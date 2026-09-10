@@ -10,6 +10,7 @@ import { Database, FileText, KeyRound, Loader2, PlugZap, Save, ShieldCheck, Tras
 import { useCallback, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import type { ConnectorsSettingsMessages, McpSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
@@ -26,6 +27,7 @@ import {
   type ConnectorInstance,
 } from '../connectors-api';
 import { McpToolsListDialog } from '../mcp/mcp-tools-list-dialog';
+import { connectorDescription } from '../utils/connector-copy';
 import { formatConnectorMessage } from '../utils/connector-i18n';
 import { ComposioConnectorPanel } from './composio-connector-panel';
 import { ConnectorLogo } from './connector-logo';
@@ -131,13 +133,12 @@ export function InstalledConnectorDetailDialog({
 }) {
   const [testing, setTesting] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
   const [syncingSource, setSyncingSource] = useState(false);
   const [sourceSyncCount, setSourceSyncCount] = useState<number | null>(null);
   const [health, setHealth] = useState<ConnectorHealthResult | null>(null);
-  const [detailTab, setDetailTab] = useState<ConnectorDetailTab>(
-    instance.materialized.type === 'mcp' ? 'health' : 'permissions',
-  );
+  const [detailTab, setDetailTab] = useState<ConnectorDetailTab>('health');
   const [toolsDialogOpen, setToolsDialogOpen] = useState(false);
   const [configDraft, setConfigDraft] = useState(() => initialConfigDraft(definition, instance));
   const [error, setError] = useState<string | null>(null);
@@ -147,18 +148,20 @@ export function InstalledConnectorDetailDialog({
     && editableConfigFields.length > 0
     && (definition?.setup.secrets ?? []).length === 0;
   const lastToolCount = health ? health.toolCount : instance.usage.lastToolCount;
+  const isMcp = instance.materialized.type === 'mcp';
+  const isComposio = instance.materialized.type === 'composio';
+  const isMemorySource = instance.materialized.type === 'memorySource';
+  const description = definition ? connectorDescription(definition, t) : null;
   const tabItems = useMemo(() => {
-    const items = instance.materialized.type === 'mcp'
-      ? [
-          ['health', ShieldCheck, t.detailHealth],
-          ['tools', Wrench, `${t.detailTools} ${health ? health.toolCount : instance.usage.lastToolCount ?? ''}`],
-          ['resources', Database, `${t.detailResources} ${health ? health.resourceCount : instance.usage.lastResourceCount ?? ''}`],
-          ['prompts', FileText, `${t.detailPrompts} ${health ? health.promptCount : instance.usage.lastPromptCount ?? ''}`],
-          ['permissions', KeyRound, t.detailPermissions],
-        ] as const
-      : [['permissions', KeyRound, t.detailPermissions]] as const;
+    const items = [
+      ['health', ShieldCheck, t.detailHealth],
+      ['tools', Wrench, `${t.detailTools} ${health ? health.toolCount : instance.usage.lastToolCount ?? ''}`],
+      ['resources', Database, `${t.detailResources} ${health ? health.resourceCount : instance.usage.lastResourceCount ?? ''}`],
+      ['prompts', FileText, `${t.detailPrompts} ${health ? health.promptCount : instance.usage.lastPromptCount ?? ''}`],
+      ['permissions', KeyRound, t.detailPermissions],
+    ] as const;
     return supportsConfigEdit ? [...items, ['config', Database, t.connectorConfigLabel] as const] : items;
-  }, [health, instance.materialized.type, instance.usage.lastPromptCount, instance.usage.lastResourceCount, instance.usage.lastToolCount, supportsConfigEdit, t]);
+  }, [health, instance.usage.lastPromptCount, instance.usage.lastResourceCount, instance.usage.lastToolCount, supportsConfigEdit, t]);
 
   const runTest = useCallback(async () => {
     setTesting(true);
@@ -239,7 +242,7 @@ export function InstalledConnectorDetailDialog({
               <div className="min-w-0">
                 <Dialog.Title className="text-base font-semibold text-fg">{instance.displayName}</Dialog.Title>
                 <Dialog.Description className="mt-1 text-sm text-fg-muted">
-                  {definition?.description ?? (instance.materialized.type === 'mcp'
+                  {description ?? (instance.materialized.type === 'mcp'
                     ? formatConnectorMessage(t.mcpServerRuntime, { serverId: instance.materialized.serverId })
                     : formatConnectorMessage(t.runtimeLabel, { runtime: instance.materialized.type }))}
                 </Dialog.Description>
@@ -260,6 +263,7 @@ export function InstalledConnectorDetailDialog({
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
             {error ? <p className="mb-4 rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{error}</p> : null}
 
+            {isMcp ? <>
             <div className="flex flex-wrap gap-2">
               {tabItems.map(([id, Icon, label]) => (
                 <button
@@ -393,47 +397,83 @@ export function InstalledConnectorDetailDialog({
                 </div>
               ) : null}
             </div>
+            </> : null}
 
-            {instance.materialized.type === 'composio' ? (
+            {isComposio ? (
               <ComposioConnectorPanel instance={instance} t={t} onChanged={onChanged} />
             ) : null}
-            {instance.materialized.type === 'memorySource' ? (
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-edge bg-surface-base p-3 text-sm">
-                <div>
-                  <p className="font-medium text-fg">{t.connectedSourceSync}</p>
-                  <p className="text-xs text-fg-muted">{definition?.description}</p>
-                  {sourceSyncCount !== null ? (
-                    <p className="mt-1 text-xs text-emerald-600">
-                      {formatConnectorMessage(t.connectedSourceSynced, { count: String(sourceSyncCount) })}
-                    </p>
-                  ) : null}
+            {isMemorySource ? (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-edge bg-surface-base p-4 text-sm">
+                  <div>
+                    <p className="font-medium text-fg">{t.connectedSourceSync}</p>
+                    {description ? <p className="mt-1 text-xs text-fg-muted">{description}</p> : null}
+                    {sourceSyncCount !== null ? (
+                      <p className="mt-1 text-xs text-emerald-600">
+                        {formatConnectorMessage(t.connectedSourceSynced, { count: String(sourceSyncCount) })}
+                      </p>
+                    ) : null}
+                  </div>
+                  <Button disabled={syncingSource} onClick={() => void syncSource()}>
+                    {syncingSource ? <Loader2 className="size-4 animate-spin" /> : <Database className="size-4" />}
+                    {t.composioSyncNow}
+                  </Button>
                 </div>
-                <Button disabled={syncingSource} onClick={() => void syncSource()}>
-                  {syncingSource ? <Loader2 className="size-4 animate-spin" /> : <Database className="size-4" />}
-                  {t.composioSyncNow}
-                </Button>
+                {supportsConfigEdit ? (
+                  <div className="grid gap-3 rounded-xl border border-edge bg-surface-base p-4">
+                    {editableConfigFields.map((field) => (
+                      <label key={field.key} className="flex flex-col gap-1.5">
+                        <span className="text-sm font-medium text-fg">{field.label}</span>
+                        {field.description ? <span className="text-xs text-fg-subtle">{field.description}</span> : null}
+                        <input
+                          className={inputClass}
+                          value={configDraft[field.key] ?? ''}
+                          placeholder={field.placeholder}
+                          onChange={(event) => setConfigDraft((previous) => ({ ...previous, [field.key]: event.currentTarget.value }))}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ) : null}
+            {!isMcp && !isComposio && !isMemorySource ? (
+              <div className="rounded-xl border border-edge bg-surface-base p-4 text-sm text-fg-muted">
+                <p>{t.connectorPolicyHint}</p>
+              </div>
+            ) : null}
+
+            <details className="mt-5 rounded-xl border border-danger/20 bg-danger/5">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-danger">{t.dangerZone}</summary>
+              <div className="flex flex-col gap-3 border-t border-danger/15 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs leading-5 text-fg-muted">{t.removeConnectorHint}</p>
+                <Button
+                  variant="secondary"
+                  className="shrink-0 border-danger/30 text-danger hover:bg-danger/10"
+                  disabled={removing}
+                  onClick={() => setRemoveConfirmOpen(true)}
+                >
+                  {removing ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                  {t.remove}
+                </Button>
+              </div>
+            </details>
           </div>
 
           <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-edge-subtle px-6 py-4">
             <Button variant="secondary" onClick={onClose}>{t.modalClose}</Button>
-            {detailTab === 'config' && supportsConfigEdit ? (
+            {((isMcp && detailTab === 'config') || isMemorySource) && supportsConfigEdit ? (
               <Button variant="primary" disabled={savingConfig} onClick={() => void saveConfig()}>
                 {savingConfig ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
                 {t.modalSave}
               </Button>
             ) : null}
-            {instance.materialized.type === 'mcp' ? (
+            {isMcp ? (
               <Button variant="secondary" disabled={testing} onClick={() => void runTest()}>
                 {testing ? <Loader2 className="size-4 animate-spin" /> : <PlugZap className="size-4" />}
                 {t.test}
               </Button>
             ) : null}
-            <Button variant="ghost" disabled={removing} onClick={() => void remove()}>
-              {removing ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-              {t.remove}
-            </Button>
           </div>
         </Dialog.Content>
       </Dialog.Portal>
@@ -453,6 +493,21 @@ export function InstalledConnectorDetailDialog({
           stripPrefix={`${instance.materialized.serverId}__`}
         />
       ) : null}
+      <ConfirmDialog
+        open={removeConfirmOpen}
+        title={formatConnectorMessage(t.removeConfirmTitle, { name: instance.displayName })}
+        description={t.removeConfirmDescription}
+        confirmLabel={t.removeConfirmAction}
+        cancelLabel={t.modalCancel}
+        destructive
+        onConfirm={() => {
+          setRemoveConfirmOpen(false);
+          void remove();
+        }}
+        onCancel={() => {
+          if (!removing) setRemoveConfirmOpen(false);
+        }}
+      />
     </Dialog.Root>
   );
 }

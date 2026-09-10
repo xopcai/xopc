@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-react';
+import { Loader2, Settings2, SlidersHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -421,11 +421,9 @@ export function ConnectorsPage() {
     <ConnectorsPageHeaderEnd
       onBrowseCatalog={() => selectTab('discover')}
       onAddCustomServer={openAddCustomServer}
-      onOpenRuntimeSettings={() => setRuntimeSettingsOpen(true)}
       addLabel={cs.addConnection}
       browseLabel={cs.addFromCatalog}
       customLabel={cs.addCustomServerAdvanced}
-      settingsLabel={cs.runtimeSettings}
     />
   ), [cs, openAddCustomServer, selectTab]);
 
@@ -458,6 +456,12 @@ export function ConnectorsPage() {
       const rightState = instanceValueById.get(right.instanceId)?.state ?? 'checking';
       return priority[leftState] - priority[rightState] || left.displayName.localeCompare(right.displayName);
     }), [connectedSearchQuery, instanceValueById, state.instances]);
+  const attentionInstances = useMemo(() => visibleInstances.filter((instance) => (
+    instanceValueById.get(instance.instanceId)?.state === 'needs_setup'
+  )), [instanceValueById, visibleInstances]);
+  const availableInstances = useMemo(() => visibleInstances.filter((instance) => (
+    instanceValueById.get(instance.instanceId)?.state !== 'needs_setup'
+  )), [instanceValueById, visibleInstances]);
   const visibleCustomServers = useMemo(
     () => customServers.filter((row) => customServerMatchesQuery(row, connectedSearchQuery)),
     [connectedSearchQuery, customServers],
@@ -553,13 +557,15 @@ export function ConnectorsPage() {
 
           {tab === 'connected' && hasToken ? (
             <div className="flex flex-col gap-6">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <ConnectorSearchField
-                  value={connectedSearchQuery}
-                  onChange={setConnectedSearchQuery}
-                  placeholder={cs.connectedSearchPlaceholder}
-                  className="max-w-xl"
-                />
+              <div className="flex items-center gap-2">
+                {installedCount > 5 || connectedSearchQuery ? (
+                  <ConnectorSearchField
+                    value={connectedSearchQuery}
+                    onChange={setConnectedSearchQuery}
+                    placeholder={cs.connectedSearchPlaceholder}
+                    className="max-w-xl"
+                  />
+                ) : <div className="flex-1" />}
                 <RefreshButton
                   className="size-9 shrink-0 p-0"
                   loading={state.loading}
@@ -568,14 +574,6 @@ export function ConnectorsPage() {
                   onClick={load}
                 />
               </div>
-
-              <section className="flex flex-col gap-3 rounded-2xl border border-edge bg-surface-base px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-sm font-semibold text-fg">{cs.relationshipsEntryTitle}</h2>
-                  <p className="mt-1 text-xs leading-5 text-fg-muted">{cs.relationshipsEntryHint}</p>
-                </div>
-                <Button type="button" className="shrink-0" onClick={() => navigate('/user-model')}>{cs.relationshipsEntryAction}</Button>
-              </section>
 
               {state.loading ? (
                 <div className="grid gap-3" aria-busy="true" aria-label={cs.loading}>
@@ -589,32 +587,89 @@ export function ConnectorsPage() {
               ) : visibleInstalledCount === 0 ? (
                 <div className="py-14 text-center text-sm text-fg-muted">{cs.connectionsSearchEmpty}</div>
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {visibleInstances.map((instance) => (
-                    <InstalledConnectorRow
-                      key={instance.instanceId}
-                      instance={instance}
-                      definition={connectorDefinitionsById.get(instance.connectorId)}
-                      highlighted={instance.instanceId === highlightedInstanceId}
-                      onOpenDetails={(selected) => {
-                        setHighlightedInstanceId(null);
-                        setDetailInstanceId(selected.instanceId);
-                        setDetailInstanceSnapshot(selected);
-                      }}
-                      onChanged={load}
-                      t={cs}
-                    />
-                  ))}
-                  {visibleCustomServers.map((row) => (
-                    <CustomMcpServerRow
-                      key={row.clientKey}
-                      row={row}
-                      t={mcp}
-                      cs={cs}
-                      onEdit={() => setCustomDialog({ mode: 'edit', row: structuredClone(row) })}
-                      onRemove={async () => removeCustomServer(row)}
-                    />
-                  ))}
+                <div className="space-y-6">
+                  {attentionInstances.length ? (
+                    <section>
+                      <div className="mb-2 flex items-center gap-2">
+                        <h2 className="text-sm font-semibold text-fg">{cs.needsAttentionTitle}</h2>
+                        <span className="text-xs tabular-nums text-amber-700 dark:text-amber-300">{attentionInstances.length}</span>
+                      </div>
+                      <div className="divide-y divide-edge-subtle overflow-hidden rounded-xl border border-amber-500/25 bg-amber-500/5">
+                        {attentionInstances.map((instance) => (
+                          <InstalledConnectorRow
+                            key={instance.instanceId}
+                            instance={instance}
+                            definition={connectorDefinitionsById.get(instance.connectorId)}
+                            highlighted={instance.instanceId === highlightedInstanceId}
+                            onOpenDetails={(selected) => {
+                              setHighlightedInstanceId(null);
+                              setDetailInstanceId(selected.instanceId);
+                              setDetailInstanceSnapshot(selected);
+                            }}
+                            t={cs}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
+
+                  {availableInstances.length ? (
+                    <section>
+                      <div className="mb-2 flex items-center gap-2">
+                        <h2 className="text-sm font-semibold text-fg">{cs.connectedServicesTitle}</h2>
+                        <span className="text-xs tabular-nums text-fg-subtle">{availableInstances.length}</span>
+                      </div>
+                      <div className="divide-y divide-edge-subtle overflow-hidden rounded-xl border border-edge bg-surface-base">
+                        {availableInstances.map((instance) => (
+                          <InstalledConnectorRow
+                            key={instance.instanceId}
+                            instance={instance}
+                            definition={connectorDefinitionsById.get(instance.connectorId)}
+                            highlighted={instance.instanceId === highlightedInstanceId}
+                            onOpenDetails={(selected) => {
+                              setHighlightedInstanceId(null);
+                              setDetailInstanceId(selected.instanceId);
+                              setDetailInstanceSnapshot(selected);
+                            }}
+                            t={cs}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
+
+                  {visibleCustomServers.length || !connectedSearchQuery.trim() ? (
+                    <details className="rounded-xl border border-edge bg-surface-base">
+                      <summary className="cursor-pointer px-4 py-3">
+                        <span className="text-sm font-medium text-fg">{cs.customIntegrationsTitle}</span>
+                        <span className="ml-2 text-xs tabular-nums text-fg-subtle">{visibleCustomServers.length}</span>
+                        <span className="mt-1 block text-xs text-fg-muted">{cs.customIntegrationsHint}</span>
+                      </summary>
+                      <div className="border-t border-edge-subtle">
+                        <div className="flex flex-wrap gap-2 px-4 py-3">
+                          <Button type="button" variant="secondary" className="h-8 text-xs" onClick={openAddCustomServer}>
+                            {cs.addCustomServerAdvanced}
+                          </Button>
+                          <Button type="button" variant="ghost" className="h-8 text-xs" onClick={() => setRuntimeSettingsOpen(true)}>
+                            <Settings2 className="size-3.5" />
+                            {cs.runtimeSettings}
+                          </Button>
+                        </div>
+                        <div className="divide-y divide-edge-subtle">
+                          {visibleCustomServers.map((row) => (
+                            <CustomMcpServerRow
+                              key={row.clientKey}
+                              row={row}
+                              t={mcp}
+                              cs={cs}
+                              onEdit={() => setCustomDialog({ mode: 'edit', row: structuredClone(row) })}
+                              onRemove={async () => removeCustomServer(row)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </details>
+                  ) : null}
                 </div>
               )}
             </div>
@@ -648,32 +703,38 @@ export function ConnectorsPage() {
                   placeholder={cs.discoverSearchPlaceholder}
                   className="max-w-xl"
                 />
-                <div className={cn(
-                  'grid min-w-0 grid-cols-1 gap-2 lg:ml-auto',
-                  understandingIntent ? 'lg:w-52' : 'sm:grid-cols-2 lg:w-[26rem]',
-                )}>
-                  {!understandingIntent ? <PopoverSelect
-                      value={discoverSource}
-                      options={sourceOptions}
-                      placeholder={cs.discoverSourceAll}
+                <details className="relative shrink-0 lg:ml-auto">
+                  <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-lg border border-edge bg-surface-panel px-3 text-xs font-medium text-fg-muted hover:bg-surface-hover hover:text-fg">
+                    <SlidersHorizontal className="size-3.5" aria-hidden />
+                    {cs.filters}
+                  </summary>
+                  <div className={cn(
+                    'mt-2 grid min-w-[15rem] grid-cols-1 gap-2 rounded-xl border border-edge bg-surface-panel p-3 shadow-popover sm:absolute sm:right-0 sm:z-10',
+                    !understandingIntent && 'sm:min-w-[24rem] sm:grid-cols-2',
+                  )}>
+                    {!understandingIntent ? <PopoverSelect
+                        value={discoverSource}
+                        options={sourceOptions}
+                        placeholder={cs.discoverSourceAll}
+                        allowEmpty={false}
+                        ariaLabel={cs.registrySourceAria}
+                        triggerClassName="h-9 bg-surface-panel text-xs"
+                        onChange={setDiscoverSource}
+                      /> : null}
+                    <PopoverSelect
+                      value={connectorSort}
+                      options={[
+                        { value: 'name', label: cs.sortName },
+                        { value: 'source', label: cs.sortSource },
+                      ]}
+                      placeholder={cs.sortName}
                       allowEmpty={false}
-                      ariaLabel={cs.registrySourceAria}
+                      ariaLabel={cs.sortAria}
                       triggerClassName="h-9 bg-surface-panel text-xs"
-                      onChange={setDiscoverSource}
-                    /> : null}
-                  <PopoverSelect
-                    value={connectorSort}
-                    options={[
-                      { value: 'name', label: cs.sortName },
-                      { value: 'source', label: cs.sortSource },
-                    ]}
-                    placeholder={cs.sortName}
-                    allowEmpty={false}
-                    ariaLabel={cs.sortAria}
-                    triggerClassName="h-9 bg-surface-panel text-xs"
-                    onChange={(value) => setConnectorSort(value as ConnectorSort)}
-                  />
-                </div>
+                      onChange={(value) => setConnectorSort(value as ConnectorSort)}
+                    />
+                  </div>
+                </details>
               </div>
 
               {(state.loading || registryLoading) && discoveryCatalog.length === 0 ? (

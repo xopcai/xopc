@@ -14,6 +14,7 @@ import { interaction } from '@/lib/interaction';
 import { OAuthProviderConnect } from '@/features/settings/models-hub/oauth-provider-connect';
 
 import { formatConnectorMessage } from '../utils/connector-i18n';
+import { connectorDescription } from '../utils/connector-copy';
 import {
   configureComposio,
   getComposioHealth,
@@ -61,32 +62,6 @@ function parseConfigValue(type: string, raw: string): unknown {
   return trimmed || undefined;
 }
 
-function CapabilityResultList({
-  title,
-  items,
-}: {
-  title: string;
-  items: Array<{ id: string; title: string; description?: string }>;
-}) {
-  if (items.length === 0) return null;
-  return (
-    <div className="rounded-lg border border-edge bg-surface-panel">
-      <div className="border-b border-edge px-3 py-2 text-xs font-semibold text-fg">{title}</div>
-      <div className="max-h-40 overflow-y-auto">
-        {items.slice(0, 12).map((item) => (
-          <div key={item.id} className="border-b border-edge-subtle px-3 py-2 last:border-b-0">
-            <div className="break-words font-mono text-xs font-medium text-fg">{item.title}</div>
-            {item.description ? <div className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{item.description}</div> : null}
-          </div>
-        ))}
-        {items.length > 12 ? (
-          <div className="px-3 py-2 text-xs text-fg-subtle">+{items.length - 12}</div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 export function InstallConnectorDialog({
   draft,
   onChange,
@@ -101,6 +76,7 @@ export function InstallConnectorDialog({
   t: ConnectorsSettingsMessages;
 }) {
   const { connector } = draft;
+  const description = connectorDescription(connector, t);
   const isComposioToolkit = connector.runtime.type === 'composio' && connector.runtime.role === 'toolkit';
   const composioToolkit = connector.runtime.type === 'composio' && connector.runtime.role === 'toolkit'
     ? connector.runtime.toolkit
@@ -113,7 +89,7 @@ export function InstallConnectorDialog({
   const [composioSetupError, setComposioSetupError] = useState<string | null>(null);
   const [composioAuth, setComposioAuth] = useState<ComposioToolkitAuthState | null>(null);
   const [composioAuthLoading, setComposioAuthLoading] = useState(false);
-  const [learnAfterConnect, setLearnAfterConnect] = useState(canLearnFromConnection);
+  const [learnAfterConnect, setLearnAfterConnect] = useState(false);
 
   useEffect(() => {
     if (!isComposioToolkit) return;
@@ -143,13 +119,6 @@ export function InstallConnectorDialog({
       .finally(() => { if (!cancelled) setComposioAuthLoading(false); });
     return () => { cancelled = true; };
   }, [composioConfigured, composioToolkit]);
-  const wizardStep = draft.result ? 'complete' : draft.installing ? 'health' : 'configure';
-  const stepItems = [
-    { id: 'configure', label: t.connectStepConfigure },
-    { id: 'health', label: t.connectStepVerify },
-    { id: 'complete', label: t.connectStepReady },
-  ] as const;
-
   const submit = useCallback(async () => {
     const electron = isElectron();
     const usesMcpOAuth = connector.runtime.type === 'mcp' && connector.auth.mode === 'oauth';
@@ -292,7 +261,7 @@ export function InstallConnectorDialog({
                   {formatConnectorMessage(t.connectDialogTitle, { name: connector.displayName })}
                 </Dialog.Title>
                 <Dialog.Description className="mt-1 line-clamp-3 text-sm text-fg-muted">
-                  {connector.description}
+                  {description}
                 </Dialog.Description>
               </div>
             </div>
@@ -312,29 +281,6 @@ export function InstallConnectorDialog({
           </div>
 
           <div className="min-h-0 overflow-y-auto px-6 py-5">
-            <div className="mb-5 grid grid-cols-3 gap-2" aria-label={t.connectProgressAria}>
-              {stepItems.map((step, index) => {
-                const activeIndex = stepItems.findIndex((item) => item.id === wizardStep);
-                const active = index === activeIndex;
-                const complete = index < activeIndex;
-                return (
-                  <div
-                    key={step.id}
-                    className={cn(
-                      'rounded-xl border px-3 py-2 text-xs font-medium',
-                      active
-                        ? 'border-accent bg-accent-soft text-accent-fg'
-                        : complete
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/40 dark:text-emerald-200'
-                          : 'border-edge bg-surface-base text-fg-muted',
-                    )}
-                  >
-                    <span className="mr-1 tabular-nums">{index + 1}.</span>
-                    {step.label}
-                  </div>
-                );
-              })}
-            </div>
             <div className="flex flex-col gap-4">
           {isComposioToolkit && composioSetupLoading ? (
             <section
@@ -544,52 +490,9 @@ export function InstallConnectorDialog({
                   {draft.health?.ok ? t.healthStatusHealthy : healthStatusLabel(draft.health?.status, t)}
                 </span>
               </div>
-              {draft.health ? (
-                <>
-                  <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
-                    <div className="rounded-lg border border-edge bg-surface-panel px-3 py-2">
-                      <div className="font-semibold text-fg">{draft.health.toolCount}</div>
-                      <div>{t.toolsMetric}</div>
-                    </div>
-                    <div className="rounded-lg border border-edge bg-surface-panel px-3 py-2">
-                      <div className="font-semibold text-fg">{draft.health.resourceCount}</div>
-                      <div>{t.resourcesMetric}</div>
-                    </div>
-                    <div className="rounded-lg border border-edge bg-surface-panel px-3 py-2">
-                      <div className="font-semibold text-fg">{draft.health.promptCount}</div>
-                      <div>{t.promptsMetric}</div>
-                    </div>
-                  </div>
-                  <div className="mt-3 grid gap-2">
-                    <CapabilityResultList
-                      title={t.detailTools}
-                      items={draft.health.tools.map((tool) => ({
-                        id: tool.name,
-                        title: tool.shortName ?? tool.name,
-                        description: tool.description,
-                      }))}
-                    />
-                    <CapabilityResultList
-                      title={t.detailResources}
-                      items={draft.health.resources.map((resource) => ({
-                        id: resource.uri,
-                        title: resource.title ?? resource.name ?? resource.uri,
-                        description: resource.description ?? resource.uri,
-                      }))}
-                    />
-                    <CapabilityResultList
-                      title={t.detailPrompts}
-                      items={draft.health.prompts.map((prompt) => ({
-                        id: prompt.name,
-                        title: prompt.title ?? prompt.name,
-                        description: prompt.description ?? formatConnectorMessage(t.promptArgumentCount, { count: String(prompt.argumentCount) }),
-                      }))}
-                    />
-                  </div>
-                </>
-              ) : (
-                <p className="mt-3">{t.installedWithoutHealth}</p>
-              )}
+              <p className="mt-3">
+                {draft.health?.ok ? t.connectionReady : draft.health ? t.connectionNeedsSetup : t.installedWithoutHealth}
+              </p>
               {draft.health?.action ? <p className="mt-3 text-xs text-fg-subtle">{draft.health.action}</p> : null}
             </div>
           ) : null}
