@@ -5,6 +5,7 @@ import { join } from 'node:path';
 /** Runtime modules kept external in the Electron gateway bundle. */
 export const ELECTRON_GATEWAY_EXTERNALS = [
   'electron',
+  'sharp',
   '@vscode/ripgrep',
   'silk-wasm',
   'playwright-core',
@@ -16,6 +17,7 @@ export const ELECTRON_GATEWAY_EXTERNALS = [
 /** Real node_modules packages required by the packaged gateway/extensions. */
 export const ELECTRON_PACKAGED_DEPENDENCIES = [
   'ws',
+  'sharp',
   'silk-wasm',
   '@huggingface/transformers',
   'onnxruntime-common',

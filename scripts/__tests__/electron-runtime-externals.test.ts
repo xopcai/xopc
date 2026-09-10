@@ -15,12 +15,14 @@ describe('electron-runtime-externals', () => {
   it('keeps only unavoidable node_modules deps in packaged runtime', () => {
     expect(ELECTRON_PACKAGED_DEPENDENCIES).toEqual([
       'ws',
+      'sharp',
       'silk-wasm',
       '@huggingface/transformers',
       'onnxruntime-common',
       'sherpa-onnx-node',
       'node-pty',
     ]);
+    expect(ELECTRON_GATEWAY_EXTERNALS).toContain('sharp');
     expect(ELECTRON_GATEWAY_EXTERNALS).toContain('playwright-core');
     expect(ELECTRON_PACKAGED_DEPENDENCIES).not.toContain('playwright-core');
     expect(ELECTRON_PACKAGED_DEPENDENCIES).not.toContain('node-cron');
@@ -35,6 +37,7 @@ describe('electron-runtime-externals', () => {
       dependencies: {
         hono: '^4.0.0',
         ws: '^8.21.0',
+        sharp: '0.35.4',
         'silk-wasm': '^3.7.1',
         '@huggingface/transformers': '3.8.1',
         'onnxruntime-common': '1.21.0',
@@ -47,6 +50,7 @@ describe('electron-runtime-externals', () => {
     });
     expect(Object.keys(minimal.dependencies)).toEqual([
       'ws',
+      'sharp',
       'silk-wasm',
       '@huggingface/transformers',
       'onnxruntime-common',
@@ -64,6 +68,7 @@ describe('electron-runtime-externals', () => {
       version: '0.0.0',
       dependencies: {
         ws: '^8.21.0',
+        sharp: '0.35.4',
         'silk-wasm': '^3.7.1',
       },
       optionalDependencies: {
@@ -77,6 +82,7 @@ describe('electron-runtime-externals', () => {
     });
     expect(minimal.dependencies).toEqual({
       ws: '^8.21.0',
+      sharp: '0.35.4',
       'silk-wasm': '^3.7.1',
       '@huggingface/transformers': '3.8.1',
       'onnxruntime-common': '1.21.0',
@@ -93,6 +99,7 @@ describe('electron-runtime-externals', () => {
         version: '0.0.0',
         dependencies: {
           ws: '^8.21.0',
+          sharp: '0.35.4',
           'silk-wasm': '^3.7.1',
           '@huggingface/transformers': '3.8.1',
           'onnxruntime-common': '1.21.0',
@@ -104,6 +111,7 @@ describe('electron-runtime-externals', () => {
     );
     expect(minimal.dependencies).toEqual({
       ws: resolveInstalledPackageVersion(repoRoot, 'ws'),
+      sharp: resolveInstalledPackageVersion(repoRoot, 'sharp'),
       'silk-wasm': resolveInstalledPackageVersion(repoRoot, 'silk-wasm'),
       '@huggingface/transformers': resolveInstalledPackageVersion(repoRoot, '@huggingface/transformers'),
       'onnxruntime-common': resolveInstalledPackageVersion(repoRoot, 'onnxruntime-common'),
@@ -145,6 +153,7 @@ describe('electron-runtime-externals', () => {
       version: '0.0.0',
       dependencies: {
         ws: '^8.21.0',
+        sharp: '0.35.4',
         'silk-wasm': '^3.7.1',
         '@huggingface/transformers': '3.8.1',
         'onnxruntime-common': '1.21.0',

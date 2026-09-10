@@ -79,6 +79,10 @@ describe('prepare-electron-pack-dir', () => {
     expect(existsSync(join(packDir, 'dist/extensions'))).toBe(false);
     expect(existsSync(join(packDir, 'dist/gateway/static/root/index.html'))).toBe(true);
     expect(existsSync(join(packDir, 'skills/tools/find-skills/SKILL.md'))).toBe(true);
+    expect(existsSync(join(packDir, 'node_modules/sharp'))).toBe(true);
+    expect(
+      existsSync(join(packDir, 'node_modules/@img', `sharp-${process.platform}-${process.arch}`)),
+    ).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/silk-wasm'))).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/@huggingface/transformers'))).toBe(true);
     expect(JSON.parse(readFileSync(join(packDir, 'node_modules/tar/package.json'), 'utf8')).version).toBe(
