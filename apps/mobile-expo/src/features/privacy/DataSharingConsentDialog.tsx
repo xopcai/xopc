@@ -14,18 +14,18 @@ export function DataSharingConsentDialog() {
   const m = useMessages().privacy;
 
   useEffect(() => {
-    if (prompt && prompt.gatewayId !== gatewayId) prompt.finish(false);
+    if (prompt && prompt.gatewayId !== gatewayId) prompt.finish('cancelled');
   }, [gatewayId, prompt]);
   useEffect(() => {
     const listener = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') useDataSharingPrompt.getState().prompt?.finish(false);
+      if (state !== 'active') useDataSharingPrompt.getState().prompt?.finish('cancelled');
     });
     return () => listener.remove();
   }, []);
 
   return (
-    <Modal visible={Boolean(prompt)} transparent animationType="fade" onRequestClose={() => prompt?.finish(false)}>
-      <Dialog visible={Boolean(prompt)} onDismiss={() => prompt?.finish(false)} style={{ maxHeight: '85%' }}>
+    <Modal visible={Boolean(prompt)} transparent animationType="fade" onRequestClose={() => prompt?.finish('cancelled')}>
+      <Dialog visible={Boolean(prompt)} onDismiss={() => prompt?.finish('cancelled')} style={{ maxHeight: '85%' }}>
         <Dialog.Title>{m.consentTitle}</Dialog.Title>
         <Dialog.ScrollArea>
           <ScrollView contentContainerStyle={{ paddingVertical: spacing.md, gap: spacing.md }}>
@@ -44,8 +44,8 @@ export function DataSharingConsentDialog() {
           </ScrollView>
         </Dialog.ScrollArea>
         <Dialog.Actions>
-          <Button onPress={() => prompt?.finish(false)}>{m.decline}</Button>
-          <Button onPress={() => prompt?.finish(true)}>{m.agree}</Button>
+          <Button onPress={() => prompt?.finish('declined')}>{m.decline}</Button>
+          <Button onPress={() => prompt?.finish('accepted')}>{m.agree}</Button>
         </Dialog.Actions>
       </Dialog>
     </Modal>

@@ -161,14 +161,10 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
         {!urlSessionKey && bootstrap.bootstrapError ? (
           <Banner
             visible
-            icon={bootstrap.bootstrapConsentRequired ? 'shield-lock-outline' : 'alert'}
+            icon="alert"
             actions={[{
-              label: bootstrap.bootstrapConsentRequired
-                ? (bootstrap.reviewingConsent ? m.common.loading : m.privacy.authorizeNow)
-                : m.common.retry,
-              onPress: bootstrap.bootstrapConsentRequired
-                ? bootstrap.reviewConsent
-                : bootstrap.retryBootstrapSession,
+              label: m.common.retry,
+              onPress: bootstrap.retryBootstrapSession,
             }]}
           >
             {bootstrap.bootstrapError}
