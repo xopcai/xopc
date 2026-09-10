@@ -4,8 +4,6 @@ import { Icon, Text } from 'react-native-paper';
 
 import { useMessages } from '../../i18n/messages';
 import type { ChatModelOption } from '../../query/models';
-import { radii, typography, useTheme } from '../../theme';
-
 import { ChatActionsSheet } from './ChatActionsSheet';
 import { ModelPickerMenu } from './ModelPickerMenu';
 
@@ -20,7 +18,6 @@ export const ChatHeader = memo(function ChatHeader({
   voiceCallDisabled,
   onBackPress,
   onNavigationPress,
-  navigationAttentionCount = 0,
   onAgentPress,
   onVoiceCallPress,
   onModelSelect,
@@ -37,7 +34,6 @@ export const ChatHeader = memo(function ChatHeader({
   voiceCallDisabled: boolean;
   onBackPress?: () => void;
   onNavigationPress?: () => void;
-  navigationAttentionCount?: number;
   onAgentPress: () => void;
   onVoiceCallPress: () => void;
   onModelSelect: (modelId: string) => void;
@@ -45,7 +41,6 @@ export const ChatHeader = memo(function ChatHeader({
   onNewChat: () => void;
 }) {
   const m = useMessages();
-  const { colors } = useTheme();
   const [actionsVisible, setActionsVisible] = useState(false);
   const [modelPickerVisible, setModelPickerVisible] = useState(false);
 
@@ -85,13 +80,6 @@ export const ChatHeader = memo(function ChatHeader({
               accessibilityLabel={onBackPress ? m.common.back : m.drawer.chats}
             >
               <Icon source={onBackPress ? 'chevron-left' : 'menu'} size={onBackPress ? 26 : 23} color={pillText} />
-              {!onBackPress && navigationAttentionCount > 0 ? (
-                <View style={[styles.attentionBadge, { backgroundColor: colors.semantic.warning }]}>
-                  <Text style={[styles.attentionBadgeText, { color: colors.accent.onPrimary }]}>
-                    {navigationAttentionCount > 9 ? '9+' : navigationAttentionCount}
-                  </Text>
-                </View>
-              ) : null}
             </Pressable>
           </View>
         ) : null}
@@ -170,20 +158,6 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  attentionBadge: {
-    position: 'absolute',
-    top: 3,
-    right: 1,
-    minWidth: 17,
-    height: 17,
-    borderRadius: radii.full,
-    paddingHorizontal: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  attentionBadgeText: {
-    ...typography.micro,
   },
   disabled: { opacity: 0.44 },
   sideSlot: {

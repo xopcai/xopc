@@ -139,15 +139,6 @@ export const ChatContextControl = memo(function ChatContextControl({
         <Icon source={chip.icon} size={15} color={chip.primary ? colors.accent.primary : colors.text.secondary} />
         <Text numberOfLines={1} style={[styles.chipText, { color: chip.primary ? colors.accent.primary : colors.text.secondary }]}>{chip.label}</Text>
       </Pressable>)}
-      {!context.isLoading ? <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={copy.open}
-        onPress={() => setOpen(true)}
-        style={({ pressed }) => [styles.contextButton, { opacity: pressed ? 0.65 : 1 }]}
-      >
-        <Icon source="layers-outline" size={16} color={colors.text.tertiary} />
-        <Text style={[styles.contextButtonText, { color: colors.text.tertiary }]}>{copy.title}</Text>
-      </Pressable> : null}
     </View>
 
     <BottomSheetModal
@@ -345,8 +336,6 @@ const styles = StyleSheet.create({
   strip: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   chip: { minHeight: 44, maxWidth: 160, flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.full, paddingHorizontal: spacing.sm },
   chipText: { ...typography.caption, flexShrink: 1 },
-  contextButton: { minHeight: 44, flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.sm },
-  contextButtonText: { ...typography.caption },
   sectionTitle: { ...typography.caption, marginTop: spacing.sm, marginBottom: spacing.xs, paddingHorizontal: spacing.sm },
   row: { minHeight: 50, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
   rowCopy: { flex: 1, minWidth: 0 },
