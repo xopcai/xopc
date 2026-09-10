@@ -25,7 +25,18 @@ describe('global defaults admin', () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
+    expect(result.data.changed).toBe(true);
     expect(result.data.nextConfig.agents.defaults.models.chat.primary).toBe('openai/gpt-5');
     expect(result.data.nextConfig.agents.defaults.tools.exec_command?.mode).toBe('ask');
+  });
+
+  it('marks an identical defaults update as unchanged', () => {
+    const config = ConfigSchema.parse({});
+    const result = prepareUpdateGlobalDefaults(config, {
+      defaults: structuredClone(config.agents.defaults),
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.changed).toBe(false);
   });
 });
