@@ -51,6 +51,7 @@ import {
   type ProjectWithDetails,
 } from '@/features/projects/api';
 import { ProjectSkillsPanel } from '@/features/projects/project-skills-panel';
+import { selectOverviewTasks } from '@/features/projects/project-overview-model';
 import { ProjectTaskBoard, type CreateProjectTaskInput, type ProjectTaskBoardHandle } from '@/features/projects/task-board/project-task-board';
 import type { TaskBoardAction } from '@/features/projects/task-board/task-board-model';
 import { fetchGatewayAgents, type GatewayAgentRow } from '@/features/settings/agents-admin-api';
@@ -697,6 +698,7 @@ export function ProjectDetailPage() {
   const [projectActionBusy, setProjectActionBusy] = useState<'pin' | 'archive' | null>(null);
   const [deletingProject, setDeletingProject] = useState(false);
   const [creatingBlocker, setCreatingBlocker] = useState(false);
+  const [blockerComposerOpen, setBlockerComposerOpen] = useState(false);
   const [taskActionBusyId, setTaskActionBusyId] = useState<string | null>(null);
   const taskBoardRef = useRef<ProjectTaskBoardHandle>(null);
   const taskCreatePendingRef = useRef(false);
@@ -1139,6 +1141,7 @@ export function ProjectDetailPage() {
         reason: blockerDraft.reason.trim() || undefined,
       });
       setBlockerDraft({ title: '', reason: '' });
+      setBlockerComposerOpen(false);
       await refreshProjectState();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -1572,7 +1575,7 @@ export function ProjectDetailPage() {
     );
   }
 
-  const overviewSessions = sessions.slice(0, 6);
+  const overviewSessions = sessions.slice(0, 3);
   const overviewAttentionItems: Array<{
     id: string;
     kind: string;
@@ -1582,7 +1585,8 @@ export function ProjectDetailPage() {
     href?: string;
     updatedAt?: number;
   }> = operatingView?.blockers ?? [];
-  const overviewTasks = operatingView?.tasks.filter((task) => task.phase !== 'closed') ?? [];
+  const overviewTasks = selectOverviewTasks(operatingView?.tasks ?? []);
+  const movingTaskCount = operatingView?.tasks.filter((task) => ['queued', 'running', 'waiting', 'verifying'].includes(task.operationalState)).length ?? 0;
   const statusLabel = (status: string) => pm.statuses[status as keyof typeof pm.statuses] ?? status;
   const messageCount = (count: number) => interpolate(pm.common.messages, { count });
   const sessionSearchNeedle = sessionSearchQuery.trim().toLowerCase();
@@ -1676,42 +1680,52 @@ export function ProjectDetailPage() {
       {tab === 'overview' ? (
         <section id="project-panel-overview" role="tabpanel" aria-labelledby="project-primary-tab-overview" className="grid min-h-full gap-4 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_20rem] xl:overflow-hidden">
           <div className="grid min-w-0 content-start gap-4 xl:min-h-0 xl:overflow-y-auto xl:pr-1 xl:[scrollbar-gutter:stable]">
-            <div className="min-w-0 rounded-lg bg-surface-panel p-4 shadow-surface">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-sm font-semibold text-fg">{pm.overview.directionTitle}</h2>
-                  <p className="mt-1 max-w-3xl text-sm leading-6 text-fg-muted">
-                    {project.outcome || operatingView?.digest.summary || project.description || project.brief || pm.overview.directionFallback}
-                  </p>
-                  {operatingView?.digest.recommendedAction ? (
-                    <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-fg">
-                      {interpolate(pm.overview.recommendedNext, { action: operatingView.digest.recommendedAction })}
+            <div className="min-w-0 overflow-hidden rounded-xl bg-surface-panel shadow-surface">
+              <div className="p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-sm font-semibold text-fg">{pm.overview.directionTitle}</h2>
+                      <span className="text-xs text-fg-subtle">
+                        {interpolate(pm.overview.activitySummary, { moving: movingTaskCount, attention: overviewAttentionItems.length })}
+                      </span>
+                    </div>
+                    <p className="mt-2 max-w-3xl text-base font-medium leading-7 text-fg">
+                      {project.outcome || project.description || project.brief || pm.overview.directionFallback}
                     </p>
-                  ) : null}
-                </div>
-                <div className="flex shrink-0 flex-wrap gap-2">
-                  <Button type="button" variant="secondary" onClick={() => void saveDigest()} disabled={savingDigest}>
-                    <Save className="size-4" aria-hidden />
+                    {operatingView?.digest.recommendedAction ? (
+                      <p className="mt-3 max-w-3xl rounded-lg bg-surface-hover px-3 py-2.5 text-sm font-medium leading-6 text-fg">
+                        {interpolate(pm.overview.recommendedNext, { action: operatingView.digest.recommendedAction })}
+                      </p>
+                    ) : null}
+                  </div>
+                  <Button type="button" variant="ghost" className="h-8 shrink-0 rounded-lg px-2 text-xs" onClick={() => void saveDigest()} disabled={savingDigest}>
+                    <Save className="size-3.5" aria-hidden />
                     {savingDigest ? pm.overview.savingDigest : pm.overview.saveDigest}
                   </Button>
                 </div>
               </div>
-            </div>
 
-            <div className="min-w-0 rounded-lg bg-surface-panel shadow-surface">
-              <div className="flex items-center justify-between gap-3 border-b border-edge px-4 py-3">
-                <h2 className="text-sm font-semibold text-fg">{pm.overview.nextActions}</h2>
-              </div>
-              <div className="divide-y divide-edge">
+              <div className="border-t border-edge-subtle">
+                <div className="flex items-center justify-between gap-3 px-5 py-3.5">
+                  <h2 className="text-sm font-semibold text-fg">{pm.overview.nextActions}</h2>
+                  <button type="button" className="text-xs font-medium text-fg-muted transition-colors hover:text-fg" onClick={() => navigateProjectTab('tasks')}>
+                    {pm.common.viewAll}
+                  </button>
+                </div>
+                <div className="divide-y divide-edge-subtle border-t border-edge-subtle">
                 {overviewTasks.length ? overviewTasks.map((item) => (
                   <Link
                     key={item.id}
                     to={taskDetailModalHref(projectTabHref('overview'), item.id)}
-                    className="block px-4 py-3 hover:bg-surface-hover"
+                    className="block px-5 py-3 transition-colors hover:bg-surface-hover"
                   >
                     <div className="flex min-w-0 items-center justify-between gap-3">
                       <span className="min-w-0 truncate text-sm font-medium text-fg">{item.title}</span>
-                      <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-fg-muted">{item.phase} · {item.operationalState}</span>
+                      <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium', item.attention.length ? 'bg-warning/10 text-warning' : 'bg-surface-hover text-fg-muted')}>
+                        {pm.board.phases[item.phase]}
+                        {item.operationalState !== 'idle' ? ` · ${pm.board.operationalStates[item.operationalState]}` : ''}
+                      </span>
                     </div>
                     {item.attention[0] ? <p className="mt-1 line-clamp-2 text-sm leading-5 text-fg-muted">{item.attention[0].summary}</p> : null}
                   </Link>
@@ -1720,21 +1734,22 @@ export function ProjectDetailPage() {
                     {pm.overview.noNextActions}
                   </div>
                 )}
+                </div>
               </div>
             </div>
 
             {operatingView?.recentResults.length ? (
-              <div className="min-w-0 rounded-lg bg-surface-panel shadow-surface">
-                <div className="border-b border-edge px-4 py-3">
+              <div className="min-w-0 overflow-hidden rounded-xl bg-surface-panel">
+                <div className="border-b border-edge-subtle px-5 py-3.5">
                   <h2 className="text-sm font-semibold text-fg">{pm.overview.recentResults}</h2>
                 </div>
-                <div className="divide-y divide-edge">
-                  {operatingView.recentResults.slice(0, 5).map(({ taskId, taskTitle, receipt }) => (
-                    <Link key={receipt.runId} to={taskDetailModalHref(projectTabHref('overview'), taskId)} className="block px-4 py-3 hover:bg-surface-hover">
+                <div className="divide-y divide-edge-subtle">
+                  {operatingView.recentResults.slice(0, 3).map(({ taskId, taskTitle, receipt }) => (
+                    <Link key={receipt.runId} to={taskDetailModalHref(projectTabHref('overview'), taskId)} className="block px-5 py-3 transition-colors hover:bg-surface-hover">
                       <div className="flex min-w-0 items-center justify-between gap-3">
                         <span className="min-w-0 truncate text-sm font-medium text-fg">{taskTitle}</span>
                         <span className="shrink-0 rounded-full bg-surface-hover px-2 py-0.5 text-xs text-fg-muted">
-                          {receipt.status} · {receipt.verification.status}
+                          {pm.overview.resultStatuses[receipt.status]} · {pm.board.verification[receipt.verification.status]}
                         </span>
                       </div>
                       <p className="mt-1 line-clamp-2 text-sm leading-5 text-fg-muted">{receipt.summary}</p>
@@ -1744,39 +1759,51 @@ export function ProjectDetailPage() {
               </div>
             ) : null}
 
-            <div className="grid min-w-0 gap-4 md:grid-cols-2">
-              <div className="rounded-lg bg-surface-panel shadow-surface">
-                <div className="border-b border-edge px-4 py-3">
+            {project.milestones.length || project.recentUpdates.length ? <div className="grid min-w-0 gap-4 md:grid-cols-2">
+              {project.milestones.length ? <div className="overflow-hidden rounded-xl bg-surface-panel">
+                <div className="border-b border-edge-subtle px-5 py-3.5">
                   <h2 className="text-sm font-semibold text-fg">{pm.overview.milestones}</h2>
                 </div>
-                <div className="divide-y divide-edge">
-                  {project.milestones.length ? project.milestones.map((milestone) => (
-                    <div key={milestone.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="divide-y divide-edge-subtle">
+                  {project.milestones.map((milestone) => (
+                    <div key={milestone.id} className="flex items-center justify-between gap-3 px-5 py-3">
                       <span className="min-w-0 truncate text-sm font-medium text-fg">{milestone.title}</span>
-                      <span className="shrink-0 text-xs text-fg-muted">{milestone.status}</span>
+                      <span className="shrink-0 text-xs text-fg-muted">{pm.statuses[milestone.status]}</span>
                     </div>
-                  )) : <p className="px-4 py-5 text-sm text-fg-muted">{pm.overview.noMilestones}</p>}
+                  ))}
                 </div>
-              </div>
-              <div className="rounded-lg bg-surface-panel shadow-surface">
-                <div className="border-b border-edge px-4 py-3">
+              </div> : null}
+              {project.recentUpdates.length ? <div className="overflow-hidden rounded-xl bg-surface-panel">
+                <div className="border-b border-edge-subtle px-5 py-3.5">
                   <h2 className="text-sm font-semibold text-fg">{pm.overview.projectUpdates}</h2>
                 </div>
-                <div className="divide-y divide-edge">
-                  {project.recentUpdates.length ? project.recentUpdates.slice(0, 3).map((update) => (
-                    <div key={update.id} className="px-4 py-3">
+                <div className="divide-y divide-edge-subtle">
+                  {project.recentUpdates.slice(0, 3).map((update) => (
+                    <div key={update.id} className="px-5 py-3">
                       <p className="text-sm leading-5 text-fg">{update.summary}</p>
-                      <p className="mt-1 text-xs text-fg-muted">{update.health}</p>
+                      <p className="mt-1 text-xs text-fg-muted">{pm.overview.healthLabels[update.health]}</p>
                     </div>
-                  )) : <p className="px-4 py-5 text-sm text-fg-muted">{pm.overview.noProjectUpdates}</p>}
+                  ))}
                 </div>
-              </div>
-            </div>
+              </div> : null}
+            </div> : null}
           </div>
 
           <aside className="grid min-w-0 content-start gap-4 xl:min-h-0 xl:overflow-y-auto xl:pr-1 xl:[scrollbar-gutter:stable]">
-            <div className="min-w-0 rounded-lg bg-surface-panel p-4 shadow-surface">
-              <h2 className="text-sm font-semibold text-fg">{pm.overview.attention}</h2>
+            <div className="min-w-0 rounded-xl bg-surface-panel p-4">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold text-fg">{pm.overview.attention}</h2>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-8 shrink-0 rounded-lg px-2 text-xs"
+                  aria-expanded={blockerComposerOpen}
+                  onClick={() => setBlockerComposerOpen((open) => !open)}
+                >
+                  <Plus className={cn('size-3.5 transition-transform', blockerComposerOpen && 'rotate-45')} aria-hidden />
+                  {pm.overview.addBlocker}
+                </Button>
+              </div>
               {overviewAttentionItems.length ? (
                 <div className="mt-3 grid gap-3">
                   {overviewAttentionItems.map((item) => {
@@ -1806,7 +1833,7 @@ export function ProjectDetailPage() {
               ) : (
                 <p className="mt-2 text-sm text-fg-muted">{pm.overview.noBlockedTasks}</p>
               )}
-              <form onSubmit={submitBlocker} className="mt-4 flex gap-2 border-t border-edge pt-4">
+              {blockerComposerOpen ? <form onSubmit={submitBlocker} className="mt-4 flex gap-2 border-t border-edge-subtle pt-4">
                 <input
                   className="min-h-9 min-w-0 flex-1 rounded-md border border-edge bg-surface-base px-3 text-sm text-fg outline-none focus:border-accent"
                   value={blockerDraft.title}
@@ -1823,11 +1850,11 @@ export function ProjectDetailPage() {
                 >
                   <Plus className="size-4" aria-hidden />
                 </Button>
-              </form>
+              </form> : null}
             </div>
 
-            <div className="min-w-0 rounded-lg bg-surface-panel shadow-surface">
-              <div className="flex items-center justify-between gap-3 border-b border-edge px-4 py-3">
+            <div className="min-w-0 overflow-hidden rounded-xl bg-surface-panel">
+              <div className="flex items-center justify-between gap-3 border-b border-edge-subtle px-4 py-3">
                 <div className="flex min-w-0 items-center gap-2">
                   <Clock className="size-4 shrink-0 text-fg-muted" aria-hidden />
                   <h2 className="min-w-0 truncate text-sm font-semibold text-fg">{pm.overview.recentSessions}</h2>
@@ -1836,14 +1863,14 @@ export function ProjectDetailPage() {
                   {pm.common.viewAll}
                 </button>
               </div>
-              <div className="divide-y divide-edge">
+              <div className="divide-y divide-edge-subtle">
                 {overviewSessions.length ? overviewSessions.map((session) => (
                   <Link key={session.key} to={`/chat/${encodeURIComponent(session.key)}`} onClick={onProjectTabLinkClick('sessions')} className="block px-4 py-3 hover:bg-surface-hover">
                     <div className="flex min-w-0 items-center justify-between gap-3">
                       <span className="min-w-0 truncate text-sm font-medium text-fg">{session.name || session.key}</span>
                       <span className="shrink-0 text-xs text-fg-subtle">{formatDate(session.updatedAt)}</span>
                     </div>
-                    <p className="mt-1 truncate text-xs text-fg-muted">{session.agentId || pm.common.agent}</p>
+                    {(session.routing?.agentId || session.agentId) && (session.routing?.agentId || session.agentId) !== project.defaultAgentId ? <p className="mt-1 truncate text-xs text-fg-muted">{session.routing?.agentId || session.agentId}</p> : null}
                   </Link>
                 )) : (
                   <div className="px-4 py-6 text-sm text-fg-muted">{pm.overview.noSessions}</div>

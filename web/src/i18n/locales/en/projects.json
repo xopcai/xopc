@@ -209,13 +209,21 @@
       "directionFallback": "Add a brief or define a task so the next step is clear.",
       "saveDigest": "Save digest",
       "savingDigest": "Saving",
+      "activitySummary": "{{moving}} moving · {{attention}} need attention",
       "nextActions": "Next actions",
       "recentResults": "Recent results",
       "milestones": "Milestones",
       "noMilestones": "No milestones yet.",
       "projectUpdates": "Project updates",
       "noProjectUpdates": "No project updates yet.",
+      "healthLabels": {
+        "unknown": "Status unknown",
+        "on_track": "On track",
+        "at_risk": "At risk",
+        "off_track": "Off track"
+      },
       "resultStatuses": {
+        "succeeded": "Completed",
         "running": "Running",
         "completed": "Achieved",
         "partial": "Needs review",

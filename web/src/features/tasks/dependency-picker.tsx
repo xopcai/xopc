@@ -7,6 +7,7 @@ import {
 } from '@radix-ui/react-tooltip';
 import { Check, ChevronDown, Link2, Search, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
@@ -25,12 +26,13 @@ export type DependencyPickerLabels = {
 const taskTitleTooltipClass =
   '!z-[10000] max-w-[min(28rem,90vw)] rounded-md border border-edge bg-surface-panel px-2.5 py-2 text-left text-xs leading-relaxed text-fg shadow-lg';
 
-export function DependencyPicker({ candidates, selectedIds, labels, disabled, borderless = false, onChange }: {
+export function DependencyPicker({ candidates, selectedIds, labels, disabled, borderless = false, getTaskHref, onChange }: {
   candidates: DependencyCandidate[];
   selectedIds: string[];
   labels: DependencyPickerLabels;
   disabled?: boolean;
   borderless?: boolean;
+  getTaskHref?: (taskId: string) => string;
   onChange: (ids: string[]) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -49,10 +51,19 @@ export function DependencyPicker({ candidates, selectedIds, labels, disabled, bo
               const task = candidates.find((candidate) => candidate.id === taskId);
               if (!task) return null;
               return (
-                <span key={task.id} className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-lg bg-accent-soft px-2.5 py-1.5 text-xs text-accent-fg">
+                <span key={task.id} className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-lg bg-surface-hover px-2.5 py-1.5 text-xs text-fg-muted">
                   <TooltipRoot>
                     <TooltipTrigger asChild>
-                      <span className="min-w-0 truncate">{task.title}</span>
+                      {getTaskHref ? (
+                        <Link
+                          to={getTaskHref(task.id)}
+                          className="min-w-0 truncate rounded-sm outline-none transition-colors hover:text-fg hover:underline focus-visible:ring-2 focus-visible:ring-accent/50"
+                        >
+                          {task.title}
+                        </Link>
+                      ) : (
+                        <span className="min-w-0 truncate">{task.title}</span>
+                      )}
                     </TooltipTrigger>
                     <TooltipPortal>
                       <TooltipContent side="top" sideOffset={6} collisionPadding={12} className={taskTitleTooltipClass}>
@@ -62,7 +73,7 @@ export function DependencyPicker({ candidates, selectedIds, labels, disabled, bo
                   </TooltipRoot>
                   <button
                     type="button"
-                    className="shrink-0 rounded text-accent-fg/70 hover:text-accent-fg"
+                    className="shrink-0 rounded text-fg-subtle transition-colors hover:text-fg"
                     aria-label={labels.remove.replace('{{task}}', task.title)}
                     disabled={disabled}
                     onClick={() => onChange(selectedIds.filter((id) => id !== task.id))}

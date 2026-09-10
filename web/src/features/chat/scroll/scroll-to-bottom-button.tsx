@@ -1,4 +1,4 @@
-import { ChevronDown } from 'lucide-react';
+import { ArrowDown } from 'lucide-react';
 import { memo } from 'react';
 
 import { cn } from '@/lib/cn';
@@ -24,11 +24,11 @@ export const ScrollToBottomButton = memo(function ScrollToBottomButton({
     <button
       type="button"
       className={cn(
-        'flex shrink-0 items-center justify-center rounded-full text-fg-subtle',
+        'group flex shrink-0 items-center justify-center rounded-full text-fg-muted',
         contained
-          ? 'absolute bottom-4 right-4 z-20 size-9 border border-edge bg-surface-panel shadow-float'
-          : 'size-11',
-        'hover:bg-surface-hover hover:text-fg dark:border-edge dark:shadow-none',
+          ? 'absolute bottom-3 right-3 z-20 size-9 border border-edge-subtle bg-surface-panel/95 shadow-elevated backdrop-blur-sm'
+          : 'size-10 sm:size-9',
+        'hover:bg-surface-hover hover:text-fg',
         interaction.transition,
         interaction.press,
         interaction.focusRingPanel,
@@ -37,7 +37,11 @@ export const ScrollToBottomButton = memo(function ScrollToBottomButton({
       title={m.chat.scrollToBottom}
       aria-label={m.chat.scrollToBottom}
     >
-      <ChevronDown className={contained ? 'size-5' : 'size-6'} aria-hidden />
+      <ArrowDown
+        className="size-[1.125rem] transition-transform duration-150 ease-out group-hover:translate-y-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-y-0"
+        strokeWidth={1.8}
+        aria-hidden
+      />
     </button>
   );
 });
