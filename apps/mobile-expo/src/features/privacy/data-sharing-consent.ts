@@ -5,9 +5,9 @@ import { create } from 'zustand';
 import { apiFetch } from '../../api/client';
 import { messages } from '../../i18n/messages';
 import { queryClient } from '../../query/query-client';
-import { storage } from '../../storage/mmkv';
 import { useGatewayStore } from '../../stores/gateway-store';
 import { usePreferencesStore } from '../../stores/preferences-store';
+import { consentDecisionStorage } from './consent-storage';
 import { createConsentController, DataSharingConsentError, requiresDataSharingConsent } from './consent-controller';
 
 type ConsentPrompt = {
@@ -26,8 +26,8 @@ function copy() {
 
 export const dataSharingConsent = createConsentController({
   activeGatewayId: () => useGatewayStore.getState().activeGatewayId,
-  read: (key) => storage.getString(key),
-  write: (key, value) => storage.set(key, value),
+  read: (key) => consentDecisionStorage.getString(key),
+  write: (key, value) => consentDecisionStorage.set(key, value),
   errorMessage: () => copy().consentRequired,
   onGranted: (gatewayId) => {
     DeviceEventEmitter.emit(DATA_SHARING_CONSENT_GRANTED_EVENT, gatewayId);
