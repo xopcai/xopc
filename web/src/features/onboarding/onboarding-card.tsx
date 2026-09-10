@@ -2,7 +2,7 @@ import { ChevronRight, ExternalLink, LoaderCircle, ShieldCheck, X } from 'lucide
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { Link } from 'react-router-dom';
 
-import { BrandLogo } from '@/components/shell/brand-logo';
+import { AnimatedLoopLogo } from '@/components/brand/animated-loop-logo';
 import { Button } from '@/components/ui/button';
 import { SecretInput } from '@/components/ui/secret-input';
 import type { ConfiguredModel } from '@/features/chat/api/registry-api';
@@ -286,7 +286,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
             <span className="xopc-onboarding-mark-halo absolute inset-[10%] rounded-full" />
             <span className="xopc-onboarding-mark-trace absolute inset-[13%] rounded-full" />
             <span className="xopc-onboarding-mark-core relative flex size-36 items-center justify-center">
-              <BrandLogo className="relative z-10 size-28 lg:size-32" />
+              <AnimatedLoopLogo className="relative z-10 size-28 lg:size-32" />
             </span>
           </div>
         </section>

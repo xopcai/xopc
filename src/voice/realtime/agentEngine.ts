@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import type { StreamingSttSession, StreamingSttEvent } from '../../media-understanding/types.js';
 import { createLogger } from '../../utils/logger.js';
-import { speakStream } from '../tts/speak-core.js';
+import { speakStream, type SpeakStreamResult } from '../tts/speak-core.js';
 import { AudioPlaybackWindow } from './audio-playback-window.js';
 import { ConversationTurn } from './conversationTurn.js';
 import { isLikelyPlaybackEcho } from './playback-echo.js';
@@ -10,6 +10,17 @@ import type { VoiceTicketClaim, VoiceRealtimeRuntimeOptions } from './runtime.ty
 import type { VoiceEngine, VoiceEventSink } from './engine.js';
 
 const log = createLogger('Voice:Agent');
+const AGENT_TTS_MAX_SEGMENT_CHARACTERS = 180;
+const AGENT_TTS_MIN_SEGMENT_CHARACTERS = 24;
+
+type SpeechOpening = Promise<{ result: SpeakStreamResult } | { error: unknown }>;
+
+interface SpeechJob {
+  phrase: string;
+  characters: number;
+  opening?: SpeechOpening;
+}
+
 interface ActiveVoiceResponse {
   id: string;
   playback: AudioPlaybackWindow;
@@ -18,7 +29,8 @@ interface ActiveVoiceResponse {
   text: string;
   audibleText: string;
   audioStarted: boolean;
-  speechTail: Promise<void>;
+  speechQueue: SpeechJob[];
+  speechWorker?: Promise<void>;
   speechError?: Error;
   queuedSpeechCharacters: number;
   startedAt: number;
@@ -93,14 +105,24 @@ export function createAgentVoiceEngine(options: {
     return true;
   }
 
-  async function speakPhrase(response: ActiveVoiceResponse, phrase: string): Promise<void> {
-    if (!claim.tts || response.abortController.signal.aborted) return;
-    const result = await speakStream(phrase, claim.tts.config, {
+  function openSpeech(response: ActiveVoiceResponse, job: SpeechJob): SpeechOpening {
+    if (job.opening) return job.opening;
+    job.opening = speakStream(job.phrase, claim.tts!.config, {
       appConfig: claim.config,
       parseDirectives: false,
       signal: response.abortController.signal,
       allowFallback: false,
-    });
+    }).then((result) => ({ result }), (error: unknown) => ({ error }));
+    return job.opening;
+  }
+
+  function prefetchNextSpeech(response: ActiveVoiceResponse): void {
+    const next = response.speechQueue[0];
+    if (!next || next.opening || response.abortController.signal.aborted) return;
+    openSpeech(response, next);
+  }
+
+  async function playSpeech(response: ActiveVoiceResponse, phrase: string, result: SpeakStreamResult): Promise<void> {
     let phraseMarkedAudible = false;
     try {
       if (response.abortController.signal.aborted || activeResponse !== response || closed) return;
@@ -139,6 +161,59 @@ export function createAgentVoiceEngine(options: {
     }
   }
 
+  async function releaseQueuedSpeech(response: ActiveVoiceResponse): Promise<void> {
+    const queued = response.speechQueue.splice(0);
+    for (const job of queued) {
+      response.queuedSpeechCharacters -= job.characters;
+      if (!job.opening) continue;
+      const opened = await job.opening;
+      if ('result' in opened) await opened.result.release();
+    }
+  }
+
+  async function runSpeechQueue(response: ActiveVoiceResponse): Promise<void> {
+    try {
+      while (!response.abortController.signal.aborted
+        && !response.speechError
+        && activeResponse === response
+        && response.speechQueue.length > 0) {
+        const job = response.speechQueue.shift()!;
+        try {
+          const opened = await openSpeech(response, job);
+          if ('error' in opened) throw opened.error;
+          if (response.abortController.signal.aborted || activeResponse !== response || closed) {
+            await opened.result.release();
+            return;
+          }
+          prefetchNextSpeech(response);
+          await playSpeech(response, job.phrase, opened.result);
+        } finally {
+          response.queuedSpeechCharacters -= job.characters;
+        }
+      }
+    } catch (error) {
+      if (!response.abortController.signal.aborted) {
+        response.speechError = error instanceof Error ? error : new Error(String(error));
+      }
+    } finally {
+      await releaseQueuedSpeech(response);
+    }
+  }
+
+  function startSpeechWorker(response: ActiveVoiceResponse): void {
+    if (response.speechWorker || response.speechError || response.speechQueue.length === 0) return;
+    const worker = runSpeechQueue(response).finally(() => {
+      if (response.speechWorker !== worker) return;
+      response.speechWorker = undefined;
+      if (response.speechQueue.length > 0 && !response.speechError) startSpeechWorker(response);
+    });
+    response.speechWorker = worker;
+  }
+
+  async function waitForSpeech(response: ActiveVoiceResponse): Promise<void> {
+    while (response.speechWorker) await response.speechWorker;
+  }
+
   function queuePhrases(response: ActiveVoiceResponse, phrases: string[]): void {
     for (const phrase of phrases) {
       if (response.speechError || response.abortController.signal.aborted) return;
@@ -147,18 +222,17 @@ export function createAgentVoiceEngine(options: {
         return;
       }
       response.queuedSpeechCharacters += phrase.length;
-      response.speechTail = response.speechTail
-        .then(async () => {
-          if (response.speechError || response.abortController.signal.aborted) return;
-          try {
-            await speakPhrase(response, phrase);
-          } catch (error) {
-            if (!response.abortController.signal.aborted) {
-              response.speechError = error instanceof Error ? error : new Error(String(error));
-            }
-          }
-        }).finally(() => { response.queuedSpeechCharacters -= phrase.length; });
+      const previous = response.speechQueue.at(-1);
+      if (previous && !previous.opening
+        && previous.phrase.length + phrase.length + 1 <= AGENT_TTS_MAX_SEGMENT_CHARACTERS) {
+        previous.phrase = `${previous.phrase} ${phrase}`;
+        previous.characters += phrase.length;
+      } else {
+        response.speechQueue.push({ phrase, characters: phrase.length });
+      }
     }
+    if (response.speechWorker) prefetchNextSpeech(response);
+    else startSpeechWorker(response);
   }
 
   async function runConversationTurn(text: string): Promise<void> {
@@ -168,11 +242,15 @@ export function createAgentVoiceEngine(options: {
       id: `resp_${crypto.randomUUID()}`,
       playback: new AudioPlaybackWindow(),
       abortController: new AbortController(),
-      segmenter: new SpeakableSegmenter(),
+      segmenter: new SpeakableSegmenter(
+        AGENT_TTS_MAX_SEGMENT_CHARACTERS,
+        AGENT_TTS_MIN_SEGMENT_CHARACTERS,
+        0,
+      ),
       text: '',
       audibleText: '',
       audioStarted: false,
-      speechTail: Promise.resolve(),
+      speechQueue: [],
       queuedSpeechCharacters: 0,
       startedAt: Date.now(),
       firstTextSeen: false,
@@ -236,7 +314,7 @@ export function createAgentVoiceEngine(options: {
       if (activeResponse !== response || response.abortController.signal.aborted || closed) return;
       queuePhrases(response, response.segmenter.flush());
       send('response.text.done', { responseId: response.id });
-      await response.speechTail;
+      await waitForSpeech(response);
       if (response.speechError) throw response.speechError;
       await response.playback.drain(response.abortController.signal);
       if (activeResponse !== response || response.abortController.signal.aborted) return;
@@ -260,7 +338,7 @@ export function createAgentVoiceEngine(options: {
       response.abortController.abort('provider_error');
       if (activeResponse === response) activeResponse = undefined;
     } finally {
-      await response.speechTail;
+      await waitForSpeech(response);
     }
   }
 

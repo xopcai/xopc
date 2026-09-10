@@ -6,8 +6,13 @@ const SENTENCE_END = /[。！？!?；;：:\n]/u;
 export class SpeakableSegmenter {
   private pending = '';
   private fence: string | null = null;
+  private emitted = false;
 
-  constructor(private readonly maxCharacters = 120) {}
+  constructor(
+    private readonly maxCharacters = 120,
+    private readonly minCharacters = 0,
+    private readonly firstMinCharacters = minCharacters,
+  ) {}
 
   push(delta: string): string[] {
     this.pending += delta;
@@ -53,7 +58,11 @@ export class SpeakableSegmenter {
         if (char === '(') parentheses += 1;
         if (char === ')') parentheses = Math.max(0, parentheses - 1);
         if (inlineCode || brackets || parentheses || (char === ']' && this.pending[index + 1] === '(')) continue;
-        if (SENTENCE_END.test(char)) { boundary = index + 1; break; }
+        const minCharacters = this.emitted ? this.minCharacters : this.firstMinCharacters;
+        if (SENTENCE_END.test(char) && index + 1 >= minCharacters) {
+          boundary = index + 1;
+          break;
+        }
         if (index + 1 >= this.maxCharacters) {
           const window = this.pending.slice(0, index + 1);
           const whitespace = Math.max(window.lastIndexOf(' '), window.lastIndexOf('，'), window.lastIndexOf(','));
@@ -64,7 +73,10 @@ export class SpeakableSegmenter {
       if (boundary < 0) break;
       const phrase = this.toSpeech(this.pending.slice(0, boundary));
       this.pending = this.pending.slice(boundary);
-      if (phrase) phrases.push(phrase);
+      if (phrase) {
+        this.emitted = true;
+        phrases.push(phrase);
+      }
     }
     return phrases;
   }
@@ -73,6 +85,7 @@ export class SpeakableSegmenter {
     const phrase = this.fence || /^\s*(```|~~~)/.test(this.pending) ? '' : this.toSpeech(this.pending);
     this.pending = '';
     this.fence = null;
+    if (phrase) this.emitted = true;
     return phrase ? [phrase] : [];
   }
 
