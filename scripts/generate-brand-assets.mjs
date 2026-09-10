@@ -39,7 +39,10 @@ const AI_DARK = '#F5F5F7';
 const HUMAN_LIGHT = '#007AFF';
 const HUMAN_DARK = '#0A84FF';
 const SOURCE_HUMAN = '#007AFF';
-const MOBILE_MARK_SCALE = 0.88;
+// Keep the mobile glyph inside the conservative iOS/Android launcher safe zone.
+// The canonical mark occupies ~78% of its source canvas, so 0.72 yields a
+// visible footprint of ~56% with generous, optically balanced padding.
+const MOBILE_MARK_SCALE = 0.72;
 
 const ROLE_LIGHT = { ai: AI_LIGHT, human: HUMAN_LIGHT };
 const ROLE_DARK = { ai: AI_DARK, human: HUMAN_DARK };
