@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { CheckCircle2, Database, KeyRound, Loader2, PackagePlus, PlugZap, Server, Wrench, X } from 'lucide-react';
+import { CheckCircle2, KeyRound, Loader2, PackagePlus, Server, Wrench, X } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -7,14 +7,16 @@ import type { ConnectorsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 
-import { previewConnector, type ConnectorCapability, type ConnectorDefinition, type ConnectorHealthResult } from '../connectors-api';
+import {
+  previewConnector,
+  type ConnectorCapability,
+  type ConnectorDefinition,
+  type ConnectorHealthResult,
+} from '../connectors-api';
+import { connectorBenefitsFor } from '../utils/connector-benefits';
+import { connectorDescription } from '../utils/connector-copy';
+import { formatConnectorMessage } from '../utils/connector-i18n';
 import { ConnectorLogo } from './connector-logo';
-
-function formatConnectorMessage(template: string, params: Record<string, string | number>): string {
-  return Object.entries(params).reduce((message, [key, value]) => (
-    message.replaceAll(`{{${key}}}`, String(value))
-  ), template);
-}
 
 function capabilityLabel(capability: ConnectorCapability, t: ConnectorsSettingsMessages): string {
   return t.connectorCapabilityLabels[capability] ?? capability;
@@ -40,12 +42,6 @@ function authLabel(connector: ConnectorDefinition, t: ConnectorsSettingsMessages
   return t.connectorAuthNone;
 }
 
-function countRequiredInputs(connector: ConnectorDefinition): number {
-  const secretCount = (connector.setup.secrets ?? []).filter((field) => field.required).length;
-  const configCount = (connector.setup.config ?? []).filter((field) => field.required).length;
-  return secretCount + configCount;
-}
-
 function CapabilityPreviewList({
   title,
   items,
@@ -55,16 +51,15 @@ function CapabilityPreviewList({
 }) {
   if (items.length === 0) return null;
   return (
-    <section className="rounded-lg border border-edge bg-surface-base">
-      <div className="border-b border-edge px-3 py-2 text-xs font-semibold text-fg">{title}</div>
-      <div className="max-h-48 overflow-y-auto">
-        {items.slice(0, 16).map((item) => (
-          <div key={item.id} className="border-b border-edge-subtle px-3 py-2 last:border-b-0">
-            <div className="break-words font-mono text-xs font-medium text-fg">{item.title}</div>
+    <section>
+      <h4 className="mb-2 text-xs font-medium text-fg-muted">{title}</h4>
+      <div className="divide-y divide-edge-subtle overflow-hidden rounded-lg border border-edge bg-surface-panel">
+        {items.slice(0, 12).map((item) => (
+          <div key={item.id} className="px-3 py-2.5">
+            <p className="break-words font-mono text-xs font-medium text-fg">{item.title}</p>
             {item.description ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{item.description}</p> : null}
           </div>
         ))}
-        {items.length > 16 ? <div className="px-3 py-2 text-xs text-fg-subtle">+{items.length - 16}</div> : null}
       </div>
     </section>
   );
@@ -84,27 +79,18 @@ export function ConnectorDetailDialog({
   t: ConnectorsSettingsMessages;
 }) {
   const [previewLoading, setPreviewLoading] = useState(false);
+  const description = connectorDescription(connector, t);
   const [previewResult, setPreviewResult] = useState<ConnectorHealthResult | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const requiredInputCount = countRequiredInputs(connector);
-  const visibleCapabilities = connector.capabilities.slice(0, 8);
-  const hiddenCapabilities = Math.max(0, connector.capabilities.length - visibleCapabilities.length);
-  const setupItems = [
-    ...(connector.setup.secrets ?? []).map((field) => ({
-      key: `secret:${field.key}`,
-      label: field.label,
-      description: field.description,
-      required: field.required,
-      kind: t.connectorSetupSecret,
-    })),
-    ...(connector.setup.config ?? []).map((field) => ({
-      key: `config:${field.key}`,
-      label: field.label,
-      description: field.description,
-      required: Boolean(field.required),
-      kind: t.connectorSetupConfig,
-    })),
+  const benefits = connectorBenefitsFor(connector);
+  const requiredInputs = [
+    ...(connector.setup.secrets ?? []).filter((field) => field.required),
+    ...(connector.setup.config ?? []).filter((field) => field.required),
   ];
+  const capabilities = connector.capabilities.filter((capability) => (
+    !capability.startsWith('runtime.') && !capability.startsWith('auth.')
+  ));
+
   const runPreview = async () => {
     setPreviewLoading(true);
     setPreviewError(null);
@@ -124,218 +110,120 @@ export function ConnectorDetailDialog({
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
         <Dialog.Content
           className={cn(
-            'xopc-dialog-content fixed left-1/2 top-1/2 z-[60] flex h-[min(100vh-2rem,44rem)] w-[min(100%-2rem,min(92vw,52rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden',
+            'xopc-dialog-content fixed left-1/2 top-1/2 z-[60] flex h-[min(100vh-2rem,42rem)] w-[min(100%-2rem,min(92vw,44rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden',
             'rounded-2xl border border-edge bg-surface-panel shadow-float outline-none dark:border-edge',
           )}
         >
-          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-edge-subtle px-6 py-5">
+          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-edge-subtle px-5 py-5 sm:px-6">
             <div className="flex min-w-0 items-start gap-3">
               <ConnectorLogo connector={connector} size="lg" />
               <div className="min-w-0">
-                {installed ? (
-                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Dialog.Title className="text-base font-semibold text-fg">{connector.displayName}</Dialog.Title>
+                  {installed ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
                       <CheckCircle2 className="size-3" aria-hidden />
                       {t.connectedBadge}
                     </span>
-                  </div>
-                ) : null}
-                <Dialog.Title className="text-base font-semibold text-fg">
-                  {connector.displayName}
-                </Dialog.Title>
+                  ) : null}
+                </div>
                 <Dialog.Description className="mt-1 line-clamp-3 text-sm leading-6 text-fg-muted">
-                  {connector.description}
+                  {description}
                 </Dialog.Description>
               </div>
             </div>
             <Dialog.Close asChild>
               <button
                 type="button"
-                className={cn(
-                  'rounded-lg p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg',
-                  interaction.focusRingPanel,
-                )}
+                className={cn('rounded-lg p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg', interaction.focusRingPanel)}
                 aria-label={t.modalClose}
               >
                 <X className="size-5" strokeWidth={1.75} aria-hidden />
-                <span className="sr-only">{t.modalClose}</span>
               </button>
             </Dialog.Close>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-lg border border-edge bg-surface-base p-3">
-                <div className="flex items-center gap-2 text-xs font-medium text-fg-muted">
-                  <Wrench className="size-3.5" aria-hidden />
-                  {t.detailTools}
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
+            {benefits.length ? (
+              <section>
+                <h3 className="text-sm font-semibold text-fg">{t.connectorWhyConnect}</h3>
+                <div className="mt-3 divide-y divide-edge-subtle overflow-hidden rounded-xl border border-edge bg-surface-base">
+                  {benefits.map((benefit) => (
+                    <div key={benefit} className="px-4 py-3">
+                      <p className="text-sm font-medium text-fg">{t.connectorBenefitHeadings[benefit]}</p>
+                      <p className="mt-1 text-xs leading-5 text-fg-muted">{t.connectorBenefitHints[benefit]}</p>
+                    </div>
+                  ))}
                 </div>
-                <p className="mt-2 text-sm font-semibold text-fg">
-                  {previewResult ? formatConnectorMessage(t.connectorPreviewToolsCount, { count: previewResult.toolCount }) : t.connectorPreviewUnknown}
-                </p>
-              </div>
-              <div className="rounded-lg border border-edge bg-surface-base p-3">
-                <div className="flex items-center gap-2 text-xs font-medium text-fg-muted">
-                  <KeyRound className="size-3.5" aria-hidden />
-                  {t.detailPermissions}
-                </div>
-                <p className="mt-2 text-sm font-semibold text-fg">{authLabel(connector, t)}</p>
-              </div>
-              <div className="rounded-lg border border-edge bg-surface-base p-3">
-                <div className="flex items-center gap-2 text-xs font-medium text-fg-muted">
-                  <Database className="size-3.5" aria-hidden />
-                  {t.connectorRequiredInputs}
-                </div>
-                <p className="mt-2 text-sm font-semibold text-fg">
-                  {formatConnectorMessage(t.connectorRequiredInputsCount, { count: requiredInputCount })}
-                </p>
-              </div>
-            </div>
+              </section>
+            ) : null}
 
-            <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
-              <div className="min-w-0 space-y-5">
-                <section>
-                  <h3 className="text-sm font-semibold text-fg">{t.connectorCapabilitiesTitle}</h3>
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {visibleCapabilities.map((capability) => (
-                      <span
-                        key={capability}
-                        className="rounded-md border border-edge bg-surface-base px-2 py-1 text-xs text-fg-muted"
-                      >
+            <section className="overflow-hidden rounded-xl border border-edge bg-surface-base">
+              <div className="flex items-start gap-3 border-b border-edge-subtle px-4 py-3">
+                <KeyRound className="mt-0.5 size-4 shrink-0 text-fg-muted" aria-hidden />
+                <div>
+                  <p className="text-sm font-medium text-fg">{t.detailPermissions}</p>
+                  <p className="mt-1 text-xs text-fg-muted">{authLabel(connector, t)}</p>
+                </div>
+              </div>
+              <div className="px-4 py-3">
+                <p className="text-sm font-medium text-fg">{t.connectorSetupTitle}</p>
+                <p className="mt-1 text-xs leading-5 text-fg-muted">
+                  {requiredInputs.length
+                    ? formatConnectorMessage(t.connectorRequiredInputsCount, { count: String(requiredInputs.length) })
+                    : t.connectorSetupNone}
+                </p>
+              </div>
+            </section>
+
+            <details className="rounded-xl border border-edge bg-surface-base">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-fg-muted hover:text-fg">
+                {t.connectorTechnicalDetails}
+              </summary>
+              <div className="space-y-5 border-t border-edge-subtle px-4 py-4">
+                <div>
+                  <p className="flex items-center gap-2 text-xs font-medium text-fg-muted">
+                    <Server className="size-3.5" aria-hidden />
+                    {t.connectorRuntimeTitle}
+                  </p>
+                  <p className="mt-1 break-words text-xs text-fg-subtle">{runtimeLabel(connector, t)}</p>
+                </div>
+                {capabilities.length ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {capabilities.map((capability) => (
+                      <span key={capability} className="rounded-md bg-surface-panel px-2 py-1 text-xs text-fg-muted">
                         {capabilityLabel(capability, t)}
                       </span>
                     ))}
-                    {hiddenCapabilities > 0 ? (
-                      <span className="rounded-md border border-edge bg-surface-base px-2 py-1 text-xs text-fg-subtle">
-                        +{hiddenCapabilities}
-                      </span>
-                    ) : null}
                   </div>
-                </section>
-
-                {previewError ? (
-                  <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600">{previewError}</p>
                 ) : null}
-
+                <Button variant="secondary" disabled={previewLoading} onClick={() => void runPreview()}>
+                  {previewLoading ? <Loader2 className="size-4 animate-spin" /> : <Wrench className="size-4" />}
+                  {t.connectorPreviewButton}
+                </Button>
+                {previewError ? <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600">{previewError}</p> : null}
                 {previewResult ? (
-                  <section>
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <h3 className="text-sm font-semibold text-fg">{t.connectorPreviewTitle}</h3>
-                      <span
-                        className={cn(
-                          'rounded-full px-2 py-0.5 text-xs font-medium',
-                          previewResult.ok
-                            ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                            : 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
-                        )}
-                      >
-                        {previewResult.ok ? t.healthStatusHealthy : (t.healthStatusLabels[previewResult.status] ?? previewResult.status)}
-                      </span>
-                    </div>
-                    <div className="mb-3 grid gap-2 text-xs sm:grid-cols-3">
-                      <div className="rounded-lg border border-edge bg-surface-base px-3 py-2">
-                        <div className="font-semibold text-fg">{previewResult.toolCount}</div>
-                        <div className="text-fg-muted">{t.toolsMetric}</div>
-                      </div>
-                      <div className="rounded-lg border border-edge bg-surface-base px-3 py-2">
-                        <div className="font-semibold text-fg">{previewResult.resourceCount}</div>
-                        <div className="text-fg-muted">{t.resourcesMetric}</div>
-                      </div>
-                      <div className="rounded-lg border border-edge bg-surface-base px-3 py-2">
-                        <div className="font-semibold text-fg">{previewResult.promptCount}</div>
-                        <div className="text-fg-muted">{t.promptsMetric}</div>
-                      </div>
-                    </div>
-                    <div className="grid gap-2">
-                      <CapabilityPreviewList
-                        title={t.detailTools}
-                        items={previewResult.tools.map((tool) => ({
-                          id: tool.name,
-                          title: tool.shortName ?? tool.name,
-                          description: tool.description,
-                        }))}
-                      />
-                      <CapabilityPreviewList
-                        title={t.detailResources}
-                        items={previewResult.resources.map((resource) => ({
-                          id: resource.uri,
-                          title: resource.title ?? resource.name ?? resource.uri,
-                          description: resource.description ?? resource.uri,
-                        }))}
-                      />
-                      <CapabilityPreviewList
-                        title={t.detailPrompts}
-                        items={previewResult.prompts.map((prompt) => ({
-                          id: prompt.name,
-                          title: prompt.title ?? prompt.name,
-                          description: prompt.description ?? formatConnectorMessage(t.promptArgumentCount, { count: prompt.argumentCount }),
-                        }))}
-                      />
-                    </div>
-                    {previewResult.error ? <p className="mt-3 text-xs leading-5 text-fg-subtle">{previewResult.error}</p> : null}
-                    {previewResult.action ? <p className="mt-2 text-xs leading-5 text-fg-subtle">{previewResult.action}</p> : null}
-                  </section>
+                  <div className="space-y-4">
+                    <CapabilityPreviewList
+                      title={t.detailTools}
+                      items={previewResult.tools.map((tool) => ({ id: tool.name, title: tool.shortName ?? tool.name, description: tool.description }))}
+                    />
+                    <CapabilityPreviewList
+                      title={t.detailResources}
+                      items={previewResult.resources.map((resource) => ({ id: resource.uri, title: resource.title ?? resource.name ?? resource.uri, description: resource.description }))}
+                    />
+                    <CapabilityPreviewList
+                      title={t.detailPrompts}
+                      items={previewResult.prompts.map((prompt) => ({ id: prompt.name, title: prompt.title ?? prompt.name, description: prompt.description }))}
+                    />
+                  </div>
                 ) : null}
-
               </div>
-
-              <aside className="space-y-3">
-                <section className="rounded-lg border border-edge bg-surface-base p-3">
-                  <h3 className="flex items-center gap-2 text-sm font-semibold text-fg">
-                    <KeyRound className="size-4 text-accent" aria-hidden />
-                    {t.detailPermissions}
-                  </h3>
-                  <p className="mt-2 text-sm font-medium text-fg">{authLabel(connector, t)}</p>
-                </section>
-
-                <section className="rounded-lg border border-edge bg-surface-base p-3">
-                  <h3 className="flex items-center gap-2 text-sm font-semibold text-fg">
-                    <Database className="size-4 text-accent" aria-hidden />
-                    {t.connectorSetupTitle}
-                  </h3>
-                  {setupItems.length > 0 ? (
-                    <div className="mt-3 divide-y divide-edge overflow-hidden rounded-lg border border-edge">
-                      {setupItems.map((item) => (
-                        <div key={item.key} className="bg-surface-panel px-3 py-2.5">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm font-medium text-fg">{item.label}</span>
-                            <span className="rounded-md bg-surface-hover px-1.5 py-0.5 text-[11px] text-fg-muted">{item.kind}</span>
-                            {item.required ? (
-                              <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
-                                {t.connectorSetupRequired}
-                              </span>
-                            ) : null}
-                          </div>
-                          {item.description ? <p className="mt-1 text-xs leading-5 text-fg-muted">{item.description}</p> : null}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="mt-2 text-sm leading-6 text-fg-muted">
-                      {t.connectorSetupNone}
-                    </p>
-                  )}
-                </section>
-
-                <section className="rounded-lg border border-edge bg-surface-base p-3">
-                  <h3 className="flex items-center gap-2 text-sm font-semibold text-fg">
-                    <Server className="size-4 text-accent" aria-hidden />
-                    {t.connectorRuntimeTitle}
-                  </h3>
-                  <p className="mt-2 break-words text-xs leading-5 text-fg-muted">{runtimeLabel(connector, t)}</p>
-                </section>
-              </aside>
-            </div>
+            </details>
           </div>
 
-          <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-edge-subtle px-6 py-4">
-            <Dialog.Close asChild>
-              <Button variant="secondary">{t.modalClose}</Button>
-            </Dialog.Close>
-            <Button variant="secondary" disabled={previewLoading} onClick={() => void runPreview()}>
-              {previewLoading ? <Loader2 className="size-4 animate-spin" /> : <Wrench className="size-4" />}
-              {t.connectorPreviewButton}
-            </Button>
+          <div className="flex shrink-0 justify-end gap-2 border-t border-edge-subtle px-5 py-4 sm:px-6">
+            <Dialog.Close asChild><Button variant="secondary">{t.modalClose}</Button></Dialog.Close>
             {!installed ? (
               <Button
                 variant="primary"
@@ -347,12 +235,7 @@ export function ConnectorDetailDialog({
                 <PackagePlus className="size-4" />
                 {t.connect}
               </Button>
-            ) : (
-              <Button variant="secondary" disabled>
-                <PlugZap className="size-4" />
-                {t.connectedBadge}
-              </Button>
-            )}
+            ) : null}
           </div>
         </Dialog.Content>
       </Dialog.Portal>
