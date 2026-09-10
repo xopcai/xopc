@@ -263,7 +263,7 @@ describe('SideChatConversation composer', () => {
     act(() => resizeCallback?.([], resizeObserver!));
 
     expect(scrollTop).toBe(300);
-    expect([...container.querySelectorAll('button')].some((button) => button.className.includes('bottom-4'))).toBe(true);
+    expect(container.querySelector('button[aria-label="Scroll to bottom"]')).not.toBeNull();
   });
 
   it('renders selected context as a reference chip inside the composer', async () => {
