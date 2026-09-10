@@ -2,7 +2,7 @@
 
 桌面应用是 xopc 最主要的本地入口。它包含 Gateway 控制台，会在需要时启动本地服务，并把对话、用户理解、Project、Task、模型、权限和运行记录放在同一个地方，无需常驻终端。
 
-![xopc 桌面应用演示](/xopc-desktop.gif)
+<video src="/xopc-desktop.mp4" controls muted autoplay loop playsinline width="100%" aria-label="xopc 桌面应用演示"></video>
 
 ## 安装
 
