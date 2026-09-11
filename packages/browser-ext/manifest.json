@@ -14,14 +14,12 @@
     "activeTab",
     "alarms",
     "storage",
-    "nativeMessaging"
+    "nativeMessaging",
+    "debugger"
   ],
   "host_permissions": [
     "http://127.0.0.1/*",
     "http://localhost/*"
-  ],
-  "optional_permissions": [
-    "debugger"
   ],
   "optional_host_permissions": [
     "http://*/*",

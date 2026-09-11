@@ -436,8 +436,6 @@ export class BrowserChatClient {
   async bindActiveTab(mode: BrowserTabBindingMode): Promise<void> {
     const sessionKey = this.snapshot.sessionKey;
     if (!sessionKey || !this.turnClaim) throw new Error('Open a chat and wait for the browser endpoint');
-    const debuggerGranted = await chrome.permissions.request({ permissions: ['debugger'] });
-    if (!debuggerGranted) throw new Error('Chrome debugger permission is required to control this tab');
     const descriptor = await currentTabDescriptor();
     const result = await json<{ payload: BrowserTabBinding }>(await gatewayFetch(
       `/api/browser/tab-bindings/${encodeURIComponent(sessionKey)}`,
