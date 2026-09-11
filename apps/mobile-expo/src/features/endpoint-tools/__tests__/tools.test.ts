@@ -72,6 +72,25 @@ describe('mobile endpoint file tools', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(new Uint8Array([1, 2, 3]))));
   });
 
+  it('only skips the extra confirmation for native user-mediated tools', () => {
+    expect(registry.get('mobile.file.pick')?.definition.descriptor).toMatchObject({
+      policyId: 'personal.foreground-mediated-read',
+      confirmation: 'never',
+    });
+    expect(registry.get('mobile.file.share')?.definition.descriptor).toMatchObject({
+      policyId: 'user.foreground-mediated-write',
+      confirmation: 'never',
+    });
+    expect(registry.get('mobile.device.get_info')?.definition.descriptor.confirmation).toBe('never');
+    for (const name of [
+      'mobile.notification.show',
+      'mobile.clipboard.write',
+      'mobile.app.open_url',
+    ]) {
+      expect(registry.get(name)?.definition.descriptor.confirmation).toBe('always');
+    }
+  });
+
   it('uploads the single file explicitly returned by the system picker', async () => {
     state.pick.mockResolvedValue({
       canceled: false,

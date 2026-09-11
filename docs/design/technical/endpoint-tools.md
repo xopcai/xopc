@@ -17,7 +17,9 @@ An endpoint descriptor is a capability claim, not an authorization decision. The
 
 Every descriptor has an input schema and an output schema. Arguments are validated before external execution, while returned content is validated by the gateway before the invocation succeeds. Protocol v1 is rejected; there is no compatibility branch.
 
-Personal reads and mutations require foreground execution and confirmation. Invocation audit rows retain an argument hash and terminal metadata, not raw arguments or results. A result also carries its sensitivity classification into agent-tool details.
+Silent personal reads and direct mutations require foreground execution and confirmation. Actions mediated by a native picker or share sheet require foreground execution but do not add a second xopc confirmation, because the native surface supplies the final user choice. Mobile data-sharing disclosure remains a separate prerequisite for personal data. Invocation audit rows retain an argument hash and terminal metadata, not raw arguments or results. A result also carries its sensitivity classification into agent-tool details.
+
+Deploy the gateway policy before the mobile client. The updated gateway accepts the older, more restrictive picker/share descriptors during rollout; older gateways intentionally reject the newer mediated descriptors.
 
 ## Mobile contacts
 

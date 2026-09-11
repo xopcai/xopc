@@ -5,6 +5,12 @@ circle, radius, and stroke width. The arc centre lines use an exact 80:20 ratio:
 AI handles the larger execution segment while the blue human segment represents
 intention, judgment, and final control.
 
+The 80:20 split is a direction for collaboration, not a guaranteed ratio for every
+task. As understanding, capability, and trust grow, AI can carry more repeatable,
+time-consuming, verifiable execution. The person still defines the whole loop:
+what matters, which tradeoffs are acceptable, and what the final decision should
+be. The time and attention this returns to life are part of the product promise.
+
 Run `pnpm run assets:brand` from the repository root after changing that source. The
 generator creates every consumable asset under `docs/public`, `web/public`,
 `apps/mobile-expo/assets`, `electron/resources`, and `packages/browser-ext/icons`.

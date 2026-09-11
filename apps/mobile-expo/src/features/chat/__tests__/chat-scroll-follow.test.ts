@@ -24,14 +24,14 @@ function scroll(y: number, height = 1000): ScrollEvent {
   } } as ScrollEvent;
 }
 
-function setup() {
+function setup({ loadingOlder = false }: { loadingOlder?: boolean } = {}) {
   const scrollToEnd = vi.fn();
   const onAtBottomChange = vi.fn();
   const listRef = { current: { scrollToEnd } } as unknown as Parameters<typeof useChatListScrollFollow>[0]['listRef'];
   const handlers = useChatListScrollFollow({
     listRef,
     messages: [{ id: 'answer', role: 'assistant', content: [] }],
-    streaming: true,
+    loadingOlder,
     keyboardPadding: 0,
     sessionKey: 'session',
     onAtBottomChange,
@@ -55,23 +55,33 @@ afterEach(() => {
 });
 
 describe('measured chat scroll follow', () => {
-  it('lets FlashList own continuous height anchoring without issuing a competing scroll', () => {
+  it('coalesces streamed content growth into one tail follow per frame', () => {
     const chat = setup();
     chat.onContentSizeChange(400, 1200);
     chat.onScroll(scroll(500, 1200));
-    chat.onContentSizeChange(400, 1200);
+    chat.onContentSizeChange(400, 1220);
+    chat.onContentSizeChange(400, 1240);
     vi.runAllTimers();
-    expect(chat.scrollToEnd).not.toHaveBeenCalled();
+    expect(chat.scrollToEnd).toHaveBeenCalledExactlyOnceWith({ animated: false });
     expect(chat.onAtBottomChange).not.toHaveBeenCalled();
   });
 
-  it('restores the bottom when completion collapses the live assistant row', () => {
+  it('restores the bottom when native metrics arrive before a completion layout callback', () => {
     const chat = setup();
     chat.onContentSizeChange(400, 1200);
-    chat.onScroll(scroll(700, 1200));
+    vi.runAllTimers();
+    chat.scrollToEnd.mockClear();
+    chat.onScroll(scroll(400, 900));
     chat.onContentSizeChange(400, 900);
     vi.runAllTimers();
     expect(chat.scrollToEnd).toHaveBeenCalledExactlyOnceWith({ animated: false });
+  });
+
+  it('leaves prepend anchoring to FlashList while older history is loading', () => {
+    const chat = setup({ loadingOlder: true });
+    chat.onContentSizeChange(400, 1600);
+    vi.runAllTimers();
+    expect(chat.scrollToEnd).not.toHaveBeenCalled();
   });
 
   it('cancels pending follow and keeps history reading position as tokens arrive', () => {
