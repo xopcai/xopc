@@ -53,6 +53,13 @@ const RUN_HEARTBEAT_INTERVAL_MS = 10_000;
 const RUN_LEASE_DURATION_MS = 30_000;
 const RETRY_BASE_DELAY_MS = 1_000;
 
+class AutomationDeadlineExceededError extends Error {
+  constructor() {
+    super('Automation deadline exceeded while calling the completion webhook');
+    this.name = 'AutomationDeadlineExceededError';
+  }
+}
+
 export class AutomationAlreadyRunningError extends Error {
   constructor(readonly automationId: string, readonly runningRunId?: string) {
     super(`Automation is already running: ${automationId}`);
@@ -551,7 +558,8 @@ export class AutomationService {
       }
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
-      const deadlineExceeded = run.deadlineAtMs !== undefined && Date.now() >= run.deadlineAtMs;
+      const deadlineExceeded = err instanceof AutomationDeadlineExceededError
+        || (run.deadlineAtMs !== undefined && Date.now() >= run.deadlineAtMs);
       status = controller.signal.aborted ? 'cancelled' : deadlineExceeded ? 'timeout' : 'failed';
       this.appendRunEvent(run, activePhase === 'completion_hook' ? 'completion_hook.failed' : 'action.failed', `Automation run ${status}`, {
         error,
@@ -735,13 +743,22 @@ export class AutomationService {
     const remainingMs = run.deadlineAtMs === undefined
       ? 30_000
       : Math.max(1, run.deadlineAtMs - Date.now());
-    const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(remainingMs)]);
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ run }),
-      signal: requestSignal,
-    });
+    const deadlineSignal = AbortSignal.timeout(remainingMs);
+    const requestSignal = AbortSignal.any([signal, deadlineSignal]);
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ run }),
+        signal: requestSignal,
+      });
+    } catch (err) {
+      if (!signal.aborted && deadlineSignal.aborted) {
+        throw new AutomationDeadlineExceededError();
+      }
+      throw err;
+    }
     if (!response.ok) {
       const text = await response.text().catch(() => '');
       throw new Error(`Automation webhook failed: HTTP ${response.status}${text ? ` ${text.slice(0, 200)}` : ''}`);
