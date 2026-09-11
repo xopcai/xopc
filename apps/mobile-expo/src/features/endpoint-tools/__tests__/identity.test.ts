@@ -16,9 +16,9 @@ import {
 describe('mobile endpoint identity', () => {
   beforeEach(() => secureValues.clear());
 
-  it('persists a P-256 identity and emits valid P1363 signatures', () => {
-    const first = getOrCreateMobileEndpointIdentity();
-    const second = getOrCreateMobileEndpointIdentity();
+  it('binds a persisted P-256 key to the paired device principal', () => {
+    const first = getOrCreateMobileEndpointIdentity('device-a');
+    const second = getOrCreateMobileEndpointIdentity('device-a');
     expect(second.principalId).toBe(first.principalId);
     expect(second.publicKey).toBe(first.publicKey);
 
@@ -34,5 +34,17 @@ describe('mobile endpoint identity', () => {
       { key, dsaEncoding: 'ieee-p1363' },
       Buffer.from(signMobileEndpointPayload(first.privateKey, payload), 'base64url'),
     )).toBe(true);
+  });
+
+  it('uses the active gateway device id instead of persisting an unrelated principal id', () => {
+    const first = getOrCreateMobileEndpointIdentity('device-a');
+    const storageKey = 'xopc.endpoint-tools.mobile.identity';
+    const stored = JSON.parse(secureValues.get(storageKey)!) as Record<string, unknown>;
+    secureValues.set(storageKey, JSON.stringify({ ...stored, principalId: 'legacy-random-id' }));
+    const second = getOrCreateMobileEndpointIdentity('device-b');
+
+    expect(first.principalId).toBe('device-a');
+    expect(second.principalId).toBe('device-b');
+    expect(second.publicKey).toBe(first.publicKey);
   });
 });
