@@ -5,6 +5,7 @@ import type { ResolvedNewSessionSpec, SessionInitialAgentConfig } from '@xopcai/
 
 import { openChat } from '../../lib/navigation';
 
+import { canStartChatBootstrap } from './chat-bootstrap-gate';
 import { takeNewChatSessionKey } from './session-prefetch';
 import type { useMessages } from '../../i18n/messages';
 
@@ -13,6 +14,8 @@ export type ChatBootstrapDeps = {
   urlSessionKey: string;
   resumeSessionKey?: string;
   resumeLookupComplete?: boolean;
+  /** True only after an active gateway has been restored or selected. */
+  gatewayReady: boolean;
   gatewayOnline: boolean;
   newSessionSpec: Pick<ResolvedNewSessionSpec, 'agentId' | 'projectId'>;
   initialAgentConfig?: SessionInitialAgentConfig;
@@ -38,6 +41,7 @@ export function useChatPageBootstrap(deps: ChatBootstrapDeps): ChatBootstrapResu
     urlSessionKey,
     resumeSessionKey = '',
     resumeLookupComplete = true,
+    gatewayReady,
     gatewayOnline,
     newSessionSpec,
     initialAgentConfig,
@@ -61,6 +65,7 @@ export function useChatPageBootstrap(deps: ChatBootstrapDeps): ChatBootstrapResu
     autoSessionAttemptedRef.current = false;
     activeSessionKeyRef.current = '';
     setPendingBootstrapKey('');
+    setCreatingInitialSession(false);
     setBootstrapError(null);
   }, [activeSessionKeyRef, scopeKey]);
 
@@ -69,21 +74,29 @@ export function useChatPageBootstrap(deps: ChatBootstrapDeps): ChatBootstrapResu
   }, [urlSessionKey]);
 
   const startAutoSession = useCallback(() => {
-    if (urlSessionKey || !gatewayOnline) return;
-    if (!resumeLookupComplete || autoSessionAttemptedRef.current) return;
+    if (!canStartChatBootstrap({
+      gatewayReady,
+      gatewayOnline,
+      urlSessionKey,
+      resumeLookupComplete,
+      alreadyAttempted: autoSessionAttemptedRef.current,
+    })) return;
 
     autoSessionAttemptedRef.current = true;
     if (resumeSessionKey) {
       activeSessionKeyRef.current = resumeSessionKey;
       setPendingBootstrapKey(resumeSessionKey);
+      setBootstrapError(null);
       if (shouldNavigateToRoute) openChat(router, resumeSessionKey, { replace: true });
       return;
     }
     setCreatingInitialSession(true);
     setBootstrapError(null);
+    const attemptScopeKey = scopeKey;
 
     void takeNewChatSessionKey(newSessionSpec, initialAgentConfig)
       .then((key) => {
+        if (previousScopeRef.current !== attemptScopeKey) return;
         activeSessionKeyRef.current = key;
         setPendingBootstrapKey(key);
         if (shouldNavigateToRoute) {
@@ -91,26 +104,27 @@ export function useChatPageBootstrap(deps: ChatBootstrapDeps): ChatBootstrapResu
         }
       })
       .catch((err) => {
+        if (previousScopeRef.current !== attemptScopeKey) return;
         autoSessionAttemptedRef.current = false;
         setBootstrapError(err instanceof Error ? err.message : messages.sessions.bootstrapFailed);
       })
       .finally(() => {
+        if (previousScopeRef.current !== attemptScopeKey) return;
         setCreatingInitialSession(false);
       });
-  }, [urlSessionKey, gatewayOnline, resumeLookupComplete, resumeSessionKey, newSessionSpec, initialAgentConfig, messages.sessions.bootstrapFailed, router, activeSessionKeyRef, shouldNavigateToRoute]);
+  }, [urlSessionKey, gatewayReady, gatewayOnline, resumeLookupComplete, resumeSessionKey, newSessionSpec, initialAgentConfig, messages.sessions.bootstrapFailed, router, activeSessionKeyRef, shouldNavigateToRoute, scopeKey]);
 
   // Auto-start on first mount when gateway is online
   useEffect(() => {
-    if (!shouldAutoBootstrap || urlSessionKey || !gatewayOnline || !resumeLookupComplete) return;
-    if (autoSessionAttemptedRef.current) return;
+    if (!shouldAutoBootstrap) return;
     startAutoSession();
-  }, [shouldAutoBootstrap, urlSessionKey, gatewayOnline, resumeLookupComplete, startAutoSession]);
+  }, [shouldAutoBootstrap, startAutoSession]);
 
   const retryBootstrapSession = useCallback(() => {
-    if (urlSessionKey || !gatewayOnline) return;
+    if (!gatewayReady || urlSessionKey || !gatewayOnline) return;
     autoSessionAttemptedRef.current = false;
     startAutoSession();
-  }, [urlSessionKey, gatewayOnline, startAutoSession]);
+  }, [gatewayReady, urlSessionKey, gatewayOnline, startAutoSession]);
 
   return {
     pendingBootstrapKey,
