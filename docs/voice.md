@@ -14,7 +14,7 @@ Natural chat uses `qwen3-omni-flash-realtime`. Each connection restores the sele
 
 Use the composer’s call button to start or continue voice in the same Chat. Network failure, a call time limit or a page reload ends the connection; start again to continue the conversation. Minimize/route navigation does not end it. There is no silent microphone reopening or automatic indefinite connection renewal.
 
-Hosted natural calls require a published conversation route on XOPC Platform. Gateway and renderer must both support protocol v2. The platform relay must also accept `input_audio_buffer.clear`; ship its matching change before enabling the updated hosted client. See the [technical design](https://github.com/xopcai/xopc/blob/main/docs/design/realtime-voice-technical-design.md) and [delivery review](https://github.com/xopcai/xopc/blob/main/docs/design/persistent-voice-delivery.md) for implementation and verification limits.
+Hosted natural calls require a published conversation route on XOPC Platform. Gateway and clients must all support protocol v3. See the [protocol](./design/realtime-voice-websocket-protocol.md), [mobile technical design](./design/mobile-voice-technical-design.md), and [delivery review](./design/voice-experience-delivery.md) for implementation and verification limits.
 
 ## Where else voice works
 
@@ -97,8 +97,8 @@ Use **Settings → Logs** or `xopc logs tail` to find the first provider error. 
 
 Calls allow a short continuation window before answering. The default response pacing now uses 1,200 ms of provider silence; common unfinished Chinese/English phrases get additional waiting time. Resuming speech discards a reply that has not yet been shown or played. Interrupting an already playing reply remains immediate when enabled. This is pause/continuation handling, not full semantic speech detection. The policy runs on the gateway and applies to mobile, web and desktop; deploy the updated gateway for connected clients to receive it.
 
-**Stop reply** clears playback and cancels the current response, invalidating queued and unfinished input. It does not send a message or undo completed tool actions. Tool progress and explicit clarification/connector approval controls appear in the call. Ambient speech does not answer a pending clarification. Calls opened from a task retain its existing task status and detail link.
+**Stop reply** immediately clears playback and detaches the current voice rendering. A durable Agent task continues in the Chat; use the separate **Cancel task** action to abort it. Neither action sends a new message or undoes completed tool effects. Tool progress and explicit clarification/connector approval controls appear in the call. Ambient speech does not answer a pending clarification. Calls opened from a task retain its existing task status and detail link.
 
-The saved default is `voice.realtime.defaultEngine` (`agent` by default, or `omni`). A session creation request may omit `engine` to use it. Active calls keep their original route.
+Calls use the product modes **Current assistant** (`assistant`) and **Natural voice · no tools** (`natural`). Session requests may omit `mode` to use the configured default; clients cannot select an internal provider engine. Active calls keep their original mode.
 
 Run `node scripts/voice-browser-smoke.mjs` for production-component checks with Chrome synthetic microphone input and a fake gateway. Set `XOPC_VOICE_SMOKE_BROWSER` to another Chrome/Chromium executable if needed. This does not measure real acoustic quality. See [delivery and audio acceptance](https://github.com/xopcai/xopc/blob/main/docs/design/voice-experience-delivery.md).

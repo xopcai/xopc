@@ -256,7 +256,7 @@ describe('useRealtimeVoice', () => {
 
   it('streams assistant text and audio in conversation mode', async () => {
     render();
-    await act(async () => voice.startVoiceConversation('agent:main:webchat:default:direct:voice', 'agent'));
+    await act(async () => voice.startVoiceConversation('agent:main:webchat:default:direct:voice', 'assistant'));
 
     expect(mocks.connect).toHaveBeenCalledWith(expect.objectContaining({
       purpose: 'conversation',
@@ -277,8 +277,8 @@ describe('useRealtimeVoice', () => {
 
   it('selects Omni explicitly and ignores cancelled-response audio and text', async () => {
     render();
-    await act(async () => voice.startVoiceConversation('agent:main:webchat:default:direct:voice', 'omni'));
-    expect(mocks.connect).toHaveBeenCalledWith(expect.objectContaining({ purpose: 'conversation', engine: 'omni' }));
+    await act(async () => voice.startVoiceConversation('agent:main:webchat:default:direct:voice', 'natural'));
+    expect(mocks.connect).toHaveBeenCalledWith(expect.objectContaining({ purpose: 'conversation', mode: 'natural' }));
     act(() => onEvent({ type: 'response.created', payload: { responseId: 'r1' } }));
     act(() => voice.interruptResponse());
     act(() => onEvent({ type: 'response.created', payload: { responseId: 'r2' } }));
@@ -294,7 +294,7 @@ describe('useRealtimeVoice', () => {
 
   async function startResponse() {
     render();
-    await act(async () => voice.startVoiceConversation('agent:main:webchat:default:direct:voice', 'agent'));
+    await act(async () => voice.startVoiceConversation('agent:main:webchat:default:direct:voice', 'assistant'));
     act(() => {
       onEvent({ type: 'response.created', payload: { responseId: 'r1' } });
       onEvent({ type: 'response.audio.started', payload: { responseId: 'r1' } });
@@ -381,7 +381,7 @@ describe('useRealtimeVoice', () => {
   });
   it('mutes capture and upload without muting assistant playback', async () => {
     render();
-    await act(async () => voice.startVoiceConversation('same-session', 'agent'));
+    await act(async () => voice.startVoiceConversation('same-session', 'assistant'));
     sendAudio.mockClear();
     act(() => voice.toggleMute());
     expect(track.enabled).toBe(false);
@@ -399,9 +399,9 @@ describe('useRealtimeVoice', () => {
 
   it('reuses the same conversation key after ending and reconnecting', async () => {
     render();
-    await act(async () => voice.startVoiceConversation('same-session', 'omni'));
+    await act(async () => voice.startVoiceConversation('same-session', 'natural'));
     act(() => voice.cancelVoiceInput());
-    await act(async () => voice.startVoiceConversation('same-session', 'omni'));
+    await act(async () => voice.startVoiceConversation('same-session', 'natural'));
     expect(mocks.connect.mock.calls.map(([options]) => options.sessionKey)).toEqual(['same-session', 'same-session']);
   });
 
@@ -410,7 +410,7 @@ describe('useRealtimeVoice', () => {
     vi.mocked(navigator.mediaDevices.getUserMedia).mockImplementationOnce(() => new Promise((r) => { resolve = r; }));
     render();
     let pending!: Promise<void>;
-    await act(async () => { pending = voice.startVoiceConversation('same-session', 'omni'); });
+    await act(async () => { pending = voice.startVoiceConversation('same-session', 'natural'); });
     act(() => voice.cancelVoiceInput());
     await act(async () => { resolve({ getTracks: () => [track] } as unknown as MediaStream); await pending; });
     expect(track.stop).toHaveBeenCalled();
@@ -426,7 +426,7 @@ describe('useRealtimeVoice', () => {
     });
     render();
     let pending!: Promise<void>;
-    await act(async () => { pending = voice.startVoiceConversation('same-session', 'omni'); });
+    await act(async () => { pending = voice.startVoiceConversation('same-session', 'natural'); });
     act(() => voice.cancelVoiceInput());
     await act(async () => { resolve({ sampleRate: 48_000, cancel: cancelCapture }); await pending; });
     expect(sendAudio).not.toHaveBeenCalled();
@@ -436,7 +436,7 @@ describe('useRealtimeVoice', () => {
   it('rejects unavailable capabilities before asking for the microphone', async () => {
     mocks.preflight.mockRejectedValueOnce(new Error('Natural voice requires sign-in'));
     render();
-    await act(async () => voice.startVoiceConversation('same-session', 'omni'));
+    await act(async () => voice.startVoiceConversation('same-session', 'natural'));
     expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
     expect(mocks.connect).not.toHaveBeenCalled();
     expect(voice.error).toBe('Natural voice requires sign-in');
@@ -484,7 +484,7 @@ describe('useRealtimeVoice', () => {
 
   it('keeps muted native calls connected after a recoverable reply failure', async () => {
     render();
-    await act(async () => voice.startVoiceConversation('same-session', 'omni'));
+    await act(async () => voice.startVoiceConversation('same-session', 'natural'));
     act(() => voice.toggleMute());
     act(() => {
       onEvent({ type: 'response.created', payload: { responseId: 'slow' } });

@@ -27,7 +27,7 @@ import { appendOlderSessionHistoryPage } from './session-message-parser';
 import { useChatPage } from './use-chat-page';
 import { useAutoReadAloud } from './use-auto-read-aloud';
 import type { ComposerContextRef } from './composer.types';
-import type { ComposerVoiceCallEngine } from './composer-voice-call-options';
+import type { ComposerVoiceCallMode } from './composer-voice-call-options';
 import { dispatchMobileComposerAppend } from './mobile-composer-fill';
 import { useReadAloudStore } from '../voice/read-aloud-store';
 import { useVoiceCall, voiceCall } from '../voice/voice-call';
@@ -108,7 +108,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
     title: m.chat.messageReadAloudTitle,
   });
 
-  const handleVoiceCallPress = useCallback((engine: ComposerVoiceCallEngine) => {
+  const handleVoiceCallPress = useCallback((mode: ComposerVoiceCallMode) => {
     if (call.phase !== 'idle') {
       voiceCall.expand();
       return;
@@ -120,7 +120,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
     void voiceCall.start({
       gatewayId: activeGatewayId,
       sessionKey,
-      engine,
+      mode,
       background: voiceCallBackground,
       identity: sessionHistoryQuery.data?.pages[0]?.session.sessionId,
       name: sessionHistoryQuery.data?.pages[0]?.session.name ?? agentName,
@@ -275,8 +275,8 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
             onContextRefsChange={setComposerContextRefs}
             onVoiceCallStart={handleVoiceCallPress}
             voiceCallUnavailable={{
-              omni: Boolean(voiceStatusQuery.data && !voiceStatusQuery.data.capabilities.omni.available),
-              agent: Boolean(voiceStatusQuery.data && !voiceStatusQuery.data.capabilities.agent.available),
+              natural: Boolean(voiceStatusQuery.data && !voiceStatusQuery.data.capabilities.natural.available),
+              assistant: Boolean(voiceStatusQuery.data && !voiceStatusQuery.data.capabilities.assistant.available),
             }}
           />
         </KeyboardStickyView>

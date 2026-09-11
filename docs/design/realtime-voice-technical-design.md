@@ -1,6 +1,6 @@
 # Persistent voice technical design
 
-Updated: 2026-09-07. See [product contract](./realtime-voice-prd.md) and [protocol v2](./realtime-voice-websocket-protocol.md).
+Updated: 2026-09-11. See [product contract](./realtime-voice-prd.md) and [protocol v3](./realtime-voice-websocket-protocol.md).
 
 ## Ownership
 
@@ -13,38 +13,38 @@ The transport's `sessionId` is a call connection identifier. It must not be used
 1. Resume the playback AudioContext from the user action.
 2. `POST /api/voice/realtime/preflight` validates configuration, routes and Chat availability without opening an upstream socket or reserving the Chat.
 3. Acquire microphone permission and stream. Issue the connection ticket through `/sessions`; the server reserves the Chat under its existing model-config lock.
-4. Authenticate the v2 socket. For native voice, load and freeze the current canonical context before opening the upstream connection.
+4. Negotiate protocol v3 and authenticate the socket. For natural voice, load and freeze the current canonical context before opening the upstream connection.
 5. Start PCM capture. Attempt tokens and an AbortController fence permission, connection and recorder completions after cancellation. Never flush a late recorder's pending samples.
 6. On shutdown, abort the engine, await Agent cleanup and pending transcript/interruption writes, then release the reservation. Unexpected renderer disconnect uses the same cleanup path.
 
 Microphone mute disables input tracks, gates capture callbacks and discards partial encoder frames. A bounded synthetic silence tail closes an in-flight server-VAD utterance; no muted microphone samples are uploaded. Playback remains enabled. Audio output acknowledgements and response IDs retain the existing interruption/backpressure protocol.
 
-Manual response cancellation invalidates queued Agent voice turns and unfinished STT utterances observed before the stop. It resets pending-turn capacity while keeping the existing cleanup chain intact. Fresh speech after the stop can start a new turn; stale recognition results cannot advance the queue. Automatic barge-in retains the new spoken turn.
+Stopping playback only discards queued audio for that response; it does not cancel durable Agent work. Explicit task cancellation is a separate control. Fresh speech can start a new turn while stale recognition results are fenced by the connection epoch and utterance sequence.
 
 ## Conversation endpoints and continuation
 
-Provider `speech_stopped` and final transcription events mark an ASR segment, not necessarily a completed user turn. `ConversationTurn` waits for every started segment to finish transcription, joins segments in speech-start order and cancels the pending endpoint whenever speech resumes. Dictation retains its explicit commit behavior.
+Provider `speech_stopped` and final transcription events mark an ASR segment, not necessarily a completed user turn. `TurnPolicy` waits for every started segment to finish transcription, joins segments in speech-start order, invalidates pending semantic decisions whenever speech resumes, and applies a bounded fallback when the semantic decision times out. Dictation retains its explicit commit behavior.
 
 The default provider silence window is 1,200 ms; the pacing choices are 800/1,200/2,000 ms. Existing explicit values remain explicit values. Conversation completion also has a 1,200 ms minimum silence target and at least a 350 ms transcription-settling window. Conservative Chinese/English continuation hints (for example, “帮我查一下”, “因为”, “could you”, and ellipses) extend the post-provider-endpoint hold to 1,800 ms. This is a bounded lexical heuristic, **not** model-level semantic VAD. No silence timeout releases a turn while a started segment is still being spoken or awaits its final transcript.
 
-- Agent mode starts one Agent request with the combined text after the endpoint settles. If Agent cleanup is still blocking that request and the user resumes, the queued text is restored into the unfinished turn.
-- Native mode retains the certified Qwen3 server-VAD protocol. A response may be generated upstream, but its `response.created`, text, audio and completion are withheld until the turn settles. Continuation discards an unpublished reply without showing it or writing an assistant transcript. User segments retain their provider item IDs and remain in upstream conversation context. Existing audio queue limits still apply while output is withheld.
-- Agent barge-in requires a non-empty final transcript before cancelling a thinking or audible reply. Bare server-VAD events and partial ASR hypotheses are insufficient because ambient noise and imperfectly cancelled speaker output can trigger them and partial text may later disappear. The added delay is the configured provider endpoint window. An unpublished native reply is discarded on continuation even with barge-in disabled. This is an evidence gate, not semantic noise/backchannel classification.
+- Assistant mode submits one durable Agent task with the combined text after the endpoint settles. Disconnecting or stopping playback only detaches voice output; only explicit task cancellation aborts the Agent run.
+- Natural mode retains the certified Qwen3 server-VAD protocol. A response may be generated upstream, but its text, audio and completion are withheld until the turn settles. Continuation discards an unpublished reply without showing it or writing an assistant transcript. User segments retain their provider item IDs and remain in upstream conversation context. Existing audio queue limits still apply while output is withheld.
+- Assistant-mode barge-in requires a non-empty final transcript before stopping audible playback. Bare server-VAD events and partial ASR hypotheses are insufficient because ambient noise and imperfectly cancelled speaker output can trigger them and partial text may later disappear. This is an evidence gate, not semantic noise/backchannel classification.
 - Mute, manual stop, congestion reset and close invalidate pending endpoints and release discarded output waiters. A native transcription failure discards the uncertain input and reports a recoverable error rather than leaving the reply waiting indefinitely.
 
 Do not switch the current certified Qwen3 model to Qwen3.5-only semantic VAD or depend on `create_response: false` without separately certifying the model and relay. The configured hosted route acknowledged the existing automatic-response configuration during testing, but did not acknowledge the manual-response configuration. No protocol fallback or model migration is included here. Unheard generated native content may still exist inside the current provider session; deleting/truncating that provider-side history is not certified.
 
 ## Shared conversation context
 
-Native final speech remains a `voice_omni_transcript` custom transcript entry with its actual speaker role and call/item IDs. `voiceTranscriptMessage` projects it into an ordinary user or assistant message. Both `buildSessionContextForLlm` and `storedRowsToFileEntries` use that projection, so direct context reads and the real embedded Agent hydration path agree. There is no separate memory database or turn-end transcript rewrite.
+Natural-mode final speech remains a `voice_omni_transcript` custom transcript entry with its actual speaker role and call/item IDs. `voiceTranscriptMessage` projects it into an ordinary user or assistant message. Both `buildSessionContextForLlm` and `storedRowsToFileEntries` use that projection, so direct context reads and the real embedded Agent hydration path agree. There is no separate memory database or turn-end transcript rewrite.
 
 An interrupted assistant row remains visible for audit, but its generated words are replaced by a clear interruption marker in model input. Invalid speaker roles are rejected. The synthetic assistant projection carries zero usage because it is historical context, not a new billed Agent request.
 
-Native startup instructions include the selected Agent's configured name/custom instructions, concise spoken behavior, the no-tools boundary and JSON-quoted history. Hidden reasoning and tool results are excluded. Recent user/assistant text gets most of the available space; earlier turns get explicitly incomplete excerpts. The entire instructions value stays within the existing platform relay's 8,000-character envelope. Excessive custom instructions fail with guidance to shorten them instead of silently discarding conversation history.
+Natural-mode startup instructions include the selected Agent's configured name/custom instructions, concise spoken behavior, the no-tools boundary and JSON-quoted history. Hidden reasoning and tool results are excluded. Recent user/assistant text gets most of the available space; earlier turns get explicitly incomplete excerpts. The entire instructions value stays within the existing platform relay's 8,000-character envelope. Excessive custom instructions fail with guidance to shorten them instead of silently discarding conversation history.
 
 This design uses `session.instructions` in the initial `session.update`. It does not inject unsupported conversation items, repeatedly update a locked relay session, or invent a provider resume token. Alibaba's [client-event reference](https://www.alibabacloud.com/help/en/model-studio/client-events) documents initial instructions; its current conversation-item support is insufficient for arbitrary historical user/assistant item injection. The bounded quoted context is an application-level continuation, not transport replay.
 
-Native voice does not hydrate the full Agent tool/system prompt or every profile Markdown file. It receives configured identity/instructions and visible conversation history. Exact heard-offset truncation inside an already-open native provider session is not certified; the interruption marker applies to subsequent restored context.
+Natural voice does not hydrate the full Agent tool/system prompt or every profile Markdown file. It receives configured identity/instructions and visible conversation history. Exact heard-offset truncation inside an already-open provider session is not certified; the interruption marker applies to subsequent restored context.
 
 ## Transcript metadata
 

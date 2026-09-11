@@ -2,6 +2,36 @@ import ExpoModulesCore
 import AVFoundation
 import MediaPlayer
 
+private final class NearSpeechDetector {
+  private let lock = NSLock()
+  private var noiseFloor = 120.0
+  private var loudFrames = 0
+  private var quietFrames = 0
+  private var active = false
+
+  func process(_ samples: UnsafePointer<Int16>, count: Int) -> Bool? {
+    lock.withLock {
+      guard count > 0 else { return nil }
+      var total: Int64 = 0
+      for index in 0..<count { total += Int64(abs(Int(samples[index]))) }
+      let level = Double(total) / Double(count)
+      let threshold = max(600.0, noiseFloor * 3.0)
+      if !active {
+        if level >= threshold {
+          loudFrames += 1
+          if loudFrames >= 2 { active = true; quietFrames = 0; return true }
+        } else { loudFrames = 0; noiseFloor = noiseFloor * 0.95 + level * 0.05 }
+        return nil
+      }
+      quietFrames = level < threshold * 0.7 ? quietFrames + 1 : 0
+      if quietFrames >= 6 { active = false; loudFrames = 0; quietFrames = 0; return false }
+      return nil
+    }
+  }
+
+  func reset() { lock.withLock { loudFrames = 0; quietFrames = 0; active = false } }
+}
+
 public final class XopcVoiceModule: Module {
   private var engine: AVAudioEngine?
   private var player: AVAudioPlayerNode?
@@ -18,18 +48,22 @@ public final class XopcVoiceModule: Module {
   private var submitted = 0
   private var played = 0
   private var configurationRestarts: [TimeInterval] = []
+  private let nearSpeech = NearSpeechDetector()
   private let output = AVAudioFormat(standardFormatWithSampleRate: 24000, channels: 1)!
 
   public func definition() -> ModuleDefinition {
     Name("XopcVoice")
-    Events("pcm", "played", "interrupted")
+    Events("pcm", "played", "interrupted", "speechCandidate", "route")
     AsyncFunction("start") { (background: Bool, _title: String, _stopLabel: String) in
       try self.start(background: background, title: _title)
     }.runOnQueue(.main)
     Function("setCaptureEnabled") { (enabled: Bool, id: Int) in
+      self.nearSpeech.reset()
       self.captureLock.withLock { self.captureEnabled = enabled; self.captureId = id }
     }
     AsyncFunction("enqueue") { (id: String, audio: String) in try self.enqueue(id: id, audio: audio) }.runOnQueue(.main)
+    AsyncFunction("duck") { self.player?.volume = 0.2 }.runOnQueue(.main)
+    AsyncFunction("resumeOutput") { self.player?.volume = 1.0 }.runOnQueue(.main)
     AsyncFunction("flush") { self.flush() }.runOnQueue(.main)
     AsyncFunction("stop") { self.stop() }.runOnQueue(.main)
     AsyncFunction("setSpeaker") { (enabled: Bool) in
@@ -41,7 +75,7 @@ public final class XopcVoiceModule: Module {
     OnDestroy { self.stop() }
   }
 
-  private func start(background: Bool, title: String) throws {
+  private func start(background: Bool, title: String) throws -> [String: Any] {
     stop()
     let session = AVAudioSession.sharedInstance()
     try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth])
@@ -81,9 +115,23 @@ public final class XopcVoiceModule: Module {
         NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification, object: session, queue: .main) { [weak self] notification in
           if let raw = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
              raw == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue { self?.interrupt("route_lost") }
+          else if let self { self.sendEvent("route", self.routeCapabilities()) }
         }
       ]
+      return routeCapabilities()
     } catch { stop(); throw error }
+  }
+
+  private func routeCapabilities() -> [String: Any] {
+    let port = AVAudioSession.sharedInstance().currentRoute.outputs.first?.portType
+    let output: String
+    switch port {
+    case .builtInReceiver: output = "receiver"
+    case .headphones, .headsetMic, .usbAudio: output = "wired"
+    case .bluetoothA2DP, .bluetoothHFP, .bluetoothLE: output = "bluetooth"
+    default: output = "speaker"
+    }
+    return ["output": output, "echoControl": "verified", "fullDuplex": true]
   }
 
   private func installCaptureTap(on engine: AVAudioEngine) throws {
@@ -109,11 +157,13 @@ public final class XopcVoiceModule: Module {
         return buffer
       }
       guard error == nil, let samples = converted.int16ChannelData, converted.frameLength > 0 else { return }
+      let speechCandidate = self.nearSpeech.process(samples[0], count: Int(converted.frameLength))
       let audio = Data(bytes: samples[0], count: Int(converted.frameLength) * 2).base64EncodedString()
       DispatchQueue.main.async { [weak self] in
         guard let self, self.epoch == currentEpoch else { return }
         let valid = self.captureLock.withLock { self.captureEnabled && self.captureId == capture.1 }
         guard valid else { return }
+        if let speechCandidate { self.sendEvent("speechCandidate", ["active": speechCandidate, "captureId": capture.1]) }
         self.sendEvent("pcm", ["audio": audio, "captureId": capture.1])
       }
     }
@@ -205,6 +255,7 @@ public final class XopcVoiceModule: Module {
     player = nil
     backgroundEnabled = false
     configurationRestarts = []
+    nearSpeech.reset()
     try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
   }
 }

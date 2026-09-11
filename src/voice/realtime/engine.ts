@@ -11,6 +11,7 @@ export interface VoiceEngine {
   setInputMuted(muted: boolean): void | Promise<void>;
   commit(): Promise<void>;
   cancel(responseId: string, reason: 'client_cancelled' | 'barge_in'): boolean;
-  acknowledge(responseId: string, playedBytes: number): void;
+  cancelTask(taskId: string): Promise<boolean>;
+  acknowledge(responseId: string, playedDurationMs: number): void;
   close(): void | Promise<void>;
 }

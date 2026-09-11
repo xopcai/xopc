@@ -1,8 +1,9 @@
 import { z } from 'zod';
-export { encodeVoiceAudioFrame, decodeVoiceAudioFrame } from './voice-audio.js';
+export { encodeVoiceAudioFrame, decodeVoiceAudioFrame, encodeVoiceUplinkAudioFrame, decodeVoiceUplinkAudioFrame,
+  type VoiceAudioFrame, type VoiceUplinkAudioFrame } from './voice-audio.js';
 
-export const VOICE_REALTIME_PROTOCOL_VERSION = 2 as const;
-export const VOICE_REALTIME_WS_PATH = '/api/voice/realtime/v2/ws' as const;
+export const VOICE_REALTIME_PROTOCOL_VERSION = 3 as const;
+export const VOICE_REALTIME_WS_PATH = '/api/voice/realtime/v3/ws' as const;
 export const VOICE_REALTIME_MAX_BINARY_FRAME_BYTES = 64 * 1024;
 export const VOICE_REALTIME_START_TIMEOUT_MS = 10_000;
 export const VOICE_REALTIME_HEARTBEAT_INTERVAL_MS = 15_000;
@@ -11,7 +12,7 @@ const idSchema = z.uuid();
 const timestampSchema = z.number().int().nonnegative();
 
 export const voicePurposeSchema = z.enum(['dictation', 'conversation']);
-export const voiceEngineSchema = z.enum(['agent', 'omni']);
+export const voiceModeSchema = z.enum(['natural', 'assistant']);
 export const voiceInputModeSchema = z.literal('server_vad');
 export const voiceLanguageSchema = z.enum(['zh', 'en']);
 export const voicePcmFormatSchema = z.strictObject({
@@ -39,31 +40,34 @@ const availabilitySchema = z.strictObject({
 
 export const realtimeVoiceStatusSchema = z.object({
   enabled: z.boolean(),
-  defaultEngine: voiceEngineSchema,
+  defaultMode: voiceModeSchema,
   omni: voiceProviderRouteSchema.nullable(),
   stt: voiceProviderRouteSchema.nullable(),
   tts: voiceProviderRouteSchema.extend({ voice: z.string().optional() }).nullable(),
   capabilities: z.strictObject({
     dictation: availabilitySchema,
-    agent: availabilitySchema,
-    omni: availabilitySchema,
+    assistant: availabilitySchema,
+    natural: availabilitySchema,
     languages: z.array(voiceLanguageSchema),
     bargeIn: z.boolean(),
+    mediaTransports: z.tuple([z.literal('websocket-pcm')]),
   }),
 });
 export type RealtimeVoiceStatus = z.infer<typeof realtimeVoiceStatusSchema>;
 
 export const createVoiceSessionRequestSchema = z.strictObject({
   purpose: voicePurposeSchema,
-  engine: voiceEngineSchema.optional(),
+  mode: voiceModeSchema.optional(),
   sessionKey: z.string().min(1).max(512).optional(),
   language: voiceLanguageSchema.optional(),
+  supportedProtocolVersions: z.tuple([z.literal(VOICE_REALTIME_PROTOCOL_VERSION)]),
+  mediaPreferences: z.tuple([z.literal('websocket-pcm')]),
 }).superRefine((value, context) => {
   if (value.purpose === 'conversation' && !value.sessionKey) {
     context.addIssue({ code: 'custom', path: ['sessionKey'], message: 'sessionKey is required for conversation' });
   }
-  if (value.purpose !== 'conversation' && value.engine !== undefined) {
-    context.addIssue({ code: 'custom', path: ['engine'], message: 'engine is only supported for conversation' });
+  if (value.purpose !== 'conversation' && value.mode !== undefined) {
+    context.addIssue({ code: 'custom', path: ['mode'], message: 'mode is only supported for conversation' });
   }
 });
 
@@ -73,10 +77,13 @@ export const createVoiceSessionResponseSchema = z.strictObject({
   ticketExpiresAt: z.iso.datetime(),
   websocketPath: z.literal(VOICE_REALTIME_WS_PATH),
   protocolVersion: z.literal(VOICE_REALTIME_PROTOCOL_VERSION),
+  connectionEpoch: z.number().int().positive(),
   purpose: voicePurposeSchema,
+  mode: voiceModeSchema.optional(),
   inputMode: voiceInputModeSchema,
   bargeIn: z.boolean(),
   inputFormat: voicePcmFormatSchema,
+  media: z.strictObject({ transport: z.literal('websocket-pcm'), codec: z.literal('pcm_s16le'), frameDurationMs: z.literal(20) }),
   limits: z.strictObject({
     maxBinaryFrameBytes: z.literal(VOICE_REALTIME_MAX_BINARY_FRAME_BYTES),
     maxSessionMs: z.number().int().positive(),
@@ -108,10 +115,11 @@ export const voiceClientMessageSchema = z.discriminatedUnion('type', [
   })),
   clientEnvelope('input.mute', z.strictObject({ muted: z.boolean() })),
   clientEnvelope('input.commit', z.strictObject({})),
-  clientEnvelope('response.cancel', z.strictObject({ responseId: z.string().min(1).max(160) })),
+  clientEnvelope('response.stop_playback', z.strictObject({ responseId: z.string().min(1).max(160) })),
+  clientEnvelope('task.cancel', z.strictObject({ taskId: z.string().min(1).max(160) })),
   clientEnvelope('response.audio.played', z.strictObject({
     responseId: z.string().min(1).max(160),
-    playedBytes: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).multipleOf(2),
+    playedDurationMs: z.number().int().nonnegative().max(3_600_000),
   })),
   clientEnvelope('session.stop', z.strictObject({
     reason: z.enum(['user_finished', 'surface_closed', 'replaced']),
@@ -142,8 +150,11 @@ const serverEnvelope = <TType extends string, TPayload extends z.ZodType>(
 export const voiceServerEventSchema = z.discriminatedUnion('type', [
   serverEnvelope('session.ready', z.strictObject({
     purpose: voicePurposeSchema,
+    mode: voiceModeSchema.optional(),
+    connectionEpoch: z.number().int().positive(),
     inputMode: voiceInputModeSchema,
     inputFormat: voicePcmFormatSchema,
+    media: z.strictObject({ transport: z.literal('websocket-pcm'), codec: z.literal('pcm_s16le'), frameDurationMs: z.literal(20) }),
     route: voiceRouteSchema,
     heartbeatIntervalMs: z.literal(VOICE_REALTIME_HEARTBEAT_INTERVAL_MS),
   })),
@@ -151,13 +162,20 @@ export const voiceServerEventSchema = z.discriminatedUnion('type', [
   serverEnvelope('input.speech_stopped', z.strictObject({ utteranceId: z.string().min(1).max(160) })),
   serverEnvelope('input.transcript.delta', transcriptPayloadSchema),
   serverEnvelope('input.transcript.final', transcriptPayloadSchema),
+  serverEnvelope('turn.decision', z.strictObject({
+    turnId: z.string().min(1).max(160), disposition: z.enum(['complete', 'incomplete', 'backchannel', 'wait']),
+    confidence: z.number().min(0).max(1), source: z.enum(['provider', 'semantic', 'heuristic']), committed: z.boolean(),
+  })),
+  serverEnvelope('turn.committed', z.strictObject({ turnId: z.string().min(1).max(160) })),
   serverEnvelope('response.created', z.strictObject({ responseId: z.string().min(1).max(160) })),
-  serverEnvelope('response.activity', z.strictObject({
-    responseId: z.string().min(1).max(160),
+  serverEnvelope('task.created', z.strictObject({ responseId: z.string().min(1).max(160), taskId: z.string().min(1).max(160) })),
+  serverEnvelope('task.activity', z.strictObject({
+    taskId: z.string().min(1).max(160),
     toolCallId: z.string().min(1).max(160),
     toolName: z.string().min(1).max(256),
     status: z.enum(['running', 'completed', 'failed']),
   })),
+  serverEnvelope('task.done', z.strictObject({ taskId: z.string().min(1).max(160), status: z.enum(['completed', 'failed', 'cancelled', 'suspended']) })),
   serverEnvelope('response.clarification', z.strictObject({
     responseId: z.string().min(1).max(160),
     requestId: z.string().min(1).max(160),
@@ -200,6 +218,7 @@ export const voiceServerEventSchema = z.discriminatedUnion('type', [
 ]);
 
 export type VoicePurpose = z.infer<typeof voicePurposeSchema>;
+export type VoiceMode = z.infer<typeof voiceModeSchema>;
 export type VoiceInputMode = z.infer<typeof voiceInputModeSchema>;
 export type VoiceLanguage = z.infer<typeof voiceLanguageSchema>;
 export type VoicePcmFormat = z.infer<typeof voicePcmFormatSchema>;

@@ -2,7 +2,7 @@ import { once } from 'node:events';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo, Socket } from 'node:net';
 
-import { decodeVoiceAudioFrame, createVoiceSessionResponseSchema, parseVoiceServerEvent, type VoiceClientMessage, type VoiceServerEvent } from '@xopcai/realtime-protocol/voice';
+import { VOICE_REALTIME_PROTOCOL_VERSION, decodeVoiceAudioFrame, createVoiceSessionResponseSchema, parseVoiceServerEvent, type VoiceClientMessage, type VoiceServerEvent } from '@xopcai/realtime-protocol/voice';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 
@@ -43,7 +43,7 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
   });
 
   function send(type: VoiceClientMessage['type'], payload: VoiceClientMessage['payload']) {
-    socket.send(JSON.stringify({ protocolVersion: 2, messageId: crypto.randomUUID(), sentAt: Date.now(), type, payload }));
+    socket.send(JSON.stringify({ protocolVersion: VOICE_REALTIME_PROTOCOL_VERSION, messageId: crypto.randomUUID(), sentAt: Date.now(), type, payload }));
   }
 
   async function start(bargeIn = true, recordInterruption = async () => {}) {
@@ -64,7 +64,10 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
       getSessionIdentity: async () => 'durable-session',
       sessionExists: async () => true,
       sessionBusy: () => false,
-      runAgent: async function* () { yield { type: 'assistant_delta', payload: { delta: 'Hello.' } }; },
+      agentBroker: {
+        delegate: async () => ({ taskId: 'voice-task', runId: 'voice-run', events: (async function* () { yield { type: 'assistant_delta', payload: { delta: 'Hello.' } }; })() }),
+        cancel: async () => true,
+      },
       recordInterruption,
     });
     server = createServer();
@@ -72,7 +75,8 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');
     const session = createVoiceSessionResponseSchema.parse(await runtime.createSession({
-      purpose: 'conversation', engine: 'agent', sessionKey: 'agent:main:webchat:default:direct:voice',
+      purpose: 'conversation', mode: 'assistant', sessionKey: 'agent:main:webchat:default:direct:voice',
+      supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'],
     }, 'user-1'));
     expect(session.bargeIn).toBe(bargeIn);
     socket = new WebSocket(`ws://127.0.0.1:${(server.address() as AddressInfo).port}${session.websocketPath}`);
@@ -84,7 +88,7 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     send('session.start', { sessionId: session.sessionId, ticket: session.ticket });
     await vi.waitFor(() => expect(events.some((event) => event.type === 'session.ready')).toBe(true));
     onSttEvent({ type: 'transcript_final', utteranceId: 'u1', revision: 1, text: 'Hi' });
-    await vi.waitFor(() => expect(frames).toHaveLength(4));
+    await vi.waitFor(() => expect(frames.reduce((sum, bytes) => sum + bytes, 0)).toBe(96_000));
     const created = events.find((event) => event.type === 'response.created');
     if (created?.type !== 'response.created') throw new Error('Response was not created');
     responseId = created.payload.responseId;
@@ -99,12 +103,12 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
   it('bounds fast output and resumes without loss as playback is acknowledged', async () => {
     await start();
     await roundTrip();
-    expect(frames).toEqual([24_000, 24_000, 24_000, 24_000]);
+    expect(frames.every((bytes) => bytes === 960)).toBe(true);
     expect(events.some((event) => event.type === 'response.cancelled' || event.type === 'response.done')).toBe(false);
-    send('response.audio.played', { responseId, playedBytes: 96_000 });
-    await vi.waitFor(() => expect(frames).toHaveLength(8));
+    send('response.audio.played', { responseId, playedDurationMs: 2_000 });
+    await vi.waitFor(() => expect(frames.reduce((sum, bytes) => sum + bytes, 0)).toBe(192_000));
     expect(events.some((event) => event.type === 'response.done')).toBe(false);
-    send('response.audio.played', { responseId, playedBytes: 192_000 });
+    send('response.audio.played', { responseId, playedDurationMs: 4_000 });
     await vi.waitFor(() => expect(events.some((event) => event.type === 'response.done')).toBe(true));
     expect(frames.reduce((sum, bytes) => sum + bytes, 0)).toBe(192_000);
     expect(events.some((event) => event.type === 'session.error' || event.type === 'response.cancelled')).toBe(false);
@@ -123,12 +127,12 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     await roundTrip();
     expect(events.some((event) => event.type === 'response.cancelled')).toBe(bargeIn);
     if (!bargeIn) {
-      send('response.cancel', { responseId });
+      send('response.stop_playback', { responseId });
       await vi.waitFor(() => expect(events.some((event) => event.type === 'response.cancelled')).toBe(true));
     }
-    send('response.audio.played', { responseId, playedBytes: 96_000 });
+    send('response.audio.played', { responseId, playedDurationMs: 2_000 });
     await roundTrip();
-    expect(frames).toHaveLength(4);
+    expect(frames.reduce((sum, bytes) => sum + bytes, 0)).toBe(96_000);
     expect(events.some((event) => event.type === 'response.done' || event.type === 'session.error')).toBe(false);
   });
 
@@ -137,7 +141,7 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     const saved = new Promise<void>((resolve) => { finish = resolve; });
     const record = vi.fn(async () => { await saved; });
     await start(true, record);
-    send('response.cancel', { responseId });
+    send('response.stop_playback', { responseId });
     await vi.waitFor(() => expect(record).toHaveBeenCalledOnce());
     send('session.stop', { reason: 'user_finished' });
     await vi.waitFor(() => expect(abortStt).toHaveBeenCalled());
@@ -146,13 +150,13 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     finish();
     await closed;
     expect(runtime.hasConversation('agent:main:webchat:default:direct:voice')).toBe(false);
-    await expect(runtime.createSession({ purpose: 'conversation', engine: 'agent', sessionKey: 'agent:main:webchat:default:direct:voice' }, 'user-1')).resolves.toHaveProperty('ticket');
+    await expect(runtime.createSession({ purpose: 'conversation', mode: 'assistant', sessionKey: 'agent:main:webchat:default:direct:voice', supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] }, 'user-1')).resolves.toHaveProperty('ticket');
   });
 
   it('rejects acknowledgements for audio that was never sent', async () => {
     await start();
     const closed = once(socket, 'close');
-    send('response.audio.played', { responseId, playedBytes: 192_000 });
+    send('response.audio.played', { responseId, playedDurationMs: 4_000 });
     expect((await closed)[0]).toBe(4400);
   });
 });

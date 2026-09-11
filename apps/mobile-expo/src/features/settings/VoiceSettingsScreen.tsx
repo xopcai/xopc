@@ -27,22 +27,22 @@ export function VoiceSettingsScreen() {
   const [preview] = useState(() => new VoicePreview());
   const playPreview = useMutation({ mutationFn: () => preview.play(), retry: false });
   useEffect(() => () => preview.stop(), [preview, gatewayId]);
-  const selected = gatewayId ? prefs.engines[gatewayId] : undefined;
+  const selected = gatewayId ? prefs.modes[gatewayId] : undefined;
   return <View style={{ flex: 1, backgroundColor: colors.surface.base }}>
     <NativeScreenHeader title={m.settings} onBack={() => router.back()} />
     <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       {!nativeVoiceAvailable ? <Text style={[styles.notice, { color: colors.text.secondary }]}>{m.upgrade}</Text> : null}
       <SettingsSection title={m.mode}>
-        {([undefined, 'omni', 'agent'] as const).map((engine, index) => <SettingsRow key={engine ?? 'default'}
-          icon={selected === engine ? 'radiobox-marked' : 'radiobox-blank'}
-          label={engine === 'omni' ? m.chatOnly : engine === 'agent' ? m.tools : m.followGateway}
-          value={engine && status.data && !status.data.capabilities[engine].available ? m.unavailable : undefined}
+        {([undefined, 'natural', 'assistant'] as const).map((mode, index) => <SettingsRow key={mode ?? 'default'}
+          icon={selected === mode ? 'radiobox-marked' : 'radiobox-blank'}
+          label={mode === 'natural' ? m.chatOnly : mode === 'assistant' ? m.tools : m.followGateway}
+          value={mode && status.data && !status.data.capabilities[mode].available ? m.unavailable : undefined}
           isLast={index === 2}
           showChevron={false}
-          onPress={!gatewayId || (engine && !status.data?.capabilities[engine].available) ? undefined : () => {
+          onPress={!gatewayId || (mode && !status.data?.capabilities[mode].available) ? undefined : () => {
             if (!gatewayId) return;
-            const engines = { ...prefs.engines }; if (engine) engines[gatewayId] = engine; else delete engines[gatewayId];
-            prefs.update({ engines });
+            const modes = { ...prefs.modes }; if (mode) modes[gatewayId] = mode; else delete modes[gatewayId];
+            prefs.update({ modes });
           }} />)}
       </SettingsSection>
       <SettingsSection title={m.nextCall}>
@@ -51,7 +51,7 @@ export function VoiceSettingsScreen() {
       </SettingsSection>
       <SettingsSection title={m.service}>
         {status.isPending && gatewayId ? <ListSkeleton count={3} /> :
-          status.data ? (['dictation', 'omni', 'agent'] as const).map((kind, index) => <SettingsRow key={kind} icon="waveform" label={kind === 'dictation' ? m.dictation : kind === 'omni' ? m.chatOnly : m.tools} value={status.data.capabilities[kind].available ? m.ready : m.unavailable} isLast={index === 2} showChevron={false} />) : <Text style={[styles.notice, { color: colors.semantic.error }]}>{voiceErrorMessage(status.error?.message ?? 'SERVICE_UNAVAILABLE', m)}</Text>}
+          status.data ? (['dictation', 'natural', 'assistant'] as const).map((kind, index) => <SettingsRow key={kind} icon="waveform" label={kind === 'dictation' ? m.dictation : kind === 'natural' ? m.chatOnly : m.tools} value={status.data.capabilities[kind].available ? m.ready : m.unavailable} isLast={index === 2} showChevron={false} />) : <Text style={[styles.notice, { color: colors.semantic.error }]}>{voiceErrorMessage(status.error?.message ?? 'SERVICE_UNAVAILABLE', m)}</Text>}
       </SettingsSection>
       {status.data && <SettingsSection>
         <SettingsRow icon="translate" label={m.languages} value={status.data.capabilities.languages.map(language => language === 'zh' ? m.languageZh : m.languageEn).join(' / ')} showChevron={false} />
@@ -62,7 +62,7 @@ export function VoiceSettingsScreen() {
           icon="play-circle-outline"
           label={m.preview}
           value={playPreview.isPending ? m.connecting : playPreview.isError ? m.error : undefined}
-          onPress={call.phase !== 'idle' || playPreview.isPending || (selected ?? status.data?.defaultEngine) !== 'agent' || !status.data?.capabilities.agent.available ? undefined : () => playPreview.mutate()}
+          onPress={call.phase !== 'idle' || playPreview.isPending || (selected ?? status.data?.defaultMode) !== 'assistant' || !status.data?.capabilities.assistant.available ? undefined : () => playPreview.mutate()}
         />
         <SettingsRow
           icon="tune-variant"

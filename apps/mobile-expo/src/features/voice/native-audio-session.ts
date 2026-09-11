@@ -4,13 +4,22 @@ import { AppState } from 'react-native';
 import { claimAudioCapture, releaseAudioCapture } from './audio-playback-coordinator';
 
 type Subscription = { remove(): void };
+export type AudioRouteCapabilities = {
+  output: 'receiver' | 'speaker' | 'wired' | 'bluetooth';
+  echoControl: 'verified' | 'available' | 'none';
+  fullDuplex: boolean;
+};
 interface VoiceNative extends NativeModule {
   addListener(event: 'pcm', listener: (value: { audio: string; captureId: number }) => void): Subscription;
   addListener(event: 'played', listener: (value: { responseId: string; playedBytes: number }) => void): Subscription;
   addListener(event: 'interrupted', listener: (value: { reason: string }) => void): Subscription;
-  start(background: boolean, title: string, stopLabel: string): Promise<void>;
+  addListener(event: 'speechCandidate', listener: (value: { active: boolean; captureId: number }) => void): Subscription;
+  addListener(event: 'route', listener: (value: AudioRouteCapabilities) => void): Subscription;
+  start(background: boolean, title: string, stopLabel: string): Promise<AudioRouteCapabilities>;
   setCaptureEnabled(enabled: boolean, captureId: number): void;
   enqueue(id: string, audio: string): Promise<void>;
+  duck(): Promise<void>;
+  resumeOutput(): Promise<void>;
   flush(): Promise<void>;
   stop(): Promise<void>;
   setSpeaker(enabled: boolean): Promise<void>;
@@ -60,7 +69,9 @@ export class NativeAudioSession {
     pcm: (bytes: Uint8Array) => void;
     played: (id: string, bytes: number) => void;
     interrupted: (reason: string) => void;
-  }): Promise<void> {
+    speechCandidate: (active: boolean) => void;
+    route: (capabilities: AudioRouteCapabilities) => void;
+  }): Promise<AudioRouteCapabilities> {
     if (!native) throw new Error('NATIVE_BUILD_REQUIRED');
     if (!claimAudioCapture(this.owner)) throw new Error('MICROPHONE_BUSY');
     this.owned = true;
@@ -86,8 +97,12 @@ export class NativeAudioSession {
         }),
         native.addListener('played', ({ responseId, playedBytes }: { responseId: string; playedBytes: number }) => callbacks.played(responseId, playedBytes)),
         native.addListener('interrupted', ({ reason }: { reason: string }) => callbacks.interrupted(reason)),
+        native.addListener('speechCandidate', ({ active, captureId }) => {
+          if (this.capturing && captureId === this.captureId) callbacks.speechCandidate(active);
+        }),
+        native.addListener('route', callbacks.route),
       ];
-      await native.start(background, labels.title, labels.end);
+      return await native.start(background, labels.title, labels.end);
     } catch (error) { await this.stop(); throw error; }
   }
   capture(enabled: boolean): void {
@@ -96,6 +111,8 @@ export class NativeAudioSession {
     if (this.owned) native?.setCaptureEnabled(enabled, captureId);
   }
   enqueue(id: string, bytes: Uint8Array): Promise<void> { return this.owned ? native!.enqueue(id, encodePcm(bytes)) : Promise.resolve(); }
+  duck(): Promise<void> { return this.owned ? native!.duck() : Promise.resolve(); }
+  resumeOutput(): Promise<void> { return this.owned ? native!.resumeOutput() : Promise.resolve(); }
   flush(): Promise<void> { return this.owned ? native!.flush() : Promise.resolve(); }
   speaker(enabled: boolean): Promise<void> { return native?.setSpeaker(enabled) ?? Promise.resolve(); }
   async stop(): Promise<void> {

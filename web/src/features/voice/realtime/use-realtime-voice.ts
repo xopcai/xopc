@@ -7,6 +7,7 @@ import { voiceInputConstraints } from '@/stores/voice-preferences-store';
 import { apiUrl } from '@/lib/url';
 import { fetchJson } from '@/lib/fetch';
 import type { ChatMessages } from '@/i18n/messages';
+import type { VoiceMode } from '@xopcai/realtime-protocol/voice';
 
 import { PcmFrameCapture, PcmStreamEncoder } from '@/features/chat/composer/pcm-wav-recorder';
 
@@ -99,7 +100,7 @@ export interface UseRealtimeVoiceReturn {
   endedReason: string | null;
   mode: VoiceSessionMode;
   startVoiceInput: () => Promise<void>;
-  startVoiceConversation: (sessionKey: string, engine?: 'agent' | 'omni') => Promise<void>;
+  startVoiceConversation: (sessionKey: string, mode?: VoiceMode) => Promise<void>;
   interruptResponse: () => void;
   toggleMute: () => void;
   cancelVoiceInput: () => void;
@@ -134,7 +135,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
   const captureRef = useRef<PcmFrameCapture | null>(null);
   const encoderRef = useRef<PcmStreamEncoder | null>(null);
   const clientRef = useRef<VoiceSessionClient | null>(null);
-  const engineRef = useRef<'agent' | 'omni' | undefined>(undefined);
+  const callModeRef = useRef<VoiceMode | undefined>(undefined);
   const playerRef = useRef<PcmPlayer | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recordStartPerfRef = useRef<number | null>(null);
@@ -143,6 +144,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
   const confirmRef = useRef<() => void>(() => {});
   const transcriptRevisionsRef = useRef(new Map<string, number>());
   const activeResponseIdRef = useRef<string | null>(null);
+  const activeTaskIdRef = useRef<string | null>(null);
   const responseDoneRef = useRef(false);
   const speechStoppedAtRef = useRef<number | null>(null);
   const firstAudioRef = useRef(false);
@@ -200,6 +202,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     dictationRef.current.clear();
     finalizingRef.current = false;
     activeResponseIdRef.current = null;
+    activeTaskIdRef.current = null;
   }, [stopMedia, stopTimer]);
 
   const finishIdle = useCallback(() => {
@@ -273,7 +276,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     }, 200);
   }, [finishIdle, stopTimer]);
 
-  const beginCapture = useCallback(async (purpose: VoiceSessionMode, engine?: 'agent' | 'omni', conversationKey?: string) => {
+  const beginCapture = useCallback(async (purpose: VoiceSessionMode, callMode?: VoiceMode, conversationKey?: string) => {
     if (disabled || phaseRef.current !== 'idle') return;
     if (purpose === 'conversation' && !conversationKey) return;
     if (captureOwner) {
@@ -291,7 +294,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     const attempt = ++attemptRef.current;
     const isCurrent = () => attempt === attemptRef.current;
     setMode(purpose);
-    engineRef.current = engine;
+    callModeRef.current = callMode;
     setResponseText('');
     updatePhase('starting');
     let stage: VoiceCaptureStartStage = 'permission';
@@ -303,7 +306,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
         if (!isCurrent()) { void player.close(); return; }
       }
       stage = 'session';
-      await VoiceSessionClient.preflight({ purpose, ...(purpose === 'conversation' ? { engine, sessionKey: conversationKey } : {}), signal: controller.signal });
+      await VoiceSessionClient.preflight({ purpose, ...(purpose === 'conversation' ? { mode: callMode, sessionKey: conversationKey } : {}), signal: controller.signal });
       if (!isCurrent()) return;
       stage = 'permission';
       const electronSystem = window.electronAPI?.system;
@@ -335,7 +338,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
       const client = await VoiceSessionClient.connect({
         purpose,
         signal: controller.signal,
-        ...(purpose === 'conversation' ? { engine, sessionKey: conversationKey } : {}),
+        ...(purpose === 'conversation' ? { mode: callMode, sessionKey: conversationKey } : {}),
         onEvent: (event) => {
           if (!isCurrent()) return;
           if (event.type === 'input.transcript.delta' || event.type === 'input.transcript.final') {
@@ -367,9 +370,12 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
             setClarification(null);
             setResponsePhase('thinking');
           }
-          if (event.type === 'response.activity' && activeResponseIdRef.current === event.payload.responseId) {
-            setActivities((current) => [...current.filter((activity) => activity.toolCallId !== event.payload.toolCallId), event.payload].slice(-8));
+          if (event.type === 'task.created' && activeResponseIdRef.current === event.payload.responseId) activeTaskIdRef.current = event.payload.taskId;
+          if (event.type === 'task.activity' && activeTaskIdRef.current === event.payload.taskId) {
+            const activity = { toolCallId: event.payload.toolCallId, toolName: event.payload.toolName, status: event.payload.status };
+            setActivities((current) => [...current.filter((value) => value.toolCallId !== activity.toolCallId), activity].slice(-8));
           }
+          if (event.type === 'task.done' && activeTaskIdRef.current === event.payload.taskId) { activeTaskIdRef.current = null; setActivities([]); }
           if (event.type === 'response.clarification' && activeResponseIdRef.current === event.payload.responseId) setClarification(event.payload);
           if (event.type === 'response.text.delta' && activeResponseIdRef.current === event.payload.responseId) {
             setResponseText((current) => current + event.payload.delta);
@@ -386,8 +392,6 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
           }
           if (event.type === 'response.cancelled' && activeResponseIdRef.current === event.payload.responseId) {
             activeResponseIdRef.current = null;
-            setClarification(null);
-            setActivities([]);
             setResponsePhase('idle');
             playerRef.current?.clear();
           }
@@ -547,19 +551,17 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     if (phaseRef.current !== 'error') return;
     reset();
     updatePhase('idle');
-    void beginCapture(mode, engineRef.current, callSessionKeyRef.current);
+    void beginCapture(mode, callModeRef.current, callSessionKeyRef.current);
   }, [beginCapture, mode, reset, updatePhase]);
 
   const startVoiceInput = useCallback(() => beginCapture('dictation'), [beginCapture]);
-  const startVoiceConversation = useCallback((key: string, engine?: 'agent' | 'omni') => beginCapture('conversation', engine, key), [beginCapture]);
+  const startVoiceConversation = useCallback((key: string, callMode?: VoiceMode) => beginCapture('conversation', callMode, key), [beginCapture]);
   const interruptResponse = useCallback(() => {
     const startedAt = performance.now();
     const responseId = activeResponseIdRef.current;
     playerRef.current?.clear();
     activeResponseIdRef.current = null;
     setResponsePhase('idle');
-    setClarification(null);
-    setActivities([]);
     if (responseId) {
       clientRef.current?.reportMetric(responseId, 'local_stop', performance.now() - startedAt);
       clientRef.current?.cancelResponse(responseId);

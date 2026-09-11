@@ -21,6 +21,7 @@ export const voiceCall = new VoiceCallController({
     start: (background, callbacks) => audio.start(background, messages(usePreferencesStore.getState().language).voice, callbacks),
     capture: value => audio.capture(value), flush: () => audio.flush(), stop: () => audio.stop(),
     enqueue: (id, bytes) => audio.enqueue(id, bytes),
+    duck: () => audio.duck(), resumeOutput: () => audio.resumeOutput(),
   },
   prepare: async (target, signal, recovering) => {
     const assertGateway = () => {
@@ -29,8 +30,9 @@ export const voiceCall = new VoiceCallController({
     };
     assertGateway();
     const status = await queryClient.fetchQuery(voiceStatusOptions(target.gatewayId));
-    const engine = target.engine ?? status.defaultEngine;
-    if (!status.capabilities[engine].available) throw new Error(status.capabilities[engine].reasonCode ?? 'PROVIDER_UNAVAILABLE');
+    const mode = target.mode ?? status.defaultMode;
+    if (!status.capabilities[mode].available) throw new Error(status.capabilities[mode].reasonCode ?? 'PROVIDER_UNAVAILABLE');
+    const engine = mode === 'natural' ? 'omni' as const : 'agent' as const;
     let identity = target.identity;
     let name = target.name;
     if (recovering || !identity) {
@@ -48,14 +50,15 @@ export const voiceCall = new VoiceCallController({
         signal.addEventListener('abort', onAbort, { once: true });
         if (signal.aborted) onAbort();
       });
-      try { await preflightVoice({ purpose: 'conversation', engine, sessionKey: target.sessionKey }, signal); break; }
+      try { await preflightVoice({ purpose: 'conversation', mode, sessionKey: target.sessionKey,
+        supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] }, signal); break; }
       catch (error) {
         if (!recovering || !(error instanceof Error) || !('status' in error) || error.status !== 409) throw error;
         if (delay === 3000) throw error;
       }
     }
     assertGateway();
-    return { engine, identity, name: name ?? messages(usePreferencesStore.getState().language).voice.title };
+    return { mode, engine, identity, name: name ?? messages(usePreferencesStore.getState().language).voice.title };
   },
   create: createVoiceConnection,
   discard: cancelVoiceConnection,
