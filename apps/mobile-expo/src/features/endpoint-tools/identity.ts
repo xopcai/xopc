@@ -1,6 +1,6 @@
 import { p256 } from '@noble/curves/p256';
 import { sha256 } from '@noble/hashes/sha256';
-import { getRandomValues, randomUUID } from 'expo-crypto';
+import { getRandomValues } from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 
 const IDENTITY_KEY = 'xopc.endpoint-tools.mobile.identity';
@@ -56,32 +56,32 @@ function publicKeyFromPrivate(privateKey: Uint8Array): string {
   return encodeBase64Url(spki);
 }
 
-export function getOrCreateMobileEndpointIdentity(): MobileEndpointIdentity {
+export function getOrCreateMobileEndpointIdentity(principalId: string): MobileEndpointIdentity {
+  if (!principalId) throw new Error('Endpoint principal id is required');
   const stored = SecureStore.getItem(IDENTITY_KEY, { keychainService: KEYCHAIN_SERVICE });
   if (stored) {
-    const value = JSON.parse(stored) as { principalId?: unknown; privateKey?: unknown };
-    if (typeof value.principalId !== 'string' || typeof value.privateKey !== 'string') {
+    const value = JSON.parse(stored) as { privateKey?: unknown };
+    if (typeof value.privateKey !== 'string') {
       throw new Error('Stored endpoint identity is invalid');
     }
     const privateKey = decodeBase64Url(value.privateKey);
-    return { principalId: value.principalId, privateKey, publicKey: publicKeyFromPrivate(privateKey) };
+    return { principalId, privateKey, publicKey: publicKeyFromPrivate(privateKey) };
   }
 
   const seedLength = p256.lengths.seed;
   if (seedLength === undefined) throw new Error('P-256 seed length is unavailable');
   const privateKey = p256.utils.randomSecretKey(getRandomValues(new Uint8Array(seedLength)));
-  const principalId = randomUUID();
   SecureStore.setItem(
     IDENTITY_KEY,
-    JSON.stringify({ principalId, privateKey: encodeBase64Url(privateKey) }),
+    JSON.stringify({ privateKey: encodeBase64Url(privateKey) }),
     { keychainService: KEYCHAIN_SERVICE },
   );
   return { principalId, privateKey, publicKey: publicKeyFromPrivate(privateKey) };
 }
 
-export async function rotateMobileEndpointIdentity(): Promise<MobileEndpointIdentity> {
+export async function rotateMobileEndpointIdentity(principalId: string): Promise<MobileEndpointIdentity> {
   await SecureStore.deleteItemAsync(IDENTITY_KEY, { keychainService: KEYCHAIN_SERVICE });
-  return getOrCreateMobileEndpointIdentity();
+  return getOrCreateMobileEndpointIdentity(principalId);
 }
 
 export function signMobileEndpointPayload(privateKey: Uint8Array, payload: string): string {
