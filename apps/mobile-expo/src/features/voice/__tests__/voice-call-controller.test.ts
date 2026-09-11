@@ -1,15 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { VoiceCallController, type CallDependencies } from '../voice-call-controller';
-import type { VoiceTransportCallbacks } from '../voice-transport';
+import type { VoiceAudioSendResult, VoiceTransportCallbacks } from '../voice-transport';
 
 const target = { gatewayId: 'gateway', sessionKey: 'chat', background: false };
 function harness() {
   let callbacks: VoiceTransportCallbacks;
   let audioCallbacks: Parameters<CallDependencies['audio']['start']>[1];
-  const transport = { connect: vi.fn(async () => {}), send: vi.fn(), audio: vi.fn(), close: vi.fn() };
+  const transport = { connect: vi.fn(async () => {}), send: vi.fn(),
+    audio: vi.fn<() => VoiceAudioSendResult>(() => ({ accepted: true, quality: 'good', queueAgeMs: 0 })),
+    inputQueueAgeMs: vi.fn(() => 0), close: vi.fn() };
   const deps: CallDependencies = {
-    audio: { start: vi.fn(async (_background, value) => { audioCallbacks = value; }), capture: vi.fn(), flush: vi.fn(async () => {}), stop: vi.fn(async () => {}), enqueue: vi.fn(async () => {}) },
-    prepare: vi.fn(async () => ({ identity: 'original', name: 'Assistant', engine: 'omni' as const })),
+    audio: { start: vi.fn(async (_background, value) => { audioCallbacks = value; return { output: 'speaker' as const, echoControl: 'verified' as const, fullDuplex: true }; }),
+      capture: vi.fn(), flush: vi.fn(async () => {}), stop: vi.fn(async () => {}), enqueue: vi.fn(async () => {}),
+      duck: vi.fn(async () => {}), resumeOutput: vi.fn(async () => {}) },
+    prepare: vi.fn(async () => ({ identity: 'original', name: 'Assistant', mode: 'natural' as const, engine: 'omni' as const })),
     create: vi.fn(async () => ({ origin: 'https://gateway', session: { limits: { maxSessionMs: 60000 } } as never })),
     discard: vi.fn(async () => {}),
     transport: vi.fn(value => { callbacks = value; return transport; }), invalidate: vi.fn(),
@@ -48,22 +52,64 @@ describe('mobile persistent voice controller', () => {
     await h.controller.end();
   });
 
-  it('briefly gates bridged microphone frames while first reply audio primes echo cancellation', async () => {
+  it('keeps capture open on a verified full-duplex route', async () => {
     vi.useFakeTimers();
     const h = harness(); await h.controller.start(target);
     vi.mocked(h.deps.audio.capture).mockClear();
     h.event('response.created', { responseId: 'answer' });
     h.connection().audio('answer', new Uint8Array(4800));
-    expect(h.deps.audio.capture).toHaveBeenLastCalledWith(false);
-
-    await vi.advanceTimersByTimeAsync(299);
-    expect(h.deps.audio.capture).not.toHaveBeenCalledWith(true);
-    await vi.advanceTimersByTimeAsync(1);
-    expect(h.deps.audio.capture).toHaveBeenLastCalledWith(true);
-
-    vi.mocked(h.deps.audio.capture).mockClear();
-    h.connection().audio('answer', new Uint8Array(4800));
     expect(h.deps.audio.capture).not.toHaveBeenCalledWith(false);
+    await h.controller.end();
+  });
+
+  it('drops only congested input and resumes capture without pausing the call', async () => {
+    vi.useFakeTimers();
+    const h = harness(); await h.controller.start(target);
+    h.transport.audio.mockReturnValueOnce({ accepted: false, quality: 'critical', queueAgeMs: 300 });
+    h.transport.inputQueueAgeMs.mockReturnValueOnce(200).mockReturnValueOnce(79);
+    h.audio().pcm(new Uint8Array(640));
+    expect(h.controller.getSnapshot()).toMatchObject({ phase: 'connected', networkQuality: 'critical', error: 'INPUT_DROPPED' });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(h.controller.getSnapshot()).toMatchObject({ phase: 'connected', networkQuality: 'good' });
+    expect(h.deps.audio.capture).toHaveBeenLastCalledWith(true);
+    await h.controller.end();
+  });
+
+  it('pauses capture before degraded upload becomes a drop', async () => {
+    vi.useFakeTimers();
+    const h = harness(); await h.controller.start(target);
+    h.transport.audio.mockReturnValueOnce({ accepted: true, quality: 'degraded', queueAgeMs: 120 });
+    h.transport.inputQueueAgeMs.mockReturnValueOnce(79);
+    h.audio().pcm(new Uint8Array(640));
+    expect(h.controller.getSnapshot()).toMatchObject({ phase: 'connected', networkQuality: 'degraded', error: undefined });
+    expect(h.deps.audio.capture).toHaveBeenLastCalledWith(false);
+    await vi.advanceTimersByTimeAsync(50);
+    expect(h.controller.getSnapshot().networkQuality).toBe('good');
+    expect(h.deps.audio.capture).toHaveBeenLastCalledWith(true);
+    await h.controller.end();
+  });
+
+  it('ducks for near speech and restores output for a false candidate', async () => {
+    const h = harness(); await h.controller.start(target);
+    h.event('response.created', { responseId: 'answer' });
+    h.connection().audio('answer', new Uint8Array(4800));
+    h.audio().speechCandidate(true);
+    expect(h.deps.audio.duck).toHaveBeenCalledOnce();
+    h.audio().speechCandidate(false);
+    expect(h.deps.audio.resumeOutput).toHaveBeenCalledOnce();
+    await h.controller.end();
+  });
+
+  it('holds capture for the whole reply when echo control is unavailable', async () => {
+    const h = harness(); await h.controller.start(target);
+    h.audio().route({ output: 'speaker', echoControl: 'none', fullDuplex: false });
+    vi.mocked(h.deps.audio.capture).mockClear();
+    h.event('response.created', { responseId: 'answer' });
+    h.connection().audio('answer', new Uint8Array(4800));
+    expect(h.deps.audio.capture).toHaveBeenLastCalledWith(false);
+    h.audio().played('answer', 4800);
+    h.event('response.done', { responseId: 'answer', audio: true, finishReason: 'completed' });
+    expect(h.deps.audio.capture).toHaveBeenLastCalledWith(true);
     await h.controller.end();
   });
 
@@ -128,10 +174,25 @@ describe('mobile persistent voice controller', () => {
     h.connection().audio('old', new Uint8Array([0, 0]));
     expect(h.deps.audio.flush).toHaveBeenCalledOnce();
     expect(h.deps.audio.enqueue).not.toHaveBeenCalled();
-    expect(h.transport.send.mock.calls.map(call => call[0])).toEqual(['input.mute', 'session.metric', 'response.cancel']);
+    expect(h.transport.send.mock.calls.map(call => call[0])).toEqual(['input.mute', 'session.metric', 'response.stop_playback']);
     expect(h.controller.getSnapshot().phase).toBe('connected');
     h.event('session.error', { code: 'NO_ACTIVE_RESPONSE', recoverable: true });
     expect(h.controller.getSnapshot().error).toBeUndefined();
+    await h.controller.end();
+  });
+  it('stops playback without cancelling the durable task and supports explicit task cancellation', async () => {
+    const h = harness(); await h.controller.start(target);
+    h.event('response.created', { responseId: 'answer' });
+    h.event('task.created', { responseId: 'answer', taskId: 'task-1' });
+    h.event('task.activity', { taskId: 'task-1', toolCallId: 'tool-1', toolName: 'search', status: 'running' });
+    await h.controller.stopReply();
+    expect(h.controller.getSnapshot()).toMatchObject({ taskId: 'task-1', taskStage: 'running', activity: 'search' });
+    expect(h.transport.send).not.toHaveBeenCalledWith('task.cancel', expect.anything());
+    h.controller.cancelTask();
+    expect(h.transport.send).toHaveBeenCalledWith('task.cancel', { taskId: 'task-1' });
+    expect(h.controller.getSnapshot().taskStage).toBe('cancelling');
+    h.event('task.done', { taskId: 'task-1', status: 'cancelled' });
+    expect(h.controller.getSnapshot().taskId).toBeUndefined();
     await h.controller.end();
   });
   it('finishes cancelling old playback before enqueueing a new response', async () => {
@@ -151,7 +212,7 @@ describe('mobile persistent voice controller', () => {
   it('never opens the microphone after a cancelled pending start', async () => {
     const h = harness();
     let release!: () => void;
-    vi.mocked(h.deps.audio.start).mockImplementation(() => new Promise(resolve => { release = resolve; }));
+    vi.mocked(h.deps.audio.start).mockImplementation(() => new Promise(resolve => { release = () => resolve({ output: 'speaker', echoControl: 'verified', fullDuplex: true }); }));
     const start = h.controller.start(target);
     await vi.waitFor(() => expect(release).toBeDefined());
     const end = h.controller.end(); release(); await Promise.all([start, end]);
@@ -163,7 +224,7 @@ describe('mobile persistent voice controller', () => {
   it('creates the remote session while native audio is still starting', async () => {
     const h = harness();
     let release!: () => void;
-    vi.mocked(h.deps.audio.start).mockImplementation(() => new Promise(resolve => { release = resolve; }));
+    vi.mocked(h.deps.audio.start).mockImplementation(() => new Promise(resolve => { release = () => resolve({ output: 'speaker', echoControl: 'verified', fullDuplex: true }); }));
     const start = h.controller.start(target);
     await vi.waitFor(() => expect(h.deps.create).toHaveBeenCalledOnce());
     expect(h.transport.connect).not.toHaveBeenCalled();
@@ -201,7 +262,7 @@ describe('mobile persistent voice controller', () => {
   });
   it('does not resume across a Chat reset', async () => {
     const h = harness(); await h.controller.start(target); await h.controller.pause('network');
-    vi.mocked(h.deps.prepare).mockResolvedValue({ identity: 'reset', name: 'Assistant', engine: 'omni' });
+    vi.mocked(h.deps.prepare).mockResolvedValue({ identity: 'reset', name: 'Assistant', mode: 'natural', engine: 'omni' });
     await h.controller.resume();
     expect(h.deps.create).toHaveBeenCalledOnce();
     expect(h.controller.getSnapshot().error).toBe('SESSION_CHANGED');

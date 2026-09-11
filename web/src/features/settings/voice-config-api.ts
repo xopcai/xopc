@@ -27,10 +27,18 @@ export interface TtsTestInput {
 
 export interface RealtimeVoiceStatus {
   enabled: boolean;
-  defaultEngine: 'agent' | 'omni';
+  defaultMode: 'assistant' | 'natural';
   omni: { provider: string; model: string; managed: boolean } | null;
   stt: { provider: string; model: string; managed: boolean } | null;
   tts: { provider: string; model: string; managed: boolean; voice?: string } | null;
+  capabilities: {
+    dictation: { available: boolean; reasonCode?: 'VOICE_DISABLED' | 'PROVIDER_UNAVAILABLE' };
+    assistant: { available: boolean; reasonCode?: 'VOICE_DISABLED' | 'PROVIDER_UNAVAILABLE' };
+    natural: { available: boolean; reasonCode?: 'VOICE_DISABLED' | 'PROVIDER_UNAVAILABLE' };
+    languages: Array<'zh' | 'en'>;
+    bargeIn: boolean;
+    mediaTransports: ['websocket-pcm'];
+  };
 }
 
 export async function fetchRealtimeVoiceStatus(): Promise<RealtimeVoiceStatus> {

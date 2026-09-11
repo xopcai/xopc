@@ -89,12 +89,12 @@ export function VoiceSetup({ section, v, form, pending, apiKeyLabels, sttProvide
         <p className="mt-1 text-fg-muted">{form.tts.provider === 'edge' ? s.edgeHint : s.outputHint}</p>
         <Button className="mt-2" type="button" variant="secondary" onClick={() => configure(provider)}>{s.configureConversation}</Button>
       </div> : null}
-      <label className="block space-y-2 text-sm"><span>{v.experience.defaultEngine}</span>
+      <label className="block space-y-2 text-sm"><span>{v.experience.defaultMode}</span>
         <Select value={realtime.defaultEngine} className={selectTriggerClass} onChange={(e) => updateRealtime({ defaultEngine: e.target.value as 'agent' | 'omni' })}>
-          <SelectOption value="agent">{v.experience.agent}</SelectOption><SelectOption value="omni">{v.experience.omni}</SelectOption>
+          <SelectOption value="agent">{v.experience.assistant}</SelectOption><SelectOption value="omni">{v.experience.natural}</SelectOption>
         </Select>
       </label>
-      <p className="text-xs text-fg-muted">{realtime.defaultEngine === 'agent' ? v.experience.agentHint : v.experience.omniHint} {v.experience.nextCall}</p>
+      <p className="text-xs text-fg-muted">{realtime.defaultEngine === 'agent' ? v.experience.assistantHint : v.experience.naturalHint} {v.experience.nextCall}</p>
       </> : null}
       {section === 'listening' ? <>
       <div className="flex flex-wrap items-center justify-between gap-3">

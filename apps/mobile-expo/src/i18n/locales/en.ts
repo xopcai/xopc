@@ -47,6 +47,7 @@ export const en = {
     "speaker": "Speaker",
     "systemOutput": "System audio",
     "stopReply": "Stop reply",
+    "cancelTask": "Cancel task",
     "minimize": "Minimize",
     "expand": "Return to call",
     "settings": "Voice settings",

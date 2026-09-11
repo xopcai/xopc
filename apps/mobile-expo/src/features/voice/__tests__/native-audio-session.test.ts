@@ -2,14 +2,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   listeners: new Map<string, (event: Record<string, unknown>) => void>(),
-  start: vi.fn(async () => {}), stop: vi.fn(async () => {}), capture: vi.fn(),
+  start: vi.fn(async () => ({ output: 'speaker', echoControl: 'verified', fullDuplex: true })), stop: vi.fn(async () => {}), capture: vi.fn(),
+  duck: vi.fn(async () => {}), resumeOutput: vi.fn(async () => {}),
   permission: vi.fn(async () => ({ granted: true })),
   getPermission: vi.fn(async () => ({ granted: true })),
   appState: { currentState: 'active' },
   appListeners: new Set<(state: string) => void>(),
 }));
 vi.mock('expo', () => ({ requireOptionalNativeModule: () => ({
-  start: mocks.start, stop: mocks.stop, setCaptureEnabled: mocks.capture,
+  start: mocks.start, stop: mocks.stop, setCaptureEnabled: mocks.capture, duck: mocks.duck, resumeOutput: mocks.resumeOutput,
   addListener: (event: string, fn: (event: Record<string, unknown>) => void) => {
     mocks.listeners.set(event, fn);
     return { remove: () => mocks.listeners.delete(event) };
@@ -26,7 +27,7 @@ vi.mock('react-native', () => ({ AppState: Object.assign(mocks.appState, {
 import { NativeAudioSession } from '../native-audio-session';
 import { isAudioCaptureActive } from '../audio-playback-coordinator';
 const labels = { title: 'Call', end: 'End' };
-const callbacks = () => ({ pcm: vi.fn(), played: vi.fn(), interrupted: vi.fn() });
+const callbacks = () => ({ pcm: vi.fn(), played: vi.fn(), interrupted: vi.fn(), speechCandidate: vi.fn(), route: vi.fn() });
 afterEach(() => { vi.clearAllMocks(); vi.useRealTimers(); mocks.appState.currentState = 'active'; mocks.appListeners.clear(); });
 
 function appState(state: string) {

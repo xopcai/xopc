@@ -1,8 +1,11 @@
 import {
   VOICE_REALTIME_PROTOCOL_VERSION,
+  createVoiceSessionResponseSchema,
   parseVoiceServerEvent,
   decodeVoiceAudioFrame,
+  encodeVoiceUplinkAudioFrame,
   type CreateVoiceSessionResponse,
+  type VoiceMode,
   type VoiceClientMessage,
   type VoiceServerEvent,
 } from '@xopcai/realtime-protocol/voice';
@@ -13,7 +16,7 @@ import { apiUrl } from '@/lib/url';
 interface VoiceSessionClientOptions {
   signal?: AbortSignal;
   purpose: 'dictation' | 'conversation';
-  engine?: 'agent' | 'omni';
+  mode?: VoiceMode;
   sessionKey?: string;
   onEvent: (event: VoiceServerEvent) => void;
   onAudio?: (audio: ArrayBuffer, responseId: string) => void;
@@ -41,16 +44,20 @@ function websocketUrl(path: string): string {
 
 export class VoiceSessionClient {
   private heartbeatId: number | undefined;
+  private inputRemainder = new Uint8Array();
+  private utteranceId = crypto.randomUUID();
+  private inputSeq = 0;
 
   private constructor(
     private readonly socket: WebSocket,
     readonly session: CreateVoiceSessionResponse,
   ) {}
 
-  static async preflight(options: Pick<VoiceSessionClientOptions, 'purpose' | 'engine' | 'sessionKey' | 'signal'>): Promise<void> {
+  static async preflight(options: Pick<VoiceSessionClientOptions, 'purpose' | 'mode' | 'sessionKey' | 'signal'>): Promise<void> {
     await fetchJson(apiUrl('/api/voice/realtime/preflight'), {
       method: 'POST', signal: options.signal,
-      body: JSON.stringify({ purpose: options.purpose, engine: options.engine, sessionKey: options.sessionKey }),
+      body: JSON.stringify({ purpose: options.purpose, mode: options.mode, sessionKey: options.sessionKey,
+        supportedProtocolVersions: [VOICE_REALTIME_PROTOCOL_VERSION], mediaPreferences: ['websocket-pcm'] }),
     });
   }
 
@@ -63,12 +70,14 @@ export class VoiceSessionClient {
         signal: options.signal,
         body: JSON.stringify({
           purpose: options.purpose,
-          ...(options.engine ? { engine: options.engine } : {}),
+          ...(options.mode ? { mode: options.mode } : {}),
           ...(options.sessionKey ? { sessionKey: options.sessionKey } : {}),
+          supportedProtocolVersions: [VOICE_REALTIME_PROTOCOL_VERSION],
+          mediaPreferences: ['websocket-pcm'],
         }),
       },
     );
-    const session = response.payload;
+    const session = createVoiceSessionResponseSchema.parse(response.payload);
     options.signal?.throwIfAborted();
     const socket = new WebSocket(websocketUrl(session.websocketPath));
     socket.binaryType = 'arraybuffer';
@@ -78,6 +87,7 @@ export class VoiceSessionClient {
       let settled = false;
       let timeout: number | undefined;
       let audioSeq = 0;
+      let eventSeq = 0;
       const fail = (error: Error) => {
         if (settled) return;
         settled = true;
@@ -108,7 +118,7 @@ export class VoiceSessionClient {
         if (typeof message.data !== 'string') {
           try {
             const frame = decodeVoiceAudioFrame(new Uint8Array(message.data));
-            if (frame.seq !== audioSeq + 1) throw new Error('Invalid audio sequence');
+            if (frame.connectionEpoch !== session.connectionEpoch || frame.seq !== audioSeq + 1) throw new Error('Invalid audio sequence');
             audioSeq = frame.seq;
             options.onAudio?.(frame.audio.buffer as ArrayBuffer, frame.responseId);
           } catch { socket.close(4400, 'Invalid voice audio frame'); }
@@ -116,8 +126,10 @@ export class VoiceSessionClient {
         }
         try {
           const event = parseVoiceServerEvent(JSON.parse(message.data) as unknown);
+          if (event.sessionId !== session.sessionId || event.seq !== ++eventSeq) throw new Error('Invalid voice event sequence');
           options.onEvent(event);
           if (event.type === 'session.ready' && !settled) {
+            if (event.payload.connectionEpoch !== session.connectionEpoch || event.payload.mode !== session.mode) throw new Error('Voice session mismatch');
             settled = true;
             window.clearTimeout(timeout);
             client.startHeartbeat(event.payload.heartbeatIntervalMs);
@@ -135,7 +147,19 @@ export class VoiceSessionClient {
   }
 
   sendAudio(audio: ArrayBuffer): void {
-    if (audio.byteLength > 0 && this.socket.readyState === WebSocket.OPEN) this.socket.send(audio);
+    if (!audio.byteLength || this.socket.readyState !== WebSocket.OPEN) return;
+    const bytes = new Uint8Array(audio);
+    const pending = new Uint8Array(this.inputRemainder.byteLength + bytes.byteLength);
+    pending.set(this.inputRemainder); pending.set(bytes, this.inputRemainder.byteLength);
+    let offset = 0;
+    while (offset + 640 <= pending.byteLength) {
+      const frame = encodeVoiceUplinkAudioFrame({ connectionEpoch: this.session.connectionEpoch,
+        utteranceId: this.utteranceId, audioSeq: ++this.inputSeq, capturedAtMonotonicMs: performance.now(),
+        durationMs: 20, ...(this.inputSeq === 1 ? { start: true } : {}), audio: pending.slice(offset, offset + 640) });
+      this.socket.send(frame.buffer as ArrayBuffer);
+      offset += 640;
+    }
+    this.inputRemainder = pending.slice(offset);
   }
 
   reportMetric(responseId: string, metric: 'speech_end_to_audio_received' | 'local_stop', durationMs: number): void {
@@ -144,6 +168,8 @@ export class VoiceSessionClient {
 
   setInputMuted(muted: boolean): void {
     this.sendControl('input.mute', { muted });
+    this.inputRemainder = new Uint8Array();
+    if (!muted) { this.utteranceId = crypto.randomUUID(); this.inputSeq = 0; }
   }
 
   commit(): void {
@@ -151,11 +177,11 @@ export class VoiceSessionClient {
   }
 
   cancelResponse(responseId: string): void {
-    this.sendControl('response.cancel', { responseId });
+    this.sendControl('response.stop_playback', { responseId });
   }
 
   acknowledgeAudio(responseId: string, playedBytes: number): void {
-    this.sendControl('response.audio.played', { responseId, playedBytes });
+    this.sendControl('response.audio.played', { responseId, playedDurationMs: Math.floor(playedBytes / 48) });
   }
 
   stop(reason: 'user_finished' | 'surface_closed' | 'replaced' = 'user_finished'): void {

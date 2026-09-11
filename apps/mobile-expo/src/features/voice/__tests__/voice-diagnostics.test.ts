@@ -31,7 +31,11 @@ describe('voice audio diagnostics', () => {
     const diagnostics = new VoiceDiagnostics();
     diagnostics.start();
     diagnostics.setEngine('agent');
-    diagnostics.input(640);
+    diagnostics.inputResult(640, { accepted: true, queueAgeMs: 80 });
+    diagnostics.inputResult(640, { accepted: false, queueAgeMs: 320 });
+    diagnostics.congestionPause();
+    diagnostics.rtt(45);
+    diagnostics.route({ output: 'speaker', echoControl: 'verified', fullDuplex: true });
     for (let i = 0; i < 10; i++) diagnostics.response(String(i));
     diagnostics.received('9', new Uint8Array([1]));
     diagnostics.done('9', 'text_only');
@@ -40,6 +44,10 @@ describe('voice audio diagnostics', () => {
     const snapshot = diagnostics.snapshot();
     expect(snapshot).toMatchObject({ engine: 'agent', inputBytes: 640, responseCount: 10,
       errorCode: 'RESPONSE_FAILED', endReason: 'network' });
+    expect(snapshot).toMatchObject({
+      network: { latestRttMs: 45, maxRttMs: 45, peakInputQueueAgeMs: 320, droppedInputFrames: 1, congestionPauses: 1 },
+      audioRoute: { output: 'speaker', echoControl: 'verified', fullDuplex: true },
+    });
     expect(snapshot.responses).toHaveLength(5);
     expect(snapshot.responses.at(-1)).toMatchObject({ invalidPcmFrames: 1, finishReason: 'text_only' });
     snapshot.responses[0].playedBytes = 999;

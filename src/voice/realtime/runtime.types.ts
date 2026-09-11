@@ -1,4 +1,4 @@
-import type { CreateVoiceSessionRequest, VoiceProviderRoute } from '@xopcai/realtime-protocol/voice';
+import type { CreateVoiceSessionRequest, VoiceMode, VoiceProviderRoute } from '@xopcai/realtime-protocol/voice';
 
 import type { Config } from '../../config/schema.js';
 import type { MediaUnderstandingProvider } from '../../media-understanding/types.js';
@@ -7,6 +7,7 @@ import type { TTSConfig } from '../tts/types.js';
 import type { VoiceConversationContext } from './conversation-context.js';
 import type { OmniTranscript } from './omniEngine.js';
 import type { OmniRoute } from './omniRoute.js';
+import type { VoiceAgentBroker } from './agentBroker.js';
 
 export interface ResolvedStreamingStt {
   plugin: MediaUnderstandingProvider & Required<Pick<MediaUnderstandingProvider, 'openAudioStream' | 'streamingAudio'>>;
@@ -21,7 +22,9 @@ export interface ResolvedStreamingStt {
 
 export interface VoiceTicketClaim {
   sessionId: string;
+  connectionEpoch: number;
   principalId: string;
+  mode?: VoiceMode;
   request: CreateVoiceSessionRequest;
   inputMode: 'server_vad';
   idleTimeoutMs: number;
@@ -42,25 +45,6 @@ export interface ResolvedStreamingTts {
   route: VoiceProviderRoute;
 }
 
-interface VoiceAgentEvent {
-  type: string;
-  payload?: {
-    delta?: unknown;
-    message?: unknown;
-    status?: unknown;
-    toolCallId?: unknown;
-    toolName?: unknown;
-    requestId?: unknown;
-    kind?: unknown;
-    question?: unknown;
-    choices?: unknown;
-    suggestedAnswer?: unknown;
-    version?: unknown;
-    createdAt?: unknown;
-    expiresAt?: unknown;
-  };
-}
-
 export interface VoiceRealtimeRuntimeOptions {
   recordOmniTranscript?: (sessionKey: string, callId: string, entry: OmniTranscript, expectedSessionId: string) => Promise<void>;
   getConversationContext?: (sessionKey: string, expectedSessionId: string) => Promise<VoiceConversationContext>;
@@ -68,7 +52,7 @@ export interface VoiceRealtimeRuntimeOptions {
   getConfig: () => Config;
   sessionExists: (sessionKey: string) => Promise<boolean>;
   sessionBusy: (sessionKey: string) => boolean;
-  runAgent: (text: string, sessionKey: string, signal: AbortSignal) => AsyncIterable<VoiceAgentEvent>;
+  agentBroker: VoiceAgentBroker;
   recordInterruption: (entry: {
     sessionKey: string;
     responseId: string;

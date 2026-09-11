@@ -10,6 +10,14 @@ export type VoiceResponseDiagnostics = {
   cancelReason?: string;
 };
 
+export type VoiceNetworkDiagnostics = {
+  latestRttMs?: number;
+  maxRttMs: number;
+  peakInputQueueAgeMs: number;
+  droppedInputFrames: number;
+  congestionPauses: number;
+};
+
 /** Bounded, in-memory counters only: never retain speech, transcripts or credentials. */
 export class VoiceDiagnostics {
   private startedAt = 0;
@@ -19,13 +27,28 @@ export class VoiceDiagnostics {
   private errorCode?: string;
   private endReason?: string;
   private responses: VoiceResponseDiagnostics[] = [];
+  private network: VoiceNetworkDiagnostics = { maxRttMs: 0, peakInputQueueAgeMs: 0, droppedInputFrames: 0, congestionPauses: 0 };
+  private audioRoute?: { output: string; echoControl: string; fullDuplex: boolean };
 
   start() {
     this.startedAt = Date.now(); this.engine = undefined; this.inputBytes = 0;
     this.responseCount = 0; this.errorCode = undefined; this.endReason = undefined; this.responses = [];
+    this.network = { maxRttMs: 0, peakInputQueueAgeMs: 0, droppedInputFrames: 0, congestionPauses: 0 };
+    this.audioRoute = undefined;
   }
   setEngine(engine: 'agent' | 'omni') { this.engine = engine; this.endReason = undefined; }
   input(bytes: number) { this.inputBytes += bytes; }
+  inputResult(bytes: number, result: { accepted: boolean; queueAgeMs: number }) {
+    if (Number.isFinite(result.queueAgeMs)) this.network.peakInputQueueAgeMs = Math.max(this.network.peakInputQueueAgeMs, result.queueAgeMs);
+    if (result.accepted) this.input(bytes); else this.network.droppedInputFrames += 1;
+  }
+  congestionPause() { this.network.congestionPauses += 1; }
+  rtt(durationMs: number) {
+    if (!Number.isFinite(durationMs) || durationMs < 0) return;
+    this.network.latestRttMs = durationMs;
+    this.network.maxRttMs = Math.max(this.network.maxRttMs, durationMs);
+  }
+  route(value: { output: string; echoControl: string; fullDuplex: boolean }) { this.audioRoute = { ...value }; }
   error(code: string) { this.errorCode = code; }
   end(reason: string) { this.endReason = reason; }
   response(id: string) {
@@ -55,7 +78,9 @@ export class VoiceDiagnostics {
   cancelled(id: string, reason: string) { const response = this.find(id); if (response) response.cancelReason = reason; }
   snapshot() {
     return { startedAt: this.startedAt, engine: this.engine, inputBytes: this.inputBytes, responseCount: this.responseCount,
-      errorCode: this.errorCode, endReason: this.endReason, responses: this.responses.map(response => ({ ...response })) };
+      errorCode: this.errorCode, endReason: this.endReason, network: { ...this.network },
+      audioRoute: this.audioRoute ? { ...this.audioRoute } : undefined,
+      responses: this.responses.map(response => ({ ...response })) };
   }
 }
 

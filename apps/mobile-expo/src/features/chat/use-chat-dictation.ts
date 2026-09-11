@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, DeviceEventEmitter } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
+import type { CreateVoiceSessionRequest } from '@xopcai/realtime-protocol/voice';
+
 import { preflightVoice, createVoiceConnection } from '../../query/voice';
 import { refineVoiceTranscript } from '../../api/agent-client';
 import { NativeAudioSession } from '../voice/native-audio-session';
@@ -51,7 +53,7 @@ export function useChatDictation(sessionKey: string, insert: (text: string) => v
     setPhase('connecting'); setText(''); setError(undefined); setStartedAt(0); current.transcript = new DictationTranscript();
     const abort = new AbortController(); current.abort = abort;
     const audio = new NativeAudioSession(); current.audio = audio;
-    const request = { purpose: 'dictation' as const };
+    const request: CreateVoiceSessionRequest = { purpose: 'dictation', supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] };
     const fail = (code: string) => {
       if (!active()) return;
       current.generation++;
@@ -62,8 +64,9 @@ export function useChatDictation(sessionKey: string, insert: (text: string) => v
       if (!active()) return;
       await audio.start(false, m, { pcm: bytes => {
         if (!active()) return;
-        try { current.transport?.audio(bytes); } catch { fail('INPUT_DROPPED'); }
-      }, played: () => {}, interrupted: fail });
+        const result = current.transport?.audio(bytes);
+        if (result?.quality === 'critical') fail('INPUT_DROPPED');
+      }, played: () => {}, interrupted: fail, speechCandidate: () => {}, route: () => {} });
       if (!active()) { await audio.stop(); return; }
       const connection = await createVoiceConnection(request, abort.signal);
       if (!active()) return;

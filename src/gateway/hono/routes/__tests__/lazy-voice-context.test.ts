@@ -21,7 +21,7 @@ describe('authenticated lazy voice context', () => {
   const request = (token?: string) => ({
     method: 'POST',
     headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
-    body: JSON.stringify({ purpose: 'dictation' }),
+    body: JSON.stringify({ purpose: 'dictation', supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] }),
   });
 
   it('preserves the authenticated owner across lazy dispatch', async () => {
@@ -30,7 +30,7 @@ describe('authenticated lazy voice context', () => {
     const { createSession } = mount(app);
     const response = await app.request('/api/voice/realtime/sessions', request('test-token'));
     expect(response.status).toBe(200);
-    expect(createSession).toHaveBeenCalledWith({ purpose: 'dictation' }, 'gateway-owner');
+    expect(createSession).toHaveBeenCalledWith({ purpose: 'dictation', supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] }, 'gateway-owner');
   });
 
   it.each(['sessions', 'preflight', 'sessions/cancel'])('does not bypass authentication for %s', async (action) => {
@@ -79,7 +79,7 @@ describe('authenticated lazy voice context', () => {
       strictRateLimitMiddleware: async (_c, next) => next(),
     } as never);
     expect((await app.request('/api/voice/realtime/preflight', request('test-token'))).status).toBe(200);
-    expect(preflight).toHaveBeenCalledWith({ purpose: 'dictation' });
+    expect(preflight).toHaveBeenCalledWith({ purpose: 'dictation', supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] });
     expect(createSession).not.toHaveBeenCalled();
 
   });

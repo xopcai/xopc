@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 
-import { insertSessionInput } from '../storage/sqlite/session-input-repository.js';
+import { findSessionInput, insertSessionInput } from '../storage/sqlite/session-input-repository.js';
 import { ConnectionRecoveryService } from '../connectors/connection-recovery-service.js';
 
 import { buildVoiceMemoryContext } from '../voice/realtime/memory-context.js';
@@ -107,6 +107,7 @@ import { GatewayConfigCoordinator } from './service/config-coordinator.js';
 import { GatewayAgentRunner } from './service/agent-runner.js';
 import { RealtimeRuntime } from '../realtime/runtime.js';
 import { VoiceRealtimeRuntime } from '../voice/realtime/runtime.js';
+import { DurableVoiceAgentBroker } from '../voice/realtime/agentBroker.js';
 import { reconcileMemoryMaintenanceAutomations } from './memory-maintenance-automation-reconciler.js';
 import type {
   GatewayChannelStartupPhase1Metrics,
@@ -227,20 +228,14 @@ export class GatewayService {
         interruptedDuring: entry.interruptedDuring,
       },
     }),
-    runAgent: (text, sessionKey, signal) => {
-      if (this.agentRunner.hasActiveRun(sessionKey)) {
-        throw new Error('Conversation session already has an active response');
-      }
-      return this.agentRunner.runAgent(
-        text,
-        'webchat',
-        sessionKey,
-        { type: 'channel', channel: 'webchat' },
-        undefined,
-        undefined,
-        { signal, presentation: 'voice' },
-      );
-    },
+    agentBroker: new DurableVoiceAgentBroker({
+      submit: (input) => this.agentRunner.submitSessionInput(input),
+      find: findSessionInput,
+      snapshot: (sessionKey) => this.agentRunner.inputs.snapshot(sessionKey),
+      currentSequence: (topic) => this.realtime.broker.currentSequence(topic),
+      subscribe: (topic, afterSeq, listener) => this.realtime.broker.subscribe(topic, afterSeq, listener),
+      cancelRun: async (runId) => { await this.agentRunner.abortAgentRun(runId); },
+    }),
   });
 
   getConfig(): Config {

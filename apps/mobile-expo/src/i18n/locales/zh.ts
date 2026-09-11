@@ -49,6 +49,7 @@ export const zh: MessageBundle = {
     "speaker": "扬声器",
     "systemOutput": "系统音频",
     "stopReply": "停止回复",
+    "cancelTask": "取消任务",
     "minimize": "收起",
     "expand": "返回通话",
     "settings": "语音设置",

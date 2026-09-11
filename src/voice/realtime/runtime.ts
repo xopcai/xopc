@@ -12,6 +12,7 @@ import {
   parseVoiceClientJsonFrame,
   parseVoiceClientMessage,
   encodeVoiceAudioFrame,
+  decodeVoiceUplinkAudioFrame,
   type CreateVoiceSessionRequest,
   type CreateVoiceSessionResponse,
   type VoiceClientMessage,
@@ -197,15 +198,16 @@ export class VoiceRealtimeRuntime {
     if (!config.voice?.realtime?.enabled) {
       throw new VoiceSessionCreationError('VOICE_DISABLED', 'Realtime voice is disabled', 503);
     }
-    request = request.purpose === 'conversation' ? { ...request, engine: request.engine ?? config.voice.realtime.defaultEngine } : request;
+    const defaultMode = config.voice.realtime.defaultEngine === 'omni' ? 'natural' : 'assistant';
+    request = request.purpose === 'conversation' ? { ...request, mode: request.mode ?? defaultMode } : request;
     let omni: OmniRoute | undefined;
-    if (request.engine === 'omni') {
+    if (request.mode === 'natural') {
       try { omni = await resolveOmniRoute(config); }
       catch { throw new VoiceSessionCreationError('PROVIDER_UNAVAILABLE', 'Natural conversation is unavailable. Check its model, endpoint and credentials.', 503); }
     }
     if (omni && (!this.options.recordOmniTranscript || !this.options.getConversationContext)) throw new VoiceSessionCreationError('PROVIDER_UNAVAILABLE', 'Natural conversation storage is unavailable', 503);
     const conversationSessionId = request.purpose === 'conversation' && request.sessionKey ? await this.options.getSessionIdentity?.(request.sessionKey) : undefined;
-    if (omni && !conversationSessionId) throw new VoiceSessionCreationError('SESSION_NOT_FOUND', 'Conversation session was not found', 404);
+    if (request.purpose === 'conversation' && !conversationSessionId) throw new VoiceSessionCreationError('SESSION_NOT_FOUND', 'Conversation session was not found', 404);
     const stt = omni ? undefined : resolveStreamingStt(config, request.language);
     if (!omni && !stt) {
       throw new VoiceSessionCreationError(
@@ -222,12 +224,12 @@ export class VoiceRealtimeRuntime {
         503,
       );
     }
-    const tts = request.engine === 'agent' ? resolveStreamingTts(config) : undefined;
+    const tts = request.mode === 'assistant' ? resolveStreamingTts(config) : undefined;
     if (request.purpose === 'conversation') {
       if (!request.sessionKey || !await this.options.sessionExists(request.sessionKey)) {
         throw new VoiceSessionCreationError('SESSION_NOT_FOUND', 'Conversation session was not found', 404);
       }
-      if (this.options.sessionBusy(request.sessionKey)) {
+      if (request.mode === 'natural' && this.options.sessionBusy(request.sessionKey)) {
         throw new VoiceSessionCreationError('SESSION_CONFLICT', 'Conversation session already has an active response', 409);
       }
       if (this.conversationReservations.has(request.sessionKey)) {
@@ -261,13 +263,16 @@ export class VoiceRealtimeRuntime {
     request = resolvedRequest;
     const sessionId = crypto.randomUUID();
     const ticket = crypto.randomBytes(32).toString('base64url');
+    const connectionEpoch = crypto.randomInt(1, 0x1_0000_0000);
     const maxSessionMs = request.purpose === 'conversation'
       ? Math.min(config.voice.realtime.maxConversationMs, omni?.route.managed ? 30 * 60_000 : Number.MAX_SAFE_INTEGER)
       : config.voice.realtime.maxDictationMs;
     const claim: VoiceTicketClaim = {
       conversationSessionId,
       sessionId,
+      connectionEpoch,
       principalId,
+      ...(request.purpose === 'conversation' && request.mode ? { mode: request.mode } : {}),
       request,
       inputMode,
       idleTimeoutMs: config.voice.realtime.idleTimeoutMs,
@@ -290,10 +295,13 @@ export class VoiceRealtimeRuntime {
       ticketExpiresAt: new Date(claim.expiresAt).toISOString(),
       websocketPath: VOICE_REALTIME_WS_PATH,
       protocolVersion: VOICE_REALTIME_PROTOCOL_VERSION,
+      connectionEpoch,
       purpose: request.purpose,
+      ...(request.purpose === 'conversation' && request.mode ? { mode: request.mode } : {}),
       inputMode,
       bargeIn: config.voice.realtime.bargeIn,
       inputFormat: { encoding: 'pcm_s16le', sampleRate: 16_000, channels: 1 },
+      media: { transport: 'websocket-pcm', codec: 'pcm_s16le', frameDurationMs: 20 },
       limits: {
         maxBinaryFrameBytes: VOICE_REALTIME_MAX_BINARY_FRAME_BYTES,
         maxSessionMs,
@@ -383,6 +391,8 @@ export class VoiceRealtimeRuntime {
     let ready = false;
     let seq = 0;
     let audioSeq = 0;
+    let outputMediaTimestampMs = 0;
+    const inputSequences = new Map<string, number>();
     let closed = false;
     let lastActivityAt = Date.now();
     const abortController = new AbortController();
@@ -390,6 +400,7 @@ export class VoiceRealtimeRuntime {
     let context: VoiceConversationContext | undefined;
     let unsubscribeMemory: (() => void) | undefined;
     let unsubscribeSession: (() => void) | undefined;
+    let inputMutationTail: Promise<void> = Promise.resolve();
 
     const send: VoiceEventSink = (type, payload) => {
       if (!claim || socket.readyState !== WebSocketState.OPEN) return;
@@ -477,7 +488,14 @@ export class VoiceRealtimeRuntime {
         setupStage = 'engine';
         const sendAudio = (responseId: string, bytes: Uint8Array) => {
           if (socket.bufferedAmount > 1024 * 1024) throw new Error('Voice client audio backpressure limit exceeded');
-          if (!closed && socket.readyState === WebSocketState.OPEN) socket.send(encodeVoiceAudioFrame({ responseId, seq: ++audioSeq, audio: bytes }), { binary: true });
+          if (closed || socket.readyState !== WebSocketState.OPEN) return;
+          for (let offset = 0; offset < bytes.byteLength; offset += 960) {
+            const audio = bytes.subarray(offset, offset + 960);
+            if (audio.byteLength !== 960) throw new Error('Realtime output must align to 20 ms PCM frames');
+            socket.send(encodeVoiceAudioFrame({ connectionEpoch: consumed.connectionEpoch, responseId, seq: ++audioSeq,
+              mediaTimestampMs: outputMediaTimestampMs, durationMs: 20, audio }), { binary: true });
+            outputMediaTimestampMs += 20;
+          }
         };
         engine = consumed.omni ? createOmniVoiceEngine({
           callId: consumed.sessionId,
@@ -500,8 +518,11 @@ export class VoiceRealtimeRuntime {
         }, 'Realtime voice session ready');
         send('session.ready', {
           purpose: consumed.request.purpose,
+          ...(consumed.mode ? { mode: consumed.mode } : {}),
+          connectionEpoch: consumed.connectionEpoch,
           inputMode: consumed.inputMode,
           inputFormat: { encoding: 'pcm_s16le', sampleRate: 16_000, channels: 1 },
+          media: { transport: 'websocket-pcm', codec: 'pcm_s16le', frameDurationMs: 20 },
           route: consumed.omni ? { engine: 'omni', omni: consumed.omni.route } : consumed.tts ? { engine: 'agent', stt: consumed.stt!.route, tts: consumed.tts.route } : { engine: 'dictation', stt: consumed.stt!.route },
           heartbeatIntervalMs: VOICE_REALTIME_HEARTBEAT_INTERVAL_MS,
         });
@@ -526,17 +547,32 @@ export class VoiceRealtimeRuntime {
           : Array.isArray(data)
             ? Buffer.concat(data)
             : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-        if (bytes.byteLength === 0 || bytes.byteLength % 2 !== 0 || bytes.byteLength > VOICE_REALTIME_MAX_BINARY_FRAME_BYTES) {
+        let frame;
+        try { frame = decodeVoiceUplinkAudioFrame(bytes); }
+        catch {
           send('session.error', { code: 'INVALID_AUDIO', message: 'Invalid PCM audio frame', recoverable: false });
           void shutdown('invalid_audio', true);
           return;
         }
+        if (frame.connectionEpoch !== claim.connectionEpoch || frame.audio.byteLength !== 640) {
+          send('session.error', { code: 'INVALID_AUDIO', message: 'Invalid PCM audio frame', recoverable: false });
+          void shutdown('invalid_audio', true);
+          return;
+        }
+        const previous = inputSequences.get(frame.utteranceId) ?? 0;
+        if (frame.audioSeq <= previous) return;
+        if (frame.audioSeq !== previous + 1 || inputSequences.size >= 256) {
+          send('session.error', { code: 'INVALID_AUDIO', message: 'Invalid audio sequence', recoverable: false });
+          void shutdown('invalid_audio', true);
+          return;
+        }
+        inputSequences.set(frame.utteranceId, frame.audioSeq);
         if (!ready || !engine) {
           socket.close(4401, 'Voice session is not ready');
           return;
         }
         try {
-          engine.appendAudio(bytes);
+          engine.appendAudio(frame.audio);
         } catch (error) {
           log.warn({ err: error, sessionId: claim.sessionId }, 'Realtime voice engine rejected audio');
           send('session.error', { code: 'AUDIO_BACKPRESSURE', message: 'Audio stream cannot keep up', recoverable: false });
@@ -575,18 +611,29 @@ export class VoiceRealtimeRuntime {
         const key = `${responseId}:${metric}`;
         if (!clientMetrics.has(key) && clientMetrics.size < 512) {
           clientMetrics.add(key);
-          log.info({ sessionId: claim.sessionId, responseId, metric, durationMs, source: 'client', engine: claim.request.engine }, 'Voice client timing sample');
+          log.info({ sessionId: claim.sessionId, responseId, metric, durationMs, source: 'client', mode: claim.mode }, 'Voice client timing sample');
         }
-      } else if (message.type === 'response.cancel') {
+      } else if (message.type === 'response.stop_playback') {
         if (!engine?.cancel(message.payload.responseId, 'client_cancelled')) {
           send('session.error', { code: 'NO_ACTIVE_RESPONSE', message: 'No matching response is active', recoverable: true });
         }
+      } else if (message.type === 'task.cancel') {
+        void engine?.cancelTask(message.payload.taskId).then((cancelled) => {
+          if (!cancelled) send('session.error', { code: 'NO_ACTIVE_TASK', message: 'No matching task is active', recoverable: true });
+        }).catch((error) => {
+          log.warn({ err: error, sessionId: claim?.sessionId, taskId: message.payload.taskId }, 'Voice task cancellation failed');
+          send('session.error', { code: 'TASK_CANCEL_FAILED', message: 'Could not cancel the task', recoverable: true });
+        });
       } else if (message.type === 'response.audio.played') {
-        try { engine?.acknowledge(message.payload.responseId, message.payload.playedBytes); }
+        try { engine?.acknowledge(message.payload.responseId, message.payload.playedDurationMs); }
         catch { socket.close(4400, 'Invalid playback acknowledgement'); }
       } else if (message.type === 'input.mute') {
         if (!ready || !engine || claim.request.purpose !== 'conversation') return;
-        void Promise.resolve().then(() => engine!.setInputMuted(message.payload.muted)).catch((error) => {
+        const muted = message.payload.muted;
+        inputMutationTail = inputMutationTail.then(async () => {
+          if (closed || !ready || !engine) return;
+          await engine.setInputMuted(muted);
+        }).catch((error) => {
           log.warn({ err: error, sessionId: claim?.sessionId }, 'Voice input reset failed');
           send('session.error', { code: 'PROVIDER_ERROR', message: 'Could not resume microphone input', recoverable: false });
           void shutdown('provider_error', true);

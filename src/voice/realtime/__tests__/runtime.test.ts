@@ -28,6 +28,7 @@ function config() {
 
 describe('VoiceRealtimeRuntime session creation', () => {
   let runtime: VoiceRealtimeRuntime | undefined;
+  const negotiation = { supportedProtocolVersions: [3] as [3], mediaPreferences: ['websocket-pcm'] as ['websocket-pcm'] };
 
   afterEach(() => runtime?.close());
 
@@ -36,14 +37,15 @@ describe('VoiceRealtimeRuntime session creation', () => {
       getConfig: config,
       sessionExists: vi.fn(async () => options?.exists ?? true),
       sessionBusy: vi.fn(() => options?.busy ?? false),
-      runAgent: vi.fn(async function* () {}),
+      getSessionIdentity: vi.fn(async () => 'stored-session'),
+      agentBroker: { delegate: vi.fn(), cancel: vi.fn(async () => true) },
       recordInterruption: vi.fn(async () => undefined),
     });
     return runtime;
   }
 
   it('creates a dictation session with only a streaming STT route', async () => {
-    const result = await createRuntime().createSession({ purpose: 'dictation' }, 'user-1');
+    const result = await createRuntime().createSession({ purpose: 'dictation', ...negotiation }, 'user-1');
 
     expect(result.route).toEqual({
       engine: 'dictation',
@@ -59,8 +61,8 @@ describe('VoiceRealtimeRuntime session creation', () => {
   it('creates an Omni session independently of STT and TTS and keeps secrets out of the ticket response', async () => {
     const nativeConfig = ConfigSchema.parse({ voice: { realtime: { enabled: true, defaultEngine: 'omni', omni: { provider: 'alibaba', model: 'qwen3-omni-flash-realtime', voice: 'Cherry', apiKey: 'native-secret' } } } });
     runtime = new VoiceRealtimeRuntime({ getConfig: () => nativeConfig, sessionExists: async () => true, sessionBusy: () => false,
-      getConversationContext: async () => ({ identity: '', history: [] }), getSessionIdentity: async () => 'stored-session', recordOmniTranscript: async () => {}, recordInterruption: async () => {}, runAgent: vi.fn(async function* () {}) });
-    const request = { purpose: 'conversation' as const, sessionKey: 'chat' };
+      getConversationContext: async () => ({ identity: '', history: [] }), getSessionIdentity: async () => 'stored-session', recordOmniTranscript: async () => {}, recordInterruption: async () => {}, agentBroker: { delegate: vi.fn(), cancel: vi.fn(async () => true) } });
+    const request = { purpose: 'conversation' as const, sessionKey: 'chat', ...negotiation };
     const result = await runtime.createSession(request, 'user');
     expect(result.route).toEqual({ engine: 'omni', omni: { provider: 'alibaba', model: 'qwen3-omni-flash-realtime', managed: false } });
     expect(JSON.stringify(result)).not.toContain('native-secret');
@@ -70,7 +72,7 @@ describe('VoiceRealtimeRuntime session creation', () => {
 
   it('freezes both Qwen routes for conversation', async () => {
     const result = await createRuntime().createSession(
-      { purpose: 'conversation', engine: 'agent', sessionKey: 'agent:main:webchat:default:direct:voice' },
+      { purpose: 'conversation', mode: 'assistant', sessionKey: 'agent:main:webchat:default:direct:voice', ...negotiation },
       'user-1',
     );
 
@@ -84,16 +86,16 @@ describe('VoiceRealtimeRuntime session creation', () => {
     expect(result.limits.maxSessionMs).toBe(3_600_000);
   });
 
-  it('rejects a conversation when its chat is already running', async () => {
+  it('allows assistant mode to steer an already running chat', async () => {
     await expect(createRuntime({ busy: true }).createSession(
-      { purpose: 'conversation', engine: 'agent', sessionKey: 'agent:main:webchat:default:direct:voice' },
+      { purpose: 'conversation', mode: 'assistant', sessionKey: 'agent:main:webchat:default:direct:voice', ...negotiation },
       'user-1',
-    )).rejects.toThrow('active response');
+    )).resolves.toHaveProperty('mode', 'assistant');
   });
 
   it('preflights without reserving a chat or issuing a ticket', async () => {
     const service = createRuntime();
-    const request = { purpose: 'conversation' as const, engine: 'agent' as const, sessionKey: 'chat' };
+    const request = { purpose: 'conversation' as const, mode: 'assistant' as const, sessionKey: 'chat', ...negotiation };
     await service.preflight(request);
     await service.preflight(request);
     expect(service.hasConversation('chat')).toBe(false);
@@ -103,7 +105,7 @@ describe('VoiceRealtimeRuntime session creation', () => {
   it('reserves one voice conversation per chat', async () => {
     const service = createRuntime();
     const request = {
-      purpose: 'conversation' as const, engine: 'agent' as const,
+      purpose: 'conversation' as const, mode: 'assistant' as const, ...negotiation,
       sessionKey: 'agent:main:webchat:default:direct:voice',
     };
     await service.createSession(request, 'user-1');
@@ -117,7 +119,7 @@ describe('VoiceRealtimeRuntime session creation', () => {
   it('releases an unused conversation reservation for its authenticated owner', async () => {
     const service = createRuntime();
     const request = {
-      purpose: 'conversation' as const, engine: 'agent' as const,
+      purpose: 'conversation' as const, mode: 'assistant' as const, ...negotiation,
       sessionKey: 'agent:main:webchat:default:direct:voice',
     };
     const issued = await service.createSession(request, 'user-1');
@@ -133,7 +135,7 @@ describe('VoiceRealtimeRuntime session creation', () => {
   it('releases an unused conversation reservation when its ticket expires', async () => {
     const service = createRuntime();
     const request = {
-      purpose: 'conversation' as const, engine: 'agent' as const,
+      purpose: 'conversation' as const, mode: 'assistant' as const, ...negotiation,
       sessionKey: 'agent:main:webchat:default:direct:voice',
     };
     await service.createSession(request, 'user-1', 1_000);

@@ -1,22 +1,26 @@
-import type { CreateVoiceSessionRequest, CreateVoiceSessionResponse, VoiceServerEvent } from '@xopcai/realtime-protocol/voice';
-import type { VoiceTransport, VoiceTransportCallbacks } from './voice-transport';
+import type { CreateVoiceSessionRequest, CreateVoiceSessionResponse, VoiceMode, VoiceServerEvent } from '@xopcai/realtime-protocol/voice';
+import type { AudioRouteCapabilities } from './native-audio-session';
+import type { VoiceAudioSendResult, VoiceInputQuality, VoiceTransport, VoiceTransportCallbacks } from './voice-transport';
 import { VoiceDiagnostics, voiceDiagnosticFinding } from './voice-diagnostics';
 
-type Transport = Pick<VoiceTransport, 'connect' | 'send' | 'audio' | 'close'>;
+type Transport = Pick<VoiceTransport, 'connect' | 'send' | 'audio' | 'inputQueueAgeMs' | 'close'>;
 
 export type CallTarget = {
   gatewayId: string;
   sessionKey: string;
-  engine?: 'agent' | 'omni';
+  mode?: VoiceMode;
   background: boolean;
   identity?: string;
   name?: string;
 };
 export type CallState = {
   phase: 'idle' | 'connecting' | 'connected' | 'recovering' | 'paused' | 'ending';
-  target?: CallTarget; name: string; engine?: 'agent' | 'omni'; expanded: boolean; muted: boolean;
+  target?: CallTarget; name: string; mode?: VoiceMode; engine?: 'agent' | 'omni'; expanded: boolean; muted: boolean;
   startedAt: number; expiresAt?: number; responseId?: string; userText: string; assistantText: string;
   activity?: string; error?: string;
+  taskId?: string;
+  taskStage?: 'running' | 'cancelling';
+  networkQuality: VoiceInputQuality;
   responseStage?: 'thinking' | 'buffering' | 'speaking';
   clarification?: {
     requestId: string;
@@ -31,18 +35,22 @@ export type CallState = {
 };
 export type CallDependencies = {
   audio: {
-    start(background: boolean, callbacks: { pcm: (bytes: Uint8Array) => void; played: (id: string, bytes: number) => void; interrupted: (reason: string) => void }): Promise<void>;
+    start(background: boolean, callbacks: { pcm: (bytes: Uint8Array) => void; played: (id: string, bytes: number) => void;
+      interrupted: (reason: string) => void; speechCandidate: (active: boolean) => void;
+      route: (capabilities: AudioRouteCapabilities) => void }): Promise<AudioRouteCapabilities>;
     capture(enabled: boolean): void; flush(): Promise<void>; stop(): Promise<void>;
     enqueue(id: string, bytes: Uint8Array): Promise<void>;
+    duck(): Promise<void>; resumeOutput(): Promise<void>;
   };
-  prepare(target: CallTarget, signal: AbortSignal, recovering?: boolean): Promise<{ identity: string; name: string; engine: 'agent' | 'omni' }>;
+  prepare(target: CallTarget, signal: AbortSignal, recovering?: boolean): Promise<{ identity: string; name: string; mode: VoiceMode; engine: 'agent' | 'omni' }>;
   create(request: CreateVoiceSessionRequest, signal: AbortSignal): Promise<{ origin: string; session: CreateVoiceSessionResponse }>;
   discard(connection: { origin: string; session: CreateVoiceSessionResponse }): Promise<void>;
   transport(callbacks: VoiceTransportCallbacks): Transport;
   invalidate(target: CallTarget): void;
 };
-const initial = (): CallState => ({ phase: 'idle', name: '', expanded: true, muted: false, startedAt: 0, userText: '', assistantText: '' });
-const PLAYBACK_CAPTURE_GUARD_MS = 300;
+const initial = (): CallState => ({ phase: 'idle', name: '', expanded: true, muted: false, startedAt: 0, userText: '', assistantText: '', networkQuality: 'good' });
+const INPUT_RECOVERY_QUEUE_AGE_MS = 80;
+const INPUT_RECOVERY_POLL_MS = 50;
 
 export function shouldPauseVoiceForBackground(state: CallState, permissionPromptActive: boolean): boolean {
   if (state.target?.background || !['connecting', 'recovering', 'connected'].includes(state.phase)) return false;
@@ -68,9 +76,11 @@ export class VoiceCallController {
   private limitTimer?: ReturnType<typeof setTimeout>;
   private recoveryTimer?: ReturnType<typeof setTimeout>;
   private playbackTimer?: ReturnType<typeof setTimeout>;
-  private playbackCaptureTimer?: ReturnType<typeof setTimeout>;
-  private playbackCaptureGuarded = false;
-  private playbackCaptureGuardApplied = false;
+  private fullDuplex = false;
+  private playbackCaptureBlocked = false;
+  private bargeInDucked = false;
+  private inputCongested = false;
+  private inputRecoveryTimer?: ReturnType<typeof setTimeout>;
   private inputReset = Promise.resolve();
   private playbackReset = Promise.resolve();
   constructor(private deps: CallDependencies) {}
@@ -89,6 +99,7 @@ export class VoiceCallController {
     this.diagnostics.start();
     this.identity = undefined;
     this.approvalPending = false;
+    this.fullDuplex = false; this.playbackCaptureBlocked = false; this.bargeInDucked = false; this.inputCongested = false;
     this.update({ ...initial(), phase: 'connecting', target, startedAt: Date.now() });
     this.opening = this.open(false);
     return this.opening;
@@ -107,11 +118,14 @@ export class VoiceCallController {
       if (this.identity && this.identity !== prepared.identity) throw new Error('SESSION_CHANGED');
       this.identity = prepared.identity;
       this.diagnostics.setEngine(prepared.engine);
-      this.update({ name: prepared.name, engine: prepared.engine, target: { ...target, engine: prepared.engine } });
+      this.update({ name: prepared.name, mode: prepared.mode, engine: prepared.engine, target: { ...target, mode: prepared.mode } });
       const audioStart = this.deps.audio.start(target.background, {
         pcm: bytes => {
           if (!current() || this.state.phase !== 'connected' || this.state.muted || this.state.clarification || this.approvalPending) return;
-          try { this.transport?.audio(bytes); this.diagnostics.input(bytes.byteLength); } catch { void this.pause('INPUT_DROPPED'); }
+          const result = this.transport?.audio(bytes);
+          if (!result) return;
+          this.diagnostics.inputResult(bytes.byteLength, result);
+          this.handleInputQuality(result);
         },
         played: (id, bytes) => {
           if (!current() || id !== this.state.responseId || bytes <= this.renderedBytes) return;
@@ -120,22 +134,26 @@ export class VoiceCallController {
           const responseStage = bytes < this.receivedBytes ? 'speaking' : 'thinking';
           if (this.state.responseStage !== responseStage) this.update({ responseStage });
           this.watchPlayback(true);
-          this.transport?.send('response.audio.played', { responseId: id, playedBytes: bytes });
+          this.transport?.send('response.audio.played', { responseId: id, playedDurationMs: Math.floor(bytes / 48) });
           this.finishResponse();
         },
         interrupted: reason => { if (current()) { if (reason === 'ended') void this.end(); else void this.pause(reason); } },
+        speechCandidate: active => { if (current()) this.handleSpeechCandidate(active); },
+        route: capabilities => { if (current()) this.applyAudioCapabilities(capabilities); },
       });
       let created: { origin: string; session: CreateVoiceSessionResponse } | undefined;
       const create = this.deps.create(
-        { purpose: 'conversation', sessionKey: target.sessionKey, engine: prepared.engine },
+        { purpose: 'conversation', sessionKey: target.sessionKey, mode: prepared.mode,
+          supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] },
         abort.signal,
       ).then((connection) => {
         created = connection;
         return connection;
       });
       let connection: { origin: string; session: CreateVoiceSessionResponse };
+      let audioCapabilities: AudioRouteCapabilities;
       try {
-        [connection] = await Promise.all([create, audioStart]);
+        [connection, audioCapabilities] = await Promise.all([create, audioStart]);
       } catch (error) {
         if (created) void this.deps.discard(created).catch(() => undefined);
         else void create.then((late) => this.deps.discard(late)).catch(() => undefined);
@@ -145,11 +163,12 @@ export class VoiceCallController {
         void this.deps.discard(connection).catch(() => undefined);
         return;
       }
+      this.applyAudioCapabilities(audioCapabilities);
       const transport = this.deps.transport({
         event: event => { if (current()) this.onEvent(event); },
         audio: (id, pcm) => {
           if (!current() || id !== this.state.responseId) return;
-          this.guardCaptureForPlayback();
+          this.blockCaptureForPlayback();
           this.receivedBytes += pcm.byteLength;
           this.diagnostics.received(id, pcm);
           if (this.state.responseStage === 'thinking') this.update({ responseStage: 'buffering' });
@@ -162,14 +181,15 @@ export class VoiceCallController {
           }).catch(() => { if (current()) void this.pause('PLAYBACK_FAILED'); });
         },
         close: reason => { if (current()) void this.disconnected(reason); },
+        networkRtt: rttMs => this.diagnostics.rtt(rttMs),
       });
       this.transport = transport;
       await transport.connect(connection.origin, connection.session, abort.signal);
       if (!current()) return;
-      transport.send('input.mute', { muted: this.state.muted });
+      transport.send('input.mute', { muted: this.inputShouldBeMuted() });
       if (!current()) return;
       this.update({ phase: 'connected', expiresAt: Date.now() + connection.session.limits.maxSessionMs });
-      this.deps.audio.capture(!this.state.muted && !this.approvalPending);
+      this.deps.audio.capture(this.shouldCapture());
       this.limitTimer = setTimeout(() => void this.pause('TIME_LIMIT'), connection.session.limits.maxSessionMs);
     } catch (error) {
       if (current()) {
@@ -186,7 +206,8 @@ export class VoiceCallController {
   private finishResponse() {
     if (this.responseComplete && this.renderedBytes >= this.receivedBytes) {
       clearTimeout(this.playbackTimer); this.playbackTimer = undefined;
-      this.clearPlaybackCaptureGuard(true);
+      this.clearPlaybackCaptureBlock(true);
+      this.restoreOutput();
       this.update({ responseId: undefined, responseStage: undefined, activity: undefined });
     }
   }
@@ -195,28 +216,65 @@ export class VoiceCallController {
       && !this.state.muted
       && !this.state.clarification
       && !this.approvalPending
-      && !this.playbackCaptureGuarded;
+      && !this.inputCongested
+      && !this.playbackCaptureBlocked;
   }
-  private guardCaptureForPlayback(): void {
-    if (this.playbackCaptureGuardApplied || this.playbackCaptureGuarded || !this.shouldCapture()) return;
-    this.playbackCaptureGuardApplied = true;
-    this.playbackCaptureGuarded = true;
+  private inputShouldBeMuted(): boolean {
+    return this.state.muted || Boolean(this.state.clarification) || this.approvalPending || this.inputCongested;
+  }
+  private handleInputQuality(result: VoiceAudioSendResult): void {
+    if (result.quality !== 'good') { this.suspendCongestedInput(result.quality === 'critical'); return; }
+    if (!this.inputCongested && this.state.networkQuality !== result.quality) this.update({ networkQuality: result.quality });
+  }
+  private suspendCongestedInput(dropped: boolean): void {
+    if (this.inputCongested || this.state.phase !== 'connected') return;
+    this.inputCongested = true;
+    this.diagnostics.congestionPause();
+    this.restoreOutput();
     this.deps.audio.capture(false);
-    const generation = this.generation;
-    const responseId = this.state.responseId;
-    this.playbackCaptureTimer = setTimeout(() => {
-      this.playbackCaptureTimer = undefined;
-      if (generation !== this.generation || responseId !== this.state.responseId) return;
-      this.playbackCaptureGuarded = false;
-      this.deps.audio.capture(this.shouldCapture());
-    }, PLAYBACK_CAPTURE_GUARD_MS);
+    this.transport?.send('input.mute', { muted: true });
+    this.update({ networkQuality: dropped ? 'critical' : 'degraded', ...(dropped ? { error: 'INPUT_DROPPED' } : {}) });
+    this.scheduleInputRecovery(this.generation);
   }
-  private clearPlaybackCaptureGuard(restore: boolean): void {
-    clearTimeout(this.playbackCaptureTimer);
-    this.playbackCaptureTimer = undefined;
-    const wasGuarded = this.playbackCaptureGuarded;
-    this.playbackCaptureGuarded = false;
-    if (restore && wasGuarded) this.deps.audio.capture(this.shouldCapture());
+  private scheduleInputRecovery(generation: number): void {
+    clearTimeout(this.inputRecoveryTimer);
+    this.inputRecoveryTimer = setTimeout(() => {
+      this.inputRecoveryTimer = undefined;
+      if (generation !== this.generation || !this.inputCongested || this.state.phase !== 'connected') return;
+      if ((this.transport?.inputQueueAgeMs() ?? Number.POSITIVE_INFINITY) >= INPUT_RECOVERY_QUEUE_AGE_MS) { this.scheduleInputRecovery(generation); return; }
+      this.inputCongested = false;
+      this.transport?.send('input.mute', { muted: this.inputShouldBeMuted() });
+      this.update({ networkQuality: 'good', ...(this.state.error === 'INPUT_DROPPED' ? { error: undefined } : {}) });
+      this.deps.audio.capture(this.shouldCapture());
+    }, INPUT_RECOVERY_POLL_MS);
+  }
+  private applyAudioCapabilities(capabilities: AudioRouteCapabilities): void {
+    this.diagnostics.route(capabilities);
+    this.fullDuplex = capabilities.fullDuplex;
+    if (this.fullDuplex) this.clearPlaybackCaptureBlock(true);
+    else if (this.receivedBytes > this.renderedBytes) { this.restoreOutput(); this.blockCaptureForPlayback(); }
+  }
+  private blockCaptureForPlayback(): void {
+    if (this.fullDuplex || this.playbackCaptureBlocked) return;
+    this.playbackCaptureBlocked = true;
+    this.deps.audio.capture(false);
+  }
+  private clearPlaybackCaptureBlock(restore: boolean): void {
+    const wasBlocked = this.playbackCaptureBlocked;
+    this.playbackCaptureBlocked = false;
+    if (restore && wasBlocked) this.deps.audio.capture(this.shouldCapture());
+  }
+  private handleSpeechCandidate(active: boolean): void {
+    if (!active) { this.restoreOutput(); return; }
+    const audible = Boolean(this.state.responseId) && this.receivedBytes > this.renderedBytes;
+    if (!this.fullDuplex || !audible || this.bargeInDucked) return;
+    this.bargeInDucked = true;
+    void this.deps.audio.duck().catch(() => { if (this.state.phase === 'connected') void this.pause('PLAYBACK_FAILED'); });
+  }
+  private restoreOutput(): void {
+    if (!this.bargeInDucked) return;
+    this.bargeInDucked = false;
+    void this.deps.audio.resumeOutput().catch(() => { if (this.state.phase === 'connected') void this.pause('PLAYBACK_FAILED'); });
   }
   private watchPlayback(progress = false) {
     if (progress) { clearTimeout(this.playbackTimer); this.playbackTimer = undefined; }
@@ -234,8 +292,8 @@ export class VoiceCallController {
       case 'response.created':
         this.diagnostics.response(event.payload.responseId);
         clearTimeout(this.playbackTimer); this.playbackTimer = undefined;
-        this.clearPlaybackCaptureGuard(true);
-        this.playbackCaptureGuardApplied = false;
+        this.clearPlaybackCaptureBlock(true);
+        this.restoreOutput();
         this.receivedBytes = 0; this.renderedBytes = 0; this.responseComplete = false;
         this.update({ responseId: event.payload.responseId, responseStage: 'thinking', assistantText: '', activity: undefined, error: undefined }); break;
       case 'response.audio.started':
@@ -244,8 +302,14 @@ export class VoiceCallController {
       case 'response.text.delta':
         this.diagnostics.text(event.payload.responseId, event.payload.delta.length);
         if (event.payload.responseId === this.state.responseId) this.update({ assistantText: (this.state.assistantText + event.payload.delta).slice(-32_000) }); break;
-      case 'response.activity':
-        if (event.payload.responseId === this.state.responseId) this.update({ activity: event.payload.status === 'running' ? event.payload.toolName : undefined }); break;
+      case 'task.activity':
+        if (event.payload.taskId === this.state.taskId) this.update({ activity: event.payload.status === 'running' ? event.payload.toolName : undefined });
+        break;
+      case 'task.created':
+        this.update({ taskId: event.payload.taskId, taskStage: 'running' }); break;
+      case 'task.done':
+        if (event.payload.taskId === this.state.taskId) this.update({ taskId: undefined, taskStage: undefined, activity: undefined });
+        break;
       case 'response.clarification':
         if (event.payload.responseId !== this.state.responseId) break;
         this.deps.audio.capture(false);
@@ -255,9 +319,10 @@ export class VoiceCallController {
         this.diagnostics.cancelled(event.payload.responseId, event.payload.reason);
         if (event.payload.responseId === this.state.responseId) {
           clearTimeout(this.playbackTimer); this.playbackTimer = undefined;
-          this.clearPlaybackCaptureGuard(true);
+          this.clearPlaybackCaptureBlock(true);
+          this.restoreOutput();
           void this.flushPlayback().catch(() => { if (this.state.phase === 'connected') void this.pause('PLAYBACK_FAILED'); });
-          this.update({ responseId: undefined, responseStage: undefined, activity: undefined, clarification: undefined });
+          this.update({ responseId: undefined, responseStage: undefined });
         }
         break;
       case 'response.done':
@@ -276,10 +341,11 @@ export class VoiceCallController {
   }
   async setMuted(muted: boolean): Promise<void> {
     this.update({ muted });
+    if (muted) this.restoreOutput();
     this.deps.audio.capture(false);
     this.inputReset = this.inputReset.then(() => {
       if (this.state.phase !== 'connected') return;
-      this.transport?.send('input.mute', { muted: this.state.muted || Boolean(this.state.clarification) || this.approvalPending });
+      this.transport?.send('input.mute', { muted: this.inputShouldBeMuted() });
       this.deps.audio.capture(this.shouldCapture());
     });
     await this.inputReset;
@@ -292,15 +358,22 @@ export class VoiceCallController {
     const startedAt = performance.now();
     this.diagnostics.cancelled(id, 'client_cancelled');
     clearTimeout(this.playbackTimer); this.playbackTimer = undefined;
-    this.clearPlaybackCaptureGuard(false);
+    this.clearPlaybackCaptureBlock(false);
+    this.restoreOutput();
     this.deps.audio.capture(false);
-    this.update({ responseId: undefined, responseStage: undefined, activity: undefined, clarification: undefined });
+    this.update({ responseId: undefined, responseStage: undefined });
     try { await this.flushPlayback(); }
     catch { if (generation === this.generation) await this.pause('PLAYBACK_FAILED'); return; }
     if (generation !== this.generation) return;
     transport?.send('session.metric', { responseId: id, metric: 'local_stop', durationMs: Math.min(600_000, Math.max(0, performance.now() - startedAt)) });
-    transport?.send('response.cancel', { responseId: id });
+    transport?.send('response.stop_playback', { responseId: id });
     this.deps.audio.capture(this.shouldCapture());
+  }
+  cancelTask(): void {
+    const taskId = this.state.taskId;
+    if (!taskId || this.state.taskStage === 'cancelling') return;
+    this.transport?.send('task.cancel', { taskId });
+    this.update({ taskStage: 'cancelling', activity: undefined });
   }
   private flushPlayback(): Promise<void> {
     const flush = this.playbackReset.then(() => this.deps.audio.flush());
@@ -331,12 +404,15 @@ export class VoiceCallController {
     const stoppingGeneration = ++this.generation;
     clearTimeout(this.limitTimer); clearTimeout(this.recoveryTimer);
     clearTimeout(this.playbackTimer); this.playbackTimer = undefined;
-    this.clearPlaybackCaptureGuard(false);
+    clearTimeout(this.inputRecoveryTimer); this.inputRecoveryTimer = undefined;
+    this.inputCongested = false;
+    this.clearPlaybackCaptureBlock(false);
+    this.bargeInDucked = false;
     this.deps.audio.capture(false);
     this.transport?.send('session.stop', { reason: 'user_finished' });
     this.transport?.close(); this.transport = undefined;
     this.abort?.abort();
-    this.update({ phase: 'ending', responseId: undefined, responseStage: undefined, activity: undefined, clarification: undefined });
+    this.update({ phase: 'ending', responseId: undefined, responseStage: undefined, activity: undefined, clarification: undefined, taskId: undefined, taskStage: undefined });
     const opening = this.opening;
     this.cleanup = this.cleanup.then(async () => {
       await opening;
