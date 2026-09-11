@@ -11,7 +11,14 @@ export const REALTIME_HELLO_TIMEOUT_MS = 5_000;
 export const REALTIME_HEARTBEAT_INTERVAL_MS = 15_000;
 export const REALTIME_HEARTBEAT_TIMEOUT_MS = 45_000;
 
-export const realtimeClientKindSchema = z.enum(['web', 'desktop', 'mobile', 'tui', 'mcp']);
+export const realtimeClientKindSchema = z.enum([
+  'web',
+  'desktop',
+  'mobile',
+  'browser_extension',
+  'tui',
+  'mcp',
+]);
 export const realtimeTopicSchema = z.string().min(1).max(512);
 export const realtimeEventNameSchema = z.string().regex(/^[a-z][a-z0-9_.-]*$/).max(160);
 

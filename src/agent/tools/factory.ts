@@ -77,6 +77,7 @@ import { createImageGenerateTool } from './image-generate-tool.js';
 import { BrowserNotReadyError, checkBrowserReadiness } from '../../browser/index.js';
 import { createBrowserDriver } from '../../browser/drivers/create-driver.js';
 import { BrowserRuntime } from '../../browser/runtime/browser-runtime.js';
+import { getBrowserTabBinding } from '../../storage/sqlite/browser-tab-binding-repository.js';
 import { createBrowserUseTool } from './browser/tool/browser-use-tool.js';
 import { createReviewWorkspaceTool } from './review-workspace.js';
 import { createLanguageDiagnosticsTool } from './language-diagnostics.js';
@@ -258,6 +259,10 @@ export class AgentToolsFactory {
         },
         allowedUploadRoots: [this.deps.workspace],
         emit: this.deps.emitBrowserEvent,
+        resolveTarget: (sessionKey) => {
+          const binding = getBrowserTabBinding(sessionKey);
+          return binding ? { kind: 'attached_tab', bindingId: binding.id } : undefined;
+        },
       });
     }
     return this.browserRuntime;

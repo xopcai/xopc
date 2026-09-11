@@ -36,6 +36,14 @@ export {
   type StoredEndpointSessionBinding,
 } from './endpoint-session-binding-repository.js';
 export {
+  deleteBrowserTabBinding,
+  deleteBrowserTabBindingsByEndpoint,
+  deleteBrowserTabBindingsByPrincipal,
+  getBrowserTabBinding,
+  getBrowserTabBindingById,
+  setBrowserTabBinding,
+} from './browser-tab-binding-repository.js';
+export {
   authenticateDeviceAccessToken,
   buildRefreshProofMessage,
   createDevice,

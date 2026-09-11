@@ -780,10 +780,34 @@ importers:
       '@xopcai/browser-control-contract':
         specifier: workspace:*
         version: link:../browser-control-contract
+      '@xopcai/endpoint-tools-protocol':
+        specifier: workspace:*
+        version: link:../endpoint-tools-protocol
+      '@xopcai/gateway-contract':
+        specifier: workspace:*
+        version: link:../gateway-contract
+      '@xopcai/realtime-client':
+        specifier: workspace:*
+        version: link:../realtime-client
+      '@xopcai/realtime-protocol':
+        specifier: workspace:*
+        version: link:../realtime-protocol
+      react:
+        specifier: ^19.2.5
+        version: 19.2.6
+      react-dom:
+        specifier: ^19.2.5
+        version: 19.2.6(react@19.2.6)
     devDependencies:
       '@types/chrome':
         specifier: ^0.0.287
         version: 0.0.287
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.15
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.15)
       adm-zip:
         specifier: ^0.6.0
         version: 0.6.0

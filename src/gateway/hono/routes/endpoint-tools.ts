@@ -17,6 +17,8 @@ import {
   EndpointUploadError,
 } from '../../../endpoint-tools/upload-service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+import { getDevice } from '../../../storage/sqlite/device-access-repository.js';
 
 async function readBoundedBody(
   body: ReadableStream<Uint8Array> | null,
@@ -70,6 +72,17 @@ export function registerEndpointToolRoutes(
     const parsed = endpointPrincipalRegistrationSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) {
       return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid endpoint principal' } }, 400);
+    }
+    const gatewayPrincipal = getGatewayPrincipal(c);
+    if (gatewayPrincipal.kind === 'device') {
+      const device = gatewayPrincipal.deviceId ? getDevice(gatewayPrincipal.deviceId) : undefined;
+      const ownsPrincipal = parsed.data.principalId === gatewayPrincipal.deviceId;
+      const compatibleKind = device?.platform === 'chrome'
+        ? parsed.data.kind === 'browser' && parsed.data.platform === 'chrome'
+        : parsed.data.kind === 'mobile';
+      if (!ownsPrincipal || !compatibleKind) {
+        return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Endpoint identity does not match this device' } }, 403);
+      }
     }
     try {
       parseEndpointPublicKey(parsed.data.publicKey);

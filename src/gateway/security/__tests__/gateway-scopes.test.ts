@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_MOBILE_SCOPES, hasGatewayScope, requiredGatewayScope } from '../gateway-scopes.js';
+import {
+  DEFAULT_BROWSER_EXTENSION_SCOPES,
+  DEFAULT_MOBILE_SCOPES,
+  hasGatewayScope,
+  requiredGatewayScope,
+} from '../gateway-scopes.js';
 
 describe('gateway scopes', () => {
   it('allows paired phones to read and respond to session confirmations', () => {
@@ -27,5 +32,18 @@ describe('gateway scopes', () => {
 
   it('allows gateway administrators to access every scope', () => {
     expect(hasGatewayScope(['gateway.admin'], 'sessions.write')).toBe(true);
+  });
+
+  it('limits browser extensions to chat and device capabilities', () => {
+    expect(DEFAULT_BROWSER_EXTENSION_SCOPES).toEqual([
+      'gateway.status',
+      'agents.read',
+      'agents.run',
+      'sessions.read',
+      'sessions.write',
+      'device.self',
+    ]);
+    expect(hasGatewayScope(DEFAULT_BROWSER_EXTENSION_SCOPES, 'workspace.read')).toBe(false);
+    expect(hasGatewayScope(DEFAULT_BROWSER_EXTENSION_SCOPES, 'gateway.admin')).toBe(false);
   });
 });

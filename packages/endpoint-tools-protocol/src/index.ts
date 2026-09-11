@@ -5,7 +5,7 @@ export const ENDPOINT_MAX_FILE_BYTES = 25 * 1024 * 1024;
 export const ENDPOINT_INVOCATION_RECEIPT_TIMEOUT_MS = 3_000;
 export const ENDPOINT_MAX_CONCURRENT_INVOCATIONS = 4;
 
-export const endpointKindSchema = z.enum(['web', 'desktop', 'mobile']);
+export const endpointKindSchema = z.enum(['web', 'desktop', 'mobile', 'browser']);
 export const endpointAvailabilitySchema = z.enum(['foreground', 'background']);
 export const endpointEffectSchema = z.enum(['read', 'write', 'destructive']);
 export const endpointConfirmationSchema = z.enum(['never', 'always']);

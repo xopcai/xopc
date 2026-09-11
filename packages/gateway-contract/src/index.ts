@@ -18,6 +18,8 @@ export * from './notifications.js';
 export * from './files.js';
 export * from './mobile-privacy.js';
 export * from './device-pairing.js';
+export * from './browser-page-context.js';
+export * from './browser-tab-binding.js';
 
 export * from './model-selection.js';
 

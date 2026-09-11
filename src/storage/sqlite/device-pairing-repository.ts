@@ -8,7 +8,7 @@ const PAIRING_ATTEMPTS = 5;
 
 export type DeviceRoute = {
   id: string;
-  kind: 'xopc-secure-link' | 'tailscale' | 'custom-https';
+  kind: 'xopc-secure-link' | 'tailscale' | 'custom-https' | 'local-browser';
   url: string;
 };
 

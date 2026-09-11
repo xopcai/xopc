@@ -5,16 +5,27 @@
  * Commands are sent over the WS connection and results are returned asynchronously.
  */
 
+import crypto from 'node:crypto';
+
 import {
   BROWSER_EXTENSION_PROTOCOL_VERSION,
+  browserWireAuthenticationPayload,
   type BrowserActionInput,
   type BrowserExtensionStatus,
+  type BrowserWireAuthenticate,
+  type BrowserWireChallenge,
   type BrowserWireCommand,
   type BrowserWireKeepAlive,
   type BrowserWireResult,
 } from '@xopcai/browser-control-contract';
 
 import { createLogger } from '../../utils/logger.js';
+import { getDevice } from '../../storage/sqlite/device-access-repository.js';
+import { isChromeExtensionOrigin } from '../../gateway/security/origin-check.js';
+import {
+  deleteBrowserTabBindingsByPrincipal,
+  getBrowserTabBindingById,
+} from '../../storage/sqlite/browser-tab-binding-repository.js';
 
 const log = createLogger('ExtensionProvider');
 
@@ -61,6 +72,8 @@ export class ExtensionBrowserProvider {
   private connected = false;
   private extensionProtocolVersion: number | null = null;
   private extensionVersion: string | null = null;
+  private connectionId: string | null = null;
+  private principalId: string | null = null;
   private readonly config: Required<ExtensionProviderConfig>;
   private connectionWaiters: Array<{ resolve: () => void; reject: (e: Error) => void }> = [];
 
@@ -97,22 +110,56 @@ export class ExtensionBrowserProvider {
 
     this.wss = new WebSocketServer({ server: this.server, path: '/browser-ext' });
 
-    (this.wss as { on: Function }).on('connection', (ws: unknown) => {
-      log.info('Chrome Extension connected');
-      const previousClient = this.clientWs;
-      this.clientWs = ws;
-      this.socketConnected = true;
-      this.handshakeReceived = false;
-      this.connected = false;
-      this.extensionProtocolVersion = null;
-      this.extensionVersion = null;
-
-      if (previousClient && previousClient !== ws) {
-        try { (previousClient as { close: Function }).close(); } catch { /* */ }
+    (this.wss as { on: Function }).on('connection', (ws: unknown, request: import('node:http').IncomingMessage) => {
+      const origin = request.headers.origin?.toLowerCase();
+      if (!isChromeExtensionOrigin(origin)) {
+        (ws as { close: Function }).close(4403, 'Chrome extension origin required');
+        return;
       }
+      const challenge: BrowserWireChallenge = {
+        type: 'auth_challenge',
+        protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
+        connectionId: crypto.randomUUID(),
+        challenge: crypto.randomBytes(32).toString('base64url'),
+        issuedAt: Date.now(),
+      };
+      let authenticated = false;
+      const authenticationTimer = setTimeout(() => {
+        if (!authenticated) (ws as { close: Function }).close(4401, 'Browser authentication timed out');
+      }, 5_000);
+      (ws as { send: Function }).send(JSON.stringify(challenge));
 
       (ws as { on: Function }).on('message', (data: Buffer | string) => {
-        this._handleMessage(data.toString(), ws);
+        if (authenticated) {
+          this._handleMessage(data.toString(), ws);
+          return;
+        }
+        if (!this._authenticateCandidate(data.toString(), origin, challenge)) {
+          clearTimeout(authenticationTimer);
+          (ws as { close: Function }).close(4401, 'Browser authentication failed');
+          return;
+        }
+        authenticated = true;
+        clearTimeout(authenticationTimer);
+        const message = JSON.parse(data.toString()) as BrowserWireAuthenticate;
+        const previousClient = this.clientWs;
+        this.clientWs = ws;
+        this.socketConnected = true;
+        this.handshakeReceived = true;
+        this.connected = true;
+        this.extensionProtocolVersion = message.protocolVersion;
+        this.extensionVersion = message.extensionVersion;
+        this.connectionId = message.connectionId;
+        this.principalId = message.principalId;
+        if (previousClient && previousClient !== ws) {
+          try { (previousClient as { close: Function }).close(4001, 'Connection replaced'); } catch { /* */ }
+        }
+        for (const waiter of this.connectionWaiters) waiter.resolve();
+        this.connectionWaiters = [];
+        log.info(
+          { principalId: message.principalId, extensionId: message.extensionId, connectionId: message.connectionId },
+          'Chrome extension authenticated',
+        );
       });
 
       (ws as { on: Function }).on('close', (code: number, reason: Buffer) => {
@@ -121,12 +168,16 @@ export class ExtensionBrowserProvider {
           { code, reason: reason.toString(), pendingCount: this.pending.size },
           'Chrome Extension disconnected',
         );
+        const disconnectedPrincipalId = this.principalId;
         this.clientWs = null;
         this.socketConnected = false;
         this.handshakeReceived = false;
         this.connected = false;
         this.extensionProtocolVersion = null;
         this.extensionVersion = null;
+        this.connectionId = null;
+        this.principalId = null;
+        if (disconnectedPrincipalId) deleteBrowserTabBindingsByPrincipal(disconnectedPrincipalId);
         // Reject all pending requests
         for (const [id, req] of this.pending) {
           clearTimeout(req.timer);
@@ -222,11 +273,18 @@ export class ExtensionBrowserProvider {
         : 'Extension not connected. Ensure the Chrome Extension is installed and connected.';
       throw new Error(detail);
     }
+    if (input.target?.kind === 'attached_tab') {
+      const binding = getBrowserTabBindingById(input.target.bindingId);
+      if (!binding || binding.principalId !== this.principalId) {
+        throw new Error('Attached tab binding does not belong to the connected browser');
+      }
+    }
 
     const id = `cmd_${++this.commandCounter}_${Date.now()}`;
     const cmd: BrowserWireCommand = {
       id,
       protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
+      connectionId: this.connectionId!,
       input,
       timeoutMs: timeoutMs ?? this.config.commandTimeout,
       visualFallback,
@@ -261,6 +319,7 @@ export class ExtensionBrowserProvider {
     protocolVersion: number | null;
     expectedProtocolVersion: number;
     extensionVersion: string | null;
+    principalId: string | null;
   } {
     return {
       socketConnected: this.socketConnected,
@@ -268,6 +327,7 @@ export class ExtensionBrowserProvider {
       protocolVersion: this.extensionProtocolVersion,
       expectedProtocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
       extensionVersion: this.extensionVersion,
+      principalId: this.principalId,
     };
   }
 
@@ -312,6 +372,8 @@ export class ExtensionBrowserProvider {
     this.handshakeReceived = false;
     this.extensionProtocolVersion = null;
     this.extensionVersion = null;
+    this.connectionId = null;
+    this.principalId = null;
     log.info('Extension provider shut down');
   }
 
@@ -320,34 +382,13 @@ export class ExtensionBrowserProvider {
     try {
       const msg = JSON.parse(raw);
 
-      // Status events from extension (fire-and-forget, no pending match)
+      if (!this.connectionId || msg.connectionId !== this.connectionId) return;
+
+      // Status events from the authenticated extension are telemetry only.
       if (msg.type === 'status') {
         const status = msg as Partial<BrowserExtensionStatus>;
-        this.handshakeReceived = true;
-        this.extensionProtocolVersion = typeof status.protocolVersion === 'number'
-          ? status.protocolVersion
-          : null;
-        this.extensionVersion = typeof status.extensionVersion === 'string'
-          ? status.extensionVersion
-          : null;
-        this.connected = status.protocolVersion === BROWSER_EXTENSION_PROTOCOL_VERSION;
-        if (this.connected) {
-          for (const waiter of this.connectionWaiters) waiter.resolve();
-          this.connectionWaiters = [];
-          log.debug(msg, 'Compatible browser extension connected');
-        } else {
-          const error = new Error(this.protocolMismatchMessage());
-          for (const waiter of this.connectionWaiters) waiter.reject(error);
-          this.connectionWaiters = [];
-          log.warn(
-            {
-              expectedProtocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
-              extensionProtocolVersion: this.extensionProtocolVersion,
-              extensionVersion: this.extensionVersion,
-            },
-            'Browser extension protocol mismatch; reload the extension',
-          );
-        }
+        if (status.principalId !== this.principalId) return;
+        log.debug({ sessionCount: status.sessionCount }, 'Browser extension status updated');
         return;
       }
 
@@ -375,12 +416,48 @@ export class ExtensionBrowserProvider {
       log.error({ err: e }, 'Failed to parse extension message');
     }
   }
+
+  private _authenticateCandidate(
+    raw: string,
+    origin: string,
+    challenge: BrowserWireChallenge,
+  ): boolean {
+    try {
+      const message = JSON.parse(raw) as BrowserWireAuthenticate;
+      if (message.type !== 'authenticate'
+        || message.protocolVersion !== BROWSER_EXTENSION_PROTOCOL_VERSION
+        || message.connectionId !== challenge.connectionId
+        || `chrome-extension://${message.extensionId}` !== origin
+        || Math.abs(Date.now() - challenge.issuedAt) > 5_000) return false;
+      const device = getDevice(message.principalId);
+      if (!device || device.revokedAt !== undefined || device.platform !== 'chrome'
+        || device.extensionId !== message.extensionId) return false;
+      const payload = browserWireAuthenticationPayload({
+        protocolVersion: message.protocolVersion,
+        connectionId: message.connectionId,
+        challenge: challenge.challenge,
+        issuedAt: challenge.issuedAt,
+        principalId: message.principalId,
+        extensionId: message.extensionId,
+        extensionVersion: message.extensionVersion,
+      });
+      return crypto.verify(
+        'sha256',
+        Buffer.from(payload),
+        { key: crypto.createPublicKey({ key: device.publicKeyJwk, format: 'jwk' }), dsaEncoding: 'ieee-p1363' },
+        Buffer.from(message.signature, 'base64url'),
+      );
+    } catch {
+      return false;
+    }
+  }
 }
 
 export function isBrowserWireResult(value: unknown): value is BrowserWireResult {
   if (!value || typeof value !== 'object') return false;
   const result = (value as { result?: unknown }).result;
   return typeof (value as { id?: unknown }).id === 'string'
+    && typeof (value as { connectionId?: unknown }).connectionId === 'string'
     && Boolean(result)
     && typeof result === 'object'
     && typeof (result as { ok?: unknown }).ok === 'boolean';
@@ -390,5 +467,6 @@ function isBrowserWireKeepAlive(value: unknown): value is BrowserWireKeepAlive {
   return Boolean(value)
     && typeof value === 'object'
     && (value as { type?: unknown }).type === 'keepalive'
+    && typeof (value as { connectionId?: unknown }).connectionId === 'string'
     && typeof (value as { timestamp?: unknown }).timestamp === 'number';
 }
