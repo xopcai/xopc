@@ -19,6 +19,7 @@ import * as Device from 'expo-device';
 import { Alert, AppState, Platform } from 'react-native';
 
 import { apiFetch } from '@/api/client';
+import { useGatewayStore } from '@/stores/gateway-store';
 import { dataSharingConsent } from '../privacy/data-sharing-consent';
 import {
   attachMobileRealtimeEndpoint,
@@ -142,7 +143,9 @@ export class MobileEndpointToolHost {
     if (this.stopped || this.registrationBlocked) return;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     try {
-      const identity = getOrCreateMobileEndpointIdentity();
+      const profile = useGatewayStore.getState().getActiveProfile();
+      if (!profile) return;
+      const identity = getOrCreateMobileEndpointIdentity(profile.deviceId);
       const displayName = Device.modelName ?? 'xopc Mobile';
       const registration = await apiFetch('/api/endpoint-tools/principals', {
         method: 'POST',
@@ -169,7 +172,7 @@ export class MobileEndpointToolHost {
             this.registrationBlocked = true;
             return;
           }
-          await rotateMobileEndpointIdentity();
+          await rotateMobileEndpointIdentity(profile.deviceId);
           if (!this.stopped) await this.connectOnce(false);
           return;
         }
