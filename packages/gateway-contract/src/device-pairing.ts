@@ -8,8 +8,16 @@ export const devicePairingKeySchema = z.strictObject({
 });
 export const devicePairingDeviceSchema = z.strictObject({
   displayName: z.string().trim().min(1).max(80),
-  platform: z.enum(['ios', 'android']),
+  platform: z.enum(['ios', 'android', 'chrome']),
   publicKeyJwk: devicePairingKeySchema,
+  extensionId: z.string().regex(/^[a-p]{32}$/).optional(),
+}).superRefine((device, context) => {
+  if (device.platform === 'chrome' && !device.extensionId) {
+    context.addIssue({ code: 'custom', path: ['extensionId'], message: 'Chrome devices require an extension id' });
+  }
+  if (device.platform !== 'chrome' && device.extensionId) {
+    context.addIssue({ code: 'custom', path: ['extensionId'], message: 'Only Chrome devices may set an extension id' });
+  }
 });
 export const initialDeviceRefreshTokenSchema = z.string().regex(
   /^xopc_rt_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_[A-Za-z0-9_-]{43}$/i,
@@ -30,7 +38,7 @@ export type DevicePairingAction = 'request' | 'status' | 'complete' | 'cancel';
 export type DevicePairingState = 'pending' | 'approved' | 'completed' | 'rejected' | 'cancelled' | 'expired';
 export type DevicePairingStatus = {
   requestId: string; setupId: string; status: DevicePairingState; revision: number;
-  displayName: string; platform: 'ios' | 'android'; confirmationCode: string;
+  displayName: string; platform: 'ios' | 'android' | 'chrome'; confirmationCode: string;
   expiresAt: number; serverTime: number; deviceId?: string;
 };
 

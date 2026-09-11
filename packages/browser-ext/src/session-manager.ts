@@ -6,7 +6,6 @@
  */
 
 import { createLogger } from './logger';
-import { hideOverlayOnTab } from './content-bridge';
 
 const log = createLogger('SessionManager');
 
@@ -195,9 +194,6 @@ export async function closeSession(workspace = DEFAULT_WORKSPACE): Promise<void>
   if (session.idleTimer) clearTimeout(session.idleTimer);
 
   const tabs = await chrome.tabs.query({ groupId: session.groupId }).catch(() => []);
-  for (const t of tabs) {
-    if (t.id != null) await hideOverlayOnTab(t.id);
-  }
   for (const t of tabs) {
     if (t.id != null) await chrome.tabs.remove(t.id).catch(() => {});
   }

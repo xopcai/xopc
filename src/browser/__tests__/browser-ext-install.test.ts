@@ -8,9 +8,11 @@ import { PACKAGE_VERSION } from '../../package-version.js';
 import {
   BROWSER_EXT_REQUIRED_FILES,
   browserExtContentHash,
+  browserNativeManifestDirectories,
   computeNeedsRefresh,
   ensureBrowserExtensionArtifacts,
   ensureBrowserExtensionOnStartup,
+  installBrowserNativeMessagingHost,
   resolveWindowsExtensionManager,
   validateBrowserExtLayout,
 } from '../providers/browser-ext-install.js';
@@ -22,8 +24,7 @@ function writeMinimalExtensionTree(root: string, version = '0.0.1'): void {
     join(root, 'manifest.json'),
     JSON.stringify({ manifest_version: 3, name: 'test', version }, null, 2),
   );
-  writeFileSync(join(root, 'popup.html'), '<html></html>');
-  for (const file of ['background.js', 'content.js', 'popup.js']) {
+  for (const file of ['background.js', 'sidepanel.html']) {
     writeFileSync(join(root, 'dist', file), `// ${file}`);
   }
   writeFileSync(join(root, 'icons/icon-16.png'), '');
@@ -197,5 +198,34 @@ describe('browser-ext-install', () => {
       executablePath: edgePath,
       url: 'edge://extensions/',
     });
+  });
+
+  it('installs the fixed-id native bootstrap manifest for Chromium browsers', async () => {
+    const nativeHome = join(tempHome, 'native-home');
+    const result = await installBrowserNativeMessagingHost({
+      cacheDir: binDir,
+      cliPath: '/opt/xopc/cli.js',
+      nodePath: '/opt/node',
+      platform: 'linux',
+      home: nativeHome,
+      configPath: join(tempHome, '.xopc/xopc.json'),
+      stateDir: join(tempHome, '.xopc'),
+    });
+
+    expect(result.installed).toBe(true);
+    expect(result.manifestPaths).toHaveLength(4);
+    expect(browserNativeManifestDirectories('linux', nativeHome)).toHaveLength(4);
+    const manifest = JSON.parse(readFileSync(result.manifestPaths[0]!, 'utf8')) as {
+      name: string;
+      path: string;
+      allowed_origins: string[];
+    };
+    expect(manifest.name).toBe('ai.xopc.browser');
+    expect(manifest.path).toBe(join(binDir, 'browser-native-host'));
+    expect(manifest.allowed_origins).toEqual([
+      'chrome-extension://gopbfhaojnnhiheiikblejnpgmfmkmgd/',
+    ]);
+    expect(readFileSync(manifest.path, 'utf8')).toContain("'/opt/node' '/opt/xopc/cli.js' browser extension native-host");
+    expect(readFileSync(manifest.path, 'utf8')).toContain('XOPC_LOG_CONSOLE=false');
   });
 });

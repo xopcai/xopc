@@ -22,7 +22,10 @@ import {
   signGatewayPayload,
 } from '../../../storage/sqlite/gateway-identity-repository.js';
 import { runSqliteWriteTransaction } from '../../../storage/sqlite/transaction.js';
-import { DEFAULT_MOBILE_SCOPES } from '../../security/gateway-scopes.js';
+import {
+  DEFAULT_BROWSER_EXTENSION_SCOPES,
+  DEFAULT_MOBILE_SCOPES,
+} from '../../security/gateway-scopes.js';
 import { resolveSecureDeviceRoutes } from '../../device-routes.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -41,7 +44,8 @@ const pairingExchangeSchema = z.strictObject({
   pairingToken: z.string().min(1).max(256),
   device: z.strictObject({
     displayName: z.string().trim().min(1).max(80),
-    platform: z.enum(['ios', 'android']),
+    platform: z.enum(['ios', 'android', 'chrome']),
+    extensionId: z.string().regex(/^[a-p]{32}$/).optional(),
     publicKeyJwk: z.strictObject({
       kty: z.literal('EC'),
       crv: z.literal('P-256'),
@@ -49,6 +53,13 @@ const pairingExchangeSchema = z.strictObject({
       y: z.string().min(40).max(64),
     }),
   }),
+}).superRefine((value, context) => {
+  if (value.device.platform === 'chrome' && !value.device.extensionId) {
+    context.addIssue({ code: 'custom', path: ['device', 'extensionId'], message: 'Chrome devices require an extension id' });
+  }
+  if (value.device.platform !== 'chrome' && value.device.extensionId) {
+    context.addIssue({ code: 'custom', path: ['device', 'extensionId'], message: 'Only Chrome devices may set an extension id' });
+  }
 });
 
 const pairingProbeSchema = z.strictObject({
@@ -120,7 +131,10 @@ export function registerDeviceAuthPublicRoutes(app: Hono): void {
         displayName: parsed.data.device.displayName,
         platform: parsed.data.device.platform,
         publicKeyJwk: parsed.data.device.publicKeyJwk,
-        scopes: DEFAULT_MOBILE_SCOPES,
+        extensionId: parsed.data.device.extensionId,
+        scopes: parsed.data.device.platform === 'chrome'
+          ? DEFAULT_BROWSER_EXTENSION_SCOPES
+          : DEFAULT_MOBILE_SCOPES,
       });
       return {
         success: true as const,
@@ -206,6 +220,16 @@ export function registerDeviceRoutes(authenticated: Hono, deps: AuthenticatedRou
     return device
       ? c.json({ ok: true, device })
       : c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Device not found' } }, 404);
+  });
+
+  authenticated.delete('/api/devices/me', (c) => {
+    const principal = getGatewayPrincipal(c);
+    if (principal.kind !== 'device' || !principal.deviceId) {
+      return c.json({ ok: false, error: { code: 'DEVICE_REQUIRED', message: 'Device access required' } }, 403);
+    }
+    const revoked = revokeDevice(principal.deviceId);
+    if (revoked) deps.service.realtime.disconnectPrincipal(principal.deviceId);
+    return c.json({ ok: true, revoked });
   });
 
   authenticated.delete('/api/devices/:deviceId', (c) => {
