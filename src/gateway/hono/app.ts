@@ -14,6 +14,7 @@ import { maxSessionInputRequestBodyBytes } from '../chat-limits.js';
 import { buildGatewayConsoleCspHeader } from '../security/csp.js';
 import { checkBrowserOrigin } from '../security/origin-check.js';
 import { isChromeExtensionOrigin } from '../security/origin-check.js';
+import { BROWSER_EXTENSION_ID } from '../../browser/extension-identity.js';
 import { listDevices } from '../../storage/sqlite/device-access-repository.js';
 import { isLoopbackIpAddress, isTrustedProxyAddress } from '../client-ip.js';
 import { resolveReverseProxyPublicUrl } from '../public-url.js';
@@ -93,6 +94,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
   const resolveAllBrowserOrigins = (): string[] => [
     ...resolveBrowserOrigins(),
+    `chrome-extension://${BROWSER_EXTENSION_ID}`,
     ...resolvePairedBrowserExtensionOrigins(),
   ];
 

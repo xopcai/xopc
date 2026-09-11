@@ -1283,4 +1283,44 @@ describe('SQLite migrations', () => {
     } finally { db.close(); }
   });
 
+  it('adds browser endpoint principals without losing existing principals or bindings', () => {
+    const db = openEmptyDb();
+    try {
+      ensureSchemaMetaTable(db);
+      db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
+      setSchemaVersion(db, XOPC_DB_BASELINE_SCHEMA_VERSION);
+      applyPendingMigrations(db, { migrationsDir: resolveMigrationsDir(), targetVersion: 156 });
+      db.prepare(`INSERT INTO endpoint_principals
+        (id, kind, display_name, platform, public_key, created_at)
+        VALUES ('existing', 'web', 'Existing browser', 'web', 'key', 1)`).run();
+      db.prepare(`INSERT INTO endpoint_instance_bindings
+        (endpoint_id, principal_id, bound_at)
+        VALUES ('endpoint-existing', 'existing', 2)`).run();
+      db.prepare(`INSERT INTO endpoint_session_bindings
+        (session_key, endpoint_id, bound_at)
+        VALUES ('session-existing', 'endpoint-existing', 3)`).run();
+
+      expect(applyPendingMigrations(db)).toBe(158);
+      expect(db.prepare('SELECT principal_id FROM endpoint_instance_bindings').get())
+        .toEqual({ principal_id: 'existing' });
+      expect(db.prepare('SELECT endpoint_id FROM endpoint_session_bindings').get())
+        .toEqual({ endpoint_id: 'endpoint-existing' });
+      expect(() => db.prepare(`INSERT INTO endpoint_principals
+        (id, kind, display_name, platform, public_key, created_at)
+        VALUES ('chrome', 'browser', 'xopc Chrome', 'chrome', 'browser-key', 4)`).run())
+        .not.toThrow();
+      expect(db.prepare('PRAGMA table_info(device_pairing_sessions)').all()
+        .map((column) => (column as { name: string }).name))
+        .toEqual(expect.arrayContaining([
+          'enrollment_issuer',
+          'enrollment_extension_id',
+          'enrollment_public_key_thumbprint',
+          'enrollment_nonce',
+        ]));
+      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
 });

@@ -2,6 +2,7 @@
 import { getConnInfo } from '@hono/node-server/conninfo';
 import type { Context, Hono } from 'hono';
 import { browserTabBindingRequestSchema } from '@xopcai/gateway-contract';
+import { BROWSER_EXTENSION_PROTOCOL_VERSION, BROWSER_CONTROL_ENDPOINT_TOOL_NAME } from '@xopcai/browser-control-contract';
 
 import { createBrowserDriver } from '../../../browser/drivers/create-driver.js';
 import { decideBrowserApproval, listBrowserApprovals } from '../../../browser/policy/approval-store.js';
@@ -16,8 +17,6 @@ import {
   setBrowserTabBinding,
 } from '../../../storage/sqlite/browser-tab-binding-repository.js';
 
-const EXTENSION_ENDPOINT = 'http://127.0.0.1:19820/';
-
 interface ExtensionStatusPayload {
   running: boolean;
   socketConnected: boolean;
@@ -29,48 +28,26 @@ interface ExtensionStatusPayload {
   artifacts: Record<string, unknown>;
   bridgeHeld: boolean;
   refCount: number;
+  transport: 'gateway-realtime';
 }
 
-async function extensionStatus(): Promise<ExtensionStatusPayload> {
-  const { getExtensionBrowserServerSnapshot } = await import(
-    '../../../browser/providers/extension-ws-acquire.js'
-  );
-  const snapshot = getExtensionBrowserServerSnapshot();
-  let running = snapshot.active;
-  let socketConnected = false;
-  let connected = false;
-  let protocolVersion: number | null = null;
-  let expectedProtocolVersion: number | null = null;
-  let extensionVersion: string | null = null;
-  try {
-    const response = await fetch(EXTENSION_ENDPOINT, { signal: AbortSignal.timeout(2_000) });
-    const payload = await response.json() as {
-      ok?: boolean;
-      socketConnected?: boolean;
-      connected?: boolean;
-      protocolVersion?: number | null;
-      expectedProtocolVersion?: number;
-      extensionVersion?: string | null;
-    };
-    running ||= payload.ok === true;
-    socketConnected = payload.socketConnected ?? payload.connected === true;
-    connected = payload.connected === true;
-    protocolVersion = typeof payload.protocolVersion === 'number' ? payload.protocolVersion : null;
-    expectedProtocolVersion = typeof payload.expectedProtocolVersion === 'number' ? payload.expectedProtocolVersion : null;
-    extensionVersion = typeof payload.extensionVersion === 'string' ? payload.extensionVersion : null;
-  } catch {
-    // A stopped bridge is a valid diagnostic result.
-  }
+async function extensionStatus(service: AuthenticatedRouteDeps['service']): Promise<ExtensionStatusPayload> {
+  const endpoint = service.endpointTools.registry.list()
+    .filter((item) => item.kind === 'browser'
+      && item.tools.some((tool) => tool.descriptor.name === BROWSER_CONTROL_ENDPOINT_TOOL_NAME))
+    .sort((left, right) => right.lastHeartbeatAt - left.lastHeartbeatAt)[0];
+  const connected = Boolean(endpoint);
+  const extensionVersion = endpoint?.appVersion ?? null;
 
   const { browserExtDoctor } = await import('../../../browser/providers/browser-ext-install.js');
   const doctor = await browserExtDoctor({ runtimeExtensionVersion: extensionVersion ?? undefined });
   return {
-    running,
-    socketConnected,
+    running: true,
+    socketConnected: connected,
     connected,
     driverKind: 'extension',
-    protocolVersion,
-    expectedProtocolVersion,
+    protocolVersion: connected ? BROWSER_EXTENSION_PROTOCOL_VERSION : null,
+    expectedProtocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
     extensionVersion,
     artifacts: {
       installed: doctor.installed,
@@ -79,10 +56,12 @@ async function extensionStatus(): Promise<ExtensionStatusPayload> {
       xopcVersion: doctor.xopcVersion,
       installedVersion: doctor.installedVersion,
       needsRefresh: doctor.needsRefresh,
-      needsChromeReload: doctor.needsChromeReload || socketConnected && !connected,
+      needsChromeReload: doctor.needsChromeReload,
+      nativeHost: doctor.nativeHost,
     },
-    bridgeHeld: snapshot.active,
-    refCount: snapshot.refCount,
+    bridgeHeld: false,
+    refCount: connected ? 1 : 0,
+    transport: 'gateway-realtime',
   };
 }
 
@@ -160,7 +139,7 @@ export function registerBrowserRoutes(authenticated: Hono, deps: AuthenticatedRo
 
   authenticated.get('/api/browser/extension-status', async (c) => {
     try {
-      return c.json(await extensionStatus());
+      return c.json(await extensionStatus(service));
     } catch (error) {
       return c.json({
         running: false,
@@ -178,7 +157,7 @@ export function registerBrowserRoutes(authenticated: Hono, deps: AuthenticatedRo
     }
     const readiness = await checkBrowserReadiness(service.currentConfig);
     const driverStatus = config.driver.kind === 'extension'
-      ? await extensionStatus().catch((error) => ({ error: error instanceof Error ? error.message : String(error) }))
+      ? await extensionStatus(service).catch((error) => ({ error: error instanceof Error ? error.message : String(error) }))
       : config.driver.kind === 'playwright'
         ? await import('../../../browser/providers/playwright-doctor.js').then(({ playwrightChromiumDoctor }) => playwrightChromiumDoctor())
         : undefined;
@@ -214,7 +193,7 @@ export function registerBrowserRoutes(authenticated: Hono, deps: AuthenticatedRo
     const startedAt = Date.now();
     let driver: Awaited<ReturnType<typeof createBrowserDriver>> | undefined;
     try {
-      driver = await createBrowserDriver(service.currentConfig.browser);
+      driver = await createBrowserDriver(service.currentConfig.browser, service.endpointTools);
       await driver.connect();
       return c.json({
         ok: true,
@@ -233,9 +212,16 @@ export function registerBrowserRoutes(authenticated: Hono, deps: AuthenticatedRo
     }
     const body = await c.req.json().catch(() => ({})) as { force?: unknown };
     try {
-      const { browserExtDoctor, ensureBrowserExtensionArtifacts } = await import('../../../browser/providers/browser-ext-install.js');
+      const {
+        browserExtDoctor,
+        ensureBrowserExtensionArtifacts,
+        installBrowserNativeMessagingHost,
+      } = await import('../../../browser/providers/browser-ext-install.js');
       const result = await ensureBrowserExtensionArtifacts({ force: body.force === true });
-      return c.json({ ok: true, payload: { ...result, doctor: await browserExtDoctor() } });
+      const nativeHost = await installBrowserNativeMessagingHost({
+        configPath: service.getHealth().configPath,
+      });
+      return c.json({ ok: true, payload: { ...result, nativeHost, doctor: await browserExtDoctor() } });
     } catch (error) {
       return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 500);
     }

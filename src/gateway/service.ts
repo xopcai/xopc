@@ -158,10 +158,6 @@ export class GatewayService {
   private notesService: NotesService;
   private extensionLoader: ExtensionLoader | null = null;
   private extensionMetadataSnapshot: import('../extensions/extension-metadata-snapshot.js').ExtensionMetadataSnapshot | null = null;
-  private browserExtensionProvider: import('../browser/providers/extension.js').ExtensionBrowserProvider | null = null;
-  private browserExtensionRelease: (() => Promise<void>) | null = null;
-  /** `${host}:${port}` when the gateway holds the extension bridge listener. */
-  private browserExtensionBindKey: string | null = null;
   private heartbeatService: HeartbeatService | null = null;
   private sessionIndex: SessionIndex;
   private running = false;
@@ -250,6 +246,7 @@ export class GatewayService {
     if (!this.browserAutomationService) {
       this.browserAutomationService = createRuntimeBrowserAutomationService({
         getConfig: () => this.config,
+        endpointTools: this.endpointTools,
         emit: (type, payload) => this.emit(type, payload),
       });
     }
@@ -577,7 +574,6 @@ export class GatewayService {
       getChannelManager: () => this.channelManager,
       getHeartbeatService: () => this.heartbeatService,
       getExtensionLoader: () => this.extensionLoader,
-      reconcileBrowserExtensionServer: () => this.reconcileBrowserExtensionServer(),
       reconcileMemoryMaintenanceAutomations: () => this.reconcileMemoryMaintenanceAutomations(),
       getChannelsStatus: () => this.getChannelsStatus(),
       emit: (type, payload) => this.emit(type, payload),
@@ -1247,9 +1243,6 @@ export class GatewayService {
       .then(({ ensureBrowserExtensionOnStartup }) => ensureBrowserExtensionOnStartup(this.config))
       .catch((err) => log.warn({ err }, 'Browser extension artifact ensure failed'));
 
-    // Start browser extension WS server if configured
-    await trace.measure('browser-extension.start', () => this.startBrowserExtensionServerIfNeeded());
-
     // Start agent service (runs in background)
     this.agentService.start().catch((err) => {
       log.error({ err }, 'Agent service error');
@@ -1476,14 +1469,6 @@ export class GatewayService {
 
     await this.browserAutomationService?.shutdown();
 
-    // Stop the shared browser extension WebSocket server.
-    if (this.browserExtensionRelease) {
-      await this.browserExtensionRelease();
-      this.browserExtensionRelease = null;
-    }
-    this.browserExtensionProvider = null;
-    this.browserExtensionBindKey = null;
-
     registerClarificationChannelRuntime(null);
     this.connectionRecovery.stop();
     this.agentRunner.disposeClarifications();
@@ -1516,86 +1501,6 @@ export class GatewayService {
     closeXopcDatabase();
 
     log.debug('Gateway service stopped');
-  }
-
-  /** Start the browser extension WebSocket server when its driver is active. */
-  private async startBrowserExtensionServerIfNeeded(): Promise<void> {
-    await this.reconcileBrowserExtensionServer();
-  }
-
-  /**
-   * Start/stop/rebind the Chrome extension bridge.
-   * PATCH saves update config in memory without re-running gateway startup, so this must run on save too.
-   */
-  async reconcileBrowserExtensionServer(): Promise<void> {
-    const driver = this.config.browser.driver;
-    const bridgeConfig = this.config.browser.enabled && driver.kind === 'extension'
-      ? {
-          host: '127.0.0.1',
-          port: 19820,
-          connectionTimeout: this.config.browser.limits.actionTimeoutMs,
-          commandTimeout: this.config.browser.limits.actionTimeoutMs,
-        }
-      : null;
-
-    if (!bridgeConfig) {
-      if (this.browserExtensionRelease) {
-        await this.browserExtensionRelease();
-        this.browserExtensionRelease = null;
-        this.browserExtensionProvider = null;
-        this.browserExtensionBindKey = null;
-        log.debug('Browser extension WebSocket server stopped because its driver is inactive');
-      }
-      return;
-    }
-
-    const { port, host, connectionTimeout, commandTimeout } = bridgeConfig;
-    const bindKey = `${host}:${port}`;
-
-    if (this.browserExtensionRelease && this.browserExtensionBindKey === bindKey) {
-      return;
-    }
-
-    if (this.browserExtensionRelease) {
-      await this.browserExtensionRelease();
-      this.browserExtensionRelease = null;
-      this.browserExtensionProvider = null;
-      this.browserExtensionBindKey = null;
-    }
-
-    try {
-      const { acquireExtensionBrowserServer } = await import('../browser/providers/extension-ws-acquire.js');
-      const { provider, release } = await acquireExtensionBrowserServer({
-        port,
-        host,
-        connectionTimeout,
-        commandTimeout,
-      });
-      this.browserExtensionProvider = provider;
-      this.browserExtensionRelease = release;
-      this.browserExtensionBindKey = bindKey;
-      log.info({ port, host }, 'Browser extension WS server started');
-    } catch (err) {
-      const code = err && typeof err === 'object' && 'code' in err ? (err as { code: unknown }).code : undefined;
-      if (code === 'EADDRINUSE') {
-        log.warn(
-          {
-            err,
-            phase: 'browser_extension_ws',
-            bindPort: port,
-            bindHost: host,
-            hint: 'Another process holds the browser extension bridge port 19820. Stop it before starting xopc.',
-          },
-          `Browser extension WS server port is already in use: ${host}:${port}`,
-        );
-        return;
-      }
-
-      log.error(
-        { err, phase: 'browser_extension_ws' },
-        `Failed to start browser extension WS server: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
   }
 
   /**

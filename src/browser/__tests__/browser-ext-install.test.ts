@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -8,6 +8,7 @@ import { PACKAGE_VERSION } from '../../package-version.js';
 import {
   BROWSER_EXT_REQUIRED_FILES,
   browserExtContentHash,
+  browserNativeHostDoctor,
   browserNativeManifestDirectories,
   computeNeedsRefresh,
   ensureBrowserExtensionArtifacts,
@@ -222,8 +223,8 @@ describe('browser-ext-install', () => {
     });
 
     expect(result.installed).toBe(true);
-    expect(result.manifestPaths).toHaveLength(4);
-    expect(browserNativeManifestDirectories('linux', nativeHome)).toHaveLength(4);
+    expect(result.manifestPaths).toHaveLength(5);
+    expect(browserNativeManifestDirectories('linux', nativeHome)).toHaveLength(5);
     const manifest = JSON.parse(readFileSync(result.manifestPaths[0]!, 'utf8')) as {
       name: string;
       path: string;
@@ -234,7 +235,32 @@ describe('browser-ext-install', () => {
     expect(manifest.allowed_origins).toEqual([
       'chrome-extension://gopbfhaojnnhiheiikblejnpgmfmkmgd/',
     ]);
-    expect(readFileSync(manifest.path, 'utf8')).toContain("'/opt/node' '/opt/xopc/cli.js' browser extension native-host");
+    expect(readFileSync(manifest.path, 'utf8')).toContain("'/opt/node' '/opt/xopc/cli.js' 'browser' 'extension' 'native-host'");
+    expect(readFileSync(manifest.path, 'utf8')).toContain('ELECTRON_RUN_AS_NODE=1');
     expect(readFileSync(manifest.path, 'utf8')).toContain('XOPC_LOG_CONSOLE=false');
+    expect(browserNativeHostDoctor('linux', nativeHome)).toMatchObject({
+      installed: true,
+      manifestPaths: result.manifestPaths,
+    });
+  });
+
+  it('uses absolute Node and tsx entries for a development native host', async () => {
+    const nativeHome = join(tempHome, 'native-dev-home');
+    const tsxCliPath = join(tempHome, 'tsx-cli.mjs');
+    writeFileSync(tsxCliPath, '');
+    const result = await installBrowserNativeMessagingHost({
+      cacheDir: binDir,
+      cliPath: '/opt/xopc/src/cli/bin.ts',
+      nodePath: '/opt/node/bin/node',
+      tsxCliPath,
+      platform: 'linux',
+      home: nativeHome,
+    });
+
+    const manifest = JSON.parse(readFileSync(result.manifestPaths[0]!, 'utf8')) as { path: string };
+    const wrapper = readFileSync(manifest.path, 'utf8');
+    expect(wrapper).toContain("'/opt/node/bin/node'");
+    expect(wrapper).toContain(`'${realpathSync(tsxCliPath)}' '/opt/xopc/src/cli/bin.ts'`);
+    expect(wrapper).not.toContain('node_modules/.bin/tsx');
   });
 });

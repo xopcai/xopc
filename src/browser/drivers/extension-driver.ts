@@ -6,14 +6,19 @@ import type {
   BrowserTabsInput,
 } from '@xopcai/browser-control-contract';
 
-import type { ExtensionBrowserProvider } from '../providers/extension.js';
 import type { BrowserDriver, BrowserPrimitiveInput } from './browser-driver.js';
+
+type ExtensionProvider = {
+  start(): Promise<void>;
+  waitForConnection(timeoutMs?: number): Promise<void>;
+  send(input: import('@xopcai/browser-control-contract').BrowserActionInput, timeoutMs?: number, visualFallback?: boolean): Promise<import('@xopcai/browser-control-contract').BrowserWireResult>;
+};
 
 export class ExtensionDriver implements BrowserDriver {
   readonly kind = 'extension' as const;
 
   constructor(
-    private readonly provider: ExtensionBrowserProvider,
+    private readonly provider: ExtensionProvider,
     private readonly timeoutMs: number,
     private readonly visualFallback: boolean,
     private readonly release: () => Promise<void>,
@@ -56,7 +61,7 @@ export class ExtensionDriver implements BrowserDriver {
     return this.send({ ...input, sessionId });
   }
 
-  private async send(input: Parameters<ExtensionBrowserProvider['send']>[0]): Promise<BrowserControlResult> {
+  private async send(input: Parameters<ExtensionProvider['send']>[0]): Promise<BrowserControlResult> {
     return (await this.provider.send(input, this.timeoutMs, this.visualFallback)).result;
   }
 }

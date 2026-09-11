@@ -5,6 +5,8 @@ import {
   type DevicePairingAction, type DevicePairingState, type DevicePairingStatus,
 } from '@xopcai/gateway-contract';
 
+import { BROWSER_EXTENSION_ID } from '../../browser/extension-identity.js';
+import { browserEnrollmentPublicKeyThumbprint } from '../../browser/enrollment.js';
 import {
   DEFAULT_BROWSER_EXTENSION_SCOPES,
   DEFAULT_MOBILE_SCOPES,
@@ -20,6 +22,8 @@ const RECOVERY_WINDOW_MS = 24 * 60 * 60_000;
 type SetupRow = {
   pairing_id: string; secret_hash: string; routes_json: string; expires_at: number;
   protocol_version: number; consumed_at: number | null; attempts_remaining: number;
+  enrollment_issuer: string | null; enrollment_extension_id: string | null;
+  enrollment_public_key_thumbprint: string | null; enrollment_nonce: string | null;
 };
 type RequestRow = {
   request_id: string; pairing_id: string; device_json: string; status: DevicePairingState;
@@ -37,6 +41,33 @@ const fail = (code: string, status?: 400 | 401 | 404 | 409): never => { throw ne
 const scopesForPlatform = (platform: 'ios' | 'android' | 'chrome') => platform === 'chrome'
   ? DEFAULT_BROWSER_EXTENSION_SCOPES
   : DEFAULT_MOBILE_SCOPES;
+
+function isTrustedLocalBrowserSetup(setup: SetupRow, deviceJson: string): boolean {
+  const device = devicePairingDeviceSchema.parse(JSON.parse(deviceJson));
+  if (device.platform !== 'chrome' || device.extensionId !== BROWSER_EXTENSION_ID
+    || setup.enrollment_issuer !== 'browser-native-host'
+    || setup.enrollment_extension_id !== device.extensionId
+    || !setup.enrollment_public_key_thumbprint
+    || browserEnrollmentPublicKeyThumbprint(device.publicKeyJwk) !== setup.enrollment_public_key_thumbprint
+    || !setup.enrollment_nonce) return false;
+
+  const routes = JSON.parse(setup.routes_json) as DeviceRoute[];
+  if (routes.length !== 1 || routes[0]?.kind !== 'local-browser') return false;
+  try {
+    const url = new URL(routes[0].url);
+    return url.protocol === 'http:' && url.hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
+function approveTrustedLocalBrowserRequest(setup: SetupRow, row: RequestRow, now: number): RequestRow {
+  if (row.status !== 'pending' || !isTrustedLocalBrowserSetup(setup, row.device_json)) return row;
+  getSqliteDatabase().prepare(
+    "UPDATE device_pairing_requests SET status = 'approved', revision = revision + 1 WHERE request_id = ? AND status = 'pending'",
+  ).run(row.request_id);
+  return requestRow(row.request_id, now);
+}
 
 function requestRow(id: string, now: number): RequestRow {
   const db = getSqliteDatabase();
@@ -88,21 +119,23 @@ export function submitDevicePairingRequest(body: Record<string, unknown>, now = 
   const setup = verifiedSetup(String(body.pairingToken), now);
   const device = devicePairingDeviceSchema.parse(body.device);
   const deviceJson = JSON.stringify(device);
+  const autoApprove = isTrustedLocalBrowserSetup(setup, deviceJson);
   verifyProof('request', body, deviceJson, now);
   return runSqliteWriteTransaction((db) => {
     const existing = db.prepare('SELECT request_id, device_json FROM device_pairing_requests WHERE pairing_id = ?')
       .get(setup.pairing_id) as { request_id: string; device_json: string } | undefined;
     if (existing) {
       if (existing.request_id !== body.requestId || existing.device_json !== deviceJson) return fail('PAIRING_BUSY');
-      return statusFromRow(requestRow(existing.request_id, now), now);
+      return statusFromRow(approveTrustedLocalBrowserRequest(setup, requestRow(existing.request_id, now), now), now);
     }
     if (setup.consumed_at !== null) return fail('PAIRING_CANCELLED');
     if (setup.expires_at <= now) return fail('PAIRING_EXPIRED');
     const expiresAt = Math.min(setup.expires_at, now + APPROVAL_WINDOW_MS);
     db.prepare(`INSERT INTO device_pairing_requests (request_id, pairing_id, device_json, status,
-      confirmation_code, expires_at, recovery_until, created_at) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?)`)
-      .run(String(body.requestId), setup.pairing_id, deviceJson, crypto.randomInt(0, 1_000_000).toString().padStart(6, '0'),
-        expiresAt, setup.expires_at + RECOVERY_WINDOW_MS, now);
+      confirmation_code, expires_at, recovery_until, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(String(body.requestId), setup.pairing_id, deviceJson, autoApprove ? 'approved' : 'pending',
+        crypto.randomInt(0, 1_000_000).toString().padStart(6, '0'), expiresAt,
+        setup.expires_at + RECOVERY_WINDOW_MS, now);
     return statusFromRow(requestRow(String(body.requestId), now), now);
   });
 }
@@ -137,9 +170,10 @@ export function operateDevicePairingRequest(action: Exclude<DevicePairingAction,
   request: DevicePairingStatus; routes: DeviceRoute[]; scopes?: readonly string[];
 } {
   const setup = verifiedSetup(String(body.pairingToken), now);
-  const row = requestRow(String(body.requestId), now);
+  let row = requestRow(String(body.requestId), now);
   if (row.pairing_id !== setup.pairing_id) return fail('PAIRING_DENIED', 401);
   verifyProof(action, body, row.device_json, now);
+  if (action === 'status') row = approveTrustedLocalBrowserRequest(setup, row, now);
   if (action !== 'cancel' && row.device_id && getDevice(row.device_id)?.revokedAt !== undefined) return fail('DEVICE_REVOKED', 401);
   if (now >= row.recovery_until) return fail('PAIRING_EXPIRED');
   if (action === 'cancel') {

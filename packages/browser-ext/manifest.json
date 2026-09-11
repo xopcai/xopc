@@ -12,7 +12,6 @@
     "tabs",
     "tabGroups",
     "activeTab",
-    "alarms",
     "storage",
     "nativeMessaging",
     "debugger"

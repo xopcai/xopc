@@ -12,6 +12,14 @@ describe('isChromeExtensionOrigin', () => {
 });
 
 describe('checkBrowserOrigin — allowlist & host-header fallback', () => {
+  it('allows a canonical Chrome extension origin when explicitly allowlisted', () => {
+    const origin = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop';
+    expect(checkBrowserOrigin({ origin, allowedOrigins: [origin] })).toEqual({
+      ok: true,
+      matchedBy: 'allowlist',
+    });
+  });
+
   it('allows when Origin exactly matches an allowlisted entry', () => {
     const result = checkBrowserOrigin({
       requestHost: 'gateway.example.com',

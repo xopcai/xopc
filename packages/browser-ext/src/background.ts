@@ -1,175 +1,151 @@
+import {
+  BROWSER_CONTROL_ENDPOINT_DESCRIPTOR,
+  BROWSER_EXTENSION_PROTOCOL_VERSION,
+  type BrowserActionInput,
+} from '@xopcai/browser-control-contract';
+import {
+  EndpointToolHostController,
+  EndpointToolRegistry,
+} from '@xopcai/endpoint-tools-client';
+import type { EndpointToolDescriptor } from '@xopcai/endpoint-tools-protocol';
+import { RealtimeClient, type RealtimeWebSocket } from '@xopcai/realtime-client';
+
 import { executeBrowserCommand } from './controller';
 import { createLogger } from './logger';
-import type {
-  BrowserExtensionStatus,
-  BrowserWireAuthenticate,
-  BrowserWireChallenge,
-  BrowserWireCommand,
-  BrowserWireKeepAlive,
-} from './protocol';
 import {
-  BROWSER_EXTENSION_PROTOCOL_VERSION,
-  browserWireAuthenticationPayload,
-  WS_KEEPALIVE_INTERVAL,
-  WS_RECONNECT_BASE_DELAY,
-  WS_RECONNECT_MAX_DELAY,
-  WS_WATCHDOG_ALARM,
-  WS_WATCHDOG_PERIOD_MINUTES,
-  XOPC_EXT_WS_URL,
-} from './protocol';
-import { automationSessions } from './session-manager';
-import { readProfile, signBrowserBridgeChallenge } from './sidepanel/auth';
+  createBrowserEndpointHello,
+  gatewayFetch,
+  getAccessProfile,
+  readProfile,
+  registerBrowserEndpoint,
+} from './sidepanel/auth';
 import { captureTabPage, PENDING_CONTEXT_KEY } from './sidepanel/page-context';
 
 const log = createLogger('Background');
-let ws: WebSocket | null = null;
-let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-let keepAliveTimer: ReturnType<typeof setInterval> | null = null;
-let reconnectDelay = WS_RECONNECT_BASE_DELAY;
-let intentionalClose = false;
-let authenticatedConnectionId: string | null = null;
+const BACKGROUND_CLIENT_ID_KEY = 'xopc.browser.background-client-id';
+let realtime: RealtimeClient | undefined;
+let endpointClaim: { endpointId: string; token: string } | undefined;
+let lastConnectionError: string | undefined;
+let connectTask: Promise<void> | undefined;
+let connectionGeneration = 0;
 
-async function authenticate(socket: WebSocket, challenge: BrowserWireChallenge): Promise<void> {
-  if (challenge.protocolVersion !== BROWSER_EXTENSION_PROTOCOL_VERSION) {
-    socket.close(4406, 'Browser protocol mismatch');
-    return;
-  }
-  const profile = await readProfile();
-  if (!profile) {
-    socket.close(4401, 'Browser is not paired');
-    return;
-  }
-  const extensionVersion = chrome.runtime.getManifest().version;
-  const unsigned = {
-    protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
-    connectionId: challenge.connectionId,
-    challenge: challenge.challenge,
-    issuedAt: challenge.issuedAt,
-    principalId: profile.deviceId,
-    extensionId: chrome.runtime.id,
-    extensionVersion,
-  } as const;
-  const message: BrowserWireAuthenticate = {
-    type: 'authenticate',
-    protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
-    connectionId: challenge.connectionId,
-    principalId: profile.deviceId,
-    extensionId: chrome.runtime.id,
-    extensionVersion,
-    signature: await signBrowserBridgeChallenge(browserWireAuthenticationPayload(unsigned)),
-  };
-  socket.send(JSON.stringify(message));
-  authenticatedConnectionId = challenge.connectionId;
-  sendStatus(profile.deviceId);
-  startKeepAlive();
-}
-
-async function connect(): Promise<void> {
-  if (!await readProfile()) return;
-  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
-  intentionalClose = false;
-  authenticatedConnectionId = null;
-  const socket = new WebSocket(XOPC_EXT_WS_URL);
-  ws = socket;
-  socket.onopen = () => {
-    if (ws !== socket) socket.close();
-  };
-  socket.onmessage = async (event) => {
-    if (ws !== socket) return;
-    try {
-      const value = JSON.parse(String(event.data)) as { type?: unknown; connectionId?: unknown };
-      if (value.type === 'auth_challenge') {
-        await authenticate(socket, value as BrowserWireChallenge);
-        reconnectDelay = WS_RECONNECT_BASE_DELAY;
-        log.info('Authenticated with xopc browser bridge');
-        return;
-      }
-      if (!authenticatedConnectionId || value.connectionId !== authenticatedConnectionId) {
-        throw new Error('Browser command arrived before authentication or for a stale connection');
-      }
-      const result = await executeBrowserCommand(value as BrowserWireCommand);
-      if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(result));
-    } catch (error) {
-      log.error('Failed to process browser bridge message', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  };
-  socket.onclose = (event) => {
-    if (ws !== socket) return;
-    stopKeepAlive();
-    ws = null;
-    authenticatedConnectionId = null;
-    log.warn('Disconnected from xopc browser bridge', {
-      code: event.code,
-      reason: event.reason,
-      wasClean: event.wasClean,
+const browserToolRegistry = new EndpointToolRegistry([{
+  descriptor: BROWSER_CONTROL_ENDPOINT_DESCRIPTOR as unknown as EndpointToolDescriptor,
+  execute: async (args) => {
+    const input = args.input;
+    if (!input || typeof input !== 'object') throw new TypeError('Browser control input is required');
+    const result = await executeBrowserCommand({
+      id: crypto.randomUUID(),
+      protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
+      connectionId: 'gateway-realtime',
+      input: input as BrowserActionInput,
+      timeoutMs: typeof args.timeoutMs === 'number' ? args.timeoutMs : 30_000,
+      visualFallback: args.visualFallback !== false,
     });
-    if (!intentionalClose && event.code !== 4401) scheduleReconnect();
-  };
+    return { content: [{ type: 'json', value: result.result }] };
+  },
+}]);
+
+const endpointHost = new EndpointToolHostController({
+  registry: browserToolRegistry,
+  getAvailability: () => 'background',
+  confirm: async () => false,
+  uploadFile: async () => { throw new Error('Browser control does not upload endpoint files'); },
+  createMessageId: () => crypto.randomUUID(),
+});
+
+async function backgroundClientId(): Promise<string> {
+  const stored = await chrome.storage.local.get(BACKGROUND_CLIENT_ID_KEY);
+  if (typeof stored[BACKGROUND_CLIENT_ID_KEY] === 'string') return stored[BACKGROUND_CLIENT_ID_KEY];
+  const value = crypto.randomUUID();
+  await chrome.storage.local.set({ [BACKGROUND_CLIENT_ID_KEY]: value });
+  return value;
 }
 
-function sendStatus(principalId: string): void {
-  if (ws?.readyState !== WebSocket.OPEN || !authenticatedConnectionId) return;
-  const status: BrowserExtensionStatus = {
-    type: 'status',
-    protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
-    extensionVersion: chrome.runtime.getManifest().version,
-    connectionId: authenticatedConnectionId,
-    principalId,
-    connected: true,
-    sessionCount: automationSessions.size,
-  };
-  ws.send(JSON.stringify(status));
-}
-
-function startKeepAlive(): void {
-  stopKeepAlive();
-  keepAliveTimer = setInterval(() => {
-    if (ws?.readyState !== WebSocket.OPEN || !authenticatedConnectionId) {
-      stopKeepAlive();
-      return;
-    }
-    const message: BrowserWireKeepAlive = {
-      type: 'keepalive',
-      connectionId: authenticatedConnectionId,
-      timestamp: Date.now(),
-    };
-    ws.send(JSON.stringify(message));
-  }, WS_KEEPALIVE_INTERVAL);
-}
-
-function stopKeepAlive(): void {
-  if (keepAliveTimer) clearInterval(keepAliveTimer);
-  keepAliveTimer = null;
-}
-
-function scheduleReconnect(): void {
-  if (reconnectTimer) clearTimeout(reconnectTimer);
-  reconnectTimer = setTimeout(() => {
-    reconnectTimer = null;
-    reconnectDelay = Math.min(reconnectDelay * 1.5, WS_RECONNECT_MAX_DELAY);
-    void connect();
-  }, reconnectDelay);
+async function connect(generation: number): Promise<void> {
+  if (realtime || !await readProfile()) return;
+  await registerBrowserEndpoint();
+  const profile = await getAccessProfile();
+  const id = await backgroundClientId();
+  const client = new RealtimeClient({
+    clientId: id,
+    clientKind: 'browser_extension',
+    getWebSocketUrl: () => {
+      const url = new URL(profile.gatewayUrl);
+      url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      url.pathname = '/api/realtime/v1/ws';
+      url.search = '';
+      url.hash = '';
+      return url.toString();
+    },
+    issueTicket: async (signal) => {
+      const response = await gatewayFetch('/api/realtime/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: id, clientKind: 'browser_extension' }),
+        signal,
+      });
+      const body = await response.json() as { payload?: { ticket?: string } };
+      if (!response.ok || !body.payload?.ticket) throw new Error(`Realtime ticket failed (${response.status})`);
+      return body.payload.ticket;
+    },
+    createWebSocket: (url) => new WebSocket(url) as unknown as RealtimeWebSocket,
+    onStateChange: (state, error) => {
+      lastConnectionError = error;
+      if (state === 'connected') lastConnectionError = undefined;
+      if (error) log.warn('Browser Realtime connection changed', { state, error });
+    },
+  });
+  client.setEndpoint({
+    createHello: () => createBrowserEndpointHello(browserToolRegistry.descriptors()),
+    onReady: ({ endpointId, turnToken }) => {
+      endpointClaim = { endpointId, token: turnToken };
+      lastConnectionError = undefined;
+      endpointHost.connect((message) => client.sendEndpointMessage(message));
+      void chrome.runtime.sendMessage({ type: 'browser/endpoint-ready', claim: endpointClaim }).catch(() => undefined);
+      log.info('Browser control connected through Gateway Realtime', { endpointId });
+    },
+    onMessage: (message) => { void endpointHost.handleMessage(message); },
+    onDisconnected: () => {
+      endpointClaim = undefined;
+      endpointHost.disconnect();
+    },
+  });
+  if (generation !== connectionGeneration || realtime) return;
+  realtime = client;
+  client.connect();
 }
 
 function disconnect(): void {
-  intentionalClose = true;
-  stopKeepAlive();
-  if (reconnectTimer) clearTimeout(reconnectTimer);
-  reconnectTimer = null;
-  ws?.close();
-  ws = null;
-  authenticatedConnectionId = null;
+  connectionGeneration += 1;
+  realtime?.disconnect();
+  realtime = undefined;
+  endpointClaim = undefined;
+  endpointHost.disconnect();
+}
+
+function connectWithLogging(): void {
+  if (connectTask) return;
+  const generation = connectionGeneration;
+  connectTask = connect(generation)
+    .catch((error) => {
+      lastConnectionError = error instanceof Error ? error.message : String(error);
+      log.warn('Could not connect browser Realtime transport', { error: lastConnectionError });
+    })
+    .finally(() => {
+      connectTask = undefined;
+      if (generation !== connectionGeneration && !realtime) connectWithLogging();
+    });
 }
 
 chrome.runtime.onMessage.addListener((message: { type: string }, _sender, sendResponse) => {
   if (message.type === 'browser/get-status') {
-    sendResponse({ connected: Boolean(authenticatedConnectionId), url: XOPC_EXT_WS_URL });
+    sendResponse({ connected: Boolean(endpointClaim), transport: 'gateway-realtime', error: lastConnectionError });
+  } else if (message.type === 'browser/get-endpoint-claim') {
+    sendResponse({ claim: endpointClaim, error: lastConnectionError });
   } else if (message.type === 'browser/reconnect') {
     disconnect();
-    intentionalClose = false;
-    void connect();
+    connectWithLogging();
     sendResponse({ ok: true });
   } else {
     sendResponse({ ok: false, error: `Unknown message: ${message.type}` });
@@ -199,19 +175,14 @@ chrome.runtime.onInstalled.addListener(() => {
       contexts: ['selection'],
     });
   });
-  void connect();
+  connectWithLogging();
 });
-chrome.runtime.onStartup.addListener(() => { void connect(); });
+chrome.runtime.onStartup.addListener(connectWithLogging);
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes['xopc.browser.profile']) {
     disconnect();
-    intentionalClose = false;
-    void connect();
+    connectWithLogging();
   }
 });
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === WS_WATCHDOG_ALARM && !intentionalClose) void connect();
-});
-void chrome.alarms.create(WS_WATCHDOG_ALARM, { periodInMinutes: WS_WATCHDOG_PERIOD_MINUTES });
 void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
-void connect();
+connectWithLogging();

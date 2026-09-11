@@ -255,7 +255,7 @@ export class AgentToolsFactory {
         createDriver: async () => {
           const config = this.deps.getConfig?.();
           if (!config) throw new Error('Browser configuration is unavailable');
-          return createBrowserDriver(config.browser);
+          return createBrowserDriver(config.browser, this.deps.endpointTools);
         },
         allowedUploadRoots: [this.deps.workspace],
         emit: this.deps.emitBrowserEvent,

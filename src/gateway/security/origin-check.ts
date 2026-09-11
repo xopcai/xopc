@@ -32,6 +32,9 @@ function parseOriginHost(originRaw?: string): { origin: string; host: string; ho
   if (!trimmed || trimmed === 'null') {
     return null;
   }
+  if (isChromeExtensionOrigin(trimmed)) {
+    return { origin: trimmed.toLowerCase(), host: '', hostname: '' };
+  }
   try {
     const url = new URL(trimmed);
     return {

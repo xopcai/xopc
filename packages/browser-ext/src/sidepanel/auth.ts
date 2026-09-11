@@ -2,6 +2,7 @@ import { buildDevicePairingProof, type DevicePairingAction } from '@xopcai/gatew
 import { endpointHelloSigningPayload, type EndpointHelloPayload } from '@xopcai/endpoint-tools-protocol';
 
 const PROFILE_KEY = 'xopc.browser.profile';
+const AUTO_CONNECT_KEY = 'xopc.browser.auto-connect';
 const KEY_DATABASE = 'xopc-browser-identity';
 const KEY_STORE = 'identity';
 const KEY_NAME = 'device-key';
@@ -48,14 +49,42 @@ export type LocalGatewayBootstrap = {
   expiresAt: number;
 };
 
-export async function discoverLocalGateway(): Promise<LocalGatewayBootstrap | undefined> {
+async function browserPublicKeyThumbprint(jwk: { kty: 'EC'; crv: 'P-256'; x: string; y: string }): Promise<string> {
+  const canonical = JSON.stringify({ crv: jwk.crv, kty: jwk.kty, x: jwk.x, y: jwk.y });
+  return encodeBase64Url(new Uint8Array(await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(canonical),
+  )));
+}
+
+export async function isAutoConnectEnabled(): Promise<boolean> {
+  const stored = await chrome.storage.local.get(AUTO_CONNECT_KEY);
+  return stored[AUTO_CONNECT_KEY] !== false;
+}
+
+export async function setAutoConnectEnabled(enabled: boolean): Promise<void> {
+  await chrome.storage.local.set({ [AUTO_CONNECT_KEY]: enabled });
+}
+
+export async function discoverLocalGateway(options?: { force?: boolean }): Promise<LocalGatewayBootstrap | undefined> {
   try {
+    if (!options?.force && !await isAutoConnectEnabled()) return undefined;
+    const pair = await getOrCreateKeyPair();
+    const key = await publicKeyJwk(pair);
+    const nonce = randomNonce();
     const response = await chrome.runtime.sendNativeMessage(
       NATIVE_HOST_NAME,
-      { type: 'bootstrap' },
+      {
+        type: 'bootstrap',
+        extensionId: chrome.runtime.id,
+        publicKeyJwk: key,
+        publicKeyThumbprint: await browserPublicKeyThumbprint(key),
+        nonce,
+      },
     ) as Partial<LocalGatewayBootstrap> & { ok?: boolean; error?: string };
     if (response.ok !== true || typeof response.gatewayUrl !== 'string'
       || typeof response.pairingLink !== 'string' || typeof response.expiresAt !== 'number') {
+      if (options?.force) throw new Error(response.error || 'The local xopc enrollment host returned an invalid response');
       return undefined;
     }
     return {
@@ -63,7 +92,8 @@ export async function discoverLocalGateway(): Promise<LocalGatewayBootstrap | un
       pairingLink: response.pairingLink,
       expiresAt: response.expiresAt,
     };
-  } catch {
+  } catch (cause) {
+    if (options?.force) throw cause;
     return undefined;
   }
 }
@@ -142,6 +172,15 @@ async function getOrCreateKeyPair(): Promise<CryptoKeyPair> {
     request.onerror = () => reject(request.error);
   }).finally(() => database.close());
   return pair;
+}
+
+async function forgetIdentity(): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(KEY_DATABASE);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+    request.onblocked = () => reject(new Error('Browser identity is still in use'));
+  });
 }
 
 async function publicKeyJwk(pair: CryptoKeyPair) {
@@ -284,7 +323,7 @@ export async function pairGateway(
   const requestId = crypto.randomUUID();
   const initialRefreshToken = createRefreshToken();
   let result = await signedPairingRequest(pair, payload, origin, requestId, 'request');
-  onApproval(result.request.confirmationCode);
+  if (result.request.status === 'pending') onApproval(result.request.confirmationCode);
   while (result.request.status === 'pending') {
     await wait(1_500);
     result = await signedPairingRequest(pair, payload, origin, requestId, 'status');
@@ -372,7 +411,9 @@ export async function registerBrowserEndpoint(): Promise<void> {
   if (!response.ok) throw new Error(`Browser endpoint registration failed (${response.status})`);
 }
 
-export async function createBrowserEndpointHello(): Promise<EndpointHelloPayload> {
+export async function createBrowserEndpointHello(
+  tools: EndpointHelloPayload['tools'] = [],
+): Promise<EndpointHelloPayload> {
   const profile = await getAccessProfile();
   const pair = await getOrCreateKeyPair();
   const unsigned: EndpointHelloPayload = {
@@ -387,7 +428,7 @@ export async function createBrowserEndpointHello(): Promise<EndpointHelloPayload
     nonce: crypto.randomUUID(),
     signedAt: Date.now(),
     signature: 'pending',
-    tools: [],
+    tools,
   };
   return {
     ...unsigned,
@@ -408,6 +449,11 @@ export async function revokeAndForgetProfile(): Promise<void> {
     });
   } finally {
     await forgetProfile();
+    try {
+      await forgetIdentity();
+    } finally {
+      await setAutoConnectEnabled(false);
+    }
   }
 }
 
