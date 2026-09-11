@@ -12,10 +12,14 @@ import { LIST_DELAY_LONG_PRESS } from '../../constants/list-interaction';
 import { t, useMessages } from '../../i18n/messages';
 import { sessionDisplayName } from '../../lib/session-helpers';
 import type { SessionListItem } from '../../query/sessions';
+import { usePreferencesStore } from '../../stores/preferences-store';
 import { radii, spacing, typography, useTheme } from '../../theme';
 import { AgentAvatar } from '../ai/AgentAvatar';
 
-function relativeTime(dateStr: string): string {
+const relativeTimeFormatters = new Map<string, Intl.RelativeTimeFormat>();
+const dateTimeFormatters = new Map<string, Intl.DateTimeFormat>();
+
+function relativeTime(dateStr: string, locale: string): string {
   const now = Date.now();
   const date = new Date(dateStr);
   const then = date.getTime();
@@ -26,7 +30,11 @@ function relativeTime(dateStr: string): string {
   const intl = typeof Intl === 'object' ? Intl : undefined;
   const RelativeTimeFormat = intl?.RelativeTimeFormat;
   if (typeof RelativeTimeFormat === 'function') {
-    const formatter = new RelativeTimeFormat(undefined, { numeric: 'auto', style: 'short' });
+    let formatter = relativeTimeFormatters.get(locale);
+    if (!formatter) {
+      formatter = new RelativeTimeFormat(locale, { numeric: 'auto', style: 'short' });
+      relativeTimeFormatters.set(locale, formatter);
+    }
     if (mins < 1) return formatter.format(0, 'second');
     if (mins < 60) return formatter.format(-mins, 'minute');
     const hours = Math.floor(mins / 60);
@@ -47,7 +55,12 @@ function relativeTime(dateStr: string): string {
   if (weeks < 5) return `${weeks}w`;
   const DateTimeFormat = intl?.DateTimeFormat;
   if (typeof DateTimeFormat === 'function') {
-    return new DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date);
+    let formatter = dateTimeFormatters.get(locale);
+    if (!formatter) {
+      formatter = new DateTimeFormat(locale, { month: 'short', day: 'numeric' });
+      dateTimeFormatters.set(locale, formatter);
+    }
+    return formatter.format(date);
   }
   return `${date.getMonth() + 1}/${date.getDate()}`;
 }
@@ -79,10 +92,10 @@ function resolveSessionAgentAvatar(session: SessionListItem): string | undefined
 
 type SessionCardProps = {
   session: SessionListItem;
-  onPress: () => void;
-  onPressIn?: () => void;
-  onLongPress?: () => void;
-  onSwipeAction?: (action: SwipeAction) => void;
+  onPress: (session: SessionListItem) => void;
+  onPressIn?: (session: SessionListItem) => void;
+  onLongPress?: (session: SessionListItem) => void;
+  onSwipeAction?: (session: SessionListItem, action: SwipeAction) => void;
   selectionMode?: boolean;
   selected?: boolean;
   isFirst?: boolean;
@@ -103,19 +116,25 @@ export const SessionCard = memo(function SessionCard({
   const { colors } = useTheme();
   const m = useMessages();
   const sa = m.sessionActions;
+  const language = usePreferencesStore((state) => state.language);
+  const locale = language === 'zh' ? 'zh-CN' : 'en-US';
 
   const isPinned = session.status === 'pinned';
   const isArchived = session.status === 'archived';
   const title = useMemo(() => sessionDisplayName(session, m.sessions.untitled), [m.sessions.untitled, session]);
-  const time = useMemo(() => relativeTime(session.updatedAt), [session.updatedAt]);
+  const time = useMemo(() => relativeTime(session.updatedAt, locale), [locale, session.updatedAt]);
   const agentId = useMemo(() => resolveSessionAgentId(session), [session]);
   const agentAvatar = useMemo(() => resolveSessionAgentAvatar(session), [session]);
 
-  const handlePress = useCallback(() => onPress(), [onPress]);
+  const handlePress = useCallback(() => onPress(session), [onPress, session]);
+
+  const handlePressIn = useCallback(() => {
+    onPressIn?.(session);
+  }, [onPressIn, session]);
 
   const handleLongPress = useCallback(() => {
-    onLongPress?.();
-  }, [onLongPress]);
+    onLongPress?.(session);
+  }, [onLongPress, session]);
 
   const swipeActions: SwipeAction[] = useMemo(() => [
     isArchived
@@ -125,13 +144,13 @@ export const SessionCard = memo(function SessionCard({
   ], [isArchived, sa.archive, sa.delete, sa.unarchive]);
 
   const handleSwipeAction = useCallback((action: SwipeAction) => {
-    onSwipeAction?.(action);
-  }, [onSwipeAction]);
+    onSwipeAction?.(session, action);
+  }, [onSwipeAction, session]);
 
   const cardContent = (
     <Pressable
       onPress={handlePress}
-      onPressIn={onPressIn}
+      onPressIn={onPressIn ? handlePressIn : undefined}
       onLongPress={handleLongPress}
       delayLongPress={LIST_DELAY_LONG_PRESS}
       android_ripple={{ color: colors.surface.hover }}

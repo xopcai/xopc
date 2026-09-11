@@ -7,6 +7,12 @@ import type { ChatModelOption } from '../../query/models';
 import { ChatActionsSheet } from './ChatActionsSheet';
 import { ModelPickerMenu } from './ModelPickerMenu';
 
+export const CHAT_HEADER_TOP_PADDING_AFTER_SAFE_AREA = 8;
+const CHAT_HEADER_CONTROL_HEIGHT = 44;
+const CHAT_HEADER_BOTTOM_PADDING = 6;
+export const CHAT_HEADER_HEIGHT_AFTER_SAFE_AREA =
+  CHAT_HEADER_TOP_PADDING_AFTER_SAFE_AREA + CHAT_HEADER_CONTROL_HEIGHT + CHAT_HEADER_BOTTOM_PADDING;
+
 export const ChatHeader = memo(function ChatHeader({
   agentName,
   modelName,
@@ -14,12 +20,9 @@ export const ChatHeader = memo(function ChatHeader({
   currentModelId,
   paddingTop,
   pillText,
-  voiceCallActive,
-  voiceCallDisabled,
   onBackPress,
   onNavigationPress,
   onAgentPress,
-  onVoiceCallPress,
   onModelSelect,
   onFilesPress,
   onNewChat,
@@ -30,12 +33,9 @@ export const ChatHeader = memo(function ChatHeader({
   currentModelId: string;
   paddingTop: number;
   pillText: string;
-  voiceCallActive: boolean;
-  voiceCallDisabled: boolean;
   onBackPress?: () => void;
   onNavigationPress?: () => void;
   onAgentPress: () => void;
-  onVoiceCallPress: () => void;
   onModelSelect: (modelId: string) => void;
   onFilesPress?: () => void;
   onNewChat: () => void;
@@ -100,21 +100,6 @@ export const ChatHeader = memo(function ChatHeader({
 
         <View style={styles.rightActions}>
           <Pressable
-            style={[styles.iconButton, voiceCallDisabled && styles.disabled]}
-            onPress={onVoiceCallPress}
-            disabled={voiceCallDisabled}
-            hitSlop={6}
-            accessibilityRole="button"
-            accessibilityLabel={voiceCallActive ? m.voice.expand : m.voice.title}
-            accessibilityState={{ disabled: voiceCallDisabled }}
-          >
-            <Icon
-              source={voiceCallActive ? 'phone-in-talk' : 'phone-outline'}
-              size={23}
-              color={pillText}
-            />
-          </Pressable>
-          <Pressable
             style={styles.iconButton}
             onPress={() => setActionsVisible(true)}
             accessibilityRole="button"
@@ -150,22 +135,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 20,
-    paddingBottom: 6,
+    paddingBottom: CHAT_HEADER_BOTTOM_PADDING,
   },
   iconButton: {
     position: 'relative',
     width: 44,
-    height: 44,
+    height: CHAT_HEADER_CONTROL_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  disabled: { opacity: 0.44 },
   sideSlot: {
     width: 44,
     alignItems: 'flex-start',
   },
   rightActions: {
-    width: 88,
+    width: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
@@ -173,7 +157,7 @@ const styles = StyleSheet.create({
   headerCenter: {
     flex: 1,
     minWidth: 0,
-    minHeight: 44,
+    minHeight: CHAT_HEADER_CONTROL_HEIGHT,
     alignItems: 'flex-start',
     justifyContent: 'center',
     paddingLeft: 4,
@@ -181,7 +165,7 @@ const styles = StyleSheet.create({
   },
   titlePressable: {
     maxWidth: '100%',
-    minHeight: 44,
+    minHeight: CHAT_HEADER_CONTROL_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',

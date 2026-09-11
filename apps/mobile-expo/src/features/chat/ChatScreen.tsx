@@ -1,7 +1,7 @@
 /** Chat-first root and session detail surface. */
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { Banner, Text } from 'react-native-paper';
@@ -18,7 +18,7 @@ import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding } from '../../theme';
 import { AgentPickerSheet } from './AgentPickerSheet';
 import { ChatComposer } from './ChatComposer';
 import { ChatContextControl } from './ChatContextControl';
-import { ChatHeader } from './ChatHeader';
+import { ChatHeader, CHAT_HEADER_TOP_PADDING_AFTER_SAFE_AREA } from './ChatHeader';
 import { ChatNavigationSheet } from './ChatNavigationSheet';
 import { ContinuousReadAloudBar } from './ContinuousReadAloudBar';
 import { ClarifyPrompt } from './ClarifyPrompt';
@@ -27,6 +27,7 @@ import { appendOlderSessionHistoryPage } from './session-message-parser';
 import { useChatPage } from './use-chat-page';
 import { useAutoReadAloud } from './use-auto-read-aloud';
 import type { ComposerContextRef } from './composer.types';
+import type { ComposerVoiceCallEngine } from './composer-voice-call-options';
 import { dispatchMobileComposerAppend } from './mobile-composer-fill';
 import { useReadAloudStore } from '../voice/read-aloud-store';
 import { useVoiceCall, voiceCall } from '../voice/voice-call';
@@ -91,14 +92,13 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
   } = page;
   const language = usePreferencesStore((state) => state.language);
   const call = useVoiceCall();
-  const voicePreferences = useVoicePreferences();
+  const voiceCallBackground = useVoicePreferences((state) => state.background);
+  const voiceStatusQuery = useQuery({
+    ...voiceStatusOptions(activeGatewayId),
+    enabled: Boolean(activeGatewayId && sessionKey),
+  });
   const attentionQuery = useAttentionFeed();
   const attentionItems = attentionQuery.data?.needsUser ?? [];
-
-  useEffect(() => {
-    if (!activeGatewayId || !sessionKey) return;
-    void queryClient.prefetchQuery(voiceStatusOptions(activeGatewayId));
-  }, [activeGatewayId, queryClient, sessionKey]);
 
   useAutoReadAloud({
     language,
@@ -108,7 +108,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
     title: m.chat.messageReadAloudTitle,
   });
 
-  const handleVoiceCallPress = useCallback(() => {
+  const handleVoiceCallPress = useCallback((engine: ComposerVoiceCallEngine) => {
     if (call.phase !== 'idle') {
       voiceCall.expand();
       return;
@@ -120,14 +120,14 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
     void voiceCall.start({
       gatewayId: activeGatewayId,
       sessionKey,
-      engine: voicePreferences.engines[activeGatewayId],
-      background: voicePreferences.background,
+      engine,
+      background: voiceCallBackground,
       identity: sessionHistoryQuery.data?.pages[0]?.session.sessionId,
       name: sessionHistoryQuery.data?.pages[0]?.session.name ?? agentName,
     });
-  }, [activeGatewayId, agentName, call.phase, chat.streaming, composerDisabled, sessionHistoryQuery.data?.pages, sessionKey, voicePreferences.background, voicePreferences.engines]);
+  }, [activeGatewayId, agentName, call.phase, chat.streaming, composerDisabled, sessionHistoryQuery.data?.pages, sessionKey, voiceCallBackground]);
 
-  const headerPaddingTop = insets.top + 8;
+  const headerPaddingTop = insets.top + CHAT_HEADER_TOP_PADDING_AFTER_SAFE_AREA;
   const canvasBg = colors.surface.base;
 
   return (
@@ -139,12 +139,9 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
           currentModelId={effectiveModelId}
           paddingTop={headerPaddingTop}
           pillText={colors.text.primary}
-          voiceCallActive={call.phase !== 'idle'}
-          voiceCallDisabled={call.phase === 'idle' && (!activeGatewayId || !sessionKey || composerDisabled || chat.streaming)}
           onBackPress={root ? undefined : handleBack}
           onNavigationPress={root ? () => setNavigationVisible(true) : undefined}
           onAgentPress={openAgentsPicker}
-          onVoiceCallPress={handleVoiceCallPress}
           onModelSelect={handleModelSelect}
           onFilesPress={sessionKey ? () => router.push(`/files/context/session/${encodeURIComponent(sessionKey)}` as never) : undefined}
           onNewChat={handleNewChat}
@@ -276,6 +273,11 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
             onConsumeSuggestionDraft={() => setComposerSuggestion(undefined)}
             contextRefs={composerContextRefs}
             onContextRefsChange={setComposerContextRefs}
+            onVoiceCallStart={handleVoiceCallPress}
+            voiceCallUnavailable={{
+              omni: Boolean(voiceStatusQuery.data && !voiceStatusQuery.data.capabilities.omni.available),
+              agent: Boolean(voiceStatusQuery.data && !voiceStatusQuery.data.capabilities.agent.available),
+            }}
           />
         </KeyboardStickyView>
         </View>
