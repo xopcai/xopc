@@ -795,6 +795,9 @@ importers:
       '@xopcai/realtime-protocol':
         specifier: workspace:*
         version: link:../realtime-protocol
+      markdown-it:
+        specifier: ^14.2.0
+        version: 14.2.0
       react:
         specifier: ^19.2.5
         version: 19.2.6
@@ -805,6 +808,9 @@ importers:
       '@types/chrome':
         specifier: ^0.0.287
         version: 0.0.287
+      '@types/markdown-it':
+        specifier: ^14.1.2
+        version: 14.1.2
       '@types/react':
         specifier: ^19.2.14
         version: 19.2.15

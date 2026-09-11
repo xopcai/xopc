@@ -1,6 +1,8 @@
 import { buildDevicePairingProof, type DevicePairingAction } from '@xopcai/gateway-contract';
 import { endpointHelloSigningPayload, type EndpointHelloPayload } from '@xopcai/endpoint-tools-protocol';
 
+import { clearBrowserOutboxes } from './chat-outbox';
+
 const PROFILE_KEY = 'xopc.browser.profile';
 const AUTO_CONNECT_KEY = 'xopc.browser.auto-connect';
 const KEY_DATABASE = 'xopc-browser-identity';
@@ -450,9 +452,13 @@ export async function revokeAndForgetProfile(): Promise<void> {
   } finally {
     await forgetProfile();
     try {
-      await forgetIdentity();
+      await clearBrowserOutboxes();
     } finally {
-      await setAutoConnectEnabled(false);
+      try {
+        await forgetIdentity();
+      } finally {
+        await setAutoConnectEnabled(false);
+      }
     }
   }
 }

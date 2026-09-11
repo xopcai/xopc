@@ -19,11 +19,13 @@
     "@xopcai/gateway-contract": "workspace:*",
     "@xopcai/realtime-client": "workspace:*",
     "@xopcai/realtime-protocol": "workspace:*",
+    "markdown-it": "^14.2.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.287",
+    "@types/markdown-it": "^14.1.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "adm-zip": "^0.6.0",

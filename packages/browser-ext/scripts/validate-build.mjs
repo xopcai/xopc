@@ -66,6 +66,15 @@ if (!configuredExtensionId || !manifestExtensionId || configuredExtensionId !== 
   );
 }
 
+const manifestPermissions = new Set(manifest.permissions ?? []);
+if (!manifestPermissions.has('scripting') || !manifestPermissions.has('tabs')) {
+  errors.push('manifest must include scripting and tabs permissions for page context capture');
+}
+const optionalHostPermissions = new Set(manifest.optional_host_permissions ?? []);
+if (!optionalHostPermissions.has('http://*/*') || !optionalHostPermissions.has('https://*/*')) {
+  errors.push('manifest must allow optional per-site http(s) access for page context capture');
+}
+
 const gatewayThemeSource = readFileSync(join(repositoryRoot, 'web/src/styles/globals.css'), 'utf8');
 const extensionThemeSource = readFileSync(join(packageRoot, 'src/sidepanel/styles.css'), 'utf8');
 const gatewayThemeBlocks = {
