@@ -1,5 +1,5 @@
 export const queryKeys = {
-  sessions: (search?: string) => ['sessions', search?.trim() ?? ''] as const,
+  sessions: (search?: string) => ['sessions', 'search', search?.trim() ?? ''] as const,
   sessionsRecent: ['sessions', 'recent'] as const,
   sessionsAll: ['sessions'] as const,
   session: (key: string) => ['session', key] as const,

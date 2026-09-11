@@ -49,6 +49,10 @@ import { MOBILE_COMPOSER_APPEND_EVENT, MOBILE_COMPOSER_FILL_EVENT } from './mobi
 import { VoiceRecordingCard } from './VoiceRecordingCard';
 import { useChatVoiceRecording } from './use-chat-voice-recording';
 import { useVoiceCall } from '../voice/voice-call';
+import {
+  COMPOSER_VOICE_CALL_OPTIONS,
+  type ComposerVoiceCallEngine,
+} from './composer-voice-call-options';
 
 type InputMode = 'text' | 'voice';
 
@@ -65,6 +69,8 @@ export const ChatComposer = memo(function ChatComposer({
   contextRefs,
   onContextRefsChange,
   contextControl,
+  onVoiceCallStart,
+  voiceCallUnavailable,
 }: {
   sessionKey: string;
   disabled: boolean;
@@ -78,6 +84,8 @@ export const ChatComposer = memo(function ChatComposer({
   contextRefs: ComposerContextRef[];
   onContextRefsChange: (refs: ComposerContextRef[]) => void;
   contextControl?: ReactNode;
+  onVoiceCallStart: (engine: ComposerVoiceCallEngine) => void;
+  voiceCallUnavailable?: Partial<Record<ComposerVoiceCallEngine, boolean>>;
 }) {
   const m = useMessages();
   const cm = m.chat;
@@ -410,6 +418,15 @@ export const ChatComposer = memo(function ChatComposer({
     [cm.localFiles, cm.photos, cm.takePhoto, handleAttachmentPick],
   );
 
+  const voiceCallItems = useMemo(
+    () => COMPOSER_VOICE_CALL_OPTIONS.map((item) => ({
+      ...item,
+      label: item.engine === 'omni' ? m.voice.callWithoutTools : m.voice.callWithTools,
+      onPress: () => onVoiceCallStart(item.engine),
+    })),
+    [m.voice.callWithTools, m.voice.callWithoutTools, onVoiceCallStart],
+  );
+
   const renderCaptureChip = (
     key: string,
     icon: string,
@@ -449,6 +466,13 @@ export const ChatComposer = memo(function ChatComposer({
         keyboardShouldPersistTaps="handled"
       >
         {contextControl}
+        {voiceCallItems.map((item) => {
+          const itemDisabled = disabled
+            || streaming
+            || voiceInteractionActive
+            || (call.phase === 'idle' && voiceCallUnavailable?.[item.engine] === true);
+          return renderCaptureChip(item.key, item.icon, item.label, item.onPress, itemDisabled);
+        })}
         {captureItems.map((item) => {
           const itemDisabled = disabled
             || streaming
