@@ -7,13 +7,14 @@
   "scripts": {
     "icons": "node scripts/render-icons.mjs",
     "dev": "node scripts/render-icons.mjs && vite build --watch",
-    "build": "node scripts/render-icons.mjs && vite build",
-    "pack": "pnpm run build && node scripts/pack-zip.mjs",
+    "build": "node scripts/render-icons.mjs && vite build && node scripts/validate-build.mjs",
+    "pack": "node ../../scripts/sync-browser-ext-version.mjs && pnpm run build && node scripts/pack-zip.mjs",
     "pack:zip": "node scripts/pack-zip.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@xopcai/browser-control-contract": "workspace:*",
+    "@xopcai/endpoint-tools-client": "workspace:*",
     "@xopcai/endpoint-tools-protocol": "workspace:*",
     "@xopcai/gateway-contract": "workspace:*",
     "@xopcai/realtime-client": "workspace:*",

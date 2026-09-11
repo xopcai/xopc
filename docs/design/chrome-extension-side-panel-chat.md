@@ -12,8 +12,8 @@
 
 1. 使用 Chrome 原生 `chrome.sidePanel`，Side Panel UI 随扩展本地打包；不 iframe Gateway Console，不加载远程执行代码。
 2. 浏览器侧栏使用普通持久 Session，与 Web、Desktop、Mobile 共享历史、标题、模型配置和运行结果；不使用 30 分钟租约的 ephemeral side chat。
-3. 会话读写走现有 Gateway REST；流式回答和 endpoint tool 走现有 Gateway Realtime。现有 `ws://127.0.0.1:19820/browser-ext` 仅继续承担浏览器控制，不承载聊天历史或 Gateway owner token。
-4. 浏览器扩展使用独立设备身份和最小权限 token。Native Messaging 只负责本机 Gateway 发现与安全配对引导，不代理聊天正文。
+3. 会话读写走 Gateway REST；流式回答、endpoint tool 和浏览器控制统一走经身份验证的 Gateway Realtime。不再开启 `127.0.0.1:19820` 自定义控制桥。
+4. 浏览器扩展使用独立设备身份和最小权限 token。Native Messaging 只负责本机 Gateway 发现和一次性本机 enrollment grant，不代理聊天正文或长期凭证。
 5. 打开侧栏不会自动读取页面。页面正文、选中文本和截图仅在用户明确附加或授权 Agent 操作时采集。
 6. 页面内容在发送时冻结为 `browser_page` source context，进入现有 `session_inputs.context_snapshots_json` 可靠队列；模型侧始终把它视为不可信数据。
 7. “在隔离自动化窗口操作”与“操作用户当前标签页”是两个明确的 target。当前标签页必须由用户把 Session 显式绑定到该 tab，Agent 不能自行传入任意 tab id。
@@ -43,7 +43,7 @@
 | --- | --- | --- |
 | Chrome 扩展 | `packages/browser-ext` 是 MV3 Side Panel + service worker，页面脚本只按用户动作注入 | 已移除 popup、常驻 content script 与 `<all_urls>` 默认访问 |
 | 浏览器控制 | `BrowserControl v2` 已有 observe/click/fill/select/press/scroll/upload/tabs、风险分级、revision/documentId | 默认面向独立 automation window；没有用户 tab 显式绑定 |
-| 控制传输 | Gateway 在 `127.0.0.1:19820/browser-ext` 提供 WS，扩展主动连接 | 已增加连接 challenge、设备签名、固定扩展 Origin 和 connection generation 校验 |
+| 控制传输 | 扩展作为 `browser` endpoint 连入 Gateway Realtime，并广播受策略限定的 `browser.control` tool | 已共享 ticket、设备签名、endpoint turn token、心跳和重连机制 |
 | 会话 | Side Panel 使用普通持久 Session、durable input 和 run cursor 恢复 | Browser extension surface 和 endpoint identity 已进入协议 |
 | 实时 | `@xopcai/realtime-client` 支持 ticket、topic cursor、replay、gap 和 endpoint tools | `clientKind` 没有 `browser_extension`；扩展未接入 |
 | 输入可靠性 | `session_inputs` 已持久化 `context_refs_json` 和冻结后的 `context_snapshots_json` | API 只允许 Note ref，无法接收浏览器采集的受限快照 |
@@ -68,14 +68,15 @@ flowchart LR
   Inputs --> Agent[Agent Runtime]
 
   Agent --> BrowserUse[browser_use]
-  BrowserUse --> Control[Browser Control Provider\n127.0.0.1:19820]
-  Control -->|authenticated command| SW
+  BrowserUse --> Control[Realtime Endpoint Tool Runtime]
+  Control -->|browser.control invocation| RT
+  RT -->|authenticated endpoint command| SW
 
   Native[Native Messaging Host] -. 仅发现与配对 .-> SW
   Native -.-> API
 ```
 
-### 4.1 两条数据链路
+### 4.1 统一身份与传输边界
 
 **Conversation plane**：Side Panel → Gateway REST/Realtime。
 
@@ -84,13 +85,13 @@ flowchart LR
 - 复用 `@xopcai/realtime-client` 的 ticket、heartbeat、cursor、replay 和 gap 恢复。
 - Bearer token 不放入 WebSocket URL。
 
-**Browser control plane**：Gateway Browser Provider ↔ Extension Service Worker。
+**Browser control plane**：Gateway Browser Provider ↔ Gateway Realtime ↔ Extension Service Worker。
 
 - 保留现有 Browser Control v2 的严格语义和 `documentId/revision/ref` 防陈旧操作。
-- 协议增加扩展连接身份、连接代次和 attached-tab binding，但不复制会话/消息协议。
-- 在身份校验完成前，Provider 不把连接标记为 ready，也不能发送任何浏览器命令。
+- 扩展用设备私钥签名 endpoint hello，仅在 Gateway 校验 principal 并签发本轮 turn token 后才广播 `browser.control`。
+- Browser Provider 只通过 `EndpointToolRuntime` 调用信任的固定 descriptor；通用 endpoint tool 搜索/执行显式隐藏该工具，不能绕过 Browser Runtime 的审批、tab binding 和风险分级。
 
-分开两条链路的原因是：聊天需要持久化、范围化鉴权、事件重放和多端一致性；浏览器命令需要低延迟的本机 Chrome API 执行。把二者混成一个自定义 WS 会重复实现现有 Gateway 能力，并放大当前 19820 握手的安全风险。
+两个 plane 共享 Realtime 底层连接，但保持不同的业务边界：聊天使用持久会话与 topic，浏览器命令使用有限并发、有超时与取消的 endpoint invocation。这样无需维护第二个本地端口、第二套心跳和第二套鉴权协议。
 
 ## 5. Extension 结构
 
@@ -169,7 +170,7 @@ content script 改为按需 `chrome.scripting.executeScript()`。只有页面需
 | 数据 | 存储 | 生命周期 |
 | --- | --- | --- |
 | 扩展安装 id、Gateway id、refresh token | `chrome.storage.local` | 显式解绑/卸载前 |
-| 私钥 | IndexedDB 中不可导出的 `CryptoKey` | 显式解绑/卸载前 |
+| 私钥 | IndexedDB 中不可导出的 `CryptoKey` | 显式解绑时删除 |
 | `tabId → sessionKey`、active run/cursor | `chrome.storage.session` | 当前浏览器会话 |
 | 草稿 | `chrome.storage.session`，按 `gatewayId + sessionKey` 分区 | 浏览器会话或发送成功前 |
 | 页面正文快照 | 不在扩展持久化；提交成功后清除 | 单次发送事务 |
@@ -220,12 +221,14 @@ device.self
 
 1. `xopc browser extension install` 安装扩展文件，并为 Chrome 写入 `ai.xopc.browser` Native Messaging host manifest。
 2. host manifest 的 `allowed_origins` 只包含发布渠道对应的固定 extension id。
-3. Extension 首次打开时生成 P-256 key，调用 native host 获取本机 Gateway URL、Gateway identity 和一次性 pairing setup。
-4. Gateway Console 的 Browser 设置页显示待配对扩展名称、Chrome profile、extension id 和短指纹。
-5. 用户批准后，扩展用一次性 token 和公钥换取 scope 受限的 access/refresh token。
-6. Extension 验证 Gateway 签名后保存凭证，创建 Realtime ticket 并连接。
+3. Extension 首次打开时生成不可导出的 P-256 key，将公钥、公钥指纹和随机 nonce 交给 native host。
+4. native host 校验固定 extension id，创建绑定该公钥指纹的 60 秒、一次性 local enrollment setup；路由必须精确为 `http://127.0.0.1:<gateway-port>`。
+5. Gateway 只对同时命中 native issuer、固定 extension id、公钥指纹和 loopback route 的请求自动批准。仅由页面发现 localhost、或手动构造配对链接，都不足以触发自动批准。
+6. Extension 验证 Gateway 签名后保存 scope 受限的设备凭证，创建 Realtime ticket 并连接。
 
-Native host 不返回 owner token，不转发聊天正文，不长期驻留。若 host 不可用，Side Panel 显示安装/修复入口；开发模式可提供显式输入 Gateway URL 和一次性 pairing code 的 fallback。
+Native host 不返回 owner token，不转发聊天正文，不长期驻留。用户点击“Disconnect”时撤销设备、删除本地凭证与私钥，并持久关闭自动重连；只有用户再次点击连接本机 Gateway 才会重新 enrollment。
+
+远程/服务器 Gateway 不使用本机 enrollment：用户必须通过配对链接并在 Gateway 侧显式批准。Electron 和本机 CLI Gateway 在启动时会修复固定扩展目录及 native host manifest；Chrome 本身仍要求用户首次安装扩展，非企业策略环境不应尝试静默侧载。
 
 ### 7.3 Origin 与 CORS
 
@@ -244,18 +247,16 @@ chrome-extension://<extension-id>
 
 Origin 只用于浏览器请求防护，不能替代 token。解绑设备后立即撤销 token、断开 Realtime、移除动态 Origin，并取消该 endpoint 的 tab bindings。
 
-### 7.4 19820 控制桥加固
+### 7.4 Realtime 浏览器控制
 
-当前 Browser Provider 在新 WS 连接后只等待 protocol status。改为：
+1. Extension Service Worker 使用短期 access token 申请一次性 Realtime ticket。
+2. Realtime hello 携带 browser principal、随机 nonce、connection instance id 和设备私钥签名。
+3. Gateway 验证已配对且未撤销的 Chrome device，再为连接签发 endpoint turn token。
+4. Extension 只广播固定 descriptor 的 `browser.control`；Gateway policy 只接受精确匹配的权限、传输、输入/输出 schema 和超时上限。
+5. 每个 invocation 都有 tool call id、descriptor revision、超时、取消和有界并发；断线后由 Realtime 重连并重新注册 endpoint。
+6. attached-tab 命令仍必须命中同一 principal 的 session-tab binding，不允许通过通用 endpoint tool API 直接调用。
 
-1. HTTP upgrade 阶段只接受 `chrome-extension://<paired-id>` Origin。
-2. Gateway 发送随机 challenge、gateway id、protocol version。
-3. Extension 返回 installation id、endpoint id、extension version、challenge 签名。
-4. Gateway 从 endpoint principal 读取公钥验证签名和 nonce。
-5. 验证通过才设置 `connected=true`；连接替换必须属于同一 principal，且 connection generation 更新。
-6. 所有 command/result 包含 `connectionId`，旧连接的迟到结果被丢弃。
-
-仅绑定 loopback 仍然保留，但不再视为完整认证。
+Gateway 不再监听 19820，因此 Electron、本机 CLI 和服务器部署都只需暴露 Gateway 本身的 HTTP/Realtime 入口。
 
 ## 8. Side Panel 产品状态模型
 
@@ -590,7 +591,7 @@ type BrowserSitePermission = {
 - POST 重试去重成功率、Realtime 重连和 gap 恢复率。
 - 页面导航后的 stale context/stale observation 命中率。
 - read/act 权限批准率、撤销率和高风险动作拒绝率。
-- 19820 handshake 失败、重复连接和 protocol mismatch 数量。
+- browser endpoint 鉴权失败、重复连接和 protocol mismatch 数量。
 
 日志使用稳定前缀，例如 `BrowserSidePanel`、`BrowserExtensionAuth`、`BrowserContext`、`BrowserTabBinding`，保持 object first/message second。
 
@@ -604,7 +605,7 @@ type BrowserSitePermission = {
 - Source context：browser kind 解析、预算裁剪、metadata 投影和 prompt 不可信边界。
 - State reducer：tab/session/generation 切换、晚到事件、token revoked、page navigation。
 - Browser binding：endpoint mismatch、tab closed、document stale、read→act 升级。
-- Browser WS handshake：Origin、nonce replay、签名错误、旧 connectionId result。
+- Browser Realtime endpoint：Origin、nonce replay、hello 签名错误、descriptor 篡改、旧 connection instance 的迟到结果。
 - Scope/Origin：browser token 无 workspace/admin 权限，解绑后 Origin 立即失效。
 
 ### 16.2 Gateway 集成测试
@@ -639,7 +640,7 @@ Chrome Side Panel 自动化能力若在 CI 不稳定，保留一个有录屏和�
 - Native Messaging bootstrap、固定 extension id、browser device pairing。
 - Gateway 动态 Origin、browser scopes、Realtime client kind。
 - 连接/离线/撤销/修复 UI。
-- 加固 19820 handshake，但不改变现有 automation 行为。
+- 浏览器控制迁移到已认证 Gateway Realtime endpoint，移除 19820 运行时依赖。
 
 退出标准：未配对扩展无法访问会话或执行命令；已配对扩展能在 Gateway 重启后重新连接。
 

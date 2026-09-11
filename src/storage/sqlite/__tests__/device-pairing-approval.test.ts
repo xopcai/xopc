@@ -3,10 +3,13 @@ import crypto from 'node:crypto';
 import { buildDevicePairingProof, type DevicePairingAction } from '@xopcai/gateway-contract';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { BROWSER_EXTENSION_ID } from '../../../browser/extension-identity.js';
+import { browserEnrollmentPublicKeyThumbprint } from '../../../browser/enrollment.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../index.js';
 import { listDevices, revokeDevice, rotateDeviceRefreshToken, buildRefreshProofMessage } from '../device-access-repository.js';
 import { createDevicePairingSetup, consumeDevicePairingToken } from '../device-pairing-repository.js';
 import { getOrCreateGatewayIdentity } from '../gateway-identity-repository.js';
+import { getSqliteDatabase } from '../transaction.js';
 import { cancelDevicePairingSetup, decideDevicePairingRequest, operateDevicePairingRequest, submitDevicePairingRequest } from '../device-pairing-approval.js';
 
 describe('computer-approved device pairing', () => {
@@ -78,5 +81,92 @@ describe('computer-approved device pairing', () => {
     const at = pending.expiresAt + 1;
     expect(operateDevicePairingRequest('status', signed('status', {}, at), at).request.status).toBe('expired');
     expect(listDevices()).toHaveLength(0);
+  });
+
+  it('automatically approves only a native-host enrollment bound to the fixed extension and device key', () => {
+    const publicKeyJwk = keys.publicKey.export({ format: 'jwk' });
+    const localSetup = createDevicePairingSetup([
+      { id: 'local-browser', kind: 'local-browser', url: 'http://127.0.0.1:18790' },
+    ], now, 3, { ttlMs: 60_000, enrollment: {
+      issuer: 'browser-native-host',
+      extensionId: BROWSER_EXTENSION_ID,
+      publicKeyThumbprint: browserEnrollmentPublicKeyThumbprint(publicKeyJwk),
+      nonce: crypto.randomBytes(24).toString('base64url'),
+    } });
+    base = {
+      gatewayId: getOrCreateGatewayIdentity().id,
+      requestId: crypto.randomUUID(),
+      pairingToken: localSetup.token,
+    };
+    const approved = submitDevicePairingRequest(signed('request', { device: {
+      displayName: 'Chrome',
+      platform: 'chrome',
+      extensionId: BROWSER_EXTENSION_ID,
+      publicKeyJwk,
+    } }), now);
+    expect(approved.status).toBe('approved');
+
+    // A retried request for the same bound device is promoted on its next status poll.
+    getSqliteDatabase().prepare(
+      "UPDATE device_pairing_requests SET status = 'pending', revision = revision + 1 WHERE request_id = ?",
+    ).run(approved.requestId);
+    expect(operateDevicePairingRequest('status', signed('status'), now).request.status).toBe('approved');
+
+    const completed = operateDevicePairingRequest('complete', signed('complete', {
+      idempotencyKey: crypto.randomUUID(),
+      initialRefreshToken: refreshToken(),
+    }), now);
+    expect(completed.request.status).toBe('completed');
+    expect(listDevices()).toHaveLength(1);
+  });
+
+  it('keeps non-local and unrecognized Chrome extensions behind explicit approval', () => {
+    const remoteChrome = submitDevicePairingRequest(signed('request', { device: {
+      displayName: 'Remote Chrome',
+      platform: 'chrome',
+      extensionId: BROWSER_EXTENSION_ID,
+      publicKeyJwk: keys.publicKey.export({ format: 'jwk' }),
+    } }), now);
+    expect(remoteChrome.status).toBe('pending');
+
+    const localSetup = createDevicePairingSetup([
+      { id: 'local-browser', kind: 'local-browser', url: 'http://127.0.0.1:18790' },
+    ], now, 3);
+    base = {
+      gatewayId: getOrCreateGatewayIdentity().id,
+      requestId: crypto.randomUUID(),
+      pairingToken: localSetup.token,
+    };
+    const otherExtension = submitDevicePairingRequest(signed('request', { device: {
+      displayName: 'Other extension',
+      platform: 'chrome',
+      extensionId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      publicKeyJwk: keys.publicKey.export({ format: 'jwk' }),
+    } }), now);
+    expect(otherExtension.status).toBe('pending');
+  });
+
+  it('does not auto-approve a leaked local token for another browser device key', () => {
+    const enrolledKeys = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
+    const localSetup = createDevicePairingSetup([
+      { id: 'local-browser', kind: 'local-browser', url: 'http://127.0.0.1:18790' },
+    ], now, 3, { ttlMs: 60_000, enrollment: {
+      issuer: 'browser-native-host',
+      extensionId: BROWSER_EXTENSION_ID,
+      publicKeyThumbprint: browserEnrollmentPublicKeyThumbprint(enrolledKeys.publicKey.export({ format: 'jwk' })),
+      nonce: crypto.randomBytes(24).toString('base64url'),
+    } });
+    base = {
+      gatewayId: getOrCreateGatewayIdentity().id,
+      requestId: crypto.randomUUID(),
+      pairingToken: localSetup.token,
+    };
+    const pending = submitDevicePairingRequest(signed('request', { device: {
+      displayName: 'Different Chrome key',
+      platform: 'chrome',
+      extensionId: BROWSER_EXTENSION_ID,
+      publicKeyJwk: keys.publicKey.export({ format: 'jwk' }),
+    } }), now);
+    expect(pending.status).toBe('pending');
   });
 });

@@ -9,6 +9,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
@@ -65,6 +66,7 @@ export interface BrowserExtDoctor {
   needsChromeReload?: boolean;
   bundledFrom?: BrowserExtBundledFrom;
   runtimeExtensionVersion?: string;
+  nativeHost: BrowserNativeHostInstallResult;
 }
 
 export interface EnsureBrowserExtResult {
@@ -353,6 +355,7 @@ export async function browserExtDoctor(opts?: {
     needsChromeReload,
     bundledFrom: bundled?.bundledFrom,
     runtimeExtensionVersion: runtimeVer,
+    nativeHost: browserNativeHostDoctor(),
   };
 }
 
@@ -441,6 +444,7 @@ export function browserNativeManifestDirectories(
   if (platform === 'darwin') {
     return [
       join(home, 'Library/Application Support/Google/Chrome/NativeMessagingHosts'),
+      join(home, 'Library/Application Support/Google/ChromeForTesting/NativeMessagingHosts'),
       join(home, 'Library/Application Support/Chromium/NativeMessagingHosts'),
       join(home, 'Library/Application Support/Microsoft Edge/NativeMessagingHosts'),
       join(home, 'Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts'),
@@ -449,6 +453,7 @@ export function browserNativeManifestDirectories(
   if (platform === 'linux') {
     return [
       join(home, '.config/google-chrome/NativeMessagingHosts'),
+      join(home, '.config/google-chrome-for-testing/NativeMessagingHosts'),
       join(home, '.config/chromium/NativeMessagingHosts'),
       join(home, '.config/microsoft-edge/NativeMessagingHosts'),
       join(home, '.config/BraveSoftware/Brave-Browser/NativeMessagingHosts'),
@@ -457,11 +462,49 @@ export function browserNativeManifestDirectories(
   return [];
 }
 
+export function browserNativeHostDoctor(
+  platform: NodeJS.Platform = process.platform,
+  home = process.env.HOME || process.env.USERPROFILE || '',
+): BrowserNativeHostInstallResult {
+  const directories = browserNativeManifestDirectories(platform, home);
+  if (directories.length === 0) {
+    return {
+      installed: false,
+      manifestPaths: [],
+      reason: 'Automatic local Gateway discovery is supported on macOS and Linux',
+    };
+  }
+  const manifestPaths = directories
+    .map((directory) => join(directory, `${BROWSER_NATIVE_HOST_NAME}.json`))
+    .filter((manifestPath) => {
+      try {
+        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+          name?: unknown;
+          path?: unknown;
+          allowed_origins?: unknown;
+        };
+        return manifest.name === BROWSER_NATIVE_HOST_NAME
+          && typeof manifest.path === 'string'
+          && existsSync(manifest.path)
+          && Array.isArray(manifest.allowed_origins)
+          && manifest.allowed_origins.includes(`chrome-extension://${BROWSER_EXTENSION_ID}/`);
+      } catch {
+        return false;
+      }
+    });
+  return {
+    installed: manifestPaths.length > 0,
+    manifestPaths,
+    ...(manifestPaths.length === 0 ? { reason: 'Browser native enrollment host is not installed' } : {}),
+  };
+}
+
 /** Install the local-only bootstrap host used to discover and pair with a Gateway. */
 export async function installBrowserNativeMessagingHost(opts?: {
   cacheDir?: string;
   cliPath?: string;
   nodePath?: string;
+  tsxCliPath?: string;
   platform?: NodeJS.Platform;
   home?: string;
   configPath?: string;
@@ -470,11 +513,23 @@ export async function installBrowserNativeMessagingHost(opts?: {
   const platform = opts?.platform ?? process.platform;
   const directories = browserNativeManifestDirectories(platform, opts?.home);
   if (directories.length === 0) {
-    return { installed: false, manifestPaths: [], reason: 'Native bootstrap installation is supported on macOS and Linux' };
+    return { installed: false, manifestPaths: [], reason: 'Automatic local Gateway discovery is supported on macOS and Linux' };
   }
 
   const cliPath = opts?.cliPath ?? process.argv[1];
   if (!cliPath) throw new Error('Unable to resolve the xopc CLI entry point');
+  const executablePath = opts?.nodePath ?? process.execPath;
+  let executableArgs = [cliPath, 'browser', 'extension', 'native-host'];
+  if (cliPath.endsWith('.ts')) {
+    const tsxPath = opts?.tsxCliPath ?? join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs');
+    if (!existsSync(tsxPath)) {
+      throw new Error('Unable to install the browser native host in development: the tsx CLI entry was not found');
+    }
+    // Chrome starts native hosts with a minimal PATH. Invoke the real tsx CLI
+    // module through the absolute Node executable instead of relying on the
+    // package-manager shim or its `#!/usr/bin/env node` fallback.
+    executableArgs = [realpathSync(tsxPath), ...executableArgs];
+  }
   const cacheDir = opts?.cacheDir?.trim() ? assertCacheDir(opts.cacheDir) : resolveBinDir();
   const hostPath = join(cacheDir || resolveBinDir(), 'browser-native-host');
   mkdirSync(dirname(hostPath), { recursive: true });
@@ -482,7 +537,7 @@ export async function installBrowserNativeMessagingHost(opts?: {
   const configPath = opts?.configPath ?? resolveConfigPath();
   await writeTextAtomic(
     hostPath,
-    `#!/bin/sh\nexec env XOPC_STATE_DIR=${shellQuote(stateDir)} XOPC_CONFIG_PATH=${shellQuote(configPath)} XOPC_LOG_CONSOLE=false ${shellQuote(opts?.nodePath ?? process.execPath)} ${shellQuote(cliPath)} browser extension native-host\n`,
+    `#!/bin/sh\nexec env ELECTRON_RUN_AS_NODE=1 XOPC_STATE_DIR=${shellQuote(stateDir)} XOPC_CONFIG_PATH=${shellQuote(configPath)} XOPC_LOG_CONSOLE=false ${shellQuote(executablePath)} ${executableArgs.map(shellQuote).join(' ')}\n`,
   );
   chmodSync(hostPath, 0o755);
 
@@ -503,10 +558,14 @@ export async function installBrowserNativeMessagingHost(opts?: {
   return { installed: true, manifestPaths };
 }
 
-/** Gateway startup hook: ensure artifacts only while the extension driver is active. */
+/** Gateway startup hook: install/repair extension artifacts and its local enrollment host. */
 export async function ensureBrowserExtensionOnStartup(config: Config | undefined): Promise<void> {
   if (config?.browser.enabled === false || config?.browser.driver.kind !== 'extension') return;
   await ensureBrowserExtensionArtifacts();
+  const nativeHost = await installBrowserNativeMessagingHost();
+  if (!nativeHost.installed) {
+    log.warn({ reason: nativeHost.reason }, 'Browser native enrollment host was not installed');
+  }
 }
 
 export async function readInstalledExtensionDir(cacheDir?: string): Promise<string | null> {

@@ -1,10 +1,11 @@
 import type { Browser, BrowserContext } from 'playwright-core';
 
 import type { Config } from '../../config/schema.js';
+import type { EndpointToolRuntime } from '../../endpoint-tools/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { BrowserbaseProvider } from '../providers/browserbase.js';
 import { BrowserUseProvider } from '../providers/browser-use.js';
-import { acquireExtensionBrowserServer } from '../providers/extension-ws-acquire.js';
+import { RealtimeExtensionBrowserProvider } from '../providers/realtime-extension.js';
 import { loadPlaywrightCoreModule } from '../providers/playwright-doctor.js';
 import { ExtensionDriver } from './extension-driver.js';
 import type { BrowserDriver } from './browser-driver.js';
@@ -12,16 +13,17 @@ import { PlaywrightDriver, type PlaywrightConnection } from './playwright-driver
 
 const log = createLogger('BrowserDriverFactory');
 
-export async function createBrowserDriver(config: Config['browser']): Promise<BrowserDriver> {
+export async function createBrowserDriver(
+  config: Config['browser'],
+  endpointTools: EndpointToolRuntime,
+): Promise<BrowserDriver> {
   const limits = config.limits;
   if (config.driver.kind === 'extension') {
-    const { provider, release } = await acquireExtensionBrowserServer({
-      host: '127.0.0.1',
-      port: 19820,
+    const provider = new RealtimeExtensionBrowserProvider(endpointTools, {
       connectionTimeout: limits.actionTimeoutMs,
       commandTimeout: limits.actionTimeoutMs,
     });
-    return new ExtensionDriver(provider, limits.actionTimeoutMs, config.observation.visualFallback, release);
+    return new ExtensionDriver(provider, limits.actionTimeoutMs, config.observation.visualFallback, () => provider.shutdown());
   }
   const driver = config.driver;
 

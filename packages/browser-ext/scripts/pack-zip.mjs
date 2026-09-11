@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 
 import AdmZip from 'adm-zip';
 
+import './validate-build.mjs';
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = resolve(__dirname, '..');
 

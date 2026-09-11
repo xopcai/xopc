@@ -53,8 +53,6 @@ export interface GatewayConfigCoordinatorOptions {
   getChannelManager: () => ChannelManager;
   getHeartbeatService: () => HeartbeatService | null;
   getExtensionLoader: () => ExtensionLoader | null;
-  /** Re-evaluate browser-extension server attachment after agent defaults change. */
-  reconcileBrowserExtensionServer: () => Promise<void>;
   /** Sync deterministic user-model maintenance automations after config changes. */
   reconcileMemoryMaintenanceAutomations: () => Promise<void>;
   /** Latest channel status snapshot for the `channels.status` event. */
@@ -267,7 +265,6 @@ export class GatewayConfigCoordinator {
     log.debug('Reloading agent defaults...');
     this.opts.setConfig(newConfig);
     this.opts.getAgentService().applyAgentDefaultsFromConfig(newConfig);
-    void this.opts.reconcileBrowserExtensionServer();
     void this.opts.reconcileMemoryMaintenanceAutomations().catch((err) => {
       const em = err instanceof Error ? err.message : String(err);
       log.warn({ err, errorMessage: em }, `Memory maintenance automation refresh failed: ${em}`);
@@ -418,7 +415,6 @@ export class GatewayConfigCoordinator {
       await writeConfigToDisk(reloaded, this.opts.configPath);
     }
     this.opts.getAgentService().applyAgentDefaultsFromConfig(reloaded);
-    await this.opts.reconcileBrowserExtensionServer();
     await this.opts.reconcileMemoryMaintenanceAutomations().catch((err) => {
       const em = err instanceof Error ? err.message : String(err);
       log.warn({ err, errorMessage: em }, `Memory maintenance automation refresh after save failed: ${em}`);

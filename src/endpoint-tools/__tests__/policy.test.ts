@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { BROWSER_CONTROL_ENDPOINT_DESCRIPTOR } from '@xopcai/browser-control-contract';
 
 import {
   ENDPOINT_CONTACT_OUTPUT_SCHEMA,
@@ -10,6 +11,24 @@ import { EndpointToolPolicy } from '../policy.js';
 const policy = new EndpointToolPolicy();
 
 describe('EndpointToolPolicy', () => {
+  it('accepts only the trusted internal browser-control transport contract', () => {
+    expect(() => policy.validateDescriptor(
+      'browser',
+      BROWSER_CONTROL_ENDPOINT_DESCRIPTOR as never,
+    )).not.toThrow();
+    expect(() => policy.validateDescriptor('browser', {
+      ...BROWSER_CONTROL_ENDPOINT_DESCRIPTOR,
+      requiredPermissions: [],
+    } as never)).toThrow('trusted server contract');
+  });
+
+  it('rejects browser control descriptors with a modified input contract', () => {
+    expect(() => policy.validateDescriptor('browser', {
+      ...BROWSER_CONTROL_ENDPOINT_DESCRIPTOR,
+      inputSchema: { type: 'object' },
+    } as never)).toThrow('trusted server contract');
+  });
+
   it('rejects tools outside their endpoint namespace', () => {
     expect(() => policy.validateDescriptor('mobile', {
       name: 'web.page.read', title: 'Read', description: 'Read.',

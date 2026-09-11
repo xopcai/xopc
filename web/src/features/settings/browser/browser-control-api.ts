@@ -11,6 +11,7 @@ export type BrowserExtensionArtifacts = {
   installedVersion?: string;
   needsRefresh: boolean;
   needsChromeReload?: boolean;
+  nativeHost?: { installed: boolean; manifestPaths: string[]; reason?: string };
 };
 
 export type BrowserExtensionStatus = {
@@ -24,6 +25,7 @@ export type BrowserExtensionStatus = {
   artifacts?: BrowserExtensionArtifacts;
   bridgeHeld?: boolean;
   refCount?: number;
+  transport?: 'gateway-realtime';
   error?: string;
 };
 
@@ -56,6 +58,7 @@ export function installBrowserExtension(force = false): Promise<ApiResult<{
   extensionDir: string;
   xopcVersion: string;
   copied: boolean;
+  nativeHost: { installed: boolean; manifestPaths: string[]; reason?: string };
   doctor: BrowserExtensionArtifacts;
 }>> {
   return fetchJson(apiUrl('/api/browser/extension/install'), {

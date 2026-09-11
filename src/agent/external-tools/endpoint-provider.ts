@@ -1,5 +1,6 @@
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { EndpointToolContent } from '@xopcai/endpoint-tools-protocol';
+import { BROWSER_CONTROL_ENDPOINT_TOOL_NAME } from '@xopcai/browser-control-contract';
 
 import type { EndpointToolRuntime } from '../../endpoint-tools/index.js';
 import { externalToolRef, parseExternalToolRef } from './refs.js';
@@ -30,7 +31,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
   async search(_query: string): Promise<ExternalToolSearchHit[]> {
     const endpoint = this.currentEndpoint();
     if (!endpoint) return [];
-    return endpoint.tools.map(({ descriptor }) => ({
+    return endpoint.tools.filter(({ descriptor }) => descriptor.name !== BROWSER_CONTROL_ENDPOINT_TOOL_NAME).map(({ descriptor }) => ({
       toolRef: externalToolRef(this.source, endpoint.endpointId, descriptor.name),
       source: this.source,
       namespace: endpoint.endpointId,
@@ -107,6 +108,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
     const endpoint = this.currentEndpoint();
     if (!endpoint || endpoint.endpointId !== parsed.namespace) return undefined;
     const tool = this.deps.runtime.registry.getTool(endpoint.endpointId, parsed.toolName);
+    if (tool?.descriptor.name === BROWSER_CONTROL_ENDPOINT_TOOL_NAME) return undefined;
     return tool ? { endpointId: endpoint.endpointId, displayName: endpoint.displayName, tool } : undefined;
   }
 }
