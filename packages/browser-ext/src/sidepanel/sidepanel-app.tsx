@@ -9,6 +9,7 @@ import {
   type BrowserGatewayProfile,
 } from './auth';
 import { ChatPanel } from './chat-panel';
+import { SparkleIcon } from './icons';
 import { watchSidePanelTheme } from './theme';
 
 async function reconnectBrowserBridge(): Promise<void> {
@@ -97,11 +98,11 @@ export function SidePanelApp() {
   return (
     <main className="shell">
       <header className="header">
-        <div className="brand">xopc</div>
-        <div className="status">
-          <span className={`status-dot ${state === 'online' ? 'online' : error ? 'error' : ''}`} />
-          {state === 'online' ? 'Connected' : state === 'pairing' ? 'Pairing' : 'Not connected'}
-        </div>
+        <div className="brand"><span className="brand-mark"><SparkleIcon /></span><span>xopc</span></div>
+        {state !== 'online' ? <div className="status">
+          <span className={`status-dot ${error ? 'error' : ''}`} />
+          {state === 'pairing' ? 'Pairing' : state === 'loading' ? 'Starting' : 'Setup required'}
+        </div> : null}
       </header>
       {state !== 'online' ? <section className="center">
         {state === 'loading' ? <div className="muted">Loading…</div> : null}
