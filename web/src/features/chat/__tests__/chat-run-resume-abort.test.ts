@@ -192,6 +192,28 @@ describe('MessageSender terminal state', () => {
     publishEndpointTurnClaim('web-test', 'test-turn-token');
   });
 
+  it('attributes replayed user messages to their run', () => {
+    const sender = new MessageSender();
+    const onUserMessage = vi.fn();
+    const dispatch = sender as unknown as {
+      _dispatchStreamEvent: (
+        event: string,
+        parsed: Record<string, unknown>,
+        callbacks: Partial<MessagingCallbacks>,
+      ) => void;
+    };
+
+    dispatch._dispatchStreamEvent('user_message', {
+      runId: 'run-user-message',
+      payload: { message: { role: 'user', content: 'follow up', timestamp: 42 } },
+    }, { onUserMessage });
+
+    expect(onUserMessage).toHaveBeenCalledWith(expect.objectContaining({
+      role: 'user',
+      turnId: 'run-user-message',
+    }));
+  });
+
   afterEach(() => {
     clearEndpointTurnClaim();
   });

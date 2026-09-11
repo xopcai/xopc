@@ -117,7 +117,9 @@ export function mergeConsecutiveAssistantMessages(messages: Message[]): Message[
       continue;
     }
     const prev = out[out.length - 1];
-    if (prev?.role === 'assistant') {
+    const sameTurn = prev?.role === 'assistant'
+      && (!prev.turnId || !m.turnId || prev.turnId === m.turnId);
+    if (prev?.role === 'assistant' && sameTurn) {
       prev.content = mergeAssistantContentFragments(prev.content, m.content);
       if (m.timestamp != null) prev.timestamp = m.timestamp;
       if (m.completedAt != null) prev.completedAt = m.completedAt;
