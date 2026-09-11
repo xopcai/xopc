@@ -75,6 +75,15 @@ describe('browser-ext-install', () => {
     expect(validateBrowserExtLayout(bundledDir)).toBe(false);
   });
 
+  it('declares debugger as a required Chrome permission', () => {
+    const manifest = JSON.parse(
+      readFileSync(join(process.cwd(), 'packages/browser-ext/manifest.json'), 'utf8'),
+    ) as { permissions?: string[]; optional_permissions?: string[] };
+
+    expect(manifest.permissions).toContain('debugger');
+    expect(manifest.optional_permissions ?? []).not.toContain('debugger');
+  });
+
   it('computeNeedsRefresh when meta missing or force', () => {
     expect(
       computeNeedsRefresh({
