@@ -85,7 +85,7 @@ export class ChatStreamMapper {
           ...(typeof event.message === 'string' && event.message ? { message: event.message } : {}),
         })];
       case 'user_message':
-        return [this.make('user_message', { message: userMessageFromEvent(event) })];
+        return [this.make('user_message', { message: userMessageFromEvent(event, this.opts.runId) })];
       case 'user_transcript':
         return [this.make('user_transcript', { text: String(event.text ?? ''), media: event.media })];
       case 'progress': {
@@ -474,9 +474,10 @@ export class ChatStreamMapper {
   }
 }
 
-function userMessageFromEvent(event: { [key: string]: unknown }): unknown {
+function userMessageFromEvent(event: { [key: string]: unknown }, turnId: string): unknown {
   return {
     role: 'user',
+    turnId,
     content: event.content ?? [],
     attachments: event.media,
     metadata: userMessageDisplayMetadata(event.metadata),

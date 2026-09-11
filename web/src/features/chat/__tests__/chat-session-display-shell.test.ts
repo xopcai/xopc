@@ -3,7 +3,10 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import type { Message } from '@/features/chat/messages/messages.types';
 import { defaultSessionMeta } from '@/features/chat/session/chat-session-defaults';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
-import { selectDisplayMessages } from '@/features/chat/session/chat-session-view';
+import {
+  extractResumeTailForRun,
+  selectDisplayMessages,
+} from '@/features/chat/session/chat-session-view';
 
 const sessionKey = 'agent:main:webchat:default:direct:abc';
 
@@ -27,6 +30,37 @@ describe('store-backed chat display', () => {
         streamingMsg: null,
       }),
     ).toEqual(messages);
+  });
+
+  it('does not hydrate the previous turn assistant when a queued follow-up starts', () => {
+    const previousAssistant: Message = {
+      role: 'assistant',
+      turnId: 'run-1',
+      content: [{ type: 'text', text: 'first answer' }],
+      timestamp: 2,
+    };
+
+    expect(extractResumeTailForRun([
+      { role: 'user', turnId: 'run-1', content: [{ type: 'text', text: 'first' }], timestamp: 1 },
+      previousAssistant,
+    ], 'run-2')).toBeNull();
+  });
+
+  it('hydrates an assistant tail when it belongs to the resumed run', () => {
+    const currentAssistant: Message = {
+      role: 'assistant',
+      turnId: 'run-2',
+      content: [{ type: 'text', text: 'partial answer' }],
+      timestamp: 3,
+    };
+    const prefix: Message[] = [
+      { role: 'user', turnId: 'run-2', content: [{ type: 'text', text: 'second' }], timestamp: 2 },
+    ];
+
+    expect(extractResumeTailForRun([...prefix, currentAssistant], 'run-2')).toEqual({
+      messagesWithoutTail: prefix,
+      tail: currentAssistant,
+    });
   });
 });
 

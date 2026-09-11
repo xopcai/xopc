@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  claimLatestUnassignedUserTurn,
   shouldReplaceOptimisticUserRow,
   userMessageFromStreamPayload,
   userMessagesEquivalent,
@@ -186,5 +187,28 @@ describe('userMessagesEquivalent', () => {
     const a: Message = { role: 'user', content: [{ type: 'text', text: 'x' }], timestamp: 1 };
     const b: Message = { role: 'user', content: [{ type: 'text', text: 'y' }], timestamp: 1 };
     expect(userMessagesEquivalent(a, b)).toBe(true);
+  });
+});
+
+describe('claimLatestUnassignedUserTurn', () => {
+  it('claims an optimistic user row for the run', () => {
+    const optimistic: Message = {
+      role: 'user', content: [{ type: 'text', text: 'next' }], timestamp: 2,
+    };
+
+    expect(claimLatestUnassignedUserTurn([optimistic], 'run-2')[0]?.turnId).toBe('run-2');
+  });
+
+  it('does not steal the previous run user while a follow-up row is still in flight', () => {
+    const previous: Message = {
+      role: 'user', content: [{ type: 'text', text: 'first' }], timestamp: 1,
+    };
+    const messages: Message[] = [
+      previous,
+      { role: 'assistant', content: [{ type: 'text', text: 'first answer' }], timestamp: 2 },
+    ];
+
+    expect(claimLatestUnassignedUserTurn(messages, 'run-2')).toBe(messages);
+    expect(previous.turnId).toBeUndefined();
   });
 });

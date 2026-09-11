@@ -31,6 +31,7 @@ import {
   provisionalTitleFromUserText,
 } from '@/lib/provisional-session-title';
 import { resolveResumeRunId } from '@/features/chat/session/resolve-resume-run-id';
+import { extractResumeTailForRun } from '@/features/chat/session/chat-session-view';
 import type { PendingFollowUp } from '@/features/chat/follow-up/pending-follow-up.types';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import {
@@ -184,12 +185,13 @@ export function useChatSessionStreaming(deps: {
         if (!shouldApplyStreamUpdate(chatId)) return;
         hydratedResumeTail = true;
         const prev = getSessionMessages(chatId);
-        if (prev.length === 0) return;
-        const last = prev[prev.length - 1];
-        if (last?.role !== 'assistant') return;
-        const extractedTail = cloneMessageForRender(last);
-        const committedWithoutTail = prev.slice(0, -1);
-        store().applyHydratedTail(chatId, committedWithoutTail, extractedTail);
+        const extracted = extractResumeTailForRun(prev, runId);
+        if (!extracted) return;
+        store().applyHydratedTail(
+          chatId,
+          extracted.messagesWithoutTail,
+          cloneMessageForRender(extracted.tail),
+        );
       };
 
       const clearFailedResumeState = () => {

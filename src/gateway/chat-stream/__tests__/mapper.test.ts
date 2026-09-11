@@ -76,6 +76,7 @@ describe('ChatStreamMapper', () => {
       payload: {
         message: {
           role: 'user',
+          turnId: 'run-1',
           timestamp: 42,
           attachments: [
             { uri: 'media://inbound/x.png', mimeType: 'image/png', name: 'x.png' },
