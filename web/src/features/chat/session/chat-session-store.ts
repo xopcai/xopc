@@ -692,7 +692,11 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
             },
           };
         }
-        const merged = mergeMissingUserMessagesFromServer(current.messages, serverMessages);
+        const merged = mergeMissingUserMessagesFromServer(
+          current.messages,
+          serverMessages,
+          current.streamingMsg?.turnId,
+        );
         if (
           merged === current.messages &&
           nextHasMore === current.hasMore &&

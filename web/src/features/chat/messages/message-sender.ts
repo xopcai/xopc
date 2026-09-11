@@ -570,7 +570,13 @@ export class MessageSender {
         if (typeof parsed.runId === 'string') cb?.onStreamStart(parsed.runId);
         break;
       case 'user_message': {
-        const userMsg = userMessageFromStreamPayload(payload.message as Record<string, unknown>);
+        const rawMessage = payload.message && typeof payload.message === 'object'
+          ? payload.message as Record<string, unknown>
+          : {};
+        const userMsg = userMessageFromStreamPayload({
+          ...rawMessage,
+          turnId: typeof rawMessage.turnId === 'string' ? rawMessage.turnId : parsed.runId,
+        });
         if (userMsg) cb?.onUserMessage?.(userMsg);
         break;
       }
@@ -579,6 +585,7 @@ export class MessageSender {
           text: payload.text,
           media: payload.media,
           timestamp: parsed.timestamp,
+          turnId: parsed.runId,
         });
         if (userMsg) cb?.onUserMessage?.(userMsg);
         break;
