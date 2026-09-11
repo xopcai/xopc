@@ -13,9 +13,9 @@ export async function resetNoteListPagination(queryClient: QueryClient): Promise
   invalidateAttentionFeed(queryClient);
 }
 
-/** Reset an infinite list to the first page and refetch (user-initiated refresh). */
+/** Reset session-list variants so active views refetch and inactive pages cannot go stale. */
 export async function refreshSessionsList(queryClient: QueryClient): Promise<void> {
-  await queryClient.resetQueries({ queryKey: queryKeys.sessionsAll, exact: true });
+  await queryClient.resetQueries({ queryKey: queryKeys.sessionsAll });
   invalidateAttentionFeed(queryClient);
 }
 

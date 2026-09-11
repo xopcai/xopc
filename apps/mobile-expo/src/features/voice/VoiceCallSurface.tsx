@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { randomUUID } from 'expo-crypto';
 import { submitClarificationResponse } from '../../api/agent-client';
+import { CHAT_HEADER_HEIGHT_AFTER_SAFE_AREA } from '../chat/ChatHeader';
 import { ClarifyPrompt } from '../chat/ClarifyPrompt';
 import { MarkdownView } from '../chat/MarkdownView';
 import { useMessages } from '../../i18n/messages';
@@ -110,7 +111,15 @@ export function VoiceCallSurface() {
   return <VoiceCallOverlay expanded={state.expanded} onClose={() => voiceCall.expand(false)}>
     {!state.expanded ?
       <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-        <View style={[styles.miniBar, { top: insets.top + spacing.sm, backgroundColor: colors.surface.panel, borderColor: colors.border.default }, elevation.overlay]}>
+        <View style={[
+          styles.miniBar,
+          {
+            top: insets.top + CHAT_HEADER_HEIGHT_AFTER_SAFE_AREA + spacing.sm,
+            backgroundColor: colors.surface.panel,
+            borderColor: colors.border.default,
+          },
+          elevation.overlay,
+        ]}>
           <Pressable style={styles.miniBody} accessibilityRole="button" accessibilityLabel={m.expand} onPress={() => voiceCall.expand()}>
             <View style={[styles.miniIcon, { backgroundColor: colors.accent.selectionBg }]}>
               <Icon source="waveform" size={20} color={colors.accent.primary} />
