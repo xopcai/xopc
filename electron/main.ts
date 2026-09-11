@@ -436,8 +436,8 @@ function shouldEmbedGateway(): boolean {
 
 function buildStartupFailureMessage(detail: string): string {
   return (
-    `Failed to start the local gateway.\n\n${detail}\n\n` +
-    'Electron uses the shared xopc gateway configured in ~/.xopc/xopc.json. If the configured port is occupied by another process, stop it or change gateway.port, then restart.\n\n' +
+    `Failed to start xopc.\n\n${detail}\n\n` +
+    'The desktop app could not start its local service. If the configured port is occupied by another process, stop it or choose another local port, then restart.\n\n' +
     '(Developers: pnpm run build && pnpm run electron:vite:build && pnpm run electron:server:build && pnpm run electron:extensions:build)'
   );
 }
@@ -562,8 +562,8 @@ async function resolveWindowLoad(reportProgress: StartupProgressReporter = () =>
             mainWindow.webContents.send('gateway:exited', { code, signal });
           } else {
             void dialog.showErrorBox(
-              'xopc - Gateway stopped',
-              `The gateway process stopped (exit code: ${code ?? 'unknown'}, signal: ${signal ?? 'none'}).\n\n` +
+              'xopc stopped',
+              `The local service stopped (exit code: ${code ?? 'unknown'}, signal: ${signal ?? 'none'}).\n\n` +
                 'Restart the application.',
             );
           }
