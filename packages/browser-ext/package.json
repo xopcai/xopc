@@ -13,10 +13,18 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@xopcai/browser-control-contract": "workspace:*"
+    "@xopcai/browser-control-contract": "workspace:*",
+    "@xopcai/endpoint-tools-protocol": "workspace:*",
+    "@xopcai/gateway-contract": "workspace:*",
+    "@xopcai/realtime-client": "workspace:*",
+    "@xopcai/realtime-protocol": "workspace:*",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.287",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "adm-zip": "^0.6.0",
     "typescript": "^5.9.3",
     "vite": "^6.4.3"

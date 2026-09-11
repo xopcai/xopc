@@ -20,10 +20,13 @@ export interface SourceContextRefSummary {
   title: string;
   tokenEstimate?: number;
   truncated?: boolean;
+  url?: string;
+  capturedAt?: number;
+  documentId?: string;
 }
 
 export interface AgentSourceContext {
-  kind: SessionSourceBinding['kind'];
+  kind: SessionSourceBinding['kind'] | 'browser_page';
   sourceId: string;
   version: string;
   title: string;
@@ -31,6 +34,9 @@ export interface AgentSourceContext {
   images?: ImageContent[];
   tokenEstimate?: number;
   truncated?: boolean;
+  url?: string;
+  capturedAt?: number;
+  documentId?: string;
 }
 
 export function summarizeSourceContext(context: AgentSourceContext): SourceContextRefSummary {
@@ -41,6 +47,9 @@ export function summarizeSourceContext(context: AgentSourceContext): SourceConte
     title: context.title,
     tokenEstimate: context.tokenEstimate,
     truncated: context.truncated,
+    url: context.url,
+    capturedAt: context.capturedAt,
+    documentId: context.documentId,
   };
 }
 

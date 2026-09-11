@@ -5,6 +5,7 @@
 
 import {
   existsSync,
+  chmodSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -21,24 +22,23 @@ import { fileURLToPath } from 'node:url';
 
 import type { Config } from '../../config/schema.js';
 import { PACKAGE_VERSION } from '../../package-version.js';
-import { resolveBinDir } from '../../config/paths.js';
+import { resolveBinDir, resolveConfigPath, resolveStateDir } from '../../config/paths.js';
 import { resolvePackageRoot } from '../../infra/update-check.js';
 import { writeTextAtomic } from '../../infra/write-file-atomic.js';
 import { createLogger } from '../../utils/logger.js';
 import { assertCacheDir } from '../cache-dir-policy.js';
+import { BROWSER_EXTENSION_ID, BROWSER_NATIVE_HOST_NAME } from '../native-messaging-host.js';
 
 const log = createLogger('BrowserExtInstall');
 
 const META_FILENAME = '.meta.json';
 const STAGING_MAX_AGE_MS = 60 * 60 * 1000;
-const INSTALLED_ARTIFACT_NAMES = ['manifest.json', 'popup.html', 'dist', 'icons'] as const;
+const INSTALLED_ARTIFACT_NAMES = ['manifest.json', 'dist', 'icons'] as const;
 
 export const BROWSER_EXT_REQUIRED_FILES = [
   'manifest.json',
-  'popup.html',
   'dist/background.js',
-  'dist/content.js',
-  'dist/popup.js',
+  'dist/sidepanel.html',
 ] as const;
 
 export type BrowserExtBundledFrom = 'npm-dist' | 'git-dev' | 'electron-asar' | 'env-override';
@@ -73,6 +73,12 @@ export interface EnsureBrowserExtResult {
   copied: boolean;
 }
 
+export interface BrowserNativeHostInstallResult {
+  installed: boolean;
+  manifestPaths: string[];
+  reason?: string;
+}
+
 function moduleDir(): string {
   return dirname(fileURLToPath(import.meta.url));
 }
@@ -84,7 +90,17 @@ export function validateBrowserExtLayout(dir: string): boolean {
 
 export function browserExtContentHash(dir: string): string {
   const hash = createHash('sha256');
-  for (const relativePath of BROWSER_EXT_REQUIRED_FILES) {
+  const collectFiles = (relativeDir: string): string[] => readdirSync(join(dir, relativeDir), { withFileTypes: true })
+    .flatMap((entry) => {
+      const relativePath = join(relativeDir, entry.name);
+      return entry.isDirectory() ? collectFiles(relativePath) : [relativePath];
+    });
+  const relativePaths = [
+    'manifest.json',
+    ...collectFiles('dist'),
+    ...collectFiles('icons'),
+  ].sort();
+  for (const relativePath of relativePaths) {
     hash.update(relativePath);
     hash.update(readFileSync(join(dir, relativePath)));
   }
@@ -264,17 +280,22 @@ function copyBundledFile(src: string, dest: string): void {
   writeFileSync(dest, readFileSync(src));
 }
 
-const BROWSER_EXT_DIST_FILES = ['background.js', 'content.js', 'popup.js'] as const;
 const BROWSER_EXT_ICON_FILES = ['icon-16.png', 'icon-32.png', 'icon-48.png', 'icon-128.png'] as const;
+
+function copyBundledDirectory(src: string, dest: string): void {
+  mkdirSync(dest, { recursive: true });
+  for (const entry of readdirSync(src, { withFileTypes: true })) {
+    const sourcePath = join(src, entry.name);
+    const destinationPath = join(dest, entry.name);
+    if (entry.isDirectory()) copyBundledDirectory(sourcePath, destinationPath);
+    else copyBundledFile(sourcePath, destinationPath);
+  }
+}
 
 function copyBundledTree(src: string, dest: string): void {
   mkdirSync(dest, { recursive: true });
-  for (const name of ['manifest.json', 'popup.html']) {
-    copyBundledFile(join(src, name), join(dest, name));
-  }
-  for (const file of BROWSER_EXT_DIST_FILES) {
-    copyBundledFile(join(src, 'dist', file), join(dest, 'dist', file));
-  }
+  copyBundledFile(join(src, 'manifest.json'), join(dest, 'manifest.json'));
+  copyBundledDirectory(join(src, 'dist'), join(dest, 'dist'));
   for (const icon of BROWSER_EXT_ICON_FILES) {
     const iconSrc = join(src, 'icons', icon);
     if (existsSync(iconSrc)) {
@@ -406,6 +427,80 @@ export async function ensureBrowserExtensionArtifacts(opts?: {
     xopcVersion: PACKAGE_VERSION,
     copied: true,
   };
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+export function browserNativeManifestDirectories(
+  platform: NodeJS.Platform = process.platform,
+  home = process.env.HOME || process.env.USERPROFILE || '',
+): string[] {
+  if (!home) return [];
+  if (platform === 'darwin') {
+    return [
+      join(home, 'Library/Application Support/Google/Chrome/NativeMessagingHosts'),
+      join(home, 'Library/Application Support/Chromium/NativeMessagingHosts'),
+      join(home, 'Library/Application Support/Microsoft Edge/NativeMessagingHosts'),
+      join(home, 'Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts'),
+    ];
+  }
+  if (platform === 'linux') {
+    return [
+      join(home, '.config/google-chrome/NativeMessagingHosts'),
+      join(home, '.config/chromium/NativeMessagingHosts'),
+      join(home, '.config/microsoft-edge/NativeMessagingHosts'),
+      join(home, '.config/BraveSoftware/Brave-Browser/NativeMessagingHosts'),
+    ];
+  }
+  return [];
+}
+
+/** Install the local-only bootstrap host used to discover and pair with a Gateway. */
+export async function installBrowserNativeMessagingHost(opts?: {
+  cacheDir?: string;
+  cliPath?: string;
+  nodePath?: string;
+  platform?: NodeJS.Platform;
+  home?: string;
+  configPath?: string;
+  stateDir?: string;
+}): Promise<BrowserNativeHostInstallResult> {
+  const platform = opts?.platform ?? process.platform;
+  const directories = browserNativeManifestDirectories(platform, opts?.home);
+  if (directories.length === 0) {
+    return { installed: false, manifestPaths: [], reason: 'Native bootstrap installation is supported on macOS and Linux' };
+  }
+
+  const cliPath = opts?.cliPath ?? process.argv[1];
+  if (!cliPath) throw new Error('Unable to resolve the xopc CLI entry point');
+  const cacheDir = opts?.cacheDir?.trim() ? assertCacheDir(opts.cacheDir) : resolveBinDir();
+  const hostPath = join(cacheDir || resolveBinDir(), 'browser-native-host');
+  mkdirSync(dirname(hostPath), { recursive: true });
+  const stateDir = opts?.stateDir ?? resolveStateDir();
+  const configPath = opts?.configPath ?? resolveConfigPath();
+  await writeTextAtomic(
+    hostPath,
+    `#!/bin/sh\nexec env XOPC_STATE_DIR=${shellQuote(stateDir)} XOPC_CONFIG_PATH=${shellQuote(configPath)} XOPC_LOG_CONSOLE=false ${shellQuote(opts?.nodePath ?? process.execPath)} ${shellQuote(cliPath)} browser extension native-host\n`,
+  );
+  chmodSync(hostPath, 0o755);
+
+  const manifest = JSON.stringify({
+    name: BROWSER_NATIVE_HOST_NAME,
+    description: 'xopc local browser pairing bootstrap',
+    path: hostPath,
+    type: 'stdio',
+    allowed_origins: [`chrome-extension://${BROWSER_EXTENSION_ID}/`],
+  }, null, 2);
+  const manifestPaths: string[] = [];
+  for (const directory of directories) {
+    mkdirSync(directory, { recursive: true });
+    const manifestPath = join(directory, `${BROWSER_NATIVE_HOST_NAME}.json`);
+    await writeTextAtomic(manifestPath, manifest);
+    manifestPaths.push(manifestPath);
+  }
+  return { installed: true, manifestPaths };
 }
 
 /** Gateway startup hook: ensure artifacts only while the extension driver is active. */

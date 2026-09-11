@@ -15,6 +15,7 @@ import {
   startEndpointToolInvocationAudit,
   setEndpointSessionBinding,
   touchEndpointPrincipal,
+  deleteBrowserTabBindingsByEndpoint,
 } from '../storage/sqlite/index.js';
 import { createLogger } from '../utils/logger.js';
 import { EndpointAuthenticator, type EndpointAuthenticatorDeps } from './auth.js';
@@ -109,6 +110,7 @@ export class EndpointToolRuntime {
   remove(endpointId: string, connectionId: string): void {
     if (!this.registry.remove(endpointId, connectionId)) return;
     this.invocations.failEndpoint(endpointId);
+    deleteBrowserTabBindingsByEndpoint(endpointId);
     log.info({ endpointId, connectionId }, 'Endpoint disconnected');
   }
 

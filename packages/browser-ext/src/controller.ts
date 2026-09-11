@@ -17,6 +17,8 @@ import {
   resetWindowIdleTimer,
   waitForTabLoad,
 } from './session-manager';
+import { TAB_BINDING_PREFIX } from './sidepanel/page-context';
+import type { BrowserTabBinding } from '@xopcai/gateway-contract';
 
 interface ObservationState {
   documentMarker: string;
@@ -27,11 +29,62 @@ interface ObservationState {
 
 const observations = new Map<string, ObservationState>();
 
+type AttachedTarget = { binding: BrowserTabBinding; tabId: number; stateKey: string };
+
+async function markerDigest(tabId: number): Promise<string> {
+  const marker = await cdp.evaluate(tabId, `({ url: location.href, timeOrigin: performance.timeOrigin })`) as {
+    url: string;
+    timeOrigin: number;
+  };
+  const url = new URL(marker.url);
+  url.username = '';
+  url.password = '';
+  url.hash = '';
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${url.toString()}\n${marker.timeOrigin}`));
+  return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function resolveAttachedTarget(input: BrowserActionInput): Promise<AttachedTarget | BrowserControlResult | undefined> {
+  if (input.target?.kind !== 'attached_tab') return undefined;
+  const key = `${TAB_BINDING_PREFIX}${input.target.bindingId}`;
+  const stored = await chrome.storage.session.get(key);
+  const binding = stored[key] as BrowserTabBinding | undefined;
+  if (!binding || binding.id !== input.target.bindingId || binding.expiresAt <= Date.now()) {
+    return fail('SESSION_NOT_FOUND', 'The attached tab binding is unavailable or expired.');
+  }
+  if (input.action === 'navigate' || input.action === 'tabs' || input.action === 'sequence') {
+    return fail('INVALID_INPUT', `${input.action} is unavailable for an attached tab.`);
+  }
+  const needsAct = !['observe', 'wait', 'close'].includes(input.action);
+  if (needsAct && binding.mode !== 'act') {
+    return fail('APPROVAL_REQUIRED', 'This tab is attached in read-only mode. Enable Control tab in the side panel.');
+  }
+  const tabId = Number(binding.tabId);
+  const tab = Number.isInteger(tabId) ? await chrome.tabs.get(tabId).catch(() => null) : null;
+  if (!tab || String(tab.windowId) !== binding.windowId || !tab.url) {
+    return fail('SESSION_NOT_FOUND', 'The attached tab is no longer available.');
+  }
+  let origin: string;
+  try {
+    origin = new URL(tab.url).origin;
+  } catch {
+    return fail('UNSUPPORTED_PAGE', 'The attached tab URL is not supported.');
+  }
+  if (origin !== binding.urlOrigin) {
+    return fail('STALE_OBSERVATION', 'The attached tab navigated to another site. Bind it again.');
+  }
+  if (await markerDigest(tabId) !== binding.documentId) {
+    return fail('STALE_OBSERVATION', 'The attached tab document changed. Bind it again.');
+  }
+  return { binding, tabId, stateKey: `attached:${binding.id}` };
+}
+
 export async function executeBrowserCommand(command: BrowserWireCommand): Promise<BrowserWireResult> {
   const startedAt = Date.now();
   if (command.protocolVersion !== BROWSER_EXTENSION_PROTOCOL_VERSION) {
     return {
       id: command.id,
+      connectionId: command.connectionId,
       result: fail(
         'DRIVER_UNAVAILABLE',
         `Browser protocol mismatch. Expected ${BROWSER_EXTENSION_PROTOCOL_VERSION}; reload the xopc extension.`,
@@ -40,10 +93,11 @@ export async function executeBrowserCommand(command: BrowserWireCommand): Promis
   }
   try {
     const result = await execute(command.input, command.timeoutMs, command.visualFallback, startedAt);
-    return { id: command.id, result };
+    return { id: command.id, connectionId: command.connectionId, result };
   } catch (error) {
     return {
       id: command.id,
+      connectionId: command.connectionId,
       result: {
         ok: false,
         error: {
@@ -63,32 +117,35 @@ async function execute(
 ): Promise<BrowserControlResult> {
   const sessionId = input.sessionId;
   if (!sessionId) return fail('INVALID_INPUT', 'Extension actions require a session id.');
+  const attached = await resolveAttachedTarget(input);
+  if (attached && !('binding' in attached)) return attached;
+  const stateKey = attached?.stateKey ?? sessionId;
   if (input.action === 'close') {
-    await closeSession(sessionId);
-    observations.delete(sessionId);
+    if (!attached) await closeSession(sessionId);
+    observations.delete(stateKey);
     return success('close', 'read', startedAt);
   }
   if (input.action === 'observe') {
     const mode = input.visual === 'always' ? 'always' : input.visual === 'never' || !visualFallback ? 'never' : 'auto';
-    const observation = await observe(sessionId, mode);
+    const observation = await observe(sessionId, mode, attached);
     return success('observe', 'read', startedAt, observation);
   }
   if (input.action === 'navigate') {
-    const tabId = await getActiveTabId(sessionId);
+    const tabId = attached?.tabId ?? await getActiveTabId(sessionId);
     await chrome.tabs.update(tabId, { url: input.url });
     await waitForTabLoad(tabId, timeoutMs);
-    resetWindowIdleTimer(sessionId);
-    const observation = await observe(sessionId, visualFallback ? 'auto' : 'never');
+    if (!attached) resetWindowIdleTimer(sessionId);
+    const observation = await observe(sessionId, visualFallback ? 'auto' : 'never', attached);
     return verified(input, observation, startedAt, 'read');
   }
   if (input.action === 'tabs') return tabs(sessionId, input, startedAt, timeoutMs);
   if (input.action === 'sequence') return fail('INVALID_INPUT', 'Sequences are expanded by the browser runtime.');
 
-  const current = observations.get(sessionId);
+  const current = observations.get(stateKey);
   if (!current || current.revision !== input.revision) {
-    return fail('STALE_OBSERVATION', 'The page changed. Observe it again.', await observe(sessionId, 'never'));
+    return fail('STALE_OBSERVATION', 'The page changed. Observe it again.', await observe(sessionId, 'never', attached));
   }
-  const tabId = await getActiveTabId(sessionId);
+  const tabId = attached?.tabId ?? await getActiveTabId(sessionId);
   const ref = 'ref' in input ? input.ref : undefined;
   if (ref && !current.nodes.some((node) => node.ref === ref)) {
     return fail('TARGET_NOT_FOUND', `Target ${ref} was not found.`);
@@ -145,12 +202,16 @@ async function execute(
   }
 
   await new Promise((resolve) => setTimeout(resolve, 200));
-  const observation = await observe(sessionId, visualFallback ? 'auto' : 'never');
+  const observation = await observe(sessionId, visualFallback ? 'auto' : 'never', attached);
   return verified(input, observation, startedAt, 'draft');
 }
 
-async function observe(sessionId: string, visual: 'never' | 'auto' | 'always'): Promise<BrowserObservation> {
-  const tabId = await getActiveTabId(sessionId);
+async function observe(
+  sessionId: string,
+  visual: 'never' | 'auto' | 'always',
+  attached?: AttachedTarget,
+): Promise<BrowserObservation> {
+  const tabId = attached?.tabId ?? await getActiveTabId(sessionId);
   const tab = await chrome.tabs.get(tabId);
   const raw = await cdp.evaluate(tabId, `(() => {
     const selector = 'a[href],button,input:not([type="hidden"]),textarea,select,summary,[contenteditable="true"],[role="button"],[role="link"],[role="checkbox"],[role="radio"],[role="combobox"],[role="menuitem"],[role="option"],[role="tab"],[tabindex]:not([tabindex="-1"])';
@@ -186,12 +247,18 @@ async function observe(sessionId: string, visual: 'never' | 'auto' | 'always'): 
     }
     return { marker: location.href + '|' + performance.timeOrigin, nodes, hasVisualSurface: !!document.querySelector('canvas,embed[type="application/pdf"],object[type="application/pdf"]') };
   })()` ) as { marker: string; nodes: BrowserNode[]; hasVisualSurface: boolean };
-  const prior = observations.get(sessionId);
+  const stateKey = attached?.stateKey ?? sessionId;
+  const prior = observations.get(stateKey);
   const state: ObservationState = prior?.documentMarker === raw.marker
     ? { ...prior, revision: prior.revision + 1, nodes: raw.nodes }
-    : { documentMarker: raw.marker, documentId: crypto.randomUUID(), revision: 1, nodes: raw.nodes };
+    : {
+        documentMarker: raw.marker,
+        documentId: attached && !prior ? attached.binding.documentId : crypto.randomUUID(),
+        revision: 1,
+        nodes: raw.nodes,
+      };
   const changes = diff(prior?.documentMarker === raw.marker ? prior.nodes : [], raw.nodes);
-  observations.set(sessionId, state);
+  observations.set(stateKey, state);
   const capture = visual === 'always' || (visual === 'auto' && (raw.nodes.length === 0 || raw.hasVisualSurface));
   const image = capture ? await cdp.captureScreenshot(tabId, { format: 'jpeg', quality: 70, fullPage: false }) : undefined;
   return {

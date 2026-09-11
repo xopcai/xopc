@@ -16,7 +16,11 @@ import {
 import { getClientIpFromHeaders } from '../../security/loopback.js';
 import { safeEqualSecret } from '../../security/secret-equal.js';
 import { authorizeTrustedProxy } from '../../trusted-proxy.js';
-import { authenticateDeviceAccessToken } from '../../../storage/sqlite/device-access-repository.js';
+import {
+  authenticateDeviceAccessToken,
+  getDevice,
+} from '../../../storage/sqlite/device-access-repository.js';
+import { isChromeExtensionOrigin } from '../../security/origin-check.js';
 import { setGatewayPrincipal } from '../../security/gateway-principal.js';
 import { createLogger, logAuthEvent } from '../../../utils/logger.js';
 
@@ -250,7 +254,12 @@ export function auth(config?: AuthConfig) {
 
     const providedCredential = authHeader || queryToken;
 
+    const browserExtensionOrigin = isChromeExtensionOrigin(origin) ? origin!.toLowerCase() : undefined;
+
     if (providedCredential && validateCredential(providedCredential, expectedCredential)) {
+      if (browserExtensionOrigin) {
+        return c.json({ error: 'Forbidden', code: 'device_credential_required' }, 403);
+      }
       recordSuccess(rl);
       setGatewayPrincipal(c, {
         kind: 'owner',
@@ -265,6 +274,13 @@ export function auth(config?: AuthConfig) {
       ? authenticateDeviceAccessToken(providedCredential)
       : undefined;
     if (deviceIdentity) {
+      const device = getDevice(deviceIdentity.deviceId);
+      if (browserExtensionOrigin && (
+        device?.platform !== 'chrome'
+        || `chrome-extension://${device.extensionId}` !== browserExtensionOrigin
+      )) {
+        return c.json({ error: 'Forbidden', code: 'extension_origin_mismatch' }, 403);
+      }
       recordSuccess(rl);
       setGatewayPrincipal(c, {
         kind: 'device',

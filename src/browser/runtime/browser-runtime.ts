@@ -7,6 +7,7 @@ import type {
   BrowserObservation,
   BrowserRiskLevel,
   BrowserSequenceInput,
+  BrowserTarget,
 } from '@xopcai/browser-control-contract';
 
 import type { Config } from '../../config/schema.js';
@@ -20,6 +21,7 @@ export interface BrowserRuntimeOptions {
   createDriver: () => Promise<BrowserDriver>;
   allowedUploadRoots?: string[];
   emit?: (type: string, payload: unknown) => void;
+  resolveTarget?: (taskKey: string) => BrowserTarget | undefined;
 }
 
 interface RuntimeSession {
@@ -39,10 +41,11 @@ export class BrowserRuntime {
     this.evictExpiredSessions();
     if (!this.options.getConfig().enabled) return failure('DRIVER_UNAVAILABLE', 'Browser Control is disabled.');
     if (signal?.aborted) return failure('ABORTED', 'Operation was aborted.');
+    const effectiveInput = input.target ? input : { ...input, target: this.options.resolveTarget?.(taskKey) };
     let session: RuntimeSession | null;
     let driver: BrowserDriver;
     try {
-      session = await this.resolveSession(taskKey, input.sessionId);
+      session = await this.resolveSession(taskKey, effectiveInput.sessionId);
       if (!session) return failure('SESSION_NOT_FOUND', 'The browser session does not belong to this task.');
       driver = await this.getDriver();
     } catch (error) {
@@ -53,7 +56,7 @@ export class BrowserRuntime {
     this.options.emit?.('browser.action.started', { sessionId: session.id, action: input.action });
     let result: BrowserControlResult;
     try {
-      result = await this.dispatch(driver, session, input, signal);
+      result = await this.dispatch(driver, session, effectiveInput, signal);
       result = this.constrainResult(result);
     } catch (error) {
       result = failure('DRIVER_UNAVAILABLE', error instanceof Error ? error.message : String(error));
