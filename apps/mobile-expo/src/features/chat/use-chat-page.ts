@@ -143,6 +143,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     urlSessionKey,
     resumeSessionKey,
     resumeLookupComplete: !root || !activeGatewayId || !recentSessionsQuery.isLoading,
+    gatewayReady: Boolean(activeGatewayId),
     gatewayOnline,
     newSessionSpec: bootstrapSpec,
     initialAgentConfig: bootstrapInitialAgentConfig,
