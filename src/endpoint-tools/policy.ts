@@ -20,6 +20,7 @@ export class EndpointToolPolicyError extends Error {}
 
 interface TrustedToolContract {
   policyId: string;
+  legacyPolicyIds: string[];
   outputSchema: Record<string, unknown>;
   resultKinds: EndpointResultKind[];
   permissions: string[];
@@ -30,8 +31,9 @@ function contract(
   outputSchema: Record<string, unknown>,
   resultKinds: EndpointResultKind[],
   permissions: string[],
+  legacyPolicyIds: string[] = [],
 ): TrustedToolContract {
-  return { policyId, outputSchema, resultKinds, permissions };
+  return { policyId, legacyPolicyIds, outputSchema, resultKinds, permissions };
 }
 
 const POLICY_BY_TOOL: Readonly<Record<string, TrustedToolContract>> = {
@@ -46,11 +48,29 @@ const POLICY_BY_TOOL: Readonly<Record<string, TrustedToolContract>> = {
   'desktop.clipboard.read': contract('personal.foreground-read', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['clipboard-read']),
   'desktop.clipboard.write': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['clipboard-write']),
   'desktop.app.open_external': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['open-external-url']),
-  'mobile.contacts.pick': contract('personal.foreground-read', ENDPOINT_CONTACT_OUTPUT_SCHEMA, ['json'], ['contacts-read-selected']),
+  'mobile.contacts.pick': contract(
+    'personal.foreground-mediated-read',
+    ENDPOINT_CONTACT_OUTPUT_SCHEMA,
+    ['json'],
+    ['contacts-read-selected'],
+    ['personal.foreground-read'],
+  ),
   'mobile.contacts.search': contract('personal.foreground-read', ENDPOINT_CONTACT_LIST_OUTPUT_SCHEMA, ['json'], ['contacts-read']),
   'mobile.contacts.get': contract('personal.foreground-read', ENDPOINT_CONTACT_OUTPUT_SCHEMA, ['json'], ['contacts-read']),
-  'mobile.file.pick': contract('personal.foreground-read', ENDPOINT_FILE_OUTPUT_SCHEMA, ['file'], ['file-read']),
-  'mobile.file.share': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['file-share']),
+  'mobile.file.pick': contract(
+    'personal.foreground-mediated-read',
+    ENDPOINT_FILE_OUTPUT_SCHEMA,
+    ['file'],
+    ['file-read'],
+    ['personal.foreground-read'],
+  ),
+  'mobile.file.share': contract(
+    'user.foreground-mediated-write',
+    ENDPOINT_TEXT_OUTPUT_SCHEMA,
+    ['text'],
+    ['file-share'],
+    ['user.foreground-write'],
+  ),
   'mobile.notification.show': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['notifications']),
   'mobile.device.get_info': contract('public.background-read', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], []),
   'mobile.clipboard.write': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['clipboard-write']),
@@ -66,7 +86,7 @@ export class EndpointToolPolicy {
     }
     const contract = POLICY_BY_TOOL[descriptor.name];
     if (!contract) throw new EndpointToolPolicyError(`Tool ${descriptor.name} has no trusted server policy`);
-    if (descriptor.policyId !== contract.policyId) {
+    if (descriptor.policyId !== contract.policyId && !contract.legacyPolicyIds.includes(descriptor.policyId)) {
       throw new EndpointToolPolicyError(`Tool ${descriptor.name} does not match its trusted server policy`);
     }
     if (
@@ -108,6 +128,25 @@ export class EndpointToolPolicy {
         this.assertFields(descriptor, 'read', 'always', true, 'personal');
         if (descriptor.requiredPermissions.length === 0) {
           throw new EndpointToolPolicyError(`Personal tool ${descriptor.name} must declare a permission`);
+        }
+        return;
+      case 'personal.foreground-mediated-read':
+        this.assertFields(descriptor, 'read', 'never', true, 'personal');
+        if (descriptor.requiredPermissions.length === 0) {
+          throw new EndpointToolPolicyError(`Personal tool ${descriptor.name} must declare a permission`);
+        }
+        return;
+      case 'user.foreground-mediated-write':
+        if (descriptor.effect === 'read') {
+          throw new EndpointToolPolicyError(`Mediated tool ${descriptor.name} must declare a write effect`);
+        }
+        if (
+          descriptor.confirmation !== 'never'
+          || !descriptor.requiresForeground
+          || descriptor.sensitivity !== 'personal'
+          || descriptor.requiredPermissions.length === 0
+        ) {
+          throw new EndpointToolPolicyError(`Mediated tool ${descriptor.name} violates its trusted policy`);
         }
         return;
       case 'user.foreground-write':

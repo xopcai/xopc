@@ -94,6 +94,7 @@ export class EndpointToolRegistry {
 export interface EndpointToolHostControllerOptions {
   registry: EndpointToolRegistry;
   getAvailability(): EndpointAvailability;
+  authorize?(request: EndpointToolApprovalRequest): Promise<void>;
   confirm(request: EndpointToolApprovalRequest): Promise<boolean>;
   uploadFile(grant: EndpointToolUploadGrant, file: EndpointToolFile): Promise<Extract<EndpointToolContent, { type: 'file' }>>;
   createMessageId(): string;
@@ -167,7 +168,7 @@ export class EndpointToolHostController {
       return;
     }
     const descriptor = registered.definition.descriptor;
-    const localConfirmationRequired = descriptor.confirmation === 'always' || descriptor.effect !== 'read';
+    const localConfirmationRequired = descriptor.confirmation === 'always';
     if (confirmationRequired !== localConfirmationRequired) {
       this.sendError(invocationId, 'PROTOCOL_ERROR', 'Endpoint confirmation policy mismatch');
       return;
@@ -180,15 +181,18 @@ export class EndpointToolHostController {
     this.active.set(invocationId, invocation);
     try {
       this.assertExecutable(invocationId, invocation, descriptor, deadlineAt);
+      const authorizationRequest = {
+        invocationId,
+        descriptor,
+        arguments: args,
+        deadlineAt,
+        signal: invocation.controller.signal,
+      };
+      await this.options.authorize?.(authorizationRequest);
+      this.assertExecutable(invocationId, invocation, descriptor, deadlineAt);
       if (localConfirmationRequired) {
         this.send('tool.progress', { invocationId, message: 'Waiting for approval' });
-        const allowed = await this.options.confirm({
-          invocationId,
-          descriptor,
-          arguments: args,
-          deadlineAt,
-          signal: invocation.controller.signal,
-        });
+        const allowed = await this.options.confirm(authorizationRequest);
         this.assertExecutable(invocationId, invocation, descriptor, deadlineAt);
         if (!allowed) throw new EndpointToolClientError('USER_DENIED', 'User denied the endpoint tool call');
       }

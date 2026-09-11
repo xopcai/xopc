@@ -61,6 +61,7 @@
 - **Start before it is organized.** Drop in text, voice, files, links, or a thought you cannot explain clearly yet.
 - **Stop repeating yourself.** Sessions, projects, tasks, and correctable user understanding keep the context that matters.
 - **Move beyond advice.** xopc can use tools, run workflows, verify results, and continue the work later.
+- **Reduce the burden, not your agency.** Let xopc carry repeatable execution while you keep intent, judgment, creativity, and final decisions.
 - **Stay in control.** It is local-first, sources are authorized separately, and high-impact actions such as sending or deleting require confirmation.
 
 **Keep what matters moving.** xopc keeps context, the next action, evidence, and follow-up together, so important work does not disappear when a chat ends.

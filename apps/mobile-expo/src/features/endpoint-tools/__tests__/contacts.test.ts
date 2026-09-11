@@ -70,14 +70,21 @@ describe('mobile contact endpoint tools', () => {
     state.getDetails.mockResolvedValue(fullContact);
   });
 
-  it('registers a small read-only contact surface with mandatory confirmation', () => {
+  it('uses the system picker as confirmation while protecting silent contact reads', () => {
     expect(registry.descriptors().map((tool) => tool.name)).toEqual([
       'mobile.contacts.pick',
       'mobile.contacts.search',
       'mobile.contacts.get',
     ]);
-    for (const descriptor of registry.descriptors()) {
-      expect(descriptor).toMatchObject({
+    expect(registry.get('mobile.contacts.pick')?.definition.descriptor).toMatchObject({
+      policyId: 'personal.foreground-mediated-read',
+      effect: 'read',
+      confirmation: 'never',
+      requiresForeground: true,
+    });
+    for (const name of ['mobile.contacts.search', 'mobile.contacts.get']) {
+      expect(registry.get(name)?.definition.descriptor).toMatchObject({
+        policyId: 'personal.foreground-read',
         effect: 'read',
         confirmation: 'always',
         requiresForeground: true,

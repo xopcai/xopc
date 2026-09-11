@@ -59,17 +59,19 @@ function createHost(options: {
     context: EndpointToolExecutionContext,
   ) => Promise<EndpointToolExecutionResult>;
   availability?: 'foreground' | 'background';
+  authorize?: ConstructorParameters<typeof EndpointToolHostController>[0]['authorize'];
   confirm?: ConstructorParameters<typeof EndpointToolHostController>[0]['confirm'];
 } = {}) {
   const tool = options.tool ?? descriptor;
   const sent: ClientEndpointMessage[] = [];
-  const execute = options.execute ?? (async (args: Record<string, unknown>) => ({
+  const execute = vi.fn(options.execute ?? (async (args: Record<string, unknown>) => ({
     content: [{ type: 'text' as const, text: String(args.text) }],
-  }));
+  })));
   const registry = new EndpointToolRegistry([{ descriptor: tool, execute }]);
   const host = new EndpointToolHostController({
     registry,
     getAvailability: () => options.availability ?? 'foreground',
+    authorize: options.authorize,
     confirm: options.confirm ?? vi.fn(async () => true),
     uploadFile: vi.fn(),
     createMessageId: () => crypto.randomUUID(),
@@ -143,6 +145,52 @@ describe('EndpointToolHostController', () => {
       confirmationRequired: false,
     }));
     expect(mismatch.sent.at(-1)).toMatchObject({ type: 'tool.error', payload: { code: 'PROTOCOL_ERROR' } });
+  });
+
+  it('authorizes a system-mediated write without requesting another confirmation', async () => {
+    const mediatedTool = {
+      ...descriptor,
+      policyId: 'user.foreground-mediated-write',
+      sensitivity: 'personal' as const,
+      effect: 'write' as const,
+      confirmation: 'never' as const,
+      requiresForeground: true,
+      requiredPermissions: ['file-share'],
+    };
+    const authorize = vi.fn(async () => undefined);
+    const confirm = vi.fn(async () => true);
+    const mediated = createHost({ tool: mediatedTool, authorize, confirm });
+
+    await mediated.host.handleMessage(invocation({
+      toolName: mediatedTool.name,
+      descriptorRevision: endpointToolRevision(mediatedTool),
+      confirmationRequired: false,
+    }));
+
+    expect(authorize).toHaveBeenCalledOnce();
+    expect(confirm).not.toHaveBeenCalled();
+    expect(mediated.execute).toHaveBeenCalledOnce();
+    expect(mediated.sent.map((message) => message.type)).toEqual(['tool.received', 'tool.result']);
+  });
+
+  it('does not execute when endpoint authorization is rejected', async () => {
+    const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'no' }] }));
+    const denied = createHost({
+      execute,
+      authorize: vi.fn(async () => {
+        const error = new Error('Data sharing is not authorized');
+        error.name = 'NotAllowedError';
+        throw error;
+      }),
+    });
+
+    await denied.host.handleMessage(invocation());
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(denied.sent.at(-1)).toMatchObject({
+      type: 'tool.error',
+      payload: { code: 'PERMISSION_DENIED' },
+    });
   });
 
   it('rejects duplicate tool names', () => {

@@ -52,7 +52,6 @@ function formatArguments(args: Record<string, unknown>): string {
 }
 
 async function confirm(request: EndpointToolApprovalRequest): Promise<boolean> {
-  try { await dataSharingConsent.ensure(); } catch { return false; }
   const { invocationId, descriptor, arguments: args, deadlineAt, signal } = request;
   if (deadlineAt <= Date.now()) return Promise.resolve(false);
   if (signal.aborted) return Promise.resolve(false);
@@ -101,6 +100,9 @@ export class MobileEndpointToolHost {
   private readonly controller = new EndpointToolHostController({
     registry: this.registry,
     getAvailability: availability,
+    authorize: async ({ descriptor }) => {
+      if (descriptor.sensitivity === 'personal') await dataSharingConsent.ensure();
+    },
     confirm,
     uploadFile: (grant, file) => this.uploadFile(grant, file),
     createMessageId: randomUUID,

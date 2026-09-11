@@ -181,7 +181,7 @@ python3 scripts/apps/mobile-expo/verify-ios-ipa.py apps/mobile-expo/dist/xopc.ip
 | Change gateway / recipient / proxy | Previous decision cannot silently authorize a new recipient |
 | Background or cancel during prompt | Content remains unsent; no stale approval |
 | Gateway older than disclosure API / offline | Clear update/reconnect error; content not sent without disclosure |
-| Contact tool | Data-sharing consent and per-tool confirmation precede contact access |
+| Contact tool | Data-sharing consent precedes contact access; silent search/get require per-tool confirmation, while the system picker is the explicit user choice |
 | Background read aloud | Audio and lock-screen controls work; stopping prevents further requests |
 | Push | Real distribution build receives and opens notifications with production APNs |
 | Share / Widget | Extension opens correct content and versions match main app |
