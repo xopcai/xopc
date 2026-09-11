@@ -8,6 +8,13 @@ export type CaptureMode = 'page' | 'selection';
 export const PENDING_CONTEXT_KEY = 'xopc.browser.pending-context';
 export const TAB_BINDING_PREFIX = 'xopc.browser.tab-binding.';
 
+export type AttachedPageContext = {
+  context: BrowserPageContextInput;
+  tabId: number;
+  source: 'current_page' | 'current_selection' | 'tab_mention';
+  stale?: boolean;
+};
+
 type RawPageSnapshot = {
   title: string;
   url: string;
@@ -66,12 +73,12 @@ function extractPage(mode: CaptureMode): RawPageSnapshot {
   return { title: document.title, url: location.href, timeOrigin: performance.timeOrigin, text };
 }
 
-export async function captureCurrentPage(mode: CaptureMode): Promise<BrowserPageContextInput> {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab.id || !tab.url) throw new Error('No active web page');
+export async function captureTabPage(tabId: number, mode: CaptureMode): Promise<BrowserPageContextInput> {
+  const tab = await chrome.tabs.get(tabId);
+  if (!tab.url) throw new Error('The selected tab is no longer available');
   sanitizedUrl(tab.url);
   const result = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
+    target: { tabId },
     func: extractPage,
     args: [mode],
   });
@@ -97,6 +104,22 @@ export async function captureCurrentPage(mode: CaptureMode): Promise<BrowserPage
     ...canonical,
     truncated: selected?.truncated === true || page?.truncated === true,
   };
+}
+
+export async function captureTabWithPermission(
+  tabId: number,
+  url: string,
+  mode: CaptureMode,
+): Promise<BrowserPageContextInput> {
+  const originPattern = `${new URL(sanitizedUrl(url)).origin}/*`;
+  const alreadyGranted = await chrome.permissions.contains({ origins: [originPattern] });
+  const granted = alreadyGranted || await chrome.permissions.request({ origins: [originPattern] });
+  if (!granted) throw new Error('Site access is required to attach this tab');
+  try {
+    return await captureTabPage(tabId, mode);
+  } finally {
+    if (!alreadyGranted) await chrome.permissions.remove({ origins: [originPattern] });
+  }
 }
 
 export async function activeTabId(): Promise<number | undefined> {

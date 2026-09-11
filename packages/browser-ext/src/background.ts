@@ -19,7 +19,7 @@ import {
 } from './protocol';
 import { automationSessions } from './session-manager';
 import { readProfile, signBrowserBridgeChallenge } from './sidepanel/auth';
-import { captureCurrentPage, PENDING_CONTEXT_KEY } from './sidepanel/page-context';
+import { captureTabPage, PENDING_CONTEXT_KEY } from './sidepanel/page-context';
 
 const log = createLogger('Background');
 let ws: WebSocket | null = null;
@@ -179,9 +179,12 @@ chrome.runtime.onMessage.addListener((message: { type: string }, _sender, sendRe
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId !== 'xopc-ask-selection' || !tab?.id) return;
-  void captureCurrentPage('selection').then(async (context) => {
-    await chrome.storage.session.set({ [PENDING_CONTEXT_KEY]: context });
-    await chrome.sidePanel.open({ tabId: tab.id! });
+  const tabId = tab.id;
+  void captureTabPage(tabId, 'selection').then(async (context) => {
+    await chrome.storage.session.set({
+      [PENDING_CONTEXT_KEY]: { context, tabId, source: 'current_selection' },
+    });
+    await chrome.sidePanel.open({ tabId });
   }).catch((error) => log.warn('Could not attach selected page text', {
     error: error instanceof Error ? error.message : String(error),
   }));

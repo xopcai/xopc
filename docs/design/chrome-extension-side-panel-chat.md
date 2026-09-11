@@ -2,7 +2,7 @@
 
 日期：2026-09-11。状态：P0–P4 核心链路已实现并通过分阶段回归。目标：在现有 `@xopcai/browser-ext` 上增加类似 ChatGPT/Codex 浏览器扩展的侧边对话，并支持显式页面上下文和当前标签页操作。
 
-实现取舍：遵循 KISS，不额外抽象 `chat-client-core`，扩展只复用稳定协议包；站点授权由带 origin、documentId、TTL 和 read/act mode 的 session-tab binding 表达，不再叠加第二套长期站点授权状态。P4 已实现截图、PDF/文件附件以及 Chrome、Chromium、Edge、Brave 的 macOS/Linux Native Messaging manifests；YouTube 专用字幕和可选语音不进入本轮核心范围。
+实现取舍：遵循 KISS，不额外抽象 `chat-client-core`，扩展只复用稳定协议包；站点授权由带 origin、documentId、TTL 和 read/act mode 的 session-tab binding 表达，不再叠加第二套长期站点授权状态。P4 已实现标签页 mention、截图、PDF/文件附件以及 Chrome、Chromium、Edge、Brave 的 macOS/Linux Native Messaging manifests；YouTube 专用字幕和可选语音不进入本轮核心范围。
 
 ## 1. 摘要与核心决策
 

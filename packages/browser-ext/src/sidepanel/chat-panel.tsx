@@ -1,17 +1,30 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import type { BrowserPageContextInput } from '@xopcai/gateway-contract';
 
 import {
   BrowserChatClient,
   type BrowserChatSnapshot,
 } from './chat-client';
-import { captureCurrentPage, PENDING_CONTEXT_KEY, type CaptureMode } from './page-context';
+import {
+  activeTabId,
+  captureTabPage,
+  captureTabWithPermission,
+  PENDING_CONTEXT_KEY,
+  type AttachedPageContext,
+  type CaptureMode,
+} from './page-context';
 import {
   captureVisibleScreenshot,
   fileToBrowserAttachment,
   MAX_BROWSER_ATTACHMENTS,
   type BrowserAttachment,
 } from './attachments';
+import {
+  findTabMention,
+  listMentionableTabs,
+  removeTabMention,
+  type MentionableTab,
+  type TabMention,
+} from './tab-mention';
 
 const EMPTY: BrowserChatSnapshot = {
   connection: 'idle',
@@ -31,10 +44,15 @@ export function ChatPanel() {
   const [error, setError] = useState('');
   const [clarificationAnswer, setClarificationAnswer] = useState('');
   const [clarificationSubmitting, setClarificationSubmitting] = useState(false);
-  const [pageContext, setPageContext] = useState<(BrowserPageContextInput & { stale?: boolean })>();
+  const [pageContext, setPageContext] = useState<AttachedPageContext>();
   const [attachments, setAttachments] = useState<BrowserAttachment[]>([]);
+  const [tabMention, setTabMention] = useState<TabMention>();
+  const [mentionTabs, setMentionTabs] = useState<MentionableTab[]>([]);
+  const [mentionIndex, setMentionIndex] = useState(0);
   const viewport = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const textarea = useRef<HTMLTextAreaElement>(null);
+  const mentionRequest = useRef(0);
   const bindingRef = useRef(snapshot.tabBinding);
   bindingRef.current = snapshot.tabBinding;
 
@@ -49,15 +67,24 @@ export function ChatPanel() {
 
   useEffect(() => {
     void chrome.storage.session.get(PENDING_CONTEXT_KEY).then(async (stored) => {
-      const pending = stored[PENDING_CONTEXT_KEY] as BrowserPageContextInput | undefined;
-      if (pending?.kind === 'browser_page') setPageContext(pending);
+      const pending = stored[PENDING_CONTEXT_KEY] as AttachedPageContext | undefined;
+      if (pending?.context.kind === 'browser_page') setPageContext(pending);
       await chrome.storage.session.remove(PENDING_CONTEXT_KEY);
     });
-    const onUpdated = (_tabId: number, change: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
-      if (change.url && tab.active) setPageContext((current) => current ? { ...current, stale: true } : current);
+    const onUpdated = (tabId: number, change: chrome.tabs.TabChangeInfo) => {
+      if (change.url || change.status === 'loading') {
+        setPageContext((current) => current?.tabId === tabId ? { ...current, stale: true } : current);
+      }
+    };
+    const onRemoved = (tabId: number) => {
+      setPageContext((current) => current?.tabId === tabId ? { ...current, stale: true } : current);
     };
     chrome.tabs.onUpdated.addListener(onUpdated);
-    return () => chrome.tabs.onUpdated.removeListener(onUpdated);
+    chrome.tabs.onRemoved.addListener(onRemoved);
+    return () => {
+      chrome.tabs.onUpdated.removeListener(onUpdated);
+      chrome.tabs.onRemoved.removeListener(onRemoved);
+    };
   }, []);
 
   useEffect(() => {
@@ -98,7 +125,7 @@ export function ChatPanel() {
     try {
       if (!snapshot.sessionKey) await client.createSession();
       if (pageContext?.stale) throw new Error('The attached page changed. Refresh or remove it before sending.');
-      await client.send(sending, pageContext ? [pageContext] : [], sendingAttachments);
+      await client.send(sending, pageContext ? [pageContext.context] : [], sendingAttachments);
       setPageContext(undefined);
     } catch (cause) {
       setDraft(sending);
@@ -148,7 +175,71 @@ export function ChatPanel() {
   async function attachPage(mode: CaptureMode) {
     setError('');
     try {
-      setPageContext(await captureCurrentPage(mode));
+      const tabId = await activeTabId();
+      if (tabId === undefined) throw new Error('No active web page');
+      setPageContext({
+        context: await captureTabPage(tabId, mode),
+        tabId,
+        source: mode === 'selection' ? 'current_selection' : 'current_page',
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+
+  async function refreshPageContext() {
+    if (!pageContext) return;
+    setError('');
+    try {
+      const mode = pageContext.context.selection ? 'selection' : 'page';
+      const context = await captureTabWithPermission(
+        pageContext.tabId,
+        pageContext.context.url,
+        mode,
+      );
+      setPageContext({ ...pageContext, context, stale: false });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+
+  async function updateTabMention(value: string, cursor: number) {
+    const requestId = ++mentionRequest.current;
+    const mention = findTabMention(value, cursor);
+    setTabMention(mention);
+    setMentionIndex(0);
+    if (!mention) {
+      setMentionTabs([]);
+      return;
+    }
+    try {
+      const tabs = await listMentionableTabs(mention.query);
+      if (requestId === mentionRequest.current) setMentionTabs(tabs);
+    } catch (cause) {
+      if (requestId === mentionRequest.current) {
+        setTabMention(undefined);
+        setMentionTabs([]);
+        setError(cause instanceof Error ? cause.message : String(cause));
+      }
+    }
+  }
+
+  async function chooseMentionedTab(tab: MentionableTab) {
+    const mention = tabMention;
+    if (!mention) return;
+    mentionRequest.current += 1;
+    setTabMention(undefined);
+    setMentionTabs([]);
+    setError('');
+    try {
+      const context = await captureTabWithPermission(tab.id, tab.url, 'page');
+      const nextDraft = removeTabMention(draft, mention);
+      setPageContext({ context, tabId: tab.id, source: 'tab_mention' });
+      setDraft(nextDraft);
+      requestAnimationFrame(() => {
+        textarea.current?.focus();
+        textarea.current?.setSelectionRange(mention.start, mention.start);
+      });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     }
@@ -261,8 +352,11 @@ export function ChatPanel() {
         {error || snapshot.error ? <div className="composer-error">{error || snapshot.error}</div> : null}
         {pageContext ? (
           <div className={`context-chip${pageContext.stale ? ' stale' : ''}`}>
-            <span>{pageContext.selection ? 'Selection' : 'Page'} · {new URL(pageContext.url).hostname} · {pageContext.title}</span>
-            {pageContext.stale ? <button type="button" onClick={() => void attachPage(pageContext.selection ? 'selection' : 'page')}>Refresh</button> : null}
+            <span>
+              {pageContext.source === 'tab_mention' ? 'Tab' : pageContext.context.selection ? 'Selection' : 'Page'}
+              {' · '}{new URL(pageContext.context.url).hostname} · {pageContext.context.title}
+            </span>
+            {pageContext.stale ? <button type="button" onClick={() => void refreshPageContext()}>Refresh</button> : null}
             <button type="button" aria-label="Remove page context" onClick={() => setPageContext(undefined)}>×</button>
           </div>
         ) : null}
@@ -280,14 +374,69 @@ export function ChatPanel() {
           accept="image/*,.pdf,text/plain,text/markdown,.json,.csv"
           onChange={(event) => void addFiles(event.target.files)}
         />
+        {tabMention ? (
+          <div className="tab-mention-menu" role="listbox" aria-label="Open tabs">
+            {mentionTabs.length ? mentionTabs.map((tab, index) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="option"
+                aria-selected={index === mentionIndex}
+                className={index === mentionIndex ? 'selected' : ''}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  void chooseMentionedTab(tab);
+                }}
+              >
+                <span>{tab.title}</span>
+                <small>{tab.hostname}{tab.active ? ' · current' : ''}</small>
+              </button>
+            )) : <div className="tab-mention-empty">No matching tabs</div>}
+          </div>
+        ) : null}
         <textarea
+          ref={textarea}
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            void updateTabMention(event.target.value, event.target.selectionStart);
+          }}
+          onSelect={(event) => void updateTabMention(event.currentTarget.value, event.currentTarget.selectionStart)}
           onKeyDown={(event) => {
+            if (tabMention) {
+              if (event.key === 'ArrowDown' && mentionTabs.length) {
+                event.preventDefault();
+                setMentionIndex((current) => (current + 1) % mentionTabs.length);
+                return;
+              }
+              if (event.key === 'ArrowUp' && mentionTabs.length) {
+                event.preventDefault();
+                setMentionIndex((current) => (current - 1 + mentionTabs.length) % mentionTabs.length);
+                return;
+              }
+              if (event.key === 'Escape') {
+                event.preventDefault();
+                mentionRequest.current += 1;
+                setTabMention(undefined);
+                setMentionTabs([]);
+                return;
+              }
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                const selectedTab = mentionTabs[mentionIndex];
+                if (selectedTab) void chooseMentionedTab(selectedTab);
+                return;
+              }
+            }
             if (event.key === 'Enter' && !event.shiftKey) {
               event.preventDefault();
               event.currentTarget.form?.requestSubmit();
             }
+          }}
+          onBlur={() => {
+            mentionRequest.current += 1;
+            setTabMention(undefined);
+            setMentionTabs([]);
           }}
           placeholder="Ask anything"
           rows={3}
@@ -337,7 +486,7 @@ export function ChatPanel() {
           {snapshot.runId ? (
             <button type="button" className="stop-button" onClick={() => void client.abort()}>Stop</button>
           ) : (
-            <button className="send-button" type="submit" disabled={(!draft.trim() && attachments.length === 0) || !snapshot.endpointReady}>↑</button>
+            <button className="send-button" type="submit" disabled={(!draft.trim() && attachments.length === 0) || !snapshot.endpointReady || Boolean(tabMention)}>↑</button>
           )}
         </div>
       </form>
