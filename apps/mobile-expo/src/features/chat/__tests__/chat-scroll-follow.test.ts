@@ -55,14 +55,14 @@ afterEach(() => {
 });
 
 describe('measured chat scroll follow', () => {
-  it('coalesces streamed content growth into one tail follow per frame', () => {
+  it('leaves streamed content growth to FlashList anchoring', () => {
     const chat = setup();
     chat.onContentSizeChange(400, 1200);
     chat.onScroll(scroll(500, 1200));
     chat.onContentSizeChange(400, 1220);
     chat.onContentSizeChange(400, 1240);
     vi.runAllTimers();
-    expect(chat.scrollToEnd).toHaveBeenCalledExactlyOnceWith({ animated: false });
+    expect(chat.scrollToEnd).not.toHaveBeenCalled();
     expect(chat.onAtBottomChange).not.toHaveBeenCalled();
   });
 
@@ -95,7 +95,7 @@ describe('measured chat scroll follow', () => {
     expect(chat.onAtBottomChange).toHaveBeenLastCalledWith(false);
     expect(chat.scrollToEnd).not.toHaveBeenCalled();
     chat.scrollToBottom();
-    expect(chat.scrollToEnd).toHaveBeenCalledWith({ animated: true });
+    expect(chat.scrollToEnd).toHaveBeenCalledWith({ animated: false });
   });
 
   it('does not fight momentum and resumes following after reaching the bottom', () => {

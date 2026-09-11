@@ -1,8 +1,9 @@
 import { memo } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { radii, spacing, typography, useTheme } from '@/theme';
 import { VoiceMeterBars } from './VoiceMeterBars';
+import { StaticLoadingIndicator } from './StaticLoadingIndicator';
 
 export const VoiceRecordingCard = memo(function VoiceRecordingCard({
   visible, processing, cancelled, meterSamples, durationMillis = 0, hint,
@@ -22,7 +23,7 @@ export const VoiceRecordingCard = memo(function VoiceRecordingCard({
       <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }, elevation.raised]}>
         {processing ? (
           <View style={styles.processingRow} accessibilityLiveRegion="polite">
-            <ActivityIndicator size="small" color={color} />
+            <StaticLoadingIndicator size={16} color={color} />
             <Text style={[styles.hint, { color }]}>{hint}</Text>
           </View>
         ) : (

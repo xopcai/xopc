@@ -37,6 +37,8 @@ export type BottomSheetModalProps = {
   scroll?: boolean;
   keyboardAvoiding?: boolean;
   testID?: string;
+  /** Disable open, close, scrim, and drag-settle motion for stability-sensitive surfaces. */
+  disableAnimation?: boolean;
 };
 
 export function BottomSheetModal({
@@ -51,10 +53,12 @@ export function BottomSheetModal({
   scroll = false,
   keyboardAvoiding = false,
   testID,
+  disableAnimation = false,
 }: BottomSheetModalProps) {
   const { colors, elevation } = useTheme();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
+  const motionDisabled = disableAnimation || reducedMotion;
   const { height: screenHeight } = useWindowDimensions();
   const [mounted, setMounted] = useState(visible);
   const progress = useSharedValue(visible ? 1 : 0);
@@ -73,7 +77,7 @@ export function BottomSheetModal({
     if (closingRef.current) return;
     closingRef.current = true;
     cancelAnimation(progress);
-    if (reducedMotion) {
+    if (motionDisabled) {
       progress.value = 0;
       completeClose(notify);
       return;
@@ -85,7 +89,7 @@ export function BottomSheetModal({
         if (finished) scheduleOnRN(completeClose, notify);
       },
     );
-  }, [completeClose, progress, reducedMotion]);
+  }, [completeClose, motionDisabled, progress]);
 
   const requestDismiss = useCallback(() => close(true), [close]);
 
@@ -99,7 +103,7 @@ export function BottomSheetModal({
     setMounted(true);
     cancelAnimation(progress);
     dragY.value = 0;
-    if (reducedMotion) {
+    if (motionDisabled) {
       progress.value = 1;
       return;
     }
@@ -108,10 +112,10 @@ export function BottomSheetModal({
       duration: motion.duration.standard,
       easing: motion.easing.enter,
     });
-  }, [close, dragY, mounted, progress, reducedMotion, visible]);
+  }, [close, dragY, mounted, motionDisabled, progress, visible]);
 
   const dismissGesture = Gesture.Pan()
-    .enabled(!reducedMotion)
+    .enabled(!motionDisabled)
     .activeOffsetY(8)
     .failOffsetX([-24, 24])
     .onUpdate((event) => {
@@ -129,9 +133,9 @@ export function BottomSheetModal({
     opacity: progress.value * Math.max(0, 1 - dragY.value / (screenHeight * 0.7)),
   }));
   const sheetStyle = useAnimatedStyle(() => ({
-    opacity: reducedMotion ? progress.value : 1,
+    opacity: motionDisabled ? progress.value : 1,
     transform: [{
-      translateY: reducedMotion
+      translateY: motionDisabled
         ? 0
         : (1 - progress.value) * screenHeight + dragY.value,
     }],

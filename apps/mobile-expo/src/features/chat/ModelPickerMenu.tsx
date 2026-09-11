@@ -38,6 +38,7 @@ export const ModelPickerMenu = memo(function ModelPickerMenu({
     <BottomSheetModal
       visible={visible}
       onDismiss={onDismiss}
+      disableAnimation
       title={m.chat.modelPickerTitle}
       subtitle={m.chat.modelPickerHint}
       maxHeight="72%"

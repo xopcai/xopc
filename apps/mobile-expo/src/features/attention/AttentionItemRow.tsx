@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
 import type { HomeAction, HomeFocusItem } from '../../query/home';
@@ -63,7 +63,7 @@ export const AttentionItemRow = memo(function AttentionItemRow({
               accessibilityRole="button"
               accessibilityState={{ disabled: pending, busy: pending }}
             >
-              {pending && index === 0 ? <ActivityIndicator size={14} color={colors.accent.onPrimary} /> : null}
+              {pending && index === 0 ? <Icon source="clock-outline" size={14} color={colors.accent.onPrimary} /> : null}
               <Text style={[
                 styles.actionText,
                 { color: index === 0 ? colors.accent.onPrimary : colors.text.secondary },

@@ -6,11 +6,10 @@
  * - Auto-collapses when the final answer text starts flowing
  * - Can be manually toggled by tapping the header
  */
-import { memo, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Icon, Text } from 'react-native-paper';
+import { Icon, Text } from 'react-native-paper';
 
-import { AnimatedDisclosureIcon } from '../../components/AnimatedDisclosureIcon';
 import {
   buildStepsRoundActiveSummary,
   buildStepsRoundCompleteSummary,
@@ -22,6 +21,7 @@ import { formatStepRoundDuration } from './step-round-duration';
 import { chatColors } from './styles';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolUseBlock } from './ToolUseBlock';
+import { StaticLoadingIndicator } from './StaticLoadingIndicator';
 import { useMessages } from '../../i18n/messages';
 import { usePreferencesStore } from '../../stores/preferences-store';
 import { useTheme } from '../../theme';
@@ -36,31 +36,12 @@ export function isAnyBlockActive(blocks: Array<ThinkingContent | ToolUseContent>
 }
 
 const StepRoundDurationText = memo(function StepRoundDurationText({
-  active,
-  roundStartRef,
   frozenMs,
 }: {
-  active: boolean;
-  roundStartRef: MutableRefObject<number | null>;
   frozenMs: number | null;
 }) {
   const language = usePreferencesStore((s) => s.language);
-  const [, setTick] = useState(0);
-
-  useEffect(() => {
-    if (!active) return;
-    const id = setInterval(() => setTick((n) => n + 1), 1_000);
-    return () => clearInterval(id);
-  }, [active]);
-
-  const startedAt = roundStartRef.current;
-  const elapsedMs = active && startedAt != null ? Math.max(0, Date.now() - startedAt) : 0;
-  const text =
-    active && startedAt != null
-      ? formatStepRoundDuration(elapsedMs, language)
-      : frozenMs != null
-        ? formatStepRoundDuration(frozenMs, language)
-        : null;
+  const text = frozenMs != null ? formatStepRoundDuration(frozenMs, language) : null;
 
   if (!text) return null;
 
@@ -201,7 +182,7 @@ export const AssistantStepsBlock = memo(function AssistantStepsBlock({
         accessibilityState={{ expanded }}
       >
         {anyActive ? (
-          <ActivityIndicator size={14} color={chatColors.accent} />
+          <StaticLoadingIndicator size={14} color={chatColors.accent} />
         ) : (
           <Icon
             source="check-circle-outline"
@@ -218,21 +199,13 @@ export const AssistantStepsBlock = memo(function AssistantStepsBlock({
         >
           {headerMain}
         </Text>
-        {anyActive ? (
-          <StepRoundDurationText
-            active={anyActive}
-            roundStartRef={roundStartRef}
-            frozenMs={null}
-          />
-        ) : (
-          <StepRoundDurationText
-            active={false}
-            roundStartRef={roundStartRef}
-            frozenMs={frozenDurationMs}
-          />
-        )}
+        {!anyActive ? <StepRoundDurationText frozenMs={frozenDurationMs} /> : null}
 
-        <AnimatedDisclosureIcon expanded={expanded} size={16} color={colors.text.tertiary} />
+        <Icon
+          source={expanded ? 'chevron-up' : 'chevron-down'}
+          size={16}
+          color={colors.text.tertiary}
+        />
       </Pressable>
 
       {expanded ? (
