@@ -84,6 +84,7 @@ export const ChatActionsSheet = memo(function ChatActionsSheet({
     <BottomSheetModal
       visible={visible}
       onDismiss={onDismiss}
+      disableAnimation
       title={m.chat.headerSettingsTitle}
       maxHeight="68%"
       testID="chat-actions-sheet"

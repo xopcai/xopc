@@ -26,7 +26,7 @@ export const AttachmentSourceSheet = memo(function AttachmentSourceSheet({
   const { colors } = useTheme();
 
   return (
-    <BottomSheetModal visible={visible} onDismiss={onClose} maxHeight="42%">
+    <BottomSheetModal visible={visible} onDismiss={onClose} maxHeight="42%" disableAnimation>
       <View style={styles.grid}>
         {items.map((item) => (
           <Pressable

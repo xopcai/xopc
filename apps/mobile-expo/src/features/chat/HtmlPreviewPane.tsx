@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Text } from 'react-native-paper';
+import { Text } from 'react-native-paper';
 import { WebView, type WebViewNavigation } from 'react-native-webview';
 
 import { t, useMessages } from '../../i18n/messages';
@@ -11,6 +11,7 @@ import {
   shouldAllowHtmlWebViewNavigation,
   type HtmlWebViewSource,
 } from './html-preview-source';
+import { StaticLoadingIndicator } from './StaticLoadingIndicator';
 
 export type HtmlPreviewPaneProps = {
   htmlContent?: string | null;
@@ -100,7 +101,7 @@ export function HtmlPreviewPane({
           ]}
           pointerEvents="none"
         >
-          <ActivityIndicator />
+          <StaticLoadingIndicator size={24} />
           <Text style={[styles.message, { color: mutedColor }]}>{cm.htmlPreviewRendering}</Text>
         </View>
       ) : null}

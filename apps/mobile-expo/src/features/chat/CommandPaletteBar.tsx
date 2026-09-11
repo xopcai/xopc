@@ -4,7 +4,6 @@
  */
 import { memo, useCallback } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   Pressable,
   StyleSheet,
@@ -15,6 +14,7 @@ import { Icon, Text } from 'react-native-paper';
 import { useMessages } from '../../i18n/messages';
 import { useTheme } from '../../theme';
 import type { PaletteItem } from './command-palette.types';
+import { StaticLoadingIndicator } from './StaticLoadingIndicator';
 
 const MAX_HEIGHT = 180;
 
@@ -65,7 +65,6 @@ export const CommandPaletteBar = memo(function CommandPaletteBar({
       <Pressable
         style={[styles.item, { backgroundColor: itemBg }]}
         onPress={() => onSelect(item)}
-        android_ripple={{ color: colors.accent.selectionBg }}
       >
         <Icon source={itemIcon(item.kind)} size={18} color={iconColor} />
         <View style={styles.itemText}>
@@ -78,7 +77,7 @@ export const CommandPaletteBar = memo(function CommandPaletteBar({
         </View>
       </Pressable>
     ),
-    [colors.accent.primary, colors.accent.selectionBg, itemBg, iconColor, descColor, query, onSelect],
+    [colors.accent.primary, itemBg, iconColor, descColor, query, onSelect],
   );
 
   const keyExtractor = useCallback((item: PaletteItem) => item.id, []);
@@ -86,7 +85,7 @@ export const CommandPaletteBar = memo(function CommandPaletteBar({
   if (loading && items.length === 0) {
     return (
       <View style={[styles.container, { backgroundColor: bg, borderBottomColor: border }]}>
-        <ActivityIndicator size="small" style={styles.loader} />
+        <StaticLoadingIndicator size={16} style={styles.loader} />
       </View>
     );
   }

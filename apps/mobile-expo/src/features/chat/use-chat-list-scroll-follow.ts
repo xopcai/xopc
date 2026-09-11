@@ -114,14 +114,13 @@ export function useChatListScrollFollow({
   }, []);
 
   const onContentSizeChange = useCallback((_width: number, height: number) => {
-    const layoutHeightChanged = Math.abs(height - contentLayoutHeightRef.current) > 1;
+    const previousHeight = contentLayoutHeightRef.current;
     contentLayoutHeightRef.current = height;
     metricsRef.current.contentHeight = height;
     syncButtonVisibility();
-    // FlashList still preserves the visible item while older rows are prepended,
-    // but this hook is the sole owner of tail following. Content-size callbacks
-    // are authoritative even when a native scroll event arrived first.
-    if (layoutHeightChanged && !loadingOlder) scheduleFollow();
+    // FlashList owns continuous bottom anchoring while streamed content grows.
+    // Only restore the live edge after a completion collapses transient details.
+    if (!loadingOlder && previousHeight > 0 && height < previousHeight - 1) scheduleFollow();
   }, [loadingOlder, scheduleFollow, syncButtonVisibility]);
 
   const onLayout = useCallback((event: LayoutChangeEvent) => {
@@ -164,7 +163,7 @@ export function useChatListScrollFollow({
 
   const scrollToBottom = useCallback(() => {
     setPinned(true);
-    void listRef.current?.scrollToEnd({ animated: true });
+    void listRef.current?.scrollToEnd({ animated: false });
   }, [listRef, setPinned]);
 
   return {

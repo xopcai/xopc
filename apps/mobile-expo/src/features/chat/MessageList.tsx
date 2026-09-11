@@ -14,7 +14,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { ActivityIndicator, Button, Icon, IconButton, Text } from 'react-native-paper';
+import { Button, Icon, IconButton, Text } from 'react-native-paper';
 
 import { useKeyboardListPadding } from '../../hooks/use-keyboard-list-padding';
 import { useMessages } from '../../i18n/messages';
@@ -26,11 +26,14 @@ import { messageKey } from './message-key';
 import type { Message, ProgressState, ReasoningLevel } from './messages.types';
 import type { MobileWelcomeStarter } from './mobile-welcome-starters';
 import { useChatListScrollFollow } from './use-chat-list-scroll-follow';
+import { StaticLoadingIndicator } from './StaticLoadingIndicator';
 
 const LIST_BASE_PADDING_BOTTOM = 8;
 const LOADING_INDICATOR_DELAY_MS = 160;
 const CHAT_MAINTAIN_VISIBLE_CONTENT_POSITION = {
   startRenderingFromBottom: true,
+  autoscrollToBottomThreshold: 0.08,
+  animateAutoScrollToBottom: false,
 } as const;
 
 function useDelayedLoadingIndicator(loading: boolean): boolean {
@@ -171,7 +174,7 @@ export const MessageList = memo(function MessageList({
         ) : null}
         {loadingOlder ? (
           <View style={styles.loadingOlderRow}>
-            <ActivityIndicator size="small" />
+            <StaticLoadingIndicator size={16} />
           </View>
         ) : null}
       </View>
@@ -257,7 +260,7 @@ export const MessageList = memo(function MessageList({
     return (
       <View style={styles.center}>
         {listHeader}
-        {showLoadingIndicator ? <ActivityIndicator size="large" /> : null}
+        {showLoadingIndicator ? <StaticLoadingIndicator size={28} /> : null}
       </View>
     );
   }
