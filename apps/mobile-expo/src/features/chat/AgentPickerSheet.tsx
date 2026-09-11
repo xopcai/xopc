@@ -40,6 +40,7 @@ export const AgentPickerSheet = memo(function AgentPickerSheet({
     <BottomSheetModal
       visible={visible}
       onDismiss={onDismiss}
+      disableAnimation
       title={m.chat.agentPickerTitle}
       subtitle={m.chat.agentPickerHint}
       maxHeight="60%"

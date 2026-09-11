@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Image,
   Modal,
   Pressable,
@@ -16,7 +15,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { useMessages } from '../../i18n/messages';
-import { useReducedMotion } from '../../motion/use-reduced-motion';
 import { radii, spacing, typography, useTheme } from '../../theme';
 import type { ComposerAttachment } from './composer.types';
 import {
@@ -26,6 +24,7 @@ import {
   type ImageSize,
 } from './image-editor-math';
 import { cropImageAttachment, rotateImageForEditing } from './image-editing';
+import { StaticLoadingIndicator } from './StaticLoadingIndicator';
 
 type AspectMode = 'original' | 'square' | 'fourThree' | 'sixteenNine';
 type EditorSource = ImageSize & { uri: string };
@@ -63,7 +62,6 @@ export function ImageEditorModal({
 }) {
   const m = useMessages();
   const { colors } = useTheme();
-  const reducedMotion = useReducedMotion();
   const [source, setSource] = useState<EditorSource | null>(null);
   const [originalSource, setOriginalSource] = useState<EditorSource | null>(null);
   const [stage, setStage] = useState<ImageSize>({ width: 0, height: 0 });
@@ -231,7 +229,7 @@ export function ImageEditorModal({
   return (
     <Modal
       visible={visible}
-      animationType={reducedMotion ? 'none' : 'slide'}
+      animationType="none"
       presentationStyle="fullScreen"
       onRequestClose={() => {
         if (!busy) onClose();
@@ -303,7 +301,7 @@ export function ImageEditorModal({
           ) : error ? (
             <Text style={[styles.error, { color: colors.semantic.error }]}>{error}</Text>
           ) : (
-            <ActivityIndicator color={colors.accent.primary} />
+            <StaticLoadingIndicator size={24} color={colors.accent.primary} />
           )}
         </View>
 
@@ -359,7 +357,7 @@ export function ImageEditorModal({
         {busy ? (
           <View style={[styles.busyOverlay, { backgroundColor: colors.overlay.scrim }]} pointerEvents="auto">
             <View style={[styles.busyCard, { backgroundColor: colors.surface.elevated }]}>
-              <ActivityIndicator color={colors.accent.primary} />
+              <StaticLoadingIndicator size={24} color={colors.accent.primary} />
               <Text style={[styles.busyText, { color: colors.text.primary }]}>{m.chat.imageEditorProcessing}</Text>
             </View>
           </View>

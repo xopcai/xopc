@@ -1,9 +1,10 @@
 import { memo } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
 import { spacing, useTheme } from '../../theme';
 import type { MobileAtMentionItem } from './use-at-mention-picker';
+import { StaticLoadingIndicator } from './StaticLoadingIndicator';
 
 export const AtMentionPaletteBar = memo(function AtMentionPaletteBar({ items, loading, emptyLabel, onSelect }: {
   items: MobileAtMentionItem[];
@@ -12,7 +13,7 @@ export const AtMentionPaletteBar = memo(function AtMentionPaletteBar({ items, lo
   onSelect: (item: MobileAtMentionItem) => void;
 }) {
   const { colors } = useTheme();
-  if (loading && items.length === 0) return <View style={styles.loading}><ActivityIndicator size="small" /></View>;
+  if (loading && items.length === 0) return <View style={styles.loading}><StaticLoadingIndicator size={16} /></View>;
   if (!items.length) return <View style={styles.loading}><Text style={{ color: colors.text.tertiary }}>{emptyLabel}</Text></View>;
   return <FlatList
     data={items}

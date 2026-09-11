@@ -1,10 +1,11 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
+import { Button, Icon, Text } from 'react-native-paper';
 
 import { useMessages } from '../../i18n/messages';
 import { useTheme } from '../../theme';
 import { MarkdownView } from './MarkdownView';
+import { StaticLoadingIndicator } from './StaticLoadingIndicator';
 
 export type ClarifyPromptState = {
   requestId: string;
@@ -81,7 +82,7 @@ export const ClarifyPrompt = memo(function ClarifyPrompt({
       <View style={styles.headerRow}>
         <View style={styles.headerIcon}>
           {submitting ? (
-            <ActivityIndicator size={16} />
+            <StaticLoadingIndicator size={16} />
           ) : (
             <Icon source="help-circle-outline" size={18} color={colors.accent.primary} />
           )}

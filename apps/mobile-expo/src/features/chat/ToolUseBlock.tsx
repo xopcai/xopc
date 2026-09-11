@@ -7,7 +7,7 @@
  */
 import { memo, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Icon, Text } from 'react-native-paper';
+import { Icon, Text } from 'react-native-paper';
 
 import type { ToolUseContent } from './messages.types';
 import { chatColors } from './styles';
@@ -15,6 +15,7 @@ import { useTheme } from '../../theme';
 import { getFriendlyToolTitle } from './tool-friendly-title';
 import { formatParamsJson, getKeyDetailLine } from './tool-input-preview';
 import { WebSearchToolResultLinks } from './WebSearchToolResultLinks';
+import { StaticLoadingIndicator } from './StaticLoadingIndicator';
 import {
   extractWebSearchLinksFromToolResult,
   isWebSearchToolName,
@@ -160,7 +161,7 @@ export const ToolUseBlock = memo(function ToolUseBlock({
       <View style={inlineStyles.row}>
         <View style={inlineStyles.iconCol}>
           {isRunning ? (
-            <ActivityIndicator size={12} color={muted} />
+            <StaticLoadingIndicator size={12} color={muted} />
           ) : isError ? (
             <Icon source="close-circle-outline" size={14} color={colors.semantic.error} />
           ) : (
@@ -290,7 +291,7 @@ export const ToolUseBlock = memo(function ToolUseBlock({
         accessibilityLabel={`Tool: ${block.name}, status: ${block.status}`}
       >
         {isRunning ? (
-          <ActivityIndicator size={12} color={color} />
+          <StaticLoadingIndicator size={12} color={color} />
         ) : isError ? (
           <Icon source="alert-circle-outline" size={14} color={color} />
         ) : (

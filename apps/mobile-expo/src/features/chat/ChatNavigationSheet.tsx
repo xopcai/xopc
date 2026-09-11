@@ -1,7 +1,6 @@
 import { useRouter } from 'expo-router';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback } from 'react';
 import {
-  Animated,
   Modal,
   Pressable,
   ScrollView,
@@ -14,7 +13,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useMessages } from '../../i18n/messages';
 import { sessionDisplayName } from '../../lib/session-helpers';
-import { motion } from '../../motion';
 import type { SessionListItem } from '../../query/sessions';
 import { radii, spacing, typography, useTheme } from '../../theme';
 
@@ -44,31 +42,6 @@ export const ChatNavigationSheet = memo(function ChatNavigationSheet({
   const m = useMessages();
   const copy = m.drawer;
   const drawerWidth = Math.min(windowWidth * 0.88, 360);
-  const [mounted, setMounted] = useState(visible);
-  const translateX = useRef(new Animated.Value(-drawerWidth)).current;
-
-  useEffect(() => {
-    if (visible) {
-      setMounted(true);
-      translateX.setValue(-drawerWidth);
-      requestAnimationFrame(() => {
-        Animated.timing(translateX, {
-          toValue: 0,
-          duration: motion.duration.standard,
-          useNativeDriver: true,
-        }).start();
-      });
-      return;
-    }
-    if (!mounted) return;
-    Animated.timing(translateX, {
-      toValue: -drawerWidth,
-      duration: motion.duration.quick,
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (finished) setMounted(false);
-    });
-  }, [drawerWidth, mounted, translateX, visible]);
 
   const navigate = useCallback((route: string) => {
     onDismiss();
@@ -97,7 +70,7 @@ export const ChatNavigationSheet = memo(function ChatNavigationSheet({
     { icon: 'cog-outline', label: copy.settings, route: '/settings' },
   ];
 
-  if (!mounted) return null;
+  if (!visible) return null;
 
   return (
     <Modal
@@ -108,7 +81,7 @@ export const ChatNavigationSheet = memo(function ChatNavigationSheet({
       onRequestClose={onDismiss}
     >
       <View style={styles.overlay}>
-        <Animated.View
+        <View
           testID="chat-navigation-drawer"
           style={[
             styles.drawer,
@@ -118,7 +91,6 @@ export const ChatNavigationSheet = memo(function ChatNavigationSheet({
               paddingBottom: insets.bottom,
               backgroundColor: colors.surface.panel,
               borderRightColor: colors.border.subtle,
-              transform: [{ translateX }],
             },
           ]}
           accessibilityViewIsModal
@@ -206,7 +178,7 @@ export const ChatNavigationSheet = memo(function ChatNavigationSheet({
           ))}
         </View>
           </ScrollView>
-        </Animated.View>
+        </View>
         <Pressable style={[styles.scrim, { backgroundColor: colors.overlay.scrim }]} onPress={onDismiss} accessible={false} />
       </View>
     </Modal>

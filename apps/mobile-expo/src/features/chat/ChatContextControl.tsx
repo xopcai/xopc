@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SessionContextSummary } from '@xopcai/gateway-contract';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Icon, Text } from 'react-native-paper';
+import { Icon, Text } from 'react-native-paper';
 
 import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { useMessages } from '../../i18n/messages';
@@ -13,6 +13,7 @@ import { fetchSessionAgentConfig, setSessionWorkingDirectory } from '../../query
 import { fetchSessionContextSummary } from '../../query/sessions';
 import { radii, spacing, typography, useTheme } from '../../theme';
 import type { ComposerContextRef } from './composer.types';
+import { StaticLoadingIndicator } from './StaticLoadingIndicator';
 
 function environmentLabel(environment: SessionContextSummary['environment']): string | undefined {
   if (!environment) return undefined;
@@ -121,7 +122,7 @@ export const ChatContextControl = memo(function ChatContextControl({
 
   return <>
     <View style={styles.strip}>
-      {context.isLoading ? <ActivityIndicator size={16} /> : null}
+      {context.isLoading ? <StaticLoadingIndicator size={16} /> : null}
       {chips.map((chip) => <Pressable
         key={chip.key}
         accessibilityRole="button"
@@ -149,6 +150,7 @@ export const ChatContextControl = memo(function ChatContextControl({
       headerAction={selecting || directoryPath !== undefined ? <Pressable accessibilityRole="button" onPress={() => { setSelecting(false); setSelectedProject(null); setDirectoryPath(undefined); }}><Text style={{ color: colors.accent.primary }}>{m.common.cancel}</Text></Pressable> : undefined}
       maxHeight="82%"
       scroll
+      disableAnimation
     >
       {context.isError ? <View style={styles.error}>
         <Text style={{ color: colors.text.secondary }}>{copy.loadFailed}</Text>
@@ -156,7 +158,7 @@ export const ChatContextControl = memo(function ChatContextControl({
           <Text style={{ color: colors.accent.primary }}>{m.common.retry}</Text>
         </Pressable>
       </View> : null}
-      {context.isLoading ? <ActivityIndicator style={styles.loading} /> : null}
+      {context.isLoading ? <StaticLoadingIndicator size={20} style={styles.loading} /> : null}
       {directoryPath !== undefined ? <>
         <Text numberOfLines={1} style={[styles.directoryPath, { color: colors.text.secondary }]}>{directories.data?.currentPath || directoryPath || copy.hostRoot}</Text>
         {directories.data?.parentPath != null ? <Pressable
@@ -164,7 +166,7 @@ export const ChatContextControl = memo(function ChatContextControl({
           onPress={() => setDirectoryPath(directories.data!.parentPath ?? '')}
           style={({ pressed }) => [styles.choice, { backgroundColor: pressed ? colors.surface.pressed : colors.surface.input }]}
         ><Icon source="arrow-up" size={20} color={colors.text.secondary} /><Text style={{ color: colors.text.primary }}>{copy.parentFolder}</Text></Pressable> : null}
-        {directories.isLoading ? <ActivityIndicator style={styles.loading} /> : null}
+        {directories.isLoading ? <StaticLoadingIndicator size={20} style={styles.loading} /> : null}
         {directories.data?.entries.map((entry) => <Pressable
           key={entry.absolutePath}
           accessibilityRole="button"
@@ -200,7 +202,7 @@ export const ChatContextControl = memo(function ChatContextControl({
           <Icon source="account-outline" size={20} color={colors.text.secondary} />
           <Text style={[styles.rowTitle, { color: colors.text.primary }]}>{copy.noProject}</Text>
         </Pressable>
-        {projects.isLoading ? <ActivityIndicator style={styles.loading} /> : null}
+        {projects.isLoading ? <StaticLoadingIndicator size={20} style={styles.loading} /> : null}
         {projects.isError ? <Text style={[styles.warning, { color: colors.semantic.error }]}>{copy.projectsFailed}</Text> : null}
         {projects.data?.filter((project) => project.status !== 'archived').map((project) => <Pressable
           key={project.id}
@@ -219,7 +221,7 @@ export const ChatContextControl = memo(function ChatContextControl({
         </Pressable>)}
         {selectedProject ? <View style={[styles.modePanel, { borderColor: colors.border.subtle }]}>
           <Text style={[styles.sectionTitle, { color: colors.text.tertiary }]}>{copy.chooseEnvironment}</Text>
-          {environmentOptions.isLoading ? <ActivityIndicator style={styles.loading} /> : null}
+          {environmentOptions.isLoading ? <StaticLoadingIndicator size={20} style={styles.loading} /> : null}
           {environmentOptions.isError ? <Text style={[styles.warning, { color: colors.semantic.error }]}>{copy.environmentCheckFailed}</Text> : null}
           {environmentOptions.data ? <>
             <ModeChoice

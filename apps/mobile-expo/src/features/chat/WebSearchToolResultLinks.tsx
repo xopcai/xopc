@@ -1,10 +1,7 @@
 import { memo, useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
-import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 
-import { AnimatedDisclosureIcon } from '../../components/AnimatedDisclosureIcon';
-import { motion, useReducedMotion } from '../../motion';
 import { useTheme } from '../../theme';
 import type { WebSearchResultLink } from './web-search-tool-result-links';
 
@@ -27,7 +24,6 @@ export const WebSearchToolResultLinks = memo(function WebSearchToolResultLinks({
 }) {
   const { colors } = useTheme();
   const [expanded, setExpanded] = useState(false);
-  const reducedMotion = useReducedMotion();
 
   if (links.length === 0) return null;
 
@@ -47,17 +43,9 @@ export const WebSearchToolResultLinks = memo(function WebSearchToolResultLinks({
         {formatSummary(labels.summary, links.length)}
       </Text>
 
-      <Animated.View
-        layout={reducedMotion ? undefined : LinearTransition.duration(motion.duration.standard)}
-        style={styles.links}
-      >
-        {visibleLinks.map(({ url, title, host }, index) => (
-          <Animated.View
-            key={url}
-            entering={index < DEFAULT_VISIBLE_LINKS || reducedMotion ? undefined : FadeIn.duration(motion.duration.quick)}
-            exiting={index < DEFAULT_VISIBLE_LINKS || reducedMotion ? undefined : FadeOut.duration(motion.duration.press)}
-            layout={reducedMotion ? undefined : LinearTransition.duration(motion.duration.quick)}
-          >
+      <View style={styles.links}>
+        {visibleLinks.map(({ url, title, host }) => (
+          <View key={url}>
             <Pressable
               style={styles.linkRow}
               onPress={() => {
@@ -82,9 +70,9 @@ export const WebSearchToolResultLinks = memo(function WebSearchToolResultLinks({
                 {title}
               </Text>
             </Pressable>
-          </Animated.View>
+          </View>
         ))}
-      </Animated.View>
+      </View>
 
       {canToggle ? (
         <Pressable
@@ -97,7 +85,11 @@ export const WebSearchToolResultLinks = memo(function WebSearchToolResultLinks({
           <Text variant="labelSmall" style={[styles.toggleText, { color: colors.text.tertiary }]}>
             {expanded ? labels.showLess : labels.showMore}
           </Text>
-          <AnimatedDisclosureIcon expanded={expanded} size={14} color={colors.text.tertiary} />
+          <Icon
+            source={expanded ? 'chevron-up' : 'chevron-down'}
+            size={14}
+            color={colors.text.tertiary}
+          />
         </Pressable>
       ) : null}
     </View>

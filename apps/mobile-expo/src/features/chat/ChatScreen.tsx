@@ -2,12 +2,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
-import { Banner, Text } from 'react-native-paper';
+import { Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AppToast } from '../../components/AppToast';
 import { ConnectionInterventionBanner } from '../gateway/ConnectionInterventionBanner';
 import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_DEFAULT } from '../../constants/toast';
 import { queryKeys } from '../../query/keys';
@@ -20,6 +19,8 @@ import { ChatComposer } from './ChatComposer';
 import { ChatContextControl } from './ChatContextControl';
 import { ChatHeader, CHAT_HEADER_TOP_PADDING_AFTER_SAFE_AREA } from './ChatHeader';
 import { ChatNavigationSheet } from './ChatNavigationSheet';
+import { StaticLoadingIndicator } from './StaticLoadingIndicator';
+import { StaticChatToast } from './StaticChatToast';
 import { ContinuousReadAloudBar } from './ContinuousReadAloudBar';
 import { ClarifyPrompt } from './ClarifyPrompt';
 import { MessageList } from './MessageList';
@@ -156,20 +157,19 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
       <View style={[styles.chatBody, { backgroundColor: canvasBg }]}>
         <View style={styles.chatBodyInner}>
         {!urlSessionKey && bootstrap.bootstrapError ? (
-          <Banner
-            visible
-            icon="alert"
-            actions={[{
-              label: m.common.retry,
-              onPress: bootstrap.retryBootstrapSession,
-            }]}
-          >
-            {bootstrap.bootstrapError}
-          </Banner>
+          <View style={[styles.bootstrapError, { borderColor: colors.semantic.error }]}>
+            <Icon source="alert" size={18} color={colors.semantic.errorBold} />
+            <Text style={[styles.bootstrapErrorText, { color: colors.semantic.errorBold }]}>
+              {bootstrap.bootstrapError}
+            </Text>
+            <Pressable accessibilityRole="button" onPress={bootstrap.retryBootstrapSession}>
+              <Text style={{ color: colors.accent.primary }}>{m.common.retry}</Text>
+            </Pressable>
+          </View>
         ) : null}
         {!urlSessionKey && bootstrap.creatingInitialSession ? (
           <View style={styles.bootstrapRow}>
-            <ActivityIndicator size="small" />
+            <StaticLoadingIndicator size={16} />
             <Text variant="bodySmall" style={{ opacity: 0.65 }}>{m.common.loading}</Text>
           </View>
         ) : null}
@@ -283,14 +283,14 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
         </View>
       </View>
 
-      <AppToast
+      <StaticChatToast
         visible={Boolean(chat.snackMsg)}
         onDismiss={() => chat.setSnackMsg('')}
         duration={TOAST_DURATION_DEFAULT}
         bottomLift={TOAST_BOTTOM_LIFT_ABOVE_BAR}
       >
         {chat.snackMsg}
-      </AppToast>
+      </StaticChatToast>
 
       <AgentPickerSheet
         visible={agentSheetVisible}
@@ -324,5 +324,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
+  bootstrapError: {
+    minHeight: 48,
+    marginHorizontal: 12,
+    paddingHorizontal: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  bootstrapErrorText: { flex: 1 },
   listFill: { flex: 1, minHeight: 0 },
 });
