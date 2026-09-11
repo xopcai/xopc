@@ -48,6 +48,7 @@ import {
   mergeStreamingAssistantIntoMessages,
 } from './session-message-parser';
 import { reconcileMessageRows } from './reconcile-message-rows';
+import { sessionContainsFinalAssistant } from './session-refresh-confirmation';
 import { takeNewChatSessionKey } from './session-prefetch';
 import { buildMobileWelcomeModel } from './mobile-welcome-starters';
 import { resumableRootChatSessions, rootChatResumeKey } from './chat-root-session';
@@ -267,8 +268,11 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   }, [sessionHistoryQuery.data?.pages]);
 
   const sessionRefreshComplete =
-    chatSession.awaitingSessionRefresh &&
-    sessionHistoryQuery.dataUpdatedAt > chatSession.sessionDataUpdatedAtRef.current;
+    !chatSession.streaming &&
+    sessionHistoryQuery.dataUpdatedAt > chatSession.sessionDataUpdatedAtRef.current &&
+    (chatSession.streamingMsg
+      ? sessionContainsFinalAssistant(sessionMessages, chatSession.streamingMsg)
+      : chatSession.awaitingSessionRefresh);
 
   const committedRowsRef = useRef({ scope: '', messages: [] as Message[] });
   const rowScope = JSON.stringify([activeGatewayId, sessionKey]);

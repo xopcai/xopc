@@ -4,17 +4,10 @@
  * User messages: right-aligned, tinted background, plain text.
  * Assistant messages: left-aligned, markdown rendering, thinking/tool blocks.
  */
-import { memo, useEffect, useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 import { useRouter } from 'expo-router';
-import Animated, {
-  cancelAnimation,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-} from 'react-native-reanimated';
 
 import { AssistantStepsBlock } from './AssistantStepsBlock';
 import { AssistantDeliverablesCard } from './AssistantDeliverablesCard';
@@ -47,7 +40,6 @@ import {
   type AssistantActivityPresentation,
 } from './assistant-turn-view-model';
 import { openNoteDetail } from '../../lib/navigation';
-import { motion, useReducedMotion } from '../../motion';
 
 function formatTime(ts: number): string {
   const d = new Date(ts);
@@ -57,33 +49,9 @@ function formatTime(ts: number): string {
 }
 
 function StreamingCursor() {
-  const reducedMotion = useReducedMotion();
-  const opacity = useSharedValue(0.72);
-
-  useEffect(() => {
-    cancelAnimation(opacity);
-    if (reducedMotion) {
-      opacity.value = 0.72;
-      return;
-    }
-    opacity.value = withRepeat(
-      withTiming(0.28, {
-        duration: motion.duration.ambient,
-        easing: motion.easing.enter,
-      }),
-      -1,
-      true,
-    );
-    return () => cancelAnimation(opacity);
-  }, [opacity, reducedMotion]);
-
-  const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
-
   return (
     <View style={styles.cursor}>
-      <Animated.View
-        style={[styles.cursorDot, { backgroundColor: chatColors.cursorBlink }, animatedStyle]}
-      />
+      <View style={[styles.cursorDot, { backgroundColor: chatColors.cursorBlink }]} />
     </View>
   );
 }
@@ -278,7 +246,6 @@ function renderAssistantContent(
             <MarkdownView
               key={`text-${i}`}
               content={merged}
-              streaming={isStreaming}
               allowTrailingMargin={allowTrailingMargin}
               sessionKey={sessionKey}
             />,
@@ -302,7 +269,7 @@ function renderAssistantContent(
     }
   }
 
-  // Streaming cursor: show blinking indicator while waiting or at the end of streamed content
+  // Static streaming marker: chat intentionally avoids autonomous visual motion.
   if (showStreamingCursor) {
     nodes.push(<StreamingCursor key="cursor" />);
   }

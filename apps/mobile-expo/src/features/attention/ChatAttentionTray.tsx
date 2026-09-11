@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
-import { AppToast } from '../../components/AppToast';
 import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { useMessages, t } from '../../i18n/messages';
 import type { HomeAction, HomeFocusItem } from '../../query/home';
@@ -12,6 +11,7 @@ import { radii, spacing, typography, useTheme } from '../../theme';
 import { AttentionItemRow } from './AttentionItemRow';
 import { markAttentionSeen, readAttentionSeen, unseenAttentionItems } from './attention-seen';
 import { useAttentionActions } from './use-attention-actions';
+import { StaticChatToast } from '../chat/StaticChatToast';
 
 export function ChatAttentionTray({
   gatewayId,
@@ -99,6 +99,7 @@ export function ChatAttentionTray({
         maxHeight="78%"
         scroll
         testID="chat-attention-sheet"
+        disableAnimation
       >
         <View style={[styles.sheetGroup, { backgroundColor: colors.surface.panel }]}>
           {orderedItems.slice(0, 3).map((item) => (
@@ -115,9 +116,9 @@ export function ChatAttentionTray({
         </Pressable>
       </BottomSheetModal>
 
-      <AppToast visible={Boolean(actions.feedback)} onDismiss={actions.clearFeedback}>
+      <StaticChatToast visible={Boolean(actions.feedback)} onDismiss={actions.clearFeedback}>
         {actions.feedback}
-      </AppToast>
+      </StaticChatToast>
     </>
   );
 }

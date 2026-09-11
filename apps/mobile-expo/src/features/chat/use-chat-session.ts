@@ -83,7 +83,9 @@ import { shouldWakeStreamRecoveryOnForeground } from './stream-recovery-foregrou
 import { formatMobileAgentRunError } from './agent-run-error';
 import { queueAssistantAudioAutoplay } from './assistant-audio-autoplay';
 
-const STREAMING_RENDER_THROTTLE_MS = 50;
+// Discrete 10 Hz text commits keep the answer responsive without continuously
+// rebuilding Markdown and remeasuring the virtualized row.
+const STREAMING_RENDER_THROTTLE_MS = 100;
 
 export interface UseChatSessionOptions {
   sessionKey: string;

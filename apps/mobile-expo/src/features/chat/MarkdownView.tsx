@@ -217,14 +217,10 @@ type EnrichedProps = {
   markdown: string;
   flavor: 'commonmark' | 'github';
   markdownStyle: MarkdownStyle;
-  streamingAnimation?: boolean;
   onLinkPress: (e: { url: string }) => void;
   selectable: boolean;
   allowTrailingMargin?: boolean;
 };
-
-/** Skip native streaming animation for large payloads — reduces native crash risk. */
-const STREAMING_ANIMATION_MAX_CHARS = 8192;
 
 function isExpoGo(): boolean {
   return Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
@@ -283,7 +279,6 @@ const JsMarkdownFallback = memo(function JsMarkdownFallback({
 
 const EnrichedMarkdownBody = memo(function EnrichedMarkdownBody({
   content,
-  streaming,
   allowTrailingMargin,
   Enriched,
   markdownStyle,
@@ -292,7 +287,6 @@ const EnrichedMarkdownBody = memo(function EnrichedMarkdownBody({
   onLinkPress,
 }: {
   content: string;
-  streaming: boolean;
   allowTrailingMargin: boolean;
   Enriched: ComponentType<EnrichedProps>;
   markdownStyle: MarkdownStyle;
@@ -300,9 +294,6 @@ const EnrichedMarkdownBody = memo(function EnrichedMarkdownBody({
   isDark: boolean;
   onLinkPress: (e: { url: string }) => void;
 }) {
-  const useStreamingAnimation =
-    streaming && content.length <= STREAMING_ANIMATION_MAX_CHARS;
-
   return (
     <ChatRenderErrorBoundary
       fallback={
@@ -316,7 +307,6 @@ const EnrichedMarkdownBody = memo(function EnrichedMarkdownBody({
         // CommonMark renderer preserves the native view while tokens stream.
         flavor="commonmark"
         markdownStyle={markdownStyle as EnrichedProps['markdownStyle']}
-        {...(useStreamingAnimation ? { streamingAnimation: true } : {})}
         onLinkPress={onLinkPress}
         selectable
         allowTrailingMargin={allowTrailingMargin}
@@ -327,14 +317,11 @@ const EnrichedMarkdownBody = memo(function EnrichedMarkdownBody({
 
 export const MarkdownView = memo(function MarkdownView({
   content,
-  streaming = false,
   allowTrailingMargin = false,
   sessionKey,
   onLinkPress,
 }: {
   content: string;
-  /** When true, enables the streaming fade-in animation for new tokens (native renderer only). */
-  streaming?: boolean;
   /**
    * When true, keeps marginBottom on the last markdown block in Yoga layout.
    * Use when another view (e.g. deliverables) sits directly below the markdown.
@@ -383,7 +370,6 @@ export const MarkdownView = memo(function MarkdownView({
   return (
     <EnrichedMarkdownBody
       content={content}
-      streaming={streaming}
       allowTrailingMargin={allowTrailingMargin}
       Enriched={Enriched!}
       markdownStyle={markdownStyle}
