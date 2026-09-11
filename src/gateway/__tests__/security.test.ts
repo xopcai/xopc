@@ -7,6 +7,7 @@ import { GatewayConfigSchema, type Config } from '../../config/schema.js';
 import { buckets } from '../rate-limit/index.js';
 import { resolveEffectiveGatewayPort } from '../host.js';
 import { loadTunnelState } from '../../tunnel/tunnel-state.js';
+import { BROWSER_EXTENSION_ID } from '../../browser/extension-identity.js';
 
 vi.mock('../../tunnel/tunnel-state.js', () => ({
   loadTunnelState: vi.fn(() => null),
@@ -70,6 +71,20 @@ function createMockService(config: any = {}, listenPort?: number): GatewayServic
 }
 
 describe('Gateway Security Fixes', () => {
+  describe('bundled browser extension origin', () => {
+    it('passes the fixed extension origin to device authentication without accepting owner credentials', async () => {
+      const app = createHonoApp({ service: createMockService(), token: 'test-token' });
+      const origin = `chrome-extension://${BROWSER_EXTENSION_ID}`;
+
+      expect((await app.request('/api/config', { headers: { Origin: origin } })).status).toBe(401);
+      const ownerResponse = await app.request('/api/config', {
+        headers: { Origin: origin, Authorization: 'Bearer test-token' },
+      });
+      expect(ownerResponse.status).toBe(403);
+      expect(await ownerResponse.json()).toMatchObject({ code: 'device_credential_required' });
+    });
+  });
+
   describe('password gateway authentication', () => {
     it('fails closed without a password and accepts only the configured password', async () => {
       const service = createMockService({ gateway: { auth: { mode: 'password', password: 'correct-password' } } });

@@ -1,6 +1,8 @@
 import os from 'node:os';
 
 import { loadConfig } from '../config/loader.js';
+import { browserEnrollmentPublicKeyThumbprint } from './enrollment.js';
+import { BROWSER_EXTENSION_ID } from './extension-identity.js';
 import { closeXopcDatabase, openXopcDatabase } from '../storage/sqlite/connection.js';
 import { createDevicePairingSetup } from '../storage/sqlite/device-pairing-repository.js';
 import {
@@ -8,11 +10,14 @@ import {
   getOrCreateGatewayIdentity,
 } from '../storage/sqlite/gateway-identity-repository.js';
 
-export const BROWSER_NATIVE_HOST_NAME = 'ai.xopc.browser';
-export const BROWSER_EXTENSION_ID = 'gopbfhaojnnhiheiikblejnpgmfmkmgd';
+export { BROWSER_EXTENSION_ID, BROWSER_NATIVE_HOST_NAME } from './extension-identity.js';
 
 export type BrowserNativeBootstrap = {
   type: 'bootstrap';
+  extensionId: string;
+  publicKeyJwk: unknown;
+  publicKeyThumbprint: string;
+  nonce: string;
 };
 
 export type BrowserNativeBootstrapResult = {
@@ -42,13 +47,28 @@ export function decodeNativeMessage(buffer: Buffer): unknown {
   return JSON.parse(buffer.subarray(4).toString('utf8')) as unknown;
 }
 
-export function createBrowserNativeBootstrap(configPath: string): BrowserNativeBootstrapResult {
+export function createBrowserNativeBootstrap(
+  configPath: string,
+  request: Omit<BrowserNativeBootstrap, 'type'>,
+): BrowserNativeBootstrapResult {
+  if (request.extensionId !== BROWSER_EXTENSION_ID) throw new Error('Browser extension identity is not trusted');
+  if (!/^[A-Za-z0-9_-]{24,160}$/.test(request.nonce)) throw new Error('Browser enrollment nonce is invalid');
+  const publicKeyThumbprint = browserEnrollmentPublicKeyThumbprint(request.publicKeyJwk);
+  if (request.publicKeyThumbprint !== publicKeyThumbprint) throw new Error('Browser enrollment key does not match');
   const config = loadConfig(configPath);
   const gatewayUrl = gatewayLoopbackUrl(config.gateway.port ?? 18790);
   openXopcDatabase();
   try {
     const route = { id: 'local-browser', kind: 'local-browser' as const, url: gatewayUrl };
-    const setup = createDevicePairingSetup([route], Date.now(), 3);
+    const setup = createDevicePairingSetup([route], Date.now(), 3, {
+      ttlMs: 60_000,
+      enrollment: {
+        issuer: 'browser-native-host',
+        extensionId: request.extensionId,
+        publicKeyThumbprint,
+        nonce: request.nonce,
+      },
+    });
     const identity = getOrCreateGatewayIdentity();
     const encoded = Buffer.from(JSON.stringify({
       version: 3,
@@ -115,7 +135,13 @@ export async function runBrowserNativeMessagingHost(configPath: string): Promise
     if (!request || typeof request !== 'object' || (request as { type?: unknown }).type !== 'bootstrap') {
       throw new Error('Unsupported native messaging request');
     }
-    process.stdout.write(encodeNativeMessage(createBrowserNativeBootstrap(configPath)));
+    const bootstrap = request as BrowserNativeBootstrap;
+    process.stdout.write(encodeNativeMessage(createBrowserNativeBootstrap(configPath, {
+      extensionId: bootstrap.extensionId,
+      publicKeyJwk: bootstrap.publicKeyJwk,
+      publicKeyThumbprint: bootstrap.publicKeyThumbprint,
+      nonce: bootstrap.nonce,
+    })));
   } catch (error) {
     process.stdout.write(encodeNativeMessage({
       ok: false,

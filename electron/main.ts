@@ -544,7 +544,8 @@ async function resolveWindowLoad(reportProgress: StartupProgressReporter = () =>
     reportProgress({ phase: 'preparing-workspace' });
     const paths = getElectronUserPaths();
     const { port, token, bind, bindHost } = await ensureGatewayConfigForElectron(paths);
-    // Browser-extension artifact install runs inside the gateway subprocess (see
+    // Browser-extension artifacts and the Native Messaging enrollment host are
+    // installed/repaired inside the gateway subprocess (see
     // gateway/service.ts → ensureBrowserExtensionOnStartup). Main does not import src/.
     try {
       const proxyUrl = await resolveVoiceModelProxyUrl();

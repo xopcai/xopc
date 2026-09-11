@@ -161,12 +161,13 @@ function ExtensionSetup(props: {
   const artifacts = status?.artifacts;
   return (
     <div className="mt-4 border-t border-edge-subtle pt-4">
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <StatusItem label={zh ? '扩展文件' : 'Extension files'} ok={artifacts?.installed === true} value={artifacts?.installed ? (zh ? '已安装' : 'Installed') : (zh ? '未安装或需更新' : 'Install or update required')} />
-        <StatusItem label={zh ? '本地桥接' : 'Local bridge'} ok={status?.running === true} value={status?.running ? (zh ? '运行中' : 'Running') : (zh ? '未运行' : 'Stopped')} />
+        <StatusItem label={zh ? '本机自动发现' : 'Local auto-discovery'} ok={artifacts?.nativeHost?.installed === true} value={artifacts?.nativeHost?.installed ? (zh ? '已就绪' : 'Ready') : (artifacts?.nativeHost?.reason ?? (zh ? '需要修复' : 'Repair required'))} />
+        <StatusItem label={zh ? '安全通道' : 'Secure channel'} ok={status?.transport === 'gateway-realtime'} value={status?.transport === 'gateway-realtime' ? 'Gateway Realtime' : (zh ? '不可用' : 'Unavailable')} />
         <StatusItem label={zh ? 'Chrome 连接' : 'Chrome connection'} ok={status?.connected === true} value={status?.connected ? (zh ? '已连接' : 'Connected') : status?.socketConnected ? (zh ? '需要重新加载扩展' : 'Reload extension') : (zh ? '等待扩展连接' : 'Waiting for extension')} />
       </div>
-      <p className="mt-3 break-all text-xs text-fg-subtle">{artifacts?.extensionDir ?? '127.0.0.1:19820'}</p>
+      <p className="mt-3 break-all text-xs text-fg-subtle">{artifacts?.extensionDir ?? 'Gateway Realtime'}</p>
       <div className="mt-3 flex flex-wrap gap-2">
         <Button className="h-9" variant={artifacts?.installed ? 'secondary' : 'primary'} disabled={busy !== null} onClick={() => void run('extension-install', () => installBrowserExtension(Boolean(artifacts?.installed)), zh ? '扩展文件已准备好。' : 'Extension files are ready.')}>
           {busy === 'extension-install' ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
@@ -179,7 +180,7 @@ function ExtensionSetup(props: {
           <FolderOpen className="size-3.5" />{zh ? '打开扩展目录' : 'Open folder'}
         </Button>
       </div>
-      {!status?.connected ? <p className="mt-3 text-xs leading-5 text-fg-muted">{status?.socketConnected ? (zh ? '扩展仍在运行旧协议。请打开 Chrome 扩展页，找到 xopc Browser Bridge 并点击“重新加载”，然后刷新状态。' : 'The extension is still running an older protocol. Open Chrome Extensions, find xopc Browser Bridge, click Reload, then refresh status.') : (zh ? '首次使用：打开 Chrome 扩展页，开启“开发者模式”，选择“加载已解压的扩展程序”，然后选择上面的扩展目录。' : 'First use: open Chrome Extensions, enable Developer mode, choose Load unpacked, then select the extension folder shown above.')}</p> : null}
+      {!status?.connected ? <p className="mt-3 text-xs leading-5 text-fg-muted">{status?.socketConnected ? (zh ? '扩展仍在运行旧协议。请打开 Chrome 扩展页，找到 xopc 并点击“重新加载”，然后刷新状态。' : 'The extension is still running an older protocol. Open Chrome Extensions, find xopc, click Reload, then refresh status.') : (zh ? '打开 xopc Chrome 扩展后，它会自动发现并安全连接本机 Gateway；连接远程 Gateway 时才需要配对链接和手动确认。' : 'Open the xopc Chrome extension to discover and securely connect to a local Gateway automatically. A pairing link and explicit approval are only required for a remote Gateway.')}</p> : null}
     </div>
   );
 }

@@ -66,6 +66,18 @@ describe('endpoint principal repository', () => {
     expect(() => createEndpointPrincipal(principal)).toThrow();
   });
 
+  it('stores Chrome browser principals', () => {
+    const created = createEndpointPrincipal({
+      id: '0196d708-62f0-7000-8000-000000000006',
+      kind: 'browser',
+      displayName: 'xopc Chrome',
+      platform: 'chrome',
+      publicKey: 'browser-public-key',
+    });
+
+    expect(getEndpointPrincipal(created.id)).toEqual(created);
+  });
+
   it('binds an endpoint instance to exactly one principal', () => {
     const first = createEndpointPrincipal({
       id: '0196d708-62f0-7000-8000-000000000003',
