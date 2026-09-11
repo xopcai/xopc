@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "minimum_chrome_version": "120",
   "name": "xopc",
-  "version": "0.0.267",
+  "version": "0.0.268",
   "description": "Chat with xopc and explicitly share or control the current page.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqnpr4vpLC/nmvy+wiOWk3SWlp2nEZkFijfk8ivGw7StNZgCK90nOMvwhdEtlkk3GOWDvdVnq8HxCsM3UNQ8FnGUyerpH1FJXqXuradxeHf8ZxFjiQU/mIWfnKbUuONWQORon3/pigyoXoK/VUXgg0Wbm/rbVwsS0bv+25R6m+mZgBspOLeKuoH7ivhL+48WV6POtMBsFPZweY26477EM7ukh+56Ff5ENevB8ymxBBn7qK5ZoeZd2a23U8ioX5TsHfe6fnrjitPWjIxD8G0NoKQxcaa/Mo+xs+T6UiLKxP0wjz5bm7jB5H+CXtkRJqzBWUB0h+RSLJckzZfA8BAJrRwIDAQAB",
   "permissions": [
