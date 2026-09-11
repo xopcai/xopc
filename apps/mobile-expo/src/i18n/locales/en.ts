@@ -56,6 +56,8 @@ export const en = {
     "mode": "Call capability",
     "chatOnly": "Chat only",
     "tools": "Can use tools",
+    "callWithoutTools": "Voice call (no tools)",
+    "callWithTools": "Voice call (with tools)",
     "followGateway": "Follow gateway",
     "nextCall": "Changes apply to the next call.",
     "connecting": "Connecting…",
@@ -1505,6 +1507,14 @@ export const en = {
     empty: 'No chats yet',
     emptyHint: 'Start with a question or an idea.',
     manageAgents: 'Manage agents',
+    groups: {
+      today: 'Today',
+      yesterday: 'Yesterday',
+      thisWeek: 'This week',
+      lastWeek: 'Last week',
+      thisMonth: 'This month',
+      earlier: 'Earlier',
+    },
   },
 
   inboxPage: {

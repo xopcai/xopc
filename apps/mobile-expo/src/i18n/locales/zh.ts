@@ -58,6 +58,8 @@ export const zh: MessageBundle = {
     "mode": "通话能力",
     "chatOnly": "仅聊天",
     "tools": "可使用工具",
+    "callWithoutTools": "语音通话（无工具）",
+    "callWithTools": "语音通话（带工具）",
     "followGateway": "跟随网关",
     "nextCall": "修改将在下次通话生效。",
     "connecting": "正在连接…",
@@ -1506,6 +1508,14 @@ export const zh: MessageBundle = {
     empty: '还没有对话',
     emptyHint: '从一个问题或想法开始。',
     manageAgents: '管理智能体',
+    groups: {
+      today: '今天',
+      yesterday: '昨天',
+      thisWeek: '本周',
+      lastWeek: '上周',
+      thisMonth: '本月',
+      earlier: '更早',
+    },
   },
 
   inboxPage: {

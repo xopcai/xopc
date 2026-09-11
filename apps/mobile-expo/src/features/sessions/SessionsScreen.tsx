@@ -1,7 +1,8 @@
-import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
+import { keepPreviousData, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
+import { Pressable, RefreshControl, StyleSheet, TextInput, View } from 'react-native';
 import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -32,20 +33,26 @@ import {
   unarchiveSession,
   useGatewayConfigured,
 } from '../../query/sessions';
-import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding, spacing, typography, useTheme } from '../../theme';
+import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding, radii, spacing, typography, useTheme } from '../../theme';
 import { useGatewayStore } from '../../stores/gateway-store';
+import { usePreferencesStore } from '../../stores/preferences-store';
 import { prefetchSessionChatEntry } from '../chat/session-history-prefetch';
 
 import { RenameDialog } from './RenameDialog';
 import { SessionCard } from './SessionCard';
+import { buildSessionListRows, type SessionListRow } from './session-time-groups';
 import type { SwipeAction } from '../../components/SwipeableRow';
 
 const PAGE_SIZE = 20;
+const sessionRowKey = (item: SessionListRow) => item.key;
+const sessionRowType = (item: SessionListRow) => item.type;
+
 export function SessionsScreen() {
   const router = useRouter();
   useDismissOnHardwareBack(router);
   const queryClient = useQueryClient();
   const activeGatewayId = useGatewayStore((state) => state.activeGatewayId);
+  const language = usePreferencesStore((state) => state.language);
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const m = useMessages();
@@ -56,13 +63,24 @@ export function SessionsScreen() {
   const [snackMsg, setSnackMsg] = useState('');
   const [renameTarget, setRenameTarget] = useState<SessionListItem | null>(null);
   const [showBatchDelete, setShowBatchDelete] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [committedSearch, setCommittedSearch] = useState('');
+  const listRef = useRef<FlashListRef<SessionListRow>>(null);
+  const searchInputRef = useRef<TextInput>(null);
+  const searchDraftRef = useRef('');
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const historyPrefetchesRef = useRef(new Map<string, Promise<void>>());
   const openingSessionKeyRef = useRef('');
   const openingResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => {
     if (openingResetTimerRef.current) clearTimeout(openingResetTimerRef.current);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
   }, []);
+  useEffect(() => {
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [committedSearch]);
   const {
     selectionMode,
     selectedIds,
@@ -78,22 +96,52 @@ export function SessionsScreen() {
     undoDelete,
   } = useDelayedDelete<string>();
 
+  const sessionsListQueryKey = useMemo(
+    () => committedSearch ? queryKeys.sessions(committedSearch) : queryKeys.sessionsAll,
+    [committedSearch],
+  );
   const sessionsQuery = useInfiniteQuery({
-    queryKey: queryKeys.sessionsAll,
-    queryFn: ({ pageParam }) => fetchSessionsList({ limit: PAGE_SIZE, offset: pageParam, channel: null }),
+    queryKey: sessionsListQueryKey,
+    queryFn: ({ pageParam, signal }) => fetchSessionsList({
+      limit: PAGE_SIZE,
+      offset: pageParam,
+      channel: null,
+      search: committedSearch,
+      signal,
+    }),
     initialPageParam: 0,
     getNextPageParam: (lastPage: SessionsPage) => lastPage.hasMore ? lastPage.offset + lastPage.limit : undefined,
     enabled: configured,
+    placeholderData: keepPreviousData,
     staleTime: 60_000,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
 
-  const allSessions = useMemo(
-    () => (sessionsQuery.data?.pages.flatMap((page) => page.items) ?? [])
-      .filter((item) => !pendingDeleteIds.has(item.key)),
-    [pendingDeleteIds, sessionsQuery.data?.pages],
+  const allSessions = useMemo(() => {
+    const seen = new Set<string>();
+    const sessions: SessionListItem[] = [];
+    for (const page of sessionsQuery.data?.pages ?? []) {
+      for (const item of page.items) {
+        if (seen.has(item.key) || pendingDeleteIds.has(item.key)) continue;
+        seen.add(item.key);
+        sessions.push(item);
+      }
+    }
+    return sessions;
+  }, [pendingDeleteIds, sessionsQuery.data?.pages]);
+  const sessionByKey = useMemo(
+    () => new Map(allSessions.map((session) => [session.key, session])),
+    [allSessions],
+  );
+  const listRows = useMemo(
+    () => buildSessionListRows(
+      allSessions,
+      sm.groups,
+      language === 'zh' ? 'zh-CN' : 'en-US',
+    ),
+    [allSessions, language, sm.groups],
   );
 
   const createSessionMutation = useMutation({
@@ -113,7 +161,7 @@ export function SessionsScreen() {
   const runBatchArchive = useCallback(async () => {
     const keys = [...selectedIds];
     const targets = keys
-      .map((key) => allSessions.find((item) => item.key === key))
+      .map((key) => sessionByKey.get(key))
       .filter((session): session is SessionListItem => Boolean(session));
     const allArchived = targets.length > 0 && targets.every((session) => session.status === 'archived');
     try {
@@ -134,19 +182,19 @@ export function SessionsScreen() {
           : allArchived ? sa.failedToUnarchive : sa.failedToArchive,
       );
     }
-  }, [allSessions, exitSelectionMode, refreshList, sa, selectedIds]);
+  }, [exitSelectionMode, refreshList, sa, selectedIds, sessionByKey]);
 
   const runBatchPin = useCallback(async () => {
     const keys = [...selectedIds];
     await Promise.all(keys.map(async (key) => {
-      const session = allSessions.find((item) => item.key === key);
+      const session = sessionByKey.get(key);
       if (!session || session.status === 'pinned') return;
       await pinSession(key);
     }));
     await refreshList();
     setSnackMsg(sa.sessionPinned);
     exitSelectionMode();
-  }, [allSessions, exitSelectionMode, refreshList, sa.sessionPinned, selectedIds]);
+  }, [exitSelectionMode, refreshList, sa.sessionPinned, selectedIds, sessionByKey]);
 
   const renameMutation = useMutation({
     mutationFn: ({ key, name }: { key: string; name: string }) => renameSession(key, name),
@@ -244,9 +292,9 @@ export function SessionsScreen() {
   const handleBatchRename = useCallback(() => {
     if (selectedCount !== 1) return;
     const key = [...selectedIds][0];
-    const session = allSessions.find((item) => item.key === key);
+    const session = sessionByKey.get(key);
     if (session) setRenameTarget(session);
-  }, [allSessions, selectedCount, selectedIds]);
+  }, [selectedCount, selectedIds, sessionByKey]);
 
   const batchActions = useMemo(() => [
     {
@@ -301,30 +349,78 @@ export function SessionsScreen() {
   const listExtraData = useMemo(
     () => ({
       selectionMode,
-      selectedKey: [...selectedIds].sort().join('|'),
+      selectedIds,
     }),
     [selectedIds, selectionMode],
   );
 
-  const handleRefresh = useCallback(() => {
-    void refreshList();
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refreshList();
+    } finally {
+      setRefreshing(false);
+    }
   }, [refreshList]);
 
-  const renderSession = useCallback(({ item, index }: { item: SessionListItem; index: number }) => (
-    <SessionCard
-      session={item}
-      onPress={() => handleSessionPress(item)}
-      onPressIn={selectionMode
-        ? undefined
-        : () => { void primeSessionHistory(item.key).catch(() => undefined); }}
-      onLongPress={() => handleSessionLongPress(item)}
-      onSwipeAction={(action) => handleSwipeAction(item, action)}
-      selectionMode={selectionMode}
-      selected={selectedIds.has(item.key)}
-      isFirst={index === 0}
-      isLast={index === allSessions.length - 1}
-    />
-  ), [allSessions.length, handleSessionPress, handleSessionLongPress, handleSwipeAction, primeSessionHistory, selectedIds, selectionMode]);
+  const handleSessionPressIn = useCallback((session: SessionListItem) => {
+    void primeSessionHistory(session.key).catch(() => undefined);
+  }, [primeSessionHistory]);
+
+  const renderListRow = useCallback(({ item }: { item: SessionListRow }) => {
+    if (item.type === 'section') {
+      return (
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: colors.text.secondary }]}>{item.title}</Text>
+        </View>
+      );
+    }
+    return (
+      <SessionCard
+        session={item.session}
+        onPress={handleSessionPress}
+        onPressIn={selectionMode ? undefined : handleSessionPressIn}
+        onLongPress={handleSessionLongPress}
+        onSwipeAction={handleSwipeAction}
+        selectionMode={selectionMode}
+        selected={selectedIds.has(item.session.key)}
+        isFirst={item.isFirst}
+        isLast={item.isLast}
+      />
+    );
+  }, [colors.text.secondary, handleSessionLongPress, handleSessionPress, handleSessionPressIn, handleSwipeAction, selectedIds, selectionMode]);
+
+  const handleSearchChange = useCallback((value: string) => {
+    searchDraftRef.current = value;
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setCommittedSearch(searchDraftRef.current.trim());
+      searchTimerRef.current = null;
+    }, 250);
+  }, []);
+
+  const submitSearch = useCallback(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = null;
+    setCommittedSearch(searchDraftRef.current.trim());
+  }, []);
+
+  const closeSearch = useCallback(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = null;
+    searchDraftRef.current = '';
+    searchInputRef.current?.clear();
+    setCommittedSearch('');
+    setSearchOpen(false);
+  }, []);
+
+  const openSearch = useCallback(() => {
+    if (searchOpen) {
+      searchInputRef.current?.focus();
+      return;
+    }
+    setSearchOpen(true);
+  }, [searchOpen]);
 
   const renderListFooter = useCallback(() => {
     if (sessionsQuery.isFetchingNextPage) {
@@ -343,6 +439,8 @@ export function SessionsScreen() {
         title={selectionMode ? t(li.selectedCount, { count: selectedCount }) : sm.title}
         largeTitle={!selectionMode}
         onBack={selectionMode ? exitSelectionMode : () => dismissOrRoot(router)}
+        onSearchPress={!selectionMode && configured ? openSearch : undefined}
+        searchPlaceholder={m.sessions.searchPlaceholder}
         rightActions={selectionMode ? undefined : [
           {
             icon: 'square-edit-outline',
@@ -354,6 +452,39 @@ export function SessionsScreen() {
         ]}
       />
 
+      {!selectionMode && searchOpen ? (
+        <View style={styles.searchWrap}>
+          <View style={[styles.searchBox, { backgroundColor: colors.surface.input }]}>
+            <Icon source="magnify" size={19} color={colors.text.tertiary} />
+            <TextInput
+              ref={searchInputRef}
+              defaultValue=""
+              onChangeText={handleSearchChange}
+              onSubmitEditing={submitSearch}
+              placeholder={m.sessions.searchPlaceholder}
+              placeholderTextColor={colors.text.tertiary}
+              style={[styles.searchInput, { color: colors.text.primary }]}
+              autoFocus
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {committedSearch && sessionsQuery.isFetching && !sessionsQuery.isFetchingNextPage ? (
+              <ActivityIndicator size={16} />
+            ) : null}
+            <Pressable
+              onPress={closeSearch}
+              accessibilityRole="button"
+              accessibilityLabel={m.common.close}
+              hitSlop={4}
+              style={styles.searchClose}
+            >
+              <Icon source="close-circle" size={20} color={colors.text.tertiary} />
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
       {!configured ? (
         <View style={styles.center}>
           <Icon source="cloud-off-outline" size={42} color={colors.text.tertiary} />
@@ -363,10 +494,12 @@ export function SessionsScreen() {
       ) : sessionsQuery.isLoading ? (
         <ListSkeleton count={8} withIcon={false} />
       ) : (
-        <FlatList
-          data={allSessions}
-          keyExtractor={(item) => item.key}
-          renderItem={renderSession}
+        <FlashList
+          ref={listRef}
+          data={listRows}
+          keyExtractor={sessionRowKey}
+          renderItem={renderListRow}
+          getItemType={sessionRowType}
           onEndReached={onEndReached}
           onEndReachedThreshold={0.5}
           onMomentumScrollBegin={onMomentumScrollBegin}
@@ -374,23 +507,29 @@ export function SessionsScreen() {
           extraData={listExtraData}
           refreshControl={
             <RefreshControl
-              refreshing={sessionsQuery.isFetching && !sessionsQuery.isLoading && !sessionsQuery.isFetchingNextPage}
-              onRefresh={handleRefresh}
+              refreshing={refreshing}
+              onRefresh={() => { void handleRefresh(); }}
             />
           }
           contentContainerStyle={[styles.list, { paddingBottom: listBottomPadding }]}
           ListEmptyComponent={
             <View style={styles.center}>
-              <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>{sm.empty}</Text>
-              <Text style={[styles.emptyText, { color: colors.text.tertiary }]}>{sm.emptyHint}</Text>
-              <Button
-                mode="contained"
-                style={styles.emptyAction}
-                loading={createSessionMutation.isPending}
-                onPress={() => createSessionMutation.mutate()}
-              >
-                {sm.newChat}
-              </Button>
+              <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>
+                {committedSearch ? m.sessions.noResults : sm.empty}
+              </Text>
+              <Text style={[styles.emptyText, { color: colors.text.tertiary }]}>
+                {committedSearch ? t(m.sessions.noResultsHint, { query: committedSearch }) : sm.emptyHint}
+              </Text>
+              {!committedSearch ? (
+                <Button
+                  mode="contained"
+                  style={styles.emptyAction}
+                  loading={createSessionMutation.isPending}
+                  onPress={() => createSessionMutation.mutate()}
+                >
+                  {sm.newChat}
+                </Button>
+              ) : null}
             </View>
           }
         />
@@ -433,7 +572,26 @@ export function SessionsScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 8 },
-  list: { paddingTop: spacing.sm, paddingBottom: spacing.lg, gap: 0, flexGrow: 1 },
+  searchWrap: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
+  searchBox: {
+    minHeight: 44,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingLeft: spacing.md,
+  },
+  searchInput: { flex: 1, minHeight: 44, fontSize: 16, paddingVertical: 0 },
+  searchClose: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  list: { paddingBottom: spacing.lg, flexGrow: 1 },
+  sectionHeader: {
+    minHeight: 40,
+    justifyContent: 'flex-end',
+    paddingHorizontal: spacing.content + spacing.sm,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  sectionTitle: { ...typography.label, fontWeight: '700' },
   footerLoader: { paddingVertical: 16, alignItems: 'center' },
   emptyTitle: { ...typography.heading },
   emptyText: { ...typography.label, textAlign: 'center', maxWidth: 260 },

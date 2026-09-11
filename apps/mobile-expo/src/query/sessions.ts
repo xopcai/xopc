@@ -119,21 +119,30 @@ export type SessionsPage = {
 };
 
 export async function fetchSessionsList(
-  options?: { limit?: number; offset?: number; search?: string; channel?: string | null },
+  options?: {
+    limit?: number;
+    offset?: number;
+    search?: string;
+    channel?: string | null;
+    signal?: AbortSignal;
+  },
 ): Promise<SessionsPage> {
   const limit = options?.limit ?? 20;
   const offset = options?.offset ?? 0;
   const search = options?.search?.trim() ?? '';
   const channel = options?.channel === undefined ? 'webchat' : options.channel;
 
-  const res = await apiFetch(buildSessionListPath({
-    limit,
-    offset,
-    search: search || undefined,
-    channel,
-    sortBy: 'updatedAt',
-    sortOrder: 'desc',
-  }));
+  const res = await apiFetch(
+    buildSessionListPath({
+      limit,
+      offset,
+      search: search || undefined,
+      channel,
+      sortBy: 'updatedAt',
+      sortOrder: 'desc',
+    }),
+    { signal: options?.signal },
+  );
   if (!res.ok) throwApiError(res, await parseErrorBody(res));
   const raw = await res.json();
   let parsed: SessionsListResponse;
