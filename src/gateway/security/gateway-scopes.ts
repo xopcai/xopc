@@ -35,6 +35,15 @@ export const DEFAULT_MOBILE_SCOPES: readonly GatewayScope[] = [
   'device.self',
 ];
 
+export const DEFAULT_BROWSER_EXTENSION_SCOPES: readonly GatewayScope[] = [
+  'gateway.status',
+  'agents.read',
+  'agents.run',
+  'sessions.read',
+  'sessions.write',
+  'device.self',
+];
+
 export function isGatewayScope(value: unknown): value is GatewayScope {
   return typeof value === 'string' && KNOWN_GATEWAY_SCOPES.has(value);
 }
@@ -61,6 +70,10 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   if (path === '/api/device-auth/refresh' || path === '/api/devices/me') return 'device.self';
   if (path.startsWith('/api/devices/me/push')) return 'notifications.self';
   if (path.startsWith('/api/endpoint-tools')) return 'device.self';
+  if (path.startsWith('/api/browser/tab-bindings')
+    || path.startsWith('/api/browser/approvals')) {
+    return methodScope(method, 'sessions.read', 'sessions.write');
+  }
   if (method === 'GET' && path === '/api/connectors/approvals') return 'sessions.read';
   if (method === 'POST' && path === '/api/connectors/approvals/respond') return 'sessions.write';
   if (path === '/api/agent' || path.startsWith('/api/agent/')) return 'agents.run';

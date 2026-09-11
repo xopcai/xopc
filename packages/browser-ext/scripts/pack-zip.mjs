@@ -1,6 +1,6 @@
 /**
  * Build a Chrome Web Store / sideload zip from the extension package root layout.
- * Includes: manifest.json, popup.html, dist/*.js, icons/*.png
+ * Includes the manifest, compiled Side Panel/background assets, and icons.
  */
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -17,10 +17,8 @@ const slug = 'xopc-browser-bridge';
 
 const requiredFiles = [
   'manifest.json',
-  'popup.html',
   'dist/background.js',
-  'dist/content.js',
-  'dist/popup.js',
+  'dist/sidepanel.html',
 ];
 
 for (const rel of requiredFiles) {
@@ -44,7 +42,6 @@ const outZip = join(releaseDir, `${slug}-v${version}.zip`);
 
 const zip = new AdmZip();
 zip.addLocalFile(join(pkgRoot, 'manifest.json'));
-zip.addLocalFile(join(pkgRoot, 'popup.html'));
 zip.addLocalFolder(join(pkgRoot, 'dist'), 'dist');
 zip.addLocalFolder(join(pkgRoot, 'icons'), 'icons');
 zip.writeZip(outZip);

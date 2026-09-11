@@ -15,6 +15,7 @@ import {
 } from '../../../../storage/sqlite/index.js';
 import type { AuthenticatedRouteDeps } from '../deps.js';
 import { registerEndpointToolRoutes } from '../endpoint-tools.js';
+import { setGatewayPrincipal } from '../../../security/gateway-principal.js';
 
 describe('endpoint tool principal routes', () => {
   let stateDir: string;
@@ -50,6 +51,14 @@ describe('endpoint tool principal routes', () => {
     revokeEndpointPrincipal(registration.principalId);
 
     const app = new Hono();
+    app.use('*', async (c, next) => {
+      setGatewayPrincipal(c, {
+        kind: 'owner',
+        principalId: 'local-owner',
+        scopes: ['gateway.admin'],
+      });
+      await next();
+    });
     registerEndpointToolRoutes(app, { service: {} } as AuthenticatedRouteDeps);
     const response = await app.request('/api/endpoint-tools/principals', {
       method: 'POST',

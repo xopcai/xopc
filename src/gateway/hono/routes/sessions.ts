@@ -19,6 +19,7 @@ import type { StartupUnavailableGatewayMethod } from '../../startup-readiness.js
 import { evictEmbeddedSessionRunner } from '../../../agent/embedded/session-runner.js';
 import { SessionEnvironmentService } from '../../../execution-environments/session-environment-service.js';
 import type { ProjectExecutionMode } from '../../../projects/types.js';
+import { deleteBrowserTabBinding } from '../../../storage/sqlite/browser-tab-binding-repository.js';
 
 const log = createGatewayRouteLogger('Sessions');
 
@@ -279,6 +280,9 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
         });
         return c.json({ ok: false, error: result.error }, 400);
       }
+    }
+    if (body.createdSurface === 'browser_extension') {
+      await service.sessions.patch(sessionKey, { customData: { createdSurface: 'browser_extension' } });
     }
     const session = await service.sessions.getSession(sessionKey);
     const agentConfig = channel === 'webchat' ? await service.sessions.getFixedAgentConfig(sessionKey) : undefined;
@@ -724,6 +728,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     if (result.ok === false) {
       return c.json({ ok: false, error: result.error }, 404);
     }
+    deleteBrowserTabBinding(key);
     if (requestedProjectId !== undefined) {
       try {
         if (requestedProjectId) {
@@ -885,6 +890,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     }
     const result = await service.sessions.delete(key);
     if (result.deleted) {
+      deleteBrowserTabBinding(key);
       await environments.release(key).catch((error) => {
         log.warn({ err: error, sessionKey: key }, 'Session deleted but execution environment cleanup failed');
       });

@@ -2,6 +2,8 @@ export type {
   BrowserActionInput,
   BrowserControlResult,
   BrowserExtensionStatus,
+  BrowserWireAuthenticate,
+  BrowserWireChallenge,
   BrowserNode,
   BrowserObservation,
   BrowserTab,
@@ -9,7 +11,10 @@ export type {
   BrowserWireKeepAlive,
   BrowserWireResult,
 } from '@xopcai/browser-control-contract';
-export { BROWSER_EXTENSION_PROTOCOL_VERSION } from '@xopcai/browser-control-contract';
+export {
+  BROWSER_EXTENSION_PROTOCOL_VERSION,
+  browserWireAuthenticationPayload,
+} from '@xopcai/browser-control-contract';
 
 export const XOPC_EXT_PORT = 19820;
 export const XOPC_EXT_HOST = '127.0.0.1';

@@ -1,38 +1,39 @@
 {
   "manifest_version": 3,
   "minimum_chrome_version": "120",
-  "name": "xopc Browser Bridge",
+  "name": "xopc",
   "version": "0.0.264",
-  "description": "Browser automation bridge for xopc — executes commands in Chrome via the local xopc daemon.",
+  "description": "Chat with xopc and explicitly share or control the current page.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqnpr4vpLC/nmvy+wiOWk3SWlp2nEZkFijfk8ivGw7StNZgCK90nOMvwhdEtlkk3GOWDvdVnq8HxCsM3UNQ8FnGUyerpH1FJXqXuradxeHf8ZxFjiQU/mIWfnKbUuONWQORon3/pigyoXoK/VUXgg0Wbm/rbVwsS0bv+25R6m+mZgBspOLeKuoH7ivhL+48WV6POtMBsFPZweY26477EM7ukh+56Ff5ENevB8ymxBBn7qK5ZoeZd2a23U8ioX5TsHfe6fnrjitPWjIxD8G0NoKQxcaa/Mo+xs+T6UiLKxP0wjz5bm7jB5H+CXtkRJqzBWUB0h+RSLJckzZfA8BAJrRwIDAQAB",
   "permissions": [
-    "debugger",
+    "sidePanel",
+    "contextMenus",
     "scripting",
     "tabs",
     "tabGroups",
     "activeTab",
     "alarms",
     "storage",
-    "windows"
+    "nativeMessaging"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "optional_permissions": [
+    "debugger"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
   ],
   "background": {
     "service_worker": "dist/background.js",
     "type": "module"
   },
-  "content_scripts": [
-    {
-      "matches": [
-        "<all_urls>"
-      ],
-      "js": [
-        "dist/content.js"
-      ],
-      "run_at": "document_idle",
-      "all_frames": false
-    }
-  ],
+  "side_panel": {
+    "default_path": "dist/sidepanel.html"
+  },
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -40,8 +41,7 @@
     "128": "icons/icon-128.png"
   },
   "action": {
-    "default_title": "xopc Browser Bridge",
-    "default_popup": "popup.html",
+    "default_title": "Open xopc",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png"

@@ -4,9 +4,14 @@ import { describe, expect, it } from 'vitest';
 import { ConfigSchema } from '../../../../config/schema.js';
 import type { AuthenticatedRouteDeps } from '../deps.js';
 import { registerBrowserRoutes } from '../browser.js';
+import { setGatewayPrincipal } from '../../../security/gateway-principal.js';
 
 function createApp() {
   const app = new Hono();
+  app.use('*', async (c, next) => {
+    setGatewayPrincipal(c, { kind: 'owner', principalId: 'local-owner', scopes: ['gateway.admin'] });
+    await next();
+  });
   registerBrowserRoutes(app, {
     service: {
       currentConfig: ConfigSchema.parse({

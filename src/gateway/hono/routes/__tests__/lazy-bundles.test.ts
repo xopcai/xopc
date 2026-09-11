@@ -48,6 +48,8 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/browser/status')?.id).toBe('browser');
     expect(findAuthenticatedLazyRouteBundle('/api/browser/test')?.id).toBe('browser');
     expect(findAuthenticatedLazyRouteBundle('/api/browser/extension/install')?.id).toBe('browser');
+    expect(findAuthenticatedLazyRouteBundle('/api/browser/tab-bindings/session-1')?.id).toBe('browser');
+    expect(findAuthenticatedLazyRouteBundle('/api/browserish/tab-bindings/session-1')).toBeUndefined();
   });
 
   it('routes image generation APIs to models, not agents', () => {

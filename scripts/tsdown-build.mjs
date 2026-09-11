@@ -46,10 +46,8 @@ const browserExtPkg = join(root, 'packages/browser-ext');
 const browserExtDist = join(root, 'dist/browser-ext');
 const browserExtRequired = [
   'manifest.json',
-  'popup.html',
   'dist/background.js',
-  'dist/content.js',
-  'dist/popup.js',
+  'dist/sidepanel.html',
 ];
 
 function validateBrowserExtLayout(dir) {
@@ -71,9 +69,7 @@ if (!validateBrowserExtLayout(browserExtPkg)) {
 }
 
 mkdirSync(browserExtDist, { recursive: true });
-for (const name of ['manifest.json', 'popup.html']) {
-  cpSync(join(browserExtPkg, name), join(browserExtDist, name));
-}
+cpSync(join(browserExtPkg, 'manifest.json'), join(browserExtDist, 'manifest.json'));
 cpSync(join(browserExtPkg, 'dist'), join(browserExtDist, 'dist'), { recursive: true });
 cpSync(join(browserExtPkg, 'icons'), join(browserExtDist, 'icons'), { recursive: true });
 

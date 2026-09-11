@@ -1,4 +1,4 @@
-import type { ModelThinkingValue } from '@xopcai/gateway-contract';
+import { browserPageContextsInputSchema, type ModelThinkingValue } from '@xopcai/gateway-contract';
 import { endpointTurnClaimSchema } from '@xopcai/endpoint-tools-protocol';
 import type { Context } from 'hono';
 
@@ -9,6 +9,7 @@ import { validateWebchatAttachments, validateWebchatContent } from '../../chat-l
 import type { UserTurnAttachment } from '../../user-turn-input.js';
 import { parseTurnContextRefs } from '../../../agent/source-context/types.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { browserPageContextToAgentContext } from '../../../agent/source-context/browser-page.js';
 
 const MAX_TURN_CONTEXTS = 5;
 
@@ -26,6 +27,10 @@ export async function submitSessionInput(
   if (contextRefs === null) {
     return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: `contextRefs must contain at most ${MAX_TURN_CONTEXTS} valid notes` } }, 400);
   }
+  const browserContexts = browserPageContextsInputSchema.safeParse(body.browserContexts ?? []);
+  if (!browserContexts.success) {
+    return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid browser page context' } }, 400);
+  }
   const content = typeof body.content === 'string' ? body.content : '';
   const contentError = validateWebchatContent(content);
   if (contentError) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: contentError } }, 400);
@@ -37,6 +42,10 @@ export async function submitSessionInput(
   if (!origin.success) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid endpoint origin' } }, 400);
   if (!deps.service.endpointTools.registry.verifyTurnClaim(origin.data.endpointId, origin.data.token)) {
     return c.json({ ok: false, error: { code: 'INVALID_ENDPOINT', message: 'Endpoint connection is not active' } }, 401);
+  }
+  if (browserContexts.data.length
+    && deps.service.endpointTools.registry.get(origin.data.endpointId)?.kind !== 'browser') {
+    return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Browser context requires a browser endpoint' } }, 403);
   }
   if (body.expectedSessionId !== undefined && (typeof body.expectedSessionId !== 'string' || !body.expectedSessionId || body.expectedSessionId.length > 128)) {
     return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid session identity' } }, 400);
@@ -67,6 +76,7 @@ export async function submitSessionInput(
       content,
       attachments: attachments as UserTurnAttachment[] | undefined,
       contextRefs,
+      sourceContexts: browserContexts.data.map(browserPageContextToAgentContext),
       thinking: selection?.thinkingLevel ?? (typeof body.thinking === 'string' ? body.thinking : undefined),
       origin: { type: 'endpoint', endpointId: origin.data.endpointId },
     });

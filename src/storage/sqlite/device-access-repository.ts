@@ -12,13 +12,14 @@ const REFRESH_PROOF_MAX_AGE_MS = 5 * 60 * 1_000;
 const ACCESS_TOKEN_PREFIX = 'xopc_at_';
 const REFRESH_TOKEN_PREFIX = 'xopc_rt_';
 
-export type DevicePlatform = 'ios' | 'android';
+export type DevicePlatform = 'ios' | 'android' | 'chrome';
 export type DevicePublicKeyJwk = crypto.webcrypto.JsonWebKey;
 
 export type DeviceRecord = {
   id: string;
   displayName: string;
   platform: DevicePlatform;
+  extensionId?: string;
   publicKeyJwk: DevicePublicKeyJwk;
   scopes: GatewayScope[];
   createdAt: number;
@@ -44,6 +45,7 @@ type DeviceRow = {
   display_name: string;
   platform: DevicePlatform;
   public_key_jwk: string;
+  extension_id: string | null;
   scopes_json: string;
   created_at: number;
   last_seen_at: number | null;
@@ -81,6 +83,7 @@ function deviceFromRow(row: DeviceRow): DeviceRecord {
     displayName: row.display_name,
     platform: row.platform,
     publicKeyJwk: JSON.parse(row.public_key_jwk) as DevicePublicKeyJwk,
+    ...(row.extension_id ? { extensionId: row.extension_id } : {}),
     scopes: parseGatewayScopes(row.scopes_json),
     createdAt: row.created_at,
     ...(row.last_seen_at === null ? {} : { lastSeenAt: row.last_seen_at }),
@@ -93,6 +96,7 @@ export function createDevice(input: {
   displayName: string;
   platform: DevicePlatform;
   publicKeyJwk: DevicePublicKeyJwk;
+  extensionId?: string;
   scopes: readonly GatewayScope[];
   now?: number;
 }): DeviceRecord {
@@ -100,12 +104,13 @@ export function createDevice(input: {
   const createdAt = input.now ?? Date.now();
   getSqliteDatabase().prepare(`
     INSERT INTO devices (
-      device_id, display_name, platform, public_key_jwk, scopes_json, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?)
+      device_id, display_name, platform, extension_id, public_key_jwk, scopes_json, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     input.displayName,
     input.platform,
+    input.extensionId ?? null,
     JSON.stringify(input.publicKeyJwk),
     JSON.stringify([...new Set(input.scopes)]),
     createdAt,

@@ -146,12 +146,7 @@ async function runOnce(params: {
           port: params.port,
           auth: { mode: 'none' },
         },
-        cron: { enabled: false },
-        agents: {
-          defaults: {
-            browser: { enabled: false },
-          },
-        },
+        browser: { enabled: false },
       },
       null,
       2,
