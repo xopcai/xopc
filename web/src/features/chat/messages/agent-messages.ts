@@ -104,7 +104,7 @@ function mergeAssistantContentFragments(left: MessageContent[], right: MessageCo
 }
 
 /**
- * Merge consecutive assistant bubbles into one (same as a single live streaming turn).
+ * Merge consecutive assistant rows into one visible reply.
  * Persisted sessions often store one wire `assistant` row per thinking/tool fragment; without this,
  * the chat shows repeated "execution" lines after refresh.
  */
@@ -117,14 +117,15 @@ export function mergeConsecutiveAssistantMessages(messages: Message[]): Message[
       continue;
     }
     const prev = out[out.length - 1];
-    const sameTurn = prev?.role === 'assistant'
-      && (!prev.turnId || !m.turnId || prev.turnId === m.turnId);
-    if (prev?.role === 'assistant' && sameTurn) {
+    // A visible assistant reply can span multiple backend runs (for example,
+    // connection/clarification resumes). The user row, not runId, is the
+    // conversation bubble boundary.
+    if (prev?.role === 'assistant') {
       prev.content = mergeAssistantContentFragments(prev.content, m.content);
       if (m.timestamp != null) prev.timestamp = m.timestamp;
       if (m.completedAt != null) prev.completedAt = m.completedAt;
       if (m.renderKey) prev.renderKey = m.renderKey;
-      if (m.turnId) prev.turnId = m.turnId;
+      if (!prev.turnId && m.turnId) prev.turnId = m.turnId;
       if (m.progressiveRender) prev.progressiveRender = true;
       if (m.usage) prev.usage = m.usage;
       if (m.outcome) prev.outcome = m.outcome;

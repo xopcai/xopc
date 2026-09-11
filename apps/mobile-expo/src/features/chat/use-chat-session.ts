@@ -69,7 +69,14 @@ import { useGatewayHealth } from '../gateway/use-gateway-health';
 import { requestMobileRealtimeReconnect } from '../gateway/use-gateway-realtime';
 import { readCachedSessionDetail } from '../gateway/session-detail-cache';
 import { capAttachments } from './chat-limits';
-import { localMessageScope, readLocalMessages, useLocalMessagesStore } from './local-messages-store';
+import {
+  acknowledgeLocalSessionInputs,
+  failLocalMessageIfSending,
+  localMessageScope,
+  readLocalMessages,
+  setLocalMessageDeliveryState,
+  useLocalMessagesStore,
+} from './local-messages-store';
 import type { MessageSubmission } from './message-submission';
 import { resolveResumeRunId } from './resolve-resume-run-id';
 import { shouldWakeStreamRecoveryOnForeground } from './stream-recovery-foreground';
@@ -179,6 +186,9 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   const setOptimisticMessages = useCallback((update: (messages: Message[]) => Message[]) => {
     useLocalMessagesStore.getState().update(scope, update);
   }, [scope]);
+  const setMessageDeliveryState = useCallback((messageId: string, deliveryState: Message['deliveryState']) => {
+    setOptimisticMessages(messages => setLocalMessageDeliveryState(messages, messageId, deliveryState));
+  }, [setOptimisticMessages]);
   const activeMessageIdRef = useRef<string | null>(null);
   const sending = optimisticMessages.some(message => message.deliveryState === 'sending');
   const [awaitingSessionRefresh, setAwaitingSessionRefresh] = useState(false);
@@ -298,10 +308,11 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       invalidateSessionByKey(targetSessionKey);
     });
     if (activeSessionKeyRef.current !== targetSessionKey) return;
+    if (activeMessageIdRef.current) setMessageDeliveryState(activeMessageIdRef.current, 'sent');
     sendingRef.current = false;
     runBusyRef.current = false;
     clearAllState();
-  }, [clearAllState, invalidateSessionByKey, refreshSessionHeadByKey, sessionKey]);
+  }, [clearAllState, invalidateSessionByKey, refreshSessionHeadByKey, sessionKey, setMessageDeliveryState]);
 
   // ── Session key change ───────────────────────────────────
   useEffect(() => {
@@ -315,8 +326,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
 
   // ── Run busy tracking ────────────────────────────────────
   useEffect(() => {
-    runBusyRef.current = streaming || awaitingSessionRefresh || sending;
-    sendingRef.current = sending;
+    runBusyRef.current = streaming || awaitingSessionRefresh || sendingRef.current;
   }, [streaming, awaitingSessionRefresh, sending]);
 
   // ── Finalize message ─────────────────────────────────────
@@ -378,6 +388,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       onUserTranscript: ({ text, attachments }) => {
         if (!isCurrentSession()) return;
         touchStreamActivity();
+        if (activeMessageIdRef.current) setMessageDeliveryState(activeMessageIdRef.current, 'sent');
         setProgress(null);
         setOptimisticMessages((prev) => {
           const head = prev.find(message => message.id === activeMessageIdRef.current);
@@ -556,6 +567,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
           invalidateSessionByKey(callbackSessionKey);
           return;
         }
+        if (activeMessageIdRef.current) setMessageDeliveryState(activeMessageIdRef.current, 'sent');
         sendingRef.current = false;
         runBusyRef.current = true;
         if (streamingMsgRef.current) {
@@ -570,6 +582,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
           invalidateSessionByKey(callbackSessionKey);
           return;
         }
+        if (activeMessageIdRef.current) setMessageDeliveryState(activeMessageIdRef.current, 'sent');
         if (isTransientNetworkError(msg) && streamRecoveryRef.current.recover(msg)) {
           sendingRef.current = false;
           runBusyRef.current = streamingRef.current || awaitingSessionRefresh;
@@ -604,6 +617,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     finalizeMessage,
     awaitingSessionRefresh,
     setOptimisticMessages,
+    setMessageDeliveryState,
     m.chat.modelQuotaExhausted,
     m.chat.platformTokenLimitExceeded,
   ]);
@@ -612,8 +626,10 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   const submitMessage = useCallback(async (input: MessageSubmission): Promise<void> => {
     const targetScope = localMessageScope(input.gatewayId, input.sessionKey);
     const updateMessage = (deliveryState: Message['deliveryState']) => {
-      useLocalMessagesStore.getState().update(targetScope, messages => messages.map(message =>
-        message.id === input.clientMessageId ? { ...message, deliveryState } : message));
+      useLocalMessagesStore.getState().update(
+        targetScope,
+        messages => setLocalMessageDeliveryState(messages, input.clientMessageId, deliveryState),
+      );
     };
     const isCurrent = () => mountedRef.current && activeSessionKeyRef.current === input.sessionKey
       && useGatewayStore.getState().activeGatewayId === input.gatewayId;
@@ -629,7 +645,10 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       ({ runId } = await senderRef.current.sendMessage(input));
       updateMessage('sent');
     } catch (error) {
-      updateMessage('failed');
+      useLocalMessagesStore.getState().update(
+        targetScope,
+        messages => failLocalMessageIfSending(messages, input.clientMessageId),
+      );
       if (isCurrent()) {
         sendingRef.current = false;
         runBusyRef.current = false;
@@ -901,9 +920,12 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   }), [refreshClarification, sessionKey]);
 
   useEffect(() => subscribeGatewayEvent('session.input-state', (detail) => {
-    if (!detail || typeof detail !== 'object' || (detail as { sessionKey?: string }).sessionKey !== sessionKey) return;
+    if (!detail || typeof detail !== 'object') return;
+    const state = detail as { sessionKey?: string; inputs?: unknown };
+    if (state.sessionKey !== sessionKey) return;
+    setOptimisticMessages(messages => acknowledgeLocalSessionInputs(messages, state.inputs));
     void refreshClarification(sessionKey).catch(() => undefined);
-  }), [refreshClarification, sessionKey]);
+  }), [refreshClarification, sessionKey, setOptimisticMessages]);
 
   useEffect(() => {
     if (!clarifyPrompt?.expiresAt) return;

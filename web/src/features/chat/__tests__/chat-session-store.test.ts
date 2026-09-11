@@ -245,7 +245,7 @@ describe('useChatSessionStore', () => {
     expect(useChatSessionStore.getState().sessions[sessionKey].messages[0]).toBe(historicalRow);
   });
 
-  it('does not merge adjacent assistant rows from different turns', () => {
+  it('merges adjacent assistant rows across backend continuation runs', () => {
     useChatSessionStore.getState().initSessionSnapshot(sessionKey, {
       ...idleSlice,
       messages: [{
@@ -262,8 +262,35 @@ describe('useChatSessionStore', () => {
       role: 'assistant', turnId: 'run-2', content: [{ type: 'text', text: 'second' }], timestamp: 2,
     });
 
-    expect(getChatSessionSnapshot(sessionKey)?.messages.map((message) => message.turnId))
-      .toEqual(['run-1', 'run-2']);
+    const messages = getChatSessionSnapshot(sessionKey)?.messages;
+    expect(messages).toHaveLength(1);
+    expect(messages?.[0]).toMatchObject({
+      role: 'assistant',
+      turnId: 'run-1',
+      content: [{ type: 'text', text: 'first' }, { type: 'text', text: 'second' }],
+    });
+  });
+
+  it('keeps assistant replies separate when a user row defines a new bubble boundary', () => {
+    useChatSessionStore.getState().initSessionSnapshot(sessionKey, {
+      ...idleSlice,
+      messages: [
+        { role: 'assistant', turnId: 'run-1', content: [{ type: 'text', text: 'first' }], timestamp: 1 },
+        { role: 'user', turnId: 'run-2', content: [{ type: 'text', text: 'follow up' }], timestamp: 2 },
+      ],
+      streamingMsg: {
+        role: 'assistant', turnId: 'run-2', content: [{ type: 'text', text: 'second' }], timestamp: 3,
+      },
+      sending: true,
+      streaming: true,
+    });
+
+    useChatSessionStore.getState().finalizeStreamingTurn(sessionKey, {
+      role: 'assistant', turnId: 'run-2', content: [{ type: 'text', text: 'second' }], timestamp: 3,
+    });
+
+    expect(getChatSessionSnapshot(sessionKey)?.messages.map((message) => message.role))
+      .toEqual(['assistant', 'user', 'assistant']);
   });
 
   it('keeps the newest canonical task plan revision', () => {
