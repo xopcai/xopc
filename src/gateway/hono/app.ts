@@ -76,9 +76,20 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       reverseProxyPublicUrl: resolveReverseProxyPublicUrl(service.currentConfig),
     });
 
-  const resolvePairedBrowserExtensionOrigins = (): string[] => listDevices()
-    .filter((device) => device.platform === 'chrome' && !device.revokedAt && device.extensionId)
-    .map((device) => `chrome-extension://${device.extensionId}`);
+  let loggedUnavailableDeviceStore = false;
+  const resolvePairedBrowserExtensionOrigins = (): string[] => {
+    try {
+      return listDevices()
+        .filter((device) => device.platform === 'chrome' && !device.revokedAt && device.extensionId)
+        .map((device) => `chrome-extension://${device.extensionId}`);
+    } catch (cause) {
+      if (!loggedUnavailableDeviceStore) {
+        loggedUnavailableDeviceStore = true;
+        log.warn({ err: cause }, 'Browser extension origins unavailable until the device store opens');
+      }
+      return [];
+    }
+  };
 
   const resolveAllBrowserOrigins = (): string[] => [
     ...resolveBrowserOrigins(),

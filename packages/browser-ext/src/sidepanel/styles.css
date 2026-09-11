@@ -55,6 +55,13 @@ button { cursor: pointer; }
 @keyframes blink { 50% { opacity: 0; } }
 .composer { position: absolute; left: 12px; right: 12px; bottom: 12px; border: 1px solid #cbd5e1; border-radius: 16px; background: #fff; padding: 10px; box-shadow: 0 8px 30px rgb(15 23 42 / 10%); }
 .composer textarea { width: 100%; resize: none; border: 0; outline: none; background: transparent; }
+.tab-mention-menu { position: absolute; z-index: 6; left: 0; right: 0; bottom: calc(100% + 8px); max-height: min(45vh, 320px); overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 12px; background: #fff; padding: 5px; box-shadow: 0 14px 40px rgb(15 23 42 / 14%); }
+.tab-mention-menu button { width: 100%; display: grid; gap: 2px; border: 0; border-radius: 8px; padding: 8px 10px; background: transparent; color: inherit; text-align: left; }
+.tab-mention-menu button:hover, .tab-mention-menu button.selected { background: #eff6ff; }
+.tab-mention-menu span, .tab-mention-menu small { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.tab-mention-menu span { font-size: 12px; font-weight: 600; }
+.tab-mention-menu small, .tab-mention-empty { color: #64748b; font-size: 11px; }
+.tab-mention-empty { padding: 10px; }
 .composer-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; margin-top: 5px; }
 .composer-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 .composer-tools button { border: 0; background: transparent; padding: 3px; color: #475569; font-size: 11px; }
@@ -89,10 +96,11 @@ button { cursor: pointer; }
   .field input, .field textarea, .secondary { border-color: #475569; color: #e2e8f0; }
   .muted, .status { color: #94a3b8; }
   .chat-toolbar { border-color: #334155; }
-  .session-menu, .composer { background: #111827; border-color: #475569; }
+  .session-menu, .composer, .tab-mention-menu { background: #111827; border-color: #475569; }
   .session-menu > input { border-color: #334155; color: #e2e8f0; }
   .session-list button { color: #e2e8f0; }
   .session-list button:hover, .message.user { background: #1e293b; }
+  .tab-mention-menu button:hover, .tab-mention-menu button.selected { background: #1e293b; }
   .clarification { border-color: #1e40af; background: #172554; }
   .clarification strong { color: #93c5fd; }
   .clarification > button, .clarification-answer button { border-color: #1d4ed8; background: #1e3a8a; color: #dbeafe; }
