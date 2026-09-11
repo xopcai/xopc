@@ -48,6 +48,16 @@ export function selectDisplayMessages(params: {
   return [...params.messages, params.streamingMsg];
 }
 
+/** Extract only a persisted assistant tail that belongs to the run being resumed. */
+export function extractResumeTailForRun(
+  messages: Message[],
+  runId: string,
+): { messagesWithoutTail: Message[]; tail: Message } | null {
+  const last = messages[messages.length - 1];
+  if (last?.role !== 'assistant' || last.turnId !== runId) return null;
+  return { messagesWithoutTail: messages.slice(0, -1), tail: last };
+}
+
 /** Reset visible React chat shell only; does not stop background agent runs. */
 export function detachChatViewOnly(resetUi: () => void): void {
   resetUi();

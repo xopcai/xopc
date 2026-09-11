@@ -21,4 +21,30 @@ describe('mergeMissingUserMessagesFromServer', () => {
     expect(out).toHaveLength(3);
     expect(out[2]).toEqual(u2);
   });
+
+  it('repairs a live prefix when the active user was appended ahead of the prior assistant', () => {
+    const activeUser = { ...u2, turnId: 'run-2' };
+    const out = mergeMissingUserMessagesFromServer(
+      [u1, activeUser],
+      [u1, a1, activeUser],
+      'run-2',
+    );
+
+    expect(out).toEqual([u1, a1, activeUser]);
+  });
+
+  it('keeps stable local rows when only client render metadata differs', () => {
+    const activeUser = { ...u2, turnId: 'run-2' };
+    const local = [
+      u1,
+      { ...a1, renderKey: 'assistant-stable' },
+      { ...u2 },
+    ];
+
+    expect(mergeMissingUserMessagesFromServer(
+      local,
+      [u1, a1, activeUser],
+      'run-2',
+    )).toBe(local);
+  });
 });

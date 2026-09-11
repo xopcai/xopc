@@ -79,3 +79,13 @@ export function userMessagesEquivalent(a: Message, b: Message): boolean {
   if (a.timestamp === b.timestamp) return true;
   return extractUserMessagePlainText(a.content) === extractUserMessagePlainText(b.content);
 }
+
+/** Associate a run with an optimistic user row without stealing a completed turn's row. */
+export function claimLatestUnassignedUserTurn(messages: Message[], turnId: string): Message[] {
+  const index = messages.length - 1;
+  const user = messages[index];
+  if (!user || !isUiUserMessage(user.role) || user.turnId) return messages;
+  const next = [...messages];
+  next[index] = { ...user, turnId };
+  return next;
+}

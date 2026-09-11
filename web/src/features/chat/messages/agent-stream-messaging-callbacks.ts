@@ -2,6 +2,7 @@ import type { AgentStreamRunStatus } from '@xopcai/gateway-contract';
 
 import type { CompactionState, MessagingCallbacks } from '@/features/chat/messages/message-sender';
 import type { Message } from '@/features/chat/messages/messages.types';
+import { claimLatestUnassignedUserTurn } from '@/features/chat/messages/user-message-from-stream';
 import { chatRunManager } from '@/features/chat/session/chat-run-manager';
 import {
   getChatSessionSnapshot,
@@ -134,13 +135,10 @@ export function createAgentStreamMessagingCallbacks(opts: {
     onStreamStart: (turnId) => {
       markChatRunRunning(chatId);
       beforeAssistantDelta();
-      store().updateSessionMessages(chatId, (messages) => {
-        const lastUserIndex = messages.findLastIndex((message) => message.role === 'user');
-        if (lastUserIndex < 0 || messages[lastUserIndex]?.turnId === turnId) return messages;
-        const next = [...messages];
-        next[lastUserIndex] = { ...messages[lastUserIndex], turnId };
-        return next;
-      });
+      store().updateSessionMessages(
+        chatId,
+        (messages) => claimLatestUnassignedUserTurn(messages, turnId),
+      );
       store().mutateSessionStreaming(chatId, (message) => {
         message.turnId = turnId;
       });

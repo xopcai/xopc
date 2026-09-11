@@ -245,6 +245,27 @@ describe('useChatSessionStore', () => {
     expect(useChatSessionStore.getState().sessions[sessionKey].messages[0]).toBe(historicalRow);
   });
 
+  it('does not merge adjacent assistant rows from different turns', () => {
+    useChatSessionStore.getState().initSessionSnapshot(sessionKey, {
+      ...idleSlice,
+      messages: [{
+        role: 'assistant', turnId: 'run-1', content: [{ type: 'text', text: 'first' }], timestamp: 1,
+      }],
+      streamingMsg: {
+        role: 'assistant', turnId: 'run-2', content: [{ type: 'text', text: 'second' }], timestamp: 2,
+      },
+      sending: true,
+      streaming: true,
+    });
+
+    useChatSessionStore.getState().finalizeStreamingTurn(sessionKey, {
+      role: 'assistant', turnId: 'run-2', content: [{ type: 'text', text: 'second' }], timestamp: 2,
+    });
+
+    expect(getChatSessionSnapshot(sessionKey)?.messages.map((message) => message.turnId))
+      .toEqual(['run-1', 'run-2']);
+  });
+
   it('keeps the newest canonical task plan revision', () => {
     useChatSessionStore.getState().initSessionSnapshot(sessionKey, {
       ...idleSlice,
