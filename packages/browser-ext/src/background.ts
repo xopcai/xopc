@@ -19,7 +19,7 @@ import {
   readProfile,
   registerBrowserEndpoint,
 } from './sidepanel/auth';
-import { captureTabPage, PENDING_CONTEXT_KEY } from './sidepanel/page-context';
+import { captureTabWithPermission, PENDING_CONTEXT_KEY } from './sidepanel/page-context';
 
 const log = createLogger('Background');
 const BACKGROUND_CLIENT_ID_KEY = 'xopc.browser.background-client-id';
@@ -156,7 +156,7 @@ chrome.runtime.onMessage.addListener((message: { type: string }, _sender, sendRe
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId !== 'xopc-ask-selection' || !tab?.id) return;
   const tabId = tab.id;
-  void captureTabPage(tabId, 'selection').then(async (context) => {
+  void captureTabWithPermission(tabId, 'selection').then(async (context) => {
     await chrome.storage.session.set({
       [PENDING_CONTEXT_KEY]: { context, tabId, source: 'current_selection' },
     });

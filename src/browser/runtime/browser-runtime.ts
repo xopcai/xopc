@@ -41,7 +41,8 @@ export class BrowserRuntime {
     this.evictExpiredSessions();
     if (!this.options.getConfig().enabled) return failure('DRIVER_UNAVAILABLE', 'Browser Control is disabled.');
     if (signal?.aborted) return failure('ABORTED', 'Operation was aborted.');
-    const effectiveInput = input.target ? input : { ...input, target: this.options.resolveTarget?.(taskKey) };
+    const resolvedTarget = input.target ? undefined : this.options.resolveTarget?.(taskKey);
+    const effectiveInput = input.target || !resolvedTarget ? input : { ...input, target: resolvedTarget };
     let session: RuntimeSession | null;
     let driver: BrowserDriver;
     try {

@@ -82,6 +82,25 @@ describe('BrowserRuntime', () => {
     expect(observe).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({ target: explicitTarget }), undefined);
   });
 
+  it('does not add an undefined target when the task has no tab binding', async () => {
+    const observe = vi.fn(async () => observation('https://example.com'));
+    const driver: BrowserDriver = {
+      kind: 'extension', connect: vi.fn(), disconnect: vi.fn(), createSession: vi.fn(), closeSession: vi.fn(),
+      navigate: vi.fn(), observe: observe as BrowserDriver['observe'], perform: vi.fn(), tabs: vi.fn(),
+    };
+    const runtime = new BrowserRuntime({
+      getConfig: () => setup('allow').browser,
+      createDriver: async () => driver,
+      resolveTarget: () => undefined,
+    });
+
+    await runtime.execute('task-without-binding', { action: 'observe' });
+
+    const forwarded = observe.mock.calls[0]?.[1];
+    expect(forwarded).toEqual({ action: 'observe' });
+    expect(Object.hasOwn(forwarded ?? {}, 'target')).toBe(false);
+  });
+
   it('enforces cross-domain deny before navigation', async () => {
     const { runtime, navigate } = setup('deny');
     await runtime.execute('task-a', { action: 'navigate', url: 'https://one.example' });
