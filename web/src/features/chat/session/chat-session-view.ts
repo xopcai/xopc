@@ -3,6 +3,7 @@
  * Product contract: docs/web/chat-session-semantics.md
  */
 import type { Message } from '@/features/chat/messages/messages.types';
+import { mergeConsecutiveAssistantMessages } from '@/features/chat/messages/agent-messages';
 import {
   isViewingSession,
   resolveViewSessionKey,
@@ -45,6 +46,11 @@ export function selectDisplayMessages(params: {
     return [];
   }
   if (!params.streamingMsg) return params.messages;
+  const last = params.messages[params.messages.length - 1];
+  if (last?.role === 'assistant' && params.streamingMsg.role === 'assistant') {
+    const mergedTail = mergeConsecutiveAssistantMessages([last, params.streamingMsg]);
+    return [...params.messages.slice(0, -1), ...mergedTail];
+  }
   return [...params.messages, params.streamingMsg];
 }
 
