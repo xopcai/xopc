@@ -151,16 +151,16 @@ Side Panel 的视觉组件可以先独立实现窄屏版本，后续只共享稳
 
 ### 6.2 权限分层
 
-现有 manifest 的 `debugger`、`<all_urls>` 和常驻 `<all_urls>` content script 对纯聊天过宽。目标权限模型：
+Chrome 的命名权限按扩展安装生效，而站点权限和产品授权仍可分层。当前同包方案必须安装时声明 `debugger`；下表描述运行时实际启用的能力与额外站点授权：
 
 | 模式 | 权限 | 行为 |
 | --- | --- | --- |
-| Chat only | sidePanel、storage、alarms、Gateway host | 不读取网页 |
+| Chat only | 不授予站点 host permission，不调用 debugger | 不读取网页 |
 | Ask this page | activeTab、scripting、contextMenus | 用户动作后读取当前 tab 一次 |
-| Control this site | 当前 origin 的 host permission、tabs；必要时 debugger | 在明确站点授权和审批下操作 |
-| Full browser automation | debugger、tabGroups、windows、广泛 host permission | 单独开启并显示高风险说明 |
+| Control this site | 当前 origin 的临时 host permission、显式 tab binding、debugger | 在明确站点授权和审批下操作 |
+| Full browser automation | debugger、tabGroups、按策略授予的 host permission | 单独开启并显示高风险说明 |
 
-实施时先验证 `debugger` 是否能安全迁入 `optional_permissions`；若 Chrome 的安装/更新语义不满足，则至少在产品层把 Full browser automation 设为独立开关，并在首次使用前二次解释。
+Chrome 不允许把 `debugger` 声明为可选权限，因此同包提供 Browser Control 时必须把它放在 `permissions`，并在安装时明确解释高权限警告。若产品后续要求 Chat-only 安装不申请该权限，应拆分独立控制扩展，而不是保留无效的运行时申请。
 
 content script 改为按需 `chrome.scripting.executeScript()`。只有页面需要持续操作反馈时，才注入现有 overlay content script；不再为所有网页永久声明常驻脚本。
 
