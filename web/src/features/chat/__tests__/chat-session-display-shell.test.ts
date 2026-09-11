@@ -32,6 +32,52 @@ describe('store-backed chat display', () => {
     ).toEqual(messages);
   });
 
+  it('renders a continued assistant run in the existing live bubble', () => {
+    const previous: Message = {
+      role: 'assistant',
+      turnId: 'run-1',
+      renderKey: 'assistant-run-1',
+      content: [{ type: 'tool_use', id: 'tool-1', name: 'search', status: 'done' }],
+      timestamp: 1,
+    };
+    const streaming: Message = {
+      role: 'assistant',
+      turnId: 'run-2',
+      renderKey: 'assistant-run-2',
+      content: [{ type: 'text', text: 'Continuing the answer.' }],
+      timestamp: 2,
+    };
+
+    expect(selectDisplayMessages({
+      viewSessionKey: sessionKey,
+      sessionKey,
+      messages: [previous],
+      streamingMsg: streaming,
+    })).toEqual([expect.objectContaining({
+      role: 'assistant',
+      turnId: 'run-1',
+      renderKey: 'assistant-run-2',
+      content: [...previous.content, ...streaming.content],
+    })]);
+  });
+
+  it('does not merge a live assistant across a visible user boundary', () => {
+    const messages: Message[] = [
+      { role: 'assistant', turnId: 'run-1', content: [{ type: 'text', text: 'first' }] },
+      { role: 'user', turnId: 'run-2', content: [{ type: 'text', text: 'follow up' }] },
+    ];
+    const streaming: Message = {
+      role: 'assistant', turnId: 'run-2', content: [{ type: 'text', text: 'second' }],
+    };
+
+    expect(selectDisplayMessages({
+      viewSessionKey: sessionKey,
+      sessionKey,
+      messages,
+      streamingMsg: streaming,
+    })).toEqual([...messages, streaming]);
+  });
+
   it('does not hydrate the previous turn assistant when a queued follow-up starts', () => {
     const previousAssistant: Message = {
       role: 'assistant',
