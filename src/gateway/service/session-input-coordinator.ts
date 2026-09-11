@@ -33,6 +33,7 @@ import {
 } from '../../storage/sqlite/index.js';
 import { deleteMediaUrisNoLongerReferenced } from '../../media/session-references.js';
 import { createLogger } from '../../utils/logger.js';
+import { fitSourceContextsToBudget } from '../../agent/source-context/budget.js';
 
 const log = createLogger('SessionInputCoordinator');
 const MAX_PENDING_INPUTS = 10;
@@ -58,6 +59,7 @@ export type SubmitSessionInput = {
   content: string;
   attachments?: UserTurnAttachment[];
   contextRefs?: TurnContextRef[];
+  sourceContexts?: AgentSourceContext[];
   thinking?: string;
   origin: TurnOrigin;
 };
@@ -142,7 +144,8 @@ export class SessionInputCoordinator {
       const clientMessageId = input.clientMessageId.trim();
       const content = input.content.trim();
       const targetTurnId = input.targetTurnId.trim();
-      if (!sessionKey || !clientMessageId || !targetTurnId || (!content && !input.attachments?.length)) {
+      if (!sessionKey || !clientMessageId || !targetTurnId
+        || (!content && !input.attachments?.length && !input.sourceContexts?.length)) {
         return { ok: false, code: 'BAD_REQUEST' };
       }
       if (!await this.deps.sessionExists(sessionKey)) return { ok: false, code: 'BAD_REQUEST' };
@@ -159,7 +162,8 @@ export class SessionInputCoordinator {
       const attachments = await this.deps.prepareAttachments(sessionKey, input.attachments);
       let sourceContexts: AgentSourceContext[] | undefined;
       try {
-        sourceContexts = await this.deps.prepareContexts(input.contextRefs);
+        const resolved = await this.deps.prepareContexts(input.contextRefs) ?? [];
+        sourceContexts = fitSourceContextsToBudget([...resolved, ...(input.sourceContexts ?? [])]);
       } catch (err) {
         log.warn({ err, sessionKey }, 'Session input context preparation failed');
         return { ok: false, code: 'CONTEXT_UNAVAILABLE' };
@@ -203,7 +207,8 @@ export class SessionInputCoordinator {
     const sessionKey = input.sessionKey;
     const clientMessageId = input.clientMessageId.trim();
     const content = input.content.trim();
-    if (!sessionKey || !clientMessageId || (!content && !input.attachments?.length)) {
+    if (!sessionKey || !clientMessageId
+      || (!content && !input.attachments?.length && !input.sourceContexts?.length)) {
       return { ok: false, code: 'BAD_REQUEST' };
     }
     if (!await this.deps.sessionExists(sessionKey)) return { ok: false, code: 'BAD_REQUEST' };
@@ -219,7 +224,8 @@ export class SessionInputCoordinator {
     const attachments = await this.deps.prepareAttachments(sessionKey, input.attachments);
     let sourceContexts: AgentSourceContext[] | undefined;
     try {
-      sourceContexts = await this.deps.prepareContexts(input.contextRefs);
+      const resolved = await this.deps.prepareContexts(input.contextRefs) ?? [];
+      sourceContexts = fitSourceContextsToBudget([...resolved, ...(input.sourceContexts ?? [])]);
     } catch (err) {
       log.warn({ err, sessionKey }, 'Session input context preparation failed');
       return { ok: false, code: 'CONTEXT_UNAVAILABLE' };

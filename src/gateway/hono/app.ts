@@ -13,6 +13,8 @@ import { loadTunnelState } from '../../tunnel/tunnel-state.js';
 import { maxSessionInputRequestBodyBytes } from '../chat-limits.js';
 import { buildGatewayConsoleCspHeader } from '../security/csp.js';
 import { checkBrowserOrigin } from '../security/origin-check.js';
+import { isChromeExtensionOrigin } from '../security/origin-check.js';
+import { listDevices } from '../../storage/sqlite/device-access-repository.js';
 import { isLoopbackIpAddress, isTrustedProxyAddress } from '../client-ip.js';
 import { resolveReverseProxyPublicUrl } from '../public-url.js';
 import { auth } from './middleware/auth.js';
@@ -74,6 +76,15 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       reverseProxyPublicUrl: resolveReverseProxyPublicUrl(service.currentConfig),
     });
 
+  const resolvePairedBrowserExtensionOrigins = (): string[] => listDevices()
+    .filter((device) => device.platform === 'chrome' && !device.revokedAt && device.extensionId)
+    .map((device) => `chrome-extension://${device.extensionId}`);
+
+  const resolveAllBrowserOrigins = (): string[] => [
+    ...resolveBrowserOrigins(),
+    ...resolvePairedBrowserExtensionOrigins(),
+  ];
+
   /**
    * TCP source for the in-flight request, normalized for trusted-proxy checks.
    * Returns undefined when the runtime doesn't expose conninfo (tests, mocks).
@@ -113,11 +124,12 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   app.use(
     cors({
       origin: (origin) => {
-        const allowed = resolveBrowserOrigins();
+        const allowed = resolveAllBrowserOrigins();
         if (!origin) {
           return allowed[0] ?? `http://127.0.0.1:${gatewayPort}`;
         }
         const normalized = origin.toLowerCase();
+        if (isChromeExtensionOrigin(normalized)) return origin;
         const hit = allowed.find((entry) => entry.toLowerCase() === normalized);
         if (hit) return origin;
         return allowed.includes('*') ? '*' : '';
@@ -172,10 +184,14 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       return next();
     }
 
+    const isPublicBrowserPairing = isChromeExtensionOrigin(origin)
+      && (c.req.path.startsWith('/api/device-pairing/') || c.req.path === '/api/device-auth/refresh');
+    if (isPublicBrowserPairing) return next();
+
     const result = checkBrowserOrigin({
       requestHost: c.req.header('host'),
       origin,
-      allowedOrigins: resolveBrowserOrigins(),
+      allowedOrigins: resolveAllBrowserOrigins(),
       allowHostHeaderOriginFallback,
       autoAllowSameHostFromTrustedProxy: isRequestFromTrustedProxy(c),
       isLocalClient: false,

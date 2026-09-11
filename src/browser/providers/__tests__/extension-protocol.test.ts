@@ -5,12 +5,12 @@ import { isBrowserWireResult } from '../extension.js';
 
 describe('browser extension protocol', () => {
   it('uses an explicit protocol version', () => {
-    expect(BROWSER_EXTENSION_PROTOCOL_VERSION).toBe(3);
+    expect(BROWSER_EXTENSION_PROTOCOL_VERSION).toBe(4);
   });
 
   it('rejects responses that do not contain a result envelope', () => {
     expect(isBrowserWireResult({ id: 'cmd-1', ok: true })).toBe(false);
-    expect(isBrowserWireResult({ id: 'cmd-1', result: { ok: true, receipt: {} } })).toBe(true);
-    expect(isBrowserWireResult({ id: 'cmd-1', result: { error: {} } })).toBe(false);
+    expect(isBrowserWireResult({ id: 'cmd-1', connectionId: 'connection-1', result: { ok: true, receipt: {} } })).toBe(true);
+    expect(isBrowserWireResult({ id: 'cmd-1', connectionId: 'connection-1', result: { error: {} } })).toBe(false);
   });
 });

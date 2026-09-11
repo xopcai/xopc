@@ -17,6 +17,11 @@ type OriginCheckResult =
   | { ok: false; reason: string };
 
 const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+const CHROME_EXTENSION_ORIGIN = /^chrome-extension:\/\/[a-p]{32}$/;
+
+export function isChromeExtensionOrigin(origin: string | undefined): boolean {
+  return CHROME_EXTENSION_ORIGIN.test((origin ?? '').trim().toLowerCase());
+}
 
 function isLoopbackHost(hostname: string): boolean {
   return LOOPBACK_HOSTNAMES.has(hostname.toLowerCase());

@@ -237,7 +237,10 @@ export class RealtimeRuntime {
         connectionId = crypto.randomUUID();
         let endpointReady: { endpointId: string; turnToken: string } | undefined;
         if (message.payload.endpoint) {
-          if (!this.endpointTools || message.payload.endpoint.kind !== message.payload.clientKind) {
+          const endpointKindMatches = message.payload.endpoint.kind === message.payload.clientKind
+            || (message.payload.clientKind === 'browser_extension'
+              && message.payload.endpoint.kind === 'browser');
+          if (!this.endpointTools || !endpointKindMatches) {
             socket.close(4401, 'Realtime endpoint identity is invalid');
             return;
           }

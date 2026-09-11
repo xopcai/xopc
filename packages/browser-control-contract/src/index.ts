@@ -1,7 +1,44 @@
 export type BrowserVisualMode = 'never' | 'auto' | 'always';
 export type BrowserRiskLevel = 'read' | 'draft' | 'external_effect' | 'destructive' | 'sensitive';
 
-export const BROWSER_EXTENSION_PROTOCOL_VERSION = 3;
+export type BrowserTarget =
+  | { kind: 'automation_window' }
+  | { kind: 'attached_tab'; bindingId: string };
+
+export const BROWSER_EXTENSION_PROTOCOL_VERSION = 4;
+
+export interface BrowserWireChallenge {
+  type: 'auth_challenge';
+  protocolVersion: typeof BROWSER_EXTENSION_PROTOCOL_VERSION;
+  connectionId: string;
+  challenge: string;
+  issuedAt: number;
+}
+
+export interface BrowserWireAuthenticate {
+  type: 'authenticate';
+  protocolVersion: typeof BROWSER_EXTENSION_PROTOCOL_VERSION;
+  connectionId: string;
+  principalId: string;
+  extensionId: string;
+  extensionVersion: string;
+  signature: string;
+}
+
+export function browserWireAuthenticationPayload(input: Omit<BrowserWireAuthenticate, 'type' | 'signature'> & {
+  challenge: string;
+  issuedAt: number;
+}): string {
+  return [
+    'xopc-browser-extension-v4',
+    input.connectionId,
+    input.challenge,
+    String(input.issuedAt),
+    input.principalId,
+    input.extensionId,
+    input.extensionVersion,
+  ].join('\n');
+}
 
 export interface BrowserExpectation {
   urlIncludes?: string;
@@ -14,6 +51,7 @@ export interface BrowserExpectation {
 export interface BrowserInputBase {
   sessionId?: string;
   approvalId?: string;
+  target?: BrowserTarget;
 }
 
 export interface BrowserObserveInput extends BrowserInputBase {
@@ -200,6 +238,7 @@ export type BrowserControlResult =
 export interface BrowserWireCommand {
   id: string;
   protocolVersion: typeof BROWSER_EXTENSION_PROTOCOL_VERSION;
+  connectionId: string;
   input: BrowserActionInput;
   timeoutMs: number;
   visualFallback: boolean;
@@ -207,11 +246,13 @@ export interface BrowserWireCommand {
 
 export interface BrowserWireResult {
   id: string;
+  connectionId: string;
   result: BrowserControlResult;
 }
 
 export interface BrowserWireKeepAlive {
   type: 'keepalive';
+  connectionId: string;
   timestamp: number;
 }
 
@@ -219,6 +260,8 @@ export interface BrowserExtensionStatus {
   type: 'status';
   protocolVersion: typeof BROWSER_EXTENSION_PROTOCOL_VERSION;
   extensionVersion: string;
+  connectionId: string;
+  principalId: string;
   connected: boolean;
   sessionCount: number;
 }

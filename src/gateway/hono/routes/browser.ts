@@ -1,12 +1,20 @@
 /** Browser Control status, approvals, and driver diagnostics. */
 import { getConnInfo } from '@hono/node-server/conninfo';
 import type { Context, Hono } from 'hono';
+import { browserTabBindingRequestSchema } from '@xopcai/gateway-contract';
 
 import { createBrowserDriver } from '../../../browser/drivers/create-driver.js';
 import { decideBrowserApproval, listBrowserApprovals } from '../../../browser/policy/approval-store.js';
 import { checkBrowserReadiness } from '../../../browser/readiness.js';
 import { isLoopbackClientIp } from '../../security/loopback.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+import { getDevice } from '../../../storage/sqlite/device-access-repository.js';
+import {
+  deleteBrowserTabBinding,
+  getBrowserTabBinding,
+  setBrowserTabBinding,
+} from '../../../storage/sqlite/browser-tab-binding-repository.js';
 
 const EXTENSION_ENDPOINT = 'http://127.0.0.1:19820/';
 
@@ -79,6 +87,8 @@ async function extensionStatus(): Promise<ExtensionStatusPayload> {
 }
 
 function isLocalOwnerRequest(c: Context, service: AuthenticatedRouteDeps['service']): boolean {
+  const principal = getGatewayPrincipal(c);
+  if (principal.kind !== 'owner' && principal.kind !== 'trusted-proxy') return false;
   if (service.currentConfig.gateway?.bind === 'loopback') return true;
   try {
     return isLoopbackClientIp(getConnInfo(c).remote.address);
@@ -87,8 +97,66 @@ function isLocalOwnerRequest(c: Context, service: AuthenticatedRouteDeps['servic
   }
 }
 
+function chromeDevicePrincipal(c: Context) {
+  const principal = getGatewayPrincipal(c);
+  if (principal.kind !== 'device' || !principal.deviceId) return undefined;
+  const device = getDevice(principal.deviceId);
+  return device?.platform === 'chrome' && device.revokedAt === undefined ? principal : undefined;
+}
+
+function canManageBrowserSession(c: Context, service: AuthenticatedRouteDeps['service'], sessionKey: string): boolean {
+  const principal = chromeDevicePrincipal(c);
+  if (principal) return getBrowserTabBinding(sessionKey)?.principalId === principal.deviceId;
+  return isLocalOwnerRequest(c, service);
+}
+
 export function registerBrowserRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
+
+  authenticated.get('/api/browser/tab-bindings/:sessionKey', (c) => {
+    const sessionKey = c.req.param('sessionKey').trim();
+    const binding = getBrowserTabBinding(sessionKey);
+    if (!binding) return c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Tab binding not found' } }, 404);
+    if (!canManageBrowserSession(c, service, sessionKey)) {
+      return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Tab binding belongs to another device' } }, 403);
+    }
+    return c.json({ ok: true, payload: binding });
+  });
+
+  authenticated.put('/api/browser/tab-bindings/:sessionKey', async (c) => {
+    const principal = chromeDevicePrincipal(c);
+    if (!principal?.deviceId) {
+      return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Chrome device access required' } }, 403);
+    }
+    const parsed = browserTabBindingRequestSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid tab binding' } }, 400);
+    }
+    const endpoint = service.endpointTools.registry.get(parsed.data.endpointId);
+    if (!service.endpointTools.registry.verifyTurnClaim(parsed.data.endpointId, parsed.data.turnToken)
+      || endpoint?.kind !== 'browser' || endpoint.principalId !== principal.deviceId) {
+      return c.json({ ok: false, error: { code: 'INVALID_ENDPOINT', message: 'Browser endpoint is not active' } }, 401);
+    }
+    const sessionKey = c.req.param('sessionKey').trim();
+    if (!sessionKey || !await service.sessions.getSession(sessionKey)) {
+      return c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Session not found' } }, 404);
+    }
+    const { turnToken: _turnToken, ...bindingInput } = parsed.data;
+    const binding = setBrowserTabBinding({
+      ...bindingInput,
+      sessionKey,
+      principalId: principal.deviceId,
+    });
+    return c.json({ ok: true, payload: binding });
+  });
+
+  authenticated.delete('/api/browser/tab-bindings/:sessionKey', (c) => {
+    const sessionKey = c.req.param('sessionKey').trim();
+    if (!canManageBrowserSession(c, service, sessionKey)) {
+      return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Tab binding belongs to another device' } }, 403);
+    }
+    return c.json({ ok: true, payload: { removed: deleteBrowserTabBinding(sessionKey) } });
+  });
 
   authenticated.get('/api/browser/extension-status', async (c) => {
     try {
@@ -190,23 +258,28 @@ export function registerBrowserRoutes(authenticated: Hono, deps: AuthenticatedRo
   });
 
   authenticated.get('/api/browser/approvals', (c) => {
-    if (!isLocalOwnerRequest(c, service)) {
+    const sessionKey = c.req.query('sessionKey');
+    if (!isLocalOwnerRequest(c, service) && (!sessionKey || !canManageBrowserSession(c, service, sessionKey))) {
       return c.json({ ok: false, error: 'Local owner access required.' }, 403);
     }
-    return c.json({ ok: true, approvals: listBrowserApprovals(c.req.query('sessionKey')) });
+    return c.json({ ok: true, approvals: listBrowserApprovals(sessionKey) });
   });
 
   authenticated.post('/api/browser/approvals/respond', strictRateLimitMiddleware, async (c) => {
-    if (!isLocalOwnerRequest(c, service)) {
+    const body = await c.req.json().catch(() => null) as { id?: unknown; decision?: unknown } | null;
+    const approval = typeof body?.id === 'string'
+      ? listBrowserApprovals().find((candidate) => candidate.id === body.id)
+      : undefined;
+    if (!isLocalOwnerRequest(c, service)
+      && (!approval || !canManageBrowserSession(c, service, approval.sessionKey))) {
       return c.json({ ok: false, error: 'Local owner access required.' }, 403);
     }
-    const body = await c.req.json().catch(() => null) as { id?: unknown; decision?: unknown } | null;
     if (typeof body?.id !== 'string' || (body.decision !== 'approved' && body.decision !== 'denied')) {
       return c.json({ ok: false, error: 'id and decision are required.' }, 400);
     }
-    const approval = decideBrowserApproval(body.id, body.decision);
-    if (!approval) return c.json({ ok: false, error: 'Approval not found.' }, 404);
-    return c.json({ ok: true, approval });
+    const decided = decideBrowserApproval(body.id, body.decision);
+    if (!decided) return c.json({ ok: false, error: 'Approval not found.' }, 404);
+    return c.json({ ok: true, approval: decided });
   });
 
   authenticated.get('/api/browser/playwright/doctor', async (c) => {
