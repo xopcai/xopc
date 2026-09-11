@@ -103,6 +103,15 @@ function stableWireContentKey(content: unknown): string {
   }
 }
 
+function stableKeyHash(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' ? value as Record<string, unknown> : null;
 }
@@ -269,7 +278,11 @@ function wireImageBlockToContent(block: WireContentBlock): MessageContent | null
 }
 
 /** Parse a single content block from wire format. */
-export function parseContentBlock(b: Record<string, unknown>): MessageContent | null {
+export function parseContentBlock(
+  b: Record<string, unknown>,
+  index = 0,
+  identityScope = 'content',
+): MessageContent | null {
   const block = b as WireContentBlock;
   const t = block.type;
   if (t === 'text') {
@@ -311,7 +324,9 @@ export function parseContentBlock(b: Record<string, unknown>): MessageContent | 
         : 'running';
     return {
       type: 'tool_use',
-      id: String(block.id ?? `tool-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`),
+      // Some legacy transcript rows have no tool id. Keep their render identity
+      // deterministic so a history refresh cannot remount the completed row.
+      id: String(block.id ?? `tool-${identityScope}-${index}-${block.name ?? block.function?.name ?? 'tool'}`),
       name: String(block.name ?? block.function?.name ?? 'tool'),
       input: block.input ?? block.args ?? block.arguments ?? block.function?.arguments,
       status,
@@ -367,13 +382,13 @@ function normalizeReviewBlock(raw: unknown): Extract<MessageContent, { type: 're
 }
 
 /** Normalize raw content to MessageContent[]. */
-function normalizeContentBlocks(raw: unknown): MessageContent[] {
+function normalizeContentBlocks(raw: unknown, identityScope = 'content'): MessageContent[] {
   if (raw == null) return [];
   if (typeof raw === 'string') return raw.trim() ? [{ type: 'text', text: raw }] : [];
   if (!Array.isArray(raw)) return [{ type: 'text', text: String(raw) }];
   return raw
     .filter((item): item is Record<string, unknown> => item != null && typeof item === 'object')
-    .map(parseContentBlock)
+    .map((item, index) => parseContentBlock(item, index, identityScope))
     .filter((block): block is MessageContent => block != null);
 }
 
@@ -381,10 +396,14 @@ function normalizeContentBlocks(raw: unknown): MessageContent[] {
 
 /** Build assistant content, including top-level tool_calls / toolCalls fields. */
 function buildAssistantContent(m: WireMessage): MessageContent[] {
+  const identityScope = stableKeyHash(
+    wireMessageId(m)
+      ?? (m.timestamp == null ? stableWireContentKey(m.rawContent ?? m.content) : String(m.timestamp)),
+  );
   // Session history includes flattened content for simple clients. Prefer the
   // structured copy so thinking/tool/text ordering survives a reload.
-  const rawBlocks = normalizeContentBlocks(m.rawContent);
-  const blocks = rawBlocks.length > 0 ? rawBlocks : normalizeContentBlocks(m.content);
+  const rawBlocks = normalizeContentBlocks(m.rawContent, identityScope);
+  const blocks = rawBlocks.length > 0 ? rawBlocks : normalizeContentBlocks(m.content, identityScope);
   appendReviewFromMetadata(blocks, m.metadata);
 
   // OpenAI format: top-level tool_calls array

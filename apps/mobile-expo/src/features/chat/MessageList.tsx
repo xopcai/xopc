@@ -31,8 +31,6 @@ const LIST_BASE_PADDING_BOTTOM = 8;
 const LOADING_INDICATOR_DELAY_MS = 160;
 const CHAT_MAINTAIN_VISIBLE_CONTENT_POSITION = {
   startRenderingFromBottom: true,
-  autoscrollToBottomThreshold: 0.08,
-  animateAutoScrollToBottom: false,
 } as const;
 
 function useDelayedLoadingIndicator(loading: boolean): boolean {
@@ -154,7 +152,6 @@ export const MessageList = memo(function MessageList({
   } = useChatListScrollFollow({
     listRef,
     messages,
-    streaming,
     loadingOlder,
     keyboardPadding,
     sessionKey,

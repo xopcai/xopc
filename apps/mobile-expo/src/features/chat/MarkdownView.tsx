@@ -1,7 +1,7 @@
 /**
  * Markdown renderer for chat messages.
  *
- * - **Native dev / release:** `react-native-enriched-markdown` (GFM, streaming on native).
+ * - **Native dev / release:** `react-native-enriched-markdown` (stable single-view streaming).
  * - **Expo Go / unsafe native tables / render errors:** `react-native-markdown-display` JS fallback.
  */
 import Constants, { ExecutionEnvironment } from 'expo-constants';
@@ -215,7 +215,7 @@ type JsMarkdownStyle = ReturnType<typeof createJsMarkdownStyles>;
 
 type EnrichedProps = {
   markdown: string;
-  flavor: 'github';
+  flavor: 'commonmark' | 'github';
   markdownStyle: MarkdownStyle;
   streamingAnimation?: boolean;
   onLinkPress: (e: { url: string }) => void;
@@ -311,7 +311,10 @@ const EnrichedMarkdownBody = memo(function EnrichedMarkdownBody({
     >
       <Enriched
         markdown={content}
-        flavor="github"
+        // The GitHub renderer rebuilds every native child view for each update.
+        // Chat tables already use the JS fallback, so the single-TextView
+        // CommonMark renderer preserves the native view while tokens stream.
+        flavor="commonmark"
         markdownStyle={markdownStyle as EnrichedProps['markdownStyle']}
         {...(useStreamingAnimation ? { streamingAnimation: true } : {})}
         onLinkPress={onLinkPress}

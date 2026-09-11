@@ -6,6 +6,19 @@ xopc is a local-first personal AI assistant. It builds a reviewable, correctable
 
 It is not an AI employee waiting for a job description, a coding agent confined to one repository, or a task manager that expects you to organize everything first. Models, Agents, Tasks, Projects, Workflows, and Automations are supporting capabilities. The product is the long-term relationship they make possible.
 
+## Let AI carry the execution. Keep the direction human.
+
+xopc is not meant to live life on a person's behalf or turn them into an operator who merely supervises automation. It lets AI carry repeatable, time-consuming, verifiable execution while keeping goals, judgment, creativity, and final decisions with the person. People should not have to surrender agency to gain leverage, nor personally perform every step to stay in control.
+
+This relationship follows four principles:
+
+1. AI should take on execution such as organizing, researching, following up, using tools, and verifying results.
+2. The person decides what is worth doing and retains consequential tradeoffs, creative judgment, and final decisions.
+3. Automation stays bounded by explicit authority, inspectable processes, and correctable outcomes.
+4. Time saved is part of the product's value. It should return to life, relationships, and what genuinely matters.
+
+The 80/20 brand loop expresses the direction in which this relationship can develop: as understanding, capability, and trust grow, AI can carry more execution, so people spend less time on mechanical work and preserve more attention for judgment and life. It is not a fixed promise for every task, nor does it reduce the human role to 20 percent. Human intent and decisions continue to define the entire loop.
+
 ## The relationship, not just the interface
 
 xopc should not pretend to know someone on the day it is installed. Understanding is earned through an explicit progression:
@@ -126,3 +139,5 @@ This is a direction, not a claim that every part is complete in the current rele
 Message volume and automatic task count are not the north-star measure. The more important question is:
 
 > After seven days, does the user feel that xopc understands them better than it did on day one—and that it genuinely helped advance something important?
+
+Equally important: did xopc reduce the repeatable work the person had to carry without weakening their sense of control, and return meaningful time and attention to them?
