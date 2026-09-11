@@ -60,6 +60,28 @@ describe('BrowserRuntime', () => {
       .toMatchObject({ ok: false, error: { code: 'DRIVER_UNAVAILABLE', message: 'driver failed' } });
   });
 
+  it('injects the session-bound target and preserves an explicit target', async () => {
+    const observe = vi.fn(async () => observation('https://example.com'));
+    const driver: BrowserDriver = {
+      kind: 'extension', connect: vi.fn(), disconnect: vi.fn(), createSession: vi.fn(), closeSession: vi.fn(),
+      navigate: vi.fn(), observe: observe as BrowserDriver['observe'], perform: vi.fn(), tabs: vi.fn(),
+    };
+    const browser = setup('allow').browser;
+    const boundTarget = { kind: 'attached_tab' as const, bindingId: 'binding-1' };
+    const runtime = new BrowserRuntime({
+      getConfig: () => browser,
+      createDriver: async () => driver,
+      resolveTarget: () => boundTarget,
+    });
+
+    await runtime.execute('task-a', { action: 'observe' });
+    expect(observe).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({ target: boundTarget }), undefined);
+
+    const explicitTarget = { kind: 'automation_window' as const };
+    await runtime.execute('task-a', { action: 'observe', target: explicitTarget });
+    expect(observe).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({ target: explicitTarget }), undefined);
+  });
+
   it('enforces cross-domain deny before navigation', async () => {
     const { runtime, navigate } = setup('deny');
     await runtime.execute('task-a', { action: 'navigate', url: 'https://one.example' });

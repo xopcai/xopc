@@ -234,4 +234,47 @@ describe('SessionInputCoordinator', () => {
     complete({ status: 'ok', summary: 'done' });
     await vi.waitFor(() => expect(coordinator.snapshot(sessionKey).inputs).toEqual([]));
   });
+
+  it('freezes browser page context before a turn executes', async () => {
+    let complete!: (value: { status: string; summary: string }) => void;
+    const execute = vi.fn(() => new Promise<{ status: string; summary: string }>((resolve) => {
+      complete = resolve;
+    }));
+    const coordinator = new SessionInputCoordinator({
+      sessionExists: async () => true,
+      execute,
+      prepareAttachments: async (_key, attachments) => attachments,
+      prepareContexts: async () => undefined,
+      steer: async () => false,
+      emit: () => {},
+    });
+    const browserContext = {
+      kind: 'browser_page' as const,
+      sourceId: 'page-1',
+      version: 'digest',
+      title: 'Page',
+      text: 'Frozen page body',
+      url: 'https://example.com/',
+      capturedAt: 1,
+      documentId: 'doc-1',
+    };
+
+    await coordinator.submit({
+      sessionKey,
+      clientMessageId: 'page-turn',
+      delivery: 'next',
+      content: 'summarize',
+      sourceContexts: [browserContext],
+      origin,
+    });
+
+    const stored = getSessionInputById(sessionKey, coordinator.snapshot(sessionKey).activeInputId!);
+    expect(stored?.contextSnapshots).toEqual([expect.objectContaining({ text: 'Frozen page body' })]);
+    browserContext.text = 'mutated after submit';
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce());
+    expect(execute.mock.calls[0]?.[0].sourceContexts).toEqual([
+      expect.objectContaining({ text: 'Frozen page body' }),
+    ]);
+    complete({ status: 'ok', summary: 'done' });
+  });
 });

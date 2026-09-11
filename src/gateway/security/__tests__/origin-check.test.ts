@@ -1,6 +1,15 @@
 import { describe, it, expect } from 'vitest';
 
-import { checkBrowserOrigin } from '../origin-check.js';
+import { checkBrowserOrigin, isChromeExtensionOrigin } from '../origin-check.js';
+
+describe('isChromeExtensionOrigin', () => {
+  it('accepts only canonical Chrome extension origins', () => {
+    expect(isChromeExtensionOrigin('chrome-extension://abcdefghijklmnopabcdefghijklmnop')).toBe(true);
+    expect(isChromeExtensionOrigin('chrome-extension://abcdefghijklmnopabcdefghijklmnop/path')).toBe(false);
+    expect(isChromeExtensionOrigin('chrome-extension://not-an-extension')).toBe(false);
+    expect(isChromeExtensionOrigin('https://abcdefghijklmnopabcdefghijklmnop')).toBe(false);
+  });
+});
 
 describe('checkBrowserOrigin — allowlist & host-header fallback', () => {
   it('allows when Origin exactly matches an allowlisted entry', () => {

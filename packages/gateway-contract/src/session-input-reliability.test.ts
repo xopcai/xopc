@@ -23,6 +23,12 @@ describe('session input reliability', () => {
     expect(withNote).not.toBe(plain);
   });
 
+  it('includes frozen browser context', () => {
+    const first = sessionInputFingerprint({ content: 'hello', browserContexts: [{ version: 'one' }] });
+    const changed = sessionInputFingerprint({ content: 'hello', browserContexts: [{ version: 'two' }] });
+    expect(first).not.toBe(changed);
+  });
+
   it('retries only transient HTTP statuses', () => {
     expect(shouldRetrySessionInputStatus(408)).toBe(true);
     expect(shouldRetrySessionInputStatus(429)).toBe(true);

@@ -5,7 +5,10 @@ import {
   type DevicePairingAction, type DevicePairingState, type DevicePairingStatus,
 } from '@xopcai/gateway-contract';
 
-import { DEFAULT_MOBILE_SCOPES } from '../../gateway/security/gateway-scopes.js';
+import {
+  DEFAULT_BROWSER_EXTENSION_SCOPES,
+  DEFAULT_MOBILE_SCOPES,
+} from '../../gateway/security/gateway-scopes.js';
 import { createDevice, getDevice, revokeDevice, registerInitialDeviceRefreshToken } from './device-access-repository.js';
 import type { DeviceRoute } from './device-pairing-repository.js';
 import { getOrCreateGatewayIdentity } from './gateway-identity-repository.js';
@@ -31,6 +34,9 @@ export class DevicePairingError extends Error {
 }
 const hash = (value: string) => crypto.createHash('sha256').update(value).digest('hex');
 const fail = (code: string, status?: 400 | 401 | 404 | 409): never => { throw new DevicePairingError(code, status); };
+const scopesForPlatform = (platform: 'ios' | 'android' | 'chrome') => platform === 'chrome'
+  ? DEFAULT_BROWSER_EXTENSION_SCOPES
+  : DEFAULT_MOBILE_SCOPES;
 
 function requestRow(id: string, now: number): RequestRow {
   const db = getSqliteDatabase();
@@ -154,7 +160,7 @@ export function operateDevicePairingRequest(action: Exclude<DevicePairingAction,
       }
       if (current.status !== 'approved') fail('PAIRING_NOT_APPROVED');
       const device = devicePairingDeviceSchema.parse(JSON.parse(current.device_json));
-      const created = createDevice({ ...device, scopes: DEFAULT_MOBILE_SCOPES, now });
+      const created = createDevice({ ...device, scopes: scopesForPlatform(device.platform), now });
       registerInitialDeviceRefreshToken(created.id, complete.initialRefreshToken, now);
       db.prepare(`UPDATE device_pairing_requests SET status = 'completed', revision = revision + 1,
         completion_key = ?, initial_token_hash = ?, device_id = ? WHERE request_id = ?`)
@@ -165,6 +171,8 @@ export function operateDevicePairingRequest(action: Exclude<DevicePairingAction,
   return {
     request: statusFromRow(requestRow(row.request_id, now), now),
     routes: JSON.parse(setup.routes_json) as DeviceRoute[],
-    ...(action === 'complete' ? { scopes: DEFAULT_MOBILE_SCOPES } : {}),
+    ...(action === 'complete'
+      ? { scopes: scopesForPlatform(devicePairingDeviceSchema.parse(JSON.parse(row.device_json)).platform) }
+      : {}),
   };
 }
