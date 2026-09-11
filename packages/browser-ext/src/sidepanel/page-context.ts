@@ -37,14 +37,66 @@ function truncateUtf8(value: string, maxBytes: number): { value: string; truncat
 }
 
 function sanitizedUrl(raw: string): string {
-  const url = new URL(raw);
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error('This tab does not have a valid web address');
+  }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new Error('This page cannot be attached');
+    throw new Error('Chrome does not allow xopc to read this page. Open a regular http(s) page and try again.');
+  }
+  if (url.hostname === 'chromewebstore.google.com'
+    || (url.hostname === 'chrome.google.com' && url.pathname.startsWith('/webstore'))) {
+    throw new Error('Chrome does not allow extensions to read Chrome Web Store pages.');
   }
   url.username = '';
   url.password = '';
   url.hash = '';
   return url.toString();
+}
+
+type AccessibleTab = chrome.tabs.Tab & { id: number; url: string; windowId: number };
+
+function siteAccessError(cause: unknown, url: string): Error {
+  const message = cause instanceof Error ? cause.message : String(cause);
+  const hostname = new URL(url).hostname;
+  if (/cannot access|cannot be scripted|missing host permission|extensions gallery|chrome web store/i.test(message)) {
+    return new Error(`Chrome blocked access to ${hostname}. Check xopc's site access for this page and try again.`);
+  }
+  return cause instanceof Error ? cause : new Error(message);
+}
+
+export async function runWithTabSiteAccess<T>(
+  tabId: number,
+  operation: (tab: AccessibleTab) => Promise<T>,
+): Promise<T> {
+  const tab = await chrome.tabs.get(tabId);
+  if (tab.id === undefined || tab.windowId === undefined || !tab.url) {
+    throw new Error('The selected tab is no longer available');
+  }
+  const url = sanitizedUrl(tab.url);
+  const originPattern = `${new URL(url).origin}/*`;
+  const alreadyGranted = await chrome.permissions.contains({ origins: [originPattern] });
+  let newlyGranted = false;
+
+  if (!alreadyGranted) {
+    let granted = false;
+    try {
+      granted = await chrome.permissions.request({ origins: [originPattern] });
+    } catch (cause) {
+      throw siteAccessError(cause, url);
+    }
+    if (!granted) throw new Error(`Allow xopc to access ${new URL(url).hostname} to continue.`);
+    newlyGranted = true;
+  }
+
+  try {
+    return await operation({ ...tab, id: tab.id, windowId: tab.windowId, url });
+  } catch (cause) {
+    if (newlyGranted) await chrome.permissions.remove({ origins: [originPattern] }).catch(() => false);
+    throw siteAccessError(cause, url);
+  }
 }
 
 async function sha256(value: string): Promise<string> {
@@ -85,6 +137,9 @@ export async function captureTabPage(tabId: number, mode: CaptureMode): Promise<
   const raw = result[0]?.result as RawPageSnapshot | undefined;
   if (!raw) throw new Error('Could not read this page');
   const url = sanitizedUrl(raw.url);
+  if (new URL(url).origin !== new URL(sanitizedUrl(tab.url)).origin) {
+    throw new Error('The page changed while xopc was reading it. Try again.');
+  }
   const selected = raw.selection
     ? truncateUtf8(raw.selection, MAX_BROWSER_SELECTION_BYTES)
     : undefined;
@@ -108,18 +163,9 @@ export async function captureTabPage(tabId: number, mode: CaptureMode): Promise<
 
 export async function captureTabWithPermission(
   tabId: number,
-  url: string,
   mode: CaptureMode,
 ): Promise<BrowserPageContextInput> {
-  const originPattern = `${new URL(sanitizedUrl(url)).origin}/*`;
-  const alreadyGranted = await chrome.permissions.contains({ origins: [originPattern] });
-  const granted = alreadyGranted || await chrome.permissions.request({ origins: [originPattern] });
-  if (!granted) throw new Error('Site access is required to attach this tab');
-  try {
-    return await captureTabPage(tabId, mode);
-  } finally {
-    if (!alreadyGranted) await chrome.permissions.remove({ origins: [originPattern] });
-  }
+  return runWithTabSiteAccess(tabId, () => captureTabPage(tabId, mode));
 }
 
 export async function activeTabId(): Promise<number | undefined> {
@@ -134,18 +180,22 @@ export async function currentTabDescriptor(): Promise<{
 }> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (tab.id === undefined || tab.windowId === undefined || !tab.url) throw new Error('No active web page');
-  const url = sanitizedUrl(tab.url);
-  const result = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: () => ({ url: location.href, timeOrigin: performance.timeOrigin }),
+  return runWithTabSiteAccess(tab.id, async (accessibleTab) => {
+    const result = await chrome.scripting.executeScript({
+      target: { tabId: accessibleTab.id },
+      func: () => ({ url: location.href, timeOrigin: performance.timeOrigin }),
+    });
+    const marker = result[0]?.result;
+    if (!marker) throw new Error('Could not identify this page');
+    const currentUrl = sanitizedUrl(marker.url);
+    if (new URL(currentUrl).origin !== new URL(accessibleTab.url).origin) {
+      throw new Error('The page changed while xopc was connecting to it. Try again.');
+    }
+    return {
+      tabId: String(accessibleTab.id),
+      windowId: String(accessibleTab.windowId),
+      documentId: await sha256(`${currentUrl}\n${marker.timeOrigin}`),
+      urlOrigin: new URL(currentUrl).origin,
+    };
   });
-  const marker = result[0]?.result;
-  if (!marker) throw new Error('Could not identify this page');
-  const currentUrl = sanitizedUrl(marker.url);
-  return {
-    tabId: String(tab.id),
-    windowId: String(tab.windowId),
-    documentId: await sha256(`${currentUrl}\n${marker.timeOrigin}`),
-    urlOrigin: new URL(currentUrl).origin,
-  };
 }

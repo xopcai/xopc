@@ -3,19 +3,19 @@ import {
   type RealtimeConnectionState,
   type RealtimeWebSocket,
 } from '@xopcai/realtime-client';
+import type { BrowserPageContextInput, BrowserTabBinding, BrowserTabBindingMode } from '@xopcai/gateway-contract';
 
 import {
   gatewayFetch,
   getAccessProfile,
 } from './auth';
-import type { BrowserPageContextInput, BrowserTabBinding, BrowserTabBindingMode } from '@xopcai/gateway-contract';
-import { activeTabId, currentTabDescriptor, TAB_BINDING_PREFIX } from './page-context';
 import type { BrowserAttachment } from './attachments';
+import { deleteBrowserOutbox, readBrowserOutbox, writeBrowserOutbox } from './chat-outbox';
+import { activeTabId, currentTabDescriptor, TAB_BINDING_PREFIX } from './page-context';
 
 const CLIENT_ID_KEY = 'xopc.browser.client-id';
 const ACTIVE_CHAT_KEY = 'xopc.browser.active-chat';
 const CURSOR_PREFIX = 'xopc.browser.cursor.';
-const OUTBOX_PREFIX = 'xopc.browser.outbox.';
 const TAB_SESSION_PREFIX = 'xopc.browser.tab-session.';
 
 export type BrowserChatSession = {
@@ -30,7 +30,15 @@ export type BrowserChatMessage = {
   role: 'user' | 'assistant' | 'system';
   text: string;
   timestamp?: number;
+  attachments?: BrowserChatAttachment[];
   sourceContexts?: Array<{ kind: 'note' | 'browser_page'; title: string; url?: string; truncated?: boolean }>;
+};
+
+export type BrowserChatAttachment = {
+  type: 'image' | 'file';
+  mimeType?: string;
+  name: string;
+  size?: number;
 };
 
 export type BrowserClarification = {
@@ -66,6 +74,10 @@ export type BrowserSessionModelConfig = {
 export type BrowserChatSnapshot = {
   connection: RealtimeConnectionState;
   endpointReady: boolean;
+  sessionLoading: boolean;
+  submitting: boolean;
+  stopping: boolean;
+  pendingDelivery: boolean;
   sessions: BrowserChatSession[];
   sessionKey?: string;
   sessionId?: string;
@@ -80,6 +92,13 @@ export type BrowserChatSnapshot = {
   error?: string;
 };
 
+class GatewayRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'GatewayRequestError';
+  }
+}
+
 type TurnClaim = { endpointId: string; token: string };
 type Listener = (snapshot: BrowserChatSnapshot) => void;
 type BrowserOutboxRequest = {
@@ -93,12 +112,31 @@ type BrowserOutboxRequest = {
 };
 
 async function json<T>(response: Response): Promise<T> {
-  const body = await response.json() as T & { error?: { message?: string } | string };
+  const raw = await response.text();
+  let body: T & { error?: { message?: string } | string };
+  try {
+    body = (raw ? JSON.parse(raw) : {}) as T & { error?: { message?: string } | string };
+  } catch {
+    throw new GatewayRequestError(
+      response.ok ? 'Gateway returned an invalid response' : `Gateway returned ${response.status}`,
+      response.status,
+    );
+  }
   if (!response.ok) {
     const error = body.error;
-    throw new Error(typeof error === 'string' ? error : error?.message ?? `Gateway returned ${response.status}`);
+    throw new GatewayRequestError(
+      typeof error === 'string' ? error : error?.message ?? `Gateway returned ${response.status}`,
+      response.status,
+    );
   }
   return body;
+}
+
+function isRetryableDeliveryError(cause: unknown): boolean {
+  return !(cause instanceof GatewayRequestError)
+    || cause.status === 408
+    || cause.status === 429
+    || cause.status >= 500;
 }
 
 function textContent(value: unknown): string {
@@ -116,12 +154,31 @@ function mapMessage(value: unknown, index: number): BrowserChatMessage | undefin
   const row = value as Record<string, unknown>;
   if (row.role !== 'user' && row.role !== 'assistant' && row.role !== 'system') return undefined;
   const text = textContent(row.content);
-  if (!text) return undefined;
+  const attachments = Array.isArray(row.media)
+    ? row.media.flatMap((value): BrowserChatAttachment[] => {
+        if (!value || typeof value !== 'object') return [];
+        const media = value as Record<string, unknown>;
+        const mimeType = typeof media.mimeType === 'string' ? media.mimeType : undefined;
+        const name = typeof media.name === 'string' && media.name.trim()
+          ? media.name.trim()
+          : 'Attachment';
+        return [{
+          type: media.type === 'image' || media.type === 'photo' || mimeType?.startsWith('image/')
+            ? 'image'
+            : 'file',
+          name,
+          ...(mimeType ? { mimeType } : {}),
+          ...(typeof media.size === 'number' && Number.isFinite(media.size) ? { size: media.size } : {}),
+        }];
+      })
+    : [];
+  if (!text && !attachments.length) return undefined;
   return {
     id: typeof row.id === 'string' ? row.id : `${row.role}-${index}`,
     role: row.role,
     text,
     ...(typeof row.timestamp === 'number' ? { timestamp: row.timestamp } : {}),
+    ...(attachments.length ? { attachments } : {}),
     ...(row.metadata && typeof row.metadata === 'object'
       && Array.isArray((row.metadata as Record<string, unknown>).sourceContexts)
       ? {
@@ -177,6 +234,8 @@ export class BrowserChatClient {
   private turnClaim?: TurnClaim;
   private runTopic?: string;
   private recoveringOutbox = false;
+  private lastOutboxRecoveryAt = 0;
+  private sessionsRequest = 0;
   private endpointPoll?: ReturnType<typeof setInterval>;
   private readonly onRuntimeMessage = (message: { type?: string; claim?: TurnClaim }) => {
     if (message.type !== 'browser/endpoint-ready' || !message.claim) return;
@@ -187,6 +246,10 @@ export class BrowserChatClient {
   private snapshot: BrowserChatSnapshot = {
     connection: 'idle',
     endpointReady: false,
+    sessionLoading: false,
+    submitting: false,
+    stopping: false,
+    pendingDelivery: false,
     sessions: [],
     messages: [],
     streamingText: '',
@@ -228,7 +291,7 @@ export class BrowserChatClient {
       onStateChange: (connection, error) => this.update({
         connection,
         ...(connection !== 'connected' ? { endpointReady: false } : {}),
-        ...(error ? { error } : {}),
+        ...(error ? { error } : connection === 'connected' ? { error: undefined } : {}),
       }),
       onEvent: (event) => { void this.onRealtimeEvent(event.topic, event.seq, event.event, event.data); },
       onGap: async ({ topic }) => {
@@ -248,7 +311,20 @@ export class BrowserChatClient {
       ? stored[tabKey]
       : stored[ACTIVE_CHAT_KEY];
     if (typeof restored === 'string') {
-      await this.openSession(restored);
+      try {
+        await this.openSession(restored);
+      } catch (cause) {
+        if (!(cause instanceof GatewayRequestError) || cause.status !== 404) throw cause;
+        await chrome.storage.session.remove([ACTIVE_CHAT_KEY, ...(tabKey ? [tabKey] : [])]);
+        this.update({
+          sessionKey: undefined,
+          sessionId: undefined,
+          messages: [],
+          sessionLoading: false,
+          modelConfig: undefined,
+          error: undefined,
+        });
+      }
     }
   }
 
@@ -262,6 +338,18 @@ export class BrowserChatClient {
     this.update({ endpointReady: false });
   }
 
+  async reconnect(): Promise<void> {
+    this.turnClaim = undefined;
+    this.update({ connection: 'reconnecting', endpointReady: false, error: undefined });
+    this.realtime?.reconnect();
+    const response = await chrome.runtime.sendMessage({ type: 'browser/reconnect' }).catch((cause) => ({
+      ok: false,
+      error: cause instanceof Error ? cause.message : String(cause),
+    })) as { ok?: boolean; error?: string } | undefined;
+    if (response?.ok === false) throw new Error(response.error ?? 'Could not reconnect to the browser endpoint');
+    await this.refreshEndpointClaim();
+  }
+
   private async refreshEndpointClaim(): Promise<void> {
     const response = await chrome.runtime.sendMessage({ type: 'browser/get-endpoint-claim' }).catch(() => undefined) as {
       claim?: TurnClaim;
@@ -270,11 +358,13 @@ export class BrowserChatClient {
     this.turnClaim = response?.claim;
     this.update({
       endpointReady: Boolean(this.turnClaim),
-      ...(response?.error ? { error: response.error } : {}),
+      ...(response?.error ? { error: response.error } : this.turnClaim ? { error: undefined } : {}),
     });
+    if (this.turnClaim && this.snapshot.pendingDelivery) void this.recoverOutbox();
   }
 
   async loadSessions(search?: string): Promise<void> {
+    const requestId = ++this.sessionsRequest;
     const params = new URLSearchParams({ channel: 'webchat', limit: '30' });
     if (search?.trim()) params.set('search', search.trim());
     const result = await json<{ items?: unknown[] }>(await gatewayFetch(`/api/sessions?${params}`));
@@ -289,7 +379,7 @@ export class BrowserChatClient {
         updatedAt: typeof row.updatedAt === 'string' ? row.updatedAt : '',
       }];
     });
-    this.update({ sessions });
+    if (requestId === this.sessionsRequest) this.update({ sessions });
   }
 
   async createSession(): Promise<void> {
@@ -305,35 +395,68 @@ export class BrowserChatClient {
   async openSession(sessionKey: string): Promise<void> {
     if (this.runTopic) this.realtime?.unsubscribe(this.runTopic);
     this.runTopic = undefined;
-    this.update({ sessionKey, streamingText: '', runId: undefined, clarification: undefined, error: undefined });
+    this.update({
+      sessionKey,
+      sessionId: this.snapshot.sessions.find((candidate) => candidate.key === sessionKey)?.sessionId,
+      messages: [],
+      streamingText: '',
+      runId: undefined,
+      stopping: false,
+      sessionLoading: true,
+      pendingDelivery: false,
+      clarification: undefined,
+      tabBinding: undefined,
+      browserApproval: undefined,
+      modelConfig: undefined,
+      error: undefined,
+    });
     await chrome.storage.session.set({ [ACTIVE_CHAT_KEY]: sessionKey });
     const tabId = await activeTabId();
     if (tabId !== undefined) {
       await chrome.storage.session.set({ [`${TAB_SESSION_PREFIX}${tabId}`]: sessionKey });
     }
-    await this.reloadMessages();
-    await this.reloadModelConfig();
-    const run = await json<{ payload?: { active?: boolean; runId?: string } }>(await gatewayFetch(
-      `/api/sessions/${encodeURIComponent(sessionKey)}/run`,
-    ));
-    if (run.payload?.active && run.payload.runId) await this.followRun(run.payload.runId);
-    await this.reloadClarification();
-    await this.reloadTabBinding();
-    await this.reloadBrowserApproval();
-    if (this.snapshot.endpointReady) await this.recoverOutbox();
+    try {
+      await Promise.all([
+        this.reloadMessages(),
+        this.reloadModelConfig(),
+        this.reloadClarification(),
+        this.reloadTabBinding(),
+      ]);
+      if (this.snapshot.sessionKey !== sessionKey) return;
+      const run = await json<{ payload?: { active?: boolean; runId?: string } }>(await gatewayFetch(
+        `/api/sessions/${encodeURIComponent(sessionKey)}/run`,
+      ));
+      if (this.snapshot.sessionKey !== sessionKey) return;
+      if (run.payload?.active && run.payload.runId) await this.followRun(run.payload.runId);
+      await this.reloadBrowserApproval();
+      if (this.snapshot.sessionKey !== sessionKey) return;
+      this.update({ pendingDelivery: Boolean(await readBrowserOutbox<BrowserOutboxRequest>(sessionKey)) });
+      if (this.snapshot.endpointReady) await this.recoverOutbox();
+    } catch (cause) {
+      if (this.snapshot.sessionKey !== sessionKey) return;
+      throw cause;
+    } finally {
+      if (this.snapshot.sessionKey === sessionKey) {
+        await chrome.storage.session.set({ [ACTIVE_CHAT_KEY]: sessionKey });
+        this.update({ sessionLoading: false });
+      }
+    }
   }
 
   async send(
     content: string,
     browserContexts: BrowserPageContextInput[] = [],
     attachments: BrowserAttachment[] = [],
-  ): Promise<void> {
+  ): Promise<'sent' | 'queued'> {
     const text = content.trim();
-    if ((!text && attachments.length === 0) || !this.snapshot.sessionKey) return;
+    if (!text && attachments.length === 0) return 'sent';
+    if (!this.snapshot.sessionKey) throw new Error('Open a chat before sending');
+    if (this.snapshot.submitting || this.snapshot.pendingDelivery || this.recoveringOutbox) {
+      throw new Error('Wait for the queued message to be delivered before sending another');
+    }
     if (!this.turnClaim) throw new Error('Realtime endpoint is not ready');
     const sessionKey = this.snapshot.sessionKey;
     const clientMessageId = crypto.randomUUID();
-    const outboxKey = `${OUTBOX_PREFIX}${sessionKey}`;
     const request: BrowserOutboxRequest = {
       content: text,
       clientMessageId,
@@ -343,39 +466,82 @@ export class BrowserChatClient {
       ...(browserContexts.length ? { browserContexts } : {}),
       ...(attachments.length ? { attachments } : {}),
     };
-    await chrome.storage.session.set({ [outboxKey]: request });
-    this.update({
-      messages: [...this.snapshot.messages, {
-        id: clientMessageId,
-        role: 'user',
-        text: text || `[Attached ${attachments.length} file${attachments.length === 1 ? '' : 's'}]`,
-      }],
-      streamingText: '',
-      error: undefined,
-    });
-    const response = await json<{ payload: { state: { activeRunId?: string; inputs?: Array<{ clientMessageId?: string; runId?: string }> } } }>(
-      await gatewayFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/inputs`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
-      }),
-    );
-    await chrome.storage.session.remove(outboxKey);
-    const runId = response.payload.state.inputs?.find((input) => input.clientMessageId === clientMessageId)?.runId
-      ?? response.payload.state.activeRunId
-      ?? await this.waitForRun(sessionKey, clientMessageId);
-    if (runId) await this.followRun(runId);
-    else await this.reloadMessages();
+    const previousMessages = this.snapshot.messages;
+    let outboxStored = false;
+    let deliveryAccepted = false;
+    this.update({ submitting: true, pendingDelivery: false });
+    try {
+      await writeBrowserOutbox(sessionKey, request);
+      outboxStored = true;
+      this.update({
+        messages: [...this.snapshot.messages, {
+          id: clientMessageId,
+          role: 'user',
+          text,
+          ...(attachments.length ? {
+            attachments: attachments.map((attachment) => ({
+              type: attachment.type,
+              mimeType: attachment.mimeType,
+              name: attachment.name,
+              size: attachment.size,
+            })),
+          } : {}),
+        }],
+        streamingText: '',
+        error: undefined,
+      });
+      const response = await json<{ payload: { state: { activeRunId?: string; inputs?: Array<{ clientMessageId?: string; runId?: string }> } } }>(
+        await gatewayFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/inputs`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(request),
+        }),
+      );
+      deliveryAccepted = true;
+      await deleteBrowserOutbox(sessionKey);
+      outboxStored = false;
+      if (this.snapshot.sessionKey !== sessionKey) return 'sent';
+      const runId = response.payload.state.inputs?.find((input) => input.clientMessageId === clientMessageId)?.runId
+        ?? response.payload.state.activeRunId
+        ?? await this.waitForRun(sessionKey, clientMessageId);
+      if (this.snapshot.sessionKey !== sessionKey) return 'sent';
+      if (runId) await this.followRun(runId);
+      else await this.reloadMessages();
+      return 'sent';
+    } catch (cause) {
+      if (deliveryAccepted) {
+        if (this.snapshot.sessionKey === sessionKey) {
+          this.update({
+            pendingDelivery: false,
+            error: 'Message sent, but the response status could not be refreshed. Reopen this chat to sync it.',
+          });
+        }
+        return 'sent';
+      }
+      if (outboxStored && isRetryableDeliveryError(cause)) {
+        if (this.snapshot.sessionKey === sessionKey) {
+          this.update({ pendingDelivery: true, error: undefined });
+        }
+        return 'queued';
+      }
+      if (outboxStored) await deleteBrowserOutbox(sessionKey);
+      if (this.snapshot.sessionKey === sessionKey) this.update({ messages: previousMessages });
+      throw cause;
+    } finally {
+      if (this.snapshot.sessionKey === sessionKey) this.update({ submitting: false });
+    }
   }
 
   private async recoverOutbox(): Promise<void> {
     const sessionKey = this.snapshot.sessionKey;
     if (!sessionKey || !this.turnClaim || this.recoveringOutbox) return;
-    const outboxKey = `${OUTBOX_PREFIX}${sessionKey}`;
-    const stored = await chrome.storage.session.get(outboxKey);
-    const pending = stored[outboxKey] as BrowserOutboxRequest | undefined;
+    if (Date.now() - this.lastOutboxRecoveryAt < 3_000) return;
+    const pending = await readBrowserOutbox<BrowserOutboxRequest>(sessionKey);
     if (!pending?.clientMessageId || typeof pending.content !== 'string') return;
     this.recoveringOutbox = true;
+    this.lastOutboxRecoveryAt = Date.now();
+    this.update({ pendingDelivery: true });
+    let deliveryAccepted = false;
     try {
       const request: BrowserOutboxRequest = {
         ...pending,
@@ -388,26 +554,54 @@ export class BrowserChatClient {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
       }));
-      await chrome.storage.session.remove(outboxKey);
+      deliveryAccepted = true;
+      await deleteBrowserOutbox(sessionKey);
+      if (this.snapshot.sessionKey !== sessionKey) return;
+      this.update({ pendingDelivery: false, error: undefined });
       const runId = response.payload.state.inputs?.find((input) => input.clientMessageId === request.clientMessageId)?.runId
         ?? response.payload.state.activeRunId
         ?? await this.waitForRun(sessionKey, request.clientMessageId);
+      if (this.snapshot.sessionKey !== sessionKey) return;
       if (runId) await this.followRun(runId);
       else await this.reloadMessages();
     } catch (cause) {
-      this.update({ error: cause instanceof Error ? cause.message : String(cause) });
+      if (this.snapshot.sessionKey === sessionKey) {
+        if (deliveryAccepted) {
+          this.update({
+            pendingDelivery: false,
+            error: 'Message sent, but the response status could not be refreshed. Reopen this chat to sync it.',
+          });
+        } else if (isRetryableDeliveryError(cause)) {
+          this.update({ pendingDelivery: true, error: undefined });
+        } else {
+          await deleteBrowserOutbox(sessionKey);
+          this.update({
+            pendingDelivery: false,
+            messages: this.snapshot.messages.filter((message) => message.id !== pending.clientMessageId),
+            error: cause instanceof Error ? cause.message : String(cause),
+          });
+        }
+      }
     } finally {
       this.recoveringOutbox = false;
     }
   }
 
   async abort(): Promise<void> {
-    if (!this.snapshot.runId) return;
-    await json(await gatewayFetch('/api/agent/abort', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ runId: this.snapshot.runId }),
-    }));
+    const runId = this.snapshot.runId;
+    if (!runId || this.snapshot.stopping) return;
+    this.update({ stopping: true, error: undefined });
+    try {
+      await json(await gatewayFetch('/api/agent/abort', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runId }),
+      }));
+      await this.reconcileAbortedRun(runId);
+    } catch (cause) {
+      if (this.snapshot.runId === runId) this.update({ stopping: false });
+      throw cause;
+    }
   }
 
   async updateModel(model: string): Promise<void> {
@@ -459,6 +653,7 @@ export class BrowserChatClient {
         }),
       },
     ));
+    if (this.snapshot.sessionKey !== sessionKey) return;
     if (this.snapshot.tabBinding) {
       await chrome.storage.session.remove(`${TAB_BINDING_PREFIX}${this.snapshot.tabBinding.id}`);
     }
@@ -471,6 +666,7 @@ export class BrowserChatClient {
     const binding = this.snapshot.tabBinding;
     if (!sessionKey) return;
     await json(await gatewayFetch(`/api/browser/tab-bindings/${encodeURIComponent(sessionKey)}`, { method: 'DELETE' }));
+    if (this.snapshot.sessionKey !== sessionKey) return;
     if (binding) await chrome.storage.session.remove(`${TAB_BINDING_PREFIX}${binding.id}`);
     this.update({ tabBinding: undefined });
   }
@@ -540,8 +736,13 @@ export class BrowserChatClient {
       this.realtime?.unsubscribe(topic);
       this.runTopic = undefined;
       await chrome.storage.session.remove(`${CURSOR_PREFIX}${runId}`);
-      await this.reloadMessages();
-      this.update({ runId: undefined, streamingText: '' });
+      try {
+        await this.reloadMessages();
+      } finally {
+        if (topic === this.runTopic || this.snapshot.runId === runId) {
+          this.update({ runId: undefined, streamingText: '', stopping: false });
+        }
+      }
     }
   }
 
@@ -555,6 +756,7 @@ export class BrowserChatClient {
       const message = mapMessage(value, index);
       return message ? [message] : [];
     });
+    if (this.snapshot.sessionKey !== sessionKey) return;
     const session = this.snapshot.sessions.find((candidate) => candidate.key === sessionKey);
     this.update({ messages, sessionId: session?.sessionId });
   }
@@ -595,6 +797,7 @@ export class BrowserChatClient {
     if (!config || typeof config.model !== 'string' || typeof config.thinkingLevel !== 'string') {
       throw new Error('Gateway returned an invalid session model configuration');
     }
+    if (this.snapshot.sessionKey !== sessionKey) return;
     this.update({ modelConfig: {
       model: config.model,
       thinkingLevel: config.thinkingLevel,
@@ -619,6 +822,7 @@ export class BrowserChatClient {
     if (!config || typeof config.model !== 'string' || typeof config.thinkingLevel !== 'string') {
       throw new Error('Gateway returned an invalid session model configuration');
     }
+    if (this.snapshot.sessionKey !== sessionKey) return;
     this.update({ modelConfig: {
       model: config.model,
       thinkingLevel: config.thinkingLevel,
@@ -643,10 +847,11 @@ export class BrowserChatClient {
     if (!sessionKey) return;
     const response = await gatewayFetch(`/api/browser/tab-bindings/${encodeURIComponent(sessionKey)}`);
     if (response.status === 404) {
-      this.update({ tabBinding: undefined });
+      if (this.snapshot.sessionKey === sessionKey) this.update({ tabBinding: undefined });
       return;
     }
     const result = await json<{ payload: BrowserTabBinding }>(response);
+    if (this.snapshot.sessionKey !== sessionKey) return;
     await chrome.storage.session.set({ [`${TAB_BINDING_PREFIX}${result.payload.id}`]: result.payload });
     this.update({ tabBinding: result.payload });
   }
@@ -660,7 +865,35 @@ export class BrowserChatClient {
     const result = await json<{ approvals: BrowserApproval[] }>(await gatewayFetch(
       `/api/browser/approvals?sessionKey=${encodeURIComponent(sessionKey)}`,
     ));
-    this.update({ browserApproval: result.approvals.find((approval) => approval.status === 'pending') });
+    if (this.snapshot.sessionKey === sessionKey) {
+      this.update({ browserApproval: result.approvals.find((approval) => approval.status === 'pending') });
+    }
+  }
+
+  private async reconcileAbortedRun(runId: string): Promise<void> {
+    const sessionKey = this.snapshot.sessionKey;
+    if (!sessionKey) return;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      if (this.snapshot.sessionKey !== sessionKey || this.snapshot.runId !== runId) return;
+      const run = await json<{ payload?: { active?: boolean; runId?: string } }>(await gatewayFetch(
+        `/api/sessions/${encodeURIComponent(sessionKey)}/run`,
+      ));
+      if (!run.payload?.active || run.payload.runId !== runId) {
+        if (this.runTopic) this.realtime?.unsubscribe(this.runTopic);
+        this.runTopic = undefined;
+        await chrome.storage.session.remove(`${CURSOR_PREFIX}${runId}`);
+        try {
+          await this.reloadMessages();
+        } finally {
+          if (this.snapshot.sessionKey === sessionKey) {
+            this.update({ runId: undefined, streamingText: '', stopping: false });
+          }
+        }
+        return;
+      }
+    }
+    if (this.snapshot.runId === runId) this.update({ stopping: false });
   }
 
   private requireProfileUrl(): string {
