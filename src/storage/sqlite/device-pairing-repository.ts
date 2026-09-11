@@ -19,6 +19,13 @@ export type DevicePairingSetup = {
   expiresAt: number;
 };
 
+export type DevicePairingEnrollment = {
+  issuer: 'browser-native-host';
+  extensionId: string;
+  publicKeyThumbprint: string;
+  nonce: string;
+};
+
 type PairingRow = {
   pairing_id: string;
   secret_hash: string;
@@ -52,11 +59,12 @@ export function createDevicePairingSetup(
   routes: readonly DeviceRoute[],
   now = Date.now(),
   protocolVersion: 2 | 3 = 2,
+  options?: { ttlMs?: number; enrollment?: DevicePairingEnrollment },
 ): DevicePairingSetup {
   if (routes.length === 0) throw new Error('No secure mobile route is available');
   const id = crypto.randomUUID();
   const token = `${PAIRING_TOKEN_PREFIX}${id}_${crypto.randomBytes(32).toString('base64url')}`;
-  const expiresAt = now + PAIRING_TTL_MS;
+  const expiresAt = now + (options?.ttlMs ?? PAIRING_TTL_MS);
   runSqliteWriteTransaction((db) => {
     db.prepare(`DELETE FROM device_pairing_sessions WHERE
       (protocol_version = 2 AND (expires_at <= ? OR consumed_at IS NOT NULL)) OR
@@ -64,9 +72,16 @@ export function createDevicePairingSetup(
     db.prepare(`
       INSERT INTO device_pairing_sessions (
         pairing_id, secret_hash, routes_json, expires_at, attempts_remaining, created_at
-        , protocol_version
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, hashToken(token), JSON.stringify(routes), expiresAt, PAIRING_ATTEMPTS, now, protocolVersion);
+        , protocol_version, enrollment_issuer, enrollment_extension_id,
+        enrollment_public_key_thumbprint, enrollment_nonce
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id, hashToken(token), JSON.stringify(routes), expiresAt, PAIRING_ATTEMPTS, now, protocolVersion,
+      options?.enrollment?.issuer ?? null,
+      options?.enrollment?.extensionId ?? null,
+      options?.enrollment?.publicKeyThumbprint ?? null,
+      options?.enrollment?.nonce ?? null,
+    );
   });
   return { id, token, routes: [...routes], expiresAt };
 }

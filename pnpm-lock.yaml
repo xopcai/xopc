@@ -780,6 +780,9 @@ importers:
       '@xopcai/browser-control-contract':
         specifier: workspace:*
         version: link:../browser-control-contract
+      '@xopcai/endpoint-tools-client':
+        specifier: workspace:*
+        version: link:../endpoint-tools-client
       '@xopcai/endpoint-tools-protocol':
         specifier: workspace:*
         version: link:../endpoint-tools-protocol

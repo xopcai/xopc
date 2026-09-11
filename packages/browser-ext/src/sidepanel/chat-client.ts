@@ -5,10 +5,8 @@ import {
 } from '@xopcai/realtime-client';
 
 import {
-  createBrowserEndpointHello,
   gatewayFetch,
   getAccessProfile,
-  registerBrowserEndpoint,
 } from './auth';
 import type { BrowserPageContextInput, BrowserTabBinding, BrowserTabBindingMode } from '@xopcai/gateway-contract';
 import { activeTabId, currentTabDescriptor, TAB_BINDING_PREFIX } from './page-context';
@@ -179,6 +177,13 @@ export class BrowserChatClient {
   private turnClaim?: TurnClaim;
   private runTopic?: string;
   private recoveringOutbox = false;
+  private endpointPoll?: ReturnType<typeof setInterval>;
+  private readonly onRuntimeMessage = (message: { type?: string; claim?: TurnClaim }) => {
+    if (message.type !== 'browser/endpoint-ready' || !message.claim) return;
+    this.turnClaim = message.claim;
+    this.update({ endpointReady: true, error: undefined });
+    void this.recoverOutbox();
+  };
   private snapshot: BrowserChatSnapshot = {
     connection: 'idle',
     endpointReady: false,
@@ -196,7 +201,7 @@ export class BrowserChatClient {
 
   async start(): Promise<void> {
     await this.prepare();
-    await registerBrowserEndpoint();
+    chrome.runtime.onMessage.addListener(this.onRuntimeMessage);
     const id = await clientId();
     this.realtime = new RealtimeClient({
       clientId: id,
@@ -230,22 +235,11 @@ export class BrowserChatClient {
         if (topic === this.runTopic) await this.reloadMessages();
       },
     });
-    this.realtime.setEndpoint({
-      createHello: createBrowserEndpointHello,
-      onReady: ({ endpointId, turnToken }) => {
-        this.turnClaim = { endpointId, token: turnToken };
-        this.update({ endpointReady: true, error: undefined });
-        void this.recoverOutbox();
-      },
-      onMessage: () => {},
-      onDisconnected: () => {
-        this.turnClaim = undefined;
-        this.update({ endpointReady: false });
-      },
-    });
     this.realtime.subscribe('gateway');
     this.realtime.subscribe('sessions');
     this.realtime.connect();
+    await this.refreshEndpointClaim();
+    this.endpointPoll = setInterval(() => { void this.refreshEndpointClaim(); }, 1_000);
     await Promise.all([this.loadSessions(), this.loadModels()]);
     const tabId = await activeTabId();
     const tabKey = tabId === undefined ? undefined : `${TAB_SESSION_PREFIX}${tabId}`;
@@ -259,10 +253,25 @@ export class BrowserChatClient {
   }
 
   stop(): void {
+    chrome.runtime.onMessage.removeListener(this.onRuntimeMessage);
+    if (this.endpointPoll) clearInterval(this.endpointPoll);
+    this.endpointPoll = undefined;
     this.realtime?.disconnect();
     this.realtime = undefined;
     this.turnClaim = undefined;
     this.update({ endpointReady: false });
+  }
+
+  private async refreshEndpointClaim(): Promise<void> {
+    const response = await chrome.runtime.sendMessage({ type: 'browser/get-endpoint-claim' }).catch(() => undefined) as {
+      claim?: TurnClaim;
+      error?: string;
+    } | undefined;
+    this.turnClaim = response?.claim;
+    this.update({
+      endpointReady: Boolean(this.turnClaim),
+      ...(response?.error ? { error: response.error } : {}),
+    });
   }
 
   async loadSessions(search?: string): Promise<void> {

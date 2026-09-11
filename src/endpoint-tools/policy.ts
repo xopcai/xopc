@@ -1,6 +1,10 @@
 import Ajv2020 from 'ajv/dist/2020.js';
 
 import {
+  BROWSER_CONTROL_ENDPOINT_INPUT_SCHEMA,
+  BROWSER_CONTROL_ENDPOINT_OUTPUT_SCHEMA,
+} from '@xopcai/browser-control-contract';
+import {
   ENDPOINT_CONTACT_LIST_OUTPUT_SCHEMA,
   ENDPOINT_CONTACT_OUTPUT_SCHEMA,
   ENDPOINT_FILE_OUTPUT_SCHEMA,
@@ -21,6 +25,7 @@ export class EndpointToolPolicyError extends Error {}
 interface TrustedToolContract {
   policyId: string;
   legacyPolicyIds: string[];
+  inputSchema?: Record<string, unknown>;
   outputSchema: Record<string, unknown>;
   resultKinds: EndpointResultKind[];
   permissions: string[];
@@ -32,8 +37,9 @@ function contract(
   resultKinds: EndpointResultKind[],
   permissions: string[],
   legacyPolicyIds: string[] = [],
+  inputSchema?: Record<string, unknown>,
 ): TrustedToolContract {
-  return { policyId, legacyPolicyIds, outputSchema, resultKinds, permissions };
+  return { policyId, legacyPolicyIds, inputSchema, outputSchema, resultKinds, permissions };
 }
 
 const POLICY_BY_TOOL: Readonly<Record<string, TrustedToolContract>> = {
@@ -75,6 +81,14 @@ const POLICY_BY_TOOL: Readonly<Record<string, TrustedToolContract>> = {
   'mobile.device.get_info': contract('public.background-read', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], []),
   'mobile.clipboard.write': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['clipboard-write']),
   'mobile.app.open_url': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['open-external-url']),
+  'browser.control': contract(
+    'browser.control',
+    BROWSER_CONTROL_ENDPOINT_OUTPUT_SCHEMA,
+    ['json'],
+    ['browser-control'],
+    [],
+    BROWSER_CONTROL_ENDPOINT_INPUT_SCHEMA,
+  ),
 };
 
 export class EndpointToolPolicy {
@@ -90,7 +104,8 @@ export class EndpointToolPolicy {
       throw new EndpointToolPolicyError(`Tool ${descriptor.name} does not match its trusted server policy`);
     }
     if (
-      canonicalJson(descriptor.outputSchema) !== canonicalJson(contract.outputSchema)
+      (contract.inputSchema && canonicalJson(descriptor.inputSchema) !== canonicalJson(contract.inputSchema))
+      || canonicalJson(descriptor.outputSchema) !== canonicalJson(contract.outputSchema)
       || canonicalJson(descriptor.resultKinds) !== canonicalJson(contract.resultKinds)
       || canonicalJson([...descriptor.requiredPermissions].sort()) !== canonicalJson([...contract.permissions].sort())
     ) {
@@ -160,6 +175,17 @@ export class EndpointToolPolicy {
           || descriptor.requiredPermissions.length === 0
         ) {
           throw new EndpointToolPolicyError(`Mutating tool ${descriptor.name} violates its trusted policy`);
+        }
+        return;
+      case 'browser.control':
+        this.assertFields(descriptor, 'write', 'never', false, 'personal');
+        if (descriptor.requiredPermissions.length !== 1
+          || descriptor.requiredPermissions[0] !== 'browser-control'
+          || descriptor.timeoutMs !== 120_000
+          || descriptor.maxConcurrency !== 4
+          || descriptor.supportsCancellation !== true
+          || descriptor.idempotent !== false) {
+          throw new EndpointToolPolicyError(`Browser tool ${descriptor.name} violates its trusted policy`);
         }
         return;
       default:

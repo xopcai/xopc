@@ -7,6 +7,53 @@ export type BrowserTarget =
 
 export const BROWSER_EXTENSION_PROTOCOL_VERSION = 4;
 
+export const BROWSER_CONTROL_ENDPOINT_TOOL_NAME = 'browser.control';
+
+export const BROWSER_CONTROL_ENDPOINT_INPUT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['input'],
+  properties: {
+    input: { type: 'object' },
+    timeoutMs: { type: 'integer', minimum: 1, maximum: 120_000 },
+    visualFallback: { type: 'boolean' },
+  },
+} as const;
+
+export const BROWSER_CONTROL_ENDPOINT_OUTPUT_SCHEMA = {
+  type: 'array',
+  minItems: 1,
+  maxItems: 1,
+  items: {
+    type: 'object',
+    additionalProperties: false,
+    required: ['type', 'value'],
+    properties: {
+      type: { const: 'json' },
+      value: {},
+    },
+  },
+} as const;
+
+export const BROWSER_CONTROL_ENDPOINT_DESCRIPTOR = {
+  name: BROWSER_CONTROL_ENDPOINT_TOOL_NAME,
+  title: 'Browser control transport',
+  description: 'Internal authenticated transport for xopc browser-control actions.',
+  inputSchema: BROWSER_CONTROL_ENDPOINT_INPUT_SCHEMA,
+  outputSchema: BROWSER_CONTROL_ENDPOINT_OUTPUT_SCHEMA,
+  policyId: 'browser.control',
+  sensitivity: 'personal',
+  effect: 'write',
+  confirmation: 'never',
+  requiresForeground: false,
+  requiredPermissions: ['browser-control'],
+  timeoutMs: 120_000,
+  maxConcurrency: 4,
+  supportsCancellation: true,
+  idempotent: false,
+  resultKinds: ['json'],
+} as const;
+
 export interface BrowserWireChallenge {
   type: 'auth_challenge';
   protocolVersion: typeof BROWSER_EXTENSION_PROTOCOL_VERSION;
