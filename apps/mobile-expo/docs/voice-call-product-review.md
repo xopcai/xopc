@@ -15,7 +15,7 @@
 
 关键源码：[`ChatScreen.tsx`](../src/features/chat/ChatScreen.tsx)、[`voice-call-controller.ts`](../src/features/voice/voice-call-controller.ts)、[`agentEngine.ts`](../../../src/voice/realtime/agentEngine.ts)、[`voice-preview.ts`](../src/features/voice/voice-preview.ts)。
 
-Agent 模式已经有单次 turn 的语音表达提示，要求简短口语、先说明工作再调用工具。但它仍是逐轮执行：服务端等待句末、执行 Agent、按语句串行发起 TTS，不是一个统一模型直接完成端到端语音交互。`ConversationTurn` 至少保留 350 ms 的转写收尾窗口；结合 STT 已等待的静音时间，以约 1.2 秒作为普通停顿目标，未说完的句式还会延长等待。上述时间不包含模型、工具、TTS 和网络延迟。
+助手模式已经有单次 turn 的语音表达提示，要求简短口语、先说明工作再调用工具。但它仍是逐轮执行：服务端等待句末、执行 Agent、按语句串行发起 TTS，不是一个统一模型直接完成端到端语音交互。`TurnPolicy` 汇总按序完成的转写片段，并在语义判断超时后使用有界规则兜底；上述等待不包含模型、工具、TTS 和网络延迟。
 
 ## 本轮端到端修复清单
 

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { StreamingSttEvent } from '../../../media-understanding/types.js';
+import type { VoiceAgentEvent } from '../agentBroker.js';
 import type { VoiceEngine } from '../engine.js';
-import type { VoiceRealtimeRuntimeOptions } from '../runtime.js';
 
 const mocks = vi.hoisted(() => ({ speak: vi.fn() }));
 vi.mock('../../tts/speak-core.js', () => ({ speakStream: mocks.speak }));
@@ -14,7 +14,9 @@ describe('Agent voice interruption cleanup', () => {
   const cleanups: Array<() => void> = [];
   afterEach(async () => { for (const cleanup of cleanups.splice(0)) cleanup(); await engine?.close(); vi.clearAllMocks(); });
 
-  async function setup(runAgent: VoiceRealtimeRuntimeOptions['runAgent'], bargeIn = true) {
+  type RunAgent = (text: string, sessionKey: string, signal: AbortSignal) => AsyncIterable<VoiceAgentEvent>;
+
+  async function setup(runAgent: RunAgent, bargeIn = true) {
     let emit!: (event: StreamingSttEvent) => void;
     const send = vi.fn();
     const sendAudio = vi.fn();
@@ -25,14 +27,25 @@ describe('Agent voice interruption cleanup', () => {
     }));
     engine = createAgentVoiceEngine({
       claim: {
-        sessionId: 'call', request: { purpose: 'conversation', engine: 'agent', sessionKey: 'chat' },
+        sessionId: 'call', conversationSessionId: 'stored-session',
+        request: { purpose: 'conversation', mode: 'assistant', sessionKey: 'chat' },
         config: { voice: { realtime: { bargeIn } } }, silenceDurationMs: 1200, tts: { config: {} },
         stt: { model: 'test', route: { provider: 'test' }, plugin: { openAudioStream: async (request: { onEvent: typeof emit }) => {
           emit = request.onEvent;
           return { abort: vi.fn(), appendAudio: vi.fn() };
         } } },
       } as never,
-      runtime: { runAgent, recordInterruption: async () => {} } as never,
+      runtime: {
+        agentBroker: {
+          delegate: async ({ text, sessionKey, signal }) => ({
+            taskId: `task:${text}`,
+            runId: `run:${text}`,
+            events: runAgent(text, sessionKey, signal),
+          }),
+          cancel: async () => true,
+        },
+        recordInterruption: async () => {},
+      } as never,
       signal: new AbortController().signal, send, sendAudio, onClose: async () => {},
     });
     await engine.start();
@@ -116,7 +129,7 @@ describe('Agent voice interruption cleanup', () => {
 
     test.final('first');
     await vi.waitFor(() => expect(mocks.speak).toHaveBeenCalledWith('我先帮你查一下', expect.anything(), expect.anything()));
-    expect(test.send).toHaveBeenCalledWith('response.activity', expect.objectContaining({ status: 'running' }));
+    expect(test.send).toHaveBeenCalledWith('task.activity', expect.objectContaining({ status: 'running' }));
     releaseTool();
   });
 
@@ -282,7 +295,7 @@ describe('Agent voice interruption cleanup', () => {
     expect(test.send.mock.calls.some(([type]) => type === 'response.cancelled')).toBe(false);
     expect(calls).toEqual(['first']);
     resume();
-    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.activity', expect.objectContaining({ toolCallId: 'tool-1', status: 'completed' })));
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('task.activity', expect.objectContaining({ toolCallId: 'tool-1', status: 'completed' })));
     expect(calls).toEqual(['first']);
   });
 

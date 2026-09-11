@@ -51,7 +51,7 @@ import { useChatVoiceRecording } from './use-chat-voice-recording';
 import { useVoiceCall } from '../voice/voice-call';
 import {
   COMPOSER_VOICE_CALL_OPTIONS,
-  type ComposerVoiceCallEngine,
+  type ComposerVoiceCallMode,
 } from './composer-voice-call-options';
 
 type InputMode = 'text' | 'voice';
@@ -84,8 +84,8 @@ export const ChatComposer = memo(function ChatComposer({
   contextRefs: ComposerContextRef[];
   onContextRefsChange: (refs: ComposerContextRef[]) => void;
   contextControl?: ReactNode;
-  onVoiceCallStart: (engine: ComposerVoiceCallEngine) => void;
-  voiceCallUnavailable?: Partial<Record<ComposerVoiceCallEngine, boolean>>;
+  onVoiceCallStart: (mode: ComposerVoiceCallMode) => void;
+  voiceCallUnavailable?: Partial<Record<ComposerVoiceCallMode, boolean>>;
 }) {
   const m = useMessages();
   const cm = m.chat;
@@ -421,8 +421,8 @@ export const ChatComposer = memo(function ChatComposer({
   const voiceCallItems = useMemo(
     () => COMPOSER_VOICE_CALL_OPTIONS.map((item) => ({
       ...item,
-      label: item.engine === 'omni' ? m.voice.callWithoutTools : m.voice.callWithTools,
-      onPress: () => onVoiceCallStart(item.engine),
+      label: item.mode === 'natural' ? m.voice.callWithoutTools : m.voice.callWithTools,
+      onPress: () => onVoiceCallStart(item.mode),
     })),
     [m.voice.callWithTools, m.voice.callWithoutTools, onVoiceCallStart],
   );
@@ -470,7 +470,7 @@ export const ChatComposer = memo(function ChatComposer({
           const itemDisabled = disabled
             || streaming
             || voiceInteractionActive
-            || (call.phase === 'idle' && voiceCallUnavailable?.[item.engine] === true);
+            || (call.phase === 'idle' && voiceCallUnavailable?.[item.mode] === true);
           return renderCaptureChip(item.key, item.icon, item.label, item.onPress, itemDisabled);
         })}
         {captureItems.map((item) => {

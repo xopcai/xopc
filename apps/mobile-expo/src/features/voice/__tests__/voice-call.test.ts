@@ -46,7 +46,8 @@ const identity = { sessionId: 'original', name: 'Assistant' };
 beforeEach(() => {
   vi.resetAllMocks();
   vi.stubGlobal('AbortController', NativeAbortController);
-  mocks.status.mockResolvedValue({ defaultEngine: 'omni', capabilities: { agent: { available: true }, omni: { available: true } } });
+  mocks.status.mockResolvedValue({ defaultMode: 'natural', capabilities: { assistant: { available: true }, natural: { available: true } } });
+  mocks.start.mockResolvedValue({ output: 'speaker', echoControl: 'verified', fullDuplex: true });
   mocks.identity.mockResolvedValue(identity);
   mocks.create.mockResolvedValue({ origin: 'https://gateway.example', session: { limits: { maxSessionMs: 60000 } } });
 });
@@ -56,10 +57,10 @@ afterEach(async () => {
 });
 
 describe('mobile voice call entry with React Native AbortController', () => {
-  it.each(['agent', 'omni'] as const)('prepares and connects a %s call', async engine => {
+  it.each([['assistant', 'agent'], ['natural', 'omni']] as const)('prepares and connects a %s call', async (mode, engine) => {
     expect(new AbortController().signal.throwIfAborted).toBeUndefined();
-    await voiceCall.start({ ...target, engine });
-    expect(voiceCall.getSnapshot()).toMatchObject({ phase: 'connected', engine, error: undefined });
+    await voiceCall.start({ ...target, mode });
+    expect(voiceCall.getSnapshot()).toMatchObject({ phase: 'connected', mode, engine, error: undefined });
     expect(mocks.status).toHaveBeenCalledOnce();
     expect(mocks.preflight).not.toHaveBeenCalled();
     expect(mocks.start).toHaveBeenCalledOnce();
@@ -70,12 +71,12 @@ describe('mobile voice call entry with React Native AbortController', () => {
   });
 
   it('does not open the microphone when cancelled during preparation', async () => {
-    let resolveStatus!: (value: { defaultEngine: 'omni'; capabilities: { omni: { available: true } } }) => void;
+    let resolveStatus!: (value: { defaultMode: 'natural'; capabilities: { natural: { available: true } } }) => void;
     mocks.status.mockImplementationOnce(() => new Promise(resolve => { resolveStatus = resolve; }));
     const starting = voiceCall.start(target);
     await vi.waitFor(() => expect(mocks.status).toHaveBeenCalledOnce());
     const ending = voiceCall.end();
-    resolveStatus({ defaultEngine: 'omni', capabilities: { omni: { available: true } } });
+    resolveStatus({ defaultMode: 'natural', capabilities: { natural: { available: true } } });
     await Promise.all([starting, ending]);
     expect(mocks.preflight).not.toHaveBeenCalled();
     expect(mocks.start).not.toHaveBeenCalled();

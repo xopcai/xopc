@@ -72,9 +72,9 @@ describe('Omni voice engine', () => {
     test.emit({ type: 'response.audio_transcript.delta', response_id: 'complete', delta: 'Complete answer' });
     test.emit({ type: 'response.audio.delta', response_id: 'complete', delta: Buffer.alloc(24000, 2).toString('base64') });
     test.emit({ type: 'response.done', response: { id: 'complete', status: 'completed' } });
-    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledTimes(25));
     expect(test.sendAudio.mock.calls[0]![0]).toBe('complete');
-    engine.acknowledge('complete', 24000);
+    engine.acknowledge('complete', 500);
     await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', expect.objectContaining({ responseId: 'complete' })));
     expect(test.send.mock.calls.filter(([type, payload]) => type.startsWith('response.') && payload.responseId === 'premature')).toEqual([]);
     expect(test.record.mock.calls.some(([entry]) => entry.itemId === 'premature')).toBe(false);
@@ -227,13 +227,13 @@ describe('Omni voice engine', () => {
     test.emit({ type: 'response.audio_transcript.delta', response_id: 'r1', delta: 'Hello' });
     test.emit({ type: 'response.audio.delta', response_id: 'r1', delta: Buffer.alloc(24000).toString('base64') });
     test.emit({ type: 'response.done', response: { id: 'r1', status: 'completed' } });
-    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledTimes(25));
     expect(test.send.mock.calls.some(([type]) => type === 'response.done')).toBe(false);
     expect(engine.cancel('r1', 'client_cancelled')).toBe(true);
     test.emit({ type: 'response.audio.delta', response_id: 'r1', delta: Buffer.alloc(24000).toString('base64') });
-    engine.acknowledge('r1', 24000);
+    engine.acknowledge('r1', 500);
     await vi.waitFor(() => expect(test.record).toHaveBeenCalledWith(expect.objectContaining({ interrupted: true, text: 'Hello' })));
-    expect(test.sendAudio).toHaveBeenCalledOnce();
+    expect(test.sendAudio).toHaveBeenCalledTimes(25);
     expect(test.received.some((event) => event.type === 'response.cancel')).toBe(false);
   });
 
@@ -252,8 +252,8 @@ describe('Omni voice engine', () => {
     test.emit({ type: 'response.audio_transcript.delta', response_id: 'r2', delta: 'Second' });
     test.emit({ type: 'response.audio.delta', response_id: 'r2', delta: Buffer.alloc(24000).toString('base64') });
     test.emit({ type: 'response.done', response: { id: 'r2', status: 'completed' } });
-    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledOnce());
-    engine.acknowledge('r2', 24000);
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledTimes(25));
+    engine.acknowledge('r2', 500);
     await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', { responseId: 'r2', audio: true, finishReason: 'completed' }));
     expect(test.record).toHaveBeenCalledWith(expect.objectContaining({ itemId: 'r2', interrupted: false }));
     expect(test.send.mock.calls.some(([type]) => type === 'session.error')).toBe(false);
@@ -306,10 +306,10 @@ describe('Omni voice engine', () => {
     expect(test.send.mock.calls.filter(([type]) => type === 'session.error')).toEqual([]);
     expect(test.send.mock.calls.some(([type]) => type === 'response.done')).toBe(false);
     let played = 0;
-    for (let count = 4; count <= 20; count += 4) {
+    for (let count = 100; count <= 500; count += 100) {
       await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledTimes(count));
       played = test.sendAudio.mock.calls.reduce((sum, [, bytes]) => sum + bytes.length, 0);
-      engine.acknowledge('long-reply', played);
+      engine.acknowledge('long-reply', played / 48);
     }
     await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', expect.objectContaining({ responseId: 'long-reply' })));
     expect(played).toBe(480_000);
@@ -322,7 +322,7 @@ describe('Omni voice engine', () => {
     test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'u1', transcript: 'Hello' });
     test.emit({ type: 'response.created', response: { id: 'old' } });
     for (let index = 0; index < 20; index++) test.emit({ type: 'response.audio.delta', response_id: 'old', delta: Buffer.alloc(24_000).toString('base64') });
-    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledTimes(4));
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledTimes(100));
     expect(engine.cancel('old', 'client_cancelled')).toBe(true);
     const oldSent = test.sendAudio.mock.calls.length;
     test.emit({ type: 'response.audio.delta', response_id: 'old', delta: Buffer.alloc(24_000).toString('base64') });
@@ -332,9 +332,9 @@ describe('Omni voice engine', () => {
     test.emit({ type: 'response.created', response: { id: 'new' } });
     test.emit({ type: 'response.audio.delta', response_id: 'new', delta: Buffer.alloc(24_000).toString('base64') });
     test.emit({ type: 'response.done', response: { id: 'new', status: 'completed' } });
-    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledTimes(oldSent + 1));
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledTimes(oldSent + 25));
     expect(test.sendAudio.mock.calls.at(-1)![0]).toBe('new');
-    engine.acknowledge('new', 24_000);
+    engine.acknowledge('new', 500);
     await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', expect.objectContaining({ responseId: 'new' })));
     expect(test.send.mock.calls.filter(([type]) => type === 'session.error')).toEqual([]);
   });
@@ -372,7 +372,7 @@ describe('Omni voice engine', () => {
     test.emit({ type: 'response.created', response: { id: 'stalled' } });
     test.emit({ type: 'response.audio.delta', response_id: 'stalled', delta: Buffer.alloc(24_000).toString('base64') });
     test.emit({ type: 'response.done', response: { id: 'stalled', status: 'completed' } });
-    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledTimes(25));
     await vi.advanceTimersByTimeAsync(15_001);
     expect(test.send).toHaveBeenCalledWith('session.error', expect.objectContaining({ recoverable: true, code: 'RESPONSE_FAILED' }));
     expect(test.send.mock.calls.filter(([type, payload]) => type === 'session.error' && !payload.recoverable)).toEqual([]);

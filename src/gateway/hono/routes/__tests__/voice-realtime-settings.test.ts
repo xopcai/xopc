@@ -36,7 +36,9 @@ describe('realtime voice setup endpoints', () => {
     } });
     expect(JSON.stringify(data)).not.toContain('private-key');
     expect(data.payload).not.toHaveProperty('verified');
-    expect(realtimeVoiceStatusSchema.parse(data.payload).capabilities.agent.available).toBe(true);
+    expect(realtimeVoiceStatusSchema.parse(data.payload)).toMatchObject({
+      defaultMode: 'assistant', capabilities: { assistant: { available: true }, natural: { available: false } },
+    });
     expect(speakStream).not.toHaveBeenCalled();
   });
 
@@ -44,7 +46,7 @@ describe('realtime voice setup endpoints', () => {
     const response = await app(false).request('/api/voice/realtime/status');
     expect(await response.json()).toMatchObject({ payload: {
       stt: { provider: 'alibaba' }, tts: null,
-      capabilities: { dictation: { available: true }, agent: { available: false, reasonCode: 'PROVIDER_UNAVAILABLE' } },
+      capabilities: { dictation: { available: true }, assistant: { available: false, reasonCode: 'PROVIDER_UNAVAILABLE' } },
     } });
     expect((await app(false).request('/api/voice/realtime/preview', { method: 'POST' })).status).toBe(503);
     expect(speakStream).not.toHaveBeenCalled();

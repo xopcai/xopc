@@ -3,7 +3,8 @@ import WebSocket from 'ws';
 
 import { createLogger } from '../../utils/logger.js';
 import { AudioPlaybackWindow } from './audio-playback-window.js';
-import { ConversationTurn } from './conversationTurn.js';
+import { TurnCoordinator } from './turnPolicy.js';
+import { PcmFrameBuffer } from './pcmFrameBuffer.js';
 import type { VoiceEngine, VoiceEventSink } from './engine.js';
 import type { OmniRoute } from './omniRoute.js';
 
@@ -49,6 +50,7 @@ interface ResponseState {
   published: boolean;
   release: () => void;
   settled: Promise<void>;
+  pcm: PcmFrameBuffer;
 }
 
 export function createOmniVoiceEngine(options: {
@@ -84,8 +86,10 @@ export function createOmniVoiceEngine(options: {
   let uploadTimer: ReturnType<typeof setTimeout> | undefined;
   let turnSettled = false;
   const speaking = new Set<string>();
-  const turn = new ConversationTurn(options.silenceDurationMs, () => {
+  const turn = new TurnCoordinator(options.silenceDurationMs, (_text, decision, turnId) => {
     if (closed || failed || muted || inputBlocked) return;
+    options.send('turn.decision', { turnId, disposition: decision.disposition, confidence: decision.confidence, source: decision.source, committed: true });
+    options.send('turn.committed', { turnId });
     turnSettled = true;
     if (active) publish(active);
   });
@@ -154,6 +158,13 @@ export function createOmniVoiceEngine(options: {
     options.send('response.text.done', { responseId: response.id });
     await response.tail;
     if (active !== response || closed) return;
+    const finalFrame = response.pcm.finish();
+    if (finalFrame) {
+      await response.playback.reserve(finalFrame.byteLength, response.abort.signal);
+      if (active !== response || closed) return;
+      if (!response.audio) { response.audio = true; options.send('response.audio.started', { responseId: response.id, format: { encoding: 'pcm_s16le', channels: 1, sampleRate: 24_000 } }); }
+      options.sendAudio(response.id, finalFrame);
+    }
     await response.playback.drain(response.abort.signal);
     if (active !== response || closed) return;
     save({ itemId: response.id, role: 'assistant', text: response.text, interrupted: false });
@@ -275,7 +286,7 @@ export function createOmniVoiceEngine(options: {
               if (typeof id !== 'string' || !id.length || id.length > 160) throw new Error('Invalid response ID');
               let release!: () => void;
               const settled = new Promise<void>((resolve) => { release = resolve; });
-              active = { id, text: '', audio: false, generating: true, queuedBytes: 0, abort: new AbortController(), playback: new AudioPlaybackWindow(), tail: Promise.resolve(), published: false, settled, release };
+              active = { id, text: '', audio: false, generating: true, queuedBytes: 0, abort: new AbortController(), playback: new AudioPlaybackWindow(), tail: Promise.resolve(), published: false, settled, release, pcm: new PcmFrameBuffer() };
               if (turnSettled) publish(active);
             } else if (active && event.response_id === active.id && event.type === 'response.audio_transcript.delta') {
               if (typeof event.delta !== 'string' || active.text.length + event.delta.length > 32_000) { fail('OMNI_TRANSCRIPT_LIMIT'); return; }
@@ -290,9 +301,8 @@ export function createOmniVoiceEngine(options: {
               response.queuedBytes += audio.length;
               response.tail = response.tail.then(async () => {
                 await response.settled;
-                for (let offset = 0; offset < audio.length; offset += 24_000) {
+                for (const chunk of response.pcm.push(audio)) {
                   if (closed || active !== response) return;
-                  const chunk = audio.subarray(offset, offset + 24_000);
                   await response.playback.reserve(chunk.length, response.abort.signal);
                   if (closed || active !== response) return;
                   if (!response.audio) { response.audio = true; options.send('response.audio.started', { responseId: response.id, format: { encoding: 'pcm_s16le', channels: 1, sampleRate: 24_000 } }); }
@@ -340,7 +350,8 @@ export function createOmniVoiceEngine(options: {
       if (reason === 'client_cancelled') discardInput();
       return cancel(reason);
     },
-    acknowledge(responseId, playedBytes) { if (active?.id === responseId) active.playback.acknowledge(playedBytes); },
+    async cancelTask() { return false; },
+    acknowledge(responseId, playedDurationMs) { if (active?.id === responseId) active.playback.acknowledge(playedDurationMs * 48); },
     close() {
       if (closed) return writes;
       closed = true; cancel('session_closed'); clearTimeout(timer); clearTimeout(clearTimer); clearTimeout(uploadTimer);

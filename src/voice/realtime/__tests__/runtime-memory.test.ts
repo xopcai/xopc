@@ -3,7 +3,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo, Socket } from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
-import { parseVoiceServerEvent, type VoiceServerEvent } from '@xopcai/realtime-protocol/voice';
+import { VOICE_REALTIME_PROTOCOL_VERSION, parseVoiceServerEvent, type VoiceServerEvent } from '@xopcai/realtime-protocol/voice';
 
 import { ConfigSchema } from '../../../config/schema.js';
 import { notifyUserContextChange, onUserContextChange } from '../../../user-context/changes.js';
@@ -30,14 +30,16 @@ describe('native voice memory lifecycle', () => {
     const config = ConfigSchema.parse({ voice: { realtime: { enabled: true, defaultEngine: 'omni', omni: { provider: 'alibaba', apiKey: 'test', model: 'qwen3-omni-flash-realtime', voice: 'Cherry', instructions: '' } } } });
     runtime = new VoiceRealtimeRuntime({ getConfig: () => config, sessionExists: async () => true,
       sessionBusy: () => false, getSessionIdentity: async () => 'stored', getConversationContext: async () => context,
-      recordOmniTranscript: async () => {}, recordInterruption: async () => {}, runAgent: vi.fn(async function* () {}) });
+      recordOmniTranscript: async () => {}, recordInterruption: async () => {},
+      agentBroker: { delegate: vi.fn(), cancel: vi.fn(async () => true) } });
     server = createServer(); server.on('upgrade', (request, client, head) => runtime.handleUpgrade(request, client as Socket, head));
     server.listen(0, '127.0.0.1'); await once(server, 'listening');
-    const session = await runtime.createSession({ purpose: 'conversation', engine: 'omni', sessionKey }, 'owner');
+    const session = await runtime.createSession({ purpose: 'conversation', mode: 'natural', sessionKey,
+      supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] }, 'owner');
     socket = new WebSocket(`ws://127.0.0.1:${(server.address() as AddressInfo).port}${session.websocketPath}`);
     socket.on('message', (data) => events.push(parseVoiceServerEvent(JSON.parse(data.toString()))));
     await once(socket, 'open');
-    socket.send(JSON.stringify({ protocolVersion: 2, messageId: crypto.randomUUID(), sentAt: Date.now(), type: 'session.start', payload: { sessionId: session.sessionId, ticket: session.ticket } }));
+    socket.send(JSON.stringify({ protocolVersion: VOICE_REALTIME_PROTOCOL_VERSION, messageId: crypto.randomUUID(), sentAt: Date.now(), type: 'session.start', payload: { sessionId: session.sessionId, ticket: session.ticket } }));
     if (ready) await vi.waitFor(() => expect(events.some((e) => e.type === 'session.ready')).toBe(true));
   }
   const context = (): VoiceConversationContext => ({ identity: 'Ada', history: [], memory: {

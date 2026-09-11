@@ -88,7 +88,8 @@ export class GatewayAgentRunner {
           input.origin,
           input.attachments,
           input.thinking,
-          { runId: input.runId, taskRunId: input.taskRunId, sourceContexts: input.sourceContexts },
+          { runId: input.runId, taskRunId: input.taskRunId, sourceContexts: input.sourceContexts,
+            ...(input.origin.type === 'channel' && input.origin.channel === 'voice' ? { presentation: 'voice' as const } : {}) },
         );
         let result: { status: string; summary: string } | undefined;
         while (true) {

@@ -43,7 +43,7 @@ export function VoiceCallSurface() {
   const [diagnosticCopy, setDiagnosticCopy] = useState<'copied' | 'failed'>();
   const clarificationAttempt = useRef<{ signature: string; idempotencyKey: string } | undefined>(undefined);
   const [, tick] = useState(0);
-  const approvalsEnabled = state.phase === 'connected' && state.engine === 'agent' && Boolean(state.target);
+  const approvalsEnabled = state.phase === 'connected' && state.mode === 'assistant' && Boolean(state.target);
   const approvals = useQuery({ ...voiceApprovalsOptions(state.target?.gatewayId, state.target?.sessionKey), enabled: approvalsEnabled });
   const pendingApprovals = approvalsEnabled ? approvals.data ?? [] : [];
   const approval = useMutation({ mutationFn: ({ id, decision, sessionKey }: { id: string; decision: 'approved' | 'denied'; sessionKey: string }) => respondVoiceApproval(id, decision, sessionKey), onSuccess: () => approvals.refetch(), retry: false });
@@ -159,6 +159,7 @@ export function VoiceCallSurface() {
             <MarkdownView content={state.assistantText} />
           </View>}
           {state.responseId && <Button mode="outlined" onPress={() => void voiceCall.stopReply()}>{m.stopReply}</Button>}
+          {state.taskId && <Button mode="text" disabled={state.taskStage === 'cancelling'} onPress={() => voiceCall.cancelTask()}>{m.cancelTask}</Button>}
           {state.clarification ? <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.subtle }]}>
             <ClarifyPrompt prompt={state.clarification} submitting={clarification.isPending} submitError={clarification.isError ? m.error : null}
               onSubmit={answer => { if (state.clarification) clarification.mutate({ id: state.clarification.requestId, action: 'answer', answer, version: state.clarification.version }); }}

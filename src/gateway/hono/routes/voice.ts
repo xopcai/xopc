@@ -204,12 +204,13 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
       enabled,
       capabilities: {
         dictation: availability(Boolean(stt)),
-        agent: availability(Boolean(stt && tts)),
-        omni: availability(Boolean(omni)),
+        assistant: availability(Boolean(stt && tts)),
+        natural: availability(Boolean(omni)),
         languages: ['zh', 'en'],
         bargeIn: config.voice?.realtime?.bargeIn ?? true,
+        mediaTransports: ['websocket-pcm'],
       },
-      defaultEngine: config.voice?.realtime?.defaultEngine ?? 'agent',
+      defaultMode: config.voice?.realtime?.defaultEngine === 'omni' ? 'natural' : 'assistant',
       omni: omni?.route ?? null,
       stt: stt?.route ?? null,
       tts: tts ? {

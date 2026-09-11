@@ -33,7 +33,9 @@ class XopcVoiceModule : Module() {
   private var lastPlayed = 0
   private val playbackQueue = VoicePlaybackQueue()
   private val playbackProgress = VoicePlaybackProgress()
-  private var playbackVolume = 1f
+  private var focusVolume = 1f
+  private var speechVolume = 1f
+  private val nearSpeech = NearSpeechDetector()
   private var forcedSpeaker = false
   private var previousAudioMode: Int? = null
   private var previousSpeakerphone: Boolean? = null
@@ -68,14 +70,17 @@ class XopcVoiceModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("XopcVoice")
-    Events("pcm", "played", "interrupted")
+    Events("pcm", "played", "interrupted", "speechCandidate", "route")
     AsyncFunction("start") { enabled: Boolean, title: String, stopLabel: String -> start(enabled, title, stopLabel) }.runOnQueue(Queues.MAIN)
     Function("setCaptureEnabled") { enabled: Boolean, id: Int ->
       capturing = false
+      nearSpeech.reset()
       captureId = id
       capturing = enabled
     }
     AsyncFunction("enqueue") { id: String, audio: String -> enqueue(id, audio) }.runOnQueue(Queues.MAIN)
+    AsyncFunction("duck") { speechVolume = 0.2f; applyPlaybackVolume() }.runOnQueue(Queues.MAIN)
+    AsyncFunction("resumeOutput") { speechVolume = 1f; applyPlaybackVolume() }.runOnQueue(Queues.MAIN)
     AsyncFunction("flush") { flush() }.runOnQueue(Queues.MAIN)
     AsyncFunction("stop") { stop() }.runOnQueue(Queues.MAIN)
     AsyncFunction("setSpeaker") { enabled: Boolean ->
@@ -88,6 +93,24 @@ class XopcVoiceModule : Module() {
     }
     OnDestroy { handler.post { stop() } }
   }
+
+  private fun applyPlaybackVolume() { track?.setVolume(minOf(focusVolume, speechVolume)) }
+
+  private fun outputKind(): String = when (track?.routedDevice?.type) {
+    AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> "receiver"
+    AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_USB_HEADSET -> "wired"
+    AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO, AudioDeviceInfo.TYPE_BLE_HEADSET -> "bluetooth"
+    else -> "speaker"
+  }
+
+  private fun routeCapabilities(): Map<String, Any> {
+    val output = outputKind()
+    val verified = output == "wired" || output == "bluetooth"
+    val echoControl = if (verified) "verified" else if (echo?.enabled == true) "available" else "none"
+    return mapOf("output" to output, "echoControl" to echoControl, "fullDuplex" to (verified || echo?.enabled == true))
+  }
+
+  private fun publishRoute() { if (recorder != null) sendEvent("route", routeCapabilities()) }
 
   private fun bindVolumeKeys() {
     val activity = appContext.currentActivity ?: return
@@ -122,8 +145,8 @@ class XopcVoiceModule : Module() {
         request = AudioFocusRequest.Builder(gain).setAudioAttributes(attributes)
           .setOnAudioFocusChangeListener({ change ->
             when (audioFocusAction(change, epoch == generation && focus === request)) {
-              AudioFocusAction.RESTORE -> { playbackVolume = 1f; track?.setVolume(playbackVolume) }
-              AudioFocusAction.DUCK -> { playbackVolume = 0.2f; track?.setVolume(playbackVolume) }
+              AudioFocusAction.RESTORE -> { focusVolume = 1f; applyPlaybackVolume() }
+              AudioFocusAction.DUCK -> { focusVolume = 0.2f; applyPlaybackVolume() }
               AudioFocusAction.PAUSE -> interrupt("audio_focus_lost")
               AudioFocusAction.IGNORE -> Unit
             }
@@ -166,10 +189,10 @@ class XopcVoiceModule : Module() {
     track = player
     val generation = epoch
     outputRoutingListener = AudioRouting.OnRoutingChangedListener { routing ->
-      if (epoch == generation && track === player) routing.routedDevice?.let { outputDeviceId = it.id }
+      if (epoch == generation && track === player) { routing.routedDevice?.let { outputDeviceId = it.id }; publishRoute() }
     }
     player.addOnRoutingChangedListener(outputRoutingListener!!, handler)
-    player.setVolume(playbackVolume)
+    applyPlaybackVolume()
     player.play()
     outputDeviceId = player.routedDevice?.id
     handler.post(progress)
@@ -198,7 +221,7 @@ class XopcVoiceModule : Module() {
     throw IllegalStateException("MICROPHONE_UNAVAILABLE", lastError)
   }
 
-  private fun start(enabled: Boolean, title: String, stopLabel: String) {
+  private fun start(enabled: Boolean, title: String, stopLabel: String): Map<String, Any> {
     savedContext = appContext.reactContext?.applicationContext
     stop()
     background = enabled
@@ -235,8 +258,12 @@ class XopcVoiceModule : Module() {
             break
           }
           if (count > 0 && capturing && captureId == currentCapture) {
+            val candidate = nearSpeech.process(buffer, count)
             val audio = Base64.encodeToString(buffer, 0, count, Base64.NO_WRAP)
-            handler.post { if (epoch == generation && capturing && captureId == currentCapture) sendEvent("pcm", mapOf("audio" to audio, "captureId" to currentCapture)) }
+            handler.post { if (epoch == generation && capturing && captureId == currentCapture) {
+              if (candidate != null) sendEvent("speechCandidate", mapOf("active" to candidate, "captureId" to currentCapture))
+              sendEvent("pcm", mapOf("audio" to audio, "captureId" to currentCapture))
+            } }
           }
         }
       }, "xopc-voice-capture").apply { start() }
@@ -245,6 +272,7 @@ class XopcVoiceModule : Module() {
           if (epoch == generation && !forcedSpeaker) {
             try { applyOutputRoute(false) }
             catch (error: RuntimeException) { Log.w("XopcVoice", "Audio output selection failed", error); interrupt("route_lost") }
+            publishRoute()
           }
         }
         override fun onAudioDevicesRemoved(removed: Array<out AudioDeviceInfo>) {
@@ -253,6 +281,7 @@ class XopcVoiceModule : Module() {
       }
       try { manager.registerAudioDeviceCallback(devices, handler) }
       catch (error: RuntimeException) { devices = null; Log.w("XopcVoice", "Audio route monitoring is unavailable", error) }
+      return routeCapabilities()
     } catch (error: SecurityException) { stop(); throw IllegalStateException("PERMISSION_DENIED", error) }
     catch (error: Throwable) { stop(); throw error }
   }
@@ -334,7 +363,9 @@ class XopcVoiceModule : Module() {
     VoiceCallService.onStop = null
     context.stopService(Intent(context, VoiceCallService::class.java))
     background = false
-    playbackVolume = 1f
+    focusVolume = 1f
+    speechVolume = 1f
+    nearSpeech.reset()
     forcedSpeaker = false
     inputDeviceId = null
     outputDeviceId = null

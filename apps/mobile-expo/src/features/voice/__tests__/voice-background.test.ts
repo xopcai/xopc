@@ -3,7 +3,7 @@ import { shouldPauseVoiceForBackground, type CallState } from '../voice-call-con
 
 const state = (phase: CallState['phase'], background = false): CallState => ({
   phase, target: { gatewayId: 'gateway', sessionKey: 'test', background }, name: '',
-  expanded: true, muted: false, startedAt: 0, userText: '', assistantText: '',
+  expanded: true, muted: false, startedAt: 0, userText: '', assistantText: '', networkQuality: 'good',
 });
 
 describe('voice background handling', () => {

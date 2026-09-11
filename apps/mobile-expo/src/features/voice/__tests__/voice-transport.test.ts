@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { encodeVoiceAudioFrame, type CreateVoiceSessionResponse } from '@xopcai/realtime-protocol/voice';
+import { decodeVoiceUplinkAudioFrame, encodeVoiceAudioFrame, type CreateVoiceSessionResponse } from '@xopcai/realtime-protocol/voice';
 import { VoiceTransport } from '../voice-transport';
 
 class Socket {
@@ -11,10 +11,15 @@ class Socket {
   send = vi.fn(); close = vi.fn(() => { this.readyState = 3; this.onclose?.(); });
   constructor(readonly url: string) { Socket.latest = this; }
 }
-const session = { sessionId: randomUUID(), ticket: 'secret-ticket', websocketPath: '/api/voice/realtime/v2/ws', route: { engine: 'omni', omni: { provider: 'p', model: 'm', managed: true } } } as CreateVoiceSessionResponse;
+const session = { sessionId: randomUUID(), ticket: 'secret-ticket-secret-ticket-secret', ticketExpiresAt: new Date().toISOString(),
+  websocketPath: '/api/voice/realtime/v3/ws', protocolVersion: 3, connectionEpoch: 1,
+  purpose: 'conversation', mode: 'natural', inputMode: 'server_vad', bargeIn: true,
+  inputFormat: { encoding: 'pcm_s16le', sampleRate: 16000, channels: 1 }, media: { transport: 'websocket-pcm', codec: 'pcm_s16le', frameDurationMs: 20 },
+  limits: { maxBinaryFrameBytes: 65536, maxSessionMs: 60000, idleTimeoutMs: 30000 },
+  route: { engine: 'omni', omni: { provider: 'p', model: 'm', managed: true } } } as CreateVoiceSessionResponse;
 function ready() {
   Socket.latest.onopen?.();
-  Socket.latest.onmessage?.({ data: JSON.stringify({ protocolVersion: 2, sessionId: session.sessionId, eventId: randomUUID(), seq: 1, type: 'session.ready', sentAt: Date.now(), payload: { purpose: 'conversation', inputMode: 'server_vad', inputFormat: { encoding: 'pcm_s16le', sampleRate: 16000, channels: 1 }, route: session.route, heartbeatIntervalMs: 15000 } }) });
+  Socket.latest.onmessage?.({ data: JSON.stringify({ protocolVersion: 3, sessionId: session.sessionId, eventId: randomUUID(), seq: 1, type: 'session.ready', sentAt: Date.now(), payload: { purpose: 'conversation', mode: 'natural', connectionEpoch: 1, inputMode: 'server_vad', inputFormat: { encoding: 'pcm_s16le', sampleRate: 16000, channels: 1 }, media: session.media, route: session.route, heartbeatIntervalMs: 15000 } }) });
 }
 function harness() {
   vi.stubGlobal('WebSocket', Socket);
@@ -27,7 +32,7 @@ describe('mobile voice transport', () => {
   it('pins WSS to the ticket origin and keeps the ticket out of the URL', async () => {
     const h = harness(); const connecting = h.transport.connect('https://paired.example', session, new AbortController().signal);
     ready(); await connecting;
-    expect(Socket.latest.url).toBe('wss://paired.example/api/voice/realtime/v2/ws');
+    expect(Socket.latest.url).toBe('wss://paired.example/api/voice/realtime/v3/ws');
     expect(JSON.parse(Socket.latest.send.mock.calls[0][0]).payload.ticket).toBe(session.ticket);
     h.transport.close();
   });
@@ -49,7 +54,7 @@ describe('mobile voice transport', () => {
   it('delivers only sequential audio and reports a protocol failure once', async () => {
     const h = harness(); const connecting = h.transport.connect('https://paired.example', session, new AbortController().signal);
     ready(); await connecting;
-    const frame = (seq: number) => encodeVoiceAudioFrame({ responseId: 'answer', seq, audio: new Uint8Array([0, 0]) }).buffer;
+    const frame = (seq: number) => encodeVoiceAudioFrame({ connectionEpoch: 1, responseId: 'answer', seq, mediaTimestampMs: (seq - 1) * 20, durationMs: 20, audio: new Uint8Array([0, 0]) }).buffer;
     Socket.latest.onmessage?.({ data: frame(1) }); Socket.latest.onmessage?.({ data: frame(3) });
     expect(h.callbacks.audio).toHaveBeenCalledOnce();
     expect(h.callbacks.close).toHaveBeenCalledExactlyOnceWith('PROTOCOL_ERROR');
@@ -65,8 +70,19 @@ describe('mobile voice transport', () => {
     const connecting = h.transport.connect('https://paired.example', session, abort.signal);
     abort.abort(); await expect(connecting).rejects.toThrow('CANCELLED');
     const next = harness(); const opening = next.transport.connect('https://paired.example', session, new AbortController().signal);
-    ready(); await opening; Socket.latest.bufferedAmount = 70000;
-    expect(() => next.transport.audio(new Uint8Array([0, 0]))).toThrow('INPUT_DROPPED');
+    ready(); await opening; Socket.latest.bufferedAmount = 9600;
+    expect(next.transport.audio(new Uint8Array(640))).toMatchObject({ accepted: false, quality: 'critical' });
     next.transport.close();
+  });
+
+  it('frames uplink audio with epoch, utterance id and a monotonic sequence', async () => {
+    const h = harness(); const connecting = h.transport.connect('https://paired.example', session, new AbortController().signal);
+    ready(); await connecting;
+    expect(h.transport.audio(new Uint8Array(1280))).toMatchObject({ accepted: true });
+    const frames = Socket.latest.send.mock.calls.slice(1).map(([value]) => decodeVoiceUplinkAudioFrame(new Uint8Array(value)));
+    expect(frames).toHaveLength(2);
+    expect(frames.map(frame => frame.audioSeq)).toEqual([1, 2]);
+    expect(frames[0]).toMatchObject({ connectionEpoch: 1, durationMs: 20, start: true });
+    expect(frames[1].utteranceId).toBe(frames[0].utteranceId);
   });
 });

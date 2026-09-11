@@ -3,8 +3,9 @@ import type { StreamingSttSession, StreamingSttEvent } from '../../media-underst
 import { createLogger } from '../../utils/logger.js';
 import { speakStream, type SpeakStreamResult } from '../tts/speak-core.js';
 import { AudioPlaybackWindow } from './audio-playback-window.js';
-import { ConversationTurn } from './conversationTurn.js';
+import { TurnCoordinator } from './turnPolicy.js';
 import { isLikelyPlaybackEcho } from './playback-echo.js';
+import { PcmFrameBuffer } from './pcmFrameBuffer.js';
 import { SpeakableSegmenter } from './speakable-segmenter.js';
 import type { VoiceTicketClaim, VoiceRealtimeRuntimeOptions } from './runtime.types.js';
 import type { VoiceEngine, VoiceEventSink } from './engine.js';
@@ -36,6 +37,8 @@ interface ActiveVoiceResponse {
   startedAt: number;
   firstTextSeen: boolean;
   awaitingClarification: boolean;
+  taskId?: string;
+  pcm: PcmFrameBuffer;
 }
 
 export function createAgentVoiceEngine(options: {
@@ -67,9 +70,13 @@ export function createAgentVoiceEngine(options: {
   let finalCount = 0;
   let committing = false;
   const finalizedUtterances = new Set<string>();
-  let pendingTurn: { text: string; cancelled: boolean } | undefined;
-  const turn = new ConversationTurn(claim.silenceDurationMs, (text) => {
+  let pendingTurn: { turnId: string; text: string; cancelled: boolean } | undefined;
+  const turn = new TurnCoordinator(claim.silenceDurationMs, (text, decision, turnId) => {
     if (closed || muted) return;
+    log.info({ sessionId: claim.sessionId, turnId, disposition: decision.disposition, confidence: decision.confidence,
+      source: decision.source, transcriptCharacters: text.length }, 'Realtime voice turn committed');
+    send('turn.decision', { turnId, disposition: decision.disposition, confidence: decision.confidence, source: decision.source, committed: true });
+    send('turn.committed', { turnId });
     if (queuedTurns >= 8) {
       send('session.error', { code: 'INPUT_BACKPRESSURE', message: 'Too many queued voice turns', recoverable: false });
       void options.onClose('input_backpressure', true);
@@ -77,11 +84,11 @@ export function createAgentVoiceEngine(options: {
     }
     queuedTurns += 1;
     const generation = inputGeneration;
-    const pending = { text, cancelled: false };
+    const pending = { turnId, text, cancelled: false };
     pendingTurn = pending;
     conversationTail = conversationTail.then(() => {
       if (pendingTurn === pending) pendingTurn = undefined;
-      if (generation === inputGeneration && !pending.cancelled) return runConversationTurn(text);
+      if (generation === inputGeneration && !pending.cancelled) return runAssistantTurn(text, turnId);
     }).finally(() => { if (generation === inputGeneration) queuedTurns -= 1; });
   });
   function cancelActiveResponse(reason: 'barge_in' | 'client_cancelled' | 'session_closed'): boolean {
@@ -149,11 +156,10 @@ export function createAgentVoiceEngine(options: {
           });
         }
         // Half-second frames keep acknowledgements flowing within the playback window.
-        for (let offset = 0; offset < item.value.byteLength; offset += 24_000) {
-          const chunk = item.value.subarray(offset, offset + 24_000);
-          await response.playback.reserve(chunk.byteLength, response.abortController.signal);
+        for (const frame of response.pcm.push(item.value)) {
+          await response.playback.reserve(frame.byteLength, response.abortController.signal);
           if (activeResponse !== response || closed) return;
-          options.sendAudio(response.id, chunk);
+          options.sendAudio(response.id, frame);
         }
       }
     } finally {
@@ -235,7 +241,7 @@ export function createAgentVoiceEngine(options: {
     else startSpeechWorker(response);
   }
 
-  async function runConversationTurn(text: string): Promise<void> {
+  async function runAssistantTurn(text: string, turnId: string): Promise<void> {
     if (!claim.tts || !claim.request.sessionKey || !text.trim() || closed) return;
     cancelActiveResponse('barge_in');
     const response: ActiveVoiceResponse = {
@@ -255,17 +261,19 @@ export function createAgentVoiceEngine(options: {
       startedAt: Date.now(),
       firstTextSeen: false,
       awaitingClarification: false,
+      pcm: new PcmFrameBuffer(),
     };
     activeResponse = response;
     send('response.created', { responseId: response.id });
     try {
       await interruptionWrites;
       if (response.abortController.signal.aborted || closed) return;
-      for await (const event of options.runtime.runAgent(
-        text,
-        claim.request.sessionKey,
-        response.abortController.signal,
-      )) {
+      if (!claim.conversationSessionId) throw new Error('Conversation identity is unavailable');
+      const task = await options.runtime.agentBroker.delegate({ text, turnId, sessionKey: claim.request.sessionKey,
+        expectedSessionId: claim.conversationSessionId, signal: response.abortController.signal });
+      response.taskId = task.taskId;
+      send('task.created', { responseId: response.id, taskId: task.taskId });
+      for await (const event of task.events) {
         if (activeResponse !== response || response.abortController.signal.aborted) return;
         if (event.type === 'assistant_delta'
           || (event.type === 'tool_end' && event.payload?.toolName !== 'clarify')) {
@@ -291,7 +299,11 @@ export function createAgentVoiceEngine(options: {
           queuePhrases(response, response.segmenter.flush());
         }
         if ((event.type === 'tool_start' || event.type === 'tool_end') && typeof event.payload?.toolCallId === 'string' && typeof event.payload?.toolName === 'string') {
-          send('response.activity', { responseId: response.id, toolCallId: event.payload.toolCallId.slice(0, 160), toolName: event.payload.toolName.slice(0, 256), status: event.type === 'tool_start' ? 'running' : event.payload.status === 'error' ? 'failed' : 'completed' });
+          send('task.activity', { taskId: task.taskId, toolCallId: event.payload.toolCallId.slice(0, 160), toolName: event.payload.toolName.slice(0, 256), status: event.type === 'tool_start' ? 'running' : event.payload.status === 'error' ? 'failed' : 'completed' });
+        }
+        if (event.type === 'stream_end') {
+          const status = event.payload?.status;
+          send('task.done', { taskId: task.taskId, status: status === 'cancelled' ? 'cancelled' : status === 'suspended' ? 'suspended' : status === 'error' ? 'failed' : 'completed' });
         }
         if (event.type === 'clarify_request' && typeof event.payload?.requestId === 'string' && typeof event.payload?.question === 'string') {
           response.awaitingClarification = true;
@@ -316,6 +328,12 @@ export function createAgentVoiceEngine(options: {
       send('response.text.done', { responseId: response.id });
       await waitForSpeech(response);
       if (response.speechError) throw response.speechError;
+      const finalFrame = response.pcm.finish();
+      if (finalFrame) {
+        await response.playback.reserve(finalFrame.byteLength, response.abortController.signal);
+        if (activeResponse !== response || closed) return;
+        options.sendAudio(response.id, finalFrame);
+      }
       await response.playback.drain(response.abortController.signal);
       if (activeResponse !== response || response.abortController.signal.aborted) return;
       if (response.audioStarted) send('response.audio.done', { responseId: response.id });
@@ -384,7 +402,7 @@ export function createAgentVoiceEngine(options: {
       if (claim.request.purpose === 'conversation') {
         if (pendingTurn) {
           pendingTurn.cancelled = true;
-          turn.restore(pendingTurn.text);
+          turn.restore(pendingTurn.turnId, pendingTurn.text);
           pendingTurn = undefined;
         }
         turn.start(event.utteranceId);
@@ -515,8 +533,9 @@ export function createAgentVoiceEngine(options: {
       }
       return cancelActiveResponse(reason);
     },
-    acknowledge(responseId, playedBytes) {
-      if (activeResponse?.id === responseId) activeResponse.playback.acknowledge(playedBytes);
+    cancelTask(taskId) { return options.runtime.agentBroker.cancel(taskId); },
+    acknowledge(responseId, playedDurationMs) {
+      if (activeResponse?.id === responseId) activeResponse.playback.acknowledge(playedDurationMs * 48);
     },
     close() {
       if (closing) return closing;
