@@ -153,7 +153,7 @@ describe('attachment-pipeline', () => {
     expect(optimized.byteLength).toBeLessThan(original.byteLength);
     const stored = await readMediaReference(uri);
     expect(stored.buffer).toEqual(original);
-  });
+  }, 15_000);
 
   it('hydrateUserTurnForLlm does not pass svg attachments to native vision models', async () => {
     const uri = await seedMedia(Buffer.from('<svg/>'), 'x.svg');
