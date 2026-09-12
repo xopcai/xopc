@@ -37,6 +37,17 @@ Gateway 未运行时执行 `xopc gateway`。端口已占用时，停止其它进
 4. 确认 Gateway 持续运行。
 5. 阅读[消息通道](../channels/index.md)中的对应指南。
 
+## Chrome 扩展或浏览器工具不可用
+
+```bash
+xopc browser extension doctor
+xopc browser doctor
+```
+
+每次更新解压扩展文件后，都要在 `chrome://extensions` 中重新加载。Chrome 阻止普通网站时，检查扩展对该 origin 的网站访问权限并刷新页面。远程或自部署 Gateway 需要明确的配对链接和 owner 批准；本机自动 enrollment 只适用于受支持的同机安装。
+
+安装、版本不一致、`DRIVER_UNAVAILABLE` 和站点权限问题见 [Chrome 浏览器扩展](../browser-extension.md)。
+
 ## 验证配置
 
 ```bash

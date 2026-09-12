@@ -45,7 +45,7 @@ Global options such as `--config <path>` and `--workspace <path>` select a diffe
 | `skills` | Install, configure, audit, and test Skills |
 | `connectors` | Browse and install connector capabilities |
 | `tailscale` | Inspect Tailscale access status |
-| `browser` | Manage browser automations and dependencies |
+| `browser` | Diagnose browser control and install the Chrome extension bridge |
 | `agents` | Create, list, and remove Agents |
 | `extensions` | Install and manage extensions |
 

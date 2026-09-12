@@ -14,7 +14,7 @@ Natural chat uses `qwen3-omni-flash-realtime`. Each connection restores the sele
 
 Use the composer’s call button to start or continue voice in the same Chat. Network failure, a call time limit or a page reload ends the connection; start again to continue the conversation. Minimize/route navigation does not end it. There is no silent microphone reopening or automatic indefinite connection renewal.
 
-Hosted natural calls require a published conversation route on XOPC Platform. Gateway and clients must all support protocol v3. See the [protocol](./design/realtime-voice-websocket-protocol.md), [mobile technical design](./design/mobile-voice-technical-design.md), and [delivery review](./design/voice-experience-delivery.md) for implementation and verification limits.
+Hosted natural calls require a published conversation route on XOPC Platform. Gateway and clients must all support protocol v3. See the repository's [protocol](https://github.com/xopcai/xopc/blob/main/docs/design/realtime-voice-websocket-protocol.md), [mobile technical design](https://github.com/xopcai/xopc/blob/main/docs/design/mobile-voice-technical-design.md), and [delivery review](https://github.com/xopcai/xopc/blob/main/docs/design/voice-experience-delivery.md) for implementation and verification limits.
 
 ## Where else voice works
 
