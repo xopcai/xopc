@@ -6,6 +6,7 @@ import type { Socket } from 'node:net';
 import {
   VOICE_REALTIME_HEARTBEAT_INTERVAL_MS,
   VOICE_REALTIME_MAX_BINARY_FRAME_BYTES,
+  VOICE_REALTIME_PROXY_WS_PATH,
   VOICE_REALTIME_PROTOCOL_VERSION,
   VOICE_REALTIME_START_TIMEOUT_MS,
   VOICE_REALTIME_WS_PATH,
@@ -312,8 +313,9 @@ export class VoiceRealtimeRuntime {
   }
 
   handleUpgrade(req: IncomingMessage, socket: Socket, head: Buffer): boolean {
-    const pathname = new URL(req.url ?? '/', 'http://gateway.local').pathname;
-    if (pathname !== VOICE_REALTIME_WS_PATH) return false;
+    const url = new URL(req.url ?? '/', 'http://gateway.local');
+    const pathAndQuery = `${url.pathname}${url.search}`;
+    if (url.pathname !== VOICE_REALTIME_WS_PATH && pathAndQuery !== VOICE_REALTIME_PROXY_WS_PATH) return false;
     if (this.closed || this.wss.clients.size >= MAX_CONNECTIONS) {
       socket.destroy();
       return true;

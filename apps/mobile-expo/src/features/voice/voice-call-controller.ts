@@ -108,6 +108,19 @@ export class VoiceCallController {
     const target = this.state.target!;
     const generation = ++this.generation;
     const abort = new AbortController();
+    let createPromise: Promise<{ origin: string; session: CreateVoiceSessionResponse }> | undefined;
+    let created: { origin: string; session: CreateVoiceSessionResponse } | undefined;
+    const discardIssuedConnection = async () => {
+      const connection = created;
+      const pending = createPromise;
+      created = undefined;
+      createPromise = undefined;
+      if (connection) {
+        await this.deps.discard(connection).catch(() => undefined);
+      } else if (pending) {
+        void pending.then((late) => this.deps.discard(late)).catch(() => undefined);
+      }
+    };
     this.abort = abort;
     const deadline = recovering ? setTimeout(() => { if (generation === this.generation) void this.pause('NETWORK'); }, 10_000) : undefined;
     this.update({ phase: recovering ? 'recovering' : 'connecting', error: undefined, responseId: undefined, responseStage: undefined, clarification: undefined });
@@ -141,8 +154,7 @@ export class VoiceCallController {
         speechCandidate: active => { if (current()) this.handleSpeechCandidate(active); },
         route: capabilities => { if (current()) this.applyAudioCapabilities(capabilities); },
       });
-      let created: { origin: string; session: CreateVoiceSessionResponse } | undefined;
-      const create = this.deps.create(
+      createPromise = this.deps.create(
         { purpose: 'conversation', sessionKey: target.sessionKey, mode: prepared.mode,
           supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] },
         abort.signal,
@@ -150,17 +162,9 @@ export class VoiceCallController {
         created = connection;
         return connection;
       });
-      let connection: { origin: string; session: CreateVoiceSessionResponse };
-      let audioCapabilities: AudioRouteCapabilities;
-      try {
-        [connection, audioCapabilities] = await Promise.all([create, audioStart]);
-      } catch (error) {
-        if (created) void this.deps.discard(created).catch(() => undefined);
-        else void create.then((late) => this.deps.discard(late)).catch(() => undefined);
-        throw error;
-      }
+      const [connection, audioCapabilities] = await Promise.all([createPromise, audioStart]);
       if (!current()) {
-        void this.deps.discard(connection).catch(() => undefined);
+        await discardIssuedConnection();
         return;
       }
       this.applyAudioCapabilities(audioCapabilities);
@@ -185,6 +189,8 @@ export class VoiceCallController {
       });
       this.transport = transport;
       await transport.connect(connection.origin, connection.session, abort.signal);
+      created = undefined;
+      createPromise = undefined;
       if (!current()) return;
       transport.send('input.mute', { muted: this.inputShouldBeMuted() });
       if (!current()) return;
@@ -192,6 +198,7 @@ export class VoiceCallController {
       this.deps.audio.capture(this.shouldCapture());
       this.limitTimer = setTimeout(() => void this.pause('TIME_LIMIT'), connection.session.limits.maxSessionMs);
     } catch (error) {
+      await discardIssuedConnection();
       if (current()) {
         this.transport?.close();
         this.transport = undefined;

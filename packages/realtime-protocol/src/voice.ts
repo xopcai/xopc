@@ -4,6 +4,7 @@ export { encodeVoiceAudioFrame, decodeVoiceAudioFrame, encodeVoiceUplinkAudioFra
 
 export const VOICE_REALTIME_PROTOCOL_VERSION = 3 as const;
 export const VOICE_REALTIME_WS_PATH = '/api/voice/realtime/v3/ws' as const;
+export const VOICE_REALTIME_PROXY_WS_PATH = '/api/realtime/v1/ws?transport=voice-v3' as const;
 export const VOICE_REALTIME_MAX_BINARY_FRAME_BYTES = 64 * 1024;
 export const VOICE_REALTIME_START_TIMEOUT_MS = 10_000;
 export const VOICE_REALTIME_HEARTBEAT_INTERVAL_MS = 15_000;
