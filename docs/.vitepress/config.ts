@@ -118,6 +118,7 @@ export default defineConfig({
               { text: 'Gateway console', link: '/gateway' },
               { text: 'Terminal UI', link: '/tui' },
               { text: 'Mobile app', link: '/mobile-app' },
+              { text: 'Chrome extension', link: '/browser-extension' },
               { text: 'Remote access', link: '/remote-access' },
               { text: 'Heartbeat', link: '/heartbeat' },
               { text: 'Updates', link: '/update' }
@@ -219,6 +220,7 @@ export default defineConfig({
               { text: '网关控制台', link: '/zh/gateway' },
               { text: '终端界面', link: '/zh/tui' },
               { text: '手机端', link: '/zh/mobile-app' },
+              { text: 'Chrome 浏览器扩展', link: '/zh/browser-extension' },
               { text: '远程访问', link: '/zh/remote-access' },
               { text: '心跳检查', link: '/zh/heartbeat' },
               { text: '更新', link: '/zh/update' }
