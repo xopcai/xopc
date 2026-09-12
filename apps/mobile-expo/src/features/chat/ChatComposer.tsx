@@ -50,7 +50,7 @@ import { VoiceRecordingCard } from './VoiceRecordingCard';
 import { useChatVoiceRecording } from './use-chat-voice-recording';
 import { useVoiceCall } from '../voice/voice-call';
 import {
-  COMPOSER_VOICE_CALL_OPTIONS,
+  resolveComposerVoiceCallOption,
   type ComposerVoiceCallMode,
 } from './composer-voice-call-options';
 
@@ -70,6 +70,7 @@ export const ChatComposer = memo(function ChatComposer({
   onContextRefsChange,
   contextControl,
   onVoiceCallStart,
+  voiceCallMode,
   voiceCallUnavailable,
 }: {
   sessionKey: string;
@@ -84,7 +85,8 @@ export const ChatComposer = memo(function ChatComposer({
   contextRefs: ComposerContextRef[];
   onContextRefsChange: (refs: ComposerContextRef[]) => void;
   contextControl?: ReactNode;
-  onVoiceCallStart: (mode: ComposerVoiceCallMode) => void;
+  onVoiceCallStart: (mode?: ComposerVoiceCallMode) => void;
+  voiceCallMode?: ComposerVoiceCallMode;
   voiceCallUnavailable?: Partial<Record<ComposerVoiceCallMode, boolean>>;
 }) {
   const m = useMessages();
@@ -418,14 +420,15 @@ export const ChatComposer = memo(function ChatComposer({
     [cm.localFiles, cm.photos, cm.takePhoto, handleAttachmentPick],
   );
 
-  const voiceCallItems = useMemo(
-    () => COMPOSER_VOICE_CALL_OPTIONS.map((item) => ({
-      ...item,
-      label: item.mode === 'natural' ? m.voice.callWithoutTools : m.voice.callWithTools,
-      onPress: () => onVoiceCallStart(item.mode),
-    })),
-    [m.voice.callWithTools, m.voice.callWithoutTools, onVoiceCallStart],
-  );
+  const voiceCallItem = useMemo(() => {
+    const option = resolveComposerVoiceCallOption(voiceCallMode);
+    return {
+      ...option,
+      key: 'voice-call',
+      label: m.voice.title,
+      onPress: () => onVoiceCallStart(voiceCallMode),
+    };
+  }, [m.voice.title, onVoiceCallStart, voiceCallMode]);
 
   const renderCaptureChip = (
     key: string,
@@ -466,13 +469,19 @@ export const ChatComposer = memo(function ChatComposer({
         keyboardShouldPersistTaps="handled"
       >
         {contextControl}
-        {voiceCallItems.map((item) => {
+        {call.phase === 'idle' ? (() => {
           const itemDisabled = disabled
             || streaming
             || voiceInteractionActive
-            || (call.phase === 'idle' && voiceCallUnavailable?.[item.mode] === true);
-          return renderCaptureChip(item.key, item.icon, item.label, item.onPress, itemDisabled);
-        })}
+            || (voiceCallMode ? voiceCallUnavailable?.[voiceCallMode] === true : false);
+          return renderCaptureChip(
+            voiceCallItem.key,
+            voiceCallItem.icon,
+            voiceCallItem.label,
+            voiceCallItem.onPress,
+            itemDisabled,
+          );
+        })() : null}
         {captureItems.map((item) => {
           const itemDisabled = disabled
             || streaming

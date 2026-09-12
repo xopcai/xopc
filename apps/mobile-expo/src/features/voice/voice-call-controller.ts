@@ -12,6 +12,8 @@ export type CallTarget = {
   background: boolean;
   identity?: string;
   name?: string;
+  agentId?: string;
+  avatar?: string;
 };
 export type CallState = {
   phase: 'idle' | 'connecting' | 'connected' | 'recovering' | 'paused' | 'ending';
