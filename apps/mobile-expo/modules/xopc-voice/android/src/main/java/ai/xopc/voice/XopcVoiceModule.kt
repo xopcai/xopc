@@ -36,6 +36,9 @@ class XopcVoiceModule : Module() {
   private var focusVolume = 1f
   private var speechVolume = 1f
   private val nearSpeech = NearSpeechDetector()
+  private val captureHealth = PcmCaptureHealth()
+  @Volatile private var preferRawMicrophone = false
+  @Volatile private var recorderSource = MediaRecorder.AudioSource.VOICE_COMMUNICATION
   private var forcedSpeaker = false
   private var previousAudioMode: Int? = null
   private var previousSpeakerphone: Boolean? = null
@@ -208,13 +211,19 @@ class XopcVoiceModule : Module() {
 
   private fun startRecorder(bufferSize: Int): AudioRecord {
     var lastError: RuntimeException? = null
-    for (source in intArrayOf(MediaRecorder.AudioSource.VOICE_COMMUNICATION, MediaRecorder.AudioSource.MIC)) {
+    val sources = if (preferRawMicrophone) {
+      intArrayOf(MediaRecorder.AudioSource.MIC, MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+    } else {
+      intArrayOf(MediaRecorder.AudioSource.VOICE_COMMUNICATION, MediaRecorder.AudioSource.MIC)
+    }
+    for (source in sources) {
       var candidate: AudioRecord? = null
       try {
         candidate = AudioRecord(source, 16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize)
         check(candidate.state == AudioRecord.STATE_INITIALIZED)
         candidate.startRecording()
         check(candidate.recordingState == AudioRecord.RECORDSTATE_RECORDING)
+        recorderSource = source
         return candidate
       } catch (error: SecurityException) {
         try { candidate?.release() } catch (_: RuntimeException) { }
@@ -248,6 +257,7 @@ class XopcVoiceModule : Module() {
       check(minInput > 0) { "MICROPHONE_FORMAT_UNAVAILABLE" }
       val input = startRecorder(maxOf(minInput, 6400))
       recorder = input
+      captureHealth.reset()
       configureInputEffects(input)
       val generation = epoch
       inputDeviceId = input.routedDevice?.id
@@ -265,6 +275,15 @@ class XopcVoiceModule : Module() {
             break
           }
           if (count > 0 && capturing && captureId == currentCapture) {
+            if (!captureHealth.observe(buffer, count)) {
+              val retryWithRawMicrophone = recorderSource == MediaRecorder.AudioSource.VOICE_COMMUNICATION && !preferRawMicrophone
+              if (retryWithRawMicrophone) preferRawMicrophone = true
+              handler.post { if (epoch == generation) {
+                Log.w("XopcVoice", "AudioRecord did not produce a usable startup signal; source=$recorderSource retryWithRawMicrophone=$retryWithRawMicrophone")
+                interrupt(if (retryWithRawMicrophone) "capture_failed" else "capture_no_signal")
+              } }
+              break
+            }
             val candidate = nearSpeech.process(buffer, count)
             val audio = Base64.encodeToString(buffer, 0, count, Base64.NO_WRAP)
             handler.post { if (epoch == generation && capturing && captureId == currentCapture) {
@@ -366,6 +385,7 @@ class XopcVoiceModule : Module() {
     focusVolume = 1f
     speechVolume = 1f
     nearSpeech.reset()
+    captureHealth.reset()
     forcedSpeaker = false
     inputDeviceId = null
     outputDeviceId = null

@@ -28,7 +28,7 @@ function setup(options: { activeRunId?: string; row?: SessionInput } = {}) {
   const deps = {
     submit: vi.fn(async () => ({ ok: true as const, effectiveDelivery: options.activeRunId ? 'steer' as const : 'next' as const, state })),
     find: vi.fn(() => row), snapshot: vi.fn(() => state), currentSequence: vi.fn(() => 12),
-    subscribe: vi.fn(() => ({ initial: [event('assistant_delta'), event('stream_end')], cursor: 2, unsubscribe })),
+    subscribe: vi.fn(() => ({ initial: [event('assistant_delta'), event('run_end')], cursor: 2, unsubscribe })),
     cancelRun: vi.fn(async () => {}),
   };
   return { broker: new DurableVoiceAgentBroker(deps), deps, unsubscribe };
@@ -45,9 +45,18 @@ describe('DurableVoiceAgentBroker', () => {
     }));
     const types: string[] = [];
     for await (const value of task.events) types.push(value.type);
-    expect(types).toEqual(['assistant_delta', 'stream_end']);
+    expect(types).toEqual(['assistant_delta', 'run_end']);
     expect(deps.subscribe).toHaveBeenCalledWith('run:run-1', 0, expect.any(Function));
     await expect(broker.cancel(task.taskId)).resolves.toBe(false);
+  });
+
+  it('accepts the legacy stream terminal event during rolling updates', async () => {
+    const { broker, deps } = setup();
+    deps.subscribe.mockReturnValue({ initial: [event('stream_end')], cursor: 1, unsubscribe: vi.fn() });
+    const task = await broker.delegate({ sessionKey: 'chat', expectedSessionId: 'session', turnId: 'turn', text: 'hello', signal: new AbortController().signal });
+    const types: string[] = [];
+    for await (const value of task.events) types.push(value.type);
+    expect(types).toEqual(['stream_end']);
   });
 
   it('steers an active run and starts after the current event cursor', async () => {

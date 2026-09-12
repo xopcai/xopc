@@ -132,6 +132,7 @@ export async function openDashScopeStreamingStt(
           sample_rate: request.inputFormat.sampleRate,
           semantic_punctuation_enabled: false,
           max_sentence_silence: request.turnDetection.silenceDurationMs,
+          heartbeat: true,
           ...(request.language && request.language !== 'auto'
             ? { language_hints: [request.language] }
             : {}),
