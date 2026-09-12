@@ -22,7 +22,6 @@ import { registerLocalAppsRoutes } from './local-apps.js';
 import { registerWorkDiscoveryRoutes } from './work-discovery.js';
 import { registerContextSourceRoutes } from './context-sources.js';
 import { registerTaskRoutes } from './tasks.js';
-import { registerProactiveRoutes } from './proactive.js';
 import { registerMobilePrivacyRoutes } from './mobile-privacy.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import {
@@ -49,7 +48,6 @@ export function registerCoreAuthenticatedRoutes(
   registerWorkDiscoveryRoutes(authenticated, deps);
   registerContextSourceRoutes(authenticated, deps);
   registerTaskRoutes(authenticated, deps);
-  registerProactiveRoutes(authenticated, deps);
   registerSearchRoutes(authenticated, deps);
   registerDevicePushRoutes(authenticated);
   registerNotificationRoutes(authenticated, deps);

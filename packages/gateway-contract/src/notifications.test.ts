@@ -31,7 +31,7 @@ describe('notification targets', () => {
     },
     {
       target: { kind: 'insight', inboxItemId: 'item?one' },
-      web: '/?judgment=item%3Fone',
+      web: '/proactive?item=item%3Fone',
       mobile: '/inbox?item=item%3Fone',
     },
     {

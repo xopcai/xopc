@@ -1300,7 +1300,7 @@ describe('SQLite migrations', () => {
         (session_key, endpoint_id, bound_at)
         VALUES ('session-existing', 'endpoint-existing', 3)`).run();
 
-      expect(applyPendingMigrations(db)).toBe(158);
+      expect(applyPendingMigrations(db)).toBe(161);
       expect(db.prepare('SELECT principal_id FROM endpoint_instance_bindings').get())
         .toEqual({ principal_id: 'existing' });
       expect(db.prepare('SELECT endpoint_id FROM endpoint_session_bindings').get())

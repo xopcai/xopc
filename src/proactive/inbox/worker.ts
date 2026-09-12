@@ -1,8 +1,8 @@
+import { reconcileCards } from './lifecycle.js';
 import { createLogger } from '../../utils/logger.js';
 import { executePendingProactiveActions } from '../actions/service.js';
 import { pruneProactiveHistory } from '../maintenance.js';
-
-import { claimDelivery, finishDelivery, projectInsightsToInbox, recoverExpiredDeliveries, wakeSnoozedItems } from './repository.js';
+import { claimDelivery, deferDelivery, finishDelivery, projectInsightsToInbox, recoverExpiredDeliveries, wakeSnoozedItems } from './repository.js';
 import type { InboxDeliveryAdapter } from './types.js';
 
 const log = createLogger('ProactiveInboxWorker');
@@ -35,11 +35,12 @@ export class ProactiveInboxWorker {
         pruneProactiveHistory(new Date(now));
         this.lastMaintenanceAt = now;
       }
-      projectInsightsToInbox(); executePendingProactiveActions(); wakeSnoozedItems(); recoverExpiredDeliveries();
+      projectInsightsToInbox(); reconcileCards(); executePendingProactiveActions(); wakeSnoozedItems(); recoverExpiredDeliveries();
       const claim = claimDelivery();
       if (!claim) return;
       try {
-        await this.delivery.deliver({ deliveryId: claim.id, inboxItem: claim.item });
+        const result = await this.delivery.deliver({ deliveryId: claim.id, inboxItem: claim.item });
+        if (result && result.retryAt) { deferDelivery(claim.id, claim.attempt, result.retryAt); return; }
         finishDelivery(claim.id, undefined, claim.attempt);
       } catch (error) {
         finishDelivery(claim.id, error, claim.attempt);

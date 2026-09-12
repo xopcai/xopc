@@ -1,4 +1,7 @@
-import { getConnectorSyncPolicyForConnection } from '../../storage/sqlite/connector-sync-policy-repository.js';
+import { effectiveProactivePolicy } from '../policy/service.js';
+import { listSubscriptions } from '../scenarios/repository.js';
+import { scanDueProjects } from './schedule.js';
+import { authorizedConnectedSource } from '../execution/authorization.js';
 import { listKnowledgeSourceItems } from '../../storage/sqlite/knowledge-repository.js';
 import { createLogger } from '../../utils/logger.js';
 import { ProactiveEventService } from '../service.js';
@@ -51,6 +54,9 @@ export class ProactiveTemporalWorker {
     this.running = true;
     const result: TemporalTickResult = { scanned: 0, published: 0, skipped: 0 };
     try {
+      scanDueProjects(this.events, now);
+      const activeWorkspaces = new Set(listSubscriptions(MEETING_SCENARIO).filter((sub) => effectiveProactivePolicy(sub.id, now).enabled).map((sub) => sub.workspaceId));
+      if (!activeWorkspaces.size) return result;
       const nowMs = now.getTime();
       const pageSize = 500;
       for (let offset = 0; ; offset += pageSize) {
@@ -70,11 +76,8 @@ export class ProactiveTemporalWorker {
           const agentId = metadataString(item.metadata, 'agentId');
           const startMs = item.occurredAt ? Date.parse(item.occurredAt) : Number.NaN;
           const window = meetingWindow(startMs, nowMs);
-          const policy = connectionId ? getConnectorSyncPolicyForConnection(connectionId) : undefined;
-          const scenarioAllowed = !policy?.allowedScenarioKeys.length
-            || policy.allowedScenarioKeys.includes(MEETING_SCENARIO);
-          if (!connectionId || !workspaceId || !connectorId || !window
-            || !policy?.scanEnabled || !policy.proactiveEnabled || !scenarioAllowed
+          if (!connectionId || !workspaceId || !activeWorkspaces.has(workspaceId) || !connectorId || !window
+            || !authorizedConnectedSource(item.id, workspaceId, MEETING_SCENARIO, agentId)
             || item.sensitivity === 'secret' || item.sensitivity === 'regulated') {
             result.skipped += 1;
             continue;

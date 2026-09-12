@@ -14,9 +14,10 @@ import {
 } from '../../storage/sqlite/index.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { ContextProviderRegistry } from '../execution/context.js';
-import { getScenario } from '../scenarios/repository.js';
+import { getScenario, upsertSubscription } from '../scenarios/repository.js';
 import { ProactiveScenarioService } from '../scenarios/service.js';
 import { ProactiveEventService } from '../service.js';
+import { updateProactivePreferences } from '../policy/service.js';
 import { ProactiveTemporalWorker } from '../temporal/worker.js';
 import { defineTaskContract, TaskApplicationService } from '../../tasks/index.js';
 
@@ -27,6 +28,7 @@ describe('proactive temporal worker', () => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-proactive-temporal-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
+    upsertSubscription({ scenarioKey: 'meeting_preparation', scopeKind: 'workspace', scopeId: '/workspace', workspaceId: '/workspace', enabled: true });
     upsertConnectorConnection({
       id: 'calendar-work',
       connectorId: 'googlecalendar',
@@ -196,4 +198,17 @@ describe('proactive temporal worker', () => {
       expect.objectContaining({ payload: expect.objectContaining({ window: '2h' }) }),
     ]);
   });
+  it('does not scan calendar items when global proactive is disabled', async () => {
+    updateProactivePreferences('/workspace', { expectedRevision: 0, level: 'off' });
+    const worker = new ProactiveTemporalWorker(new ProactiveEventService(() => []));
+    expect(await worker.tick()).toEqual({ scanned: 0, published: 0, skipped: 0 });
+  });
+
+  it('does not analyze a disconnected calendar even if its old sync policy remains enabled', async () => {
+    upsertConnectorSyncPolicy({ accountId: 'account:calendar-work', scanEnabled: true, proactiveEnabled: true });
+    storeMeeting('2026-08-15T02:00:00.000Z');
+    getSqliteDatabase().prepare("UPDATE connector_connections SET status = 'revoked' WHERE id = 'calendar-work'").run();
+    expect(await new ProactiveTemporalWorker(new ProactiveEventService(() => [])).tick(new Date('2026-08-15T01:00:00Z'))).toMatchObject({ scanned: 1, published: 0, skipped: 1 });
+  });
+
 });

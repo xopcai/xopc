@@ -49,6 +49,7 @@ import { subscribeSystemTheme, syncThemeAfterHydration, useThemeStore } from '@/
 const SessionsPage = lazy(() => loadSessionsPage().then((m) => ({ default: m.SessionsPage })));
 const AutomationsPage = lazy(() => loadAutomationsPage().then((m) => ({ default: m.AutomationsPage })));
 const BrowserAutomationsPage = lazy(() => loadBrowserAutomationsPage().then((m) => ({ default: m.BrowserAutomationsPage })));
+const ProactivePage = lazy(() => import('@/features/proactive/proactive-page').then((m) => ({ default: m.ProactivePage })));
 const HomePage = lazy(() => loadHomePage().then((m) => ({ default: m.HomePage })));
 const TaskDetailPage = lazy(() => loadTaskDetailPage().then((m) => ({ default: m.TaskDetailPage })));
 const ProjectsPage = lazy(() => loadProjectsPage().then((m) => ({ default: m.ProjectsPage })));
@@ -188,6 +189,10 @@ const router = createHashRouter([
           { path: 'task/:taskId', element: <TaskChatPage /> },
           { path: CHAT_SESSION_ROUTE_PATH, element: <ChatPage /> },
         ],
+      },
+      {
+        path: 'proactive',
+        element: <Suspense fallback={<SecondaryRouteFallback />}><ProactivePage /></Suspense>,
       },
       {
         path: 'automations',
