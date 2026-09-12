@@ -87,6 +87,7 @@ export class VoiceCallController {
   private recoveryTimer?: ReturnType<typeof setTimeout>;
   private playbackTimer?: ReturnType<typeof setTimeout>;
   private fullDuplex = false;
+  private bargeIn = false;
   private playbackCaptureBlocked = false;
   private bargeInDucked = false;
   private inputCongested = false;
@@ -114,7 +115,7 @@ export class VoiceCallController {
     this.identity = undefined;
     this.connection = undefined;
     this.approvalPending = false;
-    this.fullDuplex = false; this.playbackCaptureBlocked = false; this.bargeInDucked = false; this.inputCongested = false;
+    this.fullDuplex = false; this.bargeIn = false; this.playbackCaptureBlocked = false; this.bargeInDucked = false; this.inputCongested = false;
     this.autoRecoveryAttempts = 0;
     this.connectedAt = 0;
     this.update({ ...initial(), phase: this.networkOnline ? 'connecting' : 'recovering', target, startedAt: Date.now(),
@@ -186,6 +187,7 @@ export class VoiceCallController {
         await discardIssuedConnection();
         return;
       }
+      this.bargeIn = connection.session.bargeIn;
       this.applyAudioCapabilities(audioCapabilities);
       const transport = this.deps.transport({
         event: event => { if (current()) this.onEvent(event); },
@@ -295,7 +297,7 @@ export class VoiceCallController {
   private handleSpeechCandidate(active: boolean): void {
     if (!active) { this.restoreOutput(); return; }
     const audible = Boolean(this.state.responseId) && this.receivedBytes > this.renderedBytes;
-    if (!this.fullDuplex || !audible || this.bargeInDucked) return;
+    if (!this.bargeIn || !this.fullDuplex || !audible || this.bargeInDucked) return;
     this.bargeInDucked = true;
     void this.deps.audio.duck().catch(() => { if (this.state.phase === 'connected') void this.recover('PLAYBACK_FAILED'); });
   }
@@ -456,6 +458,7 @@ export class VoiceCallController {
     clearTimeout(this.playbackTimer); this.playbackTimer = undefined;
     clearTimeout(this.inputRecoveryTimer); this.inputRecoveryTimer = undefined;
     this.inputCongested = false;
+    this.bargeIn = false;
     this.clearPlaybackCaptureBlock(false);
     this.bargeInDucked = false;
     this.deps.audio.capture(false);
