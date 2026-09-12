@@ -16,7 +16,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.functions.Queues
 import java.lang.ref.WeakReference
 
-private const val DUCKED_PLAYBACK_VOLUME = 0.5f
+private const val DUCKED_PLAYBACK_VOLUME = 0.65f
 
 class XopcVoiceModule : Module() {
   private var recorder: AudioRecord? = null
