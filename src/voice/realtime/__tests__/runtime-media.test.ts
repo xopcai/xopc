@@ -2,7 +2,7 @@ import { once } from 'node:events';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo, Socket } from 'node:net';
 
-import { VOICE_REALTIME_PROTOCOL_VERSION, encodeVoiceUplinkAudioFrame, parseVoiceServerEvent, type VoiceServerEvent } from '@xopcai/realtime-protocol/voice';
+import { VOICE_REALTIME_PROTOCOL_VERSION, VOICE_REALTIME_PROXY_WS_PATH, encodeVoiceUplinkAudioFrame, parseVoiceServerEvent, type VoiceServerEvent } from '@xopcai/realtime-protocol/voice';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket } from 'ws';
 
@@ -21,7 +21,7 @@ describe('VoiceRealtimeRuntime media frames', () => {
     vi.restoreAllMocks();
   });
 
-  async function start() {
+  async function start(websocketPath?: string) {
     const appendAudio = vi.fn();
     vi.spyOn(alibabaTranscriptionProvider, 'openAudioStream').mockImplementation(async () => ({ appendAudio, abort: vi.fn(), commit: vi.fn(async () => {}) }));
     const config = ConfigSchema.parse({ voice: { realtime: { enabled: true } }, tools: { media: { audio: {
@@ -34,7 +34,7 @@ describe('VoiceRealtimeRuntime media frames', () => {
     server.listen(0, '127.0.0.1'); await once(server, 'listening');
     const session = await runtime.createSession({ purpose: 'dictation', supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] }, 'owner');
     const events: VoiceServerEvent[] = [];
-    socket = new WebSocket(`ws://127.0.0.1:${(server.address() as AddressInfo).port}${session.websocketPath}`);
+    socket = new WebSocket(`ws://127.0.0.1:${(server.address() as AddressInfo).port}${websocketPath ?? session.websocketPath}`);
     socket.on('message', (data, binary) => { if (!binary) events.push(parseVoiceServerEvent(JSON.parse(data.toString()))); });
     await once(socket, 'open');
     socket.send(JSON.stringify({ protocolVersion: VOICE_REALTIME_PROTOCOL_VERSION, messageId: crypto.randomUUID(), sentAt: Date.now(),
@@ -50,6 +50,11 @@ describe('VoiceRealtimeRuntime media frames', () => {
     socket.send(bytes); socket.send(bytes);
     await vi.waitFor(() => expect(appendAudio).toHaveBeenCalledOnce());
     expect(appendAudio).toHaveBeenCalledWith(new Uint8Array(640));
+  });
+
+  it('accepts voice sessions through the shared reverse-proxy WebSocket route', async () => {
+    const { events } = await start(VOICE_REALTIME_PROXY_WS_PATH);
+    expect(events).toContainEqual(expect.objectContaining({ type: 'session.ready' }));
   });
 
   it('closes a stream with a sequence gap', async () => {

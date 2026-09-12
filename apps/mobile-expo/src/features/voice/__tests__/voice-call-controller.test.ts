@@ -242,6 +242,14 @@ describe('mobile persistent voice controller', () => {
     expect(h.transport.connect).not.toHaveBeenCalled();
     await h.controller.end();
   });
+  it('discards an issued ticket when the voice transport cannot connect', async () => {
+    const h = harness();
+    h.transport.connect.mockRejectedValueOnce(new Error('NETWORK'));
+    await h.controller.start(target);
+    expect(h.deps.discard).toHaveBeenCalledOnce();
+    expect(h.controller.getSnapshot()).toMatchObject({ phase: 'paused', error: 'NETWORK' });
+    await h.controller.end();
+  });
   it('keeps mute intent when resuming and rejects callbacks from the previous connection', async () => {
     const h = harness(); await h.controller.start(target);
     const old = h.audio(); await h.controller.setMuted(true);

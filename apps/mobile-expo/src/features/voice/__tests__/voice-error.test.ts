@@ -30,4 +30,9 @@ describe('voiceErrorMessage', () => {
   it('keeps Android security failures actionable as microphone permission errors', () => {
     expect(voiceErrorMessage('PERMISSION_DENIED', en.voice)).toBe(en.voice.permission);
   });
+
+  it('distinguishes local recording ownership from a busy Chat session', () => {
+    expect(voiceErrorMessage('MICROPHONE_BUSY', en.voice)).toBe(en.voice.recordingBusy);
+    expect(voiceErrorMessage('SESSION_CONFLICT', en.voice)).toBe(en.voice.sessionBusy);
+  });
 });

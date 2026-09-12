@@ -94,5 +94,48 @@ describe('buildAssistantTurnViewModel', () => {
     expect(view.deliverables.artifacts).toEqual([
       expect.objectContaining({ title: 'analysis.csv' }),
     ]);
+    expect(view.showDeliverables).toBe(true);
+  });
+
+  it('waits for the final assistant message before rendering deliverables', () => {
+    const message = {
+      role: 'assistant' as const,
+      content: [
+        { type: 'text' as const, text: 'Preparing the file…', presentation: 'pending' as const },
+      ],
+      outcome: {
+        version: 1 as const,
+        outcomeId: 'outcome-1',
+        runId: 'run-1',
+        turnId: 'turn-1',
+        status: 'succeeded' as const,
+        deliverables: [{
+          artifactId: 'analysis',
+          title: 'analysis.csv',
+          kind: 'spreadsheet' as const,
+          availability: 'available' as const,
+          location: 'artifact_store' as const,
+          capabilities: ['preview' as const],
+          uri: 'media://outbound/analysis.csv',
+        }],
+        evidence: [],
+        createdAt: '2026-09-03T00:00:00.000Z',
+      },
+    };
+
+    const streaming = buildAssistantTurnViewModel({
+      message,
+      isStreaming: true,
+      reasoningLevel: 'on',
+    });
+    expect(streaming.deliverables.artifacts).toHaveLength(1);
+    expect(streaming.showDeliverables).toBe(false);
+
+    const complete = buildAssistantTurnViewModel({
+      message,
+      isStreaming: false,
+      reasoningLevel: 'on',
+    });
+    expect(complete.showDeliverables).toBe(true);
   });
 });

@@ -6,6 +6,8 @@ export function voiceErrorMessage(code: string | undefined, m: MessageBundle['vo
   if (code === 'RESPONSE_FAILED') return m.responseFailed;
   if (/EMPTY_UTTERANCE/.test(code)) return m.noSpeech;
   if (/PERMISSION/.test(code)) return m.permission;
+  if (code === 'MICROPHONE_BUSY') return m.recordingBusy;
+  if (code === 'SESSION_CONFLICT') return m.sessionBusy;
   if (/UPGRADE|NATIVE_BUILD/.test(code)) return m.upgrade;
   if (/CONFLICT|BUSY|AUDIO_FOCUS|MICROPHONE_(?:FORMAT_)?UNAVAILABLE/.test(code)) return m.busy;
   if (/SESSION_CHANGED|NOT_FOUND|context_changed/.test(code)) return m.sessionChanged;
