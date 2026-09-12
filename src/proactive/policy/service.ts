@@ -10,7 +10,7 @@ export class ProactiveConflict extends Error {}
 type SettingsRow = { settings_json: string; revision: number };
 export function subscriptionSettings(id: string) {
   const row = getSqliteDatabase().prepare('SELECT settings_json, revision FROM proactive_subscription_settings WHERE subscription_id = ?').get(id) as SettingsRow | undefined;
-  return { ...ProactiveSubscriptionSettingsSchema.parse(row ? JSON.parse(row.settings_json) : {}), revision: row?.revision ?? 0, managed: Boolean(row) };
+  return { ...ProactiveSubscriptionSettingsSchema.parse(row ? JSON.parse(row.settings_json) : {}), revision: row?.revision ?? 0 };
 }
 
 export function proactivePreferences(workspaceId: string): ProactivePreferences {
@@ -48,10 +48,10 @@ export function effectiveProactivePolicy(subscriptionId: string, now = new Date(
   const settings = subscriptionSettings(subscriptionId);
   const preferences = proactivePreferences(sub?.workspace_id ?? 'default');
   const level: ProactiveLevel = preferences.level === 'off' ? 'off' : settings.level ?? preferences.level;
-  const enabled = Boolean(sub?.enabled) && level !== 'off'
+  const enabled = Boolean(sub?.enabled) && !settings.completedAt && level !== 'off'
     && !(preferences.pausedUntil && Date.parse(preferences.pausedUntil) > now.getTime());
   return { enabled, level, settings, preferences, workspaceId: sub?.workspace_id ?? '',
-    scanIntervalMinutes: settings.scanIntervalMinutes ?? (level === 'active' ? 30 : level === 'quiet' ? 1440 : 120) };
+    scanIntervalMinutes: settings.scanIntervalMinutes ?? 120 };
 }
 
 export function localProactiveDay(now: Date, timezone: string): string {
@@ -77,7 +77,6 @@ export function reserveProactiveNotification(subscriptionId: string, dedupeKey: 
   return runSqliteWriteTransaction((db) => {
     const policy = effectiveProactivePolicy(subscriptionId, now);
     if (!policy.enabled) return 'suppressed';
-    if (!policy.settings.managed && policy.preferences.revision === 0) return 'allowed';
     if (policy.level === 'quiet' || policy.settings.delivery === 'inbox') return 'suppressed';
     const end = quietHoursEnd(policy.preferences, now);
     if (end) return end;

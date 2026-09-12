@@ -166,6 +166,9 @@ function normalizeCalendar(result: unknown): ConnectedSourceEntity[] {
       value: compact({
         id: externalId,
         title: text(event, 'summary', 'title', 'name'),
+        description: text(event, 'description'),
+        location: text(event, 'location'),
+        allDay: Boolean(event.start && typeof event.start === 'object' && 'date' in event.start),
         start: occurredAt,
         end: time(event.end ?? event.endTime ?? event.end_time),
         organizer: event.organizer,

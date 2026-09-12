@@ -1665,6 +1665,8 @@ export function ProjectDetailPage() {
         </Button>
       </div>
 
+      <div className="mt-2 shrink-0"><Button variant="ghost" onClick={() => navigate(`/proactive?tab=services&project=${encodeURIComponent(projectId)}`)}>{language === 'zh' ? '让助理帮我跟进' : 'Ask the assistant to follow this project'}</Button></div>
+
       {error ? <p className="mt-3 shrink-0 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">{error}</p> : null}
 
       <div

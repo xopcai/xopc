@@ -1,3 +1,5 @@
+import { ProactiveArtifactSchema } from '@xopcai/gateway-contract';
+
 import { stripCodeFences } from '../../providers/model-response.js';
 
 import type { InsightCandidate } from './types.js';
@@ -63,6 +65,7 @@ export function parseInsightCandidate(raw: string, allowedEvidenceIds: Set<strin
     throw new Error('Insight proposedAction requires approve and reject decision options');
   }
   return {
+    ...(row.artifact != null ? { artifact: ProactiveArtifactSchema.parse(row.artifact) } : {}),
     title: boundedText(row.title, 'title', 160), summary: boundedText(row.summary, 'summary', 1200),
     whyNow: boundedText(row.whyNow, 'whyNow', 800), impact: boundedText(row.impact, 'impact', 800),
     recommendation: boundedText(row.recommendation, 'recommendation', 800),
@@ -83,7 +86,7 @@ export function isValuableInsight(
   policy: { minConfidence: number; minScore: number } = { minConfidence: 0.65, minScore: 0.6 },
 ): boolean {
   return candidate.confidence >= policy.minConfidence
-    && candidate.urgency !== 'low'
+    && (candidate.urgency !== 'low' || Boolean(candidate.artifact))
     && scoreInsight(candidate) >= policy.minScore;
 }
 
