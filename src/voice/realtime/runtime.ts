@@ -186,6 +186,12 @@ export class VoiceRealtimeRuntime {
   private readonly preauthBudget = createPreauthConnectionBudget();
   private readonly socketsByPrincipal = new Map<string, Set<WebSocket>>();
   private readonly conversationReservations = new Map<string, string>();
+  private readonly activeSessions = new Map<string, {
+    principalId: string;
+    socket: WebSocket;
+    ticketKey: string;
+    shutdown: () => Promise<void>;
+  }>();
   private closed = false;
 
   constructor(private readonly options: VoiceRealtimeRuntimeOptions) {
@@ -339,12 +345,17 @@ export class VoiceRealtimeRuntime {
     return this.conversationReservations.has(sessionKey);
   }
 
-  cancelSession(sessionId: string, ticket: string, principalId: string): boolean {
+  async cancelSession(sessionId: string, ticket: string, principalId: string): Promise<boolean> {
     const key = ticketKey(ticket);
     const claim = this.tickets.get(key);
-    if (!claim || claim.sessionId !== sessionId || claim.principalId !== principalId) return false;
-    this.tickets.delete(key);
-    this.releaseConversationReservation(claim);
+    if (claim && claim.sessionId === sessionId && claim.principalId === principalId) {
+      this.tickets.delete(key);
+      this.releaseConversationReservation(claim);
+      return true;
+    }
+    const active = this.activeSessions.get(sessionId);
+    if (!active || active.principalId !== principalId || active.ticketKey !== key) return false;
+    await active.shutdown();
     return true;
   }
 
@@ -353,6 +364,7 @@ export class VoiceRealtimeRuntime {
     this.closed = true;
     for (const client of this.wss.clients) client.close(1001, 'Gateway stopping');
     this.tickets.clear();
+    this.activeSessions.clear();
     this.wss.close();
     this.socketsByPrincipal.clear();
     this.conversationReservations.clear();
@@ -427,6 +439,9 @@ export class VoiceRealtimeRuntime {
     const shutdown = async (reason: string, notify: boolean) => {
       if (closed) return;
       closed = true;
+      if (claim && this.activeSessions.get(claim.sessionId)?.socket === socket) {
+        this.activeSessions.delete(claim.sessionId);
+      }
       unsubscribeMemory?.(); unsubscribeSession?.();
       clearTimeout(startTimer);
       clearInterval(lifecycleTimer);
@@ -469,6 +484,12 @@ export class VoiceRealtimeRuntime {
         return;
       }
       claim = consumed;
+      this.activeSessions.set(consumed.sessionId, {
+        principalId: consumed.principalId,
+        socket,
+        ticketKey: ticketKey(message.payload.ticket),
+        shutdown: () => shutdown('cancelled', false),
+      });
       principalSockets.add(socket);
       this.socketsByPrincipal.set(consumed.principalId, principalSockets);
       clearTimeout(startTimer);

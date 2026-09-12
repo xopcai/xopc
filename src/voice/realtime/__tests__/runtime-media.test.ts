@@ -57,6 +57,13 @@ describe('VoiceRealtimeRuntime media frames', () => {
     expect(events).toContainEqual(expect.objectContaining({ type: 'session.ready' }));
   });
 
+  it('lets the authenticated owner cancel an active voice session', async () => {
+    const { session } = await start();
+    await expect(runtime.cancelSession(session.sessionId, session.ticket, 'other')).resolves.toBe(false);
+    await expect(runtime.cancelSession(session.sessionId, session.ticket, 'owner')).resolves.toBe(true);
+    await vi.waitFor(() => expect(socket.readyState).toBe(WebSocket.CLOSED));
+  });
+
   it('closes a stream with a sequence gap', async () => {
     const { events, session } = await start();
     socket.send(encodeVoiceUplinkAudioFrame({ connectionEpoch: session.connectionEpoch, utteranceId: 'utterance', audioSeq: 2,

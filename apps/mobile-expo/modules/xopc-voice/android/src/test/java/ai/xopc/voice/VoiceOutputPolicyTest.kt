@@ -24,4 +24,9 @@ class VoiceOutputPolicyTest {
     assertTrue(useVoiceSpeaker(true, devices))
     assertFalse(useVoiceSpeaker(false, devices))
   }
+
+  @Test fun playbackStartsAfterOneCompleteTwentyMillisecondFrame() {
+    assertEquals(480, voicePlaybackStartFrames(48000))
+    assertEquals(240, voicePlaybackStartFrames(240))
+  }
 }

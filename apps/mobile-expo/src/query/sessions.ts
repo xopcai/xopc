@@ -177,8 +177,14 @@ export function readPlaceholderSessions(): SessionListItem[] | null {
   return readCachedSessions(useGatewayStore.getState().activeGatewayId);
 }
 
-export async function fetchSession(key: string): Promise<SessionDetail | null> {
-  const res = await apiFetch(buildSessionDetailPath(key));
+export async function fetchSession(
+  key: string,
+  options: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<SessionDetail | null> {
+  const path = buildSessionDetailPath(key);
+  const res = await (options.signal || options.timeoutMs !== undefined
+    ? apiFetch(path, options)
+    : apiFetch(path));
   if (res.status === 404) return null;
   if (!res.ok) throwApiError(res, await parseErrorBody(res));
   const data = parseSessionResponse(await res.json());

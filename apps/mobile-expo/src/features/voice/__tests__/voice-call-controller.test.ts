@@ -113,7 +113,7 @@ describe('mobile persistent voice controller', () => {
     await h.controller.end();
   });
 
-  it('pauses with a playback error when arriving audio makes no native progress', async () => {
+  it('rebuilds the call when arriving audio makes no native progress', async () => {
     vi.useFakeTimers();
     const h = harness(); await h.controller.start(target);
     h.event('response.created', { responseId: 'answer' });
@@ -121,8 +121,11 @@ describe('mobile persistent voice controller', () => {
     await vi.advanceTimersByTimeAsync(3000);
     h.connection().audio('answer', new Uint8Array(4800));
     await vi.advanceTimersByTimeAsync(2000);
-    expect(h.controller.getSnapshot()).toMatchObject({ phase: 'paused', error: 'PLAYBACK_STALLED' });
+    expect(h.controller.getSnapshot()).toMatchObject({ phase: 'recovering', error: 'PLAYBACK_STALLED' });
     expect(h.deps.audio.stop).toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(500);
+    await vi.waitFor(() => expect(h.controller.getSnapshot().phase).toBe('connected'));
+    expect(h.deps.create).toHaveBeenCalledTimes(2);
     await h.controller.end();
   });
 
@@ -258,6 +261,43 @@ describe('mobile persistent voice controller', () => {
     expect(h.transport.audio).not.toHaveBeenCalled();
     expect(h.controller.getSnapshot().muted).toBe(true);
     expect(h.deps.audio.capture).toHaveBeenLastCalledWith(false);
+    await h.controller.end();
+  });
+  it('waits for network availability before opening an offline call', async () => {
+    vi.useFakeTimers();
+    const h = harness();
+    h.controller.setNetworkOnline(false);
+    await h.controller.start(target);
+    expect(h.controller.getSnapshot()).toMatchObject({ phase: 'recovering', error: 'NETWORK' });
+    expect(h.deps.create).not.toHaveBeenCalled();
+    h.controller.setNetworkOnline(true);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.waitFor(() => expect(h.controller.getSnapshot().phase).toBe('connected'));
+    expect(h.deps.create).toHaveBeenCalledOnce();
+    await h.controller.end();
+  });
+  it('recovers an established call as soon as the network returns', async () => {
+    vi.useFakeTimers();
+    const h = harness(); await h.controller.start(target);
+    h.controller.setNetworkOnline(false);
+    await vi.waitFor(() => expect(h.controller.getSnapshot().phase).toBe('recovering'));
+    expect(h.deps.create).toHaveBeenCalledOnce();
+    h.controller.setNetworkOnline(true);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.waitFor(() => expect(h.controller.getSnapshot().phase).toBe('connected'));
+    expect(h.deps.discard).toHaveBeenCalledWith(expect.anything(), undefined, 3_000);
+    expect(h.deps.create).toHaveBeenCalledTimes(2);
+    await h.controller.end();
+  });
+  it('reinitializes native audio after a transient route loss', async () => {
+    vi.useFakeTimers();
+    const h = harness(); await h.controller.start(target);
+    h.audio().interrupted('route_lost');
+    await vi.waitFor(() => expect(h.controller.getSnapshot().phase).toBe('recovering'));
+    await vi.advanceTimersByTimeAsync(500);
+    await vi.waitFor(() => expect(h.controller.getSnapshot().phase).toBe('connected'));
+    expect(h.deps.audio.start).toHaveBeenCalledTimes(2);
+    expect(h.deps.create).toHaveBeenCalledTimes(2);
     await h.controller.end();
   });
   it('keeps the same target when opened from another Chat', async () => {
