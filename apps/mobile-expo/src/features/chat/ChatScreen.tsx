@@ -94,12 +94,15 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
   const language = usePreferencesStore((state) => state.language);
   const call = useVoiceCall();
   const voiceCallBackground = useVoicePreferences((state) => state.background);
+  const preferredVoiceMode = useVoicePreferences((state) => activeGatewayId ? state.modes[activeGatewayId] : undefined);
   const voiceStatusQuery = useQuery({
     ...voiceStatusOptions(activeGatewayId),
     enabled: Boolean(activeGatewayId && sessionKey),
   });
   const attentionQuery = useAttentionFeed();
   const attentionItems = attentionQuery.data?.needsUser ?? [];
+  const callAgent = agentsQuery.data?.items.find((agent) => agent.id === currentSessionAgentId);
+  const voiceCallMode = preferredVoiceMode ?? voiceStatusQuery.data?.defaultMode;
 
   useAutoReadAloud({
     language,
@@ -109,7 +112,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
     title: m.chat.messageReadAloudTitle,
   });
 
-  const handleVoiceCallPress = useCallback((mode: ComposerVoiceCallMode) => {
+  const handleVoiceCallPress = useCallback((mode?: ComposerVoiceCallMode) => {
     if (call.phase !== 'idle') {
       voiceCall.expand();
       return;
@@ -125,8 +128,10 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
       background: voiceCallBackground,
       identity: sessionHistoryQuery.data?.pages[0]?.session.sessionId,
       name: sessionHistoryQuery.data?.pages[0]?.session.name ?? agentName,
+      agentId: callAgent?.id ?? currentSessionAgentId,
+      avatar: callAgent?.avatar,
     });
-  }, [activeGatewayId, agentName, call.phase, chat.streaming, composerDisabled, sessionHistoryQuery.data?.pages, sessionKey, voiceCallBackground]);
+  }, [activeGatewayId, agentName, call.phase, callAgent?.avatar, callAgent?.id, chat.streaming, composerDisabled, currentSessionAgentId, sessionHistoryQuery.data?.pages, sessionKey, voiceCallBackground]);
 
   const headerPaddingTop = insets.top + CHAT_HEADER_TOP_PADDING_AFTER_SAFE_AREA;
   const canvasBg = colors.surface.base;
@@ -153,6 +158,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
         onReconnect={openReconnectLanding}
       />
 
+      {call.phase !== 'idle' && !call.expanded ? <View style={styles.voiceCallSpacer} /> : null}
 
       <View style={[styles.chatBody, { backgroundColor: canvasBg }]}>
         <View style={styles.chatBodyInner}>
@@ -274,6 +280,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
             contextRefs={composerContextRefs}
             onContextRefsChange={setComposerContextRefs}
             onVoiceCallStart={handleVoiceCallPress}
+            voiceCallMode={voiceCallMode}
             voiceCallUnavailable={{
               natural: Boolean(voiceStatusQuery.data && !voiceStatusQuery.data.capabilities.natural.available),
               assistant: Boolean(voiceStatusQuery.data && !voiceStatusQuery.data.capabilities.assistant.available),
@@ -335,5 +342,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   bootstrapErrorText: { flex: 1 },
+  voiceCallSpacer: { height: 78 },
   listFill: { flex: 1, minHeight: 0 },
 });
