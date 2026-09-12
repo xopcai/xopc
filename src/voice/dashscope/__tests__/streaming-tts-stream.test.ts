@@ -52,7 +52,7 @@ describe('DashScope streaming TTS', () => {
     expect(Array.from((await reader.read()).value!)).toEqual([1, 2]);
     expect((await reader.read()).done).toBe(true);
     expect(received).toEqual(['Hello']);
-    expect(configuredVolume).toBe(75);
+    expect(configuredVolume).toBe(100);
     expect(attempts).toBe(2);
     await result.release?.();
   });

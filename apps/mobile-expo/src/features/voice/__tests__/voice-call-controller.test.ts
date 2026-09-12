@@ -3,7 +3,7 @@ import { VoiceCallController, type CallDependencies } from '../voice-call-contro
 import type { VoiceAudioSendResult, VoiceTransportCallbacks } from '../voice-transport';
 
 const target = { gatewayId: 'gateway', sessionKey: 'chat', background: false };
-function harness() {
+function harness(bargeIn = true) {
   let callbacks: VoiceTransportCallbacks;
   let audioCallbacks: Parameters<CallDependencies['audio']['start']>[1];
   const transport = { connect: vi.fn(async () => {}), send: vi.fn(),
@@ -14,7 +14,7 @@ function harness() {
       capture: vi.fn(), flush: vi.fn(async () => {}), stop: vi.fn(async () => {}), enqueue: vi.fn(async () => {}),
       duck: vi.fn(async () => {}), resumeOutput: vi.fn(async () => {}) },
     prepare: vi.fn(async () => ({ identity: 'original', name: 'Assistant', mode: 'natural' as const, engine: 'omni' as const })),
-    create: vi.fn(async () => ({ origin: 'https://gateway', session: { limits: { maxSessionMs: 60000 } } as never })),
+    create: vi.fn(async () => ({ origin: 'https://gateway', session: { bargeIn, limits: { maxSessionMs: 60000 } } as never })),
     discard: vi.fn(async () => {}),
     transport: vi.fn(value => { callbacks = value; return transport; }), invalidate: vi.fn(),
   };
@@ -97,6 +97,15 @@ describe('mobile persistent voice controller', () => {
     expect(h.deps.audio.duck).toHaveBeenCalledOnce();
     h.audio().speechCandidate(false);
     expect(h.deps.audio.resumeOutput).toHaveBeenCalledOnce();
+    await h.controller.end();
+  });
+
+  it('does not lower playback when server-side interruption is disabled', async () => {
+    const h = harness(false); await h.controller.start(target);
+    h.event('response.created', { responseId: 'answer' });
+    h.connection().audio('answer', new Uint8Array(4800));
+    h.audio().speechCandidate(true);
+    expect(h.deps.audio.duck).not.toHaveBeenCalled();
     await h.controller.end();
   });
 

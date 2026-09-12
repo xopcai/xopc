@@ -9,7 +9,7 @@ import { createLogger } from '../../utils/logger.js';
 
 const { WebSocket } = createRequire(import.meta.url)('ws') as typeof import('ws');
 const DEFAULT_REALTIME_URL = 'wss://dashscope.aliyuncs.com/api-ws/v1/realtime';
-const DEFAULT_REALTIME_VOLUME = 75;
+const DEFAULT_REALTIME_VOLUME = 100;
 const log = createLogger('TTS:DashScope');
 
 class TtsHandshakeError extends Error {

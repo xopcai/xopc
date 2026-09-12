@@ -2,7 +2,7 @@ import ExpoModulesCore
 import AVFoundation
 import MediaPlayer
 
-private let duckedPlaybackVolume: Float = 0.5
+private let duckedPlaybackVolume: Float = 0.65
 
 private final class NearSpeechDetector {
   private let lock = NSLock()

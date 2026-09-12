@@ -40,6 +40,7 @@ import { voiceConversationInstructions, type VoiceConversationContext } from './
 import type { VoiceEngine, VoiceEventSink } from './engine.js';
 import { resolveOmniRoute, type OmniRoute } from './omniRoute.js';
 import { createOmniVoiceEngine } from './omniEngine.js';
+import { applyVoiceOutputGain } from './pcm-output-gain.js';
 import type { ResolvedStreamingStt, ResolvedStreamingTts, VoiceTicketClaim, VoiceRealtimeRuntimeOptions } from './runtime.types.js';
 
 export type { VoiceTicketClaim, VoiceRealtimeRuntimeOptions } from './runtime.types.js';
@@ -512,8 +513,9 @@ export class VoiceRealtimeRuntime {
         const sendAudio = (responseId: string, bytes: Uint8Array) => {
           if (socket.bufferedAmount > 1024 * 1024) throw new Error('Voice client audio backpressure limit exceeded');
           if (closed || socket.readyState !== WebSocketState.OPEN) return;
-          for (let offset = 0; offset < bytes.byteLength; offset += 960) {
-            const audio = bytes.subarray(offset, offset + 960);
+          const amplified = applyVoiceOutputGain(bytes);
+          for (let offset = 0; offset < amplified.byteLength; offset += 960) {
+            const audio = amplified.subarray(offset, offset + 960);
             if (audio.byteLength !== 960) throw new Error('Realtime output must align to 20 ms PCM frames');
             socket.send(encodeVoiceAudioFrame({ connectionEpoch: consumed.connectionEpoch, responseId, seq: ++audioSeq,
               mediaTimestampMs: outputMediaTimestampMs, durationMs: 20, audio }), { binary: true });
