@@ -23,6 +23,7 @@ describe('DashScope streaming TTS', () => {
   it('retries a rejected 429 handshake and sends text only on the successful connection', async () => {
     let attempts = 0;
     const received: string[] = [];
+    let configuredVolume: number | undefined;
     server = new WebSocketServer({ host: '127.0.0.1', port: 0, verifyClient: (_info, done) => {
       attempts += 1;
       if (attempts === 1) done(false, 429, 'Too Many Requests', { 'Retry-After': '1' });
@@ -33,7 +34,10 @@ describe('DashScope streaming TTS', () => {
       socket.send(JSON.stringify({ type: 'session.created' }));
       socket.on('message', (raw) => {
         const message = JSON.parse(raw.toString());
-        if (message.type === 'session.update') socket.send(JSON.stringify({ type: 'session.updated' }));
+        if (message.type === 'session.update') {
+          configuredVolume = message.session.volume;
+          socket.send(JSON.stringify({ type: 'session.updated' }));
+        }
         if (message.type === 'input_text_buffer.append') received.push(message.text);
         if (message.type === 'input_text_buffer.commit') {
           socket.send(JSON.stringify({ type: 'response.audio.delta', delta: Buffer.from([1, 2]).toString('base64') }));
@@ -48,6 +52,7 @@ describe('DashScope streaming TTS', () => {
     expect(Array.from((await reader.read()).value!)).toEqual([1, 2]);
     expect((await reader.read()).done).toBe(true);
     expect(received).toEqual(['Hello']);
+    expect(configuredVolume).toBe(75);
     expect(attempts).toBe(2);
     await result.release?.();
   });
