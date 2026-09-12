@@ -89,6 +89,16 @@ describe('mobile voice transport', () => {
     next.transport.close();
   });
 
+  it('keeps sending audio when React Native does not expose bufferedAmount', async () => {
+    const h = harness(); const connecting = h.transport.connect('https://paired.example', session, new AbortController().signal);
+    ready(); await connecting;
+    Object.defineProperty(Socket.latest, 'bufferedAmount', { configurable: true, value: undefined });
+    expect(h.transport.inputQueueAgeMs()).toBe(0);
+    expect(h.transport.audio(new Uint8Array(640))).toMatchObject({ accepted: true, quality: 'good' });
+    expect(Socket.latest.send).toHaveBeenCalledTimes(2);
+    h.transport.close();
+  });
+
   it('frames uplink audio with epoch, utterance id and a monotonic sequence', async () => {
     const h = harness(); const connecting = h.transport.connect('https://paired.example', session, new AbortController().signal);
     ready(); await connecting;

@@ -153,7 +153,11 @@ export class VoiceTransport {
   }
   inputQueueAgeMs(): number {
     if (!this.socket || this.closed || this.socket.readyState !== WebSocket.OPEN) return Number.POSITIVE_INFINITY;
-    return this.socket.bufferedAmount / PCM_BYTES_PER_MS;
+    const bufferedAmount = this.socket.bufferedAmount;
+    // React Native declares bufferedAmount but does not populate it on its native WebSocket.
+    // Treat an unavailable measurement as an empty JS-side queue so microphone input keeps flowing.
+    if (typeof bufferedAmount !== 'number' || !Number.isFinite(bufferedAmount) || bufferedAmount < 0) return 0;
+    return bufferedAmount / PCM_BYTES_PER_MS;
   }
   audio(bytes: Uint8Array): VoiceAudioSendResult {
     const before = this.inputQueueAgeMs();
