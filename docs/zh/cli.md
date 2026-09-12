@@ -44,7 +44,7 @@ xopc --version
 | `skills` | 安装、配置、审计和测试 Skill |
 | `connectors` | 浏览和安装连接器能力 |
 | `tailscale` | 查看 Tailscale 访问状态 |
-| `browser` | 管理浏览器自动化和依赖 |
+| `browser` | 诊断浏览器控制并安装 Chrome 扩展桥接 |
 | `agents` | 创建、列出和移除 Agent |
 | `extensions` | 安装和管理扩展 |
 

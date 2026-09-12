@@ -1,6 +1,6 @@
 # Chrome 扩展 Side Panel 对话技术方案
 
-日期：2026-09-11。状态：P0–P4 核心链路已实现并通过分阶段回归。目标：在现有 `@xopcai/browser-ext` 上增加类似 ChatGPT/Codex 浏览器扩展的侧边对话，并支持显式页面上下文和当前标签页操作。
+日期：2026-09-11，2026-09-12 更新。状态：P0–P4 核心链路已实现，随 `v0.0.268` 发布，并通过完整回归与真实 Gateway/Chrome 链路验证。面向用户的安装、权限与排障说明见[Chrome 浏览器扩展](../zh/browser-extension.md)。
 
 实现取舍：遵循 KISS，不额外抽象 `chat-client-core`，扩展只复用稳定协议包；站点授权由带 origin、documentId、TTL 和 read/act mode 的 session-tab binding 表达，不再叠加第二套长期站点授权状态。P4 已实现标签页 mention、截图、PDF/文件附件以及 Chrome、Chromium、Edge、Brave 的 macOS/Linux Native Messaging manifests；YouTube 专用字幕和可选语音不进入本轮核心范围。
 
@@ -37,7 +37,9 @@
 - 不保证在 Side Panel 关闭后 Extension Service Worker 永久存活；长任务由 Gateway 执行，重新打开后通过持久状态与 realtime cursor 恢复。
 - 不把页面 DOM 或网页内文字当作系统指令，也不允许网页内容绕过审批策略。
 
-## 3. 现有基线与缺口
+## 3. 实施前基线与缺口（历史）
+
+本节保留立项时的差距分析，描述的是实施前状态，不代表 `v0.0.268` 当前能力。当前扩展已接入 `browser_extension` Realtime client、browser device/endpoint identity、持久 Session、durable outbox、页面上下文、tab binding 与 Gateway Realtime 浏览器控制。
 
 | 领域 | 已有能力 | 缺口 |
 | --- | --- | --- |
@@ -95,26 +97,27 @@ flowchart LR
 
 ## 5. Extension 结构
 
-建议在 `packages/browser-ext` 内增加以下入口：
+当前 `packages/browser-ext` 使用以下主要入口：
 
 | 位置 | 职责 |
 | --- | --- |
 | `sidepanel.html` | Side Panel 本地 HTML shell |
 | `src/sidepanel/main.tsx` | React 入口、主题和 i18n |
-| `src/sidepanel/app.tsx` | 连接、会话选择、消息和 Composer 布局 |
-| `src/sidepanel/chat-client.ts` | Gateway REST + shared realtime adapter |
-| `src/sidepanel/store.ts` | Panel UI、tab binding、draft、run cursor 派生状态 |
-| `src/sidepanel/components/*` | recent chats、context chip、connection/approval card |
-| `src/page-context.ts` | 纯页面快照提取、归一化、截断与敏感字段过滤 |
-| `src/pairing.ts` | 扩展 key、Native Messaging bootstrap、token rotation |
+| `src/sidepanel/sidepanel-app.tsx` | 自动发现、配对、连接状态与 Side Panel 外壳 |
+| `src/sidepanel/chat-panel.tsx` | 会话选择、消息、工具状态、上下文条和 Composer |
+| `src/sidepanel/chat-client.ts` | Gateway REST、Realtime streaming、run recovery 与 tab binding |
+| `src/sidepanel/chat-outbox.ts` | durable input outbox、幂等发送与失败恢复 |
+| `src/sidepanel/markdown-content.tsx` | Markdown、代码、链接与复制渲染 |
+| `src/sidepanel/page-context.ts` | 页面/选区快照、按 origin 申请权限、归一化和敏感字段过滤 |
+| `src/sidepanel/auth.ts` | 扩展 key、Native Messaging bootstrap、设备凭证与 token rotation |
 | `src/background.ts` | 连接所有者、Side Panel/context menu、tab 事件、Browser Control |
 
 不允许 `packages/browser-ext` 直接从 `web/src/**` 导入。Web 代码依赖 Vite alias、DOM 全局 store 和完整 AppShell，直接复用会形成无法独立构建的隐式边界。
 
-建议把以下无 UI 能力提取为 workspace package，再由 Web 和 Extension 共同使用：
+实现阶段遵循 KISS，没有为首版抽取新的通用 Chat UI 包。扩展直接复用现有协议包，并把可靠性逻辑保持在独立、可测试的 Side Panel 模块中：
 
-- `@xopcai/chat-client-core`：session input、outbox idempotency、run resume、stream mapper。
-- 已有 `@xopcai/realtime-client`、`@xopcai/gateway-contract`、`@xopcai/agent-stream-client` 继续直接复用。
+- `chat-client.ts` 与 `chat-outbox.ts`：session input、outbox idempotency、run resume、stream mapper。
+- `@xopcai/realtime-client`、`@xopcai/gateway-contract`、`@xopcai/agent-stream-client` 继续直接复用。
 
 Side Panel 的视觉组件可以先独立实现窄屏版本，后续只共享稳定的 message block renderer；不要为首版抽取整个 Web design system。
 
@@ -632,7 +635,7 @@ type BrowserSitePermission = {
 
 Chrome Side Panel 自动化能力若在 CI 不稳定，保留一个有录屏和版本记录的 release checklist；不能用只打开 `sidepanel.html` 的普通页面测试替代真实 Side Panel 验收。
 
-## 17. 分阶段交付
+## 17. 已完成的分阶段交付
 
 ### P0：安全连接骨架
 
@@ -693,9 +696,9 @@ Chrome Side Panel 自动化能力若在 CI 不稳定，保留一个有录屏和�
 | Settings | `web/src/features/settings/browser/**`、中英文 i18n |
 | Shared chat client | 新建 `packages/chat-client-core`，逐步替代 Web 内部重复 transport 逻辑 |
 
-## 19. 评审时需要确认的产品选择
+## 19. 后续产品选择
 
-实施前只需确认以下会影响范围的决策：
+以下项目不阻塞 `v0.0.268`，作为后续产品演进选择保留：
 
 1. P1 是否必须同时支持项目 Session；建议首版 recent list 可打开已有项目会话，但新建默认 inbox，项目选择放后续。
 2. 发布版是否强制 Native Messaging bootstrap；建议正式版强制，开发版保留 pairing code fallback。

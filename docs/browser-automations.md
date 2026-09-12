@@ -85,9 +85,10 @@ xopc does not currently ship a catalog of third-party browser automations. This 
 | It used to work but now fails | The website may have changed. Select **Edit with assistant** and test the task again. |
 | A scheduled run did not start | Check that the Gateway and browser were running, the automation was enabled, and its login session had not expired. |
 
-For installation diagnostics, the instance owner can run `xopc browser doctor`.
+For extension installation, permissions, and connection diagnostics, see the [Chrome extension guide](./browser-extension.md). The instance owner can also run `xopc browser doctor`.
 
 ## Related guides
 
 - [Automations](./automations.md) — run work manually, on a schedule, or from a webhook
+- [Chrome extension](./browser-extension.md) — install, connect, grant site access, and troubleshoot the browser bridge
 - [Tools](./tools.md) — configure browser access for an Agent
