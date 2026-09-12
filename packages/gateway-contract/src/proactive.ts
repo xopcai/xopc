@@ -37,7 +37,7 @@ export const ProactivePreferencesUpdateSchema = z.object({
 export const ProactiveSubscriptionSettingsSchema = z.object({
   level: ProactiveLevelSchema.nullable().default(null),
   delivery: z.enum(['inbox', 'important', 'digest']).default('important'),
-  preparationWorkflowId: z.string().min(1).max(160).nullable().default(null),
+  completedAt: z.iso.datetime().nullable().default(null),
   scanIntervalMinutes: z.number().int().min(15).max(10080).nullable().default(null),
   userInstructions: z.string().max(12000).default(''),
 });
@@ -50,18 +50,30 @@ export const ProactiveSubscriptionCreateSchema = ProactiveSubscriptionSettingsSc
 export const ProactiveSubscriptionUpdateSchema = z.object({
   level: ProactiveSubscriptionSettingsSchema.shape.level.removeDefault().optional(),
   delivery: ProactiveSubscriptionSettingsSchema.shape.delivery.removeDefault().optional(),
-  preparationWorkflowId: ProactiveSubscriptionSettingsSchema.shape.preparationWorkflowId.removeDefault().optional(),
+  completedAt: ProactiveSubscriptionSettingsSchema.shape.completedAt.removeDefault().optional(),
   scanIntervalMinutes: ProactiveSubscriptionSettingsSchema.shape.scanIntervalMinutes.removeDefault().optional(),
   userInstructions: ProactiveSubscriptionSettingsSchema.shape.userInstructions.removeDefault().optional(),
   enabled: z.boolean().optional(),
   expectedRevision: z.number().int().nonnegative(),
 }).strict();
+export const ProactiveArtifactSchema = z.object({
+  kind: z.enum(['checklist', 'briefing', 'draft']),
+  title: z.string().trim().min(1).max(160),
+  content: z.string().trim().min(1).max(12000),
+}).strict();
+export type ProactiveArtifact = z.infer<typeof ProactiveArtifactSchema>;
+export const ProactiveTaskDraftSchema = z.object({
+  title: z.string().trim().min(1).max(160),
+  objective: z.string().trim().min(1).max(1200),
+}).strict();
 export const ProactiveCardActionSchema = z.object({
-  actionId: z.enum(['read', 'resolve', 'snooze', 'decide', 'less', 'pause', 'useful', 'not_useful', 'retry']),
+  actionId: z.enum(['read', 'resolve', 'handled', 'snooze', 'decide', 'pause', 'useful', 'not_useful', 'retry', 'edit_artifact']),
   expectedRevision: z.number().int().positive(),
   idempotencyKey: z.string().min(8).max(128),
   choice: z.string().min(1).max(200).optional(),
   snoozedUntil: z.iso.datetime().optional(),
+  artifact: ProactiveArtifactSchema.optional(),
+  taskDraft: ProactiveTaskDraftSchema.optional(),
 }).strict();
 export type ProactiveLevel = z.infer<typeof ProactiveLevelSchema>;
 export type ProactivePreferences = z.infer<typeof ProactivePreferencesSchema>;
@@ -77,7 +89,10 @@ export interface ProactiveCard {
   scenarioKey: string;
   kind: ProactiveCardKind;
   status: 'unread' | 'read' | 'snoozed' | 'resolved' | 'expired' | 'withdrawn';
-  preparationAvailable?: boolean;
+  artifact?: ProactiveArtifact;
+  taskDraft?: z.infer<typeof ProactiveTaskDraftSchema>;
+  followUp?: { taskId: string; title: string; phase: string; resolution: string | null };
+  communication?: { id: string; sessionKey: string | null };
   relatedCardIds?: string[];
   title: string;
   summary: string;

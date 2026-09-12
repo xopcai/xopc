@@ -6,12 +6,32 @@ import { startChatRunStateBridge } from '@/features/chat/session/chat-run-state-
 import { startAgentRunStreamEventBridge } from '@/features/gateway/agent-run-stream-event-bridge';
 import { configReloadSection } from '@/features/gateway/config-reload-event';
 import { useGatewayRealtime } from '@/features/gateway/use-gateway-realtime';
+import { proactiveWrite } from '@/features/proactive/api';
 
 export function GatewayRealtimeBridge() {
   useGatewayRealtime();
   const { mutate } = useSWRConfig();
   useEffect(() => startAgentRunStreamEventBridge(), []);
   useEffect(() => startChatRunStateBridge(), []);
+  useEffect(() => {
+    const clientId = crypto.randomUUID();
+    const report = (active = document.visibilityState === 'visible' && document.hasFocus()) => {
+      void proactiveWrite('/api/proactive/presence', 'POST', { clientId, active, surface: 'web' }).catch(() => {});
+    };
+    const changed = () => report();
+    const timer = window.setInterval(changed, 30000);
+    report();
+    document.addEventListener('visibilitychange', changed);
+    window.addEventListener('focus', changed);
+    window.addEventListener('blur', changed);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', changed);
+      window.removeEventListener('focus', changed);
+      window.removeEventListener('blur', changed);
+      report(false);
+    };
+  }, []);
   useEffect(() => {
     const onConfigReload = (event: Event) => {
       const section = configReloadSection((event as CustomEvent<unknown>).detail);

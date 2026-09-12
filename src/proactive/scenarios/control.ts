@@ -48,7 +48,7 @@ export function createControlledSubscription(workspaceId: string, value: unknown
   const scopeId = input.scopeKind === 'workspace' ? workspaceId : input.scopeId;
   return runSqliteWriteTransaction(() => {
     const existing = listSubscriptions(input.scenarioKey).find((sub) => sub.workspaceId === workspaceId && sub.scopeKind === input.scopeKind && sub.scopeId === scopeId);
-    if (existing && subscriptionSettings(existing.id).managed) throw new ProactiveConflict('Subscription already exists');
+    if (existing) throw new ProactiveConflict('Subscription already exists');
     const sub = upsertSubscription({ ...input, scopeId, workspaceId });
     if (input.userInstructions || sub.activePromptRevisionId) publishPromptRevision(createPromptDraft(sub.id, input.userInstructions).id);
     saveSettings(sub.id, input, 1);
@@ -72,12 +72,12 @@ export function updateControlledSubscription(workspaceId: string, id: string, va
 }
 
 function calendarSourceStatus(workspaceId: string) {
-  const row = getSqliteDatabase().prepare(`SELECT COUNT(*) AS count, MAX(k.updated_at) AS lastSyncedAt FROM knowledge_source_items k
+  const row = getSqliteDatabase().prepare(`SELECT COUNT(*) AS count, MAX(k.updated_at) AS lastSourceUpdatedAt FROM knowledge_source_items k
     JOIN connector_connections c ON c.id = json_extract(k.metadata_json, '$.connectionId')
     JOIN connector_sync_policies p ON p.account_id = c.account_id
     WHERE k.item_type = 'calendar_event' AND k.deleted_at IS NULL AND k.sensitivity NOT IN ('secret', 'regulated')
     AND json_extract(k.metadata_json, '$.workspaceId') = ? AND c.status = 'active' AND p.scan_enabled = 1 AND p.proactive_enabled = 1
     AND (json_array_length(p.allowed_scenario_keys_json) = 0 OR EXISTS (SELECT 1 FROM json_each(p.allowed_scenario_keys_json) WHERE value = 'meeting_preparation'))`)
-    .get(workspaceId) as { count: number; lastSyncedAt: number | null };
-  return { status: row.count ? 'available' : 'waiting_for_authorized_data', lastSyncedAt: row.lastSyncedAt ? new Date(row.lastSyncedAt).toISOString() : null };
+    .get(workspaceId) as { count: number; lastSourceUpdatedAt: number | null };
+  return { status: row.count ? 'available' : 'waiting_for_authorized_data', lastSourceUpdatedAt: row.lastSourceUpdatedAt ? new Date(row.lastSourceUpdatedAt).toISOString() : null };
 }

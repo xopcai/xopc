@@ -1,3 +1,5 @@
+import type { ProactiveArtifact } from '@xopcai/gateway-contract';
+
 export type InboxStatus = 'unread' | 'read' | 'snoozed' | 'resolved';
 
 export interface InboxItem {
@@ -15,6 +17,7 @@ export interface InboxItem {
   createdAt: string;
   updatedAt: string;
   insight: {
+    artifact?: ProactiveArtifact;
     scenarioKey: string; title: string; summary: string; whyNow: string; impact: string;
     recommendation: string; workDone: string;
     decision?: { question: string; options: Array<{ id: string; label: string; consequence: string }> };

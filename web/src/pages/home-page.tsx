@@ -1,6 +1,7 @@
+import { ProactiveToday } from '@/features/proactive/proactive-today';
 import * as Dialog from '@radix-ui/react-dialog';
 import type { HomeAction, HomeWorkbenchItem } from '@xopcai/gateway-contract';
-import { CalendarClock, ChevronRight, CircleAlert, Plus, Sparkles, X } from 'lucide-react';
+import { CalendarClock, ChevronRight, CircleAlert, Plus, X } from 'lucide-react';
 import {
   type ClipboardEvent,
   type DragEvent,
@@ -12,7 +13,10 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import useSWR from 'swr';
+
+import { proactiveGet, type ProactiveOverview } from '@/features/proactive/api';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -30,14 +34,9 @@ import { useRealtimeVoice } from '@/features/voice/realtime/use-realtime-voice';
 import { newChatAutoSendHref } from '@/features/chat/session/composer-handoff-params';
 import {
   acknowledgeWorkAttention,
-  decideAgentJudgment,
   fetchHome,
-  feedbackAgentJudgment,
-  instructAgentJudgment,
   respondToWorkDecision,
   retryWorkAttention,
-  transitionAgentJudgment,
-  type HomeDecision,
   type HomeResponse,
 } from '@/features/tasks/home-api';
 import { HomeQuickComposer } from '@/features/tasks/home-quick-composer';
@@ -166,81 +165,12 @@ function BackgroundRow({ item, onAction }: { item: HomeWorkbenchItem; onAction: 
   );
 }
 
-function AgentJudgmentCard({
-  item,
-  labels,
-  busy,
-  onDecide,
-  onSnooze,
-  onDismiss,
-  onInstruct,
-  onFeedback,
-}: {
-  item: HomeDecision;
-  labels: ReturnType<typeof taskCopy>;
-  busy: boolean;
-  onDecide: (choice: string) => void;
-  onSnooze: () => void;
-  onDismiss: () => void;
-  onInstruct: (instruction: string) => void;
-  onFeedback: (rating: 'useful' | 'not_useful') => void;
-}) {
-  const [instruction, setInstruction] = useState('');
-  const judgment = item.judgment!;
-  return (
-    <article className="rounded-xl border border-accent/25 bg-accent-soft/15 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0"><h3 className="text-sm font-semibold text-fg">{item.title}</h3><p className="mt-2 text-xs leading-5 text-fg-muted">{item.detail}</p></div>
-        <Sparkles className="size-4 shrink-0 text-accent" aria-hidden />
-      </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {[[labels.whyNow, judgment.whyNow], [labels.impact, judgment.impact], [labels.workDone, judgment.workDone], [labels.recommendation, judgment.recommendation]].map(([label, value]) => (
-          <div key={label} className="rounded-lg bg-surface-panel/80 p-3"><p className="text-[11px] font-medium text-fg-subtle">{label}</p><p className="mt-1 text-xs leading-5 text-fg">{value}</p></div>
-        ))}
-      </div>
-      {judgment.dispositionReason ? (
-        <div className="mt-3 rounded-lg border border-edge-subtle bg-surface-panel/70 p-3 text-xs leading-5">
-          <p className="font-medium text-fg-subtle">{labels.policyReason}</p>
-          <p className="mt-1 text-fg-muted">{judgment.dispositionReason}</p>
-          {judgment.proposedActionTitle ? (
-            <p className="mt-2 text-fg">
-              <span className="font-medium">{labels.proposedAction}：</span>{judgment.proposedActionTitle}
-              {judgment.actionStatus ? ` · ${labels.actionStates[judgment.actionStatus]}` : ''}
-            </p>
-          ) : null}
-          {judgment.actionError ? <p className="mt-1 text-danger">{judgment.actionError}</p> : null}
-        </div>
-      ) : null}
-      {judgment.decision ? <div className="mt-4"><p className="text-sm font-medium text-fg">{judgment.decision.question}</p><div className="mt-2 flex flex-wrap gap-2">{judgment.decision.options.map((option) => (
-        <Button key={option.id} type="button" variant="secondary" className="h-auto min-h-9 flex-col items-start px-3 py-2 text-left" disabled={busy} title={option.consequence} onClick={() => onDecide(option.id)}><span>{option.label}</span><span className="text-[10px] font-normal text-fg-muted">{option.consequence}</span></Button>
-      ))}</div></div> : null}
-      <details className="mt-4 rounded-lg border border-edge-subtle bg-surface-panel/60 px-3 py-2 text-xs">
-        <summary className="cursor-pointer font-medium text-fg-subtle">{labels.evidence} ({judgment.evidenceIds.length})</summary>
-        <ul className="mt-2 space-y-1 text-fg-muted">
-          {judgment.evidenceIds.map((id) => <li key={id} className="break-all font-mono text-[11px]">{id}</li>)}
-        </ul>
-      </details>
-      <div className="mt-4 flex flex-wrap gap-2 border-t border-edge-subtle pt-3">
-        <Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={() => onFeedback('useful')}>{labels.useful}</Button>
-        <Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={() => onFeedback('not_useful')}>{labels.notUseful}</Button>
-        <Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={onSnooze}>{labels.snooze}</Button>
-        <Button type="button" variant="ghost" className="h-8 px-2" disabled={busy} onClick={onDismiss}>{labels.dismiss}</Button>
-      </div>
-      <form className="mt-3 flex gap-2" onSubmit={(event) => { event.preventDefault(); const value = instruction.trim(); if (!value) return; onInstruct(value); setInstruction(''); }}>
-        <input className="min-w-0 flex-1 rounded-lg border border-edge bg-surface-base px-3 py-2 text-xs text-fg outline-none focus:border-accent" value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder={labels.feedbackPlaceholder} />
-        <Button type="submit" variant="secondary" className="h-9 px-3" disabled={busy || !instruction.trim()}>{labels.applyFeedback}</Button>
-      </form>
-    </article>
-  );
-}
-
 export function HomePage() {
   const language = useLocaleStore((state) => state.language);
   const msg = messages(language);
   const t = msg.projectsPage;
   const copy = taskCopy(language);
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
   const [home, setHome] = useState<HomeResponse | null>(null);
@@ -248,9 +178,7 @@ export function HomePage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [conversationOpen, setConversationOpen] = useState(false);
   const [intent, setIntent] = useState('');
-  const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
-  const [reviewDecision, setReviewDecision] = useState<HomeDecision | null>(null);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const attachments = useComposerAttachments({ chat: msg.chat });
   const intentInputRef = useRef<HTMLTextAreaElement>(null);
@@ -275,7 +203,8 @@ export function HomePage() {
     if (showSkeleton) setLoading(true);
     setLoadError(null);
     try {
-      setHome(await fetchHome(language));
+      const snapshot = await fetchHome(language);
+      setHome({ ...snapshot, needsUser: snapshot.needsUser.filter(item => item.primaryAction?.type !== 'review_judgment' && item.openAction?.type !== 'review_judgment'), background: snapshot.background.filter(item => item.primaryAction?.type !== 'review_judgment' && item.openAction?.type !== 'review_judgment') });
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -379,7 +308,10 @@ export function HomePage() {
     submit: copy.newWork,
   };
 
-  const isIdle = Boolean(home && home.needsUser.length === 0 && home.backgroundCount === 0);
+  const proactive = useSWR<ProactiveOverview>('/api/proactive/overview', proactiveGet, { refreshInterval: 15000 });
+  const hasProactiveWork = Boolean(proactive.data && (proactive.data.needsDecision.length
+    || proactive.data.prepared.length || proactive.data.updates.length || proactive.data.delegations.some(sub => sub.effectiveEnabled)));
+  const isIdle = Boolean(home && home.needsUser.length === 0 && home.backgroundCount === 0 && proactive.data && !hasProactiveWork);
   const composerVisible = isIdle || conversationOpen;
 
   useEffect(() => {
@@ -437,49 +369,13 @@ export function HomePage() {
     </Button>
   ), [copy.newWork, isIdle]);
 
-  const handleJudgmentAction = useCallback(async (item: HomeDecision, action: () => Promise<unknown>) => {
-    setBusyDecisionId(item.id);
-    setLoadError(null);
-    try {
-      await action();
-      await load();
-      setReviewDecision(null);
-      setSearchParams((current) => {
-        const next = new URLSearchParams(current);
-        next.delete('judgment');
-        return next;
-      }, { replace: true });
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setBusyDecisionId(null);
-    }
-  }, [load, setSearchParams]);
-
-  useEffect(() => {
-    const requestedId = searchParams.get('judgment');
-    if (!requestedId || !home) return;
-    const decision = home.decisions.find((item) => item.judgment?.inboxItemId === requestedId);
-    if (decision) setReviewDecision(decision);
-  }, [home, searchParams]);
-
-  const closeJudgment = useCallback(() => {
-    setReviewDecision(null);
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current);
-      next.delete('judgment');
-      return next;
-    }, { replace: true });
-  }, [setSearchParams]);
-
   const runAction = useCallback<HomeActionRunner>((action, itemId) => {
     if (action.type === 'open') {
       navigate(action.href);
       return;
     }
     if (action.type === 'review_judgment') {
-      const decision = home?.decisions.find((item) => item.judgment?.inboxItemId === action.itemId);
-      if (decision) setReviewDecision(decision);
+      navigate(`/proactive?item=${encodeURIComponent(action.itemId)}`);
       return;
     }
     setBusyItemId(itemId);
@@ -500,7 +396,7 @@ export function HomePage() {
         setBusyItemId(null);
       }
     })();
-  }, [home?.decisions, load, navigate]);
+  }, [load, navigate]);
 
   useLayoutEffect(() => {
     setPageHeader({
@@ -517,14 +413,16 @@ export function HomePage() {
     ? interpolate(t.home.attentionTitle, { count: needsUserCount })
     : backgroundCount > 0
       ? t.home.clearTitle
-      : t.home.idleTitle;
+      : hasProactiveWork ? (language === 'zh' ? '助理在跟进你交代的事' : 'Your assistant is following through')
+        : proactive.data ? t.home.idleTitle : (language === 'zh' ? '今天的工作' : 'Your work today');
   const intro = needsUserCount > 0
     ? backgroundCount > 0
       ? interpolate(t.home.attentionIntroWithBackground, { count: backgroundCount })
       : t.home.attentionIntro
     : backgroundCount > 0
       ? interpolate(t.home.clearIntro, { count: backgroundCount })
-      : t.home.idleIntro;
+      : hasProactiveWork ? (language === 'zh' ? '准备好的成果和需要你决定的事项都在这里。' : 'Prepared work and decisions that need you appear here.')
+        : proactive.data ? t.home.idleIntro : (language === 'zh' ? '正在核对已交代的事项。' : 'Checking your delegated work.');
 
   return (
     <main className="mx-auto flex w-full max-w-[920px] flex-1 flex-col px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
@@ -588,32 +486,6 @@ export function HomePage() {
         </Dialog.Portal>
       </Dialog.Root>
 
-      <Dialog.Root open={Boolean(reviewDecision)} onOpenChange={(open) => { if (!open) closeJudgment(); }}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
-          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex h-[min(42rem,calc(100dvh-1.5rem))] w-[min(42rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-edge px-4 py-3">
-              <Dialog.Title className="text-sm font-semibold text-fg">{copy.needsAttention}</Dialog.Title>
-              <Dialog.Close asChild><Button type="button" variant="ghost" className="size-8 p-0" title={t.cancel} aria-label={t.cancel}><X className="size-4" aria-hidden /></Button></Dialog.Close>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              {reviewDecision?.judgment ? (
-                <AgentJudgmentCard
-                  item={reviewDecision}
-                  labels={copy}
-                  busy={busyDecisionId === reviewDecision.id}
-                  onDecide={(choice) => void handleJudgmentAction(reviewDecision, () => decideAgentJudgment(reviewDecision.judgment!.inboxItemId, choice))}
-                  onSnooze={() => void handleJudgmentAction(reviewDecision, () => transitionAgentJudgment(reviewDecision.judgment!.inboxItemId, 'snoozed'))}
-                  onDismiss={() => void handleJudgmentAction(reviewDecision, () => transitionAgentJudgment(reviewDecision.judgment!.inboxItemId, 'resolved'))}
-                  onInstruct={(instruction) => void handleJudgmentAction(reviewDecision, () => instructAgentJudgment(reviewDecision.judgment!.inboxItemId, instruction))}
-                  onFeedback={(rating) => void handleJudgmentAction(reviewDecision, () => feedbackAgentJudgment(reviewDecision.judgment!.inboxItemId, rating))}
-                />
-              ) : null}
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
-
       {loadError ? (
         <div className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-sm text-danger">
           <span>{loadError}</span>
@@ -622,7 +494,7 @@ export function HomePage() {
       ) : null}
 
       {loading ? <HomeSkeleton /> : home ? (
-        <div className={isIdle ? 'flex min-h-[calc(100dvh-10rem)] items-center justify-center pb-[12vh]' : ''}>
+        <div>
           <section className={isIdle ? 'w-full max-w-2xl text-center' : 'max-w-3xl'}>
             <h2 className="text-3xl font-semibold tracking-[-0.035em] text-fg sm:text-[2.5rem] sm:leading-[1.12]">{headline}</h2>
             <p className={isIdle
@@ -654,6 +526,8 @@ export function HomePage() {
               />
             ) : null}
           </section>
+
+          <section className="mt-8"><ProactiveToday compact /></section>
 
           {home.needsUser.length > 0 ? (
             <section className="mt-10" aria-labelledby="home-needs-user-title">

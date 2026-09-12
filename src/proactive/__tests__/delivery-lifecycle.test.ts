@@ -11,7 +11,6 @@ import { NotificationService } from '../../notifications/service.js';
 import { recheckNotificationDelivery } from '../../notifications/proactive-policy.js';
 import { drainChannelNotifications } from '../../notifications/proactive-channel.js';
 import { prepareBrowserPush, registerBrowserPush, drainBrowserPush, testBrowserPush, acknowledgeBrowserProbe, listBrowserProbes } from '../../notifications/web-push.js';
-import type { WorkflowRunService } from '../../workflows/service/workflow-run-service.js';
 import { createControlledSubscription, updateControlledSubscription } from '../scenarios/control.js';
 import { ProactiveScenarioService } from '../scenarios/service.js';
 import { ProactiveEventService } from '../service.js';
@@ -28,7 +27,6 @@ import { scanDueProjects } from '../temporal/schedule.js';
 import { ProactiveTemporalWorker } from '../temporal/worker.js';
 import { previewSubscription } from '../scenarios/preview.js';
 import { proactiveMetrics } from '../metrics.js';
-import { prepareCardWorkflow } from '../actions/workflow.js';
 
 describe('proactive delivery and lifecycle', () => {
   let dir: string;
@@ -118,7 +116,7 @@ describe('proactive delivery and lifecycle', () => {
     upsertConnectorConnection({ id: 'calendar', connectorId: 'googlecalendar', provider: 'composio', principalId: 'local-owner', providerConnectionId: 'test', identity: {}, status: 'active', isDefault: true, metadata: {} });
     upsertConnectorSyncPolicy({ accountId: 'account:calendar', scanEnabled: true, proactiveEnabled: true });
     createControlledSubscription('default', { scenarioKey: 'meeting_preparation', scopeKind: 'workspace', scopeId: 'default', delivery: 'important' });
-    upsertKnowledgeSourceItems([{ sourceInstanceId: 'calendar', collectionScope: 'events', externalId: 'meeting', itemType: 'calendar_event', occurredAt: '2026-09-12T13:00:00Z', contentHash: 'one', normalizedText: 'Private meeting', metadata: { workspaceId: 'default', connectionId: 'calendar', connectorId: 'googlecalendar' }, sensitivity: 'personal', retentionClass: 'bounded', synthesisPipeline: 'connected_knowledge', synthesisStatus: 'pending' }]);
+    upsertKnowledgeSourceItems([{ sourceInstanceId: 'calendar', collectionScope: 'events', externalId: 'meeting', itemType: 'calendar_event', occurredAt: '2026-09-12T13:00:00Z', contentHash: 'one', normalizedText: JSON.stringify({ title: 'Private meeting' }), metadata: { workspaceId: 'default', connectionId: 'calendar', connectorId: 'googlecalendar' }, sensitivity: 'personal', retentionClass: 'bounded', synthesisPipeline: 'connected_knowledge', synthesisStatus: 'pending' }]);
     const source = events(); await new ProactiveTemporalWorker(source).tick(); source.markReadyBatches(new Date(Date.now() + 600000));
     await new ProactiveWorker({ execute: async () => ({ text: JSON.stringify(candidate([source.listEvents()[0]!.id])) }) }).tick();
     new ProactiveInboxService().project();
@@ -147,18 +145,7 @@ describe('proactive delivery and lifecycle', () => {
     await expect(previewSubscription('default', sub.id, executor)).rejects.toThrow('five minutes');
     expect(executor.execute).toHaveBeenCalledOnce();
   });
-  it('starts a configured workflow once and exposes its live run state', async () => {
-    const { card, sub } = await projectCard();
-    updateControlledSubscription('default', sub.id, { expectedRevision: sub.revision, preparationWorkflowId: 'prepare-checklist' });
-    const start = vi.fn(async () => ({ ok: true, runId: 'workflow-1', sessionKey: 'workflow/session' }));
-    const workflows = { startWorkflowRun: start, createRunStore: () => ({ readRunView: async () => ({ run: { status: 'running' } }) }) } as unknown as WorkflowRunService;
-    const value = { expectedRevision: getCard(card.id, 'default').revision };
-    expect(await prepareCardWorkflow('default', card.id, value, 'main', workflows)).toMatchObject({ runId: 'workflow-1', status: 'running' });
-    await prepareCardWorkflow('default', card.id, value, 'main', workflows);
-    expect(start).toHaveBeenCalledOnce();
-    expect((start.mock.calls as unknown[][])[0]?.[0]).not.toHaveProperty('maxSubagents');
-    expect(start).toHaveBeenCalledWith(expect.objectContaining({ preparationOnly: true, writebackPolicy: { targets: [] } }));
-  });
+
   it('separates provider acceptance from opening a browser test notification', async () => {
     prepareBrowserPush(); const { id } = registerBrowserPush('default', subscription());
     const send = vi.fn(async () => ({ statusCode: 201, headers: {}, body: '' }));
@@ -182,7 +169,7 @@ describe('proactive delivery and lifecycle', () => {
     const preferences = updateProactivePreferences('default', { expectedRevision: 1, digestEnabled: true });
     expect(preferences).toMatchObject({ timezone: 'UTC', quietStartHour: 0, quietEndHour: 0, digestEnabled: true });
     const edited = updateControlledSubscription('default', sub.id, { expectedRevision: sub.revision, level: 'active', userInstructions: 'Focus on delivery' });
-    const updated = updateControlledSubscription('default', sub.id, { expectedRevision: edited.revision, preparationWorkflowId: 'checklist' });
+    const updated = updateControlledSubscription('default', sub.id, { expectedRevision: edited.revision, delivery: 'inbox' });
     expect(updated).toMatchObject({ level: 'active', userInstructions: 'Focus on delivery' });
   });
   it('rolls back digest membership and budget if notification persistence fails', async () => {
@@ -211,20 +198,6 @@ describe('proactive delivery and lifecycle', () => {
     updateProactivePreferences('default', { expectedRevision: 2, digestEnabled: false });
     expect(recheckNotificationDelivery(notification!, 'browser')).toBe('cancel');
   });
-  it('only retries a preparation run after a real terminal failure', async () => {
-    const { card, sub } = await projectCard();
-    updateControlledSubscription('default', sub.id, { expectedRevision: sub.revision, preparationWorkflowId: 'prepare-checklist' });
-    let status = 'running';
-    const start = vi.fn(async () => ({ ok: true, runId: 'workflow-1', sessionKey: 'workflow/session' }));
-    const workflows = { startWorkflowRun: start, createRunStore: () => ({ readRunView: async () => ({ run: { status } }) }) } as unknown as WorkflowRunService;
-    const value = { expectedRevision: getCard(card.id, 'default').revision };
-    await prepareCardWorkflow('default', card.id, value, 'main', workflows);
-    await expect(prepareCardWorkflow('default', card.id, { ...value, retry: true }, 'main', workflows)).rejects.toThrow('Only failed');
-    expect(start).toHaveBeenCalledOnce();
-    status = 'failed';
-    await prepareCardWorkflow('default', card.id, { ...value, retry: true }, 'main', workflows);
-    expect(start).toHaveBeenCalledTimes(2);
-    expect(start).toHaveBeenLastCalledWith(expect.objectContaining({ retryOfRunId: 'workflow-1', preparationOnly: true }));
-  });
+
 
 });

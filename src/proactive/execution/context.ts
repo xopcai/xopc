@@ -1,3 +1,4 @@
+import { authorizedMailThread, requireMailFollowUp } from '../follow-ups.js';
 import { getAssertionSlot, listUserAssertions } from '../../user-model/index.js';
 import { getDiscussionCapture, getLatestDiscussionOrganization } from '../../discussions/repository.js';
 import { authorizedConnectedSource } from './authorization.js';
@@ -43,7 +44,12 @@ function emptyContext(): ResolvedContext {
 }
 
 function authorizedConnectedSourceItem(event: EventRow, scenarioKey: string) {
-  return authorizedConnectedSource(event.subject_id, event.workspace_id, scenarioKey, event.agent_id);
+  const item = authorizedConnectedSource(event.subject_id, event.workspace_id, scenarioKey, event.agent_id);
+  if (item && event.type === 'connected_source.calendar_window.v1') {
+    const payload = JSON.parse(event.payload_json) as { meetingStartsAt?: string; contentHash?: string };
+    if (payload.meetingStartsAt !== item.occurredAt || (payload.contentHash && payload.contentHash !== item.contentHash)) return null;
+  }
+  return item;
 }
 
 export class EventBatchContextProvider implements ContextProvider {
@@ -73,11 +79,13 @@ export class ConnectedSourceContextProvider implements ContextProvider {
   async collect(input: ContextInput): Promise<ResolvedContext> {
     const items: Record<string, unknown>[] = [];
     const snapshotItems: Record<string, unknown>[] = [];
+    const seen = new Set<string>();
     const evidenceIds: string[] = [];
     for (const event of eventRows(input.eventIds)) {
       if (!event.type.startsWith('connected_source.') || event.type.includes('_deleted.')) continue;
       const item = authorizedConnectedSourceItem(event, input.scenarioKey);
-      if (!item) continue;
+      if (!item || seen.has(item.id)) continue;
+      seen.add(item.id);
       const evidenceId = `source-item:${item.id}`;
       const common = {
         evidenceId,
@@ -357,6 +365,27 @@ export class DiscussionContextProvider implements ContextProvider {
   }
 }
 
+export class MailFollowUpContextProvider implements ContextProvider {
+  readonly id = 'follow_up';
+
+  async collect(input: ContextInput): Promise<ResolvedContext> {
+    const event = eventRows(input.eventIds).findLast(row => row.subject_kind === 'mail_follow_up');
+    if (!event) return emptyContext();
+    const follow = requireMailFollowUp(event.workspace_id, event.subject_id);
+    const thread = authorizedMailThread(follow);
+    if (!thread || follow.status !== 'watching') return emptyContext();
+    const common = { followUpId: follow.id, revision: follow.revision, fingerprint: thread.fingerprint,
+      dueAt: follow.due_at, deadlinePassed: Date.parse(follow.due_at) <= Date.now() };
+    return {
+      content: { ...common, instructions: follow.instructions,
+        items: thread.items.map(item => ({ evidenceId: `source-item:${item.id}`, occurredAt: item.occurredAt,
+          content: wrapExternalContent(item.normalizedText?.slice(0, 4000) ?? '', { source: 'email' }) })) },
+      snapshotContent: { ...common, items: thread.items.map(item => ({ sourceItemId: item.id, contentHash: item.contentHash, occurredAt: item.occurredAt })) },
+      evidenceIds: thread.items.map(item => `source-item:${item.id}`),
+    };
+  }
+}
+
 export class ContextProviderRegistry {
   constructor(private readonly providers: ContextProvider[] = [
     new EventBatchContextProvider(),
@@ -367,6 +396,7 @@ export class ContextProviderRegistry {
     new ProjectStateContextProvider(),
     new AutomationStateContextProvider(),
     new DiscussionContextProvider(),
+    new MailFollowUpContextProvider(),
   ]) {}
 
   async collect(

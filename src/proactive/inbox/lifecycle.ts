@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
-import { insightSourcesAuthorized } from '../execution/authorization.js';
+import { insightSourcesAuthorized, insightSourcesChanged } from '../execution/authorization.js';
 
 export function withdrawCard(id: string, now = new Date()): void {
   runSqliteWriteTransaction((db) => {
@@ -44,6 +44,10 @@ export function reconcileCards(now = new Date()): number {
     for (const row of rows) {
       if (!insightSourcesAuthorized(row.insight_id)) { withdrawCard(row.inbox_item_id, now); withdrawn++; }
       else {
+        if (insightSourcesChanged(row.insight_id)) db.prepare(`UPDATE proactive_inbox_items SET expires_at = ?, updated_at = ?
+          WHERE inbox_item_id = ? AND (expires_at IS NULL OR expires_at > ?)
+          AND insight_id IN (SELECT insight_id FROM proactive_insights WHERE action_status IS NULL OR action_status <> 'completed')`)
+          .run(now.toISOString(), now.toISOString(), row.inbox_item_id, now.toISOString());
         const correlation = insightCorrelation(row.insight_id);
         if (row.correlation_key !== correlation) db.prepare('UPDATE proactive_inbox_items SET correlation_key = ? WHERE inbox_item_id = ?').run(correlation, row.inbox_item_id);
       }

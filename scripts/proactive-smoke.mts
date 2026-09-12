@@ -47,7 +47,7 @@ process.once('SIGINT', () => cleanup());
 process.once('SIGTERM', () => cleanup());
 try {
   assert.equal((await fetch(`${origin}/api/proactive/templates`)).status, 401);
-  for (const path of ['/api/proactive/metrics', '/api/proactive/web-push/probes', '/api/proactive/templates', '/api/proactive/preferences', '/api/proactive/subscriptions', '/api/proactive/cards', '/api/inbox/judgments/changes?cursor=0']) await request(path);
+  for (const path of ['/api/proactive/follow-ups', '/api/proactive/follow-ups/sources', '/api/proactive/overview', '/api/proactive/metrics', '/api/proactive/web-push/probes', '/api/proactive/templates', '/api/proactive/preferences', '/api/proactive/subscriptions', '/api/proactive/cards', '/api/inbox/judgments/changes?cursor=0']) await request(path);
   const { subscription } = await request('/api/proactive/subscriptions', 'POST', { scenarioKey: 'automation_failure_impact', scopeKind: 'workspace', scopeId: 'current', delivery: 'inbox' }, 201);
   await request(`/api/proactive/subscriptions/${subscription.id}`, 'PATCH', { expectedRevision: 1, level: 'quiet' });
   await request(`/api/proactive/subscriptions/${subscription.id}`, 'PATCH', { expectedRevision: 1, level: 'active' }, 409);
@@ -64,16 +64,18 @@ try {
   await request(`/api/proactive/web-push/subscriptions/${pushId}`, 'DELETE');
 
   const { ProjectService } = await import('../src/projects/index.js');
-  const { createControlledSubscription } = await import('../src/proactive/scenarios/control.js');
   const { scanDueProjects } = await import('../src/proactive/temporal/schedule.js');
   const { ProactiveWorker } = await import('../src/proactive/execution/worker.js');
   const project = new ProjectService().create({ name: '客户评审准备' });
-  createControlledSubscription(workspace, { scenarioKey: 'project_delivery_risk', scopeKind: 'project', scopeId: project.id, delivery: 'digest' });
+  const { subscription: delegation } = await request('/api/proactive/delegations', 'POST', { scenarioKey: 'project_delivery_risk', projectId: project.id, instructions: 'Prepare the customer review and ask before project changes.' }, 201);
+  await request(`/api/proactive/subscriptions/${delegation.id}/check`, 'POST', {}, 202);
+  await request(`/api/proactive/subscriptions/${delegation.id}`, 'PATCH', { expectedRevision: delegation.revision, delivery: 'digest' });
   scanDueProjects(service.proactive);
   service.proactive.markReadyBatches(new Date(Date.now() + 600000));
   const worker = new ProactiveWorker({ execute: async () => ({ text: JSON.stringify({
     title: '客户评审材料需要确认', summary: '评审前需要确认演示材料的负责人和完成时间。', whyNow: '项目进入准备阶段，可以提前安排跟进。',
     impact: '客户评审准备', recommendation: '建立一个待办，确认评审材料。', workDone: '已检查测试项目。此卡片由本地固定样例生成。',
+    artifact: { kind: 'checklist', title: '客户评审清单', content: '1. 核对评审材料。\n2. 确认尚未解决的问题。' },
     urgency: 'high', confidence: 0.95, evidenceIds: [`project:${project.id}`],
     decision: { question: '创建材料确认任务？', options: [{ id: 'approve', label: '创建任务', consequence: '创建一个待办任务，由你安排执行。' }, { id: 'reject', label: '暂不创建', consequence: '保留现有安排。' }] },
     proposedAction: { id: 'create_project_task', risk: 'low', rationale: '需要明确准备事项。', input: { title: '确认客户评审材料', objective: '确认评审材料的负责人和完成时间。' } },
@@ -93,13 +95,29 @@ try {
   assert(digest?.target.kind === 'proactive_digest');
   assert.equal((await request(`/api/proactive/digests/${digest.target.digestId}`)).cards.length, 1);
   await request(`/api/inbox/judgments/${card.id}`);
-  assert.equal((await request(`/api/inbox/judgments/${card.id}/workflow`)).workflow, null);
-  await request(`/api/inbox/judgments/${card.id}/prepare`, 'POST', { expectedRevision: card.revision }, 400);
+  assert.equal((await request('/api/proactive/overview')).needsDecision[0].artifact.kind, 'checklist');
   const action = { actionId: 'read', expectedRevision: card.revision, idempotencyKey: randomUUID() };
   const read = await request(`/api/inbox/judgments/${card.id}/actions`, 'POST', action);
   assert.equal(read.card.status, 'read');
   assert.equal((await request(`/api/inbox/judgments/${card.id}/actions`, 'POST', action)).card.revision, read.card.revision);
   await request(`/api/inbox/judgments/${card.id}/actions`, 'POST', { ...action, actionId: 'resolve', idempotencyKey: randomUUID() }, 409);
+  const edited = await request(`/api/inbox/judgments/${card.id}/actions`, 'POST', { actionId: 'edit_artifact', expectedRevision: read.card.revision, idempotencyKey: randomUUID(), artifact: { ...card.artifact, content: 'Confirm the final agenda.' } });
+  const approved = await request(`/api/inbox/judgments/${card.id}/actions`, 'POST', { actionId: 'decide', choice: 'approve', expectedRevision: edited.card.revision, idempotencyKey: randomUUID(), taskDraft: { title: 'Confirm final agenda', objective: 'Review only the final agenda.' } });
+  assert.equal(approved.card.followUp.title, 'Confirm final agenda');
+  assert.equal(approved.card.followUp.phase, 'backlog');
+  const { upsertConnectorConnection, upsertConnectorSyncPolicy, upsertKnowledgeSourceItems } = await import('../src/storage/sqlite/index.js');
+  upsertConnectorConnection({ id: 'smoke-mail', connectorId: 'gmail', provider: 'composio', principalId: 'local-owner', providerConnectionId: 'fixture', identity: {}, status: 'active', isDefault: true, metadata: {} });
+  upsertConnectorSyncPolicy({ accountId: 'account:smoke-mail', scanEnabled: true, proactiveEnabled: true });
+  upsertKnowledgeSourceItems([{ sourceInstanceId: 'smoke-mail', collectionScope: 'mail', externalId: 'email', itemType: 'email', occurredAt: new Date().toISOString(), contentHash: 'fixture', normalizedText: JSON.stringify({ threadId: 'thread', subject: 'Customer review', sender: 'customer@example.test', labels: ['INBOX'] }), metadata: { workspaceId: workspace, connectionId: 'smoke-mail' }, sensitivity: 'personal', retentionClass: 'bounded', synthesisPipeline: 'connected_knowledge', synthesisStatus: 'pending' }]);
+  const { sources: mailSources } = await request('/api/proactive/follow-ups/sources');
+  assert.equal(mailSources.length, 1);
+  const mailInput = { sourceItemId: mailSources[0].id, instructions: 'Wait for a confirmed review date', dueAt: new Date(Date.now() + 86400000).toISOString() };
+  const { followUp } = await request('/api/proactive/follow-ups', 'POST', mailInput, 201);
+  await request('/api/proactive/follow-ups', 'POST', mailInput, 409);
+  const { followUp: pausedFollowUp } = await request(`/api/proactive/follow-ups/${followUp.id}`, 'PATCH', { expectedRevision: followUp.revision, status: 'paused' });
+  assert.equal(pausedFollowUp.status, 'paused');
+  await request(`/api/proactive/follow-ups/${followUp.id}`, 'PATCH', { expectedRevision: followUp.revision, status: 'completed' }, 409);
+  assert.equal((await request('/api/proactive/overview')).followUps.length, 1);
   if (process.env.PROACTIVE_SMOKE_KEEP === '1') {
     console.log(JSON.stringify({ origin, root, token, cardId: card.id, checks: 'passed; waiting for UI inspection; no model or external notification calls' }));
   } else {
