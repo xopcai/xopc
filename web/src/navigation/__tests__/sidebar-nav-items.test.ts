@@ -40,6 +40,7 @@ describe('reconcileNavOrder', () => {
       'builtin:home',
       'builtin:projects',
       'builtin:notes',
+      'builtin:proactive',
       'builtin:automations',
       'builtin:skills',
       'builtin:connectors',
