@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { decodeVoiceUplinkAudioFrame, encodeVoiceAudioFrame, type CreateVoiceSessionResponse } from '@xopcai/realtime-protocol/voice';
+import { decodeVoiceUplinkAudioFrame, encodeVoiceAudioFrame, VOICE_REALTIME_PROXY_WS_PATH, type CreateVoiceSessionResponse } from '@xopcai/realtime-protocol/voice';
 import { VoiceTransport } from '../voice-transport';
 
 class Socket {
@@ -36,6 +36,18 @@ describe('mobile voice transport', () => {
     expect(JSON.parse(Socket.latest.send.mock.calls[0][0]).payload.ticket).toBe(session.ticket);
     h.transport.close();
   });
+  it('falls back to the proxy-compatible route only when the primary handshake never opens', async () => {
+    const h = harness();
+    const connecting = h.transport.connect('https://paired.example', session, new AbortController().signal);
+    const primary = Socket.latest;
+    primary.onerror?.();
+    expect(primary.close).toHaveBeenCalledOnce();
+    expect(Socket.latest.url).toBe(`wss://paired.example${VOICE_REALTIME_PROXY_WS_PATH}`);
+    ready();
+    await connecting;
+    expect(JSON.parse(Socket.latest.send.mock.calls[0][0]).payload.ticket).toBe(session.ticket);
+    h.transport.close();
+  });
   it('rejects unverified cleartext routes before opening a socket', async () => {
     const h = harness(); await expect(h.transport.connect('http://paired.example', session, new AbortController().signal)).rejects.toThrow('SECURE_ROUTE_REQUIRED');
   });
@@ -46,9 +58,11 @@ describe('mobile voice transport', () => {
   it('settles a failed handshake send without reporting an established connection', async () => {
     const h = harness();
     const connecting = h.transport.connect('https://paired.example', session, new AbortController().signal);
+    const primary = Socket.latest;
     Socket.latest.send.mockImplementation(() => { throw new Error('offline'); });
     Socket.latest.onopen?.();
     await expect(connecting).rejects.toThrow('NETWORK');
+    expect(Socket.latest).toBe(primary);
     expect(h.callbacks.close).not.toHaveBeenCalled();
   });
   it('delivers only sequential audio and reports a protocol failure once', async () => {
