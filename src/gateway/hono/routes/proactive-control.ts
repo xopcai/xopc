@@ -1,9 +1,7 @@
+import { listMailFollowUps, mailFollowUpSources, startMailFollowUp, updateMailFollowUp } from '../../../proactive/follow-ups.js';
 import type { Hono } from 'hono';
 import { ZodError } from 'zod';
 
-import { resolveProjectAgentId } from '../../../projects/index.js';
-import { getDefaultAgentId } from '../../../routing/resolve-route.js';
-import { prepareCardWorkflow, workflowForCard } from '../../../proactive/actions/workflow.js';
 import { recordProactivePresence } from '../../../proactive/policy/presence.js';
 import { digestCards } from '../../../proactive/inbox/digest.js';
 import { proactiveMetrics } from '../../../proactive/metrics.js';
@@ -15,10 +13,18 @@ import { proactivePreferences, ProactiveConflict, updateProactivePreferences } f
 import { controlledSubscriptions, createControlledSubscription, requireSubscription, templateCatalog, updateControlledSubscription } from '../../../proactive/scenarios/control.js';
 import { getSqliteDatabase } from '../../../storage/sqlite/transaction.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { checkDelegation, delegationOverview, startDelegation } from '../../../proactive/experience.js';
 
 export function registerProactiveControlRoutes(app: Hono, deps: AuthenticatedRouteDeps): void {
   app.onError((error, c) => c.json({ ok: false, error: error instanceof ZodError ? 'Invalid request' : error.message }, error instanceof ProactiveConflict ? 409 : 400));
   const workspace = () => deps.service.currentWorkspacePath;
+  app.get('/api/proactive/follow-ups/sources', c => c.json({ ok: true, sources: mailFollowUpSources(workspace()) }));
+  app.get('/api/proactive/follow-ups', c => c.json({ ok: true, followUps: listMailFollowUps(workspace()) }));
+  app.post('/api/proactive/follow-ups', deps.strictRateLimitMiddleware, async c => c.json({ ok: true, followUp: startMailFollowUp(workspace(), await c.req.json()) }, 201));
+  app.patch('/api/proactive/follow-ups/:id', deps.strictRateLimitMiddleware, async c => c.json({ ok: true, followUp: updateMailFollowUp(workspace(), c.req.param('id'), await c.req.json()) }));
+  app.get('/api/proactive/overview', c => c.json({ ok: true, ...delegationOverview(workspace()) }));
+  app.post('/api/proactive/delegations', deps.strictRateLimitMiddleware, async c => c.json({ ok: true, subscription: startDelegation(workspace(), await c.req.json()) }, 201));
+  app.post('/api/proactive/subscriptions/:id/check', deps.strictRateLimitMiddleware, c => c.json({ ok: true, ...checkDelegation(workspace(), c.req.param('id')) }, 202));
   for (const path of ['/api/proactive/*', '/api/inbox/judgments/*']) {
     app.use(path, async (c, next) => {
       try {
@@ -36,14 +42,6 @@ export function registerProactiveControlRoutes(app: Hono, deps: AuthenticatedRou
   app.post('/api/proactive/web-push/prepare', deps.strictRateLimitMiddleware, (c) => c.json({ ok: true, ...prepareBrowserPush() }));
   app.post('/api/proactive/web-push/subscriptions', deps.strictRateLimitMiddleware, async (c) => c.json({ ok: true, ...registerBrowserPush(workspace(), await c.req.json()) }, 201));
   app.delete('/api/proactive/web-push/subscriptions/:id', deps.strictRateLimitMiddleware, (c) => { unregisterBrowserPush(workspace(), c.req.param('id')); return c.json({ ok: true }); });
-  app.get('/api/inbox/judgments/:itemId/workflow', async (c) => c.json({ ok: true, workflow: await workflowForCard(c.req.param('itemId'), workspace(), deps.service.createWorkflowRunService()) }));
-  app.post('/api/inbox/judgments/:itemId/prepare', deps.strictRateLimitMiddleware, async (c) => {
-    const card = getCard(c.req.param('itemId'), workspace());
-    const sub = requireSubscription(card.subscriptionId, workspace());
-    const config = deps.service.currentConfig;
-    const agentId = sub.scopeKind === 'project' ? resolveProjectAgentId({ config, projects: deps.service.projects, projectId: sub.scopeId }) : getDefaultAgentId(config);
-    return c.json({ ok: true, workflow: await prepareCardWorkflow(workspace(), card.id, await c.req.json(), agentId, deps.service.createWorkflowRunService()) }, 202);
-  });
   app.post('/api/proactive/presence', deps.strictRateLimitMiddleware, async (c) => { recordProactivePresence(workspace(), await c.req.json()); return c.json({ ok: true }); });
   app.get('/api/proactive/metrics', (c) => c.json({ ok: true, metrics: proactiveMetrics(workspace()) }));
   app.get('/api/proactive/digests/:id', (c) => c.json({ ok: true, cards: digestCards(c.req.param('id'), workspace()) }));

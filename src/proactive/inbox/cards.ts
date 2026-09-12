@@ -3,7 +3,7 @@ import { ProactiveCardActionSchema, type ProactiveCard, type ProactiveCardAction
 import { executePendingProactiveActions } from '../actions/service.js';
 import { withdrawCard } from './lifecycle.js';
 import { getKnowledgeSourceItem } from '../../storage/sqlite/knowledge-repository.js';
-import { insightSourcesAuthorized } from '../execution/authorization.js';
+import { insightSourcesAuthorized, insightSourcesChanged } from '../execution/authorization.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 import { effectiveProactivePolicy, ProactiveConflict, subscriptionSettings } from '../policy/service.js';
 import { updateControlledSubscription } from '../scenarios/control.js';
@@ -18,13 +18,24 @@ export function requireCardScope(id: string, workspaceId: string): void {
 export function getCard(id: string, workspaceId: string): ProactiveCard {
   requireCardScope(id, workspaceId);
   const item = getInboxItem(id)!;
+  if (!item.withdrawnAt && item.insight.actionStatus !== 'completed'
+    && (!item.expiresAt || Date.parse(item.expiresAt) > Date.now()) && insightSourcesChanged(item.insightId)) {
+    item.expiresAt = new Date().toISOString();
+    getSqliteDatabase().prepare('UPDATE proactive_inbox_items SET expires_at = ? WHERE inbox_item_id = ?').run(item.expiresAt, id);
+    item.revision = getInboxItem(id)!.revision;
+  }
   if (!insightSourcesAuthorized(item.insightId)) { withdrawCard(id); item.withdrawnAt = new Date().toISOString(); }
   if (item.withdrawnAt) return { schemaVersion: 1, id, revision: getInboxItem(id)!.revision!, notificationRevision: item.notificationRevision!, subscriptionId: item.subscriptionId!, scenarioKey: item.insight.scenarioKey, kind: 'briefing', status: 'withdrawn', title: 'Source unavailable / 来源已撤回', summary: '', whyNow: '', recommendation: '', workDone: '', evidence: [], createdAt: item.createdAt, updatedAt: item.withdrawnAt, fallbackText: 'Source unavailable / 来源已撤回' };
   const insight = item.insight;
   const expired = item.expiresAt && Date.parse(item.expiresAt) <= Date.now();
   return {
     schemaVersion: 1, id, revision: item.revision!, notificationRevision: item.notificationRevision!, subscriptionId: item.subscriptionId!,
-    preparationAvailable: Boolean(subscriptionSettings(item.subscriptionId!).preparationWorkflowId),
+    ...(insight.artifact ? { artifact: insight.artifact } : {}),
+    ...(insight.proposedAction && insight.actionStatus === 'approval_required' ? { taskDraft: insight.proposedAction.input } : {}),
+    ...(typeof insight.actionResult?.taskId === 'string' ? { followUp: getSqliteDatabase().prepare('SELECT task_id AS taskId, title, phase, resolution FROM tasks WHERE task_id = ?').get(insight.actionResult.taskId) as ProactiveCard['followUp'] } : {}),
+    ...(insight.scenarioKey === 'communication_follow_up' ? { communication: getSqliteDatabase().prepare(`SELECT f.id, f.session_key AS sessionKey
+      FROM proactive_runs r JOIN proactive_context_snapshots c ON c.snapshot_id = r.context_snapshot_id
+      JOIN proactive_follow_ups f ON f.id = json_extract(c.content_json, '$.follow_up.followUpId') WHERE r.run_id = (SELECT run_id FROM proactive_insights WHERE insight_id = ?)`).get(item.insightId) as ProactiveCard['communication'] } : {}),
     relatedCardIds: item.correlationKey ? (getSqliteDatabase().prepare('SELECT inbox_item_id AS id FROM proactive_inbox_items WHERE correlation_key = ? AND inbox_item_id <> ? AND withdrawn_at IS NULL').all(item.correlationKey, id) as Array<{ id: string }>).map((row) => row.id) : [],
     scenarioKey: insight.scenarioKey,
     kind: insight.attentionKind === 'receipt' ? 'receipt' : insight.decision ? 'decision'
@@ -34,7 +45,7 @@ export function getCard(id: string, workspaceId: string): ProactiveCard {
     status: expired ? 'expired' : item.status,
     title: insight.title, summary: insight.summary, whyNow: insight.whyNow, recommendation: insight.recommendation, workDone: insight.workDone,
     evidence: insight.evidenceIds.map((evidenceId) => cardEvidence(evidenceId, workspaceId)),
-    ...(insight.decision ? { decision: insight.decision } : {}),
+    ...(insight.decision && !['completed', 'rejected'].includes(insight.actionStatus ?? '') ? { decision: insight.decision } : {}),
     actionStatus: insight.actionStatus, actionResult: insight.actionResult, actionError: insight.actionError,
     createdAt: item.createdAt, updatedAt: item.updatedAt, expiresAt: item.expiresAt,
     fallbackText: `${insight.title}\n${insight.summary}\n${insight.whyNow}`,
@@ -86,7 +97,15 @@ export function performCardAction(id: string, workspaceId: string, value: unknow
 
 function applyCardAction(card: ProactiveCard, workspaceId: string, input: ProactiveCardAction) {
   const service = new ProactiveInboxService();
+  if (input.taskDraft && (input.actionId !== 'decide' || input.choice !== 'approve' || !card.taskDraft)) throw new Error('Task draft requires a pending approval');
+  if (input.artifact && input.actionId !== 'edit_artifact') throw new Error('Artifact requires an edit action');
   switch (input.actionId) {
+    case 'edit_artifact': {
+      if (!input.artifact || !card.artifact || input.artifact.kind !== card.artifact.kind) throw new Error('An existing artifact is required');
+      getSqliteDatabase().prepare(`UPDATE proactive_insights SET artifact_json = ?, artifact_edited_at = ?
+        WHERE insight_id = (SELECT insight_id FROM proactive_inbox_items WHERE inbox_item_id = ?)`).run(JSON.stringify(input.artifact), new Date().toISOString(), card.id);
+      break;
+    }
     case 'retry': {
       if (!effectiveProactivePolicy(card.subscriptionId).enabled) throw new Error('Subscription paused');
       const result = getSqliteDatabase().prepare("UPDATE proactive_insights SET action_status = 'pending', action_error = NULL, action_updated_at = ? WHERE insight_id = (SELECT insight_id FROM proactive_inbox_items WHERE inbox_item_id = ?) AND action_status = 'failed'").run(new Date().toISOString(), card.id);
@@ -98,17 +117,22 @@ function applyCardAction(card: ProactiveCard, workspaceId: string, input: Proact
     case 'not_useful': service.feedback(card.id, input.actionId); break;
     case 'read': service.transition(card.id, { status: 'read' }); break;
     case 'resolve': service.transition(card.id, { status: 'resolved', resolution: 'dismissed' }); break;
+    case 'handled': service.transition(card.id, { status: 'resolved', resolution: 'user_reported_done' }); break;
     case 'snooze': service.transition(card.id, { status: 'snoozed', snoozedUntil: input.snoozedUntil ?? new Date(Date.now() + 3600000).toISOString() }); break;
     case 'decide':
       if (!input.choice) throw new Error('Decision choice required');
       if (!effectiveProactivePolicy(card.subscriptionId).enabled) throw new Error('Subscription paused');
+      if (input.taskDraft) {
+        const item = getInboxItem(card.id)!;
+        getSqliteDatabase().prepare('UPDATE proactive_insights SET proposed_action_json = ? WHERE insight_id = ?')
+          .run(JSON.stringify({ ...item.insight.proposedAction, input: input.taskDraft }), item.insightId);
+      }
       service.decide(card.id, input.choice);
       break;
-    case 'less':
     case 'pause': {
       const settings = subscriptionSettings(card.subscriptionId);
       updateControlledSubscription(workspaceId, card.subscriptionId, { expectedRevision: settings.revision,
-        ...(input.actionId === 'less' ? { delivery: 'inbox' } : { enabled: false }) });
+        enabled: false });
       service.transition(card.id, { status: 'resolved', resolution: input.actionId });
       break;
     }

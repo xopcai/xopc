@@ -1,5 +1,5 @@
 import { insightCorrelation } from '../inbox/lifecycle.js';
-import { insightSourcesAuthorized } from '../execution/authorization.js';
+import { insightSourcesAuthorized, insightSourcesChanged } from '../execution/authorization.js';
 import { effectiveProactivePolicy } from '../policy/service.js';
 import type { InsightCandidate } from '../execution/types.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
@@ -22,6 +22,7 @@ function executeClaimedAction(row: ActionRow, now = new Date()): void {
   try {
     if (getSqliteDatabase().prepare('SELECT 1 FROM proactive_inbox_items WHERE insight_id = ? AND withdrawn_at IS NOT NULL').get(row.insight_id)) throw new Error('Card was withdrawn');
     if (!insightSourcesAuthorized(row.insight_id)) throw new Error('Source permission is no longer available');
+    if (insightSourcesChanged(row.insight_id)) throw new Error('Source changed; review updated work before acting');
     if (!effectiveProactivePolicy(row.subscription_id).enabled) throw new Error('Proactive subscription paused');
     const permission = getSqliteDatabase().prepare(`SELECT mode, allowed_actions_json FROM project_monitoring_policies WHERE project_id = ?`).get(projectIdFromAggregationKey(row.aggregation_key)) as { mode: string; allowed_actions_json: string } | undefined;
     const approved = getSqliteDatabase().prepare(`SELECT 1 FROM proactive_decisions d JOIN proactive_inbox_items i USING(inbox_item_id) WHERE i.insight_id = ? AND d.choice = 'approve'`).get(row.insight_id);
@@ -53,6 +54,7 @@ function executeClaimedAction(row: ActionRow, now = new Date()): void {
       SET action_status = 'completed', action_result_json = ?, action_error = NULL, action_updated_at = ?
       WHERE insight_id = ? AND action_status = 'executing'`)
       .run(JSON.stringify({ taskId: result.model.task.id }), now.toISOString(), row.insight_id);
+    getSqliteDatabase().prepare("UPDATE proactive_inbox_items SET status = 'read', resolution = NULL, updated_at = ? WHERE insight_id = ?").run(now.toISOString(), row.insight_id);
   } catch (error) {
     getSqliteDatabase().prepare(`UPDATE proactive_insights
       SET action_status = 'failed', action_error = ?, action_updated_at = ?

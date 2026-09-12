@@ -444,7 +444,7 @@ export class HomeQueryService {
           ? 'approval_required'
           : item.insight.attentionKind === 'decision' ? 'decision_needed' : 'insight_available',
         urgency: item.insight.urgency === 'critical' || item.insight.urgency === 'high' ? 'now' : 'soon',
-        href: `/?judgment=${encodeURIComponent(item.id)}`,
+        href: `/proactive?item=${encodeURIComponent(item.id)}`,
         updatedAt: Date.parse(item.updatedAt),
         judgment: {
           inboxItemId: item.id,

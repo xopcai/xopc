@@ -1,3 +1,5 @@
+import type { ProactiveArtifact } from '@xopcai/gateway-contract';
+
 export interface ContextSnapshot {
   id: string;
   batchId: string;
@@ -7,6 +9,7 @@ export interface ContextSnapshot {
 }
 
 export interface InsightCandidate {
+  artifact?: ProactiveArtifact;
   title: string;
   summary: string;
   whyNow: string;

@@ -1,6 +1,8 @@
+import { scanMailFollowUps } from '../follow-ups.js';
 import { effectiveProactivePolicy } from '../policy/service.js';
 import { listSubscriptions } from '../scenarios/repository.js';
 import { scanDueProjects } from './schedule.js';
+import { completeDeliveredProjects } from '../experience.js';
 import { authorizedConnectedSource } from '../execution/authorization.js';
 import { listKnowledgeSourceItems } from '../../storage/sqlite/knowledge-repository.js';
 import { createLogger } from '../../utils/logger.js';
@@ -8,6 +10,15 @@ import { ProactiveEventService } from '../service.js';
 
 const log = createLogger('Proactive:Temporal');
 const MEETING_SCENARIO = 'meeting_preparation';
+
+export function isMeetingWorthPreparing(content: string | undefined | null): boolean {
+  if (!content) return false;
+  try {
+    const event = JSON.parse(content) as { title?: string; status?: string; allDay?: boolean; attendees?: Array<{ self?: boolean; responseStatus?: string }> };
+    return Boolean(event.title?.trim()) && event.status !== 'cancelled' && !event.allDay
+      && !event.attendees?.some(attendee => attendee.self && attendee.responseStatus === 'declined');
+  } catch { return false; }
+}
 
 export type TemporalTickResult = {
   scanned: number;
@@ -54,7 +65,9 @@ export class ProactiveTemporalWorker {
     this.running = true;
     const result: TemporalTickResult = { scanned: 0, published: 0, skipped: 0 };
     try {
+      completeDeliveredProjects(now);
       scanDueProjects(this.events, now);
+      result.published += scanMailFollowUps(this.events, now);
       const activeWorkspaces = new Set(listSubscriptions(MEETING_SCENARIO).filter((sub) => effectiveProactivePolicy(sub.id, now).enabled).map((sub) => sub.workspaceId));
       if (!activeWorkspaces.size) return result;
       const nowMs = now.getTime();
@@ -77,6 +90,7 @@ export class ProactiveTemporalWorker {
           const startMs = item.occurredAt ? Date.parse(item.occurredAt) : Number.NaN;
           const window = meetingWindow(startMs, nowMs);
           if (!connectionId || !workspaceId || !activeWorkspaces.has(workspaceId) || !connectorId || !window
+            || !isMeetingWorthPreparing(item.normalizedText)
             || !authorizedConnectedSource(item.id, workspaceId, MEETING_SCENARIO, agentId)
             || item.sensitivity === 'secret' || item.sensitivity === 'regulated') {
             result.skipped += 1;
@@ -90,11 +104,12 @@ export class ProactiveTemporalWorker {
             actor: { kind: 'system' },
             scope: { workspaceId, ...(agentId ? { agentId } : {}) },
             occurredAt: now.toISOString(),
-            dedupeKey: `calendar-window:${item.id}:${item.occurredAt}:${window}`,
+            dedupeKey: `calendar-window:${item.id}:${item.occurredAt}:${item.contentHash}:${window}`,
             sensitivity: item.sensitivity === 'normal' ? 'personal' : item.sensitivity,
             payload: {
               sourceItemId: item.id,
               meetingStartsAt: item.occurredAt,
+              contentHash: item.contentHash,
               window,
             },
           }, now);

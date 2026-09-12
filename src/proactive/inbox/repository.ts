@@ -1,4 +1,4 @@
-import { insightSourcesAuthorized } from '../execution/authorization.js';
+import { insightSourcesAuthorized, insightSourcesChanged } from '../execution/authorization.js';
 import { effectiveProactivePolicy } from '../policy/service.js';
 import { randomUUID } from 'node:crypto';
 
@@ -27,6 +27,7 @@ function itemFromRow(row: Row): InboxItem {
     ...(row.resolution ? { resolution: s(row, 'resolution') } : {}),
     createdAt: s(row, 'created_at'), updatedAt: s(row, 'updated_at'),
     insight: { scenarioKey: s(row, 'scenario_key'), title: s(row, 'title'), summary: s(row, 'summary'),
+      ...(row.artifact_json ? { artifact: JSON.parse(s(row, 'artifact_json')) } : {}),
       whyNow: s(row, 'why_now'), impact: s(row, 'impact'), recommendation: s(row, 'recommendation'), workDone: s(row, 'work_done'),
       ...(row.decision_json ? { decision: JSON.parse(s(row, 'decision_json')) as NonNullable<InboxItem['insight']['decision']> } : {}),
       ...(row.proposed_action_json ? { proposedAction: JSON.parse(s(row, 'proposed_action_json')) as NonNullable<InboxItem['insight']['proposedAction']> } : {}),
@@ -42,7 +43,7 @@ function itemFromRow(row: Row): InboxItem {
 }
 
 const SELECT_ITEM = `SELECT i.*, x.subscription_id, x.scenario_key, x.title, x.summary, x.why_now, x.impact, x.recommendation,
-  x.work_done, x.decision_json, x.proposed_action_json, x.disposition, x.disposition_reason,
+  x.work_done, x.artifact_json, x.decision_json, x.proposed_action_json, x.disposition, x.disposition_reason,
   x.action_status, x.action_result_json, x.action_error, x.urgency, x.confidence, x.value_score, x.evidence_ids_json FROM proactive_inbox_items i
   JOIN proactive_insights x ON x.insight_id = i.insight_id`;
 
@@ -58,6 +59,10 @@ export function projectInsightsToInbox(now = new Date()): number {
       WHERE x.disposition IS NULL ORDER BY x.created_at`).all() as Array<Record<string, unknown>>;
     let projected = 0;
     for (const row of missing) {
+      if (!insightSourcesAuthorized(String(row.insight_id)) || insightSourcesChanged(String(row.insight_id))) {
+        db.prepare("UPDATE proactive_insights SET disposition = 'record_silently', disposition_reason = 'Source changed before delivery' WHERE insight_id = ?").run(String(row.insight_id));
+        continue;
+      }
       const attention = effectiveProactivePolicy(String(row.subscription_id), now);
       if (!attention.enabled) {
         db.prepare("UPDATE proactive_insights SET disposition = 'record_silently', disposition_reason = 'Proactive subscription paused' WHERE insight_id = ?").run(String(row.insight_id));
@@ -88,9 +93,9 @@ export function projectInsightsToInbox(now = new Date()): number {
         ...(action ? { actionId: action.id } : {}),
         requiresApproval: !action && Boolean(row.decision_json),
       };
-      const legacyDisposition = action && !projectId ? 'show_in_work' : decideProactiveDisposition(policy, dispositionInput);
-      const disposition = attention.settings.managed && legacyDisposition === 'record_silently'
-        ? action && projectId ? 'request_approval' : 'show_in_work' : legacyDisposition;
+      const requestedDisposition = action && !projectId ? 'show_in_work' : decideProactiveDisposition(policy, dispositionInput);
+      const disposition = requestedDisposition === 'record_silently' && Number(row.confidence) >= policy.confidenceThreshold
+        ? action && projectId ? 'request_approval' : 'show_in_work' : requestedDisposition;
       const reason = action && !projectId
         ? 'Proposed project action cannot run outside a project scope'
         : proactiveDispositionReason(policy, dispositionInput, disposition);
@@ -104,19 +109,20 @@ export function projectInsightsToInbox(now = new Date()): number {
         disposition_at = ?, action_updated_at = ? WHERE insight_id = ? AND disposition IS NULL`)
         .run(disposition, reason, actionStatus, nowIso, actionStatus ? nowIso : null, String(row.insight_id));
       if (disposition === 'record_silently') continue;
-      const previous = attention.settings.managed ? db.prepare(`SELECT i.inbox_item_id, x.urgency, x.decision_json,
+      const previous = db.prepare(`SELECT i.inbox_item_id, i.expires_at, x.urgency, x.decision_json,
         o.delivered_at FROM proactive_inbox_items i JOIN proactive_insights x USING(insight_id)
         JOIN proactive_runs r USING(run_id) JOIN proactive_signal_batches b USING(batch_id)
         LEFT JOIN proactive_delivery_outbox o USING(inbox_item_id)
         WHERE x.subscription_id = ? AND x.scenario_key = ? AND b.aggregation_key = ?
-        AND i.withdrawn_at IS NULL AND i.status IN ('unread', 'read', 'snoozed') AND (i.expires_at IS NULL OR i.expires_at > ?)
+        AND i.withdrawn_at IS NULL AND i.status IN ('unread', 'read', 'snoozed') AND (i.expires_at IS NULL OR i.expires_at > ? OR x.scenario_key = 'meeting_preparation')
         AND (x.action_status IS NULL OR x.action_status IN ('not_authorized', 'rejected', 'failed'))
+        AND x.artifact_edited_at IS NULL
         ORDER BY i.updated_at DESC LIMIT 1`).get(String(row.subscription_id), String(row.scenario_key), aggregationKey, nowIso) as
-        { inbox_item_id: string; urgency: string; decision_json: string | null; delivered_at: string | null } | undefined : undefined;
+        { inbox_item_id: string; expires_at: string | null; urgency: string; decision_json: string | null; delivered_at: string | null } | undefined;
       const id = previous?.inbox_item_id ?? randomUUID();
       const urgencyRank: Record<string, number> = { low: 0, medium: 1, high: 2, critical: 3 };
       const materialChange = previous && ((urgencyRank[String(row.urgency)] ?? 0) > (urgencyRank[previous.urgency] ?? 0)
-        || row.decision_json !== previous.decision_json);
+        || row.decision_json !== previous.decision_json || (previous.expires_at && previous.expires_at <= nowIso));
       if (previous) {
         db.prepare(`UPDATE proactive_inbox_items SET insight_id = ?, updated_at = ?,
           notification_revision = notification_revision + ? WHERE inbox_item_id = ?`)
@@ -125,7 +131,7 @@ export function projectInsightsToInbox(now = new Date()): number {
         db.prepare(`INSERT INTO proactive_inbox_items (inbox_item_id, insight_id, status, created_at, updated_at)
           VALUES (?, ?, 'unread', ?, ?)`).run(id, String(row.insight_id), nowIso, nowIso);
       }
-      if (attention.settings.managed) {
+      {
         const meeting = db.prepare(`SELECT e.payload_json FROM proactive_events e
           JOIN proactive_batch_events be ON be.event_id = e.event_id
           JOIN proactive_runs r ON r.batch_id = be.batch_id JOIN proactive_insights x ON x.run_id = r.run_id
@@ -195,6 +201,7 @@ export function recordDecision(id: string, choice: string, note = '', now = new 
     if (!row) throw new Error('Inbox item not found');
     if (row.status === 'resolved') throw new Error('Inbox item is already resolved');
     if (!row.decision_json) throw new Error('Inbox item does not require a decision');
+    if (row.action_status && row.action_status !== 'approval_required') throw new Error('Action is no longer awaiting approval');
     const decision = JSON.parse(row.decision_json) as NonNullable<InboxItem['insight']['decision']>;
     if (!decision.options.some((option) => option.id === choice.trim())) throw new Error('choice is not a valid decision option');
     db.prepare('INSERT INTO proactive_decisions (decision_id, inbox_item_id, choice, note, created_at) VALUES (?, ?, ?, ?, ?)')
