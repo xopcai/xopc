@@ -2,6 +2,8 @@ import ExpoModulesCore
 import AVFoundation
 import MediaPlayer
 
+private let duckedPlaybackVolume: Float = 0.5
+
 private final class NearSpeechDetector {
   private let lock = NSLock()
   private var noiseFloor = 120.0
@@ -62,7 +64,7 @@ public final class XopcVoiceModule: Module {
       self.captureLock.withLock { self.captureEnabled = enabled; self.captureId = id }
     }
     AsyncFunction("enqueue") { (id: String, audio: String) in try self.enqueue(id: id, audio: audio) }.runOnQueue(.main)
-    AsyncFunction("duck") { self.player?.volume = 0.2 }.runOnQueue(.main)
+    AsyncFunction("duck") { self.player?.volume = duckedPlaybackVolume }.runOnQueue(.main)
     AsyncFunction("resumeOutput") { self.player?.volume = 1.0 }.runOnQueue(.main)
     AsyncFunction("flush") { self.flush() }.runOnQueue(.main)
     AsyncFunction("stop") { self.stop() }.runOnQueue(.main)

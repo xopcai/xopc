@@ -16,6 +16,8 @@ import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.functions.Queues
 import java.lang.ref.WeakReference
 
+private const val DUCKED_PLAYBACK_VOLUME = 0.5f
+
 class XopcVoiceModule : Module() {
   private var recorder: AudioRecord? = null
   private var track: AudioTrack? = null
@@ -82,7 +84,7 @@ class XopcVoiceModule : Module() {
       capturing = enabled
     }
     AsyncFunction("enqueue") { id: String, audio: String -> enqueue(id, audio) }.runOnQueue(Queues.MAIN)
-    AsyncFunction("duck") { speechVolume = 0.2f; applyPlaybackVolume() }.runOnQueue(Queues.MAIN)
+    AsyncFunction("duck") { speechVolume = DUCKED_PLAYBACK_VOLUME; applyPlaybackVolume() }.runOnQueue(Queues.MAIN)
     AsyncFunction("resumeOutput") { speechVolume = 1f; applyPlaybackVolume() }.runOnQueue(Queues.MAIN)
     AsyncFunction("flush") { flush() }.runOnQueue(Queues.MAIN)
     AsyncFunction("stop") { stop() }.runOnQueue(Queues.MAIN)
