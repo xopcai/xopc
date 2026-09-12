@@ -25,6 +25,16 @@ describe('gateway scopes', () => {
     expect(requiredGatewayScope('PATCH', '/api/tasks/a')).toBe('tasks.write');
   });
 
+  it('separates proactive settings and browser notification permission', () => {
+    expect(requiredGatewayScope('POST', '/api/proactive/subscriptions/id/preview')).toBe('agents.run');
+    expect(requiredGatewayScope('GET', '/api/inbox/judgments/id/workflow')).toBe('automations.read');
+    expect(requiredGatewayScope('POST', '/api/inbox/judgments/id/prepare')).toBe('automations.write');
+    expect(requiredGatewayScope('GET', '/api/proactive/preferences')).toBe('tasks.read');
+    expect(requiredGatewayScope('PATCH', '/api/proactive/subscriptions/id')).toBe('tasks.write');
+    expect(requiredGatewayScope('POST', '/api/proactive/web-push/prepare')).toBe('notifications.self');
+    expect(requiredGatewayScope('POST', '/api/inbox/judgments/id/actions')).toBe('tasks.write');
+  });
+
   it('fails closed for unclassified routes', () => {
     expect(requiredGatewayScope('GET', '/api/new-feature')).toBe('gateway.admin');
     expect(hasGatewayScope(['gateway.status'], 'gateway.admin')).toBe(false);

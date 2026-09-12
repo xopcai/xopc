@@ -19,6 +19,7 @@ export type NotificationDecision =
   | { notify: false; reason: 'disabled' | 'status-disabled' | 'permission' | 'focused' | 'duplicate' };
 
 export function decideNotification(input: NotificationPolicyInput): NotificationDecision {
+  if (input.notification.systemAllowed === false) return { notify: false, reason: 'disabled' };
   if (!input.preferences.enabled) return { notify: false, reason: 'disabled' };
   if (input.notification.status === 'success' && !input.preferences.completed) {
     return { notify: false, reason: 'status-disabled' };

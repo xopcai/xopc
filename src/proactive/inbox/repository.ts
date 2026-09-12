@@ -1,3 +1,5 @@
+import { insightSourcesAuthorized } from '../execution/authorization.js';
+import { effectiveProactivePolicy } from '../policy/service.js';
 import { randomUUID } from 'node:crypto';
 
 import type { ProjectMonitoringPolicy } from '@xopcai/gateway-contract';
@@ -17,7 +19,10 @@ function itemFromRow(row: Row): InboxItem {
       ? 'decision'
       : 'information';
   return {
-    id: s(row, 'inbox_item_id'), insightId: s(row, 'insight_id'), status: s(row, 'status') as InboxStatus,
+    id: s(row, 'inbox_item_id'), insightId: s(row, 'insight_id'), subscriptionId: s(row, 'subscription_id'),
+    withdrawnAt: row.withdrawn_at ? s(row, 'withdrawn_at') : undefined, correlationKey: row.correlation_key ? s(row, 'correlation_key') : undefined,
+    revision: Number(row.revision), notificationRevision: Number(row.notification_revision),
+    ...(row.expires_at ? { expiresAt: s(row, 'expires_at') } : {}), status: s(row, 'status') as InboxStatus,
     ...(row.snoozed_until ? { snoozedUntil: s(row, 'snoozed_until') } : {}),
     ...(row.resolution ? { resolution: s(row, 'resolution') } : {}),
     createdAt: s(row, 'created_at'), updatedAt: s(row, 'updated_at'),
@@ -43,7 +48,7 @@ const SELECT_ITEM = `SELECT i.*, x.subscription_id, x.scenario_key, x.title, x.s
 
 export function projectInsightsToInbox(now = new Date()): number {
   return runSqliteWriteTransaction((db) => {
-    const missing = db.prepare(`SELECT x.insight_id, x.confidence, x.value_score, x.decision_json,
+    const missing = db.prepare(`SELECT x.insight_id, x.subscription_id, x.scenario_key, x.urgency, x.confidence, x.value_score, x.decision_json,
       x.proposed_action_json, b.aggregation_key, p.project_id, p.mode, p.quiet_hours_json,
       p.allowed_actions_json, p.confidence_threshold FROM proactive_insights x
       JOIN proactive_runs r ON r.run_id = x.run_id
@@ -53,6 +58,11 @@ export function projectInsightsToInbox(now = new Date()): number {
       WHERE x.disposition IS NULL ORDER BY x.created_at`).all() as Array<Record<string, unknown>>;
     let projected = 0;
     for (const row of missing) {
+      const attention = effectiveProactivePolicy(String(row.subscription_id), now);
+      if (!attention.enabled) {
+        db.prepare("UPDATE proactive_insights SET disposition = 'record_silently', disposition_reason = 'Proactive subscription paused' WHERE insight_id = ?").run(String(row.insight_id));
+        continue;
+      }
       const aggregationKey = String(row.aggregation_key);
       const projectId = aggregationKey.startsWith('project:') ? aggregationKey.slice('project:'.length) : undefined;
       const policy: ProjectMonitoringPolicy = projectId
@@ -78,7 +88,9 @@ export function projectInsightsToInbox(now = new Date()): number {
         ...(action ? { actionId: action.id } : {}),
         requiresApproval: !action && Boolean(row.decision_json),
       };
-      const disposition = action && !projectId ? 'show_in_work' : decideProactiveDisposition(policy, dispositionInput);
+      const legacyDisposition = action && !projectId ? 'show_in_work' : decideProactiveDisposition(policy, dispositionInput);
+      const disposition = attention.settings.managed && legacyDisposition === 'record_silently'
+        ? action && projectId ? 'request_approval' : 'show_in_work' : legacyDisposition;
       const reason = action && !projectId
         ? 'Proposed project action cannot run outside a project scope'
         : proactiveDispositionReason(policy, dispositionInput, disposition);
@@ -92,12 +104,43 @@ export function projectInsightsToInbox(now = new Date()): number {
         disposition_at = ?, action_updated_at = ? WHERE insight_id = ? AND disposition IS NULL`)
         .run(disposition, reason, actionStatus, nowIso, actionStatus ? nowIso : null, String(row.insight_id));
       if (disposition === 'record_silently') continue;
-      const id = randomUUID();
-      db.prepare(`INSERT INTO proactive_inbox_items (inbox_item_id, insight_id, status, created_at, updated_at)
-        VALUES (?, ?, 'unread', ?, ?)`).run(id, String(row.insight_id), nowIso, nowIso);
-      const nextAttemptAt = nextQuietHoursEnd(policy.quietHours, now)?.toISOString() ?? nowIso;
+      const previous = attention.settings.managed ? db.prepare(`SELECT i.inbox_item_id, x.urgency, x.decision_json,
+        o.delivered_at FROM proactive_inbox_items i JOIN proactive_insights x USING(insight_id)
+        JOIN proactive_runs r USING(run_id) JOIN proactive_signal_batches b USING(batch_id)
+        LEFT JOIN proactive_delivery_outbox o USING(inbox_item_id)
+        WHERE x.subscription_id = ? AND x.scenario_key = ? AND b.aggregation_key = ?
+        AND i.withdrawn_at IS NULL AND i.status IN ('unread', 'read', 'snoozed') AND (i.expires_at IS NULL OR i.expires_at > ?)
+        AND (x.action_status IS NULL OR x.action_status IN ('not_authorized', 'rejected', 'failed'))
+        ORDER BY i.updated_at DESC LIMIT 1`).get(String(row.subscription_id), String(row.scenario_key), aggregationKey, nowIso) as
+        { inbox_item_id: string; urgency: string; decision_json: string | null; delivered_at: string | null } | undefined : undefined;
+      const id = previous?.inbox_item_id ?? randomUUID();
+      const urgencyRank: Record<string, number> = { low: 0, medium: 1, high: 2, critical: 3 };
+      const materialChange = previous && ((urgencyRank[String(row.urgency)] ?? 0) > (urgencyRank[previous.urgency] ?? 0)
+        || row.decision_json !== previous.decision_json);
+      if (previous) {
+        db.prepare(`UPDATE proactive_inbox_items SET insight_id = ?, updated_at = ?,
+          notification_revision = notification_revision + ? WHERE inbox_item_id = ?`)
+          .run(String(row.insight_id), nowIso, materialChange ? 1 : 0, id);
+      } else {
+        db.prepare(`INSERT INTO proactive_inbox_items (inbox_item_id, insight_id, status, created_at, updated_at)
+          VALUES (?, ?, 'unread', ?, ?)`).run(id, String(row.insight_id), nowIso, nowIso);
+      }
+      if (attention.settings.managed) {
+        const meeting = db.prepare(`SELECT e.payload_json FROM proactive_events e
+          JOIN proactive_batch_events be ON be.event_id = e.event_id
+          JOIN proactive_runs r ON r.batch_id = be.batch_id JOIN proactive_insights x ON x.run_id = r.run_id
+          WHERE x.insight_id = ? AND e.type = 'connected_source.calendar_window.v1' ORDER BY e.occurred_at DESC LIMIT 1`).get(String(row.insight_id)) as { payload_json: string } | undefined;
+        const meetingStart = meeting ? JSON.parse(meeting.payload_json).meetingStartsAt : undefined;
+        const expiresAt = typeof meetingStart === 'string' && Number.isFinite(Date.parse(meetingStart)) ? meetingStart : new Date(now.getTime() + 7 * 86400000).toISOString();
+        db.prepare('UPDATE proactive_inbox_items SET expires_at = ? WHERE inbox_item_id = ?').run(expiresAt, id);
+      }
+      const quietEnd = nextQuietHoursEnd(policy.quietHours, now)?.getTime() ?? now.getTime();
+      const cooldownEnd = previous?.delivered_at ? Date.parse(previous.delivered_at) + 4 * 3600000 : now.getTime();
+      const nextAttemptAt = new Date(Math.max(quietEnd, cooldownEnd)).toISOString();
+      if (previous && !materialChange) { projected += 1; continue; }
       db.prepare(`INSERT INTO proactive_delivery_outbox (delivery_id, inbox_item_id, status, attempt, next_attempt_at, created_at, updated_at)
-        VALUES (?, ?, 'pending', 0, ?, ?, ?)`).run(randomUUID(), id, nextAttemptAt, nowIso, nowIso);
+        VALUES (?, ?, 'pending', 0, ?, ?, ?)
+        ON CONFLICT(inbox_item_id) DO UPDATE SET delivery_id = excluded.delivery_id, status = 'pending', attempt = 0, next_attempt_at = excluded.next_attempt_at, lease_expires_at = NULL, updated_at = excluded.updated_at`).run(randomUUID(), id, nextAttemptAt, nowIso, nowIso);
       projected += 1;
     }
     return projected;
@@ -114,7 +157,7 @@ export function listInbox(input: { status?: InboxStatus; limit?: number } = {}):
   const rows = input.status
     ? getSqliteDatabase().prepare(`${SELECT_ITEM} WHERE i.status = ? ORDER BY i.updated_at DESC LIMIT ?`).all(input.status, limit)
     : getSqliteDatabase().prepare(`${SELECT_ITEM} ORDER BY i.updated_at DESC LIMIT ?`).all(limit);
-  return (rows as Row[]).map(itemFromRow);
+  return (rows as Row[]).map(itemFromRow).filter((item) => !item.withdrawnAt && insightSourcesAuthorized(item.insightId));
 }
 
 export function getInboxItem(id: string): InboxItem | null {
@@ -123,9 +166,12 @@ export function getInboxItem(id: string): InboxItem | null {
 }
 
 export function transitionInboxItem(id: string, input: { status: InboxStatus; snoozedUntil?: string; resolution?: string }, now = new Date()): InboxItem {
-  if (input.status === 'snoozed' && (!input.snoozedUntil || Date.parse(input.snoozedUntil) <= now.getTime())) throw new Error('snoozedUntil must be in the future');
+  if (input.status === 'snoozed' && (!input.snoozedUntil || (!Number.isFinite(Date.parse(input.snoozedUntil)) || Date.parse(input.snoozedUntil) <= now.getTime()))) throw new Error('snoozedUntil must be in the future');
   if (input.status === 'resolved' && !input.resolution?.trim()) throw new Error('resolution is required');
   runSqliteWriteTransaction((db) => {
+    const current = getInboxItem(id);
+    if (!current || current.withdrawnAt || !insightSourcesAuthorized(current.insightId)) throw new Error('Inbox item not found');
+    if ((current.status === 'resolved' || (current.expiresAt && Date.parse(current.expiresAt) <= now.getTime())) && input.status !== 'resolved') throw new Error('Card is no longer actionable');
     const result = db.prepare(`UPDATE proactive_inbox_items SET status = ?, snoozed_until = ?, resolution = ?, updated_at = ? WHERE inbox_item_id = ?`)
       .run(input.status, input.status === 'snoozed' ? input.snoozedUntil! : null, input.status === 'resolved' ? input.resolution!.trim() : null, now.toISOString(), id);
     if (result.changes !== 1) throw new Error('Inbox item not found');
@@ -135,6 +181,10 @@ export function transitionInboxItem(id: string, input: { status: InboxStatus; sn
 
 export function recordDecision(id: string, choice: string, note = '', now = new Date()): InboxItem {
   if (!choice.trim()) throw new Error('choice is required');
+  const activeItem = getInboxItem(id);
+  if (!activeItem || activeItem.withdrawnAt || !insightSourcesAuthorized(activeItem.insightId)) throw new Error('Inbox item not found');
+  if (activeItem?.expiresAt && Date.parse(activeItem.expiresAt) <= now.getTime()) throw new Error('Card expired');
+  if (choice === 'approve' && activeItem?.subscriptionId && !effectiveProactivePolicy(activeItem.subscriptionId, now).enabled) throw new Error('Subscription paused');
   runSqliteWriteTransaction((db) => {
     const row = db.prepare(`SELECT i.status, x.decision_json, x.action_status FROM proactive_inbox_items i
       JOIN proactive_insights x ON x.insight_id = i.insight_id WHERE i.inbox_item_id = ?`).get(id) as {
@@ -191,15 +241,19 @@ export function finishDelivery(id: string, error?: unknown, attempt = 1, now = n
   runSqliteWriteTransaction((db) => {
     const retry = Boolean(error) && attempt < 5;
     db.prepare(`UPDATE proactive_delivery_outbox SET status = ?, next_attempt_at = ?, lease_expires_at = NULL,
-      error_message = ?, delivered_at = ?, updated_at = ? WHERE delivery_id = ?`)
+      error_message = ?, delivered_at = ?, updated_at = ? WHERE delivery_id = ? AND status = 'delivering' AND attempt = ?`)
       .run(error ? (retry ? 'retryable' : 'failed') : 'delivered',
         retry ? new Date(now.getTime() + attempt * 30_000).toISOString() : now.toISOString(),
         error ? String(error instanceof Error ? error.message : error).slice(0, 1000) : null,
-        error ? null : now.toISOString(), now.toISOString(), id);
+        error ? null : now.toISOString(), now.toISOString(), id, attempt);
   });
 }
 
 export function recoverExpiredDeliveries(now = new Date()): number {
   return Number(runSqliteWriteTransaction((db) => db.prepare(`UPDATE proactive_delivery_outbox SET status = 'retryable', next_attempt_at = ?, lease_expires_at = NULL, updated_at = ?
     WHERE status = 'delivering' AND lease_expires_at <= ?`).run(now.toISOString(), now.toISOString(), now.toISOString()).changes));
+}
+
+export function deferDelivery(id: string, attempt: number, retryAt: string): void {
+  getSqliteDatabase().prepare("UPDATE proactive_delivery_outbox SET status = 'pending', attempt = attempt - 1, next_attempt_at = ?, lease_expires_at = NULL WHERE delivery_id = ? AND status = 'delivering' AND attempt = ?").run(retryAt, id, attempt);
 }

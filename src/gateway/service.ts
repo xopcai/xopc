@@ -1,3 +1,4 @@
+import { deliverProactiveCard } from '../proactive/inbox/delivery.js';
 import crypto from 'node:crypto';
 
 import { findSessionInput, insertSessionInput } from '../storage/sqlite/session-input-repository.js';
@@ -331,7 +332,7 @@ export class GatewayService {
     this.proactiveTemporalWorker = new ProactiveTemporalWorker(this.proactive);
     this.proactiveInboxWorker = new ProactiveInboxWorker({
       deliver: async ({ inboxItem }) => {
-        this.emit('proactive.inbox.created', inboxItem);
+        return deliverProactiveCard(inboxItem, this.createNotificationService(), (type, payload) => this.realtime.broker.publish('gateway', type, payload));
       },
     });
     let bootstrapConfigChanged = initializeVoiceDefaults(
@@ -730,6 +731,13 @@ export class GatewayService {
     if (!this.notificationService) {
       this.notificationService = new NotificationService({
         publish: (type, payload) => this.realtime.broker.publish('gateway', type, payload),
+        sendChannel: async (target, text) => {
+          const outbound = this.channelManager.getPlugin('telegram')?.outbound;
+          if (!outbound?.sendText || !this.channelManager.getRunningChannels().includes('telegram')) throw new Error('Telegram is not connected');
+          const result = await outbound.sendText({ cfg: this.config, to: target.chatId, accountId: target.accountId, text });
+          if (!result.success) throw new Error('Telegram delivery failed');
+          return { messageId: result.messageId };
+        },
       });
     }
     return this.notificationService;
@@ -1031,7 +1039,6 @@ export class GatewayService {
     this.running = true;
     this.taskRunDispatchTimer = setInterval(() => this.dispatchTaskRuns(), 1_000);
     this.taskRunDispatchTimer.unref?.();
-    this.ensureDefaultProactiveScenarioSubscriptions();
     this.proactiveWorker.start();
     this.proactiveTemporalWorker.start();
     this.proactiveInboxWorker.start();
@@ -1287,21 +1294,6 @@ export class GatewayService {
     }
 
     log.debug('Gateway service started');
-  }
-
-  private ensureDefaultProactiveScenarioSubscriptions(): void {
-    for (const scenarioKey of ['automation_failure_impact', 'meeting_preparation', 'discussion_follow_up']) {
-      if (this.proactiveScenarios.subscriptions(scenarioKey).some(
-        (subscription) => subscription.workspaceId === this.currentWorkspacePath,
-      )) continue;
-      this.proactiveScenarios.subscribe({
-        scenarioKey,
-        workspaceId: this.currentWorkspacePath,
-        scopeKind: 'workspace',
-        scopeId: this.currentWorkspacePath,
-        enabled: true,
-      });
-    }
   }
 
   /** Called when the HTTP listener is bound (before deferred channel work). */

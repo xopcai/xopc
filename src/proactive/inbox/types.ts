@@ -3,6 +3,12 @@ export type InboxStatus = 'unread' | 'read' | 'snoozed' | 'resolved';
 export interface InboxItem {
   id: string;
   insightId: string;
+  subscriptionId?: string;
+  revision?: number;
+  notificationRevision?: number;
+  expiresAt?: string;
+  withdrawnAt?: string;
+  correlationKey?: string;
   status: InboxStatus;
   snoozedUntil?: string;
   resolution?: string;
@@ -33,5 +39,5 @@ export interface InboxDelivery {
 }
 
 export interface InboxDeliveryAdapter {
-  deliver(delivery: InboxDelivery): Promise<void>;
+  deliver(delivery: InboxDelivery): Promise<void | { retryAt: string }>;
 }

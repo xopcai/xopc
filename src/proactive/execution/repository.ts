@@ -1,3 +1,4 @@
+import { effectiveProactivePolicy } from '../policy/service.js';
 import { createHash, randomUUID } from 'node:crypto';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
@@ -9,12 +10,21 @@ const str = (row: Row, key: string) => String(row[key]);
 
 export interface ClaimedRun {
   id: string; batchId: string; subscriptionId: string; scenarioKey: string; scenarioVersion: number;
-  promptRevisionId?: string; attempt: number;
+  promptRevisionId?: string; attempt: number; subscriptionRevision?: number;
 }
 
 export function claimNextRun(owner: string, now = new Date(), leaseSeconds = 120): ClaimedRun | null {
   return runSqliteWriteTransaction((db) => {
     const nowIso = now.toISOString();
+    for (const row of db.prepare("SELECT run_id, batch_id, subscription_id FROM proactive_runs WHERE status IN ('retryable', 'running')").all() as Row[]) {
+      if (!effectiveProactivePolicy(str(row, 'subscription_id'), now).enabled) {
+        db.prepare("UPDATE proactive_runs SET status = 'discarded', outcome_reason = 'disabled', updated_at = ? WHERE run_id = ?").run(nowIso, str(row, 'run_id'));
+        db.prepare("UPDATE proactive_signal_batches SET status = 'ignored', updated_at = ? WHERE batch_id = ?").run(nowIso, str(row, 'batch_id'));
+      }
+    }
+    for (const row of db.prepare("SELECT batch_id, subscription_id FROM proactive_signal_batches WHERE status = 'ready'").all() as Row[]) {
+      if (!effectiveProactivePolicy(str(row, 'subscription_id'), now).enabled) db.prepare("UPDATE proactive_signal_batches SET status = 'ignored' WHERE batch_id = ?").run(str(row, 'batch_id'));
+    }
     const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
     db.prepare(`UPDATE proactive_signal_batches SET status = 'ignored', updated_at = ? WHERE status = 'ready'
       AND subscription_id IN (SELECT subscription_id FROM proactive_scenario_subscriptions WHERE enabled = 0)`).run(nowIso);
@@ -51,11 +61,12 @@ export function claimNextRun(owner: string, now = new Date(), leaseSeconds = 120
       WHERE b.status = 'ready' ORDER BY b.ready_at LIMIT 1`).get() as Row | undefined;
     if (!batch) return null;
     const id = randomUUID();
+    const policy = effectiveProactivePolicy(str(batch, 'subscription_id'), now);
     db.prepare(`INSERT INTO proactive_runs (run_id, batch_id, subscription_id, scenario_key, scenario_version,
-      prompt_revision_id, status, attempt, lease_owner, lease_expires_at, started_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'running', 1, ?, ?, ?, ?)`)
+      prompt_revision_id, status, attempt, lease_owner, lease_expires_at, started_at, updated_at, policy_revision, subscription_revision, policy_snapshot_json)
+      VALUES (?, ?, ?, ?, ?, ?, 'running', 1, ?, ?, ?, ?, ?, ?, ?)`)
       .run(id, str(batch, 'batch_id'), str(batch, 'subscription_id'), str(batch, 'scenario_key'), Number(batch.scenario_version),
-        batch.active_prompt_revision_id ? String(batch.active_prompt_revision_id) : null, owner, new Date(now.getTime() + leaseSeconds * 1000).toISOString(), nowIso, nowIso);
+        batch.active_prompt_revision_id ? String(batch.active_prompt_revision_id) : null, owner, new Date(now.getTime() + leaseSeconds * 1000).toISOString(), nowIso, nowIso, policy.preferences.revision, policy.settings.revision, JSON.stringify({ level: policy.level, delivery: policy.settings.delivery, scanIntervalMinutes: policy.scanIntervalMinutes }));
     db.prepare("UPDATE proactive_signal_batches SET status = 'processing', updated_at = ? WHERE batch_id = ?").run(nowIso, str(batch, 'batch_id'));
     return runFromRow(db.prepare('SELECT * FROM proactive_runs WHERE run_id = ?').get(id) as Row);
   });
@@ -63,7 +74,7 @@ export function claimNextRun(owner: string, now = new Date(), leaseSeconds = 120
 
 function runFromRow(row: Row): ClaimedRun {
   return { id: str(row, 'run_id'), batchId: str(row, 'batch_id'), subscriptionId: str(row, 'subscription_id'),
-    scenarioKey: str(row, 'scenario_key'), scenarioVersion: Number(row.scenario_version), attempt: Number(row.attempt),
+    scenarioKey: str(row, 'scenario_key'), scenarioVersion: Number(row.scenario_version), attempt: Number(row.attempt), subscriptionRevision: Number(row.subscription_revision),
     ...(row.prompt_revision_id ? { promptRevisionId: str(row, 'prompt_revision_id') } : {}) };
 }
 
@@ -90,10 +101,16 @@ export function finishRun(input: {
   valueScore?: number;
   cooldownSeconds?: number;
   rawOutput: string;
+  outcomeReason?: string;
   modelRef?: string;
 }, now = new Date()): ProactiveInsight | null {
   return runSqliteWriteTransaction((db) => {
     const nowIso = now.toISOString();
+    const current = db.prepare("SELECT status, attempt FROM proactive_runs WHERE run_id = ?").get(input.run.id) as { status: string; attempt: number } | undefined;
+    if (!current || current.status !== 'running' || current.attempt !== input.run.attempt) return null;
+    const currentPolicy = effectiveProactivePolicy(input.run.subscriptionId, now);
+    if (!currentPolicy.enabled) input = { ...input, candidate: undefined, outcomeReason: 'disabled' };
+    else if (input.run.subscriptionRevision !== undefined && input.run.subscriptionRevision !== currentPolicy.settings.revision) input = { ...input, candidate: undefined, outcomeReason: 'policy_changed' };
     const subjectScope = (db.prepare(`SELECT DISTINCT e.subject_kind, e.subject_id
       FROM proactive_batch_events be
       JOIN proactive_events e ON e.event_id = be.event_id
@@ -119,9 +136,12 @@ export function finishRun(input: {
         new Date(now.getTime() - (input.cooldownSeconds ?? 7 * 24 * 60 * 60) * 1000).toISOString(),
       ) : undefined;
     const valuable = Boolean(input.candidate) && !duplicate;
+    const reason = duplicate ? 'duplicate' : input.outcomeReason;
+    const completed = valuable || ['unchanged', 'routine', 'insufficient_evidence', 'duplicate', 'below_threshold'].includes(reason ?? '');
+    db.prepare('UPDATE proactive_runs SET outcome_reason = ? WHERE run_id = ?').run(reason ?? null, input.run.id);
     db.prepare(`UPDATE proactive_runs SET status = ?, raw_output = ?, model_ref = ?, lease_owner = NULL,
       lease_expires_at = NULL, completed_at = ?, updated_at = ? WHERE run_id = ?`)
-      .run(valuable ? 'completed' : 'discarded', input.rawOutput.slice(0, 20_000), input.modelRef ?? null, nowIso, nowIso, input.run.id);
+      .run(completed ? 'completed' : 'discarded', input.rawOutput.slice(0, 20_000), input.modelRef ?? null, nowIso, nowIso, input.run.id);
     db.prepare(`UPDATE proactive_signal_batches SET status = ?, updated_at = ? WHERE batch_id = ?`)
       .run(valuable ? 'processed' : 'ignored', nowIso, input.run.batchId);
     if (!input.candidate || duplicate) return null;
@@ -145,8 +165,9 @@ export function failRun(run: ClaimedRun, error: unknown, retryable: boolean, now
     const finalRetryable = retryable && run.attempt < 3;
     const nowIso = now.toISOString();
     const nextAttemptAt = finalRetryable ? new Date(now.getTime() + 15_000 * run.attempt).toISOString() : null;
-    db.prepare(`UPDATE proactive_runs SET status = ?, error_message = ?, lease_owner = NULL, lease_expires_at = NULL, next_attempt_at = ?, updated_at = ? WHERE run_id = ?`)
-      .run(finalRetryable ? 'retryable' : 'failed', String(error instanceof Error ? error.message : error).slice(0, 2000), nextAttemptAt, nowIso, run.id);
+    const updated = db.prepare(`UPDATE proactive_runs SET status = ?, error_message = ?, lease_owner = NULL, lease_expires_at = NULL, next_attempt_at = ?, updated_at = ? WHERE run_id = ? AND status = 'running' AND attempt = ?`)
+      .run(finalRetryable ? 'retryable' : 'failed', String(error instanceof Error ? error.message : error).slice(0, 2000), nextAttemptAt, nowIso, run.id, run.attempt);
+    if (!updated.changes) return;
     db.prepare(`UPDATE proactive_signal_batches SET status = ?, updated_at = ? WHERE batch_id = ?`)
       .run(finalRetryable ? 'failed_retryable' : 'failed_permanent', nowIso, run.batchId);
   });

@@ -8,6 +8,7 @@ export const NotificationTargetSchema = z.discriminatedUnion('kind', [
     automationId: z.string().min(1),
     runId: z.string().min(1),
   }),
+  z.object({ kind: z.literal('proactive_digest'), digestId: z.string().min(1) }),
   z.object({ kind: z.literal('insight'), inboxItemId: z.string().min(1) }),
   z.object({
     kind: z.literal('work_discovery'),
@@ -78,9 +79,11 @@ export function notificationTargetRoute(
       return surface === 'mobile'
         ? `/automation/runs/${encodeURIComponent(target.runId)}`
         : `/automations?automation=${encodeURIComponent(target.automationId)}&run=${encodeURIComponent(target.runId)}`;
+    case 'proactive_digest':
+      return surface === 'web' ? `/proactive?digest=${encodeURIComponent(target.digestId)}` : '/inbox';
     case 'insight':
       return surface === 'web'
-        ? `/?judgment=${encodeURIComponent(target.inboxItemId)}`
+        ? `/proactive?item=${encodeURIComponent(target.inboxItemId)}`
         : `/inbox?item=${encodeURIComponent(target.inboxItemId)}`;
     case 'work_discovery':
       return surface === 'web'

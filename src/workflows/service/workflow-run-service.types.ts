@@ -8,6 +8,7 @@ import type {
 } from '../domain/index.js';
 
 export interface StartWorkflowRunServiceParams {
+  preparationOnly?: boolean;
   agentId: string;
   definitionId: string;
   taskRunId?: string;

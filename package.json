@@ -183,6 +183,7 @@
     "thread-stream": "^4.2.0",
     "undici": "^8.9.0",
     "uuid": "^14.0.0",
+    "web-push": "^3.6.7",
     "ws": "^8.21.0",
     "zod": "^4.4.3"
   },
@@ -217,6 +218,7 @@
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^25.9.1",
     "@types/qrcode-terminal": "^0.12.2",
+    "@types/web-push": "^3.6.4",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react-swc": "^4.3.1",
     "@xopcai/browser-control-contract": "workspace:*",
