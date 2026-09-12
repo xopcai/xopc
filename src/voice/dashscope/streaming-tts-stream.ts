@@ -9,6 +9,7 @@ import { createLogger } from '../../utils/logger.js';
 
 const { WebSocket } = createRequire(import.meta.url)('ws') as typeof import('ws');
 const DEFAULT_REALTIME_URL = 'wss://dashscope.aliyuncs.com/api-ws/v1/realtime';
+const DEFAULT_REALTIME_VOLUME = 75;
 const log = createLogger('TTS:DashScope');
 
 class TtsHandshakeError extends Error {
@@ -37,6 +38,7 @@ export interface DashScopeStreamingTtsRequest {
   baseUrl?: string;
   model: string;
   voice: string;
+  volume?: number;
   text: string;
   instructions?: string;
   signal: AbortSignal;
@@ -73,6 +75,11 @@ function event(type: string, extra: Record<string, unknown> = {}): string {
 export async function openDashScopeStreamingTts(
   request: DashScopeStreamingTtsRequest,
 ): Promise<SpeechSynthesisStreamResult> {
+  const volume = request.volume ?? DEFAULT_REALTIME_VOLUME;
+  if (!Number.isInteger(volume) || volume < 0 || volume > 100) {
+    throw new Error('DashScope realtime TTS volume must be an integer from 0 to 100');
+  }
+  request = { ...request, volume };
   const deadline = Date.now() + request.timeoutMs;
   for (let attempt = 1; ; attempt += 1) {
     request.signal.throwIfAborted();
@@ -169,6 +176,7 @@ async function openStreamingTtsAttempt(
           language_type: 'Auto',
           response_format: 'pcm',
           sample_rate: 24_000,
+          volume: request.volume,
           ...(request.instructions
             ? { instructions: request.instructions, optimize_instructions: false }
             : {}),
