@@ -132,7 +132,7 @@ export class WorkflowRunService {
         httpStatus: 409,
       };
     }
-    const definition = await this.loadDefinition(params.definitionId);
+    let definition = await this.loadDefinition(params.definitionId);
     if (!definition) {
       return {
         ok: false,
@@ -141,6 +141,8 @@ export class WorkflowRunService {
         httpStatus: 404,
       };
     }
+
+    if (params.preparationOnly) definition = preparationDefinition(definition);
 
     const connectorPreflight = preflightWorkflowConnectors({
       definition,
@@ -219,7 +221,7 @@ export class WorkflowRunService {
     const contextRefs = resolvedContext ? [...resolvedContext.refs, ...passiveContextRefs] : requestedContextRefs;
     let writebackPolicy: WorkflowRunMetadata['writebackPolicy'];
     try {
-      writebackPolicy = resolveWorkflowWritebackPolicy(params.writebackPolicy, { projectId, taskId });
+      writebackPolicy = resolveWorkflowWritebackPolicy(params.preparationOnly ? { targets: [] } : params.writebackPolicy, { projectId, taskId });
     } catch (cause) {
       return {
         ok: false,
@@ -293,6 +295,7 @@ export class WorkflowRunService {
       source,
       metadata: buildWorkflowRunMetadata({
         definition,
+        preparationOnly: params.preparationOnly,
         agentId: params.agentId,
         taskRunId: params.taskRunId,
         projectId,
@@ -344,6 +347,7 @@ export class WorkflowRunService {
     return this.startWorkflowRun({
       agentId: params.agentId,
       definitionId: existing.run.definitionId,
+      preparationOnly: existing.run.metadata?.preparationOnly,
       taskRunId: existing.run.metadata?.taskRunId,
       projectId,
       contextRefs: existing.run.metadata?.contextRefs,
@@ -370,7 +374,7 @@ export class WorkflowRunService {
       };
     }
 
-    const definition = await this.loadDefinition(existing.run.definitionId);
+    let definition = await this.loadDefinition(existing.run.definitionId);
     if (!definition) {
       return {
         ok: false,
@@ -380,7 +384,11 @@ export class WorkflowRunService {
       };
     }
 
+    if (existing.run.metadata?.preparationOnly) definition = preparationDefinition(definition);
     const targets = resolveWorkflowReplayTargets(existing, params.scope);
+    if (existing.run.metadata?.preparationOnly) {
+      for (const target of targets.targets) if (target.invocation) target.invocation.toolset = [];
+    }
     if (targets.targets.length === 0) {
       return {
         ok: false,
@@ -465,6 +473,7 @@ export class WorkflowRunService {
       source,
       metadata: buildWorkflowRunMetadata({
         definition,
+        preparationOnly: existing.run.metadata?.preparationOnly,
         agentId: params.agentId,
         taskRunId,
         projectId,
@@ -705,6 +714,7 @@ export function buildWorkflowRunInputEnvelope(input: unknown, goal?: string): Wo
 }
 
 export function buildWorkflowRunMetadata(params: {
+  preparationOnly?: boolean;
   definition: WorkflowDefinition;
   agentId: string;
   taskRunId?: string;
@@ -723,9 +733,10 @@ export function buildWorkflowRunMetadata(params: {
   const taskId = taskRunId ? new TaskRunRepository().get(taskRunId)?.taskId : undefined;
   const projectId = params.projectId?.trim() || undefined;
   const contextRefs = params.contextRefs ?? buildDefaultWorkflowContextRefs({ projectId, taskId, source: params.source });
-  const writebackPolicy = resolveWorkflowWritebackPolicy(params.writebackPolicy, { projectId, taskId });
+  const writebackPolicy = resolveWorkflowWritebackPolicy(params.preparationOnly ? { targets: [] } : params.writebackPolicy, { projectId, taskId });
   return {
     sessionKey: params.sessionKey,
+    ...(params.preparationOnly ? { preparationOnly: true } : {}),
     triggerSource: params.source.kind,
     agentId: params.agentId,
     projectId,
@@ -915,4 +926,13 @@ function isWorkflowRunInputEnvelope(input: unknown): input is WorkflowRunInputEn
     return false;
   }
   return 'payload' in input || 'variables' in input || 'context' in input;
+}
+
+/** Preparation runs can only transform supplied context into a reviewable result. */
+export function preparationDefinition(original: WorkflowDefinition): WorkflowDefinition {
+  const definition = structuredClone(original);
+  for (const node of definition.graph.nodes) if (node.kind === 'agent') node.config.toolset = [];
+  definition.permissions = { tools: [], network: false, fileSystem: 'none' };
+  definition.connectors = [];
+  return definition;
 }

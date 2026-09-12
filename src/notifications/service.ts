@@ -1,3 +1,10 @@
+import { proactiveNotificationWorkspace, recheckNotificationDelivery } from './proactive-policy.js';
+import { proactivePreferences } from '../proactive/policy/service.js';
+import { flushDueDigests } from '../proactive/inbox/digest.js';
+import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
+import { drainChannelNotifications, enqueueChannelNotification, type ProactiveChannelSender } from './proactive-channel.js';
+import { drainBrowserPush, enqueueBrowserPush } from './web-push.js';
+import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { localizeNotification, type ProductNotificationType } from '@xopcai/gateway-contract';
 
 import { createLogger } from '../utils/logger.js';
@@ -6,9 +13,10 @@ import {
   disableNotificationDeviceForPushToken,
   listDeliverableNotificationDevices,
 } from './device-store.js';
-import { notificationPlanFromGatewayEvent } from './planner.js';
+import { notificationPlanFromGatewayEvent, type NotificationPlan } from './planner.js';
 import {
   createNotificationEvent,
+  deferNotificationDelivery,
   expireUndeliverableNotificationDeliveries,
   listDueNotificationDeliveries,
   markNotificationDeliveryAccepted,
@@ -67,6 +75,7 @@ export class NotificationService {
   constructor(private readonly options: {
     publish: (type: string, payload: unknown) => void;
     fetch?: typeof fetch;
+    sendChannel?: ProactiveChannelSender;
   }) {}
 
   start(): void {
@@ -83,20 +92,47 @@ export class NotificationService {
 
   handleGatewayEvent(type: string, payload: unknown): void {
     try {
-      const plan = notificationPlanFromGatewayEvent(type, payload);
-      if (!plan) return;
-      const devices = listDeliverableNotificationDevices()
-        .filter((device) => preferenceAllows(plan.notification.type, device.preferences));
-      const result = createNotificationEvent({
-        ...plan,
-        deviceIds: devices.map((device) => device.id),
-      });
-      if (!result.created) return;
-      this.options.publish('notification.created', result.notification);
+      const notification = this.persistGatewayEvent(type, payload);
+      if (!notification) return;
+      this.options.publish('notification.created', notification);
       void this.drain();
     } catch (err) {
       log.error({ err, eventType: type }, 'Notification event persistence failed');
     }
+  }
+
+  /** Throws on persistence failure so durable producers can retry the handoff. */
+  persistGatewayEvent(type: string, payload: unknown) {
+    const plan = notificationPlanFromGatewayEvent(type, payload);
+    if (!plan) return null;
+    return this.persistPlan(plan);
+  }
+
+  persistPlan(plan: NotificationPlan) {
+    let devices = listDeliverableNotificationDevices()
+      .filter((device) => preferenceAllows(plan.notification.type, device.preferences));
+    const workspace = proactiveNotificationWorkspace(plan.notification);
+    let browserIds: string[] | undefined;
+    let selectedChannel = 'all';
+    if (workspace) {
+      const preferences = proactivePreferences(workspace);
+      const browsers = getSqliteDatabase().prepare('SELECT id FROM proactive_web_push_subscriptions WHERE workspace_id = ? ORDER BY created_at DESC, id').all(workspace) as Array<{ id: string }>;
+      selectedChannel = preferences.preferredChannel === 'auto' ? (browsers.length ? 'browser' : devices.length ? 'mobile' : 'browser') : preferences.preferredChannel;
+      if (!['all', 'mobile'].includes(selectedChannel)) devices = [];
+      else if (preferences.preferredChannel === 'auto') devices = devices.slice(0, 1);
+      browserIds = ['all', 'browser'].includes(selectedChannel) ? browsers.map((row) => row.id) : [];
+      if (preferences.preferredChannel === 'auto') browserIds = browserIds.slice(0, 1);
+      plan = { ...plan, notification: { ...plan.notification, payload: { ...plan.notification.payload, deliveryChannel: selectedChannel, deliveryMode: preferences.preferredChannel } } };
+    }
+    const result = runSqliteWriteTransaction(() => {
+      const created = createNotificationEvent({ ...plan, deviceIds: devices.map((device) => device.id) });
+      if (created.created) {
+        enqueueBrowserPush(created.notification, browserIds);
+        if (workspace && selectedChannel === 'telegram') enqueueChannelNotification(created.notification, workspace);
+      }
+      return created;
+    });
+    return result.created ? result.notification : null;
   }
 
   async drain(): Promise<void> {
@@ -109,8 +145,11 @@ export class NotificationService {
         pruneNotificationEvents(now - 30 * 24 * 60 * 60 * 1_000);
         this.lastMaintenanceAt = now;
       }
+      for (const notification of flushDueDigests((plan) => this.persistPlan(plan))) this.options.publish('notification.created', notification);
       await this.deliverPending();
       await this.checkReceipts();
+      await drainBrowserPush();
+      if (this.options.sendChannel) await drainChannelNotifications(this.options.sendChannel);
     } catch (err) {
       log.warn({ err }, 'Notification delivery pass failed');
     } finally {
@@ -124,6 +163,11 @@ export class NotificationService {
   }
 
   private async send(delivery: NotificationDelivery): Promise<void> {
+    if (delivery.event.type === 'proactive.insight') {
+      const policy = recheckNotificationDelivery(delivery.event, 'mobile');
+      if (policy === 'cancel') { markNotificationDeliveryDead(delivery.event.id, delivery.deviceId, 'Proactive policy changed'); return; }
+      if (policy instanceof Date) { deferNotificationDelivery(delivery.event.id, delivery.deviceId, policy.getTime()); return; }
+    }
     const fetchImpl = this.options.fetch ?? fetch;
     const localized = localizeNotification(delivery.event, delivery.locale);
     try {
@@ -133,8 +177,8 @@ export class NotificationService {
         signal: AbortSignal.timeout(10_000),
         body: JSON.stringify({
           to: delivery.pushToken,
-          title: localized.localizedTitle,
-          body: localized.localizedBody,
+          title: delivery.event.type === 'proactive.insight' ? (delivery.locale.startsWith('zh') ? '有一项工作需要查看' : 'A work update is ready') : localized.localizedTitle,
+          body: delivery.event.type === 'proactive.insight' ? (delivery.locale.startsWith('zh') ? '打开 xopc 查看详情。' : 'Open xopc to review it.') : localized.localizedBody,
           sound: delivery.event.priority === 'high' ? 'default' : undefined,
           priority: delivery.event.priority,
           data: {

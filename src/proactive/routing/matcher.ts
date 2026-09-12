@@ -58,9 +58,11 @@ export function aggregationKey(event: EventEnvelope, route: ScenarioRoute): stri
 }
 
 export function matchScenario(event: EventEnvelope, route: ScenarioRoute): string | null {
-  if (!route.enabled || !route.eventTypes.includes(event.type)) return null;
+  const scheduled = event.type === 'proactive.scan.v1' && event.source.kind === 'proactive_scheduler'
+    && event.payload.subscriptionId === route.subscriptionId;
+  if (!route.enabled || (!scheduled && !route.eventTypes.includes(event.type))) return null;
   if (route.scope?.workspaceId && route.scope.workspaceId !== event.scope.workspaceId) return null;
   if (route.scope?.projectId && route.scope.projectId !== event.scope.projectId) return null;
-  if (route.condition && !matchesCondition(event, route.condition)) return null;
+  if (!scheduled && route.condition && !matchesCondition(event, route.condition)) return null;
   return aggregationKey(event, route);
 }

@@ -13,6 +13,7 @@ import type { WorkflowDefinition } from '../domain/index.js';
 import { WorkflowEventStore } from '../store/event-store.js';
 import { WorkflowRunStore } from '../store/run-store.js';
 import {
+  preparationDefinition,
   buildWorkflowRunDefinitionSnapshot,
   buildWorkflowRunInputEnvelope,
   buildWorkflowRunMetadata,
@@ -86,6 +87,17 @@ describe('WorkflowRunService helpers', () => {
       process.env.XOPC_STATE_DIR = originalStateDir;
     }
     await rm(stateDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+  });
+
+  it('restricts preparation runs without mutating the saved workflow', () => {
+    const original = createDefinition();
+    const prepared = preparationDefinition(original);
+    expect(prepared.graph.nodes.filter((node) => node.kind === 'agent').map((node) => node.config.toolset)).toEqual([[], []]);
+    expect(prepared.connectors).toEqual([]);
+    expect(original.graph.nodes[1]!.config).not.toHaveProperty('toolset');
+    const metadata = buildWorkflowRunMetadata({ definition: prepared, preparationOnly: true, agentId: 'main', sessionKey: 'prepare', source: { kind: 'webui' }, input: { payload: {} }, writebackPolicy: { targets: [{ kind: 'project', id: 'x', mode: 'record' }] } });
+    expect(metadata.preparationOnly).toBe(true);
+    expect(metadata.writebackPolicy).toEqual({ targets: [] });
   });
 
   it('wraps raw input into a stable input envelope', () => {

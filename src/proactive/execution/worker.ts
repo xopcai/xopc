@@ -1,3 +1,5 @@
+import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
+import { effectiveProactivePolicy } from '../policy/service.js';
 import { randomUUID } from 'node:crypto';
 
 import { createLogger } from '../../utils/logger.js';
@@ -6,7 +8,7 @@ import { composeScenarioPrompt } from '../scenarios/prompt-composer.js';
 import { getPromptRevision, getScenario } from '../scenarios/repository.js';
 
 import { ContextProviderRegistry } from './context.js';
-import { isValuableInsight, parseInsightCandidate, scoreInsight } from './insight.js';
+import { isValuableInsight, parseAnalysisResult, scoreInsight } from './insight.js';
 import { attachSnapshot, claimNextRun, eventIdsForBatch, failRun, finishRun, saveSnapshot } from './repository.js';
 import type { ProactiveAgentExecutor } from './types.js';
 
@@ -48,9 +50,17 @@ export class ProactiveWorker {
       try {
         const scenario = getScenario(run.scenarioKey, run.scenarioVersion);
         if (!scenario) throw new Error('Pinned scenario version is unavailable');
+        if (!effectiveProactivePolicy(run.subscriptionId).enabled) {
+          finishRun({ run, rawOutput: '', outcomeReason: 'disabled' });
+          return;
+        }
         const revision = run.promptRevisionId ? getPromptRevision(run.promptRevisionId) ?? undefined : undefined;
         const eventIds = eventIdsForBatch(run.batchId);
         const context = await this.contexts.collect(scenario, { batchId: run.batchId, eventIds, subscriptionId: run.subscriptionId });
+        if (context.evidenceIds.length === 0) {
+          finishRun({ run, rawOutput: '', outcomeReason: 'source_unavailable' });
+          return;
+        }
         const snapshot = saveSnapshot(
           run.batchId,
           context.snapshotContent ?? context.content,
@@ -59,20 +69,26 @@ export class ProactiveWorker {
         attachSnapshot(run.id, snapshot.id);
         const prompt = composeScenarioPrompt({ scenario, ...(revision ? { revision } : {}), runtimeContext: 'Use the read-only inspection tool to examine the authorized evidence.' });
         const output = await this.executor.execute({ systemPrompt: prompt.platformSafety, userPrompt: prompt.text, authorizedContext: context.content });
-        const candidate = parseInsightCandidate(output.text, new Set(context.evidenceIds));
-        const valueScore = scoreInsight(candidate);
-        const valuable = isValuableInsight(candidate, scenario.valuePolicy);
+        if (output.usage) getSqliteDatabase().prepare('UPDATE proactive_runs SET input_tokens = ?, output_tokens = ?, estimated_cost_usd = ? WHERE run_id = ? AND attempt = ?').run(output.usage.inputTokens, output.usage.outputTokens, output.usage.estimatedCostUsd ?? null, run.id, run.attempt);
+        const latestContext = await this.contexts.collect(scenario, { batchId: run.batchId, eventIds, subscriptionId: run.subscriptionId });
+        const revoked = context.evidenceIds.some((id) => !latestContext.evidenceIds.includes(id));
+        const result = revoked ? { result: 'no_insight' as const, reason: 'source_unavailable' } : parseAnalysisResult(output.text, new Set(latestContext.evidenceIds));
+        const candidate = result.result === 'insight' ? result.candidate : undefined;
+        const valueScore = candidate ? scoreInsight(candidate) : 0;
+        const enabled = effectiveProactivePolicy(run.subscriptionId).enabled;
+        const valuable = enabled && candidate && isValuableInsight(candidate, scenario.valuePolicy);
         const insight = finishRun({
           run,
           ...(valuable ? { candidate, valueScore } : {}),
           cooldownSeconds: scenario.valuePolicy.cooldownSeconds,
-          rawOutput: output.text,
+          outcomeReason: !enabled ? 'disabled' : result.result === 'no_insight' ? result.reason : valuable ? 'insight' : 'below_threshold',
+          rawOutput: revoked ? '' : output.text,
           modelRef: output.modelRef,
         });
-        const disposition = insight ? 'created' : valuable ? 'duplicate_suppressed' : 'value_gate_discarded';
+        const disposition = insight ? 'created' : valuable ? 'duplicate_suppressed' : result.result === 'no_insight' ? result.reason : 'value_gate_discarded';
         log.info(
           { runId: run.id, scenarioKey: run.scenarioKey, disposition, insightId: insight?.id },
-          insight ? 'Proactive insight created' : 'Proactive output discarded',
+          insight ? 'Proactive insight created' : 'Proactive check completed without a card',
         );
       } catch (error) {
         const permanent = error instanceof Error && /Pinned scenario/.test(error.message);

@@ -29,6 +29,11 @@ describe('product notification presentation', () => {
     });
   });
 
+  it('leaves automatic device delivery to the durable push queue', () => {
+    expect(presentProductNotification({ ...event, payload: { deliveryMode: 'auto', deliveryChannel: 'browser' } }, 'en').systemAllowed).toBe(false);
+    expect(presentProductNotification({ ...event, payload: { deliveryChannel: 'telegram' } }, 'en').systemAllowed).toBe(false);
+  });
+
   it('rejects malformed realtime payloads', () => {
     expect(parseProductNotification({ ...event, target: { kind: 'chat', sessionKey: '' } })).toBeNull();
   });

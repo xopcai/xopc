@@ -6,6 +6,13 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps proactive controls and card families without swallowing neighboring inbox routes', () => {
+    for (const path of ['/api/proactive/metrics', '/api/proactive/presence', '/api/proactive/digests/id', '/api/proactive/subscriptions/id/preview', '/api/inbox/judgments/id/workflow', '/api/inbox/judgments/id/prepare', '/api/proactive/web-push/probes', '/api/proactive/web-push/probes/id/opened', '/api/proactive/web-push/subscriptions/id/test', '/api/proactive/templates', '/api/proactive/preferences', '/api/proactive/subscriptions', '/api/proactive/subscriptions/sub/runs', '/api/proactive/cards', '/api/inbox/judgments', '/api/inbox/judgments/changes', '/api/inbox/judgments/card/actions', '/api/internal/proactive/health']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('proactive');
+    }
+    expect(findAuthenticatedLazyRouteBundle('/api/inbox/other')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/proactive-other')).toBeUndefined();
+  });
   it('keeps chat-critical routes off the lazy registry', () => {
     const paths = [
       '/api/status',
