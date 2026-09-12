@@ -14,7 +14,7 @@ export function voiceErrorMessage(code: string | undefined, m: MessageBundle['vo
   if (/TIME_LIMIT|max_duration|session_limit|idle_timeout/.test(code)) return m.timeLimit;
   if (/INPUT_DROPPED|audio_backpressure/.test(code)) return m.inputDropped;
   if (/audio_focus_lost/.test(code)) return m.audioFocusLost;
-  if (/capture_failed/.test(code)) return m.captureFailed;
+  if (/capture_(?:failed|no_signal)/.test(code)) return m.captureFailed;
   if (/route_lost/.test(code)) return m.routeLost;
   if (/background/.test(code)) return m.backgroundPaused;
   if (/interruption/.test(code)) return m.interruption;

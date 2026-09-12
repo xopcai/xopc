@@ -301,7 +301,7 @@ export function createAgentVoiceEngine(options: {
         if ((event.type === 'tool_start' || event.type === 'tool_end') && typeof event.payload?.toolCallId === 'string' && typeof event.payload?.toolName === 'string') {
           send('task.activity', { taskId: task.taskId, toolCallId: event.payload.toolCallId.slice(0, 160), toolName: event.payload.toolName.slice(0, 256), status: event.type === 'tool_start' ? 'running' : event.payload.status === 'error' ? 'failed' : 'completed' });
         }
-        if (event.type === 'stream_end') {
+        if (event.type === 'run_end' || event.type === 'stream_end') {
           const status = event.payload?.status;
           send('task.done', { taskId: task.taskId, status: status === 'cancelled' ? 'cancelled' : status === 'suspended' ? 'suspended' : status === 'error' ? 'failed' : 'completed' });
         }
