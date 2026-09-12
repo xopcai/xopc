@@ -8,3 +8,8 @@ export const COMPOSER_VOICE_CALL_OPTIONS = [
   mode: ComposerVoiceCallMode;
   icon: string;
 }>;
+
+export function resolveComposerVoiceCallOption(mode?: ComposerVoiceCallMode) {
+  return COMPOSER_VOICE_CALL_OPTIONS.find((item) => item.mode === mode)
+    ?? COMPOSER_VOICE_CALL_OPTIONS[0];
+}
