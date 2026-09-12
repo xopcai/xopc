@@ -1,6 +1,7 @@
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { effectiveProactivePolicy } from '../policy/service.js';
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 
 import { createLogger } from '../../utils/logger.js';
 import { markReadyBatches } from '../routing/batch-repository.js';
@@ -11,6 +12,7 @@ import { ContextProviderRegistry } from './context.js';
 import { isValuableInsight, parseAnalysisResult, scoreInsight } from './insight.js';
 import { attachSnapshot, claimNextRun, eventIdsForBatch, failRun, finishRun, saveSnapshot } from './repository.js';
 import type { ProactiveAgentExecutor } from './types.js';
+import { authorizedConnectedSource } from './authorization.js';
 
 const log = createLogger('ProactiveWorker');
 
@@ -72,8 +74,14 @@ export class ProactiveWorker {
         if (output.usage) getSqliteDatabase().prepare('UPDATE proactive_runs SET input_tokens = ?, output_tokens = ?, estimated_cost_usd = ? WHERE run_id = ? AND attempt = ?').run(output.usage.inputTokens, output.usage.outputTokens, output.usage.estimatedCostUsd ?? null, run.id, run.attempt);
         const latestContext = await this.contexts.collect(scenario, { batchId: run.batchId, eventIds, subscriptionId: run.subscriptionId });
         const revoked = context.evidenceIds.some((id) => !latestContext.evidenceIds.includes(id));
-        const result = revoked ? { result: 'no_insight' as const, reason: 'source_unavailable' } : parseAnalysisResult(output.text, new Set(latestContext.evidenceIds));
+        const changed = !isDeepStrictEqual(context.snapshotContent ?? context.content, latestContext.snapshotContent ?? latestContext.content);
+        const unavailable = context.evidenceIds.some(id => id.startsWith('source-item:')
+          && !authorizedConnectedSource(id.slice('source-item:'.length), effectiveProactivePolicy(run.subscriptionId).workspaceId, run.scenarioKey));
+        const result = revoked || changed ? { result: 'no_insight' as const, reason: unavailable ? 'source_unavailable' : 'source_changed' } : parseAnalysisResult(output.text, new Set(latestContext.evidenceIds));
         const candidate = result.result === 'insight' ? result.candidate : undefined;
+        if (run.scenarioKey === 'communication_follow_up' && (candidate?.decision || candidate?.proposedAction)) {
+          throw new Error('Communication preparation must return a draft or update; actions require the conversation confirmation flow');
+        }
         const valueScore = candidate ? scoreInsight(candidate) : 0;
         const enabled = effectiveProactivePolicy(run.subscriptionId).enabled;
         const valuable = enabled && candidate && isValuableInsight(candidate, scenario.valuePolicy);

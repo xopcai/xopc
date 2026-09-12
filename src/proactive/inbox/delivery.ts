@@ -5,7 +5,7 @@ import { viewingProactiveCards } from '../policy/presence.js';
 import { nextDigestTime, queueDigest } from './digest.js';
 import { insightCorrelation } from './lifecycle.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
-import { insightSourcesAuthorized } from '../execution/authorization.js';
+import { insightSourcesAuthorized, insightSourcesChanged } from '../execution/authorization.js';
 import type { NotificationService } from '../../notifications/service.js';
 import { notificationPlanFromGatewayEvent } from '../../notifications/planner.js';
 import { runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
@@ -18,6 +18,7 @@ export function deliverProactiveCard(item: InboxItem, notifications: Notificatio
   const result = runSqliteWriteTransaction(() => {
     const current = getInboxItem(item.id);
     if (!current || current.withdrawnAt || !insightSourcesAuthorized(current.insightId) || current.status === 'resolved' || (current.expiresAt && Date.parse(current.expiresAt) <= Date.now())) return null;
+    if (current.insight.actionStatus !== 'completed' && insightSourcesChanged(current.insightId)) return null;
     if (current.status === 'snoozed') return { retryAt: current.snoozedUntil! };
     const policy = effectiveProactivePolicy(current.subscriptionId!);
     if (!policy.enabled || policy.settings.delivery === 'inbox') return null;
@@ -28,6 +29,7 @@ export function deliverProactiveCard(item: InboxItem, notifications: Notificatio
     const plan = notificationPlanFromGatewayEvent('proactive.inbox.created', current);
     if (!plan) return null;
     if (policy.level === 'quiet') return null;
+    if (policy.level !== 'active' && ['low', 'medium'].includes(current.insight.urgency) && !current.insight.decision) return null;
     const quietUntil = quietHoursEnd(policy.preferences, new Date());
     if (quietUntil) { queueDigest(current, 'quiet', quietUntil); return null; }
     const db = getSqliteDatabase();

@@ -117,9 +117,14 @@ export function finishRun(input: {
       WHERE be.batch_id = ?
       ORDER BY e.subject_kind, e.subject_id`).all(input.run.batchId) as Row[])
       .map((row) => `${str(row, 'subject_kind')}:${str(row, 'subject_id')}`);
+    const snapshot = db.prepare(`SELECT c.content_json FROM proactive_runs r JOIN proactive_context_snapshots c
+      ON c.snapshot_id = r.context_snapshot_id WHERE r.run_id = ?`).get(input.run.id) as { content_json: string } | undefined;
+    const sourceVersions = snapshot ? JSON.parse(snapshot.content_json) as Record<string, unknown> : {};
     const fingerprint = input.candidate
       ? createHash('sha256').update([
         ...subjectScope,
+        JSON.stringify(input.candidate.artifact ?? null),
+        JSON.stringify(sourceVersions.connected_source ?? sourceVersions.project_state ?? sourceVersions.follow_up ?? null),
         ...[
           input.candidate.title,
           input.candidate.summary,
@@ -156,6 +161,8 @@ export function finishRun(input: {
         insight.proposedAction ? JSON.stringify(insight.proposedAction) : null,
         insight.urgency, insight.confidence, insight.valueScore,
         JSON.stringify(insight.evidenceIds), fingerprint, insight.createdAt);
+    if (insight.artifact) db.prepare('UPDATE proactive_insights SET artifact_json = ? WHERE insight_id = ?')
+      .run(JSON.stringify(insight.artifact), insight.id);
     return insight;
   });
 }
@@ -178,6 +185,7 @@ export function listInsights(limit = 50): ProactiveInsight[] {
     id: str(row, 'insight_id'), runId: str(row, 'run_id'), subscriptionId: str(row, 'subscription_id'), scenarioKey: str(row, 'scenario_key'),
     title: str(row, 'title'), summary: str(row, 'summary'), whyNow: str(row, 'why_now'), impact: str(row, 'impact'),
     recommendation: str(row, 'recommendation'), workDone: str(row, 'work_done'),
+    ...(row.artifact_json ? { artifact: JSON.parse(str(row, 'artifact_json')) } : {}),
     ...(row.decision_json ? { decision: JSON.parse(str(row, 'decision_json')) as NonNullable<ProactiveInsight['decision']> } : {}),
     ...(row.proposed_action_json ? { proposedAction: JSON.parse(str(row, 'proposed_action_json')) as NonNullable<ProactiveInsight['proposedAction']> } : {}),
     urgency: str(row, 'urgency') as ProactiveInsight['urgency'], confidence: Number(row.confidence),

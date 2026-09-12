@@ -35,7 +35,7 @@ export class ProactiveInboxWorker {
         pruneProactiveHistory(new Date(now));
         this.lastMaintenanceAt = now;
       }
-      projectInsightsToInbox(); reconcileCards(); executePendingProactiveActions(); wakeSnoozedItems(); recoverExpiredDeliveries();
+      reconcileCards(); projectInsightsToInbox(); executePendingProactiveActions(); wakeSnoozedItems(); recoverExpiredDeliveries();
       const claim = claimDelivery();
       if (!claim) return;
       try {

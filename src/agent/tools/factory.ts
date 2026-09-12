@@ -548,6 +548,7 @@ export class AgentToolsFactory {
         || this.deps.dispatchTaskRuns
         ? [
             createXopcUseTool({
+              getWorkspace: () => this.deps.workspace,
               getConfig: () => this.deps.getConfig?.(),
               getCurrentAgentId: () => options.agentId,
               getCurrentSessionKey: () => this.deps.getCurrentContext()?.sessionKey,

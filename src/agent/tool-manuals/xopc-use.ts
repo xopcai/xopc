@@ -7,7 +7,7 @@ Load this manual before a non-trivial mutation.
 
 \`\`\`json
 {
-  "mode": "project | automation | note | task | task_run | local_app | settings",
+  "mode": "project | proactive | automation | note | task | task_run | local_app | settings",
   "command": "...",
   "args": {},
   "dryRun": false
@@ -16,6 +16,14 @@ Load this manual before a non-trivial mutation.
 
 Send one object command per call. Inspect the returned JSON \`ok\` field; a tool call can
 complete successfully while the product command returns \`ok: false\`.
+
+## Proactive delegation
+
+Use mode proactive only for explicit user delegation. Inspect list before start; edit existing subscriptions instead of duplicating them.
+For one email thread, call mail_sources, then follow_up with sourceItemId, instructions and dueAt (ISO timestamp).
+Use update_follow_up with the current expectedRevision to pause, resume, adjust the deadline or end the delegation.
+On a communication card, continue_card with its id reads current work and binds this conversation to the delegation.
+Use the returned exact connectionId when retrieving or replying to the thread. Review current recipients and the full draft with the user and retain connector confirmation for sending. Never mark sent from an approval alone; require a successful provider receipt. The delegation continues watching synchronized replies until explicitly ended.
 
 ## Object routing
 
@@ -47,6 +55,16 @@ to a TaskRun. Never treat these three objects as interchangeable.
 Timestamps are Unix epoch milliseconds. Array fields are arrays of strings. Omission
 preserves a patchable field; an empty array intentionally clears it. Prefer explicit
 \`projectId\`, \`taskId\`, \`runId\`, \`noteId\`, and \`localAppId\` fields over \`id\`.
+
+## Proactive delegated work
+
+Use mode \`proactive\` for work the user asks the assistant to keep following.
+Use \`list\` before starting; update existing delegations instead of duplicating them.
+- \`start\`: {scenarioKey: "project_delivery_risk" | "meeting_preparation" | "discussion_follow_up", projectId?: string, instructions: string}.
+- \`update\`: {id, expectedRevision, userInstructions?, enabled?, completedAt?}. Read the revision from list. completedAt is an ISO timestamp; ending work also sets enabled false.
+- \`check\`: {id}, for project checks.
+- \`get_card\`: {id}, reads the current authorized artifact and action state before discussing it.
+Instructions adjust what to watch; they never grant new action permissions. Distinguish a task being created from its work being completed. Do not claim a draft was sent.
 
 ## Projects
 

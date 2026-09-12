@@ -184,7 +184,7 @@ describe('proactive user controls', () => {
     expect(quietHoursEnd({ ...preferences, quietStartHour: 0, quietEndHour: 0 }, new Date())).toBeNull();
   });
 
-  it('keeps legacy natural-language feedback and template settings on the same prompt revision', async () => {
+  it('keeps natural-language feedback and template settings on the same prompt revision', async () => {
     const { sub, card } = await createCard();
     new ProactiveInboxService().instruct(card.id, 'Only notify me about external commitments.');
     const settings = subscriptionSettings(sub.id);
