@@ -22,3 +22,6 @@ private val externalOutputTypes = setOf(
 
 internal fun useVoiceSpeaker(forceSpeaker: Boolean, outputTypes: List<Int>): Boolean =
   forceSpeaker || outputTypes.none { it in externalOutputTypes }
+
+internal fun voicePlaybackStartFrames(capacityFrames: Int, sampleRate: Int = 24000): Int =
+  minOf(capacityFrames, maxOf(1, sampleRate / 50))

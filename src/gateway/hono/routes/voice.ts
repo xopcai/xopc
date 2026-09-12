@@ -287,7 +287,7 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
       return c.json({ ok: false, error: { code: 'INVALID_REQUEST', message: 'Invalid realtime voice cancellation request' } }, 400);
     }
     const principal = getGatewayPrincipal(c);
-    service.voiceRealtime.cancelSession(parsed.data.sessionId, parsed.data.ticket, principal.principalId);
+    await service.voiceRealtime.cancelSession(parsed.data.sessionId, parsed.data.ticket, principal.principalId);
     return c.json({ ok: true });
   });
 

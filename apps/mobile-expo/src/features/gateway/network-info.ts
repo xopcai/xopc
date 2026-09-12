@@ -5,10 +5,9 @@
  *  - key the per-network "last good route" cache so jumping between home
  *    Wi-Fi, work Wi-Fi, and cellular each remembers its own winner.
  *
- * `@react-native-community/netinfo` is NOT a project dependency; we
- * lazy-require it so the optimization works the moment it's installed
- * and degrades gracefully when it's not. Without NetInfo we still get
- * the per-profile cache and AppState-driven re-probe.
+ * NetInfo is lazy-required so this module remains safe in non-native test
+ * environments. Native builds use its connectivity events to switch routes
+ * and recover active voice calls without waiting for socket timeouts.
  *
  * NOTE: react-native's `AppState` is also lazy-required so this module is
  * safe to import from non-RN test environments.
@@ -49,6 +48,7 @@ const UNKNOWN: NetworkSnapshot = { key: 'unknown', kind: 'unknown', online: true
 type NetInfoState = {
   type?: string;
   isConnected?: boolean | null;
+  isInternetReachable?: boolean | null;
   details?: { ssid?: string | null; cellularGeneration?: string | null } | null;
 };
 
@@ -72,13 +72,16 @@ function loadNetInfo(): NetInfoModule | null {
 
 function snapshotFromState(state: NetInfoState | undefined): NetworkSnapshot {
   if (!state) return UNKNOWN;
+  // Android's generic internet validation can fail on otherwise usable regional
+  // or proxied networks. The gateway preflight is the authoritative reachability
+  // check; this signal only needs to catch an actual transport disconnect.
   const online = state.isConnected !== false;
   const type = (state.type ?? 'unknown').toLowerCase();
   let kind: NetworkKind = 'unknown';
-  if (type === 'wifi') kind = 'wifi';
+  if (!online || type === 'none') kind = 'offline';
+  else if (type === 'wifi') kind = 'wifi';
   else if (type === 'cellular') kind = 'cellular';
   else if (type === 'ethernet') kind = 'ethernet';
-  else if (type === 'none' || !online) kind = 'offline';
 
   let suffix = 'none';
   if (kind === 'wifi') {
@@ -92,7 +95,7 @@ function snapshotFromState(state: NetInfoState | undefined): NetworkSnapshot {
     suffix = 'offline';
   }
 
-  return { key: `${kind}:${suffix}`, kind, online: kind !== 'offline' };
+  return { key: `${kind}:${suffix}`, kind, online };
 }
 
 /** Stable, non-cryptographic 32-bit hash. We never need to recover the SSID. */
@@ -218,6 +221,11 @@ export function subscribeNetworkChange(cb: Listener): () => void {
 export function __setNetworkSnapshotForTests(snap: NetworkSnapshot): void {
   current = snap;
   emit();
+}
+
+/** @internal test hook */
+export function __snapshotFromNetInfoStateForTests(state: NetInfoState | undefined): NetworkSnapshot {
+  return snapshotFromState(state);
 }
 
 /** @internal test hook */
