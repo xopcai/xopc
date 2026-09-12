@@ -124,10 +124,10 @@ describe('VoiceRealtimeRuntime session creation', () => {
     };
     const issued = await service.createSession(request, 'user-1');
 
-    expect(service.cancelSession(issued.sessionId, issued.ticket, 'user-2')).toBe(false);
+    await expect(service.cancelSession(issued.sessionId, issued.ticket, 'user-2')).resolves.toBe(false);
     expect(service.hasConversation(request.sessionKey)).toBe(true);
-    expect(service.cancelSession(issued.sessionId, issued.ticket, 'user-1')).toBe(true);
-    expect(service.cancelSession(issued.sessionId, issued.ticket, 'user-1')).toBe(false);
+    await expect(service.cancelSession(issued.sessionId, issued.ticket, 'user-1')).resolves.toBe(true);
+    await expect(service.cancelSession(issued.sessionId, issued.ticket, 'user-1')).resolves.toBe(false);
     expect(service.hasConversation(request.sessionKey)).toBe(false);
     await expect(service.createSession(request, 'user-1')).resolves.toHaveProperty('ticket');
   });

@@ -44,18 +44,26 @@ export type CallDependencies = {
   };
   prepare(target: CallTarget, signal: AbortSignal, recovering?: boolean): Promise<{ identity: string; name: string; mode: VoiceMode; engine: 'agent' | 'omni' }>;
   create(request: CreateVoiceSessionRequest, signal: AbortSignal): Promise<{ origin: string; session: CreateVoiceSessionResponse }>;
-  discard(connection: { origin: string; session: CreateVoiceSessionResponse }): Promise<void>;
+  discard(connection: { origin: string; session: CreateVoiceSessionResponse }, signal?: AbortSignal, timeoutMs?: number): Promise<void>;
   transport(callbacks: VoiceTransportCallbacks): Transport;
   invalidate(target: CallTarget): void;
 };
 const initial = (): CallState => ({ phase: 'idle', name: '', expanded: true, muted: false, startedAt: 0, userText: '', assistantText: '', networkQuality: 'good' });
 const INPUT_RECOVERY_QUEUE_AGE_MS = 80;
 const INPUT_RECOVERY_POLL_MS = 50;
+const AUTO_RECOVERY_DELAYS_MS = [500, 1_000, 2_000, 4_000, 8_000] as const;
+const AUTO_RECOVERY_RESET_MS = 30_000;
+const RECOVERY_OPEN_TIMEOUT_MS = 75_000;
+const AUTO_RECOVERY_REASONS = new Set(['NETWORK', 'route_lost', 'capture_failed', 'playback_failed', 'PLAYBACK_FAILED', 'PLAYBACK_STALLED']);
 
 export function shouldPauseVoiceForBackground(state: CallState, permissionPromptActive: boolean): boolean {
   if (state.target?.background || !['connecting', 'recovering', 'connected'].includes(state.phase)) return false;
   // Android's permission activity temporarily pauses the app before capture starts.
   return !(permissionPromptActive && (state.phase === 'connecting' || state.phase === 'recovering'));
+}
+
+export function shouldResumeVoiceAfterForeground(state: CallState): boolean {
+  return state.phase === 'paused' && state.error === 'background' && Boolean(state.target) && !state.target?.background;
 }
 
 export class VoiceCallController {
@@ -83,6 +91,10 @@ export class VoiceCallController {
   private inputRecoveryTimer?: ReturnType<typeof setTimeout>;
   private inputReset = Promise.resolve();
   private playbackReset = Promise.resolve();
+  private networkOnline = true;
+  private autoRecoveryAttempts = 0;
+  private connectedAt = 0;
+  private connection?: { origin: string; session: CreateVoiceSessionResponse };
   constructor(private deps: CallDependencies) {}
   getSnapshot = (): CallState => this.state;
   getDiagnostics = () => {
@@ -98,9 +110,14 @@ export class VoiceCallController {
     if (this.state.phase !== 'idle') { this.expand(); return Promise.resolve(); }
     this.diagnostics.start();
     this.identity = undefined;
+    this.connection = undefined;
     this.approvalPending = false;
     this.fullDuplex = false; this.playbackCaptureBlocked = false; this.bargeInDucked = false; this.inputCongested = false;
-    this.update({ ...initial(), phase: 'connecting', target, startedAt: Date.now() });
+    this.autoRecoveryAttempts = 0;
+    this.connectedAt = 0;
+    this.update({ ...initial(), phase: this.networkOnline ? 'connecting' : 'recovering', target, startedAt: Date.now(),
+      ...(this.networkOnline ? {} : { error: 'NETWORK' }) });
+    if (!this.networkOnline) return Promise.resolve();
     this.opening = this.open(false);
     return this.opening;
   }
@@ -122,7 +139,7 @@ export class VoiceCallController {
       }
     };
     this.abort = abort;
-    const deadline = recovering ? setTimeout(() => { if (generation === this.generation) void this.pause('NETWORK'); }, 10_000) : undefined;
+    const deadline = recovering ? setTimeout(() => { if (generation === this.generation) void this.pause('NETWORK'); }, RECOVERY_OPEN_TIMEOUT_MS) : undefined;
     this.update({ phase: recovering ? 'recovering' : 'connecting', error: undefined, responseId: undefined, responseStage: undefined, clarification: undefined });
     const current = () => generation === this.generation && !abort.signal.aborted;
     try {
@@ -150,7 +167,7 @@ export class VoiceCallController {
           this.transport?.send('response.audio.played', { responseId: id, playedDurationMs: Math.floor(bytes / 48) });
           this.finishResponse();
         },
-        interrupted: reason => { if (current()) { if (reason === 'ended') void this.end(); else void this.pause(reason); } },
+        interrupted: reason => { if (current()) { if (reason === 'ended') void this.end(); else if (AUTO_RECOVERY_REASONS.has(reason)) void this.recover(reason); else void this.pause(reason); } },
         speechCandidate: active => { if (current()) this.handleSpeechCandidate(active); },
         route: capabilities => { if (current()) this.applyAudioCapabilities(capabilities); },
       });
@@ -182,7 +199,7 @@ export class VoiceCallController {
             return this.deps.audio.enqueue(id, pcm);
           }).then(() => {
             if (current() && id === this.state.responseId) this.diagnostics.queued(id, pcm.byteLength);
-          }).catch(() => { if (current()) void this.pause('PLAYBACK_FAILED'); });
+          }).catch(() => { if (current()) void this.recover('PLAYBACK_FAILED'); });
         },
         close: reason => { if (current()) void this.disconnected(reason); },
         networkRtt: rttMs => this.diagnostics.rtt(rttMs),
@@ -192,9 +209,11 @@ export class VoiceCallController {
       created = undefined;
       createPromise = undefined;
       if (!current()) return;
+      this.connection = connection;
       transport.send('input.mute', { muted: this.inputShouldBeMuted() });
       if (!current()) return;
       this.update({ phase: 'connected', expiresAt: Date.now() + connection.session.limits.maxSessionMs });
+      this.connectedAt = Date.now();
       this.deps.audio.capture(this.shouldCapture());
       this.limitTimer = setTimeout(() => void this.pause('TIME_LIMIT'), connection.session.limits.maxSessionMs);
     } catch (error) {
@@ -276,12 +295,12 @@ export class VoiceCallController {
     const audible = Boolean(this.state.responseId) && this.receivedBytes > this.renderedBytes;
     if (!this.fullDuplex || !audible || this.bargeInDucked) return;
     this.bargeInDucked = true;
-    void this.deps.audio.duck().catch(() => { if (this.state.phase === 'connected') void this.pause('PLAYBACK_FAILED'); });
+    void this.deps.audio.duck().catch(() => { if (this.state.phase === 'connected') void this.recover('PLAYBACK_FAILED'); });
   }
   private restoreOutput(): void {
     if (!this.bargeInDucked) return;
     this.bargeInDucked = false;
-    void this.deps.audio.resumeOutput().catch(() => { if (this.state.phase === 'connected') void this.pause('PLAYBACK_FAILED'); });
+    void this.deps.audio.resumeOutput().catch(() => { if (this.state.phase === 'connected') void this.recover('PLAYBACK_FAILED'); });
   }
   private watchPlayback(progress = false) {
     if (progress) { clearTimeout(this.playbackTimer); this.playbackTimer = undefined; }
@@ -290,7 +309,7 @@ export class VoiceCallController {
     const id = this.state.responseId;
     this.playbackTimer = setTimeout(() => {
       this.playbackTimer = undefined;
-      if (generation === this.generation && id === this.state.responseId && this.renderedBytes < this.receivedBytes) void this.pause('PLAYBACK_STALLED');
+      if (generation === this.generation && id === this.state.responseId && this.renderedBytes < this.receivedBytes) void this.recover('PLAYBACK_STALLED');
     }, 5000);
   }
   private onEvent(event: VoiceServerEvent) {
@@ -396,12 +415,32 @@ export class VoiceCallController {
     this.update({ clarification: undefined });
     void this.setMuted(this.state.muted);
   }
-  private async disconnected(reason: string) {
+  setNetworkOnline(online: boolean): void {
+    if (this.networkOnline === online) return;
+    this.networkOnline = online;
+    if (!online) {
+      if (['connecting', 'recovering', 'connected'].includes(this.state.phase)) void this.recover('NETWORK');
+      return;
+    }
+    if (this.state.phase === 'recovering' && this.state.error === 'NETWORK') this.scheduleRecovery(0);
+  }
+  private async disconnected(reason: string) { await this.recover(reason); }
+  private async recover(reason: string): Promise<void> {
+    if (!AUTO_RECOVERY_REASONS.has(reason)) { await this.pause(reason); return; }
+    if (this.connectedAt && Date.now() - this.connectedAt >= AUTO_RECOVERY_RESET_MS) this.autoRecoveryAttempts = 0;
     await this.pause(reason);
-    if (reason !== 'NETWORK' || this.state.phase !== 'paused') return;
-    this.update({ phase: 'recovering' });
-    // Retry only preparation; an ambiguous creation is never replayed.
-    this.recoveryTimer = setTimeout(() => { if (this.state.phase === 'recovering') void this.resume(); }, 1000);
+    if (this.state.phase !== 'paused') return;
+    if (this.autoRecoveryAttempts >= AUTO_RECOVERY_DELAYS_MS.length) return;
+    this.update({ phase: 'recovering', error: reason });
+    if (reason === 'NETWORK' && !this.networkOnline) return;
+    this.scheduleRecovery(AUTO_RECOVERY_DELAYS_MS[this.autoRecoveryAttempts++] ?? AUTO_RECOVERY_DELAYS_MS.at(-1)!);
+  }
+  private scheduleRecovery(delayMs: number): void {
+    clearTimeout(this.recoveryTimer);
+    this.recoveryTimer = setTimeout(() => {
+      this.recoveryTimer = undefined;
+      if (this.state.phase === 'recovering') void this.resume();
+    }, delayMs);
   }
   async pause(reason: string): Promise<void> { await this.stopResources(false, reason); }
   async end(): Promise<void> { await this.stopResources(true); }
@@ -409,6 +448,8 @@ export class VoiceCallController {
     if (this.state.phase === 'idle') return Promise.resolve();
     this.diagnostics.end(reason ?? 'user_finished');
     const stoppingGeneration = ++this.generation;
+    const connection = end ? this.connection : undefined;
+    if (end) this.connection = undefined;
     clearTimeout(this.limitTimer); clearTimeout(this.recoveryTimer);
     clearTimeout(this.playbackTimer); this.playbackTimer = undefined;
     clearTimeout(this.inputRecoveryTimer); this.inputRecoveryTimer = undefined;
@@ -424,6 +465,7 @@ export class VoiceCallController {
     this.cleanup = this.cleanup.then(async () => {
       await opening;
       await this.deps.audio.stop();
+      if (connection) await this.deps.discard(connection).catch(() => undefined);
       if (this.state.target) this.deps.invalidate(this.state.target);
       if (stoppingGeneration !== this.generation) return;
       if (end) { this.state = initial(); this.update({}); }
@@ -433,11 +475,28 @@ export class VoiceCallController {
   }
   async resume(): Promise<void> {
     if (this.resuming || !['paused', 'recovering'].includes(this.state.phase)) return;
+    if (!this.networkOnline) {
+      this.update({ phase: 'recovering', error: 'NETWORK' });
+      return;
+    }
     this.resuming = true;
     clearTimeout(this.recoveryTimer);
     try {
       await this.cleanup;
       if (!this.state.target) return;
+      const staleConnection = this.connection;
+      if (staleConnection) {
+        try {
+          await this.deps.discard(staleConnection, undefined, 3_000);
+          if (this.connection === staleConnection) this.connection = undefined;
+        } catch {
+          if (this.state.phase === 'recovering' && this.autoRecoveryAttempts < AUTO_RECOVERY_DELAYS_MS.length) {
+            this.update({ error: 'NETWORK' });
+            this.scheduleRecovery(AUTO_RECOVERY_DELAYS_MS[this.autoRecoveryAttempts++] ?? AUTO_RECOVERY_DELAYS_MS.at(-1)!);
+          }
+          return;
+        }
+      }
       this.opening = this.open(true);
       await this.opening;
     } finally { this.resuming = false; }

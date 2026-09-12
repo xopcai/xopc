@@ -187,6 +187,13 @@ class XopcVoiceModule : Module() {
       throw IllegalStateException("PLAYBACK_UNAVAILABLE")
     }
     track = player
+    val startFrames = voicePlaybackStartFrames(player.bufferCapacityInFrames)
+    if (Build.VERSION.SDK_INT >= 31) {
+      check(player.setStartThresholdInFrames(startFrames) > 0) { "PLAYBACK_UNAVAILABLE" }
+    } else {
+      // Before API 31 the effective buffer size also controls the streaming start threshold.
+      check(player.setBufferSizeInFrames(startFrames) > 0) { "PLAYBACK_UNAVAILABLE" }
+    }
     val generation = epoch
     outputRoutingListener = AudioRouting.OnRoutingChangedListener { routing ->
       if (epoch == generation && track === player) { routing.routedDevice?.let { outputDeviceId = it.id }; publishRoute() }
@@ -301,15 +308,8 @@ class XopcVoiceModule : Module() {
   private fun pumpPlayback() {
     val player = track ?: return
     handler.removeCallbacks(playbackPump)
-    // Reserve space for the frame, then lower the streaming start threshold. Leaving
-    // the effective buffer at two seconds stalls short replies (also after flush).
-    check(player.setBufferSizeInFrames(player.bufferCapacityInFrames) > 0) { "PLAYBACK_UNAVAILABLE" }
-    val drained = try {
-      playbackQueue.drain { bytes, offset, count ->
-        player.write(bytes, offset, count, AudioTrack.WRITE_NON_BLOCKING)
-      }
-    } finally {
-      check(player.setBufferSizeInFrames(1) > 0) { "PLAYBACK_UNAVAILABLE" }
+    val drained = playbackQueue.drain { bytes, offset, count ->
+      player.write(bytes, offset, count, AudioTrack.WRITE_NON_BLOCKING)
     }
     if (!drained) handler.postDelayed(playbackPump, 10)
   }

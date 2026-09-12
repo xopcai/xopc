@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { shouldPauseVoiceForBackground, type CallState } from '../voice-call-controller';
+import { shouldPauseVoiceForBackground, shouldResumeVoiceAfterForeground, type CallState } from '../voice-call-controller';
 
 const state = (phase: CallState['phase'], background = false): CallState => ({
   phase, target: { gatewayId: 'gateway', sessionKey: 'test', background }, name: '',
@@ -18,5 +18,10 @@ describe('voice background handling', () => {
   });
   it.each(['idle', 'ending', 'paused'] as const)('does not overwrite the reason for a %s call', phase => {
     expect(shouldPauseVoiceForBackground(state(phase), false)).toBe(false);
+  });
+  it('resumes a foreground-only call when the app returns to the foreground', () => {
+    expect(shouldResumeVoiceAfterForeground({ ...state('paused'), error: 'background' })).toBe(true);
+    expect(shouldResumeVoiceAfterForeground({ ...state('paused'), error: 'NETWORK' })).toBe(false);
+    expect(shouldResumeVoiceAfterForeground({ ...state('paused', true), error: 'background' })).toBe(false);
   });
 });
