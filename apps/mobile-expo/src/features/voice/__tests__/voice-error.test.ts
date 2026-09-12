@@ -12,6 +12,7 @@ describe('voiceErrorMessage', () => {
     ['RESPONSE_FAILED', en.voice.responseFailed],
     ['audio_focus_lost', en.voice.audioFocusLost],
     ['capture_failed', en.voice.captureFailed],
+    ['capture_no_signal', en.voice.captureFailed],
     ['route_lost', en.voice.routeLost],
     ['background', en.voice.backgroundPaused],
     ['interruption', en.voice.interruption],

@@ -15,6 +15,7 @@ describe('DashScope STT relay handshake', () => {
 
   it('authenticates against a relay requiring the platform Bearer scheme', async () => {
     const headers: string[] = [];
+    const requests: Array<{ payload?: { parameters?: Record<string, unknown> } }> = [];
     server = new WebSocketServer({
       port: 0,
       host: '127.0.0.1',
@@ -27,6 +28,7 @@ describe('DashScope STT relay handshake', () => {
     server.on('connection', (socket) => {
       socket.on('message', (raw) => {
         const message = JSON.parse(raw.toString());
+        requests.push(message);
         socket.send(JSON.stringify({ header: {
           event: message.header.action === 'run-task' ? 'task-started' : 'task-finished',
         } }));
@@ -43,6 +45,11 @@ describe('DashScope STT relay handshake', () => {
       onEvent: vi.fn(),
     });
     expect(headers).toEqual(['Bearer test-access-token']);
+    expect(requests[0]?.payload?.parameters).toMatchObject({
+      heartbeat: true,
+      max_sentence_silence: 600,
+      semantic_punctuation_enabled: false,
+    });
     await session.commit();
   });
 });
