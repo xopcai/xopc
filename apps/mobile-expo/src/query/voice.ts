@@ -11,18 +11,30 @@ import { fetchSession } from './sessions';
 export class VoiceRequestError extends Error {
   constructor(readonly code: string, readonly status = 0) { super(code); }
 }
-export const voiceStatusOptions = (gatewayId: string | null) => ({
+export const voiceStatusOptions = (
+  gatewayId: string | null,
+  request: { signal?: AbortSignal; timeoutMs?: number } = {},
+) => ({
   queryKey: ['voice-status', gatewayId], staleTime: 5 * 60_000, retry: false as const,
   queryFn: async ({ signal }: { signal: AbortSignal }) => {
-    const response = await apiFetch('/api/voice/realtime/status', { signal });
+    const response = await apiFetch('/api/voice/realtime/status', {
+      signal: request.signal ?? signal,
+      timeoutMs: request.timeoutMs,
+    });
     if (!response.ok) throw new VoiceRequestError('SERVICE_UNAVAILABLE', response.status);
     const parsed = realtimeVoiceStatusSchema.safeParse((await response.json()).payload);
     if (!parsed.success) throw new VoiceRequestError('GATEWAY_UPGRADE_REQUIRED');
     return parsed.data;
   },
 });
-export async function preflightVoice(request: CreateVoiceSessionRequest, signal: AbortSignal): Promise<void> {
-  const response = await apiFetch('/api/voice/realtime/preflight', { method: 'POST', body: JSON.stringify(request), signal });
+export async function preflightVoice(
+  request: CreateVoiceSessionRequest,
+  signal: AbortSignal,
+  timeoutMs?: number,
+): Promise<void> {
+  const response = await apiFetch('/api/voice/realtime/preflight', {
+    method: 'POST', body: JSON.stringify(request), signal, timeoutMs,
+  });
   if (!response.ok) throw new VoiceRequestError((await response.json()).error?.code ?? 'SERVICE_UNAVAILABLE', response.status);
 }
 export async function createVoiceConnection(request: CreateVoiceSessionRequest, signal: AbortSignal) {
@@ -37,6 +49,8 @@ export async function createVoiceConnection(request: CreateVoiceSessionRequest, 
 }
 export async function cancelVoiceConnection(
   connection: { session: Pick<CreateVoiceSessionResponse, 'sessionId' | 'ticket'> },
+  signal?: AbortSignal,
+  timeoutMs?: number,
 ): Promise<void> {
   const response = await apiFetch('/api/voice/realtime/sessions/cancel', {
     method: 'POST',
@@ -44,12 +58,14 @@ export async function cancelVoiceConnection(
       sessionId: connection.session.sessionId,
       ticket: connection.session.ticket,
     }),
+    signal,
+    timeoutMs,
   });
   if (!response.ok) throw new VoiceRequestError('CANCEL_FAILED', response.status);
 }
-export function voiceSessionIdentity(gatewayId: string, sessionKey: string) {
+export function voiceSessionIdentity(gatewayId: string, sessionKey: string, signal?: AbortSignal, timeoutMs?: number) {
   return queryClient.fetchQuery({ queryKey: ['voice-identity', gatewayId, sessionKey], staleTime: 0, retry: false,
-    queryFn: () => fetchSession(sessionKey),
+    queryFn: () => fetchSession(sessionKey, { signal, timeoutMs }),
   });
 }
 

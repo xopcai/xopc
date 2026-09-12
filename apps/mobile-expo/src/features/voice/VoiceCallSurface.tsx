@@ -11,9 +11,10 @@ import { ClarifyPrompt } from '../chat/ClarifyPrompt';
 import { MarkdownView } from '../chat/MarkdownView';
 import { useMessages } from '../../i18n/messages';
 import { useGatewayStore } from '../../stores/gateway-store';
+import { subscribeNetworkChange } from '../gateway/network-info';
 import { radii, useTheme, spacing, typography } from '../../theme';
 import { isCallPermissionPromptActive, setCallSpeaker, useVoiceCall, voiceCall } from './voice-call';
-import { shouldPauseVoiceForBackground } from './voice-call-controller';
+import { shouldPauseVoiceForBackground, shouldResumeVoiceAfterForeground } from './voice-call-controller';
 import { voiceApprovalsOptions, respondVoiceApproval, VoiceRequestError } from '../../query/voice';
 import { useVoicePreferences } from './voice-preferences';
 import { voiceErrorMessage } from './voice-error';
@@ -82,11 +83,13 @@ export function VoiceCallSurface() {
     const app = AppState.addEventListener('change', status => {
       const current = voiceCall.getSnapshot();
       if (status === 'background' && shouldPauseVoiceForBackground(current, isCallPermissionPromptActive())) void voiceCall.pause('background');
+      else if (status === 'active' && shouldResumeVoiceAfterForeground(current)) void voiceCall.resume();
     });
+    const network = subscribeNetworkChange(snapshot => voiceCall.setNetworkOnline(snapshot.online));
     const gateway = useGatewayStore.subscribe((next, previous) => {
       if (next.activeGatewayId !== previous.activeGatewayId || next.unauthorized) void voiceCall.end();
     });
-    return () => { consent.remove(); app.remove(); gateway(); void voiceCall.end(); };
+    return () => { consent.remove(); app.remove(); network(); gateway(); void voiceCall.end(); };
   }, []);
   useEffect(() => {
     if (state.phase === 'connecting' || state.phase === 'recovering') setSpeaker(false);
