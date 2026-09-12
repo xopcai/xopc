@@ -133,6 +133,20 @@ describe('Agent voice interruption cleanup', () => {
     releaseTool();
   });
 
+  it('finishes the voice task when the chat run emits run_end', async () => {
+    const test = await setup(async function* () {
+      yield { type: 'assistant_delta', payload: { delta: 'Hello.' } };
+      yield { type: 'run_end', payload: { status: 'success' } };
+    });
+
+    test.final('first');
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('task.done', {
+      taskId: 'task:first',
+      status: 'completed',
+    }));
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', expect.anything()));
+  });
+
   it('prefetches the next TTS segment before the current stream finishes', async () => {
     let finishFirst: (() => void) | undefined;
     cleanups.push(() => finishFirst?.());

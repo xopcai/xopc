@@ -99,7 +99,12 @@ export class DurableVoiceAgentBroker implements VoiceAgentBroker {
         const event = eventData(delivery);
         if (!event) continue;
         yield event;
-        if (event.type === 'stream_end') { this.runByTask.delete(taskId); return; }
+        // `run_end` is the current chat stream terminal event. Keep accepting the
+        // legacy name so voice sessions remain compatible during rolling updates.
+        if (event.type === 'run_end' || event.type === 'stream_end') {
+          this.runByTask.delete(taskId);
+          return;
+        }
       }
     } finally {
       signal.removeEventListener('abort', abort);
