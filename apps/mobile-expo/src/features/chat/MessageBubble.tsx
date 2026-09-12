@@ -344,13 +344,7 @@ export const MessageBubble = memo(function MessageBubble({
     [assistantTurnView?.displayContent, isAssistant, contentBlocks],
   );
 
-  const showAssistantDeliverables = Boolean(
-    assistantTurnView && (
-      assistantTurnView.deliverables.awaiting
-      || assistantTurnView.deliverables.artifacts.length > 0
-      || assistantTurnView.deliverables.productDeliveries.length > 0
-    ),
-  );
+  const showAssistantDeliverables = Boolean(assistantTurnView?.showDeliverables);
 
   const stepsActive = Boolean(assistantTurnView?.activity.active);
   const progressForMeta = reasoningLevel === 'off'

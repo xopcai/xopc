@@ -38,6 +38,7 @@ export function buildAssistantTurnViewModel({
   answerStarted: boolean;
   showStreamingCursor: boolean;
   deliverables: ReturnType<typeof collectAssistantDeliverables>;
+  showDeliverables: boolean;
 } {
   const content = message.content;
   const displayContent = reasoningLevel === 'off'
@@ -59,6 +60,7 @@ export function buildAssistantTurnViewModel({
       (block.type === 'thinking' && Boolean(block.streaming))
       || (block.type === 'tool_use' && block.status === 'running'),
   );
+  const deliverables = collectAssistantDeliverables(message, isStreaming);
 
   return {
     displayContent,
@@ -69,6 +71,10 @@ export function buildAssistantTurnViewModel({
     },
     answerStarted,
     showStreamingCursor: isStreaming && (activityBlocks.length === 0 || answerStarted),
-    deliverables: collectAssistantDeliverables(message, isStreaming),
+    deliverables,
+    showDeliverables: !isStreaming && (
+      deliverables.artifacts.length > 0
+      || deliverables.productDeliveries.length > 0
+    ),
   };
 }
