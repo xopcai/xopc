@@ -57,6 +57,7 @@ features:
 | 重复多步骤流程 | [Workflow](./workflows.md) |
 | 按计划运行任务 | [Automation](./automations.md) |
 | 从消息应用使用 xopc | [消息通道](./channels/index.md) |
+| 从 Chrome 对话或处理当前页面 | [Chrome 浏览器扩展](./browser-extension.md) |
 | 连接外部服务 | [连接器](./connectors/index.md) |
 | 连接 XOPC Cloud 或企业独立部署平台 | [XOPC Platform](./platform.md) |
 | 离开主机时访问 xopc | [远程访问](./remote-access.md) |

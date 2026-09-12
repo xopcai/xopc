@@ -58,6 +58,7 @@ features:
 | Repeat a multi-step process | [Workflows](./workflows.md) |
 | Run something on a schedule | [Automations](./automations.md) |
 | Use xopc from a messaging app | [Channels](./channels/index.md) |
+| Chat from Chrome or work with the current page | [Chrome extension](./browser-extension.md) |
 | Connect external services | [Connectors](./connectors/index.md) |
 | Connect XOPC Cloud or a private enterprise platform | [XOPC Platform](./platform.md) |
 | Access xopc away from the host | [Remote access](./remote-access.md) |
