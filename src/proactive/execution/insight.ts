@@ -50,7 +50,7 @@ export function parseInsightCandidate(raw: string, allowedEvidenceIds: Set<strin
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Insight must be a JSON object');
   const row = value as Record<string, unknown>;
   if (!URGENCY.has(String(row.urgency))) throw new Error('Insight urgency is invalid');
-  if (typeof row.confidence !== 'number' || row.confidence < 0 || row.confidence > 1) throw new Error('Insight confidence is invalid');
+  if (typeof row.confidence !== 'number' || !Number.isFinite(row.confidence) || row.confidence < 0 || row.confidence > 1) throw new Error('Insight confidence is invalid');
   if (!Array.isArray(row.evidenceIds) || row.evidenceIds.length === 0 || row.evidenceIds.length > 20) throw new Error('Insight evidenceIds are invalid');
   const evidenceIds = [...new Set(row.evidenceIds.map(String))];
   if (evidenceIds.some((id) => !allowedEvidenceIds.has(id))) throw new Error('Insight cites unknown evidence');
@@ -85,4 +85,21 @@ export function isValuableInsight(
   return candidate.confidence >= policy.minConfidence
     && candidate.urgency !== 'low'
     && scoreInsight(candidate) >= policy.minScore;
+}
+
+export function parseAnalysisResult(raw: string, allowedEvidenceIds: Set<string>):
+  | { result: 'no_insight'; reason: string }
+  | { result: 'insight'; candidate: InsightCandidate } {
+  let value: unknown;
+  try { value = JSON.parse(stripCodeFences(raw)); } catch { throw new Error('Model output is not valid JSON'); }
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const row = value as Record<string, unknown>;
+    if (row.result === 'no_insight') {
+      if (!['unchanged', 'routine', 'insufficient_evidence', 'duplicate'].includes(String(row.reason))
+        || Object.keys(row).some((key) => key !== 'result' && key !== 'reason')) throw new Error('Invalid no_insight result');
+      return { result: 'no_insight', reason: String(row.reason) };
+    }
+    if (row.result === 'insight') return { result: 'insight', candidate: parseInsightCandidate(JSON.stringify(row.candidate), allowedEvidenceIds) };
+  }
+  return { result: 'insight', candidate: parseInsightCandidate(raw, allowedEvidenceIds) };
 }

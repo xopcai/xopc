@@ -59,7 +59,8 @@ export class ReadonlyProactiveAgentExecutor implements ProactiveAgentExecutor {
     userPrompt: string;
     authorizedContext: Record<string, unknown>;
     signal?: AbortSignal;
-  }): Promise<{ text: string; modelRef: string }> {
+  }): Promise<{ text: string; modelRef: string; usage: { inputTokens: number; outputTokens: number; estimatedCostUsd?: number } }> {
+    input.signal?.throwIfAborted();
     const model = resolveModel(getDefaultModelSync(this.config())) as Model<Api>;
     let toolCalls = 0;
     const agent = new Agent({
@@ -91,7 +92,14 @@ export class ReadonlyProactiveAgentExecutor implements ProactiveAgentExecutor {
       const text = assistantText(agent.state.messages);
       if (!text) throw new Error('Proactive agent returned empty output');
       if (toolCalls === 0) throw new Error('Proactive agent did not inspect authorized evidence');
-      return { text, modelRef: `${model.provider}/${model.id}` };
+      const usage = { inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0 };
+      for (const message of agent.state.messages) {
+        if (message.role !== 'assistant') continue;
+        const reported = (message as { usage?: { input?: number; output?: number; cost?: { total?: number } } }).usage;
+        if (reported) { usage.inputTokens += reported.input ?? 0; usage.outputTokens += reported.output ?? 0; usage.estimatedCostUsd += reported.cost?.total ?? 0; }
+      }
+      const priced = Object.values(model.cost).some((value) => value > 0);
+      return { text, usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, ...(priced ? { estimatedCostUsd: usage.estimatedCostUsd } : {}) }, modelRef: `${model.provider}/${model.id}` };
     } finally {
       input.signal?.removeEventListener('abort', abort);
     }

@@ -1,3 +1,4 @@
+import { effectiveProactivePolicy } from '../policy/service.js';
 import { createHash, randomUUID } from 'node:crypto';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
@@ -84,7 +85,7 @@ export function listSubscriptions(scenarioKey?: string): ScenarioSubscription[] 
 }
 
 export function listEnabledRoutes(): ScenarioRoute[] {
-  return listSubscriptions().filter((item) => item.enabled).flatMap((subscription) => {
+  return listSubscriptions().filter((item) => item.enabled && effectiveProactivePolicy(item.id).enabled).flatMap((subscription) => {
     const scenario = getScenario(subscription.scenarioKey);
     if (!scenario) return [];
     return [{
@@ -139,6 +140,7 @@ export function publishPromptRevision(id: string, now = new Date()): PromptRevis
     db.prepare("UPDATE proactive_prompt_revisions SET status = 'published', published_at = ? WHERE revision_id = ?").run(nowIso, id);
     db.prepare('UPDATE proactive_scenario_subscriptions SET active_prompt_revision_id = ?, updated_at = ? WHERE subscription_id = ?')
       .run(id, nowIso, subscriptionId);
+    db.prepare("UPDATE proactive_subscription_settings SET settings_json = json_set(settings_json, '$.userInstructions', ?), revision = revision + 1 WHERE subscription_id = ?").run(text(draft, 'user_instructions'), subscriptionId);
     return revisionFromRow(db.prepare('SELECT * FROM proactive_prompt_revisions WHERE revision_id = ?').get(id) as Row);
   });
 }
@@ -153,6 +155,7 @@ export function rollbackPromptRevision(id: string, now = new Date()): PromptRevi
     db.prepare("UPDATE proactive_prompt_revisions SET status = 'published', published_at = ? WHERE revision_id = ?").run(nowIso, id);
     db.prepare('UPDATE proactive_scenario_subscriptions SET active_prompt_revision_id = ?, updated_at = ? WHERE subscription_id = ?')
       .run(id, nowIso, subscriptionId);
+    db.prepare("UPDATE proactive_subscription_settings SET settings_json = json_set(settings_json, '$.userInstructions', ?), revision = revision + 1 WHERE subscription_id = ?").run(text(target, 'user_instructions'), subscriptionId);
     return revisionFromRow(db.prepare('SELECT * FROM proactive_prompt_revisions WHERE revision_id = ?').get(id) as Row);
   });
 }
@@ -196,6 +199,7 @@ export function publishInstructionFeedback(input: {
     db.prepare(`INSERT INTO proactive_instruction_feedback
       (instruction_id, inbox_item_id, prompt_revision_id, instruction, created_at) VALUES (?, ?, ?, ?, ?)`)
       .run(randomUUID(), input.inboxItemId, revisionId, normalized, nowIso);
+    db.prepare("UPDATE proactive_subscription_settings SET settings_json = json_set(settings_json, '$.userInstructions', ?), revision = revision + 1 WHERE subscription_id = ?").run(instructions, input.subscriptionId);
     return revisionFromRow(db.prepare('SELECT * FROM proactive_prompt_revisions WHERE revision_id = ?').get(revisionId) as Row);
   });
 }

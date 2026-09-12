@@ -9,6 +9,7 @@ import {
 import type { StoredLanguage } from '@/lib/storage';
 
 export type ProductNotificationPresentation = {
+  systemAllowed?: boolean;
   id: string;
   title: string;
   body: string;
@@ -36,12 +37,13 @@ export function presentProductNotification(
     || notification.type === 'work_discovery.failed';
   const source = notification.target.kind === 'automation_run'
     ? 'automation'
-    : notification.target.kind === 'insight'
+    : (notification.target.kind === 'insight' || notification.target.kind === 'proactive_digest')
       ? 'insight'
       : notification.target.kind === 'work_discovery'
         ? 'understanding'
         : notification.target.kind;
   return {
+    systemAllowed: notification.payload.deliveryMode !== 'auto' && (!notification.payload.deliveryChannel || ['all', 'browser'].includes(String(notification.payload.deliveryChannel))),
     id: notification.id,
     title: localized.localizedTitle,
     body: localized.localizedBody ?? localized.localizedTitle,

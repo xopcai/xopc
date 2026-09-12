@@ -1,3 +1,6 @@
+import { registerProactiveControlRoutes } from './proactive-control.js';
+import { listCards } from '../../../proactive/inbox/cards.js';
+import { getInboxItem } from '../../../proactive/inbox/repository.js';
 import type { Hono } from 'hono';
 
 import type { PublishEventInput } from '../../../proactive/index.js';
@@ -8,15 +11,14 @@ function positiveInt(value: string | undefined, fallback: number): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-/** User-facing judgment inbox plus internal diagnostics. There is intentionally no proactive control-panel API. */
+/** Proactive controls, cards and internal diagnostics. */
 export function registerProactiveRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
+  registerProactiveControlRoutes(authenticated, deps);
   authenticated.get('/api/inbox/judgments', (c) => {
     const status = c.req.query('status');
     if (status && !['unread', 'read', 'snoozed', 'resolved'].includes(status)) return c.json({ ok: false, error: 'Invalid inbox status' }, 400);
-    return c.json({ ok: true, items: deps.service.proactiveInbox.list({
-      ...(status ? { status: status as 'unread' | 'read' | 'snoozed' | 'resolved' } : {}),
-      limit: positiveInt(c.req.query('limit'), 50),
-    }) });
+    const page = listCards(deps.service.currentWorkspacePath, { status, limit: positiveInt(c.req.query('limit'), 50), before: c.req.query('before') });
+    return c.json({ ok: true, ...page, items: page.cards.map((card) => getInboxItem(card.id)) });
   });
 
   authenticated.post('/api/inbox/judgments/:itemId/transition', deps.strictRateLimitMiddleware, async (c) => {

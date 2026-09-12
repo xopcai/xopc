@@ -49,6 +49,7 @@ export interface WorkflowRun {
 }
 
 export interface WorkflowRunMetadata {
+  preparationOnly?: boolean;
   sessionKey: string;
   triggerSource: WorkflowRunSource['kind'];
   agentId?: string;

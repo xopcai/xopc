@@ -187,11 +187,11 @@ export class DelegateSubagentRunner implements SubagentRunner {
   }
 }
 
-function resolveAllowedToolNames(
+export function resolveAllowedToolNames(
   requested: string[] | undefined,
   wantStructured: boolean,
 ): string[] {
-  const base = requested && requested.length > 0 ? requested : [...DEFAULT_DELEGATE_TOOLS];
+  const base = requested ?? [...DEFAULT_DELEGATE_TOOLS];
   const filtered = base
     .map((s) => String(s).trim())
     .filter((s) => s.length > 0)

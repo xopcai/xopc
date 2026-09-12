@@ -1,7 +1,6 @@
 import { getAssertionSlot, listUserAssertions } from '../../user-model/index.js';
 import { getDiscussionCapture, getLatestDiscussionOrganization } from '../../discussions/repository.js';
-import { getConnectorSyncPolicyForConnection } from '../../storage/sqlite/connector-sync-policy-repository.js';
-import { getKnowledgeSourceItem } from '../../storage/sqlite/knowledge-repository.js';
+import { authorizedConnectedSource } from './authorization.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { wrapExternalContent } from '../../gateway/security/external-content.js';
 
@@ -44,18 +43,7 @@ function emptyContext(): ResolvedContext {
 }
 
 function authorizedConnectedSourceItem(event: EventRow, scenarioKey: string) {
-  const item = getKnowledgeSourceItem(event.subject_id);
-  const connectionId = typeof item?.metadata.connectionId === 'string'
-    ? item.metadata.connectionId
-    : undefined;
-  if (!item || item.deletedAt || !connectionId) return null;
-  if (item.sensitivity === 'secret' || item.sensitivity === 'regulated') return null;
-  if (item.metadata.workspaceId !== event.workspace_id) return null;
-  if (event.agent_id && item.metadata.agentId && item.metadata.agentId !== event.agent_id) return null;
-  const policy = getConnectorSyncPolicyForConnection(connectionId);
-  const scenarioAllowed = !policy?.allowedScenarioKeys.length
-    || policy.allowedScenarioKeys.includes(scenarioKey);
-  return policy?.scanEnabled && policy.proactiveEnabled && scenarioAllowed ? item : null;
+  return authorizedConnectedSource(event.subject_id, event.workspace_id, scenarioKey, event.agent_id);
 }
 
 export class EventBatchContextProvider implements ContextProvider {

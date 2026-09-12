@@ -48,7 +48,7 @@ export interface ProactiveAgentExecutor {
     userPrompt: string;
     authorizedContext: Record<string, unknown>;
     signal?: AbortSignal;
-  }): Promise<{ text: string; modelRef?: string }>;
+  }): Promise<{ text: string; modelRef?: string; usage?: { inputTokens: number; outputTokens: number; estimatedCostUsd?: number } }>;
 }
 
 export interface ContextProvider {

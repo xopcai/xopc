@@ -321,3 +321,12 @@ export function pruneNotificationEvents(before: number): number {
        )`,
   ).run(before).changes));
 }
+
+export function deferNotificationDelivery(eventId: string, deviceId: string, nextAttemptAt: number): void {
+  getSqliteDatabase().prepare("UPDATE notification_deliveries SET next_attempt_at = ?, last_error = 'Proactive quiet hours' WHERE event_id = ? AND device_id = ? AND status = 'pending'").run(nextAttemptAt, eventId, deviceId);
+}
+
+export function getNotificationEvent(id: string): ProductNotification | null {
+  const row = getSqliteDatabase().prepare('SELECT * FROM notification_events WHERE event_id = ?').get(id) as NotificationEventRow | undefined;
+  return row ? eventFromRow(row) : null;
+}

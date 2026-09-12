@@ -84,6 +84,11 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
     return methodScope(method, 'sessions.read', 'sessions.write');
   }
   if (path.startsWith('/api/tasks')) return methodScope(method, 'tasks.read', 'tasks.write');
+  if (method === 'POST' && /^\/api\/proactive\/subscriptions\/[^/]+\/preview$/.test(path)) return 'agents.run';
+  if (/^\/api\/inbox\/judgments\/[^/]+\/workflow$/.test(path)) return methodScope(method, 'automations.read', 'automations.write');
+  if (method === 'POST' && /^\/api\/inbox\/judgments\/[^/]+\/prepare$/.test(path)) return 'automations.write';
+  if (path.startsWith('/api/proactive/web-push')) return 'notifications.self';
+  if (path === '/api/proactive' || path.startsWith('/api/proactive/')) return methodScope(method, 'tasks.read', 'tasks.write');
   if (path.startsWith('/api/home') || path.startsWith('/api/inbox')) {
     return methodScope(method, 'tasks.read', 'tasks.write');
   }

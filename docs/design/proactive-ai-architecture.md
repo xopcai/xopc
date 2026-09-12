@@ -324,7 +324,7 @@ Dispositions are `discard`, `record`, `digest`, `inbox`, or `push`. `push` alway
 - `POST /api/inbox/judgments/:itemId/feedback`
 - `POST /api/inbox/judgments/:itemId/instructions`
 
-`GET /api/home` projects active judgments into the same cross-product decision feed used by Web and Mobile. Scenario management and raw prompt editing are intentionally absent from the user API.
+`GET /api/home` projects active judgments into the same cross-product decision feed used by Web and Mobile. Template subscriptions, bounded preference instructions, and attention controls are now exposed through `/api/proactive/*`; see the [templates and cards implementation](./proactive-templates-and-cards.md). Raw execution prompts and authority remain server-controlled.
 
 ## 10. Reliability and scheduling
 
