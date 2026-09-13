@@ -70,6 +70,29 @@ export type SetupStatusSnapshot = {
   allComplete: boolean;
 };
 
+type SetupDiagnosticsCopy = {
+  labels: Record<string, string>;
+  runtimeMissing: (runtimes: string) => string;
+  runtimeInvalid: (runtimes: string) => string;
+  gatewayNotInstalled: string;
+  gatewayUnavailable: (detail: string) => string;
+  gatewayNotRunning: (status: string) => string;
+  providerAuthMissing: string;
+  runCommand: (command: string) => string;
+  installCommand: (command: string) => string;
+  startCommand: (command: string) => string;
+  logsHealthy: string;
+  logsShuttingDown: string;
+  logsErrors: (count: number) => string;
+  chromiumInstalled: string;
+  chromiumNotInstalled: string;
+  extensionConnected: string;
+  extensionNeedsRefresh: string;
+  extensionNotConnected: string;
+  extensionNotInstalled: string;
+  browserDriverConfigured: (driver: string) => string;
+};
+
 function countConfiguredProviders(config: unknown): number {
   if (!config || typeof config !== 'object') return 0;
   const providers = (config as Record<string, unknown>).providers;
@@ -148,18 +171,61 @@ function rankStatus(status: DoctorCheckStatus): number {
   return { fail: 4, warn: 3, skip: 2, pass: 1 }[status];
 }
 
-function buildDoctorIssues(checks: DoctorCheck[]): SetupIssue[] {
+function localizeHint(hint: string, copy: SetupDiagnosticsCopy): string {
+  const run = hint.match(/^Run(?::|\s)(.*)$/i);
+  if (run?.[1]) return copy.runCommand(run[1].trim());
+  const install = hint.match(/^Install(?::|\s)(.*)$/i);
+  if (install?.[1]) return copy.installCommand(install[1].trim());
+  const start = hint.match(/^Start(?::|\s)(.*)$/i);
+  if (start?.[1]) return copy.startCommand(start[1].trim());
+  return hint;
+}
+
+function localizeDoctorCheck(check: DoctorCheck, copy?: SetupDiagnosticsCopy): DoctorCheck {
+  if (!copy) return check;
+
+  let message = check.message;
+  if (check.id === 'tool-runtimes') {
+    const missing = check.message.match(/^(.*) runtime is not installed\.$/);
+    const invalid = check.message.match(/^(.*) runtime installation is invalid\.$/);
+    if (missing?.[1]) message = copy.runtimeMissing(missing[1]);
+    else if (invalid?.[1]) message = copy.runtimeInvalid(invalid[1]);
+  } else if (check.id === 'gateway-service') {
+    if (check.message === 'Gateway is not installed as a system service.') {
+      message = copy.gatewayNotInstalled;
+    } else {
+      const unavailable = check.message.match(/^Service backend unavailable: (.*)$/);
+      const notRunning = check.message.match(/^Gateway service is installed but not running \(status: (.*)\)\.$/);
+      if (unavailable?.[1]) message = copy.gatewayUnavailable(unavailable[1]);
+      else if (notRunning?.[1]) message = copy.gatewayNotRunning(notRunning[1]);
+    }
+  } else if (check.id === 'provider-auth' && check.message === 'No API keys detected for configured providers.') {
+    message = copy.providerAuthMissing;
+  }
+
+  return {
+    ...check,
+    label: copy.labels[check.id] ?? check.label,
+    message,
+    hints: check.hints.map((hint) => localizeHint(hint, copy)),
+  };
+}
+
+function buildDoctorIssues(checks: DoctorCheck[], copy?: SetupDiagnosticsCopy): SetupIssue[] {
   return checks
     .filter((check) => check.status === 'fail' || check.status === 'warn')
-    .map((check) => ({
-      id: check.id,
-      label: check.label,
-      status: check.status,
-      message: check.message,
-      hints: check.hints,
-      path: issuePath(check.id),
-      source: 'doctor' as const,
-    }))
+    .map((rawCheck) => {
+      const check = localizeDoctorCheck(rawCheck, copy);
+      return {
+        id: check.id,
+        label: check.label,
+        status: check.status,
+        message: check.message,
+        hints: check.hints,
+        path: issuePath(check.id),
+        source: 'doctor' as const,
+      };
+    })
     .toSorted((a, b) => rankStatus(b.status) - rankStatus(a.status) || a.label.localeCompare(b.label));
 }
 
@@ -167,6 +233,7 @@ function buildDiagnosticSignals(input: {
   doctorChecks: DoctorCheck[];
   logsHealth?: LogsHealth | null;
   browserDiagnostics?: BrowserDiagnostic[];
+  copy?: SetupDiagnosticsCopy;
 }): SetupDiagnosticSignal[] {
   const byId = new Map(input.doctorChecks.map((check) => [check.id, check]));
   const signals: SetupDiagnosticSignal[] = [];
@@ -174,12 +241,13 @@ function buildDiagnosticSignals(input: {
   for (const id of ['security-audit', 'channel-config', 'channel-pairing-pending', 'gateway-health']) {
     const check = byId.get(id);
     if (check) {
+      const localized = localizeDoctorCheck(check, input.copy);
       signals.push({
-        id: check.id,
-        label: check.label,
-        status: check.status,
-        message: check.message,
-        path: issuePath(check.id),
+        id: localized.id,
+        label: localized.label,
+        status: localized.status,
+        message: localized.message,
+        path: issuePath(localized.id),
       });
     }
   }
@@ -188,19 +256,43 @@ function buildDiagnosticSignals(input: {
     const errors = input.logsHealth.stats?.errorsLast24h ?? 0;
     signals.push({
       id: 'logs-health',
-      label: 'Logs',
+      label: input.copy?.labels['logs-health'] ?? 'Logs',
       status: input.logsHealth.shuttingDown ? 'warn' : errors > 0 ? 'warn' : 'pass',
-      message: input.logsHealth.shuttingDown
-        ? 'Logger is shutting down.'
-        : errors > 0
-          ? `${errors} error(s) in the last 24 hours.`
-          : 'Log system is healthy.',
+      message: input.copy
+        ? input.logsHealth.shuttingDown
+          ? input.copy.logsShuttingDown
+          : errors > 0
+            ? input.copy.logsErrors(errors)
+            : input.copy.logsHealthy
+        : input.logsHealth.shuttingDown
+          ? 'Logger is shutting down.'
+          : errors > 0
+            ? `${errors} error(s) in the last 24 hours.`
+            : 'Log system is healthy.',
       path: '/settings/logs',
     });
   }
 
   for (const item of input.browserDiagnostics ?? []) {
-    signals.push(item);
+    let message = item.message;
+    if (input.copy) {
+      const knownMessages: Record<string, string> = {
+        'Local Chromium is installed.': input.copy.chromiumInstalled,
+        'Local Chromium is not installed.': input.copy.chromiumNotInstalled,
+        'Chrome extension bridge is connected.': input.copy.extensionConnected,
+        'Chrome extension needs refresh.': input.copy.extensionNeedsRefresh,
+        'Chrome extension is installed but not connected.': input.copy.extensionNotConnected,
+        'Chrome extension is not installed.': input.copy.extensionNotInstalled,
+      };
+      message = knownMessages[item.message] ?? item.message;
+      const configured = item.message.match(/^Browser driver "(.*)" is configured\.$/);
+      if (configured?.[1]) message = input.copy.browserDriverConfigured(configured[1]);
+    }
+    signals.push({
+      ...item,
+      label: input.copy?.labels[item.id] ?? item.label,
+      message,
+    });
   }
 
   return signals;
@@ -228,6 +320,7 @@ export function buildSetupStatusSnapshot(input: {
     skillsConfigured: (count: number) => string;
     skillsMissing: string;
     readyToChat: string;
+    diagnostics?: SetupDiagnosticsCopy;
   };
 }): SetupStatusSnapshot {
   const providerCount = countConfiguredProviders(input.config);
@@ -241,7 +334,7 @@ export function buildSetupStatusSnapshot(input: {
   const channelConfigured = isAnyChannelConfigured(input.config);
   const skillInstalled = input.skillCount > 0;
   const doctorChecks = input.doctorChecks ?? [];
-  const issues = buildDoctorIssues(doctorChecks);
+  const issues = buildDoctorIssues(doctorChecks, input.labels.diagnostics);
 
   const checklist: SetupChecklistItemState[] = [
     {
@@ -330,6 +423,7 @@ export function buildSetupStatusSnapshot(input: {
     doctorChecks,
     logsHealth: input.logsHealth,
     browserDiagnostics: input.browserDiagnostics,
+    copy: input.labels.diagnostics,
   });
 
   return {
