@@ -441,17 +441,17 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
         if (usage) streamingMsgRef.current.usage = usage;
         flushStreamingMessage();
       },
-      onThinking: (text, isDelta) => {
+      onThinking: (text, isDelta, messageId) => {
         if (!isCurrentSession()) return;
         touchStreamActivity();
         updateStreamingMessage((message) => {
-          if (!isDelta && text === '') startThinkingSegment(message.content);
-          else appendThinkingDelta(message.content, text, isDelta);
+          if (!isDelta && text === '') startThinkingSegment(message.content, messageId);
+          else appendThinkingDelta(message.content, text, isDelta, messageId);
         });
       },
-      onThinkingEnd: () => {
+      onThinkingEnd: (messageId) => {
         if (!isCurrentSession() || !streamingMsgRef.current) return;
-        finalizeStreamingThinking(streamingMsgRef.current.content);
+        finalizeStreamingThinking(streamingMsgRef.current.content, messageId);
         flushStreamingMessage();
       },
       onToolStart: (toolName, args, toolCallId) => {

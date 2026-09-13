@@ -84,8 +84,8 @@ describe('dispatchAgentStreamEvent', () => {
     dispatchAgentStreamEvent('thinking_delta', JSON.stringify(envelope('thinking_delta', 'run-1', { messageId: 'm1', delta: 'plan' })), cb);
     dispatchAgentStreamEvent('thinking_end', JSON.stringify(envelope('thinking_end', 'run-1', { messageId: 'm1' })), cb);
     expect(cb.onToken).toHaveBeenCalledWith('hi', 'm1');
-    expect(cb.onThinking).toHaveBeenCalledWith('plan', true);
-    expect(cb.onThinkingEnd).toHaveBeenCalled();
+    expect(cb.onThinking).toHaveBeenCalledWith('plan', true, 'm1');
+    expect(cb.onThinkingEnd).toHaveBeenCalledWith('m1');
   });
 
   it('dispatches review output', () => {

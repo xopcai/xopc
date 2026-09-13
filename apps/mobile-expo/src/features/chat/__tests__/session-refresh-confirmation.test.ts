@@ -17,6 +17,31 @@ const finalMessage: Message = {
 };
 
 describe('session refresh confirmation', () => {
+  it('waits for complete thinking even when the final answer is already stored', () => {
+    const final: Message = { ...finalMessage, content: [
+      { type: 'thinking', text: 'First. Second.', segmentId: 'm1' },
+      ...finalMessage.content,
+    ] };
+    for (const thinking of ['', 'First.']) {
+      const stored: Message = { ...final, content: [
+        { type: 'thinking', text: thinking }, ...finalMessage.content,
+      ] };
+      expect(sessionContainsFinalAssistant([user, stored], final)).toBe(false);
+    }
+    expect(sessionContainsFinalAssistant([user, { ...final, content: [
+      { type: 'thinking', text: 'First. Second. Extra.' }, ...finalMessage.content,
+    ] }], final)).toBe(true);
+  });
+
+  it('does not reuse one stored thought to confirm two live segments', () => {
+    const final: Message = { ...finalMessage, content: [
+      { type: 'thinking', text: 'Again', segmentId: 'm1' },
+      { type: 'thinking', text: 'Again', segmentId: 'm2' },
+      ...finalMessage.content,
+    ] };
+    expect(sessionContainsFinalAssistant([user, { ...final, content: final.content.slice(1) }], final)).toBe(false);
+  });
+
   it('does not accept a newer but stale history snapshot', () => {
     expect(sessionContainsFinalAssistant([user], finalMessage)).toBe(false);
   });

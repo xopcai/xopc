@@ -195,7 +195,6 @@ function renderAssistantContent(
 ) {
   const nodes: React.ReactNode[] = [];
   let activityRendered = false;
-  let narrationRendered = false;
   let i = 0;
 
   while (i < content.length) {
@@ -215,13 +214,6 @@ function renderAssistantContent(
       }
       i++;
     } else if (block.type === 'text') {
-      if (isAssistantNarration(block)) {
-        if (narrationRendered) {
-          i++;
-          continue;
-        }
-        narrationRendered = true;
-      }
       let merged = assistantTextForDisplay(block);
       let j = i + 1;
       while (j < content.length) {
