@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createSession,
   fetchSession,
+  fetchSessionResumeStatus,
   fetchSessionActiveRun,
   fetchSessionMessagePage,
   fetchSessionsList,
@@ -37,6 +38,36 @@ vi.mock('../../stores/preferences-store', () => ({
 }));
 
 const mockedApiFetch = vi.mocked(apiFetch);
+
+describe('restored session validation', () => {
+  beforeEach(() => { mockedApiFetch.mockReset(); });
+
+  it.each([403, 404, 410])('recognizes an explicit unavailable response (%s)', async status => {
+    mockedApiFetch.mockResolvedValue({ ok: false, status } as Response);
+    expect(await fetchSessionResumeStatus('saved')).toBe('unavailable');
+  });
+
+  it.each([401, 429, 500, 503])('does not treat transient/auth failure as a deleted session (%s)', async status => {
+    mockedApiFetch.mockResolvedValue({ ok: false, status, statusText: 'Failure', json: async () => ({}) } as Response);
+    await expect(fetchSessionResumeStatus('saved')).rejects.toThrow();
+  });
+
+  it.each(['active', 'archived'] as const)('validates %s sessions with a bounded message page', async status => {
+    mockedApiFetch.mockResolvedValue({ ok: true, json: async () => ({
+      session: { key: 'saved', status, messages: [] },
+      pagination: { total: 1000, limit: 1, offset: 0, hasMore: true },
+    }) } as Response);
+    expect(await fetchSessionResumeStatus('saved')).toBe(status === 'archived' ? 'unavailable' : 'available');
+    expect(mockedApiFetch).toHaveBeenCalledWith('/api/sessions/saved?limit=1', { signal: undefined });
+  });
+
+  it('preserves the selection when the response is malformed or the network fails', async () => {
+    mockedApiFetch.mockResolvedValue({ ok: true, json: async () => ({}) } as Response);
+    await expect(fetchSessionResumeStatus('saved')).rejects.toThrow();
+    mockedApiFetch.mockRejectedValue(new Error('timeout'));
+    await expect(fetchSessionResumeStatus('saved')).rejects.toThrow('timeout');
+  });
+});
 
 describe('createSession', () => {
   beforeEach(() => {

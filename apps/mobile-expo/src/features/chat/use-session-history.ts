@@ -32,9 +32,11 @@ export function useSessionHistory(sessionKey: string) {
   const sessionHistoryQuery = useInfiniteQuery({
     queryKey: queryKeys.sessionHistory(sessionKey, activeGatewayId),
     queryFn: ({ pageParam }) => loadSessionHistoryHead(sessionKey, pageParam),
-    placeholderData: cachedSessionHistoryHead
+    // Seed stale data rather than a placeholder: a failed refresh must not erase offline history.
+    initialData: cachedSessionHistoryHead
       ? { pages: [cachedSessionHistoryHead], pageParams: [undefined] }
       : undefined,
+    initialDataUpdatedAt: 0,
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => (
       lastPage?.pagination.hasMore ? lastPage.pagination.nextBeforeCursor : undefined
@@ -47,9 +49,9 @@ export function useSessionHistory(sessionKey: string) {
   // Write head page to cache when data arrives
   useEffect(() => {
     const headPage = sessionHistoryQuery.data?.pages[0];
-    if (!activeGatewayId || !sessionKey || !headPage || sessionHistoryQuery.isPlaceholderData) return;
+    if (!activeGatewayId || !sessionKey || !headPage || !sessionHistoryQuery.dataUpdatedAt || sessionHistoryQuery.isPlaceholderData) return;
     writeCachedSessionHistoryHead(activeGatewayId, sessionKey, headPage);
-  }, [activeGatewayId, sessionHistoryQuery.data?.pages, sessionHistoryQuery.isPlaceholderData, sessionKey]);
+  }, [activeGatewayId, sessionHistoryQuery.data?.pages, sessionHistoryQuery.dataUpdatedAt, sessionHistoryQuery.isPlaceholderData, sessionKey]);
 
   // Reset prefetch cursor on session change
   useEffect(() => {

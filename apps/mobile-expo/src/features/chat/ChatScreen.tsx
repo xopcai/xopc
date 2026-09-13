@@ -19,7 +19,6 @@ import { ChatComposer } from './ChatComposer';
 import { ChatContextControl } from './ChatContextControl';
 import { ChatHeader, CHAT_HEADER_TOP_PADDING_AFTER_SAFE_AREA } from './ChatHeader';
 import { ChatNavigationSheet } from './ChatNavigationSheet';
-import { StaticLoadingIndicator } from './StaticLoadingIndicator';
 import { StaticChatToast } from './StaticChatToast';
 import { ContinuousReadAloudBar } from './ContinuousReadAloudBar';
 import { ClarifyPrompt } from './ClarifyPrompt';
@@ -173,12 +172,6 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
             </Pressable>
           </View>
         ) : null}
-        {!urlSessionKey && bootstrap.creatingInitialSession ? (
-          <View style={styles.bootstrapRow}>
-            <StaticLoadingIndicator size={16} />
-            <Text variant="bodySmall" style={{ opacity: 0.65 }}>{m.common.loading}</Text>
-          </View>
-        ) : null}
 
         <View style={styles.listFill}>
           <MessageList
@@ -189,7 +182,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
             loading={
               sessionHistoryQuery.isLoading
               || !sessionPresentationReady
-              || (!sessionKey && bootstrap.creatingInitialSession)
+              || bootstrap.waitingForResume
             }
             loadError={sessionHistoryQuery.isError ? {
               message: m.chat.historyLoadFailed,

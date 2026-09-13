@@ -131,6 +131,7 @@ export async function fetchSessionsList(
   const offset = options?.offset ?? 0;
   const search = options?.search?.trim() ?? '';
   const channel = options?.channel === undefined ? 'webchat' : options.channel;
+  const gatewayId = useGatewayStore.getState().activeGatewayId;
 
   const res = await apiFetch(
     buildSessionListPath({
@@ -158,8 +159,8 @@ export async function fetchSessionsList(
   }
   // Persist only the unfiltered first page so cold-start hydration matches
   // the next live first request.
-  if (offset === 0 && !search) {
-    writeCachedSessions(useGatewayStore.getState().activeGatewayId, items);
+  if (offset === 0 && !search && useGatewayStore.getState().activeGatewayId === gatewayId) {
+    writeCachedSessions(gatewayId, items);
   }
   return {
     items,
@@ -189,6 +190,16 @@ export async function fetchSession(
   if (!res.ok) throwApiError(res, await parseErrorBody(res));
   const data = parseSessionResponse(await res.json());
   return data.session ?? null;
+}
+
+/** Validate a restored selection without downloading the full transcript. Auth/network failures remain errors. */
+export async function fetchSessionResumeStatus(key: string, signal?: AbortSignal): Promise<'available' | 'unavailable'> {
+  const res = await apiFetch(`${buildSessionDetailPath(key)}?limit=1`, { signal });
+  if (res.status === 404 || res.status === 410 || res.status === 403) return 'unavailable';
+  if (!res.ok) throwApiError(res, await parseErrorBody(res));
+  const page = parseSessionMessagePage(await res.json());
+  if (!page || page.session.key !== key) throw new Error('Invalid session response');
+  return page.session.status === 'archived' ? 'unavailable' : 'available';
 }
 
 export async function fetchSessionActiveRun(key: string): Promise<SessionActiveRunPayload> {

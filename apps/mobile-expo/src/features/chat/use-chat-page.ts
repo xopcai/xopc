@@ -51,7 +51,7 @@ import { reconcileMessageRows } from './reconcile-message-rows';
 import { sessionContainsFinalAssistant } from './session-refresh-confirmation';
 import { takeNewChatSessionKey } from './session-prefetch';
 import { buildMobileWelcomeModel } from './mobile-welcome-starters';
-import { resumableRootChatSessions, rootChatResumeKey } from './chat-root-session';
+import { resumableRootChatSessions } from './chat-root-session';
 import { useChatPageBootstrap } from './use-chat-page-bootstrap';
 import { useChatSession } from './use-chat-session';
 import { useSessionHistory } from './use-session-history';
@@ -137,13 +137,10 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     },
     staleTime: 30_000,
   });
-  const resumeSessionKey = root ? rootChatResumeKey(recentSessionsQuery.data?.items ?? []) : '';
 
   const bootstrap = useChatPageBootstrap({
     scopeKey: activeGatewayId ?? '',
     urlSessionKey,
-    resumeSessionKey,
-    resumeLookupComplete: !root || !activeGatewayId || !recentSessionsQuery.isLoading,
     gatewayReady: Boolean(activeGatewayId),
     gatewayOnline,
     newSessionSpec: bootstrapSpec,
@@ -398,6 +395,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   const handleAgentSelect = useCallback(
     (agentId: string) => {
+      const completeSelection = bootstrap.beginSessionSelection();
       void (async () => {
         const key = routeTaskId
           ? (await handoffTaskConversation(
@@ -422,9 +420,9 @@ export function useChatPage(options: UseChatPageOptions = {}) {
                   : undefined;
               })(),
             );
+        if (!completeSelection(key)) return;
         if (activeGatewayId) rememberSelectedAgent(activeGatewayId, agentId);
         chatSession.activeSessionKeyRef.current = key;
-        bootstrap.setPendingBootstrapKey(key);
         void queryClient.invalidateQueries({ queryKey: queryKeys.sessionsAll });
         if (routeTaskId) {
           void queryClient.invalidateQueries({ queryKey: queryKeys.task(routeTaskId) });
@@ -440,6 +438,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   );
 
   const handleNewChat = useCallback(() => {
+    const completeSelection = bootstrap.beginSessionSelection();
     chatSession.activeSessionKeyRef.current = '';
     chatSession.cancelRecovery();
     chatSession.clearAllState();
@@ -456,8 +455,8 @@ export function useChatPage(options: UseChatPageOptions = {}) {
             }
           : undefined,
       );
+      if (!completeSelection(key)) return;
       chatSession.activeSessionKeyRef.current = key;
-      bootstrap.setPendingBootstrapKey(key);
       void queryClient.invalidateQueries({ queryKey: queryKeys.sessionsAll });
       if (!root) {
         openChat(router, key, { replace: true });
@@ -468,6 +467,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   }, [currentSessionAgentId, defaultAgentId, root, router, chatSession, bootstrap, newSessionPreferences, queryClient, sessionContext.projectId]);
 
   const handleContextChange = useCallback((projectId: string | null, executionMode?: 'local_checkout' | 'managed_worktree') => {
+    const completeSelection = bootstrap.beginSessionSelection();
     chatSession.activeSessionKeyRef.current = '';
     chatSession.cancelRecovery();
     chatSession.clearAllState();
@@ -484,8 +484,8 @@ export function useChatPage(options: UseChatPageOptions = {}) {
             }
           : undefined,
       );
+      if (!completeSelection(key)) return;
       chatSession.activeSessionKeyRef.current = key;
-      bootstrap.setPendingBootstrapKey(key);
       void queryClient.invalidateQueries({ queryKey: queryKeys.sessionsAll });
       if (activeGatewayId) rememberLastChatScope(activeGatewayId, projectId);
       if (!root) openChat(router, key, { replace: true });
@@ -612,8 +612,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     displayMessages,
     reasoningLevel: coerceReasoningLevel(sessionAgentConfigQuery.data?.reasoningLevel),
     sessionPresentationReady:
-      (!root || !recentSessionsQuery.isLoading)
-      && (!sessionKey || !sessionAgentConfigQuery.isLoading),
+      !bootstrap.waitingForResume && (!sessionKey || !sessionAgentConfigQuery.isLoading),
     welcomeModel,
     isEmptyChat,
     composerDisabled,
