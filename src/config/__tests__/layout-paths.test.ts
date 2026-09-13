@@ -40,6 +40,20 @@ import {
 
 const HOME = homedir();
 const STATE_DIR = join(HOME, '.xopc');
+const originalEnv = process.env;
+
+beforeEach(() => {
+  process.env = { ...originalEnv };
+  delete process.env.XOPC_STATE_DIR;
+  delete process.env.XOPC_PROFILE;
+  delete process.env.XOPC_WORKSPACE;
+  delete process.env.XOPC_HOME;
+  delete process.env.XOPC_BUNDLED_EXTENSIONS_ROOT;
+});
+
+afterEach(() => {
+  process.env = originalEnv;
+});
 
 function makeConfig(overrides: Record<string, unknown> = {}): any {
   return { agents: { list: [], defaults: {} }, ...overrides };
@@ -60,21 +74,6 @@ function makeMultiAgentConfig(): any {
 }
 
 describe('Layout alignment: state root and workspace paths', () => {
-  const originalEnv = process.env;
-
-  beforeEach(() => {
-    process.env = { ...originalEnv };
-    delete process.env.XOPC_STATE_DIR;
-    delete process.env.XOPC_PROFILE;
-    delete process.env.XOPC_WORKSPACE;
-    delete process.env.XOPC_HOME;
-    delete process.env.XOPC_BUNDLED_EXTENSIONS_ROOT;
-  });
-
-  afterEach(() => {
-    process.env = originalEnv;
-  });
-
   it('#1: resolveStateDir is fixed ~/.xopc regardless of profile', () => {
     expect(resolveStateDir()).toBe(STATE_DIR);
 

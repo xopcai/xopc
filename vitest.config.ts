@@ -14,5 +14,6 @@ export default defineConfig({
   test: {
     // Mobile tests use their own Expo-aware Vitest config.
     exclude: ['**/node_modules/**', '**/dist/**', 'apps/mobile-expo/**'],
+    setupFiles: [path.resolve(__dirname, 'test/vitest.setup.ts')],
   },
 });
