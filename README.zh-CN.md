@@ -28,12 +28,8 @@
 
 <p align="center">
   <a href="https://xopcai.github.io/xopc/xopc-desktop.mp4">
-    <img src="docs/public/xopc-desktop-preview.gif" alt="xopc 桌面端 onboarding 演示" width="960">
+    <img src="docs/public/xopc-desktop-preview.gif" alt="xopc 桌面应用演示" width="960">
   </a>
-</p>
-
-<p align="center">
-  <a href="https://xopcai.github.io/xopc/xopc-desktop.mp4"><strong>观看完整 onboarding 视频（1:02）→</strong></a>
 </p>
 
 > 安装后可以直接告诉它：**“这周我最想推进的一件事是 ____。帮我找到最小但可信的下一步。”**
