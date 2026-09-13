@@ -21,6 +21,7 @@ describe('managed_job tool', () => {
 
   it('starts a job without blocking the tool call and exposes its terminal output', async () => {
     const tool = createManagedJobTool(process.cwd(), () => 'session-a');
+    await tool.execute('list', { action: 'list' });
     const startedAt = Date.now();
     const started = text(await tool.execute('start', {
       action: 'start',
