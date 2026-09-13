@@ -13,7 +13,7 @@ EXPORT_DIR="${EXPORT_DIR:-$DIST_DIR/ios/export}"
 IPA_PATH="${IPA_PATH:-$DIST_DIR/${APP_NAME}.ipa}"
 EXPORT_METHOD="${EXPORT_METHOD:-app-store-connect}"
 SIGNING_STYLE="${SIGNING_STYLE:-automatic}"
-ARCHIVE_SIGNING="${ARCHIVE_SIGNING:-distribution}"
+ARCHIVE_SIGNING="${ARCHIVE_SIGNING:-automatic}"
 GENERATED_EXPORT_OPTIONS_PLIST="$DIST_DIR/ios/ExportOptions.plist"
 EXPORT_OPTIONS_PLIST="${EXPORT_OPTIONS_PLIST:-$GENERATED_EXPORT_OPTIONS_PLIST}"
 DEVELOPMENT_TEAM="${DEVELOPMENT_TEAM:-}"
@@ -57,7 +57,7 @@ Optional build variables:
   EXPORT_DIR                       default: dist/ios/export
   EXPORT_METHOD                    default: app-store-connect
   SIGNING_STYLE                    default: automatic
-  ARCHIVE_SIGNING                  default: distribution; automatic|distribution
+  ARCHIVE_SIGNING                  default: automatic; automatic|distribution
   IOS_PROVISIONING_PROFILE_MAIN    main app profile UUID/name for manual signing
   IOS_PROVISIONING_PROFILE_SHARE   ShareIntake profile UUID/name for manual signing
   IOS_PROVISIONING_PROFILE_WIDGET  widget profile UUID/name for manual signing

@@ -216,7 +216,7 @@ export function VoiceSettingsPanel() {
   const hasToken = Boolean(token);
 
   useEffect(() => {
-    if (!showAdvanced && (group === 'service' || group === 'diagnostics')) {
+    if (!showAdvanced && group === 'diagnostics') {
       setGroup('listening');
     }
   }, [group, showAdvanced]);
@@ -482,7 +482,7 @@ export function VoiceSettingsPanel() {
       {autosave.error ? <p className="text-sm text-red-600 dark:text-red-400">{autosave.error}</p> : null}
 
       <nav aria-label={v.setup.advanced} className="flex flex-wrap gap-2">
-        {(['listening', 'input', 'devices', ...(showAdvanced ? ['service', 'diagnostics'] as const : [])] as const).map((id) => <Button key={id} variant={group === id ? 'secondary' : 'ghost'} aria-pressed={group === id} onClick={() => setGroup(id)}>{v.experience[id]}</Button>)}
+        {(['listening', 'input', 'devices', 'service', ...(showAdvanced ? ['diagnostics'] as const : [])] as const).map((id) => <Button key={id} variant={group === id ? 'secondary' : 'ghost'} aria-pressed={group === id} onClick={() => setGroup(id)}>{v.experience[id]}</Button>)}
       </nav>
       {group === 'listening' || group === 'service' || group === 'diagnostics' ? <VoiceSetup section={group} v={v} form={form} pending={dirty || autosave.status === 'saving' || Boolean(autosave.error)} apiKeyLabels={apiKeyLabels} sttProviders={sttProviders} onChange={updateForm} /> : null}
       {group === 'listening' ? <>

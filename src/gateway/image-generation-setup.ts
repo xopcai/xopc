@@ -72,15 +72,17 @@ export function getAgentImageGenerationConfig(config: Config, agentIdRaw: string
   };
 }
 
-export function prepareImageGenerationSetup(
+export function getDefaultImageGenerationConfig(config: Config) {
+  return {
+    model: config.agents.defaults.models.imageGeneration ?? null,
+  };
+}
+
+function prepareImageGenerationConfig(
   config: Config,
-  agentIdRaw: string,
   input: ImageGenerationSetupInput,
+  applyModel: (next: Config, model: NonNullable<Config['agents']['defaults']['models']['imageGeneration']>) => void,
 ): { ok: true; config: Config; providerId: string; modelId: string } | { ok: false; error: string } {
-  const agentId = normalizeAgentId(agentIdRaw);
-  if (!config.agents.list.some((entry) => entry.enabled !== false && normalizeAgentId(entry.id) === agentId)) {
-    return { ok: false, error: `Agent not found: ${agentId}` };
-  }
   const providerId = input.providerId.trim();
   const provider = getImageGenerationProvider(providerId);
   if (!provider) return { ok: false, error: `Unknown image provider: ${providerId}` };
@@ -95,11 +97,6 @@ export function prepareImageGenerationSetup(
   }
 
   const next = structuredClone(config);
-  const index = next.agents.list.findIndex(
-    (entry) => entry.enabled !== false && normalizeAgentId(entry.id) === agentId,
-  );
-  if (index < 0) return { ok: false, error: `Agent not found: ${agentId}` };
-
   next.providers = {
     ...(next.providers ?? {}),
     [providerId]: {
@@ -107,18 +104,44 @@ export function prepareImageGenerationSetup(
       ...parsedProviderConfig.value,
     },
   };
-  const entry = next.agents.list[index]!;
-  const models = entry.models ?? {};
-  entry.models = {
-    ...models,
-    imageGeneration: { primary: `${providerId}/${modelId}`, fallbacks: [], autoProviderFallback: false },
-  };
+  applyModel(next, {
+    primary: `${providerId}/${modelId}`,
+    fallbacks: [],
+    autoProviderFallback: false,
+  });
 
   const parsed = ConfigSchema.safeParse(next);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues.map((issue) => issue.message).join('; ') };
   }
   return { ok: true, config: next, providerId, modelId };
+}
+
+export function prepareDefaultImageGenerationSetup(
+  config: Config,
+  input: ImageGenerationSetupInput,
+): { ok: true; config: Config; providerId: string; modelId: string } | { ok: false; error: string } {
+  return prepareImageGenerationConfig(config, input, (next, model) => {
+    next.agents.defaults.models.imageGeneration = model;
+  });
+}
+
+export function prepareImageGenerationSetup(
+  config: Config,
+  agentIdRaw: string,
+  input: ImageGenerationSetupInput,
+): { ok: true; config: Config; providerId: string; modelId: string } | { ok: false; error: string } {
+  const agentId = normalizeAgentId(agentIdRaw);
+  if (!config.agents.list.some((entry) => entry.enabled !== false && normalizeAgentId(entry.id) === agentId)) {
+    return { ok: false, error: `Agent not found: ${agentId}` };
+  }
+  return prepareImageGenerationConfig(config, input, (next, model) => {
+    const index = next.agents.list.findIndex(
+      (entry) => entry.enabled !== false && normalizeAgentId(entry.id) === agentId,
+    );
+    const entry = next.agents.list[index]!;
+    entry.models = { ...(entry.models ?? {}), imageGeneration: model };
+  });
 }
 
 export async function verifyImageGenerationCredential(input: {

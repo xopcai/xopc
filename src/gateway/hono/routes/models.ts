@@ -57,7 +57,9 @@ import {
 } from '../../custom-image-providers.js';
 import {
   getAgentImageGenerationConfig,
+  getDefaultImageGenerationConfig,
   getImageGenerationCatalog,
+  prepareDefaultImageGenerationSetup,
   prepareImageGenerationSetup,
   verifyImageGenerationCredential,
 } from '../../image-generation-setup.js';
@@ -582,6 +584,85 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
           502,
         );
       }
+    },
+  );
+
+  authenticated.get('/api/image-generation/default', (c) => c.json({
+    ok: true,
+    payload: getDefaultImageGenerationConfig(service.currentConfig as Config),
+  }));
+
+  authenticated.post(
+    '/api/image-generation/default/setup',
+    strictRateLimitMiddleware,
+    async (c) => {
+      const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
+      if (!body || typeof body.providerId !== 'string') {
+        return c.json({ ok: false, error: { message: 'providerId is required' } }, 400);
+      }
+      const prepared = prepareDefaultImageGenerationSetup(
+        service.currentConfig as Config,
+        {
+          providerId: body.providerId,
+          ...(typeof body.modelId === 'string' ? { modelId: body.modelId } : {}),
+          ...(body.providerConfig && typeof body.providerConfig === 'object' && !Array.isArray(body.providerConfig)
+            ? { providerConfig: body.providerConfig as Record<string, unknown> }
+            : {}),
+        },
+      );
+      if (prepared.ok === false) {
+        return c.json({ ok: false, error: { message: prepared.error } }, 400);
+      }
+
+      const resolver = new CredentialResolver();
+      const imageProvider = getImageGenerationProvider(prepared.providerId)!;
+      const usesApiKey = resolveImageGenerationCredentialMode(imageProvider) === 'api-key';
+      const previousKey = usesApiKey
+        ? await resolver.revealGatewayStoredApiKey(prepared.providerId)
+        : undefined;
+      const suppliedKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : '';
+      const effectiveKey = usesApiKey
+        ? suppliedKey || await resolver.resolveApiKey(prepared.providerId)
+        : undefined;
+      if (usesApiKey && !effectiveKey) {
+        return c.json({ ok: false, error: { message: 'API key is required' } }, 400);
+      }
+
+      const verification = usesApiKey && suppliedKey
+        ? await verifyImageGenerationCredential({
+            providerId: prepared.providerId,
+            apiKey: suppliedKey,
+            baseUrl: typeof (body.providerConfig as Record<string, unknown> | undefined)?.baseUrl === 'string'
+              ? (body.providerConfig as Record<string, string>).baseUrl
+              : undefined,
+          })
+        : { verified: false, supported: false };
+      if (verification.supported && !verification.verified) {
+        return c.json({ ok: false, error: { message: verification.message ?? 'Credential verification failed' } }, 400);
+      }
+
+      if (usesApiKey && suppliedKey) {
+        await resolver.saveApiKey(prepared.providerId, suppliedKey, { profileName: 'default' });
+      }
+      const saved = await service.saveConfig(prepared.config);
+      if (!saved.saved) {
+        if (usesApiKey && suppliedKey) {
+          if (previousKey) {
+            await resolver.saveApiKey(prepared.providerId, previousKey, { profileName: 'default' });
+          } else {
+            await resolver.deleteProfile(`${prepared.providerId}:default`);
+          }
+        }
+        return c.json({ ok: false, error: { message: saved.error ?? 'Failed to save configuration' } }, 500);
+      }
+      return c.json({
+        ok: true,
+        payload: {
+          default: getDefaultImageGenerationConfig(service.currentConfig as Config),
+          providers: getImageGenerationCatalog(service.currentConfig as Config),
+          verification,
+        },
+      });
     },
   );
 
