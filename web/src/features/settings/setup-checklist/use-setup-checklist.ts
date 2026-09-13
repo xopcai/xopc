@@ -34,6 +34,7 @@ export function useSetupChecklist(): {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const l = m.setupStatus.labels;
+  const d = m.setupStatus.diagnostics;
   const realtimeConnected = useGatewayRealtimeStore((s) => s.connectionState === 'connected');
 
   const {
@@ -144,9 +145,31 @@ export function useSetupChecklist(): {
         skillsConfigured: (count) => l.skillsConfigured.replace('{{count}}', String(count)),
         skillsMissing: l.skillsMissing,
         readyToChat: m.setupStatus.requiredCompleteMessage,
+        diagnostics: {
+          labels: d.labels,
+          runtimeMissing: (runtimes) => d.runtimeMissing.replace('{{runtimes}}', runtimes),
+          runtimeInvalid: (runtimes) => d.runtimeInvalid.replace('{{runtimes}}', runtimes),
+          gatewayNotInstalled: d.gatewayNotInstalled,
+          gatewayUnavailable: (detail) => d.gatewayUnavailable.replace('{{detail}}', detail),
+          gatewayNotRunning: (status) => d.gatewayNotRunning.replace('{{status}}', status),
+          providerAuthMissing: d.providerAuthMissing,
+          runCommand: (command) => d.runCommand.replace('{{command}}', command),
+          installCommand: (command) => d.installCommand.replace('{{command}}', command),
+          startCommand: (command) => d.startCommand.replace('{{command}}', command),
+          logsHealthy: d.logsHealthy,
+          logsShuttingDown: d.logsShuttingDown,
+          logsErrors: (count) => d.logsErrors.replace('{{count}}', String(count)),
+          chromiumInstalled: d.chromiumInstalled,
+          chromiumNotInstalled: d.chromiumNotInstalled,
+          extensionConnected: d.extensionConnected,
+          extensionNeedsRefresh: d.extensionNeedsRefresh,
+          extensionNotConnected: d.extensionNotConnected,
+          extensionNotInstalled: d.extensionNotInstalled,
+          browserDriverConfigured: (driver) => d.browserDriverConfigured.replace('{{driver}}', driver),
+        },
       },
     });
-  }, [token, ready, realtimeConnected, configData, skillsData, providerMeta, doctorChecks, logsHealth, browserDiagnostics, l, m.setupStatus.requiredCompleteMessage]);
+  }, [token, ready, realtimeConnected, configData, skillsData, providerMeta, doctorChecks, logsHealth, browserDiagnostics, l, d, m.setupStatus.requiredCompleteMessage]);
 
   const refresh = async () => {
     await Promise.all([
