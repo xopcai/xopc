@@ -1,3 +1,4 @@
+import { fetchPublicAsset, gatewayAssetPath } from './gateway-assets';
 /**
  * Share API client — typed wrappers over the gateway's share endpoints.
  *
@@ -136,13 +137,11 @@ export async function extendShare(id: string, patch: { extendTtlMs?: number; max
  */
 export async function probeThumbnail(
   thumbnailUrl: string,
-  authToken: string | undefined,
 ): Promise<'ready' | 'pending' | 'gone' | 'unknown'> {
   if (!thumbnailUrl) return 'unknown';
   try {
-    const headers = new Headers();
-    if (authToken) headers.set('Authorization', `Bearer ${authToken}`);
-    const res = await fetch(thumbnailUrl, { method: 'HEAD', headers });
+    const path = gatewayAssetPath(thumbnailUrl);
+    const res = path ? await apiFetch(path, { method: 'HEAD' }) : await fetchPublicAsset(thumbnailUrl, { method: 'HEAD' });
     if (res.status === 200) return 'ready';
     if (res.status === 202) return 'pending';
     if (res.status === 404 || res.status === 410) return 'gone';

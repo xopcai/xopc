@@ -52,7 +52,7 @@ import {
 } from './workflow-api';
 
 function useWorkflowOwnerAgent() {
-  const token = useGatewayStore((state) => state.token);
+  const token = useGatewayStore((state) => state.sessionKey);
   const [searchParams] = useSearchParams();
   const requestedAgentId = searchParams.get('agentId')?.trim() || undefined;
   const agents = useSWR(token ? ['workflow-route-agents', token] : null, fetchGatewayAgents, { revalidateOnFocus: false });
@@ -61,7 +61,7 @@ function useWorkflowOwnerAgent() {
 }
 
 function useWorkflowDefinition(definitionId: string | undefined) {
-  const token = useGatewayStore((state) => state.token);
+  const token = useGatewayStore((state) => state.sessionKey);
   const definitions = useSWR(token ? ['workflow-route-definitions', token] : null, listWorkflowDefinitions, { revalidateOnFocus: false });
   const definition = useMemo(
     () => definitions.data?.find((item) => item.id === definitionId || item.name === definitionId),

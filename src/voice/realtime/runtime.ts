@@ -360,6 +360,11 @@ export class VoiceRealtimeRuntime {
     return true;
   }
 
+  disconnectPrincipal(principalId: string): void {
+    for (const [key, claim] of this.tickets) if (claim.principalId === principalId) { this.tickets.delete(key); this.releaseConversationReservation(claim); }
+    for (const socket of this.socketsByPrincipal.get(principalId) ?? []) socket.terminate();
+  }
+
   close(): void {
     if (this.closed) return;
     this.closed = true;
@@ -433,6 +438,7 @@ export class VoiceRealtimeRuntime {
 
     const detachPrincipal = () => {
       if (!claim) return;
+      if (this.options.isPrincipalActive?.(claim.principalId) === false) { socket.terminate(); return; }
       const sockets = this.socketsByPrincipal.get(claim.principalId);
       sockets?.delete(socket);
       if (sockets?.size === 0) this.socketsByPrincipal.delete(claim.principalId);
@@ -459,6 +465,7 @@ export class VoiceRealtimeRuntime {
     const startTimer = setTimeout(() => socket.close(4401, 'Voice session start timeout'), VOICE_REALTIME_START_TIMEOUT_MS);
     const lifecycleTimer = setInterval(() => {
       if (!claim) return;
+      if (this.options.isPrincipalActive?.(claim.principalId) === false) { socket.terminate(); return; }
       if (context?.isCurrent && !context.isCurrent()) { invalidateContext(); return; }
       if (context?.memory && !context.memory.isCurrent()) { invalidateContext(); return; }
       const now = Date.now();
@@ -474,7 +481,8 @@ export class VoiceRealtimeRuntime {
 
     const authenticate = async (message: Extract<VoiceClientMessage, { type: 'session.start' }>) => {
       const consumed = this.consumeTicket(message.payload.ticket, message.payload.sessionId);
-      if (!consumed) {
+      if (!consumed || this.options.isPrincipalActive?.(consumed.principalId) === false) {
+        if (consumed) this.releaseConversationReservation(consumed);
         socket.close(4401, 'Invalid voice session ticket');
         return;
       }

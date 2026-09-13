@@ -1,3 +1,5 @@
+import { resolveGatewayAuth } from '../gateway/auth.js';
+import { requireTunnelGatewayToken } from './auth-policy.js';
 import type { Config } from '../config/schema.js';
 import { resolveGatewayEffectiveHost } from '../config/gateway-bind.js';
 import { createLogger } from '../utils/logger.js';
@@ -144,7 +146,8 @@ export async function maybeAutoStartTunnelFromConfig(
 
   await configureTunnelFromGatewayConfig(config);
 
-  if (!gatewayToken) {
+  const resolvedAuth = resolveGatewayAuth({ authConfig: config.gateway?.auth });
+  if (resolvedAuth.mode !== 'token' || !gatewayToken?.trim()) {
     log.warn(
       { phase: 'tunnel_autostart' },
       'tunnel.autoStart is enabled but gateway auth token is unavailable (auth mode may be none)',
@@ -160,7 +163,7 @@ export async function maybeAutoStartTunnelFromConfig(
   }
 
   try {
-    await tunnel.start(port, gatewayToken);
+    await tunnel.start(port, requireTunnelGatewayToken({ mode: resolvedAuth.mode, token: gatewayToken }));
     log.info(
       { phase: 'tunnel_autostart', host, port },
       'Tunnel auto-started after gateway HTTP listen',

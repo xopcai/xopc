@@ -1,3 +1,4 @@
+import { requireTunnelGatewayToken } from '../tunnel/auth-policy.js';
 import type { Config } from '../config/schema.js';
 import type { GatewayBindMode } from '../config/schema.js';
 import type { ResolvedGatewayAuth } from './auth.js';
@@ -45,6 +46,7 @@ export function assertGatewayRuntimeConfig(params: {
   bindOverride?: GatewayBindMode;
   port: number;
 }): GatewayRuntimeConfig {
+  if (params.cfg.tunnel?.enabled) requireTunnelGatewayToken(params.auth);
   const plan = resolveGatewayListenPlan({
     cfg: params.cfg,
     bindOverride: params.bindOverride,

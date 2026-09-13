@@ -9,28 +9,12 @@ const LANGUAGE_KEY = 'xopc.language';
 
 export type StoredLanguage = 'en' | 'zh';
 
-export function getToken(): string {
-  try {
-    return localStorage.getItem(TOKEN_KEY) || '';
-  } catch {
-    return '';
-  }
+/** Read only for one-time exchange into an HttpOnly session. */
+export function readUnmigratedGatewayCredential(): string {
+  try { return localStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; }
 }
-
-export function setToken(token: string): void {
-  try {
-    localStorage.setItem(TOKEN_KEY, token);
-  } catch (err) {
-    console.error('Failed to save token:', err);
-  }
-}
-
-export function clearToken(): void {
-  try {
-    localStorage.removeItem(TOKEN_KEY);
-  } catch (err) {
-    console.error('Failed to clear token:', err);
-  }
+export function removeUnmigratedGatewayCredential(): void {
+  try { localStorage.removeItem(TOKEN_KEY); } catch { /* Storage may be disabled. */ }
 }
 
 export function getLanguage(): StoredLanguage {

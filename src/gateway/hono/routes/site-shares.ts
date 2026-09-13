@@ -1,7 +1,7 @@
 import type { Hono } from 'hono';
 import { createHash } from 'node:crypto';
 
-import { extractToken } from '../../auth.js';
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { getSiteShareStore } from '../../../share/site-share-store.js';
 import { resolveSiteShareConfig } from '../../../share/site-share-config.js';
 import { resolveSiteShareUrl } from '../../../share/share-url.js';
@@ -10,7 +10,7 @@ import { resolveGatewayEffectiveHost } from '../../../config/gateway-bind.js';
 import { resolveReverseProxyPublicUrl } from '../../public-url.js';
 import type { GatewayService } from '../../service.js';
 
-function hashGatewayToken(token: string): string {
+function hashPrincipal(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex').slice(0, 12);
 }
 
@@ -65,8 +65,7 @@ export function registerSiteShareRoutes(authenticated: Hono, deps: Authenticated
   }
 
   authenticated.post('/api/site-shares', async (c) => {
-    const gatewayToken = extractToken({ authorization: c.req.header('authorization') ?? undefined });
-    if (!gatewayToken) return c.json({ ok: false, error: { message: 'Token required' } }, 401);
+    const principalId = getGatewayPrincipal(c).principalId;
 
     let body: Record<string, unknown>;
     try {
@@ -122,7 +121,7 @@ export function registerSiteShareRoutes(authenticated: Hono, deps: Authenticated
         sessionKey,
         agentId,
         workspaceRoot,
-        gatewayTokenHash: hashGatewayToken(gatewayToken),
+        gatewayTokenHash: hashPrincipal(principalId),
       });
 
       const cfg = store.getConfig();

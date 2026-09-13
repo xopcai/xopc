@@ -97,7 +97,7 @@ function AgentDefaultsEditor({
 }
 
 export function AgentDefaultsSettingsPanel() {
-  const token = useGatewayStore((state) => state.token);
+  const token = useGatewayStore((state) => state.sessionKey);
   const language = useLocaleStore((state) => state.language);
   const zh = language === 'zh';
   const { data, error, isLoading, mutate } = useSWR(token ? 'settings-agent-defaults' : null, fetchGlobalDefaults);

@@ -1,27 +1,16 @@
 import type { Hono, MiddlewareHandler } from 'hono';
 
 import type { Config } from '../../../config/schema.js';
-import { extractToken } from '../../auth.js';
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { getExposureManager } from '../../../remote-access/exposure-manager.js';
 import type { GatewayTailscaleMode } from '../../server-tailscale.js';
 import { consumeTunnelMutationLimit } from '../../../tunnel/tunnel-rate-limit.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
-function requireGatewayToken(c: { req: { header: (name: string) => string | undefined } }): string | null {
-  return (
-    extractToken({
-      authorization: c.req.header('authorization') ?? undefined,
-    }) ?? null
-  );
-}
-
 function createExposureMutationRateLimitMiddleware(): MiddlewareHandler {
   return async (c, next) => {
-    const token = requireGatewayToken(c);
-    if (!token) {
-      return c.json({ error: 'Gateway token required' }, 401);
-    }
-    const result = consumeTunnelMutationLimit(token);
+    const principalId = getGatewayPrincipal(c).principalId;
+    const result = consumeTunnelMutationLimit(principalId);
     if (!result.allowed) {
       const retryAfterSec = Math.ceil(result.retryAfterMs / 1000);
       c.header('Retry-After', String(retryAfterSec));

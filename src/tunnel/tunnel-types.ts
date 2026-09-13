@@ -28,6 +28,7 @@ export type TunnelRegistration = {
     serverPort: number;
     authToken: string;
     proxyName: string;
+    subdomain: string;
   };
   expiresAt: string;
   heartbeatIntervalMs: number;
@@ -42,6 +43,7 @@ export type PersistedTunnelState = {
   registeredAt: string;
   enabled?: boolean;
   /** Saved on register so stop/start can resume without re-registering. */
+  frpcSubdomain?: string;
   frpcServerAddr?: string;
   frpcServerPort?: number;
   proxyName?: string;

@@ -1,6 +1,8 @@
 import os from 'node:os';
+import { buckets } from '../../rate-limit/index.js';
 
 import type { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 
 import {
@@ -79,6 +81,20 @@ function pairingLinkPayload(input: {
 }
 
 export function registerDeviceAuthPublicRoutes(app: Hono): void {
+  app.post('/api/gateway-identity/challenge', bodyLimit({ maxSize: 512 }), async (c) => {
+    const budget = buckets.identityChallenge().consume('gateway');
+    if (!budget.allowed) {
+      c.header('Retry-After', String(Math.ceil(budget.retryAfterMs / 1000)));
+      return c.json({ error: 'Too many identity challenges' }, 429);
+    }
+    const parsed = z.strictObject({ nonce: z.string().regex(/^[A-Za-z0-9_-]{32,64}$/) }).safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: 'Invalid identity challenge' }, 400);
+    const identity = getOrCreateGatewayIdentity();
+    const signedPayload = Buffer.from(JSON.stringify({ purpose: 'gateway-route-v1', gatewayId: identity.id,
+      nonce: parsed.data.nonce, expiresAt: Date.now() + 30_000 })).toString('base64url');
+    c.header('Cache-Control', 'no-store');
+    return c.json({ signedPayload, signature: signGatewayPayload(signedPayload) });
+  });
   registerPairingApprovalPublicRoutes(app);
   app.post('/api/device-auth/refresh', async (c) => {
     const parsed = refreshRequestSchema.safeParse(await c.req.json().catch(() => null));
@@ -86,7 +102,11 @@ export function registerDeviceAuthPublicRoutes(app: Hono): void {
       return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid refresh request' } }, 400);
     }
     try {
-      return c.json({ ok: true, payload: rotateDeviceRefreshToken(parsed.data) });
+      const tokens = rotateDeviceRefreshToken(parsed.data);
+      const signedPayload = Buffer.from(JSON.stringify({ purpose: 'device-refresh-v3',
+        gatewayId: getOrCreateGatewayIdentity().id, requestId: parsed.data.requestId, nonce: parsed.data.nonce,
+        expiresAt: Date.now() + 30_000, tokens })).toString('base64url');
+      return c.json({ ok: true, signedPayload, signature: signGatewayPayload(signedPayload) });
     } catch (error) {
       return c.json({
         ok: false,
@@ -228,14 +248,20 @@ export function registerDeviceRoutes(authenticated: Hono, deps: AuthenticatedRou
       return c.json({ ok: false, error: { code: 'DEVICE_REQUIRED', message: 'Device access required' } }, 403);
     }
     const revoked = revokeDevice(principal.deviceId);
-    if (revoked) deps.service.realtime.disconnectPrincipal(principal.deviceId);
+    if (revoked) {
+      deps.service.realtime.disconnectPrincipal(principal.deviceId);
+      deps.service.voiceRealtime.disconnectPrincipal(principal.deviceId);
+    }
     return c.json({ ok: true, revoked });
   });
 
   authenticated.delete('/api/devices/:deviceId', (c) => {
     const deviceId = c.req.param('deviceId');
     const revoked = revokeDevice(deviceId);
-    if (revoked) deps.service.realtime.disconnectPrincipal(deviceId);
+    if (revoked) {
+      deps.service.realtime.disconnectPrincipal(deviceId);
+      deps.service.voiceRealtime.disconnectPrincipal(deviceId);
+    }
     return c.json({ ok: true, revoked });
   });
 }

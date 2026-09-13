@@ -4,9 +4,9 @@ import { reconnectGatewayRealtime, startGatewayRealtime } from '@/features/gatew
 import { useGatewayStore } from '@/stores/gateway-store';
 
 export function useGatewayRealtime(): void {
-  const token = useGatewayStore((state) => state.token);
+  const token = useGatewayStore((state) => state.sessionKey);
   useEffect(() => {
-    return startGatewayRealtime(token);
+    return startGatewayRealtime();
   }, [token]);
   useEffect(() => {
     const reconnect = () => reconnectGatewayRealtime();

@@ -71,6 +71,7 @@ class BucketRegistry {
   private authFailureLimiter?: FailureLimiter;
   private authFailureSignature?: string;
 
+  private identityChallengeLimiter?: RateLimiter;
   private strictApiLimiter?: RateLimiter;
   private chatApiLimiter?: RateLimiter;
   private mediaApiLimiter?: RateLimiter;
@@ -100,6 +101,11 @@ class BucketRegistry {
       this.authFailureSignature = sig;
     }
     return this.authFailureLimiter;
+  }
+
+  /** Global pre-authentication signing budget; independent of authenticated traffic. */
+  identityChallenge(): RateLimiter {
+    return this.identityChallengeLimiter ??= new RateLimiter({ maxRequests: 300, windowMs: 60_000 });
   }
 
   /** Authenticated admin / mutation endpoints — 150 req / 60 s per client IP. */
@@ -200,6 +206,7 @@ class BucketRegistry {
 
   destroyAll(): void {
     this.authFailureLimiter?.destroy();
+    this.identityChallengeLimiter?.destroy();
     this.strictApiLimiter?.destroy();
     this.chatApiLimiter?.destroy();
     this.mediaApiLimiter?.destroy();
@@ -211,6 +218,7 @@ class BucketRegistry {
     this.sharePublicShortLimiter?.destroy();
     this.sharePublicLongLimiter?.destroy();
     this.authFailureLimiter = undefined;
+    this.identityChallengeLimiter = undefined;
     this.strictApiLimiter = undefined;
     this.chatApiLimiter = undefined;
     this.mediaApiLimiter = undefined;

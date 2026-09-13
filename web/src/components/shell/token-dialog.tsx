@@ -14,9 +14,9 @@ export function TokenDialog() {
   const open = useGatewayStore((s) => s.tokenDialogOpen);
   const baseUrl = useGatewayStore((s) => s.baseUrl);
   const tokenExpired = useGatewayStore((s) => s.tokenExpired);
-  const setGatewayToken = useGatewayStore((s) => s.setGatewayToken);
+  const setBrowserSession = useGatewayStore((s) => s.setBrowserSession);
   const closeTokenDialog = useGatewayStore((s) => s.closeTokenDialog);
-  const storedToken = useGatewayStore((s) => s.token);
+  const storedToken = useGatewayStore((s) => s.sessionKey);
 
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).token;
@@ -53,7 +53,7 @@ export function TokenDialog() {
             className="mt-4"
             baseUrl={baseUrl}
             tokenInputRef={tokenInputRef}
-            onSubmit={setGatewayToken}
+            onSubmit={setBrowserSession}
             footerLeft={
               canDismiss ? (
                 <Button type="button" variant="ghost" onClick={() => closeTokenDialog()}>

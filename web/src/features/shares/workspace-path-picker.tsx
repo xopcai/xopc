@@ -52,7 +52,7 @@ export function WorkspacePathPickerDialog({
 
   // Active "chat editor" agent — match the chat sidebar by default.
   const chatEditorAgentId = useWorkspaceEditorAgentStore((s) => s.agentId);
-  const token = useGatewayStore((s) => s.token);
+  const token = useGatewayStore((s) => s.sessionKey);
   const hasToken = Boolean(token);
 
   const { data: agentsPayload } = useSWR(

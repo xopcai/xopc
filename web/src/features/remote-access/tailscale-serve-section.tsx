@@ -45,7 +45,7 @@ export function TailscaleServeSection({ embedded = false }: { embedded?: boolean
     }),
     [language, t.copyUrl, t.copied],
   );
-  const hasToken = Boolean(useGatewayStore((s) => s.token));
+  const hasToken = Boolean(useGatewayStore((s) => s.sessionKey));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

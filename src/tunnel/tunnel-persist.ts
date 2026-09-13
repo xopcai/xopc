@@ -9,6 +9,7 @@ export function persistedFromRegistration(registration: TunnelRegistration): Per
     frpcAuthToken: registration.frpc.authToken,
     registeredAt: new Date().toISOString(),
     enabled: true,
+    frpcSubdomain: registration.frpc.subdomain,
     frpcServerAddr: registration.frpc.serverAddr,
     frpcServerPort: registration.frpc.serverPort,
     proxyName: registration.frpc.proxyName,
@@ -21,6 +22,7 @@ export function registrationFromPersisted(
   persisted: PersistedTunnelState,
 ): TunnelRegistration | null {
   if (
+    !persisted.frpcSubdomain ||
     !persisted.frpcAuthToken ||
     !persisted.frpcServerAddr ||
     !persisted.frpcServerPort ||
@@ -34,6 +36,7 @@ export function registrationFromPersisted(
     subdomain: persisted.subdomain,
     publicUrl: persisted.publicUrl,
     frpc: {
+      subdomain: persisted.frpcSubdomain,
       serverAddr: persisted.frpcServerAddr,
       serverPort: persisted.frpcServerPort,
       authToken: persisted.frpcAuthToken,

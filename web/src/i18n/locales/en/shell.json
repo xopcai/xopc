@@ -68,7 +68,7 @@
     "sessionExpired": "Your session expired. Enter a valid gateway token to continue.",
     "tokenHelpSummary": "Where do I find my token?",
     "tokenHelpOnboard": "Run xopc onboard (or xopc onboard --gateway). The setup output includes your token.",
-    "tokenHelpLink": "Opening a setup link ending in ?token= saves the token automatically.",
+    "tokenHelpLink": "This browser remembers its authorized session. Your access credential is not stored in page storage.",
     "docsGatewayLink": "Gateway guide"
   },
   "electron": {

@@ -109,7 +109,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
 } = {}) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
-  const token = useGatewayStore((s) => s.token);
+  const token = useGatewayStore((s) => s.sessionKey);
   const navigate = useNavigate();
   const location = useLocation();
   const { pathname } = location;

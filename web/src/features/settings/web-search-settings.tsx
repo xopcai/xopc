@@ -69,7 +69,7 @@ export function WebSearchSettingsPanel() {
   const m = messages(language);
   const w = m.webSearchSettings;
   const logs = m.logs;
-  const token = useGatewayStore((st) => st.token);
+  const token = useGatewayStore((st) => st.sessionKey);
   const hasToken = Boolean(token);
 
   const [formDraft, dispatchForm] = useReducer(webSearchFormReducer, { form: null, baseline: null });

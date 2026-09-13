@@ -7,6 +7,7 @@ export type GatewayPrincipal = {
   principalId: string;
   deviceId?: string;
   accessSessionId?: string;
+  browserSessionId?: string;
   scopes: readonly GatewayScope[];
 };
 

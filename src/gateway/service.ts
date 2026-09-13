@@ -106,6 +106,7 @@ import { GatewaySessionsApi } from './service/sessions-api.js';
 import { GatewayMarketplaceService } from './service/marketplace-service.js';
 import { GatewayConfigCoordinator } from './service/config-coordinator.js';
 import { GatewayAgentRunner } from './service/agent-runner.js';
+import { isBrowserSessionActive } from '../storage/sqlite/browser-session-repository.js';
 import { RealtimeRuntime } from '../realtime/runtime.js';
 import { VoiceRealtimeRuntime } from '../voice/realtime/runtime.js';
 import { DurableVoiceAgentBroker } from '../voice/realtime/agentBroker.js';
@@ -174,8 +175,13 @@ export class GatewayService {
   private auth: ResolvedGatewayAuth;
 
   readonly endpointTools = new EndpointToolRuntime();
-  readonly realtime = new RealtimeRuntime(this.endpointTools);
+  private isRealtimePrincipalActive = (principalId: string): boolean => {
+    if (!principalId.startsWith('browser:')) return true;
+    try { return isBrowserSessionActive(principalId.slice('browser:'.length), this.auth); } catch { return false; }
+  };
+  readonly realtime = new RealtimeRuntime(this.endpointTools, this.isRealtimePrincipalActive);
   readonly voiceRealtime = new VoiceRealtimeRuntime({
+    isPrincipalActive: this.isRealtimePrincipalActive,
     getConversationContext: async (sessionKey, expectedSessionId) => {
       const before = await this.sessionIndex.getSessionMetadata(sessionKey);
       if (before?.sessionId !== expectedSessionId) throw new Error('Conversation changed before voice connection');

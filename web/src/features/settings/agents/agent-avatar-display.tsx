@@ -31,12 +31,12 @@ function fallbackAvatarDataUri(agentId: string, size = 128): string {
 
 type ResolvedAvatar =
   | { kind: 'sync'; src: string }
+  | { kind: 'authenticated'; url: string; fallbackSrc: string }
   | { kind: 'dicebear'; styleId: StoredDicebearStyleId; seed: string; fallbackSrc: string };
 
 function resolveAvatar(
   agentId: string,
   avatar: string | undefined,
-  token: string | null | undefined,
   size: number,
   cacheRevision: number,
 ): ResolvedAvatar {
@@ -48,14 +48,11 @@ function resolveAvatar(
   if (trimmed === XOPC_CUSTOM_AVATAR) {
     const u = apiUrl(`/api/agents/${encodeURIComponent(agentId)}/avatar`);
     const params = new URLSearchParams();
-    if (token) {
-      params.set('token', token);
-    }
     if (cacheRevision > 0) {
       params.set('v', String(cacheRevision));
     }
     const qs = params.toString();
-    return { kind: 'sync', src: qs ? `${u}?${qs}` : u };
+    return { kind: 'authenticated', url: qs ? `${u}?${qs}` : u, fallbackSrc };
   }
   if (/^https?:\/\//i.test(trimmed)) {
     return { kind: 'sync', src: trimmed };
@@ -74,7 +71,7 @@ export function AgentAvatarDisplay(props: {
   className?: string;
   token?: string | null;
 }) {
-  const storeToken = useGatewayStore((s) => s.token);
+  const storeToken = useGatewayStore((s) => s.sessionKey);
   const token = props.token !== undefined ? props.token : storeToken;
   const { agentId, avatar, size = 44 } = props;
 
@@ -92,7 +89,7 @@ export function AgentAvatarDisplay(props: {
 
   const cacheRevision = getAgentAvatarCacheRevision(agentId);
   const resolved = useMemo(
-    () => resolveAvatar(agentId, avatar, token, size, cacheRevision),
+    () => resolveAvatar(agentId, avatar, size, cacheRevision),
     [agentId, avatar, token, size, cacheRevision],
   );
   const primarySrc = resolved.kind === 'sync' ? resolved.src : resolved.fallbackSrc;
@@ -101,6 +98,29 @@ export function AgentAvatarDisplay(props: {
   useEffect(() => {
     setSrc(primarySrc);
   }, [primarySrc]);
+
+  useEffect(() => {
+    if (resolved.kind !== 'authenticated') return;
+    setSrc(resolved.fallbackSrc);
+    if (!token) return;
+    const controller = new AbortController();
+    let objectUrl: string | undefined;
+    void fetch(resolved.url, {
+      credentials: 'same-origin',
+      signal: controller.signal,
+      redirect: 'error',
+    }).then(async (response) => {
+      if (!response.ok) return;
+      const blob = await response.blob();
+      if (controller.signal.aborted) return;
+      objectUrl = URL.createObjectURL(blob);
+      setSrc(objectUrl);
+    }).catch(() => {});
+    return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [resolved, token]);
 
   useEffect(() => {
     if (resolved.kind !== 'dicebear') return;

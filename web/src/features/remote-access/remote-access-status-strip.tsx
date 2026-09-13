@@ -35,7 +35,7 @@ function StatusPill({ label, kind }: { label: string; kind: StatusKind }) {
 export function RemoteAccessStatusStrip({ onOpenTab }: { onOpenTab: (tab: RemoteAccessTabId) => void }) {
   const language = useLocaleStore((s) => s.language);
   const g = messages(language).remoteAccess.guide;
-  const hasToken = Boolean(useGatewayStore((s) => s.token));
+  const hasToken = Boolean(useGatewayStore((s) => s.sessionKey));
 
   const { data: exposure } = useSWR(hasToken ? 'exposure-status' : null, fetchExposureStatus, {
     refreshInterval: 30_000,

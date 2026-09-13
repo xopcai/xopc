@@ -8,7 +8,6 @@ import type { Context } from 'hono';
 import { getConnInfo } from '@hono/node-server/conninfo';
 
 import { buckets } from '../../rate-limit/index.js';
-import { getClientIpFromHeaders } from '../../security/loopback.js';
 import { resolveClientIpFromRequest } from '../../client-ip.js';
 import { createLogger } from '../../../utils/logger.js';
 
@@ -23,21 +22,18 @@ export type StrictRateLimitDeps = {
 
 function resolveClientIp(c: Context, deps: StrictRateLimitDeps): string {
   const { trustedProxies, allowRealIpFallback } = deps.getTrustedProxyContext();
-  if (trustedProxies?.length) {
     let remoteAddress: string | undefined;
-    try {
-      remoteAddress = getConnInfo(c).remote.address;
-    } catch {
-      remoteAddress = undefined;
-    }
-    return resolveClientIpFromRequest({
-      remoteAddress,
-      getHeader: (name) => c.req.header(name),
-      trustedProxies,
-      allowRealIpFallback,
-    });
+  try {
+    remoteAddress = getConnInfo(c).remote.address;
+  } catch {
+    remoteAddress = undefined;
   }
-  return getClientIpFromHeaders({ get: (name) => c.req.header(name) ?? undefined });
+  return resolveClientIpFromRequest({
+    remoteAddress,
+    getHeader: (name) => c.req.header(name),
+    trustedProxies,
+    allowRealIpFallback,
+  });
 }
 
 function createClientRateLimitMiddleware(

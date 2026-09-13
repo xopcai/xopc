@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createHonoApp, isExtensionGatewayUiAssetPath } from '../hono/app.js';
-import { isQueryTokenAllowedPath } from '../hono/middleware/auth.js';
 import type { GatewayService } from '../service.js';
 import { resolveGatewayEffectiveHost } from '../../config/gateway-bind.js';
 import { GatewayConfigSchema, type Config } from '../../config/schema.js';
@@ -100,16 +99,6 @@ describe('Gateway Security Fixes', () => {
       const app = createHonoApp({ service });
 
       expect((await app.request('/api/config?token=correct-password')).status).toBe(401);
-    });
-  });
-
-  describe('query token path policy', () => {
-    it('allows query tokens only for avatar GET requests', () => {
-      expect(isQueryTokenAllowedPath('/api/agents/main/avatar', 'GET')).toBe(true);
-      expect(isQueryTokenAllowedPath('/api/notes/n1/media/a1', 'GET')).toBe(false);
-      expect(isQueryTokenAllowedPath('/api/agents/main/avatar', 'PUT')).toBe(false);
-      expect(isQueryTokenAllowedPath('/api/notes/n1/media/a1', 'POST')).toBe(false);
-      expect(isQueryTokenAllowedPath('/api/config', 'GET')).toBe(false);
     });
   });
 
@@ -732,12 +721,12 @@ describe('Gateway Security Fixes', () => {
       expect(badAfterSuccess.status).toBe(401);
     });
 
-    it('allows GET avatars with ?token= (img subresources cannot send Authorization)', async () => {
+    it('rejects owner credentials in avatar query strings', async () => {
       const service = createMockService({ gateway: { auth: { mode: 'token', token: 'test' } } });
       const app = createHonoApp({ service });
 
       const res = await app.request('/api/agents/main/avatar?token=test');
-      expect(res.status).not.toBe(401);
+      expect(res.status).toBe(401);
 
       const rejected = await app.request('/api/config?token=test');
       expect(rejected.status).toBe(401);

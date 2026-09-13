@@ -1,19 +1,16 @@
-import { apiUrl } from '@/lib/url';
+import { establishBrowserSession } from '@/stores/gateway-store';
 
-export type GatewayCredentialVerification = 'valid' | 'rejected' | 'unreachable' | 'failed';
+export type GatewayCredentialVerification =
+  | { status: 'valid'; sessionKey: string }
+  | { status: 'rejected' | 'unreachable' | 'failed' };
 
-/** Verify a candidate before storing it so invalid credentials do not briefly enter app state. */
-export async function verifyGatewayCredential(
-  credential: string,
-): Promise<GatewayCredentialVerification> {
+export async function verifyGatewayCredential(credential: string): Promise<GatewayCredentialVerification> {
   try {
-    const response = await fetch(apiUrl('/api/config'), {
-      headers: { Authorization: `Bearer ${credential}` },
-    });
-    if (response.ok) return 'valid';
-    if (response.status === 401 || response.status === 403) return 'rejected';
-    return 'failed';
-  } catch {
-    return 'unreachable';
-  }
+    const response = await establishBrowserSession(credential);
+    if (response.ok) {
+      const body = await response.json() as { sessionKey?: string };
+      return body.sessionKey ? { status: 'valid', sessionKey: body.sessionKey } : { status: 'failed' };
+    }
+    return { status: response.status === 401 || response.status === 403 ? 'rejected' : 'failed' };
+  } catch { return { status: 'unreachable' }; }
 }

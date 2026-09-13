@@ -295,3 +295,9 @@ pnpm run mobile:configure:ios:github
 - iOS TestFlight 发布：`scripts/apps/mobile-expo/release-ios-testflight.sh`
 - iOS 凭据同步：`scripts/apps/mobile-expo/configure-ios-github-secrets.sh`
 - 双端 Patch 发布：`scripts/apps/mobile-expo/release-patch.sh`
+
+## FRP 安全版的原生构建约束
+
+`expo-file-system@56.0.11` 使用仓库固定补丁拒绝上传重定向；`apps/mobile-expo/package.json` 的 `expo.autolinking.buildFromSource` 必须包含 `expo-file-system`。Expo 56 默认可能选择预编译原生模块，仅修改 npm 源码并不能证明补丁已进入安装包。
+
+Android / TestFlight 发布脚本调用 `verify-native-upload-policy.py` 检查 APK/AAB 的 DEX 或 IPA 的原生可执行文件。仅在 JS bundle 中找到同名标记不算通过，检查失败不得分发。该检查用于防止预编译模块覆盖补丁，不替代真机重定向/文件上传验收。旧原生包中的客户端检测会拒绝上传，不允许关闭检测以恢复上传。

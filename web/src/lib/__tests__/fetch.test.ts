@@ -14,7 +14,7 @@ function makeResponse(status: number, body: unknown = {}): Response {
 describe('apiFetch authBarrier', () => {
   beforeEach(() => {
     __resetAuthBarrierForTests();
-    useGatewayStore.setState({ token: 'good-token', tokenExpired: false, tokenDialogOpen: false });
+    useGatewayStore.setState({ sessionKey: 'good-token', tokenExpired: false, tokenDialogOpen: false });
   });
 
   afterEach(() => {
@@ -39,9 +39,9 @@ describe('apiFetch authBarrier', () => {
     await Promise.resolve();
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    // Releasing the barrier — same path the store uses on setGatewayToken.
-    useGatewayStore.setState({ token: 'fresh-token' });
-    window.dispatchEvent(new CustomEvent('token-saved', { detail: { token: 'fresh-token' } }));
+    // Releasing the barrier — same path the store uses on setBrowserSession.
+    useGatewayStore.setState({ sessionKey: 'fresh-token' });
+    window.dispatchEvent(new CustomEvent('gateway-authenticated', { detail: { token: 'fresh-token' } }));
 
     const second = await secondPromise;
     expect(second.status).toBe(200);
@@ -49,7 +49,8 @@ describe('apiFetch authBarrier', () => {
 
     // Second request must have gone out with the fresh token, not the stale one.
     const headers = (fetchMock.mock.calls[1][1] as RequestInit).headers as Headers;
-    expect(headers.get('authorization')).toBe('Bearer fresh-token');
+    expect(headers.get('authorization')).toBeNull();
+    expect((fetchMock.mock.calls[1][1] as RequestInit).credentials).toBe('same-origin');
   });
 
   it('coalesces concurrent 401s into a single barrier without firing dialog state changes per response', async () => {
@@ -81,8 +82,8 @@ describe('apiFetch authBarrier', () => {
     onUnauthSpy.mockRestore();
 
     // Cleanup so the parked request doesn't leak into the next test.
-    useGatewayStore.setState({ token: 'fresh-token' });
-    window.dispatchEvent(new CustomEvent('token-saved', { detail: { token: 'fresh-token' } }));
+    useGatewayStore.setState({ sessionKey: 'fresh-token' });
+    window.dispatchEvent(new CustomEvent('gateway-authenticated', { detail: { token: 'fresh-token' } }));
     fetchMock.mockResolvedValueOnce(makeResponse(200, { ok: true }));
     await blocked;
   });

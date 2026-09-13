@@ -1,13 +1,13 @@
 import { fetchJson } from '@/lib/fetch';
 import { isElectron } from '@/lib/electron-env';
 import { apiUrl } from '@/lib/url';
-import { useGatewayStore } from '@/stores/gateway-store';
+import { initGatewayFromWindow } from '@/stores/gateway-store';
 
 export async function restartGatewayAfterConfigChange(): Promise<{ ok: boolean; message?: string }> {
   if (isElectron() && window.electronAPI?.gateway?.restart) {
     const res = await window.electronAPI.gateway.restart();
     if (res.ok && res.token) {
-      useGatewayStore.getState().setGatewayToken(res.token);
+      await initGatewayFromWindow();
     }
     return res;
   }
@@ -23,18 +23,20 @@ export async function restartGatewayAfterConfigChange(): Promise<{ ok: boolean; 
 }
 
 export async function waitForGatewayApiReady(
-  token: string,
+  sessionKey: string,
   params: { timeoutMs?: number; intervalMs?: number } = {},
 ): Promise<boolean> {
   const timeoutMs = params.timeoutMs ?? 90_000;
   const intervalMs = params.intervalMs ?? 500;
+  if (!sessionKey) throw new Error('Gateway session is unavailable');
   const deadline = Date.now() + timeoutMs;
 
   const pollOnce = async (): Promise<boolean> => {
     if (Date.now() >= deadline) return false;
     try {
       const res = await fetch(apiUrl('/api/status'), {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'same-origin',
+        redirect: 'error',
       });
       if (res.ok) return true;
     } catch {

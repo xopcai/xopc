@@ -1,45 +1,32 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-
 import type { ElectronAPI } from '@/types/electron';
-
 import { initGatewayFromWindow, useGatewayStore } from './gateway-store';
 
-describe('initGatewayFromWindow', () => {
-  afterEach(() => {
-    localStorage.clear();
-    delete window.electronAPI;
-    useGatewayStore.setState({ token: undefined, tokenDialogOpen: false, tokenExpired: false });
-    vi.restoreAllMocks();
-  });
-
-  it('hydrates the embedded credential before initialization completes', async () => {
-    window.electronAPI = {
-      gateway: { getCredential: vi.fn().mockResolvedValue('embedded-token') },
-    } as unknown as ElectronAPI;
-
+describe('HttpOnly browser session bootstrap', () => {
+  afterEach(() => { localStorage.clear(); delete window.electronAPI; useGatewayStore.setState({ sessionKey: undefined }); vi.unstubAllGlobals(); });
+  it('restores an existing cookie session without requesting the owner credential', async () => {
+    const getCredential = vi.fn();
+    window.electronAPI = { gateway: { getCredential } } as unknown as ElectronAPI;
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ sessionKey: 'browser:session' })));
     await initGatewayFromWindow();
-
-    expect(useGatewayStore.getState().token).toBe('embedded-token');
+    expect(useGatewayStore.getState().sessionKey).toBe('browser:session'); expect(getCredential).not.toHaveBeenCalled();
   });
-
-  it('falls back to the stored credential when the Electron gateway is not embedded', async () => {
-    localStorage.setItem('xopc.token', 'dev-gateway-token');
-    window.electronAPI = {
-      gateway: { getCredential: vi.fn().mockResolvedValue(undefined) },
-    } as unknown as ElectronAPI;
-
-    await initGatewayFromWindow();
-
-    expect(useGatewayStore.getState().token).toBe('dev-gateway-token');
+  it('exchanges the embedded credential without persisting it or using it as a cache key', async () => {
+    window.electronAPI = { gateway: { getCredential: vi.fn().mockResolvedValue('embedded-secret') } } as unknown as ElectronAPI;
+    const fetch = vi.fn().mockResolvedValueOnce(new Response('', { status: 401 })).mockResolvedValueOnce(Response.json({ sessionKey: 'browser:session' }));
+    vi.stubGlobal('fetch', fetch); await initGatewayFromWindow();
+    expect(useGatewayStore.getState().sessionKey).toBe('browser:session');
+    expect(localStorage.getItem('xopc.token')).toBeNull();
+    expect(fetch.mock.calls[1][1].headers.Authorization).toBe('Bearer embedded-secret');
   });
-
-  it('falls back to the stored credential when a dev preload has no credential bridge', async () => {
-    localStorage.setItem('xopc.token', 'stored-token');
-    window.electronAPI = { gateway: {} } as unknown as ElectronAPI;
-
-    await initGatewayFromWindow();
-
-    expect(useGatewayStore.getState().token).toBe('stored-token');
+  it('removes the old stored credential only after a successful exchange', async () => {
+    localStorage.setItem('xopc.token', 'stored-secret');
+    const fetch = vi.fn().mockResolvedValueOnce(new Response('', { status: 401 })).mockRejectedValueOnce(new Error('offline'));
+    vi.stubGlobal('fetch', fetch); await initGatewayFromWindow();
+    expect(localStorage.getItem('xopc.token')).toBe('stored-secret');
+    fetch.mockResolvedValueOnce(new Response('', { status: 401 })).mockResolvedValueOnce(Response.json({ sessionKey: 'browser:session' }));
+    await initGatewayFromWindow(); expect(localStorage.getItem('xopc.token')).toBeNull();
+    expect(JSON.stringify(useGatewayStore.getState())).not.toContain('stored-secret');
   });
 });

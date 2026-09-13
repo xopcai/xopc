@@ -8,8 +8,8 @@ import { useGatewayStore } from '@/stores/gateway-store';
  * as a brute-force attempt and could lock the user out before the token
  * dialog even opened.
  *
- * Released by the `token-saved` window event dispatched from
- * `useGatewayStore.setGatewayToken`. In-flight requests that miss the latch
+ * Released by the `gateway-authenticated` window event dispatched from
+ * `useGatewayStore.setBrowserSession`. In-flight requests that miss the latch
  * still get 401, but the gateway-side 1-second burst coalesce collapses
  * them into a single attempt.
  */
@@ -31,7 +31,7 @@ function releaseAuthBarrier(): void {
 }
 
 if (typeof window !== 'undefined') {
-  window.addEventListener('token-saved', releaseAuthBarrier);
+  window.addEventListener('gateway-authenticated', releaseAuthBarrier);
 }
 
 /** Test-only — drops barrier state between cases. */
@@ -44,7 +44,6 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
     await authBarrier;
   }
 
-  const token = useGatewayStore.getState().token;
   const headers = new Headers(init?.headers);
   const body = init?.body;
   const isFormData =
@@ -52,11 +51,8 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
   if (!headers.has('Content-Type') && !isFormData) {
     headers.set('Content-Type', 'application/json');
   }
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
 
-  const res = await fetch(input, { ...init, headers });
+  const res = await fetch(input, { ...init, credentials: 'same-origin', redirect: 'error', headers });
 
   if (res.status === 401) {
     engageAuthBarrier();

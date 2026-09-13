@@ -8,8 +8,8 @@ import { useGatewayStore } from '@/stores/gateway-store';
 
 it('preserves the new conversation project and temporary mode when selecting another agent', async () => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-  const previousToken = useGatewayStore.getState().token;
-  useGatewayStore.setState({ token: undefined });
+  const previousToken = useGatewayStore.getState().sessionKey;
+  useGatewayStore.setState({ sessionKey: undefined });
   const container = document.createElement('div');
   const root = createRoot(container);
   const navigate = vi.fn();
@@ -34,7 +34,7 @@ it('preserves the new conversation project and temporary mode when selecting ano
     });
   } finally {
     await act(async () => root.unmount());
-    useGatewayStore.setState({ token: previousToken });
+    useGatewayStore.setState({ sessionKey: previousToken });
     localStorage.clear();
   }
 });

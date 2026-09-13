@@ -30,7 +30,7 @@ export function useSetupChecklist(): {
   snapshot: SetupStatusSnapshot | null;
   refresh: () => Promise<void>;
 } {
-  const token = useGatewayStore((s) => s.token);
+  const token = useGatewayStore((s) => s.sessionKey);
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const l = m.setupStatus.labels;
