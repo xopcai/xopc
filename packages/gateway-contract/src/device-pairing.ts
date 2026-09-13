@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 export const DEVICE_PAIRING_VERSION = 3;
+export const devicePairingTargetKindSchema = z.enum(['mobile', 'browser']);
+export type DevicePairingTargetKind = z.infer<typeof devicePairingTargetKindSchema>;
 export const devicePairingKeySchema = z.strictObject({
   kty: z.literal('EC'), crv: z.literal('P-256'),
   x: z.string().regex(/^[A-Za-z0-9_-]{43}$/),

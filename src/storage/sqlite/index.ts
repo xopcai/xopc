@@ -65,12 +65,10 @@ export {
   type GatewayIdentity,
 } from './gateway-identity-repository.js';
 export {
-  consumeDevicePairingToken,
   createDevicePairingSetup,
   isDevicePairingSetupActive,
   type DevicePairingSetup,
   type DeviceRoute,
-  type PairingConsumeResult,
 } from './device-pairing-repository.js';
 export {
   claimContextExtractionRun,

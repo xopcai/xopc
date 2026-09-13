@@ -52,12 +52,14 @@ describe('browser native messaging framing', () => {
     });
     const payload = JSON.parse(Buffer.from(new URL(result.pairingLink).hash.slice(3), 'base64url').toString('utf8')) as {
       version: number;
+      targetKind: string;
       routes: Array<{ kind: string; url: string }>;
       expiresAt: number;
     };
     expect(result.gatewayUrl).toBe('http://127.0.0.1:18888');
     expect(payload).toMatchObject({
       version: 3,
+      targetKind: 'browser',
       routes: [{ kind: 'local-browser', url: 'http://127.0.0.1:18888' }],
     });
     expect(payload.expiresAt).toBeGreaterThan(Date.now());

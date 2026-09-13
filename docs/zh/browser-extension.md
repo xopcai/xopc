@@ -83,8 +83,8 @@ Native Messaging 只用于本机发现和 enrollment，不承载聊天正文、�
 运行在另一台电脑或服务器上的 Gateway 不会获得本机自动批准。这是安全边界：网页、远程服务器或伪造的 localhost 响应都不能静默登记浏览器设备。
 
 1. 通过 Tailscale 或 HTTPS 等受保护入口暴露 Gateway，参阅[远程访问](./remote-access.md)。
-2. 在 Gateway 管理入口生成新的浏览器配对链接。
-3. 将链接粘贴到扩展。
+2. 在 Gateway 管理入口打开 **设置 → 设备接入 → 连接浏览器扩展**。
+3. 在安装了扩展的电脑上打开一次性浏览器邀请，再点击 **Open xopc extension**。若无法自动交接，可复制邀请并粘贴到扩展。
 4. 对比确认码，并在 Gateway 中批准请求。
 
 扩展只申请所选 Gateway origin 的访问权限。使用 extension driver 时，用户浏览器需要保持在线；无人值守的服务器自动化更适合 Playwright 或已配置的远程浏览器，不应依赖某个用户的 Chrome 会话。
@@ -178,7 +178,7 @@ xopc `v0.0.268` 修复了一个问题：没有 tab binding 的浏览器动作会
 - 扩展 UI 和脚本全部本地打包，Gateway 不下发远程可执行代码。
 - Gateway 访问使用 scope 受限的浏览器设备凭据；Realtime 浏览器控制还需要签名 endpoint 身份和短期 turn token。
 - 本机自动 enrollment 同时限制固定扩展 ID、loopback Gateway、native issuer、公钥指纹、nonce 和短有效期。
-- 远程/自部署 Gateway 需要明确的配对链接和 owner 批准。
+- 远程/自部署连接只接受固定 `https://link.xopc.ai/connect` 页面的邀请交接，并且仍需 owner 批准。
 - 页面访问是可选、按 origin 授权的；页面内容是不可信数据。
 - 当前标签页控制需要 Session binding，并继续受 URL、风险、上传和审批策略约束。
 

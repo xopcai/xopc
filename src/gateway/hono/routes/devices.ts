@@ -5,29 +5,22 @@ import type { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 
+import { devicePairingTargetKindSchema } from '@xopcai/gateway-contract';
+
 import {
   listDevices,
-  createDevice,
-  issueDeviceTokenPair,
   revokeDevice,
   rotateDeviceRefreshToken,
 } from '../../../storage/sqlite/device-access-repository.js';
 import {
-  consumeDevicePairingToken,
   createDevicePairingSetup,
   isDevicePairingSetupActive,
-  type DeviceRoute,
 } from '../../../storage/sqlite/device-pairing-repository.js';
 import {
   getOrCreateGatewayIdentity,
   getGatewayIdentityPublicKeyRaw,
   signGatewayPayload,
 } from '../../../storage/sqlite/gateway-identity-repository.js';
-import { runSqliteWriteTransaction } from '../../../storage/sqlite/transaction.js';
-import {
-  DEFAULT_BROWSER_EXTENSION_SCOPES,
-  DEFAULT_MOBILE_SCOPES,
-} from '../../security/gateway-scopes.js';
 import { resolveSecureDeviceRoutes } from '../../device-routes.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -42,39 +35,22 @@ const refreshRequestSchema = z.strictObject({
   signature: z.string().min(1).max(256),
 });
 
-const pairingExchangeSchema = z.strictObject({
-  pairingToken: z.string().min(1).max(256),
-  device: z.strictObject({
-    displayName: z.string().trim().min(1).max(80),
-    platform: z.enum(['ios', 'android', 'chrome']),
-    extensionId: z.string().regex(/^[a-p]{32}$/).optional(),
-    publicKeyJwk: z.strictObject({
-      kty: z.literal('EC'),
-      crv: z.literal('P-256'),
-      x: z.string().min(40).max(64),
-      y: z.string().min(40).max(64),
-    }),
-  }),
-}).superRefine((value, context) => {
-  if (value.device.platform === 'chrome' && !value.device.extensionId) {
-    context.addIssue({ code: 'custom', path: ['device', 'extensionId'], message: 'Chrome devices require an extension id' });
-  }
-  if (value.device.platform !== 'chrome' && value.device.extensionId) {
-    context.addIssue({ code: 'custom', path: ['device', 'extensionId'], message: 'Only Chrome devices may set an extension id' });
-  }
-});
-
 const pairingProbeSchema = z.strictObject({
   pairingId: z.string().uuid(),
 });
 
+const pairingSetupSchema = z.strictObject({
+  targetKind: devicePairingTargetKindSchema,
+});
+
 function pairingLinkPayload(input: {
-  version: 2 | 3;
+  version: 3;
   pairingToken: string;
   gatewayId: string;
   gatewayName: string;
   gatewayPublicKey: string;
   routes: ReturnType<typeof resolveSecureDeviceRoutes>;
+  targetKind: 'mobile' | 'browser';
   expiresAt: number;
 }): string {
   return Buffer.from(JSON.stringify(input)).toString('base64url');
@@ -132,70 +108,22 @@ export function registerDeviceAuthPublicRoutes(app: Hono): void {
     return c.json({ ok: true, signedPayload: payload, signature: signGatewayPayload(payload) });
   });
 
-  app.post('/api/device-pairing/exchange', async (c) => {
-    const parsed = pairingExchangeSchema.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) {
-      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid pairing request' } }, 400);
-    }
-    const completed = runSqliteWriteTransaction(():
-      | { success: false; reason: 'invalid' | 'expired' | 'consumed' }
-      | {
-          success: true;
-          device: ReturnType<typeof createDevice>;
-          routes: DeviceRoute[];
-          tokens: ReturnType<typeof issueDeviceTokenPair>;
-        } => {
-      const pairing = consumeDevicePairingToken(parsed.data.pairingToken);
-      if (!pairing.ok && 'reason' in pairing) return { success: false, reason: pairing.reason };
-      const device = createDevice({
-        displayName: parsed.data.device.displayName,
-        platform: parsed.data.device.platform,
-        publicKeyJwk: parsed.data.device.publicKeyJwk,
-        extensionId: parsed.data.device.extensionId,
-        scopes: parsed.data.device.platform === 'chrome'
-          ? DEFAULT_BROWSER_EXTENSION_SCOPES
-          : DEFAULT_MOBILE_SCOPES,
-      });
-      return {
-        success: true as const,
-        device,
-        routes: pairing.routes,
-        tokens: issueDeviceTokenPair(device.id),
-      };
-    });
-    if ('reason' in completed) {
-      return c.json({
-        ok: false,
-        error: { code: 'PAIRING_DENIED', message: `Pairing ${completed.reason}` },
-      }, 401);
-    }
-    const identity = getOrCreateGatewayIdentity();
-    const payload = Buffer.from(JSON.stringify({
-      gateway: { id: identity.id, name: os.hostname() },
-      device: { id: completed.device.id, scopes: completed.device.scopes },
-      routes: completed.routes,
-      tokens: completed.tokens,
-    })).toString('base64url');
-    return c.json({
-      ok: true,
-      signedPayload: payload,
-      signature: signGatewayPayload(payload),
-    }, 201);
-  });
 }
 
 export function registerDeviceRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   registerPairingApprovalAdminRoutes(authenticated);
   authenticated.get('/api/device-pairing/readiness', (c) => {
     const routes = resolveSecureDeviceRoutes(deps.service.currentConfig);
-    return c.json({ ok: true, ready: routes.length > 0, routes, protocolVersions: [2, 3],
+    return c.json({ ok: true, ready: routes.length > 0, routes, protocolVersion: 3,
       routeState: routes.length > 0 ? 'configured' : 'missing',
       nextAction: routes.length > 0 ? 'scan' : 'configure-route', serverTime: Date.now() });
   });
 
   authenticated.post('/api/device-pairing/setups', async (c) => {
-    const body = await c.req.json().catch(() => ({})) as { protocolVersion?: unknown };
-    const version = body.protocolVersion === 3 ? 3 : 2;
+    const parsed = pairingSetupSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Choose a device type' } }, 400);
+    }
     const routes = resolveSecureDeviceRoutes(deps.service.currentConfig);
     if (routes.length === 0) {
       return c.json({
@@ -206,15 +134,16 @@ export function registerDeviceRoutes(authenticated: Hono, deps: AuthenticatedRou
         },
       }, 409);
     }
-    const setup = createDevicePairingSetup(routes, Date.now(), version);
+    const setup = createDevicePairingSetup(routes, Date.now(), { targetKind: parsed.data.targetKind });
     const identity = getOrCreateGatewayIdentity();
     const encoded = pairingLinkPayload({
-      version,
+      version: 3,
       pairingToken: setup.token,
       gatewayId: identity.id,
       gatewayName: os.hostname(),
       gatewayPublicKey: getGatewayIdentityPublicKeyRaw(identity),
       routes,
+      targetKind: setup.targetKind,
       expiresAt: setup.expiresAt,
     });
     return c.json({
@@ -224,7 +153,8 @@ export function registerDeviceRoutes(authenticated: Hono, deps: AuthenticatedRou
         universalLink: `https://link.xopc.ai/connect#p=${encoded}`,
         expiresAt: setup.expiresAt,
         routes,
-        protocolVersion: version,
+        protocolVersion: 3,
+        targetKind: setup.targetKind,
       },
     }, 201);
   });

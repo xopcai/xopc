@@ -25,7 +25,7 @@ const keys = crypto.generateKeyPairSync('ed25519');
 const requireReactNative = createRequire(import.meta.resolve('react-native/package.json'));
 const { AbortController: NativeAbortController } = requireReactNative('abort-controller/dist/abort-controller');
 const gatewayPublicKey = keys.publicKey.export({ format: 'jwk' }).x!;
-const pairing: ParsedGatewayQr = { version: 3, gatewayId: 'computer-a', gatewayName: 'Work Mac', gatewayPublicKey,
+const pairing: ParsedGatewayQr = { version: 3, targetKind: 'mobile', gatewayId: 'computer-a', gatewayName: 'Work Mac', gatewayPublicKey,
   pairingToken: 'xopc_pair_123_secret', expiresAt: Date.now() + 600000,
   routes: [{ id: 'r', kind: 'custom-https', url: 'https://computer.example' }] };
 function response(payload: unknown, tamper = false) {

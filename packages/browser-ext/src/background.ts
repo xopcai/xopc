@@ -16,6 +16,8 @@ import {
   createBrowserEndpointHello,
   gatewayFetch,
   getAccessProfile,
+  parseBrowserPairingLink,
+  PENDING_PAIRING_LINK_KEY,
   readProfile,
   registerBrowserEndpoint,
 } from './sidepanel/auth';
@@ -138,7 +140,34 @@ function connectWithLogging(): void {
     });
 }
 
-chrome.runtime.onMessage.addListener((message: { type: string }, _sender, sendResponse) => {
+type BrowserRuntimeMessage = {
+  type: string;
+  pairingLink?: string;
+  open?: boolean;
+};
+
+async function stagePairingInvite(
+  message: BrowserRuntimeMessage,
+  sender: chrome.runtime.MessageSender,
+): Promise<void> {
+  if (typeof message.pairingLink !== 'string' || !sender.url || !sender.tab?.id) {
+    throw new Error('Pairing handoff is missing its source tab');
+  }
+  const source = new URL(sender.url);
+  const invitation = new URL(message.pairingLink);
+  if (source.href !== invitation.href || source.protocol !== 'https:'
+    || source.hostname !== 'link.xopc.ai' || source.pathname !== '/connect') {
+    throw new Error('Pairing handoff source is not trusted');
+  }
+  parseBrowserPairingLink(invitation.href);
+  const tasks: Promise<unknown>[] = [
+    chrome.storage.session.set({ [PENDING_PAIRING_LINK_KEY]: invitation.href }),
+  ];
+  if (message.open) tasks.push(chrome.sidePanel.open({ tabId: sender.tab.id }));
+  await Promise.all(tasks);
+}
+
+chrome.runtime.onMessage.addListener((message: BrowserRuntimeMessage, sender, sendResponse) => {
   if (message.type === 'browser/get-status') {
     sendResponse({ connected: Boolean(endpointClaim), transport: 'gateway-realtime', error: lastConnectionError });
   } else if (message.type === 'browser/get-endpoint-claim') {
@@ -147,6 +176,13 @@ chrome.runtime.onMessage.addListener((message: { type: string }, _sender, sendRe
     disconnect();
     connectWithLogging();
     sendResponse({ ok: true });
+  } else if (message.type === 'browser/stage-pairing-invite') {
+    void stagePairingInvite(message, sender)
+      .then(() => sendResponse({ ok: true }))
+      .catch((cause) => sendResponse({
+        ok: false,
+        error: cause instanceof Error ? cause.message : String(cause),
+      }));
   } else {
     sendResponse({ ok: false, error: `Unknown message: ${message.type}` });
   }

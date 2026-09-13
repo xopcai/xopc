@@ -40,15 +40,18 @@ describe('device pairing routes', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  it('creates a Universal Link and exchanges it for per-device credentials', async () => {
+  it('creates a device-targeted v3 Universal Link', async () => {
     const readinessResponse = await app.request('/api/device-pairing/readiness');
     expect(await readinessResponse.json()).toMatchObject({
       ok: true,
       ready: true,
+      protocolVersion: 3,
       routes: [expect.objectContaining({ url: 'https://gateway.example.com' })],
     });
 
-    const setupResponse = await app.request('/api/device-pairing/setups', { method: 'POST' });
+    const setupResponse = await app.request('/api/device-pairing/setups', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetKind: 'mobile' }),
+    });
     expect(setupResponse.status).toBe(201);
     const setupBody = await setupResponse.json() as {
       setup: { universalLink: string; routes: Array<{ url: string }> };
@@ -58,7 +61,10 @@ describe('device pairing routes', () => {
       pairingToken: string;
       gatewayId: string;
       gatewayPublicKey: string;
+      targetKind: string;
+      version: number;
     };
+    expect(pairing).toMatchObject({ version: 3, targetKind: 'mobile' });
     expect(setupBody.setup.routes).toContainEqual(expect.objectContaining({ url: 'https://gateway.example.com' }));
 
     const probeResponse = await app.request('/api/device-pairing/probe', {
@@ -77,42 +83,13 @@ describe('device pairing routes', () => {
       Buffer.from(probe.signature, 'base64url'),
     )).toBe(true);
 
-    const deviceKeys = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
-    const exchangeResponse = await app.request('/api/device-pairing/exchange', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        pairingToken: pairing.pairingToken,
-        device: {
-          displayName: 'My iPhone',
-          platform: 'ios',
-          publicKeyJwk: deviceKeys.publicKey.export({ format: 'jwk' }),
-        },
-      }),
+    const missingTarget = await app.request('/api/device-pairing/setups', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
     });
-    expect(exchangeResponse.status).toBe(201);
-    const exchange = await exchangeResponse.json() as { signedPayload: string; signature: string };
-    expect(crypto.verify(
-      null,
-      Buffer.from(exchange.signedPayload),
-      crypto.createPublicKey({
-        format: 'jwk',
-        key: { kty: 'OKP', crv: 'Ed25519', x: pairing.gatewayPublicKey },
-      }),
-      Buffer.from(exchange.signature, 'base64url'),
-    )).toBe(true);
-    const payload = JSON.parse(Buffer.from(exchange.signedPayload, 'base64url').toString()) as {
-      gateway: { id: string };
-      device: { id: string };
-      tokens: { accessToken: string; refreshToken: string };
-    };
-    expect(payload.gateway.id).toBe(pairing.gatewayId);
-    expect(payload.tokens.accessToken).toMatch(/^xopc_at_/);
-    expect(payload.tokens.refreshToken).toMatch(/^xopc_rt_/);
-    expect(getDevice(payload.device.id)?.displayName).toBe('My iPhone');
+    expect(missingTarget.status).toBe(400);
   });
   it('requires a desktop decision before issuing a v3 device and signs its status', async () => {
-    const setup = await (await app.request('/api/device-pairing/setups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ protocolVersion: 3 }) })).json();
+    const setup = await (await app.request('/api/device-pairing/setups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetKind: 'mobile' }) })).json();
     const pairing = JSON.parse(Buffer.from(new URL(setup.setup.universalLink).hash.slice(3), 'base64url').toString());
     expect(pairing.version).toBe(3);
     const keys = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });

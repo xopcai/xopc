@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   discoverLocalGateway,
@@ -6,6 +6,8 @@ import {
   readProfile,
   revokeAndForgetProfile,
   setAutoConnectEnabled,
+  takePendingPairingLink,
+  PENDING_PAIRING_LINK_KEY,
   type BrowserGatewayProfile,
 } from './auth';
 import { ChatPanel } from './chat-panel';
@@ -24,11 +26,38 @@ export function SidePanelApp() {
   const [error, setError] = useState('');
   const [localPairingLink, setLocalPairingLink] = useState('');
   const initializationStarted = useRef(false);
+  const pairingStarted = useRef(false);
+
+  const connect = useCallback(async (link: string) => {
+    if (pairingStarted.current) return;
+    pairingStarted.current = true;
+    setState('pairing');
+    setError('');
+    setPairingLink(link);
+    try {
+      const paired = await pairGateway(link, setConfirmationCode);
+      await setAutoConnectEnabled(true);
+      await reconnectBrowserBridge();
+      setProfile(paired);
+      setState('online');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+      setState('unpaired');
+    } finally {
+      pairingStarted.current = false;
+    }
+  }, []);
 
   useEffect(() => {
     if (initializationStarted.current) return;
     initializationStarted.current = true;
     void (async () => {
+      const handedOff = await takePendingPairingLink();
+      if (handedOff) {
+        await connect(handedOff);
+        return;
+      }
+
       const stored = await readProfile();
       if (stored) {
         await reconnectBrowserBridge();
@@ -44,35 +73,20 @@ export function SidePanelApp() {
       }
 
       setLocalPairingLink(local.pairingLink);
-      setState('pairing');
-      try {
-        const paired = await pairGateway(local.pairingLink, setConfirmationCode);
-        await reconnectBrowserBridge();
-        setProfile(paired);
-        setState('online');
-      } catch (cause) {
-        setError(cause instanceof Error ? cause.message : String(cause));
-        setState('unpaired');
-      }
+      await connect(local.pairingLink);
     })();
-  }, []);
+  }, [connect]);
+
+  useEffect(() => {
+    const handleStorageChange = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area !== 'session' || !changes[PENDING_PAIRING_LINK_KEY]?.newValue) return;
+      void takePendingPairingLink().then((link) => { if (link) void connect(link); });
+    };
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => chrome.storage.onChanged.removeListener(handleStorageChange);
+  }, [connect]);
 
   useEffect(() => watchSidePanelTheme(profile?.gatewayUrl), [profile?.gatewayUrl]);
-
-  async function connect(link = pairingLink) {
-    setState('pairing');
-    setError('');
-    try {
-      const paired = await pairGateway(link, setConfirmationCode);
-      await setAutoConnectEnabled(true);
-      await reconnectBrowserBridge();
-      setProfile(paired);
-      setState('online');
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-      setState('unpaired');
-    }
-  }
 
   async function disconnect() {
     await revokeAndForgetProfile();
@@ -135,7 +149,7 @@ export function SidePanelApp() {
             ) : null}
             {error ? <div className="error-text">{error}</div> : null}
             <div className="actions">
-              <button className="primary" onClick={() => void connect()} disabled={!pairingLink.trim() || state === 'pairing'}>
+              <button className="primary" onClick={() => void connect(pairingLink)} disabled={!pairingLink.trim() || state === 'pairing'}>
                 {state === 'pairing' ? 'Waiting for approval…' : 'Connect'}
               </button>
             </div>
