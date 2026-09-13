@@ -80,10 +80,10 @@ export function notificationTargetRoute(
         ? `/automation/runs/${encodeURIComponent(target.runId)}`
         : `/automations?automation=${encodeURIComponent(target.automationId)}&run=${encodeURIComponent(target.runId)}`;
     case 'proactive_digest':
-      return surface === 'web' ? `/proactive?digest=${encodeURIComponent(target.digestId)}` : '/inbox';
+      return surface === 'web' ? `/assistant-work?digest=${encodeURIComponent(target.digestId)}` : '/inbox';
     case 'insight':
       return surface === 'web'
-        ? `/proactive?item=${encodeURIComponent(target.inboxItemId)}`
+        ? `/assistant-work?item=${encodeURIComponent(target.inboxItemId)}`
         : `/inbox?item=${encodeURIComponent(target.inboxItemId)}`;
     case 'work_discovery':
       return surface === 'web'

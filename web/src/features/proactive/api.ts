@@ -19,6 +19,9 @@ export interface Delegation extends ProactiveSubscription {
   latestRun: { status: string; reason: string | null; startedAt: string; completedAt: string | null; error: string | null } | null;
   pending: boolean;
 }
+export interface DelegationRun {
+  id: string; status: string; reason: string | null; startedAt: string; completedAt: string | null; error: string | null;
+}
 export interface MailFollowUp {
   id: string; subscriptionId: string; instructions: string; dueAt: string; status: 'watching' | 'paused' | 'completed';
   revision: number; lastCheckedAt: string | null; sessionKey: string | null; sourceAvailable: boolean; enabled: boolean;
