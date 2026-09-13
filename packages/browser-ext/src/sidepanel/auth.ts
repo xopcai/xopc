@@ -4,6 +4,7 @@ import { endpointHelloSigningPayload, type EndpointHelloPayload } from '@xopcai/
 import { clearBrowserOutboxes } from './chat-outbox';
 
 const PROFILE_KEY = 'xopc.browser.profile';
+export const PENDING_PAIRING_LINK_KEY = 'xopc.browser.pending-pairing-link';
 const AUTO_CONNECT_KEY = 'xopc.browser.auto-connect';
 const KEY_DATABASE = 'xopc-browser-identity';
 const KEY_STORE = 'identity';
@@ -24,6 +25,7 @@ export type BrowserGatewayProfile = {
 
 type PairingPayload = {
   version: 3;
+  targetKind: 'browser';
   pairingToken: string;
   gatewayId: string;
   gatewayName: string;
@@ -124,17 +126,36 @@ function createRefreshToken(): string {
   return `xopc_rt_${crypto.randomUUID()}_${randomNonce(32)}`;
 }
 
-function parsePairingLink(value: string): PairingPayload {
+export function parseBrowserPairingLink(value: string): PairingPayload {
   const url = new URL(value.trim());
+  if (url.protocol !== 'https:' || url.hostname !== 'link.xopc.ai' || url.pathname !== '/connect') {
+    throw new Error('Pairing link is not from xopc');
+  }
   const encoded = new URLSearchParams(url.hash.slice(1)).get('p');
   if (!encoded) throw new Error('Pairing link is invalid');
   const payload = decodeJson<PairingPayload>(encoded);
-  if (payload.version !== 3 || !payload.gatewayId || !payload.pairingToken || !payload.gatewayPublicKey) {
+  if (payload.version !== 3 || payload.targetKind !== 'browser'
+    || !payload.gatewayId || !payload.pairingToken || !payload.gatewayPublicKey
+    || !Array.isArray(payload.routes)) {
     throw new Error('Pairing link version is not supported');
   }
   if (payload.expiresAt <= Date.now()) throw new Error('Pairing link has expired');
   if (!payload.routes.length) throw new Error('Pairing link has no Gateway route');
+  for (const route of payload.routes) {
+    const routeUrl = new URL(route.url);
+    if (!route.id || !['http:', 'https:'].includes(routeUrl.protocol)) {
+      throw new Error('Pairing link has an invalid Gateway route');
+    }
+  }
   return payload;
+}
+
+export async function takePendingPairingLink(): Promise<string | undefined> {
+  const stored = await chrome.storage.session.get(PENDING_PAIRING_LINK_KEY);
+  const link = stored[PENDING_PAIRING_LINK_KEY];
+  if (typeof link !== 'string') return undefined;
+  await chrome.storage.session.remove(PENDING_PAIRING_LINK_KEY);
+  return link;
 }
 
 function openIdentityDatabase(): Promise<IDBDatabase> {
@@ -229,14 +250,26 @@ async function requestGatewayOriginPermission(origin: string): Promise<void> {
   }
 }
 
+class GatewayHttpError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'GatewayHttpError';
+  }
+}
+
 async function post(origin: string, path: string, body: unknown): Promise<Record<string, unknown>> {
   const response = await fetch(`${origin}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  const json = await response.json() as { error?: { code?: string; message?: string } };
-  if (!response.ok) throw new Error(json.error?.code ?? json.error?.message ?? `Gateway returned ${response.status}`);
+  const json = await response.json().catch(() => ({})) as { error?: { code?: string; message?: string } };
+  if (!response.ok) {
+    throw new GatewayHttpError(
+      json.error?.code ?? json.error?.message ?? `Gateway returned ${response.status}`,
+      response.status,
+    );
+  }
   return json as Record<string, unknown>;
 }
 
@@ -326,13 +359,29 @@ export async function pairGateway(
   link: string,
   onApproval: (confirmationCode: string) => void,
 ): Promise<BrowserGatewayProfile> {
-  const payload = parsePairingLink(link);
-  const origin = new URL(payload.routes[0]!.url).origin;
-  await requestGatewayOriginPermission(origin);
+  const payload = parseBrowserPairingLink(link);
   const pair = await getOrCreateKeyPair();
   const requestId = crypto.randomUUID();
   const initialRefreshToken = createRefreshToken();
-  let result = await signedPairingRequest(pair, payload, origin, requestId, 'request');
+  let origin: string | undefined;
+  let result: PairingResponse | undefined;
+  let lastRouteError: unknown;
+  for (const candidate of [...new Set(payload.routes.map(route => new URL(route.url).origin))]) {
+    await requestGatewayOriginPermission(candidate);
+    try {
+      result = await signedPairingRequest(pair, payload, candidate, requestId, 'request');
+      origin = candidate;
+      break;
+    } catch (cause) {
+      if (cause instanceof GatewayHttpError && cause.status < 500 && ![404, 408, 425, 429].includes(cause.status)) {
+        throw cause;
+      }
+      lastRouteError = cause;
+    }
+  }
+  if (!origin || !result) {
+    throw lastRouteError instanceof Error ? lastRouteError : new Error('No Gateway route could be reached');
+  }
   if (result.request.status === 'pending') onApproval(result.request.confirmationCode);
   while (result.request.status === 'pending') {
     await wait(1_500);

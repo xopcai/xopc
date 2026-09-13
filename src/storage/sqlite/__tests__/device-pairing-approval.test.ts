@@ -7,7 +7,7 @@ import { BROWSER_EXTENSION_ID } from '../../../browser/extension-identity.js';
 import { browserEnrollmentPublicKeyThumbprint } from '../../../browser/enrollment.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../index.js';
 import { listDevices, revokeDevice, rotateDeviceRefreshToken, buildRefreshProofMessage } from '../device-access-repository.js';
-import { createDevicePairingSetup, consumeDevicePairingToken } from '../device-pairing-repository.js';
+import { createDevicePairingSetup } from '../device-pairing-repository.js';
 import { getOrCreateGatewayIdentity } from '../gateway-identity-repository.js';
 import { getSqliteDatabase } from '../transaction.js';
 import { cancelDevicePairingSetup, decideDevicePairingRequest, operateDevicePairingRequest, submitDevicePairingRequest } from '../device-pairing-approval.js';
@@ -19,7 +19,7 @@ describe('computer-approved device pairing', () => {
   let base: Record<string, unknown>;
   beforeEach(() => {
     resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: ':memory:' });
-    const setup = createDevicePairingSetup(routes, now, 3);
+    const setup = createDevicePairingSetup(routes, now, { targetKind: 'mobile' });
     base = { gatewayId: getOrCreateGatewayIdentity().id, requestId: crypto.randomUUID(), pairingToken: setup.token };
   });
   afterEach(() => { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); });
@@ -35,11 +35,10 @@ describe('computer-approved device pairing', () => {
   }
   const refreshToken = () => `xopc_rt_${crypto.randomUUID()}_${crypto.randomBytes(32).toString('base64url')}`;
 
-  it('requires approval, refuses v2 exchange, and recovers a lost completion response without creating another device', () => {
+  it('requires approval and recovers a lost completion response without creating another device', () => {
     const pending = request();
     expect(request()).toEqual(pending);
     expect(listDevices()).toHaveLength(0);
-    expect(consumeDevicePairingToken(String(base.pairingToken), now).ok).toBe(false);
     const initialRefreshToken = refreshToken();
     const complete = signed('complete', { idempotencyKey: crypto.randomUUID(), initialRefreshToken });
     expect(() => operateDevicePairingRequest('complete', complete, now)).toThrow('PAIRING_NOT_APPROVED');
@@ -87,7 +86,7 @@ describe('computer-approved device pairing', () => {
     const publicKeyJwk = keys.publicKey.export({ format: 'jwk' });
     const localSetup = createDevicePairingSetup([
       { id: 'local-browser', kind: 'local-browser', url: 'http://127.0.0.1:18790' },
-    ], now, 3, { ttlMs: 60_000, enrollment: {
+    ], now, { targetKind: 'browser', ttlMs: 60_000, enrollment: {
       issuer: 'browser-native-host',
       extensionId: BROWSER_EXTENSION_ID,
       publicKeyThumbprint: browserEnrollmentPublicKeyThumbprint(publicKeyJwk),
@@ -121,6 +120,8 @@ describe('computer-approved device pairing', () => {
   });
 
   it('keeps non-local and unrecognized Chrome extensions behind explicit approval', () => {
+    const remoteSetup = createDevicePairingSetup(routes, now, { targetKind: 'browser' });
+    base = { gatewayId: getOrCreateGatewayIdentity().id, requestId: crypto.randomUUID(), pairingToken: remoteSetup.token };
     const remoteChrome = submitDevicePairingRequest(signed('request', { device: {
       displayName: 'Remote Chrome',
       platform: 'chrome',
@@ -131,7 +132,7 @@ describe('computer-approved device pairing', () => {
 
     const localSetup = createDevicePairingSetup([
       { id: 'local-browser', kind: 'local-browser', url: 'http://127.0.0.1:18790' },
-    ], now, 3);
+    ], now, { targetKind: 'browser' });
     base = {
       gatewayId: getOrCreateGatewayIdentity().id,
       requestId: crypto.randomUUID(),
@@ -150,7 +151,7 @@ describe('computer-approved device pairing', () => {
     const enrolledKeys = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
     const localSetup = createDevicePairingSetup([
       { id: 'local-browser', kind: 'local-browser', url: 'http://127.0.0.1:18790' },
-    ], now, 3, { ttlMs: 60_000, enrollment: {
+    ], now, { targetKind: 'browser', ttlMs: 60_000, enrollment: {
       issuer: 'browser-native-host',
       extensionId: BROWSER_EXTENSION_ID,
       publicKeyThumbprint: browserEnrollmentPublicKeyThumbprint(enrolledKeys.publicKey.export({ format: 'jwk' })),
@@ -168,5 +169,14 @@ describe('computer-approved device pairing', () => {
       publicKeyJwk: keys.publicKey.export({ format: 'jwk' }),
     } }), now);
     expect(pending.status).toBe('pending');
+  });
+
+  it('rejects a browser claiming a mobile invitation', () => {
+    expect(() => submitDevicePairingRequest(signed('request', { device: {
+      displayName: 'Chrome',
+      platform: 'chrome',
+      extensionId: BROWSER_EXTENSION_ID,
+      publicKeyJwk: keys.publicKey.export({ format: 'jwk' }),
+    } }), now)).toThrow('PAIRING_DEVICE_MISMATCH');
   });
 });

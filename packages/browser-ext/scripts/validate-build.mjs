@@ -124,6 +124,7 @@ for (const mode of ['light', 'dark']) {
 const requiredPaths = [
   manifest.background?.service_worker,
   manifest.side_panel?.default_path,
+  ...(manifest.content_scripts ?? []).flatMap(contentScript => contentScript.js ?? []),
 ].filter((value) => typeof value === 'string' && value.length > 0);
 
 for (const requiredPath of requiredPaths) {

@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import {
   buildDevicePairingProof, devicePairingCompleteSchema, devicePairingDeviceSchema,
   type DevicePairingAction, type DevicePairingState, type DevicePairingStatus,
+  type DevicePairingTargetKind,
 } from '@xopcai/gateway-contract';
 
 import { BROWSER_EXTENSION_ID } from '../../browser/extension-identity.js';
@@ -21,9 +22,10 @@ const APPROVAL_WINDOW_MS = 2 * 60_000;
 const RECOVERY_WINDOW_MS = 24 * 60 * 60_000;
 type SetupRow = {
   pairing_id: string; secret_hash: string; routes_json: string; expires_at: number;
-  protocol_version: number; consumed_at: number | null; attempts_remaining: number;
+  consumed_at: number | null; attempts_remaining: number;
   enrollment_issuer: string | null; enrollment_extension_id: string | null;
   enrollment_public_key_thumbprint: string | null; enrollment_nonce: string | null;
+  target_kind: DevicePairingTargetKind | null;
 };
 type RequestRow = {
   request_id: string; pairing_id: string; device_json: string; status: DevicePairingState;
@@ -92,7 +94,7 @@ function verifiedSetup(token: string, now: number): SetupRow {
   if (!id) return fail('PAIRING_DENIED', 401);
   const row = getSqliteDatabase().prepare('SELECT * FROM device_pairing_sessions WHERE pairing_id = ?')
     .get(id) as SetupRow | undefined;
-  if (!row || row.protocol_version !== 3 || row.attempts_remaining <= 0) return fail('PAIRING_DENIED', 401);
+  if (!row || row.attempts_remaining <= 0) return fail('PAIRING_DENIED', 401);
   if (!crypto.timingSafeEqual(Buffer.from(row.secret_hash, 'hex'), Buffer.from(hash(token), 'hex'))) {
     getSqliteDatabase().prepare('UPDATE device_pairing_sessions SET attempts_remaining = attempts_remaining - 1 WHERE pairing_id = ?')
       .run(id);
@@ -118,6 +120,10 @@ function verifyProof(action: DevicePairingAction, body: Record<string, unknown>,
 export function submitDevicePairingRequest(body: Record<string, unknown>, now = Date.now()): DevicePairingStatus {
   const setup = verifiedSetup(String(body.pairingToken), now);
   const device = devicePairingDeviceSchema.parse(body.device);
+  const matchesTarget = setup.target_kind === 'browser'
+    ? device.platform === 'chrome'
+    : setup.target_kind === 'mobile' && device.platform !== 'chrome';
+  if (!matchesTarget) fail('PAIRING_DEVICE_MISMATCH');
   const deviceJson = JSON.stringify(device);
   const autoApprove = isTrustedLocalBrowserSetup(setup, deviceJson);
   verifyProof('request', body, deviceJson, now);

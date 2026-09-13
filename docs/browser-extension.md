@@ -83,8 +83,8 @@ Selecting **Disconnect** revokes the browser device, clears its credentials, key
 A Gateway running on another computer or server does not receive local auto-approval. This is intentional: a website, remote server, or forged localhost response must not be able to enroll a browser silently.
 
 1. Expose the Gateway through a protected route such as Tailscale or HTTPS. See [Remote access](./remote-access.md).
-2. Generate a fresh browser pairing link from the Gateway owner interface.
-3. Paste the link into the extension.
+2. Open **Settings → Device access → Connect browser extension** in the Gateway owner interface.
+3. Open the one-time browser invitation on the computer that has the extension, then select **Open xopc extension**. If handoff is unavailable, copy the invitation and paste it into the extension.
 4. Compare the confirmation code and approve the request in the Gateway.
 
 The extension requests access only to the selected Gateway origin. Keep the browser online while using the extension driver. For unattended server automation, prefer Playwright or a configured remote browser instead of depending on a user's Chrome session.
@@ -178,7 +178,7 @@ Chat and browser control share the Gateway but use different authorization check
 - The extension UI and scripts are packaged locally; the Gateway does not provide remote executable code.
 - Gateway access uses a scope-limited browser device credential; Realtime browser control also requires a signed endpoint identity and short-lived turn token.
 - Local auto-enrollment is limited to a fixed extension ID, loopback Gateway, native issuer, key fingerprint, nonce, and short lifetime.
-- Remote/self-hosted enrollment requires an explicit pairing link and owner approval.
+- Remote/self-hosted enrollment accepts handoff only from the fixed `https://link.xopc.ai/connect` page and still requires owner approval.
 - Page access is optional and origin-scoped; page content is untrusted data.
 - Current-tab control requires a Session binding and remains subject to URL, risk, upload, and approval policy.
 

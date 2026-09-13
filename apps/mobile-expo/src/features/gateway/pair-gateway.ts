@@ -129,7 +129,6 @@ export async function pairWithGateway(pairing: ParsedGatewayQr, signal?: AbortSi
   const parentSignal = signal;
   signal = controller.signal;
   running = (async () => {
-    if (pairing.version !== 3) throw new Error('PAIRING_UPDATE_REQUIRED');
     useDevicePairingFlow.setState({ progress: { stage: 'connecting', name: pairing.gatewayName } });
     let journal = readDeviceAuthJournal<PairingJournal>(JOURNAL);
     if (journal && journal.pairing.pairingToken !== pairing.pairingToken) throw new Error('PAIRING_ALREADY_PENDING');

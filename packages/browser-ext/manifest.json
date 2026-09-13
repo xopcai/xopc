@@ -28,6 +28,13 @@
     "service_worker": "dist/background.js",
     "type": "module"
   },
+  "content_scripts": [
+    {
+      "matches": ["https://link.xopc.ai/connect*"],
+      "js": ["dist/pairing-handoff.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "side_panel": {
     "default_path": "dist/sidepanel.html"
   },

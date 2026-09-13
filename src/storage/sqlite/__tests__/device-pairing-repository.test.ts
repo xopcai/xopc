@@ -6,9 +6,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   closeXopcDatabase,
-  consumeDevicePairingToken,
   createDevicePairingSetup,
   getOrCreateGatewayIdentity,
+  isDevicePairingSetupActive,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../index.js';
@@ -34,22 +34,19 @@ describe('device pairing repository', () => {
     expect(first.publicKey).toContain('BEGIN PUBLIC KEY');
   });
 
-  it('consumes a secure pairing setup exactly once', () => {
+  it('creates a short-lived device-targeted pairing setup', () => {
     const route = { id: 'secure-1', kind: 'custom-https' as const, url: 'https://gateway.example.com' };
-    const setup = createDevicePairingSetup([route], 1_000);
-    expect(consumeDevicePairingToken(setup.token, 2_000)).toEqual({
-      ok: true,
-      pairingId: setup.id,
-      routes: [route],
-    });
-    expect(consumeDevicePairingToken(setup.token, 2_001)).toEqual({ ok: false, reason: 'consumed' });
+    const setup = createDevicePairingSetup([route], 1_000, { targetKind: 'browser' });
+    expect(setup).toMatchObject({ routes: [route], targetKind: 'browser' });
+    expect(isDevicePairingSetupActive(setup.id, 2_000)).toBe(true);
+    expect(isDevicePairingSetupActive(setup.id, setup.expiresAt)).toBe(false);
   });
 
   it('expires pairing setups and rejects insecure empty setups', () => {
-    expect(() => createDevicePairingSetup([], 1_000)).toThrow('No secure mobile route');
+    expect(() => createDevicePairingSetup([], 1_000, { targetKind: 'mobile' })).toThrow('No secure device route');
     const setup = createDevicePairingSetup([
       { id: 'secure-1', kind: 'custom-https', url: 'https://gateway.example.com' },
-    ], 1_000);
-    expect(consumeDevicePairingToken(setup.token, setup.expiresAt)).toEqual({ ok: false, reason: 'expired' });
+    ], 1_000, { targetKind: 'mobile' });
+    expect(isDevicePairingSetupActive(setup.id, setup.expiresAt)).toBe(false);
   });
 });

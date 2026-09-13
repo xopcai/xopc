@@ -503,8 +503,8 @@ export function SystemSettingsPanel() {
         <div className="space-y-2">
           <label className="flex items-center justify-between gap-3 rounded-xl bg-surface-hover/50 px-3 py-2.5">
             <div>
-              <div className="text-sm font-medium text-fg">{m.endpointToolsSettings.mobileAccess.flow.background}</div>
-              <p className="text-xs text-fg-muted">{m.endpointToolsSettings.mobileAccess.flow.sleep}</p>
+              <div className="text-sm font-medium text-fg">{m.endpointToolsSettings.deviceAccess.background}</div>
+              <p className="text-xs text-fg-muted">{m.endpointToolsSettings.deviceAccess.sleep}</p>
             </div>
             <input type="checkbox" className="ui-checkbox" disabled={!behavior?.backgroundSupported}
               checked={Boolean(behavior?.runInBackground)} onChange={e => void patchBehavior({ runInBackground: e.target.checked })} />
