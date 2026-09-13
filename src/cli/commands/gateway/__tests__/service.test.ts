@@ -1,3 +1,4 @@
+import { Command } from 'commander';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   createInstallCommand,
@@ -116,6 +117,28 @@ describe('Gateway Service Commands', () => {
       await cmd.parseAsync(['node', 'test']);
 
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('already installed'));
+    });
+
+    it('should honor --force inherited from the gateway command', async () => {
+      const { isDaemonAvailableAsync, resolveGatewayService } = await import('../../../../daemon/service.js');
+      const uninstall = vi.fn().mockResolvedValue(undefined);
+      const install = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(isDaemonAvailableAsync).mockResolvedValue(true);
+      vi.mocked(resolveGatewayService).mockResolvedValue({
+        label: 'ai.xopc.gateway',
+        isLoaded: vi.fn().mockResolvedValue(true),
+        uninstall,
+        install,
+      } as any);
+
+      const program = new Command().name('xopc');
+      const gateway = new Command('gateway').option('--force');
+      gateway.addCommand(createServiceCommand());
+      program.addCommand(gateway);
+      await program.parseAsync(['node', 'xopc', 'gateway', 'service', 'install', '--force']);
+
+      expect(uninstall).toHaveBeenCalled();
+      expect(install).toHaveBeenCalled();
     });
   });
 

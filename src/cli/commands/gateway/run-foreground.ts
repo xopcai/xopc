@@ -110,6 +110,7 @@ export async function runGatewayFromCliOptions(
   let auth = resolveGatewayAuth({ authConfig: effectiveConfig.gateway?.auth });
   if (typeof options.token === 'string' && options.token.trim().length > 0) {
     auth = { mode: 'token', token: options.token.trim() };
+    process.env.XOPC_GATEWAY_TOKEN = auth.token;
   }
   try {
     assertGatewayAuthConfigured(auth);
@@ -174,7 +175,7 @@ export async function runGatewayFromCliOptions(
       await server.start();
 
       const displayHost = bindHost === '0.0.0.0' ? 'localhost' : bindHost;
-      const token = options.token || config?.gateway?.auth?.token;
+      const token = auth.mode === 'token' ? auth.token : undefined;
       console.log('✅ Gateway started');
       console.log(`   URL: http://${displayHost}:${port}`);
       if (token) {
