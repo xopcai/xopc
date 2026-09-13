@@ -1,6 +1,6 @@
 # FRP 安全实现与验证记录
 
-依据 [技术方案](../design/frp-secure-access-plan-2026-09-13.md)。本次在 `xopc` 与相邻 `xopc-platform` 仓库实现；代码未提交。用户随后授权部署，服务器与当前 Gateway 已上线，实际状态见 [部署记录](frp-deployment-2026-09-13.md)。A0–A2 的代码与本地自审已完成；下文保留初次本地验收记录，后续 Linux 与原生端发布结果以部署记录为准。B0 仅完成协议实验，B1/B2 未实现，不能宣称全方案完成或平台已经无法读取数据。
+依据 [技术方案](https://github.com/xopcai/xopc/blob/main/docs/design/frp-secure-access-plan-2026-09-13.md)。本次在 `xopc` 与相邻 `xopc-platform` 仓库实现；代码未提交。用户随后授权部署，服务器与当前 Gateway 已上线，实际状态见 [部署记录](frp-deployment-2026-09-13.md)。A0–A2 的代码与本地自审已完成；下文保留初次本地验收记录，后续 Linux 与原生端发布结果以部署记录为准。B0 仅完成协议实验，B1/B2 未实现，不能宣称全方案完成或平台已经无法读取数据。
 
 ## 阶段一：入口、鉴权与供应链（A0/A1）
 
@@ -60,6 +60,6 @@
 
 ## B0 / B1 / B2
 
-[协议实验](../../experiments/secure-channel/README.md) 固定 Snow 0.10.0，6 项测试通过，包括独立 Cacophony 向量、错误密钥、篡改/重放/乱序/跨会话拒绝与 100 MiB 分块。它没有进入产品依赖。该库尚无正式审计，不能称为已审计方案。
+[协议实验](https://github.com/xopcai/xopc/blob/main/experiments/secure-channel/README.md) 固定 Snow 0.10.0，6 项测试通过，包括独立 Cacophony 向量、错误密钥、篡改/重放/乱序/跨会话拒绝与 100 MiB 分块。它没有进入产品依赖。该库尚无正式审计，不能称为已审计方案。
 
 B0 尚缺 Node/iOS/Android 统一绑定、配对身份绑定通道证书、实际 REST/WS/文件/音频与 HTTP fallback、弱网恢复和真机指标。按原方案，这些是 B1 的前置验收条件。B1/B2 未实现、未默认启用，也没有添加自创加密或静默降级路径。当前平台仍终结 HTTPS，能够读取业务数据；HttpOnly 与身份 challenge 不改变这一信任边界。
