@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { rememberSelectedAgent } from '@/features/chat/session/new-session-preferences';
 import { AgentEditor } from '@/features/settings/agents/agent-editor';
+import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { AgentsEditorModal } from '@/features/settings/agents/agents-editor-modal';
 import { AgentsListGrid } from '@/features/settings/agents/agents-list-grid';
 import { CreateAgentDialog } from '@/features/settings/agents/create-agent-dialog';
@@ -37,7 +38,7 @@ function AgentsSkeleton() {
 }
 
 export function AgentsSettingsPanel() {
-  const token = useGatewayStore((state) => state.token);
+  const token = useGatewayStore((state) => state.sessionKey);
   const language = useLocaleStore((state) => state.language);
   const zh = language === 'zh';
   const agentsMessages = messages(language).agentsSettings;
@@ -90,7 +91,8 @@ export function AgentsSettingsPanel() {
   };
 
   const deleteAgent = async (agent: GatewayAgentRow) => {
-    if (!window.confirm(zh ? `删除 ${agent.name}？此操作无法撤销。` : `Delete ${agent.name}? This cannot be undone.`)) return;
+    const displayName = agentListDisplayName(agent, agentsMessages);
+    if (!window.confirm(zh ? `删除 ${displayName}？此操作无法撤销。` : `Delete ${displayName}? This cannot be undone.`)) return;
     setBusy(true);
     setActionError(null);
     try {
@@ -154,6 +156,7 @@ export function AgentsSettingsPanel() {
       {selected ? (
         <AgentsEditorModal
           agent={selected}
+          messages={agentsMessages}
           open
           onOpenChange={(open) => { if (!open) closeAgent(); }}
         >
@@ -162,6 +165,7 @@ export function AgentsSettingsPanel() {
             agent={selected}
             toolIds={data.builtinToolIds}
             zh={zh}
+            messages={agentsMessages}
             externalError={actionError}
             onDirtyChange={handleEditorDirty}
             onClose={closeAgent}

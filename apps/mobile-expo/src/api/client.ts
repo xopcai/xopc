@@ -1,3 +1,6 @@
+import { fetch } from 'expo/fetch';
+import { requireNativeModule } from 'expo';
+import { ensureGatewayRouteIdentity } from '../features/gateway/route-identity';
 import { File, UploadType } from 'expo-file-system';
 
 import { recordConnectionEvent } from '../features/gateway/connection-log';
@@ -62,7 +65,7 @@ async function fetchRoute(
     else callerSignal.addEventListener('abort', onAbort);
   }
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    return await fetch(url, { ...init, redirect: 'error', signal: controller.signal });
   } finally {
     clearTimeout(timer);
     callerSignal?.removeEventListener('abort', onAbort);
@@ -89,6 +92,8 @@ export async function apiFetch(path: string, init: ApiFetchOptions = {}): Promis
     const url = `${route.url}${path.startsWith('/') ? path : `/${path}`}`;
     const startedAt = Date.now();
     try {
+      await ensureGatewayRouteIdentity(useGatewayStore.getState().getActiveProfile()!, route.url, requestInit.signal ?? undefined);
+      if (useGatewayStore.getState().activeGatewayId !== gatewayId || useGatewayStore.getState().connectionGeneration !== generation) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
       let response = await fetchRoute(url, { ...requestInit, headers }, timeoutMs);
       if (response.status === 401 && !refreshedAfterUnauthorized) {
         if (useGatewayStore.getState().activeGatewayId !== gatewayId || useGatewayStore.getState().connectionGeneration !== generation) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
@@ -142,6 +147,9 @@ export async function apiUploadFile(path: string, options: ApiFileUploadOptions)
   const gatewayId = useGatewayStore.getState().activeGatewayId;
   const generation = useGatewayStore.getState().connectionGeneration;
   await authorizeMobileRequest(path, 'POST', options.signal);
+  if (requireNativeModule<{ foregroundUploadRedirectPolicy?: string }>('FileSystem').foregroundUploadRedirectPolicy !== 'error') {
+    throw new Error('SECURITY_UPDATE_REQUIRED');
+  }
   const token = await getDeviceAccessToken();
   if (useGatewayStore.getState().activeGatewayId !== gatewayId || useGatewayStore.getState().connectionGeneration !== generation) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
   let lastError: unknown;
@@ -158,11 +166,14 @@ export async function apiUploadFile(path: string, options: ApiFileUploadOptions)
       else options.signal.addEventListener('abort', onAbort);
     }
     try {
+      await ensureGatewayRouteIdentity(useGatewayStore.getState().getActiveProfile()!, route.url, controller.signal);
+      if (useGatewayStore.getState().activeGatewayId !== gatewayId || useGatewayStore.getState().connectionGeneration !== generation) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
       const result = await file.upload(url, {
-        httpMethod: 'POST', uploadType: UploadType.MULTIPART, fieldName: options.fieldName,
+        sessionType: 'foreground', httpMethod: 'POST', uploadType: UploadType.MULTIPART, fieldName: options.fieldName,
         mimeType: options.mimeType, parameters: options.parameters, headers, signal: controller.signal,
       });
       if (useGatewayStore.getState().activeGatewayId !== gatewayId || useGatewayStore.getState().connectionGeneration !== generation) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
+      if (result.status >= 300 && result.status < 400) throw new Error('GATEWAY_UPLOAD_REDIRECT_REJECTED');
       const response = new Response(result.body, { status: result.status, headers: result.headers });
       if (response.status === 401) useGatewayStore.getState().onUnauthorized();
       if (response.ok && route.id !== useGatewayStore.getState().getActiveProfile()?.activeRouteId) {

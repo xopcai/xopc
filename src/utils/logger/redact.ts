@@ -9,6 +9,7 @@ const KEEP_SUFFIX_LENGTH = 4;
 const DEFAULT_REDACT_PATTERNS: RegExp[] = [
   /\b[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)\b\s*[=:]\s*(["']?)([^\s"'\\]+)\1/gi,
   /"(?:apiKey|token|secret|password|passwd|accessToken|refreshToken|privateKey)"\s*:\s*"([^"]+)"/gi,
+  /(?:__Host-xopc-session|xopc-local-session)=([A-Za-z0-9_-]{43})/g,
   /Authorization\s*[:=]\s*Bearer\s+([A-Za-z0-9._\-+=]+)/gi,
   /\b(sk-[A-Za-z0-9_-]{8,})\b/gi,
   /\b(ghp_[A-Za-z0-9]{20,})\b/gi,
@@ -30,6 +31,9 @@ const SENSITIVE_KEYS = new Set([
   'privatekey',
   'private_key',
   'authorization',
+  'cookie',
+  'set-cookie',
+  'signedpayload',
   'credential',
   'credentials',
 ]);

@@ -152,7 +152,7 @@ export function SideChatColumn({ parentSessionKey }: { parentSessionKey: string 
   const widthPx = useSideChatStore((state) => state.widthPx);
   const setWidthPx = useSideChatStore((state) => state.setWidthPx);
   const setTabRunId = useSideChatStore((state) => state.setTabRunId);
-  const token = useGatewayStore((state) => state.token);
+  const token = useGatewayStore((state) => state.sessionKey);
   const activeTab = tabs.find((tab) => tab.id === activeId) ?? null;
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -169,7 +169,7 @@ export function SideChatColumn({ parentSessionKey }: { parentSessionKey: string 
     const gateway = useGatewayStore.getState();
     void createSideChat(request.parentSessionKey, request.selections)
       .then((sideChat) => {
-        if (useGatewayStore.getState().token !== gateway.token || useGatewayStore.getState().baseUrl !== gateway.baseUrl) return;
+        if (useGatewayStore.getState().sessionKey !== gateway.sessionKey || useGatewayStore.getState().baseUrl !== gateway.baseUrl) return;
         addTab({ id: sideChat.id, parentSessionKey: sideChat.parentSessionKey, title: 'Side chat' });
       })
       .catch((error) => {
@@ -355,7 +355,7 @@ export function SideChatConversation({
   const activeRef = useRef(true);
   const endedRef = useRef(ended);
   const gatewayIdentity = useRef(useGatewayStore.getState());
-  const sameGateway = useCallback(() => gatewayIdentity.current.token === useGatewayStore.getState().token
+  const sameGateway = useCallback(() => gatewayIdentity.current.sessionKey === useGatewayStore.getState().sessionKey
     && gatewayIdentity.current.baseUrl === useGatewayStore.getState().baseUrl, []);
   const isCurrent = useCallback(() => activeRef.current && sameGateway(), [sameGateway]);
   useEffect(() => { activeRef.current = true; return () => { activeRef.current = false; }; }, []);

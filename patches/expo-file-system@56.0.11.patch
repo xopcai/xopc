@@ -1,0 +1,61 @@
+diff --git a/android/src/main/java/expo/modules/filesystem/FileSystemModule.kt b/android/src/main/java/expo/modules/filesystem/FileSystemModule.kt
+index 5ad4088a817c8ae2ef1ba4044609c2a249f10783..29517ea89ab23553ffdb4262ae142cba27be8264 100644
+--- a/android/src/main/java/expo/modules/filesystem/FileSystemModule.kt
++++ b/android/src/main/java/expo/modules/filesystem/FileSystemModule.kt
+@@ -33,6 +33,8 @@ class FileSystemModule : Module() {
+   override fun definition() = ModuleDefinition {
+     Name("FileSystem")
+ 
++    Constant("foregroundUploadRedirectPolicy") { "error" }
++
+     Events("downloadProgress")
+ 
+     Constant("documentDirectory") {
+diff --git a/android/src/main/java/expo/modules/filesystem/FileSystemUploadTask.kt b/android/src/main/java/expo/modules/filesystem/FileSystemUploadTask.kt
+index d58a1320c85b1129c6e965784a0785674747b79b..1494bf152d499a9843005c66dc548bc0dd6aa9b4 100644
+--- a/android/src/main/java/expo/modules/filesystem/FileSystemUploadTask.kt
++++ b/android/src/main/java/expo/modules/filesystem/FileSystemUploadTask.kt
+@@ -70,6 +70,8 @@ class UploadTaskResult : Record {
+ class FileSystemUploadTask : SharedObject() {
+   companion object {
+     private val client = OkHttpClientProvider.createClientBuilder()
++      .followRedirects(false)
++      .followSslRedirects(false)
+       .connectTimeout(60, TimeUnit.SECONDS)
+       .readTimeout(60, TimeUnit.SECONDS)
+       .writeTimeout(60, TimeUnit.SECONDS)
+diff --git a/ios/FileSystemDownloadTask.swift b/ios/FileSystemDownloadTask.swift
+index 0698aa2ce7db16366c057f19848d55b6bd890836..e10f6dfcadad80d60402dd42d1ddbc5392a61ede 100644
+--- a/ios/FileSystemDownloadTask.swift
++++ b/ios/FileSystemDownloadTask.swift
+@@ -91,6 +91,17 @@ final class NetworkTaskSessionDispatcher: NSObject, URLSessionDataDelegate, URLS
+     lock.unlock()
+   }
+ 
++  func urlSession(
++    _ session: URLSession,
++    task: URLSessionTask,
++    willPerformHTTPRedirection response: HTTPURLResponse,
++    newRequest request: URLRequest,
++    completionHandler: @escaping (URLRequest?) -> Void
++  ) {
++    // Foreground credential-bearing uploads must never forward their body to a redirect target.
++    completionHandler(task is URLSessionUploadTask ? nil : request)
++  }
++
+   func urlSession(
+     _ session: URLSession,
+     task: URLSessionTask,
+diff --git a/ios/FileSystemModule.swift b/ios/FileSystemModule.swift
+index 7af943c7823e2d500337f363302cba13a8dfc445..a0c0a869bf34f736df40907a9049e87ab60241cd 100644
+--- a/ios/FileSystemModule.swift
++++ b/ios/FileSystemModule.swift
+@@ -37,6 +37,8 @@ public final class FileSystemModule: Module {
+   public func definition() -> ModuleDefinition {
+     Name("FileSystem")
+ 
++    Constant("foregroundUploadRedirectPolicy") { "error" }
++
+     Events("downloadProgress")
+ 
+     Constant("documentDirectory") {

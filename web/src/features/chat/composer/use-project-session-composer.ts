@@ -34,7 +34,7 @@ export function useProjectSessionComposer({ preparation, sessionKey, ready, onSe
   ready: boolean;
   onSend: ComposerSendHandler;
 }) {
-  const token = useGatewayStore((state) => state.token);
+  const token = useGatewayStore((state) => state.sessionKey);
   const baseUrl = useGatewayStore((state) => state.baseUrl);
   const [selection, setSelection] = useState<{ preparation: ProjectSessionPreparation; mode: ExecutionMode } | null>(null);
   const [failure, setFailure] = useState<{ preparation: ProjectSessionPreparation; message: string } | null>(null);

@@ -116,7 +116,7 @@ const TTL_OPTIONS = [
 export function SharesSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).sharesSettings;
-  const token = useGatewayStore((st) => st.token);
+  const token = useGatewayStore((st) => st.sessionKey);
   const hasToken = Boolean(token);
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = parseSharesTab(searchParams.get('tab'));

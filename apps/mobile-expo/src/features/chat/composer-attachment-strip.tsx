@@ -1,8 +1,8 @@
+import { GatewayImage as Image } from '../../components/GatewayImage';
 import { memo, useState } from 'react';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
-import { useGatewayStore } from '../../stores/gateway-store';
 import { useTheme } from '../../theme';
 import { isEditableImageAttachment } from './attachment-file-io-core';
 import { AudioMessageBlock } from './AudioMessageBlock';
@@ -53,10 +53,6 @@ function thumbnailUri(att: ComposerAttachment): string | null {
   return null;
 }
 
-function needsAuthHeaders(uri: string): boolean {
-  return uri.startsWith('http://') || uri.startsWith('https://');
-}
-
 export const ComposerAttachmentStrip = memo(function ComposerAttachmentStrip({
   attachments,
   onRemove,
@@ -73,14 +69,12 @@ export const ComposerAttachmentStrip = memo(function ComposerAttachmentStrip({
   readOnly?: boolean;
 }) {
   const { colors } = useTheme();
-  const token = useGatewayStore((s) => s.accessToken);
   const [preview, setPreview] = useState<PreviewableFile | null>(null);
   const [audioPreview, setAudioPreview] = useState<AudioContent | null>(null);
   const [editing, setEditing] = useState<{ index: number; attachment: ComposerAttachment } | null>(null);
   const border = colors.border.default;
   const chipBg = colors.surface.input;
   const muted = colors.text.secondary;
-  const authHeaders = token ? { Authorization: `Bearer ${token}` } : undefined;
 
   const items = attachments;
   if (!items.length) return null;
@@ -118,7 +112,6 @@ export const ComposerAttachmentStrip = memo(function ComposerAttachmentStrip({
                   <Image
                     source={{
                       uri,
-                      ...(needsAuthHeaders(uri) && authHeaders ? { headers: authHeaders } : {}),
                     }}
                     style={styles.image}
                     resizeMode="cover"

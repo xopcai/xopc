@@ -39,7 +39,7 @@ function configuredPublicUrl(value: unknown): string | null {
 export function ReverseProxySection() {
   const language = useLocaleStore((s) => s.language);
   const rp = messages(language).remoteAccess.reverseProxy;
-  const token = useGatewayStore((s) => s.token);
+  const token = useGatewayStore((s) => s.sessionKey);
   const hasToken = Boolean(token);
   const detected = useDetectedReverseProxyOrigin();
   const config = useGatewayConfigSwr(hasToken);

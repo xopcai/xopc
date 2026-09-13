@@ -94,14 +94,14 @@ export class EndpointToolHost {
     this.stopped = false;
     this.registrationBlocked = false;
     document.addEventListener('visibilitychange', this.onVisibilityChange);
-    window.addEventListener('token-saved', this.onTokenSaved);
+    window.addEventListener('gateway-authenticated', this.onTokenSaved);
     await this.connect();
   }
 
   stop(): void {
     this.stopped = true;
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
-    window.removeEventListener('token-saved', this.onTokenSaved);
+    window.removeEventListener('gateway-authenticated', this.onTokenSaved);
     window.clearTimeout(this.reconnectTimer);
     this.detachRealtime?.();
     this.detachRealtime = undefined;

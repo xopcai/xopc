@@ -6,7 +6,7 @@ import { Readable } from 'node:stream';
 import { basename, dirname } from 'node:path';
 
 import { resolveScopedMediaReference } from '../../media-access.js';
-import { extractToken } from '../../auth.js';
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { FileServiceError } from '../../../files/file-service.js';
 import { getGatewayFileSpaceService } from '../../file-space-service.js';
 import { getClientIpFromHeaders } from '../../security/loopback.js';
@@ -90,7 +90,7 @@ function resolveShareConfig(service: GatewayService): Partial<ShareConfig> {
   return raw as Partial<ShareConfig>;
 }
 
-function hashGatewayToken(token: string): string {
+function hashPrincipal(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex').slice(0, 12);
 }
 
@@ -676,8 +676,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
   });
 
   authenticated.post('/api/sessions/:key/shares', async (c) => {
-    const gatewayToken = extractToken({ authorization: c.req.header('authorization') ?? undefined });
-    if (!gatewayToken) return c.json({ ok: false, error: { message: 'Token required' } }, 401);
+    const principalId = getGatewayPrincipal(c).principalId;
     const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
     if (typeof body.expectedSessionId !== 'string' || typeof body.expectedCutoffSeq !== 'number' || typeof body.expectedMetadataUpdatedAt !== 'string') {
       return c.json({ ok: false, error: { message: 'Share preview fingerprint is required' } }, 400);
@@ -694,7 +693,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
         attachmentIds: Array.isArray(body.attachmentIds)
           ? body.attachmentIds.filter((id): id is string => typeof id === 'string')
           : undefined,
-        gatewayTokenHash: hashGatewayToken(gatewayToken),
+        gatewayTokenHash: hashPrincipal(principalId),
       });
       const resolved = resolveShareUrl(record.token, getShareUrlContext(service));
       return c.json({
@@ -1135,8 +1134,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
   });
 
   authenticated.post('/api/shares', async (c) => {
-    const gatewayToken = extractToken({ authorization: c.req.header('authorization') ?? undefined });
-    if (!gatewayToken) return c.json({ ok: false, error: { message: 'Token required' } }, 401);
+    const principalId = getGatewayPrincipal(c).principalId;
 
     let body: Record<string, unknown>;
     try {
@@ -1196,7 +1194,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
         sessionKey,
         agentId,
         workspaceRoot,
-        gatewayTokenHash: hashGatewayToken(gatewayToken),
+        gatewayTokenHash: hashPrincipal(principalId),
         kind,
         directoryMode,
         followSymlinks,
@@ -1240,8 +1238,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
    * reachability) in a single round-trip.
    */
   authenticated.post('/api/shares/auto', async (c) => {
-    const gatewayToken = extractToken({ authorization: c.req.header('authorization') ?? undefined });
-    if (!gatewayToken) return c.json({ ok: false, error: { message: 'Token required' } }, 401);
+    const principalId = getGatewayPrincipal(c).principalId;
 
     let body: Record<string, unknown>;
     try {
@@ -1299,7 +1296,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
     const defaults = audienceDefaults(audience);
     const ttlMs = ttlOverride ?? defaults.ttlMs;
     const maxViews = maxViewsOverride !== undefined ? maxViewsOverride : defaults.maxViews;
-    const tokenHash = hashGatewayToken(gatewayToken);
+    const tokenHash = hashPrincipal(principalId);
     const urlCtx = getShareUrlContext(service);
 
     try {

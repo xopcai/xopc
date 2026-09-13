@@ -831,7 +831,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
   const sess = m.sessions;
   const projectsText = m.projectsPage;
   const wd = m.chat.workingDirectory;
-  const token = useGatewayStore((s) => s.token);
+  const token = useGatewayStore((s) => s.sessionKey);
   const discovery = useSessionDiscovery(gateway, token);
   const filterLabels = sb.sessionFilters;
   const listScrollRef = useRef<HTMLDivElement>(null);

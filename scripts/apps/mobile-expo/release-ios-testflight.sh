@@ -88,6 +88,8 @@ run_step "Check release metadata, entitlements and privacy manifests" python3 \
   --version "${IOS_MARKETING_VERSION:-$(node -p "require('$APP_DIR/app.json').expo.version")}" \
   --report "$APP_DIR/dist/ios/verification.json"
 
+run_step "Verify native upload protection" python3 "$ROOT/scripts/apps/mobile-expo/verify-native-upload-policy.py" "$BUILT_IPA"
+
 if [[ "$UPLOAD_TO_TESTFLIGHT" == "1" ]]; then
   run_step "Validate and upload IPA to TestFlight" env \
     APP_STORE_CONNECT_PRIVATE_KEY_PATH="$PRIVATE_KEY_PATH" \

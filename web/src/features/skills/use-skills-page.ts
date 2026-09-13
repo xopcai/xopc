@@ -58,7 +58,7 @@ export function useSkillsPage() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const sk = m.skills;
-  const token = useGatewayStore((st) => st.token);
+  const token = useGatewayStore((st) => st.sessionKey);
   const hasToken = Boolean(token);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();

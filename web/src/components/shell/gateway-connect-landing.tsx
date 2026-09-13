@@ -13,7 +13,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 export function GatewayConnectLanding() {
   const baseUrl = useGatewayStore((s) => s.baseUrl);
   const tokenExpired = useGatewayStore((s) => s.tokenExpired);
-  const setGatewayToken = useGatewayStore((s) => s.setGatewayToken);
+  const setBrowserSession = useGatewayStore((s) => s.setBrowserSession);
 
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -46,7 +46,7 @@ export function GatewayConnectLanding() {
 
           <GatewayTokenForm
             baseUrl={baseUrl}
-            onSubmit={setGatewayToken}
+            onSubmit={setBrowserSession}
             className="mt-6"
           />
 

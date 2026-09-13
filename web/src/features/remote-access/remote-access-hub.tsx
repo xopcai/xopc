@@ -80,7 +80,7 @@ export function RemoteAccessHub() {
   const navigate = useNavigate();
   const language = useLocaleStore((s) => s.language);
   const ra = messages(language).remoteAccess;
-  const hasToken = Boolean(useGatewayStore((s) => s.token));
+  const hasToken = Boolean(useGatewayStore((s) => s.sessionKey));
   const [searchParams, setSearchParams] = useSearchParams();
 
   const activeTab = parseRemoteAccessTab(searchParams.get('tab'));

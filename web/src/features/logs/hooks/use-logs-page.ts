@@ -195,7 +195,7 @@ function dataReducer(state: Data, action: DataAction): Data {
 
 export function useLogsPage(language: StoredLanguage) {
   const L = messages(language).logs;
-  const token = useGatewayStore((st) => st.token);
+  const token = useGatewayStore((st) => st.sessionKey);
   const hasToken = Boolean(token);
   const [searchParams, setSearchParams] = useSearchParams();
 

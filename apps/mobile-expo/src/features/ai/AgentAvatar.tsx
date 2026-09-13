@@ -1,3 +1,4 @@
+import { GatewayImage as Image } from '../../components/GatewayImage';
 import { createAvatar } from '@dicebear/core';
 import {
   adventurer,
@@ -8,7 +9,7 @@ import {
   thumbs,
 } from '@dicebear/collection';
 import { useEffect, useMemo, useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 
 import { useGatewayStore } from '../../stores/gateway-store';
@@ -120,7 +121,6 @@ export function AgentAvatar({
   }, [agentId, avatar, activeBaseUrl, token]);
 
   const uri = useMemo(() => avatarUri(agentId, avatar), [agentId, avatar, activeBaseUrl]);
-  const authHeaders = token ? { Authorization: `Bearer ${token}` } : undefined;
   const dicebear = useMemo(() => resolveDicebear(agentId, avatar), [agentId, avatar]);
   const svg = useMemo(
     () => dicebearSvg(dicebear.styleId, dicebear.seed, Math.max(size * 2, 96)),
@@ -137,10 +137,11 @@ export function AgentAvatar({
         ]}
       >
         <Image
-          source={{ uri, headers: authHeaders }}
+          source={{ uri }}
           style={{ width: size, height: size, borderRadius: radius }}
           resizeMode="cover"
           onError={() => setFailed(true)}
+          onFetchError={() => setFailed(true)}
         />
       </View>
     );

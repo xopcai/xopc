@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../storage/device-credentials', () => ({ deleteDeviceRefreshToken: vi.fn() }));
+vi.mock('../../storage/device-credentials', async (original) => ({ ...await original<typeof import('../../storage/device-credentials')>(), deleteDeviceRefreshToken: vi.fn() }));
 vi.mock('expo-constants', () => ({
   default: { executionEnvironment: 'storeClient' },
   ExecutionEnvironment: { StoreClient: 'storeClient' },

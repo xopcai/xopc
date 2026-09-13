@@ -64,11 +64,11 @@ export function GatewayTokenForm({
     const verification = await verifyGatewayCredential(trimmed);
     setIsConnecting(false);
 
-    if (verification !== 'valid') {
+    if (verification.status !== 'valid') {
       setError(
-        verification === 'rejected'
+        verification.status === 'rejected'
           ? t.tokenRejected
-          : verification === 'unreachable'
+          : verification.status === 'unreachable'
             ? t.gatewayUnreachable
             : t.tokenVerificationFailed,
       );
@@ -76,7 +76,7 @@ export function GatewayTokenForm({
       return;
     }
 
-    onSubmit(trimmed);
+    onSubmit(verification.sessionKey);
     setValue('');
     setError('');
   }

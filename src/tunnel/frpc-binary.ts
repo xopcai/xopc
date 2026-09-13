@@ -1,178 +1,107 @@
-import {
-  chmodSync,
-  createWriteStream,
-  existsSync,
-  mkdirSync,
-  rmSync,
-} from 'node:fs';
+import { chmodSync, createReadStream, createWriteStream, existsSync, mkdirSync, mkdtempSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
-import { Readable } from 'node:stream';
-import { tmpdir } from 'node:os';
-import { randomBytes } from 'node:crypto';
+import { Readable, Transform } from 'node:stream';
+import { createHash } from 'node:crypto';
 
 import { resolveBinDir } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
-import {
-  extractFrpcFromReleaseArchive,
-  frpcReleaseArchiveExtension,
-  nodePlatformForFrpTarget,
-  type FrpcReleasePlatform,
-} from './frpc-extract.js';
+import { extractFrpcFromReleaseArchive, frpcReleaseArchiveExtension, nodePlatformForFrpTarget, type FrpcReleasePlatform } from './frpc-extract.js';
+import { FRPC_RELEASES, FRPC_VERSION } from './frpc-release.js';
 import type { FrpcDownloadProgress } from './tunnel-types.js';
 
-const log = createLogger('TunnelFrpc');
-
-export const FRPC_VERSION = '0.62.1';
-
+export { FRPC_VERSION };
 export type { FrpcDownloadProgress };
-
+const log = createLogger('TunnelFrpc');
+const MAX_ARCHIVE_BYTES = 64 * 1024 * 1024;
 export type EnsureFrpcBinaryOptions = {
   onProgress?: (progress: FrpcDownloadProgress) => void;
+  platform?: FrpcReleasePlatform;
+  arch?: string;
 };
 
-const PLATFORM_MAP: Record<string, FrpcReleasePlatform> = {
-  darwin: 'darwin',
-  linux: 'linux',
-  win32: 'windows',
-};
-
-const ARCH_MAP: Record<string, string> = {
-  x64: 'amd64',
-  arm64: 'arm64',
-  ia32: '386',
-};
-
-export function buildFrpcReleaseBasename(
-  frpPlatform: FrpcReleasePlatform,
-  arch: string,
-  version = FRPC_VERSION,
-): string {
-  return `frp_${version}_${frpPlatform}_${arch}`;
+export function buildFrpcReleaseBasename(platform: FrpcReleasePlatform, arch: string, version = FRPC_VERSION): string {
+  return `frp_${version}_${platform}_${arch}`;
 }
 
-export function frpcDownloadUrlsForTarget(
-  frpPlatform: FrpcReleasePlatform,
-  arch: string,
-  version = FRPC_VERSION,
-): string[] {
-  const folder = buildFrpcReleaseBasename(frpPlatform, arch, version);
-  const ext = frpcReleaseArchiveExtension(frpPlatform);
+export function frpcDownloadUrlsForTarget(platform: FrpcReleasePlatform, arch: string, version = FRPC_VERSION): string[] {
+  const archive = buildFrpcReleaseBasename(platform, arch, version) + frpcReleaseArchiveExtension(platform);
   return [
-    `https://frp.xopc.ai/bin/${folder}${ext}`,
-    `https://github.com/fatedier/frp/releases/download/v${version}/${folder}${ext}`,
-    `https://ghfast.top/https://github.com/fatedier/frp/releases/download/v${version}/${folder}${ext}`,
+    `https://frp.xopc.ai/bin/${archive}`,
+    `https://github.com/fatedier/frp/releases/download/v${version}/${archive}`,
   ];
 }
 
-function frpcPlatformArch(): { platform: FrpcReleasePlatform; arch: string; folder: string } {
-  const platform = PLATFORM_MAP[process.platform] ?? (process.platform as FrpcReleasePlatform);
-  const arch = ARCH_MAP[process.arch] ?? process.arch;
-  return { platform, arch, folder: buildFrpcReleaseBasename(platform, arch) };
+export async function verifyFrpcDigest(path: string, expected: string): Promise<void> {
+  const hash = createHash('sha256');
+  await pipeline(createReadStream(path), hash);
+  if (hash.digest('hex') !== expected) throw new Error('COMPONENT_VERIFY_FAILED: frpc checksum mismatch');
 }
 
-function frpcDownloadUrls(): string[] {
-  const { platform, arch } = frpcPlatformArch();
-  return frpcDownloadUrlsForTarget(platform, arch);
-}
-
-async function downloadToFile(
-  url: string,
-  destPath: string,
-  onProgress?: (progress: FrpcDownloadProgress) => void,
-): Promise<void> {
-  const res = await fetch(url);
-  if (!res.ok || !res.body) {
-    throw new Error(`Download failed: ${res.status} ${url}`);
+async function downloadToFile(url: string, path: string, onProgress?: EnsureFrpcBinaryOptions['onProgress']): Promise<void> {
+  const response = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+  if (!response.ok || !response.body) throw new Error(`frpc download failed: ${response.status}`);
+  const length = Number(response.headers.get('content-length'));
+  const totalBytes = length > 0 ? length : null;
+  if (totalBytes && totalBytes > MAX_ARCHIVE_BYTES) {
+    await response.body.cancel();
+    throw new Error('frpc archive exceeds size limit');
   }
-
-  const contentLength = res.headers.get('content-length');
-  const totalBytes =
-    contentLength && Number.isFinite(Number(contentLength)) ? Number(contentLength) : null;
   let bytesReceived = 0;
-
-  const report = () => {
-    onProgress?.({
-      phase: 'downloading',
-      url,
-      bytesReceived,
-      totalBytes,
-      percent:
-        totalBytes && totalBytes > 0
-          ? Math.min(100, Math.round((bytesReceived / totalBytes) * 100))
-          : null,
-    });
-  };
-
-  report();
-
-  const nodeStream = Readable.fromWeb(res.body as Parameters<typeof Readable.fromWeb>[0]);
-  nodeStream.on('data', (chunk: Buffer | string) => {
-    bytesReceived += typeof chunk === 'string' ? Buffer.byteLength(chunk) : chunk.length;
-    report();
+  const bounded = new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      bytesReceived += chunk.length;
+      if (bytesReceived > MAX_ARCHIVE_BYTES) return callback(new Error('frpc archive exceeds size limit'));
+      onProgress?.({ phase: 'downloading', url, bytesReceived, totalBytes, percent: totalBytes ? Math.min(100, Math.round(bytesReceived / totalBytes * 100)) : null });
+      callback(null, chunk);
+    },
   });
-
-  await pipeline(nodeStream, createWriteStream(destPath));
-  report();
+  await pipeline(Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]), bounded, createWriteStream(path, { mode: 0o600 }));
 }
 
-/** Set after a successful tunnel start so subprocesses can resolve the same binary. */
-export function publishFrpcPathForProcess(binPath: string): void {
-  process.env.XOPC_FRPC_PATH = binPath;
-}
+export function publishFrpcPathForProcess(path: string): void { process.env.XOPC_FRPC_PATH = path; }
+export function clearFrpcPathForProcess(): void { delete process.env.XOPC_FRPC_PATH; }
 
-/** Clear runtime frpc path when the tunnel stops (no bundled Electron binary). */
-export function clearFrpcPathForProcess(): void {
-  delete process.env.XOPC_FRPC_PATH;
-}
-
-export async function ensureFrpcBinary(opts?: EnsureFrpcBinaryOptions): Promise<string> {
-  const onProgress = opts?.onProgress;
-  const ext = process.platform === 'win32' ? '.exe' : '';
-  const binName = `frpc${ext}`;
-
-  const fromEnv = process.env.XOPC_FRPC_PATH?.trim();
-  if (fromEnv && existsSync(fromEnv)) {
+export async function ensureFrpcBinary(opts: EnsureFrpcBinaryOptions = {}): Promise<string> {
+  const platform = opts.platform ?? (process.platform === 'win32' ? 'windows' : process.platform) as FrpcReleasePlatform;
+  const arch = opts.arch ?? (process.arch === 'x64' ? 'amd64' : process.arch);
+  const target = `${platform}_${arch}`;
+  if (!Object.hasOwn(FRPC_RELEASES, target)) throw new Error(`Unsupported frpc target: ${target}`);
+  const release = FRPC_RELEASES[target as keyof typeof FRPC_RELEASES];
+  const fromEnv = !opts.platform && !opts.arch ? process.env.XOPC_FRPC_PATH?.trim() : undefined;
+  if (fromEnv) {
+    await verifyFrpcDigest(fromEnv, release.binary);
     return fromEnv;
   }
-
-  const cacheDir = resolveBinDir();
-  mkdirSync(cacheDir, { recursive: true });
+  const cacheDir = join(resolveBinDir(), 'frpc', FRPC_VERSION, target);
+  mkdirSync(cacheDir, { recursive: true, mode: 0o700 });
+  chmodSync(cacheDir, 0o700);
+  const binName = platform === 'windows' ? 'frpc.exe' : 'frpc';
   const cachePath = join(cacheDir, binName);
-  if (existsSync(cachePath)) return cachePath;
-
-  const tmpBase = join(tmpdir(), `xopc-frpc-${randomBytes(6).toString('hex')}`);
-  mkdirSync(tmpBase, { recursive: true });
-  const { platform, arch, folder } = frpcPlatformArch();
-  const archiveExt = frpcReleaseArchiveExtension(platform);
-  const archivePath = join(tmpBase, `frpc${archiveExt}`);
-
-  const urls = frpcDownloadUrls();
-  let lastErr: unknown;
+  if (existsSync(cachePath)) {
+    try { await verifyFrpcDigest(cachePath, release.binary); return cachePath; }
+    catch { log.warn({ target }, 'Discarding unverified frpc cache'); }
+  }
+  const temporary = mkdtempSync(join(cacheDir, '.download-'));
+  const archivePath = join(temporary, 'release' + frpcReleaseArchiveExtension(platform));
+  const executablePath = join(temporary, binName);
+  let lastError: unknown;
   try {
-    for (const url of urls) {
+    for (const url of frpcDownloadUrlsForTarget(platform, arch)) {
       try {
-        log.info({ url }, 'Downloading frpc');
-        await downloadToFile(url, archivePath, onProgress);
-        onProgress?.({ phase: 'extracting', url, bytesReceived: 0, totalBytes: null, percent: null });
-        await extractFrpcFromReleaseArchive(
-          archivePath,
-          cachePath,
-          folder,
-          nodePlatformForFrpTarget(platform),
-        );
-        if (process.platform !== 'win32') chmodSync(cachePath, 0o755);
+        await downloadToFile(url, archivePath, opts.onProgress);
+        await verifyFrpcDigest(archivePath, release.archive);
+        opts.onProgress?.({ phase: 'extracting', url });
+        await extractFrpcFromReleaseArchive(archivePath, executablePath, buildFrpcReleaseBasename(platform, arch), nodePlatformForFrpTarget(platform));
+        await verifyFrpcDigest(executablePath, release.binary);
+        if (platform !== 'windows') chmodSync(executablePath, 0o700);
+        renameSync(executablePath, cachePath);
         return cachePath;
-      } catch (err) {
-        lastErr = err;
-        log.warn({ url, err }, 'frpc download attempt failed');
+      } catch (error) {
+        lastError = error;
+        log.warn({ url, err: error }, 'Verified frpc download failed');
       }
     }
-  } finally {
-    rmSync(tmpBase, { recursive: true, force: true });
-  }
-
-  throw new Error(
-    `Failed to download frpc v${FRPC_VERSION} for ${platform}/${arch}: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`,
-  );
+  } finally { rmSync(temporary, { recursive: true, force: true }); }
+  throw new Error(`Failed to obtain verified frpc for ${target}`, { cause: lastError });
 }

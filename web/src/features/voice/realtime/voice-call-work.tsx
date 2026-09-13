@@ -13,7 +13,7 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import type { UseRealtimeVoiceReturn } from './use-realtime-voice';
 
 export function VoiceCallWork({ voice, sessionKey, m }: { voice: UseRealtimeVoiceReturn; sessionKey: string; m: ChatMessages }) {
-  const token = useGatewayStore((state) => state.token);
+  const token = useGatewayStore((state) => state.sessionKey);
   const [pending, setPending] = useState(false);
   const submitting = useRef(false);
   const clarificationAttempt = useRef<{ signature: string; idempotencyKey: string } | null>(null);

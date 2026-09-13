@@ -1,3 +1,6 @@
+import { resolveGatewayAuth } from '../../gateway/auth.js';
+import { requireTunnelGatewayToken } from '../../tunnel/auth-policy.js';
+import { isXopcDatabaseOpen, openXopcDatabase } from '../../storage/sqlite/connection.js';
 import { Command } from 'commander';
 
 import { loadConfig, saveConfig } from '../../config/index.js';
@@ -31,6 +34,7 @@ function resolveGatewayPortHost(config: ReturnType<typeof loadConfig>): { port: 
 }
 
 function resolveGatewayToken(config: ReturnType<typeof loadConfig>): string {
+  requireTunnelGatewayToken(resolveGatewayAuth({ authConfig: config.gateway.auth }));
   const fromEnv = process.env.XOPC_GATEWAY_TOKEN?.trim();
   if (fromEnv) return fromEnv;
   const token = config.gateway.auth?.token?.trim();
@@ -233,6 +237,7 @@ function createTunnelCommand(ctx: CLIContext): Command {
 
       const config = loadConfig(ctx.configPath);
       assertTunnelMayStart(config);
+      if (!isXopcDatabaseOpen()) openXopcDatabase();
 
       const { port, host } = resolveGatewayPortHost(config);
       const token = resolveGatewayToken(config);

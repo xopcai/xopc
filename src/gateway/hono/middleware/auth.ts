@@ -1,3 +1,5 @@
+import { authenticateBrowserSession } from '../../../storage/sqlite/browser-session-repository.js';
+import { browserCookieRequestAllowed, readBrowserSessionCookie, writeBrowserSessionCookie } from '../../security/browser-session.js';
 import { createMiddleware } from 'hono/factory';
 import type { Context } from 'hono';
 import { getConnInfo } from '@hono/node-server/conninfo';
@@ -13,7 +15,6 @@ import {
   resolveAuthTracking,
   type ResolvedAuthRateLimitConfig,
 } from '../../rate-limit/index.js';
-import { getClientIpFromHeaders } from '../../security/loopback.js';
 import { safeEqualSecret } from '../../security/secret-equal.js';
 import { authorizeTrustedProxy } from '../../trusted-proxy.js';
 import {
@@ -30,6 +31,7 @@ export interface AuthConfig {
   /** Current gateway auth from config (for rate-limit settings); optional. */
   getGatewayAuth?: () => GatewayAuthConfig | undefined;
   getResolvedAuth?: () => ResolvedGatewayAuth;
+  isPublicTunnelEnabled?: () => boolean;
   getTrustedProxyContext?: () => {
     trustedProxies?: string[];
     allowRealIpFallback?: boolean;
@@ -52,26 +54,6 @@ function extractTokenFromHeader(authHeader: string | null): string | null {
   return authHeader;
 }
 
-/**
- * SECURITY: query-string tokens leak into server logs, Referer headers, and
- * browser history. We accept them only for avatar `<img>` loads, where an
- * Authorization header cannot be set. Realtime WebSocket authentication uses a
- * one-time ticket acquired over authenticated HTTP.
- */
-function extractTokenFromQuery(url: string): string | null {
-  return new URL(url).searchParams.get('token');
-}
-
-const AGENT_AVATAR_GET_PATH = /^\/api\/agents\/[^/]+\/avatar$/;
-
-/** Exported for gateway security tests. */
-export function isQueryTokenAllowedPath(path: string, method: string): boolean {
-  if (method === 'GET' && AGENT_AVATAR_GET_PATH.test(path)) {
-    return true;
-  }
-  return false;
-}
-
 function resolveRemoteAddress(c: Context): string | undefined {
   try {
     return getConnInfo(c).remote.address;
@@ -85,16 +67,11 @@ function resolveMiddlewareClientIp(
   trustedProxies?: string[],
   allowRealIpFallback?: boolean,
 ): string {
-  if (trustedProxies?.length) {
-    return resolveClientIpFromRequest({
-      remoteAddress: resolveRemoteAddress(c),
-      getHeader: (name) => c.req.header(name),
-      trustedProxies,
-      allowRealIpFallback,
-    });
-  }
-  return getClientIpFromHeaders({
-    get: (name: string) => c.req.header(name) ?? undefined,
+  return resolveClientIpFromRequest({
+    remoteAddress: resolveRemoteAddress(c),
+    getHeader: (name) => c.req.header(name),
+    trustedProxies,
+    allowRealIpFallback,
   });
 }
 
@@ -109,9 +86,10 @@ function buildRateLimitContext(
   getGatewayAuth: AuthConfig['getGatewayAuth'],
   clientIp: string,
   origin: string | undefined,
+  enforce = false,
 ): RateLimitContext {
   const cfg = resolveAuthRateLimit(getGatewayAuth?.()?.rateLimit);
-  const active = cfg.enabled && !isAuthRateLimitGloballyDisabled();
+  const active = cfg.enabled && (enforce || !isAuthRateLimitGloballyDisabled());
   if (!active) return { active: false, cfg, trackingKey: undefined };
   const tracking = resolveAuthTracking({ clientIp, origin, cfg: authPolicyConfig(cfg) });
   return {
@@ -150,7 +128,13 @@ function blockedResponse(c: Context, retryAfterSec: number) {
 }
 
 export function auth(config?: AuthConfig) {
-  const { getGatewayAuth, getResolvedAuth, getTrustedProxyContext } = config || {};
+  const { getGatewayAuth: readGatewayAuth, getResolvedAuth, getTrustedProxyContext, isPublicTunnelEnabled } = config || {};
+  const getGatewayAuth = () => {
+    const current = readGatewayAuth?.();
+    return isPublicTunnelEnabled?.()
+      ? { ...current, rateLimit: { ...current?.rateLimit, enabled: true, exemptLoopback: false } } as GatewayAuthConfig
+      : current;
+  };
 
   return createMiddleware(async (c, next) => {
     const resolvedAuth = getResolvedAuth?.();
@@ -159,6 +143,9 @@ export function auth(config?: AuthConfig) {
       return c.json({ error: 'Unauthorized', code: 'auth_unavailable' }, 401);
     }
     const authMode = resolvedAuth.mode;
+    if (isPublicTunnelEnabled?.() && authMode !== 'token') {
+      return c.json({ error: 'Unauthorized', code: 'unsafe_tunnel_auth' }, 401);
+    }
 
     if (authMode === 'trusted-proxy') {
       const proxyContext = getTrustedProxyContext?.();
@@ -167,7 +154,7 @@ export function auth(config?: AuthConfig) {
 
       const clientIp = resolveMiddlewareClientIp(c, trustedProxies, proxyContext?.allowRealIpFallback);
       const origin = c.req.header('origin');
-      const rl = buildRateLimitContext(getGatewayAuth, clientIp, origin);
+      const rl = buildRateLimitContext(getGatewayAuth, clientIp, origin, isPublicTunnelEnabled?.());
 
       // Server misconfiguration — not an attack signal. Don't count.
       if (!trustedProxyConfig) {
@@ -237,22 +224,22 @@ export function auth(config?: AuthConfig) {
     const proxyContext = getTrustedProxyContext?.();
     const clientIp = resolveMiddlewareClientIp(c, proxyContext?.trustedProxies, proxyContext?.allowRealIpFallback);
     const origin = c.req.header('origin');
-    const rl = buildRateLimitContext(getGatewayAuth, clientIp, origin);
+    const rl = buildRateLimitContext(getGatewayAuth, clientIp, origin, isPublicTunnelEnabled?.());
 
     const authHeader = extractTokenFromHeader(c.req.header('authorization'));
-    const requestPath = new URL(c.req.url).pathname;
-    const queryToken = authMode === 'token' && isQueryTokenAllowedPath(requestPath, c.req.method)
-      ? extractTokenFromQuery(c.req.url)
-      : null;
-
-    if (!authHeader && queryToken === null && new URL(c.req.url).searchParams.has('token')) {
-      log.warn(
-        { path: requestPath, method: c.req.method, clientIp },
-        'Credential in query string rejected: use Authorization header for this endpoint',
-      );
+    const browserCookie = readBrowserSessionCookie(c);
+    if (!authHeader && browserCookie) {
+      if (!browserCookieRequestAllowed(c)) return c.json({ error: 'Forbidden', code: 'csrf_rejected' }, 403);
+      const session = authenticateBrowserSession(browserCookie, resolvedAuth);
+      if (!session) { recordFailure(rl); return c.json({ error: 'Unauthorized', code: 'browser_session_expired' }, 401); }
+      if (session.renewed) writeBrowserSessionCookie(c, browserCookie, session.expiresAt);
+      setGatewayPrincipal(c, { kind: 'owner', principalId: `browser:${session.sessionId}`, browserSessionId: session.sessionId, scopes: ['gateway.admin'] });
+      recordSuccess(rl);
+      return next();
     }
 
-    const providedCredential = authHeader || queryToken;
+    const requestPath = new URL(c.req.url).pathname;
+    const providedCredential = authHeader;
 
     const browserExtensionOrigin = isChromeExtensionOrigin(origin) ? origin!.toLowerCase() : undefined;
 

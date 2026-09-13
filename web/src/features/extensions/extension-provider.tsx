@@ -29,7 +29,7 @@ export function ExtensionProvider({ children }: { children: React.ReactNode }) {
     routerRef.current = newRouter;
   }
   const router = routerRef.current;
-  const hasToken = useGatewayStore((s) => Boolean(s.token));
+  const hasToken = useGatewayStore((s) => Boolean(s.sessionKey));
   const { data, isLoading, mutate } = useSWR(
     hasToken ? 'gateway-extensions-list' : null,
     () => fetchJson<ExtensionsListResponse>(apiUrl('/api/extensions')),

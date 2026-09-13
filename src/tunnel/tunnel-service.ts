@@ -3,9 +3,9 @@ import { EventEmitter } from 'node:events';
 
 import { PACKAGE_VERSION } from '../package-version.js';
 import { createLogger } from '../utils/logger.js';
-import { TunnelBrokerClient, resolveBrokerApiBase } from './broker-client.js';
+import { TunnelBrokerClient, TunnelBrokerError, resolveBrokerApiBase } from './broker-client.js';
 import { clearFrpcPathForProcess, ensureFrpcBinary, publishFrpcPathForProcess } from './frpc-binary.js';
-import { writeFrpcConfig } from './frpc-config.js';
+import { removeFrpcConfig, writeFrpcConfig } from './frpc-config.js';
 import { type FrpcProcessHandle, spawnFrpcProcess } from './frpc-process.js';
 import { TunnelRegistrationSecretError } from './env.js';
 import {
@@ -158,7 +158,7 @@ export class TunnelService extends EventEmitter {
     this.setStartPhase('registering', { publicUrl: registration.publicUrl });
 
     try {
-      const configPath = writeFrpcConfig(registration, gatewayPort, '127.0.0.1', 'http');
+      const configPath = writeFrpcConfig(registration, gatewayPort, '127.0.0.1');
       this.setStartPhase('starting_frpc', { publicUrl: registration.publicUrl });
       await this.spawnAndWait(frpcBin, configPath, broker, state, registration.heartbeatIntervalMs);
     } catch (err) {
@@ -200,6 +200,7 @@ export class TunnelService extends EventEmitter {
     let released = false;
     const persisted = loadTunnelState();
     const cfg = this.serviceConfig;
+    if (persisted) removeFrpcConfig(persisted.tunnelId);
     if (release && persisted && cfg) {
       const broker = new TunnelBrokerClient(resolveBrokerApiBase(cfg.brokerUrl));
       try {
@@ -250,6 +251,7 @@ export class TunnelService extends EventEmitter {
           return resumed;
         }
       } catch (err) {
+        if (!(err instanceof TunnelBrokerError) || err.status !== 410) throw err;
         log.info(
           { err, tunnelId: persisted.tunnelId, phase: 'tunnel_resume' },
           'Persisted tunnel not resumable — registering again',
@@ -266,7 +268,7 @@ export class TunnelService extends EventEmitter {
       registrationSecret: cfg.registrationSecret,
       gatewayVersion: PACKAGE_VERSION,
       platform: platformLabel(),
-      gatewayTokenHash: hashGatewayToken(gatewayToken),
+      recoveryToken: persisted?.tunnelToken,
       preferredSubdomain: persisted?.subdomain,
     });
   }
@@ -357,20 +359,35 @@ export class TunnelService extends EventEmitter {
     }
   }
 
+  private heartbeatGeneration = 0;
+
   private startHeartbeat(
     broker: TunnelBrokerClient,
     state: PersistedTunnelState,
     intervalMs: number,
   ): void {
     this.clearHeartbeat();
+    const generation = this.heartbeatGeneration;
+    let pending = false;
     const tick = async () => {
+      if (pending || this.stopping || generation !== this.heartbeatGeneration) return;
+      pending = true;
       try {
         await broker.heartbeat(state.tunnelId, state.tunnelToken);
-        this.lastHeartbeatAt = new Date().toISOString();
+        if (generation === this.heartbeatGeneration) this.lastHeartbeatAt = new Date().toISOString();
       } catch (err) {
         log.warn({ err, tunnelId: state.tunnelId }, 'Tunnel heartbeat failed');
-        if (this.stopping) return;
+        if (this.stopping || generation !== this.heartbeatGeneration) return;
+        if (!(err instanceof TunnelBrokerError) || ![401, 403, 410].includes(err.status)) return;
         this.clearHeartbeat();
+        if (err.status === 401 || err.status === 403) {
+          await this.stop();
+          this.lastError = 'TUNNEL_AUTH_REVOKED';
+          this.state = 'error';
+          this.emit('tunnel:error', this.lastError);
+          return;
+        }
+        const renewalGeneration = this.heartbeatGeneration;
         const ctx = this.startContext;
         const cfg = this.serviceConfig;
         if (!ctx || !cfg) return;
@@ -383,26 +400,31 @@ export class TunnelService extends EventEmitter {
             registrationSecret: cfg.registrationSecret,
             gatewayVersion: PACKAGE_VERSION,
             platform: platformLabel(),
-            gatewayTokenHash: hashGatewayToken(ctx.gatewayToken),
+            recoveryToken: state.tunnelToken,
             preferredSubdomain: state.subdomain,
           });
+          if (this.stopping || renewalGeneration !== this.heartbeatGeneration) return;
           const next = persistedFromRegistration(registration);
+          removeFrpcConfig(state.tunnelId);
           saveTunnelState(next);
           const frpcBin = await ensureFrpcBinary();
-          const configPath = writeFrpcConfig(registration, ctx.gatewayPort, '127.0.0.1', 'http');
+          const configPath = writeFrpcConfig(registration, ctx.gatewayPort, '127.0.0.1');
           await this.spawnAndWait(frpcBin, configPath, broker, next, registration.heartbeatIntervalMs);
         } catch (reErr) {
+          if (this.stopping || renewalGeneration !== this.heartbeatGeneration) return;
+          if (reErr instanceof TunnelBrokerError && [401, 403].includes(reErr.status)) await this.stop();
           this.lastError = reErr instanceof Error ? reErr.message : String(reErr);
           this.state = 'error';
           this.emit('tunnel:error', this.lastError);
         }
-      }
+      } finally { pending = false; }
     };
     void tick();
     this.heartbeatTimer = setInterval(() => void tick(), intervalMs);
   }
 
   private clearHeartbeat(): void {
+    this.heartbeatGeneration += 1;
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;

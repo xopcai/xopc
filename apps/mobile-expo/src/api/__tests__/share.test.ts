@@ -1,3 +1,4 @@
+vi.mock('../../stores/gateway-store', () => ({ useGatewayStore: { getState: () => ({ getActiveProfile: () => null }) } }));
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -134,35 +135,35 @@ describe('probeThumbnail', () => {
     globalThis.fetch = originalFetch;
   });
 
-  it('returns ready on 200 and sends a HEAD with Authorization', async () => {
+  it('returns ready on 200 and never forwards credentials to a public thumbnail origin', async () => {
     fetchMock.mockResolvedValue({ status: 200 } as Response);
-    const s = await probeThumbnail('https://x/thumb', 'tok');
+    const s = await probeThumbnail('https://x/thumb');
     expect(s).toBe('ready');
     const [, init] = fetchMock.mock.calls[0];
     expect((init as RequestInit).method).toBe('HEAD');
-    const headers = (init as RequestInit).headers as Headers;
-    expect(headers.get('Authorization')).toBe('Bearer tok');
+    expect(new Headers((init as RequestInit).headers).has('Authorization')).toBe(false);
+    expect((init as RequestInit).redirect).toBe('error');
   });
 
   it('returns pending on 202', async () => {
     fetchMock.mockResolvedValue({ status: 202 } as Response);
-    expect(await probeThumbnail('https://x/thumb', undefined)).toBe('pending');
+    expect(await probeThumbnail('https://x/thumb')).toBe('pending');
   });
 
   it('returns gone on 404 / 410', async () => {
     fetchMock.mockResolvedValueOnce({ status: 404 } as Response);
-    expect(await probeThumbnail('https://x/thumb', undefined)).toBe('gone');
+    expect(await probeThumbnail('https://x/thumb')).toBe('gone');
     fetchMock.mockResolvedValueOnce({ status: 410 } as Response);
-    expect(await probeThumbnail('https://x/thumb', undefined)).toBe('gone');
+    expect(await probeThumbnail('https://x/thumb')).toBe('gone');
   });
 
   it('returns unknown on network error', async () => {
     fetchMock.mockRejectedValue(new Error('boom'));
-    expect(await probeThumbnail('https://x/thumb', undefined)).toBe('unknown');
+    expect(await probeThumbnail('https://x/thumb')).toBe('unknown');
   });
 
   it('returns unknown when url is empty', async () => {
-    expect(await probeThumbnail('', undefined)).toBe('unknown');
+    expect(await probeThumbnail('')).toBe('unknown');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

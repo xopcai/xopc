@@ -11,7 +11,7 @@ import { buildSessionKey } from '../../../routing/session-key.js';
 import { agentExists, getDefaultAgentId } from '../../../routing/resolve-route.js';
 import type { CaptureChannel, CaptureSource, Note, NoteKind, NoteStatus, SnapshotTrigger } from '../../../notes/types.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
-import { extractToken } from '../../auth.js';
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { resolveGatewayEffectiveHost } from '../../../config/gateway-bind.js';
 import { resolveReverseProxyPublicUrl } from '../../public-url.js';
 import { getShareStore } from '../../../share/share-store.js';
@@ -465,8 +465,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
   });
 
   authenticated.post('/api/notes/:id/shares', async (c) => {
-    const gatewayToken = extractToken({ authorization: c.req.header('authorization') ?? undefined });
-    if (!gatewayToken) return c.json({ ok: false, error: { message: 'Token required' } }, 401);
+    const principalId = getGatewayPrincipal(c).principalId;
     const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
     const shares = noteShares();
     try {
@@ -478,7 +477,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
         ttlMs: typeof body.ttlMs === 'number' ? body.ttlMs : undefined,
         maxViews: body.maxViews === null ? null : typeof body.maxViews === 'number' ? body.maxViews : undefined,
         description: typeof body.description === 'string' ? body.description.trim() || undefined : undefined,
-        gatewayTokenHash: createHash('sha256').update(gatewayToken, 'utf8').digest('hex').slice(0, 12),
+        gatewayTokenHash: createHash('sha256').update(principalId, 'utf8').digest('hex').slice(0, 12),
       });
       const resolved = resolveShareUrl(record.token, shareUrlContext());
       return c.json({
