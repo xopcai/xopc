@@ -1,6 +1,7 @@
 // Session management types
 
 import type { CompactionAudit } from './compaction-types.js';
+import type { SessionDiscoveryQuery } from '@xopcai/gateway-contract';
 import type { TranscriptStoredRow } from './session-context-for-llm.js';
 
 export interface Message {
@@ -151,7 +152,7 @@ export interface SessionDetail extends SessionMetadata {
 }
 
 /** Session list query parameters */
-export interface SessionListQuery {
+export interface SessionListQuery extends SessionDiscoveryQuery {
   status?: SessionStatus | SessionStatus[];
   /** Single `sourceChannel`, or comma-separated list (e.g. `telegram,weixin`). */
   channel?: string;

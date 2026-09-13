@@ -1,9 +1,11 @@
 import useSWR from 'swr';
+import type { SessionIdentityInput } from '@xopcai/gateway-contract';
 
 import { getSessionDetail } from '@/features/sessions/session-api';
 import { useGatewayStore } from '@/stores/gateway-store';
 
 export interface ChatSessionMetadata {
+  identity?: SessionIdentityInput;
   workflowRunId: string | null;
   ownerAgentId: string | null;
   sessionType: string | null;
@@ -47,6 +49,7 @@ export function useChatSessionMetadata(sessionKey: string | null | undefined) {
           : null;
       const rawForkedFromSessionName = detail.customData?.forkedFromSessionName;
       return {
+        identity: { sourceChannel: detail.sourceChannel, sessionType: detail.sessionType, customData: detail.customData },
         workflowRunId,
         ownerAgentId,
         sessionType,

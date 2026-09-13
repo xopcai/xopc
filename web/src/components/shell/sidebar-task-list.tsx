@@ -14,10 +14,14 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useState, type FormEvent, type UIEvent } from 'react';
+import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type UIEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
+
+import { SessionFilterToolbar } from '@/features/sessions/session-filter-toolbar';
+import { useSessionDiscovery } from '@/features/sessions/use-session-discovery';
+import { sessionIdentityLabel } from '@/features/sessions/session-identity-label';
 
 import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
 import { shouldRefreshSidebarForTranscriptUpdate } from '@/components/shell/sidebar-session-refresh';
@@ -54,6 +58,8 @@ import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+
+const SessionDescriptionContext = createContext(false);
 
 const PAGE_SIZE = 20;
 const PROJECT_LIMIT = 12;
@@ -94,10 +100,6 @@ function interpolate(template: string, params: Record<string, string | number>):
 function sessionUpdatedAtMs(session: SessionMetadata): number {
   const timestamp = new Date(session.updatedAt).getTime();
   return Number.isFinite(timestamp) ? timestamp : 0;
-}
-
-function isWebSession(session: SessionMetadata): boolean {
-  return session.sourceChannel === 'webchat' || session.sourceChannel === 'web';
 }
 
 function rowShellClass(isActive: boolean, indented: boolean): string {
@@ -158,7 +160,6 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   session,
   isActive,
   indented = false,
-  showSourceChannelIcon,
   onNavigate,
   mutate,
   onRequestRename,
@@ -167,13 +168,13 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   sess,
   clipboard,
   defaultUnnamedTitle,
+  contextLabel,
 }: {
   session: SessionMetadata;
   isActive: boolean;
   /** Keep nested titles indented while allowing the row background to span the full list width. */
   indented?: boolean;
-  /** When true (IM list), show a channel glyph before the title. */
-  showSourceChannelIcon?: boolean;
+  contextLabel?: string;
   onNavigate?: () => void;
   mutate: () => void;
   onRequestRename: (key: string) => void;
@@ -183,6 +184,9 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   clipboard: ReturnType<typeof messages>['clipboard'];
   defaultUnnamedTitle: string;
 }) {
+  const showDescription = useContext(SessionDescriptionContext);
+  const identityLabel = sessionIdentityLabel(session, sb.sessionFilters);
+  const description = [identityLabel, contextLabel].filter(Boolean).join(' · ');
   const [menuOpen, setMenuOpen] = useState(false);
   const [pinBusy, setPinBusy] = useState(false);
   const agentRunActive = useSidebarSessionAgentRun(session.key);
@@ -226,7 +230,8 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
           'min-w-0 flex-1 rounded-lg py-1 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
           'flex min-w-0 items-center gap-2',
         )}
-        title={title}
+        title={`${title} — ${description}`}
+        aria-label={`${title} — ${description}`}
         onClick={() => onNavigate?.()}
         onDoubleClick={(event) => {
           event.preventDefault();
@@ -234,22 +239,13 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
           onRequestRename(session.key);
         }}
       >
-        {showSourceChannelIcon ? (
-          <>
-            <span
-              className={cn(
-                'flex size-4 shrink-0 items-center justify-center',
-                isActive ? 'text-fg-muted' : 'text-fg-subtle',
-              )}
-              title={session.sourceChannel}
-            >
-              <SessionChannelIcon sourceChannel={session.sourceChannel} className="size-3.5" />
-            </span>
-            <span className="min-w-0 flex-1 truncate">{title}</span>
-          </>
-        ) : (
-          <span className="min-w-0 flex-1 truncate">{title}</span>
-        )}
+        <span className="flex size-4 shrink-0 items-center justify-center text-fg-muted" title={identityLabel}>
+          <SessionChannelIcon sourceChannel={session.sourceChannel} session={session} className="size-3.5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate">{title}</span>
+          {showDescription ? <span className="block truncate text-xs font-normal text-fg-muted">{description}</span> : null}
+        </span>
         {agentRunActive ? (
           <span
             className="pointer-events-none relative flex size-2.5 shrink-0 items-center justify-center"
@@ -613,7 +609,6 @@ function SidebarProjectSection({
               session={session}
               isActive={activeSessionKey === session.key}
               indented
-              showSourceChannelIcon={!isWebSession(session)}
               onNavigate={onNavigate}
               mutate={mutate}
               onRequestRename={onRequestRename}
@@ -739,7 +734,6 @@ function SidebarInboxSection({
             session={session}
             isActive={activeSessionKey === session.key}
             indented
-            showSourceChannelIcon={!isWebSession(session)}
             onNavigate={onNavigate}
             mutate={mutate}
             onRequestRename={onRequestRename}
@@ -807,7 +801,6 @@ function SidebarPinnedSection({
             key={session.key}
             session={session}
             isActive={activeSessionKey === session.key}
-            showSourceChannelIcon={!isWebSession(session)}
             onNavigate={onNavigate}
             mutate={mutate}
             onRequestRename={onRequestRename}
@@ -824,6 +817,11 @@ function SidebarPinnedSection({
 }
 
 export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
+  const gateway = useGatewayStore((state) => state.baseUrl);
+  return <SidebarTaskListContent key={gateway} gateway={gateway} onNavigate={onNavigate} />;
+}
+
+function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => void; gateway: string }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const sb = m.sidebar;
@@ -831,6 +829,13 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   const projectsText = m.projectsPage;
   const wd = m.chat.workingDirectory;
   const token = useGatewayStore((s) => s.token);
+  const discovery = useSessionDiscovery(gateway, token);
+  const filterLabels = sb.sessionFilters;
+  const listScrollRef = useRef<HTMLDivElement>(null);
+  const browseScrollTop = useRef(0);
+  useLayoutEffect(() => {
+    if (listScrollRef.current) listScrollRef.current.scrollTop = discovery.active ? 0 : browseScrollTop.current;
+  }, [discovery.active]);
   const openTokenDialog = useGatewayStore((s) => s.openTokenDialog);
 
   const { data: chatAgents, mutate: mutateChatAgents } = useSWR(
@@ -968,6 +973,8 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     [items],
   );
 
+  const operationItems = useMemo(() => [...discovery.items, ...items], [items, discovery.items]);
+
   const hasGroupedItems = projectGroups.length > 0 || inboxItems.length > 0;
 
   const pinnedSessions = useMemo(
@@ -997,12 +1004,14 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   const onScroll = useCallback(
     (e: UIEvent<HTMLDivElement>) => {
       const el = e.currentTarget;
+      if (discovery.active) return;
+      browseScrollTop.current = el.scrollTop;
       if (!hasMorePages || loadingMore) return;
       const { scrollTop, scrollHeight, clientHeight } = el;
       if (scrollHeight - scrollTop - clientHeight > 100) return;
       void setSize((s) => s + 1);
     },
-    [hasMorePages, loadingMore, setSize],
+    [discovery.active, hasMorePages, loadingMore, setSize],
   );
 
   useEffect(() => {
@@ -1043,10 +1052,10 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   }, [activeSessionKey, data, items, token]);
 
   const openRename = useCallback((key: string) => {
-    const row = items.find((s) => s.key === key);
+    const row = operationItems.find((s) => s.key === key);
     setRenameKey(key);
     setRenameDraft(row?.name?.trim() ?? '');
-  }, [items]);
+  }, [operationItems]);
 
   const runRename = async () => {
     if (!renameKey) return;
@@ -1055,6 +1064,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     try {
       await renameSession(renameKey, name);
       setRenameKey(null);
+      discovery.refresh();
       refreshSidebar();
     } catch {
       // Preserve the current sidebar state when the action fails.
@@ -1064,6 +1074,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   const runDelete = async (key: string) => {
     try {
       await deleteSession(key);
+      discovery.refresh();
       if (activeSessionKey === key) {
         navigate('/chat/new?projectScope=none', { state: { forceNewChat: true } });
       }
@@ -1262,7 +1273,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     }
   }, [createProjectName, createProjectWorkspace, creatingProject, refreshSidebar]);
 
-  const renameTarget = renameKey ? items.find((s) => s.key === renameKey) : undefined;
+  const renameTarget = renameKey ? operationItems.find((s) => s.key === renameKey) : undefined;
   const renameProjectTarget = renameProjectId
     ? projectGroups.find((group) => group.project.id === renameProjectId)?.project
     : undefined;
@@ -1294,132 +1305,163 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   }
 
   return (
+    <SessionDescriptionContext value={discovery.filters.details}>
     <div className="flex min-h-0 flex-1 flex-col">
       <div
-        className={cn(
-          'app-sidebar-nav-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain',
-          'pb-2',
-        )}
+        ref={listScrollRef}
+        className="app-sidebar-nav-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain pt-3 pb-2"
         onScroll={onScroll}
       >
-        {loadingFirst ? (
-          <SidebarTaskListSkeleton />
-        ) : hasGroupedItems ? (
-          <div className="flex flex-col px-2 pt-4">
-            <SidebarPinnedSection
-              sessions={pinnedSessions}
-              activeSessionKey={activeSessionKey}
-              onNavigate={onNavigate}
-              mutate={refreshSidebar}
-              onRequestRename={openRename}
-              onRequestDelete={setDeleteKey}
-              sb={sb}
-              sess={sess}
-              clipboard={m.clipboard}
-              defaultUnnamedTitle={m.chat.newSession}
+        <div hidden={discovery.active || loadingFirst} className="px-2">
+          <SidebarPinnedSection
+            sessions={pinnedSessions}
+            activeSessionKey={activeSessionKey}
+            onNavigate={onNavigate}
+            mutate={refreshSidebar}
+            onRequestRename={openRename}
+            onRequestDelete={setDeleteKey}
+            sb={sb}
+            sess={sess}
+            clipboard={m.clipboard}
+            defaultUnnamedTitle={m.chat.newSession}
+          />
+        </div>
+        <div className="px-2">
+          <div className="group flex min-w-0 items-center gap-1.5 px-2 pb-1">
+            <button
+              type="button"
+              className={cn(
+                'flex shrink-0 items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+                sidebarSectionButtonClass,
+              )}
+              onClick={() => setProjectsCollapsed((value) => !value)}
+              aria-expanded={!projectsCollapsed}
+            >
+              {sb.projectsHeading}
+              <ChevronDown
+                className={cn(
+                  'size-3.5 transition-transform duration-150 ease-out',
+                  projectsCollapsed && '-rotate-90',
+                )}
+                strokeWidth={1.75}
+                aria-hidden
+              />
+            </button>
+            <SessionFilterToolbar
+              filters={discovery.filters} onChange={discovery.updateFilters}
+              search={discovery.search} onSearch={discovery.setSearch}
+              labels={filterLabels} gateway={gateway} agents={chatAgents?.items ?? []}
             />
-            {projectGroups.length > 0 ? (
-              <div className="pb-1">
-                <div className="group flex items-center justify-between px-2 pb-1">
-                  <button
-                    type="button"
-                    className={cn(
-                      'flex items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
-                      sidebarSectionButtonClass,
-                    )}
-                    onClick={() => setProjectsCollapsed((value) => !value)}
-                    aria-expanded={!projectsCollapsed}
-                  >
-                    {sb.projectsHeading}
-                    <ChevronDown
-                      className={cn(
-                        'size-3.5 transition-transform duration-150 ease-out',
-                        projectsCollapsed && '-rotate-90',
-                      )}
-                      strokeWidth={1.75}
-                      aria-hidden
-                    />
-                  </button>
-                  <button
-                    type="button"
-                    className={cn(
-                      'flex size-6 items-center justify-center rounded-md text-fg-subtle opacity-0 transition-[color,background-color,opacity] hover:bg-surface-hover hover:text-fg focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                      'group-hover:opacity-100 group-focus-within:opacity-100',
-                      createProjectOpen && 'opacity-100',
-                    )}
-                    onClick={() => setCreateProjectOpen(true)}
-                    aria-label={projectsText.createTitle}
-                    title={projectsText.createTitle}
-                  >
-                    <Plus className="size-3.5" strokeWidth={2} aria-hidden />
-                  </button>
-                </div>
-                {!projectsCollapsed
-                  ? projectGroups.map((group) => (
-                      <SidebarProjectSection
-                        key={group.project.id}
-                        group={group}
-                        isExpanded={expandedProjects.has(group.project.id)}
-                        isCollapsed={collapsedProjectIds.has(group.project.id)}
-                        activeSessionKey={activeSessionKey}
-                        onToggleExpanded={toggleProjectExpanded}
-                        onToggleCollapsed={toggleProjectCollapsed}
-                        onCreateProjectChat={(project) => void createProjectChat(project)}
-                        onToggleProjectPin={(project) => void toggleProjectPin(project)}
-                        onRequestProjectRename={openProjectRename}
-                        onArchiveProject={(project) => void runProjectArchive(project)}
-                        onRequestProjectRemove={(project) => setRemoveProjectId(project.id)}
-                        onNavigate={onNavigate}
-                        mutate={refreshSidebar}
-                        onRequestRename={openRename}
-                        onRequestDelete={setDeleteKey}
-                        sb={sb}
-                        sess={sess}
-                        clipboard={m.clipboard}
-                        defaultUnnamedTitle={m.chat.newSession}
-                        excludedSessionKeys={pinnedSessionKeys}
-                      />
-                    ))
-                  : null}
-              </div>
-            ) : null}
-
-            <SidebarInboxSection
-              sessions={inboxItems}
-              hasMore={inboxHasMore}
-              loadingMore={loadingInboxMore}
-              isCollapsed={inboxCollapsed}
-              onToggleCollapsed={() => setInboxCollapsed((value) => !value)}
-              onCreateChat={() => {
-                navigate('/chat/new?projectScope=none', { state: { forceNewChat: true } });
-                onNavigate?.();
-              }}
-              onLoadMore={loadMoreInbox}
-              activeSessionKey={activeSessionKey}
-              onNavigate={onNavigate}
-              mutate={refreshSidebar}
-              onRequestRename={openRename}
-              onRequestDelete={setDeleteKey}
-              sb={sb}
-              sess={sess}
-              clipboard={m.clipboard}
-              defaultUnnamedTitle={m.chat.newSession}
-              excludedSessionKeys={pinnedSessionKeys}
-            />
+            <button
+              type="button"
+              className={cn(
+                'flex size-6 shrink-0 items-center justify-center rounded-md text-fg-subtle opacity-0 transition-[color,background-color,opacity] hover:bg-surface-hover hover:text-fg focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                'group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100',
+                createProjectOpen && 'opacity-100',
+              )}
+              onClick={() => setCreateProjectOpen(true)}
+              aria-label={projectsText.createTitle}
+              title={projectsText.createTitle}
+            >
+              <Plus className="size-3.5" strokeWidth={2} aria-hidden />
+            </button>
           </div>
-        ) : (
-          <div className="px-4 pb-2">
-            <p className="rounded-xl bg-surface-panel p-3 text-xs leading-relaxed text-fg-muted">
-              {sb.taskListEmpty}
-            </p>
-          </div>
-        )}
-
-        {loadingMore ? (
-          <div className="flex justify-center py-2" aria-busy>
-            <Loader2 className="size-4 animate-spin text-fg-subtle" strokeWidth={1.75} aria-hidden />
+        </div>
+        {discovery.active ? (
+          <div className="px-2 py-2">
+            {discovery.pendingUpdate ? <button type="button" className="mb-2 w-full rounded-md px-2 py-1 text-xs text-accent-fg hover:bg-surface-hover" onClick={discovery.refresh}>{filterLabels.refresh}</button> : null}
+            {discovery.error ? <div role="alert" className="space-y-2 p-2 text-xs text-fg-muted"><p>{filterLabels.error}</p><Button variant="secondary" onClick={discovery.refresh}>{filterLabels.retry}</Button></div>
+              : discovery.loading ? <SidebarTaskListSkeleton />
+              : <>
+                <p className="px-2 pb-2 text-xs text-fg-muted" aria-live="polite">{filterLabels.results.replace('{{count}}', String(discovery.total))}</p>
+                {!discovery.items.length ? <p className="px-2 py-4 text-xs text-fg-muted">{filterLabels.empty}</p> : null}
+                <SessionDescriptionContext value={true}>
+                  {discovery.items.map((session) => <SidebarTaskRow
+                    key={session.key} session={session} isActive={session.key === activeSessionKey}
+                    contextLabel={session.projectId ? discovery.projects?.find((project) => project.id === session.projectId)?.name ?? projectGroups.find((group) => group.project.id === session.projectId)?.project.name ?? session.projectId : filterLabels.unassigned}
+                    onNavigate={onNavigate} mutate={() => { discovery.refresh(); refreshSidebar(); }}
+                    onRequestRename={openRename} onRequestDelete={setDeleteKey}
+                    sb={sb} sess={sess} clipboard={m.clipboard} defaultUnnamedTitle={m.chat.newSession}
+                  />)}
+                </SessionDescriptionContext>
+                {discovery.loadingMore ? <SidebarSessionSkeletonRow /> : discovery.hasMore ? <button type="button" className="w-full rounded-md py-2 text-xs text-fg-muted hover:bg-surface-hover" onClick={discovery.loadMore}>{filterLabels.more}</button> : null}
+              </>}
           </div>
         ) : null}
+        <div hidden={discovery.active}>
+          {loadingFirst ? (
+            <SidebarTaskListSkeleton />
+          ) : hasGroupedItems ? (
+            <div className="flex flex-col px-2">
+              {projectGroups.length > 0 ? (
+                <div className="pb-1">
+                  {!projectsCollapsed
+                    ? projectGroups.map((group) => (
+                        <SidebarProjectSection
+                          key={group.project.id}
+                          group={group}
+                          isExpanded={expandedProjects.has(group.project.id)}
+                          isCollapsed={collapsedProjectIds.has(group.project.id)}
+                          activeSessionKey={activeSessionKey}
+                          onToggleExpanded={toggleProjectExpanded}
+                          onToggleCollapsed={toggleProjectCollapsed}
+                          onCreateProjectChat={(project) => void createProjectChat(project)}
+                          onToggleProjectPin={(project) => void toggleProjectPin(project)}
+                          onRequestProjectRename={openProjectRename}
+                          onArchiveProject={(project) => void runProjectArchive(project)}
+                          onRequestProjectRemove={(project) => setRemoveProjectId(project.id)}
+                          onNavigate={onNavigate}
+                          mutate={refreshSidebar}
+                          onRequestRename={openRename}
+                          onRequestDelete={setDeleteKey}
+                          sb={sb}
+                          sess={sess}
+                          clipboard={m.clipboard}
+                          defaultUnnamedTitle={m.chat.newSession}
+                          excludedSessionKeys={pinnedSessionKeys}
+                        />
+                      ))
+                    : null}
+                </div>
+              ) : null}
+
+              <SidebarInboxSection
+                sessions={inboxItems}
+                hasMore={inboxHasMore}
+                loadingMore={loadingInboxMore}
+                isCollapsed={inboxCollapsed}
+                onToggleCollapsed={() => setInboxCollapsed((value) => !value)}
+                onCreateChat={() => {
+                  navigate('/chat/new?projectScope=none', { state: { forceNewChat: true } });
+                  onNavigate?.();
+                }}
+                onLoadMore={loadMoreInbox}
+                activeSessionKey={activeSessionKey}
+                onNavigate={onNavigate}
+                mutate={refreshSidebar}
+                onRequestRename={openRename}
+                onRequestDelete={setDeleteKey}
+                sb={sb}
+                sess={sess}
+                clipboard={m.clipboard}
+                defaultUnnamedTitle={m.chat.newSession}
+                excludedSessionKeys={pinnedSessionKeys}
+              />
+            </div>
+          ) : (
+            <div className="px-4 pb-2">
+              <p className="rounded-xl bg-surface-panel p-3 text-xs leading-relaxed text-fg-muted">
+                {sb.taskListEmpty}
+              </p>
+            </div>
+          )}
+
+          {loadingMore ? (
+            <div className="flex justify-center py-2" aria-busy>
+              <Loader2 className="size-4 animate-spin text-fg-subtle" strokeWidth={1.75} aria-hidden />
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <Dialog.Root
@@ -1655,5 +1697,6 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
         </Dialog.Portal>
       </Dialog.Root>
     </div>
+    </SessionDescriptionContext>
   );
 }
