@@ -23,6 +23,7 @@ export interface PrepareWorkflowRunSessionParams {
   goal: string;
   parentSessionKey?: string;
   projectId?: string;
+  triggerSource?: string;
 }
 
 export interface PrepareWorkflowRunSessionResult {
@@ -73,6 +74,7 @@ export class WorkflowSessionBridge {
         workflowRunId: params.runId,
         workflowDefinitionId: params.definitionId,
         workflowGoal: params.goal,
+        ...(params.triggerSource ? { triggerSource: params.triggerSource } : {}),
         ...(params.parentSessionKey ? { parentSessionKey: params.parentSessionKey } : {}),
       },
     });
