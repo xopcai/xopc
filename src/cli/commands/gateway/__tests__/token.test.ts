@@ -42,6 +42,11 @@ vi.mock('../../../../utils/logger.js', () => ({
   }),
 }));
 
+vi.mock('../../../../daemon/service.js', () => ({
+  isDaemonAvailableAsync: vi.fn().mockResolvedValue(false),
+  resolveGatewayService: vi.fn(),
+}));
+
 describe('Gateway Token Command', () => {
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
@@ -131,6 +136,28 @@ describe('Gateway Token Command', () => {
 
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('authentication is disabled'));
       expect(processExitSpy).toHaveBeenCalledWith(0);
+    });
+
+    it('should display the installed service token and report drift', async () => {
+      const { isDaemonAvailableAsync, resolveGatewayService } = await import('../../../../daemon/service.js');
+      vi.mocked(isDaemonAvailableAsync).mockResolvedValue(true);
+      vi.mocked(resolveGatewayService).mockResolvedValue({
+        isLoaded: vi.fn().mockResolvedValue(true),
+        readCommand: vi.fn().mockResolvedValue({
+          programArguments: [],
+          environment: { XOPC_GATEWAY_TOKEN: 'service-token-1234567890abcdef' },
+        }),
+      } as any);
+      vi.mocked(loadConfig).mockReturnValue({
+        gateway: { auth: { mode: 'token', token: 'config-token-1234567890abcdef' } },
+      } as any);
+
+      const cmd = createTokenCommand();
+      await cmd.parseAsync(['node', 'test']);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith('   service-token-1234567890abcdef');
+      expect(consoleLogSpy).toHaveBeenCalledWith('Source: installed gateway service');
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Token drift detected'));
     });
   });
 
