@@ -17,7 +17,7 @@ export function shouldRefreshTaskDetailFromChange(
 }
 
 export function useTaskDetail(taskId: string) {
-  const token = useGatewayStore((state) => state.token);
+  const token = useGatewayStore((state) => state.sessionKey);
   const [lastChange, setLastChange] = useState<TaskChangedEvent | null>(null);
   const [conversationLoading, setConversationLoading] = useState(false);
   const [conversationError, setConversationError] = useState<unknown>(null);

@@ -1,3 +1,4 @@
+import { GatewayImage as Image } from '../../components/GatewayImage';
 /**
  * MySharesScreen — list of every share the user has created on this gateway.
  *
@@ -19,7 +20,6 @@
 import { useMemo, useState } from 'react';
 import {
   FlatList,
-  Image,
   Pressable,
   RefreshControl,
   Share,
@@ -45,7 +45,6 @@ import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { t, useMessages } from '../../i18n/messages';
 import { LIST_DELAY_LONG_PRESS } from '../../constants/list-interaction';
 import { dismissOrRoot, useDismissOnHardwareBack } from '../../lib/navigation';
-import { useGatewayStore } from '../../stores/gateway-store';
 import { radii, spacing, typography, type ColorScheme } from '../../theme';
 import { useTheme } from '../../theme/useTheme';
 import { queryKeys } from '../../query/keys';
@@ -75,7 +74,6 @@ export function MySharesScreen() {
   const pm = m.sharingPage;
   const qc = useQueryClient();
   const list = useShareList();
-  const token = useGatewayStore((s) => s.accessToken);
 
   const [extending, setExtending] = useState<ShareListItem | null>(null);
   const [revoking, setRevoking] = useState<ShareListItem | null>(null);
@@ -92,7 +90,6 @@ export function MySharesScreen() {
   const renderItem = ({ item }: { item: ShareListItem }) => (
     <ShareRow
       item={item}
-      token={token ?? ''}
       palette={palette}
       onPreview={() => setPreviewing({ url: item.shareUrl, title: item.fileName })}
       onExtend={() => setExtending(item)}
@@ -177,7 +174,6 @@ export function MySharesScreen() {
 
 function ShareRow({
   item,
-  token,
   palette,
   onPreview,
   onExtend,
@@ -185,7 +181,6 @@ function ShareRow({
   m,
 }: {
   item: ShareListItem;
-  token: string;
   palette: ShareListColors;
   onPreview: () => void;
   onExtend: () => void;
@@ -197,7 +192,6 @@ function ShareRow({
   const expiryLabel = useMemo(() => formatExpiryLabel(item, pm), [item, pm]);
   const downloads = item.downloadCount;
   const thumbnailUri = `${item.shareUrl.replace(/\/+$/, '')}/thumbnail`;
-  const thumbHeaders = token ? { Authorization: `Bearer ${token}` } : undefined;
   const [actionsVisible, setActionsVisible] = useState(false);
 
   const closeActions = () => setActionsVisible(false);
@@ -233,7 +227,7 @@ function ShareRow({
     >
       <View style={styles.cardLeft}>
         <View style={[styles.thumb, { backgroundColor: palette.thumbBg }]}>
-          <Image source={{ uri: thumbnailUri, headers: thumbHeaders }} style={styles.thumbImage} resizeMode="cover" />
+          <Image source={{ uri: thumbnailUri }} style={styles.thumbImage} resizeMode="cover" />
         </View>
       </View>
 

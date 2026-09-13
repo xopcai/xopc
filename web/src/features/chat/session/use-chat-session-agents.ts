@@ -30,7 +30,7 @@ export function useChatSessionAgents(opts: {
   locationSearch: string;
 }) {
   const { navigate, sessionKeyRef, sessionKey, isNewRoute, locationState, locationSearch } = opts;
-  const token = useGatewayStore((s) => s.token);
+  const token = useGatewayStore((s) => s.sessionKey);
   const sessionAgentKey = sessionKey?.trim() ?? '';
 
   const { data: chatAgentsData, mutate: mutateChatAgents } = useSWR(

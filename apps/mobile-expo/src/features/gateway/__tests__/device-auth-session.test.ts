@@ -1,4 +1,7 @@
+import { generateKeyPairSync, sign } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../route-identity', () => ({ ensureGatewayRouteIdentity: vi.fn(async () => {}) }));
 
 const state = vi.hoisted(() => ({ token: 'xopc_rt_old_secret', journal: new Map<string, unknown>(), generation: 1, activeId: 'a', setAccess: vi.fn(), deny: vi.fn() }));
 vi.mock('../../../storage/device-credentials', () => ({
@@ -14,11 +17,15 @@ vi.mock('../../../stores/gateway-store', () => ({ useGatewayStore: { getState: (
   getActiveProfile: () => profile, setAccessToken: state.setAccess, onUnauthorized: state.deny,
 }) } }));
 import { refreshDeviceAccessToken, resetDeviceAuthSessionForTests } from '../device-auth-session';
-const profile = { gatewayId: 'a', name: 'Work', deviceId: 'phone', gatewayPublicKey: 'key', scopes: [], updatedAt: 1,
+const identity = generateKeyPairSync('ed25519');
+const profile = { gatewayId: 'a', name: 'Work', deviceId: 'phone', gatewayPublicKey: identity.publicKey.export({ format: 'jwk' }).x!, scopes: [], updatedAt: 1,
   activeRouteId: 'r', routes: [{ id: 'r', kind: 'custom-https', url: 'https://computer.example' }] };
-function success(body: { nextRefreshToken: string }) {
-  return new Response(JSON.stringify({ payload: { accessToken: 'access', accessTokenExpiresAt: Date.now() + 60000,
-    refreshToken: body.nextRefreshToken, refreshTokenExpiresAt: Date.now() + 100000 } }));
+function success(body: { nextRefreshToken: string; nonce: string; requestId: string }) {
+  const signedPayload = Buffer.from(JSON.stringify({ purpose: 'device-refresh-v3', gatewayId: profile.gatewayId,
+    nonce: body.nonce, requestId: body.requestId, expiresAt: Date.now() + 30_000,
+    tokens: { accessToken: 'access', accessTokenExpiresAt: Date.now() + 60000,
+      refreshToken: body.nextRefreshToken, refreshTokenExpiresAt: Date.now() + 100000 } })).toString('base64url');
+  return Response.json({ signedPayload, signature: sign(null, Buffer.from(signedPayload), identity.privateKey).toString('base64url') });
 }
 describe('durable device refresh', () => {
   beforeEach(() => { state.token = 'xopc_rt_old_secret'; state.journal.clear(); state.generation = 1; state.activeId = 'a'; state.setAccess.mockReset(); state.deny.mockReset(); resetDeviceAuthSessionForTests(); });
@@ -45,6 +52,20 @@ describe('durable device refresh', () => {
     expect(bodies[1].requestId).toBe(bodies[0].requestId);
     expect(bodies[1].nextRefreshToken).toBe(bodies[0].nextRefreshToken);
     expect(bodies[1].nonce).not.toBe(bodies[0].nonce);
+  });
+  it.each(['nonce', 'signature', 'unsigned'])('rejects a %s response without persisting credentials or clearing the recovery journal', async (fault) => {
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      if (fault === 'nonce') return success({ ...body, nonce: 'replayed-nonce' });
+      const response = await success(body).json();
+      if (fault === 'signature') response.signature = 'invalid';
+      else delete response.signature;
+      return Response.json(response);
+    }));
+    await expect(refreshDeviceAccessToken()).rejects.toThrow('No secure gateway route');
+    expect(state.token).toBe('xopc_rt_old_secret');
+    expect(state.setAccess).not.toHaveBeenCalled();
+    expect(state.journal.size).toBe(1);
   });
   it('does not apply late credentials to a new connection', async () => {
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {

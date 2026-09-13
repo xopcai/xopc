@@ -41,7 +41,7 @@ function websocketUrl(): string {
   return url.toString();
 }
 
-export function startGatewayRealtime(token?: string): () => void {
+export function startGatewayRealtime(): () => void {
   const id = resolveClientId();
   const kind = window.electronAPI ? 'desktop' as const : 'web' as const;
   const client = new RealtimeClient({
@@ -53,7 +53,6 @@ export function startGatewayRealtime(token?: string): () => void {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ clientId: id, clientKind: kind }),
         signal,

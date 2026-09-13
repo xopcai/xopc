@@ -91,10 +91,12 @@ mkdir -p "$OUTPUT_DIR"
 if [[ "$TARGET" == "apk" || "$TARGET" == "both" ]]; then
   cp "${APP_DIR}/android/app/build/outputs/apk/release/app-release.apk" \
     "${OUTPUT_DIR}/xopc-android.apk"
+  python3 "${SCRIPT_DIR}/verify-native-upload-policy.py" "${OUTPUT_DIR}/xopc-android.apk"
 fi
 if [[ "$TARGET" == "aab" || "$TARGET" == "both" ]]; then
   cp "${APP_DIR}/android/app/build/outputs/bundle/release/app-release.aab" \
     "${OUTPUT_DIR}/xopc-android.aab"
+  python3 "${SCRIPT_DIR}/verify-native-upload-policy.py" "${OUTPUT_DIR}/xopc-android.aab"
 fi
 
 echo "Android release artifacts:"

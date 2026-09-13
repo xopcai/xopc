@@ -40,7 +40,7 @@ export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
     agentId: opts.agentId?.trim() || 'main',
     projectId: opts.projectId ?? null,
   });
-  const cacheKey = JSON.stringify([scopeKey, gateway.token, opts.forceNew === true, opts.temporary === true, opts.executionMode, opts.search]);
+  const cacheKey = JSON.stringify([scopeKey, gateway.sessionKey, opts.forceNew === true, opts.temporary === true, opts.executionMode, opts.search]);
   const existing = inflightByScope.get(cacheKey);
   if (existing) {
     existing.target.opts = opts;

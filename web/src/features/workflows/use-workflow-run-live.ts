@@ -8,7 +8,7 @@ import { ACTIVE_RUN_STATUSES } from './workflow-page.constants';
 
 /** Live workflow run view for a dedicated workflow chat session (realtime + polling fallback). */
 export function useWorkflowRunLive(runId: string | null | undefined, options?: { ownerAgentId?: string }) {
-  const token = useGatewayStore((s) => s.token);
+  const token = useGatewayStore((s) => s.sessionKey);
   const hasToken = Boolean(token);
   const trimmedRunId = runId?.trim() || null;
   const ownerAgentId = options?.ownerAgentId?.trim() || undefined;

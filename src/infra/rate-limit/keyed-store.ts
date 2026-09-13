@@ -13,6 +13,7 @@ export type Clock = () => number;
 export type KeyedStoreOptions = {
   /** Drop entries whose `lastTouchedMs` is older than this. */
   staleAfterMs: number;
+  maxEntries?: number;
   /** How often the sweep runs. Defaults to `staleAfterMs / 4` (capped at 10min). */
   cleanupIntervalMs?: number;
   /** Injected clock for deterministic tests. */
@@ -21,11 +22,14 @@ export type KeyedStoreOptions = {
 
 export class KeyedStore<V extends { lastTouchedMs: number }> {
   private readonly map = new Map<string, V>();
+  private readonly maxEntries: number;
+  private overflow?: V;
   private readonly clock: Clock;
   private readonly staleAfterMs: number;
   private cleanupTimer?: NodeJS.Timeout;
 
   constructor(opts: KeyedStoreOptions) {
+    this.maxEntries = Math.max(1, opts.maxEntries ?? 10_000);
     this.clock = opts.clock ?? Date.now;
     this.staleAfterMs = Math.max(1000, opts.staleAfterMs);
     const interval = Math.min(
@@ -37,11 +41,12 @@ export class KeyedStore<V extends { lastTouchedMs: number }> {
   }
 
   get(key: string): V | undefined {
-    return this.map.get(key);
+    return this.map.get(key) ?? (this.map.size >= this.maxEntries ? this.overflow : undefined);
   }
 
   set(key: string, value: V): void {
-    this.map.set(key, value);
+    if (this.map.has(key) || this.map.size < this.maxEntries) this.map.set(key, value);
+    else this.overflow ??= value;
   }
 
   delete(key: string): void {
@@ -54,6 +59,7 @@ export class KeyedStore<V extends { lastTouchedMs: number }> {
 
   clear(): void {
     this.map.clear();
+    this.overflow = undefined;
   }
 
   destroy(): void {
@@ -62,10 +68,12 @@ export class KeyedStore<V extends { lastTouchedMs: number }> {
       this.cleanupTimer = undefined;
     }
     this.map.clear();
+    this.overflow = undefined;
   }
 
   private sweep(): void {
     const now = this.clock();
+    if (this.overflow && now - this.overflow.lastTouchedMs > this.staleAfterMs) this.overflow = undefined;
     for (const [k, v] of this.map.entries()) {
       if (now - v.lastTouchedMs > this.staleAfterMs) {
         this.map.delete(k);

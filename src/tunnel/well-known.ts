@@ -38,11 +38,12 @@ export async function fetchTunnelWellKnown(brokerUrl: string): Promise<TunnelWel
   }
 
   const url = `${origin}/.well-known/tunnel-config`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+  const res = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(10_000) });
   if (!res.ok) {
     throw new Error(`Tunnel well-known fetch failed: ${res.status} ${res.statusText}`);
   }
   const body = (await res.json()) as TunnelWellKnownConfig;
+  if (new URL(body.brokerUrl).origin !== origin) throw new Error('Broker discovery cannot redirect registration credentials to another origin');
   cached = { origin, config: body, fetchedAt: Date.now() };
   log.debug({ url, brokerUrl: body.brokerUrl, transport: body.transport?.tls }, 'Loaded tunnel well-known config');
   return body;

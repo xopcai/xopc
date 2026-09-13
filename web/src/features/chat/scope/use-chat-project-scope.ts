@@ -5,7 +5,7 @@ import { getSessionDetail } from '@/features/sessions/session-api';
 import { useGatewayStore } from '@/stores/gateway-store';
 
 export function useChatProjectScope(sessionKey?: string | null, draftProjectId?: string | null): Project | null {
-  const token = useGatewayStore((state) => state.token);
+  const token = useGatewayStore((state) => state.sessionKey);
   const baseUrl = useGatewayStore((state) => state.baseUrl);
   const { data, error } = useSWR(
     sessionKey || draftProjectId ? ['chat-project-scope', baseUrl, token, sessionKey, draftProjectId] : null,

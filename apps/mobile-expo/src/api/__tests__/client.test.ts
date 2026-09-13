@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const nativePolicy = vi.hoisted(() => ({ foregroundUploadRedirectPolicy: 'error' }));
+vi.mock('expo', () => ({ requireNativeModule: () => nativePolicy }));
+
+const identity = vi.hoisted(() => ({ verify: vi.fn(async () => {}) }));
+vi.mock('../../features/gateway/route-identity', () => ({ ensureGatewayRouteIdentity: identity.verify }));
+
 const consent = vi.hoisted(() => ({ authorize: vi.fn(async () => {}) }));
 vi.mock('../../features/privacy/data-sharing-consent', () => ({ authorizeMobileRequest: consent.authorize }));
 
@@ -57,7 +63,9 @@ import { apiFetch, apiUploadFile } from '../client';
 
 describe('mobile gateway client', () => {
   beforeEach(() => {
+    nativePolicy.foregroundUploadRedirectPolicy = 'error';
     gateway.activeGatewayId = 'gateway-1';
+    identity.verify.mockReset().mockResolvedValue(undefined);
     consent.authorize.mockReset().mockResolvedValue(undefined);
     gateway.activeRouteId = 'secure-link';
     gateway.selectRoute.mockClear();
@@ -66,6 +74,13 @@ describe('mobile gateway client', () => {
     nativeFile.uris.length = 0;
     nativeFile.upload.mockReset();
     vi.restoreAllMocks();
+  });
+
+  it('never sends a bearer or upload after identity validation fails', async () => {
+    identity.verify.mockRejectedValue(new Error('GATEWAY_IDENTITY_MISMATCH'));
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    await expect(apiFetch('/api/notes')).rejects.toThrow();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('does not send content when authorization is denied', async () => {
@@ -131,8 +146,14 @@ describe('mobile gateway client', () => {
     expect(response.status).toBe(201);
     expect(nativeFile.upload).toHaveBeenCalledWith(
       'https://primary.gateway/api/voice/transcriptions',
-      expect.objectContaining({ headers: { Authorization: 'Bearer access-token' } }),
+      expect.objectContaining({ sessionType: 'foreground', headers: { Authorization: 'Bearer access-token' } }),
     );
+  });
+
+  it('refuses uploads from a native binary without redirect protection', async () => {
+    nativePolicy.foregroundUploadRedirectPolicy = 'missing';
+    await expect(apiUploadFile('/api/media', { uri: 'file:///file', fieldName: 'file', mimeType: 'audio/mp4' })).rejects.toThrow('SECURITY_UPDATE_REQUIRED');
+    expect(nativeFile.upload).not.toHaveBeenCalled();
   });
 
   it('rejects missing or empty recordings before starting a request', async () => {

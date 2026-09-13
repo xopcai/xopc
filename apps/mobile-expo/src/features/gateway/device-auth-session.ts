@@ -1,3 +1,5 @@
+import { fetch } from 'expo/fetch';
+import { ensureGatewayRouteIdentity } from './route-identity';
 import { randomUUID } from 'expo-crypto';
 
 import {
@@ -6,7 +8,7 @@ import {
 } from '../../storage/device-credentials';
 import { useGatewayStore } from '../../stores/gateway-store';
 import type { GatewayProfile } from '../../stores/gateway-types';
-import { randomNonce, signDevicePayload } from './device-crypto';
+import { decodeBase64UrlJson, randomNonce, signDevicePayload, verifyGatewayPayload } from './device-crypto';
 
 const ACCESS_EXPIRY_MARGIN_MS = 30_000;
 const refreshTasks = new Map<string, Promise<DeviceTokens>>();
@@ -43,12 +45,18 @@ export async function refreshCredentialsForProfile(profile: GatewayProfile): Pro
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 8_000);
       try {
+        await ensureGatewayRouteIdentity(profile, route.url, controller.signal);
         const response = await fetch(`${route.url}/api/device-auth/refresh`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
+          method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
           body: JSON.stringify({ ...attempt, timestamp, nonce, signature }),
         });
         if (response.status === 401 || response.status === 403) throw new Error('DEVICE_AUTH_DENIED');
-        const body = await response.json() as { payload?: DeviceTokens };
+        const signed = await response.json() as { signedPayload?: string; signature?: string };
+        if (!signed.signedPayload || !signed.signature || !verifyGatewayPayload(profile.gatewayPublicKey, signed.signedPayload, signed.signature)) throw new Error('GATEWAY_IDENTITY_MISMATCH');
+        const proof = decodeBase64UrlJson<{ purpose: string; gatewayId: string; nonce: string; requestId: string; expiresAt: number; tokens: DeviceTokens }>(signed.signedPayload);
+        if (proof.purpose !== 'device-refresh-v3' || proof.gatewayId !== profile.gatewayId || proof.nonce !== nonce || proof.requestId !== attempt.requestId
+          || !(proof.expiresAt > Date.now()) || proof.expiresAt > Date.now() + 60_000) throw new Error('GATEWAY_IDENTITY_MISMATCH');
+        const body = { payload: proof.tokens };
         if (!response.ok || !body.payload?.accessToken || body.payload.refreshToken !== attempt.nextRefreshToken
           || !(body.payload.accessTokenExpiresAt > Date.now()) || !(body.payload.refreshTokenExpiresAt > Date.now())) {
           throw new Error('DEVICE_REFRESH_FAILED');

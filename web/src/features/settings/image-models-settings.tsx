@@ -180,7 +180,7 @@ export function ImageModelsSettingsPanel() {
   const language = useLocaleStore((state) => state.language);
   const text = copy[language];
   const commonMessages = messages(language);
-  const hasToken = Boolean(useGatewayStore((state) => state.token));
+  const hasToken = Boolean(useGatewayStore((state) => state.sessionKey));
   const [agentId, setAgentId] = useState('');
   const [providerId, setProviderId] = useState('');
   const [modelId, setModelId] = useState('');

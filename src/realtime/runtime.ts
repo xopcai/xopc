@@ -74,7 +74,7 @@ export class RealtimeRuntime {
   private readonly socketsByPrincipal = new Map<string, Set<WebSocket>>();
   private closed = false;
 
-  constructor(private readonly endpointTools?: EndpointToolRuntime) {
+  constructor(private readonly endpointTools?: EndpointToolRuntime, private readonly isPrincipalActive: (id: string) => boolean = () => true) {
     this.wss.on('connection', (socket, request) => this.handleConnection(socket, request));
     this.wss.on('error', (err) => log.error({ err }, 'Realtime WebSocket server failed'));
   }
@@ -117,8 +117,9 @@ export class RealtimeRuntime {
   }
 
   disconnectPrincipal(principalId: string): void {
+    this.tickets.revokePrincipal(principalId);
     for (const socket of this.socketsByPrincipal.get(principalId) ?? []) {
-      socket.close(4403, 'Device access revoked');
+      socket.terminate();
     }
   }
 
@@ -150,6 +151,7 @@ export class RealtimeRuntime {
     };
     const helloTimer = setTimeout(() => socket.close(4401, 'Realtime hello timeout'), REALTIME_HELLO_TIMEOUT_MS);
     const heartbeatTimer = setInterval(() => {
+      if (principalId && !this.isPrincipalActive(principalId)) { socket.terminate(); return; }
       if (Date.now() - lastSeenAt > REALTIME_HEARTBEAT_TIMEOUT_MS) {
         socket.close(4408, 'Realtime heartbeat timeout');
       }
@@ -224,7 +226,7 @@ export class RealtimeRuntime {
           message.payload.clientId,
           message.payload.clientKind,
         );
-        if (!claim) {
+        if (!claim || !this.isPrincipalActive(claim.principalId)) {
           socket.close(4401, 'Realtime authentication failed');
           return;
         }

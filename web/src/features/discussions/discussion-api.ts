@@ -101,8 +101,6 @@ export function uploadDiscussionRecording(
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open('PUT', apiUrl(`/api/discussions/${encodeURIComponent(discussionId)}/recording`));
-    const token = useGatewayStore.getState().token;
-    if (token) request.setRequestHeader('Authorization', `Bearer ${token}`);
     request.responseType = 'json';
     request.upload.onprogress = (event) => {
       if (event.lengthComputable && event.total > 0) {

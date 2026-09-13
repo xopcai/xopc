@@ -7,7 +7,7 @@ import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
 
 export function useSessionContext(sessionKey: string | null, open: boolean) {
-  const token = useGatewayStore((state) => state.token);
+  const token = useGatewayStore((state) => state.sessionKey);
   const baseUrl = useGatewayStore((state) => state.baseUrl);
   const result = useSWR(
     sessionKey ? ['session-context', baseUrl, token, sessionKey] : null,

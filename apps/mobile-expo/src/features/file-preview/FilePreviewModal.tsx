@@ -1,3 +1,4 @@
+import { fetchGatewayAsset, fetchPublicAsset } from '../../api/gateway-assets';
 import { useEffect, useMemo, useState } from 'react';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -16,7 +17,6 @@ import type { ShareAutoRequest } from '../../api/share';
 import { TOAST_DURATION_SHORT } from '../../constants/toast';
 import { t, useMessages } from '../../i18n/messages';
 import { fetchFileContent } from '../../query/files';
-import { useGatewayStore } from '../../stores/gateway-store';
 import { useTheme } from '../../theme';
 import { FilePreviewHeader } from './FilePreviewHeader';
 import { ShareSheet } from '../share/ShareSheet';
@@ -128,9 +128,7 @@ async function loadPreview(
   }
 
   if (file.remoteUri) {
-    const token = file.remoteRequiresAuth ? useGatewayStore.getState().accessToken : undefined;
-    const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-    const response = await fetch(file.remoteUri, headers ? { headers } : undefined);
+    const response = await (file.remoteRequiresAuth ? fetchGatewayAsset(file.remoteUri) : fetchPublicAsset(file.remoteUri));
     if (!response.ok) throw new Error(`Failed to load file (${response.status})`);
     if (kind === 'image') {
       const bytes = new Uint8Array(await response.arrayBuffer());
@@ -249,14 +247,9 @@ export function FilePreviewModal({ visible, file, onClose }: FilePreviewModalPro
     try {
       if (file.fileId || (file.remoteUri && file.remoteRequiresAuth)) {
         if (!(await Sharing.isAvailableAsync())) throw new Error(cm.filePreviewShareUnavailable);
-        const accessToken = useGatewayStore.getState().accessToken;
         const response = file.fileId
           ? await fetchFileContent(file.fileId)
-          : await fetch(file.remoteUri!, {
-              headers: accessToken
-                ? { Authorization: `Bearer ${accessToken}` }
-                : undefined,
-            });
+          : await fetchGatewayAsset(file.remoteUri!);
         if (!response.ok) throw new Error(`Failed to download file (${response.status})`);
         const directory = new Directory(Paths.cache, 'file-share', `${Date.now()}`);
         directory.create({ intermediates: true });

@@ -39,7 +39,7 @@ export function useWorkflowsPage() {
   const language = useLocaleStore((state) => state.language);
   const labels = messages(language).workflows;
   const localeTag = language === 'zh' ? 'zh-CN' : 'en-US';
-  const token = useGatewayStore((state) => state.token);
+  const token = useGatewayStore((state) => state.sessionKey);
   const hasToken = Boolean(token);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();

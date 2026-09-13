@@ -68,7 +68,7 @@
     "sessionExpired": "登录已失效，请重新输入有效的网关访问令牌。",
     "tokenHelpSummary": "在哪里找到访问令牌？",
     "tokenHelpOnboard": "在终端运行 xopc onboard（或 xopc onboard --gateway），初始化输出中会包含访问令牌。",
-    "tokenHelpLink": "直接打开以 ?token= 结尾的初始化链接，访问令牌会自动保存。",
+    "tokenHelpLink": "这台浏览器会记住授权会话，页面存储中不再保存访问令牌。",
     "docsGatewayLink": "网关说明"
   },
   "electron": {

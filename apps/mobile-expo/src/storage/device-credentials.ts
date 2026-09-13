@@ -64,6 +64,18 @@ function refreshKey(gatewayId: string): string {
   return `${REFRESH_PREFIX}${gatewayId.replace(/[^\w.-]/g, '_')}`;
 }
 
+export function readGatewayIdentityPin(gatewayId: string): string | null {
+  return read(`xopc.gateway.identity.${gatewayId.replace(/[^\w.-]/g, '_')}`);
+}
+
+/** Called only with an already paired identity, never a network discovery response. */
+export function retainGatewayIdentityPin(gatewayId: string, publicKey: string): string {
+  const existing = readGatewayIdentityPin(gatewayId);
+  if (existing) return existing;
+  write(`xopc.gateway.identity.${gatewayId.replace(/[^\w.-]/g, '_')}`, publicKey);
+  return publicKey;
+}
+
 export function readDeviceRefreshToken(gatewayId: string): string | null {
   return read(refreshKey(gatewayId));
 }

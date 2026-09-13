@@ -32,7 +32,7 @@ export function ComposerContextBar({ sessionKey, project, workspacePath, canChan
   const language = useLocaleStore((state) => state.language);
   const m = messages(language);
   const copy = m.chat.composerContext;
-  const token = useGatewayStore((state) => state.token);
+  const token = useGatewayStore((state) => state.sessionKey);
   const baseUrl = useGatewayStore((state) => state.baseUrl);
   const [query, setQuery] = useState('');
   const [search] = useDebounce(query, 200);

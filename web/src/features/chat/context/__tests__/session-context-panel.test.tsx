@@ -39,7 +39,7 @@ describe('session context panel', () => {
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
-    useGatewayStore.setState({ token: undefined });
+    useGatewayStore.setState({ sessionKey: undefined });
     vi.mocked(fetchJson).mockReset().mockImplementation(async (url) => ({ summary: summary(String(url).includes('/two/') ? 'two' : 'one') }));
   });
   afterEach(() => { act(() => root.unmount()); container.remove(); vi.restoreAllMocks(); });
@@ -83,7 +83,7 @@ describe('session context panel', () => {
   it('does not reuse a summary after gateway credentials change', async () => {
     await render(); await toggle();
     vi.mocked(fetchJson).mockImplementation(() => new Promise(() => {}));
-    await act(async () => useGatewayStore.setState({ token: 'another-device' }));
+    await act(async () => useGatewayStore.setState({ sessionKey: 'another-device' }));
     expect(document.body.textContent).not.toContain('Project one');
   });
 

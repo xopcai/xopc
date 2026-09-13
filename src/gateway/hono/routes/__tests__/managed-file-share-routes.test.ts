@@ -31,6 +31,7 @@ import { getShareStore, resetShareStoreForTests } from '../../../../share/share-
 import { getSiteShareStore, resetSiteShareStoreForTests } from '../../../../share/site-share-store.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../../storage/sqlite/index.js';
 import type { GatewayService } from '../../../service.js';
+import { setGatewayPrincipal } from '../../../security/gateway-principal.js';
 import { registerFilesRoutes } from '../files.js';
 import { registerShareRoutes } from '../shares.js';
 
@@ -73,6 +74,7 @@ describe('managed file sharing', () => {
       },
     } as unknown as GatewayService;
     app = new Hono();
+    app.use('*', async (c, next) => { setGatewayPrincipal(c, { kind: 'owner', principalId: 'gateway-owner', scopes: ['gateway.admin'] }); await next(); });
     registerFilesRoutes(app, { service } as never);
     registerShareRoutes(app, { service } as never);
   });

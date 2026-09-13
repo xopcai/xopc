@@ -12,9 +12,9 @@ describe('verifyGatewayCredential', () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 401 }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(verifyGatewayCredential('invalid-token')).resolves.toBe('rejected');
+    await expect(verifyGatewayCredential('invalid-token')).resolves.toEqual({ status: 'rejected' });
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringMatching(/\/api\/config$/),
+      expect.stringMatching(/\/api\/browser-session$/),
       expect.objectContaining({ headers: { Authorization: 'Bearer invalid-token' } }),
     );
   });
@@ -22,6 +22,6 @@ describe('verifyGatewayCredential', () => {
   it('distinguishes an unreachable gateway from a rejected token', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
 
-    await expect(verifyGatewayCredential('candidate-token')).resolves.toBe('unreachable');
+    await expect(verifyGatewayCredential('candidate-token')).resolves.toEqual({ status: 'unreachable' });
   });
 });

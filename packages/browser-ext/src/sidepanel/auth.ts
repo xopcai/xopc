@@ -287,6 +287,7 @@ async function refreshAccessToken(
   gatewayUrl: string,
   refreshToken: string,
   pair: CryptoKeyPair,
+  gateway: { gatewayId: string; gatewayPublicKey: string },
 ): Promise<{ accessToken: string; accessTokenExpiresAt: number; refreshToken: string }> {
   const nextRefreshToken = createRefreshToken();
   const requestId = crypto.randomUUID();
@@ -302,12 +303,19 @@ async function refreshAccessToken(
     timestamp,
     nonce,
     signature,
-  }) as { payload?: { accessToken?: string; accessTokenExpiresAt?: number; refreshToken?: string } };
-  if (!response.payload?.accessToken || !response.payload.accessTokenExpiresAt
-    || response.payload.refreshToken !== nextRefreshToken) {
+  });
+  if (typeof response.signedPayload !== 'string' || typeof response.signature !== 'string'
+    || !await verifyGateway(gateway.gatewayPublicKey, response.signedPayload, response.signature)) throw new Error('Gateway identity could not be verified');
+  const responseProof = decodeJson<{ purpose: string; gatewayId: string; requestId: string; nonce: string; expiresAt: number;
+    tokens: { accessToken?: string; accessTokenExpiresAt?: number; refreshToken?: string } }>(response.signedPayload);
+  if (responseProof.purpose !== 'device-refresh-v3' || responseProof.gatewayId !== gateway.gatewayId || responseProof.requestId !== requestId
+    || responseProof.nonce !== nonce || !(responseProof.expiresAt > Date.now()) || responseProof.expiresAt > Date.now() + 60_000) throw new Error('Gateway refresh response does not match this request');
+  const payload = responseProof.tokens;
+  if (!payload?.accessToken || !payload.accessTokenExpiresAt
+    || payload.refreshToken !== nextRefreshToken) {
     throw new Error('Gateway returned invalid browser credentials');
   }
-  return response.payload as { accessToken: string; accessTokenExpiresAt: number; refreshToken: string };
+  return payload as { accessToken: string; accessTokenExpiresAt: number; refreshToken: string };
 }
 
 function wait(milliseconds: number): Promise<void> {
@@ -340,7 +348,7 @@ export async function pairGateway(
     });
   }
   if (!result.request.deviceId) throw new Error('Gateway did not register the browser');
-  const tokens = await refreshAccessToken(origin, initialRefreshToken, pair);
+  const tokens = await refreshAccessToken(origin, initialRefreshToken, pair, payload);
   const profile: BrowserGatewayProfile = {
     gatewayId: payload.gatewayId,
     gatewayName: result.gateway.name,
@@ -367,7 +375,7 @@ export async function getAccessProfile(): Promise<BrowserGatewayProfile> {
   if (profile.accessTokenExpiresAt > Date.now() + 30_000) return profile;
   if (refreshTask) return refreshTask;
   refreshTask = (async () => {
-    const tokens = await refreshAccessToken(profile.gatewayUrl, profile.refreshToken, await getOrCreateKeyPair());
+    const tokens = await refreshAccessToken(profile.gatewayUrl, profile.refreshToken, await getOrCreateKeyPair(), profile);
     const next = { ...profile, ...tokens };
     await chrome.storage.local.set({ [PROFILE_KEY]: next });
     return next;

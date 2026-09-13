@@ -300,16 +300,14 @@ function setupIssueText(issue: ChannelSetupIssue, ch: ReturnType<typeof messages
 }
 
 function ChannelIcon({ entry }: { entry: ChannelCatalogEntry }) {
-  const gatewayToken = useGatewayStore((s) => s.token);
   const [customIconFailed, setCustomIconFailed] = useState(false);
   const customIconSrc = useMemo(() => {
     if (!entry.ui?.icon || customIconFailed) return null;
     const url = new URL(
       apiUrl(`/api/extensions/${encodeURIComponent(entry.extensionId)}/assets/${encodeAssetPath(entry.ui.icon)}`),
     );
-    if (gatewayToken?.trim()) url.searchParams.set('token', gatewayToken.trim());
     return url.toString();
-  }, [customIconFailed, entry.extensionId, entry.ui?.icon, gatewayToken]);
+  }, [customIconFailed, entry.extensionId, entry.ui?.icon]);
 
   return (
     <span className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-surface-base text-fg">
@@ -556,7 +554,7 @@ function ChannelSetupReadinessBanner({
 export function ChannelsSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
-  const hasToken = useGatewayStore((s) => Boolean(s.token));
+  const hasToken = useGatewayStore((s) => Boolean(s.sessionKey));
   const navigate = useNavigate();
   const { channelId: routeChannelId } = useParams<{ channelId?: string }>();
   const activeChannelId = normalizeChannelRouteId(routeChannelId);

@@ -59,7 +59,7 @@ describe('composer project environment selection and first send', () => {
     commit.mockReset();
     vi.mocked(fetchJson).mockReset().mockResolvedValue({ options: { localAvailable: true } });
     localStorage.clear();
-    useGatewayStore.setState({ token: undefined });
+    useGatewayStore.setState({ sessionKey: undefined });
     useLocaleStore.setState({ language: 'en' });
     cache = new Map();
     container = document.createElement('div');
@@ -191,7 +191,7 @@ describe('composer project environment selection and first send', () => {
   it('cancels pending sends when gateway credentials change', async () => {
     await render();
     await act(async () => submit().click());
-    await act(async () => useGatewayStore.setState({ token: 'different-gateway' }));
+    await act(async () => useGatewayStore.setState({ sessionKey: 'different-gateway' }));
     await render({ prepared: null, sessionKey: 'created', ready: true });
     expect(onSend).not.toHaveBeenCalled();
     expect(commit).not.toHaveBeenCalled();

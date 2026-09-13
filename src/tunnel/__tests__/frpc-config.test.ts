@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -33,6 +33,7 @@ describe('frpc-config', () => {
       serverPort: 7000,
       authToken: 'frpc-auth',
       proxyName: 'proxy_abc123',
+      subdomain: 'lease-test',
     },
     expiresAt: new Date().toISOString(),
     heartbeatIntervalMs: 30_000,
@@ -46,11 +47,20 @@ describe('frpc-config', () => {
     expect(toml).toContain('localPort = 18790');
   });
 
-  it('writes https proxy for E2E mode', () => {
-    writeFrpcConfig(registration, 18791, '127.0.0.1', 'https');
-    const path = join(stateDir, 'tmp', 'frpc-t_test.toml');
+  it('verifies the server hostname against trusted roots and keeps credentials private', () => {
+    const path = writeFrpcConfig(registration, 18790);
     const toml = readFileSync(path, 'utf8');
-    expect(toml).toContain('type = "https"');
-    expect(toml).toContain('localPort = 18791');
+    expect(toml).toContain('transport.tls.enable = true');
+    expect(toml).toContain('transport.tls.serverName = "frp.xopc.ai"');
+    expect(toml).toContain('transport.tls.trustedCaFile = ');
+    expect(readFileSync(join(stateDir, 'tmp', 'frp-trusted-roots.pem'), 'utf8')).toContain('BEGIN CERTIFICATE');
+    if (process.platform !== 'win32') expect(statSync(path).mode & 0o777).toBe(0o600);
+  });
+
+  it('escapes broker strings and rejects path traversal and invalid ports', () => {
+    const path = writeFrpcConfig({ ...registration, frpc: { ...registration.frpc, authToken: 'token"\n[[proxies]]' } }, 18790);
+    expect(readFileSync(path, 'utf8').split('\n').filter((line) => line === '[[proxies]]')).toHaveLength(1);
+    expect(() => writeFrpcConfig({ ...registration, tunnelId: '../escape' }, 18790)).toThrow('Invalid tunnel id');
+    expect(() => writeFrpcConfig(registration, 0)).toThrow();
   });
 });

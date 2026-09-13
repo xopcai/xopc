@@ -108,7 +108,7 @@ export function useThumbnailReadiness(
 
     let cancelled = false;
     const timer = setTimeout(async () => {
-      const next = await probeThumbnail(thumbnailUrl, token ?? undefined);
+      const next = await probeThumbnail(thumbnailUrl);
       if (cancelled) return;
       setStatus(next);
       setAttempt((n) => n + 1);

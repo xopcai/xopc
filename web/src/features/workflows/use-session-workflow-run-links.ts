@@ -10,7 +10,7 @@ import {
 
 /** Parent-session pointer cards persisted as `kind: 'context'` transcript rows. */
 export function useSessionWorkflowRunLinks(sessionKey: string | null | undefined) {
-  const token = useGatewayStore((s) => s.token);
+  const token = useGatewayStore((s) => s.sessionKey);
   const trimmedKey = sessionKey?.trim() || null;
 
   return useSWR(

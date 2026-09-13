@@ -79,3 +79,4 @@ patchedDependencies:
   app-builder-lib@26.15.3: patches/app-builder-lib@26.15.3.patch
   # Preserve compact Mermaid edge labels such as -.标签.->.
   beautiful-mermaid@1.1.3: patches/beautiful-mermaid@1.1.3.patch
+  expo-file-system@56.0.11: patches/expo-file-system@56.0.11.patch

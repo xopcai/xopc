@@ -1,3 +1,5 @@
+import { apiFetch } from '../../api/client';
+import { clearGatewayRouteIdentityCache } from './route-identity';
 import { useEffect } from 'react';
 import { randomUUID } from 'expo-crypto';
 import { AppState } from 'react-native';
@@ -13,7 +15,6 @@ import type { RealtimeEventPayload } from '@xopcai/realtime-protocol';
 import { useGatewayConfigured } from '../../query/sessions';
 import { queryClient } from '../../query/query-client';
 import { useGatewayStore } from '../../stores/gateway-store';
-import { getDeviceAccessToken } from './device-auth-session';
 
 import { recordConnectionEvent } from './connection-log';
 import { emitGatewayEvent } from './gateway-event-bus';
@@ -45,13 +46,10 @@ function createClient(clientId: string, cursorScopeKey: string): RealtimeClient 
     createMessageId: randomUUID,
     getWebSocketUrl: websocketUrl,
     issueTicket: async (signal) => {
-      const { apiUrl } = useGatewayStore.getState();
-      const token = await getDeviceAccessToken();
-      const response = await fetch(apiUrl('/api/realtime/tickets'), {
+      const response = await apiFetch('/api/realtime/tickets', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ clientId, clientKind: 'mobile' }),
         signal,
@@ -144,6 +142,7 @@ export function useGatewayRealtime(): void {
   useEffect(() => {
     let previous = AppState.currentState;
     const subscription = AppState.addEventListener('change', (next) => {
+      if (next === 'active') clearGatewayRouteIdentityCache();
       const wasActive = previous === 'active';
       previous = next;
       if (wasActive && next !== 'active') {

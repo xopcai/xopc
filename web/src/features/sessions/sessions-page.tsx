@@ -178,7 +178,7 @@ export function SessionsPage() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const s = m.sessions;
-  const token = useGatewayStore((st) => st.token);
+  const token = useGatewayStore((st) => st.sessionKey);
   const hasToken = Boolean(token);
   const { data: chatAgents, mutate: mutateChatAgents } = useSWR(
     hasToken ? (['gateway-chat-agents', token] as const) : null,

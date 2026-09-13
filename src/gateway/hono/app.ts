@@ -311,6 +311,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     auth({
       getGatewayAuth: () => service.currentConfig.gateway?.auth,
       getResolvedAuth: () => service.getResolvedAuth(),
+      isPublicTunnelEnabled: () => service.currentConfig.tunnel?.enabled === true,
       getTrustedProxyContext: () => ({
         trustedProxies: service.currentConfig.gateway?.trustedProxies,
         allowRealIpFallback: service.currentConfig.gateway?.allowRealIpFallback === true,

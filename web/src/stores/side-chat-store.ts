@@ -205,7 +205,7 @@ export const useSideChatStore = create<SideChatPaneState>((set, get) => {
 });
 
 useGatewayStore.subscribe((state, previous) => {
-  if (state.baseUrl !== previous.baseUrl || (previous.token !== undefined && state.token !== previous.token)) {
+  if (state.baseUrl !== previous.baseUrl || (previous.sessionKey !== undefined && state.sessionKey !== previous.sessionKey)) {
     useSideChatStore.getState().reset();
     try { sessionStorage.removeItem('xopc:side-chat-client-id'); } catch { /* Storage may be disabled. */ }
   }

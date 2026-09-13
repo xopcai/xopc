@@ -83,13 +83,13 @@ function ExtensionNavigateListener() {
 }
 
 export function AppShell() {
-  const token = useGatewayStore((state) => state.token);
+  const token = useGatewayStore((state) => state.sessionKey);
   const baseUrl = useGatewayStore((state) => state.baseUrl);
   return <VoiceCallProvider key={`${baseUrl}:${token ?? ''}`}><AppShellContent /></VoiceCallProvider>;
 }
 
 function AppShellContent() {
-  const token = useGatewayStore((s) => s.token);
+  const token = useGatewayStore((s) => s.sessionKey);
   const { pathname, search } = useLocation();
   const navigate = useNavigate();
   const isSettingsRoute = pathname.startsWith('/settings');

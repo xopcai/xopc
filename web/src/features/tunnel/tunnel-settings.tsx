@@ -73,7 +73,7 @@ const initialTunnelUi: TunnelUi = {
 export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }) {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).tunnelSettings;
-  const token = useGatewayStore((st) => st.token);
+  const token = useGatewayStore((st) => st.sessionKey);
   const hasToken = Boolean(token);
 
   const [ui, dispatchUi] = useReducer(uiPatchReducer<TunnelUi>, initialTunnelUi);

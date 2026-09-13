@@ -17,7 +17,7 @@ export interface ChatSessionMetadata {
 
 /** Read execution bindings from the session's authoritative metadata. */
 export function useChatSessionMetadata(sessionKey: string | null | undefined) {
-  const token = useGatewayStore((s) => s.token);
+  const token = useGatewayStore((s) => s.sessionKey);
   const trimmedKey = sessionKey?.trim() || null;
 
   return useSWR(

@@ -57,14 +57,14 @@ export interface ConnectedProvidersData {
 }
 
 export function useConnectedProviders(): ConnectedProvidersData {
-  const token = useGatewayStore((s) => s.token);
+  const token = useGatewayStore((s) => s.sessionKey);
   const hasToken = Boolean(token);
 
   const { data: cfgData, isLoading: cfgLoading } = useGatewayConfigSwr(hasToken);
   const { data: metaList, isLoading: metaLoading } = useSWR(
     hasToken ? apiUrl('/api/providers/meta') : null,
     async (url: string) => {
-      const { payload } = await (await fetch(url, { headers: { Authorization: `Bearer ${token}` } })).json();
+      const { payload } = await (await fetch(url, { credentials: 'same-origin', redirect: 'error' })).json();
       return (payload?.providers ?? []) as import('@/features/settings/providers-api').ProviderMeta[];
     },
     { revalidateOnFocus: false },

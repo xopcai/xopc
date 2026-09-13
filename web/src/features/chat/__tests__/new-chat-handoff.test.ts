@@ -58,7 +58,7 @@ describe('openNewChatHandoff', () => {
     expect(opts.onOpened).toHaveBeenCalledOnce();
   });
   beforeEach(() => {
-    useGatewayStore.setState({ token: 'test-token', baseUrl: 'http://gateway-a' });
+    useGatewayStore.setState({ sessionKey: 'test-token', baseUrl: 'http://gateway-a' });
     resetNewChatHandoffInflightForTests();
     resetWebchatEmptyShellCacheForTests();
   });
@@ -99,7 +99,7 @@ describe('openNewChatHandoff', () => {
     const sessionMgr = { createSession: vi.fn(() => pending) } as unknown as SessionManager;
     const opts = { sessionMgr, agentId: 'main', projectId: 'project-a', executionMode: 'managed_worktree' as const, navigateToSession: vi.fn(), onOpened: vi.fn() };
     const first = openNewChatHandoff(opts);
-    useGatewayStore.setState({ token: 'different-token' });
+    useGatewayStore.setState({ sessionKey: 'different-token' });
     const second = openNewChatHandoff(opts);
     expect(first).not.toBe(second);
     expect(sessionMgr.createSession).toHaveBeenCalledTimes(2);

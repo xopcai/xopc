@@ -235,7 +235,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const language = useLocaleStore((state) => state.language);
-  const token = useGatewayStore((state) => state.token);
+  const token = useGatewayStore((state) => state.sessionKey);
   const copy = useMemo(() => taskCopy(language), [language]);
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
