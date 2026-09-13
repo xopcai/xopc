@@ -14,9 +14,12 @@ export function createInstallCommand(): Command {
     .option('--token <token>', 'Gateway auth token')
     .option('--force', 'Force reinstall if already installed')
     .option('--json', 'Output JSON')
-    .action(async (options) => {
+    .action(async (options, command) => {
       const ctx = getContextWithOpts();
       const configPath = ctx.configPath || resolveConfigPath();
+      // `gateway` also owns a --force option for foreground runs. Commander can
+      // attach a trailing --force to that parent, so include inherited options.
+      const force = options.force === true || command.optsWithGlobals().force === true;
 
       const [{ loadConfig }, { resolveGatewayService, isDaemonAvailableAsync, getPlatformName }, { buildGatewayInstallArgs }] =
         await Promise.all([
@@ -44,7 +47,7 @@ export function createInstallCommand(): Command {
 
       // Check if already installed
       const loaded = await service.isLoaded({ env: process.env });
-      if (loaded && !options.force) {
+      if (loaded && !force) {
         if (options.json) {
           console.log(JSON.stringify({ ok: true, result: 'already-installed' }));
         } else {
@@ -54,7 +57,7 @@ export function createInstallCommand(): Command {
       }
 
       // Uninstall first if force
-      if (loaded && options.force) {
+      if (loaded && force) {
         try {
           await service.uninstall({ env: process.env });
         } catch {
