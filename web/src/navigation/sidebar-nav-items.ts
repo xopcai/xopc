@@ -1,4 +1,4 @@
-import { Bell, Box, Cable, FolderKanban, GitBranch, Home, Layers, MonitorPlay, Plug, Puzzle, StickyNote, Users, Zap } from 'lucide-react';
+import { Box, Cable, CircleDotDashed, FolderKanban, GitBranch, Home, Layers, MonitorPlay, Plug, Puzzle, StickyNote, Users, Zap } from 'lucide-react';
 
 import type { LucideIcon } from '@/features/extensions/extension-nav-icon';
 
@@ -45,7 +45,7 @@ export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
   { id: 'builtin:home', to: '/', Icon: Home },
   { id: 'builtin:projects', to: '/projects', Icon: FolderKanban },
   { id: 'builtin:notes', to: '/notes', Icon: StickyNote },
-  { id: 'builtin:proactive', to: '/proactive', Icon: Bell },
+  { id: 'builtin:proactive', to: '/assistant-work', Icon: CircleDotDashed },
   { id: 'builtin:automations', to: '/automations', Icon: Zap },
   { id: 'builtin:skills', to: '/skills', Icon: Layers },
   { id: 'builtin:connectors', to: '/connectors', Icon: Cable },
@@ -62,6 +62,7 @@ export const PRIMARY_NAV_IDS = [
   'builtin:home',
   'builtin:projects',
   'builtin:notes',
+  'builtin:proactive',
 ] as const satisfies readonly BuiltinNavId[];
 
 /** Adjustable shortcut-row bounds, excluding "New chat" and "More". */
