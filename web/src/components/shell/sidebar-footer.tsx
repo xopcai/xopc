@@ -1,5 +1,5 @@
 import * as Popover from '@radix-ui/react-popover';
-import { Settings, Smartphone } from 'lucide-react';
+import { MonitorSmartphone, Settings } from 'lucide-react';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -11,7 +11,7 @@ import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
-const MobilePairingWizard = lazy(() => import('@/features/endpoint-tools/mobile-pairing-wizard').then(m => ({ default: m.MobilePairingWizard })));
+const DevicePairingWizard = lazy(() => import('@/features/endpoint-tools/device-pairing-wizard').then(m => ({ default: m.DevicePairingWizard })));
 
 export function SidebarFooter({
   collapsed = false,
@@ -44,11 +44,11 @@ export function SidebarFooter({
     >
       <button type="button" onClick={() => setPairingOpen(true)}
         className={cn('mb-2 flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm text-fg-muted hover:bg-surface-hover hover:text-fg', collapsed && 'justify-center px-2')}
-        aria-label={m.endpointToolsSettings.mobileAccess.flow.title}>
-        <Smartphone className="size-4 shrink-0" />
-        {!collapsed ? m.endpointToolsSettings.mobileAccess.flow.title : null}
+        aria-label={m.endpointToolsSettings.deviceAccess.flow.title}>
+        <MonitorSmartphone className="size-4 shrink-0" />
+        {!collapsed ? m.endpointToolsSettings.deviceAccess.flow.title : null}
       </button>
-      {pairingOpen ? <Suspense fallback={null}><MobilePairingWizard open onOpenChange={setPairingOpen} /></Suspense> : null}
+      {pairingOpen ? <Suspense fallback={null}><DevicePairingWizard open onOpenChange={setPairingOpen} /></Suspense> : null}
       <Popover.Root open={open} onOpenChange={setOpen}>
         {collapsed ? (
           <div className="flex flex-col items-center gap-1.5">

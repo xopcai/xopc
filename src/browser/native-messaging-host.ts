@@ -60,7 +60,8 @@ export function createBrowserNativeBootstrap(
   openXopcDatabase();
   try {
     const route = { id: 'local-browser', kind: 'local-browser' as const, url: gatewayUrl };
-    const setup = createDevicePairingSetup([route], Date.now(), 3, {
+    const setup = createDevicePairingSetup([route], Date.now(), {
+      targetKind: 'browser',
       ttlMs: 60_000,
       enrollment: {
         issuer: 'browser-native-host',
@@ -77,6 +78,7 @@ export function createBrowserNativeBootstrap(
       gatewayName: os.hostname(),
       gatewayPublicKey: getGatewayIdentityPublicKeyRaw(identity),
       routes: [route],
+      targetKind: setup.targetKind,
       expiresAt: setup.expiresAt,
     })).toString('base64url');
     return {

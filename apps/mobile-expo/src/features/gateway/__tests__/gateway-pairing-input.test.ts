@@ -9,7 +9,7 @@ import { readGatewayPairingInput } from '../gateway-pairing-input';
 
 function link(overrides: Record<string, unknown> = {}): string {
   const payload = {
-    version: 3, pairingToken: 'xopc_pair_123_secret', gatewayId: 'gateway-1', gatewayName: 'Work',
+    version: 3, targetKind: 'mobile', pairingToken: 'xopc_pair_123_secret', gatewayId: 'gateway-1', gatewayName: 'Work',
     gatewayPublicKey: 'public-key', expiresAt: Date.now() + 60_000,
     routes: [{ id: 'https', kind: 'custom-https', url: 'https://computer.example' }],
     ...overrides,

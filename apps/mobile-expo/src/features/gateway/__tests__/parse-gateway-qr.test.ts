@@ -5,7 +5,8 @@ import { parseGatewayQrPayload } from '../parse-gateway-qr';
 
 function link(overrides: Record<string, unknown> = {}): string {
   const payload = {
-    version: 2,
+    version: 3,
+    targetKind: 'mobile',
     pairingToken: 'xopc_pair_123_secret',
     gatewayId: 'gateway-1',
     gatewayName: 'Studio',
@@ -21,7 +22,8 @@ function link(overrides: Record<string, unknown> = {}): string {
 describe('parseGatewayQrPayload', () => {
   it('parses the current Universal Link payload', () => {
     expect(parseGatewayQrPayload(link())).toMatchObject({
-      version: 2,
+      version: 3,
+      targetKind: 'mobile',
       gatewayId: 'gateway-1',
       routes: [{ url: 'https://gateway.example.com' }],
     });
@@ -29,6 +31,8 @@ describe('parseGatewayQrPayload', () => {
 
   it('rejects expired, non-HTTPS, and old custom-scheme links', () => {
     expect(parseGatewayQrPayload(link({ expiresAt: Date.now() - 1 }))).toBeNull();
+    expect(parseGatewayQrPayload(link({ targetKind: 'browser' }))).toBeNull();
+    expect(parseGatewayQrPayload(link({ version: 2 }))).toBeNull();
     expect(parseGatewayQrPayload(link({ routes: [{ id: 'lan', kind: 'custom-https', url: 'http://192.168.1.2' }] }))).toBeNull();
     expect(parseGatewayQrPayload('xopc://gateway/mobile-connect?baseUrl=https://example.com&ps=old')).toBeNull();
   });

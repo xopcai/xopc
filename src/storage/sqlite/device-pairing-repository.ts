@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
 
+import type { DevicePairingTargetKind } from '@xopcai/gateway-contract';
+
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 const PAIRING_TOKEN_PREFIX = 'xopc_pair_';
@@ -17,6 +19,7 @@ export type DevicePairingSetup = {
   token: string;
   routes: DeviceRoute[];
   expiresAt: number;
+  targetKind: DevicePairingTargetKind;
 };
 
 export type DevicePairingEnrollment = {
@@ -26,92 +29,42 @@ export type DevicePairingEnrollment = {
   nonce: string;
 };
 
-type PairingRow = {
-  pairing_id: string;
-  secret_hash: string;
-  routes_json: string;
-  expires_at: number;
-  attempts_remaining: number;
-  consumed_at: number | null;
-  protocol_version: number;
-};
-
-export type PairingConsumeResult =
-  | { ok: true; pairingId: string; routes: DeviceRoute[] }
-  | { ok: false; reason: 'invalid' | 'expired' | 'consumed' };
-
 function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
-}
-
-function hashesMatch(left: string, right: string): boolean {
-  return crypto.timingSafeEqual(Buffer.from(left, 'hex'), Buffer.from(right, 'hex'));
-}
-
-function tokenId(token: string): string | undefined {
-  if (!token.startsWith(PAIRING_TOKEN_PREFIX)) return undefined;
-  const separator = token.indexOf('_', PAIRING_TOKEN_PREFIX.length);
-  if (separator <= PAIRING_TOKEN_PREFIX.length || separator === token.length - 1) return undefined;
-  return token.slice(PAIRING_TOKEN_PREFIX.length, separator);
 }
 
 export function createDevicePairingSetup(
   routes: readonly DeviceRoute[],
   now = Date.now(),
-  protocolVersion: 2 | 3 = 2,
-  options?: { ttlMs?: number; enrollment?: DevicePairingEnrollment },
+  options: {
+    targetKind: DevicePairingTargetKind;
+    ttlMs?: number;
+    enrollment?: DevicePairingEnrollment;
+  },
 ): DevicePairingSetup {
-  if (routes.length === 0) throw new Error('No secure mobile route is available');
+  if (routes.length === 0) throw new Error('No secure device route is available');
   const id = crypto.randomUUID();
   const token = `${PAIRING_TOKEN_PREFIX}${id}_${crypto.randomBytes(32).toString('base64url')}`;
   const expiresAt = now + (options?.ttlMs ?? PAIRING_TTL_MS);
   runSqliteWriteTransaction((db) => {
-    db.prepare(`DELETE FROM device_pairing_sessions WHERE
-      (protocol_version = 2 AND (expires_at <= ? OR consumed_at IS NOT NULL)) OR
-      (protocol_version = 3 AND expires_at < ?)`).run(now, now - 24 * 60 * 60_000);
+    db.prepare(`DELETE FROM device_pairing_sessions
+      WHERE expires_at < ?`).run(now - 24 * 60 * 60_000);
     db.prepare(`
       INSERT INTO device_pairing_sessions (
         pairing_id, secret_hash, routes_json, expires_at, attempts_remaining, created_at
-        , protocol_version, enrollment_issuer, enrollment_extension_id,
-        enrollment_public_key_thumbprint, enrollment_nonce
+        , enrollment_issuer, enrollment_extension_id,
+        enrollment_public_key_thumbprint, enrollment_nonce, target_kind
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      id, hashToken(token), JSON.stringify(routes), expiresAt, PAIRING_ATTEMPTS, now, protocolVersion,
+      id, hashToken(token), JSON.stringify(routes), expiresAt, PAIRING_ATTEMPTS, now,
       options?.enrollment?.issuer ?? null,
       options?.enrollment?.extensionId ?? null,
       options?.enrollment?.publicKeyThumbprint ?? null,
       options?.enrollment?.nonce ?? null,
+      options.targetKind,
     );
   });
-  return { id, token, routes: [...routes], expiresAt };
-}
-
-export function consumeDevicePairingToken(token: string, now = Date.now()): PairingConsumeResult {
-  const id = tokenId(token);
-  if (!id) return { ok: false, reason: 'invalid' };
-  return runSqliteWriteTransaction((db) => {
-    const row = db.prepare('SELECT * FROM device_pairing_sessions WHERE pairing_id = ?')
-      .get(id) as PairingRow | undefined;
-    if (!row || row.attempts_remaining <= 0) return { ok: false, reason: 'invalid' };
-    if (row.protocol_version !== 2) return { ok: false, reason: 'invalid' };
-    if (row.consumed_at !== null) return { ok: false, reason: 'consumed' };
-    if (row.expires_at <= now) return { ok: false, reason: 'expired' };
-    if (!hashesMatch(row.secret_hash, hashToken(token))) {
-      db.prepare(`
-        UPDATE device_pairing_sessions
-        SET attempts_remaining = attempts_remaining - 1
-        WHERE pairing_id = ? AND attempts_remaining > 0
-      `).run(id);
-      return { ok: false, reason: 'invalid' };
-    }
-    db.prepare('UPDATE device_pairing_sessions SET consumed_at = ? WHERE pairing_id = ?')
-      .run(now, id);
-    return {
-      ok: true,
-      pairingId: id,
-      routes: JSON.parse(row.routes_json) as DeviceRoute[],
-    };
-  });
+  return { id, token, routes: [...routes], expiresAt, targetKind: options.targetKind };
 }
 
 export function isDevicePairingSetupActive(pairingId: string, now = Date.now()): boolean {
