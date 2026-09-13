@@ -60,7 +60,8 @@ describe('proactive user controls', () => {
   it('emits one durable scan on due changes, skips unchanged input, and respects disabling', () => {
     const sub = subscribe();
     const events = new ProactiveEventService(() => new ProactiveScenarioService().routes());
-    const now = new Date();
+    const now = new Date(Date.now() + 86400000);
+    now.setUTCHours(12, 0, 0, 0);
     expect(scanDueProjects(events, now)).toBe(1);
     expect(scanDueProjects(events, now)).toBe(0);
     expect(scanDueProjects(events, new Date(now.getTime() + 180 * 60000))).toBe(0);
