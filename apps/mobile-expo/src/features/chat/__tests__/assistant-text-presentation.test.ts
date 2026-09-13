@@ -9,12 +9,23 @@ import type { MessageContent } from '../messages.types';
 import { parseSessionMessages } from '../session-message-parser';
 
 describe('assistant text presentation', () => {
-  it('keeps narration concise like WebUI', () => {
+  it('keeps completed narration intact', () => {
     expect(assistantTextForDisplay({
       type: 'text',
       text: '我先检查项目。后续过程不应作为第二个答案展示。',
       presentation: 'narration',
-    })).toBe('我先检查项目。');
+    })).toBe('我先检查项目。后续过程不应作为第二个答案展示。');
+  });
+
+  it('never retracts streamed text when consecutive segments become narration', () => {
+    const content: MessageContent[] = [];
+    const chunks = ['第一段。仍在检查。', '第二段。'.repeat(100)];
+    for (const [index, text] of chunks.entries()) {
+      appendTextDelta(content, text, `segment-${index}`);
+      finishTextSegment(content, `segment-${index}`, 'narration');
+    }
+    expect(content.map(block => block.type === 'text' ? assistantTextForDisplay(block) : '')).toEqual(chunks);
+    expect(getAssistantFinalResultText(content)).toBe('');
   });
 
   it('renders every pending delta before the segment ends without exposing it to TTS', () => {

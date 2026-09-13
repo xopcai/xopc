@@ -1,4 +1,5 @@
 import type { Message, MessageContent, ToolUseContent } from './messages.types';
+import { findThinkingSnapshot } from './thinking-snapshot';
 
 function textContent(message: Message): string {
   return message.content
@@ -21,6 +22,15 @@ function snapshotCoversFinal(persisted: Message, finalMessage: Message): boolean
   if (finalMessage.turnId && persisted.turnId && finalMessage.turnId !== persisted.turnId) return false;
 
   let hasConfirmationSignal = false;
+  const matchedThinking = new Set<number>();
+  for (const block of finalMessage.content) {
+    if (block.type !== 'thinking' || !block.text.trim()) continue;
+    const index = findThinkingSnapshot(persisted.content, block, matchedThinking);
+    const stored = persisted.content[index];
+    if (stored?.type !== 'thinking' || !stored.text.trim().startsWith(block.text.trim())) return false;
+    matchedThinking.add(index);
+    hasConfirmationSignal = true;
+  }
   const finalText = textContent(finalMessage);
   if (finalText) {
     const persistedText = textContent(persisted);
