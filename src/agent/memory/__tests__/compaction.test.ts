@@ -1,3 +1,4 @@
+import type { Api, Model } from '@earendil-works/pi-ai/compat';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,7 +16,9 @@ const model = {
   provider: 'test',
   id: 'summary-model',
   contextWindow: 128_000,
-} as never;
+  maxTokens: 16_000,
+  reasoning: true,
+} as Model<Api>;
 
 function conversation(): AgentMessage[] {
   return Array.from({ length: 12 }, (_, index) => ({
@@ -83,7 +86,7 @@ describe('SessionCompactor', () => {
           content: expect.stringContaining('<record seq="1" entry_id="entry-1">'),
         })],
       }),
-      expect.objectContaining({ maxTokens: 2000, reasoning: 'low' }),
+      expect.objectContaining({ maxTokens: 4000, reasoning: 'low' }),
     );
   });
 
@@ -208,6 +211,10 @@ describe('SessionCompactor', () => {
     expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(2);
     expect(vi.mocked(completeWithResolvedCredentials).mock.calls[1]?.[1].messages[0]?.content)
       .toContain('Allowed source sequence numbers');
+    const repair = String(vi.mocked(completeWithResolvedCredentials).mock.calls[1]?.[1].messages[0]?.content);
+    expect(repair).toContain('<record seq="1"');
+    expect(repair).toContain('I am married, have two children');
+    expect(repair).toContain('Previous ledger:');
   });
 
   it('runs an independent gap audit for risky source records and merges omissions', async () => {
@@ -338,6 +345,168 @@ describe('SessionCompactor', () => {
     await expect(compactor.compact(sources(conversation()), model, undefined, true)).rejects.toThrow(
       'OAuth token expired',
     );
+  });
+
+  it.each([
+    [],
+    [{ type: 'thinking', thinking: 'private reasoning' }],
+    [{ type: 'text', text: '{"items":[' }],
+    [{ type: 'text', text: ledger() }],
+  ].map((content) => ({ content })))('regenerates every length response with more budget, never repairing it ($content)', async ({ content }) => {
+    vi.mocked(completeWithResolvedCredentials)
+      .mockResolvedValueOnce({ content, stopReason: 'length', usage: { output: 4_000, reasoning: 0 } } as never)
+      .mockResolvedValueOnce(completion(ledger()));
+    const compactor = new SessionCompactor({ keepRecentTokens: 1, recentTurnsPreserve: 1, gapAudit: false });
+    expect((await compactor.compact(sources(conversation()), model, undefined, true)).compacted).toBe(true);
+    const calls = vi.mocked(completeWithResolvedCredentials).mock.calls;
+    expect(calls.map((call) => call[2]?.maxTokens)).toEqual([4_000, 8_000]);
+    expect(calls[1]?.[1].messages[0]?.content).toEqual(calls[0]?.[1].messages[0]?.content);
+  });
+
+  it('stops length retries at the configured cap and switches to the fallback', async () => {
+    vi.mocked(completeWithResolvedCredentials)
+      .mockResolvedValueOnce({ content: [], stopReason: 'length' } as never)
+      .mockResolvedValueOnce(completion(ledger()));
+    const fallback = { ...model, id: 'fallback' };
+    const compactor = new SessionCompactor({ summaryMaxTokens: 2_000, keepRecentTokens: 1, recentTurnsPreserve: 1, gapAudit: false });
+    const result = await compactor.compact(sources(conversation()), model, undefined, true, { fallbackModels: [fallback, model] });
+    expect(result.summaryModelRef).toBe('test/fallback');
+    expect(vi.mocked(completeWithResolvedCredentials).mock.calls.map((call) => call[2]?.maxTokens)).toEqual([2_000, 2_000]);
+  });
+
+  it('honors the model cap and fails without retrying the same truncated request', async () => {
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue({ content: [], stopReason: 'length' } as never);
+    const compactor = new SessionCompactor({ keepRecentTokens: 1, recentTurnsPreserve: 1 });
+    await expect(compactor.compact(sources(conversation()), { ...model, maxTokens: 3_000 }, undefined, true))
+      .rejects.toThrow('truncated');
+    expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(completeWithResolvedCredentials).mock.calls[0]?.[2]?.maxTokens).toBe(3_000);
+  });
+
+  it('retries an empty normal response without changing the budget', async () => {
+    vi.mocked(completeWithResolvedCredentials)
+      .mockResolvedValueOnce({ content: [], stopReason: 'stop' } as never)
+      .mockResolvedValueOnce(completion(ledger()));
+    await new SessionCompactor({ keepRecentTokens: 1, recentTurnsPreserve: 1, gapAudit: false })
+      .compact(sources(conversation()), model, undefined, true);
+    expect(vi.mocked(completeWithResolvedCredentials).mock.calls.map((call) => call[2]?.maxTokens)).toEqual([4_000, 4_000]);
+  });
+
+  it('does not retry permanent authentication failures', async () => {
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue({ content: [], stopReason: 'error', errorMessage: '401 Unauthorized' } as never);
+    await expect(new SessionCompactor({ keepRecentTokens: 1, recentTurnsPreserve: 1 })
+      .compact(sources(conversation()), model, undefined, true)).rejects.toThrow('401 Unauthorized');
+    expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not grow a request when the adapter already reduced its output budget', async () => {
+    vi.mocked(completeWithResolvedCredentials).mockImplementation(async (_model, _context, options) => {
+      await options?.onPayload?.({ max_completion_tokens: 1_000 }, model);
+      return { content: [], stopReason: 'length' } as never;
+    });
+    await expect(new SessionCompactor({ keepRecentTokens: 1, recentTurnsPreserve: 1 })
+      .compact(sources(conversation()), model, undefined, true)).rejects.toThrow('truncated');
+    expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries transient transport failures within the existing attempt count', async () => {
+    vi.mocked(completeWithResolvedCredentials)
+      .mockRejectedValueOnce(new Error('ECONNRESET'))
+      .mockResolvedValueOnce(completion(ledger()));
+    await new SessionCompactor({ keepRecentTokens: 1, recentTurnsPreserve: 1, gapAudit: false })
+      .compact(sources(conversation()), model, undefined, true);
+    expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(2);
+  });
+
+  it('times out an attempt and uses the fallback', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(completeWithResolvedCredentials)
+        .mockImplementationOnce(async (_model, _context, options) => new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener('abort', () => reject(options.signal?.reason), { once: true });
+        }))
+        .mockResolvedValueOnce(completion(ledger()));
+      const task = new SessionCompactor({ summaryTimeoutMs: 1_000, summaryRetries: 0, keepRecentTokens: 1, recentTurnsPreserve: 1, gapAudit: false })
+        .compact(sources(conversation()), model, undefined, true, { fallbackModels: [{ ...model, id: 'fallback' }] });
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect((await task).summaryModelRef).toBe('test/fallback');
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops during retry backoff when the parent is cancelled', async () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      const reason = new Error('cancelled');
+      vi.mocked(completeWithResolvedCredentials).mockRejectedValue(new Error('ECONNRESET'));
+      const task = new SessionCompactor({ keepRecentTokens: 1, recentTurnsPreserve: 1 })
+        .compact(sources(conversation()), model, undefined, true, { signal: controller.signal, fallbackModels: [{ ...model, id: 'fallback' }] });
+      const rejected = expect(task).rejects.toBe(reason);
+      await vi.advanceTimersByTimeAsync(0);
+      controller.abort(reason);
+      await rejected;
+      expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(1);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('rejects an invalid repaired ledger without requesting another repair', async () => {
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue(completion(ledger(999)));
+    await expect(new SessionCompactor({ keepRecentTokens: 1, recentTurnsPreserve: 1 })
+      .compact(sources(conversation()), model, undefined, true)).rejects.toThrow('unavailable source seq');
+    expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(2);
+  });
+
+  it('propagates cancellation during the audit even if the provider returns a valid response', async () => {
+    const controller = new AbortController();
+    const reason = new Error('parent deadline');
+    vi.mocked(completeWithResolvedCredentials)
+      .mockResolvedValueOnce(completion(ledger(1, 'Inspect /tmp/job.log.')))
+      .mockImplementationOnce(async () => { controller.abort(reason); return completion('{"items":[]}'); });
+    const rows = conversation();
+    rows[0] = { role: 'user', content: 'Inspect /tmp/job.log.' } as AgentMessage;
+    await expect(new SessionCompactor({ keepRecentTokens: 1, recentTurnsPreserve: 1 })
+      .compact(sources(rows), model, undefined, true, { signal: controller.signal })).rejects.toBe(reason);
+    expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(2);
+  });
+
+  it('shrinks later chunks as the previous ledger grows while preserving all source text', async () => {
+    const seenRecords: string[] = [];
+    let count = 0;
+    vi.mocked(completeWithResolvedCredentials).mockImplementation(async (_model, context) => {
+      const prompt = String(context.messages[0]?.content);
+      const records = prompt.split(/Transcript records \(chunk \d+\):\n/)[1]!.split('\n\nReturn the complete updated JSON ledger.')[0]!;
+      seenRecords.push(records);
+      expect(Math.ceil((context.systemPrompt ?? '').length / 4) + Math.ceil(prompt.length / 4) + 32 + 4_096 + 2_000).toBeLessThanOrEqual(10_000);
+      count += 1;
+      return completion(ledger(1, 'fact '.repeat(count === 1 ? 800 : 1_000)));
+    });
+    const rows = sources([
+      { role: 'user', content: 'BEGIN-' + 'x'.repeat(30_000) + '-END' } as AgentMessage,
+      { role: 'assistant', content: 'ack' } as AgentMessage,
+      { role: 'user', content: 'keep' } as AgentMessage,
+      { role: 'assistant', content: 'kept' } as AgentMessage,
+    ]);
+    const result = await new SessionCompactor({ summaryMaxTokens: 2_000, summaryChunkTokens: 24_000, keepRecentTokens: 1, recentTurnsPreserve: 1, gapAudit: false })
+      .compact(rows, { ...model, contextWindow: 10_000 }, undefined, true);
+    expect(result.compacted).toBe(true);
+    expect(seenRecords.length).toBeGreaterThan(2);
+    expect(seenRecords[1]!.length).toBeLessThan(seenRecords[0]!.length);
+    expect(seenRecords.join('')).toContain('BEGIN-');
+    expect(seenRecords.join('')).toContain('-END');
+    const fragments = seenRecords.flatMap((text) => [...text.matchAll(/<record_fragment[^>]*>\n([\s\S]*?)\n<\/record_fragment>/g)].map((match) => match[1]));
+    expect(fragments.join('')).toContain('x'.repeat(30_000));
+  });
+
+  it('fails before calling a model when the ledger and source cannot fit', async () => {
+    await expect(new SessionCompactor({ keepRecentTokens: 1, recentTurnsPreserve: 1 })
+      .compact(sources(conversation()), { ...model, contextWindow: 4_096 }, undefined, true)).rejects.toThrow('context budget');
+    expect(completeWithResolvedCredentials).not.toHaveBeenCalled();
   });
 
   it('refuses to split a single active user and tool turn', async () => {
