@@ -17,6 +17,7 @@ import {
   fetchGatewayAgents,
 } from '@/features/settings/agents-admin-api';
 import type { GatewayAgentRow } from '@/features/settings/types/agent-gateway';
+import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
@@ -39,6 +40,7 @@ export function AgentsSettingsPanel() {
   const token = useGatewayStore((state) => state.token);
   const language = useLocaleStore((state) => state.language);
   const zh = language === 'zh';
+  const agentsMessages = messages(language).agentsSettings;
   const navigate = useNavigate();
   const { agentId } = useParams();
   const { data, error, isLoading, mutate } = useSWR(token ? 'settings-gateway-agents' : null, fetchGatewayAgents);
@@ -144,7 +146,7 @@ export function AgentsSettingsPanel() {
       <AgentsListGrid
         agents={data.agents}
         busy={busy}
-        zh={zh}
+        messages={agentsMessages}
         onOpen={openAgent}
         onChat={startChat}
       />

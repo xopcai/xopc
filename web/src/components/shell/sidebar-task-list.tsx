@@ -1,5 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
+import { resolveSessionIdentity } from '@xopcai/gateway-contract';
 import {
   Archive,
   ChevronDown,
@@ -185,6 +186,8 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   defaultUnnamedTitle: string;
 }) {
   const showDescription = useContext(SessionDescriptionContext);
+  const identity = resolveSessionIdentity(session);
+  const showIdentityIcon = identity.source !== 'workbench' || identity.purpose !== 'chat';
   const identityLabel = sessionIdentityLabel(session, sb.sessionFilters);
   const description = [identityLabel, contextLabel].filter(Boolean).join(' · ');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -239,9 +242,9 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
           onRequestRename(session.key);
         }}
       >
-        <span className="flex size-4 shrink-0 items-center justify-center text-fg-muted" title={identityLabel}>
+        {showIdentityIcon ? <span className="flex size-4 shrink-0 items-center justify-center text-fg-muted" title={identityLabel}>
           <SessionChannelIcon sourceChannel={session.sourceChannel} session={session} className="size-3.5" />
-        </span>
+        </span> : null}
         <span className="min-w-0 flex-1">
           <span className="block truncate">{title}</span>
           {showDescription ? <span className="block truncate text-xs font-normal text-fg-muted">{description}</span> : null}
