@@ -4,6 +4,49 @@ import { mergeStreamingAssistantIntoMessages, parseSessionMessages } from '../se
 import type { Message } from '../messages.types';
 
 describe('mergeStreamingAssistantIntoMessages', () => {
+  it('reconciles thinking across intervening text without duplicating or reordering it', () => {
+    const persisted = parseSessionMessages([{ role: 'assistant', rawContent: [
+      { type: 'thinking', thinking: 'First thought' },
+      { type: 'text', text: 'Checking.' },
+    ] }]);
+    const live: Message = { role: 'assistant', content: [
+      { type: 'thinking', text: 'First thought', streaming: false, segmentId: 'm1' },
+      { type: 'text', text: 'Checking.', segmentId: 'm1' },
+      { type: 'thinking', text: 'Second thought', streaming: true, segmentId: 'm2' },
+    ] };
+    const merged = mergeStreamingAssistantIntoMessages(persisted, live)[0];
+    expect(merged.content).toEqual(live.content);
+    expect(persisted[0].content).toHaveLength(2);
+  });
+
+  it.each([true, false])('retains fuller history text and thinking (segment ids: %s)', withIds => {
+    const persisted: Message = { role: 'assistant', content: [
+      { type: 'thinking', text: 'First thought. More thought.', ...(withIds ? { segmentId: 'm1' } : {}) },
+      { type: 'text', text: 'First sentence. Second sentence.', ...(withIds ? { segmentId: 'm1' } : {}) },
+    ] };
+    const live: Message = { role: 'assistant', content: [
+      { type: 'thinking', text: 'First thought.', segmentId: 'm1' },
+      { type: 'text', text: 'First sentence.', segmentId: 'm1' },
+    ] };
+    expect(mergeStreamingAssistantIntoMessages([persisted], live)[0].content).toEqual([
+      { type: 'thinking', text: 'First thought. More thought.', segmentId: 'm1' },
+      { type: 'text', text: 'First sentence. Second sentence.', segmentId: 'm1' },
+    ]);
+  });
+
+  it('preserves repeated thinking from distinct history segments and matches it once per occurrence', () => {
+    const persisted = parseSessionMessages([
+      { role: 'assistant', rawContent: [{ type: 'thinking', thinking: 'Again' }] },
+      { role: 'assistant', rawContent: [{ type: 'thinking', thinking: 'Again' }] },
+    ]);
+    expect(persisted[0].content).toHaveLength(2);
+    const live: Message = { role: 'assistant', content: [
+      { type: 'thinking', text: 'Again', segmentId: 'm1', streaming: false },
+      { type: 'thinking', text: 'Again', segmentId: 'm2', streaming: false },
+    ] };
+    expect(mergeStreamingAssistantIntoMessages(persisted, live)[0].content).toEqual(live.content);
+  });
+
   it('keeps persisted and live segments from one assistant turn in one stable row', () => {
     const persisted: Message = {
       id: 'persisted-narration',

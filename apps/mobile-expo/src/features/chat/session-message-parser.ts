@@ -11,6 +11,7 @@ import type { InfiniteData } from '@tanstack/react-query';
 import { parseTurnOutcome } from '@xopcai/gateway-contract';
 
 import type { Message, MessageAttachment, MessageContent } from './messages.types';
+import { findThinkingSnapshot } from './thinking-snapshot';
 import { dedupeAttachments, mergeWireAttachments } from './wire-attachments';
 import {
   applyStripToUserContent,
@@ -298,7 +299,12 @@ export function parseContentBlock(
       ...(presentation ? { presentation } : {}),
     };
   }
-  if (t === 'thinking') return { type: 'thinking', text: String(block.text ?? block.thinking ?? ''), streaming: false };
+  if (t === 'thinking') return {
+    type: 'thinking',
+    text: String(block.text ?? block.thinking ?? ''),
+    streaming: false,
+    ...(typeof block.segmentId === 'string' ? { segmentId: block.segmentId } : {}),
+  };
   if (t === 'review') return normalizeReviewBlock(block);
   const mimeType = firstString(block.mimeType, block.mime_type);
   if (t === 'audio' || t === 'tts_audio' || mimeType?.startsWith('audio/')) {
@@ -592,7 +598,7 @@ function applyToolResultToLastAssistant(out: Message[], m: WireMessage): void {
 
 // ── Merge helpers ──────────────────────────────────────────
 
-/** Merge two assistant content arrays: dedupe tool_use by id, dedupe adjacent identical thinking. */
+/** Merge transcript fragments, or reconcile their overlapping live projection. */
 function mergeAssistantContentFragments(
   left: MessageContent[],
   right: MessageContent[],
@@ -600,6 +606,7 @@ function mergeAssistantContentFragments(
 ): MessageContent[] {
   const out: MessageContent[] = left.map((b) => ({ ...b }));
   const matchedText = new Set<number>();
+  const matchedThinking = new Set<number>();
   const toolIndexById = new Map<string, number>();
   const textIndexBySegmentId = new Map<string, number>();
   for (let i = 0; i < out.length; i++) {
@@ -617,7 +624,10 @@ function mergeAssistantContentFragments(
     if (b.type === 'text' && b.segmentId && textIndexBySegmentId.has(b.segmentId)) {
       const idx = textIndexBySegmentId.get(b.segmentId)!;
       matchedText.add(idx);
-      out[idx] = { ...b }; // streaming/history overlap for the same model segment
+      const stored = out[idx];
+      // Durable history can be ahead of the throttled live projection.
+      out[idx] = reconcileLiveText && stored.type === 'text' && stored.text.startsWith(b.text)
+        && stored.text.length > b.text.length ? { ...stored } : { ...b };
       continue;
     }
     if (reconcileLiveText && b.type === 'text' && b.text.trim()) {
@@ -636,9 +646,16 @@ function mergeAssistantContentFragments(
         continue;
       }
     }
-    if (b.type === 'thinking' && out.length > 0) {
-      const last = out[out.length - 1];
-      if (last.type === 'thinking' && (last.text || '').trim() === (b.text || '').trim()) continue;
+    if (reconcileLiveText && b.type === 'thinking') {
+      const idx = findThinkingSnapshot(left, b, matchedThinking);
+      const stored = left[idx];
+      if (stored?.type === 'thinking') {
+        matchedThinking.add(idx);
+        out[idx] = stored.text.trim().length > b.text.trim().length
+          ? { ...stored, segmentId: b.segmentId ?? stored.segmentId }
+          : { ...b };
+        continue;
+      }
     }
     if (b.type === 'tool_use') toolIndexById.set(b.id, out.length);
     if (b.type === 'text' && b.segmentId) textIndexBySegmentId.set(b.segmentId, out.length);

@@ -46,8 +46,8 @@ export type AgentStreamCallbacks = {
       cost?: number;
     },
   ) => void;
-  onThinking: (content: string, isDelta: boolean) => void;
-  onThinkingEnd: () => void;
+  onThinking: (content: string, isDelta: boolean, messageId?: string) => void;
+  onThinkingEnd: (messageId?: string) => void;
   onToolStart: (toolName: string, args?: unknown, toolCallId?: string) => void;
   onToolUpdate?: (toolName: string, toolCallId: string | undefined, details: unknown) => void;
   onToolEnd: (toolName: string, isError: boolean, result?: unknown, toolCallId?: string) => void;
@@ -200,10 +200,12 @@ export function dispatchAgentStreamEvent(
       }
       break;
     case 'thinking_delta':
-      if (typeof p.delta === 'string' && p.delta) cb?.onThinking(p.delta, true);
+      if (typeof p.delta === 'string' && p.delta) {
+        cb?.onThinking(p.delta, true, typeof p.messageId === 'string' ? p.messageId : undefined);
+      }
       break;
     case 'thinking_end':
-      cb?.onThinkingEnd();
+      cb?.onThinkingEnd(typeof p.messageId === 'string' ? p.messageId : undefined);
       break;
     case 'assistant_message_end': {
       const messageId = typeof p.messageId === 'string' ? p.messageId : '';
