@@ -43,8 +43,8 @@ export function BrowserPushControls({ zh }: { zh: boolean }) {
   }
   return <section className="max-w-2xl rounded-2xl border border-edge bg-surface-panel p-5">
     <h2 className="font-medium">{zh ? '网页关闭后也接收提醒' : 'Receive alerts when this page is closed'}</h2>
-    <p className="mt-2 text-sm text-fg-muted">{zh ? 'Gateway 需要保持在线。锁屏通知只显示通用提示，详情在应用内查看。' : 'Keep the Gateway online. Lock-screen notifications contain a generic summary; open the app for details.'}</p>
-    <Button className="mt-4" disabled={busy || !supported} onClick={() => void toggle()}>{!supported ? (zh ? '当前环境不支持 Web Push' : 'Web Push is unavailable here') : registered ? (zh ? '关闭此浏览器推送' : 'Disable browser push') : (zh ? '启用此浏览器推送' : 'Enable browser push')}</Button>
+    <p className="mt-2 text-sm text-fg-muted">{zh ? '应用在线时可将重要变化送到这台设备。锁屏只显示通用提示，详情在应用内查看。' : 'When the app is online, important changes can reach this device. Lock-screen alerts stay generic; open the app for details.'}</p>
+    <Button className="mt-4" disabled={busy || !supported} onClick={() => void toggle()}>{!supported ? (zh ? '当前设备不支持系统提醒' : 'System notifications are unavailable here') : registered ? (zh ? '关闭这台设备的提醒' : 'Disable alerts on this device') : (zh ? '在这台设备上提醒我' : 'Notify me on this device')}</Button>
     {registered && <Button className="ml-2 mt-4" disabled={busy} onClick={() => void testPush()}>{zh ? '向此浏览器发送测试通知' : 'Send a test to this browser'}</Button>}
     {probes.data?.probes.slice(0, 3).map((probe) => <p key={probe.id} className="mt-2 text-xs text-fg-muted">{new Date(probe.createdAt).toLocaleString()} · {probe.status === 'opened' ? (zh ? '已点击打开' : 'Opened') : probe.status === 'accepted' ? (zh ? '提供方已接受，等待点击确认' : 'Provider accepted; awaiting open confirmation') : probe.status}{probe.error && ` · ${probe.error}`}</p>)}
     {error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}

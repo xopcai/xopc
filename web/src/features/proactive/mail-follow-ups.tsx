@@ -7,6 +7,7 @@ import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 
 import { proactiveGet, proactiveWrite, type MailFollowUp } from './api';
+import { formatAssistantDate, mailFollowUpState } from './presentation';
 
 const field = 'mt-2 w-full rounded-lg border border-edge bg-surface-base p-3 text-sm text-fg';
 const localDate = (iso: string) => {
@@ -36,9 +37,13 @@ export function MailFollowUpService({ zh, onStarted, open, onOpen }: { zh: boole
       <label className="block text-sm">{zh ? '最晚什么时候再跟进？（本地时间）' : 'When should I follow up? (Local time)'}<input type="datetime-local" className={field} value={dueAt} onChange={e => setDueAt(e.target.value)} /></label>
       <p className="text-xs text-fg-muted">{zh ? '只跟进这段邮件往来。草稿由你审阅后在对话中办理，发出后继续等待实际回复。' : 'Follows this thread only. Review drafts and continue sending in chat; follow-up continues after sending.'}</p>
       <Button variant="primary" disabled={busy || !sourceId || !instructions.trim() || !dueAt} onClick={() => void start()}>{zh ? '交给你跟进' : 'Start following'}</Button>
-    </div> : !sources.error && <p className="mt-4 text-sm text-fg-muted">{zh ? '还没有可跟进的授权邮件。' : 'No authorized email is available yet.'} <Link to="/connectors" className="text-accent">{zh ? '连接邮箱并授权主动跟进' : 'Connect and authorize an email account'}</Link></p>}
+    </div> : !sources.error && <p className="mt-4 text-sm text-fg-muted">{zh ? '还没有可跟进的邮件。' : 'No email is available to follow yet.'} <Link to="/connectors" className="text-accent">{zh ? '连接邮箱并选择可用范围' : 'Connect an email account and choose what is available'}</Link></p>}
     {(error || sources.error) && <p role="alert" className="mt-3 text-sm text-danger">{error || String(sources.error)}</p>}
   </article>;
+}
+
+export function MailFollowUpListItem({ follow, zh }: { follow: MailFollowUp; zh: boolean }) {
+  return <article className="rounded-2xl border border-edge bg-surface-panel p-5"><div className="flex items-start justify-between gap-4"><div className="min-w-0 flex-1"><h2 className="font-semibold text-fg">{follow.subject ?? (zh ? '邮件跟进' : 'Email follow-up')}</h2><p className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-fg-muted">{follow.instructions}</p></div><Link className="shrink-0 text-sm font-medium text-accent" to={`/assistant-work?follow-up=${encodeURIComponent(follow.id)}`}>{zh ? '查看' : 'View'}</Link></div><dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-xs text-fg-subtle">{zh ? '当前状态' : 'Current state'}</dt><dd className="mt-1 text-fg">{mailFollowUpState(follow, zh)}</dd></div><div><dt className="text-xs text-fg-subtle">{zh ? '接下来' : 'Next'}</dt><dd className="mt-1 text-fg">{follow.status === 'completed' ? (zh ? '不会再跟进' : 'No more follow-up') : `${zh ? '约定时间' : 'Follow up by'} ${formatAssistantDate(follow.dueAt, zh)}`}</dd></div><div><dt className="text-xs text-fg-subtle">{zh ? '最新成果或决定' : 'Latest result or decision'}</dt><dd className="mt-1 text-fg">{follow.latestDirection === 'received' ? (zh ? '发现新的回复，等待整理' : 'A new reply is ready to review') : (zh ? '还没有需要交付的新成果' : 'No new result needs delivery yet')}</dd></div><div><dt className="text-xs text-fg-subtle">{zh ? '最近核对' : 'Last checked'}</dt><dd className="mt-1 text-fg">{follow.lastCheckedAt ? formatAssistantDate(follow.lastCheckedAt, zh) : (zh ? '尚未完成首次核对' : 'First check has not completed')}</dd></div></dl></article>;
 }
 
 export function MailFollowUpView({ follow, zh, refresh }: { follow: MailFollowUp; zh: boolean; refresh: () => void }) {
@@ -53,10 +58,10 @@ export function MailFollowUpView({ follow, zh, refresh }: { follow: MailFollowUp
     catch (cause) { setError(String(cause)); }
     finally { setBusy(false); }
   }
-  const state = follow.status === 'completed' ? (zh ? '已结束跟进' : 'Follow-up ended') : follow.status === 'paused' ? (zh ? '已暂停' : 'Paused') : !follow.enabled ? (zh ? '主动跟进已暂停' : 'Proactive work is paused') : !follow.sourceAvailable ? (zh ? '邮件资料不可用，需要重新连接或授权' : 'Email unavailable; reconnect or authorize access') : follow.latestDirection === 'sent' ? (zh ? '已同步发出的邮件，继续等待回复' : 'Sent email synchronized; watching for replies') : (zh ? '正在关注来信与约定时间' : 'Watching replies and the follow-up time');
-  return <article className="rounded-2xl border border-edge bg-surface-panel p-5"><h2 className="font-medium">{follow.subject ?? (zh ? '邮件跟进' : 'Email follow-up')}</h2><p className="mt-2 text-sm text-fg-muted">{state}</p><p className="mt-3 whitespace-pre-wrap text-sm">{follow.instructions}</p><p className="mt-2 text-xs text-fg-muted">{zh ? '约定跟进时间：' : 'Follow up by: '}{new Date(follow.dueAt).toLocaleString()}</p>
-    {follow.lastCheckedAt && <p className="mt-1 text-xs text-fg-muted">{zh ? '最近检查已同步资料：' : 'Last check of synchronized email: '}{new Date(follow.lastCheckedAt).toLocaleString()}</p>}
-    {follow.lastSyncedAt && <p className="mt-1 text-xs text-fg-muted">{zh ? '邮箱最近同步：' : 'Email last synchronized: '}{new Date(follow.lastSyncedAt).toLocaleString()}</p>}
+  const state = mailFollowUpState(follow, zh);
+  return <article className="rounded-2xl border border-edge bg-surface-panel p-5"><h2 className="font-medium">{follow.subject ?? (zh ? '邮件跟进' : 'Email follow-up')}</h2><p className="mt-2 text-sm text-fg-muted">{state}</p><p className="mt-3 whitespace-pre-wrap text-sm">{follow.instructions}</p><p className="mt-2 text-xs text-fg-muted">{zh ? '约定跟进时间：' : 'Follow up by: '}{formatAssistantDate(follow.dueAt, zh)}</p>
+    {follow.lastCheckedAt && <p className="mt-1 text-xs text-fg-muted">{zh ? '最近核对邮件：' : 'Last email check: '}{formatAssistantDate(follow.lastCheckedAt, zh)}</p>}
+    {follow.lastSyncedAt && <p className="mt-1 text-xs text-fg-muted">{zh ? '邮箱最近同步：' : 'Email last synchronized: '}{formatAssistantDate(follow.lastSyncedAt, zh)}</p>}
     {follow.syncFailed && <p className="mt-2 text-sm text-danger">{zh ? '最近一次邮箱同步失败，当前结果可能尚未包含新回复。请检查邮箱连接。' : 'The latest email sync failed. Current work may not include new replies. Check your email connection.'}</p>}
     {!follow.sourceAvailable && <Link className="mt-3 block text-sm text-accent" to="/connectors">{zh ? '检查邮箱连接' : 'Check email connection'}</Link>}
     {follow.sessionKey && <Link className="mt-3 block text-sm text-accent" to={`/chat/${encodeURIComponent(follow.sessionKey)}`}>{zh ? '继续原来的对话' : 'Continue the conversation'}</Link>}
