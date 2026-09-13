@@ -18,6 +18,38 @@ export type PopoverSelectOption = {
   group?: string;
 };
 
+/** Inline choices for an existing panel; avoids stacking another popover above it. */
+export function SelectOptionList({ options, values, multiple = false, onChange, ariaLabel }: {
+  options: PopoverSelectOption[];
+  values: string[];
+  multiple?: boolean;
+  onChange: (values: string[]) => void;
+  ariaLabel: string;
+}) {
+  const name = useId();
+  return (
+    <fieldset aria-label={ariaLabel} className="min-w-0 space-y-0.5">
+      {options.map((option) => (
+        <label key={option.value} className={cn(
+          'flex min-h-10 min-w-0 items-center gap-3 rounded-md px-2 py-2 text-sm text-fg has-focus-visible:ring-2 has-focus-visible:ring-accent',
+          option.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-surface-hover',
+        )}>
+          <input
+            type={multiple ? 'checkbox' : 'radio'} name={name} value={option.value}
+            checked={values.includes(option.value)} disabled={option.disabled}
+            className="shrink-0 accent-accent"
+            onChange={(event) => onChange(multiple
+              ? event.target.checked ? [...values, option.value] : values.filter((value) => value !== option.value)
+              : [option.value])}
+          />
+          {option.icon}
+          <span className="min-w-0 flex-1 break-words">{option.label}</span>
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
 export type SelectChangeEvent = {
   target: { value: string };
   currentTarget: { value: string };

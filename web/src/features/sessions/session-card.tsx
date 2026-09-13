@@ -11,6 +11,10 @@ import {
 
 import type { SessionMetadata } from '@/features/sessions/session.types';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
+import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
+import { sessionIdentityLabel } from './session-identity-label';
+import { messages } from '@/i18n/messages';
+import { useLocaleStore } from '@/stores/locale-store';
 import { ghostIconButton } from '@/lib/interaction';
 import { cn } from '@/lib/cn';
 
@@ -68,6 +72,8 @@ export function SessionCard({
   onAction: (action: SessionCardAction) => void;
 }) {
   const displayName = session.name?.trim() || labels.unnamedSession;
+  const language = useLocaleStore((state) => state.language);
+  const sourceLabel = sessionIdentityLabel(session, messages(language).sidebar.sessionFilters);
   const showKeySubtitle = Boolean(session.name?.trim());
   const isArchived = session.status === 'archived';
   const isPinned = session.status === 'pinned';
@@ -98,8 +104,9 @@ export function SessionCard({
         )}
       >
         <div className="flex min-w-0 items-center gap-2">
+          <SessionChannelIcon sourceChannel={session.sourceChannel} session={session} className="size-3.5" />
           <span className="truncate text-[11px] font-medium uppercase tracking-wide text-fg-subtle">
-            {session.sourceChannel}
+            {sourceLabel}
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-1.5 text-xs text-fg-muted">

@@ -2,6 +2,7 @@ import { patchChatModelConfig } from './chat-model-config.js';
 import { randomUUID } from 'node:crypto';
 
 import type { Hono } from 'hono';
+import { SessionDiscoveryQuerySchema } from '@xopcai/gateway-contract';
 
 import { getSessionContextSummary } from '../../session-context-summary.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
@@ -296,11 +297,23 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       return blocked;
     }
     const query = c.req.query();
+    const discovery = SessionDiscoveryQuerySchema.safeParse({
+      sources: query.sources?.split(','),
+      purposes: query.purposes?.split(','),
+      activity: query.activity,
+      agentId: query.agentId,
+      excludeArchived: query.excludeArchived === 'true',
+    });
+    if (!discovery.success) return c.json({ error: 'Invalid session filters' }, 400);
+    if (query.updatedAfter && !Number.isFinite(Number(query.updatedAfter))) {
+      return c.json({ error: 'Invalid session time filter' }, 400);
+    }
     const sessionTypes = query.types
       ?.split(',')
       .map((value) => value.trim())
       .filter(isSessionType);
     const result = await service.sessions.listSessions({
+      ...discovery.data,
       status: query.status as any,
       search: query.search,
       channel: query.channel,

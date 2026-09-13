@@ -1,4 +1,7 @@
 import { Loader2, Plus, SquareTerminal } from 'lucide-react';
+import type { SessionIdentityInput } from '@xopcai/gateway-contract';
+import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
+import { sessionIdentityLabel } from '@/features/sessions/session-identity-label';
 import { memo, useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
@@ -25,6 +28,7 @@ const MAX_MD = '(max-width: 767px)';
 
 type ChatPageHeaderRegistrationProps = {
   chatHeadline: string;
+  sessionIdentity?: SessionIdentityInput;
   chatAgents: ChatAgentOption[];
   showChatAgentSelector: boolean;
   chatAgentId: string;
@@ -48,6 +52,7 @@ type ChatPageHeaderRegistrationProps = {
  */
 export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistration({
   chatHeadline,
+  sessionIdentity,
   chatAgents,
   showChatAgentSelector,
   chatAgentId,
@@ -156,6 +161,10 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
           >
             {chatHeadline}
           </h1>
+          {sessionIdentity ? <div className={cn('mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-fg-muted', showNewChatLink && 'md:justify-center')}>
+            <SessionChannelIcon sourceChannel={sessionIdentity.sourceChannel} session={sessionIdentity} className="size-3.5" />
+            <span className="truncate">{sessionIdentityLabel(sessionIdentity, m.sidebar.sessionFilters)}</span>
+          </div> : null}
         </div>
       ),
       end: (
@@ -232,6 +241,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     });
   }, [
     chatHeadline,
+    sessionIdentity,
     chatAgents,
     showChatAgentSelector,
     chatAgentId,
@@ -246,6 +256,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     m.chat.terminal.open,
     terminalShortcut,
     m.sidebar.newTask,
+    m.sidebar.sessionFilters,
     projectId,
     context,
     terminalPanelOpen,

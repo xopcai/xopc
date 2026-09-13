@@ -14,6 +14,7 @@ import {
   type SessionRow,
 } from './row-mappers.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
+import { SESSION_PURPOSE_SQL, SESSION_SOURCE_SQL } from './session-identity-sql.js';
 
 const SESSION_COLUMNS = `
   s.session_key, s.agent_id, s.session_id, s.status, s.name, s.tags_json,
@@ -164,7 +165,7 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
   if (query.sessionTypes?.length) {
     conditions.push(`s.session_type IN (${query.sessionTypes.map(() => '?').join(', ')})`);
     params.push(...query.sessionTypes);
-  } else if (!query.includeHidden) {
+  } else if (!query.includeHidden && !query.purposes?.length && !query.activity && !query.sources?.length) {
     conditions.push(`s.session_type = ?`);
     params.push('chat');
   }
@@ -173,6 +174,24 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
     const statuses = Array.isArray(query.status) ? query.status : [query.status];
     conditions.push(`s.status IN (${statuses.map(() => '?').join(', ')})`);
     params.push(...statuses);
+  }
+
+  if (query.excludeArchived) conditions.push(`s.status != 'archived'`);
+  if (query.sources?.length) {
+    conditions.push(`${SESSION_SOURCE_SQL} IN (${query.sources.map(() => '?').join(',')})`);
+    params.push(...query.sources);
+  }
+  if (query.purposes?.length) {
+    conditions.push(`${SESSION_PURPOSE_SQL} IN (${query.purposes.map(() => '?').join(',')})`);
+    params.push(...query.purposes);
+  }
+  if (query.activity === 'automatic') conditions.push(`${SESSION_SOURCE_SQL} IN ('automation', 'system')`);
+  if (query.activity === 'manual') {
+    conditions.push(`${SESSION_PURPOSE_SQL} = 'chat' AND ${SESSION_SOURCE_SQL} NOT IN ('automation', 'system')`);
+  }
+  if (query.agentId) {
+    conditions.push('s.agent_id = ?');
+    params.push(query.agentId);
   }
 
   if (query.projectId) {
@@ -224,33 +243,19 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
     }
   }
 
-  let searchKeys: string[] | null = null;
   if (query.search?.trim()) {
     const rawSearch = query.search.trim();
-    const ftsQuery = buildFts5SearchQuery(rawSearch);
-    const ftsRows = db
-      .prepare(
-        `SELECT DISTINCT session_key FROM transcript_fts WHERE transcript_fts MATCH ? LIMIT 500`,
-      )
-      .all(ftsQuery) as Array<{ session_key: string }>;
-    const ftsKeys = new Set(ftsRows.map((r) => r.session_key));
     const like = `%${rawSearch.toLowerCase()}%`;
-    const metaRows = db
-      .prepare(
-        `SELECT session_key FROM sessions
-         WHERE LOWER(session_key) LIKE ?
-            OR LOWER(COALESCE(name, '')) LIKE ?
-            OR LOWER(source_channel) LIKE ?
-            OR LOWER(source_chat_id) LIKE ?
-            OR LOWER(tags_json) LIKE ?`,
-      )
-      .all(like, like, like, like, like) as Array<{ session_key: string }>;
-    searchKeys = [...new Set([...ftsKeys, ...metaRows.map((r) => r.session_key)])];
-    if (searchKeys.length === 0) {
-      return { items: [], total: 0, limit: query.limit ?? 50, offset: query.offset ?? 0, hasMore: false };
-    }
-    conditions.push(`s.session_key IN (${searchKeys.map(() => '?').join(', ')})`);
-    params.push(...searchKeys);
+    // Keep FTS selection inside SQLite so filtering/counting covers all matches,
+    // without a pre-pagination cap or SQLite's bound-parameter limit.
+    conditions.push(`(s.session_key IN (
+      SELECT session_key FROM transcript_fts WHERE transcript_fts MATCH ?
+    ) OR LOWER(s.session_key) LIKE ?
+      OR LOWER(COALESCE(s.name, '')) LIKE ?
+      OR LOWER(s.source_channel) LIKE ?
+      OR LOWER(s.source_chat_id) LIKE ?
+      OR LOWER(s.tags_json) LIKE ?)`);
+    params.push(buildFts5SearchQuery(rawSearch), like, like, like, like, like);
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -267,7 +272,7 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
   const rows = db
     .prepare(
       `SELECT ${SESSION_COLUMNS} ${SESSION_FROM_JOIN} ${where}
-       ORDER BY ${sortColumn} ${sortOrder}
+       ORDER BY ${sortColumn} ${sortOrder}, s.session_key ASC
        LIMIT ? OFFSET ?`,
     )
     .all(...params, limit, offset) as SessionRow[];

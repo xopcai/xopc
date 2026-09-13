@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { SessionDiscoveryQuery } from './session-identity.js';
 
 export type SessionStatus = 'active' | 'idle' | 'archived' | 'pinned';
 
@@ -99,7 +100,7 @@ export interface SessionDetail extends SessionMetadata {
   transcriptRows?: unknown[];
 }
 
-export interface SessionListQuery {
+export interface SessionListQuery extends SessionDiscoveryQuery {
   status?: SessionStatus;
   search?: string;
   channel?: string | null;
@@ -539,6 +540,11 @@ export function buildSessionListQueryString(query?: SessionListQuery): string {
   if (query.status) params.set('status', query.status);
   if (query.search) params.set('search', query.search);
   if (query.channel) params.set('channel', query.channel);
+  if (query.sources?.length) params.set('sources', query.sources.join(','));
+  if (query.purposes?.length) params.set('purposes', query.purposes.join(','));
+  if (query.activity) params.set('activity', query.activity);
+  if (query.agentId) params.set('agentId', query.agentId);
+  if (query.excludeArchived) params.set('excludeArchived', 'true');
   if (query.projectId) params.set('projectId', query.projectId);
   if (query.unassigned) params.set('unassigned', 'true');
   if (query.updatedAfter != null) params.set('updatedAfter', String(query.updatedAfter));
@@ -648,6 +654,11 @@ export function sessionListDedupeKey(query?: SessionListQuery): string {
     status: query.status,
     search: query.search,
     channel: query.channel,
+    sources: query.sources,
+    purposes: query.purposes,
+    activity: query.activity,
+    agentId: query.agentId,
+    excludeArchived: query.excludeArchived,
     projectId: query.projectId,
     unassigned: query.unassigned,
     updatedAfter: query.updatedAfter,
