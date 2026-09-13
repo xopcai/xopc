@@ -7,6 +7,7 @@
  * so the scroll position resets cleanly — no visible "scroll down" flash.
  */
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
+import { ListSkeleton } from '../../components/ListSkeleton';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
@@ -260,7 +261,7 @@ export const MessageList = memo(function MessageList({
     return (
       <View style={styles.center}>
         {listHeader}
-        {showLoadingIndicator ? <StaticLoadingIndicator size={28} /> : null}
+        {showLoadingIndicator ? <View style={{ alignSelf: 'stretch' }}><ListSkeleton count={3} withIcon={false} /></View> : null}
       </View>
     );
   }

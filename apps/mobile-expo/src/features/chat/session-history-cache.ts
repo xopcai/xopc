@@ -29,6 +29,7 @@ export function readCachedSessionHistoryHead(
     QUERY_CACHE_NAMESPACES.sessionHistory,
     profileId,
     normalizedSessionKey,
+    { maxAgeMs: Infinity },
   );
   if (!isSessionMessagePage(page) || page.session.key !== normalizedSessionKey) return null;
   return page;
