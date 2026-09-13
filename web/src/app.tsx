@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom';
+import { createHashRouter, Navigate, RouterProvider, useLocation } from 'react-router-dom';
 
 import { AppShell } from '@/components/shell/app-shell';
 import { RouteErrorFallback } from '@/components/errors/app-error-boundary';
@@ -115,6 +115,21 @@ function SecondaryRouteFallback() {
   );
 }
 
+function LegacyProactiveRedirect() {
+  const location = useLocation();
+  const source = new URLSearchParams(location.search);
+  const target = new URLSearchParams();
+  const tab = source.get('tab');
+  if (tab === 'services') target.set('view', 'new');
+  else if (tab === 'settings') target.set('view', 'settings');
+  for (const key of ['item', 'digest', 'project', 'probe', 'subscription']) {
+    const value = source.get(key);
+    if (value) target.set(key === 'subscription' ? 'delegation' : key, value);
+  }
+  const query = target.toString();
+  return <Navigate to={`/assistant-work${query ? `?${query}` : ''}`} replace />;
+}
+
 
 function SettingsRouteFallback() {
   return (
@@ -191,9 +206,10 @@ const router = createHashRouter([
         ],
       },
       {
-        path: 'proactive',
+        path: 'assistant-work',
         element: <Suspense fallback={<SecondaryRouteFallback />}><ProactivePage /></Suspense>,
       },
+      { path: 'proactive', element: <LegacyProactiveRedirect /> },
       {
         path: 'automations',
         element: (

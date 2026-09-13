@@ -130,7 +130,7 @@ export async function testBrowserPush(workspaceId: string, subscriptionId: strin
   const keys = getSqliteDatabase().prepare('SELECT public_key, private_key FROM proactive_web_push_keys WHERE id = 1').get() as { public_key: string; private_key: string };
   try {
     if (!allowedPushEndpoint(claimed.endpoint)) throw new Error('Unsupported push service');
-    await send(claimed, JSON.stringify({ id, title: 'xopc 推送测试 / Push test', body: '点击此通知确认打开 / Tap to confirm opening', route: `/proactive?probe=${encodeURIComponent(id)}` }), { vapidDetails: { subject: 'https://xopc.ai', publicKey: keys.public_key, privateKey: keys.private_key }, TTL: 300, timeout: 10000 });
+    await send(claimed, JSON.stringify({ id, title: 'xopc 推送测试 / Push test', body: '点击此通知确认打开 / Tap to confirm opening', route: `/assistant-work?probe=${encodeURIComponent(id)}` }), { vapidDetails: { subject: 'https://xopc.ai', publicKey: keys.public_key, privateKey: keys.private_key }, TTL: 300, timeout: 10000 });
     getSqliteDatabase().prepare("UPDATE proactive_push_probes SET status = CASE WHEN opened_at IS NULL THEN 'accepted' ELSE 'opened' END WHERE id = ?").run(id);
     return { id, status: 'accepted' };
   } catch {

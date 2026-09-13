@@ -309,8 +309,11 @@ export function HomePage() {
   };
 
   const proactive = useSWR<ProactiveOverview>('/api/proactive/overview', proactiveGet, { refreshInterval: 15000 });
-  const hasProactiveWork = Boolean(proactive.data && (proactive.data.needsDecision.length
-    || proactive.data.prepared.length || proactive.data.updates.length || proactive.data.delegations.some(sub => sub.effectiveEnabled)));
+  const hasPreparedWork = Boolean(proactive.data?.prepared.length);
+  const hasAssistantUpdates = Boolean(proactive.data?.updates.length);
+  const hasFollowingWork = Boolean(proactive.data && (proactive.data.delegations.some(sub => sub.effectiveEnabled)
+    || proactive.data.followUps.some(follow => follow.enabled && follow.status === 'watching')));
+  const hasProactiveWork = Boolean(proactive.data && (proactive.data.needsDecision.length || hasPreparedWork || hasAssistantUpdates || hasFollowingWork));
   const isIdle = Boolean(home && home.needsUser.length === 0 && home.backgroundCount === 0 && proactive.data && !hasProactiveWork);
   const composerVisible = isIdle || conversationOpen;
 
@@ -375,7 +378,7 @@ export function HomePage() {
       return;
     }
     if (action.type === 'review_judgment') {
-      navigate(`/proactive?item=${encodeURIComponent(action.itemId)}`);
+      navigate(`/assistant-work?item=${encodeURIComponent(action.itemId)}`);
       return;
     }
     setBusyItemId(itemId);
@@ -407,21 +410,25 @@ export function HomePage() {
     return () => clearPageHeader();
   }, [clearPageHeader, headerEnd, setPageHeader, t.title]);
 
-  const needsUserCount = home?.needsUser.length ?? 0;
+  const needsUserCount = (home?.needsUser.length ?? 0) + (proactive.data?.needsDecision.length ?? 0);
   const backgroundCount = home?.backgroundCount ?? 0;
   const headline = needsUserCount > 0
     ? interpolate(t.home.attentionTitle, { count: needsUserCount })
-    : backgroundCount > 0
+    : hasPreparedWork ? (language === 'zh' ? '助理准备好了这些' : 'Your assistant prepared these')
+      : hasAssistantUpdates ? (language === 'zh' ? '有一些值得知道的变化' : 'A few changes are worth knowing')
+        : backgroundCount > 0
       ? t.home.clearTitle
-      : hasProactiveWork ? (language === 'zh' ? '助理在跟进你交代的事' : 'Your assistant is following through')
+      : hasFollowingWork ? (language === 'zh' ? '助理在跟进你交代的事' : 'Your assistant is following through')
         : proactive.data ? t.home.idleTitle : (language === 'zh' ? '今天的工作' : 'Your work today');
   const intro = needsUserCount > 0
     ? backgroundCount > 0
       ? interpolate(t.home.attentionIntroWithBackground, { count: backgroundCount })
       : t.home.attentionIntro
-    : backgroundCount > 0
+    : hasPreparedWork ? (language === 'zh' ? '成果已经整理好，可以直接查看或继续办理。' : 'The results are ready to review or continue.')
+      : hasAssistantUpdates ? (language === 'zh' ? '这里是可能影响你当前工作的最新变化。' : 'These changes may affect your current work.')
+        : backgroundCount > 0
       ? interpolate(t.home.clearIntro, { count: backgroundCount })
-      : hasProactiveWork ? (language === 'zh' ? '准备好的成果和需要你决定的事项都在这里。' : 'Prepared work and decisions that need you appear here.')
+      : hasFollowingWork ? (language === 'zh' ? '助理记着这些事项，有实质进展时会带回来。' : 'Your assistant remembers these items and will bring back useful progress.')
         : proactive.data ? t.home.idleIntro : (language === 'zh' ? '正在核对已交代的事项。' : 'Checking your delegated work.');
 
   return (
@@ -527,7 +534,7 @@ export function HomePage() {
             ) : null}
           </section>
 
-          <section className="mt-8"><ProactiveToday compact /></section>
+          <section className="mt-8"><ProactiveToday compact section="decisions" /></section>
 
           {home.needsUser.length > 0 ? (
             <section className="mt-10" aria-labelledby="home-needs-user-title">
@@ -551,6 +558,8 @@ export function HomePage() {
               </div>
             </section>
           ) : null}
+
+          <section className="mt-10"><ProactiveToday compact section="rest" /></section>
 
           {home.background.length > 0 ? (
             <section className="mt-10" aria-labelledby="home-background-title">
