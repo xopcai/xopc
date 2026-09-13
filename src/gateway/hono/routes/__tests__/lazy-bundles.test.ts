@@ -66,6 +66,8 @@ describe('lazy route bundles', () => {
 
   it('routes image generation APIs to models, not agents', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/image-generation/catalog')?.id).toBe('image-generation');
+    expect(findAuthenticatedLazyRouteBundle('/api/image-generation/default')?.id).toBe('image-generation');
+    expect(findAuthenticatedLazyRouteBundle('/api/image-generation/default/setup')?.id).toBe('image-generation');
     expect(findAuthenticatedLazyRouteBundle('/api/agents/main/image-generation')?.id).toBe('image-generation');
     expect(findAuthenticatedLazyRouteBundle('/api/agents')?.id).toBe('agents');
   });

@@ -6,8 +6,7 @@ import { Button } from '@/components/ui/button';
 import { PopoverSelect } from '@/components/ui/popover-select';
 import { SecretInput } from '@/components/ui/secret-input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
-import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
+import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { CustomImageProviderDialog } from '@/features/settings/custom-image-provider-dialog';
 import {
   fetchCustomImageProviders,
@@ -20,17 +19,15 @@ import { revealProviderApiKey } from '@/features/settings/providers-api';
 import { fetchJson } from '@/lib/fetch';
 import { isMaskedSecret } from '@/lib/is-masked-secret';
 import { apiUrl } from '@/lib/url';
-import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
-type AgentImageGeneration = {
-  agentId: string;
+type DefaultImageGeneration = {
   model: { primary: string; fallbacks?: string[] } | null;
 };
 
 type SetupResult = {
-  agent: AgentImageGeneration;
+  default: DefaultImageGeneration;
   providers: ImageProvider[];
   verification: { verified: boolean; supported: boolean; message?: string };
 };
@@ -40,8 +37,7 @@ const MASKED_API_KEY = '••••••••••••';
 const copy = {
   en: {
     title: 'Image generation',
-    intro: 'Choose an agent and image model, or connect an OpenAI Images service of your own.',
-    agent: 'Agent',
+    intro: 'Configure the default image model and service. Agents inherit this setting unless overridden in Agent settings.',
     provider: 'Provider',
     model: 'Model',
     apiKey: 'API key',
@@ -63,7 +59,6 @@ const copy = {
     needsKey: 'API key required',
     connect: 'Connect to a gateway to continue.',
     loadError: 'Unable to load image generation settings.',
-    selectAgent: 'Select an agent',
     selectModel: 'Select a model',
     show: 'Show key',
     hide: 'Hide key',
@@ -72,8 +67,7 @@ const copy = {
   },
   zh: {
     title: '图片生成',
-    intro: '为智能体选择图片模型，也可以连接你自己的图片服务。',
-    agent: 'Agent',
+    intro: '配置全局图片生成模型和服务。各智能体默认继承此设置，也可在智能体详情中单独覆盖。',
     provider: 'Provider',
     model: '模型',
     apiKey: 'API Key',
@@ -95,7 +89,6 @@ const copy = {
     needsKey: '需要 API Key',
     connect: '请先连接网关。',
     loadError: '无法加载图片生成设置。',
-    selectAgent: '选择 Agent',
     selectModel: '选择模型',
     show: '显示密钥',
     hide: '隐藏密钥',
@@ -104,11 +97,11 @@ const copy = {
   },
 } as const;
 
-async function fetchAgentImageGeneration(agentId: string): Promise<AgentImageGeneration> {
-  const response = await fetchJson<{ payload?: AgentImageGeneration }>(
-    apiUrl(`/api/agents/${encodeURIComponent(agentId)}/image-generation`),
+async function fetchDefaultImageGeneration(): Promise<DefaultImageGeneration> {
+  const response = await fetchJson<{ payload?: DefaultImageGeneration }>(
+    apiUrl('/api/image-generation/default'),
   );
-  if (!response.payload) throw new Error('Invalid agent image generation response');
+  if (!response.payload) throw new Error('Invalid default image generation response');
   return response.payload;
 }
 
@@ -179,9 +172,7 @@ function ImageSettingsSkeleton() {
 export function ImageModelsSettingsPanel() {
   const language = useLocaleStore((state) => state.language);
   const text = copy[language];
-  const commonMessages = messages(language);
   const hasToken = Boolean(useGatewayStore((state) => state.sessionKey));
-  const [agentId, setAgentId] = useState('');
   const [providerId, setProviderId] = useState('');
   const [modelId, setModelId] = useState('');
   const [apiKey, setApiKey] = useState('');
@@ -192,11 +183,6 @@ export function ImageModelsSettingsPanel() {
   const [customDialogOpen, setCustomDialogOpen] = useState(false);
   const [editingCustomProvider, setEditingCustomProvider] = useState<CustomImageProvider>();
 
-  const { data: agents, isLoading: agentsLoading, error: agentsError } = useSWR(
-    hasToken ? 'image-generation-agents' : null,
-    fetchGatewayAgents,
-    { revalidateOnFocus: false },
-  );
   const { data: providers, isLoading: providersLoading, error: providersError, mutate: mutateProviders } = useSWR(
     hasToken ? apiUrl('/api/image-generation/catalog') : null,
     fetchImageCatalog,
@@ -208,20 +194,15 @@ export function ImageModelsSettingsPanel() {
     { revalidateOnFocus: false },
   );
 
-  useEffect(() => {
-    if (!agents || agentId) return;
-    setAgentId(agents.defaultId || agents.agents[0]?.id || '');
-  }, [agentId, agents]);
-
-  const { data: agentConfig, isLoading: agentConfigLoading, error: agentConfigError, mutate: mutateAgentConfig } = useSWR(
-    hasToken && agentId ? ['agent-image-generation', agentId] : null,
-    () => fetchAgentImageGeneration(agentId),
+  const { data: defaultConfig, isLoading: defaultConfigLoading, error: defaultConfigError, mutate: mutateDefaultConfig } = useSWR(
+    hasToken ? 'default-image-generation' : null,
+    fetchDefaultImageGeneration,
     { revalidateOnFocus: false },
   );
 
   useEffect(() => {
-    if (!providers || !agentConfig) return;
-    const currentProviderId = providerIdFromModel(agentConfig.model?.primary);
+    if (!providers || !defaultConfig) return;
+    const currentProviderId = providerIdFromModel(defaultConfig.model?.primary);
     const selected = providers.find((provider) => provider.id === currentProviderId)
       ?? providers.find((provider) => provider.configured)
       ?? providers[0];
@@ -229,45 +210,33 @@ export function ImageModelsSettingsPanel() {
     setProviderId(selected.id);
     setModelId(
       selected.id === currentProviderId
-        ? modelIdFromRef(agentConfig.model?.primary) || selected.defaultModel
+        ? modelIdFromRef(defaultConfig.model?.primary) || selected.defaultModel
         : selected.defaultModel,
     );
     setApiKey(selected.configured ? MASKED_API_KEY : '');
     setProviderConfig(initialProviderConfig(selected));
-  }, [agentConfig, providers]);
-
-  useEffect(() => {
-    setError(undefined);
-  }, [agentId]);
+  }, [defaultConfig, providers]);
 
   const selectedProvider = providers?.find((provider) => provider.id === providerId);
   const apiKeyUrl = selectedProvider
     ? selectedProvider.apiKeyUrl
       ?? getOrderedApiKeyLinks(selectedProvider.id, language)[0]?.href
     : undefined;
-  const agentOptions = useMemo(
-    () => (agents?.agents ?? []).map((agent) => ({
-      value: agent.id,
-      label: agentListDisplayName(agent, commonMessages.agentsSettings),
-    })),
-    [agents?.agents, commonMessages.agentsSettings],
-  );
   const modelOptions = useMemo(
     () => (selectedProvider?.models ?? []).map((model) => ({ value: model, label: model })),
     [selectedProvider?.models],
   );
-  const currentRef = agentConfig?.model?.primary;
+  const currentRef = defaultConfig?.model?.primary;
   const canSubmit = Boolean(
-    agentId
-      && selectedProvider
+    selectedProvider
       && modelId
       && (selectedProvider.credentialMode !== 'api-key' || selectedProvider.configured || apiKey.trim())
       && selectedProvider.configFields.every((field) => !field.required || providerConfig[field.key]?.trim()),
   );
 
   if (!hasToken) return <p className="text-sm text-fg-muted">{text.connect}</p>;
-  if (agentsLoading || providersLoading || customProvidersLoading || agentConfigLoading) return <ImageSettingsSkeleton />;
-  if (agentsError || providersError || customProvidersError || agentConfigError || !providers || !agents || !customProviders) {
+  if (providersLoading || customProvidersLoading || defaultConfigLoading) return <ImageSettingsSkeleton />;
+  if (providersError || customProvidersError || defaultConfigError || !providers || !customProviders) {
     return <p className="text-sm text-red-600 dark:text-red-400">{text.loadError}</p>;
   }
 
@@ -313,7 +282,7 @@ export function ImageModelsSettingsPanel() {
     setSaved(false);
     try {
       const response = await fetchJson<{ payload?: SetupResult }>(
-        apiUrl(`/api/agents/${encodeURIComponent(agentId)}/image-generation/setup`),
+        apiUrl('/api/image-generation/default/setup'),
         {
           method: 'POST',
           body: JSON.stringify({
@@ -328,8 +297,13 @@ export function ImageModelsSettingsPanel() {
       );
       if (!response.payload) throw new Error('Invalid setup response');
       await Promise.all([
-        mutateAgentConfig(response.payload.agent, { revalidate: false }),
+        mutateDefaultConfig(response.payload.default, { revalidate: false }),
         mutateProviders(response.payload.providers, { revalidate: false }),
+        import('swr').then(({ mutate }) => Promise.all([
+          mutate('settings-agent-defaults'),
+          mutate('settings-gateway-agents'),
+        ])),
+        revalidateGatewayConfig(),
       ]);
       setApiKey(MASKED_API_KEY);
       setSaved(true);
@@ -350,17 +324,6 @@ export function ImageModelsSettingsPanel() {
             <p className="mt-1 text-sm leading-relaxed text-fg-muted">{text.intro}</p>
           </div>
         </div>
-        <label className="mt-4 block text-xs font-medium text-fg-muted">
-          {text.agent}
-          <PopoverSelect
-            value={agentId}
-            options={agentOptions}
-            placeholder={text.selectAgent}
-            allowEmpty={false}
-            onChange={setAgentId}
-            triggerClassName="mt-1.5 max-w-md"
-          />
-        </label>
       </section>
 
       <section>
