@@ -12,6 +12,7 @@ export const KEYS = {
   clipboardLatestAppHash: 'clipboard.latestAppHash',
   defaultAgentId: 'prefs.defaultAgentId',
   newSessionPreferencesByGateway: 'prefs.newSessionPreferencesByGateway',
+  lastChatSessionByGateway: 'chat.lastSessionByGateway',
   endpointId: 'endpointTools.endpointId',
   notificationsEnabled: 'prefs.notificationsEnabled',
   noteTags: 'prefs.noteTags',

@@ -41,6 +41,14 @@ beforeEach(() => {
 });
 
 describe('session history head cache', () => {
+  it('retains an old snapshot for immediate offline rendering after a later cold start', () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    try {
+      writeCachedSessionHistoryHead('gateway-a', 'saved', page('saved', 'offline history'));
+      clock.mockReturnValue(1000 + 2 * 24 * 60 * 60 * 1000);
+      expect(readCachedSessionHistoryHead('gateway-a', 'saved')?.session.messages[0]?.content).toBe('offline history');
+    } finally { clock.mockRestore(); }
+  });
   it('keeps the same session key isolated between gateways', () => {
     const sessionKey = 'agent:main:webchat:default:direct:shared';
     writeCachedSessionHistoryHead('gateway-a', sessionKey, page(sessionKey, 'from a'));
