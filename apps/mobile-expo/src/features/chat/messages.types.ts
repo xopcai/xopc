@@ -10,7 +10,7 @@ export type TextContent = {
   text: string;
   /** One model message segment within an assistant turn. */
   segmentId?: string;
-  /** Pending text is rendered like narration until the segment completes. */
+  /** Classification for answer semantics and TTS, never for truncating visible text. */
   presentation?: 'pending' | 'narration' | 'answer';
 };
 
@@ -36,6 +36,8 @@ export type ToolUseContent = {
 export type ThinkingContent = {
   type: 'thinking';
   text: string;
+  /** Model message identity from the realtime stream, when available. */
+  segmentId?: string;
   streaming?: boolean;
 };
 

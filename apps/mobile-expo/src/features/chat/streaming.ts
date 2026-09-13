@@ -39,22 +39,6 @@ export function cloneMessageForRender(msg: Message): Message {
   };
 }
 
-/**
- * Resume/reconnect can replay part of a stream; append only the non-overlapping suffix.
- */
-function appendWithOverlap(base: string, incoming: string): string {
-  if (!incoming) return base;
-  if (!base) return incoming;
-  if (base.endsWith(incoming)) return base;
-  const max = Math.min(base.length, incoming.length, 512);
-  for (let overlap = max; overlap > 0; overlap--) {
-    if (base.slice(-overlap) === incoming.slice(0, overlap)) {
-      return base + incoming.slice(overlap);
-    }
-  }
-  return base + incoming;
-}
-
 function closeStreamingThinkingIfAny(content: MessageContent[]): void {
   const last = content[content.length - 1];
   if (last?.type === 'thinking' && last.streaming) {
@@ -63,32 +47,35 @@ function closeStreamingThinkingIfAny(content: MessageContent[]): void {
 }
 
 /** Start a new reasoning segment. */
-export function startThinkingSegment(content: MessageContent[]): void {
+export function startThinkingSegment(content: MessageContent[], segmentId?: string): void {
   const last = content[content.length - 1];
-  if (last?.type === 'thinking' && last.streaming) return;
-  content.push({ type: 'thinking', text: '', streaming: true });
+  if (last?.type === 'thinking' && last.streaming && last.segmentId === segmentId) return;
+  closeStreamingThinkingIfAny(content);
+  content.push({ type: 'thinking', text: '', streaming: true, ...(segmentId ? { segmentId } : {}) });
 }
 
 /** Append or replace text in the current thinking block, creating one if needed. */
-export function appendThinkingDelta(content: MessageContent[], text: string, isDelta: boolean): void {
+export function appendThinkingDelta(content: MessageContent[], text: string, isDelta: boolean, segmentId?: string): void {
   const last = content[content.length - 1];
-  if (last?.type === 'thinking') {
+  if (last?.type === 'thinking' && last.streaming && last.segmentId === segmentId) {
     if (isDelta) {
-      last.text = appendWithOverlap(last.text || '', text);
+      // Realtime sequence numbers dedupe replays; repeated text is valid model output.
+      last.text += text;
     } else {
       last.text = text;
     }
     last.streaming = true;
     return;
   }
-  content.push({ type: 'thinking', text, streaming: true });
+  closeStreamingThinkingIfAny(content);
+  content.push({ type: 'thinking', text, streaming: true, ...(segmentId ? { segmentId } : {}) });
 }
 
-/** Mark the last open thinking segment as no longer streaming. */
-export function finalizeStreamingThinking(content: MessageContent[]): void {
-  closeStreamingThinkingIfAny(content);
+/** Close the matching model message, or all thinking when the run finishes. */
+export function finalizeStreamingThinking(content: MessageContent[], segmentId?: string): void {
   for (const b of content) {
-    if (b.type === 'thinking' && typeof b.text === 'string') {
+    if (b.type === 'thinking' && (segmentId === undefined || b.segmentId === segmentId)) {
+      b.streaming = false;
       b.text = b.text.trim();
     }
   }
@@ -129,7 +116,7 @@ export function appendTextDelta(content: MessageContent[], delta: string, segmen
   closeStreamingThinkingIfAny(content);
   const last = content[content.length - 1];
   if (last?.type === 'text' && last.segmentId === segmentId) {
-    last.text = appendWithOverlap(last.text || '', delta);
+    last.text += delta;
     return;
   }
   content.push({
