@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -51,7 +51,6 @@ describe('tunnel stop --release', () => {
     expect(result.released).toBe(true);
     expect(deregister).toHaveBeenCalledWith('t_rel', 'tok_rel');
 
-    const raw = readFileSync(resolveTunnelStatePath(), 'utf8');
-    expect(raw.trim()).toBe('{}');
+    expect(existsSync(resolveTunnelStatePath())).toBe(false);
   });
 });

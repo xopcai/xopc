@@ -44,7 +44,7 @@ function extensionSettingsReducer(
 }
 
 export function ExtensionAutoSettings({ extensionId }: { extensionId: string }) {
-  const hasToken = useGatewayStore((s) => Boolean(s.token));
+  const hasToken = useGatewayStore((s) => Boolean(s.sessionKey));
   const { data: detail, error: detailError } = useSWR(
     hasToken && extensionId ? `ext-detail-${extensionId}` : null,
     () => fetchJson<ExtensionDetailResponse>(apiUrl(`/api/extensions/${encodeURIComponent(extensionId)}`)),

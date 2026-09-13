@@ -1,7 +1,8 @@
+import { GatewayImage as Image } from '../../components/GatewayImage';
 import { useQuery } from '@tanstack/react-query';
 import type { FileResource } from '@xopcai/gateway-contract';
 import { useMemo, useState } from 'react';
-import { Image, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
 import { t, useMessages } from '../../i18n/messages';
@@ -63,10 +64,8 @@ function imageSource(
   resource: FileResource | null,
   sessionKey: string | null | undefined,
   apiUrl: (path: string) => string,
-  token: string,
-): { uri: string; headers?: Record<string, string> } | null {
+): { uri: string } | null {
   const payload = attachmentPayload(att)?.trim();
-  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
   const fileId = artifactFileId(att.uri);
   if (payload) {
     if (payload.startsWith('data:')) return { uri: payload };
@@ -74,16 +73,16 @@ function imageSource(
     return { uri: `data:${mime};base64,${payload.replace(/\s/g, '')}` };
   }
   if (isMediaUri(att.uri)) {
-    return { uri: apiUrl(buildGatewayMediaReadPath(att.uri, sessionKey)), headers };
+    return { uri: apiUrl(buildGatewayMediaReadPath(att.uri, sessionKey)) };
   }
   if (fileId) {
-    return { uri: apiUrl(fileContentPath(fileId)), headers };
+    return { uri: apiUrl(fileContentPath(fileId)) };
   }
   if (/^https?:\/\//i.test(att.uri ?? '')) {
     return { uri: att.uri! };
   }
   if (resource) {
-    return { uri: apiUrl(fileContentPath(resource.id)), headers };
+    return { uri: apiUrl(fileContentPath(resource.id)) };
   }
   return null;
 }
@@ -124,7 +123,6 @@ export function AttachmentRenderer({
   const { colors } = useTheme();
   const m = useMessages();
   const apiUrl = useGatewayStore((s) => s.apiUrl);
-  const token = useGatewayStore((s) => s.accessToken);
   const [active, setActive] = useState<PreviewableFile | null>(null);
   const items = useMemo(() => attachments?.filter(Boolean) ?? [], [attachments]);
   const workspacePaths = useMemo(
@@ -172,7 +170,7 @@ export function AttachmentRenderer({
           const itemIndex = items.indexOf(att);
           const resource = resourceByItem[itemIndex] ?? null;
           const preview = attachmentToPreviewable(att, index, resource, sessionKey);
-          const source = isImageAttachment(att) ? imageSource(att, resource, sessionKey, apiUrl, token ?? '') : null;
+          const source = isImageAttachment(att) ? imageSource(att, resource, sessionKey, apiUrl) : null;
           if (source) {
             return (
               <Pressable

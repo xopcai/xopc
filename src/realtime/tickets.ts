@@ -57,6 +57,10 @@ export class RealtimeTicketStore {
     return claim;
   }
 
+  revokePrincipal(principalId: string): void {
+    for (const [key, claim] of this.claims) if (claim.principalId === principalId) this.claims.delete(key);
+  }
+
   private prune(now: number): void {
     for (const [key, claim] of this.claims) {
       if (claim.expiresAt < now) this.claims.delete(key);

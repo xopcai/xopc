@@ -6,6 +6,11 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps browser sessions without swallowing browser control routes', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/browser-session')?.id).toBe('browser-session');
+    expect(findAuthenticatedLazyRouteBundle('/api/browser-sessions')).toBeUndefined();
+    expect(findAuthenticatedLazyRouteBundle('/api/browser/tab-bindings')?.id).not.toBe('browser-session');
+  });
   it('maps proactive controls and card families without swallowing neighboring inbox routes', () => {
     for (const path of ['/api/proactive/metrics', '/api/proactive/presence', '/api/proactive/digests/id', '/api/proactive/subscriptions/id/preview', '/api/proactive/follow-ups', '/api/proactive/follow-ups/sources', '/api/proactive/follow-ups/id', '/api/proactive/overview', '/api/proactive/delegations', '/api/proactive/subscriptions/id/check', '/api/proactive/web-push/probes', '/api/proactive/web-push/probes/id/opened', '/api/proactive/web-push/subscriptions/id/test', '/api/proactive/templates', '/api/proactive/preferences', '/api/proactive/subscriptions', '/api/proactive/subscriptions/sub/runs', '/api/proactive/cards', '/api/inbox/judgments', '/api/inbox/judgments/changes', '/api/inbox/judgments/card/actions', '/api/internal/proactive/health']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('proactive');

@@ -15,7 +15,7 @@ import { useVoiceInputShortcutStore } from '@/stores/voice-input-shortcut-store'
 
 export function GlobalVoiceInputShortcutHost() {
   const navigate = useNavigate();
-  const token = useGatewayStore((s) => s.token);
+  const token = useGatewayStore((s) => s.sessionKey);
   const shortcut = useVoiceInputShortcutStore((s) => s.shortcut);
   const recordingShortcutRef = useRef(false);
   const systemHotkeyActiveRef = useRef(false);

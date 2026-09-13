@@ -46,6 +46,7 @@ export interface ResolvedStreamingTts {
 }
 
 export interface VoiceRealtimeRuntimeOptions {
+  isPrincipalActive?: (principalId: string) => boolean;
   recordOmniTranscript?: (sessionKey: string, callId: string, entry: OmniTranscript, expectedSessionId: string) => Promise<void>;
   getConversationContext?: (sessionKey: string, expectedSessionId: string) => Promise<VoiceConversationContext>;
   getSessionIdentity?: (sessionKey: string) => Promise<string | undefined>;

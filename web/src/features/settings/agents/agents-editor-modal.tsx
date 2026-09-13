@@ -3,18 +3,22 @@ import { X } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
+import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import type { GatewayAgentRow } from '@/features/settings/types/agent-gateway';
+import type { AgentsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
 import { SettingsShellLayerProvider } from '@/lib/settings-shell-layer-context';
 
 export function AgentsEditorModal({
   agent,
+  messages,
   open,
   onOpenChange,
   children,
 }: {
   agent: GatewayAgentRow;
+  messages: AgentsSettingsMessages;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   children: ReactNode;
@@ -40,13 +44,13 @@ export function AgentsEditorModal({
               <div className="flex min-w-0 items-center gap-3">
                 <AgentAvatarDisplay agentId={agent.id} avatar={agent.avatar} size={42} className="size-11 shrink-0" />
                 <div className="min-w-0">
-                  <Dialog.Title className="truncate text-base font-semibold text-fg">{agent.name}</Dialog.Title>
+                  <Dialog.Title className="truncate text-base font-semibold text-fg">{agentListDisplayName(agent, messages)}</Dialog.Title>
                   <Dialog.Description className="mt-0.5 truncate font-mono text-xs text-fg-muted">{agent.id}</Dialog.Description>
                 </div>
-                {agent.isDefault ? <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">DEFAULT</span> : null}
+                {agent.isDefault ? <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent">{messages.listDefaultBadge}</span> : null}
               </div>
               <Dialog.Close asChild>
-                <button type="button" className="rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label="Close">
+                <button type="button" className="rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={messages.closeDialogAria}>
                   <X className="size-4" />
                 </button>
               </Dialog.Close>

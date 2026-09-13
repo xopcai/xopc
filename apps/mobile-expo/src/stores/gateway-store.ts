@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import { deleteDeviceRefreshToken } from '../storage/device-credentials';
+import { deleteDeviceRefreshToken, retainGatewayIdentityPin } from '../storage/device-credentials';
 import { KEYS, storage } from '../storage/mmkv';
 import { activeGatewayRoute, parseGatewayProfile, type GatewayProfile } from './gateway-types';
 
@@ -60,7 +60,8 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
   unauthorized: false,
 
   hydrateFromStorage: () => {
-    const profiles = readProfiles();
+    const profiles = readProfiles().map((profile) => ({ ...profile,
+      gatewayPublicKey: retainGatewayIdentityPin(profile.gatewayId, profile.gatewayPublicKey) }));
     const storedId = storage.getString(KEYS.activeId) ?? null;
     const activeGatewayId = profiles.some((profile) => profile.gatewayId === storedId)
       ? storedId
@@ -83,6 +84,7 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
   },
 
   savePairedProfile: (profile, accessToken, accessTokenExpiresAt) => {
+    if (retainGatewayIdentityPin(profile.gatewayId, profile.gatewayPublicKey) !== profile.gatewayPublicKey) throw new Error('GATEWAY_IDENTITY_MISMATCH');
     const profiles = [profile, ...get().profiles.filter((item) => item.gatewayId !== profile.gatewayId)];
     set({ profiles, activeGatewayId: profile.gatewayId, accessToken, accessTokenExpiresAt, unauthorized: false, connectionGeneration: get().connectionGeneration + 1 });
     persistProfiles(profiles, profile.gatewayId);

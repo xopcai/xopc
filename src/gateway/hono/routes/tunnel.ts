@@ -1,7 +1,8 @@
 import type { Hono, MiddlewareHandler } from 'hono';
 
 import type { Config } from '../../../config/schema.js';
-import { extractToken } from '../../auth.js';
+import { requireTunnelGatewayToken } from '../../../tunnel/auth-policy.js';
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import {
   assertTunnelMayStart,
   getTunnelConsentState,
@@ -59,21 +60,9 @@ function enrichTunnelStatus(config: Config, status: ReturnType<ReturnType<typeof
   };
 }
 
-function requireGatewayToken(c: { req: { header: (name: string) => string | undefined } }): string | null {
-  return (
-    extractToken({
-      authorization: c.req.header('authorization') ?? undefined,
-    }) ?? null
-  );
-}
-
 function createTunnelMutationRateLimitMiddleware(): MiddlewareHandler {
   return async (c, next) => {
-    const token = requireGatewayToken(c);
-    if (!token) {
-      return c.json({ error: 'Gateway token required' }, 401);
-    }
-    const result = consumeTunnelMutationLimit(token);
+    const result = consumeTunnelMutationLimit(getGatewayPrincipal(c).principalId);
     if (!result.allowed) {
       c.header('Retry-After', String(Math.ceil(result.retryAfterMs / 1000)));
       return c.json(
@@ -101,8 +90,6 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
    * the UI can render targeted hints (TLS / DNS / wrong service / blocked path).
    */
   authenticated.post('/api/tunnel/probe-public', tunnelMutationLimit, async (c) => {
-    const token = requireGatewayToken(c);
-    if (!token) return c.json({ error: 'Gateway token required' }, 401);
 
     let body: { url?: unknown };
     try {
@@ -172,8 +159,6 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
   });
 
   authenticated.post('/api/tunnel/consent', tunnelMutationLimit, async (c) => {
-    const token = requireGatewayToken(c);
-    if (!token) return c.json({ error: 'Gateway token required' }, 401);
 
     const config = deps.service.currentConfig as Config;
     applyTunnelConsentToConfig(config);
@@ -186,7 +171,7 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
       'tunnel.consent',
       {
         consentVersion: consent.currentVersion,
-        gatewayTokenHash: hashGatewayToken(token).slice(0, 12),
+        principalId: getGatewayPrincipal(c).principalId,
       },
       'Remote access security consent recorded',
     );
@@ -226,10 +211,14 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
   });
 
   authenticated.post('/api/tunnel/start', tunnelMutationLimit, async (c) => {
+    let token: string;
+    try {
+      token = requireTunnelGatewayToken(deps.service.getResolvedAuth());
+    } catch (error) {
+      return c.json({ error: (error as Error).message, code: 'TUNNEL_AUTH_REQUIRED' }, 403);
+    }
     await configureTunnelFromService(deps, { force: true });
     const config = deps.service.currentConfig as Config;
-    const token = requireGatewayToken(c);
-    if (!token) return c.json({ error: 'Gateway token required' }, 401);
 
     try {
       assertTunnelMayStart(config);

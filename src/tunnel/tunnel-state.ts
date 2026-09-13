@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { resolveStateDir } from '../config/paths.js';
@@ -25,8 +25,12 @@ export function loadTunnelState(): PersistedTunnelState | null {
 
 export function saveTunnelState(state: PersistedTunnelState): void {
   const path = resolveTunnelStatePath();
-  mkdirSync(resolveStateDir(), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+  mkdirSync(resolveStateDir(), { recursive: true, mode: 0o700 });
+  chmodSync(resolveStateDir(), 0o700);
+  const temporary = `${path}.${process.pid}.tmp`;
+  writeFileSync(temporary, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
+  chmodSync(temporary, 0o600);
+  renameSync(temporary, path);
 }
 
 export function updateTunnelState(patch: Partial<PersistedTunnelState>): PersistedTunnelState | null {
@@ -39,7 +43,5 @@ export function updateTunnelState(patch: Partial<PersistedTunnelState>): Persist
 
 export function clearTunnelState(): void {
   const path = resolveTunnelStatePath();
-  if (existsSync(path)) {
-    writeFileSync(path, '{}\n', 'utf8');
-  }
+  rmSync(path, { force: true });
 }

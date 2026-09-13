@@ -1,69 +1,56 @@
 import { create } from 'zustand';
-
-import { clearToken, getToken, setToken as persistToken } from '@/lib/storage';
+import { readUnmigratedGatewayCredential, removeUnmigratedGatewayCredential } from '@/lib/storage';
 
 export type GatewayState = {
   baseUrl: string;
-  token: string | undefined;
+  /** Public cache namespace; never an authentication credential. */
+  sessionKey: string | undefined;
   tokenDialogOpen: boolean;
   tokenExpired: boolean;
-  setGatewayToken: (token: string) => void;
-  clearGatewayToken: () => void;
+  setBrowserSession: (sessionKey: string) => void;
+  clearBrowserSession: () => void;
   openTokenDialog: () => void;
   closeTokenDialog: () => void;
   onUnauthorized: () => void;
 };
-
-export const useGatewayStore = create<GatewayState>((set, get) => ({
+export const useGatewayStore = create<GatewayState>((set) => ({
   baseUrl: typeof window !== 'undefined' ? window.location.origin : '',
-  token: undefined,
-  tokenDialogOpen: false,
-  tokenExpired: false,
-
-  setGatewayToken: (token) => {
-    persistToken(token);
-    set({ token, tokenDialogOpen: false, tokenExpired: false });
-    window.dispatchEvent(new CustomEvent('token-saved', { detail: { token } }));
+  sessionKey: undefined, tokenDialogOpen: false, tokenExpired: false,
+  setBrowserSession: (sessionKey) => {
+    removeUnmigratedGatewayCredential();
+    set({ sessionKey, tokenDialogOpen: false, tokenExpired: false });
+    window.dispatchEvent(new CustomEvent('gateway-authenticated'));
   },
-
-  clearGatewayToken: () => {
-    clearToken();
-    set({ token: undefined });
+  clearBrowserSession: () => {
+    void fetch('/api/browser-session', { method: 'DELETE', credentials: 'same-origin', redirect: 'error', signal: AbortSignal.timeout(8_000) }).catch(() => {});
+    set({ sessionKey: undefined });
   },
-
   openTokenDialog: () => set({ tokenDialogOpen: true }),
-
   closeTokenDialog: () => set({ tokenDialogOpen: false }),
-
   onUnauthorized: () => {
-    get().clearGatewayToken();
-    set({ tokenDialogOpen: false, tokenExpired: true });
-    window.dispatchEvent(new CustomEvent('token-expired'));
+    set({ sessionKey: undefined, tokenDialogOpen: false, tokenExpired: true });
+    window.dispatchEvent(new CustomEvent('gateway-auth-expired'));
   },
 }));
 
-export async function initGatewayFromWindow(): Promise<void> {
-  const getElectronCredential = window.electronAPI?.gateway?.getCredential;
-  if (typeof getElectronCredential === 'function') {
-    try {
-      const credential = await getElectronCredential();
-      if (credential) {
-        useGatewayStore.setState({ token: credential, tokenDialogOpen: false, tokenExpired: false });
-        return;
-      }
-    } catch {
-      // Development renderers may expose the bridge before an embedded gateway is available.
-    }
-    hydrateStoredGatewayToken();
-    return;
-  }
-  hydrateStoredGatewayToken();
+export async function establishBrowserSession(credential: string): Promise<Response> {
+  return fetch('/api/browser-session', { method: 'POST', credentials: 'same-origin', redirect: 'error', signal: AbortSignal.timeout(8_000), headers: { Authorization: `Bearer ${credential}` } });
 }
 
-function hydrateStoredGatewayToken(): void {
-  const stored = getToken();
-  useGatewayStore.setState({
-    token: stored || undefined,
-    tokenDialogOpen: false,
-  });
+export async function initGatewayFromWindow(): Promise<void> {
+  try {
+    const response = await fetch('/api/browser-session', { credentials: 'same-origin', redirect: 'error', signal: AbortSignal.timeout(8_000) });
+    if (response.ok) {
+      const body = await response.json() as { sessionKey?: string };
+      if (body.sessionKey) { useGatewayStore.getState().setBrowserSession(body.sessionKey); return; }
+    }
+    if (response.status !== 401) return;
+    const getCredential = window.electronAPI?.gateway?.getCredential;
+    const credential = typeof getCredential === 'function' ? await getCredential() : readUnmigratedGatewayCredential();
+    if (!credential) return;
+    const exchanged = await establishBrowserSession(credential);
+    if (!exchanged.ok) return;
+    const body = await exchanged.json() as { sessionKey?: string };
+    if (body.sessionKey) useGatewayStore.getState().setBrowserSession(body.sessionKey);
+  } catch { /* Keep bootstrap retryable when the local Gateway is still starting. */ }
 }

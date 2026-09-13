@@ -34,11 +34,7 @@ export async function uploadSkillZip(
   }
   form.append('target', opts.target ?? 'global');
 
-  const token = useGatewayStore.getState().token;
   const headers = new Headers();
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
 
   const res = await fetch(apiUrl('/api/skills/upload'), {
     method: 'POST',

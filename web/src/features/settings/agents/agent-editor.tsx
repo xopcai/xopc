@@ -10,6 +10,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { updateGatewayAgent } from '@/features/settings/agents-admin-api';
 import type {
   AgentModelsOverride,
@@ -19,6 +20,7 @@ import type {
   ModelRoute,
   ToolPolicy,
 } from '@/features/settings/types/agent-gateway';
+import type { AgentsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 
 type AgentPanel = 'overview' | 'profile' | 'models' | 'capabilities' | 'runtime' | 'danger';
@@ -121,6 +123,7 @@ export function AgentEditor({
   agent,
   toolIds,
   zh,
+  messages,
   externalError,
   onDirtyChange,
   onClose,
@@ -131,6 +134,7 @@ export function AgentEditor({
   agent: GatewayAgentRow;
   toolIds: string[];
   zh: boolean;
+  messages: AgentsSettingsMessages;
   externalError?: string | null;
   onDirtyChange: (dirty: boolean) => void;
   onClose: () => void;
@@ -166,6 +170,24 @@ export function AgentEditor({
   const skillSummary = agent.effective.skills.mode === 'selected'
     ? (zh ? `${agent.effective.skills.include.length} 个已选技能` : `${agent.effective.skills.include.length} selected skills`)
     : (zh ? '所有已启用技能' : 'All enabled skills');
+  const displayedDraftName = agentListDisplayName(
+    { id: agent.id, name: draft.profile?.name ?? agent.name },
+    messages,
+  );
+  const intentLabels: Record<ModelIntent, string> = {
+    fast: messages.editorIntentFast,
+    reasoning: messages.editorIntentReasoning,
+    coding: messages.editorIntentCoding,
+    review: messages.editorIntentReview,
+    vision: messages.editorIntentVision,
+    understanding: messages.editorIntentUnderstanding,
+  };
+  const toolModeLabels = {
+    inherit: messages.editorToolModeInherit,
+    allow: messages.editorToolModeAllow,
+    ask: messages.editorToolModeAsk,
+    deny: messages.editorToolModeDeny,
+  } as const;
 
   const save = async () => {
     setSaving(true);
@@ -290,7 +312,7 @@ export function AgentEditor({
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="text-xs font-medium text-fg-muted">
                   {zh ? '名称' : 'Name'}
-                  <input className={`${inputClass} mt-1.5`} value={draft.profile?.name ?? ''} onChange={(event) => setDraft({ ...draft, profile: { name: event.target.value, ...(draft.profile?.instructions ? { instructions: draft.profile.instructions } : {}) } })} />
+                  <input className={`${inputClass} mt-1.5`} value={displayedDraftName} onChange={(event) => setDraft({ ...draft, profile: { name: event.target.value, ...(draft.profile?.instructions ? { instructions: draft.profile.instructions } : {}) } })} />
                 </label>
                 <label className="text-xs font-medium text-fg-muted">
                   <span className="flex items-center gap-2">{zh ? '工作区' : 'Workspace'}{!draft.workspace ? <InheritedBadge>{zh ? '自动' : 'Automatic'}</InheritedBadge> : null}</span>
@@ -307,7 +329,7 @@ export function AgentEditor({
           {panel === 'models' ? (
             <div className="space-y-6">
               <SectionTitle title={zh ? '模型路由' : 'Model routing'} description={zh ? '日常对话使用 Chat；固定意图只在对应任务中生效。默认继承全局。' : 'Chat handles normal turns; fixed intents apply only to matching work. Everything inherits by default.'} action={draft.models ? <Button variant="ghost" onClick={() => setDraft({ ...draft, models: undefined })}><RotateCcw className="size-4" />{zh ? '全部继承' : 'Inherit all'}</Button> : undefined} />
-              <ModelRouteEditor label="Chat" inherited={agent.effective.models.chat} value={draft.models?.chat} zh={zh} onChange={(chat) => {
+              <ModelRouteEditor label={messages.editorChatModel} inherited={agent.effective.models.chat} value={draft.models?.chat} zh={zh} onChange={(chat) => {
                 const models = { ...(draft.models ?? {}) };
                 if (chat) models.chat = chat;
                 else delete models.chat;
@@ -319,7 +341,7 @@ export function AgentEditor({
                   {INTENTS.map((intent) => (
                     <ModelRouteEditor
                       key={intent}
-                      label={intent}
+                      label={intentLabels[intent]}
                       inherited={agent.effective.models.intents[intent] ?? agent.effective.models.chat}
                       value={draft.models?.intents?.[intent]}
                       zh={zh}
@@ -383,8 +405,8 @@ export function AgentEditor({
                   {draft.skills ? <Button variant="ghost" onClick={() => setDraft({ ...draft, skills: undefined })}><RotateCcw className="size-4" />{zh ? '继承' : 'Inherit'}</Button> : null}
                 </div>
                 <div className="mt-4 flex gap-2">
-                  <Button variant={draft.skills?.mode === 'merge' ? 'primary' : 'secondary'} onClick={() => setDraft({ ...draft, skills: { mode: 'merge', add: [], remove: [] } })}>Merge</Button>
-                  <Button variant={draft.skills?.mode === 'replace' ? 'primary' : 'secondary'} onClick={() => setDraft({ ...draft, skills: { mode: 'replace', include: [] } })}>Replace</Button>
+                  <Button variant={draft.skills?.mode === 'merge' ? 'primary' : 'secondary'} onClick={() => setDraft({ ...draft, skills: { mode: 'merge', add: [], remove: [] } })}>{messages.editorSkillModeMerge}</Button>
+                  <Button variant={draft.skills?.mode === 'replace' ? 'primary' : 'secondary'} onClick={() => setDraft({ ...draft, skills: { mode: 'replace', include: [] } })}>{messages.editorSkillModeReplace}</Button>
                 </div>
                 {draft.skills?.mode === 'merge' ? <div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="text-xs font-medium text-fg-muted">{zh ? '新增技能' : 'Add skills'}<input className={`${inputClass} mt-1.5`} value={draft.skills.add.join(', ')} onChange={(event) => setDraft({ ...draft, skills: { mode: 'merge', add: splitList(event.target.value), remove: draft.skills?.mode === 'merge' ? draft.skills.remove : [] } })} /></label><label className="text-xs font-medium text-fg-muted">{zh ? '移除技能' : 'Remove skills'}<input className={`${inputClass} mt-1.5`} value={draft.skills.remove.join(', ')} onChange={(event) => setDraft({ ...draft, skills: { mode: 'merge', add: draft.skills?.mode === 'merge' ? draft.skills.add : [], remove: splitList(event.target.value) } })} /></label></div> : null}
                 {draft.skills?.mode === 'replace' ? <label className="mt-4 block text-xs font-medium text-fg-muted">{zh ? '仅启用这些技能' : 'Enable only these skills'}<input className={`${inputClass} mt-1.5`} value={draft.skills.include.join(', ')} onChange={(event) => setDraft({ ...draft, skills: { mode: 'replace', include: splitList(event.target.value) } })} /></label> : null}
@@ -396,7 +418,7 @@ export function AgentEditor({
                   {allTools.map((id) => {
                     const local = draft.tools?.[id]?.mode;
                     const effective = agent.effective.tools[id]?.mode ?? 'allow';
-                    return <div key={id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"><div><code className="text-xs text-fg">{id}</code><p className="mt-1 text-[11px] text-fg-muted">{local ? (zh ? '单独设置' : 'Agent override') : `${zh ? '继承' : 'Inherits'} ${effective}`}</p></div><div className="flex rounded-xl bg-surface-hover p-1">{(['inherit', 'allow', 'ask', 'deny'] as const).map((mode) => <button key={mode} type="button" onClick={() => setTool(id, mode)} className={cn('rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors', (mode === 'inherit' ? !local : local === mode) ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted hover:text-fg')}>{mode}</button>)}</div></div>;
+                    return <div key={id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"><div><code className="text-xs text-fg">{id}</code><p className="mt-1 text-[11px] text-fg-muted">{local ? (zh ? '单独设置' : 'Agent override') : `${zh ? '继承' : 'Inherits'} ${toolModeLabels[effective]}`}</p></div><div className="flex rounded-xl bg-surface-hover p-1">{(['inherit', 'allow', 'ask', 'deny'] as const).map((mode) => <button key={mode} type="button" onClick={() => setTool(id, mode)} className={cn('rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors', (mode === 'inherit' ? !local : local === mode) ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted hover:text-fg')}>{toolModeLabels[mode]}</button>)}</div></div>;
                   })}
                 </div>
               </section>
@@ -422,7 +444,7 @@ export function AgentEditor({
               </section>
               <section className="rounded-2xl border border-edge bg-surface-base p-4">
                 <div className="flex items-center justify-between gap-3"><div><h4 className="text-sm font-semibold text-fg">{zh ? '提示词缓存' : 'Prompt cache'}</h4><p className="mt-1 text-xs text-fg-muted">{draft.runtime?.promptCache ? (zh ? '使用单独设置' : 'Using agent override') : (zh ? '继承全局' : 'Inherited globally')}</p></div>{draft.runtime?.promptCache ? <Button variant="ghost" onClick={() => { const runtime = cleanObject({ ...(draft.runtime ?? {}), promptCache: undefined }); setDraft({ ...draft, runtime }); }}><RotateCcw className="size-4" />{zh ? '继承' : 'Inherit'}</Button> : null}</div>
-                {draft.runtime?.promptCache ? <div className="mt-4 grid gap-4 sm:grid-cols-2"><div className="text-xs font-medium text-fg-muted"><span>{zh ? '模式' : 'Mode'}</span><div className="mt-1.5 flex rounded-xl bg-surface-hover p-1">{(['auto', 'off'] as const).map((mode) => <button key={mode} type="button" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { ...draft.runtime!.promptCache!, mode } } })} className={cn('flex-1 rounded-lg px-3 py-2 text-xs font-medium', draft.runtime?.promptCache?.mode === mode ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted')}>{mode}</button>)}</div></div><div className="text-xs font-medium text-fg-muted"><span>{zh ? '缓存周期' : 'Lifetime'}</span><div className="mt-1.5 flex rounded-xl bg-surface-hover p-1">{(['short', 'long'] as const).map((lifetime) => <button key={lifetime} type="button" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { ...draft.runtime!.promptCache!, lifetime } } })} className={cn('flex-1 rounded-lg px-3 py-2 text-xs font-medium', draft.runtime?.promptCache?.lifetime === lifetime ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted')}>{lifetime}</button>)}</div></div></div> : <Button className="mt-4" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { ...(agent.effective.runtime.promptCache ?? { mode: 'auto', lifetime: 'short' }) } } })}>{zh ? '自定义缓存策略' : 'Customize cache policy'}</Button>}
+                {draft.runtime?.promptCache ? <div className="mt-4 grid gap-4 sm:grid-cols-2"><div className="text-xs font-medium text-fg-muted"><span>{zh ? '模式' : 'Mode'}</span><div className="mt-1.5 flex rounded-xl bg-surface-hover p-1">{(['auto', 'off'] as const).map((mode) => <button key={mode} type="button" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { ...draft.runtime!.promptCache!, mode } } })} className={cn('flex-1 rounded-lg px-3 py-2 text-xs font-medium', draft.runtime?.promptCache?.mode === mode ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted')}>{mode === 'auto' ? messages.editorCacheModeAuto : messages.editorCacheModeOff}</button>)}</div></div><div className="text-xs font-medium text-fg-muted"><span>{zh ? '缓存周期' : 'Lifetime'}</span><div className="mt-1.5 flex rounded-xl bg-surface-hover p-1">{(['short', 'long'] as const).map((lifetime) => <button key={lifetime} type="button" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { ...draft.runtime!.promptCache!, lifetime } } })} className={cn('flex-1 rounded-lg px-3 py-2 text-xs font-medium', draft.runtime?.promptCache?.lifetime === lifetime ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted')}>{lifetime === 'short' ? messages.editorCacheLifetimeShort : messages.editorCacheLifetimeLong}</button>)}</div></div></div> : <Button className="mt-4" onClick={() => setDraft({ ...draft, runtime: { ...draft.runtime, promptCache: { ...(agent.effective.runtime.promptCache ?? { mode: 'auto', lifetime: 'short' }) } } })}>{zh ? '自定义缓存策略' : 'Customize cache policy'}</Button>}
               </section>
             </div>
           ) : null}

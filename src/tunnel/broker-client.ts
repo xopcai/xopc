@@ -1,3 +1,5 @@
+import { z } from 'zod';
+import { createTunnelRegistrationProof } from './registration-proof.js';
 import { createLogger } from '../utils/logger.js';
 import type { TunnelRegistration } from './tunnel-types.js';
 
@@ -8,9 +10,21 @@ export type BrokerRegisterInput = {
   registrationSecret: string;
   gatewayVersion: string;
   platform: string;
-  gatewayTokenHash: string;
+  recoveryToken?: string;
   preferredSubdomain?: string;
 };
+
+export class TunnelBrokerError extends Error {
+  constructor(readonly status: number, message: string) { super(message); }
+}
+
+const registrationResponseSchema = z.object({
+  tunnelId: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/), tunnelToken: z.string().min(1).max(256),
+  subdomain: z.string().regex(/^[a-z0-9]{4,16}$/), publicUrl: z.url(),
+  frpc: z.object({ serverAddr: z.string().min(1).max(253), serverPort: z.number().int().min(1).max(65535),
+    authToken: z.string().min(1).max(256), proxyName: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/), subdomain: z.string().regex(/^[a-z0-9]{4,16}$/) }),
+  expiresAt: z.iso.datetime(), heartbeatIntervalMs: z.number().int().min(5_000).max(60_000),
+});
 
 export class TunnelBrokerClient {
   constructor(private readonly baseUrl: string) {}
@@ -24,33 +38,33 @@ export class TunnelBrokerClient {
   async register(input: BrokerRegisterInput): Promise<TunnelRegistration> {
     const url = this.apiUrl('/tunnels/register');
     const res = await fetch(url, {
+      redirect: 'error',
+      signal: AbortSignal.timeout(15_000),
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Registration-Secret': input.registrationSecret,
       },
-      body: JSON.stringify({
-        gatewayVersion: input.gatewayVersion,
-        platform: input.platform,
-        gatewayTokenHash: input.gatewayTokenHash,
-        preferredSubdomain: input.preferredSubdomain,
-      }),
+      body: JSON.stringify(createTunnelRegistrationProof(input)),
     });
     if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      log.error({ status: res.status, url, bodyPreview: body.slice(0, 200) }, 'Tunnel register failed');
-      throw new Error(`Tunnel register failed: ${res.status} ${res.statusText}`);
+      log.error({ status: res.status, url }, 'Tunnel register failed');
+      throw new TunnelBrokerError(res.status, `Tunnel register failed: ${res.status}`);
     }
-    return (await res.json()) as TunnelRegistration;
+    const registration = registrationResponseSchema.parse(await res.json());
+    if (new URL(registration.publicUrl).protocol !== 'https:') throw new Error('Tunnel requires HTTPS');
+    return registration;
   }
 
   async heartbeat(tunnelId: string, tunnelToken: string): Promise<void> {
     const res = await fetch(this.apiUrl(`/tunnels/${encodeURIComponent(tunnelId)}/heartbeat`), {
+      redirect: 'error',
+      signal: AbortSignal.timeout(15_000),
       method: 'POST',
       headers: { 'X-Tunnel-Token': tunnelToken },
     });
-    if (res.status === 401 || res.status === 410) {
-      throw new Error(`Tunnel heartbeat rejected: ${res.status}`);
+    if (res.status === 401 || res.status === 403 || res.status === 410) {
+      throw new TunnelBrokerError(res.status, `Tunnel heartbeat rejected: ${res.status}`);
     }
     if (!res.ok) {
       throw new Error(`Tunnel heartbeat failed: ${res.status}`);
@@ -59,6 +73,8 @@ export class TunnelBrokerClient {
 
   async deregister(tunnelId: string, tunnelToken: string): Promise<void> {
     const res = await fetch(this.apiUrl(`/tunnels/${encodeURIComponent(tunnelId)}`), {
+      redirect: 'error',
+      signal: AbortSignal.timeout(15_000),
       method: 'DELETE',
       headers: { 'X-Tunnel-Token': tunnelToken },
     });
@@ -67,51 +83,7 @@ export class TunnelBrokerClient {
     }
   }
 
-  async setDnsChallenge(input: {
-    tunnelId: string;
-    tunnelToken: string;
-    subdomain: string;
-    txtValue: string;
-  }): Promise<{ recordId: string; fqdn: string }> {
-    const res = await fetch(this.apiUrl('/dns/challenge'), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tunnel-Token': input.tunnelToken,
-      },
-      body: JSON.stringify({
-        tunnelId: input.tunnelId,
-        subdomain: input.subdomain,
-        txtValue: input.txtValue,
-      }),
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new Error(`Broker DNS challenge failed: ${res.status} ${body.slice(0, 200)}`);
-    }
-    return (await res.json()) as { recordId: string; fqdn: string };
-  }
 
-  async cleanupDnsChallenge(input: {
-    tunnelId: string;
-    tunnelToken: string;
-    recordId: string;
-  }): Promise<void> {
-    const res = await fetch(this.apiUrl('/dns/cleanup'), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tunnel-Token': input.tunnelToken,
-      },
-      body: JSON.stringify({
-        tunnelId: input.tunnelId,
-        recordId: input.recordId,
-      }),
-    });
-    if (!res.ok && res.status !== 404) {
-      log.warn({ recordId: input.recordId, status: res.status }, 'Broker DNS cleanup returned non-OK');
-    }
-  }
 }
 
 export function resolveBrokerApiBase(brokerUrl: string): string {
