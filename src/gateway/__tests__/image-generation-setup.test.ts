@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ConfigSchema } from '../../config/schema.js';
 import {
-  getImageGenerationCatalog,
   getAgentImageGenerationConfig,
+  getDefaultImageGenerationConfig,
+  getImageGenerationCatalog,
+  prepareDefaultImageGenerationSetup,
   prepareImageGenerationSetup,
   verifyImageGenerationCredential,
 } from '../image-generation-setup.js';
@@ -39,6 +41,32 @@ function createConfig() {
 }
 
 describe('image generation setup', () => {
+  it('configures the global default without changing agent overrides', () => {
+    const config = createConfig();
+    config.agents.list[1]!.models!.imageGeneration = {
+      primary: 'openai/gpt-image-1',
+      fallbacks: [],
+      autoProviderFallback: false,
+    };
+
+    const result = prepareDefaultImageGenerationSetup(config, {
+      providerId: 'google',
+      modelId: 'gemini-3.1-flash-image',
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(getDefaultImageGenerationConfig(result.config).model?.primary).toBe(
+      'google/gemini-3.1-flash-image',
+    );
+    expect(getAgentImageGenerationConfig(result.config, 'main').model?.primary).toBe(
+      'google/gemini-3.1-flash-image',
+    );
+    expect(getAgentImageGenerationConfig(result.config, 'studio').model?.primary).toBe(
+      'openai/gpt-image-1',
+    );
+  });
+
   it('configures only the requested agent and stores no credential', () => {
     const config = createConfig();
     const result = prepareImageGenerationSetup(config, 'studio', {
