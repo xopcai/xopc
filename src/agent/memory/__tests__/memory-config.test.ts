@@ -18,6 +18,11 @@ describe('memory-config', () => {
     }))).toBe(false);
   });
 
+  it('preserves an explicit generation limit instead of silently raising it', () => {
+    expect(resolveCompactionPolicy(config({ userContext: { contextPlanning: { compaction: { summaryMaxTokens: 2_000 } } } })))
+      .toMatchObject({ summaryMaxTokens: 2_000 });
+  });
+
   it('uses the strict context-planning compaction policy', () => {
     const parsed = config({
       userContext: {
@@ -30,6 +35,7 @@ describe('memory-config', () => {
       triggerThreshold: 0.7,
       reserveTokens: 12_000,
       keepRecentTokens: 20_000,
+      summaryMaxTokens: 8_000,
     });
     expect(ConfigSchema.safeParse({ userContext: { contextPlanning: { compaction: true } } }).success)
       .toBe(false);

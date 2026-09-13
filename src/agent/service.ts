@@ -599,6 +599,7 @@ export class AgentService {
    */
   applyAgentDefaultsFromConfig(config: Config): void {
     this.config.config = config;
+    this.sessionStore.updateConfig(config);
     const ref = getAgentDefaultModelRef(config);
     this.config.model = ref;
     this.modelManager.updateFromConfig(config);

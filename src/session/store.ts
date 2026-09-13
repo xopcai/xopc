@@ -149,7 +149,13 @@ export class SessionStore {
     compactionConfig?: Partial<CompactionConfig>,
   ) {
     this.window = new SlidingWindow(windowConfig);
-    this.compactor = new SessionCompactor(compactionConfig);
+    this.compactor = new SessionCompactor({ ...resolveCompactionPolicy(options.config), ...compactionConfig });
+  }
+
+  /** Refresh policy for subsequent compactions without changing an in-flight request. */
+  updateConfig(config: Config): void {
+    this.options = { ...this.options, config };
+    this.compactor = new SessionCompactor(resolveCompactionPolicy(config));
   }
 
   setCompactionHooks(hooks: SessionCompactionHooks): void {
@@ -832,7 +838,8 @@ export class SessionStore {
         messageCount: messages.length,
         tokenCount,
       });
-      const result = await this.compactor.compact(snapshot.entries, model, instructions, force, executionOptions);
+      const result = await this.compactor.compact(snapshot.entries, model, instructions, force, { ...executionOptions, sessionKey: key });
+      executionOptions?.signal?.throwIfAborted();
       if (result.compacted) {
         const compacted = await this.applyCompaction(key, result, snapshot);
         await this.runCompactionHook('after', {

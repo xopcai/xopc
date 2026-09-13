@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
+import * as modelCalls from '../../providers/model-call.js';
 import { ConfigSchema } from '../../config/schema.js';
 import {
   closeXopcDatabase,
@@ -502,6 +503,55 @@ describe('SessionStore', () => {
         tokenCount: 1_200,
         compactedCount: 8,
       });
+    });
+
+    it('loads the configured cap and refreshes it for subsequent compactions', async () => {
+      const config = ConfigSchema.parse({ userContext: { contextPlanning: { compaction: { summaryMaxTokens: 2_000 } } } });
+      const configuredStore = new SessionStore({ config });
+      const key = 'agent:main:webchat:default:direct:configured-compaction';
+      const messages = Array.from({ length: 12 }, (_, index) => ({ role: 'user' as const, content: `item-${index}` }));
+      await configuredStore.saveMessages(key, messages);
+      const completion = vi.spyOn(modelCalls, 'completeWithResolvedCredentials').mockResolvedValue({
+        content: [], stopReason: 'length',
+      } as never);
+      const model = { provider: 'test', id: 'summary', reasoning: true, contextWindow: 128_000, maxTokens: 8_000 } as never;
+      try {
+        await expect(configuredStore.compact(key, messages, model, undefined, true)).rejects.toThrow('truncated');
+        expect(completion.mock.calls.map((call) => call[2]?.maxTokens)).toEqual([2_000]);
+        completion.mockClear();
+        configuredStore.updateConfig(ConfigSchema.parse({ userContext: { contextPlanning: { compaction: { summaryMaxTokens: 8_000 } } } }));
+        await expect(configuredStore.compact(key, messages, model, undefined, true)).rejects.toThrow('truncated');
+        expect(completion.mock.calls.map((call) => call[2]?.maxTokens)).toEqual([4_000, 8_000]);
+        expect(await configuredStore.listCompactionBoundaries(key)).toEqual([]);
+      } finally {
+        completion.mockRestore();
+      }
+    });
+
+    it('preserves SQLite history and boundaries when every summary is truncated', async () => {
+      const key = 'agent:main:webchat:default:direct:truncated-summary';
+      const messages = Array.from({ length: 12 }, (_, index) => ({
+        role: index % 2 === 0 ? 'user' as const : 'assistant' as const,
+        content: `line-${index}`,
+      }));
+      await store.saveMessages(key, messages);
+      const before = await store.loadTranscriptRows(key);
+      const afterHook = vi.fn();
+      store.setCompactionHooks({ after: afterHook });
+      const completion = vi.spyOn(modelCalls, 'completeWithResolvedCredentials').mockResolvedValue({
+        content: [{ type: 'text', text: '{"items":[' }], stopReason: 'length', usage: { output: 8_000 },
+      } as never);
+      try {
+        await expect(store.compact(key, messages, {
+          provider: 'test', id: 'summary', reasoning: true, contextWindow: 128_000, maxTokens: 8_000,
+        } as never, undefined, true)).rejects.toThrow('truncated');
+        expect(await store.loadTranscriptRows(key)).toEqual(before);
+        expect(await store.listCompactionBoundaries(key)).toEqual([]);
+        expect(afterHook).not.toHaveBeenCalled();
+        expect(completion).toHaveBeenCalledTimes(2);
+      } finally {
+        completion.mockRestore();
+      }
     });
 
     it('preserves the authoritative transcript while loading compacted LLM context', async () => {
