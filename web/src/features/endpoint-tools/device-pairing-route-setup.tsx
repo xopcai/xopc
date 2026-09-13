@@ -10,10 +10,10 @@ import { cleanupOAuthSession, fetchOAuthSessionStatus, startAsyncOAuthLogin } fr
 import { closeOAuthAuthorizationWindow, openOAuthAuthorizationUrl, reserveOAuthAuthorizationWindow } from '@/features/settings/oauth-authorization-window';
 
 /** Compact presentation of the existing tunnel services for the pairing wizard. */
-export function MobilePairingRouteSetup() {
+export function DevicePairingRouteSetup() {
   const language = useLocaleStore(s => s.language);
   const m = messages(language);
-  const f = m.endpointToolsSettings.mobileAccess.flow;
+  const f = m.endpointToolsSettings.deviceAccess.flow;
   const t = m.tunnelSettings;
   const { data, error: statusError, mutate } = useSWR('tunnel-status', fetchTunnelStatus, { refreshInterval: 1500 });
   const [consent, setConsent] = useState(false);
@@ -35,10 +35,10 @@ export function MobilePairingRouteSetup() {
       if (data.consentRequired) await recordTunnelConsent();
       if (!data.registrationSecret?.configured) {
         setPhase('authorizing');
-        const saved = sessionStorage.getItem('mobile-pairing-oauth');
+        const saved = sessionStorage.getItem('device-pairing-oauth');
         const pending = saved ? JSON.parse(saved) as { sessionId: string; expiresAt: number } : null;
         sessionId = pending && pending.expiresAt > Date.now() ? pending.sessionId : (await startAsyncOAuthLogin('xopc-tunnel')).sessionId;
-        sessionStorage.setItem('mobile-pairing-oauth', JSON.stringify({ sessionId, expiresAt: pending && pending.expiresAt > Date.now() ? pending.expiresAt : Date.now() + 5 * 60_000 }));
+        sessionStorage.setItem('device-pairing-oauth', JSON.stringify({ sessionId, expiresAt: pending && pending.expiresAt > Date.now() ? pending.expiresAt : Date.now() + 5 * 60_000 }));
         let opened = '';
         const until = Date.now() + 5 * 60_000;
         let authorized = false;
@@ -66,7 +66,7 @@ export function MobilePairingRouteSetup() {
     finally {
       closeOAuthAuthorizationWindow(popup);
       if (terminal) {
-        sessionStorage.removeItem('mobile-pairing-oauth');
+        sessionStorage.removeItem('device-pairing-oauth');
         if (sessionId) void cleanupOAuthSession(sessionId).catch(() => {});
       }
       if (alive.current) { setPhase('idle'); setAuthorizationUrl(''); }

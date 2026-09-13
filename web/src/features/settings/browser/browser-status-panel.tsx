@@ -9,6 +9,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,7 @@ export function BrowserStatusPanel(props: {
   zh: boolean;
 }) {
   const { enabled, driverKind, autosaveStatus, zh } = props;
+  const navigate = useNavigate();
   const status = useSWR(
     enabled ? ['browser-control-status', driverKind] : null,
     fetchBrowserStatus,
@@ -128,6 +130,7 @@ export function BrowserStatusPanel(props: {
           zh={zh}
           busy={busy}
           run={run}
+          onConnectRemote={() => navigate('/settings/devices?startDevicePairing=browser')}
         />
       ) : null}
       {enabled && driverKind === 'playwright' && isCurrent ? (
@@ -156,8 +159,9 @@ function ExtensionSetup(props: {
   zh: boolean;
   busy: string | null;
   run: (name: string, action: () => Promise<unknown>, done: string) => Promise<void>;
+  onConnectRemote: () => void;
 }) {
-  const { status, zh, busy, run } = props;
+  const { status, zh, busy, run, onConnectRemote } = props;
   const artifacts = status?.artifacts;
   return (
     <div className="mt-4 border-t border-edge-subtle pt-4">
@@ -178,6 +182,9 @@ function ExtensionSetup(props: {
         </Button>
         <Button className="h-9" variant="ghost" disabled={!artifacts?.installed || busy !== null} onClick={() => void run('extension-folder', () => openBrowserExtension('folder'), zh ? '已打开扩展目录。' : 'Extension folder opened.')}>
           <FolderOpen className="size-3.5" />{zh ? '打开扩展目录' : 'Open folder'}
+        </Button>
+        <Button className="h-9" variant="secondary" disabled={busy !== null} onClick={onConnectRemote}>
+          <PlugZap className="size-3.5" />{zh ? '连接远程 Chrome' : 'Connect remote Chrome'}
         </Button>
       </div>
       {!status?.connected ? <p className="mt-3 text-xs leading-5 text-fg-muted">{status?.socketConnected ? (zh ? '扩展仍在运行旧协议。请打开 Chrome 扩展页，找到 xopc 并点击“重新加载”，然后刷新状态。' : 'The extension is still running an older protocol. Open Chrome Extensions, find xopc, click Reload, then refresh status.') : (zh ? '打开 xopc Chrome 扩展后，它会自动发现并安全连接本机 Gateway；连接远程 Gateway 时才需要配对链接和手动确认。' : 'Open the xopc Chrome extension to discover and securely connect to a local Gateway automatically. A pairing link and explicit approval are only required for a remote Gateway.')}</p> : null}

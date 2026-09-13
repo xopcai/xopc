@@ -2,7 +2,8 @@ import { decodeBase64UrlJson } from './device-crypto';
 import { normalizeSecureGatewayUrl, type GatewayRoute } from '../../stores/gateway-types';
 
 export type ParsedGatewayQr = {
-  version: 2 | 3;
+  version: 3;
+  targetKind: 'mobile';
   pairingToken: string;
   gatewayId: string;
   gatewayName: string;
@@ -19,7 +20,8 @@ export function parseGatewayQrPayload(raw: string): ParsedGatewayQr | null {
     if (!encoded) return null;
     const value = decodeBase64UrlJson<Record<string, unknown>>(encoded);
     if (
-      (value.version !== 2 && value.version !== 3) || typeof value.pairingToken !== 'string' || !value.pairingToken.startsWith('xopc_pair_') ||
+      value.version !== 3 || value.targetKind !== 'mobile' ||
+      typeof value.pairingToken !== 'string' || !value.pairingToken.startsWith('xopc_pair_') ||
       typeof value.gatewayId !== 'string' || !value.gatewayId || typeof value.gatewayName !== 'string' ||
       typeof value.gatewayPublicKey !== 'string' || !value.gatewayPublicKey ||
       !Array.isArray(value.routes) || value.routes.length === 0 ||
@@ -36,6 +38,7 @@ export function parseGatewayQrPayload(raw: string): ParsedGatewayQr | null {
     });
     return {
       version: value.version,
+      targetKind: value.targetKind,
       pairingToken: value.pairingToken,
       gatewayId: value.gatewayId,
       gatewayName: value.gatewayName,

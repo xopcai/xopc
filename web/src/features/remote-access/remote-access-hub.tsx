@@ -5,7 +5,7 @@ import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { PageTabs, type PageTabItem } from '@/components/ui/page-tabs';
-import { fetchMobilePairingReadiness } from '@/features/endpoint-tools/mobile-device-api';
+import { fetchDevicePairingReadiness } from '@/features/endpoint-tools/device-access-api';
 import { RemoteAccessDocsLink } from '@/features/remote-access/remote-access-docs-link';
 import { RemoteAccessGuideTab } from '@/features/remote-access/remote-access-guide-tab';
 import { RemoteAccessLanTab } from '@/features/remote-access/remote-access-lan-tab';
@@ -86,8 +86,8 @@ export function RemoteAccessHub() {
   const activeTab = parseRemoteAccessTab(searchParams.get('tab'));
   const pairingIntent = searchParams.get('intent') === 'mobile-pairing';
   const pairingReadiness = useSWR(
-    pairingIntent ? 'mobile-pairing-readiness' : null,
-    fetchMobilePairingReadiness,
+    pairingIntent ? 'device-pairing-readiness' : null,
+    fetchDevicePairingReadiness,
     { refreshInterval: 2_000 },
   );
 
@@ -146,7 +146,7 @@ export function RemoteAccessHub() {
               <Button
                 variant="primary"
                 disabled={!pairingReadiness.data?.ready}
-                onClick={() => navigate('/settings/devices?startMobilePairing=1')}
+                onClick={() => navigate('/settings/devices?startDevicePairing=mobile')}
               >
                 {pairingReadiness.data?.ready
                   ? ra.mobilePairingFlow.continue
