@@ -177,6 +177,7 @@ class BucketRegistry {
         maxFailures: 30,
         windowMs: 5 * 60_000,
         blockDurationMs: 5 * 60_000,
+        burstCoalesceMs: 0,
       });
     }
     return this.pairingExchangeLimiter;

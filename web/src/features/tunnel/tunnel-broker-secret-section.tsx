@@ -7,11 +7,12 @@ import { Button } from '@/components/ui/button';
 import { SecretInput } from '@/components/ui/secret-input';
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
 import { isMaskedKey } from '@/features/settings/providers-api';
-import { revealTunnelRegistrationSecret } from '@/features/tunnel/tunnel-api';
+import {
+  revealTunnelRegistrationSecret,
+  TUNNEL_CONSOLE_REGISTRATION_KEY_URL,
+} from '@/features/tunnel/tunnel-api';
 import { cn } from '@/lib/cn';
 import type { TunnelSettingsMessages } from '@/i18n/messages';
-
-const TUNNEL_CONSOLE_REGISTRATION_KEY_URL = 'https://console.xopc.ai/access/client';
 
 export type BrokerSecretSetupProps = {
   t: TunnelSettingsMessages;

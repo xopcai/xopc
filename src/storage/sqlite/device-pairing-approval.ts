@@ -81,10 +81,12 @@ function requestRow(id: string, now: number): RequestRow {
 
 function statusFromRow(row: RequestRow, now: number): DevicePairingStatus {
   const device = devicePairingDeviceSchema.parse(JSON.parse(row.device_json));
+  const connectedAt = row.device_id ? getDevice(row.device_id)?.lastSeenAt : undefined;
   return {
     requestId: row.request_id, setupId: row.pairing_id, status: row.status, revision: row.revision,
     displayName: device.displayName, platform: device.platform, confirmationCode: row.confirmation_code,
     expiresAt: row.expires_at, serverTime: now, ...(row.device_id ? { deviceId: row.device_id } : {}),
+    ...(connectedAt ? { connectedAt } : {}),
   };
 }
 

@@ -1,5 +1,7 @@
 import os from 'node:os';
 
+import { devicePairingInvitationPayloadSchema, formatBrowserPairingInvitation } from '@xopcai/gateway-contract';
+
 import { loadConfig } from '../config/loader.js';
 import { browserEnrollmentPublicKeyThumbprint } from './enrollment.js';
 import { BROWSER_EXTENSION_ID } from './extension-identity.js';
@@ -23,7 +25,7 @@ export type BrowserNativeBootstrap = {
 export type BrowserNativeBootstrapResult = {
   ok: true;
   gatewayUrl: string;
-  pairingLink: string;
+  invitation: string;
   expiresAt: number;
 };
 
@@ -71,7 +73,7 @@ export function createBrowserNativeBootstrap(
       },
     });
     const identity = getOrCreateGatewayIdentity();
-    const encoded = Buffer.from(JSON.stringify({
+    const encoded = Buffer.from(JSON.stringify(devicePairingInvitationPayloadSchema.parse({
       version: 3,
       pairingToken: setup.token,
       gatewayId: identity.id,
@@ -80,11 +82,11 @@ export function createBrowserNativeBootstrap(
       routes: [route],
       targetKind: setup.targetKind,
       expiresAt: setup.expiresAt,
-    })).toString('base64url');
+    }))).toString('base64url');
     return {
       ok: true,
       gatewayUrl,
-      pairingLink: `https://link.xopc.ai/connect#p=${encoded}`,
+      invitation: formatBrowserPairingInvitation(encoded),
       expiresAt: setup.expiresAt,
     };
   } finally {

@@ -250,6 +250,8 @@ export const zh: MessageBundle = {
       compare: '确认两端数字一致。', resume: '继续连接', cancel: '取消', settings: '打开设置',
       update: '请更新电脑版，再生成新的二维码。', expired: '二维码已过期，请在电脑上刷新。',
       rejected: '电脑未允许连接。', cancelled: '连接已取消。', failed: '暂时无法连接，请重试。',
+      timeout: '连接电脑超时，请确认电脑保持运行，并检查远程连接是否在线。',
+      unreachable: '所有 Gateway 地址均无法访问，请检查电脑网络和远程连接。',
       identity: '无法确认电脑身份，请重新扫码。', pending: '已有连接正在进行，请先继续或取消。',
     },
     pastePairingLink: '粘贴配对链接',
