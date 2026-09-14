@@ -1,7 +1,7 @@
-import { isTextLikeFileNameAndMime, type Attachment } from '@/features/chat/attachments/attachment-utils-core';
+import { inferMimeTypeFromFileName, isTextLikeFileNameAndMime, type Attachment } from '@/features/chat/attachments/attachment-utils-core';
 
 /**
- * Load an attachment from various sources. Heavy parsers load via dynamic `import()` per file type.
+ * Load original bytes without requiring document parsing; previews are resolved when opened.
  */
 export async function loadAttachment(
   source: string | File | Blob | ArrayBuffer,
@@ -51,78 +51,8 @@ export async function loadAttachment(
 
   const id = `${detectedFileName}_${Date.now()}_${Math.random()}`;
 
-  if (mimeType === 'application/pdf' || detectedFileName.toLowerCase().endsWith('.pdf')) {
-    const { processPdf } = await import('@/features/chat/attachments/attachment-process-heavy');
-    const { extractedText, preview } = await processPdf(arrayBuffer, detectedFileName);
-    return {
-      id,
-      type: 'document',
-      name: detectedFileName,
-      mimeType: 'application/pdf',
-      size,
-      content: base64Content,
-      extractedText,
-      preview,
-    };
-  }
-
-  if (
-    mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-    detectedFileName.toLowerCase().endsWith('.docx')
-  ) {
-    const { processDocx } = await import('@/features/chat/attachments/attachment-process-heavy');
-    const { extractedText } = await processDocx(arrayBuffer, detectedFileName);
-    return {
-      id,
-      type: 'document',
-      name: detectedFileName,
-      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      size,
-      content: base64Content,
-      extractedText,
-    };
-  }
-
-  if (
-    mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
-    detectedFileName.toLowerCase().endsWith('.pptx')
-  ) {
-    const { processPptx } = await import('@/features/chat/attachments/attachment-process-heavy');
-    const { extractedText } = await processPptx(arrayBuffer, detectedFileName);
-    return {
-      id,
-      type: 'document',
-      name: detectedFileName,
-      mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      size,
-      content: base64Content,
-      extractedText,
-    };
-  }
-
-  const excelMimeTypes = [
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'application/vnd.ms-excel',
-  ];
-  if (
-    excelMimeTypes.includes(mimeType) ||
-    detectedFileName.toLowerCase().endsWith('.xlsx') ||
-    detectedFileName.toLowerCase().endsWith('.xls')
-  ) {
-    const { processExcel } = await import('@/features/chat/attachments/attachment-process-heavy');
-    const { extractedText } = await processExcel(arrayBuffer, detectedFileName);
-    return {
-      id,
-      type: 'document',
-      name: detectedFileName,
-      mimeType:
-        mimeType && mimeType.startsWith('application/vnd')
-          ? mimeType
-          : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      size,
-      content: base64Content,
-      extractedText,
-    };
+  if (mimeType === 'application/octet-stream' || /\.(csv|tsv)$/i.test(detectedFileName)) {
+    mimeType = inferMimeTypeFromFileName(detectedFileName) ?? mimeType;
   }
 
   if (mimeType?.startsWith('image/')) {
@@ -164,5 +94,12 @@ export async function loadAttachment(
     };
   }
 
-  throw new Error(`Unsupported file type: ${mimeType}`);
+  return {
+    id,
+    type: 'document',
+    name: detectedFileName,
+    mimeType,
+    size,
+    content: base64Content,
+  };
 }
