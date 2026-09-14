@@ -11,8 +11,11 @@ The extension requires a running xopc Gateway. It does not call a model directly
 - Files, screenshots, PDFs, the current page, selected text, and explicit tab mentions as conversation context.
 - Browser control through the authenticated Gateway Realtime connection.
 - Light and dark themes aligned with the Gateway console.
+- English and Simplified Chinese UI, selected automatically from Chrome's UI language.
 
 The side panel intentionally contains fewer management features than the full Gateway console. Configure Agents, models, tools, remote access, and advanced browser policy in the desktop or web console.
+
+Chrome selects the extension language from its own UI language setting. English is the fallback for browser languages that do not yet have a translation. Reload the extension after changing Chrome's language.
 
 ## Install from the desktop or web console
 

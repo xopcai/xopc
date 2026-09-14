@@ -9,6 +9,7 @@ import {
   bindEndpointPrincipal,
   createEndpointPrincipal,
   deleteEndpointSessionBinding,
+  deleteEndpointSessionBindingsByPrincipal,
   getEndpointSessionBinding,
   getEndpointPrincipal,
   listEndpointPrincipals,
@@ -106,5 +107,20 @@ describe('endpoint principal repository', () => {
     });
     expect(deleteEndpointSessionBinding('telegram:chat-1')).toBe(true);
     expect(getEndpointSessionBinding('telegram:chat-1')).toBeUndefined();
+  });
+
+  it('removes every session target owned by a revoked endpoint principal', () => {
+    const principal = createEndpointPrincipal({
+      id: '0196d708-62f0-7000-8000-000000000007',
+      kind: 'browser', displayName: 'Chrome', platform: 'chrome', publicKey: 'browser-key',
+    });
+    expect(bindEndpointPrincipal('browser:one', principal.id, 100)).toBe(true);
+    expect(bindEndpointPrincipal('browser:two', principal.id, 100)).toBe(true);
+    setEndpointSessionBinding({ sessionKey: 'webchat:one', endpointId: 'browser:one', boundAt: 200 });
+    setEndpointSessionBinding({ sessionKey: 'webchat:two', endpointId: 'browser:two', boundAt: 200 });
+
+    expect(deleteEndpointSessionBindingsByPrincipal(principal.id)).toBe(2);
+    expect(getEndpointSessionBinding('webchat:one')).toBeUndefined();
+    expect(getEndpointSessionBinding('webchat:two')).toBeUndefined();
   });
 });

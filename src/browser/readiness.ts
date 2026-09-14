@@ -31,18 +31,27 @@ export function buildBrowserSetupDeepLink(driver: BrowserDriverKind): string {
   return `/settings/agent-browser?driver=${driver}`;
 }
 
-export async function checkBrowserReadiness(cfg: Config | undefined): Promise<BrowserNotReadyError | null> {
+export async function checkBrowserReadiness(
+  cfg: Config | undefined,
+  options: { extensionConnected?: boolean; checkExtensionInstall?: boolean } = {},
+): Promise<BrowserNotReadyError | null> {
   if (!cfg?.browser.enabled) return null;
   const driver = cfg.browser.driver;
   let detail: string | null = null;
   let reason: BrowserNotReadyReason | null = null;
   try {
     if (driver.kind === 'extension') {
-      const { browserExtDoctor } = await import('./providers/browser-ext-install.js');
-      const doctor = await browserExtDoctor();
-      if (!doctor.installed) {
-        reason = 'extension_not_installed';
-        detail = 'Chrome extension artifacts are not installed.';
+      if (options.extensionConnected) return null;
+      if (options.checkExtensionInstall === false) {
+        reason = 'extension_not_connected';
+        detail = 'No authenticated Chrome extension endpoint is connected.';
+      } else {
+        const { browserExtDoctor } = await import('./providers/browser-ext-install.js');
+        const doctor = await browserExtDoctor();
+        if (!doctor.installed) {
+          reason = 'extension_not_installed';
+          detail = 'Chrome extension artifacts are not installed.';
+        }
       }
     } else if (driver.kind === 'playwright') {
       if (driver.executablePath) {
