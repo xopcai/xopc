@@ -11,6 +11,7 @@ import type { EndpointToolDescriptor } from '@xopcai/endpoint-tools-protocol';
 import { RealtimeClient, type RealtimeWebSocket } from '@xopcai/realtime-client';
 
 import { executeBrowserCommand } from './controller';
+import { t } from './i18n';
 import { createLogger } from './logger';
 import {
   createBrowserEndpointHello,
@@ -23,11 +24,22 @@ import { captureTabWithPermission, PENDING_CONTEXT_KEY } from './sidepanel/page-
 
 const log = createLogger('Background');
 const BACKGROUND_CLIENT_ID_KEY = 'xopc.browser.background-client-id';
+const RECONNECT_ALARM = 'xopc.browser.reconnect';
+const RECONNECT_DELAY_MINUTES = 1;
 let realtime: RealtimeClient | undefined;
 let endpointClaim: { endpointId: string; token: string } | undefined;
 let lastConnectionError: string | undefined;
 let connectTask: Promise<void> | undefined;
 let connectionGeneration = 0;
+
+function clearReconnectAlarm(): void {
+  void chrome.alarms.clear(RECONNECT_ALARM);
+}
+
+function scheduleReconnectAlarm(): void {
+  if (endpointClaim) return;
+  chrome.alarms.create(RECONNECT_ALARM, { delayInMinutes: RECONNECT_DELAY_MINUTES });
+}
 
 const browserToolRegistry = new EndpointToolRegistry([{
   descriptor: BROWSER_CONTROL_ENDPOINT_DESCRIPTOR as unknown as EndpointToolDescriptor,
@@ -92,7 +104,11 @@ async function connect(generation: number): Promise<void> {
     createWebSocket: (url) => new WebSocket(url) as unknown as RealtimeWebSocket,
     onStateChange: (state, error) => {
       lastConnectionError = error;
-      if (state === 'connected') lastConnectionError = undefined;
+      if (state === 'connected') {
+        lastConnectionError = undefined;
+      } else {
+        scheduleReconnectAlarm();
+      }
       if (error) log.warn('Browser Realtime connection changed', { state, error });
     },
   });
@@ -101,6 +117,7 @@ async function connect(generation: number): Promise<void> {
     onReady: ({ endpointId, turnToken }) => {
       endpointClaim = { endpointId, token: turnToken };
       lastConnectionError = undefined;
+      clearReconnectAlarm();
       endpointHost.connect((message) => client.sendEndpointMessage(message));
       void chrome.runtime.sendMessage({ type: 'browser/endpoint-ready', claim: endpointClaim }).catch(() => undefined);
       log.info('Browser control connected through Gateway Realtime', { endpointId });
@@ -109,6 +126,7 @@ async function connect(generation: number): Promise<void> {
     onDisconnected: () => {
       endpointClaim = undefined;
       endpointHost.disconnect();
+      scheduleReconnectAlarm();
     },
   });
   if (generation !== connectionGeneration || realtime) return;
@@ -130,6 +148,7 @@ function connectWithLogging(): void {
   connectTask = connect(generation)
     .catch((error) => {
       lastConnectionError = error instanceof Error ? error.message : String(error);
+      scheduleReconnectAlarm();
       log.warn('Could not connect browser Realtime transport', { error: lastConnectionError });
     })
     .finally(() => {
@@ -175,17 +194,33 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: 'xopc-ask-selection',
-      title: 'Ask xopc about “%s”',
+      title: t('contextMenuAskSelection'),
       contexts: ['selection'],
     });
   });
   connectWithLogging();
 });
 chrome.runtime.onStartup.addListener(connectWithLogging);
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== RECONNECT_ALARM) return;
+  void readProfile().then((profile) => {
+    if (!profile) {
+      clearReconnectAlarm();
+      return;
+    }
+    if (endpointClaim) {
+      clearReconnectAlarm();
+      return;
+    }
+    disconnect();
+    connectWithLogging();
+  });
+});
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes['xopc.browser.profile']) {
     disconnect();
-    connectWithLogging();
+    if (changes['xopc.browser.profile'].newValue) connectWithLogging();
+    else clearReconnectAlarm();
   }
 });
 void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });

@@ -36,12 +36,14 @@ const log = createLogger('BrowserExtInstall');
 
 const META_FILENAME = '.meta.json';
 const STAGING_MAX_AGE_MS = 60 * 60 * 1000;
-const INSTALLED_ARTIFACT_NAMES = ['manifest.json', 'dist', 'icons'] as const;
+const INSTALLED_ARTIFACT_NAMES = ['manifest.json', 'dist', 'icons', '_locales'] as const;
 
 export const BROWSER_EXT_REQUIRED_FILES = [
   'manifest.json',
   'dist/background.js',
   'dist/sidepanel.html',
+  '_locales/en/messages.json',
+  '_locales/zh_CN/messages.json',
 ] as const;
 
 export type BrowserExtBundledFrom = 'npm-dist' | 'git-dev' | 'electron-asar' | 'env-override';
@@ -108,6 +110,7 @@ export function browserExtContentHash(dir: string): string {
     'manifest.json',
     ...collectFiles('dist'),
     ...collectFiles('icons'),
+    ...collectFiles('_locales'),
   ].sort();
   for (const relativePath of relativePaths) {
     hash.update(relativePath);
@@ -322,6 +325,7 @@ function copyBundledTree(src: string, dest: string): void {
   mkdirSync(dest, { recursive: true });
   copyBundledFile(join(src, 'manifest.json'), join(dest, 'manifest.json'));
   copyBundledDirectory(join(src, 'dist'), join(dest, 'dist'));
+  copyBundledDirectory(join(src, '_locales'), join(dest, '_locales'));
   for (const icon of BROWSER_EXT_ICON_FILES) {
     const iconSrc = join(src, 'icons', icon);
     if (existsSync(iconSrc)) {

@@ -49,4 +49,81 @@ describe('RealtimeExtensionBrowserProvider', () => {
       },
     }));
   });
+
+  it('fails closed when multiple browser endpoints are online without an explicit target', async () => {
+    const endpoint = (id: string) => ({
+      principalId: `device-${id}`, endpointId: `browser:device-${id}`, connectionId: `connection-${id}`,
+      displayName: `Chrome ${id}`, kind: 'browser' as const, platform: 'chrome', appVersion: '1.2.3',
+      availability: 'background' as const, lastHeartbeatAt: 100,
+      tools: [{ descriptor: BROWSER_CONTROL_ENDPOINT_DESCRIPTOR as never, revision: 'revision-1' }],
+    });
+    const runtime = {
+      registry: { list: () => [endpoint('a'), endpoint('b')] },
+      invocations: { invoke: vi.fn() },
+    } as unknown as EndpointToolRuntime;
+    const provider = new RealtimeExtensionBrowserProvider(runtime);
+
+    await expect(provider.waitForConnection()).resolves.toBeUndefined();
+    await expect(provider.send({ action: 'observe', sessionId: 'session-1' }))
+      .rejects.toThrow('Multiple Chrome extensions are connected');
+  });
+
+  it('routes an explicitly bound session to its browser endpoint', async () => {
+    const endpoint = (id: string) => ({
+      principalId: `device-${id}`, endpointId: `browser:device-${id}`, connectionId: `connection-${id}`,
+      displayName: `Chrome ${id}`, kind: 'browser' as const, platform: 'chrome', appVersion: '1.2.3',
+      availability: 'background' as const, lastHeartbeatAt: 100,
+      tools: [{ descriptor: BROWSER_CONTROL_ENDPOINT_DESCRIPTOR as never, revision: `revision-${id}` }],
+    });
+    const endpoints = [endpoint('a'), endpoint('b')];
+    const invoke = vi.fn(async () => ({ content: [{ type: 'json' as const, value: {
+      ok: true,
+      receipt: { action: 'observe', risk: 'read', durationMs: 1, verified: true },
+    } }] }));
+    const runtime = {
+      registry: {
+        list: () => endpoints,
+        get: (endpointId: string) => endpoints.find((candidate) => candidate.endpointId === endpointId),
+        getTool: (endpointId: string) => endpoints.find((candidate) => candidate.endpointId === endpointId)?.tools[0],
+      },
+      invocations: { invoke },
+    } as unknown as EndpointToolRuntime;
+    const provider = new RealtimeExtensionBrowserProvider(runtime);
+
+    await provider.send({
+      action: 'observe',
+      sessionId: 'session-1',
+      target: { kind: 'endpoint', endpointId: 'browser:device-b' },
+    });
+
+    expect(invoke).toHaveBeenCalledWith(expect.objectContaining({
+      endpointId: 'browser:device-b',
+      descriptorRevision: 'revision-b',
+    }));
+  });
+
+  it('does not fall back to another browser when the bound endpoint is offline', async () => {
+    const online = {
+      principalId: 'device-online', endpointId: 'browser:device-online', connectionId: 'connection-online',
+      displayName: 'Online Chrome', kind: 'browser' as const, platform: 'chrome', appVersion: '1.2.3',
+      availability: 'background' as const, lastHeartbeatAt: 100,
+      tools: [{ descriptor: BROWSER_CONTROL_ENDPOINT_DESCRIPTOR as never, revision: 'revision-online' }],
+    };
+    const invoke = vi.fn();
+    const runtime = {
+      registry: {
+        list: () => [online],
+        get: (endpointId: string) => endpointId === online.endpointId ? online : undefined,
+      },
+      invocations: { invoke },
+    } as unknown as EndpointToolRuntime;
+    const provider = new RealtimeExtensionBrowserProvider(runtime);
+
+    await expect(provider.send({
+      action: 'observe',
+      sessionId: 'session-1',
+      target: { kind: 'endpoint', endpointId: 'browser:device-offline' },
+    })).rejects.toThrow('bound to this Session is offline');
+    expect(invoke).not.toHaveBeenCalled();
+  });
 });

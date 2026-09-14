@@ -31,6 +31,7 @@ export {
 export { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 export {
   deleteEndpointSessionBinding,
+  deleteEndpointSessionBindingsByPrincipal,
   getEndpointSessionBinding,
   setEndpointSessionBinding,
   type StoredEndpointSessionBinding,

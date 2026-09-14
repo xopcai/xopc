@@ -11,8 +11,11 @@ xopc Chrome 扩展在浏览器侧栏中提供精简但完整的聊天体验，�
 - 文件、截图、PDF、当前页面、选中文字，以及显式标签页 mention 上下文。
 - 通过已认证 Gateway Realtime 执行浏览器控制。
 - 与 Gateway 控制台一致的亮色和暗色主题。
+- 根据 Chrome 界面语言自动选择中文或英文界面。
 
 侧栏有意减少了管理功能。Agent、模型、工具、远程访问和高级浏览器策略仍在桌面端或 Web 控制台配置。
+
+Chrome 会根据自身的界面语言选择扩展语言；暂未提供翻译的语言会回退到英文。修改 Chrome 语言后，请重新加载扩展。
 
 ## 从桌面端或 Web 控制台安装
 
@@ -80,7 +83,7 @@ pnpm run dev -- browser extension install
 
 Native Messaging 只用于本机发现和 enrollment，不承载聊天正文、页面内容、owner token 或长期凭据，也不会常驻充当消息代理。
 
-点击 **Disconnect** 会撤销浏览器设备，删除凭据、私钥和待发送 outbox，并关闭自动重连。需要重新启用时，主动点击 **Connect local Gateway**。
+点击 **断开连接** 会撤销浏览器设备，删除凭据、私钥和待发送 outbox，并关闭自动重连。需要重新启用时，主动点击 **连接本机 Gateway**。
 
 ## 远程或服务器 Gateway
 

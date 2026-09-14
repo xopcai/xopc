@@ -1,3 +1,5 @@
+import { t } from '../i18n';
+
 const DATABASE_NAME = 'xopc-browser-chat-state';
 const DATABASE_VERSION = 1;
 const OUTBOX_STORE = 'outbox';
@@ -11,7 +13,7 @@ function openDatabase(): Promise<IDBDatabase> {
       }
     };
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error('Could not open the browser chat outbox'));
+    request.onerror = () => reject(request.error ?? new Error(t('errorOpenOutbox')));
   });
 }
 
@@ -25,10 +27,10 @@ function transactionResult<T>(
     const request = createRequest(transaction.objectStore(OUTBOX_STORE));
     let result: T;
     request.onsuccess = () => { result = request.result; };
-    request.onerror = () => reject(request.error ?? new Error('Browser chat outbox request failed'));
+    request.onerror = () => reject(request.error ?? new Error(t('errorOutboxRequest')));
     transaction.oncomplete = () => resolve(result);
-    transaction.onerror = () => reject(transaction.error ?? new Error('Browser chat outbox transaction failed'));
-    transaction.onabort = () => reject(transaction.error ?? new Error('Browser chat outbox transaction was aborted'));
+    transaction.onerror = () => reject(transaction.error ?? new Error(t('errorOutboxTransaction')));
+    transaction.onabort = () => reject(transaction.error ?? new Error(t('errorOutboxAborted')));
   });
 }
 

@@ -32,7 +32,7 @@ export class RealtimeExtensionBrowserProvider {
 
   async waitForConnection(timeoutMs = this.connectionTimeout): Promise<void> {
     const deadline = Date.now() + timeoutMs;
-    while (!this.currentEndpoint()) {
+    while (this.browserEndpoints().length === 0) {
       if (Date.now() >= deadline) {
         throw new Error(`Extension connection timeout after ${timeoutMs}ms. Open the xopc Chrome extension and connect it to this Gateway.`);
       }
@@ -42,7 +42,15 @@ export class RealtimeExtensionBrowserProvider {
 
   async send(input: BrowserActionInput, timeoutMs = this.commandTimeout, visualFallback = true): Promise<BrowserWireResult> {
     const endpoint = this.endpointForInput(input);
-    if (!endpoint) throw new Error('Extension not connected to this Gateway. Open the xopc Chrome extension and connect it first.');
+    if (!endpoint) {
+      if (input.target?.kind === 'endpoint') {
+        throw new Error(`The Chrome endpoint bound to this Session is offline (${input.target.endpointId}). Reconnect that browser or bind another one.`);
+      }
+      if (this.browserEndpoints().length > 1) {
+        throw new Error('Multiple Chrome extensions are connected. Attach this Session to a tab or choose a browser device first.');
+      }
+      throw new Error('Extension not connected to this Gateway. Open the xopc Chrome extension and connect it first.');
+    }
     const tool = this.runtime.registry.getTool(endpoint.endpointId, BROWSER_CONTROL_ENDPOINT_TOOL_NAME);
     if (!tool) throw new Error('Connected browser extension does not support authenticated Realtime browser control. Reload or update the extension.');
     const id = crypto.randomUUID();
@@ -68,18 +76,21 @@ export class RealtimeExtensionBrowserProvider {
   }
 
   isConnected(): boolean {
-    return Boolean(this.currentEndpoint());
+    return this.browserEndpoints().length > 0;
   }
 
   getConnectionStatus() {
-    const endpoint = this.currentEndpoint();
+    const endpoints = this.browserEndpoints();
+    const endpoint = endpoints.length === 1 ? endpoints[0] : undefined;
     return {
-      socketConnected: Boolean(endpoint),
-      connected: Boolean(endpoint),
-      protocolVersion: endpoint ? BROWSER_EXTENSION_PROTOCOL_VERSION : null,
+      socketConnected: endpoints.length > 0,
+      connected: endpoints.length > 0,
+      protocolVersion: endpoints.length > 0 ? BROWSER_EXTENSION_PROTOCOL_VERSION : null,
       expectedProtocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
       extensionVersion: endpoint?.appVersion ?? null,
       principalId: endpoint?.principalId ?? null,
+      endpointCount: endpoints.length,
+      selectionRequired: endpoints.length > 1,
       transport: 'gateway-realtime' as const,
     };
   }
@@ -93,13 +104,26 @@ export class RealtimeExtensionBrowserProvider {
       if (!binding || !endpoint || endpoint.principalId !== binding.principalId) return undefined;
       return endpoint;
     }
-    return this.currentEndpoint();
+    if (input.target?.kind === 'endpoint') {
+      const endpoint = this.runtime.registry.get(input.target.endpointId);
+      if (!endpoint || endpoint.kind !== 'browser'
+        || !endpoint.tools.some((tool) => tool.descriptor.name === BROWSER_CONTROL_ENDPOINT_TOOL_NAME)) {
+        return undefined;
+      }
+      return endpoint;
+    }
+    return this.defaultEndpoint();
   }
 
-  private currentEndpoint() {
+  private defaultEndpoint() {
+    const endpoints = this.browserEndpoints();
+    return endpoints.length === 1 ? endpoints[0] : undefined;
+  }
+
+  private browserEndpoints() {
     return this.runtime.registry.list()
       .filter((endpoint) => endpoint.kind === 'browser'
         && endpoint.tools.some((tool) => tool.descriptor.name === BROWSER_CONTROL_ENDPOINT_TOOL_NAME))
-      .sort((left, right) => right.lastHeartbeatAt - left.lastHeartbeatAt)[0];
+      .sort((left, right) => right.lastHeartbeatAt - left.lastHeartbeatAt);
   }
 }

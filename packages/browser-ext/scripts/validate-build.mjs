@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -73,6 +73,66 @@ if (!manifestPermissions.has('scripting') || !manifestPermissions.has('tabs')) {
 const optionalHostPermissions = new Set(manifest.optional_host_permissions ?? []);
 if (!optionalHostPermissions.has('http://*/*') || !optionalHostPermissions.has('https://*/*')) {
   errors.push('manifest must allow optional per-site http(s) access for page context capture');
+}
+
+if (manifest.default_locale !== 'en') {
+  errors.push('manifest default_locale must be en');
+}
+for (const [field, value] of [
+  ['name', manifest.name],
+  ['description', manifest.description],
+  ['action.default_title', manifest.action?.default_title],
+]) {
+  if (typeof value !== 'string' || !/^__MSG_[A-Za-z0-9_]+__$/.test(value)) {
+    errors.push(`manifest ${field} must use a localized __MSG_*__ value`);
+  }
+}
+
+const localeCatalogs = new Map();
+for (const locale of ['en', 'zh_CN']) {
+  const localePath = join(packageRoot, '_locales', locale, 'messages.json');
+  if (!existsSync(localePath)) {
+    errors.push(`missing locale catalog: _locales/${locale}/messages.json`);
+    continue;
+  }
+  try {
+    const catalog = JSON.parse(readFileSync(localePath, 'utf8'));
+    localeCatalogs.set(locale, catalog);
+    for (const [key, entry] of Object.entries(catalog)) {
+      if (!entry || typeof entry !== 'object' || typeof entry.message !== 'string' || !entry.message.trim()) {
+        errors.push(`locale ${locale} has an invalid message: ${key}`);
+      }
+    }
+  } catch (cause) {
+    errors.push(`locale ${locale} is invalid JSON: ${cause instanceof Error ? cause.message : String(cause)}`);
+  }
+}
+
+const englishKeys = Object.keys(localeCatalogs.get('en') ?? {}).sort();
+const chineseKeys = Object.keys(localeCatalogs.get('zh_CN') ?? {}).sort();
+if (englishKeys.join('\n') !== chineseKeys.join('\n')) {
+  errors.push('English and Simplified Chinese locale catalogs must contain the same message keys');
+}
+
+const englishCatalog = localeCatalogs.get('en') ?? {};
+for (const value of [manifest.name, manifest.description, manifest.action?.default_title]) {
+  const key = typeof value === 'string' ? /^__MSG_([A-Za-z0-9_]+)__$/.exec(value)?.[1] : undefined;
+  if (key && !englishCatalog[key]) errors.push(`manifest references missing locale message: ${key}`);
+}
+
+function collectSourceFiles(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return collectSourceFiles(path);
+    return /\.tsx?$/.test(entry.name) && !entry.name.endsWith('.test.ts') ? [path] : [];
+  });
+}
+
+for (const sourcePath of collectSourceFiles(join(packageRoot, 'src'))) {
+  const source = readFileSync(sourcePath, 'utf8');
+  for (const match of source.matchAll(/\bt\('([^']+)'/g)) {
+    if (!englishCatalog[match[1]]) errors.push(`source references missing locale message: ${match[1]}`);
+  }
 }
 
 const gatewayThemeSource = readFileSync(join(repositoryRoot, 'web/src/styles/globals.css'), 'utf8');

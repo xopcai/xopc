@@ -118,8 +118,16 @@ describe('endpoint tool principal routes', () => {
       unbind: () => true,
     };
     const app = new Hono();
+    app.use('*', async (c, next) => {
+      setGatewayPrincipal(c, {
+        kind: 'owner',
+        principalId: 'local-owner',
+        scopes: ['gateway.admin'],
+      });
+      await next();
+    });
     registerEndpointToolRoutes(app, {
-      service: { endpointTools: { bindings } },
+      service: { endpointTools: { bindings, registry: { get: () => undefined } } },
     } as unknown as AuthenticatedRouteDeps);
 
     const path = '/api/endpoint-tools/bindings/telegram%3Achat-1';
@@ -138,5 +146,35 @@ describe('endpoint tool principal routes', () => {
     const remove = await app.request(path, { method: 'DELETE' });
     expect(remove.status).toBe(200);
     await expect(remove.json()).resolves.toMatchObject({ payload: { removed: true } });
+  });
+
+  it('prevents a device from binding a session to another device endpoint', async () => {
+    const app = new Hono();
+    app.use('*', async (c, next) => {
+      setGatewayPrincipal(c, {
+        kind: 'device',
+        principalId: 'device-a',
+        deviceId: 'device-a',
+        scopes: ['device.self'],
+      });
+      await next();
+    });
+    registerEndpointToolRoutes(app, {
+      service: {
+        endpointTools: {
+          registry: { get: () => ({ endpointId: 'browser:device-b', principalId: 'device-b' }) },
+          bindings: { bind: () => { throw new Error('must not bind'); } },
+        },
+      },
+    } as unknown as AuthenticatedRouteDeps);
+
+    const response = await app.request('/api/endpoint-tools/bindings/webchat%3Asession-1', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpointId: 'browser:device-b' }),
+    });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'FORBIDDEN' } });
   });
 });

@@ -1,20 +1,33 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { isGatewayThemePageUrl } from './theme';
+import {
+  isSidePanelTheme,
+  loadSidePanelThemePreference,
+  saveSidePanelThemePreference,
+} from './theme';
 
-describe('isGatewayThemePageUrl', () => {
-  it('accepts local Gateway development and production ports', () => {
-    expect(isGatewayThemePageUrl('http://localhost:3000/#/settings/appearance')).toBe(true);
-    expect(isGatewayThemePageUrl('http://127.0.0.1:18790/#/chat')).toBe(true);
+afterEach(() => vi.unstubAllGlobals());
+
+describe('side panel theme preference', () => {
+  it('recognizes supported themes', () => {
+    expect(isSidePanelTheme('light')).toBe(true);
+    expect(isSidePanelTheme('dark')).toBe(true);
+    expect(isSidePanelTheme('system')).toBe(false);
   });
 
-  it('accepts only the paired remote Gateway origin', () => {
-    expect(isGatewayThemePageUrl('https://gateway.example.test/chat', 'https://gateway.example.test')).toBe(true);
-    expect(isGatewayThemePageUrl('https://other.example.test/chat', 'https://gateway.example.test')).toBe(false);
-  });
+  it('loads, applies and persists a selected theme', async () => {
+    const get = vi.fn(async () => ({ 'xopc.sidepanel.theme': 'dark' }));
+    const set = vi.fn(async () => undefined);
+    const documentElement = { dataset: {} as Record<string, string>, style: { colorScheme: '' } };
+    vi.stubGlobal('chrome', { storage: { local: { get, set } } });
+    vi.stubGlobal('document', { documentElement });
 
-  it('rejects invalid and browser-internal URLs', () => {
-    expect(isGatewayThemePageUrl('not-a-url')).toBe(false);
-    expect(isGatewayThemePageUrl('chrome://extensions')).toBe(false);
+    await expect(loadSidePanelThemePreference()).resolves.toBe('dark');
+    expect(documentElement.dataset.theme).toBe('dark');
+    expect(documentElement.style.colorScheme).toBe('dark');
+
+    await saveSidePanelThemePreference('light');
+    expect(set).toHaveBeenCalledWith({ 'xopc.sidepanel.theme': 'light' });
+    expect(documentElement.dataset.theme).toBe('light');
   });
 });

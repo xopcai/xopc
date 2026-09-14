@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { runWithTabSiteAccess } from './page-context';
 
 const MAX_BROWSER_ATTACHMENT_BYTES = 6 * 1024 * 1024;
@@ -32,7 +33,7 @@ function encodeBase64(bytes: Uint8Array): string {
 
 function assertSize(size: number): void {
   if (size > MAX_BROWSER_ATTACHMENT_BYTES) {
-    throw new Error('Browser attachments must be 6 MiB or smaller');
+    throw new Error(t('errorAttachmentTooLarge'));
   }
 }
 
@@ -42,7 +43,7 @@ function assertSupportedFile(file: File): void {
   if (mimeType.startsWith('image/')
     || SUPPORTED_DOCUMENT_MIME_TYPES.has(mimeType)
     || SUPPORTED_DOCUMENT_EXTENSIONS.some((extension) => name.endsWith(extension))) return;
-  throw new Error('Attach an image, PDF, text, Markdown, JSON, or CSV file');
+  throw new Error(t('errorUnsupportedAttachment'));
 }
 
 export async function fileToBrowserAttachment(file: File): Promise<BrowserAttachment> {
@@ -60,14 +61,14 @@ export async function fileToBrowserAttachment(file: File): Promise<BrowserAttach
 
 export async function captureVisibleScreenshot(): Promise<BrowserAttachment> {
   const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (activeTab.id === undefined) throw new Error('No active web page');
+  if (activeTab.id === undefined) throw new Error(t('errorNoActivePage'));
   const dataUrl = await runWithTabSiteAccess(activeTab.id, async (accessibleTab) => {
     const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (currentTab.id !== accessibleTab.id) throw new Error('The active tab changed. Try the screenshot again.');
+    if (currentTab.id !== accessibleTab.id) throw new Error(t('errorActiveTabChanged'));
     return chrome.tabs.captureVisibleTab(accessibleTab.windowId, { format: 'png' });
   });
   const separator = dataUrl.indexOf(',');
-  if (separator < 0) throw new Error('Chrome returned an invalid screenshot');
+  if (separator < 0) throw new Error(t('errorInvalidScreenshot'));
   const data = dataUrl.slice(separator + 1);
   const size = Math.floor(data.length * 3 / 4);
   assertSize(size);

@@ -8,6 +8,13 @@ function stubChrome(options: {
   tabUrl?: string;
   executeError?: Error;
 }) {
+  const messages: Record<string, string> = {
+    errorSiteAccessRequired: 'Allow xopc to access $1 to continue.',
+    errorSiteAccessBlocked: "Chrome blocked access to $1. Check xopc's site access for this page and try again.",
+    errorRestrictedPage: 'Chrome does not allow xopc to read this page. Open a regular http(s) page and try again.',
+    errorSelectText: 'Select text on the page first',
+    errorNoReadableContent: 'This page has no readable content',
+  };
   const remove = vi.fn().mockResolvedValue(true);
   const request = vi.fn().mockResolvedValue(options.requestGranted ?? true);
   const executeScript = options.executeError
@@ -21,6 +28,12 @@ function stubChrome(options: {
       },
     }]);
   vi.stubGlobal('chrome', {
+    i18n: {
+      getMessage: vi.fn((key: string, substitutions?: string | string[]) => {
+        const values = typeof substitutions === 'string' ? [substitutions] : substitutions ?? [];
+        return (messages[key] ?? key).replace(/\$(\d+)/g, (_match, index) => values[Number(index) - 1] ?? '');
+      }),
+    },
     permissions: {
       contains: vi.fn().mockResolvedValue(options.alreadyGranted),
       request,

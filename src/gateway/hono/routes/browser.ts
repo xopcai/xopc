@@ -25,22 +25,36 @@ interface ExtensionStatusPayload {
   protocolVersion: number | null;
   expectedProtocolVersion: number | null;
   extensionVersion: string | null;
+  endpoints: Array<{
+    endpointId: string;
+    principalId: string;
+    displayName: string;
+    platform: string;
+    appVersion: string;
+    lastHeartbeatAt: number;
+  }>;
   artifacts: Record<string, unknown>;
   bridgeHeld: boolean;
   refCount: number;
   transport: 'gateway-realtime';
 }
 
-async function extensionStatus(service: AuthenticatedRouteDeps['service']): Promise<ExtensionStatusPayload> {
-  const endpoint = service.endpointTools.registry.list()
+async function extensionStatus(
+  service: AuthenticatedRouteDeps['service'],
+  includeLocalArtifacts: boolean,
+): Promise<ExtensionStatusPayload> {
+  const endpoints = service.endpointTools.registry.list()
     .filter((item) => item.kind === 'browser'
       && item.tools.some((tool) => tool.descriptor.name === BROWSER_CONTROL_ENDPOINT_TOOL_NAME))
-    .sort((left, right) => right.lastHeartbeatAt - left.lastHeartbeatAt)[0];
-  const connected = Boolean(endpoint);
+    .sort((left, right) => right.lastHeartbeatAt - left.lastHeartbeatAt);
+  const endpoint = endpoints[0];
+  const connected = endpoints.length > 0;
   const extensionVersion = endpoint?.appVersion ?? null;
 
-  const { browserExtDoctor } = await import('../../../browser/providers/browser-ext-install.js');
-  const doctor = await browserExtDoctor({ runtimeExtensionVersion: extensionVersion ?? undefined });
+  const doctor = includeLocalArtifacts
+    ? await import('../../../browser/providers/browser-ext-install.js')
+      .then(({ browserExtDoctor }) => browserExtDoctor({ runtimeExtensionVersion: extensionVersion ?? undefined }))
+    : undefined;
   return {
     running: true,
     socketConnected: connected,
@@ -49,18 +63,28 @@ async function extensionStatus(service: AuthenticatedRouteDeps['service']): Prom
     protocolVersion: connected ? BROWSER_EXTENSION_PROTOCOL_VERSION : null,
     expectedProtocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
     extensionVersion,
+    endpoints: endpoints.map((item) => ({
+      endpointId: item.endpointId,
+      principalId: item.principalId,
+      displayName: item.displayName,
+      platform: item.platform,
+      appVersion: item.appVersion,
+      lastHeartbeatAt: item.lastHeartbeatAt,
+    })),
     artifacts: {
-      installed: doctor.installed,
-      bundledAvailable: doctor.bundledAvailable,
-      extensionDir: doctor.extensionDir,
-      xopcVersion: doctor.xopcVersion,
-      installedVersion: doctor.installedVersion,
-      needsRefresh: doctor.needsRefresh,
-      needsChromeReload: doctor.needsChromeReload,
-      nativeHost: doctor.nativeHost,
+      ...(doctor ? {
+        installed: doctor.installed,
+        bundledAvailable: doctor.bundledAvailable,
+        extensionDir: doctor.extensionDir,
+        xopcVersion: doctor.xopcVersion,
+        installedVersion: doctor.installedVersion,
+        needsRefresh: doctor.needsRefresh,
+        needsChromeReload: doctor.needsChromeReload,
+        nativeHost: doctor.nativeHost,
+      } : {}),
     },
     bridgeHeld: false,
-    refCount: connected ? 1 : 0,
+    refCount: endpoints.length,
     transport: 'gateway-realtime',
   };
 }
@@ -144,7 +168,7 @@ export function registerBrowserRoutes(authenticated: Hono, deps: AuthenticatedRo
 
   authenticated.get('/api/browser/extension-status', async (c) => {
     try {
-      return c.json(await extensionStatus(service));
+      return c.json(await extensionStatus(service, isLocalOwnerRequest(c, service)));
     } catch (error) {
       return c.json({
         running: false,
@@ -157,18 +181,23 @@ export function registerBrowserRoutes(authenticated: Hono, deps: AuthenticatedRo
 
   authenticated.get('/api/browser/status', async (c) => {
     const config = service.currentConfig.browser;
+    const localManagementAvailable = isLocalOwnerRequest(c, service);
     if (!config.enabled) {
       return c.json({ ok: true, payload: { enabled: false, driverKind: config.driver.kind, state: 'disabled' } });
     }
-    const readiness = await checkBrowserReadiness(service.currentConfig);
     const driverStatus = config.driver.kind === 'extension'
-      ? await extensionStatus(service).catch((error) => ({ error: error instanceof Error ? error.message : String(error) }))
+      ? await extensionStatus(service, localManagementAvailable)
+        .catch((error) => ({ error: error instanceof Error ? error.message : String(error) }))
       : config.driver.kind === 'playwright'
         ? await import('../../../browser/providers/playwright-doctor.js').then(({ playwrightChromiumDoctor }) => playwrightChromiumDoctor())
         : undefined;
     const extensionConnected = config.driver.kind === 'extension'
       ? (driverStatus as { connected?: boolean }).connected === true
       : true;
+    const readiness = await checkBrowserReadiness(service.currentConfig, {
+      extensionConnected,
+      checkExtensionInstall: localManagementAvailable,
+    });
     const extensionProtocolDetail = config.driver.kind === 'extension'
       && 'socketConnected' in driverStatus
       && driverStatus.socketConnected
@@ -180,6 +209,7 @@ export function registerBrowserRoutes(authenticated: Hono, deps: AuthenticatedRo
       payload: {
         enabled: true,
         driverKind: config.driver.kind,
+        localManagementAvailable,
         state: !readiness && extensionConnected ? 'ready' : 'needs_attention',
         reason: readiness?.hint.reason ?? (extensionConnected ? undefined : 'extension_not_connected'),
         detail: readiness?.hint.detail ?? extensionProtocolDetail,

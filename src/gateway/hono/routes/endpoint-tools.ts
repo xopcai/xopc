@@ -157,6 +157,12 @@ export function registerEndpointToolRoutes(
     if (!parsed.success) {
       return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid endpoint binding' } }, 400);
     }
+    const gatewayPrincipal = getGatewayPrincipal(c);
+    const endpoint = deps.service.endpointTools.registry.get(parsed.data.endpointId);
+    if (gatewayPrincipal.kind === 'device'
+      && (!endpoint || !gatewayPrincipal.deviceId || endpoint.principalId !== gatewayPrincipal.deviceId)) {
+      return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Endpoint does not belong to this device' } }, 403);
+    }
     try {
       const binding = deps.service.endpointTools.bindings.bind(
         c.req.param('sessionKey'),
