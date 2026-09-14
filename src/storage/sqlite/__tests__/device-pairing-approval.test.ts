@@ -75,8 +75,12 @@ describe('computer-approved device pairing', () => {
     expect(operateDevicePairingRequest('status', signed('status'), now).request.status).toBe('cancelled');
   });
 
-  it('expires pending approval even when the QR is still valid', () => {
+  it('keeps approval open for the full invitation lifetime', () => {
     const pending = request();
+    const whileInviteIsValid = now + 2 * 60_000 + 1;
+    expect(operateDevicePairingRequest(
+      'status', signed('status', {}, whileInviteIsValid), whileInviteIsValid,
+    ).request.status).toBe('pending');
     const at = pending.expiresAt + 1;
     expect(operateDevicePairingRequest('status', signed('status', {}, at), at).request.status).toBe('expired');
     expect(listDevices()).toHaveLength(0);

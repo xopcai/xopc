@@ -18,7 +18,6 @@ import { getOrCreateGatewayIdentity } from './gateway-identity-repository.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 const PROOF_WINDOW_MS = 5 * 60_000;
-const APPROVAL_WINDOW_MS = 2 * 60_000;
 const RECOVERY_WINDOW_MS = 24 * 60 * 60_000;
 type SetupRow = {
   pairing_id: string; secret_hash: string; routes_json: string; expires_at: number;
@@ -136,11 +135,10 @@ export function submitDevicePairingRequest(body: Record<string, unknown>, now = 
     }
     if (setup.consumed_at !== null) return fail('PAIRING_CANCELLED');
     if (setup.expires_at <= now) return fail('PAIRING_EXPIRED');
-    const expiresAt = Math.min(setup.expires_at, now + APPROVAL_WINDOW_MS);
     db.prepare(`INSERT INTO device_pairing_requests (request_id, pairing_id, device_json, status,
       confirmation_code, expires_at, recovery_until, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(String(body.requestId), setup.pairing_id, deviceJson, autoApprove ? 'approved' : 'pending',
-        crypto.randomInt(0, 1_000_000).toString().padStart(6, '0'), expiresAt,
+        crypto.randomInt(0, 1_000_000).toString().padStart(6, '0'), setup.expires_at,
         setup.expires_at + RECOVERY_WINDOW_MS, now);
     return statusFromRow(requestRow(String(body.requestId), now), now);
   });
