@@ -12,12 +12,14 @@ export function buildWorkflowChildTools(childOptions: BuildChildToolsOptions): A
     getCurrentContext: () => null,
     getConfig: childOptions.getConfig,
     getPrimaryModel: () => childOptions.model,
+    endpointTools: childOptions.endpointTools,
     toolExecutorConfig: childOptions.toolExecutorConfig,
   });
   return childFactory.createAllTools({
     workspace: childOptions.workspace,
     getPrimaryModel: () => childOptions.model,
     agentId: childOptions.agentId,
+    sessionKey: childOptions.browserSessionKey,
     disabledTools: new Set([
       EXTERNAL_TOOL_NAMES.search,
       EXTERNAL_TOOL_NAMES.describe,

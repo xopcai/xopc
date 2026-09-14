@@ -8,6 +8,7 @@ import {
 } from '@xopcai/gateway-contract';
 import { endpointHelloSigningPayload, type EndpointHelloPayload } from '@xopcai/endpoint-tools-protocol';
 
+import { t } from '../i18n';
 import { clearBrowserOutboxes } from './chat-outbox';
 
 const PROFILE_KEY = 'xopc.browser.profile';
@@ -102,7 +103,7 @@ export async function discoverLocalGateway(options?: { force?: boolean }): Promi
     ) as Partial<LocalGatewayBootstrap> & { ok?: boolean; error?: string };
     if (response.ok !== true || typeof response.gatewayUrl !== 'string'
       || typeof response.invitation !== 'string' || typeof response.expiresAt !== 'number') {
-      if (options?.force) throw new Error(response.error || 'The local xopc enrollment host returned an invalid response');
+      if (options?.force) throw new Error(response.error || t('errorInvalidLocalHostResponse'));
       return undefined;
     }
     return {
@@ -193,13 +194,13 @@ async function forgetIdentity(): Promise<void> {
     const request = indexedDB.deleteDatabase(KEY_DATABASE);
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
-    request.onblocked = () => reject(new Error('Browser identity is still in use'));
+    request.onblocked = () => reject(new Error(t('errorIdentityInUse')));
   });
 }
 
 async function publicKeyJwk(pair: CryptoKeyPair) {
   const exported = await crypto.subtle.exportKey('jwk', pair.publicKey);
-  if (!exported.x || !exported.y) throw new Error('Browser identity key export failed');
+  if (!exported.x || !exported.y) throw new Error(t('errorIdentityExport'));
   return { kty: 'EC' as const, crv: 'P-256' as const, x: exported.x, y: exported.y };
 }
 
@@ -270,7 +271,7 @@ async function post(origin: string, path: string, body: unknown): Promise<Record
       signal: controller.signal,
     });
   } catch (cause) {
-    if (controller.signal.aborted) throw new Error(`Gateway did not respond within ${GATEWAY_REQUEST_TIMEOUT_MS / 1_000} seconds`);
+    if (controller.signal.aborted) throw new Error(t('errorGatewayTimeout', String(GATEWAY_REQUEST_TIMEOUT_MS / 1_000)));
     throw cause;
   } finally {
     clearTimeout(timeout);
@@ -278,7 +279,7 @@ async function post(origin: string, path: string, body: unknown): Promise<Record
   const json = await response.json().catch(() => ({})) as { error?: { code?: string; message?: string } };
   if (!response.ok) {
     throw new GatewayHttpError(
-      json.error?.code ?? json.error?.message ?? `Gateway returned ${response.status}`,
+      json.error?.code ?? json.error?.message ?? t('errorGatewayStatus', String(response.status)),
       response.status,
     );
   }
@@ -316,14 +317,14 @@ async function signedPairingRequest(
     : `/api/device-pairing/requests/${requestId}/${action}`;
   const response = await post(origin, path, { ...body, signature });
   if (typeof response.signedPayload !== 'string' || typeof response.signature !== 'string') {
-    throw new Error('Gateway pairing response is unsigned');
+    throw new Error(t('errorUnsignedPairing'));
   }
   if (!await verifyGateway(payload.gatewayPublicKey, response.signedPayload, response.signature)) {
-    throw new Error('Gateway identity could not be verified');
+    throw new Error(t('errorGatewayVerification'));
   }
   const decoded = decodeJson<PairingResponse>(response.signedPayload);
   if (decoded.gateway.id !== payload.gatewayId || decoded.nonce !== nonce || decoded.request.requestId !== requestId) {
-    throw new Error('Gateway pairing response does not match this request');
+    throw new Error(t('errorPairingMismatch'));
   }
   return decoded;
 }
@@ -397,10 +398,10 @@ async function refreshAccessToken(
     }
   }
   if (!response || !gatewayUrl) {
-    throw lastRouteError instanceof Error ? lastRouteError : new Error('No Gateway route could be reached');
+    throw lastRouteError instanceof Error ? lastRouteError : new Error(t('errorNoReachableGatewayRoute'));
   }
   if (typeof response.signedPayload !== 'string' || typeof response.signature !== 'string'
-    || !await verifyGateway(gateway.gatewayPublicKey, response.signedPayload, response.signature)) throw new Error('Gateway identity could not be verified');
+    || !await verifyGateway(gateway.gatewayPublicKey, response.signedPayload, response.signature)) throw new Error(t('errorGatewayVerification'));
   const responseProof = decodeJson<{ purpose: string; gatewayId: string; requestId: string; nonce: string; expiresAt: number;
     tokens: { accessToken?: string; accessTokenExpiresAt?: number; refreshToken?: string } }>(response.signedPayload);
   if (responseProof.purpose !== 'device-refresh-v3' || responseProof.gatewayId !== gateway.gatewayId || responseProof.requestId !== requestId
@@ -408,7 +409,7 @@ async function refreshAccessToken(
   const payload = responseProof.tokens;
   if (!payload?.accessToken || !payload.accessTokenExpiresAt
     || payload.refreshToken !== nextRefreshToken) {
-    throw new Error('Gateway returned invalid browser credentials');
+    throw new Error(t('errorInvalidCredentials'));
   }
   return { ...payload, gatewayUrl } as {
     accessToken: string;
@@ -443,7 +444,7 @@ export async function pairGateway(
     throw new Error('PAIRING_ALREADY_PENDING');
   }
   if (!journal) {
-    if (payload.expiresAt <= Date.now()) throw new Error('Pairing invitation has expired');
+    if (payload.expiresAt <= Date.now()) throw new Error(t('errorExpiredPairingLink'));
     journal = {
       invitation: invitation.trim(),
       payload,
@@ -477,7 +478,7 @@ export async function pairGateway(
     }
     if (result.request.status !== 'approved' && result.request.status !== 'completed') {
       await chrome.storage.local.remove(PAIRING_JOURNAL_KEY);
-      throw new Error(`Pairing ${result.request.status}`);
+      throw new Error(t('errorPairingStatus', result.request.status));
     }
     if (result.request.status !== 'completed') {
       const response = await signedPairingRequestAcrossRoutes(
@@ -488,7 +489,7 @@ export async function pairGateway(
       );
       ({ origin, result } = response);
     }
-    if (!result.request.deviceId) throw new Error('Gateway did not register the browser');
+    if (!result.request.deviceId) throw new Error(t('errorBrowserNotRegistered'));
     journal.origin = origin;
     journal.completed = { deviceId: result.request.deviceId, gatewayName: result.gateway.name };
     journal.refresh ??= { requestId: crypto.randomUUID(), nextRefreshToken: createRefreshToken() };
@@ -568,7 +569,7 @@ export async function readProfile(): Promise<BrowserGatewayProfile | undefined> 
 
 export async function getAccessProfile(): Promise<BrowserGatewayProfile> {
   const profile = await readProfile();
-  if (!profile) throw new Error('Browser is not paired');
+  if (!profile) throw new Error(t('errorBrowserNotPaired'));
   if (profile.accessTokenExpiresAt > Date.now() + 30_000) return profile;
   if (refreshTask) return refreshTask;
   refreshTask = (async () => {
@@ -620,7 +621,7 @@ export async function registerBrowserEndpoint(): Promise<void> {
       publicKey,
     }),
   });
-  if (!response.ok) throw new Error(`Browser endpoint registration failed (${response.status})`);
+  if (!response.ok) throw new Error(t('errorEndpointRegistration', String(response.status)));
 }
 
 export async function createBrowserEndpointHello(

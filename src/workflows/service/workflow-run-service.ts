@@ -639,7 +639,10 @@ export class WorkflowRunService {
       getDefaultModel: () => resolveModelById(gatewayService.agentService.getModelForSession(params.sessionKey)),
       getConfig: () => gatewayService.currentConfig,
       sessionStore: gatewayService.sessionIndexInstance.getStore(),
-      buildChildTools: (childOptions) => this.options.buildChildTools(childOptions),
+      buildChildTools: (childOptions) => this.options.buildChildTools({
+        ...childOptions,
+        endpointTools: gatewayService.endpointTools,
+      }),
     });
 
     return new WorkflowEngine({

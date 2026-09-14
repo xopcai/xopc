@@ -4,6 +4,7 @@ import type { AgentMessage, AgentTool } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 
 import type { Config } from '../config/schema.js';
+import type { EndpointToolRuntime } from '../endpoint-tools/index.js';
 import type { MessageBus } from '../infra/bus/index.js';
 import { runXopcEmbeddedTurn } from './embedded/run-turn.js';
 import { evictEmbeddedSessionRunner } from './embedded/session-runner.js';
@@ -21,6 +22,8 @@ export interface BuildChildToolsOptions {
   agentId?: string;
   getConfig: () => Config | undefined;
   toolExecutorConfig?: Partial<ToolExecutorConfig>;
+  endpointTools?: EndpointToolRuntime;
+  browserSessionKey?: string;
 }
 
 export interface DelegateChildProgressHooks {
@@ -91,7 +94,9 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
       const allow = new Set(options.allowedToolNames);
       const tools = options.buildChildTools({ workspace: options.workspace, bus: options.bus,
         model: options.model, agentId: options.agentId, getConfig: options.getConfig,
-        toolExecutorConfig: options.toolExecutorConfig }).filter(tool => allow.has(tool.name));
+        toolExecutorConfig: options.toolExecutorConfig,
+        browserSessionKey: options.requesterSessionKey ?? sessionKey,
+      }).filter(tool => allow.has(tool.name));
       const limit = Math.min(60, Math.max(1, Math.floor(options.maxIterations)));
       let toolIterations = 0, exhausted = false, tokens = 0;
       const policy = createAgentTurnPolicy({ maxTurns: limit + 1, maxToolFailures: 5,

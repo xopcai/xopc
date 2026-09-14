@@ -1,6 +1,17 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { captureVisibleScreenshot, fileToBrowserAttachment } from './attachments';
+
+const messages: Record<string, string> = {
+  errorActiveTabChanged: 'The active tab changed. Try the screenshot again.',
+  errorUnsupportedAttachment: 'Attach an image, PDF, text, Markdown, JSON, or CSV file',
+};
+
+function i18n() {
+  return { getMessage: (key: string) => messages[key] ?? key };
+}
+
+beforeEach(() => vi.stubGlobal('chrome', { i18n: i18n() }));
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -9,6 +20,7 @@ describe('captureVisibleScreenshot', () => {
     const request = vi.fn().mockResolvedValue(true);
     const captureVisibleTab = vi.fn().mockResolvedValue('data:image/png;base64,AAAA');
     vi.stubGlobal('chrome', {
+      i18n: i18n(),
       permissions: {
         contains: vi.fn().mockResolvedValue(false),
         request,
@@ -34,6 +46,7 @@ describe('captureVisibleScreenshot', () => {
       .mockResolvedValueOnce([{ id: 7, windowId: 2, url: 'https://xopc.ai/zh' }])
       .mockResolvedValueOnce([{ id: 8, windowId: 2, url: 'https://example.com' }]);
     vi.stubGlobal('chrome', {
+      i18n: i18n(),
       permissions: {
         contains: vi.fn().mockResolvedValue(false),
         request: vi.fn().mockResolvedValue(true),

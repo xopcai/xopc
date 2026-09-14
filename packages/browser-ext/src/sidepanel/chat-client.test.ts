@@ -42,7 +42,12 @@ function response(body: unknown, status = 200): Response {
 
 function stubChrome() {
   const session = new Map<string, unknown>();
+  const messages: Record<string, string> = {
+    errorWaitQueuedMessage: 'Wait for the queued message to be delivered before sending another',
+    errorSentStatusUnknown: 'Message sent, but the response status could not be refreshed. Reopen this chat to sync it.',
+  };
   vi.stubGlobal('chrome', {
+    i18n: { getMessage: (key: string) => messages[key] ?? key },
     storage: {
       session: {
         get: vi.fn(async (keys: string | string[]) => {
@@ -78,6 +83,43 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('BrowserChatClient delivery safety', () => {
+  it('switches a session that already has a fixed model selection', async () => {
+    const client = readyClient();
+    internals(client).update({
+      models: [
+        { id: 'test/first', name: 'First' },
+        { id: 'test/second', name: 'Second', thinking: { mode: 'levels', options: ['low'], default: 'low' } },
+      ],
+      modelConfig: {
+        model: 'test/first',
+        thinkingLevel: 'high',
+        configVersion: 7,
+        fixedModel: true,
+      },
+    });
+    gatewayFetch.mockResolvedValueOnce(response({
+      payload: {
+        model: 'test/second',
+        thinkingLevel: 'low',
+        configVersion: 8,
+        fixedModel: true,
+      },
+    }));
+
+    await client.updateModel('test/second');
+
+    expect(gatewayFetch).toHaveBeenCalledWith('/api/sessions/chat%3Aone/agent-config', expect.objectContaining({
+      method: 'PATCH',
+      body: JSON.stringify({ model: 'test/second', thinkingLevel: 'low', configVersion: 7 }),
+    }));
+    expect(internals(client).snapshot.modelConfig).toEqual({
+      model: 'test/second',
+      thinkingLevel: 'low',
+      configVersion: 8,
+      fixedModel: true,
+    });
+  });
+
   it('keeps an uncertain delivery queued and blocks a second message', async () => {
     const client = readyClient();
     gatewayFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));

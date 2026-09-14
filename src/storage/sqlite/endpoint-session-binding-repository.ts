@@ -47,3 +47,12 @@ export function deleteEndpointSessionBinding(sessionKey: string): boolean {
     .prepare('DELETE FROM endpoint_session_bindings WHERE session_key = ?')
     .run(sessionKey).changes > 0;
 }
+
+export function deleteEndpointSessionBindingsByPrincipal(principalId: string): number {
+  return Number(getSqliteDatabase().prepare(`
+    DELETE FROM endpoint_session_bindings
+    WHERE endpoint_id IN (
+      SELECT endpoint_id FROM endpoint_instance_bindings WHERE principal_id = ?
+    )
+  `).run(principalId).changes);
+}

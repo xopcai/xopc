@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import MarkdownIt from 'markdown-it';
 
+import { t } from '../i18n';
+
 const markdown = new MarkdownIt({
   breaks: true,
   html: false,
@@ -26,7 +28,7 @@ export function MarkdownContent({ children, streaming = false }: { children: str
   return (
     <div className={`markdown-content${streaming ? ' is-streaming' : ''}`}>
       <div dangerouslySetInnerHTML={{ __html: html }} />
-      {streaming ? <span className="streaming-caret" aria-label="xopc is responding" /> : null}
+      {streaming ? <span className="streaming-caret" aria-label={t('xopcResponding')} /> : null}
     </div>
   );
 }
