@@ -9,6 +9,13 @@ const registrationResponseSchema = z.object({
   key: z.string().min(1),
 });
 
+const registrationErrorSchema = z.object({
+  error: z.object({
+    code: z.string().min(1).optional(),
+    message: z.string().min(1).optional(),
+  }),
+});
+
 type ProvisionOptions = {
   fetchImpl?: typeof fetch;
   routerUrl?: string;
@@ -16,15 +23,26 @@ type ProvisionOptions = {
   deviceName?: string;
 };
 
-function responseError(body: unknown, status: number): string {
-  if (body && typeof body === 'object') {
-    const error = (body as { error?: unknown }).error;
-    if (error && typeof error === 'object') {
-      const message = (error as { message?: unknown }).message;
-      if (typeof message === 'string' && message.trim()) return message;
-    }
+export class TunnelRegistrationProvisionError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = 'TunnelRegistrationProvisionError';
   }
-  return `Tunnel registration failed (${status})`;
+}
+
+function responseError(body: unknown, status: number): TunnelRegistrationProvisionError {
+  const parsed = registrationErrorSchema.safeParse(body);
+  const message = parsed.success
+    ? parsed.data.error.message ?? `Tunnel registration failed (${status})`
+    : `Tunnel registration failed (${status})`;
+  const code = parsed.success
+    ? parsed.data.error.code ?? 'tunnel_registration_failed'
+    : 'tunnel_registration_failed';
+  return new TunnelRegistrationProvisionError(message, code, status);
 }
 
 /** Exchange a narrowly scoped XOPC OAuth grant for a tunnel registration key. */
@@ -35,7 +53,11 @@ export async function provisionTunnelRegistrationKey(
     ?? (() => new CredentialResolver().resolveApiKey('xopc-tunnel'));
   const accessToken = await resolveAccessToken();
   if (!accessToken) {
-    throw new Error('Authorize XOPC Public Tunnel before creating a registration key');
+    throw new TunnelRegistrationProvisionError(
+      'Authorize XOPC Public Tunnel before creating a registration key',
+      'tunnel_oauth_required',
+      401,
+    );
   }
 
   const routerUrl = resolveXopcModelRouterUrl(options.routerUrl);
@@ -51,7 +73,7 @@ export async function provisionTunnelRegistrationKey(
     signal: AbortSignal.timeout(30_000),
   });
   const body = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(responseError(body, response.status));
+  if (!response.ok) throw responseError(body, response.status);
   const parsed = registrationResponseSchema.safeParse(body);
   if (!parsed.success) throw new Error('Tunnel registration returned an invalid response');
   return parsed.data.key;

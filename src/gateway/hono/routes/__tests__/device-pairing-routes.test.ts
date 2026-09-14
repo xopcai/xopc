@@ -15,12 +15,14 @@ import {
 } from '../../../../storage/sqlite/index.js';
 import { registerDeviceAuthPublicRoutes, registerDeviceRoutes } from '../devices.js';
 import type { AuthenticatedRouteDeps } from '../deps.js';
+import { buckets } from '../../../rate-limit/index.js';
 
 describe('device pairing routes', () => {
   let stateDir: string;
   let app: Hono;
 
   beforeEach(() => {
+    buckets.resetAllForTests();
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-device-pairing-routes-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
@@ -35,9 +37,24 @@ describe('device pairing routes', () => {
   });
 
   afterEach(() => {
+    buckets.resetAllForTests();
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  it('rate limits repeated invalid public pairing requests', async () => {
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const response = await app.request('/api/device-pairing/requests', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+      });
+      expect(response.status).toBe(400);
+    }
+    const blocked = await app.request('/api/device-pairing/requests', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    });
+    expect(blocked.status).toBe(429);
+    expect(blocked.headers.get('Retry-After')).toBeTruthy();
   });
 
   it('creates a device-targeted v3 Universal Link', async () => {
@@ -87,6 +104,17 @@ describe('device pairing routes', () => {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
     });
     expect(missingTarget.status).toBe(400);
+  });
+  it('creates a non-navigable browser invitation', async () => {
+    const response = await app.request('/api/device-pairing/setups', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetKind: 'browser' }),
+    });
+    expect(response.status).toBe(201);
+    const body = await response.json() as { setup: { browserInvitation: string; universalLink?: string } };
+    expect(body.setup.browserInvitation).toMatch(/^XOPC-BROWSER-INVITE-V1:[A-Za-z0-9_-]+$/);
+    expect(body.setup.universalLink).toBeUndefined();
+    const pairing = JSON.parse(Buffer.from(body.setup.browserInvitation.slice('XOPC-BROWSER-INVITE-V1:'.length), 'base64url').toString());
+    expect(pairing).toMatchObject({ version: 3, targetKind: 'browser' });
   });
   it('requires a desktop decision before issuing a v3 device and signs its status', async () => {
     const setup = await (await app.request('/api/device-pairing/setups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetKind: 'mobile' }) })).json();

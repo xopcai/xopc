@@ -44,7 +44,7 @@ xopc browser extension doctor
 xopc browser doctor
 ```
 
-每次更新解压扩展文件后，都要在 `chrome://extensions` 中重新加载。Chrome 阻止普通网站时，检查扩展对该 origin 的网站访问权限并刷新页面。远程或自部署 Gateway 需要明确的配对链接和 owner 批准；本机自动 enrollment 只适用于受支持的同机安装。
+每次更新解压扩展文件后，都要在 `chrome://extensions` 中重新加载。Chrome 阻止普通网站时，检查扩展对该 origin 的网站访问权限并刷新页面。另一台电脑上的 Chrome 需要不透明的一次性邀请和 owner 批准；本机自动 enrollment 只适用于受支持的同机安装。
 
 安装、版本不一致、`DRIVER_UNAVAILABLE` 和站点权限问题见 [Chrome 浏览器扩展](../browser-extension.md)。
 

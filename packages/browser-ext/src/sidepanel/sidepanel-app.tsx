@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
+  cancelPendingBrowserPairing,
   discoverLocalGateway,
   pairGateway,
+  readPendingBrowserPairing,
   readProfile,
   revokeAndForgetProfile,
   setAutoConnectEnabled,
@@ -21,7 +23,7 @@ function pairingErrorMessage(cause: unknown): string {
   if (message === 'Gateway site permission was not granted') {
     return 'Chrome needs access to the Gateway address. Select Connect again and allow the site permission.';
   }
-  if (message === 'PAIRING_EXPIRED' || message === 'Pairing expired' || message === 'Pairing link has expired') {
+  if (message === 'PAIRING_EXPIRED' || message === 'Pairing expired' || message === 'Pairing invitation has expired') {
     return 'This invitation expired. Create and copy a new invitation from Device access.';
   }
   if (message === 'PAIRING_DEVICE_MISMATCH') {
@@ -30,34 +32,39 @@ function pairingErrorMessage(cause: unknown): string {
   if (message === 'No Gateway route could be reached') {
     return 'None of the Gateway addresses responded. Check that the Gateway is online and its secure connection is active.';
   }
+  if (message.startsWith('PAIRING_ROUTE_PERMISSION_REQUIRED:')) {
+    return 'The current Gateway address did not respond. Select Continue to allow the next address listed in the invitation.';
+  }
   return message;
 }
 
 export function SidePanelApp() {
   const [profile, setProfile] = useState<BrowserGatewayProfile>();
-  const [pairingLink, setPairingLink] = useState('');
+  const [invitation, setInvitation] = useState('');
   const [confirmationCode, setConfirmationCode] = useState('');
   const [state, setState] = useState<'loading' | 'unpaired' | 'pairing' | 'online' | 'offline'>('loading');
   const [error, setError] = useState('');
-  const [localPairingLink, setLocalPairingLink] = useState('');
+  const [localInvitation, setLocalInvitation] = useState('');
+  const [nextOrigin, setNextOrigin] = useState<string>();
   const initializationStarted = useRef(false);
   const pairingStarted = useRef(false);
 
-  const connect = useCallback(async (link: string) => {
+  const connect = useCallback(async (value: string, origin?: string) => {
     if (pairingStarted.current) return;
     pairingStarted.current = true;
     setState('pairing');
     setError('');
     setConfirmationCode('');
-    setPairingLink(link);
+    setInvitation(value);
     try {
-      const paired = await pairGateway(link, setConfirmationCode);
+      const paired = await pairGateway(value, setConfirmationCode, origin);
       await setAutoConnectEnabled(true);
       await reconnectBrowserBridge();
       setProfile(paired);
       setState('online');
     } catch (cause) {
       setError(pairingErrorMessage(cause));
+      setNextOrigin((await readPendingBrowserPairing())?.nextOrigin);
       setState('unpaired');
     } finally {
       pairingStarted.current = false;
@@ -76,14 +83,23 @@ export function SidePanelApp() {
         return;
       }
 
+      const pending = await readPendingBrowserPairing();
+      if (pending) {
+        setInvitation(pending.invitation);
+        setNextOrigin(pending.nextOrigin);
+        if (!pending.nextOrigin) await connect(pending.invitation);
+        else setState('unpaired');
+        return;
+      }
+
       const local = await discoverLocalGateway();
       if (!local) {
         setState('unpaired');
         return;
       }
 
-      setLocalPairingLink(local.pairingLink);
-      await connect(local.pairingLink);
+      setLocalInvitation(local.invitation);
+      await connect(local.invitation);
     })();
   }, [connect]);
 
@@ -92,7 +108,7 @@ export function SidePanelApp() {
   async function disconnect() {
     await revokeAndForgetProfile();
     setProfile(undefined);
-    setLocalPairingLink('');
+    setLocalInvitation('');
     setState('unpaired');
   }
 
@@ -102,8 +118,23 @@ export function SidePanelApp() {
     try {
       const local = await discoverLocalGateway({ force: true });
       if (!local) throw new Error('No local xopc Gateway was found');
-      setLocalPairingLink(local.pairingLink);
-      await connect(local.pairingLink);
+      setLocalInvitation(local.invitation);
+      await connect(local.invitation);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+      setState('unpaired');
+    }
+  }
+
+  async function cancelPairing() {
+    setState('pairing');
+    setError('');
+    try {
+      await cancelPendingBrowserPairing();
+      setInvitation('');
+      setNextOrigin(undefined);
+      setConfirmationCode('');
+      setState('unpaired');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
       setState('unpaired');
@@ -124,10 +155,10 @@ export function SidePanelApp() {
         {(state === 'unpaired' || state === 'pairing') ? (
           <div className="card">
             <h1>Connect a Gateway</h1>
-            {localPairingLink ? (
+            {localInvitation ? (
               <>
                 <p className="muted">A local xopc Gateway was found. xopc connects automatically on this computer.</p>
-                <button className="primary local-connect" onClick={() => void connect(localPairingLink)} disabled={state === 'pairing'}>
+                <button className="primary local-connect" onClick={() => void connect(localInvitation)} disabled={state === 'pairing'}>
                   {state === 'pairing' ? 'Connecting…' : 'Retry local connection'}
                 </button>
                 <div className="pairing-divider">or paste an invitation</div>
@@ -143,16 +174,17 @@ export function SidePanelApp() {
             )}
             <label className="field">
               One-time invitation
-              <textarea rows={4} value={pairingLink} onChange={(event) => setPairingLink(event.target.value)} disabled={state === 'pairing'} />
+              <textarea rows={4} value={invitation} onChange={(event) => setInvitation(event.target.value)} disabled={state === 'pairing'} />
             </label>
             {confirmationCode ? (
               <><p className="muted">Confirm this code in the Gateway:</p><div className="approval-code">{confirmationCode}</div></>
             ) : null}
             {error ? <div className="error-text">{error}</div> : null}
             <div className="actions">
-              <button className="primary" onClick={() => void connect(pairingLink)} disabled={!pairingLink.trim() || state === 'pairing'}>
-                {state === 'pairing' ? 'Waiting for approval…' : 'Connect'}
+              <button className="primary" onClick={() => void connect(invitation, nextOrigin)} disabled={!invitation.trim() || state === 'pairing'}>
+                {state === 'pairing' ? 'Waiting for approval…' : nextOrigin ? `Allow ${new URL(nextOrigin).host} and continue` : 'Connect'}
               </button>
+              {invitation ? <button onClick={() => void cancelPairing()} disabled={state === 'pairing'}>Cancel pairing</button> : null}
             </div>
           </div>
         ) : null}

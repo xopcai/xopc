@@ -1,6 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { CheckCircle2, Download, ExternalLink, PanelRight, Smartphone, X } from 'lucide-react';
+import { CheckCircle2, Download, ExternalLink, Laptop, PanelRight, Smartphone, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,7 @@ export function DevicePairingWizard({ open, onOpenChange, onPaired, targetKind }
   onPaired?: () => void;
   targetKind?: DevicePairingTargetKind;
 }) {
+  const navigate = useNavigate();
   const [selectedTarget, setSelectedTarget] = useState<DevicePairingTargetKind | undefined>(targetKind);
   useEffect(() => { setSelectedTarget(targetKind); }, [targetKind]);
   const handleOpenChange = (nextOpen: boolean) => {
@@ -37,12 +39,20 @@ export function DevicePairingWizard({ open, onOpenChange, onPaired, targetKind }
   return <Dialog.Root open={open} onOpenChange={handleOpenChange}>
     {open ? selectedTarget
       ? <DevicePairingWizardContent targetKind={selectedTarget} onClose={() => handleOpenChange(false)} onPaired={onPaired} />
-      : <DeviceKindChooser onChoose={setSelectedTarget} onClose={() => handleOpenChange(false)} /> : null}
+      : <DeviceKindChooser
+          onChoose={setSelectedTarget}
+          onChooseLocalBrowser={() => {
+            handleOpenChange(false);
+            navigate('/settings/agent-browser?driver=extension');
+          }}
+          onClose={() => handleOpenChange(false)}
+        /> : null}
   </Dialog.Root>;
 }
 
-function DeviceKindChooser({ onChoose, onClose }: {
+function DeviceKindChooser({ onChoose, onChooseLocalBrowser, onClose }: {
   onChoose: (target: DevicePairingTargetKind) => void;
+  onChooseLocalBrowser: () => void;
   onClose: () => void;
 }) {
   const language = useLocaleStore(s => s.language);
@@ -57,7 +67,12 @@ function DeviceKindChooser({ onChoose, onClose }: {
       <div className="min-h-0 flex-1 overflow-y-auto px-8 py-7">
         <Dialog.Title className="text-xl font-semibold tracking-tight text-fg">{copy.chooseTitle}</Dialog.Title>
         <Dialog.Description className="mt-2 text-sm leading-relaxed text-fg-muted">{copy.chooseHint}</Dialog.Description>
-        <div className="mt-7 grid gap-3 sm:grid-cols-2">
+        <div className="mt-7 grid gap-3 sm:grid-cols-3">
+          <button type="button" className="rounded-xl border border-edge bg-surface-base p-5 text-left hover:border-edge-strong hover:bg-surface-hover" onClick={onChooseLocalBrowser}>
+            <Laptop className="size-5 text-accent" />
+            <span className="mt-4 block text-sm font-semibold text-fg">{copy.localBrowserTitle}</span>
+            <span className="mt-1 block text-xs leading-5 text-fg-muted">{copy.localBrowserHint}</span>
+          </button>
           <button type="button" className="rounded-xl border border-edge bg-surface-base p-5 text-left hover:border-edge-strong hover:bg-surface-hover" onClick={() => onChoose('mobile')}>
             <Smartphone className="size-5 text-accent" />
             <span className="mt-4 block text-sm font-semibold text-fg">{copy.mobileTitle}</span>
@@ -65,8 +80,8 @@ function DeviceKindChooser({ onChoose, onClose }: {
           </button>
           <button type="button" className="rounded-xl border border-edge bg-surface-base p-5 text-left hover:border-edge-strong hover:bg-surface-hover" onClick={() => onChoose('browser')}>
             <PanelRight className="size-5 text-accent" />
-            <span className="mt-4 block text-sm font-semibold text-fg">{copy.browserTitle}</span>
-            <span className="mt-1 block text-xs leading-5 text-fg-muted">{copy.browserHint}</span>
+            <span className="mt-4 block text-sm font-semibold text-fg">{copy.remoteBrowserTitle}</span>
+            <span className="mt-1 block text-xs leading-5 text-fg-muted">{copy.remoteBrowserHint}</span>
           </button>
         </div>
       </div>
@@ -96,10 +111,12 @@ function DevicePairingWizardContent({ targetKind, onClose, onPaired }: {
   const delivered = useRef(false);
   const status = useSWR(setup ? ['device-pairing-setup', setup.id] : null, () => fetchDevicePairingSetup(setup!.id), { refreshInterval: 1500 });
   const request = status.data?.request;
-  const completed = request?.status === 'completed';
-  const background = useSWR(completed && window.electronAPI?.system ? 'system-behavior' : null, () => window.electronAPI!.system!.getBehavior());
-  const qr = useAsyncResource(() => encodeMobilePairQr(setup?.universalLink ?? ''), [setup?.universalLink], {
-    enabled: Boolean(setup && targetKind === 'mobile'), initial: null as string | null, errorData: null,
+  const credentialsCommitted = request?.status === 'completed';
+  const connected = credentialsCommitted && request.connectedAt !== undefined;
+  const background = useSWR(connected && window.electronAPI?.system ? 'system-behavior' : null, () => window.electronAPI!.system!.getBehavior());
+  const mobileInvitation = setup?.targetKind === 'mobile' ? setup.universalLink : '';
+  const qr = useAsyncResource(() => encodeMobilePairQr(mobileInvitation), [mobileInvitation], {
+    enabled: Boolean(mobileInvitation), initial: null as string | null, errorData: null,
   });
   const mobileDownloadUrl = language === 'zh' ? 'https://xopc.ai/zh#download' : 'https://xopc.ai/en#download';
   const browserDocsUrl = language === 'zh'
@@ -130,7 +147,7 @@ function DevicePairingWizardContent({ targetKind, onClose, onPaired }: {
   useEffect(() => {
     if (readiness.data?.ready && !setup && error !== 'create' && !creating.current) void create();
   }, [readiness.data, setup, error, create]);
-  useEffect(() => { if (completed && !delivered.current) { delivered.current = true; onPaired?.(); } }, [completed, onPaired]);
+  useEffect(() => { if (connected && !delivered.current) { delivered.current = true; onPaired?.(); } }, [connected, onPaired]);
   const decide = async (decision: 'approve' | 'reject') => {
     if (!request) return;
     setBusy(true); setError(null);
@@ -152,7 +169,7 @@ function DevicePairingWizardContent({ targetKind, onClose, onPaired }: {
   };
   const preparationTitle = targetKind === 'mobile' ? copy.mobilePrepareTitle : copy.browserPrepareTitle;
   const preparationHint = targetKind === 'mobile' ? copy.mobilePrepareHint : copy.browserPrepareHint;
-  const title = !started ? preparationTitle : completed ? targetCopy.success : request?.status === 'pending' ? targetCopy.allowTitle : request?.status === 'approved' ? f.waiting : setup ? targetCopy.connect : f.title;
+  const title = !started ? preparationTitle : connected ? targetCopy.success : request?.status === 'pending' ? targetCopy.allowTitle : credentialsCommitted || request?.status === 'approved' ? f.waiting : setup ? targetCopy.connect : f.title;
   const errorMessage = error === 'create' ? f.createFailed
     : error === 'decision' ? f.decisionFailed
       : error === 'background' ? f.backgroundFailed
@@ -172,10 +189,10 @@ function DevicePairingWizardContent({ targetKind, onClose, onPaired }: {
         <button type="button" className="flex size-10 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover" aria-label={f.cancel} onClick={onClose}><X className="size-4" /></button>
       </header>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-8 py-7">
-        {completed ? <CheckCircle2 className="mb-5 size-7 text-success" /> : null}
+        {connected ? <CheckCircle2 className="mb-5 size-7 text-success" /> : null}
         <Dialog.Title className="text-xl font-semibold tracking-tight text-fg">{title}</Dialog.Title>
         <Dialog.Description className="mt-2 text-sm leading-relaxed text-fg-muted">
-          {!started ? preparationHint : completed ? targetCopy.successHint : request ? request.displayName : setup ? targetCopy.connectHint : f.intro}
+          {!started ? preparationHint : connected ? targetCopy.successHint : credentialsCommitted ? f.waitingForDevice : request ? request.displayName : setup ? targetCopy.connectHint : f.intro}
         </Dialog.Description>
         {errorMessage ? <p role="alert" className="mt-4 text-sm text-danger">{errorMessage}</p> : null}
         {started && readiness.error ? <p role="alert" className="mt-4 text-sm text-danger">{f.readinessFailed}</p> : null}
@@ -199,7 +216,7 @@ function DevicePairingWizardContent({ targetKind, onClose, onPaired }: {
             {copy.browserInstallHelp}<ExternalLink className="size-3" />
           </button>
         </div> : !readiness.data ? <div className="mt-8 space-y-4"><Skeleton className="h-5 w-3/4" /><Skeleton className="h-40 w-full" /></div> :
-          completed ? <>
+          connected ? <>
             {background.data ? <label className="mt-8 flex items-center justify-between gap-4 border-y border-edge-subtle py-5 text-sm text-fg">
               {copy.background}<input type="checkbox" role="switch" aria-checked={background.data.runInBackground ?? false} disabled={!background.data.backgroundSupported} checked={background.data.runInBackground ?? false} className="size-5 accent-accent"
                 onChange={e => { void window.electronAPI!.system!.setBehavior({ runInBackground: e.target.checked }).then(result => background.mutate(result.behavior)).catch(() => setError('background')); }} />
@@ -211,7 +228,7 @@ function DevicePairingWizardContent({ targetKind, onClose, onPaired }: {
             <p className="mt-10 font-mono text-4xl tracking-[0.16em] text-fg" aria-live="polite">{request.confirmationCode.slice(0, 3)} {request.confirmationCode.slice(3)}</p>
             <p className="mt-3 text-xs text-fg-muted">{f.compare}</p>
             <details className="mt-6 text-xs text-fg-muted"><summary className="cursor-pointer py-2">{f.access}</summary><p>{f.accessHint}</p></details>
-          </> : setup && targetKind === 'mobile' ? <>
+          </> : setup?.targetKind === 'mobile' ? <>
             <div className="my-6 flex justify-center">{qr.data ? <img src={qr.data} alt={copy.qrAlt} width={216} height={216} className="size-[216px] max-w-full rounded-lg bg-white" /> : qr.error ? null : <Skeleton className="size-[216px]" />}</div>
             {qr.error ? <p role="status" className="text-center text-sm text-warning">{f.qrFailed}</p> : null}
             <p className="text-center text-xs text-fg-muted">{setup.expiresAt - serverNow < 60_000 ? `${Math.max(0, Math.ceil((setup.expiresAt - serverNow) / 1000))}s` : f.valid}</p>
@@ -223,7 +240,7 @@ function DevicePairingWizardContent({ targetKind, onClose, onPaired }: {
               <li><span className="mr-2 text-fg-subtle">2.</span>{copy.browserConnectStep2}</li>
               <li><span className="mr-2 text-fg-subtle">3.</span>{copy.browserConnectStep3}</li>
             </ol>
-            <div className="mt-6"><CopyTextRow text={setup.universalLink} labels={{ copy: copy.copy, copied: copy.copied, copyFailed: m.clipboard.copyFailed }} /></div>
+            <div className="mt-6"><CopyTextRow text={setup.browserInvitation} labels={{ copy: copy.copy, copied: copy.copied, copyFailed: m.clipboard.copyFailed }} /></div>
             <p className="mt-3 text-center text-xs text-fg-muted">{setup.expiresAt - serverNow < 60_000 ? `${Math.max(0, Math.ceil((setup.expiresAt - serverNow) / 1000))}s` : f.valid}</p>
           </> : readiness.data.ready ? <div className="mt-8"><Skeleton className="mx-auto size-[216px]" /></div> :
           <div className="mt-6 flex flex-1 flex-col">
@@ -234,8 +251,8 @@ function DevicePairingWizardContent({ targetKind, onClose, onPaired }: {
             <Button variant="ghost" className="mt-3 w-full" onClick={() => setAlternative(alternative ? null : 'choices')}>{alternative ? f.back : f.existing}</Button>
           </div>}
       </div>
-      {!started || readiness.error || completed || request?.status === 'pending' || error === 'create' || error === 'decision' ? <footer className="shrink-0 px-8 pb-6">
-        {!started ? <Button className="w-full" variant="primary" onClick={() => { setError(null); setStarted(true); }}>{targetKind === 'mobile' ? copy.mobileReady : copy.browserReady}</Button> : completed ? <Button className="w-full" variant="primary" onClick={onClose}>{f.done}</Button> : request?.status === 'pending' ? <div className="flex flex-col gap-2">
+      {!started || readiness.error || connected || request?.status === 'pending' || error === 'create' || error === 'decision' ? <footer className="shrink-0 px-8 pb-6">
+        {!started ? <Button className="w-full" variant="primary" onClick={() => { setError(null); setStarted(true); }}>{targetKind === 'mobile' ? copy.mobileReady : copy.browserReady}</Button> : connected ? <Button className="w-full" variant="primary" onClick={onClose}>{f.done}</Button> : request?.status === 'pending' ? <div className="flex flex-col gap-2">
           <Button className="w-full" variant="primary" disabled={busy} onClick={() => void decide('approve')}>{f.allow}</Button>
           <Button className="w-full" variant="ghost" disabled={busy} onClick={() => void decide('reject')}>{f.cancel}</Button>
         </div> : readiness.error ? <Button className="w-full" variant="primary" onClick={() => void readiness.mutate()}>{f.retry}</Button>

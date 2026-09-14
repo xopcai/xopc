@@ -3,6 +3,7 @@ import type { Hono, MiddlewareHandler } from 'hono';
 import type { Config } from '../../../config/schema.js';
 import { requireTunnelGatewayToken } from '../../../tunnel/auth-policy.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+import { createLogger } from '../../../utils/logger.js';
 import {
   assertTunnelMayStart,
   getTunnelConsentState,
@@ -26,9 +27,14 @@ import {
   mergeTunnelConfigPatch,
   setTunnelEnabledInConfig,
 } from '../../../tunnel/tunnel-config.js';
-import { provisionTunnelRegistrationKey } from '../../../tunnel/xopc-cloud-registration.js';
+import {
+  provisionTunnelRegistrationKey,
+  TunnelRegistrationProvisionError,
+} from '../../../tunnel/xopc-cloud-registration.js';
 import { consumeTunnelMutationLimit } from '../../../tunnel/tunnel-rate-limit.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+
+const log = createLogger('Gateway:Tunnel');
 
 async function configureTunnelFromService(
   deps: AuthenticatedRouteDeps,
@@ -188,6 +194,9 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
 
   authenticated.post('/api/tunnel/registration-key', tunnelMutationLimit, async (c) => {
     const config = deps.service.currentConfig as Config;
+    if (readTunnelRegistrationSecretFromConfigOnly(config)) {
+      return c.json({ ok: true, reused: true });
+    }
     try {
       const registrationSecret = await provisionTunnelRegistrationKey();
       const merged = mergeTunnelConfigPatch(config, { registrationSecret });
@@ -206,7 +215,29 @@ export function registerTunnelRoutes(authenticated: Hono, deps: AuthenticatedRou
       return c.json({ ok: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      return c.json({ ok: false, error: message }, 502);
+      if (error instanceof TunnelRegistrationProvisionError) {
+        const status = error.code === 'tunnel_key_limit_reached'
+          ? 409
+          : error.code === 'tunnel_oauth_required'
+            ? 403
+            : 502;
+        log.warn(
+          { err: error, code: error.code, upstreamStatus: error.status, phase: 'registration_key' },
+          `Tunnel registration key failed: ${message}`,
+        );
+        return c.json({
+          ok: false,
+          error: { code: error.code, message },
+        }, status);
+      }
+      log.warn(
+        { err: error, errorMessage: message, phase: 'registration_key' },
+        `Tunnel registration key failed: ${message}`,
+      );
+      return c.json({
+        ok: false,
+        error: { code: 'tunnel_registration_failed', message },
+      }, 502);
     }
   });
 

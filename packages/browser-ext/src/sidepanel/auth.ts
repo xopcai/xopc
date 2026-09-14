@@ -1,9 +1,17 @@
-import { buildDevicePairingProof, type DevicePairingAction } from '@xopcai/gateway-contract';
+import {
+  buildDevicePairingProof,
+  devicePairingInvitationPayloadSchema,
+  isRetryableDevicePairingHttpStatus,
+  readBrowserPairingInvitation,
+  type DevicePairingAction,
+  type DevicePairingInvitationPayload,
+} from '@xopcai/gateway-contract';
 import { endpointHelloSigningPayload, type EndpointHelloPayload } from '@xopcai/endpoint-tools-protocol';
 
 import { clearBrowserOutboxes } from './chat-outbox';
 
 const PROFILE_KEY = 'xopc.browser.profile';
+const PAIRING_JOURNAL_KEY = 'xopc.browser.pairing';
 const AUTO_CONNECT_KEY = 'xopc.browser.auto-connect';
 const KEY_DATABASE = 'xopc-browser-identity';
 const KEY_STORE = 'identity';
@@ -24,16 +32,21 @@ export type BrowserGatewayProfile = {
   accessTokenExpiresAt: number;
 };
 
-type PairingPayload = {
-  version: 3;
-  targetKind: 'browser';
-  pairingToken: string;
-  gatewayId: string;
-  gatewayName: string;
-  gatewayPublicKey: string;
-  routes: Array<{ id: string; url: string }>;
-  expiresAt: number;
+type PairingPayload = DevicePairingInvitationPayload & { targetKind: 'browser' };
+
+type BrowserPairingJournal = {
+  invitation: string;
+  payload: PairingPayload;
+  requestId: string;
+  idempotencyKey: string;
+  initialRefreshToken: string;
+  origin?: string;
+  completed?: { deviceId: string; gatewayName: string };
+  refresh?: { requestId: string; nextRefreshToken: string };
+  nextOrigin?: string;
 };
+
+export type PendingBrowserPairing = { invitation: string; nextOrigin?: string };
 
 type PairingResponse = {
   request: {
@@ -50,7 +63,7 @@ type PairingResponse = {
 
 export type LocalGatewayBootstrap = {
   gatewayUrl: string;
-  pairingLink: string;
+  invitation: string;
   expiresAt: number;
 };
 
@@ -88,13 +101,13 @@ export async function discoverLocalGateway(options?: { force?: boolean }): Promi
       },
     ) as Partial<LocalGatewayBootstrap> & { ok?: boolean; error?: string };
     if (response.ok !== true || typeof response.gatewayUrl !== 'string'
-      || typeof response.pairingLink !== 'string' || typeof response.expiresAt !== 'number') {
+      || typeof response.invitation !== 'string' || typeof response.expiresAt !== 'number') {
       if (options?.force) throw new Error(response.error || 'The local xopc enrollment host returned an invalid response');
       return undefined;
     }
     return {
       gatewayUrl: response.gatewayUrl,
-      pairingLink: response.pairingLink,
+      invitation: response.invitation,
       expiresAt: response.expiresAt,
     };
   } catch (cause) {
@@ -127,27 +140,12 @@ function createRefreshToken(): string {
   return `xopc_rt_${crypto.randomUUID()}_${randomNonce(32)}`;
 }
 
-export function parseBrowserPairingLink(value: string): PairingPayload {
-  const url = new URL(value.trim());
-  if (url.protocol !== 'https:' || url.hostname !== 'link.xopc.ai' || url.pathname !== '/connect') {
-    throw new Error('Pairing link is not from xopc');
-  }
-  const encoded = new URLSearchParams(url.hash.slice(1)).get('p');
-  if (!encoded) throw new Error('Pairing link is invalid');
-  const payload = decodeJson<PairingPayload>(encoded);
-  if (payload.version !== 3 || payload.targetKind !== 'browser'
-    || !payload.gatewayId || !payload.pairingToken || !payload.gatewayPublicKey
-    || !Array.isArray(payload.routes)) {
-    throw new Error('Pairing link version is not supported');
-  }
-  if (payload.expiresAt <= Date.now()) throw new Error('Pairing link has expired');
-  if (!payload.routes.length) throw new Error('Pairing link has no Gateway route');
-  for (const route of payload.routes) {
-    const routeUrl = new URL(route.url);
-    if (!route.id || !['http:', 'https:'].includes(routeUrl.protocol)) {
-      throw new Error('Pairing link has an invalid Gateway route');
-    }
-  }
+export function parseBrowserPairingInvitation(value: string, allowExpired = false): PairingPayload {
+  const encoded = readBrowserPairingInvitation(value);
+  const parsed = devicePairingInvitationPayloadSchema.safeParse(decodeJson<unknown>(encoded));
+  if (!parsed.success || parsed.data.targetKind !== 'browser') throw new Error('Pairing invitation version is not supported');
+  const payload = parsed.data as PairingPayload;
+  if (!allowExpired && payload.expiresAt <= Date.now()) throw new Error('Pairing invitation has expired');
   return payload;
 }
 
@@ -247,6 +245,12 @@ function requestGatewayOriginPermissions(origins: string[]): Promise<boolean> {
   return chrome.permissions.request({ origins: patterns });
 }
 
+async function hasGatewayOriginPermission(origin: string): Promise<boolean> {
+  const url = new URL(origin);
+  if (url.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(url.hostname)) return true;
+  return chrome.permissions.contains({ origins: [`${url.origin}/*`] });
+}
+
 class GatewayHttpError extends Error {
   constructor(message: string, readonly status: number) {
     super(message);
@@ -326,8 +330,13 @@ async function signedPairingRequest(
 
 function shouldTryNextRoute(cause: unknown): boolean {
   return !(cause instanceof GatewayHttpError)
-    || cause.status >= 500
-    || [404, 408, 425, 429].includes(cause.status);
+    || isRetryableDevicePairingHttpStatus(cause.status);
+}
+
+function isRouteFailure(cause: unknown): boolean {
+  if (cause instanceof GatewayHttpError) return isRetryableDevicePairingHttpStatus(cause.status);
+  const message = cause instanceof Error ? cause.message : String(cause);
+  return /network|fetch|respond|identity|route/i.test(message);
 }
 
 async function signedPairingRequestAcrossRoutes(
@@ -355,9 +364,12 @@ async function refreshAccessToken(
   refreshToken: string,
   pair: CryptoKeyPair,
   gateway: { gatewayId: string; gatewayPublicKey: string },
+  operation: { requestId: string; nextRefreshToken: string } = {
+    requestId: crypto.randomUUID(),
+    nextRefreshToken: createRefreshToken(),
+  },
 ): Promise<{ accessToken: string; accessTokenExpiresAt: number; refreshToken: string; gatewayUrl: string }> {
-  const nextRefreshToken = createRefreshToken();
-  const requestId = crypto.randomUUID();
+  const { nextRefreshToken, requestId } = operation;
   const timestamp = Date.now();
   const nonce = randomNonce();
   const credentialId = refreshToken.slice('xopc_rt_'.length).split('_')[0]!;
@@ -411,61 +423,147 @@ function wait(milliseconds: number): Promise<void> {
 }
 
 export async function pairGateway(
-  link: string,
+  invitation: string,
   onApproval: (confirmationCode: string) => void,
+  requestedOrigin?: string,
 ): Promise<BrowserGatewayProfile> {
-  const payload = parseBrowserPairingLink(link);
+  const payload = parseBrowserPairingInvitation(invitation, true);
   const origins = [...new Set(payload.routes.map(route => new URL(route.url).origin))];
-  const permissionTask = requestGatewayOriginPermissions(origins);
+  const selectedOrigin = requestedOrigin && origins.includes(requestedOrigin) ? requestedOrigin : origins[0]!;
+  const permissionTask = requestGatewayOriginPermissions([selectedOrigin]);
   if (!await permissionTask) throw new Error('Gateway site permission was not granted');
+  const permittedOrigins = (await Promise.all(origins.map(async origin => ({
+    origin,
+    permitted: await hasGatewayOriginPermission(origin),
+  })))).filter(candidate => candidate.permitted).map(candidate => candidate.origin);
   const pair = await getOrCreateKeyPair();
-  const requestId = crypto.randomUUID();
-  const initialRefreshToken = createRefreshToken();
-  let { origin, result } = await signedPairingRequestAcrossRoutes(
-    pair, payload, origins, requestId, 'request',
-  );
-  if (result.request.status === 'pending') onApproval(result.request.confirmationCode);
-  while (result.request.status === 'pending') {
-    await wait(1_500);
-    const response = await signedPairingRequestAcrossRoutes(
-      pair, payload, [origin, ...origins.filter(candidate => candidate !== origin)], requestId, 'status',
-    );
-    ({ origin, result } = response);
+  const stored = await chrome.storage.local.get(PAIRING_JOURNAL_KEY);
+  let journal = stored[PAIRING_JOURNAL_KEY] as BrowserPairingJournal | undefined;
+  if (journal && journal.payload.pairingToken !== payload.pairingToken) {
+    throw new Error('PAIRING_ALREADY_PENDING');
   }
-  if (result.request.status !== 'approved' && result.request.status !== 'completed') {
-    throw new Error(`Pairing ${result.request.status}`);
-  }
-  if (result.request.status !== 'completed') {
-    const response = await signedPairingRequestAcrossRoutes(
-      pair, payload, [origin, ...origins.filter(candidate => candidate !== origin)], requestId, 'complete', {
+  if (!journal) {
+    if (payload.expiresAt <= Date.now()) throw new Error('Pairing invitation has expired');
+    journal = {
+      invitation: invitation.trim(),
+      payload,
+      requestId: crypto.randomUUID(),
       idempotencyKey: crypto.randomUUID(),
-      initialRefreshToken,
-      },
-    );
-    ({ origin, result } = response);
+      initialRefreshToken: createRefreshToken(),
+    };
+    await chrome.storage.local.set({ [PAIRING_JOURNAL_KEY]: journal });
   }
-  if (!result.request.deviceId) throw new Error('Gateway did not register the browser');
-  const orderedOrigins = [origin, ...origins.filter(candidate => candidate !== origin)];
-  const tokens = await refreshAccessToken(orderedOrigins, initialRefreshToken, pair, payload);
-  const profile: BrowserGatewayProfile = {
-    gatewayId: payload.gatewayId,
-    gatewayName: result.gateway.name,
-    gatewayUrl: tokens.gatewayUrl,
-    gatewayUrls: [tokens.gatewayUrl, ...orderedOrigins.filter(candidate => candidate !== tokens.gatewayUrl)],
-    gatewayPublicKey: payload.gatewayPublicKey,
-    deviceId: result.request.deviceId,
-    refreshToken: tokens.refreshToken,
-    accessToken: tokens.accessToken,
-    accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-  };
-  await chrome.storage.local.set({ [PROFILE_KEY]: profile });
-  return profile;
+  delete journal.nextOrigin;
+  await chrome.storage.local.set({ [PAIRING_JOURNAL_KEY]: journal });
+  const requestId = journal.requestId;
+  const availableOrigins = journal.origin && permittedOrigins.includes(journal.origin)
+    ? [journal.origin, ...permittedOrigins.filter(candidate => candidate !== journal.origin)]
+    : [selectedOrigin, ...permittedOrigins.filter(candidate => candidate !== selectedOrigin)];
+  try {
+    let { origin, result } = await signedPairingRequestAcrossRoutes(
+      pair, journal.payload, availableOrigins, requestId, 'request',
+    );
+    journal.origin = origin;
+    await chrome.storage.local.set({ [PAIRING_JOURNAL_KEY]: journal });
+    if (result.request.status === 'pending') onApproval(result.request.confirmationCode);
+    while (result.request.status === 'pending') {
+      await wait(1_500);
+      const response = await signedPairingRequestAcrossRoutes(
+        pair, journal.payload, [origin, ...permittedOrigins.filter(candidate => candidate !== origin)], requestId, 'status',
+      );
+      ({ origin, result } = response);
+      journal.origin = origin;
+      await chrome.storage.local.set({ [PAIRING_JOURNAL_KEY]: journal });
+    }
+    if (result.request.status !== 'approved' && result.request.status !== 'completed') {
+      await chrome.storage.local.remove(PAIRING_JOURNAL_KEY);
+      throw new Error(`Pairing ${result.request.status}`);
+    }
+    if (result.request.status !== 'completed') {
+      const response = await signedPairingRequestAcrossRoutes(
+        pair, journal.payload, [origin, ...permittedOrigins.filter(candidate => candidate !== origin)], requestId, 'complete', {
+          idempotencyKey: journal.idempotencyKey,
+          initialRefreshToken: journal.initialRefreshToken,
+        },
+      );
+      ({ origin, result } = response);
+    }
+    if (!result.request.deviceId) throw new Error('Gateway did not register the browser');
+    journal.origin = origin;
+    journal.completed = { deviceId: result.request.deviceId, gatewayName: result.gateway.name };
+    journal.refresh ??= { requestId: crypto.randomUUID(), nextRefreshToken: createRefreshToken() };
+    await chrome.storage.local.set({ [PAIRING_JOURNAL_KEY]: journal });
+    const orderedOrigins = [origin, ...permittedOrigins.filter(candidate => candidate !== origin)];
+    const tokens = await refreshAccessToken(
+      orderedOrigins,
+      journal.initialRefreshToken,
+      pair,
+      journal.payload,
+      journal.refresh,
+    );
+    const profile: BrowserGatewayProfile = {
+      gatewayId: journal.payload.gatewayId,
+      gatewayName: journal.completed.gatewayName,
+      gatewayUrl: tokens.gatewayUrl,
+      gatewayUrls: [tokens.gatewayUrl, ...orderedOrigins.filter(candidate => candidate !== tokens.gatewayUrl)],
+      gatewayPublicKey: journal.payload.gatewayPublicKey,
+      deviceId: journal.completed.deviceId,
+      refreshToken: tokens.refreshToken,
+      accessToken: tokens.accessToken,
+      accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+    };
+    await chrome.storage.local.set({ [PROFILE_KEY]: profile });
+    await chrome.storage.local.remove(PAIRING_JOURNAL_KEY);
+    return profile;
+  } catch (cause) {
+    const nextOrigin = origins.find(origin => !permittedOrigins.includes(origin));
+    if (nextOrigin && isRouteFailure(cause)) {
+      journal.nextOrigin = nextOrigin;
+      await chrome.storage.local.set({ [PAIRING_JOURNAL_KEY]: journal });
+      throw new Error(`PAIRING_ROUTE_PERMISSION_REQUIRED:${nextOrigin}`);
+    }
+    throw cause;
+  }
+}
+
+export async function readPendingBrowserPairing(): Promise<PendingBrowserPairing | undefined> {
+  const stored = await chrome.storage.local.get(PAIRING_JOURNAL_KEY);
+  const journal = stored[PAIRING_JOURNAL_KEY] as BrowserPairingJournal | undefined;
+  return journal ? { invitation: journal.invitation, ...(journal.nextOrigin ? { nextOrigin: journal.nextOrigin } : {}) } : undefined;
+}
+
+export async function cancelPendingBrowserPairing(): Promise<void> {
+  const stored = await chrome.storage.local.get(PAIRING_JOURNAL_KEY);
+  const journal = stored[PAIRING_JOURNAL_KEY] as BrowserPairingJournal | undefined;
+  if (!journal) return;
+  const origins = [...new Set(journal.payload.routes.map(route => new URL(route.url).origin))];
+  const permittedOrigins = (await Promise.all(origins.map(async origin => ({
+    origin,
+    permitted: await hasGatewayOriginPermission(origin),
+  })))).filter(candidate => candidate.permitted).map(candidate => candidate.origin);
+  try {
+    await signedPairingRequestAcrossRoutes(
+      await getOrCreateKeyPair(),
+      journal.payload,
+      journal.origin && permittedOrigins.includes(journal.origin)
+        ? [journal.origin, ...permittedOrigins.filter(candidate => candidate !== journal.origin)]
+        : permittedOrigins,
+      journal.requestId,
+      'cancel',
+    );
+  } catch (cause) {
+    if (!(cause instanceof GatewayHttpError) || !['PAIRING_NOT_FOUND', 'PAIRING_EXPIRED', 'PAIRING_CANCELLED']
+      .includes(cause.message)) throw cause;
+  }
+  await chrome.storage.local.remove(PAIRING_JOURNAL_KEY);
 }
 
 export async function readProfile(): Promise<BrowserGatewayProfile | undefined> {
-  const stored = await chrome.storage.local.get(PROFILE_KEY);
+  const stored = await chrome.storage.local.get([PROFILE_KEY, PAIRING_JOURNAL_KEY]);
   const profile = stored[PROFILE_KEY] as BrowserGatewayProfile | undefined;
-  return profile?.gatewayId && profile.gatewayUrl && profile.refreshToken ? profile : undefined;
+  if (!profile?.gatewayId || !profile.gatewayUrl || !profile.refreshToken) return undefined;
+  if (stored[PAIRING_JOURNAL_KEY]) await chrome.storage.local.remove(PAIRING_JOURNAL_KEY);
+  return profile;
 }
 
 export async function getAccessProfile(): Promise<BrowserGatewayProfile> {
@@ -551,7 +649,7 @@ export async function createBrowserEndpointHello(
 }
 
 export async function forgetProfile(): Promise<void> {
-  await chrome.storage.local.remove(PROFILE_KEY);
+  await chrome.storage.local.remove([PROFILE_KEY, PAIRING_JOURNAL_KEY]);
 }
 
 export async function revokeAndForgetProfile(): Promise<void> {

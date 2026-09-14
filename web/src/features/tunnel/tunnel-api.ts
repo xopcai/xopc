@@ -1,6 +1,23 @@
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
+export const TUNNEL_CONSOLE_REGISTRATION_KEY_URL = 'https://console.xopc.ai/access/client';
+
+export function tunnelApiErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== 'object') return undefined;
+  const body = (error as { body?: unknown }).body;
+  if (!body || typeof body !== 'object') return undefined;
+  const responseError = (body as { error?: unknown }).error;
+  if (!responseError || typeof responseError !== 'object') return undefined;
+  const code = (responseError as { code?: unknown }).code;
+  return typeof code === 'string' ? code : undefined;
+}
+
+export function tunnelApiRequiresAuthorization(error: unknown): boolean {
+  return ['tunnel_oauth_required', 'invalid_token', 'insufficient_scope']
+    .includes(tunnelApiErrorCode(error) ?? '');
+}
+
 export type TunnelStatusResponse = {
   enabled: boolean;
   state: 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';

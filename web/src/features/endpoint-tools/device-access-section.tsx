@@ -1,6 +1,6 @@
-import { PanelRight, ShieldOff, Smartphone } from 'lucide-react';
+import { Laptop, PanelRight, ShieldOff, Smartphone } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import { fetchConnectedDevices, revokeConnectedDevice, type ConnectedDevice } fr
 import { DevicePairingWizard } from './device-pairing-wizard';
 
 export function DeviceAccessSection() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const language = useLocaleStore(s => s.language);
   const copy = messages(language).endpointToolsSettings.deviceAccess;
@@ -43,7 +44,8 @@ export function DeviceAccessSection() {
       <div><h2 className="text-sm font-semibold text-fg">{copy.title}</h2><p className="mt-1 text-sm text-fg-muted">{copy.hint}</p></div>
       <div className="flex flex-wrap gap-2">
         <Button variant="secondary" onClick={() => { setPairingTarget('mobile'); setPairingOpen(true); }}><Smartphone className="size-4" />{copy.addMobile}</Button>
-        <Button variant="primary" onClick={() => { setPairingTarget('browser'); setPairingOpen(true); }}><PanelRight className="size-4" />{copy.addBrowser}</Button>
+        <Button variant="primary" onClick={() => navigate('/settings/agent-browser?driver=extension')}><Laptop className="size-4" />{copy.addLocalBrowser}</Button>
+        <Button variant="secondary" onClick={() => { setPairingTarget('browser'); setPairingOpen(true); }}><PanelRight className="size-4" />{copy.addRemoteBrowser}</Button>
       </div>
     </div>
     {error ? <p role="alert" className="mt-3 text-sm text-danger">{copy.revokeFailed}</p> : null}

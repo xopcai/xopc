@@ -212,7 +212,7 @@ readiness 建议扩展为 `protocolVersions`、`routes[]`、`routeState`、`next
 
 ### 6.2 需电脑确认的配对协议（拟新增 v3）
 
-沿用现有 `link.xopc.ai/connect#p=...` 格式和 HTTPS/WSS 约束。v3 增加协议能力，不直接在旧 exchange 语义上增加一个可绕过的 UI 步骤。
+手机沿用 `link.xopc.ai/connect#p=...` Universal Link 和 HTTPS/WSS 约束；浏览器使用独立版本的不透明剪贴板邀请，不请求该域名。两种载体封装同一个 v3 配对协议。
 
 ```mermaid
 sequenceDiagram
