@@ -1,7 +1,9 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { extensionLocale, t } from '../i18n';
 import {
   BrowserChatClient,
+  type BrowserApproval,
   type BrowserChatSnapshot,
 } from './chat-client';
 import {
@@ -61,7 +63,7 @@ const EMPTY: BrowserChatSnapshot = {
 
 function formatMessageTime(timestamp?: number): string {
   if (!timestamp) return '';
-  return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(timestamp);
+  return new Intl.DateTimeFormat(extensionLocale(), { hour: '2-digit', minute: '2-digit' }).format(timestamp);
 }
 
 function formatSessionDate(timestamp?: string | number): string {
@@ -70,7 +72,31 @@ function formatSessionDate(timestamp?: string | number): string {
   if (!Number.isFinite(date.getTime())) return '';
   const now = new Date();
   if (date.toDateString() === now.toDateString()) return formatMessageTime(date.getTime());
-  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date);
+  return new Intl.DateTimeFormat(extensionLocale(), { month: 'short', day: 'numeric' }).format(date);
+}
+
+const RISK_MESSAGE_KEYS: Record<BrowserApproval['risk'], string> = {
+  external_effect: 'riskExternalEffect',
+  destructive: 'riskDestructive',
+  sensitive: 'riskSensitive',
+  draft: 'riskDraft',
+  read: 'riskRead',
+};
+
+const THINKING_MESSAGE_KEYS: Record<string, string> = {
+  off: 'thinkingOff',
+  minimal: 'thinkingMinimal',
+  low: 'thinkingLow',
+  medium: 'thinkingMedium',
+  high: 'thinkingHigh',
+  xhigh: 'thinkingXhigh',
+  max: 'thinkingMax',
+  ultra: 'thinkingUltra',
+};
+
+function thinkingLabel(level: string): string {
+  const key = THINKING_MESSAGE_KEYS[level];
+  return key ? t(key) : level;
 }
 
 function formatFileSize(size?: number): string {
@@ -232,7 +258,7 @@ export function ChatPanel() {
     setAtBottom(true);
     try {
       if (!snapshot.sessionKey) await client.createSession();
-      if (pageContext?.stale) throw new Error('The attached page changed. Refresh or remove it before sending.');
+      if (pageContext?.stale) throw new Error(t('errorAttachedPageChanged'));
       await client.send(sending, pageContext ? [pageContext.context] : [], sendingAttachments);
       setPageContext(undefined);
     } catch (cause) {
@@ -249,7 +275,7 @@ export function ChatPanel() {
     setError('');
     try {
       const remaining = MAX_BROWSER_ATTACHMENTS - attachments.length;
-      if (incoming.length > remaining) throw new Error(`Attach up to ${MAX_BROWSER_ATTACHMENTS} files`);
+      if (incoming.length > remaining) throw new Error(t('errorAttachmentLimit', String(MAX_BROWSER_ATTACHMENTS)));
       const added = await Promise.all(incoming.map(fileToBrowserAttachment));
       setAttachments((current) => [...current, ...added]);
     } catch (cause) {
@@ -263,7 +289,7 @@ export function ChatPanel() {
   async function addScreenshot() {
     setError('');
     try {
-      if (attachments.length >= MAX_BROWSER_ATTACHMENTS) throw new Error(`Attach up to ${MAX_BROWSER_ATTACHMENTS} files`);
+      if (attachments.length >= MAX_BROWSER_ATTACHMENTS) throw new Error(t('errorAttachmentLimit', String(MAX_BROWSER_ATTACHMENTS)));
       const screenshot = await captureVisibleScreenshot();
       setAttachments((current) => [...current, screenshot]);
     } catch (cause) {
@@ -287,7 +313,7 @@ export function ChatPanel() {
     setError('');
     try {
       const tabId = await activeTabId();
-      if (tabId === undefined) throw new Error('No active web page');
+      if (tabId === undefined) throw new Error(t('errorNoActivePage'));
       setPageContext({
         context: await captureTabWithPermission(tabId, mode),
         tabId,
@@ -394,12 +420,12 @@ export function ChatPanel() {
 
   const activeSession = snapshot.sessions.find((session) => session.key === snapshot.sessionKey);
   const connectionText = snapshot.endpointReady
-    ? 'Ready'
+    ? t('ready')
     : snapshot.connection === 'connected'
-      ? 'Waking up…'
+      ? t('wakingUp')
       : snapshot.connection === 'connecting' || snapshot.connection === 'reconnecting'
-        ? 'Connecting…'
-        : 'Offline';
+        ? t('connecting')
+        : t('offline');
   const connectionProblem = !snapshot.endpointReady
     && (snapshot.connection === 'error' || snapshot.connection === 'disconnected');
 
@@ -408,22 +434,22 @@ export function ChatPanel() {
       <div className="chat-toolbar">
         <button ref={sessionTrigger} className="session-trigger" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
           <span className="session-trigger-copy">
-            <span className="session-title">{activeSession?.title ?? 'New chat'}</span>
+            <span className="session-title">{activeSession?.title ?? t('newChat')}</span>
             <span className="session-status"><span className={`mini-status ${snapshot.endpointReady ? 'online' : ''}`} />{connectionText}</span>
           </span>
           <ChevronDownIcon className="icon-sm" />
         </button>
-        <button className="icon-button" type="button" aria-label="Start a new chat" title="New chat" disabled={snapshot.submitting} onClick={() => void runControlAction(() => client.createSession())}><PlusIcon /></button>
+        <button className="icon-button" type="button" aria-label={t('startNewChat')} title={t('newChat')} disabled={snapshot.submitting} onClick={() => void runControlAction(() => client.createSession())}><PlusIcon /></button>
       </div>
       {menuOpen ? (
         <div className="session-menu" ref={sessionMenu}>
           <div className="session-menu-header">
-            <strong>Recent chats</strong>
-            <button type="button" aria-label="Close recent chats" onClick={() => setMenuOpen(false)}><CloseIcon /></button>
+            <strong>{t('recentChats')}</strong>
+            <button type="button" aria-label={t('closeRecentChats')} onClick={() => setMenuOpen(false)}><CloseIcon /></button>
           </div>
           <label className="session-search">
             <SearchIcon />
-            <input value={search} onChange={(event) => void runSearch(event.target.value)} placeholder="Search chats" autoFocus />
+            <input value={search} onChange={(event) => void runSearch(event.target.value)} placeholder={t('searchChats')} autoFocus />
           </label>
           <div className="session-list">
             {snapshot.sessions.map((session) => (
@@ -435,45 +461,45 @@ export function ChatPanel() {
                 {session.key === snapshot.sessionKey ? <CheckIcon /> : null}
               </button>
             ))}
-            {!snapshot.sessions.length ? <div className="session-list-empty">No chats found</div> : null}
+            {!snapshot.sessions.length ? <div className="session-list-empty">{t('noChatsFound')}</div> : null}
           </div>
         </div>
       ) : null}
       {connectionProblem ? (
         <div className="connection-banner" role="alert">
           <AlertIcon />
-          <span>{snapshot.error || 'Gateway connection is offline.'}</span>
-          <button type="button" onClick={() => void runControlAction(() => client.reconnect())}>Reconnect</button>
+          <span>{snapshot.error || t('gatewayOffline')}</span>
+          <button type="button" onClick={() => void runControlAction(() => client.reconnect())}>{t('reconnect')}</button>
         </div>
       ) : null}
       <div className="messages-shell">
       <div className="messages" ref={viewport} onScroll={trackScrollPosition}>
         {snapshot.sessionLoading ? (
-          <div className="message-skeleton" aria-label="Loading chat"><span /><span /><span /></div>
+          <div className="message-skeleton" aria-label={t('loadingChat')}><span /><span /><span /></div>
         ) : null}
         {!snapshot.sessionLoading && !snapshot.messages.length && !snapshot.streamingText ? (
           <div className="empty-chat">
             <div className="empty-mark"><SparkleIcon /></div>
-            <h1>What can I help with?</h1>
-            <p>Ask a question, bring in the current page, or let xopc help you complete a browser task.</p>
+            <h1>{t('emptyChatTitle')}</h1>
+            <p>{t('emptyChatDescription')}</p>
             <div className="quick-prompts">
-              <button type="button" onClick={() => void startQuickPrompt('Summarize this page and highlight the key points.', 'page')}><PageIcon /><span>Summarize this page</span></button>
-              <button type="button" onClick={() => void startQuickPrompt('Explain the selected text in plain language.', 'selection')}><SelectionIcon /><span>Explain selection</span></button>
-              <button type="button" onClick={() => void startQuickPrompt('Help me complete the task on this page. Ask before taking any consequential action.')}><CursorIcon /><span>Help with a task</span></button>
+              <button type="button" onClick={() => void startQuickPrompt(t('promptSummarizePage'), 'page')}><PageIcon /><span>{t('summarizePage')}</span></button>
+              <button type="button" onClick={() => void startQuickPrompt(t('promptExplainSelection'), 'selection')}><SelectionIcon /><span>{t('explainSelection')}</span></button>
+              <button type="button" onClick={() => void startQuickPrompt(t('promptHelpTask'))}><CursorIcon /><span>{t('helpWithTask')}</span></button>
             </div>
           </div>
         ) : null}
         {snapshot.messages.map((message) => (
           <article key={message.id} className={`message ${message.role}`}>
             <div className="message-heading">
-              <span className="message-author">{message.role === 'user' ? 'You' : message.role === 'assistant' ? 'xopc' : 'System'}</span>
+              <span className="message-author">{message.role === 'user' ? t('you') : message.role === 'assistant' ? 'xopc' : t('system')}</span>
               {formatMessageTime(message.timestamp) ? <time>{formatMessageTime(message.timestamp)}</time> : null}
             </div>
             <div className="message-body">
               {message.sourceContexts?.length ? <div className="message-sources">{message.sourceContexts.map((source, index) => (
                 <span className="source-badge" key={`${source.title}-${index}`} title={source.url}>
                   {source.kind === 'browser_page' ? <PageIcon /> : <FileIcon />}
-                  <span>{source.title}{source.truncated ? ' · truncated' : ''}</span>
+                  <span>{source.title}{source.truncated ? ` · ${t('truncated')}` : ''}</span>
                 </span>
               ))}</div> : null}
               {message.attachments?.length ? <div className="message-attachments">{message.attachments.map((attachment, index) => (
@@ -486,9 +512,9 @@ export function ChatPanel() {
             </div>
             {message.role === 'assistant' ? (
               <div className="message-actions">
-                <button type="button" aria-label="Copy response" title="Copy response" onClick={() => void copyMessage(message.id, message.text)}>
+                <button type="button" aria-label={t('copyResponse')} title={t('copyResponse')} onClick={() => void copyMessage(message.id, message.text)}>
                   {copiedMessageId === message.id ? <CheckIcon /> : <CopyIcon />}
-                  <span>{copiedMessageId === message.id ? 'Copied' : 'Copy'}</span>
+                  <span>{copiedMessageId === message.id ? t('copied') : t('copy')}</span>
                 </button>
               </div>
             ) : null}
@@ -496,12 +522,12 @@ export function ChatPanel() {
         ))}
         {snapshot.streamingText ? (
           <article className="message assistant streaming">
-            <div className="message-heading"><span className="message-author">xopc</span><span className="responding-label">Responding</span></div>
+            <div className="message-heading"><span className="message-author">xopc</span><span className="responding-label">{t('responding')}</span></div>
             <div className="message-body"><MarkdownContent streaming>{snapshot.streamingText}</MarkdownContent></div>
           </article>
         ) : null}
       </div>
-      {!atBottom ? <button className="scroll-bottom-button" type="button" aria-label="Scroll to latest message" title="Scroll to latest message" onClick={() => scrollToBottom(true)}><ArrowDownIcon /></button> : null}
+      {!atBottom ? <button className="scroll-bottom-button" type="button" aria-label={t('scrollLatest')} title={t('scrollLatest')} onClick={() => scrollToBottom(true)}><ArrowDownIcon /></button> : null}
       </div>
       <form
         className={`composer${draggingFiles ? ' dragging' : ''}`}
@@ -526,20 +552,20 @@ export function ChatPanel() {
           void addFiles(event.dataTransfer.files);
         }}
       >
-        {draggingFiles ? <div className="file-drop-overlay"><PaperclipIcon /><span>Drop files to attach</span></div> : null}
+        {draggingFiles ? <div className="file-drop-overlay"><PaperclipIcon /><span>{t('dropFiles')}</span></div> : null}
         {snapshot.browserApproval ? (
-          <section className="request-card browser-approval" aria-label="Browser approval">
-            <div className="request-card-title"><AlertIcon /><strong>Browser approval · {snapshot.browserApproval.risk.replace('_', ' ')}</strong></div>
+          <section className="request-card browser-approval" aria-label={t('browserApproval')}>
+            <div className="request-card-title"><AlertIcon /><strong>{t('browserApproval')} · {t(RISK_MESSAGE_KEYS[snapshot.browserApproval.risk])}</strong></div>
             <p>{snapshot.browserApproval.summary}</p>
             <div className="request-actions">
-              <button className="request-primary" type="button" onClick={() => void runControlAction(() => client.respondToBrowserApproval('approved'))}>Allow once</button>
-              <button type="button" onClick={() => void runControlAction(() => client.respondToBrowserApproval('denied'))}>Deny</button>
+              <button className="request-primary" type="button" onClick={() => void runControlAction(() => client.respondToBrowserApproval('approved'))}>{t('allowOnce')}</button>
+              <button type="button" onClick={() => void runControlAction(() => client.respondToBrowserApproval('denied'))}>{t('deny')}</button>
             </div>
           </section>
         ) : null}
         {snapshot.clarification ? (
-          <section className="request-card" aria-label="Agent question">
-            <div className="request-card-title"><SparkleIcon /><strong>{snapshot.clarification.kind === 'approval' ? 'Approval required' : 'xopc needs your input'}</strong></div>
+          <section className="request-card" aria-label={t('agentQuestion')}>
+            <div className="request-card-title"><SparkleIcon /><strong>{snapshot.clarification.kind === 'approval' ? t('approvalRequired') : t('xopcNeedsInput')}</strong></div>
             <p>{snapshot.clarification.question}</p>
             {snapshot.clarification.choices?.length ? <div className="choice-list">{snapshot.clarification.choices.map((choice) => (
               <button key={choice} type="button" disabled={clarificationSubmitting} onClick={() => void respondToClarification('answer', choice)}>{choice}</button>
@@ -548,39 +574,39 @@ export function ChatPanel() {
               <input
                 value={clarificationAnswer}
                 onChange={(event) => setClarificationAnswer(event.target.value)}
-                placeholder={snapshot.clarification.suggestedAnswer ?? 'Type your answer'}
+                placeholder={snapshot.clarification.suggestedAnswer ?? t('typeAnswer')}
               />
               <button
                 type="button"
                 disabled={clarificationSubmitting || !clarificationAnswer.trim()}
                 onClick={() => void respondToClarification('answer', clarificationAnswer.trim())}
-              >Send</button>
+              >{t('send')}</button>
             </div>
             <div className="clarification-actions">
-              <button type="button" disabled={clarificationSubmitting} onClick={() => void respondToClarification('agent_decide')}>Let xopc decide</button>
-              <button type="button" disabled={clarificationSubmitting} onClick={() => void respondToClarification('cancel')}>Cancel task</button>
+              <button type="button" disabled={clarificationSubmitting} onClick={() => void respondToClarification('agent_decide')}>{t('letXopcDecide')}</button>
+              <button type="button" disabled={clarificationSubmitting} onClick={() => void respondToClarification('cancel')}>{t('cancelTask')}</button>
             </div>
           </section>
         ) : null}
-        {snapshot.pendingDelivery ? <div className="composer-notice" role="status">Connection interrupted. Your message is queued and will send after xopc reconnects.</div> : null}
+        {snapshot.pendingDelivery ? <div className="composer-notice" role="status">{t('queuedMessageNotice')}</div> : null}
         {error || (!connectionProblem && snapshot.error) ? <div className="composer-error" role="alert"><AlertIcon />{error || snapshot.error}</div> : null}
         {pageContext || attachments.length ? <div className="composer-contexts">
           {pageContext ? (
             <div className={`context-chip${pageContext.stale ? ' stale' : ''}`}>
               {pageContext.context.selection ? <SelectionIcon /> : <PageIcon />}
               <span>
-                <strong>{pageContext.source === 'tab_mention' ? 'Tab' : pageContext.context.selection ? 'Selection' : 'Page'}</strong>
+                <strong>{pageContext.source === 'tab_mention' ? t('tab') : pageContext.context.selection ? t('selection') : t('page')}</strong>
                 {' · '}{new URL(pageContext.context.url).hostname} · {pageContext.context.title}
               </span>
-              {pageContext.stale ? <button type="button" onClick={() => void refreshPageContext()}>Refresh</button> : null}
-              <button type="button" className="chip-remove" aria-label="Remove page context" onClick={() => setPageContext(undefined)}><CloseIcon /></button>
+              {pageContext.stale ? <button type="button" onClick={() => void refreshPageContext()}>{t('refresh')}</button> : null}
+              <button type="button" className="chip-remove" aria-label={t('removePageContext')} onClick={() => setPageContext(undefined)}><CloseIcon /></button>
             </div>
           ) : null}
           {attachments.map((attachment, index) => (
             <div className="attachment-chip" key={`${attachment.name}-${index}`}>
               {attachment.type === 'image' ? <CameraIcon /> : <FileIcon />}
-              <span><strong>{attachment.type === 'image' ? 'Image' : 'File'}</strong> · {attachment.name}</span>
-              <button type="button" className="chip-remove" aria-label={`Remove ${attachment.name}`} onClick={() => setAttachments((current) => current.filter((_, candidate) => candidate !== index))}><CloseIcon /></button>
+              <span><strong>{attachment.type === 'image' ? t('image') : t('file')}</strong> · {attachment.name}</span>
+              <button type="button" className="chip-remove" aria-label={t('removeAttachment', attachment.name)} onClick={() => setAttachments((current) => current.filter((_, candidate) => candidate !== index))}><CloseIcon /></button>
             </div>
           ))}
         </div> : null}
@@ -593,7 +619,7 @@ export function ChatPanel() {
           onChange={(event) => void addFiles(event.target.files)}
         />
         {tabMention ? (
-          <div className="tab-mention-menu" role="listbox" aria-label="Open tabs">
+          <div className="tab-mention-menu" role="listbox" aria-label={t('openTabs')}>
             {mentionTabs.length ? mentionTabs.map((tab, index) => (
               <button
                 key={tab.id}
@@ -607,36 +633,12 @@ export function ChatPanel() {
                 }}
               >
                 <span>{tab.title}</span>
-                <small>{tab.hostname}{tab.active ? ' · current' : ''}</small>
+                <small>{tab.hostname}{tab.active ? ` · ${t('currentTab')}` : ''}</small>
               </button>
-            )) : <div className="tab-mention-empty">No matching tabs</div>}
+            )) : <div className="tab-mention-empty">{t('noMatchingTabs')}</div>}
           </div>
         ) : null}
         <div className="composer-input-row">
-          <div className="tools-anchor">
-            <button ref={toolsTrigger} type="button" className={`composer-icon-button${toolsOpen ? ' active' : ''}`} aria-label="Add context or attachment" aria-expanded={toolsOpen} onClick={() => setToolsOpen((open) => !open)}><PaperclipIcon /></button>
-            {toolsOpen ? <div className="tools-menu" ref={toolsMenu}>
-              <div className="tools-menu-section">
-                <span className="tools-menu-label">Add to this message</span>
-                <button type="button" onClick={() => { setToolsOpen(false); void attachPage('page'); }}><PageIcon /><span><strong>Current page</strong><small>Share readable page content</small></span></button>
-                <button type="button" onClick={() => { setToolsOpen(false); void attachPage('selection'); }}><SelectionIcon /><span><strong>Selected text</strong><small>Share your current selection</small></span></button>
-                <button type="button" onClick={() => { setToolsOpen(false); void addScreenshot(); }}><CameraIcon /><span><strong>Screenshot</strong><small>Capture the visible tab</small></span></button>
-                <button type="button" onClick={() => { setToolsOpen(false); fileInput.current?.click(); }}><FileIcon /><span><strong>File</strong><small>Image, PDF, text, JSON, or CSV</small></span></button>
-              </div>
-              <div className="tools-menu-section tab-access-section">
-                <span className="tools-menu-label">Live tab access</span>
-                {snapshot.tabBinding ? (
-                  <button type="button" className="active-access" onClick={() => { setToolsOpen(false); void runControlAction(() => client.unbindActiveTab()); }}>
-                    {snapshot.tabBinding.mode === 'act' ? <CursorIcon /> : <EyeIcon />}
-                    <span><strong>{snapshot.tabBinding.mode === 'act' ? 'Control enabled' : 'Read enabled'}</strong><small>Click to stop access</small></span><CloseIcon />
-                  </button>
-                ) : <>
-                  <button type="button" onClick={() => { setToolsOpen(false); void runControlAction(() => client.bindActiveTab('read')); }}><EyeIcon /><span><strong>Read this tab</strong><small>Keep page content available</small></span></button>
-                  <button type="button" onClick={() => { setToolsOpen(false); void runControlAction(() => client.bindActiveTab('act')); }}><CursorIcon /><span><strong>Control this tab</strong><small>Allow browser actions with safeguards</small></span></button>
-                </>}
-              </div>
-            </div> : null}
-          </div>
           <textarea
             ref={textarea}
             value={draft}
@@ -686,34 +688,62 @@ export function ChatPanel() {
               setTabMention(undefined);
               setMentionTabs([]);
             }}
-            placeholder="Message xopc…  Use @ to mention a tab"
+            placeholder={t('composerPlaceholder')}
             disabled={snapshot.submitting}
             rows={1}
           />
-          {snapshot.runId ? (
-            <button type="button" className="send-button stop-button" aria-label="Stop response" title={snapshot.stopping ? 'Stopping response' : 'Stop response'} disabled={snapshot.stopping} onClick={() => void runControlAction(() => client.abort())}><StopIcon /></button>
-          ) : (
-            <button className="send-button" type="submit" aria-label="Send message" title="Send message" disabled={snapshot.submitting || snapshot.pendingDelivery || snapshot.sessionLoading || (!draft.trim() && attachments.length === 0) || !snapshot.endpointReady || Boolean(tabMention)}><SendIcon /></button>
-          )}
         </div>
         <div className="composer-footer">
-          <div className="composer-state">
-            <span className={`mini-status ${snapshot.endpointReady ? 'online' : ''}`} />
-            <span>{snapshot.stopping ? 'Stopping…' : snapshot.submitting ? 'Sending…' : snapshot.pendingDelivery ? 'Queued' : connectionText}</span>
-            {snapshot.tabBinding ? <span className="access-pill">{snapshot.tabBinding.mode === 'act' ? <CursorIcon /> : <EyeIcon />}{snapshot.tabBinding.mode === 'act' ? 'Control' : 'Read'}</span> : null}
-          </div>
-          {snapshot.modelConfig ? (
-            <div className="model-controls">
-              <select aria-label="Model" title="Session model" value={snapshot.modelConfig.model} disabled={snapshot.modelConfig.fixedModel || Boolean(snapshot.runId)} onChange={(event) => void runControlAction(() => client.updateModel(event.target.value))}>
-                {snapshot.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-              </select>
-              {thinkingOptions.length ? (
-                <select aria-label="Thinking level" title="Thinking level" value={snapshot.modelConfig.thinkingLevel} disabled={Boolean(snapshot.runId)} onChange={(event) => void runControlAction(() => client.updateThinking(event.target.value))}>
-                  {thinkingOptions.map((level) => <option key={level} value={level}>{level}</option>)}
-                </select>
-              ) : null}
+          <div className="composer-toolbar-start">
+            <div className="tools-anchor">
+              <button ref={toolsTrigger} type="button" className={`composer-icon-button${toolsOpen ? ' active' : ''}`} aria-label={t('addContext')} aria-expanded={toolsOpen} onClick={() => setToolsOpen((open) => !open)}><PlusIcon /></button>
+              {toolsOpen ? <div className="tools-menu" ref={toolsMenu}>
+                <div className="tools-menu-section">
+                  <span className="tools-menu-label">{t('addToMessage')}</span>
+                  <button type="button" onClick={() => { setToolsOpen(false); void attachPage('page'); }}><PageIcon /><span><strong>{t('currentPage')}</strong><small>{t('sharePageContent')}</small></span></button>
+                  <button type="button" onClick={() => { setToolsOpen(false); void attachPage('selection'); }}><SelectionIcon /><span><strong>{t('selectedText')}</strong><small>{t('shareSelection')}</small></span></button>
+                  <button type="button" onClick={() => { setToolsOpen(false); void addScreenshot(); }}><CameraIcon /><span><strong>{t('screenshot')}</strong><small>{t('captureVisibleTab')}</small></span></button>
+                  <button type="button" onClick={() => { setToolsOpen(false); fileInput.current?.click(); }}><FileIcon /><span><strong>{t('file')}</strong><small>{t('supportedFileTypes')}</small></span></button>
+                </div>
+                <div className="tools-menu-section tab-access-section">
+                  <span className="tools-menu-label">{t('liveTabAccess')}</span>
+                  {snapshot.tabBinding ? (
+                    <button type="button" className="active-access" onClick={() => { setToolsOpen(false); void runControlAction(() => client.unbindActiveTab()); }}>
+                      {snapshot.tabBinding.mode === 'act' ? <CursorIcon /> : <EyeIcon />}
+                      <span><strong>{snapshot.tabBinding.mode === 'act' ? t('controlEnabled') : t('readEnabled')}</strong><small>{t('stopAccess')}</small></span><CloseIcon />
+                    </button>
+                  ) : <>
+                    <button type="button" onClick={() => { setToolsOpen(false); void runControlAction(() => client.bindActiveTab('read')); }}><EyeIcon /><span><strong>{t('readThisTab')}</strong><small>{t('keepPageAvailable')}</small></span></button>
+                    <button type="button" onClick={() => { setToolsOpen(false); void runControlAction(() => client.bindActiveTab('act')); }}><CursorIcon /><span><strong>{t('controlThisTab')}</strong><small>{t('controlSafeguards')}</small></span></button>
+                  </>}
+                </div>
+              </div> : null}
             </div>
-          ) : null}
+            <div className="composer-state">
+              <span className={`mini-status ${snapshot.endpointReady ? 'online' : ''}`} />
+              <span className="composer-state-label">{snapshot.stopping ? t('stopping') : snapshot.submitting ? t('sending') : snapshot.pendingDelivery ? t('queued') : connectionText}</span>
+              {snapshot.tabBinding ? <span className="access-pill">{snapshot.tabBinding.mode === 'act' ? <CursorIcon /> : <EyeIcon />}{snapshot.tabBinding.mode === 'act' ? t('control') : t('read')}</span> : null}
+            </div>
+          </div>
+          <div className="composer-toolbar-end">
+            {snapshot.modelConfig ? (
+              <div className="model-controls">
+                <select aria-label={t('model')} title={t('sessionModel')} value={snapshot.modelConfig.model} disabled={Boolean(snapshot.runId)} onChange={(event) => void runControlAction(() => client.updateModel(event.target.value))}>
+                  {snapshot.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+                </select>
+                {thinkingOptions.length ? (
+                  <select aria-label={t('thinkingLevel')} title={t('thinkingLevel')} value={snapshot.modelConfig.thinkingLevel} disabled={Boolean(snapshot.runId)} onChange={(event) => void runControlAction(() => client.updateThinking(event.target.value))}>
+                    {thinkingOptions.map((level) => <option key={level} value={level}>{thinkingLabel(level)}</option>)}
+                  </select>
+                ) : null}
+              </div>
+            ) : null}
+            {snapshot.runId ? (
+              <button type="button" className="send-button stop-button" aria-label={t('stopResponse')} title={snapshot.stopping ? t('stoppingResponse') : t('stopResponse')} disabled={snapshot.stopping} onClick={() => void runControlAction(() => client.abort())}><StopIcon /></button>
+            ) : (
+              <button className="send-button" type="submit" aria-label={t('sendMessage')} title={t('sendMessage')} disabled={snapshot.submitting || snapshot.pendingDelivery || snapshot.sessionLoading || (!draft.trim() && attachments.length === 0) || !snapshot.endpointReady || Boolean(tabMention)}><SendIcon /></button>
+            )}
+          </div>
         </div>
       </form>
     </section>

@@ -23,6 +23,8 @@ import {
 function writeMinimalExtensionTree(root: string, version = '0.0.1'): void {
   mkdirSync(join(root, 'dist'), { recursive: true });
   mkdirSync(join(root, 'icons'), { recursive: true });
+  mkdirSync(join(root, '_locales/en'), { recursive: true });
+  mkdirSync(join(root, '_locales/zh_CN'), { recursive: true });
   writeFileSync(
     join(root, 'manifest.json'),
     JSON.stringify({ manifest_version: 3, name: 'test', version }, null, 2),
@@ -31,6 +33,8 @@ function writeMinimalExtensionTree(root: string, version = '0.0.1'): void {
     writeFileSync(join(root, 'dist', file), `// ${file}`);
   }
   writeFileSync(join(root, 'icons/icon-16.png'), '');
+  writeFileSync(join(root, '_locales/en/messages.json'), '{"appName":{"message":"test"}}');
+  writeFileSync(join(root, '_locales/zh_CN/messages.json'), '{"appName":{"message":"test"}}');
 }
 
 describe('browser-ext-install', () => {
@@ -99,6 +103,26 @@ describe('browser-ext-install', () => {
     expect(manifest.optional_permissions ?? []).not.toContain('debugger');
   });
 
+  it('ships matching English and Simplified Chinese locale catalogs', () => {
+    const extensionRoot = join(process.cwd(), 'packages/browser-ext');
+    const manifest = JSON.parse(readFileSync(join(extensionRoot, 'manifest.json'), 'utf8')) as {
+      default_locale?: string;
+      name?: string;
+      description?: string;
+      action?: { default_title?: string };
+    };
+    const english = JSON.parse(readFileSync(join(extensionRoot, '_locales/en/messages.json'), 'utf8')) as Record<string, { message?: string }>;
+    const chinese = JSON.parse(readFileSync(join(extensionRoot, '_locales/zh_CN/messages.json'), 'utf8')) as Record<string, { message?: string }>;
+
+    expect(manifest.default_locale).toBe('en');
+    expect(manifest.name).toBe('__MSG_appName__');
+    expect(manifest.description).toBe('__MSG_appDescription__');
+    expect(manifest.action?.default_title).toBe('__MSG_actionTitle__');
+    expect(Object.keys(chinese).sort()).toEqual(Object.keys(english).sort());
+    expect(Object.values(english).every((entry) => Boolean(entry.message?.trim()))).toBe(true);
+    expect(Object.values(chinese).every((entry) => Boolean(entry.message?.trim()))).toBe(true);
+  });
+
   it('computeNeedsRefresh when meta missing or force', () => {
     expect(
       computeNeedsRefresh({
@@ -149,6 +173,17 @@ describe('browser-ext-install', () => {
     const refreshed = await ensureBrowserExtensionArtifacts({ cacheDir: binDir });
     expect(refreshed.copied).toBe(true);
     expect(readFileSync(join(refreshed.extensionDir, 'dist/background.js'), 'utf8')).toContain('changed protocol');
+  });
+
+  it('refreshes installed artifacts when a locale changes', async () => {
+    await ensureBrowserExtensionArtifacts({ cacheDir: binDir });
+    const updatedCatalog = '{"appName":{"message":"本地化测试"}}';
+    writeFileSync(join(bundledDir, '_locales/zh_CN/messages.json'), updatedCatalog);
+
+    const refreshed = await ensureBrowserExtensionArtifacts({ cacheDir: binDir });
+
+    expect(refreshed.copied).toBe(true);
+    expect(readFileSync(join(refreshed.extensionDir, '_locales/zh_CN/messages.json'), 'utf8')).toBe(updatedCatalog);
   });
 
   it('skips startup artifact sync when browser tools are disabled', async () => {

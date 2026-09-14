@@ -3,7 +3,8 @@ export type BrowserRiskLevel = 'read' | 'draft' | 'external_effect' | 'destructi
 
 export type BrowserTarget =
   | { kind: 'automation_window' }
-  | { kind: 'attached_tab'; bindingId: string };
+  | { kind: 'attached_tab'; bindingId: string }
+  | { kind: 'endpoint'; endpointId: string };
 
 export const BROWSER_EXTENSION_PROTOCOL_VERSION = 4;
 

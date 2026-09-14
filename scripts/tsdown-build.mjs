@@ -48,6 +48,8 @@ const browserExtRequired = [
   'manifest.json',
   'dist/background.js',
   'dist/sidepanel.html',
+  '_locales/en/messages.json',
+  '_locales/zh_CN/messages.json',
 ];
 
 function validateBrowserExtLayout(dir) {
@@ -72,6 +74,7 @@ mkdirSync(browserExtDist, { recursive: true });
 cpSync(join(browserExtPkg, 'manifest.json'), join(browserExtDist, 'manifest.json'));
 cpSync(join(browserExtPkg, 'dist'), join(browserExtDist, 'dist'), { recursive: true });
 cpSync(join(browserExtPkg, 'icons'), join(browserExtDist, 'icons'), { recursive: true });
+cpSync(join(browserExtPkg, '_locales'), join(browserExtDist, '_locales'), { recursive: true });
 
 if (!validateBrowserExtLayout(browserExtDist)) {
   console.error('dist/browser-ext copy incomplete.');

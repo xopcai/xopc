@@ -22,6 +22,14 @@ export type BrowserExtensionStatus = {
   protocolVersion: number | null;
   expectedProtocolVersion: number | null;
   extensionVersion: string | null;
+  endpoints?: Array<{
+    endpointId: string;
+    principalId: string;
+    displayName: string;
+    platform: string;
+    appVersion: string;
+    lastHeartbeatAt: number;
+  }>;
   artifacts?: BrowserExtensionArtifacts;
   bridgeHeld?: boolean;
   refCount?: number;
@@ -41,6 +49,7 @@ export type BrowserStatus = {
   state: 'disabled' | 'ready' | 'needs_attention';
   reason?: string;
   detail?: string;
+  localManagementAvailable?: boolean;
   driverStatus?: BrowserExtensionStatus | PlaywrightDoctorStatus | { error: string };
 };
 

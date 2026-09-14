@@ -4,6 +4,8 @@ import {
   type BrowserPageContextInput,
 } from '@xopcai/gateway-contract';
 
+import { t } from '../i18n';
+
 export type CaptureMode = 'page' | 'selection';
 export const PENDING_CONTEXT_KEY = 'xopc.browser.pending-context';
 export const TAB_BINDING_PREFIX = 'xopc.browser.tab-binding.';
@@ -41,14 +43,14 @@ function sanitizedUrl(raw: string): string {
   try {
     url = new URL(raw);
   } catch {
-    throw new Error('This tab does not have a valid web address');
+    throw new Error(t('errorInvalidWebAddress'));
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new Error('Chrome does not allow xopc to read this page. Open a regular http(s) page and try again.');
+    throw new Error(t('errorRestrictedPage'));
   }
   if (url.hostname === 'chromewebstore.google.com'
     || (url.hostname === 'chrome.google.com' && url.pathname.startsWith('/webstore'))) {
-    throw new Error('Chrome does not allow extensions to read Chrome Web Store pages.');
+    throw new Error(t('errorWebStorePage'));
   }
   url.username = '';
   url.password = '';
@@ -62,7 +64,7 @@ function siteAccessError(cause: unknown, url: string): Error {
   const message = cause instanceof Error ? cause.message : String(cause);
   const hostname = new URL(url).hostname;
   if (/cannot access|cannot be scripted|missing host permission|extensions gallery|chrome web store/i.test(message)) {
-    return new Error(`Chrome blocked access to ${hostname}. Check xopc's site access for this page and try again.`);
+    return new Error(t('errorSiteAccessBlocked', hostname));
   }
   return cause instanceof Error ? cause : new Error(message);
 }
@@ -73,7 +75,7 @@ export async function runWithTabSiteAccess<T>(
 ): Promise<T> {
   const tab = await chrome.tabs.get(tabId);
   if (tab.id === undefined || tab.windowId === undefined || !tab.url) {
-    throw new Error('The selected tab is no longer available');
+    throw new Error(t('errorTabUnavailable'));
   }
   const url = sanitizedUrl(tab.url);
   const originPattern = `${new URL(url).origin}/*`;
@@ -87,7 +89,7 @@ export async function runWithTabSiteAccess<T>(
     } catch (cause) {
       throw siteAccessError(cause, url);
     }
-    if (!granted) throw new Error(`Allow xopc to access ${new URL(url).hostname} to continue.`);
+    if (!granted) throw new Error(t('errorSiteAccessRequired', new URL(url).hostname));
     newlyGranted = true;
   }
 
@@ -104,16 +106,19 @@ async function sha256(value: string): Promise<string> {
   return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-function extractPage(mode: CaptureMode): RawPageSnapshot {
+function extractPage(
+  mode: CaptureMode,
+  messages: { selectText: string; noReadableContent: string },
+): RawPageSnapshot {
   const normalize = (value: string) => value.replace(/\s+/g, ' ').trim();
   const selection = normalize(window.getSelection()?.toString() ?? '');
   if (mode === 'selection') {
-    if (!selection) throw new Error('Select text on the page first');
+    if (!selection) throw new Error(messages.selectText);
     return { title: document.title, url: location.href, timeOrigin: performance.timeOrigin, selection };
   }
 
   const source = document.querySelector('article, main') ?? document.body;
-  if (!source) throw new Error('This page has no readable content');
+  if (!source) throw new Error(messages.noReadableContent);
   const clone = source.cloneNode(true) as HTMLElement;
   clone.querySelectorAll([
     'script', 'style', 'noscript', 'template', 'iframe', 'svg', 'canvas',
@@ -121,24 +126,27 @@ function extractPage(mode: CaptureMode): RawPageSnapshot {
     '[hidden]', '[aria-hidden="true"]', '[inert]',
   ].join(',')).forEach((element) => element.remove());
   const text = normalize(clone.innerText || clone.textContent || '');
-  if (!text) throw new Error('This page has no readable content');
+  if (!text) throw new Error(messages.noReadableContent);
   return { title: document.title, url: location.href, timeOrigin: performance.timeOrigin, text };
 }
 
 export async function captureTabPage(tabId: number, mode: CaptureMode): Promise<BrowserPageContextInput> {
   const tab = await chrome.tabs.get(tabId);
-  if (!tab.url) throw new Error('The selected tab is no longer available');
+  if (!tab.url) throw new Error(t('errorTabUnavailable'));
   sanitizedUrl(tab.url);
   const result = await chrome.scripting.executeScript({
     target: { tabId },
     func: extractPage,
-    args: [mode],
+    args: [mode, {
+      selectText: t('errorSelectText'),
+      noReadableContent: t('errorNoReadableContent'),
+    }],
   });
   const raw = result[0]?.result as RawPageSnapshot | undefined;
-  if (!raw) throw new Error('Could not read this page');
+  if (!raw) throw new Error(t('errorReadPage'));
   const url = sanitizedUrl(raw.url);
   if (new URL(url).origin !== new URL(sanitizedUrl(tab.url)).origin) {
-    throw new Error('The page changed while xopc was reading it. Try again.');
+    throw new Error(t('errorPageChangedReading'));
   }
   const selected = raw.selection
     ? truncateUtf8(raw.selection, MAX_BROWSER_SELECTION_BYTES)
@@ -179,17 +187,17 @@ export async function currentTabDescriptor(): Promise<{
   urlOrigin: string;
 }> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab.id === undefined || tab.windowId === undefined || !tab.url) throw new Error('No active web page');
+  if (tab.id === undefined || tab.windowId === undefined || !tab.url) throw new Error(t('errorNoActivePage'));
   return runWithTabSiteAccess(tab.id, async (accessibleTab) => {
     const result = await chrome.scripting.executeScript({
       target: { tabId: accessibleTab.id },
       func: () => ({ url: location.href, timeOrigin: performance.timeOrigin }),
     });
     const marker = result[0]?.result;
-    if (!marker) throw new Error('Could not identify this page');
+    if (!marker) throw new Error(t('errorIdentifyPage'));
     const currentUrl = sanitizedUrl(marker.url);
     if (new URL(currentUrl).origin !== new URL(accessibleTab.url).origin) {
-      throw new Error('The page changed while xopc was connecting to it. Try again.');
+      throw new Error(t('errorPageChangedConnecting'));
     }
     return {
       tabId: String(accessibleTab.id),

@@ -40,6 +40,26 @@ describe('browser readiness', () => {
     expect(await checkBrowserReadiness(cfg({ kind: 'extension' }))).toBeNull();
   });
 
+  it('accepts a connected remote Chrome endpoint without server-side extension files', async () => {
+    extensionDoctor.mockResolvedValue({ installed: false } as never);
+
+    expect(await checkBrowserReadiness(cfg({ kind: 'extension' }), {
+      extensionConnected: true,
+      checkExtensionInstall: false,
+    })).toBeNull();
+    expect(extensionDoctor).not.toHaveBeenCalled();
+  });
+
+  it('reports a missing remote endpoint without scanning server-side extension files', async () => {
+    const error = await checkBrowserReadiness(cfg({ kind: 'extension' }), {
+      extensionConnected: false,
+      checkExtensionInstall: false,
+    });
+
+    expect(error?.hint).toMatchObject({ driver: 'extension', reason: 'extension_not_connected' });
+    expect(extensionDoctor).not.toHaveBeenCalled();
+  });
+
   it('reports unreachable CDP endpoints', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
     const error = await checkBrowserReadiness(cfg({ kind: 'cdp', endpoint: 'ws://127.0.0.1:9222/devtools/browser/x' }));

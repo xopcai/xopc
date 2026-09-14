@@ -1,6 +1,6 @@
 /**
  * Build a Chrome Web Store / sideload zip from the extension package root layout.
- * Includes the manifest, compiled Side Panel/background assets, and icons.
+ * Includes the manifest, localized messages, compiled Side Panel/background assets, and icons.
  */
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -21,6 +21,8 @@ const requiredFiles = [
   'manifest.json',
   'dist/background.js',
   'dist/sidepanel.html',
+  '_locales/en/messages.json',
+  '_locales/zh_CN/messages.json',
 ];
 
 for (const rel of requiredFiles) {
@@ -46,6 +48,7 @@ const zip = new AdmZip();
 zip.addLocalFile(join(pkgRoot, 'manifest.json'));
 zip.addLocalFolder(join(pkgRoot, 'dist'), 'dist');
 zip.addLocalFolder(join(pkgRoot, 'icons'), 'icons');
+zip.addLocalFolder(join(pkgRoot, '_locales'), '_locales');
 zip.writeZip(outZip);
 
 console.log(`Created ${outZip}`);

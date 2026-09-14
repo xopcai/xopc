@@ -9,6 +9,7 @@
 
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { Model, Api } from '@earendil-works/pi-ai';
+import { BROWSER_CONTROL_ENDPOINT_TOOL_NAME } from '@xopcai/browser-control-contract';
 import { resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
 import type { Config } from '../../config/schema.js';
 import type { EndpointToolRuntime } from '../../endpoint-tools/index.js';
@@ -212,7 +213,15 @@ export class AgentToolsFactory {
   };
 
   private browserReadinessKey(): string {
-    return JSON.stringify(this.deps.getConfig?.()?.browser.driver ?? null);
+    return JSON.stringify({
+      driver: this.deps.getConfig?.()?.browser.driver ?? null,
+      extensionConnected: this.hasBrowserEndpoint(),
+    });
+  }
+
+  private hasBrowserEndpoint(): boolean {
+    return this.deps.endpointTools?.registry.list().some((endpoint) => endpoint.kind === 'browser'
+      && endpoint.tools.some((tool) => tool.descriptor.name === BROWSER_CONTROL_ENDPOINT_TOOL_NAME)) ?? false;
   }
 
   private async checkBrowserReadinessCached(): Promise<BrowserNotReadyError | null> {
@@ -225,7 +234,10 @@ export class AgentToolsFactory {
     if (cached && cached.key === key && cached.inflight) {
       return cached.inflight;
     }
-    const inflight = checkBrowserReadiness(this.deps.getConfig?.());
+    const inflight = checkBrowserReadiness(this.deps.getConfig?.(), {
+      extensionConnected: this.hasBrowserEndpoint(),
+      checkExtensionInstall: false,
+    });
     this.browserReadinessCache = { key, expiresAt: now + 30_000, inflight };
     try {
       const result = await inflight;
@@ -261,7 +273,11 @@ export class AgentToolsFactory {
         emit: this.deps.emitBrowserEvent,
         resolveTarget: (sessionKey) => {
           const binding = getBrowserTabBinding(sessionKey);
-          return binding ? { kind: 'attached_tab', bindingId: binding.id } : undefined;
+          if (binding) return { kind: 'attached_tab', bindingId: binding.id };
+          const endpointBinding = this.deps.endpointTools?.bindings.get(sessionKey);
+          return endpointBinding
+            ? { kind: 'endpoint', endpointId: endpointBinding.endpointId }
+            : undefined;
         },
       });
     }
@@ -565,7 +581,7 @@ export class AgentToolsFactory {
         ? [
             createBrowserUseTool({
               getRuntime: () => this.ensureBrowserRuntime(),
-              getTaskId: () => this.deps.getCurrentContext()?.sessionKey ?? 'default',
+              getTaskId: () => options?.sessionKey ?? this.deps.getCurrentContext()?.sessionKey ?? 'default',
               getReadiness: () => this.checkBrowserReadinessCached(),
             }),
           ]
@@ -607,12 +623,14 @@ export class AgentToolsFactory {
                   getCurrentContext: () => null,
                   getConfig: childOpts.getConfig,
                   getPrimaryModel: () => childOpts.model,
+                  endpointTools: childOpts.endpointTools ?? this.deps.endpointTools,
                   toolExecutorConfig: childOpts.toolExecutorConfig,
                 });
                 return childFactory.createAllTools({
                   workspace: childOpts.workspace,
                   getPrimaryModel: () => childOpts.model,
                   agentId: options?.agentId ?? childOpts.agentId,
+                  sessionKey: childOpts.browserSessionKey,
                   disabledTools: new Set([
                     EXTERNAL_TOOL_NAMES.search,
                     EXTERNAL_TOOL_NAMES.describe,
