@@ -1,3 +1,4 @@
+import { modelDisplayName } from '@/lib/model-display-name';
 import * as Popover from '@radix-ui/react-popover';
 import { Check, ChevronsUpDown, Settings2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -25,7 +26,7 @@ import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
 function haystack(m: ConfiguredModel): string {
-  return `${m.id} ${m.name} ${m.provider}`.toLowerCase();
+  return `${m.id} ${m.name} ${Object.values(m.displayNames ?? {}).join(' ')} ${m.provider}`.toLowerCase();
 }
 
 const EMPTY_MODELS: ConfiguredModel[] = [];
@@ -167,8 +168,8 @@ export function ModelSelector({
   );
   const label = selected
     ? showProviderInTrigger
-      ? `${selected.name} (${selected.provider})`
-      : selected.name
+      ? `${modelDisplayName(selected, language)} (${selected.provider})`
+      : modelDisplayName(selected, language)
     : value || placeholder;
 
   const showRegistryEmpty = !error && capabilitiesFilter === 'vision' && pickerModels.length === 0;
@@ -180,7 +181,7 @@ export function ModelSelector({
           type="button"
           aria-label={ariaLabel}
           disabled={disabled || isLoading}
-          title={selected ? `${selected.name} (${selected.provider})` : placeholder}
+          title={selected ? `${modelDisplayName(selected, language)} (${selected.provider})` : placeholder}
           className={cn(
             comboboxTriggerLayoutClass,
             'items-center gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 text-left text-sm font-normal text-fg',
@@ -302,6 +303,7 @@ export function ModelPickerList({ models, value, onChange, searchPlaceholder, no
   showSearch?: boolean;
   outOfFilterNote?: string;
 }) {
+  const language = useLocaleStore((s) => s.language);
   const [query, setQuery] = useState('');
   const filtered = modelsMatchingQuery(models, showSearch ? query : '');
   return (
@@ -318,7 +320,7 @@ export function ModelPickerList({ models, value, onChange, searchPlaceholder, no
             className={cn('flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-fg hover:bg-surface-hover disabled:opacity-50', interaction.focusRingPanel, model.id === value && 'bg-surface-hover')}
             onClick={() => onChange(model.id)}>
             <span className="min-w-0 flex-1">
-              <span className="block truncate font-medium">{model.name}</span>
+              <span className="block truncate font-medium">{modelDisplayName(model, language)}</span>
               <span className="block truncate text-xs text-fg-muted">{model.provider}</span>
               {outOfFilterNote && !model.vision && model.id === value && <span className="block text-xs text-fg-muted">{outOfFilterNote}</span>}
             </span>

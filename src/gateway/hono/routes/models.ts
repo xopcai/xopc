@@ -68,6 +68,11 @@ import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
 import { buildCapabilityPlansForConfig } from '../../../capabilities/readiness/index.js';
 import { getXopcCloudCatalogCoordinator } from '../../../providers/xopc-cloud-catalog-coordinator.js';
 
+function catalogDisplayNames(providerId: string, modelId: string): { displayNames?: Partial<Record<'zh-CN' | 'en', string>> } {
+  const model = getModelCatalogStore().getSource(providerId)?.models.find(item => item.id === modelId);
+  return model?.displayNames ? { displayNames: model.displayNames } : {};
+}
+
 function readModelsJsonProviderApiKey(providerId: string): string | undefined {
   const { config } = loadModelsJson(getModelsJsonPath());
   const entry = config.providers?.[providerId.trim()];
@@ -358,6 +363,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
     const models = sortModelsForPicker(await getAvailableModels()).map(m => ({
       id: `${m.provider}/${m.id}`,
       name: m.name,
+      ...catalogDisplayNames(m.provider, m.id),
       provider: m.provider,
       contextWindow: m.contextWindow ?? 128000,
       maxTokens: m.maxTokens ?? 4096,
@@ -785,6 +791,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
     const models = sortModelsForPicker(allModels).map(m => ({
       id: `${m.provider}/${m.id}`,
       name: m.name,
+      ...catalogDisplayNames(m.provider, m.id),
       provider: m.provider,
       contextWindow: m.contextWindow ?? 128000,
       maxTokens: m.maxTokens ?? 4096,

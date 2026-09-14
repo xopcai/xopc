@@ -1,6 +1,7 @@
 export interface CatalogModel {
   id: string;
   name: string;
+  displayNames?: Partial<Record<'zh-CN' | 'en', string>>;
   availability: 'available' | 'unavailable';
   kind: 'language' | 'image' | 'stt' | 'tts';
   input: Array<'text' | 'image' | 'audio'>;

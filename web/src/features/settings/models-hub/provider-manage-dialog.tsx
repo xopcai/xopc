@@ -1,3 +1,4 @@
+import { modelDisplayName } from '@/lib/model-display-name';
 import * as Dialog from '@radix-ui/react-dialog';
 import {
   CheckCircle2,
@@ -540,7 +541,7 @@ function ManageBuiltinProvider({
                     key={model.id}
                     className="inline-block rounded-md bg-surface-hover px-2 py-1 text-xs text-fg-muted"
                   >
-                    {model.id.includes('/') ? model.id.split('/').pop() : model.id}
+                    {modelDisplayName(model, language)}
                   </span>
                 ))}
               </div>

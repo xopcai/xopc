@@ -77,6 +77,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   const isDark = usePreferencesStore((s) => s.resolvedTheme === 'dark');
   const keyboardVisible = useKeyboardVisible();
   const m = useMessages();
+  const language = usePreferencesStore((s) => s.language);
 
   // ── Agent / model info ───────────────────────────────────
   const agentsQuery = useQuery({
@@ -250,11 +251,11 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     if (!models.length) return m.chat.modelPickerSelect;
     const model = models.find((item) => item.id === effectiveModelId);
     return model
-      ? chatModelDisplayName(model)
+      ? chatModelDisplayName(model, language)
       : effectiveModelId
         ? chatModelDisplayName({ id: effectiveModelId })
         : m.chat.modelPickerSelect;
-  }, [effectiveModelId, m.chat.modelPickerSelect, modelsQuery.data?.items]);
+  }, [effectiveModelId, language, m.chat.modelPickerSelect, modelsQuery.data?.items]);
 
   // ── Parsed messages ──────────────────────────────────────
   const sessionMessages = useMemo<Message[]>(() => {
