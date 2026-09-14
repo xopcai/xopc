@@ -33,6 +33,36 @@ For a same-computer installation with automatic local discovery:
 
 Chrome does not permit ordinary applications to silently install an unpacked extension. The one-time **Load unpacked** action is therefore required outside Chrome Web Store or enterprise-policy distribution. Electron and Gateway startup can prepare and repair the files, but cannot bypass this browser boundary.
 
+## Ask questions while reading a page
+
+After installing and connecting, try the [MDN introduction to asynchronous JavaScript](https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Async_JS/Introducing). Keep the source on the left and the xopc conversation on the right so you can check explanations against the original.
+
+> These screenshots show the Chinese UI. The Gateway was offline when they were captured, so they show attached context and question drafts, not submitted questions or generated answers. Connect the side panel to your Gateway before sending a question.
+
+### Attach the current page
+
+1. Open the page you want to read and select **xopc** in the Chrome toolbar.
+2. Select **＋** beside the message box, then the current-page option (**当前页面** in the screenshots). Allow access to the current site if Chrome asks.
+3. Check that the page title and domain appear above the message box, then enter and send your question.
+
+For example: “I know basic JavaScript. Using this article, explain what problem asynchronous programming solves and which section I should read first.”
+
+![The xopc side panel beside MDN, with the page source attached above a reading question draft](./assets/browser-extension/page-context.jpg)
+
+*Check the attached source above the message box before sending to make sure you have selected the intended article.*
+
+### Ask about a selected passage
+
+1. Select a passage on the page.
+2. Select **＋**, then the selected-text option (**选中的文本** in the screenshots). Check that the source label identifies the selection.
+3. Ask a specific question, such as: “Explain this passage using a restaurant-ordering example, and point out where the analogy breaks down.”
+
+![A passage selected in MDN on the left, with the selection attached to an explanation question draft in xopc on the right](./assets/browser-extension/selection-context.jpg)
+
+*Attaching a selection shares the selected text. Attach the current page as well when your question needs the surrounding context.*
+
+After reading, continue in the same conversation: “Turn what we discussed into three study notes and include the source link.” The notes appear in the conversation for you to copy and save.
+
 ## Install from the command line
 
 ```bash

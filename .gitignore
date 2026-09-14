@@ -84,3 +84,6 @@ electron/resources/frpc/
 
 
 .agents
+
+# Local article drafts, publication records, and growth materials
+/docs/articles/
