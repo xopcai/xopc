@@ -15,7 +15,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFile, readdir, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -464,6 +464,34 @@ function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
+const WINDOWS_NATIVE_HOST_KEYS = [
+  'Google\\Chrome',
+  'Chromium',
+  'Microsoft\\Edge',
+  'BraveSoftware\\Brave-Browser',
+].map((browser) => `HKCU\\Software\\${browser}\\NativeMessagingHosts\\${BROWSER_NATIVE_HOST_NAME}`);
+
+function runNativeHostRegistry(args: string[]): string {
+  return execFileSync('reg.exe', args, { encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+}
+
+function windowsRegisteredNativeManifests(): string[] {
+  return [...new Set(WINDOWS_NATIVE_HOST_KEYS.flatMap((key) => {
+    try {
+      const output = runNativeHostRegistry(['query', key, '/ve', '/reg:32']);
+      const path = output.match(/REG_SZ\s+([^\r\n]+)/)?.[1]?.trim();
+      return path ? [path] : [];
+    } catch {
+      return [];
+    }
+  }))];
+}
+
+function batchQuote(value: string): string {
+  if (/["\r\n\0]/.test(value)) throw new Error('Invalid path in Windows native host launcher');
+  return `"${value.replaceAll('%', '%%')}"`;
+}
+
 export function browserNativeManifestDirectories(
   platform: NodeJS.Platform = process.platform,
   home = process.env.HOME || process.env.USERPROFILE || '',
@@ -495,15 +523,17 @@ export function browserNativeHostDoctor(
   home = process.env.HOME || process.env.USERPROFILE || '',
 ): BrowserNativeHostInstallResult {
   const directories = browserNativeManifestDirectories(platform, home);
-  if (directories.length === 0) {
+  if (platform !== 'win32' && directories.length === 0) {
     return {
       installed: false,
       manifestPaths: [],
-      reason: 'Automatic local Gateway discovery is supported on macOS and Linux',
+      reason: 'Automatic local Gateway discovery is supported on Windows, macOS and Linux',
     };
   }
-  const manifestPaths = directories
-    .map((directory) => join(directory, `${BROWSER_NATIVE_HOST_NAME}.json`))
+  const candidates = platform === 'win32'
+    ? windowsRegisteredNativeManifests()
+    : directories.map((directory) => join(directory, `${BROWSER_NATIVE_HOST_NAME}.json`));
+  const manifestPaths = candidates
     .filter((manifestPath) => {
       try {
         const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
@@ -540,8 +570,8 @@ export async function installBrowserNativeMessagingHost(opts?: {
 }): Promise<BrowserNativeHostInstallResult> {
   const platform = opts?.platform ?? process.platform;
   const directories = browserNativeManifestDirectories(platform, opts?.home);
-  if (directories.length === 0) {
-    return { installed: false, manifestPaths: [], reason: 'Automatic local Gateway discovery is supported on macOS and Linux' };
+  if (platform !== 'win32' && directories.length === 0) {
+    return { installed: false, manifestPaths: [], reason: 'Automatic local Gateway discovery is supported on Windows, macOS and Linux' };
   }
 
   const cliPath = opts?.cliPath ?? process.argv[1];
@@ -559,15 +589,26 @@ export async function installBrowserNativeMessagingHost(opts?: {
     executableArgs = [realpathSync(tsxPath), ...executableArgs];
   }
   const cacheDir = opts?.cacheDir?.trim() ? assertCacheDir(opts.cacheDir) : resolveBinDir();
-  const hostPath = join(cacheDir || resolveBinDir(), 'browser-native-host');
+  const hostPath = join(cacheDir || resolveBinDir(), platform === 'win32' ? 'browser-native-host.cmd' : 'browser-native-host');
   mkdirSync(dirname(hostPath), { recursive: true });
   const stateDir = opts?.stateDir ?? resolveStateDir();
   const configPath = opts?.configPath ?? resolveConfigPath();
-  await writeTextAtomic(
-    hostPath,
-    `#!/bin/sh\nexec env ELECTRON_RUN_AS_NODE=1 XOPC_STATE_DIR=${shellQuote(stateDir)} XOPC_CONFIG_PATH=${shellQuote(configPath)} XOPC_LOG_CONSOLE=false ${shellQuote(executablePath)} ${executableArgs.map(shellQuote).join(' ')}\n`,
-  );
-  chmodSync(hostPath, 0o755);
+  const wrapper = platform === 'win32'
+    ? [
+      '@echo off',
+      'setlocal DisableDelayedExpansion',
+      'chcp 65001 >nul',
+      'set "ELECTRON_RUN_AS_NODE=1"',
+      `set ${batchQuote(`XOPC_STATE_DIR=${stateDir}`)}`,
+      `set ${batchQuote(`XOPC_CONFIG_PATH=${configPath}`)}`,
+      'set "XOPC_LOG_CONSOLE=false"',
+      `${batchQuote(executablePath)} ${executableArgs.map(batchQuote).join(' ')}`,
+      'exit /b %errorlevel%',
+      '',
+    ].join('\r\n')
+    : `#!/bin/sh\nexec env ELECTRON_RUN_AS_NODE=1 XOPC_STATE_DIR=${shellQuote(stateDir)} XOPC_CONFIG_PATH=${shellQuote(configPath)} XOPC_LOG_CONSOLE=false ${shellQuote(executablePath)} ${executableArgs.map(shellQuote).join(' ')}\n`;
+  await writeTextAtomic(hostPath, wrapper);
+  if (platform !== 'win32') chmodSync(hostPath, 0o755);
 
   const manifest = JSON.stringify({
     name: BROWSER_NATIVE_HOST_NAME,
@@ -577,11 +618,20 @@ export async function installBrowserNativeMessagingHost(opts?: {
     allowed_origins: [`chrome-extension://${BROWSER_EXTENSION_ID}/`],
   }, null, 2);
   const manifestPaths: string[] = [];
-  for (const directory of directories) {
+  for (const directory of platform === 'win32' ? [dirname(hostPath)] : directories) {
     mkdirSync(directory, { recursive: true });
     const manifestPath = join(directory, `${BROWSER_NATIVE_HOST_NAME}.json`);
     await writeTextAtomic(manifestPath, manifest);
     manifestPaths.push(manifestPath);
+  }
+  if (platform === 'win32') {
+    try {
+      for (const key of WINDOWS_NATIVE_HOST_KEYS) {
+        runNativeHostRegistry(['add', key, '/ve', '/t', 'REG_SZ', '/d', manifestPaths[0]!, '/f', '/reg:32']);
+      }
+    } catch (error) {
+      return { installed: false, manifestPaths, reason: `Windows native host registration failed: ${error instanceof Error ? error.message : String(error)}` };
+    }
   }
   return { installed: true, manifestPaths };
 }

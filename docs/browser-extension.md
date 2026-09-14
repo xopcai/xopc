@@ -78,7 +78,7 @@ The install command prints the exact `extensionDir`. Load that directory from `c
 - `nativeHost.installed: true` on supported local systems;
 - no `needsRefresh` or `needsChromeReload` indication.
 
-Automatic local discovery is currently installed for Chrome, Chrome for Testing, Chromium, Microsoft Edge, and Brave on macOS and Linux. Windows can use the extension and its normal pairing flow, but local Native Messaging auto-discovery is not currently installed automatically.
+Automatic local discovery is currently installed for Chrome, Chrome for Testing, Chromium, Microsoft Edge, and Brave on macOS and Linux. On Windows, installation creates a `.cmd` launcher and registers the Native Messaging host for Chrome, Chromium, Edge, and Brave in the current user registry (HKCU), without administrator privileges. If Connect local Gateway reports `Specified native messaging host not found`, run `xopc browser extension install` as the same Windows user running the browser, then confirm `xopc browser extension doctor` reports `nativeHost.installed: true` and retry.
 
 ## Development checkout
 
