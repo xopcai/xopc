@@ -44,6 +44,7 @@ const ttsSchema = z.object({
 const catalogModelSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
+  displayNames: z.object({ 'zh-CN': z.string().min(1).optional(), en: z.string().min(1).optional() }).strict().optional(),
   availability: z.enum(['available', 'unavailable']),
   kind: z.enum(['language', 'image', 'stt', 'tts']),
   input: z.array(z.enum(['text', 'image', 'audio'])),

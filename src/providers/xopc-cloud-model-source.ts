@@ -46,6 +46,8 @@ export class XopcCloudModelSource {
       data?: Array<{
         id?: unknown;
         xopc?: {
+          displayName?: unknown;
+          displayNames?: unknown;
           kind?: unknown;
           maxOutputTokens?: unknown;
           operations?: unknown;
@@ -130,7 +132,8 @@ export class XopcCloudModelSource {
         const tts = kind === 'tts' ? parseTtsCapabilities(model.xopc?.capabilities, model.xopc?.defaultVoice) : undefined;
         const catalogModel: AvailableCatalogModel = {
           id: model.id,
-          name: model.id,
+          name: typeof model.xopc?.displayName === 'string' && model.xopc.displayName.trim() ? model.xopc.displayName.trim() : model.id,
+          ...parseDisplayNames(model.xopc?.displayNames),
           kind,
           input,
           output,
@@ -256,4 +259,15 @@ function parseImageGenerationCapabilities(value: unknown) {
       ? Number(raw.maxInputImages)
       : 0,
   };
+}
+
+function parseDisplayNames(value: unknown): Pick<AvailableCatalogModel, 'displayNames'> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const raw = value as Record<string, unknown>;
+  const displayNames: NonNullable<AvailableCatalogModel['displayNames']> = {};
+  for (const locale of ['zh-CN', 'en'] as const) {
+    const name = raw[locale];
+    if (typeof name === 'string' && name.trim()) displayNames[locale] = name.trim();
+  }
+  return Object.keys(displayNames).length ? { displayNames } : {};
 }

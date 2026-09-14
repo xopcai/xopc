@@ -18,7 +18,7 @@ function fixture(): CatalogSource {
     recommendedModel: 'chat-1',
     lastSuccessAt: 123,
     models: [{
-      id: 'chat-1', name: 'Chat 1', availability: 'available', kind: 'language',
+      id: 'chat-1', name: 'Chat 1', displayNames: { 'zh-CN': '标准', en: 'Standard' }, availability: 'available', kind: 'language',
       input: ['text', 'image'], output: ['text'], operations: ['chat.completions'],
       reasoning: false, contextWindow: 128_000, maxOutputTokens: 8_192,
     }],

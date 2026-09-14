@@ -13,6 +13,14 @@ vi.mock('../../api/client', () => ({
 const mockedApiFetch = vi.mocked(apiFetch);
 
 describe('chatModelDisplayName', () => {
+  it('localizes cloud names without changing the selected model ID', () => {
+    const model = { id: 'xopc-cloud/auto', name: 'Standard', displayNames: { 'zh-CN': '标准', en: 'Standard' } };
+    expect(chatModelDisplayName(model, 'zh')).toBe('标准');
+    expect(chatModelDisplayName(model, 'en')).toBe('Standard');
+    expect(chatModelDisplayName({ id: 'xopc-cloud/advanced', name: 'Advanced' }, 'zh')).toBe('Advanced');
+    expect(model.id).toBe('xopc-cloud/auto');
+  });
+
   it('keeps provider ids out of model labels', () => {
     expect(chatModelDisplayName({ id: 'anthropic/claude-sonnet-4-5' })).toBe('claude-sonnet-4-5');
     expect(chatModelDisplayName({ id: 'openai/gpt-5', name: 'GPT-5' })).toBe('GPT-5');

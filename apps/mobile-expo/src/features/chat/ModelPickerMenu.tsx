@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
 import { BottomSheetModal } from '../../components/BottomSheetModal';
+import { usePreferencesStore } from '../../stores/preferences-store';
 import { useMessages } from '../../i18n/messages';
 import { chatModelDisplayName, type ChatModelOption } from '../../query/models';
 import { radii, spacing, typography, useTheme } from '../../theme';
@@ -22,6 +23,7 @@ export const ModelPickerMenu = memo(function ModelPickerMenu({
 }) {
   const { colors } = useTheme();
   const m = useMessages();
+  const language = usePreferencesStore((s) => s.language);
 
   const handleSelect = useCallback(
     (modelId: string) => {
@@ -50,7 +52,7 @@ export const ModelPickerMenu = memo(function ModelPickerMenu({
       ) : (
         models.map((model) => {
           const isActive = model.id === currentModelId;
-          const title = chatModelDisplayName(model);
+          const title = chatModelDisplayName(model, language);
           return (
             <Pressable
               key={model.id}

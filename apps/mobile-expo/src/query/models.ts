@@ -7,6 +7,7 @@ import { queryKeys } from './keys';
 export type ChatModelOption = {
   id: string;
   name?: string;
+  displayNames?: Partial<Record<'zh-CN' | 'en', string>>;
   description?: string;
 };
 
@@ -15,7 +16,9 @@ export type ChatModelsPayload = {
   items: ChatModelOption[];
 };
 
-export function chatModelDisplayName(model: Pick<ChatModelOption, 'id' | 'name'>): string {
+export function chatModelDisplayName(model: Pick<ChatModelOption, 'id' | 'name' | 'displayNames'>, language = 'en'): string {
+  const localized = model.displayNames?.[language.startsWith('zh') ? 'zh-CN' : 'en']?.trim();
+  if (localized) return localized;
   const value = model.name?.trim() || model.id.trim();
   return value.split('/').at(-1)?.trim() || value;
 }
@@ -24,6 +27,7 @@ const modelRowSchema = z
   .object({
     id: z.string(),
     name: z.string().optional(),
+    displayNames: z.object({ 'zh-CN': z.string().optional(), en: z.string().optional() }).optional(),
     description: z.string().optional(),
   })
   .passthrough();
