@@ -5,7 +5,6 @@ import { useSearchParams } from 'react-router-dom';
 import { MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachments/attachment-utils';
 import type { Attachment } from '@/features/chat/attachments/attachment-utils';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { ACCEPT } from '@/features/chat/composer/composer-clipboard';
 import { ChatComposerInput, type ComposerKbdContext } from '@/features/chat/composer/chat-composer-input';
 import { ComposerFrame } from '@/features/chat/composer/composer-frame';
 import { shouldRouteGlobalComposerPaste } from '@/features/chat/composer/composer-global-paste';
@@ -657,7 +656,6 @@ export const ChatComposer = memo(function ChatComposer({
           ref={fileInputRef}
           type="file"
           multiple
-          accept={ACCEPT}
           className="hidden"
           onChange={async (e) => {
             const files = e.target.files;

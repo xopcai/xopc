@@ -21,13 +21,8 @@ import { proactiveGet, type ProactiveOverview } from '@/features/proactive/api';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachments/attachment-utils';
-import {
-  ACCEPT,
-  collectClipboardFiles,
-  isComposerAcceptableFile,
-} from '@/features/chat/composer/composer-clipboard';
+import { collectClipboardFiles } from '@/features/chat/composer/composer-clipboard';
 import { appendTranscriptToDraft } from '@/features/chat/composer/append-transcript-to-draft';
-import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { createComposerPayloadHandoff } from '@/features/chat/composer/composer-payload-handoff';
 import { useComposerAttachments } from '@/features/chat/composer/use-composer-attachments';
 import { useRealtimeVoice } from '@/features/voice/realtime/use-realtime-voice';
@@ -252,13 +247,8 @@ export function HomePage() {
     const collected = collectClipboardFiles(event.clipboardData);
     if (collected.length === 0) return;
     event.preventDefault();
-    const accepted = collected.filter(isComposerAcceptableFile);
-    if (accepted.length === 0) {
-      showComposerNotification('warning', msg.chat.clipboardFileTypeUnsupported);
-      return;
-    }
-    await processAttachmentFiles(accepted);
-  }, [msg.chat.clipboardFileTypeUnsupported, processAttachmentFiles]);
+    await processAttachmentFiles(collected);
+  }, [processAttachmentFiles]);
 
   const handleAttachmentDragOver = useCallback((event: DragEvent<HTMLFormElement>) => {
     if (!event.dataTransfer.types.includes('Files')) return;
@@ -437,7 +427,6 @@ export function HomePage() {
         ref={attachments.fileInputRef}
         type="file"
         multiple
-        accept={ACCEPT}
         className="hidden"
         onChange={(event) => {
           const files = event.target.files;

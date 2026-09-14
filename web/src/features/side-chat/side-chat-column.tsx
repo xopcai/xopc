@@ -6,7 +6,6 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ClarifyPrompt } from '@/features/chat/composer/clarify-prompt';
 import { ChatComposerInput, type ComposerKbdContext } from '@/features/chat/composer/chat-composer-input';
-import { ACCEPT } from '@/features/chat/composer/composer-clipboard';
 import { ComposerAttachmentChips } from '@/features/chat/composer/composer-attachment-chips';
 import { ComposerFrame } from '@/features/chat/composer/composer-frame';
 import { ComposerAttachButton, ComposerRunControl, ComposerToolbarRow } from '@/features/chat/composer/composer-toolbar';
@@ -826,7 +825,6 @@ export function SideChatConversation({
             ref={attachments.fileInputRef}
             type="file"
             multiple
-            accept={ACCEPT}
             className="hidden"
             onChange={(event) => {
               const files = event.target.files;
