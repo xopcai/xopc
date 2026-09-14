@@ -78,7 +78,7 @@ xopc browser doctor
 - 受支持的本机系统上 `nativeHost.installed: true`；
 - 没有 `needsRefresh` 或 `needsChromeReload`。
 
-macOS 和 Linux 当前会为 Chrome、Chrome for Testing、Chromium、Microsoft Edge 和 Brave 安装本机自动发现。Windows 可以使用扩展和正常配对流程，但目前不会自动安装 Native Messaging 本机发现。
+macOS 和 Linux 当前会为 Chrome、Chrome for Testing、Chromium、Microsoft Edge 和 Brave 安装本机自动发现。Windows 会生成 `.cmd` 启动脚本，并在当前用户的注册表（HKCU）中为 Chrome、Chromium、Edge 和 Brave 注册 Native Messaging host，无需管理员权限。若点击“连接本机 Gateway”出现 `Specified native messaging host not found`，请在运行浏览器的同一个 Windows 用户下执行 `xopc browser extension install`，确认 `xopc browser extension doctor` 输出 `nativeHost.installed: true` 后重试。
 
 ## 源码开发环境
 
