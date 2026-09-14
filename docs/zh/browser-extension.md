@@ -16,6 +16,10 @@ xopc Chrome 扩展在浏览器侧栏中提供精简但完整的聊天体验，�
 
 ## 从桌面端或 Web 控制台安装
 
+新设备最短路径是 **设置 → 设备接入 → 连接浏览器扩展**。引导会先下载可移植扩展包，确认安装完成后才开始 10 分钟邀请倒计时。解压后打开 `chrome://extensions`、开启 **开发者模式**，再用 **加载已解压的扩展程序** 选择解压出的 `xopc-browser-extension` 文件夹。
+
+若要在同一台电脑安装并使用本机自动发现：
+
 1. 启动 Gateway。
 2. 打开 **设置 → 浏览器**。
 3. 启用浏览器控制，并选择 **Chrome 扩展**。
@@ -84,8 +88,9 @@ Native Messaging 只用于本机发现和 enrollment，不承载聊天正文、�
 
 1. 通过 Tailscale 或 HTTPS 等受保护入口暴露 Gateway，参阅[远程访问](./remote-access.md)。
 2. 在 Gateway 管理入口打开 **设置 → 设备接入 → 连接浏览器扩展**。
-3. 在安装了扩展的电脑上打开一次性浏览器邀请，再点击 **Open xopc extension**。若无法自动交接，可复制邀请并粘贴到扩展。
-4. 对比确认码，并在 Gateway 中批准请求。
+3. 复制设备接入页面显示的一次性邀请。
+4. 在 Chrome 打开 xopc 侧栏，将邀请粘贴到 **One-time invitation**，点击 **Connect**；Chrome 询问时允许访问列出的 Gateway 地址。
+5. 返回设备接入页面，对比确认码并批准请求。
 
 扩展只申请所选 Gateway origin 的访问权限。使用 extension driver 时，用户浏览器需要保持在线；无人值守的服务器自动化更适合 Playwright 或已配置的远程浏览器，不应依赖某个用户的 Chrome 会话。
 
@@ -178,7 +183,7 @@ xopc `v0.0.268` 修复了一个问题：没有 tab binding 的浏览器动作会
 - 扩展 UI 和脚本全部本地打包，Gateway 不下发远程可执行代码。
 - Gateway 访问使用 scope 受限的浏览器设备凭据；Realtime 浏览器控制还需要签名 endpoint 身份和短期 turn token。
 - 本机自动 enrollment 同时限制固定扩展 ID、loopback Gateway、native issuer、公钥指纹、nonce 和短有效期。
-- 远程/自部署连接只接受固定 `https://link.xopc.ai/connect` 页面的邀请交接，并且仍需 owner 批准。
+- 远程/自部署连接只接受从设备接入复制的短期签名邀请，并且仍需 owner 对比确认码后批准。
 - 页面访问是可选、按 origin 授权的；页面内容是不可信数据。
 - 当前标签页控制需要 Session binding，并继续受 URL、风险、上传和审批策略约束。
 

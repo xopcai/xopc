@@ -16,6 +16,10 @@ The side panel intentionally contains fewer management features than the full Ga
 
 ## Install from the desktop or web console
 
+The shortest path for a new device is **Settings → Device access → Connect browser extension**. The guided flow downloads a portable extension archive before it starts the 10-minute invitation timer. Unzip it, open `chrome://extensions`, enable **Developer mode**, and choose **Load unpacked** with the extracted `xopc-browser-extension` folder.
+
+For a same-computer installation with automatic local discovery:
+
 1. Start the Gateway.
 2. Open **Settings → Browser**.
 3. Enable browser control and select **Chrome extension**.
@@ -84,8 +88,9 @@ A Gateway running on another computer or server does not receive local auto-appr
 
 1. Expose the Gateway through a protected route such as Tailscale or HTTPS. See [Remote access](./remote-access.md).
 2. Open **Settings → Device access → Connect browser extension** in the Gateway owner interface.
-3. Open the one-time browser invitation on the computer that has the extension, then select **Open xopc extension**. If handoff is unavailable, copy the invitation and paste it into the extension.
-4. Compare the confirmation code and approve the request in the Gateway.
+3. Copy the one-time invitation shown by Device access.
+4. Open the xopc side panel in Chrome, paste the invitation into **One-time invitation**, and select **Connect**. Allow access to the listed Gateway addresses when Chrome asks.
+5. Return to Device access, compare the confirmation code, and approve the request.
 
 The extension requests access only to the selected Gateway origin. Keep the browser online while using the extension driver. For unattended server automation, prefer Playwright or a configured remote browser instead of depending on a user's Chrome session.
 
@@ -178,7 +183,7 @@ Chat and browser control share the Gateway but use different authorization check
 - The extension UI and scripts are packaged locally; the Gateway does not provide remote executable code.
 - Gateway access uses a scope-limited browser device credential; Realtime browser control also requires a signed endpoint identity and short-lived turn token.
 - Local auto-enrollment is limited to a fixed extension ID, loopback Gateway, native issuer, key fingerprint, nonce, and short lifetime.
-- Remote/self-hosted enrollment accepts handoff only from the fixed `https://link.xopc.ai/connect` page and still requires owner approval.
+- Remote/self-hosted enrollment accepts only a signed, short-lived invitation copied from Device access and still requires owner approval with a matching confirmation code.
 - Page access is optional and origin-scoped; page content is untrusted data.
 - Current-tab control requires a Session binding and remains subject to URL, risk, upload, and approval policy.
 

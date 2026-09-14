@@ -21,6 +21,8 @@ import { readFile, readdir, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import AdmZip from 'adm-zip';
+
 import type { Config } from '../../config/schema.js';
 import { PACKAGE_VERSION } from '../../package-version.js';
 import { resolveBinDir, resolveConfigPath, resolveStateDir } from '../../config/paths.js';
@@ -73,6 +75,11 @@ export interface EnsureBrowserExtResult {
   extensionDir: string;
   xopcVersion: string;
   copied: boolean;
+}
+
+export interface BrowserExtensionArchive {
+  filename: string;
+  data: Buffer;
 }
 
 export interface BrowserNativeHostInstallResult {
@@ -211,6 +218,23 @@ export async function resolveBundledBrowserExtDir(): Promise<{
   }
 
   return null;
+}
+
+/** Build a portable archive for installing the bundled extension on another computer. */
+export async function createBrowserExtensionArchive(): Promise<BrowserExtensionArchive> {
+  const bundled = await resolveBundledBrowserExtDir();
+  if (!bundled) {
+    throw new Error('Bundled browser extension not found. Reinstall or rebuild xopc.');
+  }
+  const root = 'xopc-browser-extension';
+  const zip = new AdmZip();
+  zip.addLocalFile(join(bundled.dir, 'manifest.json'), root);
+  zip.addLocalFolder(join(bundled.dir, 'dist'), `${root}/dist`);
+  zip.addLocalFolder(join(bundled.dir, 'icons'), `${root}/icons`);
+  return {
+    filename: `xopc-browser-extension-${PACKAGE_VERSION}.zip`,
+    data: zip.toBuffer(),
+  };
 }
 
 export function computeNeedsRefresh(params: {

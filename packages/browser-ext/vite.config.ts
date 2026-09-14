@@ -11,7 +11,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         background: resolve(__dirname, 'src/background.ts'),
-        'pairing-handoff': resolve(__dirname, 'src/pairing-handoff.ts'),
         sidepanel: resolve(__dirname, 'sidepanel.html'),
       },
       output: {
