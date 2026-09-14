@@ -1,8 +1,9 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import * as childProcess from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import AdmZip from 'adm-zip';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Config } from '../../config/schema.js';
 import { PACKAGE_VERSION } from '../../package-version.js';
@@ -19,6 +20,11 @@ import {
   resolveWindowsExtensionManager,
   validateBrowserExtLayout,
 } from '../providers/browser-ext-install.js';
+
+vi.mock('node:child_process', async (importOriginal) => ({
+  ...await importOriginal<typeof import('node:child_process')>(),
+  execFileSync: vi.fn(),
+}));
 
 function writeMinimalExtensionTree(root: string, version = '0.0.1'): void {
   mkdirSync(join(root, 'dist'), { recursive: true });
@@ -60,6 +66,7 @@ describe('browser-ext-install', () => {
   });
 
   afterEach(() => {
+    vi.resetAllMocks();
     process.env.HOME = prevHome;
     process.env.USERPROFILE = prevUserProfile;
     if (prevBundledRoot === undefined) {
@@ -291,6 +298,45 @@ describe('browser-ext-install', () => {
       installed: true,
       manifestPaths: result.manifestPaths,
     });
+  });
+
+  it('registers a Windows batch host and diagnoses the registry manifest', async () => {
+    const registry = vi.mocked(childProcess.execFileSync).mockReturnValue('');
+    const result = await installBrowserNativeMessagingHost({
+      cacheDir: binDir,
+      platform: 'win32',
+      nodePath: 'C:\\Program Files\\nodejs\\node.exe',
+      cliPath: 'C:\\xopc & tools\\cli.js',
+      stateDir: 'C:\\Users\\100%name!\\.xopc',
+      configPath: 'C:\\Users\\100%name!\\.xopc\\xopc.json',
+    });
+    expect(result.installed).toBe(true);
+    expect(result.manifestPaths).toHaveLength(1);
+    expect(registry).toHaveBeenCalledWith('reg.exe', [
+      'add', 'HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\ai.xopc.browser',
+      '/ve', '/t', 'REG_SZ', '/d', result.manifestPaths[0], '/f', '/reg:32',
+    ], expect.objectContaining({ windowsHide: true }));
+    const manifest = JSON.parse(readFileSync(result.manifestPaths[0]!, 'utf8'));
+    expect(manifest.path).toBe(join(binDir, 'browser-native-host.cmd'));
+    expect(manifest.allowed_origins).toEqual(['chrome-extension://gopbfhaojnnhiheiikblejnpgmfmkmgd/']);
+    const wrapper = readFileSync(manifest.path, 'utf8');
+    expect(wrapper).toContain('@echo off\r\nsetlocal DisableDelayedExpansion');
+    expect(wrapper).toContain('"C:\\Program Files\\nodejs\\node.exe" "C:\\xopc & tools\\cli.js"');
+    expect(wrapper).toContain('set "XOPC_STATE_DIR=C:\\Users\\100%%name!\\.xopc"');
+    expect(wrapper).toContain('set "XOPC_LOG_CONSOLE=false"');
+    registry.mockReturnValue(`    (Default)    REG_SZ    ${result.manifestPaths[0]}\r\n`);
+    expect(browserNativeHostDoctor('win32')).toMatchObject({ installed: true, manifestPaths: result.manifestPaths });
+    rmSync(manifest.path);
+    expect(browserNativeHostDoctor('win32').installed).toBe(false);
+  });
+
+  it('reports Windows registry failures instead of claiming the host is installed', async () => {
+    vi.mocked(childProcess.execFileSync).mockImplementation(() => { throw new Error('Access denied'); });
+    const result = await installBrowserNativeMessagingHost({
+      cacheDir: binDir, platform: 'win32', cliPath: 'C:\\xopc\\cli.js',
+    });
+    expect(result).toMatchObject({ installed: false, reason: expect.stringContaining('Access denied') });
+    expect(browserNativeHostDoctor('win32').installed).toBe(false);
   });
 
   it('uses absolute Node and tsx entries for a development native host', async () => {
