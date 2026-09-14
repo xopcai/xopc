@@ -4,18 +4,19 @@ import { endpointHelloSigningPayload, type EndpointHelloPayload } from '@xopcai/
 import { clearBrowserOutboxes } from './chat-outbox';
 
 const PROFILE_KEY = 'xopc.browser.profile';
-export const PENDING_PAIRING_LINK_KEY = 'xopc.browser.pending-pairing-link';
 const AUTO_CONNECT_KEY = 'xopc.browser.auto-connect';
 const KEY_DATABASE = 'xopc-browser-identity';
 const KEY_STORE = 'identity';
 const KEY_NAME = 'device-key';
 const NATIVE_HOST_NAME = 'ai.xopc.browser';
+const GATEWAY_REQUEST_TIMEOUT_MS = 8_000;
 let refreshTask: Promise<BrowserGatewayProfile> | undefined;
 
 export type BrowserGatewayProfile = {
   gatewayId: string;
   gatewayName: string;
   gatewayUrl: string;
+  gatewayUrls?: string[];
   gatewayPublicKey: string;
   deviceId: string;
   refreshToken: string;
@@ -150,14 +151,6 @@ export function parseBrowserPairingLink(value: string): PairingPayload {
   return payload;
 }
 
-export async function takePendingPairingLink(): Promise<string | undefined> {
-  const stored = await chrome.storage.session.get(PENDING_PAIRING_LINK_KEY);
-  const link = stored[PENDING_PAIRING_LINK_KEY];
-  if (typeof link !== 'string') return undefined;
-  await chrome.storage.session.remove(PENDING_PAIRING_LINK_KEY);
-  return link;
-}
-
 function openIdentityDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(KEY_DATABASE, 1);
@@ -241,13 +234,17 @@ async function verifyGateway(publicKey: string, payload: string, signature: stri
   }
 }
 
-async function requestGatewayOriginPermission(origin: string): Promise<void> {
-  const url = new URL(origin);
-  const pattern = `${url.origin}/*`;
-  if (await chrome.permissions.contains({ origins: [pattern] })) return;
-  if (!await chrome.permissions.request({ origins: [pattern] })) {
-    throw new Error('Gateway site permission was not granted');
-  }
+function requestGatewayOriginPermissions(origins: string[]): Promise<boolean> {
+  const patterns = origins
+    .filter((origin) => {
+      const url = new URL(origin);
+      return !(url.protocol === 'http:' && ['127.0.0.1', 'localhost'].includes(url.hostname));
+    })
+    .map(origin => `${new URL(origin).origin}/*`);
+  if (!patterns.length) return Promise.resolve(true);
+  // This call must happen synchronously inside the Connect click handler. Chrome
+  // rejects optional permission prompts after any awaited work loses the gesture.
+  return chrome.permissions.request({ origins: patterns });
 }
 
 class GatewayHttpError extends Error {
@@ -258,11 +255,22 @@ class GatewayHttpError extends Error {
 }
 
 async function post(origin: string, path: string, body: unknown): Promise<Record<string, unknown>> {
-  const response = await fetch(`${origin}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), GATEWAY_REQUEST_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(`${origin}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (cause) {
+    if (controller.signal.aborted) throw new Error(`Gateway did not respond within ${GATEWAY_REQUEST_TIMEOUT_MS / 1_000} seconds`);
+    throw cause;
+  } finally {
+    clearTimeout(timeout);
+  }
   const json = await response.json().catch(() => ({})) as { error?: { code?: string; message?: string } };
   if (!response.ok) {
     throw new GatewayHttpError(
@@ -316,12 +324,38 @@ async function signedPairingRequest(
   return decoded;
 }
 
+function shouldTryNextRoute(cause: unknown): boolean {
+  return !(cause instanceof GatewayHttpError)
+    || cause.status >= 500
+    || [404, 408, 425, 429].includes(cause.status);
+}
+
+async function signedPairingRequestAcrossRoutes(
+  pair: CryptoKeyPair,
+  payload: PairingPayload,
+  origins: string[],
+  requestId: string,
+  action: DevicePairingAction,
+  completion?: { idempotencyKey: string; initialRefreshToken: string },
+): Promise<{ origin: string; result: PairingResponse }> {
+  let lastRouteError: unknown;
+  for (const origin of origins) {
+    try {
+      return { origin, result: await signedPairingRequest(pair, payload, origin, requestId, action, completion) };
+    } catch (cause) {
+      if (!shouldTryNextRoute(cause)) throw cause;
+      lastRouteError = cause;
+    }
+  }
+  throw lastRouteError instanceof Error ? lastRouteError : new Error('No Gateway route could be reached');
+}
+
 async function refreshAccessToken(
-  gatewayUrl: string,
+  gatewayUrls: string[],
   refreshToken: string,
   pair: CryptoKeyPair,
   gateway: { gatewayId: string; gatewayPublicKey: string },
-): Promise<{ accessToken: string; accessTokenExpiresAt: number; refreshToken: string }> {
+): Promise<{ accessToken: string; accessTokenExpiresAt: number; refreshToken: string; gatewayUrl: string }> {
   const nextRefreshToken = createRefreshToken();
   const requestId = crypto.randomUUID();
   const timestamp = Date.now();
@@ -329,14 +363,30 @@ async function refreshAccessToken(
   const credentialId = refreshToken.slice('xopc_rt_'.length).split('_')[0]!;
   const proof = `xopc-device-refresh-v2\n${credentialId}\n${timestamp}\n${nonce}\n${requestId}\n${nextRefreshToken}`;
   const signature = await sign(pair, proof);
-  const response = await post(gatewayUrl, '/api/device-auth/refresh', {
+  const body = {
     refreshToken,
     nextRefreshToken,
     requestId,
     timestamp,
     nonce,
     signature,
-  });
+  };
+  let gatewayUrl: string | undefined;
+  let response: Record<string, unknown> | undefined;
+  let lastRouteError: unknown;
+  for (const origin of gatewayUrls) {
+    try {
+      response = await post(origin, '/api/device-auth/refresh', body);
+      gatewayUrl = origin;
+      break;
+    } catch (cause) {
+      if (!shouldTryNextRoute(cause)) throw cause;
+      lastRouteError = cause;
+    }
+  }
+  if (!response || !gatewayUrl) {
+    throw lastRouteError instanceof Error ? lastRouteError : new Error('No Gateway route could be reached');
+  }
   if (typeof response.signedPayload !== 'string' || typeof response.signature !== 'string'
     || !await verifyGateway(gateway.gatewayPublicKey, response.signedPayload, response.signature)) throw new Error('Gateway identity could not be verified');
   const responseProof = decodeJson<{ purpose: string; gatewayId: string; requestId: string; nonce: string; expiresAt: number;
@@ -348,7 +398,12 @@ async function refreshAccessToken(
     || payload.refreshToken !== nextRefreshToken) {
     throw new Error('Gateway returned invalid browser credentials');
   }
-  return payload as { accessToken: string; accessTokenExpiresAt: number; refreshToken: string };
+  return { ...payload, gatewayUrl } as {
+    accessToken: string;
+    accessTokenExpiresAt: number;
+    refreshToken: string;
+    gatewayUrl: string;
+  };
 }
 
 function wait(milliseconds: number): Promise<void> {
@@ -360,48 +415,43 @@ export async function pairGateway(
   onApproval: (confirmationCode: string) => void,
 ): Promise<BrowserGatewayProfile> {
   const payload = parseBrowserPairingLink(link);
+  const origins = [...new Set(payload.routes.map(route => new URL(route.url).origin))];
+  const permissionTask = requestGatewayOriginPermissions(origins);
+  if (!await permissionTask) throw new Error('Gateway site permission was not granted');
   const pair = await getOrCreateKeyPair();
   const requestId = crypto.randomUUID();
   const initialRefreshToken = createRefreshToken();
-  let origin: string | undefined;
-  let result: PairingResponse | undefined;
-  let lastRouteError: unknown;
-  for (const candidate of [...new Set(payload.routes.map(route => new URL(route.url).origin))]) {
-    await requestGatewayOriginPermission(candidate);
-    try {
-      result = await signedPairingRequest(pair, payload, candidate, requestId, 'request');
-      origin = candidate;
-      break;
-    } catch (cause) {
-      if (cause instanceof GatewayHttpError && cause.status < 500 && ![404, 408, 425, 429].includes(cause.status)) {
-        throw cause;
-      }
-      lastRouteError = cause;
-    }
-  }
-  if (!origin || !result) {
-    throw lastRouteError instanceof Error ? lastRouteError : new Error('No Gateway route could be reached');
-  }
+  let { origin, result } = await signedPairingRequestAcrossRoutes(
+    pair, payload, origins, requestId, 'request',
+  );
   if (result.request.status === 'pending') onApproval(result.request.confirmationCode);
   while (result.request.status === 'pending') {
     await wait(1_500);
-    result = await signedPairingRequest(pair, payload, origin, requestId, 'status');
+    const response = await signedPairingRequestAcrossRoutes(
+      pair, payload, [origin, ...origins.filter(candidate => candidate !== origin)], requestId, 'status',
+    );
+    ({ origin, result } = response);
   }
   if (result.request.status !== 'approved' && result.request.status !== 'completed') {
     throw new Error(`Pairing ${result.request.status}`);
   }
   if (result.request.status !== 'completed') {
-    result = await signedPairingRequest(pair, payload, origin, requestId, 'complete', {
+    const response = await signedPairingRequestAcrossRoutes(
+      pair, payload, [origin, ...origins.filter(candidate => candidate !== origin)], requestId, 'complete', {
       idempotencyKey: crypto.randomUUID(),
       initialRefreshToken,
-    });
+      },
+    );
+    ({ origin, result } = response);
   }
   if (!result.request.deviceId) throw new Error('Gateway did not register the browser');
-  const tokens = await refreshAccessToken(origin, initialRefreshToken, pair, payload);
+  const orderedOrigins = [origin, ...origins.filter(candidate => candidate !== origin)];
+  const tokens = await refreshAccessToken(orderedOrigins, initialRefreshToken, pair, payload);
   const profile: BrowserGatewayProfile = {
     gatewayId: payload.gatewayId,
     gatewayName: result.gateway.name,
-    gatewayUrl: origin,
+    gatewayUrl: tokens.gatewayUrl,
+    gatewayUrls: [tokens.gatewayUrl, ...orderedOrigins.filter(candidate => candidate !== tokens.gatewayUrl)],
     gatewayPublicKey: payload.gatewayPublicKey,
     deviceId: result.request.deviceId,
     refreshToken: tokens.refreshToken,
@@ -424,8 +474,13 @@ export async function getAccessProfile(): Promise<BrowserGatewayProfile> {
   if (profile.accessTokenExpiresAt > Date.now() + 30_000) return profile;
   if (refreshTask) return refreshTask;
   refreshTask = (async () => {
-    const tokens = await refreshAccessToken(profile.gatewayUrl, profile.refreshToken, await getOrCreateKeyPair(), profile);
-    const next = { ...profile, ...tokens };
+    const gatewayUrls = profile.gatewayUrls?.length ? profile.gatewayUrls : [profile.gatewayUrl];
+    const tokens = await refreshAccessToken(gatewayUrls, profile.refreshToken, await getOrCreateKeyPair(), profile);
+    const next = {
+      ...profile,
+      ...tokens,
+      gatewayUrls: [tokens.gatewayUrl, ...gatewayUrls.filter(candidate => candidate !== tokens.gatewayUrl)],
+    };
     await chrome.storage.local.set({ [PROFILE_KEY]: next });
     return next;
   })();

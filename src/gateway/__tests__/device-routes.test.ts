@@ -44,9 +44,9 @@ describe('resolveSecureDeviceRoutes', () => {
     state.tailscale = { active: true, hostname: 'gateway.tailnet.ts.net' };
 
     expect(resolveSecureDeviceRoutes({} as never).map(({ kind, url }) => ({ kind, url }))).toEqual([
-      { kind: 'custom-https', url: 'https://gateway.example.com' },
       { kind: 'xopc-secure-link', url: 'https://active.frp.xopc.ai' },
       { kind: 'tailscale', url: 'https://gateway.tailnet.ts.net' },
+      { kind: 'custom-https', url: 'https://gateway.example.com' },
     ]);
   });
 });

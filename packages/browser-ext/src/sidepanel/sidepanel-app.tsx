@@ -6,8 +6,6 @@ import {
   readProfile,
   revokeAndForgetProfile,
   setAutoConnectEnabled,
-  takePendingPairingLink,
-  PENDING_PAIRING_LINK_KEY,
   type BrowserGatewayProfile,
 } from './auth';
 import { ChatPanel } from './chat-panel';
@@ -16,6 +14,23 @@ import { watchSidePanelTheme } from './theme';
 
 async function reconnectBrowserBridge(): Promise<void> {
   await chrome.runtime.sendMessage({ type: 'browser/reconnect' }).catch(() => undefined);
+}
+
+function pairingErrorMessage(cause: unknown): string {
+  const message = cause instanceof Error ? cause.message : String(cause);
+  if (message === 'Gateway site permission was not granted') {
+    return 'Chrome needs access to the Gateway address. Select Connect again and allow the site permission.';
+  }
+  if (message === 'PAIRING_EXPIRED' || message === 'Pairing expired' || message === 'Pairing link has expired') {
+    return 'This invitation expired. Create and copy a new invitation from Device access.';
+  }
+  if (message === 'PAIRING_DEVICE_MISMATCH') {
+    return 'This invitation was created for a phone. Create a browser invitation instead.';
+  }
+  if (message === 'No Gateway route could be reached') {
+    return 'None of the Gateway addresses responded. Check that the Gateway is online and its secure connection is active.';
+  }
+  return message;
 }
 
 export function SidePanelApp() {
@@ -33,6 +48,7 @@ export function SidePanelApp() {
     pairingStarted.current = true;
     setState('pairing');
     setError('');
+    setConfirmationCode('');
     setPairingLink(link);
     try {
       const paired = await pairGateway(link, setConfirmationCode);
@@ -41,7 +57,7 @@ export function SidePanelApp() {
       setProfile(paired);
       setState('online');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      setError(pairingErrorMessage(cause));
       setState('unpaired');
     } finally {
       pairingStarted.current = false;
@@ -52,12 +68,6 @@ export function SidePanelApp() {
     if (initializationStarted.current) return;
     initializationStarted.current = true;
     void (async () => {
-      const handedOff = await takePendingPairingLink();
-      if (handedOff) {
-        await connect(handedOff);
-        return;
-      }
-
       const stored = await readProfile();
       if (stored) {
         await reconnectBrowserBridge();
@@ -75,15 +85,6 @@ export function SidePanelApp() {
       setLocalPairingLink(local.pairingLink);
       await connect(local.pairingLink);
     })();
-  }, [connect]);
-
-  useEffect(() => {
-    const handleStorageChange = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
-      if (area !== 'session' || !changes[PENDING_PAIRING_LINK_KEY]?.newValue) return;
-      void takePendingPairingLink().then((link) => { if (link) void connect(link); });
-    };
-    chrome.storage.onChanged.addListener(handleStorageChange);
-    return () => chrome.storage.onChanged.removeListener(handleStorageChange);
   }, [connect]);
 
   useEffect(() => watchSidePanelTheme(profile?.gatewayUrl), [profile?.gatewayUrl]);
@@ -122,26 +123,26 @@ export function SidePanelApp() {
         {state === 'loading' ? <div className="muted">Loading…</div> : null}
         {(state === 'unpaired' || state === 'pairing') ? (
           <div className="card">
-            <h1>Connect to xopc</h1>
+            <h1>Connect a Gateway</h1>
             {localPairingLink ? (
               <>
                 <p className="muted">A local xopc Gateway was found. xopc connects automatically on this computer.</p>
                 <button className="primary local-connect" onClick={() => void connect(localPairingLink)} disabled={state === 'pairing'}>
                   {state === 'pairing' ? 'Connecting…' : 'Retry local connection'}
                 </button>
-                <div className="pairing-divider">or use a pairing link</div>
+                <div className="pairing-divider">or paste an invitation</div>
               </>
             ) : (
               <>
-                <p className="muted">Connect to a local Gateway, or paste a pairing link for another Gateway.</p>
+                <p className="muted">Connect locally, or paste the one-time invitation copied from Device access.</p>
                 <button className="primary local-connect" onClick={() => void connectLocalGateway()} disabled={state === 'pairing'}>
                   {state === 'pairing' ? 'Connecting…' : 'Connect local Gateway'}
                 </button>
-                <div className="pairing-divider">or use a pairing link</div>
+                <div className="pairing-divider">or paste an invitation</div>
               </>
             )}
             <label className="field">
-              Pairing link
+              One-time invitation
               <textarea rows={4} value={pairingLink} onChange={(event) => setPairingLink(event.target.value)} disabled={state === 'pairing'} />
             </label>
             {confirmationCode ? (

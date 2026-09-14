@@ -84,7 +84,7 @@ export function DevicePairingRouteSetup() {
       </details>
       <label className="flex items-start gap-3 text-sm text-fg"><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} className="mt-1 size-4 accent-accent" />{t.consentCheckbox}</label>
     </div> : null}
-    {error || statusError || data?.state === 'error' ? <p role="alert" className="mt-4 text-sm text-danger">{f.failed}</p> : null}
+    {error || statusError || data?.state === 'error' ? <p role="alert" className="mt-4 text-sm text-danger">{f.routeSetupFailed}</p> : null}
     <div className="flex-1" />
     <label className="my-5 flex items-center gap-3 text-sm text-fg-muted"><input type="checkbox" checked={autoStart} disabled={phase !== 'idle'} onChange={e => setAutoStart(e.target.checked)} className="size-4 accent-accent" />{f.autoStart}</label>
     <Button className="w-full" variant="primary" disabled={!data || phase !== 'idle' || preparing || (showConsent && !consent)} onClick={() => void enable()}>

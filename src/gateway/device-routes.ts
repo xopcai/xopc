@@ -24,7 +24,6 @@ function routeId(kind: DeviceRoute['kind'], url: string): string {
 export function resolveSecureDeviceRoutes(config: Config): DeviceRoute[] {
   const tunnelStatus = getTunnelService().getStatus();
   const candidates: Array<{ kind: DeviceRoute['kind']; url: string | null }> = [
-    { kind: 'custom-https', url: secureUrl(resolveReverseProxyPublicUrl(config)) },
     {
       kind: 'xopc-secure-link',
       url: tunnelStatus.state === 'connected' ? secureUrl(tunnelStatus.publicUrl) : null,
@@ -34,6 +33,7 @@ export function resolveSecureDeviceRoutes(config: Config): DeviceRoute[] {
   if (tailscale.active && tailscale.hostname) {
     candidates.push({ kind: 'tailscale', url: secureUrl(`https://${tailscale.hostname}`) });
   }
+  candidates.push({ kind: 'custom-https', url: secureUrl(resolveReverseProxyPublicUrl(config)) });
 
   const seen = new Set<string>();
   const routes: DeviceRoute[] = [];
