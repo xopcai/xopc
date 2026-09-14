@@ -5,6 +5,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { models } = vi.hoisted(() => ({ models: [
+  { id: 'xopc-cloud/auto', name: 'Standard', displayNames: { 'zh-CN': '标准', en: 'Standard' }, provider: 'xopc-cloud', reasoning: false,
+    thinking: { mode: 'none', options: ['off'], initialValue: 'off', supportsAdaptive: false } },
   { id: 'test/one', name: 'Model One', provider: 'test', reasoning: true,
     thinking: { mode: 'levels', options: ['low', 'high'], initialValue: 'low', supportsAdaptive: false } },
   { id: 'other/two', name: 'Model Two', provider: 'other', reasoning: false,
@@ -18,6 +20,7 @@ vi.mock('swr', () => ({ default: () => ({ data: models, isLoading: false, mutate
 
 import { ComposerModelConfigControl } from '../model/composer-model-config-control';
 import { messages } from '@/i18n/messages';
+import { useLocaleStore } from '@/stores/locale-store';
 
 let root: Root;
 let container: HTMLDivElement;
@@ -25,6 +28,7 @@ const button = (name: string) => [...document.querySelectorAll('button')].find((
 const click = async (element: HTMLElement) => act(async () => element.click());
 
 beforeEach(() => {
+  useLocaleStore.setState({ language: 'en' });
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   container = document.createElement('div');
   document.body.append(container);
@@ -41,6 +45,18 @@ async function render(props = {}) {
 }
 
 describe('composer model configuration', () => {
+  it('updates the current cloud name and picker on locale changes while retaining auto', async () => {
+    const change = vi.fn();
+    await render({ sessionModel: 'xopc-cloud/auto', onModelChange: change });
+    expect(container.querySelector('button')?.textContent).toContain('Standard');
+    await act(async () => useLocaleStore.setState({ language: 'zh' }));
+    expect(container.querySelector('button')?.textContent).toContain('标准');
+    await click(button('标准xopc-cloud'));
+    expect(button('标准xopc-cloud').getAttribute('aria-pressed')).toBe('true');
+    await click(button('标准xopc-cloud'));
+    expect(change).toHaveBeenCalledWith('xopc-cloud/auto', 'off');
+  });
+
   it('shows only the model name for a provider-routed model and retains its identity in the picker', async () => {
     await render({ sessionModel: 'xopc-cloud/openai-codex/gpt-5.6-luna', thinkingLevel: 'low' });
     const trigger = container.querySelector('button')!;

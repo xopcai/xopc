@@ -3,6 +3,22 @@ import { describe, expect, it, vi } from 'vitest';
 import { XopcCloudModelError, XopcCloudModelSource } from '../xopc-cloud-model-source.js';
 
 describe('XopcCloudModelSource', () => {
+  it('retains localized names and public IDs, falling back for old catalogs', async () => {
+    const source = new XopcCloudModelSource({
+      credentials: { resolveApiKey: async () => 'token' },
+      fetchImpl: async () => Response.json({ data: [
+        { id: 'auto', xopc: { displayName: 'Standard', displayNames: { 'zh-CN': '标准', en: 'Standard' } } },
+        { id: 'advanced', xopc: { displayName: 'Advanced', displayNames: { 'zh-CN': '高级', en: 42 } } },
+        { id: 'legacy' },
+      ] }),
+    });
+    await expect(source.fetch()).resolves.toMatchObject({ status: 'fetched', models: [
+      { id: 'auto', name: 'Standard', displayNames: { 'zh-CN': '标准', en: 'Standard' } },
+      { id: 'advanced', name: 'Advanced', displayNames: { 'zh-CN': '高级' } },
+      { id: 'legacy', name: 'legacy' },
+    ] });
+  });
+
   it('skips discovery when OAuth is not configured', async () => {
     const fetchImpl = vi.fn<typeof fetch>();
     const source = new XopcCloudModelSource({
