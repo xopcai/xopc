@@ -10,6 +10,8 @@ import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached } from '@/featur
 import type { ThinkingLevel } from '@/features/chat/composer/composer.types';
 import { ModelPickerList } from '@/features/chat/model/model-selector';
 import type { MessageBundle } from '@/i18n/messages';
+import { modelDisplayName } from '@/lib/model-display-name';
+import { useLocaleStore } from '@/stores/locale-store';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { APP_PORTALED_POPOVER_Z } from '@/lib/settings-shell-dialog-layer';
@@ -25,6 +27,7 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
   thinkingDisabled: boolean;
   onThinkingChange: (level: string) => void | Promise<void>;
 }) {
+  const language = useLocaleStore((s) => s.language);
   const registry = useSWR(CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached, { revalidateOnFocus: false });
   const [view, setView] = useState<'config' | 'models'>('config');
   const modelButtonRef = useRef<HTMLButtonElement>(null);
@@ -36,7 +39,7 @@ export function ComposerModelConfigControl({ chat: m, sessionModel, modelDisable
   const models = registry.data ?? [];
   const selected = models.find((model) => model.id === sessionModel);
   const unavailable = Boolean(sessionModel && registry.data && !selected);
-  const modelLabel = selected?.name || sessionModel.slice(sessionModel.indexOf('/') + 1) || m.modelConfigure;
+  const modelLabel = selected ? modelDisplayName(selected, language) : sessionModel.slice(sessionModel.indexOf('/') + 1) || m.modelConfigure;
   const title = modelLabel.split('/').at(-1) || modelLabel;
   const thinking = selected?.thinking;
   const adjustable = thinking?.mode === 'levels' || thinking?.mode === 'toggle';

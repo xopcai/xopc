@@ -5,6 +5,7 @@ import { apiUrl } from '@/lib/url';
 export type ConfiguredModel = {
   id: string;
   name: string;
+  displayNames?: Partial<Record<'zh-CN' | 'en', string>>;
   provider: string;
   contextWindow?: number;
   maxTokens?: number;
