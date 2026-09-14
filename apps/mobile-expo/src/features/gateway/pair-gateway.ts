@@ -1,4 +1,9 @@
-import { buildDevicePairingProof, type DevicePairingAction, type DevicePairingStatus } from '@xopcai/gateway-contract';
+import {
+  buildDevicePairingProof,
+  isRetryableDevicePairingHttpStatus,
+  type DevicePairingAction,
+  type DevicePairingStatus,
+} from '@xopcai/gateway-contract';
 import { randomUUID } from 'expo-crypto';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
@@ -30,6 +35,13 @@ function throwIfPairingPaused(signal?: AbortSignal): void {
   if (signal?.aborted) throw new Error('PAIRING_PAUSED');
 }
 
+class PairingHttpError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'PairingHttpError';
+  }
+}
+
 export function readPendingDevicePairing(): ParsedGatewayQr | null {
   return readDeviceAuthJournal<PairingJournal>(JOURNAL)?.pairing ?? null;
 }
@@ -41,11 +53,17 @@ async function post(origin: string, path: string, body: unknown, signal?: AbortS
   if (signal?.aborted) controller.abort();
   const timer = setTimeout(abort, 8_000);
   try {
-    const response = await fetch(`${origin}${path}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal,
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${origin}${path}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal,
+      });
+    } catch (cause) {
+      if (controller.signal.aborted && !signal?.aborted) throw new Error('PAIRING_ROUTE_TIMEOUT');
+      throw cause;
+    }
     const data = await response.json() as { signedPayload?: string; signature?: string; error?: { code?: string } };
-    if (!response.ok) throw new Error(data.error?.code ?? 'PAIRING_CONNECTION_FAILED');
+    if (!response.ok) throw new PairingHttpError(data.error?.code ?? 'PAIRING_CONNECTION_FAILED', response.status);
     return data;
   } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
 }
@@ -60,15 +78,17 @@ async function signedRequest(journal: PairingJournal, action: DevicePairingActio
   const signature = signDevicePayload(getOrCreateDevicePrivateKey(), buildDevicePairingProof(action, body));
   const path = action === 'request' ? '/api/device-pairing/requests' : `/api/device-pairing/requests/${journal.requestId}/${action}`;
   let response: Awaited<ReturnType<typeof post>> | undefined;
+  let lastRouteError: unknown;
   const origins = [...new Set([journal.origin, ...journal.pairing.routes.map(route => route.url)])];
   for (const origin of origins) {
     try { response = await post(origin, path, { ...body, signature }, signal); journal.origin = origin; break; }
     catch (error) {
       throwIfPairingPaused(signal);
-      if (error instanceof Error && error.message.startsWith('PAIRING_') && error.message !== 'PAIRING_CONNECTION_FAILED') throw error;
+      if (error instanceof PairingHttpError && !isRetryableDevicePairingHttpStatus(error.status)) throw error;
+      lastRouteError = error;
     }
   }
-  if (!response) throw new Error('PAIRING_CONNECTION_FAILED');
+  if (!response) throw lastRouteError instanceof Error ? lastRouteError : new Error('PAIRING_CONNECTION_FAILED');
   if (!response.signedPayload || !response.signature || !verifyGatewayPayload(journal.pairing.gatewayPublicKey, response.signedPayload, response.signature)) {
     throw new Error('PAIRING_IDENTITY_MISMATCH');
   }
@@ -85,6 +105,7 @@ async function signedRequest(journal: PairingJournal, action: DevicePairingActio
 
 async function reachableOrigin(pairing: ParsedGatewayQr, signal?: AbortSignal): Promise<string> {
   const pairingId = pairing.pairingToken.slice('xopc_pair_'.length).split('_')[0];
+  let lastRouteError: unknown;
   for (const route of pairing.routes) {
     throwIfPairingPaused(signal);
     try {
@@ -99,10 +120,11 @@ async function reachableOrigin(pairing: ParsedGatewayQr, signal?: AbortSignal): 
       return route.url;
     } catch (error) {
       throwIfPairingPaused(signal);
-      if (error instanceof Error && error.message === 'PAIRING_IDENTITY_MISMATCH') throw error;
+      if (error instanceof PairingHttpError && !isRetryableDevicePairingHttpStatus(error.status)) throw error;
+      lastRouteError = error;
     }
   }
-  throw new Error('PAIRING_CONNECTION_FAILED');
+  throw lastRouteError instanceof Error ? lastRouteError : new Error('PAIRING_CONNECTION_FAILED');
 }
 
 function waitForPoll(signal?: AbortSignal): Promise<void> {

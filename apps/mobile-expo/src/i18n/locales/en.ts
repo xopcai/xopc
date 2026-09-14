@@ -248,6 +248,8 @@ export const en = {
       compare: 'Check that both numbers match.', resume: 'Resume connection', cancel: 'Cancel', settings: 'Open settings',
       update: 'Update xopc on your computer, then create a new QR code.', expired: 'This QR code expired. Refresh it on your computer.',
       rejected: 'Your computer did not allow the connection.', cancelled: 'Connection cancelled.', failed: 'Unable to connect right now. Try again.',
+      timeout: 'The computer did not respond in time. Keep it running and check its remote connection.',
+      unreachable: 'None of the Gateway addresses could be reached. Check the computer network and remote connection.',
       identity: 'Unable to verify this computer. Scan again.', pending: 'A connection is already in progress. Resume or cancel it first.',
     },
     pastePairingLink: 'Paste pairing link',

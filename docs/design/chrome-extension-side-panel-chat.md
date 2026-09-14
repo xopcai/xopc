@@ -226,12 +226,12 @@ device.self
 2. host manifest 的 `allowed_origins` 只包含发布渠道对应的固定 extension id。
 3. Extension 首次打开时生成不可导出的 P-256 key，将公钥、公钥指纹和随机 nonce 交给 native host。
 4. native host 校验固定 extension id，创建绑定该公钥指纹的 60 秒、一次性 local enrollment setup；路由必须精确为 `http://127.0.0.1:<gateway-port>`。
-5. Gateway 只对同时命中 native issuer、固定 extension id、公钥指纹和 loopback route 的请求自动批准。仅由页面发现 localhost、或手动构造配对链接，都不足以触发自动批准。
+5. Gateway 只对同时命中 native issuer、固定 extension id、公钥指纹和 loopback route 的请求自动批准。仅由页面发现 localhost、或手动构造配对邀请，都不足以触发自动批准。
 6. Extension 验证 Gateway 签名后保存 scope 受限的设备凭证，创建 Realtime ticket 并连接。
 
 Native host 不返回 owner token，不转发聊天正文，不长期驻留。用户点击“Disconnect”时撤销设备、删除本地凭证与私钥，并持久关闭自动重连；只有用户再次点击连接本机 Gateway 才会重新 enrollment。
 
-远程/服务器 Gateway 不使用本机 enrollment：用户必须通过配对链接并在 Gateway 侧显式批准。Electron 和本机 CLI Gateway 在启动时会修复固定扩展目录及 native host manifest；Chrome 本身仍要求用户首次安装扩展，非企业策略环境不应尝试静默侧载。
+远程/服务器 Gateway 不使用本机 enrollment：用户必须复制不透明的一次性邀请，并在 Gateway 侧显式批准。Electron 和本机 CLI Gateway 在启动时会修复固定扩展目录及 native host manifest；Chrome 本身仍要求用户首次安装扩展，非企业策略环境不应尝试静默侧载。
 
 ### 7.3 Origin 与 CORS
 

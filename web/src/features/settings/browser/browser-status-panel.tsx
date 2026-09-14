@@ -187,7 +187,7 @@ function ExtensionSetup(props: {
           <PlugZap className="size-3.5" />{zh ? '连接远程 Chrome' : 'Connect remote Chrome'}
         </Button>
       </div>
-      {!status?.connected ? <p className="mt-3 text-xs leading-5 text-fg-muted">{status?.socketConnected ? (zh ? '扩展仍在运行旧协议。请打开 Chrome 扩展页，找到 xopc 并点击“重新加载”，然后刷新状态。' : 'The extension is still running an older protocol. Open Chrome Extensions, find xopc, click Reload, then refresh status.') : (zh ? '打开 xopc Chrome 扩展后，它会自动发现并安全连接本机 Gateway；连接远程 Gateway 时才需要配对链接和手动确认。' : 'Open the xopc Chrome extension to discover and securely connect to a local Gateway automatically. A pairing link and explicit approval are only required for a remote Gateway.')}</p> : null}
+      {!status?.connected ? <p className="mt-3 text-xs leading-5 text-fg-muted">{status?.socketConnected ? (zh ? '扩展仍在运行旧协议。请打开 Chrome 扩展页，找到 xopc 并点击“重新加载”，然后刷新状态。' : 'The extension is still running an older protocol. Open Chrome Extensions, find xopc, click Reload, then refresh status.') : (zh ? '打开 xopc Chrome 扩展后，它会自动发现并安全连接本机 Gateway；只有连接另一台电脑时才需要一次性邀请和手动确认。' : 'Open the xopc Chrome extension to discover and securely connect to a local Gateway automatically. A one-time invitation and explicit approval are only required for Chrome on another computer.')}</p> : null}
     </div>
   );
 }
