@@ -1,4 +1,4 @@
-import { fetchJson } from '@/lib/fetch';
+import { apiFetch, fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import type { DevicePairingStatus, DevicePairingTargetKind } from '@xopcai/gateway-contract';
 
@@ -76,4 +76,20 @@ export async function decideDevicePairing(request: DevicePairingStatus, decision
 
 export async function revokeConnectedDevice(deviceId: string): Promise<void> {
   await fetchJson(apiUrl(`/api/devices/${encodeURIComponent(deviceId)}`), { method: 'DELETE' });
+}
+
+export async function downloadBrowserExtensionArchive(): Promise<void> {
+  const response = await apiFetch(apiUrl('/api/browser/extension/archive'));
+  if (!response.ok) throw new Error(`Browser extension download failed (${response.status})`);
+  const disposition = response.headers.get('Content-Disposition') ?? '';
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'xopc-browser-extension.zip';
+  const objectUrl = URL.createObjectURL(await response.blob());
+  try {
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = filename;
+    anchor.click();
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 }

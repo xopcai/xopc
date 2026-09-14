@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import AdmZip from 'adm-zip';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { Config } from '../../config/schema.js';
@@ -11,6 +12,7 @@ import {
   browserNativeHostDoctor,
   browserNativeManifestDirectories,
   computeNeedsRefresh,
+  createBrowserExtensionArchive,
   ensureBrowserExtensionArtifacts,
   ensureBrowserExtensionOnStartup,
   installBrowserNativeMessagingHost,
@@ -74,6 +76,18 @@ describe('browser-ext-install', () => {
     expect(BROWSER_EXT_REQUIRED_FILES.length).toBeGreaterThan(0);
     rmSync(join(bundledDir, 'dist/background.js'));
     expect(validateBrowserExtLayout(bundledDir)).toBe(false);
+  });
+
+  it('creates a load-unpacked archive with only browser extension artifacts', async () => {
+    const archive = await createBrowserExtensionArchive();
+    const zip = new AdmZip(archive.data);
+
+    expect(archive.filename).toBe(`xopc-browser-extension-${PACKAGE_VERSION}.zip`);
+    expect(zip.getEntry('xopc-browser-extension/manifest.json')).not.toBeNull();
+    expect(zip.getEntry('xopc-browser-extension/dist/background.js')).not.toBeNull();
+    expect(zip.getEntry('xopc-browser-extension/dist/sidepanel.html')).not.toBeNull();
+    expect(zip.getEntry('xopc-browser-extension/icons/icon-16.png')).not.toBeNull();
+    expect(zip.getEntries().some(entry => entry.entryName.includes('.meta.json'))).toBe(false);
   });
 
   it('declares debugger as a required Chrome permission', () => {

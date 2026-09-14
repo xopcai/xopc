@@ -20,7 +20,7 @@ function invitation(overrides: Record<string, unknown> = {}, origin = 'https://l
 }
 
 describe('parseBrowserPairingLink', () => {
-  it('accepts a current browser invitation from the xopc handoff page', () => {
+  it('accepts a current browser invitation copied from xopc', () => {
     expect(parseBrowserPairingLink(invitation())).toMatchObject({
       version: 3,
       targetKind: 'browser',

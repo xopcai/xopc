@@ -76,6 +76,11 @@ function isLocalOwnerRequest(c: Context, service: AuthenticatedRouteDeps['servic
   }
 }
 
+function isOwnerRequest(c: Context): boolean {
+  const principal = getGatewayPrincipal(c);
+  return principal.kind === 'owner' || principal.kind === 'trusted-proxy';
+}
+
 function chromeDevicePrincipal(c: Context) {
   const principal = getGatewayPrincipal(c);
   if (principal.kind !== 'device' || !principal.deviceId) return undefined;
@@ -222,6 +227,25 @@ export function registerBrowserRoutes(authenticated: Hono, deps: AuthenticatedRo
         configPath: service.getHealth().configPath,
       });
       return c.json({ ok: true, payload: { ...result, nativeHost, doctor: await browserExtDoctor() } });
+    } catch (error) {
+      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 500);
+    }
+  });
+
+  authenticated.get('/api/browser/extension/archive', strictRateLimitMiddleware, async (c) => {
+    if (!isOwnerRequest(c)) {
+      return c.json({ ok: false, error: 'Owner access required.' }, 403);
+    }
+    try {
+      const { createBrowserExtensionArchive } = await import('../../../browser/providers/browser-ext-install.js');
+      const archive = await createBrowserExtensionArchive();
+      const body = new Uint8Array(archive.data.byteLength);
+      body.set(archive.data);
+      return c.body(body, 200, {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename="${archive.filename}"`,
+        'Cache-Control': 'private, no-store',
+      });
     } catch (error) {
       return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 500);
     }
