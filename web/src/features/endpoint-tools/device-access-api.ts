@@ -12,17 +12,20 @@ export type ConnectedDevice = {
   revokedAt?: number;
 };
 
-export type DevicePairingSetup = {
+type DevicePairingSetupBase = {
   id: string;
-  universalLink: string;
   expiresAt: number;
-  targetKind: DevicePairingTargetKind;
   routes: Array<{
     id: string;
     kind: 'xopc-secure-link' | 'tailscale' | 'custom-https';
     url: string;
   }>;
 };
+
+export type DevicePairingSetup = DevicePairingSetupBase & (
+  | { targetKind: 'mobile'; universalLink: string }
+  | { targetKind: 'browser'; browserInvitation: string }
+);
 
 export type DevicePairingCreation =
   | { kind: 'ready'; setup: DevicePairingSetup }

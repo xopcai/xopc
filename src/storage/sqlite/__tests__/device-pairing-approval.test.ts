@@ -6,7 +6,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { BROWSER_EXTENSION_ID } from '../../../browser/extension-identity.js';
 import { browserEnrollmentPublicKeyThumbprint } from '../../../browser/enrollment.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../index.js';
-import { listDevices, revokeDevice, rotateDeviceRefreshToken, buildRefreshProofMessage } from '../device-access-repository.js';
+import {
+  authenticateDeviceAccessToken,
+  listDevices,
+  revokeDevice,
+  rotateDeviceRefreshToken,
+  buildRefreshProofMessage,
+} from '../device-access-repository.js';
 import { createDevicePairingSetup } from '../device-pairing-repository.js';
 import { getOrCreateGatewayIdentity } from '../gateway-identity-repository.js';
 import { getSqliteDatabase } from '../transaction.js';
@@ -53,7 +59,11 @@ describe('computer-approved device pairing', () => {
       nonce: crypto.randomBytes(24).toString('base64url') };
     const message = buildRefreshProofMessage({ ...refresh, credentialId: initialRefreshToken.slice(8).split('_')[0] });
     const signature = crypto.sign('sha256', Buffer.from(message), { key: keys.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
-    expect(rotateDeviceRefreshToken({ ...refresh, signature, now }).refreshToken).toBe(nextRefreshToken);
+    const tokens = rotateDeviceRefreshToken({ ...refresh, signature, now });
+    expect(tokens.refreshToken).toBe(nextRefreshToken);
+    expect(operateDevicePairingRequest('status', signed('status'), now).request.connectedAt).toBeUndefined();
+    expect(authenticateDeviceAccessToken(tokens.accessToken, now + 1)?.deviceId).toBe(result.request.deviceId);
+    expect(operateDevicePairingRequest('status', signed('status', {}, now + 1), now + 1).request.connectedAt).toBe(now + 1);
     revokeDevice(result.request.deviceId!, now);
     expect(() => operateDevicePairingRequest('complete', complete, now)).toThrow('DEVICE_REVOKED');
   });

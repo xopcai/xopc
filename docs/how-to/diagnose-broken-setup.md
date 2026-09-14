@@ -44,7 +44,7 @@ xopc browser extension doctor
 xopc browser doctor
 ```
 
-Reload unpacked extension files from `chrome://extensions` after every extension update. If Chrome blocks a normal website, check the extension's site access for that origin and refresh the page. A remote or self-hosted Gateway requires an explicit pairing link and owner approval; local automatic enrollment is limited to supported same-machine installations.
+Reload unpacked extension files from `chrome://extensions` after every extension update. If Chrome blocks a normal website, check the extension's site access for that origin and refresh the page. Chrome on another computer requires an opaque one-time invitation and owner approval; local automatic enrollment is limited to supported same-machine installations.
 
 See [Chrome extension](../browser-extension.md) for installation, version mismatch, `DRIVER_UNAVAILABLE`, and host-permission troubleshooting.
 

@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { provisionTunnelRegistrationKey } from '../xopc-cloud-registration.js';
+import {
+  provisionTunnelRegistrationKey,
+  TunnelRegistrationProvisionError,
+} from '../xopc-cloud-registration.js';
 
 describe('provisionTunnelRegistrationKey', () => {
   it('exchanges the tunnel OAuth token without exposing it in the body', async () => {
@@ -26,15 +29,29 @@ describe('provisionTunnelRegistrationKey', () => {
   it('requires OAuth authorization', async () => {
     await expect(provisionTunnelRegistrationKey({
       resolveAccessToken: async () => null,
-    })).rejects.toThrow('Authorize XOPC Public Tunnel');
+    })).rejects.toEqual(expect.objectContaining({
+      code: 'tunnel_oauth_required',
+      message: 'Authorize XOPC Public Tunnel before creating a registration key',
+      status: 401,
+    }));
   });
 
-  it('surfaces platform errors', async () => {
-    await expect(provisionTunnelRegistrationKey({
+  it('preserves stable platform error details', async () => {
+    const result = provisionTunnelRegistrationKey({
       resolveAccessToken: async () => 'oauth-token',
       fetchImpl: async () => Response.json({
-        error: { message: 'Maximum 10 tunnel keys allowed' },
+        error: {
+          code: 'tunnel_key_limit_reached',
+          message: 'Maximum 10 tunnel keys allowed',
+        },
       }, { status: 409 }),
-    })).rejects.toThrow('Maximum 10 tunnel keys allowed');
+    });
+
+    await expect(result).rejects.toEqual(expect.objectContaining({
+      name: 'TunnelRegistrationProvisionError',
+      code: 'tunnel_key_limit_reached',
+      message: 'Maximum 10 tunnel keys allowed',
+      status: 409,
+    } satisfies Partial<TunnelRegistrationProvisionError>));
   });
 });

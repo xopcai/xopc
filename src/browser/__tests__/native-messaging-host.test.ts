@@ -35,7 +35,7 @@ describe('browser native messaging framing', () => {
     expect(() => decodeNativeMessage(invalid)).toThrow(/length/i);
   });
 
-  it('creates a short-lived v3 pairing link for the configured loopback Gateway', () => {
+  it('creates a short-lived non-navigable invitation for the configured loopback Gateway', () => {
     const directory = mkdtempSync(join(tmpdir(), 'xopc-browser-native-'));
     temporaryDirectories.push(directory);
     const configPath = join(directory, 'xopc.json');
@@ -50,7 +50,8 @@ describe('browser native messaging framing', () => {
       publicKeyThumbprint: browserEnrollmentPublicKeyThumbprint(publicKeyJwk),
       nonce: crypto.randomBytes(24).toString('base64url'),
     });
-    const payload = JSON.parse(Buffer.from(new URL(result.pairingLink).hash.slice(3), 'base64url').toString('utf8')) as {
+    expect(result.invitation).toMatch(/^XOPC-BROWSER-INVITE-V1:[A-Za-z0-9_-]+$/);
+    const payload = JSON.parse(Buffer.from(result.invitation.slice('XOPC-BROWSER-INVITE-V1:'.length), 'base64url').toString('utf8')) as {
       version: number;
       targetKind: string;
       routes: Array<{ kind: string; url: string }>;

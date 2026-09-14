@@ -297,7 +297,12 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
   registerPublicGatewayRoutes(app, service);
   registerPublicHtmlPreviewRoute(app);
-  registerDeviceAuthPublicRoutes(app);
+  registerDeviceAuthPublicRoutes(app, {
+    getTrustedProxyContext: () => ({
+      trustedProxies: service.currentConfig.gateway?.trustedProxies,
+      allowRealIpFallback: service.currentConfig.gateway?.allowRealIpFallback === true,
+    }),
+  });
 
   // Extension UI assets are served without auth: sandboxed iframes (no allow-same-origin)
   // have an opaque origin of `null` and cannot forward the ?token= from the parent HTML URL.

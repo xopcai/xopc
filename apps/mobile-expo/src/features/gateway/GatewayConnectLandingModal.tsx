@@ -53,6 +53,8 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
     if (code.includes('CANCELLED')) return 'cancelled';
     if (code.includes('IDENTITY')) return 'identity';
     if (code.includes('ALREADY_PENDING') || code.includes('BUSY')) return 'pending';
+    if (code.includes('TIMEOUT')) return 'timeout';
+    if (code.includes('CONNECTION_FAILED') || code.includes('Network request failed')) return 'unreachable';
     return 'failed';
   };
   const pairing = useMutation({

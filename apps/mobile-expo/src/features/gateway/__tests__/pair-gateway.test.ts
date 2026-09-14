@@ -69,6 +69,23 @@ describe('mobile approved pairing', () => {
     expect(fetch).toHaveBeenCalledOnce();
     expect(state.saved).not.toHaveBeenCalled();
   });
+  it('tries the next route when the first route has the wrong Gateway identity', async () => {
+    const fallback = { id: 'fallback', kind: 'xopc-secure-link' as const, url: 'https://fallback.example' };
+    const qr = { ...pairing, routes: [...pairing.routes, fallback] };
+    const fetch = vi.fn(async (url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body));
+      if (url === `${pairing.routes[0]!.url}/api/device-pairing/probe`) {
+        return response({ gatewayId: qr.gatewayId, pairingId: '123', issuedAt: Date.now() }, true);
+      }
+      if (url.endsWith('/probe')) return response({ gatewayId: qr.gatewayId, pairingId: '123', issuedAt: Date.now() });
+      return response({ gateway: { id: qr.gatewayId, name: qr.gatewayName }, nonce: body.nonce,
+        request: { requestId: body.requestId, status: 'completed', deviceId: 'phone' }, routes: qr.routes, scopes: ['sessions.read'] });
+    });
+    vi.stubGlobal('fetch', fetch);
+
+    expect((await pairWithGateway(qr)).activeRouteId).toBe('fallback');
+    expect(fetch.mock.calls[1]?.[0]).toBe('https://fallback.example/api/device-pairing/probe');
+  });
   it('does not start a network request when already paused', async () => {
     const controller = new AbortController();
     controller.abort();

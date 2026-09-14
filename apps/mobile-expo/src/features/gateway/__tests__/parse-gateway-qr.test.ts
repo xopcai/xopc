@@ -7,10 +7,10 @@ function link(overrides: Record<string, unknown> = {}): string {
   const payload = {
     version: 3,
     targetKind: 'mobile',
-    pairingToken: 'xopc_pair_123_secret',
-    gatewayId: 'gateway-1',
+    pairingToken: `xopc_pair_00000000-0000-4000-8000-000000000000_${'a'.repeat(43)}`,
+    gatewayId: '00000000-0000-4000-8000-000000000000',
     gatewayName: 'Studio',
-    gatewayPublicKey: 'public-key',
+    gatewayPublicKey: 'b'.repeat(43),
     routes: [{ id: 'secure-1', kind: 'custom-https', url: 'https://gateway.example.com' }],
     expiresAt: Date.now() + 60_000,
     ...overrides,
@@ -24,7 +24,7 @@ describe('parseGatewayQrPayload', () => {
     expect(parseGatewayQrPayload(link())).toMatchObject({
       version: 3,
       targetKind: 'mobile',
-      gatewayId: 'gateway-1',
+      gatewayId: '00000000-0000-4000-8000-000000000000',
       routes: [{ url: 'https://gateway.example.com' }],
     });
   });

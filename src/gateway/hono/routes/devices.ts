@@ -1,11 +1,14 @@
 import os from 'node:os';
-import { buckets } from '../../rate-limit/index.js';
 
 import type { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 
-import { devicePairingTargetKindSchema } from '@xopcai/gateway-contract';
+import {
+  devicePairingInvitationPayloadSchema,
+  devicePairingTargetKindSchema,
+  formatBrowserPairingInvitation,
+} from '@xopcai/gateway-contract';
 
 import {
   listDevices,
@@ -23,8 +26,14 @@ import {
 } from '../../../storage/sqlite/gateway-identity-repository.js';
 import { resolveSecureDeviceRoutes } from '../../device-routes.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+import { buckets } from '../../rate-limit/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
-import { registerPairingApprovalAdminRoutes, registerPairingApprovalPublicRoutes } from './device-pairing-approval.js';
+import {
+  pairingClientKey,
+  registerPairingApprovalAdminRoutes,
+  registerPairingApprovalPublicRoutes,
+  type PairingPublicRouteOptions,
+} from './device-pairing-approval.js';
 
 const refreshRequestSchema = z.strictObject({
   refreshToken: z.string().min(1).max(256),
@@ -43,7 +52,7 @@ const pairingSetupSchema = z.strictObject({
   targetKind: devicePairingTargetKindSchema,
 });
 
-function pairingLinkPayload(input: {
+function pairingPayload(input: {
   version: 3;
   pairingToken: string;
   gatewayId: string;
@@ -53,10 +62,10 @@ function pairingLinkPayload(input: {
   targetKind: 'mobile' | 'browser';
   expiresAt: number;
 }): string {
-  return Buffer.from(JSON.stringify(input)).toString('base64url');
+  return Buffer.from(JSON.stringify(devicePairingInvitationPayloadSchema.parse(input))).toString('base64url');
 }
 
-export function registerDeviceAuthPublicRoutes(app: Hono): void {
+export function registerDeviceAuthPublicRoutes(app: Hono, options?: PairingPublicRouteOptions): void {
   app.post('/api/gateway-identity/challenge', bodyLimit({ maxSize: 512 }), async (c) => {
     const budget = buckets.identityChallenge().consume('gateway');
     if (!budget.allowed) {
@@ -71,7 +80,7 @@ export function registerDeviceAuthPublicRoutes(app: Hono): void {
     c.header('Cache-Control', 'no-store');
     return c.json({ signedPayload, signature: signGatewayPayload(signedPayload) });
   });
-  registerPairingApprovalPublicRoutes(app);
+  registerPairingApprovalPublicRoutes(app, options);
   app.post('/api/device-auth/refresh', async (c) => {
     const parsed = refreshRequestSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) {
@@ -94,9 +103,16 @@ export function registerDeviceAuthPublicRoutes(app: Hono): void {
     }
   });
 
-  app.post('/api/device-pairing/probe', async (c) => {
+  app.post('/api/device-pairing/probe', bodyLimit({ maxSize: 512 }), async (c) => {
+    const clientKey = pairingClientKey(c, options);
+    const blocked = buckets.pairingExchange().check(clientKey);
+    if (blocked.blocked) {
+      c.header('Retry-After', String(blocked.retryAfterSec));
+      return c.json({ ok: false, error: { code: 'PAIRING_RATE_LIMITED', message: 'Too many failed pairing attempts' } }, 429);
+    }
     const parsed = pairingProbeSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success || !isDevicePairingSetupActive(parsed.data.pairingId)) {
+      buckets.pairingExchange().fail(clientKey);
       return c.json({ ok: false, error: { code: 'PAIRING_NOT_FOUND', message: 'Pairing setup not found' } }, 404);
     }
     const identity = getOrCreateGatewayIdentity();
@@ -105,6 +121,7 @@ export function registerDeviceAuthPublicRoutes(app: Hono): void {
       pairingId: parsed.data.pairingId,
       issuedAt: Date.now(),
     })).toString('base64url');
+    buckets.pairingExchange().succeed(clientKey);
     return c.json({ ok: true, signedPayload: payload, signature: signGatewayPayload(payload) });
   });
 
@@ -136,7 +153,7 @@ export function registerDeviceRoutes(authenticated: Hono, deps: AuthenticatedRou
     }
     const setup = createDevicePairingSetup(routes, Date.now(), { targetKind: parsed.data.targetKind });
     const identity = getOrCreateGatewayIdentity();
-    const encoded = pairingLinkPayload({
+    const encoded = pairingPayload({
       version: 3,
       pairingToken: setup.token,
       gatewayId: identity.id,
@@ -146,11 +163,14 @@ export function registerDeviceRoutes(authenticated: Hono, deps: AuthenticatedRou
       targetKind: setup.targetKind,
       expiresAt: setup.expiresAt,
     });
+    const invitation = setup.targetKind === 'mobile'
+      ? { universalLink: `https://link.xopc.ai/connect#p=${encoded}` }
+      : { browserInvitation: formatBrowserPairingInvitation(encoded) };
     return c.json({
       ok: true,
       setup: {
         id: setup.id,
-        universalLink: `https://link.xopc.ai/connect#p=${encoded}`,
+        ...invitation,
         expiresAt: setup.expiresAt,
         routes,
         protocolVersion: 3,
