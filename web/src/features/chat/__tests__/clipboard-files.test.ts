@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { collectClipboardFiles, isComposerAcceptableFile } from '@/features/chat/composer/composer-clipboard';
+import { collectClipboardFiles } from '@/features/chat/composer/composer-clipboard';
 
 function fileListFrom(files: File[]): FileList {
   return {
@@ -26,29 +26,6 @@ function mockDataTransfer(parts: { files?: File[]; itemGetters?: Array<() => Fil
     items: items as unknown as DataTransferItemList,
   } as DataTransfer;
 }
-
-describe('isComposerAcceptableFile', () => {
-  it('accepts image/* by mime', () => {
-    expect(isComposerAcceptableFile(new File(['x'], 'x.png', { type: 'image/png' }))).toBe(true);
-    expect(isComposerAcceptableFile(new File(['x'], 'x.webp', { type: 'image/webp' }))).toBe(true);
-  });
-
-  it('accepts application/pdf by mime', () => {
-    expect(isComposerAcceptableFile(new File(['%PDF'], 'a.pdf', { type: 'application/pdf' }))).toBe(true);
-  });
-
-  it('accepts listed extensions when mime is empty', () => {
-    expect(isComposerAcceptableFile(new File(['x'], 'notes.md', { type: '' }))).toBe(true);
-    expect(isComposerAcceptableFile(new File(['x'], 'data.json', { type: '' }))).toBe(true);
-  });
-
-  it('rejects unsupported mime and extension', () => {
-    expect(
-      isComposerAcceptableFile(new File(['x'], 'a.bin', { type: 'application/octet-stream' })),
-    ).toBe(false);
-    expect(isComposerAcceptableFile(new File(['x'], 'a.exe', { type: '' }))).toBe(false);
-  });
-});
 
 describe('collectClipboardFiles', () => {
   it('returns empty when data is null', () => {

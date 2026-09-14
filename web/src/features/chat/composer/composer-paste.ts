@@ -1,4 +1,4 @@
-import { collectClipboardFiles, isComposerAcceptableFile } from '@/features/chat/composer/composer-clipboard';
+import { collectClipboardFiles } from '@/features/chat/composer/composer-clipboard';
 import { classifyPastedText, type PastedTextAttachment } from '@/features/chat/composer/pasted-text';
 
 export type ComposerPasteAction =
@@ -11,9 +11,7 @@ export function resolveComposerPaste(data: DataTransfer | null): ComposerPasteAc
   if (!data) return null;
 
   const files = collectClipboardFiles(data);
-  const acceptedFiles = files.filter(isComposerAcceptableFile);
-  if (acceptedFiles.length > 0) return { kind: 'files', files: acceptedFiles };
-  if (files.length > 0) return { kind: 'unsupported-files' };
+  if (files.length > 0) return { kind: 'files', files };
 
   const text = data.getData('text/plain');
   if (!text) return null;

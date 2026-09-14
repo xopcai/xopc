@@ -1,6 +1,5 @@
 /**
- * Heavy parsers (pdfjs, docx-preview, jszip, xlsx) — imported dynamically from `loadAttachment`
- * and attachment preview dialog to keep the main bundle smaller.
+ * Heavy parsers (pdfjs, docx-preview, jszip, xlsx) — imported dynamically by document previews to keep the main bundle smaller.
  */
 
 import { safeSheetToCsv } from '@/features/chat/attachments/excel-worksheet-utils';

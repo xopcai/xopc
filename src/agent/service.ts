@@ -1,4 +1,5 @@
 import type { AgentEvent, AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core';
+import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../gateway/chat-limits.js';
 import type { MessageBus } from '../infra/bus/index.js';
 import { type Config, getAgentDefaultModelRef } from '../config/schema.js';
 import {
@@ -961,6 +962,7 @@ export class AgentService {
     attachments?: InboundAttachmentInput[],
   ): Promise<MediaRef[] | undefined> {
     return persistInboundAttachments(attachments, {
+      maxBytes: MAX_WEBCHAT_ATTACHMENT_FILE_BYTES,
       resolveUri: async (uri) => {
         const target = parseNoteAttachmentTarget(uri);
         if (!target) return null;
