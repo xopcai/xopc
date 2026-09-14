@@ -122,7 +122,9 @@ describe('BrowserChatClient delivery safety', () => {
 
   it('keeps an uncertain delivery queued and blocks a second message', async () => {
     const client = readyClient();
-    gatewayFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    gatewayFetch
+      .mockResolvedValueOnce(response({}))
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'));
 
     await expect(client.send('hello')).resolves.toBe('queued');
 
@@ -130,22 +132,31 @@ describe('BrowserChatClient delivery safety', () => {
     expect(internals(client).snapshot.messages.at(-1)).toMatchObject({ role: 'user', text: 'hello' });
     expect(outbox.has('chat:one')).toBe(true);
     await expect(client.send('send twice')).rejects.toThrow('queued message');
-    expect(gatewayFetch).toHaveBeenCalledTimes(1);
+    expect(gatewayFetch).toHaveBeenCalledTimes(2);
+    expect(gatewayFetch).toHaveBeenNthCalledWith(1, '/api/endpoint-tools/bindings/chat%3Aone', expect.objectContaining({
+      method: 'PUT',
+      body: JSON.stringify({ endpointId: 'browser:one' }),
+    }));
+    expect(gatewayFetch).toHaveBeenNthCalledWith(2, '/api/sessions/chat%3Aone/inputs', expect.objectContaining({ method: 'POST' }));
   });
 
   it('rolls back an optimistic message when the Gateway rejects it', async () => {
     const client = readyClient();
-    gatewayFetch.mockResolvedValueOnce(response({ error: { message: 'Invalid input' } }, 400));
+    gatewayFetch
+      .mockResolvedValueOnce(response({}))
+      .mockResolvedValueOnce(response({ error: { message: 'Invalid input' } }, 400));
 
     await expect(client.send('invalid')).rejects.toThrow('Invalid input');
 
     expect(internals(client).snapshot).toMatchObject({ submitting: false, pendingDelivery: false, messages: [] });
     expect(outbox.has('chat:one')).toBe(false);
+    expect(gatewayFetch).toHaveBeenNthCalledWith(2, '/api/sessions/chat%3Aone/inputs', expect.objectContaining({ method: 'POST' }));
   });
 
   it('does not queue a message again after the Gateway accepted it', async () => {
     const client = readyClient();
     gatewayFetch
+      .mockResolvedValueOnce(response({}))
       .mockResolvedValueOnce(response({ payload: { state: { inputs: [] } } }))
       .mockRejectedValueOnce(new TypeError('Could not refresh input state'));
 
@@ -155,6 +166,21 @@ describe('BrowserChatClient delivery safety', () => {
     expect(internals(client).snapshot.messages.at(-1)).toMatchObject({ text: 'accepted' });
     expect(internals(client).snapshot.error).toContain('Message sent');
     expect(outbox.has('chat:one')).toBe(false);
+    expect(gatewayFetch).toHaveBeenCalledTimes(3);
+    expect(gatewayFetch).toHaveBeenNthCalledWith(2, '/api/sessions/chat%3Aone/inputs', expect.objectContaining({ method: 'POST' }));
+    expect(gatewayFetch).toHaveBeenNthCalledWith(3, '/api/sessions/chat%3Aone/input-state');
+  });
+
+  it('does not queue or submit a message when endpoint binding fails', async () => {
+    const client = readyClient();
+    gatewayFetch.mockRejectedValueOnce(new TypeError('Failed to bind endpoint'));
+
+    await expect(client.send('hello')).rejects.toThrow('Failed to bind endpoint');
+
+    expect(internals(client).snapshot).toMatchObject({ submitting: false, pendingDelivery: false, messages: [] });
+    expect(outbox.has('chat:one')).toBe(false);
+    expect(gatewayFetch).toHaveBeenCalledTimes(1);
+    expect(gatewayFetch).toHaveBeenCalledWith('/api/endpoint-tools/bindings/chat%3Aone', expect.objectContaining({ method: 'PUT' }));
   });
 
   it('does not apply a late transcript response to a different chat', async () => {
