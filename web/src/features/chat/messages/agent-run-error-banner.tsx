@@ -161,10 +161,10 @@ function AgentRunErrorCard({ payload }: { payload: AgentRunErrorPayload }) {
       </div>
       {quotaExhausted ? (
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <button type="button" className={cn('inline-flex h-8 items-center rounded-lg px-3 py-1.5 text-xs font-medium transition-colors', ctaClass)} onClick={() => openConsole('/models/billing')}>
+          <button type="button" className={cn('inline-flex h-8 items-center rounded-lg px-3 py-1.5 text-xs font-medium transition-colors', ctaClass)} onClick={() => openConsole('/models/credits/purchase')}>
             {m.xopcQuotaPurchaseCta}
           </button>
-          <button type="button" className="inline-flex h-8 items-center rounded-lg border border-current px-3 py-1.5 text-xs font-medium transition-colors hover:bg-amber-500/10" onClick={() => openConsole('/models/quota/request')}>
+          <button type="button" className="inline-flex h-8 items-center rounded-lg border border-current px-3 py-1.5 text-xs font-medium transition-colors hover:bg-amber-500/10" onClick={() => openConsole('/models/credits/request')}>
             {m.xopcQuotaRequestCta}
           </button>
           <button type="button" className="inline-flex h-8 items-center rounded-lg border border-current px-3 py-1.5 text-xs font-medium transition-colors hover:bg-amber-500/10" onClick={() => navigate('/settings/capabilities/models?add=1')}>
