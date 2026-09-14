@@ -53,6 +53,8 @@ export function getAttachmentBinaryPayload(att: {
 /** Same list as `loadAttachment` text branch — keep in sync for preview decode. */
 export const TEXT_FILE_EXTENSIONS = [
   '.txt',
+  '.csv',
+  '.tsv',
   '.md',
   '.json',
   '.xml',
@@ -139,6 +141,8 @@ export function inferMimeTypeFromFileName(fileName: string): string | undefined 
   const lower = fileName.toLowerCase();
   const map: Array<[string, string]> = [
     ['.pdf', 'application/pdf'],
+    ['.csv', 'text/csv'],
+    ['.tsv', 'text/tab-separated-values'],
     ['.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
     ['.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
     ['.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],

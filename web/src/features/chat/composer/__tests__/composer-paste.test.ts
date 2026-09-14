@@ -34,7 +34,7 @@ describe('composer paste pipeline', () => {
     });
   });
 
-  it('resolves supported and unsupported clipboard files', () => {
+  it('accepts clipboard files without a type whitelist', () => {
     const image = new File(['image'], 'screen.png', { type: 'image/png' });
     const binary = new File(['binary'], 'archive.bin', { type: 'application/octet-stream' });
 
@@ -43,7 +43,8 @@ describe('composer paste pipeline', () => {
       files: [image],
     });
     expect(resolveComposerPaste(clipboardFile(binary))).toEqual({
-      kind: 'unsupported-files',
+      kind: 'files',
+      files: [binary],
     });
   });
 
