@@ -758,6 +758,10 @@ export class ShareStore {
       if (!record) return null;
 
       if (patch.extendTtlMs !== undefined) {
+        if (record.revoked) throw new Error('Revoked shares cannot be renewed');
+        if (!Number.isFinite(patch.extendTtlMs) || patch.extendTtlMs < 60000 || patch.extendTtlMs > this.config.maxTtlMs) {
+          throw new Error('Share duration is outside the configured limits');
+        }
         const newExpiry = new Date(Date.now() + patch.extendTtlMs);
         record.expiresAt = newExpiry.toISOString();
       }

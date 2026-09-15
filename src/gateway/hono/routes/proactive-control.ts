@@ -55,7 +55,7 @@ export function registerProactiveControlRoutes(app: Hono, deps: AuthenticatedRou
   app.get('/api/proactive/subscriptions/:id/runs', (c) => {
     requireSubscription(c.req.param('id'), workspace());
     return c.json({ ok: true, runs: getSqliteDatabase().prepare(`SELECT run_id AS id, status, outcome_reason AS reason,
-      started_at AS startedAt, completed_at AS completedAt, error_message AS error FROM proactive_runs WHERE subscription_id = ? ORDER BY started_at DESC LIMIT 30`).all(c.req.param('id')) });
+      started_at AS startedAt, completed_at AS completedAt, error_message AS error, attempt, next_attempt_at AS nextAttemptAt FROM proactive_runs WHERE subscription_id = ? ORDER BY started_at DESC LIMIT 30`).all(c.req.param('id')) });
   });
   app.get('/api/proactive/cards', (c) => c.json({ ok: true, ...listCards(workspace(), { status: c.req.query('status'), before: c.req.query('before') }) }));
   app.get('/api/inbox/judgments/changes', (c) => {

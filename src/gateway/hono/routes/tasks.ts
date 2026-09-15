@@ -345,7 +345,10 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
       }, 409);
     }
     if ((parsed.data.command?.type === 'add_wait' && parsed.data.command.wait.kind === 'paused')
-      || parsed.data.command?.type === 'close') {
+      || parsed.data.command?.type === 'close'
+      || (parsed.data.command?.type === 'resolve_wait'
+        && (parsed.data.command.resolution as { kind?: string; decision?: string } | undefined)?.kind === 'task_approval'
+        && (parsed.data.command.resolution as { decision?: string }).decision === 'deny')) {
       const activeRun = runs.getActiveRoot(c.req.param('id'));
       if (activeRun?.sessionKey) {
         const liveRunId = deps.service.getActiveWebchatRunId(activeRun.sessionKey);
