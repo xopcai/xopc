@@ -1,3 +1,4 @@
+import { MarkdownView } from '@/components/markdown/markdown-view';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
 import { TaskChangedEventSchema, TaskDeletedEventSchema, type ProjectMonitoringUpdate, type ProjectOperatingView, type ProjectTaskCard, type TaskCommand, type TaskPhase } from '@xopcai/gateway-contract';
@@ -368,7 +369,7 @@ function ProjectSwitcher({
 
   const statusLabel = (project: Project) => pm.statuses[project.status] ?? project.status;
   const subtitle = (project: Project) =>
-    project.workspaceRoot || project.effectiveWorkspaceRoot || project.description || project.brief || pm.common.defaultWorkspace;
+    project.description || project.brief || pm.common.defaultWorkspace;
 
   const openCreateDialog = (mode: 'new' | 'directory') => {
     setCreateMode(mode);
@@ -1754,7 +1755,7 @@ export function ProjectDetailPage() {
                           {pm.overview.resultStatuses[receipt.status]} · {pm.board.verification[receipt.verification.status]}
                         </span>
                       </div>
-                      <p className="mt-1 line-clamp-2 text-sm leading-5 text-fg-muted">{receipt.summary}</p>
+                      <div className="mt-1 line-clamp-3 text-sm leading-5 text-fg-muted"><MarkdownView content={receipt.summary} compact /></div>
                     </Link>
                   ))}
                 </div>

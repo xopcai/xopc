@@ -448,7 +448,7 @@ function NoteDetailPanelInner({
 
   const headerEnd = useMemo(
     () => (
-      <div className={cn('flex items-center gap-2', APP_CHROME_NO_DRAG_CLASS)}>
+      <div className={cn('flex min-w-0 items-center gap-1 sm:gap-2', APP_CHROME_NO_DRAG_CLASS)}>
         {onOpenSearch ? (
           <button
             type="button"
@@ -484,11 +484,12 @@ function NoteDetailPanelInner({
           )}
         >
           <Sparkles className="size-3.5" aria-hidden />
-          {catalyzing ? n.catalyzing : n.catalyzeButton}
+          <span className="hidden sm:inline">{catalyzing ? n.catalyzing : n.catalyzeButton}</span>
         </button>
         <button
           type="button"
           onClick={() => handleOpenNoteChat(false)}
+          aria-label={n.openChatButton}
           disabled={openingChat}
           className={cn(
             'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
@@ -496,7 +497,7 @@ function NoteDetailPanelInner({
           )}
         >
           <MessageCircle className="size-3.5" aria-hidden />
-          {openingChat ? n.openingChat : n.openChatButton}
+          <span className="hidden sm:inline">{openingChat ? n.openingChat : n.openChatButton}</span>
         </button>
         <NoteDetailModeSwitcher
           mode={mode}
@@ -734,7 +735,7 @@ function NoteDetailPanelInner({
           <DiscussionNoteSections noteId={noteId} />
           <div className="min-h-0 min-w-0 flex-1">
             {isPreviewingSnapshot ? (
-              <div className="h-full overflow-y-auto px-6 py-4">
+              <div className="h-full overflow-y-auto px-4 py-4 sm:px-6">
                 {displayTitle && (
                   <h1 className="mb-4 text-2xl font-bold text-fg/70">{displayTitle}</h1>
                 )}
@@ -816,14 +817,14 @@ function NoteDetailPanelInner({
                 )}
                 {mode === 'preview' && (
                   <div
-                    className="h-full overflow-y-auto px-6 py-4"
+                    className="h-full overflow-y-auto px-4 py-4 sm:px-6"
                     onClick={(event) => {
                       const target = event.target;
                       if (!(target instanceof HTMLImageElement)) return;
                       openImage(target.currentSrc || target.src, target.alt);
                     }}
                   >
-                    {title && (
+                    {title && !note.markdown.trimStart().startsWith(`# ${title.trim()}\n`) && note.markdown.trim() !== `# ${title.trim()}` && (
                       <h1 className="mb-4 text-2xl font-bold text-fg">{title}</h1>
                     )}
                     {note.markdown ? (

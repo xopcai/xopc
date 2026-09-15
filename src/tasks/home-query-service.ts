@@ -142,6 +142,7 @@ export function decisionFromTask(
   locale?: string,
 ): HomeDecision | null {
   const task = model.task;
+  if (task.phase === 'closed' || (model.operationalState === 'waiting' && model.attention.length === 0)) return null;
   const isChinese = locale?.toLowerCase().startsWith('zh') ?? task.locale === 'zh';
   if (task.phase === 'review') {
     return {
