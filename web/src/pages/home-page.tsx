@@ -489,9 +489,9 @@ export function HomePage() {
       ) : null}
 
       {loading ? <HomeSkeleton /> : home ? (
-        <div>
-          <section className={isIdle ? 'w-full max-w-2xl text-center' : 'max-w-3xl'}>
-            <h2 className="text-3xl font-semibold tracking-[-0.035em] text-fg sm:text-[2.5rem] sm:leading-[1.12]">{headline}</h2>
+        <div className={isIdle ? 'mx-auto my-auto w-full max-w-[640px]' : 'w-full'}>
+          <section className={isIdle ? 'w-full text-center' : 'max-w-3xl'}>
+            <h2 className="text-3xl font-semibold leading-tight tracking-[-0.035em] text-fg sm:text-4xl">{headline}</h2>
             <p className={isIdle
               ? 'mx-auto mt-3 max-w-xl text-sm leading-6 text-fg-muted sm:text-base sm:leading-7'
               : 'mt-3 max-w-2xl text-sm leading-6 text-fg-muted sm:text-base sm:leading-7'}>
@@ -545,7 +545,7 @@ export function HomePage() {
             </section>
           ) : null}
 
-          <section className="mt-10"><ProactiveToday compact /></section>
+          <section className={isIdle ? 'mt-6 sm:mt-8' : 'mt-10'}><ProactiveToday compact /></section>
 
           {home.background.length > 0 ? (
             <section className="mt-10" aria-labelledby="home-background-title">

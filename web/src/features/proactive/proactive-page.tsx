@@ -1,11 +1,13 @@
 import type { ProactiveCard } from '@xopcai/gateway-contract';
-import { useEffect } from 'react';
+import { ArrowLeft } from 'lucide-react';
+import { useEffect, useLayoutEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLocaleStore } from '@/stores/locale-store';
+import { usePageHeaderStore } from '@/stores/page-header-store';
 
 import { proactiveGet, proactiveWrite, type CardsResponse, type PreferencesResponse, type ProactiveOverview } from './api';
 import { BrowserPushControls } from './browser-push';
@@ -19,6 +21,8 @@ import { ProactivePreferencesForm } from './proactive-settings';
 export function ProactivePage() {
   const zh = useLocaleStore(state => state.language) === 'zh';
   const copy = proactiveCopy(zh);
+  const setPageHeader = usePageHeaderStore(state => state.setPageHeader);
+  const clearPageHeader = usePageHeaderStore(state => state.clearPageHeader);
   const [params, setParams] = useSearchParams();
   const requestedView = params.get('view');
   const view = requestedView === 'settings' ? requestedView : 'list';
@@ -46,16 +50,46 @@ export function ProactivePage() {
   const selectedFollowUp = overview.data?.followUps.find(follow => follow.id === followUpId);
   const updateParams = (values: Record<string, string>) => setParams(values);
 
+  const isDetail = Boolean(itemId || digestId || delegationId || followUpId);
+  const title = itemId ? (zh ? '跟进动态' : 'Follow-up update')
+    : digestId ? (zh ? '跟进摘要' : 'Follow-up summary')
+      : isDetail ? (zh ? '跟进详情' : 'Follow-up details')
+        : view === 'settings' ? (zh ? '提醒偏好' : 'Notification preferences')
+          : (zh ? '助理跟进' : 'Assistant follow-ups');
+  const backTo = itemId || digestId ? '/' : '/assistant-work';
+  const backLabel = itemId || digestId
+    ? (zh ? '返回工作台' : 'Back to Workbench')
+    : (zh ? '返回助理跟进' : 'Back to assistant follow-ups');
+
+  useLayoutEffect(() => {
+    setPageHeader({
+      startExtra: isDetail || view === 'settings' ? (
+        <Button asChild variant="ghost" className="size-8 rounded-lg p-0">
+          <Link to={backTo} aria-label={backLabel} title={backLabel}><ArrowLeft className="size-4" aria-hidden /></Link>
+        </Button>
+      ) : null,
+      main: <h1 className="truncate text-base font-semibold tracking-tight text-fg">{title}</h1>,
+      end: !isDetail && view === 'list' ? (
+        <Button asChild variant="ghost" className="h-9 rounded-lg">
+          <Link to="/assistant-work?view=settings">{zh ? '提醒偏好' : 'Notification preferences'}</Link>
+        </Button>
+      ) : null,
+    });
+    return () => clearPageHeader();
+  }, [backLabel, backTo, clearPageHeader, isDetail, setPageHeader, title, view, zh]);
+
   if (loading) return <div className="min-h-0 flex-1 overflow-y-auto bg-surface-base"><div className="mx-auto max-w-4xl space-y-5 px-4 py-7 sm:px-6"><Skeleton className="h-8 w-48" /><Skeleton className="h-56 rounded-2xl" /><Skeleton className="h-40 rounded-2xl" /></div></div>;
   return <div className="min-h-0 flex-1 overflow-y-auto bg-surface-base"><div className="mx-auto max-w-4xl space-y-6 px-4 py-7 sm:px-6">
     {error && <p role="alert" className="rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-sm text-danger">{String(error)}</p>}
-    {itemId ? <><Link className="text-sm text-accent" to="/">{zh ? '返回工作台' : 'Back to Workbench'}</Link>{detail.data && <ProactiveCardView key={`${detail.data.card.id}:${detail.data.card.revision}`} card={detail.data.card} copy={copy} refresh={() => void detail.mutate()} detail />}</>
-      : digestId ? <><Link className="text-sm text-accent" to="/">{zh ? '返回工作台' : 'Back to Workbench'}</Link><h1 className="text-2xl font-semibold text-fg">{zh ? '助理为你整理的变化' : 'Updates prepared by your assistant'}</h1>{digest.data?.cards.map(card => <ProactiveCardView key={card.id} card={card} copy={copy} refresh={() => void digest.mutate()} />)}{digest.data?.cards.length === 0 && <p className="text-sm text-fg-muted">{zh ? '这些事项已处理或不再需要关注。' : 'These items have been handled or are no longer relevant.'}</p>}</>
-      : selectedDelegation ? <><Link className="text-sm text-accent" to="/assistant-work">{zh ? '返回助理安排' : 'Back to assistant arrangements'}</Link><DelegationDetail key={selectedDelegation.id} sub={selectedDelegation} card={latestCardFor(cards, selectedDelegation.id)} zh={zh} refresh={() => void overview.mutate()} /></>
-      : selectedFollowUp ? <><Link className="text-sm text-accent" to="/assistant-work">{zh ? '返回助理安排' : 'Back to assistant arrangements'}</Link><MailFollowUpView follow={selectedFollowUp} zh={zh} refresh={() => void overview.mutate()} /></>
-      : <><header className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-2xl font-semibold text-fg">{view === 'settings' ? (zh ? '助理提醒' : 'Assistant notifications') : (zh ? '助理安排' : 'Assistant arrangements')}</h1><p className="mt-2 text-sm text-fg-muted">{view === 'settings' ? (zh ? '决定助理什么时候提醒你，以及通过什么方式送达。' : 'Choose when and how your assistant should notify you.') : (zh ? '管理助理已经记住的长期安排。新的安排从项目、会议或对话中开始。' : 'Manage the ongoing arrangements your assistant remembers. Start new ones from a project, meeting, or conversation.')}</p></div><div className="flex gap-2">{view !== 'list' && <Button variant="ghost" onClick={() => updateParams({})}>{zh ? '返回列表' : 'Back to list'}</Button>}{view === 'list' && <Button variant="ghost" onClick={() => updateParams({ view: 'settings' })}>{zh ? '提醒偏好' : 'Notification preferences'}</Button>}</div></header>
+    {itemId ? <>{detail.data && <ProactiveCardView key={`${detail.data.card.id}:${detail.data.card.revision}`} card={detail.data.card} copy={copy} refresh={() => void detail.mutate()} detail />}</>
+      : digestId ? <><h2 className="text-xl font-semibold text-fg">{zh ? '助理为你整理的变化' : 'Updates prepared by your assistant'}</h2>{digest.data?.cards.map(card => <ProactiveCardView key={card.id} card={card} copy={copy} refresh={() => void digest.mutate()} />)}{digest.data?.cards.length === 0 && <p className="text-sm text-fg-muted">{zh ? '这些事项已处理或不再需要关注。' : 'These items have been handled or are no longer relevant.'}</p>}</>
+      : selectedDelegation ? <><DelegationDetail key={selectedDelegation.id} sub={selectedDelegation} card={latestCardFor(cards, selectedDelegation.id)} zh={zh} refresh={() => void overview.mutate()} /></>
+      : selectedFollowUp ? <><MailFollowUpView follow={selectedFollowUp} zh={zh} refresh={() => void overview.mutate()} /></>
+      : <><p className="text-sm leading-6 text-fg-muted">{view === 'settings'
+        ? (zh ? '决定助理什么时候提醒你，以及通过什么方式送达。' : 'Choose when and how your assistant should notify you.')
+        : (zh ? '查看和管理交给助理持续跟进的事项。可以从项目、会议或对话中发起新的跟进。' : 'Review and manage work your assistant is following. Start a follow-up from a project, meeting, or conversation.')}</p>
         {view === 'settings' && preferences.data ? <div className="space-y-5"><ProactivePreferencesForm key={preferences.data.preferences.revision} preferences={preferences.data.preferences} copy={copy} refresh={() => void preferences.mutate()} /><BrowserPushControls zh={zh} /></div>
-          : <div className="space-y-5"><nav className="flex gap-2" aria-label={zh ? '安排状态' : 'Arrangement status'}>{([['active', zh ? '正在生效' : 'Active'], ['paused', zh ? '已暂停' : 'Paused'], ['completed', zh ? '已结束' : 'Ended']] as const).map(([id, label]) => <Button key={id} variant={bucket === id ? 'secondary' : 'ghost'} onClick={() => updateParams(id === 'active' ? {} : { state: id })}>{label}</Button>)}</nav><div className="space-y-3">{visibleDelegations.map(sub => <DelegationListItem key={`${sub.id}:${sub.revision}`} sub={sub} card={latestCardFor(cards, sub.id)} zh={zh} />)}{visibleFollowUps.map(follow => <MailFollowUpListItem key={`${follow.id}:${follow.revision}`} follow={follow} zh={zh} />)}{visibleDelegations.length + visibleFollowUps.length === 0 && <section className="rounded-2xl border border-edge bg-surface-panel p-6"><h2 className="font-medium text-fg">{bucket === 'active' ? (zh ? '还没有正在生效的安排' : 'No active arrangements') : bucket === 'paused' ? (zh ? '没有已暂停的安排' : 'No paused arrangements') : (zh ? '没有已结束的安排' : 'No ended arrangements')}</h2>{bucket === 'active' && <p className="mt-2 text-sm text-fg-muted">{zh ? '打开一个项目，或在会议和沟通场景中告诉助理，需要它持续帮你守住什么。' : 'Open a project, meeting, or conversation and tell the assistant what it should keep watching for you.'}</p>}</section>}</div></div>}
+          : <div className="space-y-5"><nav className="flex gap-2" aria-label={zh ? '跟进状态' : 'Follow-up status'}>{([['active', zh ? '跟进中' : 'Active'], ['paused', zh ? '已暂停' : 'Paused'], ['completed', zh ? '已结束' : 'Ended']] as const).map(([id, label]) => <Button key={id} variant={bucket === id ? 'secondary' : 'ghost'} onClick={() => updateParams(id === 'active' ? {} : { state: id })}>{label}</Button>)}</nav><div className="space-y-3">{visibleDelegations.map(sub => <DelegationListItem key={`${sub.id}:${sub.revision}`} sub={sub} card={latestCardFor(cards, sub.id)} zh={zh} />)}{visibleFollowUps.map(follow => <MailFollowUpListItem key={`${follow.id}:${follow.revision}`} follow={follow} zh={zh} />)}{visibleDelegations.length + visibleFollowUps.length === 0 && <section className="rounded-2xl border border-edge bg-surface-panel p-6"><h2 className="font-medium text-fg">{bucket === 'active' ? (zh ? '还没有正在跟进的事项' : 'No active follow-ups') : bucket === 'paused' ? (zh ? '没有已暂停的跟进' : 'No paused follow-ups') : (zh ? '没有已结束的跟进' : 'No ended follow-ups')}</h2>{bucket === 'active' && <p className="mt-2 text-sm text-fg-muted">{zh ? '打开一个项目，或在会议和沟通场景中告诉助理，需要它持续帮你守住什么。' : 'Open a project, meeting, or conversation and tell the assistant what it should keep watching for you.'}</p>}</section>}</div></div>}
       </>}
   </div></div>;
 }

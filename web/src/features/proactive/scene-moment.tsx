@@ -42,11 +42,11 @@ export function SceneMoment({ scene, zh }: { scene: ProactiveSceneMoment; zh: bo
     </div>
     <div className="space-y-4 px-5 py-4">
       <div><p className="text-xs text-fg-subtle">{zh ? '现在' : 'Now'}</p><p className="mt-1 text-sm font-medium text-fg">{scene.moment}</p></div>
-      <div><p className="text-xs text-fg-subtle">{scene.status === 'following' ? (zh ? '助理记住的安排' : 'What the assistant remembers') : (zh ? '为什么值得关注' : 'Why it matters')}</p><p className="mt-1 text-sm text-fg-muted">{scene.status === 'following' ? scene.promise : scene.relevance}</p></div>
+      <div><p className="text-xs text-fg-subtle">{scene.status === 'following' ? (zh ? '跟进要求' : 'What the assistant remembers') : (zh ? '为什么值得关注' : 'Why it matters')}</p><p className="mt-1 text-sm text-fg-muted">{scene.status === 'following' ? scene.promise : scene.relevance}</p></div>
       <div className="rounded-xl bg-surface-hover px-4 py-3"><p className="text-xs text-fg-subtle">{zh ? '助理已经做了什么' : 'What your assistant did'}</p><p className="mt-1 text-sm text-fg">{scene.help}</p></div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link className="text-sm font-medium text-accent" to={actionRoute}>{actionLabel}</Link>
-        <Link className="text-xs text-fg-subtle hover:text-fg" to={scene.manageRoute}>{zh ? '调整助理安排' : 'Adjust arrangement'}</Link>
+        <Link className="text-xs text-fg-subtle hover:text-fg" to={scene.manageRoute}>{zh ? '调整助理跟进' : 'Adjust arrangement'}</Link>
       </div>
     </div>
   </article>;

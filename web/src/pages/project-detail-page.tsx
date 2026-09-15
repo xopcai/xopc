@@ -1700,7 +1700,7 @@ export function ProjectDetailPage() {
         </Button>
       </div>
 
-      <div className="mt-2 shrink-0"><Button variant="ghost" onClick={() => projectArrangement ? navigate(`/assistant-work?delegation=${encodeURIComponent(projectArrangement.id)}`) : openProjectFollow()}>{projectArrangement ? (language === 'zh' ? '调整助理安排' : 'Adjust assistant arrangement') : (language === 'zh' ? '让助理守住这个项目' : 'Ask the assistant to protect this project')}</Button></div>
+      <div className="mt-2 shrink-0"><Button variant="ghost" onClick={() => projectArrangement ? navigate(`/assistant-work?delegation=${encodeURIComponent(projectArrangement.id)}`) : openProjectFollow()}>{projectArrangement ? (language === 'zh' ? '调整助理跟进' : 'Adjust assistant follow-up') : (language === 'zh' ? '让助理守住这个项目' : 'Ask the assistant to protect this project')}</Button></div>
 
       <Dialog.Root open={projectFollowOpen} onOpenChange={setProjectFollowOpen}>
         <Dialog.Portal>
