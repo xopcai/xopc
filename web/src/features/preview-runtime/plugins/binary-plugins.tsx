@@ -148,39 +148,26 @@ function BinaryContainerPlugin(props: PreviewRuntimeRenderProps & { kind: 'pdf' 
     ref.current.querySelector<HTMLElement>(`[data-pdf-page="${page}"]`)?.scrollIntoView({ block: 'start' });
   }, [page, props.kind]);
 
-  if (error) {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4">
-        <AlternativesBar props={props} message={openElsewhereMessage(props)} />
-        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-      </div>
-    );
-  }
-
-  if (props.kind === 'excel') {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-2 pb-2 pt-1 sm:px-4">
-        {excelTruncated ? (
-          <AlternativesBar
-            props={props}
-            message={m.chat.attachmentPreviewExcelTruncated
-              .replaceAll('{rows}', String(EXCEL_PREVIEW_MAX_ROWS))
-              .replaceAll('{cols}', String(EXCEL_PREVIEW_MAX_COLS))}
-          />
-        ) : null}
-        <div
-          ref={setPreviewHost}
-          className="docx-preview-host min-h-0 flex-1 overflow-auto rounded-lg border border-edge-subtle bg-surface-panel p-2 dark:border-edge"
-        />
-      </div>
-    );
-  }
-
   return (
-    <div
-      ref={setPreviewHost}
-      className="docx-preview-host min-h-0 flex-1 overflow-auto rounded-lg border border-edge-subtle bg-surface-panel p-2 dark:border-edge"
-    />
+    <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+      {error ? (
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto p-4">
+          <AlternativesBar props={props} message={openElsewhereMessage(props)} />
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>
+        </div>
+      ) : props.kind === 'excel' && excelTruncated ? (
+        <AlternativesBar
+          props={props}
+          message={m.chat.attachmentPreviewExcelTruncated
+            .replaceAll('{rows}', String(EXCEL_PREVIEW_MAX_ROWS))
+            .replaceAll('{cols}', String(EXCEL_PREVIEW_MAX_COLS))}
+        />
+      ) : null}
+      <div
+        ref={setPreviewHost}
+        className={`${error ? 'hidden' : 'flex'} docx-preview-host min-h-0 flex-1 flex-col overflow-auto rounded-lg border border-edge-subtle bg-surface-panel p-2 dark:border-edge`}
+      />
+    </div>
   );
 }
 
