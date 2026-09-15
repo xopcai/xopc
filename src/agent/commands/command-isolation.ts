@@ -3,8 +3,11 @@ import { realpath } from 'node:fs/promises';
 import { isAbsolute, relative, sep } from 'node:path';
 import { promisify } from 'node:util';
 
+import { credentialMounts } from './commandMounts.js';
+import { validatePath } from '../sandbox/path-policy.js';
+
 const exec = promisify(execFile);
-export type CommandIsolation = { mode: 'host' } | { mode: 'docker'; image: string; network?: boolean };
+export type CommandIsolation = { mode: 'host' } | { mode: 'docker'; image: string; network?: boolean; workspaceAccess?: 'read-only' | 'read-write' };
 
 /** Docker is opt-in and never falls back to host execution or pulls an image implicitly. */
 export async function isolatedCommand(input: {
@@ -15,14 +18,20 @@ export async function isolatedCommand(input: {
   const [workspace, cwd] = await Promise.all([realpath(input.workspace), realpath(input.cwd)]);
   const rel = relative(workspace, cwd);
   if (isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`)) throw new Error('Container cwd must be inside the workspace.');
+  const policy = validatePath(workspace);
+  if (!policy.allowed) throw new Error(`Container workspace blocked: ${policy.reason}`);
   if (workspace.includes(',')) throw new Error('Container workspace paths cannot contain commas.');
+  const masks = credentialMounts(workspace);
   const containerName = `xopc-command-${input.id}`;
   return {
     executable: 'docker', shell: false, containerName,
     args: ['run', '--rm', '--pull=never', '--name', containerName, '--interactive', '--init',
       '--read-only', '--cap-drop=ALL', '--security-opt=no-new-privileges', '--pids-limit=256', '--memory=2g', '--cpus=2',
       '--network', input.isolation.network ? 'bridge' : 'none', '--user', `${process.getuid?.() || 65534}:${process.getgid?.() || 65534}`,
-      '--mount', `type=bind,source=${workspace},target=/workspace`, '--tmpfs', '/tmp:rw,nosuid,nodev,size=256m',
+      '--mount', `type=bind,source=${workspace},target=/workspace${input.isolation.workspaceAccess === 'read-write' ? '' : ',readonly'}`,
+      ...masks, '--tmpfs', '/tmp:rw,nosuid,nodev,size=256m',
+      '--ulimit', 'nofile=1024:1024', '--ulimit', 'core=0', '--memory-swap=2g',
+      '--log-driver=none', '--env', 'ENV=', '--env', 'BASH_ENV=',
       '--env', 'HOME=/tmp', '--env', 'CI=true', '--workdir', `/workspace${rel ? `/${rel.split(sep).join('/')}` : ''}`,
       '--entrypoint', '/bin/sh', input.isolation.image, '-lc', input.command],
   };

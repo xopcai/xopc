@@ -1,4 +1,4 @@
-import { readFile, realpath } from 'node:fs/promises';
+import { realpath } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const saveMediaBufferMock = vi.fn();
 
 vi.mock('node:fs/promises', () => ({
-  readFile: vi.fn(),
   realpath: vi.fn(),
 }));
 
@@ -20,7 +19,9 @@ vi.mock('../../../media/store.js', () => ({
 import { createPublishArtifactsTool } from '../publish-artifacts.js';
 import { fileResourceId, fileSpaceId } from '../../../files/file-service.js';
 
-const readFileMock = vi.mocked(readFile);
+vi.mock('../../sandbox/fileAccess.js', () => ({ readWorkspaceFile: vi.fn() }));
+import { readWorkspaceFile } from '../../sandbox/fileAccess.js';
+const readFileMock = vi.mocked(readWorkspaceFile);
 
 describe('publish_artifacts', () => {
   beforeEach(() => {
@@ -29,7 +30,7 @@ describe('publish_artifacts', () => {
   });
 
   it('publishes generated spreadsheets as explicit durable artifacts', async () => {
-    readFileMock.mockResolvedValue(Buffer.from('xlsx'));
+    readFileMock.mockReturnValue(Buffer.from('xlsx'));
     saveMediaBufferMock.mockResolvedValue({
       id: 'sales---id.xlsx',
       bucket: 'outbound',
@@ -43,7 +44,7 @@ describe('publish_artifacts', () => {
       paths: ['reports/sales.xlsx'],
     });
 
-    expect(readFileMock).toHaveBeenCalledWith(resolve('/workspace/reports/sales.xlsx'));
+    expect(readFileMock).toHaveBeenCalledWith('/workspace', resolve('/workspace/reports/sales.xlsx'));
     expect(result.details.artifacts).toEqual([{
       artifactId: 'sales---id.xlsx',
       sourceFileId: fileResourceId(fileSpaceId(resolve('/workspace')), 'reports/sales.xlsx'),
@@ -60,8 +61,8 @@ describe('publish_artifacts', () => {
 
   it('keeps successful files visible when another file cannot be published', async () => {
     readFileMock
-      .mockResolvedValueOnce(Buffer.from('xlsx'))
-      .mockRejectedValueOnce(new Error('missing'));
+      .mockReturnValueOnce(Buffer.from('xlsx'))
+      .mockImplementationOnce(() => { throw new Error('missing'); });
     saveMediaBufferMock.mockResolvedValue({
       id: 'sales---id.xlsx',
       bucket: 'outbound',

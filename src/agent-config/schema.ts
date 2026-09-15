@@ -96,7 +96,7 @@ export const WorkflowPolicySchema = z.object({
 export const RuntimePolicySchema = z.object({
   commandIsolation: z.discriminatedUnion('mode', [
     z.object({ mode: z.literal('host') }).strict(),
-    z.object({ mode: z.literal('docker'), image: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9./:_-]*@sha256:[a-f0-9]{64}$/), network: z.boolean().default(false) }).strict(),
+    z.object({ mode: z.literal('docker'), image: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9./:_-]*@sha256:[a-f0-9]{64}$/), network: z.boolean().default(false), workspaceAccess: z.enum(['read-only', 'read-write']).default('read-only') }).strict(),
   ]).optional(),
   maxTurns: z.number().int().positive().optional(),
   timeoutMs: z.number().int().positive().optional(),

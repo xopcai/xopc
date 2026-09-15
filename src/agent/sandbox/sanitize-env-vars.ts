@@ -3,6 +3,8 @@
  * to avoid leaking API keys and other credentials.
  */
 
+import { isDangerousHostEnvVarName } from '../../infra/host-env-security.js';
+
 const BLOCKED_ENV_VAR_PATTERNS: RegExp[] = [
   /^ANTHROPIC_API_KEY$/i,
   /^OPENAI_API_KEY$/i,
@@ -30,14 +32,14 @@ function isDangerousEnvVar(key: string): boolean {
   return BLOCKED_ENV_VAR_PATTERNS.some((pattern) => pattern.test(upperKey));
 }
 
-function validateEnvVarValue(key: string, value: string): string | null {
+function validateEnvVarValue(key: string, value: string, allowCredentialData = false): string | null {
   if (value.includes('\0')) {
     return `Environment variable ${key} contains null bytes`;
   }
   if (value.length > MAX_ENV_VAR_LENGTH) {
     return `Environment variable ${key} exceeds maximum length (${MAX_ENV_VAR_LENGTH})`;
   }
-  if (/^[A-Za-z0-9+/=]{80,}$/.test(value)) {
+  if (!allowCredentialData && /^[A-Za-z0-9+/=]{80,}$/.test(value)) {
     return `Environment variable ${key} looks like base64-encoded credential data`;
   }
   return null;
@@ -60,22 +62,17 @@ export function sanitizeEnvVars(
   for (const [key, value] of Object.entries(env)) {
     if (value === undefined) continue;
 
-    if (allowedVars.has(key)) {
-      safe[key] = value;
+    const warning = validateEnvVarValue(key, value, allowedVars.has(key));
+    if (warning) {
+      warnings.push(warning);
       continue;
     }
-
-    const isBlocked =
-      isDangerousEnvVar(key) || customBlocked.some((pattern) => pattern.test(key));
-
-    if (isBlocked) {
+    if (isDangerousHostEnvVarName(key)) {
       blocked.push(key);
       continue;
     }
-
-    const warning = validateEnvVarValue(key, value);
-    if (warning) {
-      warnings.push(warning);
+    if (!allowedVars.has(key) && (isDangerousEnvVar(key) || customBlocked.some((pattern) => pattern.test(key)))) {
+      blocked.push(key);
       continue;
     }
 
@@ -95,6 +92,6 @@ export function prepareSafeToolEnv(
   const { safe } = sanitizeEnvVars(baseEnv as Record<string, string | undefined>, options);
   return {
     ...safe,
-    HOME: typeof baseEnv.HOME === 'string' && baseEnv.HOME ? baseEnv.HOME : safe.HOME || '/tmp',
+    HOME: safe.HOME || '/tmp',
   };
 }

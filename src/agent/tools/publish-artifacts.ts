@@ -1,4 +1,4 @@
-import { readFile, realpath } from 'node:fs/promises';
+import { realpath } from 'node:fs/promises';
 import { basename, isAbsolute, relative, sep } from 'node:path';
 
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
@@ -11,6 +11,7 @@ import {
 
 import { fileResourceId, fileSpaceId } from '../../files/file-service.js';
 import { evaluateFilePolicy } from '../sandbox/exec-policy.js';
+import { readWorkspaceFile } from '../sandbox/fileAccess.js';
 import { persistToolMedia } from './tool-media.js';
 import { resolvePathUnderWorkspace } from './tool-paths.js';
 
@@ -58,7 +59,7 @@ export async function publishArtifactPaths(params: {
           sourceFileId = fileResourceId(fileSpaceId(root), sourcePath.split(sep).join('/'));
         }
       }
-      const buffer = await readFile(source);
+      const buffer = readWorkspaceFile(params.workspaceRoot, source);
       const media = await persistToolMedia({ buffer, filePath: resolved });
       const kind = turnOutcomeKindFromFileName(media.name);
       artifacts.push({

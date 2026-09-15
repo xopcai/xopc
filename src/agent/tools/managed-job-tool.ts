@@ -47,7 +47,7 @@ export function createManagedJobTool(
       }
       const command = input.command.trim();
       if (!command) return result({ status: 'failed', error: 'command is required' });
-      const policy = evaluateExecPolicy({ command, cwd: resolve(workspace, input.cwd?.trim() || '.'), allowedEnvVars: getSkillPassthroughEnvVarNames?.() ?? [] });
+      const policy = evaluateExecPolicy({ workspaceRoot: workspace, command, cwd: resolve(workspace, input.cwd?.trim() || '.'), allowedEnvVars: getSkillPassthroughEnvVarNames?.() ?? [] });
       if (!policy.allowed) return result({ status: 'blocked', error: `Command blocked: ${policy.reason}` });
       const env = prepareEnv ? await prepareEnv(policy.sanitizedEnv, policy.effectiveCwd) : policy.sanitizedEnv;
       return result(await registry.start({ owner, command, cwd: policy.effectiveCwd, env: { ...env, COLUMNS: '200' },

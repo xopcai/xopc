@@ -1,7 +1,8 @@
 // Read file tool
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
-import { readFile, stat } from 'fs/promises';
+import { stat } from 'fs/promises';
+import { checkedFilePath, readWorkspaceFile } from '../sandbox/fileAccess.js';
 import { checkFileSafety } from '../prompt/safety.js';
 import { truncateHead, formatSize, DEFAULT_MAX_BYTES } from './truncate.js';
 import {
@@ -64,7 +65,8 @@ async function executeReadFile(
       return { content: [{ type: 'text', text: `🚫 ${safety.message}` }], details: { status: 'failed' } };
     }
 
-    let normalized = resolvePathUnderWorkspace(params.path, workspace);
+    let activeRoot = workspace;
+    let normalized = checkedFilePath(activeRoot, resolvePathUnderWorkspace(params.path, workspace), 'read');
     let stats;
     try {
       stats = await stat(normalized);
@@ -77,8 +79,9 @@ async function executeReadFile(
       ) {
         const alt = resolveProfileMarkdownPathIfBareName(params.path, profileMarkdownRoot);
         try {
-          stats = await stat(alt);
-          normalized = alt;
+          normalized = checkedFilePath(profileMarkdownRoot, alt, 'read');
+          stats = await stat(normalized);
+          activeRoot = profileMarkdownRoot;
         } catch {
           throw e;
         }
@@ -91,7 +94,7 @@ async function executeReadFile(
       return { content: [{ type: 'text', text: `🚫 File too large: ${formatSize(stats.size)}` }], details: { status: 'failed' } };
     }
 
-    const content = await readFile(normalized, 'utf-8');
+    const content = readWorkspaceFile(activeRoot, normalized, MAX_FILE_SIZE).toString('utf8');
     const offset = Math.max(1, params.offset ?? 1);
     const lines = content.split('\n');
     if (offset > lines.length) throw new Error(`Offset ${offset} exceeds ${lines.length} lines`);

@@ -1,6 +1,7 @@
 // Send media tool - allows sending local files as media
 import { Type } from '@sinclair/typebox';
-import { readFile } from 'fs/promises';
+import { readWorkspaceFile } from '../sandbox/fileAccess.js';
+import { MEDIA_MAX_BYTES } from '../../media/store.js';
 import { basename } from 'node:path';
 import { AgentTool, type AgentToolResult } from '@earendil-works/pi-agent-core';
 import { turnOutcomeKindFromFileName } from '@xopcai/gateway-contract';
@@ -12,7 +13,7 @@ import type { MessageBus, OutboundMessage } from '../../infra/bus/index.js';
 const SendMediaSchema = Type.Object({
   filePath: Type.String({
     description:
-      'File to send. Relative paths are under the current agent workspace; absolute paths are used as given.',
+      'File to send. Relative paths are under the current agent workspace; absolute paths must remain inside the workspace.',
   }),
   mediaType: Type.Optional(Type.Enum({
     photo: 'photo',
@@ -70,7 +71,7 @@ export function createSendMediaTool(
       }
 
       try {
-        const fileBuffer = await readFile(resolved);
+        const fileBuffer = readWorkspaceFile(workspace, resolved, MEDIA_MAX_BYTES);
         const media = await persistToolMedia({
           buffer: fileBuffer,
           filePath: resolved,

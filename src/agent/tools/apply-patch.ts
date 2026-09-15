@@ -1,12 +1,10 @@
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import { dirname, relative } from 'node:path';
+import { stat } from 'node:fs/promises';
+import { relative } from 'node:path';
 
-import { checkFileSafety } from '../prompt/safety.js';
-import { evaluateFilePolicy } from '../sandbox/exec-policy.js';
+import { checkedFilePath, readWorkspaceFile, writeWorkspaceFile, deleteWorkspaceFile } from '../sandbox/fileAccess.js';
 import { detectLineEnding, generateDiffString, normalizeToLF, restoreLineEndings } from './edit-diff.js';
-import { resolvePathUnderWorkspace } from './tool-paths.js';
 
 const ApplyPatchSchema = Type.Object({
   patch: Type.String({
@@ -177,16 +175,12 @@ function applyHunks(original: string, hunks: PatchHunk[], path: string): string 
   return content;
 }
 
-async function readExisting(path: string): Promise<string> {
-  return readFile(path, 'utf-8');
+async function readExisting(workspace: string, path: string): Promise<string> {
+  return readWorkspaceFile(workspace, path).toString('utf8');
 }
 
 async function assertWritable(workspace: string, path: string): Promise<string> {
-  const quick = checkFileSafety('write', path);
-  if (!quick.allowed) throw new Error(quick.message ?? `Cannot write ${path}`);
-  const policy = evaluateFilePolicy({ operation: 'write', path, workspaceRoot: workspace });
-  if (!policy.allowed) throw new Error(`Sandbox: ${policy.reason}`);
-  return resolvePathUnderWorkspace(path, workspace);
+  return checkedFilePath(workspace, path, 'write');
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -234,7 +228,7 @@ async function buildPatchPlan(
     if (op.kind === 'delete') {
       const target = await assertWritable(workspace, op.path);
       rememberTarget(target);
-      const oldContent = await readExisting(target);
+      const oldContent = await readExisting(workspace, target);
       const diff = generateDiffString(oldContent, '', op.path);
       const counts = countDiff(diff);
       changes.push({
@@ -250,7 +244,7 @@ async function buildPatchPlan(
 
     const target = await assertWritable(workspace, op.path);
     rememberTarget(target);
-    const oldContent = await readExisting(target);
+    const oldContent = await readExisting(workspace, target);
     const lineEnding = detectLineEnding(oldContent);
     const newLfContent = applyHunks(normalizeToLF(oldContent), op.hunks, op.path);
     const newContent = restoreLineEndings(newLfContent, lineEnding);
@@ -280,22 +274,20 @@ async function buildPatchPlan(
   return changes;
 }
 
-async function commitPatchPlan(changes: PlannedPatchChange[]): Promise<void> {
+async function commitPatchPlan(workspace: string, changes: PlannedPatchChange[]): Promise<void> {
   const committed: PlannedPatchChange[] = [];
   try {
     for (const change of changes) {
       committed.push(change);
       if (change.kind === 'add') {
-        await mkdir(dirname(change.absolutePath), { recursive: true });
-        await writeFile(change.absolutePath, change.newContent ?? '', 'utf-8');
+        writeWorkspaceFile(workspace, change.absolutePath, change.newContent ?? '');
       } else if (change.kind === 'delete') {
-        await rm(change.absolutePath);
+        deleteWorkspaceFile(workspace, change.absolutePath);
       } else {
         const destination = change.absoluteMoveTo ?? change.absolutePath;
-        await mkdir(dirname(destination), { recursive: true });
-        await writeFile(destination, change.newContent ?? '', 'utf-8');
+        writeWorkspaceFile(workspace, destination, change.newContent ?? '');
         if (destination !== change.absolutePath) {
-          await rm(change.absolutePath);
+          deleteWorkspaceFile(workspace, change.absolutePath);
         }
       }
     }
@@ -303,16 +295,14 @@ async function commitPatchPlan(changes: PlannedPatchChange[]): Promise<void> {
     for (const change of committed.reverse()) {
       try {
         if (change.kind === 'add') {
-          await rm(change.absolutePath, { force: true });
+          if (await pathExists(change.absolutePath)) deleteWorkspaceFile(workspace, change.absolutePath);
         } else if (change.kind === 'delete') {
-          await mkdir(dirname(change.absolutePath), { recursive: true });
-          await writeFile(change.absolutePath, change.oldContent ?? '', 'utf-8');
+          writeWorkspaceFile(workspace, change.absolutePath, change.oldContent ?? '');
         } else if (change.absoluteMoveTo) {
-          await rm(change.absoluteMoveTo, { force: true });
-          await mkdir(dirname(change.absolutePath), { recursive: true });
-          await writeFile(change.absolutePath, change.oldContent ?? '', 'utf-8');
+          if (await pathExists(change.absoluteMoveTo)) deleteWorkspaceFile(workspace, change.absoluteMoveTo);
+          writeWorkspaceFile(workspace, change.absolutePath, change.oldContent ?? '');
         } else {
-          await writeFile(change.absolutePath, change.oldContent ?? '', 'utf-8');
+          writeWorkspaceFile(workspace, change.absolutePath, change.oldContent ?? '');
         }
       } catch {
         // Best-effort rollback; the original write error is more useful to the caller.
@@ -342,13 +332,14 @@ export function createApplyPatchTool(workspace: string): AgentTool {
       try {
         const patch = params.patch ?? '';
         const parsed = parsePatch(patch);
-        const changes = await buildPatchPlan(workspace, parsed);
-        await commitPatchPlan(changes);
+        const canonicalWorkspace = checkedFilePath(workspace, workspace, 'write');
+        const changes = await buildPatchPlan(canonicalWorkspace, parsed);
+        await commitPatchPlan(canonicalWorkspace, changes);
 
         const diff = changes.map((change) => change.diff).join('\n');
         const added = changes.reduce((sum, change) => sum + change.added, 0);
         const removed = changes.reduce((sum, change) => sum + change.removed, 0);
-        const files = changes.map((change) => relative(workspace, change.absoluteMoveTo ?? change.absolutePath));
+        const files = changes.map((change) => relative(canonicalWorkspace, change.absoluteMoveTo ?? change.absolutePath));
         const summary = changes
           .map((change) => {
             const display = change.moveTo ? `${change.path} -> ${change.moveTo}` : change.path;

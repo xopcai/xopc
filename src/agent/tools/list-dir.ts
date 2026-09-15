@@ -2,6 +2,7 @@
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { readdir } from 'fs/promises';
+import { checkedFilePath } from '../sandbox/fileAccess.js';
 import { resolvePathUnderWorkspace } from './tool-paths.js';
 
 const ListDirSchema = Type.Object({
@@ -26,7 +27,7 @@ export function createListDirTool(workspace: string): AgentTool {
     ): Promise<AgentToolResult<{}>> {
       try {
         const p = params as ListDirParams;
-        const target = resolvePathUnderWorkspace(p.path, workspace);
+        const target = checkedFilePath(workspace, resolvePathUnderWorkspace(p.path, workspace), 'read');
         const entries = await readdir(target, { withFileTypes: true });
         const lines = entries.map((e) => {
           const type = e.isDirectory() ? 'd' : e.isFile() ? 'f' : '?';

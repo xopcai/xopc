@@ -40,3 +40,14 @@ describe('prepareSafeToolEnv', () => {
     expect(env.HOME).toBe('/tmp/h');
   });
 });
+
+it('rejects startup injection and malformed explicitly allowed values', () => {
+  const env = prepareSafeToolEnv({ NODE_OPTIONS: '--require /tmp/inject.js', BASH_ENV: '/tmp/inject.sh', HOME: '/tmp/invalid\0', CUSTOM_TOKEN: 'bad\0' },
+    { allowedVars: ['NODE_OPTIONS', 'BASH_ENV', 'HOME', 'CUSTOM_TOKEN'] });
+  expect(env).toEqual({ HOME: '/tmp' });
+});
+
+it('preserves explicitly allowed credential data while still validating its structure', () => {
+  const token = 'A'.repeat(100);
+  expect(prepareSafeToolEnv({ CUSTOM_TOKEN: token }, { allowedVars: ['CUSTOM_TOKEN'] }).CUSTOM_TOKEN).toBe(token);
+});
