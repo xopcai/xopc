@@ -41,6 +41,13 @@ jobs:
       - name: Build
         run: pnpm run build
 
+      # Recording integration tests decode real audio through FFmpeg.
+      - name: Install audio test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          ffmpeg -version
+
       - name: Run tests
         run: pnpm test
 
