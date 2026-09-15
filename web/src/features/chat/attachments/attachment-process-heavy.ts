@@ -2,29 +2,17 @@
  * Heavy parsers (pdfjs, docx-preview, jszip, xlsx) — imported dynamically by document previews to keep the main bundle smaller.
  */
 
-import { safeSheetToCsv } from '@/features/chat/attachments/excel-worksheet-utils';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 
-let pdfWorkerConfigured = false;
-
-async function ensurePdfWorker(): Promise<typeof import('pdfjs-dist')> {
-  const pdfjsLib = await import('pdfjs-dist');
-  if (!pdfWorkerConfigured) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-      'pdfjs-dist/build/pdf.worker.min.mjs',
-      import.meta.url,
-    ).toString();
-    pdfWorkerConfigured = true;
-  }
-  return pdfjsLib;
-}
+import { safeSheetToCsv } from '@/features/chat/attachments/excel-worksheet-utils';
+import { ensurePdfWorker } from '@/features/chat/attachments/pdf-runtime';
 
 export async function processPdf(
   arrayBuffer: ArrayBuffer,
   name: string,
 ): Promise<{ extractedText: string; preview?: string }> {
   const pdfjsLib = await ensurePdfWorker();
-  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer.slice(0) });
   let pdf: PDFDocumentProxy | null = null;
   try {
     pdf = await loadingTask.promise;
