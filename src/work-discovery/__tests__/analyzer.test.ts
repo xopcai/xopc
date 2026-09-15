@@ -82,6 +82,18 @@ describe('work discovery analyzer', () => {
     expect(request.messages?.[0]?.content).toContain('not “用户倾向于使用 pnpm”');
   });
 
+  it('produces a bounded project overview without requiring suggestions or user questions', async () => {
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify({ projectSummary: 'Purpose from README.md',
+        currentState: 'Run pnpm test (package.json)', uncertainties: ['Current objective is unknown'], suggestions: [] }) }],
+      stopReason: 'stop',
+    } as never);
+    const analysis = await analyzeWorkContext({ config: {} as never, snapshot, projectOverviewOnly: true });
+    expect(analysis.result.projectSummary).toBe('Purpose from README.md');
+    expect(analysis.result.lowConfidence).not.toBe(true);
+    expect(completeWithResolvedCredentials).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({ maxTokens: 2_000 }));
+  });
+
   it('reports output truncation instead of a generic JSON failure', async () => {
     vi.mocked(completeWithResolvedCredentials).mockResolvedValue({
       content: [{ type: 'text', text: '{"projectSummary":"unfinished"' }],

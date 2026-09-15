@@ -243,6 +243,7 @@ export async function analyzeWorkContext(input: {
   config: Config;
   snapshot: WorkContextSnapshot;
   candidateContext?: WorkDiscoveryCandidate[];
+  projectOverviewOnly?: boolean;
   signal?: AbortSignal;
 }): Promise<{ modelRef: string; result: WorkDiscoveryResult }> {
   const modelRef = getAgentDefaultModelRef(input.config);
@@ -257,27 +258,33 @@ export async function analyzeWorkContext(input: {
     'You help a user resume real work in one explicitly selected local folder.',
     'Analyze only the supplied bounded snapshot. Never claim that you ran commands, tests, or inspected anything absent from it.',
     'Return only one JSON object with projectSummary, currentState, uncertainties, suggestions, profileCandidates, workThreads, conversationStarter, lowConfidence, and contextQuestion.',
-    'profileCandidates contains only durable user-specific role, responsibility, preference, routine, communication, boundary, or relationship facts that are directly supported and would remain useful outside this repository snapshot.',
-    'Do not put the project stack, packages, architecture, deployment setup, repository conventions, or current task in profileCandidates. Put project facts in projectSummary/currentState and current work in workThreads.',
-    'Each profile candidate has category (role, responsibility, preference, routine, communication, boundary, or relationship), factKey, statement, confidence, and evidence.',
-    'Put current or desired outcomes in workThreads, not profileCandidates. Emit boundary or relationship only when directly stated in user-authored evidence; never infer private relationship labels or expanded permissions.',
-    'factKey is a stable language-neutral lowercase identifier such as workflow:code-review:github; equivalent facts in different languages must use the same factKey.',
     USER_FACING_UNDERSTANDING_WRITING_GUIDANCE,
-    'Do not infer sensitive traits, identity, health, finances, political views, or anything not directly supported by the work evidence.',
-    'workThreads contains every distinct evidence-backed work stream with topicKey, title, summary, horizon, status, confidence, and evidenceRefs. Do not merge unrelated streams to force a fixed count.',
-    'horizon is current, ongoing, or long_term. status is active, paused, blocked, completed, or uncertain.',
-    'topicKey is a short stable topic identifier. evidenceRefs must use exact relative paths from the snapshot or git://recent-state.',
-    'Distinguish one-off recent edits from work sustained across multiple days. Prefer one current thread and only add ongoing or long_term threads when evidence supports them.',
-    'For a normal result, suggestions must contain exactly 3 materially different next steps.',
-    'Each suggestion must include actionType, title, rationale, evidence, actionPrompt, confidence, expectedTask, estimatedMinutes, risk, and verification.',
-    'actionType must be summarize_recent_work, inspect_related_tests, or plan_next_step.',
-    'risk must be analysis, command, or file_write. estimatedMinutes is an integer from 1 to 30.',
-    'verification is a short array describing how the user can tell the task is real.',
-    'Each evidence item contains an optional exact relative path from the snapshot and one concrete observation.',
-    'actionPrompt asks the assistant to investigate or continue the step; it does not silently authorize file changes.',
-    'conversationStarter is one concise, editable first-person prompt the user can send immediately. Ground it in the most important visible project or directory signal, ask the assistant to explain before acting, and never silently authorize file changes.',
-    'Always return conversationStarter, including when confidence is low.',
-    'If the current objective is unclear or fewer than three credible suggestions exist, set lowConfidence=true, return suggestions=[], and ask one concise contextQuestion.',
+    ...(input.projectOverviewOnly ? [
+      'This request is background project understanding. Return empty suggestions, profileCandidates, and workThreads; omit conversationStarter and contextQuestion. Do not ask the user to make decisions.',
+      'Use projectSummary to describe the documented purpose and structure, and currentState for startup/test commands, project conventions, and constraints. Cite the supporting relative file paths inline.',
+      'Keep the overview concise. Distinguish documented facts from interpretations. Put missing goals and uncertain assumptions in uncertainties; never treat inferred goals as user-confirmed.',
+    ] : [
+      'profileCandidates contains only durable user-specific role, responsibility, preference, routine, communication, boundary, or relationship facts that are directly supported and would remain useful outside this repository snapshot.',
+      'Do not put the project stack, packages, architecture, deployment setup, repository conventions, or current task in profileCandidates. Put project facts in projectSummary/currentState and current work in workThreads.',
+      'Each profile candidate has category (role, responsibility, preference, routine, communication, boundary, or relationship), factKey, statement, confidence, and evidence.',
+      'Put current or desired outcomes in workThreads, not profileCandidates. Emit boundary or relationship only when directly stated in user-authored evidence; never infer private relationship labels or expanded permissions.',
+      'factKey is a stable language-neutral lowercase identifier such as workflow:code-review:github; equivalent facts in different languages must use the same factKey.',
+      'Do not infer sensitive traits, identity, health, finances, political views, or anything not directly supported by the work evidence.',
+      'workThreads contains every distinct evidence-backed work stream with topicKey, title, summary, horizon, status, confidence, and evidenceRefs. Do not merge unrelated streams to force a fixed count.',
+      'horizon is current, ongoing, or long_term. status is active, paused, blocked, completed, or uncertain.',
+      'topicKey is a short stable topic identifier. evidenceRefs must use exact relative paths from the snapshot or git://recent-state.',
+      'Distinguish one-off recent edits from work sustained across multiple days. Prefer one current thread and only add ongoing or long_term threads when evidence supports them.',
+      'For a normal result, suggestions must contain exactly 3 materially different next steps.',
+      'Each suggestion must include actionType, title, rationale, evidence, actionPrompt, confidence, expectedTask, estimatedMinutes, risk, and verification.',
+      'actionType must be summarize_recent_work, inspect_related_tests, or plan_next_step.',
+      'risk must be analysis, command, or file_write. estimatedMinutes is an integer from 1 to 30.',
+      'verification is a short array describing how the user can tell the task is real.',
+      'Each evidence item contains an optional exact relative path from the snapshot and one concrete observation.',
+      'actionPrompt asks the assistant to investigate or continue the step; it does not silently authorize file changes.',
+      'conversationStarter is one concise, editable first-person prompt the user can send immediately. Ground it in the most important visible project or directory signal, ask the assistant to explain before acting, and never silently authorize file changes.',
+      'Always return conversationStarter, including when confidence is low.',
+      'If the current objective is unclear or fewer than three credible suggestions exist, set lowConfidence=true, return suggestions=[], and ask one concise contextQuestion.',
+    ]),
     'Use Simplified Chinese for every user-facing string when the visible snapshot documents are mainly Chinese; otherwise use English.',
     '',
     input.candidateContext?.length
@@ -295,7 +302,7 @@ export async function analyzeWorkContext(input: {
   ].join('\n');
   const message: UserMessage = { role: 'user', content: prompt, timestamp: Date.now() };
   const response = await completeWithResolvedCredentials(model, { messages: [message] }, {
-    maxTokens: WORK_ANALYSIS_MAX_TOKENS,
+    maxTokens: input.projectOverviewOnly ? 2_000 : WORK_ANALYSIS_MAX_TOKENS,
     temperature: 0.1,
     signal: input.signal,
   });
@@ -321,7 +328,7 @@ export async function analyzeWorkContext(input: {
       .map((value) => validateWorkThreadCandidate(value, allowedThreadRefs))
       .filter((value): value is WorkUnderstandingThreadCandidate => Boolean(value))
     : [];
-  const lowConfidence = parsed.lowConfidence === true || suggestions.length !== 3;
+  const lowConfidence = parsed.lowConfidence === true || (!input.projectOverviewOnly && suggestions.length !== 3);
   if (lowConfidence) {
     const fallback = lowConfidenceResult(
       input.snapshot,

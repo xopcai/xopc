@@ -354,6 +354,30 @@ describe('ProjectService', () => {
     expect(readPages()).toEqual([newer.id, older.id]);
   });
 
+  it('includes empty active projects in sidebar pagination before their first conversation', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-01T00:00:00Z'));
+    const older = projects.create({ name: 'Older Empty Project' });
+    vi.setSystemTime(new Date('2026-09-02T00:00:00Z'));
+    const newer = projects.create({ name: 'New Empty Project' });
+    const archived = projects.create({ name: 'Archived Empty Project' });
+    projects.update(archived.id, { status: 'archived' });
+    const query = { status: 'active' as const, limit: 1, updatedAfter: Date.now() - 86_400_000 };
+
+    const first = projects.listWithSidebarSessions(query);
+    expect(first.items.map((project) => project.id)).toEqual([newer.id]);
+    expect(first.total).toBe(2);
+    expect(first.hasMore).toBe(true);
+    const second = projects.listWithSidebarSessions({ ...query, offset: 1 });
+    expect(second.items.map((project) => project.id)).toEqual([older.id]);
+    expect(second.hasMore).toBe(false);
+
+    ensureSessionRecord(SESSION_KEY, process.cwd(), { projectId: newer.id });
+    ensureSessionRecord(`${SESSION_KEY}-second`, process.cwd(), { projectId: newer.id });
+    expect(projects.listWithSidebarSessions(query).total).toBe(2);
+    expect(projects.listWithSidebarSessions(query).items.map((project) => project.id)).toEqual([newer.id]);
+  });
+
   it('pins projects ahead of more recent sidebar projects', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-09-01T00:00:00Z'));

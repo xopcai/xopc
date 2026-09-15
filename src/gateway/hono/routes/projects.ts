@@ -35,6 +35,10 @@ import {
 import { listKnowledgeItems, writeKnowledgeItem } from '../../../knowledge-memory/index.js';
 import { parseActivityIncludeRelated, parseActivityQuery } from './activity.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { getProjectUnderstandingRun } from '../../../work-discovery/repository.js';
+import { createLogger } from '../../../utils/logger.js';
+
+const log = createLogger('Projects');
 
 function parseProjectStatus(raw: unknown): ProjectStatus | undefined {
   return raw === 'planned' || raw === 'active' || raw === 'paused'
@@ -51,19 +55,6 @@ function parseLimit(raw: string | undefined, fallback = 50): number | undefined 
   if (!raw) return undefined;
   const n = Number.parseInt(raw, 10);
   return Number.isFinite(n) ? Math.min(500, Math.max(1, n)) : fallback;
-}
-
-function isHiddenEmptyProjectChatShell(session: {
-  hiddenFromSessionList?: boolean;
-  messageCount?: number;
-  routing?: { peerId?: string };
-  customData?: Record<string, unknown>;
-}): boolean {
-  return session.hiddenFromSessionList === true
-    && session.messageCount === 0
-    && (session.customData?.origin === 'automation'
-      || (session.customData?.genericNewChatShell !== false
-        && Boolean(session.routing?.peerId?.startsWith('chat_'))));
 }
 
 function textField(body: Record<string, unknown>, key: string): string | undefined {
@@ -236,6 +227,9 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     const name = textField(body, 'name')?.trim();
     const workspaceRoot = textField(body, 'workspaceRoot')?.trim();
+    if (body.autoUnderstand !== undefined && typeof body.autoUnderstand !== 'boolean') {
+      return c.json({ ok: false, error: 'autoUnderstand must be a boolean' }, 400);
+    }
     if (!name && !workspaceRoot) return c.json({ ok: false, error: 'Missing name' }, 400);
     const executionMode = parseProjectExecutionMode(body.executionMode);
     if (body.executionMode !== undefined && !executionMode) {
@@ -274,6 +268,13 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
         ownerId: textField(body, 'ownerId'),
         targetAt: optionalNumberField(body, 'targetAt') ?? undefined,
       });
+      if (body.autoUnderstand === true) {
+        try {
+          deps.service.workDiscovery.startProjectUnderstanding(project.id);
+        } catch (err) {
+          log.warn({ err, projectId: project.id }, 'Project created but understanding could not be queued');
+        }
+      }
       return c.json({ ok: true, project: enrichProjectWorkspace(service, project) }, 201);
     } catch (error) {
       if (error instanceof ProjectWorkspaceConflictError) {
@@ -642,6 +643,8 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
         error: 'Delete the project execution environments before deleting the project',
       }, 409);
     }
+    const understandingRun = getProjectUnderstandingRun(projectId);
+    if (understandingRun) deps.service.workDiscovery.cancelRun(understandingRun.id);
     service.projects.delete(projectId);
     return c.json({ ok: true });
   });
@@ -652,7 +655,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
       const sessions = await Promise.all(keys.map((key) => service.sessions.getSession(key)));
       return c.json({
         ok: true,
-        sessions: sessions.filter((session) => session && !isHiddenEmptyProjectChatShell(session)),
+        sessions: sessions.filter((session) => session && !session.hiddenFromSessionList),
       });
     } catch (error) {
       return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 404);

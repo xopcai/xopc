@@ -6,6 +6,7 @@ group = 'ai.xopc.voice'
 version = '1.0.0'
 dependencies {
   testImplementation 'junit:junit:4.13.2'
+  testImplementation 'org.json:json:20240303'
 }
 android {
   namespace 'ai.xopc.voice'
