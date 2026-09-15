@@ -127,7 +127,7 @@ describe('create_share tool', () => {
       getConfig: () => fakeConfig as any,
     });
     const res = await (tool as any).execute('call-1', { filePath: '/etc/hosts' });
-    expect(res.details.error).toMatch(/inside the agent workspace/i);
+    expect(res.details.error).toMatch(/blocked directory/i);
   });
 
   it('rejects an empty / workspace-root path', async () => {

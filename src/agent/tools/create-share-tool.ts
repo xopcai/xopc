@@ -9,6 +9,8 @@
  * when to call it, with optional hints about audience.
  */
 import { Type } from '@sinclair/typebox';
+import { relative } from 'node:path';
+import { assertWorkspaceTreeReadable, checkedFilePath } from '../sandbox/fileAccess.js';
 import { createHash } from 'node:crypto';
 import { AgentTool, type AgentToolResult } from '@earendil-works/pi-agent-core';
 import { turnOutcomeKindFromFileName } from '@xopcai/gateway-contract';
@@ -142,14 +144,15 @@ export function createCreateShareTool(deps: CreateShareToolDeps): AgentTool {
       const urlCtx = { gatewayHost, gatewayPort, reverseProxyPublicUrl };
       const tokenHash = hashCreator(deps.getAgentId?.() ?? 'agent-tool');
 
-      // Resolve absolute path + verify it sits under the workspace root.
-      const absolutePath = resolvePathUnderWorkspace(p.filePath, workspace);
-      if (!absolutePath.startsWith(workspace)) {
-        return errorResult(locale,'File must be inside the agent workspace.');
+      let relPath: string;
+      try {
+        const root = checkedFilePath(workspace, workspace, 'read');
+        const absolutePath = checkedFilePath(workspace, resolvePathUnderWorkspace(p.filePath, workspace), 'read');
+        relPath = relative(root, absolutePath).replace(/\\/g, '/');
+        if (relPath) assertWorkspaceTreeReadable(workspace, absolutePath);
+      } catch (err) {
+        return errorResult(locale, `Cannot read target: ${err instanceof Error ? err.message : String(err)}`);
       }
-      const relPath = absolutePath === workspace
-        ? ''
-        : absolutePath.slice(workspace.length).replace(/^[\\/]+/, '').replace(/\\/g, '/');
       if (!relPath) {
         return errorResult(locale,'Cannot share the workspace root itself.');
       }

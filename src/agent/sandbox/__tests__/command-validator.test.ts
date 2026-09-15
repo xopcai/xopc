@@ -184,11 +184,37 @@ describe('validateCommand', () => {
       expect(result.severity).toBe('medium');
       expect(result.reason).toContain('Warning');
     });
+  });
 
-    it('warns on git push --force', () => {
-      const result = validateCommand('git push --force origin main');
-      expect(result.allowed).toBe(true);
-      expect(result.severity).toBe('medium');
+  describe('git operations', () => {
+    it.each([
+      'git commit -m test',
+      'git push origin main',
+      'git push --force origin main',
+      'git push --force-with-lease origin main',
+      'git checkout -- src/index.ts',
+      'git switch main',
+      'git restore src/index.ts',
+      'git reset --hard HEAD',
+      'git rebase main',
+      'git merge feature',
+      'git cherry-pick HEAD',
+      'git clean -fd',
+      'git apply change.patch',
+      'git am change.patch',
+      'git stash pop',
+      'git branch -D feature',
+      'git tag -d v1.0.0',
+      'git -C /tmp/workspace push origin main',
+    ])('allows %s without warnings or audit findings', (command) => {
+      expect(validateCommand(command)).toEqual({ allowed: true });
+      expect(auditCommand(command)).toEqual([]);
+    });
+
+    it('still blocks dangerous shell commands combined with git', () => {
+      const command = 'git status; rm -rf /';
+      expect(validateCommand(command).allowed).toBe(false);
+      expect(auditCommand(command).some(f => f.severity === 'critical')).toBe(true);
     });
   });
 

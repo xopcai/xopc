@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readdir, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -295,4 +295,12 @@ describe('image_generate tool — Step 2 input wiring', () => {
     expect((res.details as any).status).toBe(503);
     expect((res.details as any).reason).toBe('http_5xx');
   });
+});
+
+it('rejects credential symlinks before sending image inputs to a provider', async () => {
+  await writeFile(path.join(workspace, '.env'), 'synthetic-secret');
+  await symlink(path.join(workspace, '.env'), path.join(workspace, 'image.png'));
+  const result = await makeTool().execute('blocked-input', { prompt: 'edit', inputImages: [{ source: 'image.png' }] } as any);
+  expect(generateImageMock).not.toHaveBeenCalled();
+  expect(JSON.stringify(result)).toContain('not readable');
 });
