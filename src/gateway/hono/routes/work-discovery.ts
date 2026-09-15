@@ -4,24 +4,8 @@ import { getAgentDefaultModelRef } from '../../../config/schema.js';
 import { isLocalModelBaseUrl } from '../../../providers/model-call.js';
 import { resolveModel } from '../../../providers/index.js';
 import { previewWorkDiscoveryRoot, WORK_DISCOVERY_SCAN_POLICY_VERSION } from '../../../work-discovery/probe.js';
-import { WorkDiscoveryService } from '../../../work-discovery/service.js';
 import type { WorkDiscoveryRecognitionDecision, WorkDiscoverySource } from '../../../work-discovery/types.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
-
-const services = new WeakMap<AuthenticatedRouteDeps['service'], WorkDiscoveryService>();
-
-export function getWorkDiscoveryService(deps: AuthenticatedRouteDeps): WorkDiscoveryService {
-  const existing = services.get(deps.service);
-  if (existing) return existing;
-  const service = new WorkDiscoveryService({
-    projects: deps.service.projects,
-    sessions: deps.service.sessionIndexInstance,
-    getConfig: () => deps.service.currentConfig,
-    emit: (type, payload) => deps.service.emit(type, payload),
-  });
-  services.set(deps.service, service);
-  return service;
-}
 
 function stringField(body: unknown, field: string): string {
   if (!body || typeof body !== 'object') return '';
@@ -30,7 +14,7 @@ function stringField(body: unknown, field: string): string {
 }
 
 export function registerWorkDiscoveryRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
-  const service = getWorkDiscoveryService(deps);
+  const service = deps.service.workDiscovery;
   const limited = deps.strictRateLimitMiddleware;
 
   authenticated.get('/api/onboarding/work-discovery', (c) => c.json({
