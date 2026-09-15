@@ -33,6 +33,11 @@ export function checkDelegation(workspace: string, id: string) {
   if (!effectiveProactivePolicy(id).enabled) throw new Error('Resume this service before checking');
   if (sub.scopeKind !== 'project') throw new Error('This service checks when connected sources change');
   return runSqliteWriteTransaction((db) => {
+    const retry = db.prepare("SELECT run_id FROM proactive_runs WHERE subscription_id = ? AND status = 'retryable' ORDER BY started_at DESC LIMIT 1").get(id) as { run_id: string } | undefined;
+    if (retry) {
+      db.prepare("UPDATE proactive_runs SET next_attempt_at = ? WHERE run_id = ? AND status = 'retryable'").run(new Date().toISOString(), retry.run_id);
+      return { status: 'queued' as const };
+    }
     const running = db.prepare("SELECT 1 FROM proactive_signal_batches WHERE subscription_id = ? AND status IN ('collecting', 'ready', 'processing')").get(id);
     if (running) return { status: 'queued' as const };
     const last = db.prepare('SELECT MAX(started_at) AS at FROM proactive_runs WHERE subscription_id = ?').get(id) as { at: string | null };
@@ -64,7 +69,7 @@ export function delegationOverview(workspace: string) {
       ...sub,
       effectiveEnabled: effectiveProactivePolicy(sub.id).enabled,
       project: sub.scopeKind === 'project' ? db.prepare('SELECT name, status FROM projects WHERE project_id = ?').get(sub.scopeId) ?? null : null,
-      latestRun: db.prepare(`SELECT status, outcome_reason AS reason, completed_at AS completedAt, started_at AS startedAt, error_message AS error
+      latestRun: db.prepare(`SELECT status, outcome_reason AS reason, completed_at AS completedAt, started_at AS startedAt, error_message AS error, attempt, next_attempt_at AS nextAttemptAt
         FROM proactive_runs WHERE subscription_id = ? ORDER BY started_at DESC LIMIT 1`).get(sub.id) ?? null,
       pending: Boolean(db.prepare("SELECT 1 FROM proactive_signal_batches WHERE subscription_id = ? AND status IN ('collecting', 'ready', 'processing')").get(sub.id)),
     })),

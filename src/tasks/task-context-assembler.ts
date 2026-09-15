@@ -120,6 +120,8 @@ export function buildTaskExecutionDirective(sessionKey: string): string {
     `Remaining acceptance criteria: ${remainingCriteria.join('; ')}`,
     contract.constraints.length ? `Constraints: ${contract.constraints.join('; ')}` : '',
     contract.approvalRequired.length ? `Authority required: ${contract.approvalRequired.join('; ')}` : '',
+    ...new TaskContextRepository().list(task.id).filter((edge) => typeof edge.metadata.userAnswer === 'string')
+      .slice(-20).map((edge) => `User response to ${edge.title ?? 'question'}: ${JSON.stringify(edge.metadata.userAnswer)}`),
     handoffPayload ? `Handoff snapshot: ${handoffPayload}` : '',
     'Take safe in-scope steps and produce inspectable evidence. Do not claim completion without verification.',
     '</xopc_task_execution>',

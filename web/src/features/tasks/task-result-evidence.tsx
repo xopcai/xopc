@@ -1,3 +1,4 @@
+import { ArtifactRecovery } from './artifact-recovery';
 import type { TaskEvidence } from '@xopcai/gateway-contract';
 import { ExternalLink, FileText } from 'lucide-react';
 
@@ -19,6 +20,7 @@ export function TaskResultEvidence({ evidence, projectId, sessionKey, language }
         {external ? <a className={controlClass} href={uri} target="_blank" rel="noopener noreferrer"><ExternalLink className="size-4 shrink-0" />{label}</a>
           : file && (projectId || sessionKey) ? <button type="button" className={controlClass} onClick={() => setPath(uri, null, projectId, sessionKey)}><FileText className="size-4 shrink-0" />{label}</button>
           : <p className="text-sm font-medium text-fg">{label}</p>}
+        {external && item.kind === 'artifact' && <ArtifactRecovery key={uri} uri={uri} zh={language === 'zh'} />}
         {item.summary ? <p className="mt-1 break-words text-xs leading-5 text-fg-muted">{item.summary}</p> : null}
         <p className="mt-1 text-xs text-fg-subtle">{item.strength === 'verified' ? (language === 'zh' ? '已验证' : 'Verified') : (language === 'zh' ? '已记录，待验证' : 'Observed, not verified')}</p>
       </div>;

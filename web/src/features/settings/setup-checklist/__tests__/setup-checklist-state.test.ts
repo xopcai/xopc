@@ -60,6 +60,24 @@ function configWithGlobalModel(model: string) {
 }
 
 describe('buildSetupStatusSnapshot', () => {
+  it.each([true, false])('only hides the gateway service issue in Electron (%s)', (isElectron) => {
+    const snapshot = buildSetupStatusSnapshot({
+      isElectron,
+      hasToken: true,
+      realtimeConnected: true,
+      config: configWithGlobalModel('xopc-cloud/default'),
+      skillCount: 0,
+      providerMeta: { configured: 1, total: 1 },
+      doctorChecks: [{
+        id: 'gateway-service', label: 'Gateway service', status: 'warn',
+        message: 'Gateway is not installed as a system service.', hints: [], fixed: false,
+      }],
+      labels,
+    });
+    expect(snapshot.issues).toHaveLength(isElectron ? 0 : 1);
+    expect(snapshot.healthTier).toBe(isElectron ? 'ready' : 'attention');
+  });
+
   it('marks required steps incomplete when provider and model are missing', () => {
     const snapshot = buildSetupStatusSnapshot({
       hasToken: true,
@@ -211,6 +229,7 @@ describe('buildSetupStatusSnapshot', () => {
         label: '智能体工具运行时',
         message: '尚未安装 node, uv, python 运行时。',
         hints: ['运行：xopc runtime install node'],
+        path: '/settings/runtimes',
       }),
       expect.objectContaining({
         id: 'gateway-service',

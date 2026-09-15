@@ -8,6 +8,7 @@ import { ProjectService } from '../../projects/index.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { checkDelegation, completeDeliveredProjects, delegationOverview, startDelegation } from '../experience.js';
+import { claimNextRun, failRun } from '../execution/repository.js';
 import { ProactiveWorker } from '../execution/worker.js';
 import { getCard, performCardAction } from '../inbox/cards.js';
 import { ProactiveInboxService } from '../inbox/service.js';
@@ -37,6 +38,19 @@ describe('delegated project work', () => {
     new ProactiveInboxService().project();
     return { project, sub, card: delegationOverview('workspace').needsDecision[0]! };
   }
+
+  it('expedites the existing retry instead of creating a parallel check', () => {
+    const project = new ProjectService().create({ name: 'Retry delivery' });
+    const sub = startDelegation('workspace', { scenarioKey: 'project_delivery_risk', projectId: project.id, instructions: 'Check delivery' });
+    const run = claimNextRun('test')!;
+    expect(run).toBeTruthy();
+    failRun(run, new Error('Temporary source failure'), true);
+    expect(checkDelegation('workspace', sub.id)).toEqual({ status: 'queued' });
+    const retry = claimNextRun('test')!;
+    expect(retry.id).toBe(run.id);
+    expect(retry.attempt).toBe(2);
+    expect(getSqliteDatabase().prepare('SELECT COUNT(*) AS n FROM proactive_runs WHERE subscription_id = ?').get(sub.id)).toMatchObject({ n: 1 });
+  });
 
   it('queues the first check immediately and prepares a usable artifact without a selected workflow', async () => {
     const { card, sub } = await prepare();

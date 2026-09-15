@@ -235,6 +235,29 @@ describe('ShareStore', () => {
       expect(after).toBeGreaterThan(before);
     });
 
+    it('restores an expired file link without changing token or access limits', async () => {
+      createTestFile('restorable.txt');
+      const record = await store.create({ path: 'restorable.txt', ttlMs: 60000, maxViews: 3, workspaceRoot: TEST_WORKSPACE, gatewayTokenHash: 'test' });
+      const now = Date.now();
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 120000);
+      try {
+        expect(store.validateAccess(store.getById(record.id)!)).toMatchObject({ valid: false, reason: 'expired' });
+        expect(await store.validateFileIntegrity(record)).toEqual({ valid: true });
+        const restored = store.update(record.id, { extendTtlMs: 86400000 })!;
+        expect(restored.token).toBe(record.token);
+        expect(restored.maxViews).toBe(3);
+        expect(store.validateAccess(restored)).toEqual({ valid: true });
+      } finally { clock.mockRestore(); }
+    });
+
+    it('rejects revoked shares and invalid renewal periods', async () => {
+      createTestFile('revoked.txt');
+      const record = await store.create({ path: 'revoked.txt', workspaceRoot: TEST_WORKSPACE, gatewayTokenHash: 'test' });
+      for (const duration of [NaN, -1, 1, 604800001]) expect(() => store.update(record.id, { extendTtlMs: duration })).toThrow();
+      store.revoke(record.id);
+      expect(() => store.update(record.id, { extendTtlMs: 86400000 })).toThrow(/revoked/i);
+    });
+
     it('should update maxViews', async () => {
       createTestFile('file.txt');
       const record = await store.create({

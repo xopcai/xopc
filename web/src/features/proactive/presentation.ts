@@ -35,7 +35,7 @@ export function delegationState(sub: Delegation, zh: boolean): string {
 export function delegationNextTrigger(sub: Delegation, zh: boolean): string {
   if (sub.completedAt) return zh ? '不会再跟进' : 'No more follow-up';
   if (!sub.effectiveEnabled) return zh ? '恢复后继续' : 'Continues when resumed';
-  if (sub.schedule?.nextDueAt) return `${zh ? '下次核对' : 'Next check'} ${formatAssistantDate(sub.schedule.nextDueAt, zh)}`;
+  if (sub.scopeKind === 'project' && sub.schedule?.nextDueAt) return `${zh ? '下次核对' : 'Next check'} ${formatAssistantDate(sub.schedule.nextDueAt, zh)}`;
   return zh ? '相关资料变化时继续' : 'Continues when related context changes';
 }
 

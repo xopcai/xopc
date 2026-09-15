@@ -1,9 +1,12 @@
 import { existsSync } from 'node:fs';
 
+import { CredentialResolver } from '../../../../auth/credentials.js';
+import { getModelOAuthProviderIds } from '../../../../auth/oauth/registry.js';
+import { getDefaultAgentId } from '../../../../routing/resolve-route.js';
 import { loadConfig } from '../../../../config/loader.js';
 import type { Config } from '../../../../config/schema.js';
 import { parseModelRef, getAgentDefaultModelRef } from '../../../../config/schema.js';
-import { getApiKeyFromEnv, PROVIDER_ENV_MAP } from '../../../../providers/env-keys.js';
+import { PROVIDER_ENV_MAP } from '../../../../providers/env-keys.js';
 import type { CheckResult, DoctorContext } from '../types.js';
 
 function collectProviderIdsFromConfig(cfg: Config): Set<string> {
@@ -41,19 +44,6 @@ function collectProviderIdsFromConfig(cfg: Config): Set<string> {
   return ids;
 }
 
-function anyProviderEnvPresent(): boolean {
-  for (const vars of Object.values(PROVIDER_ENV_MAP)) {
-    for (const v of vars) {
-      if (process.env[v]?.trim()) return true;
-    }
-  }
-  for (const [k, val] of Object.entries(process.env)) {
-    if (!val?.trim()) continue;
-    if (k.endsWith('_API_KEY') || k.endsWith('_TOKEN')) return true;
-  }
-  return false;
-}
-
 export async function checkProviderAuth(ctx: DoctorContext): Promise<CheckResult> {
   if (!existsSync(ctx.configPath)) {
     return {
@@ -78,30 +68,29 @@ export async function checkProviderAuth(ctx: DoctorContext): Promise<CheckResult
     };
   }
 
-  const fromConfig = collectProviderIdsFromConfig(cfg);
-  const checkIds = fromConfig.size > 0 ? [...fromConfig] : Object.keys(PROVIDER_ENV_MAP);
+  const credentials = new CredentialResolver({
+    stateDir: ctx.stateDir,
+    agentId: getDefaultAgentId(cfg),
+    appConfig: cfg,
+  });
+  const profiles = await credentials.listProfiles();
+  const checkIds = new Set([
+    ...collectProviderIdsFromConfig(cfg),
+    ...Object.keys(PROVIDER_ENV_MAP),
+    ...getModelOAuthProviderIds(),
+    ...profiles.map((profile) => profile.provider),
+  ]);
 
   for (const id of checkIds) {
-    const key = getApiKeyFromEnv(id);
-    if (key?.trim()) {
+    if (await credentials.hasCredentials(id)) {
       return {
         id: 'provider-auth',
         label: 'Provider auth',
         status: 'pass',
-        message: 'At least one LLM provider API key is available.',
+        message: 'At least one LLM provider credential is available.',
         hints: [],
       };
     }
-  }
-
-  if (anyProviderEnvPresent()) {
-    return {
-      id: 'provider-auth',
-      label: 'Provider auth',
-      status: 'pass',
-      message: 'Environment contains provider credentials.',
-      hints: [],
-    };
   }
 
   return {

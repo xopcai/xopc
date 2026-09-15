@@ -1,3 +1,4 @@
+import { TaskInputCard } from '@/features/tasks/task-input-card';
 import { verifiedTaskCriteria } from '@xopcai/gateway-contract';
 import type { TaskChangedEvent, TaskCommand, TaskPatchRequest, TaskPhase, TaskPriority } from '@xopcai/gateway-contract';
 import * as Dialog from '@radix-ui/react-dialog';
@@ -759,6 +760,8 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
       </header>
 
       {detail.attention.length > 0 ? <section className={cn('mb-4 rounded-xl border border-warning/20 bg-warning/10 p-4', recentlyChanged('attention') && 'task-detail-live-update')}><h2 className="text-sm font-semibold text-fg">{needsUserAttention ? copy.needsAttention : copy.waitingStatus}</h2><ul className="mt-2 space-y-1.5 text-sm leading-6 text-fg-muted">{detail.attention.map((item, index) => <li key={`${item.kind}-${index}`} className="flex flex-wrap items-start justify-between gap-2"><span className="min-w-0 flex-1">{item.summary}</span>{item.kind === 'input_required' || item.kind === 'approval_required' ? <Link className="inline-flex min-h-11 items-center rounded-lg bg-surface-panel px-3 text-sm font-medium text-accent" to={taskChatHref(taskId)}>{language === 'zh' ? (item.kind === 'approval_required' ? '查看并决定' : '补充信息') : (item.kind === 'approval_required' ? 'Review decision' : 'Provide information')}</Link> : null}</li>)}</ul></section> : null}
+
+      {detail.task.phase !== 'closed' && !pausedWait && detail.waits.filter(wait => (wait.kind === 'user_input' || (wait.kind === 'approval' && typeof wait.condition.capability === 'string')) && wait.condition.type !== 'connection').map(wait => <TaskInputCard key={wait.id} wait={wait} detail={detail} zh={language === 'zh'} onUpdated={updated => { void mutateDetail(updated, { revalidate: false }); }} />)}
 
       <div className="flex flex-col gap-4">
         <main className="min-w-0 overflow-hidden rounded-xl bg-surface-panel shadow-surface divide-y divide-edge-subtle">
