@@ -86,6 +86,7 @@ function composerAttachmentFromWire(attachment: WireAttachment): Attachment {
 }
 
 export const ChatComposer = memo(function ChatComposer({
+  placeholder,
   disabled,
   sending,
   streaming,
@@ -125,6 +126,7 @@ export const ChatComposer = memo(function ChatComposer({
   editingUserTurnId,
   onCancelUserMessageEdit,
 }: {
+  placeholder?: string;
   disabled: boolean;
   sending: boolean;
   streaming: boolean;
@@ -758,9 +760,9 @@ export const ChatComposer = memo(function ChatComposer({
             editorRef={editor.editorRef}
             disabled={disabled}
             hidden={voice.voiceActive && voice.phase !== 'error'}
-            ariaLabel={m.chat.inputPlaceholder}
+            ariaLabel={placeholder ?? m.chat.inputPlaceholder}
             placeholder={
-              contextualPlaceholder ?? (runBusyState
+              placeholder ?? contextualPlaceholder ?? (runBusyState
                 ? editingFollowUpId
                   ? m.chat.inputPlaceholderSteeringEdit
                   : m.chat.inputPlaceholderSteering

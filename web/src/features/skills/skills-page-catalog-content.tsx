@@ -1,5 +1,6 @@
 import { CheckCircle2, CircleAlert } from 'lucide-react';
 
+import { FindSkillsButton } from '@/features/skills/find-skills-button';
 import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
 import { SkillCatalogCardSkeleton } from '@/features/skills/skills-page-primitives';
@@ -11,6 +12,8 @@ import { interaction } from '@/lib/interaction';
 type Props = Pick<
   SkillsPageVm,
   | 'sk'
+  | 'onFindSkills'
+  | 'findingSkills'
   | 'loading'
   | 'catalog'
   | 'filteredCatalog'
@@ -66,14 +69,16 @@ export function SkillsPageCatalogContent(p: Props) {
   if (catalog.length === 0) {
     return (
       <div className="py-16 text-center text-sm text-fg-muted">
-        {sk.empty}
+        <p className="mb-3">{sk.empty}</p>
+        <FindSkillsButton sk={sk} findingSkills={p.findingSkills} onFindSkills={p.onFindSkills} secondary />
       </div>
     );
   }
   if (filteredCatalog.length === 0) {
     return (
       <div className="py-16 text-center text-sm text-fg-muted">
-        {sk.noSearchResults}
+        <p className="mb-3">{sk.noSearchResults}</p>
+        <FindSkillsButton sk={sk} findingSkills={p.findingSkills} onFindSkills={p.onFindSkills} secondary />
       </div>
     );
   }
@@ -90,7 +95,7 @@ export function SkillsPageCatalogContent(p: Props) {
           onChange={setBuiltinCategoryFilter}
           ariaLabel={sk.marketplaceCategoriesAria}
           tabIdPrefix="skills-builtin-category-tab"
-          className="gap-2 pt-0.5 [scrollbar-width:thin]"
+          className="gap-2 pt-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           buttonClassName="max-w-[14rem] truncate rounded-full border px-3 py-1.5 text-xs"
           selectedClassName="border-fg bg-fg text-surface-panel dark:border-fg dark:bg-fg dark:text-surface-base"
           unselectedClassName="border-edge bg-surface-panel text-fg-muted hover:border-edge-strong hover:text-fg dark:border-edge dark:bg-surface-hover/40"
