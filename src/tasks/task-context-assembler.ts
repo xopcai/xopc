@@ -1,3 +1,5 @@
+import { verifiedTaskCriteria } from '@xopcai/gateway-contract';
+
 import { isXopcDatabaseOpen } from '../storage/sqlite/index.js';
 import { TaskContextRepository } from './task-context-repository.js';
 import { TaskConversationRepository } from './task-conversation-repository.js';
@@ -46,13 +48,13 @@ function taskIdForSession(sessionKey: string): string | undefined {
 export function getTaskExecutionBrief(taskId: string): TaskExecutionBrief | undefined {
   if (!isXopcDatabaseOpen()) return undefined;
   const task = new TaskRepository().get(taskId);
-  if (!task?.contract) return undefined;
+  if (!task?.contract || task.phase === 'closed') return undefined;
   const runs = new TaskRunRepository();
+  if (runs.listActiveWaits(taskId).some((wait) => wait.kind === 'paused')) return undefined;
   const latestRun = runs.getLatestRoot(taskId);
-  const latestReceipt = latestRun ? runs.getReceipt(latestRun.id) : undefined;
-  const remainingCriteria = latestReceipt?.verification.checks.length
-    ? latestReceipt.verification.checks.filter((check) => check.status !== 'passed').map((check) => check.criterion)
-    : task.contract.acceptanceCriteria;
+  const latestReceipt = latestRun?.contractVersion === task.latestContractVersion ? runs.getReceipt(latestRun.id) : undefined;
+  const passedCriteria = verifiedTaskCriteria(latestReceipt);
+  const remainingCriteria = task.contract.acceptanceCriteria.filter((criterion) => !passedCriteria.has(criterion));
   const critical = task.priority === 'critical' || task.contract.risks.length > 0
     || task.contract.approvalRequired.length > 0;
   const allocation: TaskContextAllocation = critical

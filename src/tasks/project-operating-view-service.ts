@@ -24,7 +24,9 @@ export function summarizeProjectOperatingView(view: ProjectOperatingView): Proje
       counts.needsUser += 1;
       continue;
     }
-    if (task.phase === 'closed') counts.done += 1;
+    if (task.phase === 'closed') {
+      if (task.resolution === 'done') counts.done += 1;
+    }
     else if (['queued', 'running', 'verifying'].includes(task.operationalState)) counts.moving += 1;
     else if (task.operationalState === 'waiting' || task.operationalState === 'blocked') counts.waiting += 1;
     else counts.ready += 1;
@@ -52,7 +54,10 @@ export class ProjectOperatingViewService {
     const cards = projectTasks.map((task): ProjectTaskCard => {
       const model = this.#projector.project(task);
       const latest = this.#runs.getLatestRoot(task.id);
-      const receipt = latest ? this.#runs.getReceipt(latest.id) : undefined;
+      const receipt = latest?.contractVersion === task.latestContractVersion ? this.#runs.getReceipt(latest.id) : undefined;
+      const nextCheckAt = this.#runs.listActiveWaits(task.id)
+        .filter((wait) => wait.kind !== 'paused' && wait.resumeAt !== undefined)
+        .map((wait) => wait.resumeAt!).sort((a, b) => a - b)[0];
       const base = {
         id: task.id,
         title: task.title,
@@ -66,6 +71,7 @@ export class ProjectOperatingViewService {
         blockedBy: this.#dependencies.listBlocking(task.id),
         allowedCommands: model.allowedCommands,
         ...(receipt ? { latestVerification: receipt.verification.status } : {}),
+        ...(nextCheckAt !== undefined && model.allowedCommands.includes('add_wait') ? { nextCheckAt } : {}),
         updatedAt: task.updatedAt,
       };
       return base;
@@ -106,8 +112,8 @@ export class ProjectOperatingViewService {
         recommendedAction: cards.find(needsUser)?.attention[0]?.summary
           ?? cards.find((card) => card.attention.length > 0)?.attention[0]?.summary
           ?? cards.find(moving)?.title
-          ?? cards.find((card) => card.phase === 'ready')?.title
-          ?? cards.find((card) => card.phase === 'backlog')?.title,
+          ?? cards.find((card) => card.phase === 'ready' && card.allowedCommands.includes('start'))?.title
+          ?? cards.find((card) => card.phase === 'backlog' && card.operationalState === 'idle')?.title,
       },
       monitoring: this.#monitoring.get(project.id),
     };

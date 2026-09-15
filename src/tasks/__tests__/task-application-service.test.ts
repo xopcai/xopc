@@ -14,6 +14,10 @@ import { TaskContextRepository } from '../task-context-repository.js';
 import { TaskOutboxDispatcher } from '../task-outbox-dispatcher.js';
 import { TaskRepository } from '../task-repository.js';
 import { TaskRunRepository } from '../task-run-repository.js';
+import { TaskReadModelProjector } from '../task-read-model-projector.js';
+import { TaskRunCoordinator } from '../task-run-coordinator.js';
+import { getTaskExecutionBrief } from '../task-context-assembler.js';
+import { decisionFromTask } from '../home-query-service.js';
 import { TaskSignalService } from '../task-signal-service.js';
 
 const contract = {
@@ -21,7 +25,7 @@ const contract = {
   expectedOutputs: ['implementation'],
   acceptanceCriteria: ['tests pass'],
   constraints: [],
-  nonGoals: [],
+  assumptions: [],
   risks: [],
   approvalRequired: [],
   acceptancePolicy: 'verified_auto' as const,
@@ -41,6 +45,103 @@ describe('TaskApplicationService', () => {
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  function createRunningTask(key: string) {
+    const service = new TaskApplicationService();
+    const created = service.create({
+      idempotencyKey: key, title: key, priority: 'normal', contract,
+      dependencies: [], context: [], authorityGrants: [],
+      activation: { mode: 'start', executor: { kind: 'agent', agentId: 'main' } },
+    });
+    if (!created.ok || !created.runId) throw new Error('Expected run');
+    const runs = new TaskRunRepository();
+    const queued = runs.require(created.runId);
+    const snapshot = new TaskContextRepository().captureSnapshot({ ownerKind: 'task_run', ownerId: queued.id, query: key });
+    const run = runs.start({ runId: queued.id, expectedVersion: queued.version, contextSnapshotId: snapshot.id, policySnapshot: {} })!;
+    return { service, task: created.model.task, run, runs };
+  }
+
+  const receipt = {
+    status: 'succeeded' as const, summary: 'Result', changes: [],
+    evidence: [{ kind: 'test' as const, title: 'Tests', summary: 'Tests pass', provenance: 'tool' as const, strength: 'verified' as const, observedAt: 1 }],
+    verification: { status: 'passed' as const, checks: [{ criterion: 'tests pass', status: 'passed' as const, evidenceTitles: ['Tests'] }] }, remainingWork: [],
+    needsUser: false, completionVerdict: 'achieved' as const,
+  };
+
+  it('keeps paused tasks out of attention and execution context even with older input waits', () => {
+    const { service, task, run, runs } = createRunningTask('paused-attention');
+    runs.createWait({ taskId: task.id, kind: 'user_input', reason: 'Upload footage' });
+    service.execute({ taskId: task.id, expectedVersion: task.version, idempotencyKey: 'pause-attention',
+      command: { type: 'add_wait', wait: { kind: 'paused', reason: 'Later', condition: {} } } });
+    const model = new TaskReadModelProjector().get(task.id)!;
+    expect(model.attention).toEqual([]);
+    expect(decisionFromTask(model)).toBeNull();
+    expect(getTaskExecutionBrief(task.id)).toBeUndefined();
+    expect(model.allowedCommands).not.toContain('request_review');
+    const currentRun = runs.require(run.id);
+    const result = service.completeRun({ runId: run.id, expectedRunVersion: currentRun.version, receipt });
+    expect(result).toMatchObject({ ok: true, model: { task: { phase: 'active' }, attention: [] } });
+  });
+
+  it('does not reopen a closed task when a late successful run finishes', () => {
+    const { service, task, run } = createRunningTask('late-completion');
+    service.execute({ taskId: task.id, expectedVersion: task.version, idempotencyKey: 'close-late',
+      command: { type: 'close', resolution: 'cancelled' } });
+    expect(service.completeRun({ runId: run.id, expectedRunVersion: run.version, receipt }))
+      .toMatchObject({ ok: true, model: { task: { phase: 'closed', resolution: 'cancelled' }, attention: [] } });
+  });
+
+  it.each([
+    { completionVerdict: 'partial' as const },
+    { remainingWork: ['Record narration'] },
+    { needsUser: true },
+    { verification: { status: 'passed' as const, checks: [] } },
+  ])('requires an achieved outcome with no pending work for automatic acceptance: %j', (override) => {
+    const { service, run } = createRunningTask('partial-completion');
+    expect(service.completeRun({ runId: run.id, expectedRunVersion: run.version, receipt: { ...receipt, ...override } }))
+      .toMatchObject({ ok: true, model: { task: { phase: 'review' } } });
+  });
+
+  it('does not certify a revised contract using an earlier run', () => {
+    const { service, task, run } = createRunningTask('revised-contract');
+    service.execute({ taskId: task.id, expectedVersion: task.version, idempotencyKey: 'revise-active',
+      command: { type: 'revise_contract', contract: { ...contract, acceptanceCriteria: ['New criterion'] } } });
+    expect(service.completeRun({ runId: run.id, expectedRunVersion: run.version, receipt }))
+      .toMatchObject({ ok: true, model: { task: { phase: 'active' } } });
+    expect(getTaskExecutionBrief(task.id)?.remainingCriteria).toEqual(['New criterion']);
+  });
+
+  it('rejects an existing run owned by a different task', () => {
+    const first = createRunningTask('first-owner');
+    const second = createRunningTask('second-owner');
+    expect(TaskRunCoordinator.start({ runId: first.run.id, fallbackObjective: 'Other request', context: {
+      runId: first.run.id, taskId: second.task.id, sessionKey: 'session', channel: 'webchat', origin: 'task', triggerKind: 'user',
+    } })).toBeUndefined();
+  });
+
+  it('does not use a child result as the task delivery or complete the parent task', () => {
+    const { service, task, run, runs } = createRunningTask('parent-delivery');
+    const child = runs.create({ taskId: task.id, parentRunId: run.id, executorKind: 'agent', executorRef: { agentId: 'main' },
+      trigger: { kind: 'user' }, correlationId: 'child', idempotencyKey: 'child', contractVersion: task.latestContractVersion });
+    expect(service.completeRun({ runId: child.id, expectedRunVersion: child.version, receipt }))
+      .toMatchObject({ ok: true, model: { task: { phase: 'active' } } });
+    expect(runs.listReceipts(task.id)).toEqual([]);
+    expect(runs.getReceipt(child.id)).toBeDefined();
+  });
+
+  it('does not claim queued runs while the task is paused or closed', () => {
+    const tasks = new TaskRepository();
+    const runs = new TaskRunRepository();
+    const task = tasks.create({ title: 'Queued pause', objective: 'Wait for user' });
+    runs.create({ taskId: task.id, executorKind: 'agent', executorRef: { agentId: 'main' },
+      trigger: { kind: 'manual' }, correlationId: 'queued-pause', idempotencyKey: 'queued-pause',
+      contractVersion: task.latestContractVersion });
+    const wait = runs.createWait({ taskId: task.id, kind: 'paused', reason: 'Later' });
+    expect(runs.claimNext({ owner: 'test', leaseMs: 1000 })).toBeUndefined();
+    runs.resolveWait({ waitId: wait.id, actor: { kind: 'user' } });
+    tasks.setLifecycle({ taskId: task.id, expectedVersion: task.version, phase: 'closed', resolution: 'cancelled' });
+    expect(runs.claimNext({ owner: 'test', leaseMs: 1000 })).toBeUndefined();
   });
 
   it('captures durable intent without creating a run', () => {
@@ -234,8 +335,8 @@ describe('TaskApplicationService', () => {
         status: 'succeeded',
         summary: 'Implemented and verified',
         changes: [],
-        evidence: [],
-        verification: { status: 'passed', checks: [] },
+        evidence: [{ kind: 'test', title: 'Tests', summary: 'Tests passed', provenance: 'tool', strength: 'verified', observedAt: 1 }],
+        verification: { status: 'passed', checks: [{ criterion: 'tests pass', status: 'passed', evidenceTitles: ['Tests'] }] },
         remainingWork: [],
         needsUser: false,
         completionVerdict: 'achieved',

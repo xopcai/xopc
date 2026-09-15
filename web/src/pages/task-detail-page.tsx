@@ -1,3 +1,4 @@
+import { verifiedTaskCriteria } from '@xopcai/gateway-contract';
 import type { TaskChangedEvent, TaskCommand, TaskPatchRequest, TaskPhase, TaskPriority } from '@xopcai/gateway-contract';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
@@ -19,6 +20,7 @@ import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-disp
 import { DependencyPicker, type DependencyCandidate } from '@/features/tasks/dependency-picker';
 import { taskChatHref, taskDetailModalHref } from '@/features/tasks/task-detail-route';
 import { cancelTaskRun, commandTask, deleteTask, handoffTask, submitTaskFeedback, updateTask, updateTaskDependencies, type TaskDetail } from '@/features/tasks/home-api';
+import { TaskResultEvidence } from '@/features/tasks/task-result-evidence';
 import { taskCopy } from '@/features/tasks/task-copy';
 import { hasTaskEditConflict, optimisticallyPatchTask, type TaskEditBase } from '@/features/tasks/task-detail-sync';
 import { useTaskDetail } from '@/features/tasks/use-task-detail';
@@ -193,12 +195,13 @@ type TaskPendingOperation = 'command' | 'phase' | 'priority' | 'dueAt' | 'delega
 
 function detailStatusKey(detail: TaskDetail): DetailStatusKey {
   if (detail.task.phase === 'closed') return detail.task.resolution === 'done' ? 'completed' : 'ended';
+  if (detail.waits.some((wait) => wait.kind === 'paused')) return 'paused';
   if (detail.attention.some((item) => item.kind === 'input_required' || item.kind === 'approval_required')) return 'needsUser';
   if (detail.operationalState !== 'idle') return detail.operationalState;
   if (detail.task.phase === 'backlog') return 'captured';
   if (detail.task.phase === 'ready') return 'ready';
   if (detail.task.phase === 'review') return 'review';
-  return 'paused';
+  return 'ready';
 }
 
 function detailStatusTone(status: DetailStatusKey): string {
@@ -582,16 +585,18 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   if (!detail) return <div className={presentation === 'modal' ? 'p-5' : 'mx-auto max-w-4xl p-4 sm:p-6'}><DetailSkeleton /></div>;
 
   const activeWait = detail.waits[0];
-  const pausedWait = activeWait?.kind === 'paused' ? activeWait : undefined;
+  const pausedWait = detail.waits.find((wait) => wait.kind === 'paused');
   const latestReceipt = detail.receipts[0];
   const statusKey = detailStatusKey(detail);
   const statusLabel = copy.detailStatuses[statusKey];
   const objective = detail.task.body?.trim() || detail.task.contract?.objective.trim();
-  const verificationByCriterion = new Map(latestReceipt?.verification.checks.map((check) => [check.criterion, check.status]));
+  const receiptForCurrentContract = detail.runs.find((run) => run.id === latestReceipt?.runId)?.contractVersion === detail.task.latestContractVersion ? latestReceipt : undefined;
+  const evidenceVerifiedCriteria = verifiedTaskCriteria(receiptForCurrentContract);
+  const verificationByCriterion = new Map(receiptForCurrentContract?.verification.checks.map((check) => [check.criterion, check.status === 'passed' && !evidenceVerifiedCriteria.has(check.criterion) ? 'unverified' : check.status]));
   const canSchedule = detail.allowedCommands.includes('mark_ready');
   const canStart = detail.allowedCommands.includes('start');
   const canPause = detail.allowedCommands.includes('add_wait');
-  const canApprove = detail.task.phase === 'review' && detail.allowedCommands.includes('close');
+  const canApprove = !activeWait && detail.task.phase === 'review' && detail.allowedCommands.includes('close');
   const canReopen = detail.allowedCommands.includes('reopen');
   const conversationSessionKey = detail.conversation.activeSessionKey;
   const conversationAgentId = detail.conversation.currentExecutorAgentId
@@ -617,16 +622,16 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   const canMovePhase = detail.allowedCommands.includes('move');
   const commandPending = pendingOperations.has('command');
   const deletePending = pendingOperations.has('delete');
-  const activeRun = detail.runs.find((run) => ['queued', 'running', 'waiting', 'verifying'].includes(run.status));
+  const activeRun = detail.runs.find((run) => !run.parentRunId && ['queued', 'running', 'waiting', 'verifying'].includes(run.status));
   const deleteBlocked = activeRun !== undefined;
   const taskActions = (
     <div className="flex flex-wrap gap-2">
       {canSchedule ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'mark_ready' })}><Play className="size-4" />{copy.scheduleTask}</Button> : null}
-      {pausedWait ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'resolve_wait', waitId: pausedWait.id })}><Play className="size-4" />{copy.resumeTask}</Button> : null}
+      {pausedWait && detail.allowedCommands.includes('resolve_wait') ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'resolve_wait', waitId: pausedWait.id })}><Play className="size-4" />{copy.resumeTask}</Button> : null}
       {!activeWait && canStart && conversationAgentId ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'start', executor: { kind: 'agent', agentId: conversationAgentId } })}><Play className="size-4" />{copy.runTask}</Button> : null}
       {canApprove ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'close', resolution: 'done' })}><CircleCheck className="size-4" />{copy.approveTask}</Button> : null}
       {canReopen ? <Button variant="primary" disabled={commandPending} onClick={() => void execute({ type: 'reopen', phase: 'ready' })}><Play className="size-4" />{copy.reopenTask}</Button> : null}
-      {!activeWait && canPause ? <Button variant="secondary" className="border-0 bg-surface-hover shadow-none" disabled={commandPending} onClick={() => void execute({ type: 'add_wait', wait: { kind: 'paused', reason: 'Paused by user', condition: {} } })}><Pause className="size-4" />{copy.pauseTask}</Button> : null}
+      {!pausedWait && canPause ? <Button variant="secondary" className="border-0 bg-surface-hover shadow-none" disabled={commandPending} onClick={() => void execute({ type: 'add_wait', wait: { kind: 'paused', reason: 'Paused by user', condition: {} } })}><Pause className="size-4" />{copy.pauseTask}</Button> : null}
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <Button type="button" variant="ghost" className="size-9 p-0" disabled={commandPending || deletePending} aria-label={copy.moreActions}><MoreHorizontal className="size-4" aria-hidden /></Button>
@@ -753,7 +758,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
         {error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}
       </header>
 
-      {detail.attention.length > 0 ? <section className={cn('mb-4 rounded-xl border border-warning/20 bg-warning/10 p-4', recentlyChanged('attention') && 'task-detail-live-update')}><h2 className="text-sm font-semibold text-fg">{needsUserAttention ? copy.needsAttention : copy.waitingStatus}</h2><ul className="mt-2 space-y-1.5 text-sm leading-6 text-fg-muted">{detail.attention.map((item, index) => <li key={`${item.kind}-${index}`}>{item.summary}</li>)}</ul></section> : null}
+      {detail.attention.length > 0 ? <section className={cn('mb-4 rounded-xl border border-warning/20 bg-warning/10 p-4', recentlyChanged('attention') && 'task-detail-live-update')}><h2 className="text-sm font-semibold text-fg">{needsUserAttention ? copy.needsAttention : copy.waitingStatus}</h2><ul className="mt-2 space-y-1.5 text-sm leading-6 text-fg-muted">{detail.attention.map((item, index) => <li key={`${item.kind}-${index}`} className="flex flex-wrap items-start justify-between gap-2"><span className="min-w-0 flex-1">{item.summary}</span>{item.kind === 'input_required' || item.kind === 'approval_required' ? <Link className="inline-flex min-h-11 items-center rounded-lg bg-surface-panel px-3 text-sm font-medium text-accent" to={taskChatHref(taskId)}>{language === 'zh' ? (item.kind === 'approval_required' ? '查看并决定' : '补充信息') : (item.kind === 'approval_required' ? 'Review decision' : 'Provide information')}</Link> : null}</li>)}</ul></section> : null}
 
       <div className="flex flex-col gap-4">
         <main className="min-w-0 overflow-hidden rounded-xl bg-surface-panel shadow-surface divide-y divide-edge-subtle">
@@ -803,7 +808,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
             {risks.length > 0 ? <details className="mt-4 border-t border-edge-subtle pt-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted hover:text-fg">{copy.contextRisks}</summary><div className="mt-3"><TextList items={risks} empty={copy.noDefinition} /></div></details> : null}
           </section>
 
-          {latestReceipt ? <section className={cn('p-5', recentlyChanged('runs', 'receipts') && 'task-detail-live-update')}><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><h2 className="text-sm font-semibold text-fg">{copy.latestResult}</h2><MarkdownView content={latestReceipt.summary} compact className="mt-2 text-sm leading-6 text-fg" /></div><span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs text-fg-muted">{copy.receiptStatuses[latestReceipt.status]} · {copy.verificationStatuses[latestReceipt.verification.status]}</span></div>{latestReceipt.remainingWork.length > 0 ? <div className="mt-4"><h3 className="text-xs font-medium text-fg-muted">{copy.remainingWork}</h3><div className="mt-2"><TextList items={latestReceipt.remainingWork} empty={copy.noRemainingWork} /></div></div> : null}{latestReceipt.nextAction ? <div className="mt-4 rounded-lg bg-surface-hover p-3"><p className="text-xs font-medium text-fg-muted">{copy.nextAction}</p><p className="mt-1 text-sm text-fg">{latestReceipt.nextAction}</p></div> : null}<div className="mt-4 flex flex-wrap items-center gap-2"><Button className="border-0 bg-surface-hover px-2 py-1 text-xs shadow-none" variant="secondary" onClick={() => void submitTaskFeedback(latestReceipt.runId, 'helpful')}>{copy.doneWell}</Button><Button className="px-2 py-1 text-xs" variant="ghost" onClick={() => void submitTaskFeedback(latestReceipt.runId, 'not_helpful')}>{copy.needsFix}</Button>{latestReceipt.evidence.filter((evidence) => evidence.uri).map((evidence) => <a key={`${evidence.title}-${evidence.uri}`} className="ml-auto inline-flex items-center gap-1 text-xs text-accent hover:underline" href={evidence.uri}><ExternalLink className="size-3" />{evidence.title}</a>)}</div>{detail.receipts.length > 1 ? <details className="mt-4 border-t border-edge-subtle pt-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted hover:text-fg">{copy.executionHistory.replace('{{count}}', String(detail.receipts.length - 1))}</summary><div className="mt-3 space-y-3">{detail.receipts.slice(1).map((receipt) => <article key={receipt.runId} className="rounded-lg bg-surface-hover p-3"><div className="flex items-start justify-between gap-3"><p className="text-sm text-fg">{receipt.summary}</p><span className="shrink-0 text-xs text-fg-subtle">{copy.receiptStatuses[receipt.status]}</span></div></article>)}</div></details> : null}</section> : null}
+          {latestReceipt ? <section className={cn('p-5', recentlyChanged('runs', 'receipts') && 'task-detail-live-update')}><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><h2 className="text-sm font-semibold text-fg">{copy.latestResult}</h2><p className="mt-1 text-xs text-fg-muted">{language === 'zh' ? (latestReceipt.completionVerdict === 'achieved' ? '本次执行报告目标已达成，请结合下方验证依据验收。' : '这是阶段性结果，尚不能代表任务全部完成。') : (latestReceipt.completionVerdict === 'achieved' ? 'The run reports the goal achieved. Review the evidence below.' : 'This is a partial result; the task is not yet fully complete.')}</p><MarkdownView content={latestReceipt.summary} compact className="mt-2 text-sm leading-6 text-fg" /></div><span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs text-fg-muted">{copy.receiptStatuses[latestReceipt.status]} · {copy.verificationStatuses[latestReceipt.verification.status]}</span></div>{latestReceipt.remainingWork.length > 0 ? <div className="mt-4"><h3 className="text-xs font-medium text-fg-muted">{copy.remainingWork}</h3><div className="mt-2"><TextList items={latestReceipt.remainingWork} empty={copy.noRemainingWork} /></div></div> : null}{latestReceipt.nextAction ? <div className="mt-4 rounded-lg bg-surface-hover p-3"><p className="text-xs font-medium text-fg-muted">{copy.nextAction}</p><p className="mt-1 text-sm text-fg">{latestReceipt.nextAction}</p></div> : null}<div className="mt-4 flex flex-wrap items-center gap-2"><Button className="border-0 bg-surface-hover px-2 py-1 text-xs shadow-none" variant="secondary" onClick={() => void submitTaskFeedback(latestReceipt.runId, 'helpful')}>{copy.doneWell}</Button><Button className="px-2 py-1 text-xs" variant="ghost" onClick={() => void submitTaskFeedback(latestReceipt.runId, 'not_helpful')}>{copy.needsFix}</Button></div><TaskResultEvidence evidence={latestReceipt.evidence} projectId={detail.task.projectId} sessionKey={conversationSessionKey ?? undefined} language={language} />{detail.receipts.length > 1 ? <details className="mt-4 border-t border-edge-subtle pt-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted hover:text-fg">{copy.executionHistory.replace('{{count}}', String(detail.receipts.length - 1))}</summary><div className="mt-3 space-y-3">{detail.receipts.slice(1).map((receipt) => <article key={receipt.runId} className="rounded-lg bg-surface-hover p-3"><div className="flex items-start justify-between gap-3"><p className="text-sm text-fg">{receipt.summary}</p><span className="shrink-0 text-xs text-fg-subtle">{copy.receiptStatuses[receipt.status]}</span></div></article>)}</div></details> : null}</section> : null}
 
           {detail.context.length > 0 ? <section className={cn('p-5', recentlyChanged('context') && 'task-detail-live-update')}><h2 className="text-sm font-semibold text-fg">{copy.contextUsed}</h2><ul className="mt-4 grid gap-2 sm:grid-cols-2">{detail.context.map((item) => <li key={item.id} className="min-w-0 rounded-lg bg-surface-hover p-2.5"><span className="text-[11px] text-fg-subtle">{copy.contextRoleLabels[item.role]} · {copy.contextKindLabels[item.targetKind]}</span>{item.targetKind === 'url' && /^https?:\/\//.test(item.targetId) ? <a className="mt-1 block break-all text-sm text-accent hover:underline" href={item.targetId} target="_blank" rel="noreferrer">{item.title ?? item.targetId}</a> : <p className="mt-1 break-words text-sm text-fg">{item.title ?? item.targetId}</p>}</li>)}</ul></section> : null}
         </main>

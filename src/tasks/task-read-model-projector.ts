@@ -29,6 +29,7 @@ export class TaskReadModelProjector {
     const activeRun = this.#runs.getActiveRoot(task.id);
     const latestRun = activeRun ?? this.#runs.getLatestRoot(task.id);
     const waits = this.#runs.listActiveWaits(task.id);
+    const paused = waits.some((wait) => wait.kind === 'paused');
     const hasIncompleteDependency = Boolean(getSqliteDatabase().prepare(
       `SELECT 1 FROM task_dependencies edge
        JOIN tasks dependency ON dependency.task_id = edge.depends_on_task_id
@@ -70,8 +71,8 @@ export class TaskReadModelProjector {
     return {
       task,
       operationalState,
-      attention,
-      allowedCommands: this.allowedCommands(task, activeRun?.status, waits.length > 0),
+      attention: task.phase === 'closed' || paused ? [] : attention,
+      allowedCommands: this.allowedCommands(task, activeRun?.status, waits.length > 0, paused),
     };
   }
 
@@ -95,6 +96,7 @@ export class TaskReadModelProjector {
     hasIncompleteDependency: boolean;
   }): TaskOperationalState {
     if (input.task.phase === 'closed') return 'idle';
+    if (input.waits.some((wait) => wait.kind === 'paused')) return 'waiting';
     if (input.activeRun?.status === 'running') return 'running';
     if (input.activeRun?.status === 'verifying') return 'verifying';
     if (input.activeRun?.status === 'queued') return 'queued';
@@ -109,15 +111,16 @@ export class TaskReadModelProjector {
     task: TaskAggregate,
     activeRunStatus: NonNullable<ReturnType<TaskRunRepository['getActiveRoot']>>['status'] | undefined,
     hasWaits: boolean,
+    paused: boolean,
   ): string[] {
     if (task.phase === 'closed') return ['reopen'];
     const commands = ['revise_contract', 'close'];
+    if (!paused) commands.push('add_wait');
     if (!activeRunStatus && !hasWaits) commands.unshift('move');
     if (hasWaits) commands.unshift('resolve_wait');
-    else if (activeRunStatus === 'running' || activeRunStatus === 'verifying') commands.unshift('add_wait');
     if (task.phase === 'backlog') commands.unshift('mark_ready');
     if (!activeRunStatus && !hasWaits && task.phase !== 'backlog') commands.unshift('start');
-    if (task.phase === 'active' && !activeRunStatus) commands.push('request_review');
+    if (task.phase === 'active' && !activeRunStatus && !hasWaits) commands.push('request_review');
     return commands;
   }
 }

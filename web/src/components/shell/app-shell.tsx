@@ -1,3 +1,4 @@
+import { MobilePrimaryNav } from '@/components/shell/mobile-primary-nav';
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { VoiceCallProvider } from '@/features/voice/realtime/voice-call-provider';
@@ -252,6 +253,7 @@ function AppShellContent() {
                     </div>
                   )}
                 </main>
+                {!isSettingsRoute && !pathname.startsWith('/chat') && !previewPath ? <MobilePrimaryNav /> : null}
               </div>
               {!isSettingsRoute ? (
                 sideChatOpen && parentSessionKey && !taskModalId

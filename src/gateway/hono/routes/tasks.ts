@@ -344,6 +344,14 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
         latest: result.model,
       }, 409);
     }
+    if ((parsed.data.command?.type === 'add_wait' && parsed.data.command.wait.kind === 'paused')
+      || parsed.data.command?.type === 'close') {
+      const activeRun = runs.getActiveRoot(c.req.param('id'));
+      if (activeRun?.sessionKey) {
+        const liveRunId = deps.service.getActiveWebchatRunId(activeRun.sessionKey);
+        if (liveRunId) await deps.service.abortAgentRun(liveRunId);
+      }
+    }
     if (result.runId || parsed.data.command?.type === 'resolve_wait') deps.service.dispatchTaskRuns();
     else deps.service.dispatchTaskEvents();
     if (parsed.data.command?.type === 'close' && parsed.data.command.resolution === 'done') {

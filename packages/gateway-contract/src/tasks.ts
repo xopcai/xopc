@@ -427,3 +427,10 @@ export type TaskRunReceiptListResponse = z.infer<typeof TaskRunReceiptListRespon
 export function parseTaskRunReceipt(value: unknown): TaskRunReceipt {
   return TaskRunReceiptSchema.parse(value);
 }
+
+/** Criteria count as verified only when their passing check cites verified evidence. */
+export function verifiedTaskCriteria(receipt: Pick<TaskRunReceipt, 'verification' | 'evidence'> | undefined): Set<string> {
+  const evidence = new Set(receipt?.evidence.filter((item) => item.strength === 'verified').map((item) => item.title));
+  return new Set(receipt?.verification.checks.filter((check) => check.status === 'passed'
+    && check.evidenceTitles.some((title) => evidence.has(title))).map((check) => check.criterion));
+}

@@ -24,6 +24,7 @@ describe('selectOverviewTasks', () => {
   it('prioritizes attention and moving work, excludes closed tasks, and limits the result', () => {
     const selected = selectOverviewTasks([
       task({ id: 'backlog-new', updatedAt: 20 }),
+      task({ id: 'paused', phase: 'active', operationalState: 'waiting', updatedAt: 100 }),
       task({ id: 'closed', phase: 'closed', updatedAt: 100 }),
       task({ id: 'running', phase: 'active', operationalState: 'running' }),
       task({ id: 'blocked', operationalState: 'blocked', attention: [{ kind: 'input_required', summary: 'Need input' }] }),
