@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { classifyPastedText } from '@/features/chat/composer/pasted-text';
+import { classifyPastedText } from '@xopcai/composer-core/pasted-text';
 
 describe('classifyPastedText', () => {
   it('keeps normal prose and short snippets in the editor', () => {

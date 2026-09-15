@@ -1,0 +1,11 @@
+{
+  "name": "@xopcai/composer-core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./pasted-text": "./src/pasted-text.ts",
+    "./pcm-wav-recorder": "./src/pcm-wav-recorder.ts"
+  }
+}

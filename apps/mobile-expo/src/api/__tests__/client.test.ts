@@ -30,7 +30,7 @@ const nativeFile = vi.hoisted(() => ({
 }));
 
 vi.mock('expo-file-system', () => ({
-  UploadType: { MULTIPART: 1 },
+  UploadType: { MULTIPART: 1, BINARY_CONTENT: 0 },
   File: class MockFile {
     exists = nativeFile.exists;
     size = nativeFile.size;
@@ -136,6 +136,15 @@ describe('mobile gateway client', () => {
     await expect(apiFetch('/api/voice/realtime/sessions', { method: 'POST', onResolvedOrigin: origin })).rejects.toThrow();
     expect(fetch).toHaveBeenCalledOnce();
     expect(origin).not.toHaveBeenCalled();
+  });
+
+  it('uploads recording chunks as authorized binary PUT requests', async () => {
+    nativeFile.upload.mockResolvedValue({ body: '{}', status: 201, headers: {} });
+    await apiUploadFile('/api/discussions/id/recording/chunks/0', {
+      uri: 'file:///chunk.wav', fieldName: 'file', binary: true, method: 'PUT', mimeType: 'audio/wav',
+    });
+    expect(consent.authorize).toHaveBeenCalledWith('/api/discussions/id/recording/chunks/0', 'PUT', undefined);
+    expect(nativeFile.upload).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ httpMethod: 'PUT', uploadType: 0 }));
   });
 
   it('uploads readable local files with device access', async () => {

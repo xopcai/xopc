@@ -1,6 +1,7 @@
 import ExpoModulesCore
 import AVFoundation
 import MediaPlayer
+import UIKit
 
 private let duckedPlaybackVolume: Float = 0.65
 
@@ -35,6 +36,8 @@ private final class NearSpeechDetector {
 }
 
 public final class XopcVoiceModule: Module {
+  private let recording = RecordingCapture()
+  private var recordingRoot: URL { FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("xopc-recordings") }
   private var engine: AVAudioEngine?
   private var player: AVAudioPlayerNode?
   private var observers: [NSObjectProtocol] = []
@@ -55,6 +58,25 @@ public final class XopcVoiceModule: Module {
 
   public func definition() -> ModuleDefinition {
     Name("XopcVoice")
+    AsyncFunction("startRecording") { (id: String, _title: String, _stopLabel: String) in
+      guard DispatchQueue.main.sync(execute: { self.engine == nil && UIApplication.shared.applicationState == .active }) else { throw RecordingSpoolError.busy }
+      try self.recording.start(root: self.recordingRoot, captureId: id)
+      return self.recordingRoot.appendingPathComponent(id.lowercased()).absoluteString
+    }.runOnQueue(recording.lifecycle)
+    AsyncFunction("stopRecording") { (id: String) in
+      guard self.recording.captureId == id else { throw RecordingSpoolError.closed }
+      _ = try self.recording.stop()
+    }.runOnQueue(recording.lifecycle)
+    AsyncFunction("activeRecording") { self.recording.captureId }.runOnQueue(recording.lifecycle)
+    AsyncFunction("recordingChunks") { (id: String) in
+      let spool = try RecordingSpool(root: self.recordingRoot, captureId: id)
+      defer { try? spool.close() }
+      return spool.chunks.map { chunk -> [String: Any] in
+        ["sequence": chunk.sequence, "epoch": chunk.epoch, "sampleStart": chunk.sampleStart,
+         "sampleCount": chunk.sampleCount, "sha256": chunk.sha256, "bytes": chunk.bytes,
+         "uri": self.recordingRoot.appendingPathComponent(id.lowercased()).appendingPathComponent(String(format: "%08d.wav", chunk.sequence)).absoluteString]
+      }
+    }
     Events("pcm", "played", "interrupted", "speechCandidate", "route")
     AsyncFunction("start") { (background: Bool, _title: String, _stopLabel: String) in
       try self.start(background: background, title: _title)
@@ -74,10 +96,11 @@ public final class XopcVoiceModule: Module {
     OnAppEntersBackground {
       if !self.backgroundEnabled && self.engine != nil { self.interrupt("background") }
     }
-    OnDestroy { self.stop() }
+    OnDestroy { self.stop(); self.recording.lifecycle.async { _ = try? self.recording.stop() } }
   }
 
   private func start(background: Bool, title: String) throws -> [String: Any] {
+    guard recording.captureId == nil else { throw RecordingSpoolError.busy }
     stop()
     let session = AVAudioSession.sharedInstance()
     try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetooth])
@@ -258,6 +281,8 @@ public final class XopcVoiceModule: Module {
     backgroundEnabled = false
     configurationRestarts = []
     nearSpeech.reset()
-    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    if recording.captureId == nil {
+      try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
   }
 }

@@ -408,6 +408,7 @@ export function InboxScreen() {
         largeTitle={!selectionMode}
         onBack={selectionMode ? exitSelectionMode : () => dismissOrRoot(router)}
         rightActions={selectionMode ? undefined : [
+          { icon: 'microphone-plus', onPress: () => router.push('/recordings'), accessibilityLabel: m.recordings.title },
           {
             icon: 'filter-variant',
             onPress: () => setOrganizeOpen(true),

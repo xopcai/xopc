@@ -16,6 +16,7 @@
     "react-doctor:pr": "react-doctor --yes --offline --fail-on=error --annotations --diff"
   },
   "dependencies": {
+    "@xopcai/composer-core": "workspace:*",
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0",
     "@codemirror/commands": "^6.10.3",

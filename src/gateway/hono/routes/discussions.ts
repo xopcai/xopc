@@ -58,7 +58,8 @@ export function registerDiscussionRoutes(authenticated: Hono, deps: Authenticate
           ? { contextProjectId: body.contextProjectId.trim() }
           : {}),
         consentPolicyVersion: Number(body.consentPolicyVersion),
-        source: body.source === 'electron' ? 'electron' : 'web',
+        source: body.source === 'mobile' ? 'mobile' : body.source === 'electron' ? 'electron' : 'web',
+        ...(body.recordedAt !== undefined ? { recordedAt: typeof body.recordedAt === 'number' ? body.recordedAt : NaN } : {}),
       });
       return c.json(detail, 201);
     } catch (error) {
@@ -227,10 +228,12 @@ export function registerDiscussionRoutes(authenticated: Hono, deps: Authenticate
 
   authenticated.post('/api/discussions/:id/capture/seal', strictRateLimitMiddleware, async (c) => {
     const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    if (body.containerMode !== undefined && body.containerMode !== 'independent_wav') return c.json({ error: 'Unsupported container mode' }, 400);
     try {
       return c.json(await service.discussions.sealRecording(c.req.param('id'), {
         lastSequence: Number(body.lastSequence),
         chunkCount: Number(body.chunkCount), mimeType: typeof body.mimeType === 'string' ? body.mimeType : '', fileName: typeof body.fileName === 'string' ? body.fileName : '',
+        ...(body.containerMode === 'independent_wav' ? { containerMode: 'independent_wav' as const } : {}),
       }), 202);
     } catch (error) { const response = errorResponse(error); if (response) return c.json(response.body, response.status); throw error; }
   });

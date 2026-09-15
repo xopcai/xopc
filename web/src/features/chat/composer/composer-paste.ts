@@ -1,5 +1,5 @@
 import { collectClipboardFiles } from '@/features/chat/composer/composer-clipboard';
-import { classifyPastedText, type PastedTextAttachment } from '@/features/chat/composer/pasted-text';
+import { classifyPastedText, type PastedTextAttachment } from '@xopcai/composer-core/pasted-text';
 
 export type ComposerPasteAction =
   | { kind: 'files'; files: File[] }

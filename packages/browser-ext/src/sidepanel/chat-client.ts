@@ -79,6 +79,7 @@ export type BrowserChatSnapshot = {
   submitting: boolean;
   stopping: boolean;
   pendingDelivery: boolean;
+  queuedInputs?: Array<{ id: string; version: number; content: string }>;
   sessions: BrowserChatSession[];
   sessionKey?: string;
   sessionId?: string;
@@ -107,6 +108,7 @@ type BrowserOutboxRequest = {
   clientMessageId: string;
   delivery: 'next';
   expectedSessionId?: string;
+  configVersion?: number;
   origin: { type: 'endpoint'; endpointId: string; token: string };
   browserContexts?: BrowserPageContextInput[];
   attachments?: BrowserAttachment[];
@@ -235,8 +237,10 @@ export class BrowserChatClient {
   private turnClaim?: TurnClaim;
   private runTopic?: string;
   private recoveringOutbox = false;
+  private sendingInput = false;
   private lastOutboxRecoveryAt = 0;
   private sessionsRequest = 0;
+  private inputsRequest = 0;
   private endpointBinding?: string;
   private endpointBindingTask?: Promise<void>;
   private endpointPoll?: ReturnType<typeof setInterval>;
@@ -449,6 +453,7 @@ export class BrowserChatClient {
       stopping: false,
       sessionLoading: true,
       pendingDelivery: false,
+      queuedInputs: [],
       clarification: undefined,
       tabBinding: undefined,
       browserApproval: undefined,
@@ -490,7 +495,16 @@ export class BrowserChatClient {
     }
   }
 
-  async send(
+  get currentSessionKey(): string | undefined { return this.snapshot.sessionKey; }
+
+  async send(content: string, browserContexts: BrowserPageContextInput[] = [], attachments: BrowserAttachment[] = []): Promise<'sent' | 'queued'> {
+    if (this.sendingInput) throw new Error(t('errorWaitQueuedMessage'));
+    this.sendingInput = true;
+    try { return await this.sendInput(content, browserContexts, attachments); }
+    finally { this.sendingInput = false; }
+  }
+
+  private async sendInput(
     content: string,
     browserContexts: BrowserPageContextInput[] = [],
     attachments: BrowserAttachment[] = [],
@@ -502,14 +516,16 @@ export class BrowserChatClient {
       throw new Error(t('errorWaitQueuedMessage'));
     }
     if (!this.turnClaim) throw new Error(t('errorEndpointNotReady'));
-    await this.bindSessionEndpoint();
     const sessionKey = this.snapshot.sessionKey;
+    await this.bindSessionEndpoint();
+    if (this.snapshot.sessionKey !== sessionKey) throw new Error(t('errorChatChanged'));
     const clientMessageId = crypto.randomUUID();
     const request: BrowserOutboxRequest = {
       content: text,
       clientMessageId,
       delivery: 'next',
       expectedSessionId: this.snapshot.sessionId,
+      ...(this.snapshot.modelConfig?.fixedModel ? { configVersion: this.snapshot.modelConfig.configVersion } : {}),
       origin: { type: 'endpoint', endpointId: this.turnClaim.endpointId, token: this.turnClaim.token },
       ...(browserContexts.length ? { browserContexts } : {}),
       ...(attachments.length ? { attachments } : {}),
@@ -522,7 +538,7 @@ export class BrowserChatClient {
       await writeBrowserOutbox(sessionKey, request);
       outboxStored = true;
       this.update({
-        messages: [...this.snapshot.messages, {
+        messages: this.snapshot.runId ? this.snapshot.messages : [...this.snapshot.messages, {
           id: clientMessageId,
           role: 'user',
           text,
@@ -535,7 +551,7 @@ export class BrowserChatClient {
             })),
           } : {}),
         }],
-        streamingText: '',
+        ...(this.snapshot.runId ? {} : { streamingText: '' }),
         error: undefined,
       });
       const response = await json<{ payload: { state: { activeRunId?: string; inputs?: Array<{ clientMessageId?: string; runId?: string }> } } }>(
@@ -632,6 +648,48 @@ export class BrowserChatClient {
       }
     } finally {
       this.recoveringOutbox = false;
+    }
+  }
+
+  async refreshInputs(): Promise<void> {
+    const requestId = ++this.inputsRequest;
+    const sessionKey = this.snapshot.sessionKey;
+    if (!sessionKey) return;
+    const result = await json<{ payload: { activeRunId?: string; inputs?: Array<{ id: string; version: number; content: string; status: string }> } }>(
+      await gatewayFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/input-state`),
+    );
+    if (this.snapshot.sessionKey !== sessionKey || requestId !== this.inputsRequest) return;
+    this.update({ queuedInputs: (result.payload.inputs ?? []).filter(input => input.status === 'queued') });
+    if (result.payload.activeRunId !== this.snapshot.runId) {
+      await this.reloadMessages();
+      if (this.snapshot.sessionKey !== sessionKey || requestId !== this.inputsRequest) return;
+      if (result.payload.activeRunId) await this.followRun(result.payload.activeRunId);
+      else {
+        if (this.runTopic) this.realtime?.unsubscribe(this.runTopic);
+        this.runTopic = undefined;
+        this.update({ runId: undefined, streamingText: '', stopping: false });
+      }
+    }
+  }
+
+  async editInput(id: string, version: number, content: string): Promise<void> {
+    const key = this.snapshot.sessionKey;
+    if (!key) return;
+    try {
+      await json(await gatewayFetch(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(id)}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version, content }),
+      }));
+    } finally { if (this.snapshot.sessionKey === key) await this.refreshInputs(); }
+  }
+
+  async cancelInput(id: string, version: number): Promise<void> {
+    const key = this.snapshot.sessionKey;
+    if (!key) return;
+    try {
+      await json(await gatewayFetch(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(id)}?version=${version}`, { method: 'DELETE' }));
+      if (this.snapshot.sessionKey === key) await this.reloadMessages();
+    } finally {
+      if (this.snapshot.sessionKey === key) await this.refreshInputs();
     }
   }
 
@@ -745,14 +803,16 @@ export class BrowserChatClient {
   }
 
   private async followRun(runId: string): Promise<void> {
+    const topic = `run:${runId}`;
+    if (this.runTopic === topic) return;
+    const sessionKey = this.snapshot.sessionKey;
     if (this.runTopic) this.realtime?.unsubscribe(this.runTopic);
-    this.runTopic = `run:${runId}`;
+    this.runTopic = topic;
     const stored = await chrome.storage.session.get(`${CURSOR_PREFIX}${runId}`);
-    const cursor = typeof stored[`${CURSOR_PREFIX}${runId}`] === 'number'
-      ? stored[`${CURSOR_PREFIX}${runId}`]
-      : undefined;
-    this.realtime?.subscribe(this.runTopic, cursor);
-    this.update({ runId });
+    if (this.snapshot.sessionKey !== sessionKey || this.runTopic !== topic) return;
+    const cursor = typeof stored[`${CURSOR_PREFIX}${runId}`] === 'number' ? stored[`${CURSOR_PREFIX}${runId}`] : undefined;
+    this.update({ runId, streamingText: '' });
+    this.realtime?.subscribe(topic, cursor);
   }
 
   private async onRealtimeEvent(topic: string, seq: number, event: string, data: unknown): Promise<void> {

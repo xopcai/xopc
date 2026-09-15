@@ -6,7 +6,7 @@ import {
   PcmFrameCapture,
   PcmStreamEncoder,
   resamplePcm,
-} from '../pcm-wav-recorder';
+} from '@xopcai/composer-core/pcm-wav-recorder';
 
 function fakeCapture() {
   const context = {
