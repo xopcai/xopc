@@ -16,11 +16,13 @@ import { replaceTranscriptSegments, saveTranscriptRevision } from './revisions.j
 import { missingAudioRanges, slicePcmWav } from './audio-repair.js';
 import { assembleDiscussionTranscript } from './transcript.js';
 import type { DiscussionCapture } from './types.js';
+import { getRecordingJob } from './recordingJobs.js';
 
 const log = createLogger('DiscussionSealer');
 const UPLOAD_GRACE_MS = 2 * 60_000;
 
 export interface DiscussionSealerDeps {
+  processRecordingJob?: () => Promise<void>;
   notes: NotesService;
   getConfig: () => Config;
   transcribeRecording?: (
@@ -54,6 +56,7 @@ export class DiscussionSealer {
     if (this.running) return;
     this.running = true;
     try {
+      await this.deps.processRecordingJob?.();
       const capture = [
         ...listDiscussionCaptures({ status: 'sealing', limit: 1 }).items,
         ...listDiscussionCaptures({ status: 'stopping', limit: 1 }).items,
@@ -68,6 +71,8 @@ export class DiscussionSealer {
   private async sealWhenReady(capture: DiscussionCapture, now: number): Promise<void> {
     const ageMs = now - (capture.recordingStoppedAt ?? now);
     if (!capture.audioAttachmentId) {
+      const job = getRecordingJob(capture.id);
+      if (job && (job.state === 'queued' || job.state === 'running')) return;
       if (ageMs >= UPLOAD_GRACE_MS) this.fail(capture, 'audio_upload', 'recording_missing', 'Original recording was not uploaded');
       return;
     }

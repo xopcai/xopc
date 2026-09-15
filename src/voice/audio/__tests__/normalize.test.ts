@@ -69,6 +69,31 @@ describe('audio normalization', () => {
   });
 
   const hasFfmpeg = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
+  it.runIf(hasFfmpeg)('rejects media playlists instead of following their referenced files', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'xopc-normalize-playlist-test-'));
+    try {
+      await writeFile(join(directory, 'source.wav'), pcmWav(1));
+      const filePath = join(directory, 'recording.wav');
+      await writeFile(filePath, "ffconcat version 1.0\nfile 'source.wav'\n");
+      await expect(forEachNormalizedAudioSegment({ filePath }, async () => undefined)).rejects.toThrow(/whitelist/);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
+  it.runIf(hasFfmpeg)('stops consuming decoded segments after cancellation', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'xopc-normalize-cancel-test-'));
+    try {
+      const filePath = join(directory, 'recording.wav');
+      await writeFile(filePath, pcmWav(3));
+      const controller = new AbortController();
+      let consumed = 0;
+      await expect(forEachNormalizedAudioSegment({ filePath, segmentSeconds: 1, signal: controller.signal }, async () => {
+        consumed += 1;
+        controller.abort(new Error('Stopped by user'));
+      })).rejects.toThrow('Stopped by user');
+      expect(consumed).toBe(1);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  });
+
   it.runIf(hasFfmpeg)('splits a long recording into bounded normalized WAV segments', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'xopc-normalize-test-'));
     const filePath = join(directory, 'recording.wav');

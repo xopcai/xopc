@@ -218,29 +218,21 @@ export function registerDiscussionRoutes(authenticated: Hono, deps: Authenticate
     } catch (error) { const response = errorResponse(error); if (response) return c.json(response.body, response.status); throw error; }
   });
 
-  authenticated.post('/api/discussions/:id/recording/complete', strictRateLimitMiddleware, async (c) => {
-    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+  authenticated.get('/api/discussions/:id/recording/job', (c) => {
     try {
-      return c.json(await service.discussions.completeRecording(c.req.param('id'), {
-        chunkCount: Number(body.chunkCount), mimeType: typeof body.mimeType === 'string' ? body.mimeType : '', fileName: typeof body.fileName === 'string' ? body.fileName : '',
-      }));
+      const job = service.discussions.recordingJob(c.req.param('id'));
+      return job ? c.json(job) : c.json({ error: 'Recording job not found' }, 404);
     } catch (error) { const response = errorResponse(error); if (response) return c.json(response.body, response.status); throw error; }
   });
 
-  authenticated.post('/api/discussions/:id/stop', strictRateLimitMiddleware, async (c) => {
+  authenticated.post('/api/discussions/:id/capture/seal', strictRateLimitMiddleware, async (c) => {
     const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
     try {
-      const detail = await service.discussions.stop(
-        c.req.param('id'),
-        Number(body.lastSequence),
-        Number(body.durationMs),
-      );
-      return detail ? c.json(detail) : c.json({ error: 'Discussion not found' }, 404);
-    } catch (error) {
-      const response = errorResponse(error);
-      if (response) return c.json(response.body, response.status);
-      throw error;
-    }
+      return c.json(await service.discussions.sealRecording(c.req.param('id'), {
+        lastSequence: Number(body.lastSequence),
+        chunkCount: Number(body.chunkCount), mimeType: typeof body.mimeType === 'string' ? body.mimeType : '', fileName: typeof body.fileName === 'string' ? body.fileName : '',
+      }), 202);
+    } catch (error) { const response = errorResponse(error); if (response) return c.json(response.body, response.status); throw error; }
   });
 
   authenticated.post('/api/discussions/:id/retry', strictRateLimitMiddleware, async (c) => {
