@@ -58,6 +58,7 @@ export interface RunAudioTranscriptionResult {
     model?: string;
     language?: string;
     durationSeconds?: number;
+    segments?: import('./types.js').AudioTranscriptionSegment[];
   }>;
   decision: MediaUnderstandingDecision;
 }
@@ -97,6 +98,7 @@ export async function runAudioTranscription(
   const outputs = result.outputs.map((entry) => ({
     attachmentIndex: entry.attachmentIndex,
     text: entry.text,
+    ...(entry.segments ? { segments: entry.segments } : {}),
     provider: entry.provider,
     ...(entry.model ? { model: entry.model } : {}),
     ...(entry.language ? { language: entry.language } : {}),

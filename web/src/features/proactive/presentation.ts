@@ -19,24 +19,22 @@ export function mailFollowUpBucket(follow: MailFollowUp): DelegationBucket {
   return follow.status === 'watching' && follow.enabled ? 'active' : 'paused';
 }
 
-export function delegationState(sub: Delegation, zh: boolean): string {
+export function delegationState(sub: Delegation, zh: boolean, card?: ProactiveCard): string {
   if (sub.completedAt) return zh ? '这件事已结束' : 'This work has ended';
   if (!sub.effectiveEnabled) return zh ? '已暂停，恢复后继续跟进' : 'Paused until you resume it';
-  if (sub.pending) return zh ? '正在核对最新情况' : 'Checking the latest context';
-  if (sub.latestRun?.error) return zh ? '最近一次核对未完成' : 'The latest check did not finish';
-  const outcome = sub.latestRun?.reason ?? sub.latestRun?.status;
-  if (['no_insight', 'succeeded_no_insight', 'below_threshold', 'low_value', 'unchanged', 'routine'].includes(outcome ?? '')) return zh ? '已核对，暂无需要你处理的变化' : 'Checked; nothing needs your attention';
-  if (['insight', 'succeeded_with_insight'].includes(outcome ?? '')) return zh ? '已准备一项新内容' : 'A new result is ready';
-  if (outcome === 'approval_required') return zh ? '有一项决定等你处理' : 'A decision needs your attention';
-  if (sub.latestRun) return zh ? '已完成最近一次核对' : 'The latest check is complete';
+  if (sub.checking) return zh ? '助理正在查看最新情况' : 'Your assistant is reviewing the latest context';
+  if (card?.decision) return zh ? '有一项决定等你处理' : 'A decision needs your attention';
+  if (card?.artifact) return zh ? '助理准备好了新内容' : 'Your assistant prepared something new';
+  if (card) return zh ? '有一项变化值得你看' : 'A change is worth your attention';
   return zh ? '已记住，等待相关变化' : 'Remembered and waiting for a relevant change';
 }
 
 export function delegationNextTrigger(sub: Delegation, zh: boolean): string {
   if (sub.completedAt) return zh ? '不会再跟进' : 'No more follow-up';
   if (!sub.effectiveEnabled) return zh ? '恢复后继续' : 'Continues when resumed';
-  if (sub.scopeKind === 'project' && sub.schedule?.nextDueAt) return `${zh ? '下次核对' : 'Next check'} ${formatAssistantDate(sub.schedule.nextDueAt, zh)}`;
-  return zh ? '相关资料变化时继续' : 'Continues when related context changes';
+  if (sub.scopeKind === 'project') return zh ? '项目出现重要变化时回来' : 'Returns when the project meaningfully changes';
+  if (sub.scenarioKey === 'meeting_preparation') return zh ? '相关会议临近或资料变化时回来' : 'Returns when a meeting approaches or its context changes';
+  return zh ? '相关沟通需要下一步时回来' : 'Returns when the conversation needs a next step';
 }
 
 export function latestCardFor(cards: ProactiveCard[], subscriptionId: string): ProactiveCard | undefined {
@@ -61,13 +59,4 @@ export function mailFollowUpState(follow: MailFollowUp, zh: boolean): string {
 
 export function formatAssistantDate(value: string, zh: boolean): string {
   return new Date(value).toLocaleString(zh ? 'zh-CN' : 'en-US');
-}
-
-export function runProgressLabel(value: string, zh: boolean): string {
-  if (['no_insight', 'succeeded_no_insight', 'below_threshold', 'low_value', 'unchanged', 'routine'].includes(value)) return zh ? '核对完成，没有需要你处理的变化' : 'Checked; nothing needed your attention';
-  if (['insight', 'succeeded_with_insight'].includes(value)) return zh ? '准备了一项新内容' : 'Prepared a new result';
-  if (value === 'approval_required') return zh ? '发现一项需要你决定的事' : 'Found a decision that needs you';
-  if (value === 'failed' || value === 'retryable') return zh ? '这次核对没有完成' : 'This check did not finish';
-  if (value === 'running' || value === 'pending') return zh ? '正在核对最新情况' : 'Checking the latest context';
-  return zh ? '完成了一次核对' : 'Completed a check';
 }

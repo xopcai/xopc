@@ -1,29 +1,17 @@
 export function proactiveCopy(zh: boolean) {
   return zh ? {
-    locale: 'zh', title: '交给我的事', subtitle: '记住你交代的事，有进展时把成果带回来。', cards: '助理带回的内容', templates: '可以交代的事', settings: '助理提醒',
-    levels: { off: '关闭', quiet: '尽量安静', balanced: '重要时找我', active: '及时跟进' }, inherit: '继承全局', save: '保存', saved: '已保存',
-    level: '什么时候找你', delivery: '提醒方式', inbox: '仅展示卡片', important: '重要变化时通知', scope: '关注项目', enable: '启用', enabled: '已启用', paused: '已暂停',
-    instructions: '关注偏好', instructionsHint: '例如：只有影响对外承诺时才提醒我。', interval: '兜底检查间隔（分钟，留空跟随程度）',
-    connection: '会议准备需要已连接且允许主动分析的日历来源。', eventOnly: '此模板由业务事件触发。', meetingWindows: '会议前 24 小时和 2 小时检查。',
+    locale: 'zh', levels: { off: '关闭', quiet: '尽量安静', balanced: '重要时找我', active: '及时跟进' }, save: '保存', saved: '已保存',
+    level: '什么时候找你',
     quietStart: '免打扰开始（小时）', quietEnd: '免打扰结束（小时）', timezone: '时区', limit: '每日通知上限', pause: '暂停一小时', resume: '结束暂停',
     privacy: '提醒频率不会改变助理可以查看或执行的范围；这些范围仍按每件事的授权执行。',
-    empty: '暂时没有需要关注的变化。你可以先交代一件事。', all: '全部', unread: '未读', resolved: '已处理', more: '下一页', first: '返回首页',
-    whyNow: '为什么现在', recommendation: '建议', evidence: '依据', investigated: '已检查', read: '标为已读', resolve: '已处理', snooze: '一小时后', less: '少提醒这类', pauseTemplate: '暂停此服务',
-    expired: '已过期', result: '执行结果', retry: '重试', close: '返回卡片列表', runs: '进展记录', noRuns: '还没有进展记录', lastCheck: '上次核对', nextCheck: '下次核对',
-    chooseProject: '选择项目', choose: '选择', loading: '正在处理',
+    whyNow: '为什么现在', evidence: '依据', snooze: '一小时后', retry: '重试',
     kinds: { briefing: '简报', reminder: '提醒', risk: '风险', recommendation: '建议', decision: '待决定', receipt: '执行回执' },
   } : {
-    locale: 'en', title: 'Delegated work', subtitle: 'Remember what you delegate and bring useful results back.', cards: 'Assistant updates', templates: 'Things to delegate', settings: 'Assistant notifications',
-    levels: { off: 'Off', quiet: 'Keep it quiet', balanced: 'When it matters', active: 'Keep me updated' }, inherit: 'Use global level', save: 'Save', saved: 'Saved',
-    level: 'When should the assistant notify you?', delivery: 'Delivery', inbox: 'Show in Workbench only', important: 'Notify on important changes', scope: 'Project', enable: 'Enable', enabled: 'Enabled', paused: 'Paused',
-    instructions: 'What matters to you', instructionsHint: 'For example: only alert me when an external commitment is affected.', interval: 'Fallback scan interval (minutes; blank uses level)',
-    connection: 'Meeting preparation needs a connected calendar authorized for proactive analysis.', eventOnly: 'This template runs on business events.', meetingWindows: 'Checks 24 hours and 2 hours before meetings.',
+    locale: 'en', levels: { off: 'Off', quiet: 'Keep it quiet', balanced: 'When it matters', active: 'Keep me updated' }, save: 'Save', saved: 'Saved',
+    level: 'When should the assistant notify you?',
     quietStart: 'Quiet hours start', quietEnd: 'Quiet hours end', timezone: 'Timezone', limit: 'Daily notification limit', pause: 'Pause for one hour', resume: 'Resume',
     privacy: 'Notification frequency does not change what the assistant can read or do. Each delegated item keeps its own permissions.',
-    empty: 'No changes need attention yet. Delegate something to get started.', all: 'All', unread: 'Unread', resolved: 'Resolved', more: 'Next page', first: 'First page',
-    whyNow: 'Why now', recommendation: 'Recommendation', evidence: 'Evidence', investigated: 'Checked', read: 'Mark read', resolve: 'Resolve', snooze: 'In one hour', less: 'Fewer alerts like this', pauseTemplate: 'Pause service',
-    expired: 'Expired', result: 'Result', retry: 'Retry', close: 'Back to updates', runs: 'Progress', noRuns: 'No progress yet', lastCheck: 'Last checked', nextCheck: 'Next check',
-    chooseProject: 'Choose a project', choose: 'Choose', loading: 'Working',
+    whyNow: 'Why now', evidence: 'Evidence', snooze: 'In one hour', retry: 'Retry',
     kinds: { briefing: 'Briefing', reminder: 'Reminder', risk: 'Risk', recommendation: 'Recommendation', decision: 'Decision', receipt: 'Receipt' },
   };
 }
@@ -42,7 +30,9 @@ export function localizedTemplate(key: string, fallback: { title: string; descri
   const value = templates[key];
   return value ? { title: value[0], description: value[1] } : fallback;
 }
-export function runLabel(value: string, locale: string): string {
-  if (locale !== 'zh') return value.replaceAll('_', ' ');
-  return ({ approval_required: '等待确认', executing: '正在执行', rejected: '已拒绝', completed: '已完成', insight: '已生成卡片', below_threshold: '未达到提醒标准', succeeded: '检查完成', succeeded_with_insight: '已生成卡片', succeeded_no_insight: '无须提醒', no_insight: '无须提醒', running: '检查中', pending: '等待检查', retryable: '等待重试', failed: '检查失败', discarded: '已取消', unchanged: '内容未变化', routine: '常规变化', insufficient_evidence: '证据不足', duplicate: '重复发现', disabled: '服务已关闭', source_changed: '资料已变化，将按最新情况继续检查', source_unavailable: '来源不可用', low_value: '未达到提醒标准', policy_changed: '设置已变化' } as Record<string, string>)[value] ?? value.replaceAll('_', ' ');
+export function cardStatusLabel(value: string, locale: string): string {
+  const labels = locale === 'zh'
+    ? { unread: '待查看', read: '已查看', snoozed: '稍后提醒', resolved: '已收起', expired: '已过期', withdrawn: '来源已撤回' }
+    : { unread: 'Ready to review', read: 'Reviewed', snoozed: 'Remind later', resolved: 'Dismissed', expired: 'Expired', withdrawn: 'Source withdrawn' };
+  return labels[value as keyof typeof labels] ?? value;
 }

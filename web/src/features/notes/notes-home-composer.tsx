@@ -1,3 +1,4 @@
+import { MeetingImportButton } from '@/features/discussions/meeting-import-button';
 import { ArrowUp, AudioLines, CalendarDays, FileText, Folder, Loader2, Mic, Paperclip, ScanSearch, Sparkles, X } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -141,6 +142,7 @@ export function NotesHomeComposer({ projects, projectId, onProjectChange, onCrea
             <Icon className="size-3.5" aria-hidden />{h.templateOptions[id].label}
           </button>;
         })}
+        <MeetingImportButton />
         <button type="button" disabled={busy} onClick={() => openDiscussionCapture()} className="ml-auto inline-flex items-center gap-1.5 rounded-md px-2 py-2 hover:bg-surface-hover">
           <Mic className="size-3.5" aria-hidden />{h.recordDiscussion}
         </button>

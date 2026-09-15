@@ -11,7 +11,10 @@ import {
   listDiscussionTranscriptSegments,
   updateDiscussionCapture,
 } from './repository.js';
-import { appendSequentialTranscript, assembleDiscussionTranscript } from './transcript.js';
+import { decodeWavToMonoFloat32 } from '../voice/local/wav.js';
+import { replaceTranscriptSegments, saveTranscriptRevision } from './revisions.js';
+import { missingAudioRanges, slicePcmWav } from './audio-repair.js';
+import { assembleDiscussionTranscript } from './transcript.js';
 import type { DiscussionCapture } from './types.js';
 
 const log = createLogger('DiscussionSealer');
@@ -92,6 +95,7 @@ export class DiscussionSealer {
         ? { text: assembleDiscussionTranscript(confirmed) }
         : await this.transcribeFullRecording(sealing);
       const text = result.text.trim();
+      saveTranscriptRevision(capture.id);
       if (!text) throw new Error('Discussion transcription produced no text');
       const updated = updateDiscussionCapture(capture.id, {
         status: 'organizing',
@@ -113,20 +117,44 @@ export class DiscussionSealer {
   private async transcribeFullRecording(capture: DiscussionCapture): Promise<{ text: string; language?: string }> {
     const attachment = await this.deps.notes.getAttachmentPath(capture.noteId, capture.audioAttachmentId!);
     if (!attachment) throw new Error('Discussion audio file is missing');
-    if (this.deps.transcribeRecording) return this.deps.transcribeRecording(attachment.filePath, capture);
+    if (this.deps.transcribeRecording) {
+      const result = await this.deps.transcribeRecording(attachment.filePath, capture);
+      replaceTranscriptSegments(capture.id, [{ text: result.text, startedAtMs: 0, endedAtMs: capture.durationMs ?? 1_000 }]);
+      return result;
+    }
     const config = this.deps.getConfig();
     const sttConfig = mergeSttConfigFromAppConfig(config.tools?.media?.audio, config.tools?.media);
     if (!isSTTAvailable(sttConfig)) throw new Error('STT is not configured');
-    let text = '';
+    let offset = 0;
+    const confirmed = listDiscussionTranscriptSegments(capture.id).filter(segment => segment.status === 'confirmed');
+    const segments: Array<{ text: string; startedAtMs: number; endedAtMs: number; speakerLabel?: string; correctedByUser?: boolean; rawText?: string }> = confirmed.map(segment => ({
+      text: segment.displayText ?? segment.rawText ?? '', rawText: segment.rawText,
+      startedAtMs: segment.startedAtMs, endedAtMs: segment.endedAtMs,
+      speakerLabel: segment.speakerLabel, correctedByUser: segment.correctedByUser,
+    }));
     let language: string | undefined;
-    await forEachNormalizedAudioSegment({ filePath: attachment.filePath }, async (buffer, index) => {
-      const result = await transcribe(buffer, sttConfig, {
-        mime: 'audio/wav',
-        fileName: `discussion-recovery-${index}.wav`,
-      });
-      text = appendSequentialTranscript(text, result.text);
-      language ??= result.language;
+    await forEachNormalizedAudioSegment({ filePath: attachment.filePath, maxDurationSeconds: 120 * 60 }, async (buffer, index) => {
+      const decoded = decodeWavToMonoFloat32(buffer);
+      const durationMs = decoded.durationSeconds * 1_000;
+      const gaps = missingAudioRanges(offset, offset + durationMs, confirmed);
+      for (const [gapIndex, gap] of gaps.entries()) {
+        const audio = gaps.length === 1 && gap.startedAtMs === offset && gap.endedAtMs === offset + durationMs
+          ? buffer : slicePcmWav(decoded, gap.startedAtMs - offset, gap.endedAtMs - offset);
+        if (audio.length <= 44) continue;
+        const result = await transcribe(audio, sttConfig, { mime: 'audio/wav', fileName: `discussion-recovery-${index}-${gapIndex}.wav` });
+        if (result.segments?.length) {
+          for (const part of result.segments) {
+            if (!Number.isFinite(part.startMs) || !Number.isFinite(part.endMs) || part.startMs < 0 || part.endMs <= part.startMs || part.endMs > gap.endedAtMs - gap.startedAtMs + 100) throw new Error('Provider returned an invalid transcript time range');
+            segments.push({ text: part.text, startedAtMs: gap.startedAtMs + part.startMs, endedAtMs: Math.min(gap.endedAtMs, gap.startedAtMs + part.endMs), ...(part.speaker ? { speakerLabel: `${index + 1}:${gapIndex + 1}:${part.speaker}` } : {}) });
+          }
+        } else if (result.text.trim()) segments.push({ text: result.text, ...gap });
+        language ??= result.language;
+      }
+      offset += durationMs;
     });
+    segments.sort((a, b) => a.startedAtMs - b.startedAtMs);
+    replaceTranscriptSegments(capture.id, segments);
+    const text = assembleDiscussionTranscript(listDiscussionTranscriptSegments(capture.id));
     return { text, ...(language ? { language } : {}) };
   }
 

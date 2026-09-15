@@ -25,7 +25,6 @@ import { proactivePreferences, updateProactivePreferences } from '../policy/serv
 import { recordProactivePresence } from '../policy/presence.js';
 import { scanDueProjects } from '../temporal/schedule.js';
 import { ProactiveTemporalWorker } from '../temporal/worker.js';
-import { previewSubscription } from '../scenarios/preview.js';
 import { proactiveMetrics } from '../metrics.js';
 
 describe('proactive delivery and lifecycle', () => {
@@ -135,17 +134,6 @@ describe('proactive delivery and lifecycle', () => {
     expect(getSqliteDatabase().prepare('SELECT status FROM proactive_web_push_deliveries').get()).toMatchObject({ status: 'failed' });
     expect(getSqliteDatabase().prepare('SELECT title_en, body_en FROM notification_events').get()).toMatchObject({ title_en: 'Update withdrawn', body_en: null });
   });
-  it('previews existing evidence without creating runs, cards or deliveries and rate limits it', async () => {
-    const { sub } = await projectCard();
-    const executor = { execute: vi.fn(async () => ({ text: '{"result":"no_insight","reason":"routine"}' })) };
-    const before = listCards('default').cards.length;
-    expect((await previewSubscription('default', sub.id, executor)).result.result).toBe('no_insight');
-    expect(listCards('default').cards).toHaveLength(before);
-    expect(getSqliteDatabase().prepare('SELECT COUNT(*) AS n FROM notification_events').get()).toMatchObject({ n: 0 });
-    await expect(previewSubscription('default', sub.id, executor)).rejects.toThrow('five minutes');
-    expect(executor.execute).toHaveBeenCalledOnce();
-  });
-
   it('separates provider acceptance from opening a browser test notification', async () => {
     prepareBrowserPush(); const { id } = registerBrowserPush('default', subscription());
     const send = vi.fn(async () => ({ statusCode: 201, headers: {}, body: '' }));

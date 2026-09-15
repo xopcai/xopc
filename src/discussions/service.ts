@@ -33,36 +33,20 @@ import type {
   DiscussionTranscript,
   ListDiscussionsQuery,
 } from './types.js';
+import { editMeeting } from './edits.js';
+import { saveTranscriptRevision, readTranscriptRevision, refreshCanonicalTranscript } from './revisions.js';
 import { assembleDiscussionTranscript } from './transcript.js';
+
+import { DISCUSSION_MAX_DURATION_MS, DISCUSSION_SEGMENT_MAX_BYTES } from '@xopcai/gateway-contract';
+import { DiscussionServiceError } from './errors.js';
+import { listRecordingChunks, saveRecordingChunk, completeRecording, removeRecordingChunks } from './recording.js';
+export { DiscussionServiceError } from './errors.js';
+export { DISCUSSION_MAX_DURATION_MS, DISCUSSION_AUDIO_MAX_BYTES, DISCUSSION_SEGMENT_MAX_BYTES } from '@xopcai/gateway-contract';
 
 const log = createLogger('DiscussionService');
 
-export const DISCUSSION_AUDIO_MAX_BYTES = 25 * 1024 * 1024;
-export const DISCUSSION_SEGMENT_MAX_BYTES = 2 * 1024 * 1024;
-export const DISCUSSION_MAX_DURATION_MS = 30 * 60 * 1_000;
-
-function isSupportedAudioMimeType(mimeType: string): boolean {
-  const base = mimeType.toLowerCase().split(';', 1)[0]?.trim();
-  return base === 'audio/webm'
-    || base === 'audio/mp4'
-    || base === 'audio/ogg'
-    || base === 'audio/wav'
-    || base === 'audio/x-wav'
-    || base === 'audio/mpeg';
-}
-
 function placeholderTitle(now: number): string {
   return `Discussion · ${new Date(now).toISOString().slice(0, 16).replace('T', ' ')}`;
-}
-
-export class DiscussionServiceError extends Error {
-  constructor(
-    readonly code: 'invalid_input' | 'not_found' | 'conflict',
-    message: string,
-  ) {
-    super(message);
-    this.name = 'DiscussionServiceError';
-  }
 }
 
 export class DiscussionService {
@@ -177,17 +161,18 @@ export class DiscussionService {
     return getDiscussionMetrics();
   }
 
-  transcript(id: string): DiscussionTranscript | null {
+  transcript(id: string, revision?: number): DiscussionTranscript | null {
     const capture = getDiscussionCapture(id);
     if (!capture) return null;
-    const segments = listDiscussionTranscriptSegments(id);
+    const segments = revision === undefined ? listDiscussionTranscriptSegments(id) : readTranscriptRevision(id, revision);
+    if (!segments) return null;
     const count = (status: DiscussionTranscript['segments'][number]['status']) =>
       segments.filter((segment) => segment.status === status).length;
     return {
       discussionId: id,
-      revision: capture.transcriptRevision,
+      revision: revision ?? capture.transcriptRevision,
       segments,
-      text: capture.canonicalTranscript ?? assembleDiscussionTranscript(segments),
+      text: revision === undefined ? capture.canonicalTranscript ?? assembleDiscussionTranscript(segments) : assembleDiscussionTranscript(segments),
       stats: {
         ...(capture.expectedLastSequence != null ? { expected: capture.expectedLastSequence + 1 } : {}),
         uploaded: count('uploaded'),
@@ -261,74 +246,76 @@ export class DiscussionService {
     return this.transcript(input.discussionId)!;
   }
 
-  correctSegment(id: string, sequence: number, displayText: string, expectedRevision: number): DiscussionTranscript {
+  correctSegment(id: string, sequence: number, displayText: string, expectedRevision: number, speakerLabel?: string, applyToSpeakerGroup = false, expectedTranscriptRevision?: number): DiscussionTranscript {
     const capture = getDiscussionCapture(id);
     if (!capture) throw new DiscussionServiceError('not_found', 'Discussion not found');
-    if (capture.status !== 'recording' && capture.status !== 'stopping') {
-      throw new DiscussionServiceError('conflict', 'The sealed transcript cannot be changed');
-    }
+    if (!['recording', 'stopping', 'completed', 'needs_attention'].includes(capture.status)) throw new DiscussionServiceError('conflict', 'Wait until processing has finished before editing');
     const text = displayText.trim();
     if (!text || text.length > 20_000) throw new DiscussionServiceError('invalid_input', 'Invalid transcript text');
-    const segment = correctDiscussionTranscriptSegment(id, sequence, text, expectedRevision);
-    if (!segment) throw new DiscussionServiceError('conflict', 'Transcript segment changed; reload and try again');
-    const transcript = this.transcript(id)!;
+    if (speakerLabel && speakerLabel.length > 100) throw new DiscussionServiceError('invalid_input', 'Speaker label is too long');
+    if (applyToSpeakerGroup && expectedTranscriptRevision !== capture.transcriptRevision) throw new DiscussionServiceError('conflict', 'Transcript changed; reload before renaming the speaker');
+
+    const transcript = runSqliteWriteTransaction(db => {
+      const originalSpeaker = getDiscussionTranscriptSegment(id, sequence)?.speakerLabel;
+      saveTranscriptRevision(id);
+      const segment = correctDiscussionTranscriptSegment(id, sequence, text, expectedRevision, speakerLabel);
+      if (!segment) throw new DiscussionServiceError('conflict', 'Transcript segment changed; reload and try again');
+      if (applyToSpeakerGroup && originalSpeaker && speakerLabel !== undefined) db.prepare("UPDATE discussion_transcript_segments SET speaker_label=?, corrected_by_user=1, corrected_at=?, revision=revision+1, updated_at=? WHERE discussion_id=? AND speaker_label=? AND sequence<>?").run(speakerLabel.trim() || null, Date.now(), Date.now(), id, originalSpeaker, sequence);
+      if (capture.canonicalTranscript) refreshCanonicalTranscript(id);
+      saveTranscriptRevision(id);
+      return this.transcript(id)!;
+    });
     this.emit?.('discussion.segment.updated', {
-      discussionId: id,
-      noteId: capture.noteId,
-      transcriptRevision: transcript.revision,
-      segment,
-      text: transcript.text,
-      stats: transcript.stats,
+      discussionId: id, noteId: capture.noteId, transcriptRevision: transcript.revision,
     });
     return transcript;
   }
 
-  async uploadRecording(
-    id: string,
-    file: { name: string; buffer: Buffer; mimeType: string },
-    durationMs: number,
-  ): Promise<DiscussionDetail | null> {
+  editSummary(id: string, input: Parameters<typeof editMeeting>[1]) {
+    const record = editMeeting(id, input);
+    this.emit?.('discussion.updated', { id, noteId: getDiscussionCapture(id)?.noteId, organizationRevision: record.revision });
+    return record;
+  }
+
+  recordingChunks(id: string) {
+    if (!getDiscussionCapture(id)) throw new DiscussionServiceError('not_found', 'Discussion not found');
+    return listRecordingChunks(id);
+  }
+
+  async reorganize(id: string, template: string = 'general') {
+    if (!['general', 'project', 'review', 'interview'].includes(template)) throw new DiscussionServiceError('invalid_input', 'Invalid meeting template');
     return this.enqueueMutation(id, async () => {
       const capture = getDiscussionCapture(id);
-      if (!capture) return null;
-      if (capture.status !== 'recording' && capture.status !== 'stopping') {
-        throw new DiscussionServiceError('conflict', 'Discussion no longer accepts its recording');
+      if (!capture) throw new DiscussionServiceError('not_found', 'Discussion not found');
+      if (!['completed', 'needs_attention'].includes(capture.status) || !capture.canonicalTranscript) throw new DiscussionServiceError('conflict', 'Transcript is not ready');
+      const updated = updateDiscussionCapture(id, { status: 'organizing', template: template as import('./types.js').DiscussionTemplate, failureCode: undefined, failureMessage: undefined }, [capture.status]);
+      this.emit?.('discussion.updated', updated);
+      return this.detail(updated!);
+    });
+  }
+
+  async uploadRecordingChunk(id: string, sequence: number, sha256: string, body: ReadableStream<Uint8Array>) {
+    return this.enqueueMutation(id, async () => {
+      const capture = getDiscussionCapture(id);
+      if (!capture) throw new DiscussionServiceError('not_found', 'Discussion not found');
+      if (!['recording', 'stopping', 'needs_attention'].includes(capture.status) || capture.audioDeletedAt || capture.audioAttachmentId) {
+        throw new DiscussionServiceError('conflict', 'Recording no longer accepts chunks');
       }
-      if (!Number.isFinite(durationMs) || durationMs < 1_000 || durationMs > DISCUSSION_MAX_DURATION_MS) {
-        throw new DiscussionServiceError('invalid_input', 'durationMs must be between 1000 and 1800000');
+      return saveRecordingChunk(capture, sequence, sha256, body);
+    });
+  }
+
+  async completeRecording(id: string, input: { chunkCount: number; mimeType: string; fileName: string }) {
+    return this.enqueueMutation(id, async () => {
+      const capture = getDiscussionCapture(id);
+      if (!capture) throw new DiscussionServiceError('not_found', 'Discussion not found');
+      if (capture.audioAttachmentId) return this.detail(capture);
+      if (!['recording', 'stopping', 'needs_attention'].includes(capture.status) || capture.audioDeletedAt) {
+        throw new DiscussionServiceError('conflict', 'Recording cannot be completed');
       }
-      if (!isSupportedAudioMimeType(file.mimeType)) throw new DiscussionServiceError('invalid_input', 'Unsupported audio type');
-      if (file.buffer.length === 0 || file.buffer.length > DISCUSSION_AUDIO_MAX_BYTES) {
-        throw new DiscussionServiceError('invalid_input', 'Audio must be between 1 byte and 25MB');
-      }
-      const audioSha256 = createHash('sha256').update(file.buffer).digest('hex');
-      if (capture.audioAttachmentId) {
-        if (capture.audioSha256 === audioSha256) return this.detail(capture);
-        throw new DiscussionServiceError('conflict', 'Discussion already has different audio');
-      }
-      const attachment = await this.notes.addAttachment(capture.noteId, {
-        name: file.name.trim().slice(0, 200) || `discussion-${id}.webm`,
-        buffer: file.buffer,
-        mimeType: file.mimeType,
-        duration: Math.round(durationMs / 1_000),
-        retainWithoutReference: true,
-      });
-      if (!attachment) throw new DiscussionServiceError('not_found', 'Discussion note not found');
-      try {
-        const updated = updateDiscussionCapture(id, {
-          audioAttachmentId: attachment.id,
-          durationMs: Math.round(durationMs),
-          mimeType: file.mimeType,
-          audioSizeBytes: file.buffer.length,
-          audioSha256,
-        }, ['recording', 'stopping']);
-        if (!updated) throw new DiscussionServiceError('conflict', 'Discussion changed while storing audio');
-        this.emit?.('discussion.updated', updated);
-        return this.detail(updated);
-      } catch (error) {
-        await this.notes.removeAttachment(capture.noteId, attachment.id).catch(() => undefined);
-        throw error;
-      }
+      const updated = await completeRecording(capture, input, this.notes);
+      this.emit?.('discussion.updated', updated);
+      return this.detail(updated);
     });
   }
 
@@ -349,7 +336,7 @@ export class DiscussionService {
       const updated = updateDiscussionCapture(id, {
         status: 'stopping',
         expectedLastSequence: lastSequence,
-        durationMs: Math.round(durationMs),
+        durationMs: capture.audioAttachmentId ? capture.durationMs : Math.round(durationMs),
         recordingStoppedAt: now,
         failureStage: undefined,
         failureCode: undefined,
@@ -380,6 +367,7 @@ export class DiscussionService {
   }
 
   async cancel(id: string): Promise<DiscussionDetail | null> {
+    return this.enqueueMutation(id, async () => {
     const capture = getDiscussionCapture(id);
     if (!capture) return null;
     if (capture.status === 'cancelled') return this.detail(capture);
@@ -389,8 +377,10 @@ export class DiscussionService {
     const updated = updateDiscussionCapture(id, { status: 'cancelled' }, ['recording', 'stopping']);
     if (!updated) throw new DiscussionServiceError('conflict', 'Discussion changed while cancelling');
     deleteDiscussionSegmentAudio(id);
+    await removeRecordingChunks(capture);
     this.emit?.('discussion.updated', updated);
     return this.detail(updated);
+    });
   }
 
   async deleteAudio(id: string): Promise<DiscussionDetail | null> {
@@ -400,8 +390,8 @@ export class DiscussionService {
       if (!['completed', 'needs_attention', 'cancelled'].includes(capture.status)) {
         throw new DiscussionServiceError('conflict', 'Audio cannot be deleted while discussion processing is active');
       }
-      if (!capture.audioAttachmentId) return this.detail(capture);
-      await this.notes.removeAttachment(capture.noteId, capture.audioAttachmentId);
+      await removeRecordingChunks(capture);
+      if (capture.audioAttachmentId) await this.notes.removeAttachment(capture.noteId, capture.audioAttachmentId);
       deleteDiscussionSegmentAudio(id);
       const updated = updateDiscussionCapture(id, {
         audioAttachmentId: undefined,

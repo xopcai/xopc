@@ -1,8 +1,12 @@
+import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { ObjectLinkService } from '../activity/service.js';
 import type { Config } from '../config/schema.js';
 import type { NotesService } from '../notes/service.js';
 import type { ProjectService } from '../projects/project-service.js';
 
+import { applyMeetingEdits } from './edits.js';
+import { saveTranscriptRevision } from './revisions.js';
+import { getDiscussionCapture, listDiscussionTranscriptSegments, getLatestDiscussionOrganization, renewDiscussionWorkLease } from './repository.js';
 import { analyzeDiscussion } from './analyzer.js';
 import { acceptRankedProject, findExactProjectMention } from './project-inference.js';
 import {
@@ -12,7 +16,7 @@ import {
 } from './repository.js';
 import type { DiscussionCapture, DiscussionOrganization } from './types.js';
 
-const PROMPT_VERSION = 'discussion-organizer-v1';
+const PROMPT_VERSION = 'discussion-evidence-v2';
 
 export interface DiscussionOrganizerDeps {
   notes: NotesService;
@@ -32,28 +36,42 @@ export class DiscussionOrganizer {
 
   constructor(private readonly deps: DiscussionOrganizerDeps) {}
 
-  async process(capture: DiscussionCapture, _owner: string, signal?: AbortSignal): Promise<DiscussionCapture> {
+  async process(capture: DiscussionCapture, owner: string, signal?: AbortSignal): Promise<DiscussionCapture> {
     const transcript = capture.canonicalTranscript?.trim();
     const inputHash = capture.canonicalTranscriptSha256;
     if (!transcript || !inputHash) throw new Error('Canonical discussion transcript is missing');
 
+    const transcriptRevision = saveTranscriptRevision(capture.id);
     const projects = this.deps.projects.list({ status: 'active', limit: 100 }).items;
     const result = this.deps.organizeTranscript
       ? await this.deps.organizeTranscript(transcript, capture, signal)
       : await analyzeDiscussion({
         config: this.deps.getConfig(),
         transcript,
+        segments: listDiscussionTranscriptSegments(capture.id),
+        discussionId: capture.id,
+        template: capture.template,
         projects: projects.map(({ id, name }) => ({ id, name })),
         signal,
       });
 
-    const record = createDiscussionOrganization({
-      discussionId: capture.id,
-      inputTranscriptSha256: inputHash,
-      promptVersion: PROMPT_VERSION,
-      modelRef: result.modelRef,
-    });
-    completeDiscussionOrganization(record.id, result.organization);
+    signal?.throwIfAborted();
+    if (!renewDiscussionWorkLease(capture.id, owner)) throw new Error('Meeting processing lease lost');
+    if (getDiscussionCapture(capture.id)?.canonicalTranscriptSha256 !== inputHash) throw new Error('Transcript changed during organization');
+    const previous = getLatestDiscussionOrganization(capture.id)?.organization;
+    if (previous) {
+      const signature = (refs: number[]) => JSON.stringify([...refs].sort((a, b) => a - b));
+      for (const kind of ['decisions', 'actionItems', 'risks', 'openQuestions'] as const) {
+        for (const item of result.organization[kind]) {
+          const candidates = previous[kind].filter(old => signature(old.evidenceSegmentIds) === signature(item.evidenceSegmentIds));
+          const label = (value: typeof item) => 'title' in value ? value.title : value.text;
+          const exact = previous[kind].filter(old => label(old) === label(item));
+          const matches = exact.length ? exact : candidates;
+          const currentMatches = result.organization[kind].filter(other => signature(other.evidenceSegmentIds) === signature(item.evidenceSegmentIds));
+          if (matches.length === 1 && ((label(matches[0]!) === label(item) && result.organization[kind].filter(other => label(other) === label(item)).length === 1) || currentMatches.length === 1)) item.id = matches[0]!.id;
+        }
+      }
+    }
 
     let inferredProject: { id: string; score: number; source: 'exact_name' | 'model' } | undefined;
     if (!capture.projectId) {
@@ -70,7 +88,21 @@ export class DiscussionOrganizer {
       await this.deps.notes.updateNote(capture.noteId, { title }, 'ai_edit');
     }
 
-    const updated = updateDiscussionCapture(capture.id, {
+    const updated = runSqliteWriteTransaction(() => {
+      signal?.throwIfAborted();
+      if (!renewDiscussionWorkLease(capture.id, owner)) throw new Error('Meeting processing lease lost');
+      if (getDiscussionCapture(capture.id)?.canonicalTranscriptSha256 !== inputHash) throw new Error('Transcript changed during organization');
+    const record = createDiscussionOrganization({
+      discussionId: capture.id,
+      transcriptRevision,
+      inputTranscriptSha256: inputHash,
+      promptVersion: PROMPT_VERSION,
+      modelRef: result.modelRef,
+    });
+    result.organization = applyMeetingEdits(capture.id, result.organization);
+    completeDiscussionOrganization(record.id, result.organization);
+
+    const published = updateDiscussionCapture(capture.id, {
       status: 'completed',
       generatedTitle: title,
       ...(inferredProject ? {
@@ -81,12 +113,14 @@ export class DiscussionOrganizer {
       failureStage: undefined,
       failureCode: undefined,
       failureMessage: undefined,
-      completedAt: Date.now(),
+      completedAt: capture.completedAt ?? Date.now(),
     }, ['organizing']);
-    if (!updated) throw new Error('Discussion changed while applying organization');
+    if (!published) throw new Error('Discussion changed while applying organization');
+    return published;
+    });
     if (inferredProject) this.linkProject(updated, inferredProject.id);
     this.deps.onUpdated?.(updated);
-    this.deps.onCompleted?.(updated, result.organization);
+    if (!capture.completedAt) this.deps.onCompleted?.(updated, result.organization);
     return updated;
   }
 
