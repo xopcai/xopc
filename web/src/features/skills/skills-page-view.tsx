@@ -127,6 +127,8 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
         {inSettingsShell ? (
           <div className="flex flex-col gap-3 border-b border-edge-subtle pb-4 dark:border-edge-subtle sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
             <SkillsPageHeaderEnd
+              findingSkills={vm.findingSkills}
+              onFindSkills={vm.onFindSkills}
               loading={vm.loading}
               onReloadClick={vm.onReloadClick}
               searchQuery={vm.searchQuery}
@@ -287,6 +289,8 @@ function SkillsPageHeaderRegistration({ vm }: { vm: SkillsPageVm }) {
   const skillsHeaderEnd = useMemo(
     () => (
       <SkillsPageHeaderEnd
+        findingSkills={vm.findingSkills}
+        onFindSkills={vm.onFindSkills}
         loading={loading}
         onReloadClick={onReloadClick}
         searchQuery={searchQuery}
@@ -297,7 +301,7 @@ function SkillsPageHeaderRegistration({ vm }: { vm: SkillsPageVm }) {
         setInstallOpen={setInstallOpen}
       />
     ),
-    [loading, onReloadClick, searchQuery, setSearchQuery, mainTab, sk, setPendingFile, setInstallOpen],
+    [vm.findingSkills, vm.onFindSkills, loading, onReloadClick, searchQuery, setSearchQuery, mainTab, sk, setPendingFile, setInstallOpen],
   );
 
   useLayoutEffect(() => {

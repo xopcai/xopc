@@ -144,7 +144,11 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
     trackedWelcomeRef.current = welcomeDraftSeed.id;
     lastWelcomeDraftIdRef.current = welcomeDraftSeed.id;
     onExternalTextReplace?.();
-    resetEditor({ nextText: welcomeDraftSeed.text, focus: true });
+    resetEditor({
+      nextText: welcomeDraftSeed.text,
+      focus: typeof globalThis.matchMedia === 'function'
+        && globalThis.matchMedia('(hover: hover) and (pointer: fine)').matches,
+    });
   }
 
   useLayoutEffect(() => {

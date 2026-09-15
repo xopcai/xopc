@@ -1,5 +1,7 @@
-import { CheckCircle2, ChevronLeft, ChevronRight, Loader2, Star } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { CheckCircle2, Star } from 'lucide-react';
 
+import { FindSkillsButton } from '@/features/skills/find-skills-button';
 import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
 import { MarketplaceSkillCardSkeleton } from '@/features/skills/skills-page-primitives';
@@ -15,6 +17,8 @@ import { interaction } from '@/lib/interaction';
 type Props = Pick<
   SkillsPageVm,
   | 'sk'
+  | 'onFindSkills'
+  | 'findingSkills'
   | 'mpCategories'
   | 'mpCategoriesLoading'
   | 'mpCategoriesError'
@@ -23,8 +27,9 @@ type Props = Pick<
   | 'mpError'
   | 'marketCategoryId'
   | 'setMarketCategoryId'
-  | 'marketPage'
-  | 'setMarketPage'
+  | 'mpHasMore'
+  | 'onLoadMoreMarket'
+  | 'onRetryMarket'
   | 'isSkillInstalledByName'
   | 'openMarketplaceDetail'
   | 'onMarketInstall'
@@ -50,8 +55,9 @@ export function SkillsPageMarketplaceContent(p: Props) {
     mpError,
     marketCategoryId,
     setMarketCategoryId,
-    marketPage,
-    setMarketPage,
+    mpHasMore,
+    onLoadMoreMarket,
+    onRetryMarket,
     isSkillInstalledByName,
     openMarketplaceDetail,
     onMarketInstall,
@@ -74,6 +80,17 @@ export function SkillsPageMarketplaceContent(p: Props) {
   ];
   const categoryLabels = new Map(mpCategories.map((category) => [category.id, category.label]));
 
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !mpHasMore || mpLoading || mpError) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) onLoadMoreMarket();
+    }, { rootMargin: '200px' });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [mpHasMore, mpLoading, mpError, onLoadMoreMarket]);
+
   return (
     <>
       {!showCategories ? null : mpCategories.length > 0 ? (
@@ -83,13 +100,13 @@ export function SkillsPageMarketplaceContent(p: Props) {
           onChange={setMarketCategoryId}
           ariaLabel={sk.marketplaceCategoriesAria}
           tabIdPrefix="skills-marketplace-category-tab"
-          className="min-h-[2.75rem] items-center gap-2 pt-0.5 [scrollbar-width:thin]"
+          className="min-h-[2.75rem] items-center gap-2 pt-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           buttonClassName="max-w-[14rem] truncate rounded-full border px-3 py-1.5 text-xs"
           selectedClassName="border-fg bg-fg text-surface-panel dark:border-fg dark:bg-fg dark:text-surface-base"
           unselectedClassName="border-edge bg-surface-panel text-fg-muted hover:border-edge-strong hover:text-fg dark:border-edge dark:bg-surface-hover/40"
         />
       ) : mpCategoriesLoading ? (
-        <div className="-mx-1 flex min-h-[2.75rem] items-center gap-2 overflow-x-auto px-1 pb-1 pt-0.5 [scrollbar-width:thin]" aria-hidden>
+        <div className="-mx-1 flex min-h-[2.75rem] items-center gap-2 overflow-x-auto px-1 pb-1 pt-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-hidden>
           {(['p0', 'p1', 'p2', 'p3', 'p4'] as const).map((k) => (
             <div
               key={k}
@@ -118,23 +135,11 @@ export function SkillsPageMarketplaceContent(p: Props) {
           className="rounded-xl border border-edge bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-edge dark:bg-red-950/40 dark:text-red-300"
           role="alert"
         >
-          {mpError}
+          <p>{mpError}</p>
+          <Button className="mt-2" onClick={onRetryMarket}>{sk.marketplaceRetry}</Button>
         </div>
       ) : mpPayload ? (
         <div className="relative">
-          {mpLoading ? (
-            <div
-              className="pointer-events-none absolute inset-0 z-[1] flex justify-center bg-surface-panel/40 pt-[min(28vh,7.5rem)] backdrop-blur-[1px] motion-reduce:backdrop-blur-none dark:bg-surface-base/35"
-              aria-busy="true"
-              aria-label={sk.loading}
-            >
-              <Loader2
-                className="size-8 shrink-0 animate-spin text-accent motion-reduce:animate-none"
-                strokeWidth={2}
-                aria-hidden
-              />
-            </div>
-          ) : null}
           {mpPayload.items.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-12 text-center text-sm text-fg-muted">
               <p className="px-4">
@@ -142,6 +147,7 @@ export function SkillsPageMarketplaceContent(p: Props) {
                   ? interpolate(sk.marketplaceEmptySearch, { query: trimmedQuery })
                   : sk.marketplaceEmpty}
               </p>
+              <FindSkillsButton sk={sk} findingSkills={p.findingSkills} onFindSkills={p.onFindSkills} secondary />
               {searchInputActive ? (
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   {otherProviders.map((rp) => (
@@ -172,7 +178,7 @@ export function SkillsPageMarketplaceContent(p: Props) {
             <div
               className={cn(
                 'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3',
-                mpLoading && 'pointer-events-none opacity-[0.52] motion-reduce:opacity-100',
+
               )}
             >
               {mpPayload.items.map((row) => {
@@ -186,7 +192,7 @@ export function SkillsPageMarketplaceContent(p: Props) {
                     key={row.id}
                     className={cn(
                       'group flex h-full flex-col rounded-xl bg-surface-panel p-4 shadow-surface',
-                      'transition-colors hover:bg-surface-hover',
+                      'transition-colors hover:bg-surface-hover [content-visibility:auto] [contain-intrinsic-size:auto_220px]',
                     )}
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -212,7 +218,7 @@ export function SkillsPageMarketplaceContent(p: Props) {
                           type="button"
                           variant="secondary"
                           className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
-                          disabled={mpLoading || installingMarketName === packageName}
+                          disabled={installingMarketName === packageName}
                           onClick={() =>
                             void onMarketInstall(packageName, {
                               providerOverride: row.providerId ?? null,
@@ -300,7 +306,7 @@ export function SkillsPageMarketplaceContent(p: Props) {
                           type="button"
                           variant="secondary"
                           className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
-                          disabled={mpLoading || usingSkillInChatName === packageName}
+                          disabled={usingSkillInChatName === packageName}
                           onClick={() =>
                             void onUseSkillInChat({
                               name: packageName,
@@ -320,42 +326,18 @@ export function SkillsPageMarketplaceContent(p: Props) {
               })}
             </div>
           )}
-          {mpPayload.items.length > 0 ? (
-            <div className="mt-3 flex flex-col items-center justify-between gap-3 sm:flex-row">
-              <p className="text-center text-xs text-fg-muted sm:text-left">
-                {interpolate(sk.marketplacePageStatus, {
-                  page: mpPayload.meta.page,
-                  totalPages: mpPayload.meta.totalPages,
-                  total: mpPayload.meta.total,
-                })}
-              </p>
-              {mpPayload.meta.totalPages > 1 ? (
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="h-9 gap-1 px-2"
-                    disabled={mpLoading || marketPage <= 1}
-                    aria-label={sk.marketplacePagePrev}
-                    onClick={() => setMarketPage((pg) => Math.max(1, pg - 1))}
-                  >
-                    <ChevronLeft className="size-4" strokeWidth={1.75} aria-hidden />
-                    <span className="sr-only sm:not-sr-only">{sk.marketplacePagePrev}</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="h-9 gap-1 px-2"
-                    disabled={mpLoading || marketPage >= mpPayload.meta.totalPages}
-                    aria-label={sk.marketplacePageNext}
-                    onClick={() => setMarketPage((pg) => Math.min(mpPayload.meta.totalPages, pg + 1))}
-                  >
-                    <span className="sr-only sm:not-sr-only">{sk.marketplacePageNext}</span>
-                    <ChevronRight className="size-4" strokeWidth={1.75} aria-hidden />
-                  </Button>
-                </div>
-              ) : null}
+          <div ref={sentinelRef} className="h-1" aria-hidden />
+          {mpLoading ? (
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label={sk.loading}>
+              {SKILL_LIST_SKELETON_KEYS.slice(0, 3).map((key) => <MarketplaceSkillCardSkeleton key={key} />)}
             </div>
+          ) : mpError ? (
+            <div className="mt-4 text-center" role="alert">
+              <p className="mb-2 text-sm text-fg-muted">{mpError}</p>
+              <Button onClick={onRetryMarket}>{sk.marketplaceRetry}</Button>
+            </div>
+          ) : !mpHasMore && mpPayload.items.length > 0 ? (
+            <p className="mt-4 text-center text-xs text-fg-subtle">{searchInputActive ? sk.marketplaceSearchEnd : sk.marketplaceEnd}</p>
           ) : null}
         </div>
       ) : null}

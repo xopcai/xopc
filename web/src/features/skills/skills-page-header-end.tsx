@@ -1,12 +1,15 @@
 import { Plus, Search } from 'lucide-react';
 import { memo } from 'react';
 
+import { FindSkillsButton } from '@/features/skills/find-skills-button';
 import { Button } from '@/components/ui/button';
 import { RefreshButton } from '@/components/ui/refresh-button';
 import type { MainTab } from '@/features/skills/skills-page.constants';
 import type { SkillsCopy } from '@/features/skills/skill-catalog-structured-preview';
 
 export const SkillsPageHeaderEnd = memo(function SkillsPageHeaderEnd({
+  findingSkills,
+  onFindSkills,
   loading,
   onReloadClick,
   searchQuery,
@@ -16,6 +19,8 @@ export const SkillsPageHeaderEnd = memo(function SkillsPageHeaderEnd({
   setPendingFile,
   setInstallOpen,
 }: {
+  findingSkills: boolean;
+  onFindSkills: () => Promise<void>;
   loading: boolean;
   onReloadClick: () => void;
   searchQuery: string;
@@ -53,7 +58,7 @@ export const SkillsPageHeaderEnd = memo(function SkillsPageHeaderEnd({
       </label>
       <Button
         type="button"
-        variant="primary"
+        variant="secondary"
         className="shrink-0 gap-2"
         onClick={() => {
           setPendingFile(null);
@@ -63,6 +68,7 @@ export const SkillsPageHeaderEnd = memo(function SkillsPageHeaderEnd({
         <Plus className="size-4" strokeWidth={1.75} aria-hidden />
         {sk.installCta}
       </Button>
+      <FindSkillsButton sk={sk} findingSkills={findingSkills} onFindSkills={onFindSkills} />
     </div>
   );
 });

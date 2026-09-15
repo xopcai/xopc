@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { AlertTriangle, ExternalLink, Info, Trash2, X } from 'lucide-react';
+import { AlertTriangle, ExternalLink, Trash2, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { SkillCardIcon } from '@/features/skills/skill-card-icon';
@@ -122,16 +122,6 @@ export function SkillsPageDetailDialog(p: Props) {
                 <X className="size-5" strokeWidth={1.75} aria-hidden />
               </button>
             </Dialog.Close>
-          </div>
-          <div className="flex min-h-[3.25rem] shrink-0 items-start gap-2 border-b border-blue-200/80 bg-blue-50/95 px-4 py-2.5 text-sm text-fg dark:border-blue-900/50 dark:bg-blue-950/45">
-            <Info className="mt-0.5 size-4 shrink-0 text-blue-600 dark:text-blue-400" strokeWidth={1.75} aria-hidden />
-            <p className="min-w-0 leading-relaxed">
-              {detailSource === 'store' && detailMarketplacePreview
-                ? sk.detailModalBanner
-                : detailSource === 'store'
-                  ? sk.detailModalBannerStore
-                  : sk.detailModalBanner}
-            </p>
           </div>
           <div className="min-h-0 min-w-0 flex-1 overflow-auto p-4">
             {detailLoading ? (

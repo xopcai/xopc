@@ -29,6 +29,18 @@ describe('composer handoff params', () => {
       .toBe('/chat/new?draft=Start+from+workbench&autoSend=1&projectScope=none');
   });
 
+  it('keeps the skill discovery scene without enabling automatic sending', () => {
+    const search = searchParamsForComposerHandoff('?scene=find-skills&skill=find-skills&draft=Meeting+notes&projectScope=none');
+    const params = new URLSearchParams(search);
+    expect(params.get('scene')).toBe('find-skills');
+    expect(params.get('skill')).toBe('find-skills');
+    expect(params.get('draft')).toBe('Meeting notes');
+    expect(params.has('autoSend')).toBe(false);
+    expect(params.has('projectScope')).toBe(false);
+    expect(searchParamsForComposerHandoff('?scene=unknown')).toBe('');
+    expect(searchParamsForComposerHandoff('?scene=find-skills')).toBe('?scene=find-skills');
+  });
+
   it('preserves both params while resolving a new chat route', () => {
     expect(searchParamsForComposerHandoff('?skill=build-xopc-local-app&draft=Add+filters&autoSend=1&agent=coder'))
       .toBe('?skill=build-xopc-local-app&draft=Add+filters&autoSend=1');

@@ -5,6 +5,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 
 import { fetchCommandsCached } from '@/features/chat/palette/command-palette-api';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SkillDiscoveryWelcome } from '@/features/skills/skill-discovery-welcome';
 import { ChatComposer } from '@/features/chat/composer/chat-composer';
 import { ProjectEnvironmentPicker } from '@/features/chat/composer/project-environment-picker';
 import { useProjectSessionComposer } from '@/features/chat/composer/use-project-session-composer';
@@ -139,6 +140,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     taskId: taskId ?? undefined,
   });
 
+  const skillDiscovery = !embedded && !taskId && searchParams.get('scene') === 'find-skills';
   const skillQuery = searchParams.get('skill')?.trim() ?? '';
   const slashQuery = searchParams.get('slash')?.trim() ?? '';
   const draftQuery = searchParams.get('draft') ?? '';
@@ -1034,7 +1036,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
 
       {!embedded ? <ChatPageHeaderRegistration
           sessionIdentity={sessionMetadata?.identity}
-        chatHeadline={chatHeadline}
+        chatHeadline={skillDiscovery && msgSlice.items.length === 0 ? m.skills.findTitle : chatHeadline}
         chatAgents={agents.chatAgents?.items ?? []}
         showChatAgentSelector={agents.showChatAgentSelector}
         chatAgentId={agents.displayAgentId}
@@ -1195,7 +1197,14 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                     onPickWelcomePrompt={onPickWelcomePrompt}
                     welcomeSpotlight={activeWelcomeSpotlight}
                     welcomeOverlay={
-                      welcomeContextLoading ? (
+                      skillDiscovery ? (
+                        <SkillDiscoveryWelcome sk={m.skills}
+                          disabled={session.sessionRoutePending || session.showSessionLoading}
+                          onPick={(text) => {
+                            welcomeDraftSeq.current += 1;
+                            setWelcomeDraftSeed({ id: welcomeDraftSeq.current, text: buildComposerDraftSeed('find-skills', text)! });
+                          }} />
+                      ) : welcomeContextLoading ? (
                         <ChatWelcomeSpotlightSkeleton showSkeleton={showWelcomeSkeleton} compact={embedded} />
                       ) : undefined
                     }
@@ -1281,7 +1290,15 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                   }}
                 />
               ) : null}
+              {skillDiscovery && msgSlice.items.length > 0 ? (
+                <div className="mb-2 text-right">
+                  <Link to="/skills" className="text-xs text-accent-fg hover:underline">
+                    {m.skills.findBack}
+                  </Link>
+                </div>
+              ) : null}
               <ChatComposer
+                placeholder={skillDiscovery ? m.skills.findPlaceholder : undefined}
                 composerContext={!embedded && !taskId && !editingUserTurn && !showConversationLoading && msgSlice.items.length === 0 ? {
                   project: scopedProject,
                   disabled: updatingContext || projectComposer.busy || (isSessionTransitioning && !session.projectPreparation),
@@ -1304,7 +1321,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                 streaming={stream.streaming}
                 sessionKey={session.sessionKey}
                 welcomeDraftSeed={welcomeDraftSeed}
-                welcomeSuggestion={compactWelcomeLayout ? primaryWelcomeSelection : null}
+                welcomeSuggestion={!skillDiscovery && compactWelcomeLayout ? primaryWelcomeSelection : null}
                 onAcceptWelcomeSuggestion={onPickWelcomePrompt}
                 thinkingLevel={session.thinkingLevel}
                 modelSupportsThinking={session.modelSupportsThinking}
