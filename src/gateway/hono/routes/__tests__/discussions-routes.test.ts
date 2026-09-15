@@ -27,8 +27,8 @@ function createApp(overrides: Partial<GatewayService['discussions']> = {}) {
     editSummary: vi.fn(),
     recordingChunks: vi.fn(),
     uploadRecordingChunk: vi.fn(),
-    completeRecording: vi.fn(),
-    stop: vi.fn(),
+    sealRecording: vi.fn(),
+    recordingJob: vi.fn(),
     deleteAudio: vi.fn(),
     unlinkInferredProject: vi.fn(),
     retry: vi.fn(),
@@ -111,21 +111,21 @@ describe('discussion routes', () => {
     expect(read.status).toBe(200);
   });
 
-  it('stops through a sequence fence and removes only explicit audio', async () => {
+  it('seals through a sequence fence and removes only explicit audio', async () => {
     const detail = { discussion: { id: 'discussion-1' }, note: { id: 'note-1' } };
     const { app, discussions } = createApp({
-      stop: vi.fn().mockResolvedValue(detail),
+      sealRecording: vi.fn().mockResolvedValue({ id: 'job', state: 'queued' }),
       deleteAudio: vi.fn().mockResolvedValue(detail),
     });
-    const stopped = await app.request('/api/discussions/discussion-1/stop', {
+    const stopped = await app.request('/api/discussions/discussion-1/capture/seal', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ lastSequence: 4, durationMs: 90_000 }),
+      body: JSON.stringify({ lastSequence: 4, chunkCount: 1, mimeType: 'audio/wav', fileName: 'meeting.wav' }),
     });
     const deleted = await app.request('/api/discussions/discussion-1/audio', { method: 'DELETE' });
 
-    expect(stopped.status).toBe(200);
-    expect(discussions.stop).toHaveBeenCalledWith('discussion-1', 4, 90_000);
+    expect(stopped.status).toBe(202);
+    expect(discussions.sealRecording).toHaveBeenCalledWith('discussion-1', { lastSequence: 4, chunkCount: 1, mimeType: 'audio/wav', fileName: 'meeting.wav' });
     expect(deleted.status).toBe(200);
     expect(discussions.deleteAudio).toHaveBeenCalledWith('discussion-1');
   });

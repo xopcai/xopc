@@ -488,6 +488,7 @@ export class GatewayService {
       },
     });
     this.discussionSealer = new DiscussionSealer({
+      processRecordingJob: () => this.discussions.processRecordingJob(),
       notes: this.notesService,
       getConfig: () => this.config,
       onUpdated: emitDiscussion,

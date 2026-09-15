@@ -1,3 +1,5 @@
+import type { DiscussionRecordingJob, DiscussionRecordingManifest } from '@xopcai/gateway-contract';
+
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
@@ -63,17 +65,6 @@ export function uploadDiscussionSegment(
   });
 }
 
-export function stopDiscussion(
-  discussionId: string,
-  lastSequence: number,
-  durationMs: number,
-): Promise<DiscussionDetail> {
-  return fetchJson(apiUrl(`/api/discussions/${encodeURIComponent(discussionId)}/stop`), {
-    method: 'POST',
-    body: JSON.stringify({ lastSequence, durationMs }),
-  });
-}
-
 export function retryDiscussion(id: string): Promise<DiscussionDetail> {
   return fetchJson(apiUrl(`/api/discussions/${encodeURIComponent(id)}/retry`), { method: 'POST' });
 }
@@ -100,6 +91,10 @@ export function uploadRecordingChunk(id: string, sequence: number, blob: Blob, s
   });
 }
 
-export function completeRecording(id: string, input: { chunkCount: number; mimeType: string; fileName: string }): Promise<DiscussionDetail> {
-  return fetchJson(apiUrl(`/api/discussions/${encodeURIComponent(id)}/recording/complete`), { method: 'POST', body: JSON.stringify(input) });
+export function sealRecording(id: string, input: DiscussionRecordingManifest): Promise<DiscussionRecordingJob> {
+  return fetchJson(apiUrl(`/api/discussions/${encodeURIComponent(id)}/capture/seal`), { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function getRecordingJob(id: string): Promise<DiscussionRecordingJob> {
+  return fetchJson(apiUrl(`/api/discussions/${encodeURIComponent(id)}/recording/job`));
 }

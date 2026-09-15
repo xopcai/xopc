@@ -13,6 +13,7 @@ const TARGET_SAMPLE_RATE = 16_000;
 const MAX_DECODED_DURATION_SECONDS = 15 * 60;
 const MAX_DECODED_BYTES = TARGET_SAMPLE_RATE * 4 * MAX_DECODED_DURATION_SECONDS;
 const MAX_SEGMENTED_DURATION_SECONDS = 30 * 60;
+const LOCAL_AUDIO_INPUT_OPTIONS = ['-protocol_whitelist', 'file,pipe', '-format_whitelist', 'wav,matroska,webm,ogg,mp3,mov'];
 
 export type AudioFormat = 'wav' | 'webm' | 'ogg' | 'mp3' | 'mp4' | 'unknown';
 
@@ -80,23 +81,30 @@ function runFfmpeg(
     let outputBytes = 0;
     let errorBytes = 0;
     let settled = false;
+    let terminationError: Error | undefined;
+    let killTimer: NodeJS.Timeout | undefined;
     const finish = (error?: Error) => {
       if (settled) return;
       settled = true;
+      if (killTimer) clearTimeout(killTimer);
       options.signal?.removeEventListener('abort', abort);
       if (error) reject(error);
       else resolve(Buffer.concat(stdout));
     };
-    const abort = () => {
+    const terminate = (error: Error) => {
+      if (terminationError || settled) return;
+      terminationError = error;
       child.kill('SIGTERM');
-      finish(new AudioNormalizationError('Audio decoding was cancelled'));
+      killTimer = setTimeout(() => child.kill('SIGKILL'), 2_000);
+      killTimer.unref();
     };
+    const abort = () => terminate(new AudioNormalizationError('Audio decoding was cancelled'));
     options.signal?.addEventListener('abort', abort, { once: true });
     child.stdout.on('data', (chunk: Buffer) => {
+      if (terminationError) return;
       outputBytes += chunk.length;
       if (options.maxOutputBytes != null && outputBytes > options.maxOutputBytes) {
-        child.kill('SIGTERM');
-        finish(new AudioNormalizationError('Decoded audio exceeds the supported duration'));
+        terminate(new AudioNormalizationError('Decoded audio exceeds the supported duration'));
         return;
       }
       stdout.push(chunk);
@@ -115,6 +123,7 @@ function runFfmpeg(
     });
     child.once('close', (code) => {
       if (settled) return;
+      if (terminationError) { finish(terminationError); return; }
       if (code === 0) finish();
       else {
         const detail = Buffer.concat(stderr).toString('utf8').trim();
@@ -144,6 +153,7 @@ export async function decodeAudioToMonoFloat32(input: {
     }
   }
   const bytes = await runFfmpeg([
+    ...LOCAL_AUDIO_INPUT_OPTIONS,
     '-i', 'pipe:0', '-map', '0:a:0', '-vn', '-ac', '1', '-ar', String(TARGET_SAMPLE_RATE),
     '-f', 'f32le', 'pipe:1',
   ], { input: input.buffer, signal: input.signal, maxOutputBytes: MAX_DECODED_BYTES });
@@ -181,6 +191,7 @@ export async function forEachNormalizedAudioSegment(
   const outputPattern = join(directory, 'segment-%05d.wav');
   try {
     await runFfmpeg([
+      ...LOCAL_AUDIO_INPUT_OPTIONS,
       '-i', input.filePath, '-map', '0:a:0', '-vn', '-ac', '1', '-ar', String(TARGET_SAMPLE_RATE),
       '-t', String(maxDurationSeconds + segmentSeconds),
       '-c:a', 'pcm_s16le', '-f', 'segment', '-segment_time', String(segmentSeconds),
@@ -190,6 +201,7 @@ export async function forEachNormalizedAudioSegment(
     if (files.length === 0) throw new AudioNormalizationError('Audio decoder produced no segments');
     let decodedDurationSeconds = 0;
     for (const file of files) {
+      input.signal?.throwIfAborted();
       const decoded = decodeWavToMonoFloat32(await readFile(join(directory, file)));
       decodedDurationSeconds += decoded.durationSeconds;
       if (decodedDurationSeconds > maxDurationSeconds + 0.05) {
@@ -199,6 +211,7 @@ export async function forEachNormalizedAudioSegment(
       }
     }
     for (let index = 0; index < files.length; index += 1) {
+      input.signal?.throwIfAborted();
       await consume(await readFile(join(directory, files[index]!)), index);
     }
     return files.length;

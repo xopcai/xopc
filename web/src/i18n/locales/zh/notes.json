@@ -162,6 +162,7 @@
       "resume": "继续",
       "stop": "完成",
       "finalizing": "正在保存并整理笔记…",
+      "verifyingRecording": "录音已上传，正在后台校验并保存…",
       "openNote": "打开笔记",
       "liveTranscript": "实时转写",
       "waitingTranscript": "正在聆听…",
