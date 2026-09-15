@@ -62,10 +62,11 @@ export async function commandTask(
   taskId: string,
   command: TaskCommand,
   expectedVersion: number,
+  idempotencyKey: string = crypto.randomUUID(),
 ): Promise<TaskDetail> {
   await fetchJson(apiUrl(`/api/tasks/${encodeURIComponent(taskId)}/commands`), {
     method: 'POST',
-    body: JSON.stringify({ idempotencyKey: crypto.randomUUID(), expectedVersion, command }),
+    body: JSON.stringify({ idempotencyKey, expectedVersion, command }),
   });
   return fetchTask(taskId);
 }

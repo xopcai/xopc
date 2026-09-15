@@ -1545,7 +1545,17 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
     if (typeof body.extendTtlMs === 'number') patch.extendTtlMs = body.extendTtlMs;
     if (body.maxViews === null || typeof body.maxViews === 'number') patch.maxViews = body.maxViews as number | null;
 
-    const updated = store.update(id, patch);
+    const existing = store.getById(id);
+    if (patch.extendTtlMs !== undefined && existing) {
+      if (existing.revoked) return c.json({ ok: false, error: { message: 'This share was revoked and cannot be restored' } }, 409);
+      if (existing.kind === 'file' || existing.kind === 'directory') {
+        const integrity = await store.validateFileIntegrity(existing);
+        if (!integrity.valid) return c.json({ ok: false, error: { message: 'The original artifact is missing or was replaced. Generate a new artifact from the task.' } }, 410);
+      }
+    }
+    let updated;
+    try { updated = store.update(id, patch); }
+    catch (error) { return c.json({ ok: false, error: { message: error instanceof Error ? error.message : 'Cannot renew share' } }, 400); }
     if (!updated) return c.json({ ok: false, error: { message: 'Not found' } }, 404);
 
     const urlCtx = getShareUrlContext(service);

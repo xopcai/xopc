@@ -4,6 +4,7 @@ import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
 export interface ProactiveTemplate {
+  eventTypes?: string[]; contextProviderIds?: string[];
   calendarSource?: { status: string; lastSourceUpdatedAt: string | null };
   key: string; title: string; description: string; scopeKind: 'project' | 'workspace'; scheduled: boolean; requiresCalendar: boolean;
 }
@@ -16,11 +17,11 @@ export type CardsResponse = { cards: ProactiveCard[]; nextCursor: string | null 
 export interface Delegation extends ProactiveSubscription {
   effectiveEnabled: boolean;
   project: { name: string; status: string } | null;
-  latestRun: { status: string; reason: string | null; startedAt: string; completedAt: string | null; error: string | null } | null;
+  latestRun: { status: string; reason: string | null; startedAt: string; completedAt: string | null; error: string | null; attempt?: number; nextAttemptAt?: string | null } | null;
   pending: boolean;
 }
 export interface DelegationRun {
-  id: string; status: string; reason: string | null; startedAt: string; completedAt: string | null; error: string | null;
+  id: string; status: string; reason: string | null; startedAt: string; completedAt: string | null; error: string | null; attempt?: number; nextAttemptAt?: string | null;
 }
 export interface MailFollowUp {
   id: string; subscriptionId: string; instructions: string; dueAt: string; status: 'watching' | 'paused' | 'completed';

@@ -5,6 +5,7 @@ import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached } from '@/featur
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { fetchProviderMetaList } from '@/features/settings/providers-api';
 import { getSkills } from '@/features/skills/skill-list-api';
+import { isElectron } from '@/lib/electron-env';
 import { messages } from '@/i18n/messages';
 import { useGatewayRealtimeStore } from '@/stores/gateway-realtime-store';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -121,6 +122,7 @@ export function useSetupChecklist(): {
     const metaTotal = providerMeta?.length ?? 0;
 
     return buildSetupStatusSnapshot({
+      isElectron: isElectron(),
       hasToken: Boolean(token),
       realtimeConnected,
       config: configData?.payload?.config,

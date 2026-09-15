@@ -156,6 +156,7 @@ function statusFromDone(done: boolean): DoctorCheckStatus {
 }
 
 function issuePath(id: string): string | undefined {
+  if (id === 'tool-runtimes') return '/settings/runtimes';
   if (id === 'provider-auth') return '/settings/capabilities/models';
   if (id === 'config-health') return '/settings/gateway';
   if (id === 'state-integrity' || id === 'workspace-status') return '/agents';
@@ -299,6 +300,7 @@ function buildDiagnosticSignals(input: {
 }
 
 export function buildSetupStatusSnapshot(input: {
+  isElectron?: boolean;
   hasToken: boolean;
   realtimeConnected: boolean;
   config: unknown;
@@ -333,7 +335,9 @@ export function buildSetupStatusSnapshot(input: {
   const gatewayConnected = input.hasToken && input.realtimeConnected;
   const channelConfigured = isAnyChannelConfigured(input.config);
   const skillInstalled = input.skillCount > 0;
-  const doctorChecks = input.doctorChecks ?? [];
+  const doctorChecks = (input.doctorChecks ?? []).filter(
+    (check) => !input.isElectron || check.id !== 'gateway-service',
+  );
   const issues = buildDoctorIssues(doctorChecks, input.labels.diagnostics);
 
   const checklist: SetupChecklistItemState[] = [
