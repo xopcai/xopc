@@ -93,7 +93,7 @@ export function HomeQuickComposer({
       className={cn(
         'relative',
         inline
-          ? 'mx-auto mt-8 w-full max-w-[640px] overflow-hidden rounded-2xl border border-edge bg-surface-base p-2 text-left shadow-surface transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/15'
+          ? 'mx-auto mt-6 w-full overflow-hidden rounded-xl border border-edge bg-surface-base p-2 text-left shadow-surface transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/15 sm:mt-8'
           : 'flex min-h-0 flex-1 flex-col',
       )}
     >
