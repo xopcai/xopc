@@ -106,9 +106,14 @@ describe('NotesService markdown sync and AI edit', () => {
     expect(store.snapshots).toHaveLength(1);
   });
 
-  it('uses the first 10 characters of quick capture markdown as the default title', async () => {
+  it('preserves a meaningful subject as the default quick capture title', async () => {
     const note = await service.quickCapture('今天要整理产品方案和会议纪要', { channel: 'web' });
-    expect(note.title).toBe('今天要整理产品方案和');
+    expect(note.title).toBe('今天要整理产品方案和会议纪要');
+  });
+
+  it('prefers a document heading over a conversational preamble', async () => {
+    const note = await service.quickCapture('我现在彻底理解了。\n\n# 产品交互优化方案\n内容', { channel: 'web' });
+    expect(note.title).toBe('产品交互优化方案');
   });
 
   it('reuses the original quick capture for the same idempotency key', async () => {

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   closeXopcDatabase,
+  ensureSessionRecord,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../../storage/sqlite/index.js';
@@ -17,8 +18,10 @@ import { registerTaskRoutes } from '../tasks.js';
 describe('task routes', () => {
   let stateDir: string;
   let app: Hono;
+  const abortAgentRun = vi.fn();
 
   beforeEach(() => {
+    abortAgentRun.mockReset();
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-task-routes-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
@@ -31,8 +34,8 @@ describe('task routes', () => {
         sessionIndexInstance: {},
         dispatchTaskEvents: vi.fn(),
         dispatchTaskRuns: vi.fn(),
-        getActiveWebchatRunId: vi.fn(),
-        abortAgentRun: vi.fn(),
+        getActiveWebchatRunId: vi.fn(() => 'live-run'),
+        abortAgentRun,
       },
       strictRateLimitMiddleware: async (_c, next) => next(),
       chatRateLimitMiddleware: async (_c, next) => next(),
@@ -43,6 +46,21 @@ describe('task routes', () => {
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  it('aborts the live conversation after persisting a pause', async () => {
+    const task = new TaskRepository().create({ title: 'Pause route', objective: 'Wait' });
+    ensureSessionRecord('session', stateDir);
+    new TaskRunRepository().create({ taskId: task.id, sessionKey: 'session', executorKind: 'agent',
+      executorRef: { agentId: 'main' }, trigger: { kind: 'manual' }, correlationId: 'pause-route',
+      idempotencyKey: 'pause-route', contractVersion: task.latestContractVersion });
+    const response = await app.request(`/api/tasks/${task.id}/commands`, { method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ idempotencyKey: 'pause-route-command', expectedVersion: task.version,
+        command: { type: 'add_wait', wait: { kind: 'paused', reason: 'Later', condition: {} } } }) });
+    expect(response.status).toBe(200);
+    expect(abortAgentRun).toHaveBeenCalledWith('live-run');
+    expect(new TaskRunRepository().listActiveWaits(task.id)[0]?.kind).toBe('paused');
   });
 
   it('deletes an idle Task and reports a stable missing-task error', async () => {

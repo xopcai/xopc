@@ -1,3 +1,4 @@
+import { acceptTranscriptRevision } from './transcript-revisions';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
@@ -142,7 +143,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
   const dictationRef = useRef(new Map<string, string>());
   const finalizingRef = useRef(false);
   const confirmRef = useRef<() => void>(() => {});
-  const transcriptRevisionsRef = useRef(new Map<string, number>());
+  const transcriptRevisionsRef = useRef(new Map<string, { revision: number; final: boolean }>());
   const activeResponseIdRef = useRef<string | null>(null);
   const activeTaskIdRef = useRef<string | null>(null);
   const responseDoneRef = useRef(false);
@@ -342,10 +343,8 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
         onEvent: (event) => {
           if (!isCurrent()) return;
           if (event.type === 'input.transcript.delta' || event.type === 'input.transcript.final') {
-            const previous = transcriptRevisionsRef.current.get(event.payload.utteranceId) ?? 0;
-            if (event.payload.revision <= previous) return;
-            if (transcriptRevisionsRef.current.size >= 256) transcriptRevisionsRef.current.clear();
-            transcriptRevisionsRef.current.set(event.payload.utteranceId, event.payload.revision);
+            if (!acceptTranscriptRevision(transcriptRevisionsRef.current, event.payload.utteranceId,
+              event.payload.revision, event.type === 'input.transcript.final')) return;
           }
           if (event.type === 'input.transcript.delta') setPartialTranscript(event.payload.text);
           if (event.type === 'input.transcript.final') {
