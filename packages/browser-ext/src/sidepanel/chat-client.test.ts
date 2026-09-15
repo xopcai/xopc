@@ -230,3 +230,59 @@ describe('BrowserChatClient delivery safety', () => {
     expect(JSON.stringify(internals(client).snapshot.messages)).not.toContain('media://');
   });
 });
+
+describe('composer delivery concurrency', () => {
+  it('rejects a duplicate before endpoint binding completes', async () => {
+    const client = readyClient();
+    let resolveBinding!: (response: Response) => void;
+    gatewayFetch.mockImplementationOnce(() => new Promise(resolve => { resolveBinding = resolve; }))
+      .mockResolvedValueOnce(response({ payload: { state: { activeRunId: 'run-one', inputs: [] } } }));
+    const first = client.send('one');
+    await expect(client.send('two')).rejects.toThrow('Wait for the queued');
+    resolveBinding(response({ ok: true }));
+    await first;
+    expect(gatewayFetch.mock.calls.filter(([url]) => String(url).endsWith('/inputs'))).toHaveLength(1);
+  });
+
+  it('does not send into a different session after endpoint binding', async () => {
+    const client = readyClient();
+    let resolveBinding!: (response: Response) => void;
+    gatewayFetch.mockImplementationOnce(() => new Promise(resolve => { resolveBinding = resolve; }));
+    const sending = client.send('belongs to one');
+    internals(client).update({ sessionKey: 'chat:two' });
+    resolveBinding(response({ ok: true }));
+    await expect(sending).rejects.toThrow('errorChatChanged');
+    expect(gatewayFetch.mock.calls.some(([url]) => String(url).endsWith('/inputs'))).toBe(false);
+  });
+
+  it('edits only queued text and keeps existing attachments and contexts on the server', async () => {
+    const client = readyClient();
+    gatewayFetch.mockResolvedValueOnce(response({ ok: true }))
+      .mockResolvedValueOnce(response({ payload: { inputs: [{ id: 'input-one', version: 3, status: 'queued', content: 'edited' }] } }));
+    await client.editInput('input-one', 2, 'edited');
+    expect(JSON.parse(gatewayFetch.mock.calls[0][1].body as string)).toEqual({ version: 2, content: 'edited' });
+    expect(internals(client).snapshot.queuedInputs?.[0].content).toBe('edited');
+  });
+});
+
+describe('composer model and run state', () => {
+  it('includes the selected fixed model version in the submitted input', async () => {
+    const client = readyClient();
+    internals(client).update({ modelConfig: { model: 'test/one', thinkingLevel: 'high', fixedModel: true, configVersion: 7 } });
+    gatewayFetch.mockResolvedValueOnce(response({ ok: true }))
+      .mockResolvedValueOnce(response({ payload: { state: { activeRunId: 'run-one', inputs: [] } } }));
+    await client.send('hello');
+    const call = gatewayFetch.mock.calls.find(([url]) => String(url).endsWith('/inputs'))!;
+    expect(JSON.parse(call[1].body as string).configVersion).toBe(7);
+  });
+
+  it('clears the previous stream when the next queued run starts', async () => {
+    const client = readyClient();
+    internals(client).update({ runId: 'old-run', streamingText: 'old response' });
+    internals(client).reloadMessages = vi.fn().mockResolvedValue(undefined);
+    gatewayFetch.mockResolvedValueOnce(response({ payload: { activeRunId: 'new-run', inputs: [] } }));
+    await client.refreshInputs();
+    expect(internals(client).reloadMessages).toHaveBeenCalled();
+    expect(internals(client).snapshot).toMatchObject({ runId: 'new-run', streamingText: '' });
+  });
+});

@@ -1293,6 +1293,8 @@
     "composioSetupStorageHint": "密钥验证通过后才会保存，并且不会写入 xopc.json。",
     "composioAuthConfigTitle": "认证配置",
     "composioAuthConfigOptionalHint": "XOPC Cloud 会为你管理当前应用的认证。",
+    "composioCloudAuthUnavailable": "XOPC Cloud 尚未配置此应用的授权。请联系云端管理员完成配置，或切换为自己的 Composio API Key。",
+    "composioCloudAuthReady": "应用授权由 XOPC Cloud 配置，连接后将跳转到应用完成账号授权。",
     "composioAuthConfigRequiredHint": "当前应用没有 Composio 托管认证，请选择同一项目中的自定义 Auth Config。",
     "composioAuthConfigManaged": "使用 Composio 托管认证",
     "composioAuthConfigSelect": "选择 Auth Config",

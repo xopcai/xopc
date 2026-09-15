@@ -71,6 +71,9 @@ if (!manifestPermissions.has('scripting') || !manifestPermissions.has('tabs')) {
   errors.push('manifest must include scripting and tabs permissions for page context capture');
 }
 const optionalHostPermissions = new Set(manifest.optional_host_permissions ?? []);
+if (!optionalHostPermissions.has('<all_urls>')) {
+  errors.push('manifest must allow optional <all_urls> access for side panel screenshots');
+}
 if (!optionalHostPermissions.has('http://*/*') || !optionalHostPermissions.has('https://*/*')) {
   errors.push('manifest must allow optional per-site http(s) access for page context capture');
 }
@@ -212,6 +215,16 @@ if (existsSync(sidePanelPath)) {
     } else if (!existsSync(assetPath)) {
       errors.push(`side panel references missing asset: ${relativeAssetPath}`);
     }
+  }
+}
+
+const sidePanelScriptPath = join(packageRoot, 'dist/sidepanel.js');
+if (existsSync(sidePanelScriptPath)) {
+  const script = readFileSync(sidePanelScriptPath, 'utf8');
+  const worklets = [...script.matchAll(/assets\/pcm-capture-worklet-[\w-]+\.js/g)].map(match => match[0]);
+  if (!worklets.length) errors.push('side panel must reference a bundled PCM capture worklet');
+  for (const worklet of worklets) {
+    if (!existsSync(join(packageRoot, 'dist', worklet))) errors.push(`missing voice input worklet: ${worklet}`);
   }
 }
 

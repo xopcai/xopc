@@ -45,7 +45,7 @@ vi.mock('@/features/voice/realtime/pcm-player', () => ({
     close = mocks.playerClose;
   },
 }));
-vi.mock('@/features/chat/composer/pcm-wav-recorder', () => ({
+vi.mock('@xopcai/composer-core/pcm-wav-recorder', () => ({
   PcmFrameCapture: { start: mocks.startCapture },
   PcmStreamEncoder: class {
     push() { return new ArrayBuffer(4); }

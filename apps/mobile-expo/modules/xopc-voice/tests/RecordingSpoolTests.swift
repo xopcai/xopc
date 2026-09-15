@@ -84,6 +84,8 @@ struct RecordingSpoolTests {
     let twentySeconds = Data(repeating: 3, count: RecordingSpool.chunkSamples * 2)
     for _ in 0..<360 { try long.append(twentySeconds, epoch: 0) }
     precondition(long.chunks.count == 360 && long.persistedSamples == 115200000)
+    do { try long.append(Data([0, 0]), epoch: 0); preconditionFailure("Exceeded duration limit") }
+    catch RecordingSpoolError.durationLimit {}
     try long.close()
     let longRestored = try RecordingSpool(root: root, captureId: longId)
     precondition(longRestored.chunks.count == 360 && longRestored.persistedSamples == 115200000)

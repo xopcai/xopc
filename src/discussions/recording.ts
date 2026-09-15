@@ -67,6 +67,7 @@ export async function saveRecordingChunk(capture: DiscussionCapture, sequence: n
 }
 
 export function validateRecordingManifest(capture: DiscussionCapture, input: DiscussionRecordingManifest): void {
+  if (input.containerMode !== undefined && (input.containerMode !== 'independent_wav' || input.mimeType !== 'audio/wav')) throw invalid('Unsupported recording container');
   const mimeType = input.mimeType.split(';')[0];
   if (!['audio/wav', 'audio/x-wav', 'audio/webm', 'audio/ogg', 'audio/mpeg', 'audio/mp4'].includes(mimeType!)) throw invalid('Unsupported audio type');
   const chunks = listRecordingChunks(capture.id);
@@ -81,10 +82,34 @@ export async function completeRecording(capture: DiscussionCapture, input: Discu
   const hash = createHash('sha256');
   try {
   try {
+    if (input.containerMode === 'independent_wav') {
+      const samples = chunks.reduce((total, chunk) => total + (chunk.bytes - 44) / 2, 0);
+      if (!Number.isSafeInteger(samples) || samples <= 0 || samples > 16000 * DISCUSSION_MAX_DURATION_MS / 1000) throw invalid('Invalid PCM recording duration');
+      const header = recordingWavHeader(samples);
+      hash.update(header);
+      await file.writeFile(header);
+    }
     for (const chunk of chunks) {
       const chunkHash = createHash('sha256');
       let bytes = 0;
       try {
+        if (input.containerMode === 'independent_wav') {
+          signal.throwIfAborted();
+          const buffers: Buffer[] = [];
+          for await (const buffer of createReadStream(join(directory(capture), String(chunk.sequence)))) {
+            signal.throwIfAborted();
+            bytes += buffer.length;
+            if (bytes > DISCUSSION_CHUNK_MAX_BYTES || bytes > chunk.bytes) throw invalid('Stored WAV chunk is corrupt');
+            buffers.push(buffer);
+          }
+          const data = Buffer.concat(buffers, bytes);
+          if (data.length !== chunk.bytes || data.length <= 44 || data.length > DISCUSSION_CHUNK_MAX_BYTES || data.length % 2 !== 0
+            || !data.subarray(0, 44).equals(recordingWavHeader((data.length - 44) / 2))
+            || createHash('sha256').update(data).digest('hex') !== chunk.sha256) throw invalid('Stored WAV chunk is corrupt');
+          hash.update(data.subarray(44));
+          await file.writeFile(data.subarray(44));
+          continue;
+        }
         for await (const buffer of createReadStream(join(directory(capture), String(chunk.sequence)))) {
           signal.throwIfAborted();
           hash.update(buffer);
@@ -137,6 +162,16 @@ export async function completeRecording(capture: DiscussionCapture, input: Discu
     await removeRecordingChunks(capture);
     return updated;
   } finally { await rm(target, { force: true }); }
+}
+
+function recordingWavHeader(samples: number): Buffer {
+  const header = Buffer.alloc(44);
+  header.write('RIFF'); header.writeUInt32LE(36 + samples * 2, 4); header.write('WAVEfmt ', 8);
+  header.writeUInt32LE(16, 16); header.writeUInt16LE(1, 20); header.writeUInt16LE(1, 22);
+  header.writeUInt32LE(16000, 24); header.writeUInt32LE(32000, 28);
+  header.writeUInt16LE(2, 32); header.writeUInt16LE(16, 34); header.write('data', 36);
+  header.writeUInt32LE(samples * 2, 40);
+  return header;
 }
 
 export async function removeRecordingChunks(capture: DiscussionCapture): Promise<void> {

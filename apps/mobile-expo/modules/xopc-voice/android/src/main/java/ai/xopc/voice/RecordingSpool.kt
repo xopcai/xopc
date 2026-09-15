@@ -59,6 +59,7 @@ class RecordingSpool(root: File, captureId: String) : AutoCloseable {
   fun append(pcm: ByteArray, epoch: Int) {
     check(!closed && !failed) { "RECORDING_CLOSED" }
     require(pcm.size % 2 == 0 && pcm.size <= CHUNK_SAMPLES * 2 && epoch >= 0 && epoch >= (pending?.getInt("epoch") ?: receipts.lastOrNull()?.epoch ?: 0)) { "INVALID_PCM" }
+    require(persistedSamples + samples + pcm.size / 2 <= 16000L * 7200) { "RECORDING_DURATION_LIMIT" }
     try {
       if (pending != null && pending!!.getInt("epoch") != epoch) seal()
       var offset = 0

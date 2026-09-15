@@ -2,7 +2,7 @@
 
 日期：2026-09-11，2026-09-12 更新。状态：P0–P4 核心链路已实现，随 `v0.0.268` 发布，并通过完整回归与真实 Gateway/Chrome 链路验证。面向用户的安装、权限与排障说明见[Chrome 浏览器扩展](../zh/browser-extension.md)。
 
-实现取舍：遵循 KISS，不额外抽象 `chat-client-core`，扩展只复用稳定协议包；站点授权由带 origin、documentId、TTL 和 read/act mode 的 session-tab binding 表达，不再叠加第二套长期站点授权状态。P4 已实现标签页 mention、截图、PDF/文件附件以及 Chrome、Chromium、Edge、Brave 的 macOS/Linux Native Messaging manifests；YouTube 专用字幕和可选语音不进入本轮核心范围。
+实现取舍：遵循 KISS，不额外抽象 `chat-client-core`，扩展只复用稳定协议包；站点授权由带 origin、documentId、TTL 和 read/act mode 的 session-tab binding 表达，不再叠加第二套长期站点授权状态。P4 已实现标签页 mention、截图、PDF/文件附件以及 Chrome、Chromium、Edge、Brave 的 macOS/Linux Native Messaging manifests；YouTube 专用字幕不进入核心范围；2026-09-15 补齐语音转文字和 Composer 可靠性。
 
 ## 1. 摘要与核心决策
 
@@ -31,7 +31,7 @@
 
 ### 2.2 非目标
 
-- 首版不做 YouTube 字幕、跨浏览器、语音输入、浏览历史问答或多页面自动汇总。
+- 不做 YouTube 字幕、浏览历史问答或多页面自动汇总。
 - 首版不把完整 Gateway Console 搬进扩展，也不暴露 Agents、Projects、Automations 等管理页面。
 - 首版不支持未启动 Gateway 时直接调用云模型。
 - 不保证在 Side Panel 关闭后 Extension Service Worker 永久存活；长任务由 Gateway 执行，重新打开后通过持久状态与 realtime cursor 恢复。
@@ -94,6 +94,19 @@ flowchart LR
 - Browser Provider 只通过 `EndpointToolRuntime` 调用信任的固定 descriptor；通用 endpoint tool 搜索/执行显式隐藏该工具，不能绕过 Browser Runtime 的审批、tab binding 和风险分级。
 
 两个 plane 共享 Realtime 底层连接，但保持不同的业务边界：聊天使用持久会话与 topic，浏览器命令使用有限并发、有超时与取消的 endpoint invocation。这样无需维护第二个本地端口、第二套心跳和第二套鉴权协议。
+
+## 2026-09-15 Composer 能力补齐
+
+- 统一按钮/Enter 的发送条件和互斥，保护中文输入法确认；运行中显示追加与停止，支持队列编辑/取消和停止后发送。
+- IndexedDB 保存会话草稿，异步附件操作保留发起时的 Gateway/会话键；成功提交仅清理本次发送的内容。
+- 附件对齐 Gateway 上限（10 个、单个 32 MiB）；图片缩略图和放大预览，批量添加保留成功项。
+- 多网页引用沿用 `MAX_BROWSER_CONTEXTS_PER_TURN` 和协议体积校验，支持逐项预览、刷新和删除。
+- 模型使用单个可搜索弹层；命令/技能来自现有 API，技能按当前会话可用性展示。
+- 语音先检查 STT 可用性，录制 WAV 后经现有转写接口写入草稿，支持取消和失败重试。
+- `packages/composer-core` 只共享不依赖 React/AppShell 的长粘贴规则和 PCM 录音器。Web 与扩展都从此包引用，不保留旧实现或转发层。
+- 麦克风权限失败提供独立扩展授权页；仅由用户点击请求权限，授权成功立即停止音轨，返回侧栏后重新录音。
+- 自审修复了发送/配置并发、队列运行切换、异步附件草稿归属、右键选区与会话恢复顺序，以及 360px 窄侧栏弹层溢出。
+- 验证：26 个测试文件、149 项测试通过；扩展类型检查、Web 构建、扩展构建及录音 Worklet 产物检查通过；360px 明暗主题布局已检查。浏览器原生授权弹窗与真实麦克风/Gateway 链路仍需实际 Chrome 验收。
 
 ## 5. Extension 结构
 
@@ -160,6 +173,7 @@ Chrome 的命名权限按扩展安装生效，而站点权限和产品授权仍�
 | 模式 | 权限 | 行为 |
 | --- | --- | --- |
 | Chat only | 不授予站点 host permission，不调用 debugger | 不读取网页 |
+| Screenshot | 可选 `<all_urls>` | 用户点击截图时申请，拒绝后显示重试提示 |
 | Ask this page | activeTab、scripting、contextMenus | 用户动作后读取当前 tab 一次 |
 | Control this site | 当前 origin 的临时 host permission、显式 tab binding、debugger | 在明确站点授权和审批下操作 |
 | Full browser automation | debugger、tabGroups、按策略授予的 host permission | 单独开启并显示高风险说明 |
@@ -175,8 +189,8 @@ content script 改为按需 `chrome.scripting.executeScript()`。只有页面需
 | 扩展安装 id、Gateway id、refresh token | `chrome.storage.local` | 显式解绑/卸载前 |
 | 私钥 | IndexedDB 中不可导出的 `CryptoKey` | 显式解绑时删除 |
 | `tabId → sessionKey`、active run/cursor | `chrome.storage.session` | 当前浏览器会话 |
-| 草稿 | `chrome.storage.session`，按 `gatewayId + sessionKey` 分区 | 浏览器会话或发送成功前 |
-| 页面正文快照 | 不在扩展持久化；提交成功后清除 | 单次发送事务 |
+| 草稿 | IndexedDB `drafts`，按 `gatewayId + sessionKey` 分区 | 发送成功或显式解绑前 |
+| 页面正文快照 | 随草稿保存；侧栏重建后标记过期并要求刷新 | 提交成功或显式解绑前 |
 | 站点 allow/deny | Gateway 权威；扩展缓存摘要 | 可撤销配置 |
 
 Service Worker 全局变量只是缓存，不是权威状态。任何 listener 启动时均能从 storage 和 Gateway 恢复，不依赖 `beforeunload` 完成清理。

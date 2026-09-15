@@ -25,7 +25,7 @@ export function getRecordingJobInput(discussionId: string): DiscussionRecordingM
 }
 
 export function submitRecordingJob(discussionId: string, input: DiscussionRecordingManifest): DiscussionRecordingJob {
-  const inputJson = JSON.stringify({ chunkCount: input.chunkCount, mimeType: input.mimeType, fileName: input.fileName, lastSequence: input.lastSequence });
+  const inputJson = JSON.stringify({ chunkCount: input.chunkCount, mimeType: input.mimeType, fileName: input.fileName, lastSequence: input.lastSequence, ...(input.containerMode ? { containerMode: input.containerMode } : {}) });
   return runSqliteWriteTransaction(db => {
     const chunks = listRecordingChunks(discussionId);
     const manifestHash = createHash('sha256').update(inputJson).update(JSON.stringify(chunks)).digest('hex');

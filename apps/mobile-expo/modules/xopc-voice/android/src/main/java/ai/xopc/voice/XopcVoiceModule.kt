@@ -15,11 +15,18 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.functions.Queues
 import java.lang.ref.WeakReference
+import java.util.concurrent.Executors
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.asCoroutineDispatcher
 
 private const val DUCKED_PLAYBACK_VOLUME = 0.65f
 
 class XopcVoiceModule : Module() {
-  private var recorder: AudioRecord? = null
+  private val recordingExecutor = Executors.newSingleThreadExecutor()
+  private val recordingScope = CoroutineScope(recordingExecutor.asCoroutineDispatcher())
+  @Volatile private var meetingRecorder: RecordingCapture? = null
+  private val recordingRoot get() = java.io.File(context.noBackupFilesDir, "xopc-recordings")
+  @Volatile private var recorder: AudioRecord? = null
   private var track: AudioTrack? = null
   private var echo: AcousticEchoCanceler? = null
   private var noise: NoiseSuppressor? = null
@@ -75,6 +82,38 @@ class XopcVoiceModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("XopcVoice")
+    AsyncFunction("startRecording") { id: String, title: String, stopLabel: String ->
+      check(recorder == null && meetingRecorder?.captureId == null && appContext.currentActivity?.hasWindowFocus() == true) { "MICROPHONE_BUSY" }
+      savedContext = appContext.reactContext?.applicationContext
+      val capture = RecordingCapture(context, { action -> recordingExecutor.execute(action) }) {
+        VoiceCallService.onStop = null
+        context.stopService(Intent(context, VoiceCallService::class.java))
+      }
+      meetingRecorder = capture
+      VoiceCallService.onStop = { recordingExecutor.execute { try { capture.stop() } catch (error: Exception) { Log.w("XopcVoice", "Recording stop failed", error) } } }
+      try {
+        context.startForegroundService(Intent(context, VoiceCallService::class.java).putExtra("title", title).putExtra("stopLabel", stopLabel))
+        capture.start(recordingRoot, id)
+      } catch (error: Exception) {
+        VoiceCallService.onStop = null
+        context.stopService(Intent(context, VoiceCallService::class.java))
+        throw error
+      }
+      java.io.File(recordingRoot, id.lowercase()).toURI().toString()
+    }.runOnQueue(recordingScope)
+    AsyncFunction("stopRecording") { id: String ->
+      check(meetingRecorder?.captureId == id) { "RECORDING_NOT_ACTIVE" }
+      try { meetingRecorder!!.stop(); Unit }
+      finally { VoiceCallService.onStop = null; context.stopService(Intent(context, VoiceCallService::class.java)) }
+    }.runOnQueue(recordingScope)
+    AsyncFunction("activeRecording") { meetingRecorder?.captureId }.runOnQueue(recordingScope)
+    AsyncFunction("recordingChunks") { id: String ->
+      RecordingSpool(recordingRoot, id).use { spool -> spool.chunks.map { chunk ->
+        mapOf("sequence" to chunk.sequence, "epoch" to chunk.epoch, "sampleStart" to chunk.sampleStart,
+          "sampleCount" to chunk.sampleCount, "sha256" to chunk.sha256, "bytes" to chunk.bytes,
+          "uri" to java.io.File(java.io.File(recordingRoot, id.lowercase()), "%08d.wav".format(java.util.Locale.ROOT, chunk.sequence)).toURI().toString())
+      } }
+    }
     Events("pcm", "played", "interrupted", "speechCandidate", "route")
     AsyncFunction("start") { enabled: Boolean, title: String, stopLabel: String -> start(enabled, title, stopLabel) }.runOnQueue(Queues.MAIN)
     Function("setCaptureEnabled") { enabled: Boolean, id: Int ->
@@ -96,7 +135,14 @@ class XopcVoiceModule : Module() {
       val generation = epoch
       if (!background && recorder != null) handler.post { if (epoch == generation) interrupt("background") }
     }
-    OnDestroy { handler.post { stop() } }
+    OnDestroy { recordingExecutor.execute {
+      try { meetingRecorder?.stop() }
+      finally {
+        if (meetingRecorder != null) { VoiceCallService.onStop = null; context.stopService(Intent(context, VoiceCallService::class.java)) }
+        handler.post { stop() }
+        recordingExecutor.shutdown()
+      }
+    } }
   }
 
   private fun applyPlaybackVolume() { track?.setVolume(minOf(focusVolume, speechVolume)) }
@@ -240,6 +286,7 @@ class XopcVoiceModule : Module() {
   }
 
   private fun start(enabled: Boolean, title: String, stopLabel: String): Map<String, Any> {
+    check(meetingRecorder?.captureId == null) { "MICROPHONE_BUSY" }
     savedContext = appContext.reactContext?.applicationContext
     stop()
     background = enabled
@@ -381,8 +428,10 @@ class XopcVoiceModule : Module() {
     previousAudioMode?.let { manager.mode = it }; previousAudioMode = null
     volumeActivity?.get()?.volumeControlStream = previousVolumeStream
     volumeActivity = null
-    VoiceCallService.onStop = null
-    context.stopService(Intent(context, VoiceCallService::class.java))
+    if (meetingRecorder?.captureId == null) {
+      VoiceCallService.onStop = null
+      context.stopService(Intent(context, VoiceCallService::class.java))
+    }
     background = false
     focusVolume = 1f
     speechVolume = 1f

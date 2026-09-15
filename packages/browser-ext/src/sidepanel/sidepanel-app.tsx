@@ -284,7 +284,7 @@ export function SidePanelApp({ initialLocale, initialTheme }: SidePanelAppProps)
             </div>
           </div>
         ) : null}
-      </section> : <ChatPanel />}
+      </section> : <ChatPanel key={profile!.gatewayId} gatewayId={profile!.gatewayId} />}
     </main>
   );
 }

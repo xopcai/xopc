@@ -9,7 +9,7 @@ import {
 import { endpointHelloSigningPayload, type EndpointHelloPayload } from '@xopcai/endpoint-tools-protocol';
 
 import { t } from '../i18n';
-import { clearBrowserOutboxes } from './chat-outbox';
+import { clearBrowserChatState } from './chat-state';
 
 const PROFILE_KEY = 'xopc.browser.profile';
 const PAIRING_JOURNAL_KEY = 'xopc.browser.pairing';
@@ -663,7 +663,7 @@ export async function revokeAndForgetProfile(): Promise<void> {
   } finally {
     await forgetProfile();
     try {
-      await clearBrowserOutboxes();
+      await clearBrowserChatState();
     } finally {
       try {
         await forgetIdentity();

@@ -2,8 +2,11 @@ import AVFoundation
 import Foundation
 
 /// Native-only capture: audio never crosses the JS bridge before being saved.
-/// Lifecycle methods run on the main queue; disk writes run on a bounded serial queue.
+/// Lifecycle methods run on a dedicated queue; disk writes run on a bounded serial queue.
 final class RecordingCapture {
+  let lifecycle = DispatchQueue(label: "ai.xopc.recording.lifecycle", qos: .userInitiated)
+  private let identityLock = NSLock()
+  private var identity: String?
   private let writer = DispatchQueue(label: "ai.xopc.recording.writer", qos: .userInitiated)
   private let slots = DispatchSemaphore(value: 25)
   private let ingressLock = NSLock()
@@ -12,12 +15,15 @@ final class RecordingCapture {
   private var observers: [NSObjectProtocol] = []
   private var spool: RecordingSpool?
   private var generation = 0
-  private(set) var captureId: String?
+  var captureId: String? { identityLock.withLock { identity } }
   var onInterrupted: ((String) -> Void)?
 
   func start(root: URL, captureId: String) throws {
     guard engine == nil else { throw RecordingSpoolError.busy }
-    let spool = try writer.sync { try RecordingSpool(root: root, captureId: captureId) }
+    identityLock.withLock { identity = captureId }
+    let spool: RecordingSpool
+    do { spool = try writer.sync { try RecordingSpool(root: root, captureId: captureId) } }
+    catch { identityLock.withLock { identity = nil }; throw error }
     let epoch = (spool.chunks.last?.epoch ?? -1) + 1
     let session = AVAudioSession.sharedInstance()
     let engine = AVAudioEngine()
@@ -31,7 +37,6 @@ final class RecordingCapture {
         throw RecordingSpoolError.invalidPCM
       }
       self.spool = spool
-      self.captureId = captureId
       self.engine = engine
       generation += 1
       let generation = self.generation
@@ -94,6 +99,7 @@ final class RecordingCapture {
     } catch {
       if self.engine != nil { _ = try? stop() }
       else { try? writer.sync { try spool.close() }; try? session.setActive(false) }
+      identityLock.withLock { identity = nil }
       throw error
     }
   }
@@ -109,7 +115,7 @@ final class RecordingCapture {
     engine.stop()
     self.engine = nil
     self.spool = nil
-    captureId = nil
+    identityLock.withLock { identity = nil }
     defer { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
     return try writer.sync {
       try spool.close()
@@ -124,7 +130,7 @@ final class RecordingCapture {
       return true
     }
     guard shouldReport else { return }
-    DispatchQueue.main.async { [weak self] in
+    lifecycle.async { [weak self] in
       guard let self, self.generation == generation, self.engine != nil else { return }
       do { try self.stop(); self.onInterrupted?(reason) }
       catch { self.onInterrupted?("recording_storage_failed") }

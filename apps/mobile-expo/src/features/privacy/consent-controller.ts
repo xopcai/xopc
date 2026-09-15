@@ -118,7 +118,7 @@ export function waitForConsentDecision(
 
 const CONTENT_RESOURCES = new Set([
   'agent', 'sessions', 'tasks', 'notes', 'workspace', 'inbox', 'projects', 'files',
-  'media', 'voice', 'clarifications', 'automations', 'automation-runs', 'workflows', 'shares',
+  'media', 'voice', 'discussions', 'clarifications', 'automations', 'automation-runs', 'workflows', 'shares',
 ]);
 
 /** Stored workspace content can also feed indexing, understanding and scheduled agent work. */

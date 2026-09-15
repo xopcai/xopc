@@ -5,6 +5,41 @@
 import type { MessageBundle } from './en';
 
 export const zh: MessageBundle = {
+  recordings: {
+    decisions: "会议决策",
+    actions: "行动项",
+    permission: "请在系统设置中允许麦克风访问后再录音。",
+    busy: "另一个录音或通话正在使用麦克风。",
+    emptyAudio: "这条录音暂时没有已保存的声音。",
+    connect: "请先连接工作区，再同步录音。",
+
+    "title": "会议录音",
+    "start": "开始录音",
+    "pause": "暂停",
+    "resume": "继续录音",
+    "finish": "结束并保存",
+    "upload": "同步并生成总结",
+    "uploading": "正在上传",
+    "processing": "正在转写并生成总结…",
+    "summary": "会议总结",
+    "openNote": "打开会议笔记",
+    "interrupted": "录音已中断，结束后可恢复已保存的声音",
+    "saved": "已保存在手机",
+    "recording": "正在录音",
+    "paused": "已暂停",
+    "empty": "录音会保存在这里。",
+    "nativeBuildRequired": "请安装更新后的原生应用以使用录音。",
+    "disclosure": "单条录音最长两小时，录音前请告知参与者。声音先保存在手机，点击「同步并生成总结」后，将发送到当前工作区及其配置的转写和 AI 服务。",
+    "retry": "重试处理",
+    "open": "打开",
+    "workspaceChanged": "请切回创建这条录音时的工作区，再同步或查看总结。",
+    "error": "操作未完成，已保存的声音仍保留在手机上。",
+    "indexError": "无法读取本地录音索引，请重启应用后再录音。",
+    "returnToRecording": "返回录音",
+    "syncSelected": "同步所选录音",
+    "duration": "已保存时长",
+    "local": "本地录音"
+},
   voice: {
     thinking: '正在准备回复…',
     buffering: '正在等待声音播放…',

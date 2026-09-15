@@ -1,21 +1,8 @@
 import { t } from '../i18n';
 
-const DATABASE_NAME = 'xopc-browser-chat-state';
-const DATABASE_VERSION = 1;
-const OUTBOX_STORE = 'outbox';
+import { openDatabase } from './chat-state';
 
-function openDatabase(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
-    request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains(OUTBOX_STORE)) {
-        request.result.createObjectStore(OUTBOX_STORE);
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error ?? new Error(t('errorOpenOutbox')));
-  });
-}
+const OUTBOX_STORE = 'outbox';
 
 function transactionResult<T>(
   database: IDBDatabase,
@@ -60,15 +47,6 @@ export async function deleteBrowserOutbox(sessionKey: string): Promise<void> {
   const database = await openDatabase();
   try {
     await transactionResult(database, 'readwrite', (store) => store.delete(sessionKey));
-  } finally {
-    database.close();
-  }
-}
-
-export async function clearBrowserOutboxes(): Promise<void> {
-  const database = await openDatabase();
-  try {
-    await transactionResult(database, 'readwrite', (store) => store.clear());
   } finally {
     database.close();
   }

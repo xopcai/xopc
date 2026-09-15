@@ -33,6 +33,8 @@ export type ApiFetchOptions = RequestInit & {
 };
 
 export type ApiFileUploadOptions = {
+  method?: 'POST' | 'PUT';
+  binary?: boolean;
   uri: string;
   fieldName: string;
   mimeType: string;
@@ -146,7 +148,7 @@ export async function apiUploadFile(path: string, options: ApiFileUploadOptions)
 
   const gatewayId = useGatewayStore.getState().activeGatewayId;
   const generation = useGatewayStore.getState().connectionGeneration;
-  await authorizeMobileRequest(path, 'POST', options.signal);
+  await authorizeMobileRequest(path, options.method ?? 'POST', options.signal);
   if (requireNativeModule<{ foregroundUploadRedirectPolicy?: string }>('FileSystem').foregroundUploadRedirectPolicy !== 'error') {
     throw new Error('SECURITY_UPDATE_REQUIRED');
   }
@@ -169,7 +171,7 @@ export async function apiUploadFile(path: string, options: ApiFileUploadOptions)
       await ensureGatewayRouteIdentity(useGatewayStore.getState().getActiveProfile()!, route.url, controller.signal);
       if (useGatewayStore.getState().activeGatewayId !== gatewayId || useGatewayStore.getState().connectionGeneration !== generation) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');
       const result = await file.upload(url, {
-        sessionType: 'foreground', httpMethod: 'POST', uploadType: UploadType.MULTIPART, fieldName: options.fieldName,
+        sessionType: 'foreground', httpMethod: options.method ?? 'POST', uploadType: options.binary ? UploadType.BINARY_CONTENT : UploadType.MULTIPART, fieldName: options.fieldName,
         mimeType: options.mimeType, parameters: options.parameters, headers, signal: controller.signal,
       });
       if (useGatewayStore.getState().activeGatewayId !== gatewayId || useGatewayStore.getState().connectionGeneration !== generation) throw new GatewayConnectivityError('misconfigured', 'Active gateway changed');

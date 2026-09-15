@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { loadExtensionLocalePreference } from '../i18n';
+import { MicrophonePermission } from './microphone-permission';
 import { SidePanelApp } from './sidepanel-app';
 import { loadSidePanelThemePreference } from './theme';
 import './styles.css';
@@ -16,6 +17,8 @@ const [locale, theme] = await Promise.all([
 
 createRoot(root).render(
   <StrictMode>
-    <SidePanelApp initialLocale={locale} initialTheme={theme} />
+    {new URLSearchParams(location.search).has('microphone-permission')
+      ? <MicrophonePermission />
+      : <SidePanelApp initialLocale={locale} initialTheme={theme} />}
   </StrictMode>,
 );

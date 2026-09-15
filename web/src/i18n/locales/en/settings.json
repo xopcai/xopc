@@ -1293,6 +1293,8 @@
     "composioSetupStorageHint": "The key is verified before it is saved and is never written to xopc.json.",
     "composioAuthConfigTitle": "Authentication configuration",
     "composioAuthConfigOptionalHint": "XOPC Cloud manages this app authorization for you.",
+    "composioCloudAuthUnavailable": "XOPC Cloud has not configured authentication for this app. Contact your cloud administrator or switch to your own Composio API key.",
+    "composioCloudAuthReady": "XOPC Cloud configures app authentication. Connect to authorize your account with the app.",
     "composioAuthConfigRequiredHint": "This app has no Composio managed authentication. Select a custom auth config from the same project.",
     "composioAuthConfigManaged": "Use Composio managed authentication",
     "composioAuthConfigSelect": "Select an auth config",

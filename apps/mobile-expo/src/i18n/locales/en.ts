@@ -3,6 +3,41 @@
  * Keys mirror a subset of web/src/i18n/locales/en.json, adapted for mobile UX.
  */
 export const en = {
+  recordings: {
+    decisions: "Decisions",
+    actions: "Action items",
+    permission: "Allow microphone access in system settings to record.",
+    busy: "Another recording or call is using the microphone.",
+    emptyAudio: "This recording has no saved audio yet.",
+    connect: "Connect to a workspace before syncing.",
+
+    "title": "Meeting recordings",
+    "start": "Start recording",
+    "pause": "Pause",
+    "resume": "Resume",
+    "finish": "Finish and save",
+    "upload": "Sync and summarize",
+    "uploading": "Uploading",
+    "processing": "Transcribing and summarizing…",
+    "summary": "Meeting summary",
+    "openNote": "Open meeting note",
+    "interrupted": "Interrupted — finish to recover saved audio",
+    "saved": "Saved on this phone",
+    "recording": "Recording",
+    "paused": "Paused",
+    "empty": "Your recordings will appear here.",
+    "nativeBuildRequired": "Install the updated native app to record.",
+    "disclosure": "Each recording supports up to two hours. Let everyone know before recording. Audio stays on this phone until you tap Sync and summarize, which sends it to this workspace and its configured transcription and AI services.",
+    "retry": "Retry processing",
+    "open": "Open",
+    "workspaceChanged": "Switch to the workspace where this recording was created to sync or view its summary.",
+    "error": "Could not complete this action. Your saved audio remains on this phone.",
+    "indexError": "Could not read the local recording index. Restart the app before recording again.",
+    "returnToRecording": "Return to recording",
+    "syncSelected": "Sync selected",
+    "duration": "Saved duration",
+    "local": "Local recording"
+},
   voice: {
     thinking: 'Preparing a reply…',
     buffering: 'Waiting for audio playback…',

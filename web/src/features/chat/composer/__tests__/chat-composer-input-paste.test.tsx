@@ -8,7 +8,7 @@ import {
   ChatComposerInput,
   type ComposerKbdContext,
 } from '@/features/chat/composer/chat-composer-input';
-import type { PastedTextAttachment } from '@/features/chat/composer/pasted-text';
+import type { PastedTextAttachment } from '@xopcai/composer-core/pasted-text';
 
 type ProcessPastedText = (paste: PastedTextAttachment) => Promise<void>;
 
