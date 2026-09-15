@@ -17,3 +17,8 @@ export function isElectronWin32(): boolean {
 export function electronDarwinTitlebarLeftPad(): string {
   return isElectronDarwin() ? DARWIN_TRAFFIC_LIGHT_LEFT_PAD : '';
 }
+
+/** Keep viewport-sized portals below the native Windows caption buttons. */
+export function electronPreviewViewportClass(): string {
+  return isElectronWin32() ? 'windows-preview-viewport' : '';
+}

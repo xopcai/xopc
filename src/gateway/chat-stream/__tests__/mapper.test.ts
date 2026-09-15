@@ -86,10 +86,10 @@ describe('ChatStreamMapper', () => {
     });
   });
 
-  it('maps Note context summaries to the realtime user message', () => {
+  it.each(['note', 'task'])('maps Note context summaries to the realtime user message', (kind) => {
     const m = mapper();
     const sourceContexts = [{
-      kind: 'note',
+      kind,
       sourceId: 'note-1',
       version: '42',
       title: 'Launch plan',
@@ -107,7 +107,7 @@ describe('ChatStreamMapper', () => {
         message: {
           metadata: {
             sourceContexts: [{
-              kind: 'note',
+              kind,
               sourceId: 'note-1',
               version: '42',
               title: 'Launch plan',

@@ -97,4 +97,20 @@ describe('static-ui cache', () => {
 
     expect(response?.headers.get('Content-Type')).toBe('application/manifest+json');
   });
+
+  it('serves PDF module workers with a JavaScript MIME type on cache misses and hits', async () => {
+    mkdirSync(join(tempRoot, 'assets'), { recursive: true });
+    const assetPath = 'assets/pdf.worker.min-test.mjs';
+    const source = 'export const WorkerMessageHandler = {};';
+    writeFileSync(join(tempRoot, assetPath), source, 'utf8');
+    const staticUi = await loadStaticUi();
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const response = staticUi.serveStaticFile(assetPath);
+      expect(response?.status).toBe(200);
+      expect(response?.headers.get('Content-Type')).toBe('application/javascript');
+      expect(await response?.text()).toBe(source);
+    }
+    expect(staticUi.getStaticUiCacheStats()).toMatchObject({ misses: 1, hits: 1 });
+  });
 });

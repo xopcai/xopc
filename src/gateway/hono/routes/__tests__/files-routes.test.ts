@@ -145,6 +145,24 @@ describe('files routes', () => {
     }
   });
 
+  it('returns only the newest files across nested directories', async () => {
+    const root = join(stateDir, 'workspace');
+    mkdirSync(join(root, 'docs'), { recursive: true });
+    mkdirSync(join(root, 'node_modules'), { recursive: true });
+    writeFileSync(join(root, 'old.md'), 'old');
+    writeFileSync(join(root, 'docs', 'new.md'), 'new');
+    writeFileSync(join(root, 'node_modules', 'ignored.md'), 'ignored');
+    utimesSync(join(root, 'old.md'), 1_000, 1_000);
+    utimesSync(join(root, 'docs', 'new.md'), 3_000, 3_000);
+    utimesSync(join(root, 'node_modules', 'ignored.md'), 4_000, 4_000);
+    const { app } = appFor(root);
+
+    const response = await app.request('/api/files/recent?limit=1');
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ items: [{ relativePath: 'docs/new.md' }] });
+  });
+
   it.each(['note.markdown', '.env', 'deploy.sh', 'notes.custom'])(
     'edits supported text file %s using the returned revision',
     async (name) => {

@@ -48,26 +48,6 @@ function contentDisposition(disposition: 'inline' | 'attachment', fileName: stri
   return `${disposition}; filename="${asciiFallback}"; filename*=UTF-8''${encoded}`;
 }
 
-async function collectFiles(files: FileSpaceService, spaceId: string, max: number): Promise<FileResource[]> {
-  const output: FileResource[] = [];
-  const directories = [''];
-  const visited = new Set<string>();
-  const space = await files.get(spaceId);
-  while (directories.length && output.length < max) {
-    const directory = directories.shift()!;
-    const canonical = await resolveFilePath(space.root, directory).catch(() => null);
-    if (!canonical || visited.has(canonical)) continue;
-    visited.add(canonical);
-    const children = await files.children(spaceId, directory);
-    for (const child of children) {
-      if (child.kind === 'directory') directories.push(child.relativePath);
-      else output.push(child);
-      if (output.length >= max) break;
-    }
-  }
-  return output;
-}
-
 export function registerFilesRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const files = getGatewayFileSpaceService(deps.service);
   registerFileReferenceRoutes(authenticated, deps);
@@ -107,12 +87,7 @@ export function registerFilesRoutes(authenticated: Hono, deps: AuthenticatedRout
   authenticated.get('/api/files/recent', async (c) => {
     try {
       const limit = Math.min(100, Math.max(1, Number(c.req.query('limit')) || 50));
-      const spaces = await files.list();
-      const items = (await Promise.all(spaces.map((space) => collectFiles(files, space.id, 5_000))))
-        .flat()
-        .sort((a, b) => b.modifiedAt - a.modifiedAt)
-        .slice(0, limit);
-      return c.json({ items });
+      return c.json({ items: await files.recent(limit) });
     } catch (error) { return errorResponse(c, error); }
   });
 

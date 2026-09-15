@@ -1,3 +1,4 @@
+import { formatWorkspacePath } from './at-mention-utils';
 import { messageKey } from './message-key';
 import type { ComposerContextRef, WireAttachment } from './composer.types';
 import type { Message, MessageAttachment, MessageContent, TextContent } from './messages.types';
@@ -216,4 +217,14 @@ export function buildOptimisticUserMessage(text: string, wire?: WireAttachment[]
 
 export function canSendComposerDraft(text: string, attachmentCount: number, contextRefCount = 0): boolean {
   return text.trim().length > 0 || attachmentCount > 0 || contextRefCount > 0;
+}
+
+/** Workspace references use the existing file-mention pipeline, not media uploads. */
+export function prepareComposerInput(text: string, attachments: WireAttachment[]) {
+  const paths = [...new Set(attachments.filter(item => !item.data && !item.uri && !item.localUri)
+    .map(item => item.workspaceRelativePath).filter((path): path is string => Boolean(path)))];
+  return {
+    text: [text.trim(), ...paths.map(path => `@file:${formatWorkspacePath(path)}`)].filter(Boolean).join('\n'),
+    attachments: attachments.filter(item => Boolean(item.data || item.uri || item.localUri)),
+  };
 }

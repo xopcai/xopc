@@ -491,13 +491,13 @@ function userMessageDisplayMetadata(value: unknown): unknown {
   const sourceContexts = rows.flatMap((value) => {
     const row = asRecord(value);
     if (
-      row?.kind !== 'note'
+      (row?.kind !== 'note' && row?.kind !== 'task')
       || typeof row.sourceId !== 'string'
       || typeof row.version !== 'string'
       || typeof row.title !== 'string'
     ) return [];
     return [{
-      kind: 'note',
+      kind: row.kind,
       sourceId: row.sourceId,
       version: row.version,
       title: row.title,

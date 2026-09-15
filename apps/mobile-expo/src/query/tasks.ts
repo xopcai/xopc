@@ -31,8 +31,8 @@ export type TaskDetail = ReturnType<typeof TaskDetailResponseSchema.parse>;
 
 export type TaskListItem = TaskListResponse['items'][number];
 
-export async function fetchTasks(): Promise<TaskListItem[]> {
-  const response = await apiFetch('/api/tasks');
+export async function fetchTasks(search?: string): Promise<TaskListItem[]> {
+  const response = await apiFetch(`/api/tasks${search?.trim() ? `?search=${encodeURIComponent(search.trim())}` : ''}`);
   if (!response.ok) throw await taskError(response, `Failed to fetch tasks: ${response.status}`);
   return TaskListResponseSchema.parse(await response.json()).items;
 }
