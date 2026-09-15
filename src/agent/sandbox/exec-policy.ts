@@ -32,6 +32,7 @@ const log = createLogger('Sandbox:ExecPolicy');
 export function evaluateExecPolicy(params: {
   command: string;
   cwd: string;
+  workspaceRoot?: string;
   config?: Partial<SandboxConfig>;
   allowedEnvVars?: string[];
 }): ExecPolicyResult {
@@ -72,7 +73,7 @@ export function evaluateExecPolicy(params: {
 
   // 2. CWD path validation
   const cwdResult = validatePath(params.cwd, {
-    allowedRoots: config.allowedRoots.length > 0 ? config.allowedRoots : undefined,
+    allowedRoots: config.allowedRoots.length > 0 ? config.allowedRoots : [params.workspaceRoot ?? params.cwd],
     extraBlockedPaths: config.blockedPaths,
   });
   if (!cwdResult.allowed) {
@@ -119,13 +120,13 @@ export function evaluateFilePolicy(params: {
 
   const result = isWriteOp
     ? validateWritePath(params.path, params.workspaceRoot, {
-        allowedRoots: config.allowedRoots.length > 0 ? config.allowedRoots : undefined,
+        allowedRoots: config.allowedRoots.length > 0 ? config.allowedRoots : [params.workspaceRoot],
         extraBlockedPaths: config.blockedPaths,
       })
     : validatePath(
         params.path.startsWith('/') ? params.path : resolve(params.workspaceRoot, params.path),
         {
-          allowedRoots: config.allowedRoots.length > 0 ? config.allowedRoots : undefined,
+          allowedRoots: config.allowedRoots.length > 0 ? config.allowedRoots : [params.workspaceRoot],
           extraBlockedPaths: config.blockedPaths,
         },
       );

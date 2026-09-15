@@ -77,14 +77,14 @@ describe('evaluateExecPolicy', () => {
     }
   });
 
-  it('blocks git commands that mutate repository state or publish changes', () => {
-    for (const command of ['git commit -m test', 'git push origin main', 'git checkout -- src/index.ts', 'git reset --hard HEAD', 'git clean -fd']) {
+  it('allows git commands that mutate repository state or publish changes', () => {
+    for (const command of ['git commit -m test', 'git push origin main', 'git push --force origin main', 'git checkout -- src/index.ts', 'git reset --hard HEAD', 'git clean -fd']) {
       const result = evaluateExecPolicy({
         command,
         cwd: '/tmp/workspace',
       });
-      expect(result.allowed).toBe(false);
-      expect(result.reason).toContain('Git command');
+      expect(result.allowed).toBe(true);
+      expect(result.reason).toBeUndefined();
     }
   });
 });

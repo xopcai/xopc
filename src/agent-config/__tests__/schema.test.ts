@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { AgentsConfigSchema } from '../schema.js';
+import { AgentsConfigSchema, RuntimePolicySchema } from '../schema.js';
 
 describe('AgentsConfigSchema', () => {
   it('creates one valid default agent configuration', () => {
@@ -24,4 +24,15 @@ describe('AgentsConfigSchema', () => {
       'default agent "missing" must reference an enabled entry',
     ]));
   });
+});
+
+it('keeps host opt-in configuration compatible and defaults Docker to read-only and offline', () => {
+  expect(RuntimePolicySchema.parse({}).commandIsolation).toBeUndefined();
+  expect(RuntimePolicySchema.parse({ commandIsolation: { mode: 'host' } }).commandIsolation).toEqual({ mode: 'host' });
+  const image = `fixture@sha256:${'0'.repeat(64)}`;
+  expect(RuntimePolicySchema.parse({ commandIsolation: { mode: 'docker', image } }).commandIsolation)
+    .toEqual({ mode: 'docker', image, network: false, workspaceAccess: 'read-only' });
+  expect(RuntimePolicySchema.parse({ commandIsolation: { mode: 'docker', image, workspaceAccess: 'read-write' } }).commandIsolation)
+    .toMatchObject({ workspaceAccess: 'read-write', network: false });
+  expect(RuntimePolicySchema.safeParse({ commandIsolation: { mode: 'docker', image, workspaceAccess: 'anything' } }).success).toBe(false);
 });

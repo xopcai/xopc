@@ -5,8 +5,8 @@ import {
   appendProductDeliveryText,
   type ProductDeliveryEnvelope,
 } from '@xopcai/gateway-contract';
-import { writeFile, mkdir, realpath } from 'fs/promises';
-import { basename, dirname, relative, sep } from 'path';
+import { realpath } from 'fs/promises';
+import { basename, relative, sep } from 'path';
 import { fileResourceId, fileSpaceId } from '../../files/file-service.js';
 import { checkFileSafety } from '../prompt/safety.js';
 import {
@@ -14,7 +14,7 @@ import {
   resolveProfileMarkdownPathIfBareName,
   resolvePathUnderWorkspace,
 } from './tool-paths.js';
-import { evaluateFilePolicy } from '../sandbox/exec-policy.js';
+import { writeWorkspaceFile } from '../sandbox/fileAccess.js';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
@@ -64,16 +64,6 @@ export function createWriteFileTool(
         );
         const workspaceRoot = writesProfileFile ? options!.profileMarkdownRoot! : workspace;
 
-        // Sandbox path-policy check (blocked dirs, symlink escape, config protection)
-        const pathPolicy = evaluateFilePolicy({
-          operation: 'write',
-          path: p.path,
-          workspaceRoot,
-        });
-        if (!pathPolicy.allowed) {
-          return { content: [{ type: 'text', text: `🚫 Sandbox: ${pathPolicy.reason}` }], details: { status: 'failed' } };
-        }
-
         const contentBytes = Buffer.byteLength(p.content, 'utf-8');
         if (contentBytes > MAX_FILE_SIZE) {
           return { content: [{ type: 'text', text: `🚫 File too large: ${contentBytes} bytes` }], details: { status: 'failed' } };
@@ -82,8 +72,7 @@ export function createWriteFileTool(
         const target = writesProfileFile
           ? resolveProfileMarkdownPathIfBareName(p.path, options!.profileMarkdownRoot!)
           : resolvePathUnderWorkspace(p.path, workspace);
-        await mkdir(dirname(target), { recursive: true });
-        await writeFile(target, p.content, 'utf-8');
+        writeWorkspaceFile(workspaceRoot, target, p.content);
         const delivery: ProductDeliveryEnvelope | undefined = writesProfileFile
           ? undefined
           : await Promise.all([realpath(workspace), realpath(target)]).then(([root, canonicalTarget]) => ({

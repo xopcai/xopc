@@ -3,7 +3,7 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 
 import { resolveToCwd } from '../../utils/helpers.js';
 import { evaluateFilePolicy } from '../sandbox/exec-policy.js';
-import { repositorySearch } from './repository-search.js';
+import { isSearchFileAllowed, repositorySearch } from './repository-search.js';
 
 const grepSchema = Type.Object({
   pattern: Type.String({ description: 'Ripgrep regex, or literal text when literal=true' }),
@@ -21,20 +21,32 @@ export function createGrepTool(cwd: string): AgentTool {
     description: 'Search with ripgrep, respecting .gitignore and skipping binary files. Returns path:line content. Use a narrow path or glob; output is bounded.',
     supportsParallel: true, idempotent: true,
     async execute(_id, params: GrepToolInput, signal) {
-      const path = resolveToCwd(params.path || '.', cwd);
+      let path = resolveToCwd(params.path || '.', cwd);
       const policy = evaluateFilePolicy({ operation: 'read', path, workspaceRoot: cwd });
       if (!policy.allowed) throw new Error(policy.reason);
+      path = policy.canonicalPath!;
       const limit = Math.min(1000, Math.max(1, params.limit ?? 100));
       const result = await repositorySearch(cwd, [
-        '--line-number', '--with-filename', '--color', 'never', '--max-columns', '300', '--max-columns-preview',
+        '--json', '--line-number', '--with-filename', '--color', 'never', '--max-columns', '300', '--max-columns-preview',
         '--max-count', String(limit), '--context', String(params.context ?? 0),
         ...(params.ignoreCase ? ['--ignore-case'] : []), ...(params.literal ? ['--fixed-strings'] : []),
         ...(params.glob ? ['--glob', params.glob] : []), '-e', params.pattern, '--', path,
       ], signal);
-      const lines = result.output.trimEnd().split('\n');
+      const lines: string[] = [];
+      for (const row of result.output.split('\n')) {
+        if (!row) continue;
+        let event: { type: string; data?: { path?: { text?: string }; lines?: { text?: string }; line_number?: number } };
+        try { event = JSON.parse(row); }
+        catch { if (result.truncated) continue; throw new Error('Invalid search output'); }
+        if (event.type !== 'match' && event.type !== 'context') continue;
+        const data = event.data;
+        if (!data?.path?.text || !data.lines?.text || !isSearchFileAllowed(cwd, data.path.text)) continue;
+        const separator = event.type === 'match' ? ':' : '-';
+        lines.push(`${data.path.text}${separator}${data.line_number}${separator}${data.lines.text.replace(/\r?\n$/, '')}`);
+      }
       const outputLimit = limit * (1 + 2 * (params.context ?? 0));
       const truncated = result.truncated || lines.length > outputLimit;
-      return { content: [{ type: 'text', text: (result.output ? lines.slice(0, outputLimit).join('\n') : 'No matches found')
+      return { content: [{ type: 'text', text: (lines.length ? lines.slice(0, outputLimit).join('\n') : 'No matches found')
         + (truncated ? '\n[Results truncated; narrow the path or pattern.]' : '') }], details: { truncated } };
     },
   } as AgentTool;
