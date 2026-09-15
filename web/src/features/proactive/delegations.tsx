@@ -37,7 +37,7 @@ export function DelegationDetail({ sub, card, zh, refresh }: { sub: Delegation; 
     try {
       await proactiveWrite(`/api/proactive/subscriptions/${encodeURIComponent(sub.id)}${check ? '/check' : ''}`, check ? 'POST' : 'PATCH', check ? {} : { ...patch, expectedRevision: sub.revision });
       setEditing(false);
-      setNotice(check ? (zh ? '助理正在重新看看这个项目。' : 'Your assistant is checking the project again.') : (zh ? '助理安排已更新。' : 'Assistant arrangement updated.'));
+      setNotice(check ? (zh ? '助理正在重新看看这个项目。' : 'Your assistant is checking the project again.') : (zh ? '助理跟进已更新。' : 'Assistant follow-up updated.'));
       refresh();
     } catch (cause) { setError(String(cause)); refresh(); } finally { setBusy(false); }
   }
@@ -61,7 +61,7 @@ export function DelegationDetail({ sub, card, zh, refresh }: { sub: Delegation; 
     {notice && <p role="status" className="text-sm text-fg-muted">{notice}</p>}
     {card && <ProactiveCardView card={card} copy={proactiveCopy(zh)} refresh={refresh} detail />}
     <section className="rounded-2xl border border-edge bg-surface-panel p-5">
-      <h2 className="font-semibold text-fg">{zh ? '助理记住的安排' : 'What your assistant remembers'}</h2>
+      <h2 className="font-semibold text-fg">{zh ? '跟进要求' : 'What your assistant remembers'}</h2>
       <dl className="mt-4 space-y-4 text-sm"><div><dt className="text-xs text-fg-subtle">{zh ? '要帮你守住什么' : 'What to protect'}</dt><dd className="mt-1 whitespace-pre-wrap text-fg">{sub.userInstructions}</dd></div><div><dt className="text-xs text-fg-subtle">{zh ? '什么时候回来找你' : 'When to come back'}</dt><dd className="mt-1 text-fg">{when}</dd></div><div><dt className="text-xs text-fg-subtle">{zh ? '接下来' : 'Next'}</dt><dd className="mt-1 text-fg">{delegationNextTrigger(sub, zh)}</dd></div></dl>
       {sub.projectMonitoring && !sub.completedAt && <label className="mt-5 block border-t border-edge pt-5 text-sm"><span className="font-medium text-fg">{zh ? '助理可以做到哪里' : 'How far the assistant can go'}</span><Select disabled={actionBusy} value={sub.projectMonitoring.mode} onChange={event => void changeActionMode(event.target.value as MonitoringMode)}><SelectOption value="observe">{zh ? '只观察和整理' : 'Observe and organize only'}</SelectOption><SelectOption value="ask_before_action">{zh ? '先准备，行动前问我' : 'Prepare first, ask before acting'}</SelectOption><SelectOption value="auto_low_risk">{zh ? '自动完成明确的低风险动作' : 'Complete explicit low-risk actions'}</SelectOption></Select><span className="mt-2 block text-xs text-fg-muted">{sub.projectMonitoring.mode === 'auto_low_risk' ? (zh ? '目前只包括在当前项目中创建可撤销的待办。' : 'Currently limited to creating reversible tasks in this project.') : (zh ? '涉及外部发送或不可逆操作时仍会询问你。' : 'External sends and irreversible actions still require you.')}</span></label>}
       {editing && <div className="mt-5 border-t border-edge pt-5"><label className="block text-sm">{zh ? '希望助理关注什么，忽略什么？' : 'What should the assistant follow or ignore?'}<textarea rows={5} maxLength={12000} className={field} value={instructions} onChange={event => setInstructions(event.target.value)} /></label><label className="mt-4 block text-sm">{zh ? '什么时候提醒我' : 'When to notify me'}<Select value={delivery} onChange={event => setDelivery(event.target.value as typeof delivery)}><SelectOption value="inbox">{zh ? '回到工作台时告诉我' : 'Tell me in the Workbench'}</SelectOption><SelectOption value="important">{zh ? '重要变化立即告诉我' : 'Tell me right away for important changes'}</SelectOption><SelectOption value="digest">{zh ? '放进每日汇总' : 'Include it in my daily digest'}</SelectOption></Select></label></div>}
