@@ -47,7 +47,7 @@ export const ChatContextControl = memo(function ChatContextControl({
 }: {
   sessionKey: string;
   draftRefs: ComposerContextRef[];
-  onRemoveDraftRef: (sourceId: string) => void;
+  onRemoveDraftRef: (sourceId: string, kind: ComposerContextRef['kind']) => void;
   onAddSource: () => void;
   onChangeScope: (projectId: string | null, executionMode?: ExecutionMode) => void;
 }) {
@@ -284,13 +284,13 @@ export const ChatContextControl = memo(function ChatContextControl({
           subtitle={source.origins.map((origin) => origin.kind === 'task' ? copy.task : copy.session).join(' · ')}
           warning={source.unavailable}
         />)}
-        {draftRefs.map((ref) => <View key={`draft:${ref.sourceId}`} style={styles.row}>
-          <Icon source="notebook-plus-outline" size={20} color={colors.accent.primary} />
+        {draftRefs.map((ref) => <View key={`draft:${ref.kind}:${ref.sourceId}`} style={styles.row}>
+          <Icon source={ref.kind === 'task' ? 'checkbox-marked-circle-outline' : 'notebook-plus-outline'} size={20} color={colors.accent.primary} />
           <View style={styles.rowCopy}>
             <Text style={[styles.rowTitle, { color: colors.text.primary }]}>{ref.title}</Text>
             <Text style={[styles.rowSubtitle, { color: colors.text.tertiary }]}>{copy.thisTurn}</Text>
           </View>
-          <Pressable accessibilityRole="button" accessibilityLabel={`${copy.remove}: ${ref.title}`} hitSlop={8} onPress={() => onRemoveDraftRef(ref.sourceId)}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`${copy.remove}: ${ref.title}`} hitSlop={8} onPress={() => onRemoveDraftRef(ref.sourceId, ref.kind)}>
             <Icon source="close" size={18} color={colors.text.tertiary} />
           </Pressable>
         </View>)}

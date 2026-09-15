@@ -24,7 +24,7 @@ function attachmentToPreviewable(att: ComposerAttachment): PreviewableFile {
   return {
     name: att.name,
     mimeType: att.mimeType,
-    contentBase64: att.content,
+    ...(att.workspaceRelativePath ? { fileId: att.id, workspaceRelativePath: att.workspaceRelativePath } : { contentBase64: att.content }),
     remoteUri: isImage && !att.content && att.localUri ? att.localUri : undefined,
   };
 }
@@ -99,7 +99,7 @@ export const ComposerAttachmentStrip = memo(function ComposerAttachmentStrip({
               <Pressable
                 style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
                 onPress={() => {
-                  if (audio) {
+                  if (audio && !att.workspaceRelativePath) {
                     setAudioPreview(attachmentToAudioContent(att));
                     return;
                   }

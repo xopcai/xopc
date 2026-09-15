@@ -13,6 +13,7 @@ import { ShareLinkDialog } from '@/features/shares/share-link-dialog';
 import { useShareLink } from '@/features/shares/use-share-link';
 import { runFileShellAction } from '@/features/workspace/run-file-shell-action';
 import { cn } from '@/lib/cn';
+import { electronPreviewViewportClass } from '@/lib/electron-window-chrome';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -144,6 +145,7 @@ export function WorkspaceFilePreviewPanel({
       className={cn(
         'flex h-full min-h-0 flex-col bg-surface-panel',
         expanded && 'fixed inset-0 z-[65] h-[100dvh] w-screen',
+        expanded && electronPreviewViewportClass(),
       )}
     >
       <FilePreview

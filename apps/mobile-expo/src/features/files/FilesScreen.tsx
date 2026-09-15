@@ -94,7 +94,11 @@ export function FilesHubScreen() {
   const [view, setView] = useState<'recent' | 'locations'>('recent');
   const [search, setSearch] = useState('');
   const spaces = useQuery({ queryKey: queryKeys.fileSpaces, queryFn: fetchFileSpaces });
-  const recent = useQuery({ queryKey: queryKeys.recentFiles, queryFn: () => fetchRecentFiles(50) });
+  const recent = useQuery({
+    queryKey: queryKeys.recentFiles,
+    queryFn: () => fetchRecentFiles(50),
+    staleTime: 60_000,
+  });
   const results = useQuery({
     queryKey: queryKeys.fileSearch(search),
     queryFn: () => searchFiles(search),

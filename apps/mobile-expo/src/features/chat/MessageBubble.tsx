@@ -581,13 +581,13 @@ export const MessageBubble = memo(function MessageBubble({
             ]}
           >
             {message.contextRefs?.length ? (
-              <View style={styles.noteReferenceList} accessibilityLabel={m.chat.referencedNotes}>
+              <View style={styles.noteReferenceList} accessibilityLabel={m.chat.references.title}>
                 {message.contextRefs.map((ref) => (
                   <Pressable
                     key={`${ref.kind}:${ref.sourceId}`}
                     accessibilityRole="button"
-                    accessibilityLabel={m.chat.openReferencedNote.replace('{{title}}', ref.title)}
-                    onPress={() => openNoteDetail(router, ref.sourceId)}
+                    accessibilityLabel={m.chat.references.open.replace('{{title}}', ref.title)}
+                    onPress={() => ref.kind === 'task' ? router.push(`/tasks/${encodeURIComponent(ref.sourceId)}`) : openNoteDetail(router, ref.sourceId)}
                     style={({ pressed }) => [
                       styles.noteReferenceCard,
                       {
@@ -598,11 +598,11 @@ export const MessageBubble = memo(function MessageBubble({
                     ]}
                   >
                     <View style={[styles.noteReferenceIcon, { backgroundColor: colors.accent.soft }]}>
-                      <Icon source="note-text-outline" size={18} color={colors.accent.primary} />
+                      <Icon source={ref.kind === 'task' ? 'checkbox-marked-circle-outline' : 'note-text-outline'} size={18} color={colors.accent.primary} />
                     </View>
                     <View style={styles.noteReferenceText}>
                       <Text style={[styles.noteReferenceKind, { color: colors.text.secondary }]}>
-                        {m.chat.referencedNote}
+                        {ref.kind === 'task' ? m.chat.references.task : m.chat.referencedNote}
                       </Text>
                       <Text
                         numberOfLines={1}

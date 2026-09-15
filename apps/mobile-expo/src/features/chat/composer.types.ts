@@ -13,7 +13,7 @@ export type WireAttachment = {
 };
 
 export type ComposerContextRef = {
-  kind: 'note';
+  kind: 'note' | 'task';
   sourceId: string;
   expectedVersion: string;
   title: string;

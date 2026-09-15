@@ -92,7 +92,7 @@ Short description.
 });
 
 describe('parseSessionMessages startup context', () => {
-  it('strips profile, Note, and timestamp envelopes from persisted user rows', () => {
+  it.each(['note', 'task'])('strips profile, Note, and timestamp envelopes from persisted user rows', (kind) => {
     const ui = parseSessionMessages([{
       role: 'user',
       content: [
@@ -110,7 +110,7 @@ describe('parseSessionMessages startup context', () => {
       ].join('\n'),
       metadata: {
         sourceContexts: [{
-          kind: 'note', sourceId: 'n1', version: '1', title: 'Launch plan', truncated: true,
+          kind, sourceId: 'n1', version: '1', title: 'Launch plan', truncated: true,
         }],
       },
       timestamp: 1,
@@ -118,7 +118,7 @@ describe('parseSessionMessages startup context', () => {
 
     expect(extractUserMessageText(ui[0]?.content ?? [])).toBe('看下note 内容');
     expect(ui[0]?.contextRefs).toEqual([{
-      kind: 'note', sourceId: 'n1', version: '1', title: 'Launch plan', truncated: true,
+      kind, sourceId: 'n1', version: '1', title: 'Launch plan', truncated: true,
     }]);
   });
 

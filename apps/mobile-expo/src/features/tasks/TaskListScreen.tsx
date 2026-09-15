@@ -40,7 +40,7 @@ export function TaskListScreen() {
   const labels = useMessages().tasksPage;
   const [tab, setTab] = useState<WorkTab>('overview');
   const pagerRef = useRef<PagerView>(null);
-  const tasks = useQuery({ queryKey: queryKeys.tasks, queryFn: fetchTasks, enabled: configured });
+  const tasks = useQuery({ queryKey: queryKeys.tasks, queryFn: () => fetchTasks(), enabled: configured });
   const projects = useQuery({ queryKey: queryKeys.projects, queryFn: fetchProjects, enabled: configured });
 
   const selectTab = useCallback((next: WorkTab) => {

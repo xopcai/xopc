@@ -19,7 +19,7 @@ export interface ClientHistoryMessage {
   /** Whitelisted display metadata; never includes source snapshot text. */
   metadata?: {
     sourceContexts?: Array<{
-      kind: 'note' | 'browser_page';
+      kind: 'note' | 'task' | 'browser_page';
       sourceId: string;
       version: string;
       title: string;
@@ -71,7 +71,7 @@ function sourceContextDisplayMetadata(metadata: unknown): ClientHistoryMessage['
     if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
     const row = value as Record<string, unknown>;
     if (
-      (row.kind !== 'note' && row.kind !== 'browser_page')
+      (row.kind !== 'note' && row.kind !== 'task' && row.kind !== 'browser_page')
       || typeof row.sourceId !== 'string'
       || typeof row.version !== 'string'
       || typeof row.title !== 'string'

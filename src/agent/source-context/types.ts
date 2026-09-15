@@ -8,7 +8,7 @@ export interface SessionSourceBinding {
 }
 
 export interface TurnContextRef {
-  kind: 'note';
+  kind: 'note' | 'task';
   sourceId: string;
   expectedVersion?: string;
 }
@@ -26,7 +26,7 @@ export interface SourceContextRefSummary {
 }
 
 export interface AgentSourceContext {
-  kind: SessionSourceBinding['kind'] | 'browser_page';
+  kind: SessionSourceBinding['kind'] | 'task' | 'browser_page';
   sourceId: string;
   version: string;
   title: string;
@@ -56,7 +56,7 @@ export function summarizeSourceContext(context: AgentSourceContext): SourceConte
 export function isTurnContextRef(value: unknown): value is TurnContextRef {
   if (!value || typeof value !== 'object') return false;
   const row = value as Record<string, unknown>;
-  return row.kind === 'note'
+  return (row.kind === 'note' || row.kind === 'task')
     && typeof row.sourceId === 'string'
     && row.sourceId.trim().length > 0
     && (row.expectedVersion === undefined || typeof row.expectedVersion === 'string');

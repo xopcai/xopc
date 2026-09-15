@@ -1,6 +1,7 @@
 /**
  * Chat composer — Kimi-style compact/expanded input, attachments, text / voice modes.
  */
+import { useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   type LayoutChangeEvent,
@@ -19,13 +20,15 @@ import { Icon } from 'react-native-paper';
 import { useMessages } from '../../i18n/messages';
 import { radii, spacing, typography, useTheme } from '../../theme';
 import { detectAtMentionRange, formatWorkspacePath, replaceAtMention } from './at-mention-utils';
-import { canSendComposerDraft } from './composer-send-helpers';
+import { canSendComposerDraft, prepareComposerInput } from './composer-send-helpers';
 import {
   MAX_COMPOSER_CONTEXT_REFS,
   type ComposerContextRef,
   type WireAttachment,
 } from './composer.types';
-import { AttachmentSourceSheet } from './attachment-source-sheet';
+import { ComposerReferenceSheet } from './ComposerReferenceSheet';
+import type { ComposerReferenceItem, ReferenceKind } from '../../query/composer-references';
+import { ComposerActionSheet } from './composer-action-sheet';
 import { AtMentionPaletteBar } from './AtMentionPaletteBar';
 import { ComposerAttachmentStrip } from './composer-attachment-strip';
 import { ComposerContextChips } from './ComposerContextChips';
@@ -50,6 +53,7 @@ import { VoiceRecordingCard } from './VoiceRecordingCard';
 import { useChatVoiceRecording } from './use-chat-voice-recording';
 import { useVoiceCall } from '../voice/voice-call';
 import {
+  COMPOSER_VOICE_CALL_OPTIONS,
   resolveComposerVoiceCallOption,
   type ComposerVoiceCallMode,
 } from './composer-voice-call-options';
@@ -69,6 +73,7 @@ export const ChatComposer = memo(function ChatComposer({
   contextRefs,
   onContextRefsChange,
   contextControl,
+  onNewChat,
   onVoiceCallStart,
   voiceCallMode,
   voiceCallUnavailable,
@@ -85,6 +90,7 @@ export const ChatComposer = memo(function ChatComposer({
   contextRefs: ComposerContextRef[];
   onContextRefsChange: (refs: ComposerContextRef[]) => void;
   contextControl?: ReactNode;
+  onNewChat: () => void;
   onVoiceCallStart: (mode?: ComposerVoiceCallMode) => void;
   voiceCallMode?: ComposerVoiceCallMode;
   voiceCallUnavailable?: Partial<Record<ComposerVoiceCallMode, boolean>>;
@@ -93,6 +99,8 @@ export const ChatComposer = memo(function ChatComposer({
   const cm = m.chat;
   const { colors, elevation } = useTheme();
 
+  const [referenceKind, setReferenceKind] = useState<ReferenceKind | null>(null);
+  useEffect(() => setReferenceKind(null), [sessionKey, disabled]);
   const [mode, setMode] = useState<InputMode>('text');
   const [draft, setDraft] = useState('');
   const [inputHeight, setInputHeight] = useState(MIN_COMPOSER_INPUT_HEIGHT);
@@ -216,6 +224,7 @@ export const ChatComposer = memo(function ChatComposer({
     }
 
     const snapshot = readComposerDraftSnapshot(normalizedSessionKey);
+    att.restoreAttachments(snapshot?.workspaceFiles ?? []);
     if (!snapshot) {
       resetEditor();
       onContextRefsChange([]);
@@ -227,7 +236,7 @@ export const ChatComposer = memo(function ChatComposer({
     setInputHeight(estimateComposerInputHeight(snapshot.text));
     setMode('text');
     onContextRefsChange(snapshot.contextRefs);
-  }, [onContextRefsChange, resetEditor, sessionKey]);
+  }, [att.restoreAttachments, onContextRefsChange, resetEditor, sessionKey]);
 
   useEffect(() => {
     const normalizedSessionKey = sessionKey.trim();
@@ -238,8 +247,10 @@ export const ChatComposer = memo(function ChatComposer({
       return;
     }
 
-    writeComposerDraftSnapshot(normalizedSessionKey, { text: draft, cursorPos, contextRefs });
-  }, [contextRefs, cursorPos, draft, sessionKey]);
+    writeComposerDraftSnapshot(normalizedSessionKey, { text: draft, cursorPos, contextRefs,
+      workspaceFiles: att.attachments.filter(file => Boolean(file.workspaceRelativePath) && !file.content && !file.uri && !file.localUri),
+    });
+  }, [att.attachments, contextRefs, cursorPos, draft, sessionKey]);
 
   const isExpanded = useMemo(
     () =>
@@ -293,10 +304,10 @@ export const ChatComposer = memo(function ChatComposer({
     const range = atPicker.range;
     if (!range) return;
     if (item.kind === 'note') {
-      if (!contextRefs.some((ref) => ref.sourceId === item.id) && contextRefs.length >= MAX_COMPOSER_CONTEXT_REFS) {
+      if (!contextRefs.some((ref) => ref.kind === 'note' && ref.sourceId === item.id) && contextRefs.length >= MAX_COMPOSER_CONTEXT_REFS) {
         setSnack(cm.contextLimitReached);
         return;
-      } else if (!contextRefs.some((ref) => ref.sourceId === item.id)) {
+      } else if (!contextRefs.some((ref) => ref.kind === 'note' && ref.sourceId === item.id)) {
         onContextRefsChange([...contextRefs, {
           kind: 'note',
           sourceId: item.id,
@@ -313,13 +324,40 @@ export const ChatComposer = memo(function ChatComposer({
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [atPicker.range, cm.contextLimitReached, contextRefs, draft, onContextRefsChange, updateDraft]);
 
+  const handleReferenceSelect = (item: ComposerReferenceItem) => {
+    if (disabled || voiceInteractionActive) return;
+    if (item.kind === 'file') {
+      if (att.attachments.length >= att.maxAttachments || !item.relativePath) return;
+      if (!att.attachments.some(file => file.workspaceRelativePath === item.relativePath)) {
+        att.setAttachments([...att.attachments, {
+          id: item.id, type: 'document', name: item.title,
+          mimeType: item.mimeType || 'application/octet-stream', size: item.size || 0,
+          content: '', workspaceRelativePath: item.relativePath,
+        }]);
+      }
+    } else {
+      if (contextRefs.some(ref => ref.kind === item.kind && ref.kind === 'note' && ref.sourceId === item.id)) return;
+      if (contextRefs.length >= MAX_COMPOSER_CONTEXT_REFS) {
+        setReferenceKind(null);
+        setSnack(cm.contextLimitReached);
+        return;
+      }
+      onContextRefsChange([...contextRefs, {
+        kind: item.kind, sourceId: item.id, expectedVersion: item.version, title: item.title || cm.references.untitled,
+      }]);
+    }
+    setReferenceKind(null);
+    setMode('text');
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
   const handleSend = useCallback(() => {
     if (!canSendIdle || runBusy) return;
 
     const previousDraft = draft;
     const previousAttachments = att.attachments;
     const previousContextRefs = contextRefs;
-    const wire = att.toWirePayload();
+    const input = prepareComposerInput(previousDraft, att.toWirePayload());
 
     resetEditor();
     att.clearAttachments();
@@ -327,8 +365,8 @@ export const ChatComposer = memo(function ChatComposer({
     inputRef.current?.blur();
 
     void onSend(
-      previousDraft.trim(),
-      wire.length ? wire : undefined,
+      input.text,
+      input.attachments.length ? input.attachments : undefined,
       previousContextRefs.length ? previousContextRefs : undefined,
     )
       .then((accepted) => {
@@ -376,6 +414,7 @@ export const ChatComposer = memo(function ChatComposer({
     [draft],
   );
 
+  const router = useRouter();
   const surface = colors.surface.elevated;
   const border = colors.border.default;
   const accent = colors.accent.primary;
@@ -387,8 +426,9 @@ export const ChatComposer = memo(function ChatComposer({
     setMode(current => current === 'voice' ? 'text' : 'voice');
   }, [voiceToggleDisabled]);
 
-  const openAttachmentSheet = useCallback(() => {
+  const openActionSheet = useCallback(() => {
     if (disabled || voiceInteractionActive) return;
+    Keyboard.dismiss();
     att.openSheet();
   }, [att, disabled, voiceInteractionActive]);
 
@@ -400,15 +440,6 @@ export const ChatComposer = memo(function ChatComposer({
       requestAnimationFrame(() => inputRef.current?.focus());
     },
     [att],
-  );
-
-  const sheetItems = useMemo(
-    () => [
-      { source: 'camera' as const, icon: 'camera-outline', label: cm.takePhoto },
-      { source: 'photos' as const, icon: 'image-outline', label: cm.photos },
-      { source: 'document' as const, icon: 'folder-outline', label: cm.localFiles },
-    ],
-    [cm.takePhoto, cm.photos, cm.localFiles],
   );
 
   const captureItems = useMemo(
@@ -429,6 +460,29 @@ export const ChatComposer = memo(function ChatComposer({
       onPress: () => onVoiceCallStart(voiceCallMode),
     };
   }, [m.voice.title, onVoiceCallStart, voiceCallMode]);
+
+  const attachmentPickDisabled = disabled || streaming || voiceInteractionActive || att.attachments.length >= att.maxAttachments;
+  const callStartDisabled = disabled || streaming || voiceInteractionActive || call.phase !== 'idle'
+    || (voiceCallMode ? voiceCallUnavailable?.[voiceCallMode] === true : false);
+  const sheetItems = [
+    { key: 'new-chat', icon: 'square-edit-outline', label: m.drawer.newChat,
+      disabled: disabled || voiceInteractionActive,
+      onPress: () => { Keyboard.dismiss(); onNewChat(); } },
+    { key: 'meeting-recording', icon: 'microphone-plus', label: m.recordings.title,
+      onPress: () => { Keyboard.dismiss(); router.push('/recordings'); } },
+    ...(call.phase === 'idle' ? COMPOSER_VOICE_CALL_OPTIONS.map(option => ({
+      key: option.key,
+      icon: option.icon,
+      label: option.mode === 'natural' ? m.voice.realtimeCall : m.voice.assistantCall,
+      description: option.mode === 'natural' ? m.voice.realtimeCallHint : m.voice.assistantCallHint,
+      disabled: disabled || streaming || voiceInteractionActive || voiceCallUnavailable?.[option.mode] === true,
+      onPress: () => onVoiceCallStart(option.mode),
+    })) : []),
+    { key: 'reference-note', icon: 'notebook-outline', label: cm.references.addNote, onPress: () => setReferenceKind('note') },
+    { key: 'reference-task', icon: 'checkbox-marked-circle-outline', label: cm.references.addTask, onPress: () => setReferenceKind('task') },
+    { key: 'reference-file', icon: 'folder-outline', label: cm.references.addFile, onPress: () => setReferenceKind('file') },
+    ...captureItems.filter(item => item.key !== 'document').map(item => ({ ...item, disabled: attachmentPickDisabled })),
+  ];
 
   const renderCaptureChip = (
     key: string,
@@ -470,10 +524,7 @@ export const ChatComposer = memo(function ChatComposer({
       >
         {contextControl}
         {call.phase === 'idle' ? (() => {
-          const itemDisabled = disabled
-            || streaming
-            || voiceInteractionActive
-            || (voiceCallMode ? voiceCallUnavailable?.[voiceCallMode] === true : false);
+          const itemDisabled = callStartDisabled;
           return renderCaptureChip(
             voiceCallItem.key,
             voiceCallItem.icon,
@@ -483,10 +534,7 @@ export const ChatComposer = memo(function ChatComposer({
           );
         })() : null}
         {captureItems.map((item) => {
-          const itemDisabled = disabled
-            || streaming
-            || voiceInteractionActive
-            || att.attachments.length >= att.maxAttachments;
+          const itemDisabled = attachmentPickDisabled;
           return renderCaptureChip(item.key, item.icon, item.label, item.onPress, itemDisabled);
         })}
       </ScrollView>
@@ -516,20 +564,20 @@ export const ChatComposer = memo(function ChatComposer({
     </Pressable>
   );
 
-  const renderAttachButton = () => (
+  const renderMoreButton = () => (
     <Pressable
       style={({ pressed }) => [
         styles.toolBtn,
         {
           backgroundColor: pressed ? colors.surface.hover : colors.surface.input,
-          opacity: disabled || voiceInteractionActive || att.attachments.length >= att.maxAttachments ? 0.54 : 1,
+          opacity: disabled || voiceInteractionActive ? 0.54 : 1,
         },
       ]}
-      onPress={openAttachmentSheet}
-      disabled={disabled || voiceInteractionActive || att.attachments.length >= att.maxAttachments}
+      onPress={openActionSheet}
+      disabled={disabled || voiceInteractionActive}
       hitSlop={4}
       accessibilityRole="button"
-      accessibilityLabel={cm.attachFile}
+      accessibilityLabel={cm.moreActions}
     >
       <Icon
         source="plus-circle-outline"
@@ -552,7 +600,7 @@ export const ChatComposer = memo(function ChatComposer({
 
   const renderStreamingRightActions = () => (
     <View style={styles.streamingActions}>
-      {renderAttachButton()}
+      {renderMoreButton()}
       {renderAbortButton()}
     </View>
   );
@@ -653,7 +701,7 @@ export const ChatComposer = memo(function ChatComposer({
 
       <ComposerContextChips
         refs={contextRefs}
-        onRemove={(sourceId) => onContextRefsChange(contextRefs.filter((ref) => ref.sourceId !== sourceId))}
+        onRemove={(sourceId, kind) => onContextRefsChange(contextRefs.filter((ref) => ref.sourceId !== sourceId || ref.kind !== kind))}
       />
 
       {contextNotice ? (
@@ -716,7 +764,7 @@ export const ChatComposer = memo(function ChatComposer({
                   {...textInputProps}
                 />
               </View>
-              {!isExpanded ? (streaming ? renderStreamingRightActions() : renderAttachButton()) : null}
+              {!isExpanded ? (streaming ? renderStreamingRightActions() : renderMoreButton()) : null}
             </View>
             {isExpanded ? (
               <View style={styles.toolRow}>
@@ -726,7 +774,7 @@ export const ChatComposer = memo(function ChatComposer({
                   renderStreamingRightActions()
                 ) : (
                   <>
-                    {renderAttachButton()}
+                    {renderMoreButton()}
                     {renderSendOrStop()}
                   </>
                 )}
@@ -757,7 +805,7 @@ export const ChatComposer = memo(function ChatComposer({
                 renderStreamingRightActions()
               ) : (
                 <>
-                  {renderAttachButton()}
+                  {renderMoreButton()}
                   {renderSendOrStop()}
                 </>
               )}
@@ -781,17 +829,16 @@ export const ChatComposer = memo(function ChatComposer({
                 {cm.holdToSpeak}
               </Text>
             </View>
-            {streaming ? renderStreamingRightActions() : renderAttachButton()}
+            {streaming ? renderStreamingRightActions() : renderMoreButton()}
           </View>
         )}
       </View>
 
-      <AttachmentSourceSheet
-        visible={att.sheetOpen}
-        items={sheetItems}
-        onClose={att.closeSheet}
-        onPick={(source) => void handleAttachmentPick(source)}
-      />
+      {!referenceKind && <ComposerActionSheet visible={att.sheetOpen} items={sheetItems} onClose={att.closeSheet} />}
+      {referenceKind && <ComposerReferenceSheet key={sessionKey} initialKind={referenceKind} sessionKey={sessionKey}
+        selectedIds={[...contextRefs.map(ref => `${ref.kind}:${ref.sourceId}`), ...att.attachments.map(file => `file:${file.id}`)]}
+        onClose={() => setReferenceKind(null)} onSelect={handleReferenceSelect} filesDisabled={attachmentPickDisabled} referencesFull={contextRefs.length >= MAX_COMPOSER_CONTEXT_REFS}
+        onLocalFile={() => { setReferenceKind(null); requestAnimationFrame(() => void handleAttachmentPick('document')); }} />}
 
     </View>
   );

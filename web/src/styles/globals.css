@@ -419,6 +419,13 @@ html.dark {
   }
 }
 
+/* Match the 36px Electron overlay and shell titlebar; portals bypass shell layout. */
+.windows-preview-viewport {
+  --preview-titlebar-height: max(36px, env(titlebar-area-height, 36px));
+  top: var(--preview-titlebar-height);
+  height: calc(100dvh - var(--preview-titlebar-height));
+}
+
 .windows-titlebar {
   background: transparent;
   border-bottom-color: transparent;

@@ -121,13 +121,13 @@ export class GatewayAgentRunner {
           if (sourceId) unique.set(`${ref.kind}:${sourceId}`, { ...ref, sourceId });
         }
         if (unique.size > MAX_TURN_CONTEXTS) {
-          throw new Error(`A message can reference at most ${MAX_TURN_CONTEXTS} notes`);
+          throw new Error(`A message can reference at most ${MAX_TURN_CONTEXTS} sources`);
         }
         const contexts = await Promise.all(
           [...unique.values()].map((ref) => opts.resolveTurnContext(ref)),
         );
         if (contexts.some((context) => context === null)) {
-          throw new Error('A referenced note is no longer available');
+          throw new Error('A referenced source is unavailable or has changed; select it again');
         }
         return fitSourceContextsToBudget(
           contexts.filter((context): context is AgentSourceContext => context !== null),

@@ -67,13 +67,13 @@ describe('messagesToClientHistory', () => {
     ]);
   });
 
-  it('exposes only safe source context summaries for user-message chips', () => {
+  it.each(['note', 'task'])('exposes only safe source context summaries for user-message chips', (kind) => {
     const rows = [{
       role: 'user',
       content: 'question',
       metadata: {
         sourceContexts: [{
-          kind: 'note', sourceId: 'note-1', version: '42', title: 'Plan', tokenEstimate: 12,
+          kind, sourceId: 'note-1', version: '42', title: 'Plan', tokenEstimate: 12,
         }],
         internalSecret: 'do-not-expose',
       },
@@ -81,7 +81,7 @@ describe('messagesToClientHistory', () => {
 
     expect(transcriptRowsToClientHistory(rows)[0]?.metadata).toEqual({
       sourceContexts: [{
-        kind: 'note', sourceId: 'note-1', version: '42', title: 'Plan', tokenEstimate: 12,
+        kind, sourceId: 'note-1', version: '42', title: 'Plan', tokenEstimate: 12,
       }],
     });
   });
