@@ -22,19 +22,18 @@ describe('reconcileNavOrder', () => {
     }));
   });
 
-  it('places the workbench, projects, notes, and delegated work before advanced capabilities', () => {
+  it('keeps user work surfaces primary and assistant arrangements under More', () => {
     expect(PRIMARY_NAV_IDS).toEqual([
       'builtin:home',
       'builtin:projects',
       'builtin:notes',
-      'builtin:proactive',
     ]);
     expect(BUILTIN_NAV_DEFS.slice(0, DEFAULT_VISIBLE_NAV_ITEMS)).toEqual([
       expect.objectContaining({ id: 'builtin:home', to: '/' }),
       expect.objectContaining({ id: 'builtin:projects', to: '/projects' }),
       expect.objectContaining({ id: 'builtin:notes', to: '/notes' }),
-      expect.objectContaining({ id: 'builtin:proactive', to: '/assistant-work' }),
     ]);
+    expect(BUILTIN_NAV_DEFS.at(-1)).toEqual(expect.objectContaining({ id: 'builtin:proactive', to: '/assistant-work' }));
   });
 
   it('keeps the intended default built-in navigation order', () => {
@@ -42,7 +41,6 @@ describe('reconcileNavOrder', () => {
       'builtin:home',
       'builtin:projects',
       'builtin:notes',
-      'builtin:proactive',
       'builtin:automations',
       'builtin:skills',
       'builtin:connectors',
@@ -52,6 +50,7 @@ describe('reconcileNavOrder', () => {
       'builtin:browserAutomations',
       'builtin:localApps',
       'builtin:extensions',
+      'builtin:proactive',
     ]);
   });
 
@@ -73,7 +72,7 @@ describe('reconcileNavOrder', () => {
     expect(out.visible.map((i) => i.id)).toEqual(['builtin:notes', 'builtin:home']);
   });
 
-  it('keeps Workbench, Projects, Notes, and Delegated work visible by default', () => {
+  it('keeps Workbench, Projects, and Notes visible by default', () => {
     const available = [
       item('builtin:home'),
       item('builtin:projects'),
@@ -82,8 +81,8 @@ describe('reconcileNavOrder', () => {
       item('builtin:automations'),
     ];
     const out = reconcileNavOrder(available, []);
-    expect(out.visible.map((i) => i.id)).toEqual(['builtin:home', 'builtin:projects', 'builtin:notes', 'builtin:proactive']);
-    expect(out.overflow.map((i) => i.id)).toEqual(['builtin:automations']);
+    expect(out.visible.map((i) => i.id)).toEqual(['builtin:home', 'builtin:projects', 'builtin:notes']);
+    expect(out.overflow.map((i) => i.id)).toEqual(['builtin:proactive', 'builtin:automations']);
   });
 
   it('appends new items that are not yet in the stored order', () => {
@@ -101,9 +100,9 @@ describe('reconcileNavOrder', () => {
       'builtin:skills',
       'builtin:agents',
       'builtin:automations',
-      'builtin:channels',
     ]);
     expect(out.overflow.map((i) => i.id)).toEqual([
+      'builtin:channels',
       'ext:foo:home',
     ]);
   });
@@ -135,10 +134,7 @@ describe('reconcileNavOrder', () => {
     const out = reconcileNavOrder(available, []);
     expect(out.hasOverflow).toBe(true);
     expect(out.visible).toHaveLength(DEFAULT_VISIBLE_NAV_ITEMS);
-    expect(out.overflow.map((i) => i.id)).toEqual([
-      'builtin:notes',
-      'builtin:workflows',
-    ]);
+    expect(out.overflow.map((i) => i.id)).toEqual(['builtin:channels', 'builtin:notes', 'builtin:workflows']);
   });
 
   it('overflows past the default with first N shown and the rest hidden', () => {
@@ -158,9 +154,9 @@ describe('reconcileNavOrder', () => {
       'builtin:agents',
       'builtin:skills',
       'builtin:automations',
-      'builtin:channels',
     ]);
     expect(out.overflow.map((i) => i.id)).toEqual([
+      'builtin:channels',
       'ext:foo:a',
       'ext:bar:b',
       'ext:baz:c',

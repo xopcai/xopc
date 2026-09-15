@@ -20,6 +20,7 @@ complete successfully while the product command returns \`ok: false\`.
 ## Proactive delegation
 
 Use mode proactive only for explicit user delegation. Inspect list before start; edit existing subscriptions instead of duplicating them.
+When the user adopts a one-off result and repeating it would materially reduce future effort, offer one short natural-language upgrade such as “以后这类会议都这样准备吗？”. Start or update a proactive scene only after the user explicitly accepts. Confirm the moment, scope, promised help, notification timing and action boundary in ordinary language; do not expose scenario keys, schedules or runs.
 For one email thread, call mail_sources, then follow_up with sourceItemId, instructions and dueAt (ISO timestamp).
 Use update_follow_up with the current expectedRevision to pause, resume, adjust the deadline or end the delegation.
 On a communication card, continue_card with its id reads current work and binds this conversation to the delegation.

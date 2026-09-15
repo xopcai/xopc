@@ -487,7 +487,7 @@ export class NotesService {
 
   async addAttachment(noteId: string, file: {
     name: string;
-    buffer: Buffer;
+    buffer: Buffer | { filePath: string };
     mimeType: string;
     duration?: number;
     retainWithoutReference?: boolean;
@@ -508,7 +508,7 @@ export class NotesService {
 
   private async addAttachmentWithId(noteId: string, file: {
     name: string;
-    buffer: Buffer;
+    buffer: Buffer | { filePath: string };
     mimeType: string;
     duration?: number;
     retainWithoutReference?: boolean;

@@ -251,8 +251,9 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     method: string,
     contentType: string | undefined,
   ): number | undefined => {
-    if (method !== 'PUT' || contentType?.includes('multipart/form-data') !== true) return undefined;
-    if (/^\/api\/discussions\/[^/]+\/recording$/.test(path)) return NOTE_MEDIA_BODY_MAX;
+    if (method !== 'PUT') return undefined;
+    if (/^\/api\/discussions\/[^/]+\/recording\/chunks\/\d+$/.test(path)) return 8 * 1024 * 1024;
+    if (contentType?.includes('multipart/form-data') !== true) return undefined;
     if (/^\/api\/discussions\/[^/]+\/segments\/\d+$/.test(path)) return 2 * 1024 * 1024;
     return undefined;
   };

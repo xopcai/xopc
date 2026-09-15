@@ -33,6 +33,7 @@ type DiscussionRow = {
   transcript_language: string | null;
   transcript_revision: number;
   generated_title: string | null;
+  organization_template: DiscussionCapture['template'];
   project_inference_score: number | null;
   project_inference_source: string | null;
   failure_stage: string | null;
@@ -78,6 +79,7 @@ type OrganizationRow = {
   revision: number;
   input_transcript_sha256: string;
   prompt_version: string;
+  transcript_revision: number;
   model_ref: string;
   organization_json: string | null;
   status: DiscussionOrganizationRecord['status'];
@@ -106,6 +108,7 @@ function discussionFromRow(row: DiscussionRow): DiscussionCapture {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+  capture.template = row.organization_template;
   if (row.project_id) capture.projectId = row.project_id;
   if (row.audio_attachment_id) capture.audioAttachmentId = row.audio_attachment_id;
   if (row.duration_ms != null) capture.durationMs = row.duration_ms;
@@ -164,6 +167,7 @@ function organizationFromRow(row: OrganizationRow): DiscussionOrganizationRecord
     revision: row.revision,
     inputTranscriptSha256: row.input_transcript_sha256,
     promptVersion: row.prompt_version,
+    transcriptRevision: row.transcript_revision,
     modelRef: row.model_ref,
     ...optional(row.organization_json, { organization: JSON.parse(row.organization_json!) as DiscussionOrganization }),
     status: row.status,
@@ -261,7 +265,7 @@ export function updateDiscussionCapture(
     mime_type=?, audio_size_bytes=?, audio_sha256=?, canonical_transcript=?, canonical_transcript_sha256=?,
     transcript_language=?, transcript_revision=?, generated_title=?, project_inference_score=?,
     project_inference_source=?, failure_stage=?, failure_code=?, failure_message=?, recording_started_at=?,
-    recording_stopped_at=?, updated_at=?, completed_at=?, audio_deleted_at=? WHERE id=?${statusGuard}`)
+    recording_stopped_at=?, updated_at=?, completed_at=?, audio_deleted_at=?, organization_template=? WHERE id=?${statusGuard}`)
     .run(next.projectId ?? null, next.audioAttachmentId ?? null, next.source, next.status,
       next.durationMs ?? null, next.expectedLastSequence ?? null, next.mimeType ?? null,
       next.audioSizeBytes ?? null, next.audioSha256 ?? null, next.canonicalTranscript ?? null,
@@ -269,7 +273,7 @@ export function updateDiscussionCapture(
       next.generatedTitle ?? null, next.projectInferenceScore ?? null, next.projectInferenceSource ?? null,
       next.failureStage ?? null, next.failureCode ?? null, next.failureMessage ?? null,
       next.recordingStartedAt, next.recordingStoppedAt ?? null, next.updatedAt,
-      next.completedAt ?? null, next.audioDeletedAt ?? null, id, ...(expectedStatuses ?? [])).changes);
+      next.completedAt ?? null, next.audioDeletedAt ?? null, next.template ?? 'general', id, ...(expectedStatuses ?? [])).changes);
   return changes ? getDiscussionCapture(id) : null;
 }
 
@@ -286,10 +290,10 @@ export function claimNextDiscussionCapture(owner: string, now = Date.now(), leas
   });
 }
 
-export function releaseDiscussionWorkLease(id: string): void {
+export function releaseDiscussionWorkLease(id: string, owner: string): void {
   runSqliteWriteTransaction((db) => db.prepare(
-    'UPDATE discussion_captures SET work_lease_owner=NULL, work_lease_expires_at=NULL WHERE id=?',
-  ).run(id));
+    'UPDATE discussion_captures SET work_lease_owner=NULL, work_lease_expires_at=NULL WHERE id=? AND work_lease_owner=?',
+  ).run(id, owner));
 }
 
 export function createDiscussionTranscriptSegment(input: {
@@ -368,14 +372,14 @@ export function completeDiscussionTranscriptSegment(
 }
 
 export function correctDiscussionTranscriptSegment(
-  discussionId: string, sequence: number, displayText: string, expectedRevision: number,
+  discussionId: string, sequence: number, displayText: string, expectedRevision: number, speakerLabel?: string,
 ): DiscussionTranscriptSegment | null {
   const now = Date.now();
   const changes = runSqliteWriteTransaction((db) => {
-    const changed = db.prepare(`UPDATE discussion_transcript_segments SET display_text=?, corrected_by_user=1,
+    const changed = db.prepare(`UPDATE discussion_transcript_segments SET display_text=?, speaker_label=CASE WHEN ? THEN ? ELSE speaker_label END, corrected_by_user=1,
       corrected_at=?, revision=revision+1, updated_at=? WHERE discussion_id=? AND sequence=?
       AND status='confirmed' AND revision=?`)
-      .run(displayText, now, now, discussionId, sequence, expectedRevision).changes;
+      .run(displayText, speakerLabel === undefined ? 0 : 1, speakerLabel?.trim() || null, now, now, discussionId, sequence, expectedRevision).changes;
     if (changed) db.prepare('UPDATE discussion_captures SET transcript_revision=transcript_revision+1, updated_at=? WHERE id=?')
       .run(now, discussionId);
     return changed;
@@ -403,15 +407,15 @@ export function deleteDiscussionSegmentAudio(discussionId: string): void {
 }
 
 export function createDiscussionOrganization(input: {
-  discussionId: string; inputTranscriptSha256: string; promptVersion: string; modelRef: string;
+  discussionId: string; inputTranscriptSha256: string; promptVersion: string; modelRef: string; transcriptRevision: number;
 }): DiscussionOrganizationRecord {
   const now = Date.now();
   const revision = (getLatestDiscussionOrganization(input.discussionId)?.revision ?? 0) + 1;
   const id = randomUUID();
   runSqliteWriteTransaction((db) => db.prepare(`INSERT INTO discussion_organizations (
-    id, discussion_id, revision, input_transcript_sha256, prompt_version, model_ref, status, created_at
-  ) VALUES (?, ?, ?, ?, ?, ?, 'running', ?)`)
-    .run(id, input.discussionId, revision, input.inputTranscriptSha256, input.promptVersion, input.modelRef, now));
+    id, discussion_id, revision, input_transcript_sha256, prompt_version, model_ref, transcript_revision, status, created_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, 'running', ?)`)
+    .run(id, input.discussionId, revision, input.inputTranscriptSha256, input.promptVersion, input.modelRef, input.transcriptRevision, now));
   return getLatestDiscussionOrganization(input.discussionId)!;
 }
 
@@ -453,4 +457,8 @@ export function acknowledgeDiscussionCaptureConsent(policyVersion: number): Disc
     SET consent_acknowledged_at=?, updated_at=? WHERE workspace_id='default' AND consent_policy_version=?`)
     .run(now, now, policyVersion));
   return getDiscussionCaptureSettings();
+}
+
+export function renewDiscussionWorkLease(id: string, owner: string): boolean {
+  return Number(getSqliteDatabase().prepare("UPDATE discussion_captures SET work_lease_expires_at=? WHERE id=? AND work_lease_owner=? AND status='organizing'").run(Date.now() + 5 * 60_000, id, owner).changes) === 1;
 }

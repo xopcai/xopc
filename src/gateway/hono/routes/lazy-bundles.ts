@@ -236,6 +236,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'discussions',
+    match: (path) => path === '/api/discussions' || path.startsWith('/api/discussions/') || path === '/api/discussion-capture/settings',
+    load: async () => {
+      const { registerDiscussionRoutes } = await import('./discussions.js');
+      return { register: registerDiscussionRoutes };
+    },
+  },
+  {
     id: 'notes',
     match: (path) =>
       startsWithAny(path, ['/api/notes'])

@@ -12,7 +12,7 @@ import type { VoiceMode } from '@xopcai/realtime-protocol/voice';
 
 import { PcmFrameCapture, PcmStreamEncoder } from '@/features/chat/composer/pcm-wav-recorder';
 
-let captureOwner: symbol | null = null;
+import { acquireMicrophoneLease, releaseMicrophoneLease } from '../microphone-lease';
 
 export type VoiceInputPhase = 'idle' | 'requesting' | 'starting' | 'recording' | 'transcribing' | 'error';
 type VoiceCaptureStartStage = 'permission' | 'media' | 'session' | 'recorder';
@@ -173,7 +173,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
   }, []);
 
   const reset = useCallback(() => {
-    if (captureOwner === ownerRef.current) captureOwner = null;
+    releaseMicrophoneLease(ownerRef.current);
     attemptRef.current += 1;
     controllerRef.current?.abort();
     controllerRef.current = null;
@@ -280,12 +280,11 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
   const beginCapture = useCallback(async (purpose: VoiceSessionMode, callMode?: VoiceMode, conversationKey?: string) => {
     if (disabled || phaseRef.current !== 'idle') return;
     if (purpose === 'conversation' && !conversationKey) return;
-    if (captureOwner) {
+    if (!acquireMicrophoneLease(ownerRef.current)) {
       setError(m.callCaptureBusy);
       if (purpose === 'dictation') showComposerNotification('error', m.callCaptureBusy);
       return;
     }
-    captureOwner = ownerRef.current;
     callSessionKeyRef.current = conversationKey;
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -536,7 +535,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
   confirmRef.current = confirmVoiceInput;
 
   useEffect(() => () => {
-    if (captureOwner === ownerRef.current) captureOwner = null;
+    releaseMicrophoneLease(ownerRef.current);
     attemptRef.current += 1;
     controllerRef.current?.abort();
     captureRef.current?.cancel();

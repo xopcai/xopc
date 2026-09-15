@@ -45,21 +45,23 @@ describe('meeting preparation lifecycle', () => {
   }
   it('delivers the prepared brief, invalidates rescheduled work and updates the same meeting card', async () => {
     meeting(); await prepare();
-    const first = delegationOverview('workspace').prepared[0]!;
+    const overview = delegationOverview('workspace');
+    const first = overview.scenes.find(scene => scene.status === 'prepared')!.card!;
     expect(first.artifact?.kind).toBe('briefing');
+    expect(overview.scenes).toEqual([expect.objectContaining({ kind: 'meeting_preparation', status: 'prepared', title: 'Your review brief', card: expect.objectContaining({ id: first.id }) })]);
     meeting('2026-09-13T15:00:00Z', 'two');
     expect(getCard(first.id, 'workspace').status).toBe('expired');
     expect(recheckProactiveNotification(first.id)).toBe('cancel');
-    expect(delegationOverview('workspace').prepared).toEqual([]);
+    expect(delegationOverview('workspace').scenes[0]?.card).toBeNull();
     await prepare();
-    const next = delegationOverview('workspace').prepared[0]!;
+    const next = delegationOverview('workspace').scenes.find(scene => scene.status === 'prepared')!.card!;
     expect(next.id).toBe(first.id);
     expect(next.expiresAt).toBe('2026-09-13T15:00:00.000Z');
     expect(next.revision).toBeGreaterThan(first.revision);
   });
   it('withdraws cancelled meetings including their prepared artifact', async () => {
     meeting(); await prepare();
-    const card = delegationOverview('workspace').prepared[0]!;
+    const card = delegationOverview('workspace').scenes.find(scene => scene.status === 'prepared')!.card!;
     meeting('2026-09-13T10:00:00Z', 'cancelled', '2026-09-13T08:01:00Z');
     reconcileCards();
     expect(getCard(card.id, 'workspace')).toMatchObject({ status: 'withdrawn', summary: '' });
@@ -69,10 +71,10 @@ describe('meeting preparation lifecycle', () => {
   });
   it('discards a brief when source contents change during preparation', async () => {
     meeting(); await prepare(() => meeting('2026-09-13T10:00:00Z', 'updated-during-run'));
-    expect(delegationOverview('workspace').prepared).toEqual([]);
+    expect(delegationOverview('workspace').scenes[0]?.card).toBeNull();
     expect(getSqliteDatabase().prepare('SELECT outcome_reason FROM proactive_runs').get()).toMatchObject({ outcome_reason: 'source_changed' });
     await prepare();
-    expect(delegationOverview('workspace').prepared).toHaveLength(1);
+    expect(delegationOverview('workspace').scenes.filter(scene => scene.status === 'prepared')).toHaveLength(1);
   });
   it('does not prepare cancelled, declined, all-day or malformed events', () => {
     for (const event of [{ title: 'Cancelled', status: 'cancelled' }, { title: 'Holiday', allDay: true }, { title: 'Declined', attendees: [{ self: true, responseStatus: 'declined' }] }, {}]) expect(isMeetingWorthPreparing(JSON.stringify(event))).toBe(false);

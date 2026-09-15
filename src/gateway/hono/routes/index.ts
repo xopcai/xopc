@@ -3,7 +3,6 @@ import type { Hono } from 'hono';
 
 import { registerActivityRoutes } from './activity.js';
 import { registerAgentStreamRoutes } from './agent-stream.js';
-import { registerDiscussionRoutes } from './discussions.js';
 import { registerSessionsRoutes } from './sessions.js';
 import { registerExecutionEnvironmentRoutes } from './execution-environments.js';
 import { registerSideChatRoutes } from './side-chats.js';
@@ -41,7 +40,6 @@ export function registerCoreAuthenticatedRoutes(
   registerExecutionEnvironmentRoutes(authenticated, deps);
   registerSideChatRoutes(authenticated, deps);
   registerActivityRoutes(authenticated, deps);
-  registerDiscussionRoutes(authenticated, deps);
   registerProjectsRoutes(authenticated, deps);
   registerProjectSkillRoutes(authenticated, deps);
   registerLocalAppsRoutes(authenticated, deps);

@@ -33,7 +33,7 @@ The product is successful when it reduces monitoring work without creating a new
 
 ## Product surfaces
 
-- **Proactive services and cards:** `#/proactive` provides subscriptions, attention settings, and the card feed. The existing decision Inbox continues to reference the same items. The [templates and cards plan](./proactive-templates-and-cards.md) supersedes the earlier no-control-panel decision.
+- **Workbench scenes:** the workbench presents meaningful moments from projects, meetings, and follow-ups. `#/proactive` is the secondary place to review and adjust what the assistant has taken on.
 - **Judgment card:** shows why now, impact, work already performed, recommendation, and 2-3 choices only when a real user decision remains.
 - **Natural-language correction:** the user can tell AI how to judge this kind of event next time; the explicit submission publishes an auditable prompt revision without changing authority.
 - **Push:** only high-value judgments are pushed, and the notification opens the exact Inbox item.
@@ -80,7 +80,7 @@ The implementation maintains these invariants:
 - domains publish events without importing proactive scenario code;
 - an event can be replayed without duplicate runs, insights, Inbox items, or pushes;
 - each run is pinned to immutable event, context, scenario, and prompt versions;
-- users can safely preview, test, publish, and roll back per-scenario instructions;
+- users can safely correct and roll back per-scenario instructions;
 - output validation and evidence checks can reject model output before persistence;
 - delivery disposition is deterministic and auditable;
 - data authorization is enforced before context loading and again before tool execution;

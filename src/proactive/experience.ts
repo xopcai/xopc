@@ -9,6 +9,25 @@ import { ProactiveScenarioService } from './scenarios/service.js';
 import { ProactiveEventService } from './service.js';
 import { scanDueProjects } from './temporal/schedule.js';
 
+type SceneKind = 'project_momentum' | 'meeting_preparation' | 'communication_follow_up';
+type SceneStatus = 'needs_decision' | 'prepared' | 'changed' | 'following';
+
+interface SceneMoment {
+  id: string;
+  kind: SceneKind;
+  status: SceneStatus;
+  title: string;
+  promise: string;
+  moment: string;
+  relevance: string;
+  help: string;
+  arrangementId: string;
+  manageRoute: string;
+  object: { label: string; route: string } | null;
+  card: ReturnType<typeof getCard> | null;
+  updatedAt: string;
+}
+
 const DelegateSchema = z.object({
   scenarioKey: z.enum(['project_delivery_risk', 'meeting_preparation', 'discussion_follow_up']),
   projectId: z.string().min(1).optional(),
@@ -60,20 +79,109 @@ export function delegationOverview(workspace: string) {
     ORDER BY CASE WHEN x.action_status = 'approval_required' THEN 0 WHEN x.artifact_json IS NOT NULL THEN 1 ELSE 2 END,
     x.value_score DESC, i.updated_at DESC LIMIT 100`).all(workspace, now) as Array<{ inbox_item_id: string }>;
   const cards = rows.map(row => getCard(row.inbox_item_id, workspace)).filter(card => !['withdrawn', 'expired'].includes(card.status));
+  const followUps = listMailFollowUps(workspace);
+  const delegations = controlledSubscriptions(workspace).map(sub => ({
+    id: sub.id,
+    scenarioKey: sub.scenarioKey,
+    scopeKind: sub.scopeKind,
+    scopeId: sub.scopeId,
+    enabled: sub.enabled,
+    revision: sub.revision,
+    delivery: sub.delivery,
+    completedAt: sub.completedAt,
+    userInstructions: sub.userInstructions,
+    updatedAt: sub.updatedAt,
+    effectiveEnabled: effectiveProactivePolicy(sub.id).enabled,
+    project: sub.scopeKind === 'project' ? (db.prepare('SELECT name, status FROM projects WHERE project_id = ?').get(sub.scopeId) as { name: string; status: string } | undefined) ?? null : null,
+    projectMonitoring: sub.scopeKind === 'project' ? projectMonitoring(sub.scopeId) : null,
+    checking: Boolean(db.prepare("SELECT 1 FROM proactive_signal_batches WHERE subscription_id = ? AND status IN ('collecting', 'ready', 'processing')").get(sub.id)),
+  }));
   return {
-    followUps: listMailFollowUps(workspace),
-    needsDecision: cards.filter(card => card.decision && card.actionStatus !== 'completed'),
-    prepared: cards.filter(card => card.artifact && !card.decision),
-    updates: cards.filter(card => !card.artifact && !card.decision),
-    delegations: controlledSubscriptions(workspace).map(sub => ({
-      ...sub,
-      effectiveEnabled: effectiveProactivePolicy(sub.id).enabled,
-      project: sub.scopeKind === 'project' ? db.prepare('SELECT name, status FROM projects WHERE project_id = ?').get(sub.scopeId) ?? null : null,
-      latestRun: db.prepare(`SELECT status, outcome_reason AS reason, completed_at AS completedAt, started_at AS startedAt, error_message AS error, attempt, next_attempt_at AS nextAttemptAt
-        FROM proactive_runs WHERE subscription_id = ? ORDER BY started_at DESC LIMIT 1`).get(sub.id) ?? null,
-      pending: Boolean(db.prepare("SELECT 1 FROM proactive_signal_batches WHERE subscription_id = ? AND status IN ('collecting', 'ready', 'processing')").get(sub.id)),
-    })),
+    scenes: projectSceneMoments(cards, delegations, followUps),
+    followUps,
+    delegations,
   };
+}
+
+function projectMonitoring(projectId: string) {
+  const row = getSqliteDatabase().prepare('SELECT mode, allowed_actions_json FROM project_monitoring_policies WHERE project_id = ?').get(projectId) as { mode: 'observe' | 'ask_before_action' | 'auto_low_risk'; allowed_actions_json: string } | undefined;
+  return row ? { mode: row.mode, allowedActions: JSON.parse(row.allowed_actions_json) as string[] } : { mode: 'observe' as const, allowedActions: [] };
+}
+
+function projectSceneMoments(
+  cards: ReturnType<typeof getCard>[],
+  delegations: Array<{
+    id: string; scenarioKey: string; scopeKind: 'workspace' | 'project'; scopeId: string; enabled: boolean;
+    revision: number; delivery: 'inbox' | 'important' | 'digest'; completedAt: string | null;
+    userInstructions: string; updatedAt: string; effectiveEnabled: boolean;
+    project: { name: string; status: string } | null;
+    projectMonitoring: ReturnType<typeof projectMonitoring> | null;
+    checking: boolean;
+  }>,
+  followUps: ReturnType<typeof listMailFollowUps>,
+): SceneMoment[] {
+  const latestCardBySubscription = new Map<string, ReturnType<typeof getCard>>();
+  for (const card of cards) {
+    const previous = latestCardBySubscription.get(card.subscriptionId);
+    if (!previous || previous.updatedAt < card.updatedAt) latestCardBySubscription.set(card.subscriptionId, card);
+  }
+
+  const moments: SceneMoment[] = [];
+  for (const sub of delegations) {
+    if (!sub.effectiveEnabled || sub.completedAt || !['project_delivery_risk', 'meeting_preparation', 'discussion_follow_up'].includes(sub.scenarioKey)) continue;
+    const card = latestCardBySubscription.get(sub.id) ?? null;
+    const project = sub.project;
+    const kind: SceneKind = sub.scenarioKey === 'meeting_preparation' ? 'meeting_preparation'
+      : sub.scenarioKey === 'discussion_follow_up' ? 'communication_follow_up' : 'project_momentum';
+    const object = project
+      ? { label: project.name, route: `/projects/${encodeURIComponent(sub.scopeId)}` }
+      : card?.evidence.find(item => item.route) ? (() => { const item = card.evidence.find(value => value.route)!; return { label: item.label, route: item.route! }; })() : null;
+    moments.push({
+      id: `scene:${sub.id}`,
+      kind,
+      status: sceneStatus(card),
+      title: project?.name ?? card?.title ?? (kind === 'meeting_preparation' ? 'Meeting preparation' : kind === 'communication_follow_up' ? 'Conversation follow-up' : 'Project follow-through'),
+      promise: sub.userInstructions,
+      moment: card?.whyNow ?? (kind === 'meeting_preparation' ? 'Waiting for the next relevant meeting' : kind === 'communication_follow_up' ? 'Watching for a meaningful follow-up' : 'Watching the project for a meaningful change'),
+      relevance: card?.summary ?? sub.userInstructions,
+      help: card?.workDone || card?.recommendation || (kind === 'meeting_preparation' ? 'I will bring back a brief before the meeting.' : kind === 'communication_follow_up' ? 'I will return when the discussion needs a next step.' : 'I will return when the goal, commitment, or delivery risk changes.'),
+      arrangementId: sub.id,
+      manageRoute: `/assistant-work?delegation=${encodeURIComponent(sub.id)}`,
+      object,
+      card,
+      updatedAt: card?.updatedAt ?? sub.updatedAt,
+    });
+  }
+
+  for (const follow of followUps) {
+    if (!follow.enabled || follow.status !== 'watching') continue;
+    const card = cards.find(item => item.communication?.id === follow.id) ?? null;
+    moments.push({
+      id: `scene:${follow.id}`,
+      kind: 'communication_follow_up',
+      status: sceneStatus(card),
+      title: follow.subject ?? 'Communication follow-up',
+      promise: follow.instructions,
+      moment: card?.whyNow ?? (follow.latestDirection === 'received' ? 'A reply arrived' : `Waiting until ${follow.dueAt}`),
+      relevance: card?.summary ?? follow.instructions,
+      help: card?.workDone || card?.recommendation || 'I will watch the thread and prepare the next step when it matters.',
+      arrangementId: follow.subscriptionId,
+      manageRoute: `/assistant-work?follow-up=${encodeURIComponent(follow.id)}`,
+      object: follow.sessionKey ? { label: follow.subject ?? 'Open conversation', route: `/chat/${encodeURIComponent(follow.sessionKey)}` } : null,
+      card,
+      updatedAt: card?.updatedAt ?? follow.lastCheckedAt ?? follow.dueAt,
+    });
+  }
+
+  const priority: Record<SceneStatus, number> = { needs_decision: 0, prepared: 1, changed: 2, following: 3 };
+  return moments.sort((a, b) => priority[a.status] - priority[b.status] || b.updatedAt.localeCompare(a.updatedAt));
+}
+
+function sceneStatus(card: ReturnType<typeof getCard> | null): SceneStatus {
+  if (!card) return 'following';
+  if (card.decision && card.actionStatus !== 'completed') return 'needs_decision';
+  if (card.artifact) return 'prepared';
+  return 'changed';
 }
 
 export function completeDeliveredProjects(now = new Date()) {

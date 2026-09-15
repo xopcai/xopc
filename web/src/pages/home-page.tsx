@@ -299,11 +299,10 @@ export function HomePage() {
   };
 
   const proactive = useSWR<ProactiveOverview>('/api/proactive/overview', proactiveGet, { refreshInterval: 15000 });
-  const hasPreparedWork = Boolean(proactive.data?.prepared.length);
-  const hasAssistantUpdates = Boolean(proactive.data?.updates.length);
-  const hasFollowingWork = Boolean(proactive.data && (proactive.data.delegations.some(sub => sub.effectiveEnabled)
-    || proactive.data.followUps.some(follow => follow.enabled && follow.status === 'watching')));
-  const hasProactiveWork = Boolean(proactive.data && (proactive.data.needsDecision.length || hasPreparedWork || hasAssistantUpdates || hasFollowingWork));
+  const hasPreparedWork = Boolean(proactive.data?.scenes.some(scene => scene.status === 'prepared'));
+  const hasAssistantUpdates = Boolean(proactive.data?.scenes.some(scene => scene.status === 'changed'));
+  const hasFollowingWork = Boolean(proactive.data?.scenes.some(scene => scene.status === 'following'));
+  const hasProactiveWork = Boolean(proactive.data?.scenes.length);
   const isIdle = Boolean(home && home.needsUser.length === 0 && home.backgroundCount === 0 && proactive.data && !hasProactiveWork);
   const composerVisible = isIdle || conversationOpen;
 
@@ -400,7 +399,7 @@ export function HomePage() {
     return () => clearPageHeader();
   }, [clearPageHeader, headerEnd, setPageHeader, t.title]);
 
-  const needsUserCount = (home?.needsUser.length ?? 0) + (proactive.data?.needsDecision.length ?? 0);
+  const needsUserCount = (home?.needsUser.length ?? 0) + (proactive.data?.scenes.filter(scene => scene.status === 'needs_decision').length ?? 0);
   const backgroundCount = home?.backgroundCount ?? 0;
   const headline = needsUserCount > 0
     ? interpolate(t.home.attentionTitle, { count: needsUserCount })
@@ -523,8 +522,6 @@ export function HomePage() {
             ) : null}
           </section>
 
-          <section className="mt-8"><ProactiveToday compact section="decisions" /></section>
-
           {home.needsUser.length > 0 ? (
             <section className="mt-10" aria-labelledby="home-needs-user-title">
               <div className="mb-3 flex items-center gap-2 px-1">
@@ -548,7 +545,7 @@ export function HomePage() {
             </section>
           ) : null}
 
-          <section className="mt-10"><ProactiveToday compact section="rest" /></section>
+          <section className="mt-10"><ProactiveToday compact /></section>
 
           {home.background.length > 0 ? (
             <section className="mt-10" aria-labelledby="home-background-title">

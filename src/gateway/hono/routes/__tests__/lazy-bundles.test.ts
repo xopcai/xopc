@@ -6,13 +6,19 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps meeting capture and nested upload resources without swallowing notes or voice', () => {
+    for (const path of ['/api/discussions', '/api/discussion-capture/settings', '/api/discussions/metrics', '/api/discussions/by-note/id', '/api/discussions/id/recording/chunks/0', '/api/discussions/id/recording/complete', '/api/discussions/id/audio', '/api/discussions/id/export', '/api/discussions/id/actions/action/convert', '/api/discussions/id/transcript', '/api/discussions/id/organize', '/api/discussions/id/summary']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('discussions');
+    }
+    for (const path of ['/api/discussions-other', '/api/notes/id', '/api/voice']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('discussions');
+  });
   it('maps browser sessions without swallowing browser control routes', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/browser-session')?.id).toBe('browser-session');
     expect(findAuthenticatedLazyRouteBundle('/api/browser-sessions')).toBeUndefined();
     expect(findAuthenticatedLazyRouteBundle('/api/browser/tab-bindings')?.id).not.toBe('browser-session');
   });
   it('maps proactive controls and card families without swallowing neighboring inbox routes', () => {
-    for (const path of ['/api/proactive/metrics', '/api/proactive/presence', '/api/proactive/digests/id', '/api/proactive/subscriptions/id/preview', '/api/proactive/follow-ups', '/api/proactive/follow-ups/sources', '/api/proactive/follow-ups/id', '/api/proactive/overview', '/api/proactive/delegations', '/api/proactive/subscriptions/id/check', '/api/proactive/web-push/probes', '/api/proactive/web-push/probes/id/opened', '/api/proactive/web-push/subscriptions/id/test', '/api/proactive/templates', '/api/proactive/preferences', '/api/proactive/subscriptions', '/api/proactive/subscriptions/sub/runs', '/api/proactive/cards', '/api/inbox/judgments', '/api/inbox/judgments/changes', '/api/inbox/judgments/card/actions', '/api/internal/proactive/health']) {
+    for (const path of ['/api/proactive/metrics', '/api/proactive/presence', '/api/proactive/digests/id', '/api/proactive/follow-ups', '/api/proactive/follow-ups/sources', '/api/proactive/follow-ups/id', '/api/proactive/overview', '/api/proactive/delegations', '/api/proactive/subscriptions/id/check', '/api/proactive/web-push/probes', '/api/proactive/web-push/probes/id/opened', '/api/proactive/web-push/subscriptions/id/test', '/api/proactive/preferences', '/api/inbox/judgments', '/api/inbox/judgments/changes', '/api/inbox/judgments/card/actions', '/api/internal/proactive/health']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('proactive');
     }
     expect(findAuthenticatedLazyRouteBundle('/api/inbox/other')).toBeUndefined();

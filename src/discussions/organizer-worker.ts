@@ -6,6 +6,7 @@ import {
   claimNextDiscussionCapture,
   getDiscussionCapture,
   releaseDiscussionWorkLease,
+  renewDiscussionWorkLease,
   updateDiscussionCapture,
 } from './repository.js';
 import type { DiscussionCapture } from './types.js';
@@ -46,14 +47,18 @@ export class DiscussionOrganizerWorker {
     try {
       const capture = claimNextDiscussionCapture(this.owner);
       if (!capture) return;
+      const controller = new AbortController();
+      const renewal = setInterval(() => { if (!renewDiscussionWorkLease(capture.id, this.owner)) controller.abort(); }, 30_000);
+      renewal.unref();
       try {
-        await this.processor.process(capture, this.owner);
-        releaseDiscussionWorkLease(capture.id);
+        await this.processor.process(capture, this.owner, controller.signal);
+        releaseDiscussionWorkLease(capture.id, this.owner);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        releaseDiscussionWorkLease(capture.id);
+        const ownsLease = renewDiscussionWorkLease(capture.id, this.owner);
+        releaseDiscussionWorkLease(capture.id, this.owner);
         const current = getDiscussionCapture(capture.id);
-        const updated = current && updateDiscussionCapture(capture.id, {
+        const updated = ownsLease && current && updateDiscussionCapture(capture.id, {
           status: 'needs_attention',
           failureStage: 'organization',
           failureCode: 'organization_failed',
@@ -61,7 +66,7 @@ export class DiscussionOrganizerWorker {
         }, ['organizing']);
         if (updated) this.onUpdated?.(updated);
         log.warn({ err: error, discussionId: capture.id }, `Discussion organization failed: ${message}`);
-      }
+      } finally { clearInterval(renewal); }
     } finally {
       this.running = false;
     }

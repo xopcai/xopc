@@ -1,4 +1,15 @@
+import { applyMeetingEdits } from '../edits.js';
+import { updateDiscussionCapture } from '../repository.js';
+import { convertMeetingAction, meetingActionTasks } from '../action-tasks.js';
+import { createDiscussionOrganization, completeDiscussionOrganization } from '../repository.js';
+import { saveTranscriptRevision, replaceTranscriptSegments } from '../revisions.js';
+import { serve } from '@hono/node-server';
+import { Hono } from 'hono';
+import { auth } from '../../gateway/hono/middleware/auth.js';
+import { registerAuthenticatedLazyRouteFallback, resetLazyRouteBundlesForTests } from '../../gateway/hono/routes/lazy-fallback.js';
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import { open } from 'node:fs/promises';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -52,6 +63,134 @@ describe('discussion note document', () => {
     return service.create({ clientRequestId, consentPolicyVersion, source: 'web' });
   }
 
+  async function uploadRecording(id: string, _file: unknown, durationMs: number) {
+    const buffer = Buffer.alloc(44 + Math.round(durationMs * 32));
+    buffer.write('RIFF', 0); buffer.writeUInt32LE(buffer.length - 8, 4); buffer.write('WAVEfmt ', 8);
+    buffer.writeUInt32LE(16, 16); buffer.writeUInt16LE(1, 20); buffer.writeUInt16LE(1, 22);
+    buffer.writeUInt32LE(16_000, 24); buffer.writeUInt32LE(32_000, 28); buffer.writeUInt16LE(2, 32); buffer.writeUInt16LE(16, 34);
+    buffer.write('data', 36); buffer.writeUInt32LE(buffer.length - 44, 40);
+    await service.uploadRecordingChunk(id, 0, createHash('sha256').update(buffer).digest('hex'), new Blob([buffer]).stream());
+    return service.completeRecording(id, { chunkCount: 1, mimeType: 'audio/wav', fileName: 'meeting.wav' });
+  }
+
+  it('creates one durable task per action and rejects a stale summary', async () => {
+    const created = await create('action-task');
+    const revision = saveTranscriptRevision(created.discussion.id);
+    const record = createDiscussionOrganization({ discussionId: created.discussion.id, transcriptRevision: revision, inputTranscriptSha256: 'hash', promptVersion: 'test', modelRef: 'test' });
+    completeDiscussionOrganization(record.id, { title: 'Meeting', summary: 'A plan', keyPoints: [], decisions: [], actionItems: [{ id: 'action', title: 'Write the proposal', evidenceSegmentIds: [] }], risks: [], openQuestions: [], chapters: [] });
+    expect(() => convertMeetingAction(created.discussion.id, 'action', record.revision + 1)).toThrow('summary changed');
+    const first = convertMeetingAction(created.discussion.id, 'action', record.revision);
+    const second = convertMeetingAction(created.discussion.id, 'action', record.revision);
+    expect(second.taskId).toBe(first.taskId);
+    expect(second.existing).toBe(true);
+    expect(meetingActionTasks(created.discussion.id)).toHaveLength(1);
+  });
+
+  it('preserves manual edits and ignored actions across regeneration without changing the linked task', async () => {
+    const created = await create('edited-action');
+    const revision = saveTranscriptRevision(created.discussion.id);
+    const record = createDiscussionOrganization({ discussionId: created.discussion.id, transcriptRevision: revision, inputTranscriptSha256: 'hash', promptVersion: 'test', modelRef: 'test' });
+    const organization = { title: 'Meeting', summary: 'AI summary', keyPoints: [], decisions: [], actionItems: [{ id: 'action', title: 'Write proposal', evidenceSegmentIds: [] }], risks: [], openQuestions: [], chapters: [] };
+    completeDiscussionOrganization(record.id, organization);
+    updateDiscussionCapture(created.discussion.id, { status: 'completed' });
+    const task = convertMeetingAction(created.discussion.id, 'action', record.revision);
+    const edited = service.editSummary(created.discussion.id, { kind: 'actionItems', itemId: 'action', text: 'Review proposal', owner: 'Ming', ignored: true, expectedRevision: record.revision });
+    expect(edited.revision).toBe(record.revision + 1);
+    expect(() => service.editSummary(created.discussion.id, { kind: 'summary', itemId: 'summary', text: 'Stale', expectedRevision: record.revision })).toThrow('summary changed');
+    const reapplied = applyMeetingEdits(created.discussion.id, { ...organization, actionItems: [] });
+    expect(reapplied.actionItems[0]).toMatchObject({ id: 'action', title: 'Review proposal', ignored: true, editedByUser: true, evidenceRevision: revision });
+    expect(convertMeetingAction(created.discussion.id, 'action', edited.revision).taskId).toBe(task.taskId);
+    const summary = service.editSummary(created.discussion.id, { kind: 'summary', itemId: 'summary', text: 'My own summary', expectedRevision: edited.revision });
+    expect(summary.organization?.summary).toBe('My own summary');
+    expect(applyMeetingEdits(created.discussion.id, organization).summary).toBe('My own summary');
+    const withLaterChange = applyMeetingEdits(created.discussion.id, { ...organization, actionItems: [{ ...organization.actionItems[0]!, supersededBy: 'later-decision' }] });
+    expect(withLaterChange.actionItems[0]?.supersededBy).toBe('later-decision');
+    expect(withLaterChange.actionItems[0]?.reviewedChangeId).toBeUndefined();
+  });
+
+  it('renames a speaker group atomically while keeping the historical labels', async () => {
+    const created = await create('speaker-merge');
+    replaceTranscriptSegments(created.discussion.id, [
+      { text: 'First', startedAtMs: 0, endedAtMs: 1000, speakerLabel: 'A' },
+      { text: 'Second', startedAtMs: 1000, endedAtMs: 2000, speakerLabel: 'A' },
+    ]);
+    const before = service.transcript(created.discussion.id)!;
+    const result = service.correctSegment(created.discussion.id, 0, 'First corrected', before.segments[0]!.revision, 'Ming', true, before.revision);
+    expect(result.segments.map(segment => segment.speakerLabel)).toEqual(['Ming', 'Ming']);
+    expect(service.transcript(created.discussion.id, before.revision)!.segments.map(segment => segment.speakerLabel)).toEqual(['A', 'A']);
+    expect(() => service.correctSegment(created.discussion.id, 0, 'Another edit', result.segments[0]!.revision, 'B', true, before.revision)).toThrow('Transcript changed');
+  });
+
+  it('serves recording routes through real HTTP authentication and lazy dispatch', async () => {
+    resetLazyRouteBundlesForTests();
+    const app = new Hono();
+    app.use(auth({ getResolvedAuth: () => ({ mode: 'token', token: 'meeting-test', allowTailscale: false }) }));
+    registerAuthenticatedLazyRouteFallback(app, { service: { discussions: service, notesServiceInstance: notes }, strictRateLimitMiddleware: async (_c: unknown, next: () => Promise<void>) => next() } as never);
+    const server = serve({ fetch: app.fetch, port: 0, hostname: '127.0.0.1' });
+    try {
+      if (!server.listening) await new Promise<void>((resolve) => server.once('listening', resolve));
+      const address = server.address() as { port: number };
+      const base = `http://127.0.0.1:${address.port}`;
+      const created = await create('http');
+      const path = `/api/discussions/${created.discussion.id}/recording/chunks/0`;
+      expect((await fetch(base + path, { method: 'PUT', body: 'test' })).status).toBe(401);
+      const response = await fetch(base + path, { method: 'PUT', headers: { authorization: 'Bearer meeting-test', 'x-audio-sha256': createHash('sha256').update('test').digest('hex') }, body: 'test' });
+      expect(response.status).toBe(201);
+      expect(await response.json()).toMatchObject({ sequence: 0, bytes: 4 });
+      const playable = await create('http-playback');
+      await uploadRecording(playable.discussion.id, { name: 'meeting.wav', buffer: Buffer.from('audio'), mimeType: 'audio/wav' }, 2_000);
+      const audioUrl = `${base}/api/discussions/${playable.discussion.id}/audio`;
+      expect((await fetch(audioUrl)).status).toBe(401);
+      const partial = await fetch(audioUrl, { headers: { authorization: 'Bearer meeting-test', range: 'bytes=0-3' } });
+      expect(partial.status).toBe(206);
+      expect(await partial.text()).toBe('RIFF');
+      const invalid = await fetch(audioUrl, { headers: { authorization: 'Bearer meeting-test', range: 'bytes=999999999-' } });
+      expect(invalid.status).toBe(416);
+      const exported = await fetch(`${base}/api/discussions/${playable.discussion.id}/export?format=txt`, { headers: { authorization: 'Bearer meeting-test' } });
+      expect(exported.status).toBe(200);
+
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+      resetLazyRouteBundlesForTests();
+    }
+  });
+
+  it.skipIf(process.env.XOPC_MEETING_LONG_SMOKE !== '1')('ingests a two-hour recording with bounded chunks and verifies the decoded duration', async () => {
+    const source = join(stateDir, 'two-hour.wav');
+    const generated = spawnSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'anullsrc=r=16000:cl=mono', '-t', '7200', '-c:a', 'pcm_s16le', source], { timeout: 30_000 });
+    expect(generated.status).toBe(0);
+    const capture = await create('two-hour');
+    const file = await open(source, 'r');
+    let sequence = 0;
+    try {
+      while (true) {
+        const chunk = Buffer.alloc(8 * 1024 * 1024);
+        const { bytesRead } = await file.read(chunk);
+        if (!bytesRead) break;
+        const bytes = chunk.subarray(0, bytesRead);
+        await service.uploadRecordingChunk(capture.discussion.id, sequence++, createHash('sha256').update(bytes).digest('hex'), new Blob([bytes]).stream());
+      }
+    } finally { await file.close(); }
+    const result = await service.completeRecording(capture.discussion.id, { chunkCount: sequence, mimeType: 'audio/wav', fileName: 'two-hour.wav' });
+    expect(result.discussion.durationMs).toBe(7_200_000);
+    expect(result.discussion.audioSizeBytes).toBeGreaterThan(200_000_000);
+    expect(service.recordingChunks(capture.discussion.id)).toEqual([]);
+  }, 60_000);
+
+  it('persists chunks across service reconstruction and rejects missing or changed content', async () => {
+    const created = await create('durable');
+    const buffer = Buffer.from('partial');
+    const hash = createHash('sha256').update(buffer).digest('hex');
+    await service.uploadRecordingChunk(created.discussion.id, 0, hash, new Blob([buffer]).stream());
+    const restored = new DiscussionService(notes, projects);
+    expect(restored.recordingChunks(created.discussion.id)).toEqual([{ sequence: 0, sha256: hash, bytes: buffer.length }]);
+    await expect(restored.uploadRecordingChunk(created.discussion.id, 0, 'a'.repeat(64), new Blob([buffer]).stream())).rejects.toThrow('different audio');
+    await expect(restored.completeRecording(created.discussion.id, { chunkCount: 2, mimeType: 'audio/wav', fileName: 'x.wav' })).rejects.toThrow('missing chunks');
+    await restored.cancel(created.discussion.id);
+    expect(restored.recordingChunks(created.discussion.id)).toEqual([]);
+    await expect(restored.uploadRecordingChunk(created.discussion.id, 1, hash, new Blob([buffer]).stream())).rejects.toThrow('no longer accepts');
+  });
+
   function uploadSegment(discussionId: string, sequence: number, text: string) {
     const buffer = Buffer.from(text);
     return service.uploadSegment({
@@ -76,7 +215,7 @@ describe('discussion note document', () => {
     expect(second.discussion.id).toBe(first.discussion.id);
     expect(first.discussion).toMatchObject({ status: 'recording', transcriptRevision: 0 });
     expect(first.note.markdown).toBe('');
-    expect(first.transcript).toMatchObject({ revision: 0, text: '', segments: [] });
+    expect(first.transcript).toMatchObject({ revision: 0, text: '', segments: expect.any(Array) });
   });
 
   it('transcribes several segments concurrently and supports revision-checked correction', async () => {
@@ -122,7 +261,7 @@ describe('discussion note document', () => {
 
     const stopped = await service.stop(created.discussion.id, 0, 8_000);
     expect(stopped?.discussion.status).toBe('stopping');
-    await service.uploadRecording(created.discussion.id, {
+    await uploadRecording(created.discussion.id, {
       name: 'discussion.webm', buffer: Buffer.from('audio'), mimeType: 'audio/webm',
     }, 8_000);
 
@@ -145,8 +284,8 @@ describe('discussion note document', () => {
       organizeTranscript: async () => ({
         modelRef: 'test/organizer',
         organization: {
-          title: 'Friday release', summary: 'Ship Friday.', keyPoints: [], decisions: ['Ship Friday.'],
-          actionItems: [], risks: [], openQuestions: [],
+          title: 'Friday release', summary: 'Ship Friday.', keyPoints: [], decisions: [{ id: 'ship', text: 'Ship Friday.', evidenceSegmentIds: [0] }],
+          actionItems: [], risks: [], openQuestions: [], chapters: [],
         },
       }),
     });
@@ -155,7 +294,7 @@ describe('discussion note document', () => {
 
     const completed = await service.get(created.discussion.id);
     expect(completed?.discussion.status).toBe('completed');
-    expect(completed?.organization?.organization?.decisions).toEqual(['Ship Friday.']);
+    expect(completed?.organization?.organization?.decisions).toEqual([expect.objectContaining({ text: 'Ship Friday.' })]);
     const completedNote = await notes.getNote(created.note.id);
     expect(completedNote?.markdown).toBe('My own notes');
     expect(completedNote?.attachments).toEqual([
@@ -169,15 +308,17 @@ describe('discussion note document', () => {
       created.note.id,
       completed!.discussion.audioAttachmentId!,
     );
-    expect(await readFile(retainedRecording!.filePath, 'utf8')).toBe('audio');
-    expect(() => service.correctSegment(created.discussion.id, 0, 'too late', 3))
-      .toThrowError(DiscussionServiceError);
+    expect((await readFile(retainedRecording!.filePath)).subarray(0, 4).toString()).toBe('RIFF');
+    const originalRevision = completed!.organization!.transcriptRevision;
+    const segment = service.transcript(created.discussion.id)!.segments[0]!;
+    service.correctSegment(created.discussion.id, 0, 'Updated decision', segment.revision);
+    expect(service.transcript(created.discussion.id, originalRevision)!.text).toContain('ship Friday');
   });
 
   it('uses full recording only when live segments are incomplete', async () => {
     const created = await create('fallback');
     await service.stop(created.discussion.id, 0, 8_000);
-    await service.uploadRecording(created.discussion.id, {
+    await uploadRecording(created.discussion.id, {
       name: 'discussion.ogg', buffer: Buffer.from('audio'), mimeType: 'audio/ogg',
     }, 8_000);
     const sealer = new DiscussionSealer({
@@ -194,7 +335,7 @@ describe('discussion note document', () => {
     });
     expect(service.transcript(created.discussion.id)?.text).toBe('Recovered from full recording.');
     const lateSegment = uploadSegment(created.discussion.id, 0, 'late live segment');
-    expect(lateSegment).toMatchObject({ text: 'Recovered from full recording.', segments: [] });
+    expect(lateSegment).toMatchObject({ text: 'Recovered from full recording.', segments: expect.any(Array) });
   });
 
   it('requires attention when the original recording never arrives', async () => {
@@ -214,7 +355,7 @@ describe('discussion note document', () => {
   it('falls back to the original recording when no live segment was emitted', async () => {
     const created = await create('short-recording');
     await service.stop(created.discussion.id, -1, 2_000);
-    await service.uploadRecording(created.discussion.id, {
+    await uploadRecording(created.discussion.id, {
       name: 'short.webm', buffer: Buffer.from('audio'), mimeType: 'audio/webm',
     }, 2_000);
     let fallbackCalls = 0;

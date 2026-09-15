@@ -25,7 +25,7 @@ function openDraftDatabase(): Promise<IDBDatabase> {
   if (typeof indexedDB === 'undefined') return Promise.reject(new Error('Local recording storage is unavailable'));
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
-    request.onupgradeneeded = (event) => {
+    request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(DRAFTS)) db.createObjectStore(DRAFTS, { keyPath: 'id' });
       if (!db.objectStoreNames.contains(CHUNKS)) {
@@ -36,10 +36,7 @@ function openDraftDatabase(): Promise<IDBDatabase> {
         const segments = db.createObjectStore(SEGMENTS, { keyPath: ['draftId', 'sequence'] });
         segments.createIndex('draftId', 'draftId');
       }
-      if (event.oldVersion > 0 && event.oldVersion < DATABASE_VERSION) {
-        request.transaction?.objectStore(DRAFTS).clear();
-        request.transaction?.objectStore(CHUNKS).clear();
-      }
+
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error ?? new Error('Could not open local recording storage'));
@@ -57,11 +54,12 @@ export async function saveDiscussionDraft(draft: DiscussionDraft): Promise<void>
   }
 }
 
-export async function saveDiscussionDraftChunk(chunk: DiscussionDraftChunk): Promise<void> {
+export async function saveDiscussionDraftChunk(chunk: DiscussionDraftChunk, draft?: DiscussionDraft): Promise<void> {
   const db = await openDraftDatabase();
   try {
-    const transaction = db.transaction(CHUNKS, 'readwrite');
+    const transaction = db.transaction(draft ? [CHUNKS, DRAFTS] : [CHUNKS], 'readwrite', { durability: 'strict' });
     transaction.objectStore(CHUNKS).put(chunk);
+    if (draft) transaction.objectStore(DRAFTS).put(draft);
     await transactionDone(transaction);
   } finally {
     db.close();
@@ -81,19 +79,15 @@ export async function listDiscussionDrafts(): Promise<DiscussionDraft[]> {
   }
 }
 
-export async function listDiscussionDraftChunks(draftId: string): Promise<DiscussionDraftChunk[]> {
+export async function getDiscussionDraftChunk(draftId: string, index: number): Promise<DiscussionDraftChunk | undefined> {
   const db = await openDraftDatabase();
   try {
     const transaction = db.transaction(CHUNKS, 'readonly');
     const done = transactionDone(transaction);
-    const chunks = await requestResult(
-      transaction.objectStore(CHUNKS).index('draftId').getAll(draftId),
-    ) as DiscussionDraftChunk[];
+    const chunk = await requestResult(transaction.objectStore(CHUNKS).get([draftId, index])) as DiscussionDraftChunk | undefined;
     await done;
-    return chunks.sort((a, b) => a.index - b.index);
-  } finally {
-    db.close();
-  }
+    return chunk;
+  } finally { db.close(); }
 }
 
 export async function saveDiscussionLiveSegment(segment: DiscussionLiveSegment): Promise<void> {

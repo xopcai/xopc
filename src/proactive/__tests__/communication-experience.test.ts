@@ -47,9 +47,11 @@ describe('delegated email follow-up', () => {
   it('prepares an editable draft, binds the conversation, and watches sent messages and new replies without marking completion', async () => {
     const follow = start(); email('other-account-only', ['INBOX'], 'other');
     await prepare();
-    const first = delegationOverview('workspace').prepared[0]!;
+    const overview = delegationOverview('workspace');
+    const first = overview.scenes.find(scene => scene.status === 'prepared')!.card!;
     expect(first.communication?.id).toBe(follow.id);
     expect(first.evidence).toHaveLength(1);
+    expect(overview.scenes).toEqual([expect.objectContaining({ kind: 'communication_follow_up', status: 'prepared', title: 'Confirm review', card: expect.objectContaining({ id: first.id }) })]);
     const edited = performCardAction(first.id, 'workspace', { actionId: 'edit_artifact', expectedRevision: first.revision, idempotencyKey: 'edit-mail-draft', artifact: { ...first.artifact!, content: 'Hello, which date works for you?' } });
     expect(edited.artifact?.content).toContain('which date');
     expect(continueMailFollowUp('workspace', follow.id, 'chat:test').connectionId).toBe('mail');
@@ -73,7 +75,7 @@ describe('delegated email follow-up', () => {
     vi.setSystemTime(new Date('2026-09-15T08:00:00Z')); expect(scanMailFollowUps(events)).toBe(0);
   });
   it('enforces scope, revision, duplicate identity, source authorization and explicit pause/end', async () => {
-    const follow = start(); await prepare(); const card = delegationOverview('workspace').prepared[0]!;
+    const follow = start(); await prepare(); const card = delegationOverview('workspace').scenes.find(scene => scene.status === 'prepared')!.card!;
     const input = { sourceItemId: mailFollowUpSources('workspace')[0]!.id, instructions: 'Same thread', dueAt: '2026-09-14T08:00:00Z' };
     expect(() => startMailFollowUp('workspace', input)).toThrow(/already delegated/);
     expect(() => startMailFollowUp('foreign', input)).toThrow(/Authorize/);
@@ -90,7 +92,7 @@ describe('delegated email follow-up', () => {
   });
   it('discards a generated draft when a new reply arrives while it is being prepared', async () => {
     start(); await prepare(() => { vi.setSystemTime(new Date('2026-09-13T08:01:00Z')); email('new-reply'); });
-    expect(delegationOverview('workspace').prepared).toEqual([]);
+    expect(delegationOverview('workspace').scenes[0]?.card).toBeNull();
     expect(getSqliteDatabase().prepare('SELECT outcome_reason FROM proactive_runs').get()).toMatchObject({ outcome_reason: 'source_changed' });
   });
 });

@@ -1,3 +1,11 @@
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
+import { Readable } from 'node:stream';
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+import { hasGatewayScope } from '../../security/gateway-scopes.js';
+import { convertMeetingAction, meetingActionTasks } from '../../../discussions/action-tasks.js';
+import { MeetingEditSchema } from '../../../discussions/edits.js';
+import { exportDiscussion } from '../../../discussions/export.js';
 import type { Context, Hono } from 'hono';
 
 import { DISCUSSION_STATUSES, DiscussionServiceError } from '../../../discussions/index.js';
@@ -93,7 +101,7 @@ export function registerDiscussionRoutes(authenticated: Hono, deps: Authenticate
   });
 
   authenticated.get('/api/discussions/:id/transcript', (c) => {
-    const transcript = service.discussions.transcript(c.req.param('id'));
+    const transcript = service.discussions.transcript(c.req.param('id'), c.req.query('revision') === undefined ? undefined : Number(c.req.query('revision')));
     return transcript ? c.json(transcript) : c.json({ error: 'Discussion not found' }, 404);
   });
 
@@ -130,6 +138,9 @@ export function registerDiscussionRoutes(authenticated: Hono, deps: Authenticate
         Number.parseInt(c.req.param('sequence'), 10),
         typeof body.displayText === 'string' ? body.displayText : '',
         Number(body.expectedRevision),
+        typeof body.speakerLabel === 'string' ? body.speakerLabel : undefined,
+        body.applyToSpeakerGroup === true,
+        typeof body.expectedTranscriptRevision === 'number' ? body.expectedTranscriptRevision : undefined,
       ));
     } catch (error) {
       const response = errorResponse(error);
@@ -138,23 +149,82 @@ export function registerDiscussionRoutes(authenticated: Hono, deps: Authenticate
     }
   });
 
-  authenticated.put('/api/discussions/:id/recording', strictRateLimitMiddleware, async (c) => {
-    const body = await multipart(c);
-    if (!body) return c.json({ error: 'Invalid multipart body' }, 400);
-    const file = body.file;
-    if (!(file instanceof File)) return c.json({ error: 'Missing file field' }, 400);
+  authenticated.post('/api/discussions/:id/organize', strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    try { return c.json(await service.discussions.reorganize(c.req.param('id'), typeof body.template === 'string' ? body.template : 'general'), 202); }
+    catch (error) { const response = errorResponse(error); if (response) return c.json(response.body, response.status); throw error; }
+  });
+
+  authenticated.patch('/api/discussions/:id/summary', strictRateLimitMiddleware, async (c) => {
+    const parsed = MeetingEditSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: 'Invalid meeting edit' }, 400);
+    try { return c.json(service.discussions.editSummary(c.req.param('id'), parsed.data)); }
+    catch (error) { const response = errorResponse(error); if (response) return c.json(response.body, response.status); throw error; }
+  });
+  authenticated.get('/api/discussions/:id/actions', async (c) => {
+    if (!await service.discussions.get(c.req.param('id'))) return c.json({ error: 'Discussion not found' }, 404);
+    return c.json(meetingActionTasks(c.req.param('id')));
+  });
+  authenticated.post('/api/discussions/:id/actions/:actionId/convert', strictRateLimitMiddleware, async (c) => {
+    if (!hasGatewayScope(getGatewayPrincipal(c).scopes, 'tasks.write')) return c.json({ error: 'Task write permission required' }, 403);
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    try { return c.json(convertMeetingAction(c.req.param('id'), c.req.param('actionId'), Number(body.organizationRevision))); }
+    catch (error) { const response = errorResponse(error); if (response) return c.json(response.body, response.status); throw error; }
+  });
+  authenticated.get('/api/discussions/:id/export', async (c) => {
+    const detail = await service.discussions.get(c.req.param('id'));
+    if (!detail) return c.json({ error: 'Discussion not found' }, 404);
+    const format = c.req.query('format') ?? 'md';
     try {
-      const detail = await service.discussions.uploadRecording(c.req.param('id'), {
-        name: file.name,
-        buffer: Buffer.from(await file.arrayBuffer()),
-        mimeType: file.type,
-      }, Number(body.durationMs));
-      return detail ? c.json(detail, 201) : c.json({ error: 'Discussion not found' }, 404);
-    } catch (error) {
-      const response = errorResponse(error);
-      if (response) return c.json(response.body, response.status);
-      throw error;
+      const text = exportDiscussion(detail, format);
+      c.header('Content-Disposition', `attachment; filename="meeting.${format}"`);
+      c.header('Cache-Control', 'no-store');
+      return c.text(text);
+    } catch (error) { const response = errorResponse(error); if (response) return c.json(response.body, response.status); throw error; }
+  });
+  authenticated.get('/api/discussions/:id/audio', async (c) => {
+    const detail = await service.discussions.get(c.req.param('id'));
+    if (!detail?.discussion.audioAttachmentId || detail.discussion.audioDeletedAt) return c.json({ error: 'Recording unavailable' }, 404);
+    const attachment = await service.notesServiceInstance.getAttachmentPath(detail.note.id, detail.discussion.audioAttachmentId);
+    if (!attachment) return c.json({ error: 'Recording unavailable' }, 404);
+    const info = await stat(attachment.filePath).catch(() => null);
+    if (!info) return c.json({ error: 'Recording unavailable' }, 404);
+    let start = 0; let end = info.size - 1;
+    const range = c.req.header('range');
+    if (range) {
+      const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+      if (!match || (!match[1] && !match[2])) return c.body(null, 416, { 'Content-Range': `bytes */${info.size}` });
+      if (!match[1]) start = Math.max(0, info.size - Number(match[2]));
+      else { start = Number(match[1]); if (match[2]) end = Math.min(end, Number(match[2])); }
+      if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= info.size) return c.body(null, 416, { 'Content-Range': `bytes */${info.size}` });
+      c.header('Content-Range', `bytes ${start}-${end}/${info.size}`);
     }
+    c.header('Content-Type', attachment.mimeType);
+    c.header('Accept-Ranges', 'bytes');
+    c.header('Content-Length', String(end - start + 1));
+    c.header('Cache-Control', 'no-store');
+    return c.body(Readable.toWeb(createReadStream(attachment.filePath, { start, end })) as ReadableStream<Uint8Array>, range ? 206 : 200);
+  });
+
+  authenticated.get('/api/discussions/:id/recording/chunks', (c) => {
+    try { return c.json(service.discussions.recordingChunks(c.req.param('id'))); }
+    catch (error) { const response = errorResponse(error); if (response) return c.json(response.body, response.status); throw error; }
+  });
+
+  authenticated.put('/api/discussions/:id/recording/chunks/:sequence', mediaRateLimitMiddleware, async (c) => {
+    if (!c.req.raw.body) return c.json({ error: 'Missing audio body' }, 400);
+    try {
+      return c.json(await service.discussions.uploadRecordingChunk(c.req.param('id'), Number(c.req.param('sequence')), c.req.header('x-audio-sha256') ?? '', c.req.raw.body), 201);
+    } catch (error) { const response = errorResponse(error); if (response) return c.json(response.body, response.status); throw error; }
+  });
+
+  authenticated.post('/api/discussions/:id/recording/complete', strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
+    try {
+      return c.json(await service.discussions.completeRecording(c.req.param('id'), {
+        chunkCount: Number(body.chunkCount), mimeType: typeof body.mimeType === 'string' ? body.mimeType : '', fileName: typeof body.fileName === 'string' ? body.fileName : '',
+      }));
+    } catch (error) { const response = errorResponse(error); if (response) return c.json(response.body, response.status); throw error; }
   });
 
   authenticated.post('/api/discussions/:id/stop', strictRateLimitMiddleware, async (c) => {

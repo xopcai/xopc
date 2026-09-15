@@ -142,6 +142,7 @@ export async function transcribe(
 
   return {
     text: output.text,
+    ...(output.segments ? { segments: output.segments } : {}),
     provider: chosen.provider ?? 'unknown',
     ...(output.durationSeconds !== undefined ? { duration: output.durationSeconds } : {}),
     ...(output.language || options?.language ? { language: output.language ?? options?.language } : {}),
