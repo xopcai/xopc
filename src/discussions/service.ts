@@ -77,6 +77,9 @@ export class DiscussionService {
   }
 
   async create(input: CreateDiscussionInput): Promise<DiscussionDetail> {
+    if (input.recordedAt !== undefined && (!Number.isSafeInteger(input.recordedAt) || input.recordedAt < 0 || input.recordedAt > Date.now() + 60_000)) {
+      throw new DiscussionServiceError('invalid_input', 'Invalid recording time');
+    }
     const clientRequestId = input.clientRequestId.trim();
     if (!clientRequestId || clientRequestId.length > 200) {
       throw new DiscussionServiceError('invalid_input', 'clientRequestId must be between 1 and 200 characters');
@@ -104,12 +107,12 @@ export class DiscussionService {
       throw new DiscussionServiceError('invalid_input', 'Project not found');
     }
     const now = Date.now();
-    const title = placeholderTitle(now);
+    const title = placeholderTitle(input.recordedAt ?? now);
     const note = await this.notes.createNote({
       title,
       markdown: '',
       kind: 'voice',
-      capturedVia: { channel: input.source },
+      capturedVia: { channel: input.source === 'mobile' ? 'app' : input.source },
     });
     const capture: DiscussionCapture = {
       id: randomUUID(),
@@ -119,7 +122,7 @@ export class DiscussionService {
       source: input.source,
       status: 'recording',
       transcriptRevision: 0,
-      recordingStartedAt: now,
+      recordingStartedAt: input.recordedAt ?? now,
       createdAt: now,
       updatedAt: now,
     };

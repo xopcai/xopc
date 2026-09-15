@@ -127,7 +127,7 @@ describe('data sharing consent', () => {
   });
 
   it('requires permission for content and AI actions while allowing reads, deletion and stopping work', () => {
-    for (const path of ['/api/sessions/s/inputs', '/api/tasks/t/inputs', '/api/notes', '/api/media', '/api/voice/speech', '/api/voice/transcriptions', '/api/workspace/sync', '/api/automations/a/run', '/api/files/s/upload', '/api/clarifications/c/responses']) {
+    for (const path of ['/api/sessions/s/inputs', '/api/tasks/t/inputs', '/api/notes', '/api/discussions', '/api/discussions/d/capture/seal', '/api/discussions/d/retry', '/api/media', '/api/voice/speech', '/api/voice/transcriptions', '/api/workspace/sync', '/api/automations/a/run', '/api/files/s/upload', '/api/clarifications/c/responses']) {
       expect(requiresDataSharingConsent(path, 'POST'), path).toBe(true);
       expect(requiresDataSharingConsent(`${path.slice(1)}?source=mobile`, 'POST'), path).toBe(true);
       expect(requiresDataSharingConsent(path, 'GET'), path).toBe(false);
@@ -136,6 +136,7 @@ describe('data sharing consent', () => {
     for (const path of ['/api/realtime/tickets', '/api/agent/abort', '/api/workflows/runs/a/cancel', '/api/automations/a/pause', '/api/endpoint-tools/principals']) {
       expect(requiresDataSharingConsent(path, 'POST'), path).toBe(false);
     }
+    expect(requiresDataSharingConsent('/api/discussions/d/recording/chunks/0', 'PUT')).toBe(true);
     expect(requiresDataSharingConsent('/api/sessions', 'POST')).toBe(false);
     expect(requiresDataSharingConsent('/api/sessions/chat%3Amain/agent-config', 'PATCH')).toBe(false);
     expect(requiresDataSharingConsent('/api/sessions/chat%3Amain/inputs', 'POST')).toBe(true);

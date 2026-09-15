@@ -3,7 +3,7 @@ import {
   encodePcm16Wav,
   PcmFrameCapture,
   resamplePcm,
-} from '@/features/chat/composer/pcm-wav-recorder';
+} from '@xopcai/composer-core/pcm-wav-recorder';
 
 const MIN_SEGMENT_SECONDS = 4;
 const MAX_SEGMENT_SECONDS = 15;

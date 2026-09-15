@@ -16,7 +16,7 @@ import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** The foreground service owns this capture; an Activity must not own its lifetime. */
-class RecordingCapture(private val context: Context, private val onInterrupted: (String) -> Unit) {
+class RecordingCapture(private val context: Context, private val dispatch: (() -> Unit) -> Unit, private val onInterrupted: (String) -> Unit) {
   private val handler = Handler(Looper.getMainLooper())
   private val manager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
   private var input: AudioRecord? = null
@@ -30,16 +30,16 @@ class RecordingCapture(private val context: Context, private val onInterrupted: 
   private var routeListener: AudioRouting.OnRoutingChangedListener? = null
   private var recordingCallback: AudioManager.AudioRecordingCallback? = null
   private var inputDevice: Int? = null
-  var captureId: String? = null
+  @Volatile var captureId: String? = null
     private set
 
   fun start(root: File, id: String) {
-    check(Looper.myLooper() == Looper.getMainLooper())
     check(input == null) { "RECORDING_BUSY" }
-    val journal = RecordingSpool(root, id)
+    captureId = id
+    val journal = try { RecordingSpool(root, id) } catch (error: Exception) { captureId = null; throw error }
     val epoch = (journal.chunks.lastOrNull()?.epoch ?: -1) + 1
     val min = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-    if (min <= 0) { journal.close(); error("MICROPHONE_FORMAT_UNAVAILABLE") }
+    if (min <= 0) { captureId = null; journal.close(); error("MICROPHONE_FORMAT_UNAVAILABLE") }
     var candidate: AudioRecord? = null
     try {
       candidate = AudioRecord(MediaRecorder.AudioSource.MIC, 16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(min, 6400))
@@ -105,13 +105,12 @@ class RecordingCapture(private val context: Context, private val onInterrupted: 
       }, "xopc-recording-capture").apply { start() }
     } catch (error: Exception) {
       if (input != null) { try { stop() } catch (_: Exception) { } }
-      else { candidate?.release(); journal.close() }
+      else { captureId = null; candidate?.release(); journal.close() }
       throw error
     }
   }
 
   fun stop(): List<RecordingChunk> {
-    check(Looper.myLooper() == Looper.getMainLooper())
     val recorder = input ?: return emptyList()
     val journal = requireNotNull(spool)
     generation++
@@ -140,8 +139,8 @@ class RecordingCapture(private val context: Context, private val onInterrupted: 
     if (generation != current) return
     if (!failurePosted.compareAndSet(false, true)) return
     accepting.set(false)
-    handler.post {
-      if (generation != current || input == null) return@post
+    dispatch {
+      if (generation != current || input == null) return@dispatch
       try { stop(); onInterrupted(reason) }
       catch (_: Exception) { onInterrupted("recording_storage_failed") }
     }

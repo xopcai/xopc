@@ -344,7 +344,9 @@ export function InstallConnectorDialog({
                 <div>
                   <h3 className="text-sm font-semibold text-fg">{t.composioAuthConfigTitle}</h3>
                   <p className="mt-1 text-xs leading-5 text-fg-muted">
-                    {authConfigRequired ? t.composioAuthConfigRequiredHint : t.composioAuthConfigOptionalHint}
+                    {composioSetupStatus?.mode === 'managed'
+                      ? (authConfigRequired ? t.composioCloudAuthUnavailable : t.composioCloudAuthReady)
+                      : (authConfigRequired ? t.composioAuthConfigRequiredHint : t.composioAuthConfigOptionalHint)}
                   </p>
                 </div>
                 {composioSetupStatus?.mode === 'byok' ? <a
@@ -379,7 +381,7 @@ export function InstallConnectorDialog({
                   ))}
                 </Select>
               )}
-              {!composioAuthLoading && authConfigRequired && enabledAuthConfigs.length === 0 ? (
+              {composioSetupStatus?.mode !== 'managed' && !composioAuthLoading && authConfigRequired && enabledAuthConfigs.length === 0 ? (
                 <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{t.composioAuthConfigEmpty}</p>
               ) : null}
             </section>

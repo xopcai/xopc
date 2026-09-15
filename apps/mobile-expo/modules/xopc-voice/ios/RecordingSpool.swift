@@ -19,7 +19,7 @@ private struct PendingRecordingChunk: Codable {
 }
 
 enum RecordingSpoolError: Error {
-  case invalidIdentifier, busy, corruptJournal, invalidPCM, storageFull, closed
+  case invalidIdentifier, busy, corruptJournal, invalidPCM, storageFull, closed, durationLimit
 }
 
 /// Single-writer PCM spool. Call only from the native recording writer queue.
@@ -72,6 +72,7 @@ final class RecordingSpool {
     guard !closed && !failed else { throw RecordingSpoolError.closed }
     guard pcm.count % 2 == 0, pcm.count <= Self.chunkSamples * 2, epoch >= 0,
       epoch >= (pending?.epoch ?? chunks.last?.epoch ?? 0) else { throw RecordingSpoolError.invalidPCM }
+    guard persistedSamples + Int64(samples) + Int64(pcm.count / 2) <= 16000 * 7200 else { throw RecordingSpoolError.durationLimit }
     do {
       if pending?.epoch != nil && pending?.epoch != epoch { try seal() }
       var offset = 0
