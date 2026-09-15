@@ -67,13 +67,14 @@ export const ProactiveTaskDraftSchema = z.object({
   objective: z.string().trim().min(1).max(1200),
 }).strict();
 export const ProactiveCardActionSchema = z.object({
-  actionId: z.enum(['read', 'resolve', 'handled', 'snooze', 'decide', 'pause', 'useful', 'not_useful', 'retry', 'edit_artifact']),
+  actionId: z.enum(['read', 'resolve', 'handled', 'snooze', 'decide', 'pause', 'useful', 'not_useful', 'retry', 'edit_artifact', 'refine']),
   expectedRevision: z.number().int().positive(),
   idempotencyKey: z.string().min(8).max(128),
   choice: z.string().min(1).max(200).optional(),
   snoozedUntil: z.iso.datetime().optional(),
   artifact: ProactiveArtifactSchema.optional(),
   taskDraft: ProactiveTaskDraftSchema.optional(),
+  instruction: z.string().trim().min(1).max(2000).optional(),
 }).strict();
 export type ProactiveLevel = z.infer<typeof ProactiveLevelSchema>;
 export type ProactivePreferences = z.infer<typeof ProactivePreferencesSchema>;

@@ -16,7 +16,6 @@ export function pruneProactiveHistory(now = new Date()): { batches: number; even
     db.prepare('DELETE FROM proactive_notification_budget WHERE created_at < ?').run(cutoff);
     db.prepare('DELETE FROM proactive_presence WHERE expires_at <= ?').run(now.getTime());
     db.prepare('DELETE FROM proactive_delivery_decisions WHERE created_at < ?').run(cutoff);
-    db.prepare('DELETE FROM proactive_preview_runs WHERE created_at < ?').run(cutoff);
     db.prepare('DELETE FROM proactive_push_probes WHERE created_at < ?').run(Date.parse(cutoff));
     db.prepare('DELETE FROM proactive_digest_queue WHERE consumed_at < ?').run(cutoff);
     db.prepare('DELETE FROM proactive_digests WHERE created_at < ?').run(cutoff);

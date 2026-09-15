@@ -76,6 +76,7 @@ export interface CapabilityAttachmentInput {
 }
 
 export interface MediaUnderstandingOutput {
+  segments?: AudioTranscriptionSegment[];
   kind: MediaUnderstandingKind;
   attachmentIndex: number;
   text: string;
@@ -130,7 +131,15 @@ export interface AudioTranscriptionRequest {
   signal?: AbortSignal;
 }
 
+export interface AudioTranscriptionSegment {
+  text: string;
+  startMs: number;
+  endMs: number;
+  speaker?: string;
+}
+
 export interface AudioTranscriptionResult {
+  segments?: AudioTranscriptionSegment[];
   text: string;
   model?: string;
   /** Provider-reported language (e.g. 'zh', 'en'). */

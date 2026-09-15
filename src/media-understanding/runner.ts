@@ -122,6 +122,7 @@ function pickMethod(
   model?: string;
   language?: string;
   durationSeconds?: number;
+    segments?: import('./types.js').AudioTranscriptionSegment[];
 }>) | undefined {
   if (capability === 'audio') {
     return provider.transcribeAudio as (
@@ -211,6 +212,7 @@ export async function runCapability(
           model?: string;
           language?: string;
           durationSeconds?: number;
+    segments?: import('./types.js').AudioTranscriptionSegment[];
         }>)(request);
         const text = callResult.text?.trim() ?? '';
         if (!text) {
@@ -239,6 +241,7 @@ export async function runCapability(
           provider: provider.id,
           model: callResult.model,
           ...(callResult.language ? { language: callResult.language } : {}),
+          ...(callResult.segments ? { segments: callResult.segments } : {}),
           ...(callResult.durationSeconds !== undefined
             ? { durationSeconds: callResult.durationSeconds }
             : {}),

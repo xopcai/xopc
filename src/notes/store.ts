@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdir, writeFile, rm, copyFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
@@ -89,14 +89,15 @@ export class NotesStore {
   async saveAttachment(
     noteId: string,
     fileName: string,
-    buffer: Buffer,
+    buffer: Buffer | { filePath: string },
   ): Promise<{ relativePath: string; size: number }> {
     const mediaDir = resolveNoteMediaDir(noteId);
     await mkdir(mediaDir, { recursive: true });
     const safeName = `${randomUUID().slice(0, 8)}_${fileName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     const filePath = join(mediaDir, safeName);
-    await writeFile(filePath, buffer);
-    return { relativePath: safeName, size: buffer.length };
+    if (Buffer.isBuffer(buffer)) await writeFile(filePath, buffer);
+    else await copyFile(buffer.filePath, filePath);
+    return { relativePath: safeName, size: (await stat(filePath)).size };
   }
 
   resolveAttachmentPath(noteId: string, relativePath: string): string {

@@ -1,8 +1,9 @@
+import { acquireMicrophoneLease, releaseMicrophoneLease } from '@/features/voice/microphone-lease';
+import { DISCUSSION_MAX_DURATION_MS, DISCUSSION_CHUNK_MAX_BYTES } from '@xopcai/gateway-contract';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   deleteDiscussionDraft,
-  listDiscussionDraftChunks,
   listDiscussionDrafts,
   saveDiscussionDraft,
   saveDiscussionDraftChunk,
@@ -10,8 +11,8 @@ import {
 import { LivePcmSegmenter, type LivePcmSegment } from './live-pcm-segmenter';
 import type { DiscussionDraft } from './discussion-types';
 
-const MAX_RECORDING_MS = 30 * 60 * 1_000;
-const MIN_AVAILABLE_BYTES = 30 * 1024 * 1024;
+const MAX_RECORDING_MS = DISCUSSION_MAX_DURATION_MS;
+const MIN_AVAILABLE_BYTES = 100 * 1024 * 1024;
 
 export type DiscussionRecorderPhase =
   | 'idle'
@@ -32,13 +33,10 @@ function pickAudioMimeType(): string | undefined {
   ].find((type) => MediaRecorder.isTypeSupported(type));
 }
 
-function extensionForMimeType(mimeType: string): string {
-  if (mimeType.includes('mp4')) return 'm4a';
-  if (mimeType.includes('ogg')) return 'ogg';
-  return 'webm';
-}
-
 export function useDiscussionRecorder() {
+  const microphoneOwner = useRef(Symbol('meeting-capture'));
+  const captureGeneration = useRef(0);
+  const stopPromise = useRef<Promise<DiscussionDraft | null> | null>(null);
   const [phase, setPhase] = useState<DiscussionRecorderPhase>('idle');
   const [draft, setDraft] = useState<DiscussionDraft | null>(null);
   const [recoverableDrafts, setRecoverableDrafts] = useState<DiscussionDraft[]>([]);
@@ -54,7 +52,6 @@ export function useDiscussionRecorder() {
   const segmentStartedAtRef = useRef(0);
   const persistQueueRef = useRef(Promise.resolve());
   const intervalRef = useRef<number | null>(null);
-  const maxTimerRef = useRef<number | null>(null);
 
   const refreshRecoverableDrafts = useCallback(async () => {
     try {
@@ -70,15 +67,15 @@ export function useDiscussionRecorder() {
 
   const stopTimersAndStream = useCallback(() => {
     if (intervalRef.current != null) window.clearInterval(intervalRef.current);
-    if (maxTimerRef.current != null) window.clearTimeout(maxTimerRef.current);
     intervalRef.current = null;
-    maxTimerRef.current = null;
+    releaseMicrophoneLease(microphoneOwner.current);
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     recorderRef.current = null;
   }, []);
 
   useEffect(() => () => {
+    captureGeneration.current += 1;
     segmenterRef.current?.cancel();
     stopTimersAndStream();
   }, [stopTimersAndStream]);
@@ -86,27 +83,30 @@ export function useDiscussionRecorder() {
   const persistChunk = useCallback((blob: Blob) => {
     const active = draftRef.current;
     if (!active || blob.size === 0) return;
-    const index = chunkIndexRef.current++;
+    const firstIndex = chunkIndexRef.current;
+    chunkIndexRef.current += Math.ceil(blob.size / DISCUSSION_CHUNK_MAX_BYTES);
     persistQueueRef.current = persistQueueRef.current.then(async () => {
-      await saveDiscussionDraftChunk({ draftId: active.id, index, blob, createdAt: Date.now() });
-      const current = draftRef.current;
-      if (!current || current.id !== active.id) return;
-      const updated = {
-        ...current,
-        chunkCount: Math.max(current.chunkCount, index + 1),
-        durationMs: Math.max(
-          current.durationMs,
-          accumulatedMsRef.current + (segmentStartedAtRef.current ? Date.now() - segmentStartedAtRef.current : 0),
-        ),
-        updatedAt: Date.now(),
-      };
-      draftRef.current = updated;
-      setDraft(updated);
-      await saveDiscussionDraft(updated);
+      for (let offset = 0, index = firstIndex; offset < blob.size; offset += DISCUSSION_CHUNK_MAX_BYTES, index += 1) {
+        const current = draftRef.current;
+        if (!current || current.id !== active.id) return;
+        const updated = {
+          ...current, chunkCount: index + 1,
+          durationMs: Math.max(current.durationMs, accumulatedMsRef.current + (segmentStartedAtRef.current ? Date.now() - segmentStartedAtRef.current : 0)),
+          updatedAt: Date.now(),
+        };
+        await saveDiscussionDraftChunk({ draftId: active.id, index, blob: blob.slice(offset, offset + DISCUSSION_CHUNK_MAX_BYTES), createdAt: Date.now() }, updated);
+        draftRef.current = updated;
+        setDraft(updated);
+      }
+    }).catch((caught) => {
+      setError(caught instanceof Error ? caught.message : 'Local recording storage failed');
+      setPhase('error');
+      segmenterRef.current?.cancel();
+      stopTimersAndStream();
     });
-  }, []);
+  }, [stopTimersAndStream]);
 
-  const stop = useCallback(async (): Promise<DiscussionDraft | null> => {
+  const stopOnce = useCallback(async (): Promise<DiscussionDraft | null> => {
     const recorder = recorderRef.current;
     if (!recorder || recorder.state === 'inactive') return draftRef.current;
     setPhase('stopping');
@@ -147,6 +147,13 @@ export function useDiscussionRecorder() {
     return stopped;
   }, [refreshRecoverableDrafts, stopTimersAndStream]);
 
+  const stop = useCallback(() => {
+    if (stopPromise.current) return stopPromise.current;
+    const pending = stopOnce().finally(() => { stopPromise.current = null; });
+    stopPromise.current = pending;
+    return pending;
+  }, [stopOnce]);
+
   const start = useCallback(async (input: {
     projectId?: string;
     onLiveSegment: (draftId: string, segment: LivePcmSegment) => Promise<void> | void;
@@ -156,6 +163,8 @@ export function useDiscussionRecorder() {
       setPhase('error');
       return null;
     }
+    if (!acquireMicrophoneLease(microphoneOwner.current)) { setError('The microphone is being used by a voice call. End the call before recording.'); return null; }
+    const generation = ++captureGeneration.current;
     setError(null);
     setPhase('requesting_permission');
     try {
@@ -164,6 +173,7 @@ export function useDiscussionRecorder() {
         throw new Error('Not enough local storage for a discussion recording.');
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (generation !== captureGeneration.current) { stream.getTracks().forEach(track => track.stop()); releaseMicrophoneLease(microphoneOwner.current); return null; }
       streamRef.current = stream;
       const selectedMimeType = pickAudioMimeType();
       const recorder = selectedMimeType
@@ -182,6 +192,7 @@ export function useDiscussionRecorder() {
         state: 'recording',
       };
       await saveDiscussionDraft(nextDraft);
+      await navigator.storage?.persist?.().catch(() => false);
       recorderRef.current = recorder;
       draftRef.current = nextDraft;
       chunkIndexRef.current = 0;
@@ -189,7 +200,8 @@ export function useDiscussionRecorder() {
       segmentStartedAtRef.current = now;
       persistQueueRef.current = Promise.resolve();
       recorder.ondataavailable = (event) => persistChunk(event.data);
-      recorder.onerror = () => setError('The microphone stopped unexpectedly. Finish to save the recording.');
+      recorder.onerror = () => { setError('The microphone stopped unexpectedly. Saved audio can be recovered.'); void stop(); };
+      stream.getAudioTracks().forEach((track) => track.addEventListener('ended', () => void stop(), { once: true }));
       recorder.start(5_000);
       try {
         segmenterRef.current = await LivePcmSegmenter.start(
@@ -205,11 +217,11 @@ export function useDiscussionRecorder() {
       setElapsedMs(0);
       setPhase('recording');
       intervalRef.current = window.setInterval(() => {
-        setElapsedMs(accumulatedMsRef.current + (
-          segmentStartedAtRef.current ? Date.now() - segmentStartedAtRef.current : 0
-        ));
+        const elapsed = accumulatedMsRef.current + (segmentStartedAtRef.current ? Date.now() - segmentStartedAtRef.current : 0);
+        setElapsedMs(elapsed);
+        if (elapsed >= MAX_RECORDING_MS) void stop();
       }, 1_000);
-      maxTimerRef.current = window.setTimeout(() => void stop(), MAX_RECORDING_MS);
+
       return nextDraft;
     } catch (caught) {
       segmenterRef.current?.cancel();
@@ -273,19 +285,6 @@ export function useDiscussionRecorder() {
     await refreshRecoverableDrafts();
   }, [refreshRecoverableDrafts]);
 
-  const buildFile = useCallback(async (): Promise<File | null> => {
-    const current = draftRef.current;
-    if (!current) return null;
-    const chunks = await listDiscussionDraftChunks(current.id);
-    if (chunks.length === 0) return null;
-    const blob = new Blob(chunks.map((chunk) => chunk.blob), { type: current.mimeType });
-    return new File(
-      [blob],
-      `discussion-${current.startedAt}.${extensionForMimeType(current.mimeType)}`,
-      { type: current.mimeType },
-    );
-  }, []);
-
   const markUploadFailed = useCallback(async () => {
     const current = draftRef.current;
     if (!current) return;
@@ -319,7 +318,6 @@ export function useDiscussionRecorder() {
     stop,
     restore,
     discard,
-    buildFile,
     markUploadFailed,
     reset,
     setServerDiscussionId,

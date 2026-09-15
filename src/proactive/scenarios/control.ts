@@ -3,8 +3,8 @@ import {
 } from '@xopcai/gateway-contract';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
-import { effectiveProactivePolicy, ProactiveConflict, subscriptionSettings } from '../policy/service.js';
-import { getScenario, getSubscription, listScenarios, listSubscriptions, createPromptDraft, publishPromptRevision, upsertSubscription } from './repository.js';
+import { ProactiveConflict, subscriptionSettings } from '../policy/service.js';
+import { getScenario, getSubscription, listSubscriptions, createPromptDraft, publishPromptRevision, upsertSubscription } from './repository.js';
 
 export function requireSubscription(id: string, workspaceId: string) {
   const sub = getSubscription(id);
@@ -12,22 +12,9 @@ export function requireSubscription(id: string, workspaceId: string) {
   return sub;
 }
 
-export function templateCatalog(workspaceId?: string) {
-  return listScenarios().map((scenario) => ({
-    key: scenario.key, version: scenario.version, title: scenario.title, description: scenario.description,
-    scopeKind: ['project_delivery_risk', 'blocked_work'].includes(scenario.key) ? 'project' as const : 'workspace' as const,
-    eventTypes: scenario.eventTypes, contextProviderIds: scenario.contextProviderIds,
-    scheduled: ['project_delivery_risk', 'blocked_work', 'meeting_preparation'].includes(scenario.key),
-    requiresCalendar: scenario.key === 'meeting_preparation',
-    ...(workspaceId && scenario.key === 'meeting_preparation' ? { calendarSource: calendarSourceStatus(workspaceId) } : {}),
-    parameterSchema: { type: 'object', properties: { scanIntervalMinutes: { type: 'integer', minimum: 15, maximum: 10080 }, userInstructions: { type: 'string', maxLength: 12000 } } },
-  }));
-}
-
 export function controlledSubscriptions(workspaceId: string) {
   return listSubscriptions().filter((sub) => sub.workspaceId === workspaceId).map((sub) => ({
-    ...sub, ...subscriptionSettings(sub.id), effectiveLevel: effectiveProactivePolicy(sub.id).level,
-    schedule: getSqliteDatabase().prepare('SELECT next_due_at AS nextDueAt, last_checked_at AS lastCheckedAt FROM proactive_schedule_state WHERE subscription_id = ?').get(sub.id) ?? null,
+    ...sub, ...subscriptionSettings(sub.id),
   }));
 }
 
@@ -41,9 +28,9 @@ function saveSettings(id: string, value: unknown, revision: number) {
 
 export function createControlledSubscription(workspaceId: string, value: unknown) {
   const input = ProactiveSubscriptionCreateSchema.parse(value);
-  const template = templateCatalog().find((item) => item.key === input.scenarioKey);
-  if (!template || !getScenario(input.scenarioKey)) throw new Error('Template not found');
-  if (input.scopeKind !== template.scopeKind) throw new Error('Invalid template scope');
+  if (!getScenario(input.scenarioKey)) throw new Error('Scenario not found');
+  const scopeKind = ['project_delivery_risk', 'blocked_work'].includes(input.scenarioKey) ? 'project' : 'workspace';
+  if (input.scopeKind !== scopeKind) throw new Error('Invalid scenario scope');
   if (input.scopeKind === 'project' && !getSqliteDatabase().prepare('SELECT 1 FROM projects WHERE project_id = ?').get(input.scopeId)) throw new Error('Project not found');
   const scopeId = input.scopeKind === 'workspace' ? workspaceId : input.scopeId;
   return runSqliteWriteTransaction(() => {
@@ -69,15 +56,4 @@ export function updateControlledSubscription(workspaceId: string, id: string, va
     saveSettings(id, { ...current, ...patch }, current.revision + 1);
     return controlledSubscriptions(workspaceId).find((item) => item.id === id)!;
   });
-}
-
-function calendarSourceStatus(workspaceId: string) {
-  const row = getSqliteDatabase().prepare(`SELECT COUNT(*) AS count, MAX(k.updated_at) AS lastSourceUpdatedAt FROM knowledge_source_items k
-    JOIN connector_connections c ON c.id = json_extract(k.metadata_json, '$.connectionId')
-    JOIN connector_sync_policies p ON p.account_id = c.account_id
-    WHERE k.item_type = 'calendar_event' AND k.deleted_at IS NULL AND k.sensitivity NOT IN ('secret', 'regulated')
-    AND json_extract(k.metadata_json, '$.workspaceId') = ? AND c.status = 'active' AND p.scan_enabled = 1 AND p.proactive_enabled = 1
-    AND (json_array_length(p.allowed_scenario_keys_json) = 0 OR EXISTS (SELECT 1 FROM json_each(p.allowed_scenario_keys_json) WHERE value = 'meeting_preparation'))`)
-    .get(workspaceId) as { count: number; lastSourceUpdatedAt: number | null };
-  return { status: row.count ? 'available' : 'waiting_for_authorized_data', lastSourceUpdatedAt: row.lastSourceUpdatedAt ? new Date(row.lastSourceUpdatedAt).toISOString() : null };
 }

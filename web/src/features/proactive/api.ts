@@ -1,27 +1,17 @@
-import type { ProactiveCard, ProactivePreferences, ProactiveSubscriptionSettings } from '@xopcai/gateway-contract';
+import type { ProactiveCard, ProactivePreferences } from '@xopcai/gateway-contract';
 
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
-export interface ProactiveTemplate {
-  eventTypes?: string[]; contextProviderIds?: string[];
-  calendarSource?: { status: string; lastSourceUpdatedAt: string | null };
-  key: string; title: string; description: string; scopeKind: 'project' | 'workspace'; scheduled: boolean; requiresCalendar: boolean;
-}
-export interface ProactiveSubscription extends ProactiveSubscriptionSettings {
-  id: string; scenarioKey: string; scopeKind: 'project' | 'workspace'; scopeId: string; enabled: boolean; revision: number;
-  schedule: { nextDueAt: string; lastCheckedAt?: string } | null;
-}
 export type PreferencesResponse = { preferences: ProactivePreferences };
 export type CardsResponse = { cards: ProactiveCard[]; nextCursor: string | null };
-export interface Delegation extends ProactiveSubscription {
+export interface Delegation {
+  id: string; scenarioKey: string; scopeKind: 'project' | 'workspace'; scopeId: string; enabled: boolean; revision: number;
+  delivery: 'inbox' | 'important' | 'digest'; completedAt: string | null; userInstructions: string; updatedAt: string;
   effectiveEnabled: boolean;
   project: { name: string; status: string } | null;
-  latestRun: { status: string; reason: string | null; startedAt: string; completedAt: string | null; error: string | null; attempt?: number; nextAttemptAt?: string | null } | null;
-  pending: boolean;
-}
-export interface DelegationRun {
-  id: string; status: string; reason: string | null; startedAt: string; completedAt: string | null; error: string | null; attempt?: number; nextAttemptAt?: string | null;
+  projectMonitoring: { mode: 'observe' | 'ask_before_action' | 'auto_low_risk'; allowedActions: string[] } | null;
+  checking: boolean;
 }
 export interface MailFollowUp {
   id: string; subscriptionId: string; instructions: string; dueAt: string; status: 'watching' | 'paused' | 'completed';
@@ -29,11 +19,26 @@ export interface MailFollowUp {
   subject: string | null; latestMessageAt: string | null; latestDirection: 'sent' | 'received' | 'unknown' | null;
   lastSyncedAt: string | null; syncFailed: boolean;
 }
+export type ProactiveSceneKind = 'project_momentum' | 'meeting_preparation' | 'communication_follow_up';
+export type ProactiveSceneStatus = 'needs_decision' | 'prepared' | 'changed' | 'following';
+export interface ProactiveSceneMoment {
+  id: string;
+  kind: ProactiveSceneKind;
+  status: ProactiveSceneStatus;
+  title: string;
+  promise: string;
+  moment: string;
+  relevance: string;
+  help: string;
+  arrangementId: string;
+  manageRoute: string;
+  object: { label: string; route: string } | null;
+  card: ProactiveCard | null;
+  updatedAt: string;
+}
 export interface ProactiveOverview {
+  scenes: ProactiveSceneMoment[];
   followUps: MailFollowUp[];
-  needsDecision: ProactiveCard[];
-  prepared: ProactiveCard[];
-  updates: ProactiveCard[];
   delegations: Delegation[];
 }
 export const proactiveGet = <T,>(path: string) => fetchJson<T>(apiUrl(path));

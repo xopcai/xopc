@@ -46,13 +46,8 @@ function cleanup(code = 0) {
 process.once('SIGINT', () => cleanup());
 process.once('SIGTERM', () => cleanup());
 try {
-  assert.equal((await fetch(`${origin}/api/proactive/templates`)).status, 401);
-  for (const path of ['/api/proactive/follow-ups', '/api/proactive/follow-ups/sources', '/api/proactive/overview', '/api/proactive/metrics', '/api/proactive/web-push/probes', '/api/proactive/templates', '/api/proactive/preferences', '/api/proactive/subscriptions', '/api/proactive/cards', '/api/inbox/judgments/changes?cursor=0']) await request(path);
-  const { subscription } = await request('/api/proactive/subscriptions', 'POST', { scenarioKey: 'automation_failure_impact', scopeKind: 'workspace', scopeId: 'current', delivery: 'inbox' }, 201);
-  await request(`/api/proactive/subscriptions/${subscription.id}`, 'PATCH', { expectedRevision: 1, level: 'quiet' });
-  await request(`/api/proactive/subscriptions/${subscription.id}`, 'PATCH', { expectedRevision: 1, level: 'active' }, 409);
-  await request(`/api/proactive/subscriptions/${subscription.id}/runs`);
-  assert.equal((await request(`/api/proactive/subscriptions/${subscription.id}/preview`, 'POST', {})).result.reason, 'source_unavailable');
+  assert.equal((await fetch(`${origin}/api/proactive/overview`)).status, 401);
+  for (const path of ['/api/proactive/follow-ups', '/api/proactive/follow-ups/sources', '/api/proactive/overview', '/api/proactive/metrics', '/api/proactive/web-push/probes', '/api/proactive/preferences', '/api/inbox/judgments', '/api/inbox/judgments/changes?cursor=0']) await request(path);
   await request('/api/proactive/presence', 'POST', { clientId: 'http-smoke-browser', active: false, surface: 'web' });
   await request('/api/proactive/digests/missing', 'GET', undefined, 400);
   await request('/api/proactive/web-push/subscriptions/missing/test', 'POST', {}, 400);
@@ -82,7 +77,7 @@ try {
   }) }) });
   await worker.tick();
   service.proactiveInbox.project();
-  const cards = await request('/api/proactive/cards');
+  const cards = await request('/api/inbox/judgments');
   assert.equal(cards.cards.length, 1);
   const card = cards.cards[0];
   await request('/api/proactive/preferences', 'PATCH', { expectedRevision: 0, quietStartHour: 0, quietEndHour: 0 });
@@ -95,7 +90,7 @@ try {
   assert(digest?.target.kind === 'proactive_digest');
   assert.equal((await request(`/api/proactive/digests/${digest.target.digestId}`)).cards.length, 1);
   await request(`/api/inbox/judgments/${card.id}`);
-  assert.equal((await request('/api/proactive/overview')).needsDecision[0].artifact.kind, 'checklist');
+  assert.equal((await request('/api/proactive/overview')).scenes[0].card.artifact.kind, 'checklist');
   const action = { actionId: 'read', expectedRevision: card.revision, idempotencyKey: randomUUID() };
   const read = await request(`/api/inbox/judgments/${card.id}/actions`, 'POST', action);
   assert.equal(read.card.status, 'read');

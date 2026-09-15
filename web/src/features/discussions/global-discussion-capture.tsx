@@ -17,7 +17,6 @@ import {
   getDiscussionTranscript,
   stopDiscussion,
   unlinkDiscussionProject,
-  uploadDiscussionRecording,
   uploadDiscussionSegment,
 } from './discussion-api';
 import {
@@ -28,6 +27,7 @@ import {
 import { OPEN_DISCUSSION_CAPTURE_EVENT } from './discussion-events';
 import { drainDiscussionSegmentUploadQueue } from './discussion-segment-upload-queue';
 import type { DiscussionDetail, DiscussionTranscript } from './discussion-types';
+import { uploadDraftRecording } from './recording-upload';
 import { useDiscussionRecorder } from './use-discussion-recorder';
 
 function formatDuration(durationMs: number): string {
@@ -52,6 +52,9 @@ export function GlobalDiscussionCaptureHost() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [pendingSegmentCount, setPendingSegmentCount] = useState(0);
   const [operationError, setOperationError] = useState<string | null>(null);
+  const originalUploadRef = useRef<Promise<unknown> | null>(null);
+  const finishInFlightRef = useRef(false);
+  const recordingSessionRef = useRef(false);
   const createPromiseRef = useRef<Promise<DiscussionDetail> | null>(null);
   const segmentQueueTargetRef = useRef<{ draftId: string; discussionId: string } | null>(null);
   const segmentQueueAbortRef = useRef<AbortController | null>(null);
@@ -137,6 +140,7 @@ export function GlobalDiscussionCaptureHost() {
       onLiveSegment: uploadLiveSegment,
     });
     if (!draft) return;
+    recordingSessionRef.current = true;
     const creation = createDiscussion({
       clientRequestId: draft.id,
       ...(projectId ? { contextProjectId: projectId } : {}),
@@ -182,6 +186,16 @@ export function GlobalDiscussionCaptureHost() {
     return () => window.removeEventListener(OPEN_DISCUSSION_CAPTURE_EVENT, handler);
   }, [prepareStart]);
 
+  useEffect(() => {
+    const draft = recorder.draft;
+    const id = detail?.discussion.id;
+    if (!draft || !id || !draft.chunkCount || finishing || originalUploadRef.current || !['recording', 'paused'].includes(recorder.phase)) return;
+    const upload = uploadDraftRecording(draft, id, setUploadProgress, false)
+      .catch((error) => setOperationError(error instanceof Error ? error.message : copy.saveFailed))
+      .finally(() => { originalUploadRef.current = null; });
+    originalUploadRef.current = upload;
+  }, [recorder.draft, recorder.phase, detail?.discussion.id, finishing, copy.saveFailed]);
+
   const refreshServerState = useCallback(async () => {
     const id = detail?.discussion.id;
     if (!id) return;
@@ -214,7 +228,9 @@ export function GlobalDiscussionCaptureHost() {
   };
 
   const finish = async () => {
-    if (finishing) return;
+    if (finishInFlightRef.current) return;
+    finishInFlightRef.current = true;
+    recordingSessionRef.current = false;
     setFinishing(true);
     setOperationError(null);
     try {
@@ -222,40 +238,30 @@ export function GlobalDiscussionCaptureHost() {
       if (!stopped) throw new Error(copy.emptyRecording);
       const created = await createPromiseRef.current;
       if (!created) throw new Error(copy.saveFailed);
-      const stopping = await stopDiscussion(
-        created.discussion.id,
-        stopped.lastSequence,
-        stopped.durationMs,
-      );
-      setDetail(stopping);
       setBackgroundUploading(true);
-      setVisible(false);
-      void (async () => {
-        try {
-          const file = await recorder.buildFile();
-          if (!file || file.size === 0) throw new Error(copy.emptyRecording);
-          await Promise.all([
-            flushSegmentQueue(stopped.id, created.discussion.id),
-            uploadDiscussionRecording(created.discussion.id, file, stopped.durationMs, setUploadProgress),
-          ]);
-          await recorder.discard(stopped.id);
-          segmentQueueTargetRef.current = null;
-          setPendingSegmentCount(0);
-          setBackgroundUploading(false);
-        } catch (error) {
-          await recorder.markUploadFailed();
-          setBackgroundUploading(false);
-          setOperationError(error instanceof Error ? error.message : copy.saveFailed);
-          setVisible(true);
-        }
-      })();
+      await originalUploadRef.current;
+      await uploadDraftRecording(stopped, created.discussion.id, setUploadProgress);
+      // The original recording repairs failed live text; a live outage must not block saving.
+      await flushSegmentQueue(stopped.id, created.discussion.id).catch(() => undefined);
+      setDetail(await stopDiscussion(created.discussion.id, stopped.lastSequence, stopped.durationMs));
+      await recorder.discard(stopped.id);
+      segmentQueueTargetRef.current = null;
+      setPendingSegmentCount(0);
+      navigate(`/notes/${encodeURIComponent(created.note.id)}`);
     } catch (error) {
       await recorder.markUploadFailed();
       setOperationError(error instanceof Error ? error.message : copy.saveFailed);
+      setVisible(true);
     } finally {
+      finishInFlightRef.current = false;
       setFinishing(false);
+      setBackgroundUploading(false);
     }
   };
+
+  useEffect(() => {
+    if (recorder.phase === 'stopped' && recordingSessionRef.current) void finish();
+  });
 
   const openNote = () => {
     if (!detail) return;
@@ -298,34 +304,21 @@ export function GlobalDiscussionCaptureHost() {
       createPromiseRef.current = Promise.resolve(created);
       setDetail(created);
       await recorder.setServerDiscussionId(created.discussion.id);
-      if (['stopping', 'sealing', 'organizing', 'completed'].includes(created.discussion.status)) {
-        if (created.discussion.status === 'stopping' && !created.discussion.audioAttachmentId) {
-          const file = await recorder.buildFile();
-          if (!file || file.size === 0) throw new Error(copy.emptyRecording);
-          await flushSegmentQueue(candidate.id, created.discussion.id);
-          await uploadDiscussionRecording(created.discussion.id, file, candidate.durationMs, setUploadProgress);
-        }
+      if (created.discussion.audioAttachmentId && ['sealing', 'organizing', 'completed'].includes(created.discussion.status)) {
         await recorder.discard(candidate.id);
         return;
       }
-      if (created.discussion.status !== 'recording') {
-        throw new Error(created.discussion.failureMessage ?? copy.saveFailed);
-      }
+      if (created.discussion.status === 'cancelled') throw new Error('This recording was cancelled');
+      if (!created.discussion.audioAttachmentId) await uploadDraftRecording(candidate, created.discussion.id, setUploadProgress);
       const pendingSegments = await listDiscussionLiveSegments(candidate.id);
-      const lastSequence = pendingSegments.reduce(
-        (highest, segment) => Math.max(highest, segment.sequence),
-        candidate.lastSequence,
-      );
-      const durationMs = Math.max(1_000, candidate.durationMs);
-      const stopping = await stopDiscussion(created.discussion.id, lastSequence, durationMs);
-      setDetail(stopping);
-      const segmentDrain = flushSegmentQueue(candidate.id, created.discussion.id);
-      const file = await recorder.buildFile();
-      if (!file || file.size === 0) throw new Error(copy.emptyRecording);
-      await Promise.all([
-        segmentDrain,
-        uploadDiscussionRecording(created.discussion.id, file, durationMs, setUploadProgress),
-      ]);
+      const lastSequence = pendingSegments.reduce((highest, segment) => Math.max(highest, segment.sequence), candidate.lastSequence);
+      await flushSegmentQueue(candidate.id, created.discussion.id).catch(() => undefined);
+      if (created.discussion.status === 'needs_attention') {
+        const { retryDiscussion } = await import('./discussion-api');
+        await retryDiscussion(created.discussion.id);
+      } else {
+        setDetail(await stopDiscussion(created.discussion.id, lastSequence, Math.max(1_000, candidate.durationMs)));
+      }
       await recorder.discard(candidate.id);
     } catch (error) {
       await recorder.markUploadFailed();

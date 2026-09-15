@@ -7,6 +7,7 @@
  */
 
 export interface STTResult {
+  segments?: import('../../media-understanding/types.js').AudioTranscriptionSegment[];
   /** Transcribed text. */
   text: string;
   /** Provider that performed the transcription (e.g. "alibaba", "openai"). */
