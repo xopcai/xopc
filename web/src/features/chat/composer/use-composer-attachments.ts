@@ -4,7 +4,7 @@ import type { Attachment } from '@/features/chat/attachments/attachment-utils';
 import { formatFileSize, MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachments/attachment-utils';
 import type { WireAttachment } from '@/features/chat/composer/composer.types';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
-import type { PastedTextAttachment } from '@/features/chat/composer/pasted-text';
+import type { PastedTextAttachment } from '@xopcai/composer-core/pasted-text';
 import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '@/features/chat/constants';
 import type { ChatMessages } from '@/i18n/messages';
 

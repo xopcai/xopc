@@ -63,7 +63,9 @@ class RecordingSpoolTest {
   @Test fun restoresTwoHoursOfClosedAudio() = fixture { root ->
     val id = UUID.randomUUID().toString()
     val pcm = ByteArray(RecordingSpool.CHUNK_SAMPLES * 2) { 3 }
-    RecordingSpool(root, id).use { spool -> repeat(360) { spool.append(pcm, 0) } }
+    RecordingSpool(root, id).use { spool -> repeat(360) { spool.append(pcm, 0) }
+      try { spool.append(byteArrayOf(0, 0), 0); fail("Exceeded duration limit") }
+      catch (error: IllegalArgumentException) { assertEquals("RECORDING_DURATION_LIMIT", error.message) } }
     RecordingSpool(root, id).use {
       assertEquals(360, it.chunks.size)
       assertEquals(115200000L, it.persistedSamples)

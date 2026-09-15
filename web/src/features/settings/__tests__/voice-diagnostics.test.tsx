@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   connect: vi.fn(), capture: vi.fn(), preview: vi.fn(), play: vi.fn(), close: vi.fn(),
 }));
 vi.mock('@/features/voice/realtime/voice-session-client', () => ({ VoiceSessionClient: { connect: mocks.connect } }));
-vi.mock('@/features/chat/composer/pcm-wav-recorder', () => ({
+vi.mock('@xopcai/composer-core/pcm-wav-recorder', () => ({
   PcmFrameCapture: { start: mocks.capture },
   PcmStreamEncoder: class { push() { return new ArrayBuffer(2); } },
 }));

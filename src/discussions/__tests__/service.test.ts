@@ -85,6 +85,52 @@ describe('discussion note document', () => {
     return finalizeRecording(service, id, { chunkCount: 1, mimeType: 'audio/wav', fileName: 'meeting.wav' });
   }
 
+  it('assembles independent mobile WAV chunks and produces a meeting summary', async () => {
+    const consentPolicyVersion = service.settings().consentPolicyVersion;
+    service.acknowledgeConsent(consentPolicyVersion);
+    const recordedAt = Date.now() - 86_400_000;
+    const created = await service.create({ clientRequestId: 'mobile-wav', source: 'mobile', recordedAt, consentPolicyVersion });
+    expect(created.discussion).toMatchObject({ source: 'mobile', recordingStartedAt: recordedAt });
+    const chunk = Buffer.alloc(32044);
+    chunk.write('RIFF'); chunk.writeUInt32LE(chunk.length - 8, 4); chunk.write('WAVEfmt ', 8);
+    chunk.writeUInt32LE(16, 16); chunk.writeUInt16LE(1, 20); chunk.writeUInt16LE(1, 22);
+    chunk.writeUInt32LE(16000, 24); chunk.writeUInt32LE(32000, 28); chunk.writeUInt16LE(2, 32); chunk.writeUInt16LE(16, 34);
+    chunk.write('data', 36); chunk.writeUInt32LE(32000, 40);
+    for (let sequence = 0; sequence < 2; sequence++) {
+      await service.uploadRecordingChunk(created.discussion.id, sequence, createHash('sha256').update(chunk).digest('hex'), new Blob([chunk]).stream());
+    }
+    const manifest = { chunkCount: 2, mimeType: 'audio/wav', fileName: 'meeting.wav', lastSequence: -1, containerMode: 'independent_wav' as const };
+    await service.sealRecording(created.discussion.id, manifest);
+    await expect(service.sealRecording(created.discussion.id, { ...manifest, containerMode: undefined })).rejects.toThrow('manifest differs');
+    await service.processRecordingJob();
+    const finalized = (await service.get(created.discussion.id))!;
+    expect(finalized.discussion.durationMs).toBe(2000);
+    const audio = await notes.getAttachmentPath(created.note.id, finalized.discussion.audioAttachmentId!);
+    const assembled = await readFile(audio!.filePath);
+    expect(assembled.length).toBe(64044);
+    expect(assembled.readUInt32LE(40)).toBe(64000);
+    expect(assembled.subarray(44)).toEqual(Buffer.alloc(64000));
+    await new DiscussionSealer({ notes, getConfig: () => ({}) as never, transcribeRecording: async () => ({ text: 'Ship on Friday.' }) }).tick();
+    await new DiscussionOrganizerWorker(new DiscussionOrganizer({ notes, projects, getConfig: () => ({}) as never,
+      organizeTranscript: async () => ({ modelRef: 'test', organization: { title: 'Release', summary: 'Ship Friday.', keyPoints: [], decisions: [], actionItems: [], risks: [], openQuestions: [], chapters: [] } }),
+    })).tick();
+    const completed = (await service.get(created.discussion.id))!;
+    expect(completed.discussion.status).toBe('completed');
+    expect(completed.organization?.organization?.summary).toBe('Ship Friday.');
+  });
+
+  it('rejects mobile WAV chunks with a noncanonical header', async () => {
+    const created = await create('bad-mobile-wav');
+    const invalid = Buffer.alloc(32044);
+    await service.uploadRecordingChunk(created.discussion.id, 0, createHash('sha256').update(invalid).digest('hex'), new Blob([invalid]).stream());
+    const manifest = { chunkCount: 1, mimeType: 'audio/wav', fileName: 'meeting.wav', lastSequence: -1, containerMode: 'independent_wav' as const };
+    await expect(service.sealRecording(created.discussion.id, { ...manifest, mimeType: 'audio/mp4' })).rejects.toThrow('Unsupported recording container');
+    await service.sealRecording(created.discussion.id, manifest);
+    await service.processRecordingJob();
+    expect(service.recordingJob(created.discussion.id)?.state).toBe('failed');
+    expect(service.recordingChunks(created.discussion.id)).toEqual([]);
+  });
+
   it('creates one durable task per action and rejects a stale summary', async () => {
     const created = await create('action-task');
     const revision = saveTranscriptRevision(created.discussion.id);
@@ -148,7 +194,11 @@ describe('discussion note document', () => {
       if (!server.listening) await new Promise<void>((resolve) => server.once('listening', resolve));
       const address = server.address() as { port: number };
       const base = `http://127.0.0.1:${address.port}`;
-      const created = await create('http');
+      await create('http-consent');
+      const mobileResponse = await fetch(`${base}/api/discussions`, { method: 'POST', headers: { authorization: 'Bearer meeting-test', 'content-type': 'application/json' }, body: JSON.stringify({ clientRequestId: 'http', source: 'mobile', recordedAt: Date.now() - 3600000, consentPolicyVersion: service.settings().consentPolicyVersion }) });
+      expect(mobileResponse.status).toBe(201);
+      const created = await mobileResponse.json() as Awaited<ReturnType<typeof create>>;
+      expect(created.discussion.source).toBe('mobile');
       const path = `/api/discussions/${created.discussion.id}/recording/chunks/0`;
       expect((await fetch(base + path, { method: 'PUT', body: 'test' })).status).toBe(401);
       const response = await fetch(base + path, { method: 'PUT', headers: { authorization: 'Bearer meeting-test', 'x-audio-sha256': createHash('sha256').update('test').digest('hex') }, body: 'test' });
@@ -157,7 +207,7 @@ describe('discussion note document', () => {
       const sealUrl = `${base}/api/discussions/${created.discussion.id}/capture/seal`;
       expect((await fetch(sealUrl, { method: 'POST' })).status).toBe(401);
       expect((await fetch(sealUrl, { method: 'POST', headers: { authorization: 'Bearer meeting-test', 'x-test-read-only': '1' } })).status).toBe(403);
-      const sealed = await fetch(sealUrl, { method: 'POST', headers: { authorization: 'Bearer meeting-test', 'content-type': 'application/json' }, body: JSON.stringify({ chunkCount: 1, mimeType: 'audio/wav', fileName: 'meeting.wav', lastSequence: -1 }) });
+      const sealed = await fetch(sealUrl, { method: 'POST', headers: { authorization: 'Bearer meeting-test', 'content-type': 'application/json' }, body: JSON.stringify({ chunkCount: 1, mimeType: 'audio/wav', fileName: 'meeting.wav', lastSequence: -1, containerMode: 'independent_wav' }) });
       expect(sealed.status).toBe(202);
       const job = await sealed.json() as { id: string };
       const jobUrl = `${base}/api/discussions/${created.discussion.id}/recording/job`;

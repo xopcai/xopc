@@ -1,3 +1,4 @@
+import { RecordingBridge } from '../src/features/recordings/RecordingBridge';
 import { QueryClientProvider } from '@tanstack/react-query';
 import * as Linking from 'expo-linking';
 import { type Href, Stack, useRouter } from 'expo-router';
@@ -193,6 +194,7 @@ export default function RootLayout() {
                   }}
                 />
               </Stack>
+              <RecordingBridge />
               <GlobalReadAloudPlayer />
               <VoiceCallSurface />
               <DataSharingConsentDialog />

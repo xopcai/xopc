@@ -4,7 +4,7 @@ export const DISCUSSION_AUDIO_MAX_BYTES = 1024 * 1024 * 1024;
 export const DISCUSSION_CHUNK_MAX_BYTES = 8 * 1024 * 1024;
 export const DISCUSSION_SEGMENT_MAX_BYTES = 2 * 1024 * 1024;
 export interface DiscussionRecordingChunk { sequence: number; sha256: string; bytes: number }
-export interface DiscussionRecordingManifest { chunkCount: number; mimeType: string; fileName: string; lastSequence: number }
+export interface DiscussionRecordingManifest { chunkCount: number; mimeType: string; fileName: string; lastSequence: number; containerMode?: 'independent_wav' }
 export interface DiscussionRecordingJob {
   id: string;
   discussionId: string;
@@ -23,7 +23,7 @@ export const DISCUSSION_STATUSES = [
 ] as const;
 
 export type DiscussionStatus = typeof DISCUSSION_STATUSES[number];
-export type DiscussionSource = 'web' | 'electron';
+export type DiscussionSource = 'web' | 'electron' | 'mobile';
 export type DiscussionProjectInferenceSource = 'context' | 'exact_name' | 'model';
 export type DiscussionFailureStage =
   | 'segment_upload'
@@ -179,6 +179,7 @@ export interface DiscussionCaptureSettings {
 }
 
 export interface CreateDiscussionInput {
+  recordedAt?: number;
   clientRequestId: string;
   contextProjectId?: string;
   consentPolicyVersion: number;

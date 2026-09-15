@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@xopcai/composer-core": "workspace:*",
     "@xopcai/browser-control-contract": "workspace:*",
     "@xopcai/endpoint-tools-client": "workspace:*",
     "@xopcai/endpoint-tools-protocol": "workspace:*",

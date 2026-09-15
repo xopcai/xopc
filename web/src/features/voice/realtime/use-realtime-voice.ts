@@ -10,7 +10,7 @@ import { fetchJson } from '@/lib/fetch';
 import type { ChatMessages } from '@/i18n/messages';
 import type { VoiceMode } from '@xopcai/realtime-protocol/voice';
 
-import { PcmFrameCapture, PcmStreamEncoder } from '@/features/chat/composer/pcm-wav-recorder';
+import { PcmFrameCapture, PcmStreamEncoder } from '@xopcai/composer-core/pcm-wav-recorder';
 
 import { acquireMicrophoneLease, releaseMicrophoneLease } from '../microphone-lease';
 

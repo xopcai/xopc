@@ -1,4 +1,12 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { appendPageContext } from './composer-contexts';
+
+import { classifyPastedText } from '@xopcai/composer-core/pasted-text';
+import { ModelControls } from './model-controls';
+import { VoiceInput } from './voice-input';
+import { QueuedInput } from './queued-input';
+import { findCommand, loadComposerCommands, type ComposerCommand } from './composer-commands';
+import { ComposerPreviewDialog, type ComposerPreview } from './composer-preview';
 
 import { extensionLocale, t } from '../i18n';
 import {
@@ -17,6 +25,7 @@ import {
   captureVisibleScreenshot,
   fileToBrowserAttachment,
   MAX_BROWSER_ATTACHMENTS,
+  BROWSER_ATTACHMENT_ACCEPT,
   type BrowserAttachment,
 } from './attachments';
 import {
@@ -46,6 +55,7 @@ import {
   SparkleIcon,
   StopIcon,
 } from './icons';
+import { EMPTY_DRAFT, useComposerDrafts } from './composer-drafts';
 import { MarkdownContent } from './markdown-content';
 
 const EMPTY: BrowserChatSnapshot = {
@@ -83,22 +93,6 @@ const RISK_MESSAGE_KEYS: Record<BrowserApproval['risk'], string> = {
   read: 'riskRead',
 };
 
-const THINKING_MESSAGE_KEYS: Record<string, string> = {
-  off: 'thinkingOff',
-  minimal: 'thinkingMinimal',
-  low: 'thinkingLow',
-  medium: 'thinkingMedium',
-  high: 'thinkingHigh',
-  xhigh: 'thinkingXhigh',
-  max: 'thinkingMax',
-  ultra: 'thinkingUltra',
-};
-
-function thinkingLabel(level: string): string {
-  const key = THINKING_MESSAGE_KEYS[level];
-  return key ? t(key) : level;
-}
-
 function formatFileSize(size?: number): string {
   if (typeof size !== 'number' || !Number.isFinite(size) || size < 0) return '';
   if (size < 1024) return `${size} B`;
@@ -106,10 +100,37 @@ function formatFileSize(size?: number): string {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function ChatPanel() {
+export function ChatPanel({ gatewayId }: { gatewayId: string }) {
   const client = useMemo(() => new BrowserChatClient(), []);
   const [snapshot, setSnapshot] = useState(EMPTY);
-  const [draft, setDraft] = useState('');
+  const keyForSession = (sessionKey?: string) => JSON.stringify([gatewayId, sessionKey ?? 'new']);
+  const draftKey = keyForSession(snapshot.sessionKey);
+  const { store: drafts, draft: composerDraft, ready: draftReady, update: updateDraft } = useComposerDrafts(draftKey, cause => setError(String(cause)));
+  const draft = composerDraft.text;
+  const attachments = composerDraft.attachments;
+  const pageContexts = composerDraft.pages;
+  const [preview, setPreview] = useState<ComposerPreview>();
+  const setDraft = (text: string) => updateDraft(current => ({ ...current, text }));
+  const setAttachments = (value: BrowserAttachment[] | ((current: BrowserAttachment[]) => BrowserAttachment[])) => updateDraft(current => ({ ...current, attachments: typeof value === 'function' ? value(current.attachments) : value }));
+  function addPageContext(page: AttachedPageContext) {
+    updateDraft(current => ({ ...current, pages: appendPageContext(current.pages, page) }));
+  }
+  const submittingRef = useRef(false);
+  const composing = useRef(false);
+  const historyWalk = useRef<{ items: string[]; index: number; draft: string } | undefined>(undefined);
+  const [sending, setSending] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const [cursor, setCursor] = useState(0);
+  const [commandsOpen, setCommandsOpen] = useState(false);
+  const [commands, setCommands] = useState<ComposerCommand[]>([]);
+  const [commandsLoading, setCommandsLoading] = useState(false);
+  const [commandIndex, setCommandIndex] = useState(0);
+  const commandRange = commandsOpen ? findCommand(draft, cursor) : undefined;
+  const commandItems = commandRange ? commands.filter(item => `${item.name} ${item.description}`.toLowerCase().includes(commandRange.query.toLowerCase())).slice(0, 12) : [];
+
+  const canSend = draftReady && !sending && !processing && !voiceBusy && !snapshot.submitting && !snapshot.pendingDelivery && !snapshot.sessionLoading && !snapshot.stopping && snapshot.endpointReady;
+
   const [search, setSearch] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -117,8 +138,6 @@ export function ChatPanel() {
   const [copiedMessageId, setCopiedMessageId] = useState('');
   const [clarificationAnswer, setClarificationAnswer] = useState('');
   const [clarificationSubmitting, setClarificationSubmitting] = useState(false);
-  const [pageContext, setPageContext] = useState<AttachedPageContext>();
-  const [attachments, setAttachments] = useState<BrowserAttachment[]>([]);
   const [tabMention, setTabMention] = useState<TabMention>();
   const [mentionTabs, setMentionTabs] = useState<MentionableTab[]>([]);
   const [mentionIndex, setMentionIndex] = useState(0);
@@ -155,27 +174,34 @@ export function ChatPanel() {
   }, []);
 
   useEffect(() => {
+    let active = true;
     const unsubscribe = client.subscribe(setSnapshot);
-    void client.start().catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)));
+    void client.start().then(async () => {
+      if (!active) return;
+      const stored = await chrome.storage.session.get(PENDING_CONTEXT_KEY);
+      const pending = stored[PENDING_CONTEXT_KEY] as AttachedPageContext | undefined;
+      if (!pending || !active) return;
+      const key = keyForSession(client.currentSessionKey);
+      await drafts.load(key);
+      if (!active) return;
+      drafts.update(key, current => ({ ...current, pages: appendPageContext(current.pages, pending) }));
+      await chrome.storage.session.remove(PENDING_CONTEXT_KEY);
+    }).catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : String(cause)); });
     return () => {
+      active = false;
       unsubscribe();
       client.stop();
     };
   }, [client]);
 
   useEffect(() => {
-    void chrome.storage.session.get(PENDING_CONTEXT_KEY).then(async (stored) => {
-      const pending = stored[PENDING_CONTEXT_KEY] as AttachedPageContext | undefined;
-      if (pending?.context.kind === 'browser_page') setPageContext(pending);
-      await chrome.storage.session.remove(PENDING_CONTEXT_KEY);
-    });
     const onUpdated = (tabId: number, change: chrome.tabs.TabChangeInfo) => {
       if (change.url || change.status === 'loading') {
-        setPageContext((current) => current?.tabId === tabId ? { ...current, stale: true } : current);
+        drafts.invalidate(tabId);
       }
     };
     const onRemoved = (tabId: number) => {
-      setPageContext((current) => current?.tabId === tabId ? { ...current, stale: true } : current);
+      drafts.invalidate(tabId);
     };
     chrome.tabs.onUpdated.addListener(onUpdated);
     chrome.tabs.onRemoved.addListener(onRemoved);
@@ -246,55 +272,119 @@ export function ChatPanel() {
     };
   }, []);
 
-  async function submit(event: FormEvent) {
+  useEffect(() => {
+    historyWalk.current = undefined;
+    mentionRequest.current += 1;
+    setTabMention(undefined);
+    setMentionTabs([]);
+    setCommandsOpen(false);
+    setPreview(undefined);
+    setError('');
+    if (!snapshot.sessionKey) return;
+    let active = true;
+    const refresh = () => { if (active) void client.refreshInputs().catch(cause => { if (active) setError(String(cause)); }); };
+    refresh();
+    const timer = setInterval(refresh, 2000);
+    return () => { active = false; clearInterval(timer); };
+  }, [client, snapshot.sessionKey]);
+
+  useEffect(() => {
+    if (!commandsOpen) return;
+    let active = true;
+    setCommandsLoading(true);
+    void loadComposerCommands(snapshot.sessionKey).then(items => { if (active) setCommands(items); })
+      .catch(cause => { if (active) { setCommands([]); setError(String(cause)); } })
+      .finally(() => { if (active) setCommandsLoading(false); });
+    return () => { active = false; };
+  }, [commandsOpen, snapshot.sessionKey]);
+
+  function chooseCommand(item: ComposerCommand) {
+    if (!commandRange || item.disabled) return;
+    const text = `${draft.slice(0, commandRange.start)}${item.wire}${draft.slice(commandRange.end)}`;
+    setDraft(text); setCommandsOpen(false);
+    const nextCursor = commandRange.start + item.wire.length;
+    requestAnimationFrame(() => { textarea.current?.focus(); textarea.current?.setSelectionRange(nextCursor, nextCursor); });
+  }
+
+  async function submit(event: FormEvent, interrupt = false) {
     event.preventDefault();
-    if (!draft.trim() && attachments.length === 0) return;
-    const sending = draft;
-    const sendingAttachments = attachments;
-    setDraft('');
-    setAttachments([]);
+    if (!canSend || submittingRef.current || composing.current || tabMention || commandRange || attachmentTask.current) return;
+    const payload = drafts.get(draftKey);
+    if (!payload.text.trim() && !payload.attachments.length) return;
+    if (payload.pages.some(page => page.stale)) { setError(t('errorAttachedPageChanged')); return; }
+    submittingRef.current = true;
+    setSending(true);
     setError('');
     followingTail.current = true;
     setAtBottom(true);
+    let targetKey = draftKey;
     try {
-      if (!snapshot.sessionKey) await client.createSession();
-      if (pageContext?.stale) throw new Error(t('errorAttachedPageChanged'));
-      await client.send(sending, pageContext ? [pageContext.context] : [], sendingAttachments);
-      setPageContext(undefined);
+      if (!snapshot.sessionKey) {
+        await client.createSession();
+        targetKey = keyForSession(client.currentSessionKey!);
+        drafts.update(targetKey, () => payload);
+        drafts.update(draftKey, () => EMPTY_DRAFT);
+      }
+      if (interrupt && snapshot.runId) await client.abort();
+      await client.send(payload.text, payload.pages.map(page => page.context), payload.attachments);
+      historyWalk.current = undefined;
+      drafts.update(targetKey, current => ({
+        text: current.text === payload.text ? '' : current.text,
+        attachments: current.attachments.filter(item => !payload.attachments.includes(item)),
+        pages: current.pages.filter(page => !payload.pages.some(sent => sent.context.sourceId === page.context.sourceId)),
+      }));
     } catch (cause) {
-      setDraft(sending);
-      setAttachments(sendingAttachments);
       setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      submittingRef.current = false;
+      setSending(false);
     }
+  }
+
+  async function updateModelConfig(action: () => Promise<void>) {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSending(true);
+    try { await action(); }
+    catch (cause) { setError(String(cause)); throw cause; }
+    finally { submittingRef.current = false; setSending(false); }
+  }
+
+  async function processAttachmentTask(operation: () => Promise<void>) {
+    if (attachmentTask.current || submittingRef.current || !draftReady || snapshot.sessionLoading) return;
+    attachmentTask.current = true;
+    setProcessing(true);
+    setError('');
+    try { await operation(); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    finally { attachmentTask.current = false; setProcessing(false); }
   }
 
   async function addFiles(files: FileList | readonly File[] | null) {
     const incoming = Array.from(files ?? []);
-    if (!incoming.length || attachmentTask.current) return;
-    attachmentTask.current = true;
-    setError('');
-    try {
-      const remaining = MAX_BROWSER_ATTACHMENTS - attachments.length;
-      if (incoming.length > remaining) throw new Error(t('errorAttachmentLimit', String(MAX_BROWSER_ATTACHMENTS)));
-      const added = await Promise.all(incoming.map(fileToBrowserAttachment));
-      setAttachments((current) => [...current, ...added]);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      attachmentTask.current = false;
+    if (!incoming.length) return;
+    await processAttachmentTask(async () => {
+      const remaining = MAX_BROWSER_ATTACHMENTS - drafts.get(draftKey).attachments.length;
+      const failures: string[] = [];
+      if (incoming.length > remaining) failures.push(t('errorAttachmentLimit', String(MAX_BROWSER_ATTACHMENTS)));
+      const added: BrowserAttachment[] = [];
+      // Bound peak memory when encoding large files.
+      for (const file of incoming.slice(0, remaining)) {
+        try { added.push(await fileToBrowserAttachment(file)); }
+        catch (cause) { failures.push(`${file.name}: ${cause instanceof Error ? cause.message : String(cause)}`); }
+      }
+      setAttachments(current => [...current, ...added]);
       if (fileInput.current) fileInput.current.value = '';
-    }
+      if (failures.length) setError(failures.join('\n'));
+    });
   }
 
   async function addScreenshot() {
-    setError('');
-    try {
-      if (attachments.length >= MAX_BROWSER_ATTACHMENTS) throw new Error(t('errorAttachmentLimit', String(MAX_BROWSER_ATTACHMENTS)));
+    await processAttachmentTask(async () => {
+      if (drafts.get(draftKey).attachments.length >= MAX_BROWSER_ATTACHMENTS) throw new Error(t('errorAttachmentLimit', String(MAX_BROWSER_ATTACHMENTS)));
       const screenshot = await captureVisibleScreenshot();
-      setAttachments((current) => [...current, screenshot]);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    }
+      setAttachments(current => [...current, screenshot]);
+    });
   }
 
   async function runControlAction(action: () => Promise<void>) {
@@ -306,15 +396,16 @@ export function ChatPanel() {
     }
   }
 
-  const selectedModel = snapshot.models.find((model) => model.id === snapshot.modelConfig?.model);
-  const thinkingOptions = selectedModel?.thinking?.options ?? [];
 
   async function attachPage(mode: CaptureMode): Promise<boolean> {
+    if (attachmentTask.current || submittingRef.current || !draftReady) return false;
+    attachmentTask.current = true;
+    setProcessing(true);
     setError('');
     try {
       const tabId = await activeTabId();
       if (tabId === undefined) throw new Error(t('errorNoActivePage'));
-      setPageContext({
+      addPageContext({
         context: await captureTabWithPermission(tabId, mode),
         tabId,
         source: mode === 'selection' ? 'current_selection' : 'current_page',
@@ -323,7 +414,7 @@ export function ChatPanel() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
       return false;
-    }
+    } finally { attachmentTask.current = false; setProcessing(false); }
   }
 
   async function startQuickPrompt(prompt: string, mode?: CaptureMode) {
@@ -343,8 +434,9 @@ export function ChatPanel() {
     }
   }
 
-  async function refreshPageContext() {
-    if (!pageContext) return;
+  async function refreshPageContext(pageContext: AttachedPageContext) {
+    if (attachmentTask.current || submittingRef.current) return;
+    attachmentTask.current = true; setProcessing(true);
     setError('');
     try {
       const mode = pageContext.context.selection ? 'selection' : 'page';
@@ -352,13 +444,16 @@ export function ChatPanel() {
         pageContext.tabId,
         mode,
       );
-      setPageContext({ ...pageContext, context, stale: false });
+      addPageContext({ ...pageContext, context, stale: false });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
-    }
+    } finally { attachmentTask.current = false; setProcessing(false); }
   }
 
   async function updateTabMention(value: string, cursor: number) {
+    setCursor(cursor);
+    setCommandsOpen(Boolean(findCommand(value, cursor)));
+    setCommandIndex(0);
     const requestId = ++mentionRequest.current;
     const mention = findTabMention(value, cursor);
     setTabMention(mention);
@@ -381,7 +476,8 @@ export function ChatPanel() {
 
   async function chooseMentionedTab(tab: MentionableTab) {
     const mention = tabMention;
-    if (!mention) return;
+    if (!mention || attachmentTask.current || submittingRef.current) return;
+    attachmentTask.current = true; setProcessing(true);
     mentionRequest.current += 1;
     setTabMention(undefined);
     setMentionTabs([]);
@@ -389,7 +485,7 @@ export function ChatPanel() {
     try {
       const context = await captureTabWithPermission(tab.id, 'page');
       const nextDraft = removeTabMention(draft, mention);
-      setPageContext({ context, tabId: tab.id, source: 'tab_mention' });
+      addPageContext({ context, tabId: tab.id, source: 'tab_mention' });
       setDraft(nextDraft);
       requestAnimationFrame(() => {
         textarea.current?.focus();
@@ -397,7 +493,7 @@ export function ChatPanel() {
       });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
-    }
+    } finally { attachmentTask.current = false; setProcessing(false); }
   }
 
   async function runSearch(value: string) {
@@ -431,6 +527,7 @@ export function ChatPanel() {
 
   return (
     <section className="chat">
+      {preview ? <ComposerPreviewDialog preview={preview} onClose={() => setPreview(undefined)} /> : null}
       <div className="chat-toolbar">
         <button ref={sessionTrigger} className="session-trigger" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}>
           <span className="session-trigger-copy">
@@ -439,7 +536,7 @@ export function ChatPanel() {
           </span>
           <ChevronDownIcon className="icon-sm" />
         </button>
-        <button className="icon-button" type="button" aria-label={t('startNewChat')} title={t('newChat')} disabled={snapshot.submitting} onClick={() => void runControlAction(() => client.createSession())}><PlusIcon /></button>
+        <button className="icon-button" type="button" aria-label={t('startNewChat')} title={t('newChat')} disabled={sending || snapshot.submitting || snapshot.sessionLoading} onClick={() => void runControlAction(() => client.createSession())}><PlusIcon /></button>
       </div>
       {menuOpen ? (
         <div className="session-menu" ref={sessionMenu}>
@@ -453,7 +550,7 @@ export function ChatPanel() {
           </label>
           <div className="session-list">
             {snapshot.sessions.map((session) => (
-              <button key={session.key} disabled={snapshot.submitting} className={session.key === snapshot.sessionKey ? 'active' : ''} onClick={() => {
+              <button key={session.key} disabled={sending || snapshot.submitting || snapshot.sessionLoading} className={session.key === snapshot.sessionKey ? 'active' : ''} onClick={() => {
                 setMenuOpen(false);
                 void runControlAction(() => client.openSession(session.key));
               }}>
@@ -532,6 +629,9 @@ export function ChatPanel() {
       <form
         className={`composer${draggingFiles ? ' dragging' : ''}`}
         onSubmit={submit}
+        onKeyDown={event => {
+          if (event.key === 'Enter' && event.target instanceof HTMLInputElement) event.preventDefault();
+        }}
         onDragEnter={(event) => {
           if (event.dataTransfer.types.includes('Files')) setDraggingFiles(true);
         }}
@@ -588,24 +688,28 @@ export function ChatPanel() {
             </div>
           </section>
         ) : null}
+        {processing ? <div className="composer-notice" role="status">{t('processingAttachments')}</div> : null}
+        {snapshot.queuedInputs?.map(input => <QueuedInput key={`${snapshot.sessionKey}:${input.id}`} input={input} onSave={(content, version) => client.editInput(input.id, version, content)} onCancel={() => client.cancelInput(input.id, input.version)} />)}
         {snapshot.pendingDelivery ? <div className="composer-notice" role="status">{t('queuedMessageNotice')}</div> : null}
         {error || (!connectionProblem && snapshot.error) ? <div className="composer-error" role="alert"><AlertIcon />{error || snapshot.error}</div> : null}
-        {pageContext || attachments.length ? <div className="composer-contexts">
-          {pageContext ? (
-            <div className={`context-chip${pageContext.stale ? ' stale' : ''}`}>
+        {pageContexts.length || attachments.length ? <div className="composer-contexts">
+          {pageContexts.map(pageContext => (
+            <div key={pageContext.context.sourceId} className={`context-chip${pageContext.stale ? ' stale' : ''}`}>
               {pageContext.context.selection ? <SelectionIcon /> : <PageIcon />}
               <span>
                 <strong>{pageContext.source === 'tab_mention' ? t('tab') : pageContext.context.selection ? t('selection') : t('page')}</strong>
                 {' · '}{new URL(pageContext.context.url).hostname} · {pageContext.context.title}
               </span>
-              {pageContext.stale ? <button type="button" onClick={() => void refreshPageContext()}>{t('refresh')}</button> : null}
-              <button type="button" className="chip-remove" aria-label={t('removePageContext')} onClick={() => setPageContext(undefined)}><CloseIcon /></button>
+              <button type="button" onClick={() => setPreview({ title: pageContext.context.title, text: `${pageContext.context.url}\n\n${pageContext.context.selection ?? pageContext.context.text ?? ''}` })}>{t('preview')}</button>
+              {pageContext.context.truncated ? <small>{t('truncated')}</small> : null}
+              {pageContext.stale ? <button type="button" disabled={processing} onClick={() => void refreshPageContext(pageContext)}>{t('refresh')}</button> : null}
+              <button type="button" className="chip-remove" aria-label={t('removePageContext')} onClick={() => updateDraft(current => ({ ...current, pages: current.pages.filter(page => page.context.sourceId !== pageContext.context.sourceId) }))}><CloseIcon /></button>
             </div>
-          ) : null}
+          ))}
           {attachments.map((attachment, index) => (
             <div className="attachment-chip" key={`${attachment.name}-${index}`}>
-              {attachment.type === 'image' ? <CameraIcon /> : <FileIcon />}
-              <span><strong>{attachment.type === 'image' ? t('image') : t('file')}</strong> · {attachment.name}</span>
+              {attachment.type === 'image' ? <button type="button" className="attachment-thumbnail" aria-label={t('preview')} onClick={() => setPreview({ title: attachment.name, image: `data:${attachment.mimeType};base64,${attachment.data}` })}><img src={`data:${attachment.mimeType};base64,${attachment.data}`} alt={attachment.name} /></button> : <FileIcon />}
+              <span><strong>{attachment.type === 'image' ? t('image') : t('file')}</strong> · {attachment.name} · {formatFileSize(attachment.size)}</span>
               <button type="button" className="chip-remove" aria-label={t('removeAttachment', attachment.name)} onClick={() => setAttachments((current) => current.filter((_, candidate) => candidate !== index))}><CloseIcon /></button>
             </div>
           ))}
@@ -615,7 +719,7 @@ export function ChatPanel() {
           className="file-input"
           type="file"
           multiple
-          accept="image/*,.pdf,text/plain,text/markdown,.json,.csv"
+          accept={BROWSER_ATTACHMENT_ACCEPT}
           onChange={(event) => void addFiles(event.target.files)}
         />
         {tabMention ? (
@@ -638,21 +742,45 @@ export function ChatPanel() {
             )) : <div className="tab-mention-empty">{t('noMatchingTabs')}</div>}
           </div>
         ) : null}
+        {commandRange ? <div className="tab-mention-menu" role="listbox" aria-label={t('commandsAndSkills')}>
+          {commandsLoading ? <div className="message-skeleton" aria-label={t('loadingCommands')}><span /><span /><span /></div> : commandItems.map((item, index) => <button key={item.id} type="button" role="option" aria-selected={index === commandIndex} disabled={item.disabled} title={item.disabled ? t('skillUnavailable') : item.description} className={index === commandIndex ? 'selected' : ''} onMouseDown={event => { event.preventDefault(); chooseCommand(item); }}><span>{item.name}</span><small>{item.description}{item.disabled ? ` · ${t('skillUnavailable')}` : ''}</small></button>)}
+          {!commandsLoading && !commandItems.length ? <div className="tab-mention-empty">{t('noMatchingCommands')}</div> : null}
+        </div> : null}
         <div className="composer-input-row">
           <textarea
             ref={textarea}
             value={draft}
             onChange={(event) => {
+              historyWalk.current = undefined;
               setDraft(event.target.value);
               void updateTabMention(event.target.value, event.target.selectionStart);
             }}
             onSelect={(event) => void updateTabMention(event.currentTarget.value, event.currentTarget.selectionStart)}
             onPaste={(event) => {
-              if (!event.clipboardData.files.length) return;
-              event.preventDefault();
-              void addFiles(event.clipboardData.files);
+              if (event.clipboardData.files.length) {
+                event.preventDefault();
+                void addFiles(event.clipboardData.files);
+                return;
+              }
+              const pasted = classifyPastedText(event.clipboardData.getData('text/plain'));
+              if (pasted) {
+                event.preventDefault();
+                void addFiles([new File([pasted.text], pasted.name, { type: pasted.mimeType })]);
+              }
             }}
+            onCompositionStart={() => { composing.current = true; }}
+            onCompositionEnd={() => { composing.current = false; }}
             onKeyDown={(event) => {
+              if (composing.current || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+              if (commandRange) {
+                if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                  event.preventDefault();
+                  if (commandItems.length) setCommandIndex(current => (current + (event.key === 'ArrowDown' ? 1 : -1) + commandItems.length) % commandItems.length);
+                  return;
+                }
+                if (event.key === 'Escape') { event.preventDefault(); setCommandsOpen(false); return; }
+                if (event.key === 'Enter' || event.key === 'Tab') { event.preventDefault(); if (commandItems[commandIndex]) chooseCommand(commandItems[commandIndex]); return; }
+              }
               if (tabMention) {
                 if (event.key === 'ArrowDown' && mentionTabs.length) {
                   event.preventDefault();
@@ -678,18 +806,35 @@ export function ChatPanel() {
                   return;
                 }
               }
+              if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+                const input = event.currentTarget;
+                const walk = historyWalk.current;
+                if (walk || (event.key === 'ArrowUp' && input.selectionStart === 0 && input.selectionEnd === 0)) {
+                  const history = walk ?? { items: snapshot.messages.filter(message => message.role === 'user' && message.text.trim()).map(message => message.text).reverse(), index: -1, draft };
+                  const index = event.key === 'ArrowUp' ? Math.min(history.index + 1, history.items.length - 1) : history.index - 1;
+                  if (index >= 0 || walk) {
+                    event.preventDefault();
+                    historyWalk.current = index >= 0 ? { ...history, index } : undefined;
+                    setDraft(index >= 0 ? history.items[index] : history.draft);
+                    requestAnimationFrame(() => textarea.current?.setSelectionRange(0, 0));
+                    return;
+                  }
+                }
+              }
               if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
-                event.currentTarget.form?.requestSubmit();
+                if ((event.ctrlKey || event.metaKey) && snapshot.runId) void submit(event, true);
+                else event.currentTarget.form?.requestSubmit();
               }
             }}
             onBlur={() => {
+              setCommandsOpen(false);
               mentionRequest.current += 1;
               setTabMention(undefined);
               setMentionTabs([]);
             }}
             placeholder={t('composerPlaceholder')}
-            disabled={snapshot.submitting}
+            disabled={!draftReady || sending || snapshot.submitting || snapshot.sessionLoading || processing}
             rows={1}
           />
         </div>
@@ -726,23 +871,21 @@ export function ChatPanel() {
             </div>
           </div>
           <div className="composer-toolbar-end">
-            {snapshot.modelConfig ? (
-              <div className="model-controls">
-                <select aria-label={t('model')} title={t('sessionModel')} value={snapshot.modelConfig.model} disabled={Boolean(snapshot.runId)} onChange={(event) => void runControlAction(() => client.updateModel(event.target.value))}>
-                  {snapshot.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
-                </select>
-                {thinkingOptions.length ? (
-                  <select aria-label={t('thinkingLevel')} title={t('thinkingLevel')} value={snapshot.modelConfig.thinkingLevel} disabled={Boolean(snapshot.runId)} onChange={(event) => void runControlAction(() => client.updateThinking(event.target.value))}>
-                    {thinkingOptions.map((level) => <option key={level} value={level}>{thinkingLabel(level)}</option>)}
-                  </select>
-                ) : null}
-              </div>
-            ) : null}
+            <ModelControls key={draftKey} models={snapshot.models} config={snapshot.modelConfig} disabled={sending || processing || voiceBusy || snapshot.submitting || snapshot.sessionLoading || Boolean(snapshot.runId)} onModel={model => updateModelConfig(async () => {
+              if (!client.currentSessionKey) {
+                const payload = drafts.get(draftKey);
+                await client.createSession();
+                drafts.update(keyForSession(client.currentSessionKey!), () => payload);
+                drafts.update(draftKey, () => EMPTY_DRAFT);
+              }
+              await client.updateModel(model);
+            })} onThinking={level => updateModelConfig(() => client.updateThinking(level))} />
+            <VoiceInput key={`voice:${draftKey}`} disabled={sending || processing || snapshot.submitting || snapshot.sessionLoading || !draftReady || !snapshot.endpointReady} onBusy={setVoiceBusy} onTranscript={text => updateDraft(current => ({ ...current, text: current.text.trim() ? `${current.text} ${text}` : text }))} />
+            {snapshot.runId && (draft.trim() || attachments.length) ? <button type="button" className="composer-icon-button" disabled={!canSend} title={t('interruptSend')} aria-label={t('interruptSend')} onClick={event => void submit(event, true)}><SendIcon /></button> : null}
             {snapshot.runId ? (
               <button type="button" className="send-button stop-button" aria-label={t('stopResponse')} title={snapshot.stopping ? t('stoppingResponse') : t('stopResponse')} disabled={snapshot.stopping} onClick={() => void runControlAction(() => client.abort())}><StopIcon /></button>
-            ) : (
-              <button className="send-button" type="submit" aria-label={t('sendMessage')} title={t('sendMessage')} disabled={snapshot.submitting || snapshot.pendingDelivery || snapshot.sessionLoading || (!draft.trim() && attachments.length === 0) || !snapshot.endpointReady || Boolean(tabMention)}><SendIcon /></button>
-            )}
+            ) : null}
+              <button className="send-button" type="submit" aria-label={snapshot.runId ? t('queueMessage') : t('sendMessage')} title={snapshot.runId ? t('queueMessage') : t('sendMessage')} disabled={!canSend || (!draft.trim() && attachments.length === 0) || Boolean(tabMention) || Boolean(commandRange)}><SendIcon /></button>
           </div>
         </div>
       </form>

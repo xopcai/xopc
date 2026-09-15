@@ -1,8 +1,8 @@
 # 移动录音笔记技术设计与阶段验收
 
-日期：2026-09-15 · 基线：`37368b509` · 状态：设计，尚未实现。
+日期：2026-09-15 · 基线：`37368b509` · 状态：分阶段实施。
 
-实施进展：[移动实施与自查](./mobile-meeting-implementation-review.md)。M0 已开始实现原生存储和采集核心，尚未接入 App 入口或通过真机验收；下文完整产品契约仍是目标。
+实施进展：[移动实施与自查](./mobile-meeting-implementation-review.md)。已接入原生桥接、移动录音页、手动分块同步与会议总结。具体契约见 [本批技术方案](./mobile-meeting-ui-upload-design.md)；完整多轨、实时及后台能力仍为目标设计，真机验收尚未完成。
 
 关联：[PRD](./mobile-meeting-prd.md) · [研究与平台依据](./mobile-meeting-research.md) · [共用 P1/P2 契约](./voice-meeting-p1-p2-technical-design.md) · [现有实施状态](./voice-meeting-p1-p2-implementation-review.md)
 
@@ -51,7 +51,7 @@ expo-audio 能配置后台录音，但不会自动满足这套 journal、分块�
 | `src/discussions/`、SQLite migrations | 增加 mobile 来源、离线创建绑定、原始 track/epoch 接收及映射 |
 | `src/gateway/hono/routes/discussions.ts`、`lazy-bundles.ts` | 统一路由与鉴权映射，沿用现有 seal / job |
 
-当前 `POST /api/discussions` 把来源归为 web/electron，块路径只有 `:sequence`，seal 仍接收单录音 manifest。必须先完成共用 P1-A 剩余的 track/epoch 和独立片段处理，不能把多个 WAV 文件按字节拼接交给旧接口。M0 可独立做本机实验，M1 远端接入依赖共用契约。
+本批增加 mobile 来源、原始录制时间与 `independent_wav` 封存模式，单麦克风的独立 WAV 去头合并后进入现有 Discussion 任务。完整多轨及非预期中断的墙钟时间轴仍依赖共用 P1-A track/epoch 契约；当前只允许对主动暂停继续录音，非预期中断先恢复并结束。
 
 ## 3. 原生采集与设备占用
 

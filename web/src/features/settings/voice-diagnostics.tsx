@@ -4,7 +4,7 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import { VoiceCallContext } from '@/features/voice/realtime/voice-call-context';
 import { voiceInputConstraints } from '@/stores/voice-preferences-store';
 import { Button } from '@/components/ui/button';
-import { PcmFrameCapture, PcmStreamEncoder } from '@/features/chat/composer/pcm-wav-recorder';
+import { PcmFrameCapture, PcmStreamEncoder } from '@xopcai/composer-core/pcm-wav-recorder';
 import { PcmPlayer } from '@/features/voice/realtime/pcm-player';
 import { VoiceSessionClient } from '@/features/voice/realtime/voice-session-client';
 import type { VoiceSettingsMessages } from '@/i18n/messages';

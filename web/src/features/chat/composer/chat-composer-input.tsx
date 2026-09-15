@@ -12,7 +12,7 @@ import {
 } from '@/features/chat/composer/picker-key-adapter';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { applyComposerPaste, resolveComposerPaste } from '@/features/chat/composer/composer-paste';
-import type { PastedTextAttachment } from '@/features/chat/composer/pasted-text';
+import type { PastedTextAttachment } from '@xopcai/composer-core/pasted-text';
 import { syncComposerPlaceholderClass } from '@/features/chat/composer/use-composer-editor';
 import { cn } from '@/lib/cn';
 
