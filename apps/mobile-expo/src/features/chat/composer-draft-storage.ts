@@ -1,12 +1,15 @@
+import type { ComposerAttachment } from './composer.types';
+import { MAX_CHAT_ATTACHMENTS } from './chat-limits';
 import { storage } from '../../storage/mmkv';
 
 const STORAGE_PREFIX = 'xopc.chat.composerDraft:v2:';
 const MAX_DRAFT_LENGTH = 20_000;
 
 export type ComposerDraftSnapshot = {
+  workspaceFiles?: ComposerAttachment[];
   text: string;
   cursorPos: number;
-  contextRefs: Array<{ kind: 'note'; sourceId: string; expectedVersion: string; title: string }>;
+  contextRefs: Array<{ kind: 'note' | 'task'; sourceId: string; expectedVersion: string; title: string }>;
 };
 
 function storageKey(sessionKey: string): string {
@@ -36,17 +39,26 @@ export function readComposerDraftSnapshot(sessionKey: string): ComposerDraftSnap
 
     const text = parsed.text.slice(0, MAX_DRAFT_LENGTH);
     const contextRefs = Array.isArray(parsed.contextRefs)
-      ? parsed.contextRefs.flatMap((value) => {
-          if (!isRecord(value) || value.kind !== 'note' || typeof value.sourceId !== 'string'
+      ? parsed.contextRefs.flatMap((value): ComposerDraftSnapshot['contextRefs'] => {
+          if (!isRecord(value) || (value.kind !== 'note' && value.kind !== 'task') || typeof value.sourceId !== 'string'
             || typeof value.expectedVersion !== 'string' || typeof value.title !== 'string') return [];
-          return [{ kind: 'note' as const, sourceId: value.sourceId, expectedVersion: value.expectedVersion, title: value.title }];
+          return [{ kind: value.kind, sourceId: value.sourceId, expectedVersion: value.expectedVersion, title: value.title }];
         }).slice(0, 5)
       : [];
-    if (!text.trim() && contextRefs.length === 0) return null;
+    const workspaceFiles: ComposerAttachment[] = Array.isArray(parsed.workspaceFiles)
+      ? parsed.workspaceFiles.flatMap((file): ComposerAttachment[] => {
+        if (!isRecord(file) || typeof file.id !== 'string' || typeof file.name !== 'string'
+          || typeof file.workspaceRelativePath !== 'string' || !file.workspaceRelativePath
+          || typeof file.mimeType !== 'string' || typeof file.size !== 'number' || !Number.isFinite(file.size) || file.size < 0) return [];
+        return [{ id: file.id, name: file.name, workspaceRelativePath: file.workspaceRelativePath,
+          mimeType: file.mimeType, size: file.size, type: 'document', content: '' }];
+      }).slice(0, MAX_CHAT_ATTACHMENTS) : [];
+    if (!text.trim() && contextRefs.length === 0 && workspaceFiles.length === 0) return null;
     return {
       text,
       cursorPos: normalizeCursorPos(parsed.cursorPos, text.length),
       contextRefs,
+      ...(workspaceFiles.length ? { workspaceFiles } : {}),
     };
   } catch {
     return null;
@@ -61,7 +73,7 @@ export function writeComposerDraftSnapshot(
   if (!normalizedSessionKey) return;
 
   const text = snapshot.text.slice(0, MAX_DRAFT_LENGTH);
-  if (!text.trim() && !snapshot.contextRefs?.length) {
+  if (!text.trim() && !snapshot.contextRefs?.length && !snapshot.workspaceFiles?.length) {
     clearComposerDraftSnapshot(normalizedSessionKey);
     return;
   }
@@ -70,6 +82,7 @@ export function writeComposerDraftSnapshot(
     text,
     cursorPos: normalizeCursorPos(snapshot.cursorPos, text.length),
     contextRefs: snapshot.contextRefs?.slice(0, 5) ?? [],
+    ...(snapshot.workspaceFiles?.length ? { workspaceFiles: snapshot.workspaceFiles.slice(0, MAX_CHAT_ATTACHMENTS) } : {}),
   };
 
   try {

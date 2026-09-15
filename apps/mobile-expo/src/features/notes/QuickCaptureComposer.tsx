@@ -12,7 +12,7 @@ import { Icon } from 'react-native-paper';
 import { useMessages } from '../../i18n/messages';
 import { radii, spacing, typography, useTheme } from '../../theme';
 import type { AttachmentPickSource } from '../chat/attachment-file-io';
-import { AttachmentSourceSheet } from '../chat/attachment-source-sheet';
+import { ComposerActionSheet } from '../chat/composer-action-sheet';
 import { MIN_COMPOSER_INPUT_HEIGHT } from '../chat/composer-layout';
 import { useVoiceCaptureInteraction } from './use-voice-capture-interaction';
 
@@ -211,15 +211,13 @@ export function QuickCaptureComposer({
         )}
       </View>
 
-      <AttachmentSourceSheet
+      <ComposerActionSheet
         visible={sheetOpen}
-        items={sheetItems}
-        onClose={() => setSheetOpen(false)}
-        onPick={(source) => {
-          setSheetOpen(false);
+        items={sheetItems.map(item => ({ key: item.source, icon: item.icon, label: item.label, onPress: () => {
           setMode('text');
-          onAttachmentSource(source);
-        }}
+          onAttachmentSource(item.source);
+        } }))}
+        onClose={() => setSheetOpen(false)}
       />
 
     </>

@@ -11,6 +11,7 @@ vi.mock('../../lib/static-ui.js', () => ({
 
 describe('public gateway UI assets', () => {
   it.each([
+    'assets/pdf.worker.min-test.mjs',
     'apple-touch-icon.png',
     'favicon-16x16.png',
     'favicon-32x32.png',

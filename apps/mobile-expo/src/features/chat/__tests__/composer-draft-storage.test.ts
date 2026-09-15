@@ -75,3 +75,19 @@ describe('composer-draft-storage', () => {
     expect(readComposerDraftSnapshot('z')).toBeNull();
   });
 });
+
+it('restores task references with their selected version', () => {
+  writeComposerDraftSnapshot('task-reference', {
+    text: '', cursorPos: 0,
+    contextRefs: [{ kind: 'task', sourceId: 'task-1', expectedVersion: '7', title: 'Launch' }],
+  });
+  expect(readComposerDraftSnapshot('task-reference')?.contextRefs).toEqual([
+    { kind: 'task', sourceId: 'task-1', expectedVersion: '7', title: 'Launch' },
+  ]);
+});
+
+it('restores workspace files even without message text', () => {
+  const file = { id: 'file-1', type: 'document' as const, name: 'Plan', mimeType: 'text/plain', size: 12, content: '', workspaceRelativePath: 'plan.txt' };
+  writeComposerDraftSnapshot('file-reference', { text: '', cursorPos: 0, workspaceFiles: [file] });
+  expect(readComposerDraftSnapshot('file-reference')?.workspaceFiles).toEqual([file]);
+});

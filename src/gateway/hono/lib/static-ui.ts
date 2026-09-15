@@ -31,6 +31,7 @@ const UI_STATIC_ROOT = resolveUiStaticRoot();
 
 const MIME_TYPES: Record<string, string> = {
   js: 'application/javascript',
+  mjs: 'application/javascript',
   css: 'text/css',
   json: 'application/json',
   html: 'text/html',

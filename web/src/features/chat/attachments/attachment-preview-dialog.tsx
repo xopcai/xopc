@@ -13,6 +13,7 @@ import {
 import { useFilePreviewExpanded } from '@/features/file-preview/use-file-preview-expanded';
 import { cn } from '@/lib/cn';
 import { isElectron } from '@/lib/electron-env';
+import { electronPreviewViewportClass } from '@/lib/electron-window-chrome';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -120,6 +121,7 @@ export function AttachmentPreviewDialog({
           aria-describedby={undefined}
           className={cn(
             'xopc-dialog-content-fullscreen fixed inset-0 flex h-[100dvh] w-full flex-row overflow-hidden',
+            electronPreviewViewportClass(),
             layerClassName,
             'border-0 bg-transparent p-0 shadow-none outline-none',
           )}

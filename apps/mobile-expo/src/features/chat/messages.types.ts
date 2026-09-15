@@ -99,7 +99,7 @@ export type MessageAttachment = {
 };
 
 export interface MessageContextRef {
-  kind: 'note';
+  kind: 'note' | 'task';
   sourceId: string;
   version: string;
   title: string;
