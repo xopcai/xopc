@@ -298,6 +298,8 @@ export interface WorkContextSnapshotSummary {
 
 export interface WorkDiscoveryRun {
   id: string;
+  mode?: 'interactive' | 'background';
+  attempts?: number;
   idempotencyKey: string;
   source: WorkDiscoverySource;
   status: WorkDiscoveryRunStatus;

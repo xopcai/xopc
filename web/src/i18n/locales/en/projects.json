@@ -1,5 +1,20 @@
 {
   "projectsPage": {
+    "understanding": {
+      "auto": "Automatically learn about this project",
+      "hint": "Use the configured model to understand project materials in the background for better collaboration.",
+      "running": "Learning about this project",
+      "title": "Project overview",
+      "view": "View project overview",
+      "start": "Learn about project",
+      "refresh": "Refresh understanding",
+      "retry": "Retry",
+      "failed": "Understanding is not complete",
+      "edit": "Correct overview",
+      "save": "Save",
+      "cancel": "Cancel",
+      "saveFailed": "Could not save. Please retry."
+    },
     "title": "Workbench",
     "summary": "{{count}} projects · ongoing work grouped across chats and tasks",
     "searchPlaceholder": "Search projects",

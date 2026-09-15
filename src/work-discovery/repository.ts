@@ -21,6 +21,8 @@ type OnboardingRow = {
 
 type RunRow = {
   id: string;
+  mode: 'interactive' | 'background';
+  attempts: number;
   idempotency_key: string;
   source: string;
   status: string;
@@ -71,6 +73,8 @@ function onboardingFromRow(row: OnboardingRow): WorkDiscoveryOnboardingState {
 function runFromRow(row: RunRow): WorkDiscoveryRun {
   return {
     id: row.id,
+    mode: row.mode,
+    attempts: row.attempts,
     idempotencyKey: row.idempotency_key,
     source: row.source as WorkDiscoveryRun['source'],
     status: row.status as WorkDiscoveryRun['status'],
@@ -150,8 +154,8 @@ export function createWorkDiscoveryRun(run: WorkDiscoveryRun): WorkDiscoveryRun 
       `INSERT INTO work_discovery_runs (
         id, idempotency_key, source, status, stage, root_path, project_id, session_key,
         agent_id, model_ref, scan_policy_version, snapshot_summary_json, result_json,
-        error_code, error_message, created_at, started_at, completed_at, canceled_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        error_code, error_message, created_at, started_at, completed_at, canceled_at, mode, attempts
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       run.id,
       run.idempotencyKey,
@@ -172,6 +176,8 @@ export function createWorkDiscoveryRun(run: WorkDiscoveryRun): WorkDiscoveryRun 
       run.startedAt ?? null,
       run.completedAt ?? null,
       run.canceledAt ?? null,
+      run.mode ?? 'interactive',
+      run.attempts ?? 0,
     );
   });
   return getWorkDiscoveryRun(run.id)!;
@@ -185,6 +191,21 @@ export function getWorkDiscoveryRun(id: string): WorkDiscoveryRun | null {
 export function getWorkDiscoveryRunByIdempotencyKey(key: string): WorkDiscoveryRun | null {
   const { db } = requireXopcDatabase();
   return readRun(db, 'idempotency_key', key);
+}
+
+export function getProjectUnderstandingRun(projectId: string): WorkDiscoveryRun | null {
+  const { db } = requireXopcDatabase();
+  const row = db.prepare(`SELECT * FROM work_discovery_runs
+    WHERE project_id = ? AND mode = 'background' ORDER BY created_at DESC, rowid DESC LIMIT 1`)
+    .get(projectId) as RunRow | undefined;
+  return row ? runFromRow(row) : null;
+}
+
+export function listPendingProjectUnderstandingRuns(): WorkDiscoveryRun[] {
+  const { db } = requireXopcDatabase();
+  return (db.prepare(`SELECT * FROM work_discovery_runs
+    WHERE mode = 'background' AND status IN ('queued', 'probing', 'analyzing')`)
+    .all() as RunRow[]).map(runFromRow);
 }
 
 export function setWorkDiscoveryFeedback(input: {
@@ -228,6 +249,7 @@ export function updateWorkDiscoveryRun(
     | 'startedAt'
     | 'completedAt'
     | 'canceledAt'
+    | 'attempts'
   >>,
 ): WorkDiscoveryRun | null {
   const existing = getWorkDiscoveryRun(id);
@@ -237,7 +259,7 @@ export function updateWorkDiscoveryRun(
     db.prepare(
       `UPDATE work_discovery_runs SET
         status = ?, stage = ?, snapshot_summary_json = ?, result_json = ?,
-        error_code = ?, error_message = ?, started_at = ?, completed_at = ?, canceled_at = ?
+        error_code = ?, error_message = ?, started_at = ?, completed_at = ?, canceled_at = ?, attempts = ?
        WHERE id = ?`,
     ).run(
       next.status,
@@ -249,6 +271,7 @@ export function updateWorkDiscoveryRun(
       next.startedAt ?? null,
       next.completedAt ?? null,
       next.canceledAt ?? null,
+      next.attempts ?? 0,
       id,
     );
   });

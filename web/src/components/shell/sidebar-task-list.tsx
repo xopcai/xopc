@@ -25,6 +25,7 @@ import { useSessionDiscovery } from '@/features/sessions/use-session-discovery';
 import { sessionIdentityLabel } from '@/features/sessions/session-identity-label';
 
 import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
+import { ProjectUnderstandingAction, ProjectUnderstandingCheckbox } from '@/features/projects/project-understanding';
 import { shouldRefreshSidebarForTranscriptUpdate } from '@/components/shell/sidebar-session-refresh';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -446,6 +447,8 @@ function SidebarProjectMenu({
             <ExternalLink className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
             {sb.projectOpen}
           </Link>
+          <ProjectUnderstandingAction projectId={project.id} onStarted={() => setMenuOpen(false)}
+            className="flex w-full rounded-md px-2 py-1.5 text-left text-xs font-medium text-fg hover:bg-surface-hover disabled:opacity-50" />
           <button
             type="button"
             className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
@@ -872,6 +875,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
   const [createProjectWorkspace, setCreateProjectWorkspace] = useState('');
   const [createProjectError, setCreateProjectError] = useState<string | null>(null);
   const [creatingProject, setCreatingProject] = useState(false);
+  const [autoUnderstand, setAutoUnderstand] = useState(true);
   const [includedSessionKey, setIncludedSessionKey] = useState<string | undefined>(() => activeSessionKey);
   const [projectsCollapsed, setProjectsCollapsed] = useState(false);
   const [inboxCollapsed, setInboxCollapsed] = useState(false);
@@ -1040,10 +1044,12 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
     };
     window.addEventListener('session-updated', onSessionUpdated);
     window.addEventListener('session-created', onSessionListRefresh);
+    window.addEventListener('project-updated', onSessionListRefresh);
     window.addEventListener('session-transcript-updated', onSessionTranscriptUpdated);
     return () => {
       window.removeEventListener('session-updated', onSessionUpdated);
       window.removeEventListener('session-created', onSessionListRefresh);
+      window.removeEventListener('project-updated', onSessionListRefresh);
       window.removeEventListener('session-transcript-updated', onSessionTranscriptUpdated);
     };
   }, [token, refreshSidebar, visibleSessionKeys]);
@@ -1263,9 +1269,10 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
     setCreatingProject(true);
     setCreateProjectError(null);
     try {
-      const project = await createProject({ name, workspaceRoot });
+      const project = await createProject({ name, workspaceRoot, autoUnderstand });
       setCreateProjectName('');
       setCreateProjectWorkspace('');
+      setAutoUnderstand(true);
       setCreateProjectOpen(false);
       refreshSidebar();
       window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: project.id } }));
@@ -1274,7 +1281,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
     } finally {
       setCreatingProject(false);
     }
-  }, [createProjectName, createProjectWorkspace, creatingProject, refreshSidebar]);
+  }, [createProjectName, createProjectWorkspace, creatingProject, refreshSidebar, autoUnderstand]);
 
   const renameTarget = renameKey ? operationItems.find((s) => s.key === renameKey) : undefined;
   const renameProjectTarget = renameProjectId
@@ -1549,6 +1556,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
                   </button>
                   <p className="text-xs font-normal text-fg-subtle">{projectsText.workspaceSelectionHint}</p>
                 </div>
+                <ProjectUnderstandingCheckbox checked={autoUnderstand} onChange={setAutoUnderstand} disabled={creatingProject} />
                 {createProjectError ? (
                   <p className="rounded-lg bg-danger-soft px-3 py-2 text-xs text-danger" role="alert">
                     {createProjectError}

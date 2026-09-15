@@ -1,5 +1,6 @@
 import { deliverProactiveCard } from '../proactive/inbox/delivery.js';
 import crypto from 'node:crypto';
+import { WorkDiscoveryService } from '../work-discovery/service.js';
 
 import { findSessionInput, insertSessionInput } from '../storage/sqlite/session-input-repository.js';
 import { ConnectionRecoveryService } from '../connectors/connection-recovery-service.js';
@@ -312,6 +313,16 @@ export class GatewayService {
 
   /** First-class project grouping surface. */
   readonly projects: ProjectService;
+  private _workDiscovery: WorkDiscoveryService | undefined;
+
+  get workDiscovery(): WorkDiscoveryService {
+    return this._workDiscovery ??= new WorkDiscoveryService({
+      projects: this.projects,
+      sessions: this.sessionIndex,
+      getConfig: () => this.config,
+      emit: (type, payload) => this.emit(type, payload),
+    });
+  }
   readonly discussions: DiscussionService;
   readonly discussionWorker: DiscussionOrganizerWorker;
   readonly discussionLiveWorker: DiscussionLiveWorker;
@@ -1011,6 +1022,7 @@ export class GatewayService {
     }
 
     this.modelCatalogSync.start();
+    if (this.running) this.workDiscovery.resumeProjectUnderstanding();
 
     if (!this.extensionLoader || areExtensionsGloballyDisabled(this.config)) {
       return;
@@ -1422,6 +1434,7 @@ export class GatewayService {
     this.stopRealtimeLogBridge = null;
 
     log.debug('Stopping gateway service...');
+    await this._workDiscovery?.stop();
     this.readiness.markStarting();
     this.endpointTools.close();
     await this.sideChats.disposeAll();

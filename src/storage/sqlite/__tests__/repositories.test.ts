@@ -128,7 +128,7 @@ describe('sqlite repositories', () => {
     expect(project.items.map((item) => item.key)).toEqual([projectKey]);
   });
 
-  it('lists only projects with sidebar-eligible sessions', () => {
+  it('lists empty projects alongside projects with sidebar-eligible sessions', () => {
     const projects = new ProjectStore();
     const emptyProject = projects.create({ name: 'Empty Project' });
     const oldProject = projects.create({ name: 'Old Project' });
@@ -163,7 +163,7 @@ describe('sqlite repositories', () => {
     });
     expect(withoutCurrent.items.map((project) => project.id)).toContain(recentProject.id);
     expect(withoutCurrent.items.map((project) => project.id)).toContain(pinnedProject.id);
-    expect(withoutCurrent.items.map((project) => project.id)).not.toContain(emptyProject.id);
+    expect(withoutCurrent.items.map((project) => project.id)).toContain(emptyProject.id);
     expect(withoutCurrent.items.map((project) => project.id)).not.toContain(oldProject.id);
     expect(withoutCurrent.items.map((project) => project.id)).not.toContain(currentProject.id);
 
