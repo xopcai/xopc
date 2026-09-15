@@ -8,24 +8,11 @@ import {
   EXCEL_PREVIEW_MAX_ROWS,
 } from '@/features/chat/attachments/attachment-utils-core';
 import { isRenderableWorksheet } from '@/features/chat/attachments/excel-worksheet-utils';
-
-let pdfWorkerConfigured = false;
+import { ensurePdfWorker } from '@/features/chat/attachments/pdf-runtime';
 
 /** First paint: render this many pages, then lazy-load the rest when the viewport nears the sentinel. */
 const PDF_INITIAL_PAGE_COUNT = 5;
 const PDF_LAZY_PAGE_BATCH = 5;
-
-async function ensurePdfWorker(): Promise<typeof import('pdfjs-dist')> {
-  const pdfjsLib = await import('pdfjs-dist');
-  if (!pdfWorkerConfigured) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-      'pdfjs-dist/build/pdf.worker.min.mjs',
-      import.meta.url,
-    ).toString();
-    pdfWorkerConfigured = true;
-  }
-  return pdfjsLib;
-}
 
 function yieldToBrowser(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
@@ -43,7 +30,8 @@ export async function renderPdfInContainer(
   options?: RenderPdfInContainerOptions,
 ): Promise<{ cleanup: () => void }> {
   const pdfjsLib = await ensurePdfWorker();
-  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+  // PDF.js transfers this buffer to its worker; keep the source available for retries/downloads.
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer.slice(0) });
   let pendingLoadTask: { destroy: () => void } | null = loadingTask;
 
   container.innerHTML = '';

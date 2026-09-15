@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 
 import { EXCEL_PREVIEW_MAX_COLS, EXCEL_PREVIEW_MAX_ROWS } from '@/features/chat/attachments/attachment-utils-core';
 import { messages } from '@/i18n/messages';
@@ -41,20 +41,26 @@ export function useBinaryPreviewInContainer({
   containerEl,
   onPdfPageCount,
 }: UseBinaryPreviewInContainerArgs): { error: string | null; excelTruncated: boolean } {
-  const cleanupRef = useRef<(() => void) | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [excelTruncated, setExcelTruncated] = useState(false);
 
   useLayoutEffect(() => {
-    cleanupRef.current?.();
-    cleanupRef.current = null;
     setError(null);
     setExcelTruncated(false);
 
     if (!buffer || !kind || !containerEl || !fileKey) return;
 
     let cancelled = false;
-    renderLoadingPlaceholder(containerEl, previewLoadingText(language, kind));
+    let cleanup: (() => void) | undefined;
+    // Each async renderer owns its host, so late completion cannot replace a newer preview.
+    const renderHost = document.createElement('div');
+    renderHost.className = 'flex min-h-0 flex-1 flex-col overflow-auto';
+    containerEl.replaceChildren(renderHost);
+    renderLoadingPlaceholder(renderHost, previewLoadingText(language, kind));
+    const acceptCleanup = (dispose: () => void) => {
+      if (cancelled) dispose();
+      else cleanup = dispose;
+    };
 
     void (async () => {
       try {
@@ -62,23 +68,23 @@ export function useBinaryPreviewInContainer({
         if (cancelled) return;
         const L = messages(language).chat;
         if (kind === 'pdf') {
-          const { cleanup } = await mod.renderPdfInContainer(containerEl, buffer, {
+          const { cleanup } = await mod.renderPdfInContainer(renderHost, buffer, {
             loadingText: L.attachmentPreviewPdfRendering,
             loadMoreHint: L.attachmentPreviewPdfLoadMore,
-            onPageCount: onPdfPageCount,
+            onPageCount: (count) => { if (!cancelled) onPdfPageCount?.(count); },
           });
-          cleanupRef.current = cleanup;
+          acceptCleanup(cleanup);
         } else if (kind === 'excel') {
-          const { cleanup, truncated } = await mod.renderExcelInContainer(containerEl, buffer, {
+          const { cleanup, truncated } = await mod.renderExcelInContainer(renderHost, buffer, {
             truncationNotice: L.attachmentPreviewExcelTruncated
               .replaceAll('{rows}', String(EXCEL_PREVIEW_MAX_ROWS))
               .replaceAll('{cols}', String(EXCEL_PREVIEW_MAX_COLS)),
           });
-          cleanupRef.current = cleanup;
+          acceptCleanup(cleanup);
           if (!cancelled) setExcelTruncated(truncated);
         } else if (kind === 'docx') {
-          const { cleanup } = await mod.renderDocxInContainer(containerEl, buffer);
-          cleanupRef.current = cleanup;
+          const { cleanup } = await mod.renderDocxInContainer(renderHost, buffer);
+          acceptCleanup(cleanup);
         }
       } catch (e) {
         if (!cancelled) {
@@ -89,8 +95,8 @@ export function useBinaryPreviewInContainer({
 
     return () => {
       cancelled = true;
-      cleanupRef.current?.();
-      cleanupRef.current = null;
+      cleanup?.();
+      renderHost.remove();
     };
   }, [buffer, kind, containerEl, fileKey, language, onPdfPageCount]);
 
