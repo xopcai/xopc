@@ -48,6 +48,9 @@ import {
   marketplacePublicSkillUrl,
   normalizeCatalogEntry,
 } from '@/features/skills/skills-page.utils';
+import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
+import { getChatSkillsCached } from '@/features/chat/palette/command-palette-api';
+import { useMarketplaceFeed } from '@/features/skills/use-marketplace-feed';
 import { messages } from '@/i18n/messages';
 import { configReloadSection } from '@/features/gateway/config-reload-event';
 import { useAsyncResource } from '@/lib/use-async-resource';
@@ -77,11 +80,9 @@ export function useSkillsPage() {
   const initialTab: MainTab = MAIN_TAB_SET.has(initialTabRaw as MainTab)
     ? (initialTabRaw as MainTab)
     : 'installed';
-  const legacySourceFilter: SourceFilter | null =
-    initialTabRaw === 'builtin' ? 'builtin' : initialTabRaw === 'user' ? 'installed' : null;
   const initialSourceFilter: SourceFilter = SOURCE_FILTER_SET.has(initialSourceRaw as SourceFilter)
     ? (initialSourceRaw as SourceFilter)
-    : legacySourceFilter ?? 'all';
+    : 'all';
   const initialStatusFilter: CatalogStatusFilter = CATALOG_STATUS_FILTER_SET.has(
     initialStatusRaw as CatalogStatusFilter,
   )
@@ -126,7 +127,8 @@ export function useSkillsPage() {
   const [detailError, setDetailError] = useState<string | null>(null);
 
   const [marketSort, setMarketSort] = useState<'downloads' | 'newest'>('downloads');
-  const [marketPage, setMarketPage] = useState(1);
+  const [searchPageCount, setSearchPageCount] = useState(1);
+  const [searchRetry, setSearchRetry] = useState(0);
   const [installingMarketName, setInstallingMarketName] = useState<string | null>(null);
   const [usingSkillInChatName, setUsingSkillInChatName] = useState<string | null>(null);
   const [marketCategoryId, setMarketCategoryId] = useState('');
@@ -144,7 +146,7 @@ export function useSkillsPage() {
   // ─── Aggregated search state ─────────────────────────────────────────────
   // When the user types a query we fan out across every registered marketplace provider
   // concurrently and render each provider's slice as it arrives. The single-provider
-  // mpSkillsResource is gated off in this mode.
+  // Marketplace browsing is gated off in this mode.
   type AggregatedProviderResult = {
     status: 'loading' | 'ok' | 'error';
     rows: MarketplacePackageItem[];
@@ -229,11 +231,9 @@ export function useSkillsPage() {
     const nextTab: MainTab = MAIN_TAB_SET.has(nextTabRaw as MainTab)
       ? (nextTabRaw as MainTab)
       : 'installed';
-    const legacyNextSource: SourceFilter | null =
-      nextTabRaw === 'builtin' ? 'builtin' : nextTabRaw === 'user' ? 'installed' : null;
     const nextSource: SourceFilter = SOURCE_FILTER_SET.has(nextSourceRaw as SourceFilter)
       ? (nextSourceRaw as SourceFilter)
-      : legacyNextSource ?? 'all';
+      : 'all';
     const nextStatus: CatalogStatusFilter = CATALOG_STATUS_FILTER_SET.has(
       nextStatusRaw as CatalogStatusFilter,
     )
@@ -275,7 +275,7 @@ export function useSkillsPage() {
   const marketFilterKey = `${debouncedSearchQuery}|${marketSort}|${mainTab}|${marketCategoryId}|${marketBrowseProvider ?? ''}|${resultTab}`;
   if (trackedMarketFilterKeyRef.current !== marketFilterKey) {
     trackedMarketFilterKeyRef.current = marketFilterKey;
-    setMarketPage(1);
+    setSearchPageCount(1);
   }
 
   if (
@@ -288,37 +288,12 @@ export function useSkillsPage() {
   }
   trackedMarketProviderRef.current = marketBrowseProvider;
 
-  const mpSkillsResource = useAsyncResource(
-    () =>
-      getMarketplaceSkills({
-        page: marketPage,
-        pageSize: 20,
-        sort: marketSort,
-        category: marketCategoryId.trim() || undefined,
-        provider: marketBrowseProvider!,
-      }),
-    [
-      hasToken,
-      mainTab,
-      marketCategoryId,
-      marketPage,
-      marketSort,
-      searchActive,
-      marketBrowseProvider,
-    ],
-    {
-      // Aggregated search supersedes the single-provider browse fetch — when the user is
-      // searching we fan out via the dedicated effect below.
-      enabled:
-        hasToken && mainTab === 'marketplace' && Boolean(marketBrowseProvider) && !searchActive,
-      initial: null as {
-        items: MarketplacePackageItem[];
-        meta: { page: number; pageSize: number; total: number; totalPages: number };
-        provider?: string;
-      } | null,
-      errorData: null,
-    },
-  );
+  const marketplaceFeed = useMarketplaceFeed({
+    enabled: hasToken && mainTab === 'marketplace' && Boolean(marketBrowseProvider) && !searchInputActive,
+    provider: marketBrowseProvider,
+    category: marketCategoryId.trim(),
+    sort: marketSort,
+  });
 
   useEffect(() => {
     if (!hasToken || !searchActive || mainTab !== 'marketplace') return;
@@ -385,6 +360,7 @@ export function useSkillsPage() {
     }
 
     return () => {
+      aggregatedFetchTokenRef.current += 1;
       for (const t of timers) window.clearTimeout(t);
       for (const c of controllers) c.abort();
     };
@@ -395,6 +371,7 @@ export function useSkillsPage() {
     debouncedSearchQuery,
     registeredProviders,
     marketSort,
+    searchRetry,
     sk.marketplaceLoadFailed,
   ]);
 
@@ -500,11 +477,10 @@ export function useSkillsPage() {
     if (aggregatedAllRows.length === 0 && aggregatedAnyLoading) return null;
     const pageSize = 20;
     const total = aggregatedFilteredRows.length;
-    const start = (marketPage - 1) * pageSize;
-    const items = aggregatedFilteredRows.slice(start, start + pageSize);
+    const items = aggregatedFilteredRows.slice(0, searchPageCount * pageSize);
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
-    return { items, meta: { page: marketPage, pageSize, total, totalPages }, provider: resultTab };
-  }, [searchActive, aggregatedAllRows, aggregatedAnyLoading, aggregatedFilteredRows, marketPage, resultTab]);
+    return { items, meta: { page: searchPageCount, pageSize, total, totalPages }, provider: resultTab };
+  }, [searchActive, aggregatedAllRows, aggregatedAnyLoading, aggregatedFilteredRows, searchPageCount, resultTab]);
 
   const mpPayload =
     mainTab === 'marketplace'
@@ -512,7 +488,7 @@ export function useSkillsPage() {
         ? searchActive
           ? aggregatedPayload
           : null
-        : mpSkillsResource.data
+        : marketplaceFeed.payload
       : null;
   const mpLoading =
     mainTab === 'marketplace'
@@ -520,15 +496,15 @@ export function useSkillsPage() {
         ? searchActive
           ? aggregatedAnyLoading
           : true
-        : mpSkillsResource.loading
+        : marketplaceFeed.loading
       : false;
   const mpError = searchActive
     ? aggregatedAllFailed
       ? sk.marketplaceLoadFailed
       : null
-    : mpSkillsResource.error instanceof Error
-      ? mpSkillsResource.error.message
-      : mpSkillsResource.error
+    : marketplaceFeed.error instanceof Error
+      ? marketplaceFeed.error.message
+      : marketplaceFeed.error
         ? sk.marketplaceLoadFailed
         : null;
   const mpCategories = mainTab === 'marketplace' ? mpCategoriesResource.data : [];
@@ -1001,6 +977,34 @@ export function useSkillsPage() {
     [catalog],
   );
 
+  const findingSkillsRef = useRef(false);
+  const [findingSkills, setFindingSkills] = useState(false);
+  const onFindSkills = useCallback(async () => {
+    if (findingSkillsRef.current) return;
+    findingSkillsRef.current = true;
+    setFindingSkills(true);
+    setActionFeedback(null);
+    try {
+      const { defaultId } = await fetchChatAgents();
+      const { skills } = await getChatSkillsCached(defaultId, undefined, true);
+      if (!skills.some((skill) => skill.name === 'find-skills' && skill.availableForCurrentAgent)) {
+        throw new Error(sk.findUnavailable);
+      }
+      const params = new URLSearchParams({
+        projectScope: 'none',
+        scene: 'find-skills',
+        skill: 'find-skills',
+      });
+      if (searchQuery.trim()) params.set('draft', sk.findQuery.replace('{{query}}', searchQuery.trim()));
+      navigate(`/chat/new?${params}`, { state: { forceNewChat: true, agentId: defaultId } });
+    } catch (error) {
+      showFeedback('error', error instanceof Error ? error.message : sk.findFailed);
+    } finally {
+      findingSkillsRef.current = false;
+      setFindingSkills(false);
+    }
+  }, [navigate, searchQuery, showFeedback, sk.findUnavailable, sk.findFailed, sk.findQuery]);
+
   const onUseSkillInChat = useCallback(
     async (opts?: {
       name?: string;
@@ -1147,8 +1151,18 @@ export function useSkillsPage() {
     setDetailError,
     marketSort,
     setMarketSort,
-    marketPage,
-    setMarketPage,
+    mpHasMore: searchInputActive
+      ? Boolean(aggregatedPayload && aggregatedPayload.items.length < aggregatedPayload.meta.total)
+      : marketplaceFeed.hasMore,
+    onLoadMoreMarket: () => {
+      if (searchInputActive) {
+        if (!mpLoading) setSearchPageCount((page) => page + 1);
+      } else marketplaceFeed.loadMore();
+    },
+    onRetryMarket: () => {
+      if (searchInputActive) setSearchRetry((value) => value + 1);
+      else marketplaceFeed.retry();
+    },
     mpLoading,
     mpError,
     mpPayload,
@@ -1162,6 +1176,8 @@ export function useSkillsPage() {
     installingMarketName,
     usingSkillInChatName,
     onUseSkillInChat,
+    onFindSkills,
+    findingSkills,
     marketCategoryId,
     setMarketCategoryId,
     mpCategories,

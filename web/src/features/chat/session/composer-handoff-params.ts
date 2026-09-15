@@ -48,6 +48,7 @@ export function searchParamsForComposerHandoff(search: string): string {
   if (autoSend === '1') next.set('autoSend', '1');
   if (attachmentHandoff) next.set('attachmentHandoff', attachmentHandoff);
   if (attachmentsHandoff) next.set('attachmentsHandoff', attachmentsHandoff);
+  if (sp.get('scene') === 'find-skills') next.set('scene', 'find-skills');
   const out = next.toString();
   return out ? `?${out}` : '';
 }
