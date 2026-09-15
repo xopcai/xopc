@@ -257,7 +257,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
             contextControl={sessionKey ? <ChatContextControl
               sessionKey={sessionKey}
               draftRefs={composerContextRefs}
-              onRemoveDraftRef={(sourceId) => setComposerContextRefs((refs) => refs.filter((ref) => ref.sourceId !== sourceId))}
+              onRemoveDraftRef={(sourceId, kind) => setComposerContextRefs((refs) => refs.filter((ref) => ref.sourceId !== sourceId || ref.kind !== kind))}
               onAddSource={() => dispatchMobileComposerAppend('@')}
               onChangeScope={handleContextChange}
             /> : null}
@@ -272,6 +272,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
             onConsumeSuggestionDraft={() => setComposerSuggestion(undefined)}
             contextRefs={composerContextRefs}
             onContextRefsChange={setComposerContextRefs}
+            onNewChat={handleNewChat}
             onVoiceCallStart={handleVoiceCallPress}
             voiceCallMode={voiceCallMode}
             voiceCallUnavailable={{

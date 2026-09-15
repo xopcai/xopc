@@ -64,7 +64,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     const limit = Number.isFinite(rawLimit) ? rawLimit : 50;
     return c.json({
       ok: true,
-      items: tasks.list({ ...(phase.success ? { phase: phase.data } : {}), limit })
+      items: tasks.list({ search: c.req.query('search'), ...(phase.success ? { phase: phase.data } : {}), limit })
         .map((task) => {
           const model = projector.project(task);
           return { task, operationalState: model.operationalState, attention: model.attention };

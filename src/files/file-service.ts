@@ -39,9 +39,89 @@ const MIME_TYPES: Record<string, string> = {
 
 export type ResolvedFileSpace = FileSpace & { root: string };
 
+type RecentFileCandidate = {
+  space: ResolvedFileSpace;
+  absolutePath: string;
+  displayPath: string;
+  modifiedAt: number;
+};
+
+const RECENT_DIRECTORY_CONCURRENCY = 8;
+const RECENT_RESOURCE_CONCURRENCY = 16;
+
 function isWithin(root: string, target: string): boolean {
   const rel = relative(root, target);
   return rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..' && !isAbsolute(rel));
+}
+
+async function mapWithConcurrency<T, R>(
+  values: readonly T[],
+  concurrency: number,
+  mapper: (value: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+    while (next < values.length) {
+      const index = next++;
+      results[index] = await mapper(values[index]!);
+    }
+  }));
+  return results;
+}
+
+async function collectRecentCandidates(
+  space: ResolvedFileSpace,
+  limit: number,
+  maxFiles: number,
+): Promise<RecentFileCandidate[]> {
+  const directories: Array<{ absolutePath: string; displayPath: string }> = [{ absolutePath: space.root, displayPath: space.root }];
+  const visited = new Set<string>();
+  const candidates: RecentFileCandidate[] = [];
+  let filesSeen = 0;
+
+  while (directories.length > 0 && filesSeen < maxFiles) {
+    const batch = directories.splice(0, RECENT_DIRECTORY_CONCURRENCY)
+      .filter((directory) => {
+        if (visited.has(directory.absolutePath)) return false;
+        visited.add(directory.absolutePath);
+        return true;
+      });
+    const scanned = await Promise.all(batch.map(async (directory) => {
+      const entries = [];
+      const handle = await opendir(directory.absolutePath).catch(() => null);
+      if (!handle) return entries;
+      for await (const entry of handle) {
+        if (!SKIPPED_NAMES.has(entry.name)) entries.push(entry);
+      }
+      return mapWithConcurrency(entries, RECENT_RESOURCE_CONCURRENCY, async (entry) => {
+        const absolutePath = resolve(directory.absolutePath, entry.name);
+        const displayPath = resolve(directory.displayPath, entry.name);
+        if (entry.isDirectory()) return { directory: { absolutePath, displayPath } };
+        if (entry.isFile()) {
+          const info = await stat(absolutePath).catch(() => null);
+          return info?.isFile() ? { file: { space, absolutePath, displayPath, modifiedAt: Math.max(0, Math.round(info.mtimeMs)) } } : {};
+        }
+        if (!entry.isSymbolicLink()) return {};
+        const canonicalTarget = await realpath(absolutePath).catch(() => null);
+        if (!canonicalTarget || !isWithin(space.root, canonicalTarget)) return {};
+        const info = await stat(canonicalTarget).catch(() => null);
+        if (info?.isDirectory()) return { directory: { absolutePath: canonicalTarget, displayPath } };
+        return info?.isFile()
+          ? { file: { space, absolutePath: canonicalTarget, displayPath, modifiedAt: Math.max(0, Math.round(info.mtimeMs)) } }
+          : {};
+      });
+    }));
+
+    for (const result of scanned.flat()) {
+      if (result.directory) directories.push(result.directory);
+      if (!result.file || filesSeen >= maxFiles) continue;
+      filesSeen += 1;
+      candidates.push(result.file);
+    }
+  }
+
+  return candidates.sort((a, b) => b.modifiedAt - a.modifiedAt).slice(0, limit);
 }
 
 function normalizeRelativePath(input: string): string {
@@ -307,5 +387,19 @@ export class FileSpaceService {
       entries.push(await fileResourceFromPath(space, canonicalTarget, resolve(space.root, path, entry.name)));
     }
     return entries.sort((a, b) => a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'directory' ? -1 : 1);
+  }
+
+  async recent(limit: number, maxFilesPerSpace = 5_000): Promise<FileResource[]> {
+    const spaces = await this.list();
+    const candidates = (await Promise.all(spaces.map((space) =>
+      collectRecentCandidates(space, limit, maxFilesPerSpace),
+    )))
+      .flat()
+      .sort((a, b) => b.modifiedAt - a.modifiedAt)
+      .slice(0, limit);
+    const resources = await mapWithConcurrency(candidates, RECENT_RESOURCE_CONCURRENCY, async (candidate) =>
+      fileResourceFromPath(candidate.space, candidate.absolutePath, candidate.displayPath).catch(() => null),
+    );
+    return resources.filter((resource): resource is FileResource => resource !== null);
   }
 }

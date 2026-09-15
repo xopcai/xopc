@@ -1,3 +1,4 @@
+import { buildTaskAgentContext } from '../agent/source-context/task-context.js';
 import { deliverProactiveCard } from '../proactive/inbox/delivery.js';
 import crypto from 'node:crypto';
 import { WorkDiscoveryService } from '../work-discovery/service.js';
@@ -522,6 +523,7 @@ export class GatewayService {
       getChannelManager: () => this.channelManager,
       getConfig: () => this.config,
       resolveTurnContext: async (ref) => {
+        if (ref.kind === 'task') return buildTaskAgentContext(new TaskRepository().get(ref.sourceId), ref.expectedVersion);
         if (ref.kind !== 'note') return null;
         const note = await this.notesService.getNote(ref.sourceId);
         if (!note || note.status === 'trashed') return null;

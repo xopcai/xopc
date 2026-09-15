@@ -25,7 +25,7 @@ export async function submitSessionInput(
   const attachments = Array.isArray(body.attachments) ? body.attachments : undefined;
   const contextRefs = parseTurnContextRefs(body.contextRefs, MAX_TURN_CONTEXTS);
   if (contextRefs === null) {
-    return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: `contextRefs must contain at most ${MAX_TURN_CONTEXTS} valid notes` } }, 400);
+    return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: `contextRefs must contain at most ${MAX_TURN_CONTEXTS} valid note or task references` } }, 400);
   }
   const browserContexts = browserPageContextsInputSchema.safeParse(body.browserContexts ?? []);
   if (!browserContexts.success) {
@@ -103,7 +103,7 @@ export async function replaceLatestSessionTurn(
   const attachments = Array.isArray(body.attachments) ? body.attachments : undefined;
   const contextRefs = parseTurnContextRefs(body.contextRefs, MAX_TURN_CONTEXTS);
   if (contextRefs === null) {
-    return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: `contextRefs must contain at most ${MAX_TURN_CONTEXTS} valid notes` } }, 400);
+    return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: `contextRefs must contain at most ${MAX_TURN_CONTEXTS} valid note or task references` } }, 400);
   }
   const content = typeof body.content === 'string' ? body.content : '';
   const contentError = validateWebchatContent(content);

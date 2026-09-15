@@ -209,7 +209,7 @@ export class TaskRepository {
     return row ? taskFromRow(row, this.getContract(row.task_id, row.latest_contract_version)) : undefined;
   }
 
-  list(input: { phase?: TaskPhase; projectId?: string; limit?: number; order?: 'recent' | 'board' } = {}): TaskAggregate[] {
+  list(input: { search?: string; phase?: TaskPhase; projectId?: string; limit?: number; order?: 'recent' | 'board' } = {}): TaskAggregate[] {
     const clauses: string[] = [];
     const params: Array<string | number> = [];
     if (input.phase) {
@@ -219,6 +219,10 @@ export class TaskRepository {
     if (input.projectId) {
       clauses.push('project_id = ?');
       params.push(input.projectId);
+    }
+    if (input.search?.trim()) {
+      clauses.push("(instr(lower(title), lower(?)) > 0 OR instr(lower(coalesce(body, '')), lower(?)) > 0)");
+      params.push(input.search.trim(), input.search.trim());
     }
     const limit = Math.max(1, Math.min(200, Math.floor(input.limit ?? 50)));
     params.push(limit);
