@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { ProjectService } from '../../projects/index.js';
+import { ProjectMonitoringService } from '../../tasks/project-monitoring-service.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { checkDelegation, completeDeliveredProjects, delegationOverview, startDelegation } from '../experience.js';
@@ -26,9 +27,17 @@ describe('delegated project work', () => {
     updateProactivePreferences('workspace', { expectedRevision: 0, level: 'off' });
     const project = new ProjectService().create({ name: 'Paused launch' });
     const sub = startDelegation('workspace', { scenarioKey: 'project_delivery_risk', projectId: project.id, instructions: 'Follow delivery when resumed.' });
-    expect(delegationOverview('workspace').delegations[0]).toMatchObject({ id: sub.id, effectiveEnabled: false, pending: false });
+    expect(delegationOverview('workspace').delegations[0]).toMatchObject({ id: sub.id, effectiveEnabled: false, checking: false });
     expect(effectiveProactivePolicy(sub.id).enabled).toBe(false);
     expect(() => checkDelegation('workspace', sub.id)).toThrow(/Resume/);
+  });
+
+  it('exposes the same project action boundary enforced by proactive execution', () => {
+    const project = new ProjectService().create({ name: 'Controlled launch' });
+    const sub = startDelegation('workspace', { scenarioKey: 'project_delivery_risk', projectId: project.id, instructions: 'Protect the launch.' });
+    expect(delegationOverview('workspace').delegations[0]).toMatchObject({ id: sub.id, projectMonitoring: { mode: 'observe', allowedActions: [] } });
+    new ProjectMonitoringService('workspace').configure({ projectId: project.id, mode: 'auto_low_risk', allowedActions: ['create_project_task'] });
+    expect(delegationOverview('workspace').delegations[0]).toMatchObject({ projectMonitoring: { mode: 'auto_low_risk', allowedActions: ['create_project_task'] } });
   });
 
   async function prepare() {
@@ -36,7 +45,7 @@ describe('delegated project work', () => {
     const sub = startDelegation('workspace', { scenarioKey: 'project_delivery_risk', projectId: project.id, instructions: 'Prepare launch checks; ask before creating tasks.' });
     await new ProactiveWorker({ execute: async () => ({ text: JSON.stringify({ title: 'Check integration', summary: 'Review integration before launch', whyNow: 'Launch preparation', impact: 'Delivery', recommendation: 'Confirm acceptance', workDone: 'Reviewed project', urgency: 'high', confidence: .95, evidenceIds: [`project:${project.id}`], artifact: { kind: 'checklist', title: 'Launch checklist', content: '1. Confirm acceptance.\n2. Schedule integration.' }, decision: { question: 'Create acceptance task?', options: [{ id: 'approve', label: 'Create', consequence: 'Adds a task' }, { id: 'reject', label: 'Skip', consequence: 'No change' }] }, proposedAction: { id: 'create_project_task', risk: 'low', rationale: 'A reviewable follow-up', input: { title: 'Confirm acceptance', objective: 'Review acceptance evidence' } } }) }) }).tick();
     new ProactiveInboxService().project();
-    return { project, sub, card: delegationOverview('workspace').needsDecision[0]! };
+    return { project, sub, card: delegationOverview('workspace').scenes.find(scene => scene.status === 'needs_decision')!.card! };
   }
 
   it('expedites the existing retry instead of creating a parallel check', () => {
@@ -53,10 +62,15 @@ describe('delegated project work', () => {
   });
 
   it('queues the first check immediately and prepares a usable artifact without a selected workflow', async () => {
-    const { card, sub } = await prepare();
+    const { card, project, sub } = await prepare();
     expect(card.artifact?.content).toContain('Confirm acceptance');
     expect(card.taskDraft?.title).toBe('Confirm acceptance');
-    expect(delegationOverview('workspace').delegations[0]?.latestRun).toMatchObject({ status: 'completed' });
+    const overview = delegationOverview('workspace');
+    expect(overview.scenes).toEqual([expect.objectContaining({
+      kind: 'project_momentum', status: 'needs_decision', title: 'Website launch',
+      moment: 'Launch preparation', object: { label: 'Website launch', route: `/projects/${project.id}` },
+      card: expect.objectContaining({ id: card.id }),
+    })]);
     expect(() => checkDelegation('another-workspace', sub.id)).toThrow('not found');
     expect(() => checkDelegation('workspace', sub.id)).toThrow('minute');
     expect(getSqliteDatabase().prepare("SELECT 1 FROM sqlite_master WHERE name = 'proactive_workflow_links'").get()).toBeUndefined();
@@ -78,6 +92,24 @@ describe('delegated project work', () => {
     expect(getCard(card.id, 'workspace').followUp).toMatchObject({ phase: 'closed', resolution: 'done' });
   });
 
+  it('learns a correction from the scene without creating another arrangement', async () => {
+    const { card, sub } = await prepare();
+    const result = performCardAction(card.id, 'workspace', {
+      actionId: 'refine',
+      expectedRevision: card.revision,
+      idempotencyKey: 'refine-project-scene',
+      instruction: 'Only bring this back when an external launch commitment changes.',
+    });
+    expect(result.id).toBe(card.id);
+    expect(delegationOverview('workspace').delegations).toHaveLength(1);
+    expect(delegationOverview('workspace').delegations[0]).toMatchObject({
+      id: sub.id,
+      revision: sub.revision + 1,
+    });
+    expect(delegationOverview('workspace').delegations[0]?.userInstructions)
+      .toContain('Only bring this back when an external launch commitment changes.');
+  });
+
   it('does not turn dismissing a card into task completion and ends only the delivered project', async () => {
     const { card, project, sub } = await prepare();
     performCardAction(card.id, 'workspace', { actionId: 'handled', expectedRevision: card.revision, idempotencyKey: 'user-already-handled' });
@@ -92,7 +124,7 @@ describe('delegated project work', () => {
   it('uses the same revisioned instructions and rejects duplicate or cross-workspace delegations', async () => {
     const { project } = await prepare();
     expect(() => startDelegation('workspace', { scenarioKey: 'project_delivery_risk', projectId: project.id, instructions: 'Duplicate' })).toThrow('exists');
-    expect(delegationOverview('another-workspace').needsDecision).toEqual([]);
+    expect(delegationOverview('another-workspace').scenes).toEqual([]);
     expect(() => startDelegation('workspace', { scenarioKey: 'project_delivery_risk', instructions: 'No project' })).toThrow('Choose a project');
   });
 });

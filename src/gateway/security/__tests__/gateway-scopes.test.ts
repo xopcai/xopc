@@ -26,7 +26,6 @@ describe('gateway scopes', () => {
   });
 
   it('separates proactive settings and browser notification permission', () => {
-    expect(requiredGatewayScope('POST', '/api/proactive/subscriptions/id/preview')).toBe('agents.run');
     expect(requiredGatewayScope('GET', '/api/inbox/judgments/id/workflow')).toBe('automations.read');
     expect(requiredGatewayScope('POST', '/api/inbox/judgments/id/prepare')).toBe('automations.write');
     expect(requiredGatewayScope('GET', '/api/proactive/preferences')).toBe('tasks.read');

@@ -87,7 +87,7 @@ export function performCardAction(id: string, workspaceId: string, value: unknow
     }
     const card = getCard(id, workspaceId);
     if (card.revision !== input.expectedRevision) throw new ProactiveConflict('Card changed; refresh before acting');
-    if (card.status === 'withdrawn' || card.status === 'expired' || (card.status === 'resolved' && !['useful', 'not_useful', 'retry'].includes(input.actionId))) throw new ProactiveConflict('Card is no longer actionable');
+    if (card.status === 'withdrawn' || card.status === 'expired' || (card.status === 'resolved' && !['useful', 'not_useful', 'retry', 'refine'].includes(input.actionId))) throw new ProactiveConflict('Card is no longer actionable');
     applyCardAction(card, workspaceId, input);
     const result = getCard(id, workspaceId);
     db.prepare('INSERT INTO proactive_card_actions(idempotency_key, inbox_item_id, request_json, response_json) VALUES (?, ?, ?, ?)').run(input.idempotencyKey, id, request, JSON.stringify(result));
@@ -99,6 +99,7 @@ function applyCardAction(card: ProactiveCard, workspaceId: string, input: Proact
   const service = new ProactiveInboxService();
   if (input.taskDraft && (input.actionId !== 'decide' || input.choice !== 'approve' || !card.taskDraft)) throw new Error('Task draft requires a pending approval');
   if (input.artifact && input.actionId !== 'edit_artifact') throw new Error('Artifact requires an edit action');
+  if (input.instruction && input.actionId !== 'refine') throw new Error('Instruction requires a refine action');
   switch (input.actionId) {
     case 'edit_artifact': {
       if (!input.artifact || !card.artifact || input.artifact.kind !== card.artifact.kind) throw new Error('An existing artifact is required');
@@ -115,6 +116,10 @@ function applyCardAction(card: ProactiveCard, workspaceId: string, input: Proact
     }
     case 'useful':
     case 'not_useful': service.feedback(card.id, input.actionId); break;
+    case 'refine':
+      if (!input.instruction) throw new Error('Refinement instruction required');
+      service.instruct(card.id, input.instruction);
+      break;
     case 'read': service.transition(card.id, { status: 'read' }); break;
     case 'resolve': service.transition(card.id, { status: 'resolved', resolution: 'dismissed' }); break;
     case 'handled': service.transition(card.id, { status: 'resolved', resolution: 'user_reported_done' }); break;

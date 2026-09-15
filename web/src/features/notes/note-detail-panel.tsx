@@ -8,6 +8,7 @@ import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { AutomationSuggestionCard } from '@/features/automations/automation-suggestion-card';
 import { ProductAutomationFeedback } from '@/features/automations/product-automation-feedback';
+import { getDiscussionForNote } from '@/features/discussions/discussion-api';
 import { DiscussionNoteSections } from '@/features/discussions/discussion-note-sections';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -177,6 +178,8 @@ function NoteDetailPanelInner({
   const language = useLocaleStore((s) => s.language);
   const n = messages(language).notes;
   const automationSuggestions = messages(language).automations.suggestions;
+  const { data: meeting } = useSWR(['note-discussion-document', noteId], () => getDiscussionForNote(noteId));
+  const [showMeeting, setShowMeeting] = useState(true);
   const navigate = useNavigate();
   const isDark = useThemeStore((s) => s.resolved) === 'dark';
   const { openImage } = useNoteImageLightbox();
@@ -728,12 +731,13 @@ function NoteDetailPanelInner({
           payloadValue={noteId}
           className="mb-3 shrink-0"
         />
+        {meeting ? <div className="mb-2 flex shrink-0 gap-4 text-sm"><button className={showMeeting ? 'text-accent-fg' : 'text-fg-muted'} onClick={() => setShowMeeting(true)}>{language === 'zh' ? '会议' : 'Meeting'}</button><button className={!showMeeting ? 'text-accent-fg' : 'text-fg-muted'} onClick={() => setShowMeeting(false)}>{language === 'zh' ? '我的笔记' : 'My notes'}</button></div> : null}
         <div
           ref={editorContainerRef}
           className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel xl:flex-row"
         >
-          <DiscussionNoteSections noteId={noteId} />
-          <div className="min-h-0 min-w-0 flex-1">
+          {meeting && showMeeting ? <DiscussionNoteSections noteId={noteId} /> : null}
+          <div className={meeting && showMeeting ? "hidden" : "min-h-0 min-w-0 flex-1"}>
             {isPreviewingSnapshot ? (
               <div className="h-full overflow-y-auto px-4 py-4 sm:px-6">
                 {displayTitle && (

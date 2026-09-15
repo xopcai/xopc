@@ -5,6 +5,7 @@ import { TaskChangedEventSchema, TaskDeletedEventSchema, type ProjectMonitoringU
 import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Columns3, Copy, File, Folder, FolderPlus, GitBranch, History, LayoutDashboard, MessageSquarePlus, Pin, PinOff, Plus, RotateCcw, Save, Search, Settings, Sparkles, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
 import { type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
@@ -23,6 +24,7 @@ import { FileTree } from '@/features/file-tree/file-tree';
 import type { FileTreeAction, TreeEntry } from '@/features/file-tree/file-tree-types';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
 import { NotesWorkbench } from '@/features/notes/notes-workbench';
+import { proactiveGet, proactiveWrite, type ProactiveOverview } from '@/features/proactive/api';
 import {
   archiveProject,
   createProjectBlocker,
@@ -699,6 +701,11 @@ export function ProjectDetailPage() {
   const [projectActionBusy, setProjectActionBusy] = useState<'pin' | 'archive' | null>(null);
   const [deletingProject, setDeletingProject] = useState(false);
   const [creatingBlocker, setCreatingBlocker] = useState(false);
+  const [projectFollowOpen, setProjectFollowOpen] = useState(false);
+  const [projectFollowInstructions, setProjectFollowInstructions] = useState('');
+  const [projectFollowBusy, setProjectFollowBusy] = useState(false);
+  const [projectFollowError, setProjectFollowError] = useState('');
+  const proactiveOverview = useSWR<ProactiveOverview>('/api/proactive/overview', proactiveGet);
   const [blockerComposerOpen, setBlockerComposerOpen] = useState(false);
   const [taskActionBusyId, setTaskActionBusyId] = useState<string | null>(null);
   const taskBoardRef = useRef<ProjectTaskBoardHandle>(null);
@@ -1620,6 +1627,8 @@ export function ProjectDetailPage() {
   const workspaceMigrationValue = workspaceMigrationMode === 'fixed' ? workspaceMigrationRoot.trim() : '';
   const workspaceMigrationChanged = workspaceMigrationValue !== fixedProjectWorkspace;
   const workspaceMigrationCanSubmit = workspaceMigrationChanged && (workspaceMigrationMode === 'follow' || Boolean(workspaceMigrationRoot.trim()));
+  const projectName = project.name;
+  const projectArrangement = proactiveOverview.data?.delegations.find(item => item.scenarioKey === 'project_delivery_risk' && item.scopeId === projectId && !item.completedAt);
   const primaryTabItems: Array<{ id: Exclude<TabId, 'settings'>; icon: LucideIcon; label: string }> = [
     { id: 'overview', icon: LayoutDashboard, label: pm.tabs.overview },
     { id: 'tasks', icon: Columns3, label: pm.tabs.tasks },
@@ -1634,6 +1643,25 @@ export function ProjectDetailPage() {
     if (!workspaceRootLabel) return;
     const ok = await copyTextToClipboard(workspaceRootLabel);
     showComposerNotification(ok ? 'success' : 'warning', ok ? msg.workspace.pathCopied : msg.clipboard.copyFailed, undefined, { duration: ok ? 2500 : 4000 });
+  }
+
+  function openProjectFollow() {
+    setProjectFollowInstructions(language === 'zh'
+      ? `帮我守住「${projectName}」的目标和关键承诺。出现可能影响交付的变化时告诉我，并先准备好建议。`
+      : `Protect the goal and key commitments for “${projectName}”. Tell me when a change may affect delivery, and prepare a recommendation first.`);
+    setProjectFollowError('');
+    setProjectFollowOpen(true);
+  }
+
+  async function startProjectFollow() {
+    if (!projectFollowInstructions.trim() || projectFollowBusy) return;
+    setProjectFollowBusy(true); setProjectFollowError('');
+    try {
+      await proactiveWrite('/api/proactive/delegations', 'POST', { scenarioKey: 'project_delivery_risk', projectId, instructions: projectFollowInstructions.trim() });
+      await proactiveOverview.mutate();
+      setProjectFollowOpen(false);
+      showComposerNotification('success', language === 'zh' ? '助理已经记住这个项目' : 'Your assistant is now following this project');
+    } catch (cause) { setProjectFollowError(String(cause)); } finally { setProjectFollowBusy(false); }
   }
 
   function returnToWorkspaceMigrationFromMissingWorkspace() {
@@ -1666,7 +1694,18 @@ export function ProjectDetailPage() {
         </Button>
       </div>
 
-      <div className="mt-2 shrink-0"><Button variant="ghost" onClick={() => navigate(`/assistant-work?view=new&project=${encodeURIComponent(projectId)}`)}>{language === 'zh' ? '让助理帮我跟进' : 'Ask the assistant to follow this project'}</Button></div>
+      <div className="mt-2 shrink-0"><Button variant="ghost" onClick={() => projectArrangement ? navigate(`/assistant-work?delegation=${encodeURIComponent(projectArrangement.id)}`) : openProjectFollow()}>{projectArrangement ? (language === 'zh' ? '调整助理安排' : 'Adjust assistant arrangement') : (language === 'zh' ? '让助理守住这个项目' : 'Ask the assistant to protect this project')}</Button></div>
+
+      <Dialog.Root open={projectFollowOpen} onOpenChange={setProjectFollowOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex h-[min(30rem,calc(100dvh-1.5rem))] w-[min(34rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-edge px-5 py-4"><div><Dialog.Title className="font-semibold text-fg">{language === 'zh' ? '让助理守住这个项目' : 'Ask the assistant to protect this project'}</Dialog.Title><Dialog.Description className="mt-1 text-sm text-fg-muted">{language === 'zh' ? '助理会理解项目变化，只在需要你知道或决定时回来。' : 'Your assistant will understand project changes and return only when you should know or decide.'}</Dialog.Description></div><Dialog.Close asChild><Button variant="ghost" className="size-9 p-0" aria-label={language === 'zh' ? '关闭' : 'Close'}><X className="size-4" /></Button></Dialog.Close></div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5"><label className="text-sm font-medium text-fg">{language === 'zh' ? '你希望助理帮你守住什么？' : 'What should the assistant protect?'}<textarea rows={6} maxLength={12000} className="mt-2 w-full rounded-lg border border-edge bg-surface-base p-3 text-sm text-fg" value={projectFollowInstructions} onChange={event => setProjectFollowInstructions(event.target.value)} /></label><div className="mt-5 rounded-xl bg-surface-hover p-4 text-sm"><p className="font-medium text-fg">{language === 'zh' ? '它会这样工作' : 'How it will work'}</p><p className="mt-2 text-fg-muted">{language === 'zh' ? '当目标、承诺或交付风险出现有意义的变化时，助理会先判断影响、准备建议，再把完整结果放到工作台。' : 'When the goal, commitments, or delivery risk meaningfully changes, the assistant will assess the impact, prepare a recommendation, and bring the complete result to the Workbench.'}</p></div>{projectFollowError && <p role="alert" className="mt-4 text-sm text-danger">{projectFollowError}</p>}</div>
+            <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4"><Dialog.Close asChild><Button variant="ghost">{language === 'zh' ? '取消' : 'Cancel'}</Button></Dialog.Close><Button variant="primary" disabled={projectFollowBusy || !projectFollowInstructions.trim()} onClick={() => void startProjectFollow()}>{projectFollowBusy ? (language === 'zh' ? '正在记住…' : 'Remembering…') : (language === 'zh' ? '开始守住' : 'Start protecting')}</Button></div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       {error ? <p className="mt-3 shrink-0 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">{error}</p> : null}
 
