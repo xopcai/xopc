@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 
+import { verifiedTaskCriteria } from '@xopcai/gateway-contract';
+
 import type {
   ActorRef,
   TaskCommand,
@@ -210,6 +212,8 @@ export class TaskApplicationService {
           break;
         case 'request_review':
           result = task.phase === 'active'
+            && !this.#runs.getActiveRoot(task.id)
+            && this.#runs.listActiveWaits(task.id).length === 0
             ? this.lifecycle(task.id, task.version, 'review')
             : { ok: false, reason: 'invalid_transition', model };
           break;
@@ -222,6 +226,10 @@ export class TaskApplicationService {
             : { ok: false, reason: 'invalid_transition', model };
           break;
         case 'add_wait': {
+          if (task.phase === 'closed') {
+            result = { ok: false, reason: 'invalid_transition', model };
+            break;
+          }
           const activeRun = this.#runs.getActiveRoot(task.id);
           this.#runs.createWait({
             taskId: task.id,
@@ -351,6 +359,18 @@ export class TaskApplicationService {
         return { ok: false, reason: 'conflict', model: this.#projector.get(run.taskId) };
       }
       const task = this.#tasks.require(run.taskId);
+      // Late and child receipts cannot override a user's pause/close decision
+      // or certify a newer contract.
+      if (run.parentRunId || task.phase === 'closed'
+        || this.#runs.listActiveWaits(task.id).length > 0
+        || run.contractVersion !== task.latestContractVersion) {
+        enqueueTaskChangedEvent(db, {
+          taskId: task.id, projectId: task.projectId, version: task.version,
+          changedFields: ['runs', 'receipts'], actor: input.actor,
+          source: input.actor ? undefined : 'runtime',
+        });
+        return { ok: true, model: this.#projector.project(task) };
+      }
       if (input.receipt.status !== 'succeeded') {
         const model = this.#projector.project(task);
         enqueueTaskAttentionRequiredEvent(db, {
@@ -371,7 +391,13 @@ export class TaskApplicationService {
         });
         return { ok: true, model };
       }
-      const verified = input.receipt.verification.status === 'passed';
+      const verifiedCriteria = verifiedTaskCriteria(input.receipt);
+      const criteria = task.contract?.acceptanceCriteria ?? [];
+      const criteriaVerified = criteria.length > 0 && criteria.every((criterion) => verifiedCriteria.has(criterion));
+      const verified = criteriaVerified && input.receipt.verification.status === 'passed'
+        && input.receipt.completionVerdict === 'achieved'
+        && input.receipt.remainingWork.length === 0
+        && !input.receipt.needsUser;
       const phase = task.contract?.acceptancePolicy === 'verified_auto' && verified
         ? 'closed'
         : 'review';
@@ -421,6 +447,10 @@ export class TaskApplicationService {
     }
     if (task.phase === 'closed' || this.#runs.getActiveRoot(taskId)) {
       return { ok: false, reason: 'invalid_transition', model: this.#projector.project(task) };
+    }
+
+    if (this.#runs.listActiveWaits(taskId).length > 0) {
+      return { ok: false, reason: 'blocked', model: this.#projector.project(task) };
     }
 
     const blocking = this.#dependencies.listBlocking(taskId);

@@ -27,7 +27,7 @@ const PRIORITY_RANK: Record<ProjectTaskCard['priority'], number> = {
 /** Select the few tasks that are most useful for deciding what to do next. */
 export function selectOverviewTasks(tasks: ProjectTaskCard[], limit = 4): ProjectTaskCard[] {
   return tasks
-    .filter((task) => task.phase !== 'closed')
+    .filter((task) => task.phase !== 'closed' && !(task.operationalState === 'waiting' && task.attention.length === 0))
     .sort((left, right) => {
       const attentionDifference = Number(right.attention.length > 0) - Number(left.attention.length > 0);
       if (attentionDifference !== 0) return attentionDifference;

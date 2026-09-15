@@ -67,8 +67,11 @@ function inferKind(markdown?: string, hasAttachments?: boolean, attachments?: No
 }
 
 function deriveDefaultTitle(markdown?: string): string | undefined {
-  const normalized = parseNoteMarkdown(markdown ?? '').plainText.trim().replace(/\s+/g, ' ');
-  return normalized ? Array.from(normalized).slice(0, 10).join('') : undefined;
+  const heading = markdown?.match(/^#{1,3}\s+(.+)$/m)?.[1];
+  const plainText = parseNoteMarkdown(heading ?? markdown ?? '').plainText.trim();
+  const subject = plainText.split(/[\n。！？!?]/).map((line) => line.trim()).find(Boolean);
+  const normalized = subject?.replace(/\s+/g, ' ');
+  return normalized ? Array.from(normalized).slice(0, 36).join('') : undefined;
 }
 
 function splitMeaningfulLines(markdown?: string): string[] {

@@ -1429,7 +1429,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
               ) : null}
 
               <SidebarInboxSection
-                sessions={inboxItems}
+                sessions={inboxItems.filter((session) => resolveSessionIdentity(session).source !== 'system')}
                 hasMore={inboxHasMore}
                 loadingMore={loadingInboxMore}
                 isCollapsed={inboxCollapsed}
@@ -1450,6 +1450,31 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
                 defaultUnnamedTitle={m.chat.newSession}
                 excludedSessionKeys={pinnedSessionKeys}
               />
+              {inboxItems.some((session) => resolveSessionIdentity(session).source === 'system') ? <details className="mt-3" open={inboxItems.some((session) => session.key === activeSessionKey && resolveSessionIdentity(session).source === 'system')}>
+                <summary className="cursor-pointer px-2 py-2 text-xs text-fg-muted">{language === 'zh' ? '系统活动' : 'System activity'}</summary>
+              <SidebarInboxSection
+                sessions={inboxItems.filter((session) => resolveSessionIdentity(session).source === 'system')}
+                hasMore={false}
+                loadingMore={loadingInboxMore}
+                isCollapsed={false}
+                onToggleCollapsed={() => undefined}
+                onCreateChat={() => {
+                  navigate('/chat/new?projectScope=none', { state: { forceNewChat: true } });
+                  onNavigate?.();
+                }}
+                onLoadMore={loadMoreInbox}
+                activeSessionKey={activeSessionKey}
+                onNavigate={onNavigate}
+                mutate={refreshSidebar}
+                onRequestRename={openRename}
+                onRequestDelete={setDeleteKey}
+                sb={sb}
+                sess={sess}
+                clipboard={m.clipboard}
+                defaultUnnamedTitle={m.chat.newSession}
+                excludedSessionKeys={pinnedSessionKeys}
+              />
+              </details> : null}
             </div>
           ) : (
             <div className="px-4 pb-2">

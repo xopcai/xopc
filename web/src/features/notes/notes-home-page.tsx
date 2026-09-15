@@ -219,17 +219,17 @@ export function NotesHomePage() {
         <button type="button" onClick={() => navigate('/projects')} className={cn(quietButton, 'mt-2 justify-start px-2 text-xs')}>{h.allProjects}<ArrowRight className="ml-auto size-3" aria-hidden /></button>
       </aside>
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain">
-        <div className="mx-auto w-full max-w-6xl px-4 py-7 sm:px-8 lg:px-10 lg:py-9">
+        <div className="mx-auto flex w-full max-w-6xl flex-col px-4 py-4 sm:py-7 sm:px-8 lg:px-10 lg:py-9">
           <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
             <h2 className="min-w-0 break-words text-2xl font-semibold tracking-tight text-fg">{projectId ? currentProjectLabel : unassigned ? h.unassigned : h.homeTitle}</h2>
             {projectId ? <button type="button" onClick={() => navigate(`/projects/${encodeURIComponent(projectId)}`)} className={cn(quietButton, 'text-xs')}>{h.openProject}<ArrowRight className="size-3.5" aria-hidden /></button> : null}
           </div>
           {actionError ? <p className="mb-4 rounded-lg border border-danger/25 bg-danger-soft px-3 py-2 text-sm text-danger" role="alert">{actionError}</p> : null}
-          <NotesHomeComposer projects={projects} projectId={destination} onProjectChange={setDestination} onCreated={refresh} labels={n}
-            projectsLoading={projectsLoading} projectsError={Boolean(projectError)} />
+          <div className="order-3 mt-6 sm:order-none sm:mt-0"><NotesHomeComposer projects={projects} projectId={destination} onProjectChange={setDestination} onCreated={refresh} labels={n}
+            projectsLoading={projectsLoading} projectsError={Boolean(projectError)} /></div>
           {projectError ? <div role="alert" className="mt-4 flex items-center gap-3 text-xs text-danger"><span>{h.projectsLoadFailed}</span><button type="button" onClick={() => void mutateProjects().catch(() => undefined)} className="underline">{h.retry}</button></div> : null}
           {!projectId && !unassigned && (projectsLoading || projects.length > 0) ? (
-            <section className="mt-8" aria-label={h.continueProjects}>
+            <section className="order-4 mt-8 sm:order-none" aria-label={h.continueProjects}>
               <div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-semibold text-fg">{h.continueProjects}</h3><button type="button" onClick={() => navigate('/projects')} className="text-xs text-fg-muted hover:text-fg">{h.allProjects}</button></div>
               <div className="grid gap-3 sm:grid-cols-3">
                 {projectsLoading ? [0, 1, 2].map((i) => <Skeleton key={i} className="h-28 w-full" />) : projects.slice(0, 3).map((project) => (
@@ -242,7 +242,7 @@ export function NotesHomePage() {
               </div>
             </section>
           ) : null}
-          <section className="mt-8 pb-6" aria-label={h.recentNotes}>
+          <section className="order-2 mt-2 pb-6 sm:order-none sm:mt-8" aria-label={h.recentNotes}>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-sm font-semibold text-fg">{projectId ? h.projectNotes : h.recentNotes}</h3>
               <div className="w-48 max-w-full">
@@ -280,7 +280,7 @@ export function NotesHomePage() {
                   return <li key={note.id} className="group flex min-w-0 items-center gap-3 py-4">
                     <button type="button" onClick={() => openNote(note.id)} className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:ring-2 focus-visible:ring-accent">
                       <span className="flex h-10 w-8 shrink-0 items-center justify-center rounded-md border border-edge text-fg-muted"><Icon className="size-4" aria-hidden /></span>
-                      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-fg group-hover:text-accent-fg">{note.title || n.titlePlaceholder}</span>
+                      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-fg group-hover:text-accent-fg">{note.title || preview.slice(0, 48) || n.titlePlaceholder}</span>
                         <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-fg-muted">
                           {note.lastEditTrigger === 'ai_edit' ? <span className="inline-flex shrink-0 items-center gap-1 text-accent-fg"><Sparkles className="size-3" aria-hidden />{h.agentEditLabel}<span aria-hidden>·</span></span> : null}
                           <span className="truncate">{preview}</span>

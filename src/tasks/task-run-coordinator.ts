@@ -23,7 +23,10 @@ export class TaskRunCoordinator {
     const task = tasks.get(input.context.taskId);
     if (!task || task.phase === 'closed') return undefined;
     const runs = new TaskRunRepository();
+    if (runs.listActiveWaits(task.id).length > 0) return undefined;
     let run = runs.get(input.runId);
+    if (run && (run.taskId !== task.id || run.parentRunId
+      || (run.sessionKey && run.sessionKey !== input.context.sessionKey))) return undefined;
     if (!run) {
       if (runs.getActiveRoot(task.id)) return undefined;
       const agentId = task.delegateAgentId ?? input.context.agentId;

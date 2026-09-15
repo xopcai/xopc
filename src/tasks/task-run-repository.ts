@@ -281,6 +281,8 @@ export class TaskRunRepository {
              WHERE wait.task_run_id = task_runs.run_id AND wait.status = 'active'
            ))
          )
+           AND EXISTS (SELECT 1 FROM tasks task WHERE task.task_id = task_runs.task_id AND task.phase != 'closed')
+           AND NOT EXISTS (SELECT 1 FROM task_waits wait WHERE wait.task_id = task_runs.task_id AND wait.status = 'active')
            AND NOT EXISTS (SELECT 1 FROM session_inputs input WHERE input.task_run_id = task_runs.run_id AND input.status IN ('queued','running'))
            AND (? IS NULL OR executor_kind = ?)
            AND COALESCE(scheduled_at, 0) <= ?
@@ -429,7 +431,8 @@ export class TaskRunRepository {
     return (getSqliteDatabase().prepare(
       `SELECT receipt.* FROM task_run_receipts receipt
        JOIN task_runs run ON run.run_id = receipt.run_id
-       WHERE run.task_id = ? ORDER BY receipt.finalized_at DESC LIMIT ?`,
+       WHERE run.task_id = ? AND run.parent_run_id IS NULL
+       ORDER BY receipt.finalized_at DESC, run.queued_at DESC LIMIT ?`,
     ).all(taskId, Math.max(1, Math.min(500, Math.floor(limit)))) as TaskRunReceiptRow[])
       .map(receiptFromRow);
   }

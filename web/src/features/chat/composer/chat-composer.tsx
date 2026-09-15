@@ -1,3 +1,4 @@
+import { useMediaQuery } from '@/lib/use-media-query';
 import { ConnectionActionBar } from '../connections/connection-action-bar';
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -554,9 +555,10 @@ export const ChatComposer = memo(function ChatComposer({
   const hasDraft =
     Boolean(editor.value.trim()) || att.attachments.length > 0;
   const showSteeringInterrupt = hasDraft && Boolean(onSteeringInterrupt);
+  const hasFinePointer = useMediaQuery('(hover: hover) and (pointer: fine)');
   const contextualPlaceholder =
     !runBusyState && !editingFollowUpId && welcomeSuggestion
-      ? `${welcomeSuggestion.prompt} · ${m.chat.welcomeSpotlight.acceptSuggestionHint}`
+      ? `${welcomeSuggestion.prompt}${hasFinePointer ? ` · ${m.chat.welcomeSpotlight.acceptSuggestionHint}` : ''}`
       : null;
 
   return (

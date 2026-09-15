@@ -196,7 +196,7 @@ export function AssistantStepsBlock({
   const stepCount = visibleBlocks.length;
   const anyActive = activity.active;
   const failedCount = activity.failedCount;
-  const stepsDrawerOpen = activity.expandedByDefault;
+  const stepsDrawerOpen = activity.expandedByDefault && (anyActive || failedCount > 0);
   const [userExpanded, setUserExpanded] = useState<boolean | null>(null);
 
   const expanded = userExpanded ?? stepsDrawerOpen;

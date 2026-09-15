@@ -240,7 +240,7 @@ export function UpdateReminderBar({
     return (
       <div
         className={cn(
-          'relative flex min-h-10 w-full min-w-0 items-center justify-center border-b border-accent/20 bg-accent/10 py-2 text-sm',
+          'relative hidden min-h-10 w-full min-w-0 items-center justify-center border-b border-accent/20 bg-accent/10 py-2 text-sm md:flex',
           APP_CHROME_DRAG_CLASS,
           compact && 'text-xs',
         )}

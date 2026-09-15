@@ -615,7 +615,7 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, monitoring, returnTo,
                   <Button type="button" variant="ghost" className="rounded-lg" disabled={creating}>{copy.cancel}</Button>
                 </Dialog.Close>
                 <Button type="submit" variant="primary" className="rounded-lg" disabled={creating || !objective.trim()}>
-                  {creating ? copy.creating : copy.create}
+                  {creating ? copy.creating : language === 'zh' ? '保存待安排任务' : 'Save for later'}
                 </Button>
               </div>
             </form>
