@@ -69,6 +69,38 @@ describe('TaskApplicationService', () => {
     needsUser: false, completionVerdict: 'achieved' as const,
   };
 
+  it('grants only the reviewed capability and resumes the blocked task', () => {
+    const service = new TaskApplicationService();
+    const tasks = new TaskRepository();
+    const task = tasks.create({ title: 'Publish', objective: 'Publish reviewed result', approvalRequired: ['publish_result'] });
+    const runs = new TaskRunRepository();
+    const wait = runs.createWait({ taskId: task.id, kind: 'approval', reason: 'Publish the result?', condition: { capability: 'publish_result', executor: { kind: 'agent', agentId: 'main' } } });
+    const request = { taskId: task.id, expectedVersion: task.version, idempotencyKey: 'approve-card', command: { type: 'resolve_wait' as const, waitId: wait.id, resolution: { kind: 'task_approval', decision: 'approve', capability: 'unrelated' } } };
+    expect(service.execute(request)).toMatchObject({ ok: true, runId: expect.any(String) });
+    expect(new TaskContextRepository().listActiveGrants(task.id).map(grant => grant.capability)).toEqual(['publish_result']);
+  });
+
+  it('keeps authorization unmet and pauses when the user declines', () => {
+    const { service, task, runs } = createRunningTask('decline-card');
+    const wait = runs.createWait({ taskId: task.id, kind: 'approval', reason: 'Publish?', condition: { capability: 'publish_result' } });
+    expect(service.execute({ taskId: task.id, expectedVersion: task.version, idempotencyKey: 'deny-card', command: { type: 'resolve_wait', waitId: wait.id, resolution: { kind: 'task_approval', decision: 'deny' } } })).toMatchObject({ ok: true, model: { operationalState: 'waiting', attention: [] } });
+    expect(runs.requireWait(wait.id).status).toBe('active');
+    expect(runs.getActiveRoot(task.id)?.status).toBe('waiting');
+    expect(new TaskContextRepository().listActiveGrants(task.id)).toEqual([]);
+  });
+
+  it('persists card answers exactly once and rejects stale or blank submissions', () => {
+    const { service, task, runs } = createRunningTask('card-answer');
+    const wait = runs.createWait({ taskId: task.id, kind: 'user_input', reason: 'Which audience?' });
+    const request = { taskId: task.id, expectedVersion: task.version, idempotencyKey: 'answer-once',
+      command: { type: 'resolve_wait' as const, waitId: wait.id, resolution: { kind: 'user_answer', answer: 'Product designers' } } };
+    expect(service.execute({ ...request, idempotencyKey: 'blank', command: { ...request.command, resolution: { kind: 'user_answer', answer: ' ' } } })).toMatchObject({ ok: false });
+    expect(service.execute(request)).toMatchObject({ ok: true });
+    expect(service.execute(request)).toMatchObject({ ok: true });
+    expect(new TaskContextRepository().list(task.id).filter(edge => edge.metadata.userAnswer === 'Product designers')).toHaveLength(1);
+    expect(service.execute({ ...request, idempotencyKey: 'stale' })).toMatchObject({ ok: false });
+  });
+
   it('keeps paused tasks out of attention and execution context even with older input waits', () => {
     const { service, task, run, runs } = createRunningTask('paused-attention');
     runs.createWait({ taskId: task.id, kind: 'user_input', reason: 'Upload footage' });

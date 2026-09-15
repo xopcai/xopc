@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import { verifiedTaskCriteria } from '@xopcai/gateway-contract';
+import { TaskExecutorSelectionSchema, verifiedTaskCriteria } from '@xopcai/gateway-contract';
 
 import type {
   ActorRef,
@@ -257,15 +257,52 @@ export class TaskApplicationService {
           const wait = this.#runs.getWait(input.command.waitId);
           if (!wait || wait.taskId !== task.id) {
             result = { ok: false, reason: 'not_found', model };
-          } else if (wait.condition.type === 'connection') {
+          } else if (wait.status !== 'active' || task.phase === 'closed' || wait.condition.type === 'connection') {
             result = { ok: false, reason: 'invalid_transition', model };
           } else {
+            const response = input.command.resolution as { kind?: string; answer?: unknown; decision?: unknown } | undefined;
+            if (response?.kind === 'task_approval') {
+              if (actor.kind !== 'user' || wait.kind !== 'approval' || typeof wait.condition.capability !== 'string'
+                || (response.decision !== 'approve' && response.decision !== 'deny')) {
+                result = { ok: false, reason: 'invalid_transition', model };
+                break;
+              }
+              if (response.decision === 'deny') {
+                if (!this.#runs.listActiveWaits(task.id).some(item => item.kind === 'paused')) {
+                  this.#runs.createWait({ taskId: task.id, kind: 'paused', reason: 'Approval declined by user', condition: { approvalWaitId: wait.id } });
+                }
+                const active = this.#runs.getActiveRoot(task.id);
+                if (active && ['queued', 'running', 'verifying'].includes(active.status)) {
+                  this.#runs.setStatus({ runId: active.id, expectedVersion: active.version, from: [active.status], to: 'waiting', actor });
+                }
+                result = { ok: true, model: this.#projector.get(task.id)! };
+                break;
+              }
+              this.#context.grant({ taskId: task.id, capability: wait.condition.capability,
+                scope: { waitId: wait.id, contractVersion: task.latestContractVersion }, grantedBy: actor });
+            }
+            if (response?.kind === 'user_answer') {
+              if (actor.kind !== 'user' || wait.kind !== 'user_input' || typeof response.answer !== 'string'
+                || !response.answer.trim() || response.answer.length > 12000) {
+                result = { ok: false, reason: 'invalid_transition', model };
+                break;
+              }
+              this.#context.add({ taskId: task.id, targetKind: 'source', targetId: wait.id, role: 'input',
+                title: wait.reason, pinned: true, metadata: { userAnswer: response.answer.trim() }, createdBy: actor });
+            }
             this.#runs.resolveWait({
               waitId: wait.id,
               actor,
               resolution: input.command.resolution,
             });
-            result = { ok: true, model: this.#projector.get(task.id)! };
+            const executor = TaskExecutorSelectionSchema.safeParse(wait.condition.executor);
+            result = response?.kind === 'task_approval' && executor.success
+              && !this.#runs.getActiveRoot(task.id) && this.#runs.listActiveWaits(task.id).length === 0
+              ? this.start(task.id, task.version, executor.data, {
+                idempotencyKey: input.idempotencyKey, actor, correlationId: input.idempotencyKey,
+              })
+              : { ok: true, model: this.#projector.get(task.id)! };
+            if (result.ok === false && result.reason === 'blocked') result = { ok: true, model: this.#projector.get(task.id)! };
           }
           break;
         }
