@@ -5,7 +5,7 @@
  * Aligned with OpenClaw's validate-sandbox-security.ts blocked-path approach.
  */
 
-import { realpathSync } from 'node:fs';
+import { lstatSync, realpathSync } from 'node:fs';
 import { isAbsolute, normalize, posix, resolve, sep } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -65,7 +65,7 @@ function resolvePolicyPath(raw: string): string {
   return resolve(raw);
 }
 
-function getBlockedPaths(): string[] {
+export function getBlockedPaths(): string[] {
   const blocked = new Set(BLOCKED_ABSOLUTE_PATHS.map(normalizePosixPath));
 
   const homes = new Set([
@@ -79,6 +79,14 @@ function getBlockedPaths(): string[] {
     }
   }
 
+  for (const path of [process.env.XOPC_CONFIG_PATH, process.env.XOPC_CONFIG,
+    ...['', '-wal', '-shm', '-journal'].map(suffix => process.env.XOPC_STATE_DIR
+      ? resolve(process.env.XOPC_STATE_DIR, `xopc.db${suffix}`) : undefined)]) {
+    if (!path) continue;
+    const resolved = resolvePolicyPath(path);
+    blocked.add(normalizePosixPath(resolved));
+    try { blocked.add(normalizePosixPath(realpathSync(resolved))); } catch { /* Missing files remain lexically protected. */ }
+  }
   return [...blocked];
 }
 
@@ -93,7 +101,7 @@ function isPathInsideOrEqual(root: string, target: string): boolean {
   return normalizedTarget.startsWith(prefix);
 }
 
-function containsBlockedCredentialSegment(target: string): string | null {
+export function containsBlockedCredentialSegment(target: string): string | null {
   const normalized = normalizePosixPath(target);
   for (const sub of BLOCKED_HOME_SUBPATHS) {
     const prefix = `/${sub.replace(/\\/g, '/')}`;
@@ -101,6 +109,8 @@ function containsBlockedCredentialSegment(target: string): string | null {
       return sub;
     }
   }
+  if (/(?:^|\/)\.xopc\/(?:xopc\.json|xopc\.db(?:-[^/]*)?)(?:\/|$)/.test(normalized)) return '.xopc config/state';
+  if (/(?:^|\/)\.env(?:\.[^/]*)?(?:\/|$)/.test(normalized)) return '.env';
   return null;
 }
 
@@ -112,23 +122,17 @@ function containsBlockedCredentialSegment(target: string): string | null {
 function resolveCanonicalPath(targetPath: string): string {
   try {
     return realpathSync(targetPath);
-  } catch {
-    // Path does not exist yet — resolve the deepest existing ancestor.
-    const segments = targetPath.split(sep);
-    let resolved = segments[0] === '' ? '/' : segments[0];
-    let unresolved = '';
-
-    for (let i = 1; i < segments.length; i++) {
-      const candidate = resolve(resolved, segments[i]);
-      try {
-        resolved = realpathSync(candidate);
-      } catch {
-        unresolved = segments.slice(i).join('/');
-        break;
-      }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    // An existing dangling link must not be treated as a new regular file.
+    try {
+      if (lstatSync(targetPath).isSymbolicLink()) throw new Error('Unresolvable symbolic link');
+    } catch (statError) {
+      if ((statError as NodeJS.ErrnoException).code !== 'ENOENT') throw statError;
     }
-
-    return unresolved ? `${resolved}/${unresolved}` : resolved;
+    const parent = resolve(targetPath, '..');
+    if (parent === targetPath) throw error;
+    return resolve(resolveCanonicalPath(parent), targetPath.split(sep).at(-1)!);
   }
 }
 
@@ -188,8 +192,13 @@ export function validatePath(
   }
 
   // --- Pass 2: canonical (symlink-resolved) check ---
-  const canonical = resolveCanonicalPath(target);
+  let canonical: string;
+  try { canonical = resolveCanonicalPath(target); }
+  catch { return { allowed: false, reason: 'Cannot safely resolve path' }; }
   const canonicalNormalized = normalizePosixPath(canonical);
+
+  const canonicalCredential = containsBlockedCredentialSegment(canonicalNormalized);
+  if (canonicalCredential) return { allowed: false, reason: `Path resolves to protected credential path: ${canonicalCredential}` };
 
   if (canonicalNormalized !== target) {
     for (const blocked of blockedPaths) {
@@ -205,9 +214,10 @@ export function validatePath(
   // --- Pass 3: allowed-roots enforcement ---
   if (options?.allowedRoots && options.allowedRoots.length > 0) {
     // Resolve roots the same way as the target so symlink prefixes (e.g. /home on macOS) match.
-    const normalizedRoots = options.allowedRoots.map((r) =>
-      normalizePosixPath(resolveCanonicalPath(resolvePolicyPath(r))),
-    );
+    let normalizedRoots: string[];
+    try {
+      normalizedRoots = options.allowedRoots.map((r) => normalizePosixPath(resolveCanonicalPath(resolvePolicyPath(r))));
+    } catch { return { allowed: false, reason: 'Cannot safely resolve allowed roots' }; }
     const insideAllowedRoot = normalizedRoots.some((root) =>
       isPathInsideOrEqual(root, canonicalNormalized),
     );

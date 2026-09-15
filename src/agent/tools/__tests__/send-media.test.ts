@@ -1,12 +1,10 @@
-import { readFile } from 'node:fs/promises';
+import { readWorkspaceFile } from '../../sandbox/fileAccess.js';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const saveMediaBufferMock = vi.fn();
 
-vi.mock('node:fs/promises', () => ({
-  readFile: vi.fn(),
-}));
+vi.mock('../../sandbox/fileAccess.js', () => ({ readWorkspaceFile: vi.fn() }));
 
 vi.mock('../../../media/store.js', () => ({
   MEDIA_MAX_BYTES: 5 * 1024 * 1024,
@@ -17,7 +15,7 @@ vi.mock('../../../media/store.js', () => ({
 
 import { createSendMediaTool } from '../send-media.js';
 
-const readFileMock = vi.mocked(readFile);
+const readFileMock = vi.mocked(readWorkspaceFile);
 
 function savedMedia(contentType: string) {
   return {
@@ -41,7 +39,7 @@ describe('send_media', () => {
       Buffer.alloc(4),
       Buffer.from('WEBP'),
     ]);
-    readFileMock.mockResolvedValue(webp);
+    readFileMock.mockReturnValue(webp);
     saveMediaBufferMock.mockResolvedValue(savedMedia('image/webp'));
     const publishOutbound = vi.fn();
     const tool = createSendMediaTool(
@@ -79,7 +77,7 @@ describe('send_media', () => {
 
   it('still dispatches persisted media to configured non-Webchat channels', async () => {
     const svg = Buffer.from('<svg/>');
-    readFileMock.mockResolvedValue(svg);
+    readFileMock.mockReturnValue(svg);
     saveMediaBufferMock.mockResolvedValue(savedMedia('image/svg+xml'));
     const publishOutbound = vi.fn().mockResolvedValue(undefined);
     const tool = createSendMediaTool(

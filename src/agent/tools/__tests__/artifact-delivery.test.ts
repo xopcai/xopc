@@ -90,25 +90,19 @@ describe('file artifact delivery', () => {
     expect(outcome.deliverables).toHaveLength(1);
   });
 
-  it('deduplicates an external file without using its name or exposing its host path', async () => {
+  it('rejects publication outside the workspace', async () => {
     const external = join(fixture, 'report.html');
     await writeFile(external, 'external');
-    const first = await publishArtifactPaths({ paths: [external], baseDir: workspace, workspaceRoot: workspace, toolCallId: 'first' });
-    const second = await publishArtifactPaths({ paths: [external], baseDir: workspace, workspaceRoot: workspace, toolCallId: 'second' });
-    expect(first[0]?.availability).toBe('available');
-    expect(first[0]?.sourceFileId).toBe(second[0]?.sourceFileId);
-    expect(first[0]?.sourceFileId).not.toContain(fixture);
-    expect(projectTurnOutcome({
-      turnId: 'turn-1', rows: [toolRow({ artifacts: first }), toolRow({ artifacts: second })],
-    }).deliverables).toEqual(second);
+    const artifacts = await publishArtifactPaths({ paths: [external], baseDir: workspace, workspaceRoot: workspace, toolCallId: 'publish' });
+    expect(artifacts[0]).toMatchObject({ availability: 'failed', location: 'external_host' });
+    expect(artifacts[0]?.uri).toBeUndefined();
   });
 
-  it('can still publish an external file when the workspace is unavailable', async () => {
+  it('rejects external files even when the workspace is unavailable', async () => {
     const path = join(fixture, 'external.html');
     await writeFile(path, 'external');
     const published = await createPublishArtifactsTool(join(fixture, 'missing-workspace'))
       .execute('publish', { paths: [path] });
-    expect(published.details.artifacts[0]).toMatchObject({ availability: 'available', location: 'artifact_store' });
-    expect((await readMediaReference(published.details.artifacts[0]!.uri!)).buffer.toString()).toBe('external');
+    expect(published.details.artifacts[0]).toMatchObject({ availability: 'failed', location: 'external_host' });
   });
 });

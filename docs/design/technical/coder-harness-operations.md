@@ -14,6 +14,12 @@
 
 ## 仓库工具
 
+`read_file`、`write_file`、`apply_patch`、`grep`、`find` 和产物发布默认限制在当前工作区，拒绝外部绝对路径与 `..` 逃逸。仅裸 profile 文件名（如 `SOUL.md`）可以使用配置的 profile 目录。敏感路径在规范化与符号链接解析后都会检查；`.env` / `.env.*`、凭据目录及 xopc 配置/数据库不可通过这些工具读取或修改。搜索结果也执行文件策略检查，不返回硬链接文件。
+
+目录列表、媒体发送、图片输入/输出及目录分享同样执行工作区文件策略；目录分享遇到敏感文件或逃逸链接会拒绝。工作区审查过滤敏感的 tracked / untracked 文件，并把结果标为不完整，不将受限文件计作已完成审查。
+
+文件读写在实际 I/O 时重新校验路径，通过 `O_NOFOLLOW` 打开普通文件、核对 inode，并在校验成功后才截断写入；拒绝悬空链接、硬链接和特殊文件。此实现减少路径替换风险，但不提供跨平台 `openat2` 级别的原子目录约束，不能用于防御能够并发修改宿主目录树的恶意本地进程。
+
 `read_file` 支持一基 `offset` 和 `limit`；`grep` / `find` 使用 ripgrep，遵循忽略文件，不再同步遍历并读取整棵目录。搜索出错明确失败，不伪装成无匹配。
 
 运行时加载 Git 根目录至目标路径的 `AGENTS.md`，较深目录规则仅覆盖相应子树。新增规则在下一次模型请求才算送达，避免一批并行调用中后续写操作跳过规则。文件修改后会重新加载；跨仓库的指令文件符号链接不被跟随。
@@ -30,7 +36,8 @@
 {
   "mode": "docker",
   "image": "registry.example.com/dev/node@sha256:0000000000000000000000000000000000000000000000000000000000000000",
-  "network": false
+  "network": false,
+  "workspaceAccess": "read-only"
 }
 ```
 
@@ -38,7 +45,17 @@
 
 Docker 模式只挂载 workspace 到 `/workspace`，根文件系统只读，默认无网络，并限制 capability、进程数、内存和 CPU。不挂载 Docker socket，不传入宿主凭据环境；使用镜像内的工具和依赖。命令应使用 workspace 相对路径。依赖宿主绝对路径的环境（例如外部 pnpm store 或 managed worktree 的外置 Git 管理目录）需在镜像/项目中另行准备，不能假定完全兼容。配置与行为依据 [Docker run 官方文档](https://docs.docker.com/reference/cli/docker/container/run/)。
 
-本机 Docker daemon 未运行。本轮验证了配置边界、cwd 符号链接逃逸拒绝和启动失败不回退宿主；真实容器内的成功执行、网络隔离与取消清理还需在启用 daemon 后做集成验证。
+未配置隔离时仍默认 host。host 下的脚本拥有宿主用户权限，文件工具的工作区限制不能约束脚本内部的文件或网络访问。
+
+Docker 工作区默认只读；需要命令修改工作区时，显式设置 `workspaceAccess: "read-write"`，这会修改真实宿主文件。`network: false` 完全禁网；`network: true` 明确开启 bridge 网络，不提供域名/IP 白名单，应仅用于允许联网的可信任务。
+
+启动前遍历工作区，以只读空文件/不可访问目录遮蔽 `.env*`、凭据目录、`.xopc` 及多硬链接文件，显式可写模式同样遮蔽。敏感符号链接、socket/FIFO/device、扫描失败或扫描超限会拒绝启动。扫描最多 200,000 个目录项，遮蔽最多 2,048 个目标。硬链接依赖（例如部分 pnpm store 布局）会不可用，应使用镜像内依赖或工作区内的普通文件。遮蔽只覆盖启动时识别到的路径，不对任意命名的秘密做内容识别；运行期间宿主新写入的文件也不自动遮蔽。
+
+容器额外限制文件描述符，禁用 core dump、额外 swap 和 Docker 日志，避免绕过应用日志上限。
+
+Docker 集成测试需要可用 daemon 和本地已安装、包含 Node.js 的镜像。设置 `XOPC_TEST_SANDBOX_IMAGE` 为真实的 `name@sha256:…`，运行 `pnpm exec vitest run src/agent/commands/__tests__/command-isolation.integration.test.ts`，验证真实的只读边界、凭据遮蔽、断网、显式写入和取消清理。未设置该变量时测试明确跳过，不算作隔离验证通过。
+
+Git 命令没有专门的拦截或告警；与 Git 拼接的通用危险 shell 命令仍接受安全检查。
 
 ## 委派与恢复
 

@@ -22,7 +22,9 @@ export function resolvePathUnderWorkspace(userPath: string, workspaceRoot: strin
 
 /** True if `userPath` is only a profile-system filename, e.g. `SOUL.md` or `.\SOUL.md` (basename matches). */
 export function isBareProfileMarkdownFileName(userPath: string): boolean {
-  const b = basename(userPath.replace(/\\/g, '/'));
+  const normalized = userPath.replace(/\\/g, '/').replace(/^\.\//, '');
+  if (normalized.includes('/')) return false;
+  const b = basename(normalized);
   if (!b || b === '.' || b === '..') return false;
   return PROFILE_SYSTEM_MARKDOWN_NAME_LOWER.has(b.toLowerCase());
 }

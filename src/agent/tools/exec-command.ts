@@ -198,6 +198,7 @@ export function createExecCommandTool(
       const policy = evaluateExecPolicy({
         command,
         cwd: requestedCwd,
+        workspaceRoot: workspaceCwd,
         allowedEnvVars: passthroughNames,
       });
       if (!policy.allowed) {

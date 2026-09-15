@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readWorkspaceFile, writeWorkspaceFile } from '../sandbox/fileAccess.js';
 import path from 'node:path';
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
@@ -174,7 +174,7 @@ async function loadInputImages(params: {
     }
     let buffer: Buffer;
     try {
-      buffer = await readFile(resolved);
+      buffer = readWorkspaceFile(params.workspace, resolved);
     } catch (e) {
       const em = e instanceof Error ? e.message : String(e);
       throw new ToolInputError(`inputImages[].source not readable: ${em}`);
@@ -255,7 +255,6 @@ async function saveGeneratedImages(params: {
   filenameHint?: string;
 }): Promise<string[]> {
   const dir = path.join(params.workspace, 'media', 'generated');
-  await mkdir(dir, { recursive: true });
   const out: string[] = [];
   const random = randomBytes(4).toString('hex');
   let i = 0;
@@ -265,7 +264,7 @@ async function saveGeneratedImages(params: {
     const base = (params.filenameHint?.replace(/[^\w.-]/g, '') || 'image') + `-${random}`;
     const name = `${base}-${i}.${ext}`;
     const full = path.join(dir, name);
-    await writeFile(full, img.buffer);
+    writeWorkspaceFile(params.workspace, full, img.buffer);
     out.push(full);
   }
   return out;
