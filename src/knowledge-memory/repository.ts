@@ -167,6 +167,8 @@ export function getKnowledgeItem(id: string): KnowledgeItem | undefined {
 
 export function listKnowledgeItems(input: {
   principalId?: string;
+  scope?: UserModelScope;
+  canonicalKey?: string;
   statuses?: KnowledgeStatus[];
   recordClass?: KnowledgeRecordClass;
   limit?: number;
@@ -177,10 +179,14 @@ export function listKnowledgeItems(input: {
   const rows = getSqliteDatabase().prepare(`SELECT * FROM knowledge_items
     WHERE principal_id = ? AND status IN (${placeholders})
       ${input.recordClass ? 'AND record_class = ?' : ''}
+      ${input.scope ? "AND scope_type = ? AND COALESCE(scope_id, '') = COALESCE(?, '')" : ''}
+      ${input.canonicalKey ? 'AND canonical_key = ?' : ''}
     ORDER BY importance DESC, updated_at DESC LIMIT ?`).all(
       input.principalId ?? USER_MODEL_PRINCIPAL_ID,
       ...statuses,
       ...(input.recordClass ? [input.recordClass] : []),
+      ...(input.scope ? [input.scope.type, input.scope.id ?? null] : []),
+      ...(input.canonicalKey ? [input.canonicalKey] : []),
       Math.max(1, Math.min(2_000, input.limit ?? 200)),
     ) as KnowledgeRow[];
   return rows.map(fromRow);

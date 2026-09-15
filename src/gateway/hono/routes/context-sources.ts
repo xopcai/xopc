@@ -21,7 +21,6 @@ import {
 } from '../../../user-context/sources/repository.js';
 import type { UnderstandingSourcePlatform } from '../../../user-context/sources/types.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
-import { getWorkDiscoveryService } from './work-discovery.js';
 
 function stringField(value: unknown, field: string): string {
   if (!value || typeof value !== 'object') return '';
@@ -53,7 +52,7 @@ export function markContextSourceAssertionsForReview(grantId: string): number {
 }
 
 export function registerContextSourceRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
-  const service = getWorkDiscoveryService(deps);
+  const service = deps.service.workDiscovery;
   const limited = deps.strictRateLimitMiddleware;
 
   authenticated.get('/api/context-sources/catalog', (c) => {

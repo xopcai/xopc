@@ -368,10 +368,7 @@ export class ProjectStore {
 
   listWithSidebarSessions(query: SidebarProjectListQuery = {}): ProjectListResult {
     const projectConditions: string[] = [];
-    const sessionConditions = [
-      `s.hidden_from_session_list = 0`,
-      `s.session_type = 'chat'`,
-    ];
+    const sessionConditions: string[] = [];
     const params: Array<string | number> = [];
 
     if (query.status) {
@@ -394,7 +391,11 @@ export class ProjectStore {
       sessionConditions.push(`(${clauses.join(' OR ')})`);
     }
 
-    const whereParts = [...projectConditions, ...sessionConditions];
+    // A new project must be visible before its first conversation is created.
+    const whereParts = [
+      ...projectConditions,
+      ...(sessionConditions.length ? [`(s.session_key IS NULL OR (${sessionConditions.join(' AND ')}))`] : []),
+    ];
     const where = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
     const limit = clampLimit(query.limit, 50);
     const offset = Math.max(0, Math.floor(query.offset ?? 0));
@@ -403,7 +404,8 @@ export class ProjectStore {
       .prepare(
         `SELECT COUNT(DISTINCT p.project_id) AS total
          FROM projects p
-         JOIN sessions s ON s.project_id = p.project_id
+         LEFT JOIN sessions s ON s.project_id = p.project_id
+           AND s.hidden_from_session_list = 0 AND s.session_type = 'chat'
          ${where}`,
       )
       .get(...params) as { total: number }).total;
@@ -411,7 +413,8 @@ export class ProjectStore {
       .prepare(
         `SELECT p.*
          FROM projects p
-         JOIN sessions s ON s.project_id = p.project_id
+         LEFT JOIN sessions s ON s.project_id = p.project_id
+           AND s.hidden_from_session_list = 0 AND s.session_type = 'chat'
          ${where}
          GROUP BY p.project_id
          ORDER BY

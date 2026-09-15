@@ -54,6 +54,7 @@ import {
   type ProjectWithDetails,
 } from '@/features/projects/api';
 import { ProjectSkillsPanel } from '@/features/projects/project-skills-panel';
+import { ProjectUnderstandingCheckbox, ProjectUnderstandingPanel } from '@/features/projects/project-understanding';
 import { selectOverviewTasks } from '@/features/projects/project-overview-model';
 import { ProjectTaskBoard, type CreateProjectTaskInput, type ProjectTaskBoardHandle } from '@/features/projects/task-board/project-task-board';
 import type { TaskBoardAction } from '@/features/projects/task-board/task-board-model';
@@ -323,6 +324,7 @@ function ProjectSwitcher({
   const [name, setName] = useState('');
   const [workspaceRoot, setWorkspaceRoot] = useState('');
   const [creating, setCreating] = useState(false);
+  const [autoUnderstand, setAutoUnderstand] = useState(true);
   const [createError, setCreateError] = useState<string | null>(null);
   const [missingWorkspaceRoot, setMissingWorkspaceRoot] = useState<string | null>(null);
 
@@ -391,6 +393,7 @@ function ProjectSwitcher({
     setMissingWorkspaceRoot(null);
     try {
       const project = await createProject({
+        autoUnderstand,
         name: trimmedName,
         ...(trimmedWorkspace ? { workspaceRoot: trimmedWorkspace } : {}),
         ...(options.createWorkspaceRoot ? { createWorkspaceRoot: true } : {}),
@@ -398,6 +401,8 @@ function ProjectSwitcher({
       setCreateOpen(false);
       setName('');
       setWorkspaceRoot('');
+      setAutoUnderstand(true);
+      window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: project.id } }));
       setProjects((items) => [project, ...items.filter((item) => item.id !== project.id)]);
       navigate(`/projects/${encodeURIComponent(project.id)}`);
     } catch (err) {
@@ -411,7 +416,7 @@ function ProjectSwitcher({
     } finally {
       setCreating(false);
     }
-  }, [createMode, name, navigate, workspaceRoot]);
+  }, [createMode, name, navigate, workspaceRoot, autoUnderstand]);
 
   const onCreate = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -594,6 +599,7 @@ function ProjectSwitcher({
                   />
                   <p className="text-xs text-fg-subtle">{projectsText.workspaceHint}</p>
                 </div>
+                <ProjectUnderstandingCheckbox checked={autoUnderstand} onChange={setAutoUnderstand} disabled={creating} />
               </div>
               <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">
                 <Dialog.Close asChild>
@@ -1722,6 +1728,7 @@ export function ProjectDetailPage() {
       {tab === 'overview' ? (
         <section id="project-panel-overview" role="tabpanel" aria-labelledby="project-primary-tab-overview" className="grid min-h-full gap-4 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_20rem] xl:overflow-hidden">
           <div className="grid min-w-0 content-start gap-4 xl:min-h-0 xl:overflow-y-auto xl:pr-1 xl:[scrollbar-gutter:stable]">
+            <ProjectUnderstandingPanel key={project.id} projectId={project.id} />
             <div className="min-w-0 overflow-hidden rounded-xl bg-surface-panel shadow-surface">
               <div className="p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">

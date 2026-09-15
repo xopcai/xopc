@@ -20,6 +20,7 @@ import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useDirectoryPicker } from '@/features/fs/use-directory-picker';
 import { WorkingDirectoryPickerModal } from '@/features/fs/working-directory-picker-modal';
+import { ProjectUnderstandingCheckbox } from '@/features/projects/project-understanding';
 import {
   archiveProject,
   createProject,
@@ -155,6 +156,7 @@ export function ProjectsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [autoUnderstand, setAutoUnderstand] = useState(true);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [workspaceRoot, setWorkspaceRoot] = useState('');
@@ -214,6 +216,7 @@ export function ProjectsPage() {
     setCreateError(null);
     try {
       const project = await createProject({
+        autoUnderstand,
         name: trimmedName,
         ...(description.trim() ? { description: description.trim() } : {}),
         workspaceRoot: trimmedWorkspaceRoot,
@@ -222,6 +225,7 @@ export function ProjectsPage() {
       setName('');
       setDescription('');
       setWorkspaceRoot('');
+      setAutoUnderstand(true);
       setCreateOpen(false);
       window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: project.id } }));
     } catch (cause) {
@@ -229,7 +233,7 @@ export function ProjectsPage() {
     } finally {
       setCreating(false);
     }
-  }, [creating, description, name, workspaceRoot]);
+  }, [creating, description, name, workspaceRoot, autoUnderstand]);
 
   const mutateProject = useCallback(async (project: Project, action: 'pin' | 'archive') => {
     setBusyProjectId(project.id);
@@ -321,6 +325,7 @@ export function ProjectsPage() {
                   </button>
                   <p className="text-xs font-normal text-fg-subtle">{t.workspaceSelectionHint}</p>
                 </div>
+                <ProjectUnderstandingCheckbox checked={autoUnderstand} onChange={setAutoUnderstand} disabled={creating} />
                 {createError ? (
                   <p className="rounded-lg bg-danger-soft px-3 py-2 text-xs text-danger" role="alert">{createError}</p>
                 ) : null}

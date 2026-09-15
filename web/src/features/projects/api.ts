@@ -267,6 +267,7 @@ export async function fetchProjectActivity(
 }
 
 export async function createProject(input: {
+  autoUnderstand?: boolean;
   name?: string;
   description?: string;
   defaultAgentId?: string;

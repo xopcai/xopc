@@ -613,7 +613,7 @@ describe('project association routes', () => {
     expect(projects.listSessionKeys(project.id)).toEqual([body.session.key]);
   });
 
-  it.each(['webchat', 'automation'])('omits hidden empty %s shells from project session lists', async (source) => {
+  it.each(['webchat', 'automation', 'understanding'])('omits hidden %s sessions from project session lists', async (source) => {
     const hiddenKey = `agent:coder:${source}:default:direct:hidden`;
     const visibleKey = 'agent:coder:webchat:default:direct:chat_1783526000000';
     const app = registerProjectRouteApp({
@@ -627,7 +627,8 @@ describe('project association routes', () => {
               messageCount: 0,
               hiddenFromSessionList: true,
               routing: { peerId: source === 'webchat' ? 'chat_1783525363859' : 'automation-run' },
-              customData: source === 'webchat' ? { genericNewChatShell: true } : { origin: 'automation' },
+              customData: source === 'understanding' ? { workDiscovery: true, genericNewChatShell: false }
+                : source === 'webchat' ? { genericNewChatShell: true } : { origin: 'automation' },
             }
           : {
               key,

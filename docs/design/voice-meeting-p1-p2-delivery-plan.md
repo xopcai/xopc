@@ -101,6 +101,8 @@ P1-C 的平台实验可以提前做，但正式接入只接受 P1-A 的统一契
 
 ### P2-C：移动后台录音
 
+移动端专项细化见 [竞品与平台研究](./mobile-meeting-research.md)、[移动录音笔记 PRD](./mobile-meeting-prd.md) 和 [移动技术设计及 M0–M4 验收](./mobile-meeting-technical-design.md)。这些是新增设计，尚不代表 P2-C 已实现；M1 远端接入依赖 P1-A 的 track/epoch 契约完成。
+
 **工程落点：** `apps/mobile-expo/modules/xopc-voice/`、移动录音会话协调层及 Expo config plugin；维持现有 Expo 56。
 
 交付：原生音频回调写文件与 journal、闭合分块上传、原生中断事件、进程重启扫描恢复。JS 管状态和进度，不作为音频持久化必经路径。

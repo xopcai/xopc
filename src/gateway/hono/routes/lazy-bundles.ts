@@ -24,6 +24,14 @@ function startsWithAny(path: string, prefixes: readonly string[]): boolean {
 
 export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBundle[] = [
   {
+    id: 'project-understanding',
+    match: (path) => /^\/api\/projects\/[^/]+\/understanding$/.test(path),
+    load: async () => {
+      const { registerProjectUnderstandingRoutes } = await import('./project-understanding.js');
+      return { register: registerProjectUnderstandingRoutes };
+    },
+  },
+  {
     id: 'browser-session',
     match: (path) => path === '/api/browser-session',
     load: async () => {

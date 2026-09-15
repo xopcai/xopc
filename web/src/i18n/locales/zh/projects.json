@@ -1,5 +1,20 @@
 {
   "projectsPage": {
+    "understanding": {
+      "auto": "自动了解项目",
+      "hint": "使用已配置的模型，在后台了解项目资料，让后续协作更贴合项目。",
+      "running": "正在了解项目",
+      "title": "项目概览",
+      "view": "查看项目概览",
+      "start": "了解项目",
+      "refresh": "重新了解项目",
+      "retry": "重试",
+      "failed": "暂未完成了解",
+      "edit": "修正概览",
+      "save": "保存",
+      "cancel": "取消",
+      "saveFailed": "保存失败，请重试"
+    },
     "title": "工作台",
     "summary": "{{count}} 个项目 · 集中查看跨会话和任务的持续推进",
     "searchPlaceholder": "搜索项目",

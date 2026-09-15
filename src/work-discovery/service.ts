@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import type { Config } from '../config/schema.js';
 import { getAgentDefaultModelRef } from '../config/schema.js';
+import { resolveEffectiveAgentProfile } from '../config/agent-profile.js';
 import { isLocalModelBaseUrl } from '../providers/model-call.js';
 import { resolveModel } from '../providers/index.js';
 import { ActivityService } from '../activity/service.js';
@@ -10,6 +11,7 @@ import { buildSessionKey } from '../routing/session-key.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
 import type { SessionIndex } from '../session/manager.js';
 import {
+  ensureSessionRecord,
   type SessionMetadataSeed,
 } from '../storage/sqlite/index.js';
 import { createContextEvidence } from '../storage/sqlite/context-evidence-repository.js';
@@ -54,11 +56,14 @@ import {
 } from './investigation-repository.js';
 import { investigateWorkContext } from './investigator.js';
 import { persistWorkThreadsFromDiscovery } from './thread-service.js';
+import { saveProjectUnderstandingOverview } from './project-understanding.js';
 import {
   createWorkDiscoveryRun,
   getWorkDiscoveryOnboardingState,
   getWorkDiscoveryRun,
   getWorkDiscoveryRunByIdempotencyKey,
+  getProjectUnderstandingRun,
+  listPendingProjectUnderstandingRuns,
   setWorkDiscoveryFeedback,
   setWorkDiscoveryOnboardingState,
   updateWorkDiscoveryRun,
@@ -346,10 +351,84 @@ function hasLongVerbatimOverlap(value: string, sources: string[], minimumLength 
 
 export class WorkDiscoveryService {
   private readonly abortControllers = new Map<string, AbortController>();
+  private readonly executions = new Set<Promise<void>>();
+  private stopped = false;
   private readonly candidateContexts = new Map<string, WorkDiscoveryCandidate[]>();
   private readonly activity = new ActivityService();
 
   constructor(private readonly options: WorkDiscoveryServiceOptions) {}
+
+  startProjectUnderstanding(projectId: string): WorkDiscoveryRun {
+    if (this.stopped) throw new Error('Work understanding is stopping');
+    const project = this.options.projects.get(projectId);
+    if (!project) throw new Error('Project not found');
+    const existing = getProjectUnderstandingRun(projectId);
+    if (existing && (this.abortControllers.has(existing.id) || ['queued', 'probing', 'analyzing'].includes(existing.status))) return existing;
+    const config = this.options.getConfig();
+    const agentId = project.defaultAgentId ?? getDefaultAgentId(config);
+    const rootPath = project.workspaceRoot ?? resolveEffectiveAgentProfile(config, agentId).resolvedWorkspacePath;
+    const id = randomUUID();
+    const peerId = `project-understanding-${id}`;
+    const sessionKey = buildSessionKey({ agentId, source: 'webchat', accountId: 'default', peerKind: 'direct', peerId });
+    ensureSessionRecord(sessionKey, rootPath, {
+      ...sessionMetadata(agentId, peerId), projectId,
+    });
+    const run = createWorkDiscoveryRun({
+      id, idempotencyKey: id, source: 'manual_selected_directory', mode: 'background',
+      status: 'queued', rootPath, projectId, sessionKey, agentId,
+      modelRef: getAgentDefaultModelRef(config) ?? '',
+      scanPolicyVersion: WORK_DISCOVERY_SCAN_POLICY_VERSION, createdAt: Date.now(),
+    });
+    this.scheduleProjectUnderstanding(run);
+    return run;
+  }
+
+  resumeProjectUnderstanding(): void {
+    this.stopped = false;
+    for (const run of listPendingProjectUnderstandingRuns()) this.scheduleProjectUnderstanding(run);
+  }
+
+  async stop(): Promise<void> {
+    this.stopped = true;
+    for (const controller of this.abortControllers.values()) controller.abort();
+    await Promise.all(this.executions);
+  }
+
+  private trackExecution(execution: Promise<void>): void {
+    const tracked = execution.catch((err) => {
+      log.error({ err }, 'Work understanding execution failed');
+    }).finally(() => this.executions.delete(tracked));
+    this.executions.add(tracked);
+  }
+
+  private scheduleProjectUnderstanding(run: WorkDiscoveryRun): void {
+    if (this.abortControllers.has(run.id)) return;
+    const controller = new AbortController();
+    this.abortControllers.set(run.id, controller);
+    // Defer filesystem and model work until after the create response.
+    this.trackExecution(new Promise<void>((resolve) => setImmediate(resolve))
+      .then(() => this.runProjectUnderstanding(run, controller)));
+  }
+
+  private async runProjectUnderstanding(run: WorkDiscoveryRun, controller: AbortController): Promise<void> {
+    try {
+      while (!controller.signal.aborted) {
+        const current = this.getRun(run.id);
+        if (!current || !this.options.projects.get(run.projectId)) return;
+        if ((current.attempts ?? 0) >= 2) {
+          updateWorkDiscoveryRun(run.id, { status: 'failed', errorMessage: 'Project understanding was interrupted', completedAt: Date.now() });
+          return;
+        }
+        updateWorkDiscoveryRun(run.id, { status: 'queued', attempts: (current.attempts ?? 0) + 1,
+          errorCode: undefined, errorMessage: undefined, completedAt: undefined });
+        await this.execute(current, AbortSignal.any([controller.signal, AbortSignal.timeout(90_000)]));
+        const result = this.getRun(run.id);
+        if (result?.status !== 'failed' || (result.attempts ?? 0) >= 2) return;
+      }
+    } finally {
+      this.abortControllers.delete(run.id);
+    }
+  }
 
   isEnabled(): boolean {
     return this.options.getConfig().experimental?.workDiscoveryOnboarding === true;
@@ -766,6 +845,7 @@ export class WorkDiscoveryService {
     idempotencyKey: string;
     candidateContext?: WorkDiscoveryCandidate[];
   }): Promise<WorkDiscoveryRun> {
+    if (this.stopped) throw new Error('Work understanding is stopping');
     const existing = getWorkDiscoveryRunByIdempotencyKey(input.idempotencyKey);
     if (existing) return existing;
     const config = this.options.getConfig();
@@ -846,11 +926,15 @@ export class WorkDiscoveryService {
     if (input.candidateContext?.length) {
       this.candidateContexts.set(run.id, input.candidateContext.slice(0, 8));
     }
-    void this.execute(run, controller.signal);
+    this.trackExecution(this.execute(run, controller.signal));
     return run;
   }
 
   private publish(run: WorkDiscoveryRun): void {
+    if (run.mode === 'background') {
+      this.options.emit('project.updated', { id: run.projectId });
+      return;
+    }
     const suffix = run.status === 'completed'
       ? 'completed'
       : run.status === 'failed'
@@ -871,6 +955,19 @@ export class WorkDiscoveryService {
   private async execute(run: WorkDiscoveryRun, signal: AbortSignal): Promise<void> {
     const startedAt = Date.now();
     try {
+      signal.throwIfAborted();
+      if (run.mode === 'background') {
+        const preview = await previewWorkDiscoveryRoot(run.rootPath);
+        const approved = listWorkDiscoveryDirectorySources({ includeRevoked: true })
+          .find((source) => source.rootPath === preview.canonicalRootPath);
+        if (approved?.status === 'revoked') throw new Error('Project folder access was revoked');
+        const target = this.getModelProcessingTarget();
+        if (approved && target.remoteModel && approved.processingPolicy !== 'remote_allowed') {
+          throw new Error('Remote model processing is disabled for this folder');
+        }
+        if (!approved) await this.grantDirectorySource(run.rootPath, 'remote_allowed');
+        signal.throwIfAborted();
+      }
       let current = updateWorkDiscoveryRun(run.id, {
         status: 'probing',
         stage: 'folder_structure',
@@ -928,9 +1025,12 @@ export class WorkDiscoveryService {
       const analysis = await analyzeWorkContext({
         config: this.options.getConfig(),
         snapshot: investigatedSnapshot,
+        projectOverviewOnly: run.mode === 'background',
         ...(candidateContext?.length ? { candidateContext } : {}),
         signal,
       });
+      signal.throwIfAborted();
+      if (!this.options.projects.get(run.projectId)) throw new DOMException('Project deleted', 'AbortError');
       const discoveredProjects = candidateContext?.map((candidate) => ({
         rootPath: candidate.rootPath,
         displayName: candidate.displayName,
@@ -957,7 +1057,7 @@ export class WorkDiscoveryService {
         snapshot: investigatedSnapshot,
         evidence: unifiedEvidence,
       });
-      const knowledgeCandidates = workThreads.map((thread) => (
+      const knowledgeCandidates = (run.mode === 'background' ? [] : workThreads).map((thread) => (
         persistWorkKnowledge({
           canonicalKey: `work-knowledge:${thread.canonicalKey}`,
           title: thread.title,
@@ -968,21 +1068,34 @@ export class WorkDiscoveryService {
           evidenceRefs: thread.evidenceIds,
         })
       ));
-      const result = this.persistProfileCandidates(run, {
+      const analyzedResult = {
         ...baseResult,
         ...(workThreads.length ? { workThreads } : {}),
         ...(knowledgeCandidates.length ? { knowledgeCandidates } : {}),
-      });
+      };
+      const result = run.mode === 'background'
+        ? { ...analyzedResult, profileCandidates: [] }
+        : this.persistProfileCandidates(run, analyzedResult);
+      if (run.mode === 'background') {
+        const uncertaintyTitle = /[\u4e00-\u9fff]/.test(result.projectSummary) ? '待确认：' : 'Unconfirmed:';
+        saveProjectUnderstandingOverview({
+          projectId: run.projectId,
+          content: [result.projectSummary, result.currentState,
+            ...(result.uncertainties.length ? [uncertaintyTitle, ...result.uncertainties.map((item) => `- ${item}`)] : []),
+          ].join('\n\n'),
+          evidenceRefs: unifiedEvidence.map((item) => item.id),
+        });
+      }
       current = updateWorkDiscoveryRun(run.id, { status: 'analyzing', stage: 'next_steps' })!;
       this.publish(current);
-      await this.options.sessions.appendTranscriptCustomMessageEntry(run.sessionKey, {
+      if (run.mode !== 'background') await this.options.sessions.appendTranscriptCustomMessageEntry(run.sessionKey, {
         customType: 'work-discovery-result',
         content: workDiscoveryResultMarkdown(result),
         display: true,
         details: { runId: run.id, result },
       });
       const project = this.options.projects.get(run.projectId);
-      await this.options.sessions.updateSessionMetadata(run.sessionKey, {
+      if (run.mode !== 'background') await this.options.sessions.updateSessionMetadata(run.sessionKey, {
         name: project ? `Continue work on ${project.name}` : 'Continue recent work',
         hiddenFromSessionList: false,
       });
@@ -999,6 +1112,7 @@ export class WorkDiscoveryService {
           log.debug({ err: error, runId: run.id, phase: 'source_fingerprint' }, 'Work source fingerprint update failed');
         }
       }
+      signal.throwIfAborted();
       current = updateWorkDiscoveryRun(run.id, {
         status: 'completed',
         stage: 'next_steps',
@@ -1023,10 +1137,14 @@ export class WorkDiscoveryService {
         ],
       });
       this.publish(current);
-      this.options.emit('session.transcript_updated', { key: run.sessionKey });
+      if (run.mode !== 'background') this.options.emit('session.transcript_updated', { key: run.sessionKey });
       log.info({ runId: run.id, projectId: run.projectId, sessionKey: run.sessionKey, durationMs: Date.now() - startedAt }, 'Work discovery completed');
     } catch (error) {
-      const canceled = signal.aborted || (error instanceof DOMException && error.name === 'AbortError');
+      if (run.mode === 'background' && this.stopped) {
+        updateWorkDiscoveryRun(run.id, { status: 'queued', errorCode: undefined, errorMessage: undefined });
+        return;
+      }
+      const canceled = (signal.aborted && signal.reason?.name !== 'TimeoutError') || (error instanceof DOMException && error.name === 'AbortError');
       const code = canceled ? 'canceled' : errorCode(error);
       const message = canceled ? 'Analysis canceled' : error instanceof Error ? error.message : String(error);
       const current = updateWorkDiscoveryRun(run.id, {
@@ -1036,7 +1154,7 @@ export class WorkDiscoveryService {
         ...(canceled ? { canceledAt: Date.now() } : { completedAt: Date.now() }),
       });
       updateWorkDiscoverySourceRefreshForRun(run.id, 'failed');
-      if (current) this.publish(current);
+      if (current && (current.mode !== 'background' || canceled || (current.attempts ?? 0) >= 2)) this.publish(current);
       this.activity.record({
         type: canceled ? 'work_discovery.canceled' : 'work_discovery.failed',
         primaryObject: { kind: 'project', id: run.projectId },
@@ -1052,7 +1170,7 @@ export class WorkDiscoveryService {
       });
       log.warn({ err: error, runId: run.id, projectId: run.projectId, phase: 'analysis', errorCode: code }, `Work discovery failed: ${message}`);
     } finally {
-      this.abortControllers.delete(run.id);
+      if (run.mode !== 'background') this.abortControllers.delete(run.id);
       this.candidateContexts.delete(run.id);
     }
   }
@@ -1109,8 +1227,10 @@ export class WorkDiscoveryService {
   }
 
   retryRun(id: string): WorkDiscoveryRun | null {
+    if (this.stopped) throw new Error('Work understanding is stopping');
     const run = getWorkDiscoveryRun(id);
     if (!run) return null;
+    if (this.abortControllers.has(id)) return run;
     if (run.status !== 'failed' && run.status !== 'canceled') return run;
     const queued = updateWorkDiscoveryRun(id, {
       status: 'queued',
@@ -1119,15 +1239,20 @@ export class WorkDiscoveryService {
       errorMessage: undefined,
       completedAt: undefined,
       canceledAt: undefined,
+      attempts: 0,
     });
     if (!queued) return null;
+    if (queued.mode === 'background') {
+      this.scheduleProjectUnderstanding(queued);
+      return queued;
+    }
     const controller = new AbortController();
     this.abortControllers.set(id, controller);
     if (run.source === 'onboarding_selected_directory') {
       setWorkDiscoveryOnboardingState({ status: 'in_progress', activeRunId: id });
     }
     this.publish(queued);
-    void this.execute(queued, controller.signal);
+    this.trackExecution(this.execute(queued, controller.signal));
     return queued;
   }
 
