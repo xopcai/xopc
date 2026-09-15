@@ -6,4 +6,5 @@ export interface DiscussionDetail {
   note: import('../notes/types.js').Note;
   transcript: DiscussionTranscript;
   organization?: DiscussionOrganizationRecord;
+  recordingJob?: import('@xopcai/gateway-contract').DiscussionRecordingJob;
 }

@@ -20,7 +20,7 @@ type ActionTask = { actionId: string; taskId: string; phase?: string; resolution
 
 export function DiscussionNoteSections({ noteId }: { noteId: string }) {
   const zh = useLocaleStore(state => state.language) === 'zh';
-  const { data: detail, mutate, isLoading } = useSWR(['note-discussion-document', noteId], () => getDiscussionForNote(noteId), { refreshInterval: data => data && ['recording', 'stopping', 'sealing', 'organizing'].includes(data.discussion.status) ? 3_000 : 0 });
+  const { data: detail, mutate, isLoading } = useSWR(['note-discussion-document', noteId], () => getDiscussionForNote(noteId), { refreshInterval: data => data && (['recording', 'stopping', 'sealing', 'organizing'].includes(data.discussion.status) || data.recordingJob?.state === 'queued' || data.recordingJob?.state === 'running') ? 3_000 : 0 });
   const id = detail?.discussion.id;
   const base = `/api/discussions/${encodeURIComponent(id ?? '')}`;
   const { data: tasks = [], mutate: refreshTasks } = useSWR<ActionTask[]>(id ? `${base}/actions` : null, path => fetchJson(apiUrl(path)), { refreshInterval: 10_000 });
@@ -88,6 +88,7 @@ export function DiscussionNoteSections({ noteId }: { noteId: string }) {
       <div className="ml-auto flex items-center gap-2 text-xs"><Download className="size-3" />{['md','txt','srt'].map(format => <a key={format} className="text-accent-fg" href={apiUrl(`${base}/export?format=${format}`)} download>{format.toUpperCase()}</a>)}</div>
     </nav>
     {error ? <p role="alert" className="px-4 py-2 text-sm text-danger">{error}</p> : null}
+    {detail.recordingJob?.state === 'queued' || detail.recordingJob?.state === 'running' ? <p role="status" className="px-4 py-2 text-sm text-fg-muted">{zh ? '录音已上传，正在后台校验与保存。关闭此页面不会中断处理。' : 'Recording uploaded. Verification and saving continue in the background, even if you close this page.'}</p> : null}
     {discussion.status === 'needs_attention' ? <div className="flex gap-2 p-4 text-sm text-danger"><span>{discussion.failureMessage}</span><button disabled={busy} onClick={() => void operation(() => retryDiscussion(discussion.id))}>{zh ? '重试' : 'Retry'}</button></div> : null}
     {record && record.transcriptRevision !== transcript.revision ? <p className="px-4 py-2 text-xs text-fg-muted">{zh ? '转写已修改，当前纪要引用的是修改前版本。重新整理可生成新版纪要。' : 'Transcript changed. This summary cites the previous revision; regenerate to update.'}</p> : null}
     <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">

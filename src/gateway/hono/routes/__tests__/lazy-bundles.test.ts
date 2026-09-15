@@ -7,7 +7,7 @@ import {
 
 describe('lazy route bundles', () => {
   it('maps meeting capture and nested upload resources without swallowing notes or voice', () => {
-    for (const path of ['/api/discussions', '/api/discussion-capture/settings', '/api/discussions/metrics', '/api/discussions/by-note/id', '/api/discussions/id/recording/chunks/0', '/api/discussions/id/recording/complete', '/api/discussions/id/audio', '/api/discussions/id/export', '/api/discussions/id/actions/action/convert', '/api/discussions/id/transcript', '/api/discussions/id/organize', '/api/discussions/id/summary']) {
+    for (const path of ['/api/discussions', '/api/discussion-capture/settings', '/api/discussions/metrics', '/api/discussions/by-note/id', '/api/discussions/id/recording/chunks/0', '/api/discussions/id/capture/seal', '/api/discussions/id/recording/job', '/api/discussions/id/audio', '/api/discussions/id/export', '/api/discussions/id/actions/action/convert', '/api/discussions/id/transcript', '/api/discussions/id/organize', '/api/discussions/id/summary']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('discussions');
     }
     for (const path of ['/api/discussions-other', '/api/notes/id', '/api/voice']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('discussions');

@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 
+import { DISCUSSION_MAX_DURATION_MS, DISCUSSION_SEGMENT_MAX_BYTES, type DiscussionRecordingManifest } from '@xopcai/gateway-contract';
+
 import { ObjectLinkService } from '../activity/service.js';
 import type { NotesService } from '../notes/service.js';
 import type { ProjectService } from '../projects/project-service.js';
@@ -37,9 +39,9 @@ import { editMeeting } from './edits.js';
 import { saveTranscriptRevision, readTranscriptRevision, refreshCanonicalTranscript } from './revisions.js';
 import { assembleDiscussionTranscript } from './transcript.js';
 
-import { DISCUSSION_MAX_DURATION_MS, DISCUSSION_SEGMENT_MAX_BYTES } from '@xopcai/gateway-contract';
 import { DiscussionServiceError } from './errors.js';
-import { listRecordingChunks, saveRecordingChunk, completeRecording, removeRecordingChunks } from './recording.js';
+import { listRecordingChunks, saveRecordingChunk, completeRecording, removeRecordingChunks, validateRecordingManifest } from './recording.js';
+import { getRecordingJob, getRecordingJobInput, submitRecordingJob, claimRecordingJob, renewRecordingJob, finishRecordingJob, cancelRecordingJob } from './recordingJobs.js';
 export { DiscussionServiceError } from './errors.js';
 export { DISCUSSION_MAX_DURATION_MS, DISCUSSION_AUDIO_MAX_BYTES, DISCUSSION_SEGMENT_MAX_BYTES } from '@xopcai/gateway-contract';
 
@@ -53,6 +55,8 @@ export class DiscussionService {
   private readonly createsInFlight = new Map<string, Promise<DiscussionDetail>>();
   private readonly mutationTails = new Map<string, Promise<unknown>>();
   private readonly objectLinks = new ObjectLinkService();
+  private readonly recordingOwner = randomUUID();
+  private readonly recordingControllers = new Map<string, AbortController>();
 
   constructor(
     private readonly notes: NotesService,
@@ -213,6 +217,7 @@ export class DiscussionService {
       || !Number.isFinite(input.endedAtMs)
       || input.startedAtMs < 0
       || input.endedAtMs <= input.startedAtMs
+      || input.endedAtMs > DISCUSSION_MAX_DURATION_MS
       || input.endedAtMs - input.startedAtMs > 25_000
     ) {
       throw new DiscussionServiceError('invalid_input', 'Invalid live transcript segment timing');
@@ -301,50 +306,77 @@ export class DiscussionService {
       if (!['recording', 'stopping', 'needs_attention'].includes(capture.status) || capture.audioDeletedAt || capture.audioAttachmentId) {
         throw new DiscussionServiceError('conflict', 'Recording no longer accepts chunks');
       }
+      const job = getRecordingJob(id);
+      if (job && ['queued', 'running'].includes(job.state)) throw new DiscussionServiceError('conflict', 'Recording is being finalized');
       return saveRecordingChunk(capture, sequence, sha256, body);
     });
   }
 
-  async completeRecording(id: string, input: { chunkCount: number; mimeType: string; fileName: string }) {
+  recordingJob(id: string) {
+    if (!getDiscussionCapture(id)) throw new DiscussionServiceError('not_found', 'Discussion not found');
+    return getRecordingJob(id);
+  }
+
+  async sealRecording(id: string, input: DiscussionRecordingManifest) {
+    if (!Number.isInteger(input.lastSequence) || input.lastSequence < -1 || input.lastSequence > 2_000) throw new DiscussionServiceError('invalid_input', 'Invalid final segment sequence');
     return this.enqueueMutation(id, async () => {
       const capture = getDiscussionCapture(id);
       if (!capture) throw new DiscussionServiceError('not_found', 'Discussion not found');
-      if (capture.audioAttachmentId) return this.detail(capture);
+      const job = getRecordingJob(id);
+      if (capture.audioAttachmentId && job?.state === 'completed') return submitRecordingJob(id, input);
       if (!['recording', 'stopping', 'needs_attention'].includes(capture.status) || capture.audioDeletedAt) {
         throw new DiscussionServiceError('conflict', 'Recording cannot be completed');
       }
-      const updated = await completeRecording(capture, input, this.notes);
-      this.emit?.('discussion.updated', updated);
-      return this.detail(updated);
+      if (!capture.audioAttachmentId) validateRecordingManifest(capture, input);
+      const submitted = runSqliteWriteTransaction(() => {
+        const submitted = submitRecordingJob(id, input);
+        const updated = updateDiscussionCapture(id, {
+          status: 'stopping', expectedLastSequence: input.lastSequence,
+          recordingStoppedAt: capture.recordingStoppedAt ?? Date.now(),
+          failureStage: undefined, failureCode: undefined, failureMessage: undefined,
+        }, [capture.status]);
+        if (!updated) throw new DiscussionServiceError('conflict', 'Discussion changed while submitting recording');
+        return submitted;
+      });
+      this.emit?.('discussion.updated', getDiscussionCapture(id));
+      return submitted;
     });
   }
 
-  async stop(id: string, lastSequence: number, durationMs: number): Promise<DiscussionDetail | null> {
-    return this.enqueueMutation(id, async () => {
-      const capture = getDiscussionCapture(id);
-      if (!capture) return null;
-      if (capture.status === 'stopping' || capture.status === 'sealing' || capture.status === 'organizing'
-        || capture.status === 'completed') return this.detail(capture);
-      if (capture.status !== 'recording') throw new DiscussionServiceError('conflict', 'Discussion cannot be stopped');
-      if (!Number.isInteger(lastSequence) || lastSequence < -1 || lastSequence > 2_000) {
-        throw new DiscussionServiceError('invalid_input', 'Invalid final segment sequence');
+  /** Runs inside the existing sealer lifecycle; unfinished leases survive process restart. */
+  async processRecordingJob(): Promise<void> {
+    const job = claimRecordingJob(this.recordingOwner);
+    if (!job) return;
+    await this.enqueueMutation(job.discussionId, async () => {
+      const controller = new AbortController();
+      this.recordingControllers.set(job.discussionId, controller);
+      const assertLease = () => {
+        controller.signal.throwIfAborted();
+        if (!renewRecordingJob(job.id, this.recordingOwner)) throw new Error('Recording job lease expired');
+      };
+      const renewal = setInterval(() => {
+        if (!renewRecordingJob(job.id, this.recordingOwner)) controller.abort();
+      }, 15_000);
+      renewal.unref();
+      try {
+        assertLease();
+        const capture = getDiscussionCapture(job.discussionId);
+        if (!capture || capture.audioDeletedAt || capture.status === 'cancelled') throw new Error('Recording is no longer available');
+        const updated = capture.audioAttachmentId ? capture : await completeRecording(capture, job.input, this.notes, assertLease, controller.signal);
+        if (finishRecordingJob(job.id, this.recordingOwner)) this.emit?.('discussion.updated', updated);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (finishRecordingJob(job.id, this.recordingOwner, message)) {
+          const failed = updateDiscussionCapture(job.discussionId, {
+            status: 'needs_attention', failureStage: 'audio_upload', failureCode: 'recording_finalize_failed', failureMessage: message.slice(0, 1_000),
+          }, ['stopping']);
+          if (failed) this.emit?.('discussion.updated', failed);
+        }
+        log.warn({ err: error, discussionId: job.discussionId, jobId: job.id }, 'Recording finalization failed');
+      } finally {
+        clearInterval(renewal);
+        this.recordingControllers.delete(job.discussionId);
       }
-      if (!Number.isFinite(durationMs) || durationMs < 1_000 || durationMs > DISCUSSION_MAX_DURATION_MS) {
-        throw new DiscussionServiceError('invalid_input', 'Invalid recording duration');
-      }
-      const now = Date.now();
-      const updated = updateDiscussionCapture(id, {
-        status: 'stopping',
-        expectedLastSequence: lastSequence,
-        durationMs: capture.audioAttachmentId ? capture.durationMs : Math.round(durationMs),
-        recordingStoppedAt: now,
-        failureStage: undefined,
-        failureCode: undefined,
-        failureMessage: undefined,
-      }, ['recording']);
-      if (!updated) throw new DiscussionServiceError('conflict', 'Discussion changed while finishing');
-      this.emit?.('discussion.updated', updated);
-      return this.detail(updated);
     });
   }
 
@@ -353,6 +385,10 @@ export class DiscussionService {
     if (!capture) return null;
     if (capture.status !== 'needs_attention') {
       throw new DiscussionServiceError('conflict', 'Only discussions needing attention can be retried');
+    }
+    if (getRecordingJob(id)?.state === 'failed') {
+      await this.sealRecording(id, getRecordingJobInput(id)!);
+      return this.get(id);
     }
     const updated = updateDiscussionCapture(id, {
       status: capture.canonicalTranscript ? 'organizing' : 'stopping',
@@ -367,6 +403,11 @@ export class DiscussionService {
   }
 
   async cancel(id: string): Promise<DiscussionDetail | null> {
+    const active = getDiscussionCapture(id);
+    if (active && ['recording', 'stopping'].includes(active.status)) {
+      cancelRecordingJob(id);
+      this.recordingControllers.get(id)?.abort();
+    }
     return this.enqueueMutation(id, async () => {
     const capture = getDiscussionCapture(id);
     if (!capture) return null;
@@ -376,6 +417,7 @@ export class DiscussionService {
     }
     const updated = updateDiscussionCapture(id, { status: 'cancelled' }, ['recording', 'stopping']);
     if (!updated) throw new DiscussionServiceError('conflict', 'Discussion changed while cancelling');
+    cancelRecordingJob(id);
     deleteDiscussionSegmentAudio(id);
     await removeRecordingChunks(capture);
     this.emit?.('discussion.updated', updated);
@@ -391,6 +433,7 @@ export class DiscussionService {
         throw new DiscussionServiceError('conflict', 'Audio cannot be deleted while discussion processing is active');
       }
       await removeRecordingChunks(capture);
+      cancelRecordingJob(id);
       if (capture.audioAttachmentId) await this.notes.removeAttachment(capture.noteId, capture.audioAttachmentId);
       deleteDiscussionSegmentAudio(id);
       const updated = updateDiscussionCapture(id, {
@@ -423,10 +466,12 @@ export class DiscussionService {
   private async detail(capture: DiscussionCapture): Promise<DiscussionDetail> {
     const note = await this.notes.getNote(capture.noteId);
     if (!note) throw new DiscussionServiceError('not_found', 'Discussion note not found');
+    const recordingJob = getRecordingJob(capture.id);
     return {
       discussion: capture,
       note,
       transcript: this.transcript(capture.id)!,
+      ...(recordingJob ? { recordingJob } : {}),
       ...(getLatestDiscussionOrganization(capture.id)
         ? { organization: getLatestDiscussionOrganization(capture.id)! }
         : {}),

@@ -15,7 +15,6 @@ import {
   getDiscussion,
   getDiscussionCaptureSettings,
   getDiscussionTranscript,
-  stopDiscussion,
   unlinkDiscussionProject,
   uploadDiscussionSegment,
 } from './discussion-api';
@@ -243,7 +242,7 @@ export function GlobalDiscussionCaptureHost() {
       await uploadDraftRecording(stopped, created.discussion.id, setUploadProgress);
       // The original recording repairs failed live text; a live outage must not block saving.
       await flushSegmentQueue(stopped.id, created.discussion.id).catch(() => undefined);
-      setDetail(await stopDiscussion(created.discussion.id, stopped.lastSequence, stopped.durationMs));
+      setDetail(await getDiscussion(created.discussion.id));
       await recorder.discard(stopped.id);
       segmentQueueTargetRef.current = null;
       setPendingSegmentCount(0);
@@ -309,15 +308,16 @@ export function GlobalDiscussionCaptureHost() {
         return;
       }
       if (created.discussion.status === 'cancelled') throw new Error('This recording was cancelled');
-      if (!created.discussion.audioAttachmentId) await uploadDraftRecording(candidate, created.discussion.id, setUploadProgress);
       const pendingSegments = await listDiscussionLiveSegments(candidate.id);
       const lastSequence = pendingSegments.reduce((highest, segment) => Math.max(highest, segment.sequence), candidate.lastSequence);
+      if (!created.discussion.audioAttachmentId) await uploadDraftRecording({ ...candidate, lastSequence }, created.discussion.id, setUploadProgress);
       await flushSegmentQueue(candidate.id, created.discussion.id).catch(() => undefined);
-      if (created.discussion.status === 'needs_attention') {
+      const current = await getDiscussion(created.discussion.id);
+      if (current.discussion.status === 'needs_attention') {
         const { retryDiscussion } = await import('./discussion-api');
         await retryDiscussion(created.discussion.id);
       } else {
-        setDetail(await stopDiscussion(created.discussion.id, lastSequence, Math.max(1_000, candidate.durationMs)));
+        setDetail(current);
       }
       await recorder.discard(candidate.id);
     } catch (error) {
@@ -345,7 +345,7 @@ export function GlobalDiscussionCaptureHost() {
           <p className="mt-1 text-xs text-fg-muted">
             {pendingSegmentCount > 0
               ? copy.syncingSegments.replace('{{count}}', String(pendingSegmentCount))
-              : copy.saved}
+              : uploadProgress >= 100 ? copy.verifyingRecording : copy.saved}
           </p>
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-hover">
             <div className="h-full bg-accent transition-[width]" style={{ width: `${uploadProgress}%` }} />
