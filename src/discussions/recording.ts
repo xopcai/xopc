@@ -3,11 +3,11 @@ import { createReadStream } from 'node:fs';
 import { mkdir, open, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { DISCUSSION_AUDIO_MAX_BYTES, DISCUSSION_CHUNK_MAX_BYTES, DISCUSSION_MAX_DURATION_MS, type DiscussionRecordingChunk } from '@xopcai/gateway-contract';
+import { DISCUSSION_AUDIO_MAX_BYTES, DISCUSSION_CHUNK_MAX_BYTES, DISCUSSION_MAX_DURATION_MS, type DiscussionRecordingChunk, type DiscussionRecordingManifest } from '@xopcai/gateway-contract';
 
 import { resolveNoteMediaDir } from '../notes/paths.js';
 import type { NotesService } from '../notes/service.js';
-import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
+import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { forEachNormalizedAudioSegment } from '../voice/audio/normalize.js';
 import { decodeWavToMonoFloat32 } from '../voice/local/wav.js';
 
@@ -66,12 +66,17 @@ export async function saveRecordingChunk(capture: DiscussionCapture, sequence: n
   }
 }
 
-export async function completeRecording(capture: DiscussionCapture, input: { chunkCount: number; mimeType: string; fileName: string }, notes: NotesService): Promise<DiscussionCapture> {
+export function validateRecordingManifest(capture: DiscussionCapture, input: DiscussionRecordingManifest): void {
   const mimeType = input.mimeType.split(';')[0];
   if (!['audio/wav', 'audio/x-wav', 'audio/webm', 'audio/ogg', 'audio/mpeg', 'audio/mp4'].includes(mimeType!)) throw invalid('Unsupported audio type');
   const chunks = listRecordingChunks(capture.id);
   if (!Number.isSafeInteger(input.chunkCount) || input.chunkCount < 1 || chunks.length !== input.chunkCount || chunks.some((chunk, index) => chunk.sequence !== index)) throw invalid('Recording has missing chunks');
-  const target = join(directory(capture), 'assembled');
+}
+
+export async function completeRecording(capture: DiscussionCapture, input: DiscussionRecordingManifest, notes: NotesService, assertLease: () => void, signal: AbortSignal): Promise<DiscussionCapture> {
+  validateRecordingManifest(capture, input);
+  const chunks = listRecordingChunks(capture.id);
+  const target = join(directory(capture), `assembled-${randomUUID()}`);
   const file = await open(target, 'w');
   const hash = createHash('sha256');
   try {
@@ -81,6 +86,7 @@ export async function completeRecording(capture: DiscussionCapture, input: { chu
       let bytes = 0;
       try {
         for await (const buffer of createReadStream(join(directory(capture), String(chunk.sequence)))) {
+          signal.throwIfAborted();
           hash.update(buffer);
           chunkHash.update(buffer);
           bytes += buffer.length;
@@ -88,7 +94,10 @@ export async function completeRecording(capture: DiscussionCapture, input: { chu
         }
         if (bytes !== chunk.bytes || chunkHash.digest('hex') !== chunk.sha256) throw invalid('Stored recording chunk is corrupt');
       } catch (error) {
-        getSqliteDatabase().prepare('DELETE FROM discussion_recording_chunks WHERE discussion_id=? AND sequence=?').run(capture.id, chunk.sequence);
+        if (!signal.aborted && (error instanceof DiscussionServiceError || (error as NodeJS.ErrnoException).code === 'ENOENT')) {
+          assertLease();
+          getSqliteDatabase().prepare('DELETE FROM discussion_recording_chunks WHERE discussion_id=? AND sequence=?').run(capture.id, chunk.sequence);
+        }
         throw error;
       }
     }
@@ -96,12 +105,13 @@ export async function completeRecording(capture: DiscussionCapture, input: { chu
   } finally { await file.close(); }
     // Decode all media before accepting it, with bounded memory and duration.
     let durationMs = 0;
-    await forEachNormalizedAudioSegment({ filePath: target, segmentSeconds: 30, maxDurationSeconds: DISCUSSION_MAX_DURATION_MS / 1_000, signal: AbortSignal.timeout(180_000) }, async (buffer) => {
+    await forEachNormalizedAudioSegment({ filePath: target, segmentSeconds: 30, maxDurationSeconds: DISCUSSION_MAX_DURATION_MS / 1_000, signal: AbortSignal.any([signal, AbortSignal.timeout(180_000)]) }, async (buffer) => {
       durationMs += decodeWavToMonoFloat32(buffer).durationSeconds * 1_000;
     });
     if (durationMs < 1_000) throw invalid('Recording must contain at least one second of audio');
     const latest = getDiscussionCapture(capture.id);
     if (!latest || latest.status === 'cancelled' || latest.audioDeletedAt) throw new DiscussionServiceError('conflict', 'Recording was deleted or cancelled');
+    assertLease();
     const audioSha256 = hash.digest('hex');
     const attachment = await notes.addAttachment(capture.noteId, {
       name: input.fileName.trim().slice(0, 200) || 'meeting.webm', buffer: { filePath: target }, mimeType: input.mimeType,
@@ -115,10 +125,14 @@ export async function completeRecording(capture: DiscussionCapture, input: { chu
     const savedDirectory = await open(resolveNoteMediaDir(capture.noteId), 'r');
     try { await savedDirectory.sync(); } finally { await savedDirectory.close(); }
 
-    const updated = updateDiscussionCapture(capture.id, {
-      audioAttachmentId: attachment.id, mimeType: input.mimeType, audioSha256,
-      durationMs: Math.round(durationMs), audioSizeBytes: chunks.reduce((sum, chunk) => sum + chunk.bytes, 0),
-    }, ['recording', 'stopping', 'needs_attention']);
+    const updated = runSqliteWriteTransaction(() => {
+      assertLease();
+      return updateDiscussionCapture(capture.id, {
+        status: 'stopping',
+        audioAttachmentId: attachment.id, mimeType: input.mimeType, audioSha256,
+        durationMs: Math.round(durationMs), audioSizeBytes: chunks.reduce((sum, chunk) => sum + chunk.bytes, 0),
+      }, ['recording', 'stopping', 'needs_attention']);
+    });
     if (!updated) throw new DiscussionServiceError('conflict', 'Recording changed while completing');
     await removeRecordingChunks(capture);
     return updated;

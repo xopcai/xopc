@@ -3,9 +3,13 @@ import { updateDiscussionCapture } from '../repository.js';
 import { convertMeetingAction, meetingActionTasks } from '../action-tasks.js';
 import { createDiscussionOrganization, completeDiscussionOrganization } from '../repository.js';
 import { saveTranscriptRevision, replaceTranscriptSegments } from '../revisions.js';
+import { claimRecordingJob, finishRecordingJob } from '../recordingJobs.js';
+import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { auth } from '../../gateway/hono/middleware/auth.js';
+import { gatewayScopes } from '../../gateway/hono/middleware/scopes.js';
+import { getGatewayPrincipal, setGatewayPrincipal } from '../../gateway/security/gateway-principal.js';
 import { registerAuthenticatedLazyRouteFallback, resetLazyRouteBundlesForTests } from '../../gateway/hono/routes/lazy-fallback.js';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
@@ -15,7 +19,7 @@ import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NotesService, NotesStore } from '../../notes/index.js';
 import { ProjectService } from '../../projects/index.js';
@@ -63,14 +67,22 @@ describe('discussion note document', () => {
     return service.create({ clientRequestId, consentPolicyVersion, source: 'web' });
   }
 
-  async function uploadRecording(id: string, _file: unknown, durationMs: number) {
+  async function finalizeRecording(target: DiscussionService, id: string, input: { chunkCount: number; mimeType: string; fileName: string }) {
+    await target.sealRecording(id, { ...input, lastSequence: Math.max(-1, ...target.transcript(id)!.segments.map(segment => segment.sequence)) });
+    await target.processRecordingJob();
+    expect(target.recordingJob(id)?.state).toBe('completed');
+    return (await target.get(id))!;
+  }
+
+  async function uploadRecording(id: string, _file: unknown, durationMs: number, finalize = true) {
     const buffer = Buffer.alloc(44 + Math.round(durationMs * 32));
     buffer.write('RIFF', 0); buffer.writeUInt32LE(buffer.length - 8, 4); buffer.write('WAVEfmt ', 8);
     buffer.writeUInt32LE(16, 16); buffer.writeUInt16LE(1, 20); buffer.writeUInt16LE(1, 22);
     buffer.writeUInt32LE(16_000, 24); buffer.writeUInt32LE(32_000, 28); buffer.writeUInt16LE(2, 32); buffer.writeUInt16LE(16, 34);
     buffer.write('data', 36); buffer.writeUInt32LE(buffer.length - 44, 40);
     await service.uploadRecordingChunk(id, 0, createHash('sha256').update(buffer).digest('hex'), new Blob([buffer]).stream());
-    return service.completeRecording(id, { chunkCount: 1, mimeType: 'audio/wav', fileName: 'meeting.wav' });
+    if (!finalize) return (await service.get(id))!;
+    return finalizeRecording(service, id, { chunkCount: 1, mimeType: 'audio/wav', fileName: 'meeting.wav' });
   }
 
   it('creates one durable task per action and rejects a stale summary', async () => {
@@ -125,6 +137,11 @@ describe('discussion note document', () => {
     resetLazyRouteBundlesForTests();
     const app = new Hono();
     app.use(auth({ getResolvedAuth: () => ({ mode: 'token', token: 'meeting-test', allowTailscale: false }) }));
+    app.use(async (c, next) => {
+      if (c.req.header('x-test-read-only')) setGatewayPrincipal(c, { ...getGatewayPrincipal(c), scopes: ['workspace.read'] });
+      await next();
+    });
+    app.use(gatewayScopes());
     registerAuthenticatedLazyRouteFallback(app, { service: { discussions: service, notesServiceInstance: notes }, strictRateLimitMiddleware: async (_c: unknown, next: () => Promise<void>) => next() } as never);
     const server = serve({ fetch: app.fetch, port: 0, hostname: '127.0.0.1' });
     try {
@@ -137,6 +154,17 @@ describe('discussion note document', () => {
       const response = await fetch(base + path, { method: 'PUT', headers: { authorization: 'Bearer meeting-test', 'x-audio-sha256': createHash('sha256').update('test').digest('hex') }, body: 'test' });
       expect(response.status).toBe(201);
       expect(await response.json()).toMatchObject({ sequence: 0, bytes: 4 });
+      const sealUrl = `${base}/api/discussions/${created.discussion.id}/capture/seal`;
+      expect((await fetch(sealUrl, { method: 'POST' })).status).toBe(401);
+      expect((await fetch(sealUrl, { method: 'POST', headers: { authorization: 'Bearer meeting-test', 'x-test-read-only': '1' } })).status).toBe(403);
+      const sealed = await fetch(sealUrl, { method: 'POST', headers: { authorization: 'Bearer meeting-test', 'content-type': 'application/json' }, body: JSON.stringify({ chunkCount: 1, mimeType: 'audio/wav', fileName: 'meeting.wav', lastSequence: -1 }) });
+      expect(sealed.status).toBe(202);
+      const job = await sealed.json() as { id: string };
+      const jobUrl = `${base}/api/discussions/${created.discussion.id}/recording/job`;
+      expect((await fetch(jobUrl)).status).toBe(401);
+      expect((await fetch(jobUrl, { headers: { authorization: 'Bearer meeting-test', 'x-test-read-only': '1' } })).status).toBe(200);
+      expect(await (await fetch(jobUrl, { headers: { authorization: 'Bearer meeting-test' } })).json()).toMatchObject({ id: job.id, state: 'queued' });
+      await service.cancel(created.discussion.id);
       const playable = await create('http-playback');
       await uploadRecording(playable.discussion.id, { name: 'meeting.wav', buffer: Buffer.from('audio'), mimeType: 'audio/wav' }, 2_000);
       const audioUrl = `${base}/api/discussions/${playable.discussion.id}/audio`;
@@ -171,7 +199,7 @@ describe('discussion note document', () => {
         await service.uploadRecordingChunk(capture.discussion.id, sequence++, createHash('sha256').update(bytes).digest('hex'), new Blob([bytes]).stream());
       }
     } finally { await file.close(); }
-    const result = await service.completeRecording(capture.discussion.id, { chunkCount: sequence, mimeType: 'audio/wav', fileName: 'two-hour.wav' });
+    const result = await finalizeRecording(service, capture.discussion.id, { chunkCount: sequence, mimeType: 'audio/wav', fileName: 'two-hour.wav' });
     expect(result.discussion.durationMs).toBe(7_200_000);
     expect(result.discussion.audioSizeBytes).toBeGreaterThan(200_000_000);
     expect(service.recordingChunks(capture.discussion.id)).toEqual([]);
@@ -185,10 +213,92 @@ describe('discussion note document', () => {
     const restored = new DiscussionService(notes, projects);
     expect(restored.recordingChunks(created.discussion.id)).toEqual([{ sequence: 0, sha256: hash, bytes: buffer.length }]);
     await expect(restored.uploadRecordingChunk(created.discussion.id, 0, 'a'.repeat(64), new Blob([buffer]).stream())).rejects.toThrow('different audio');
-    await expect(restored.completeRecording(created.discussion.id, { chunkCount: 2, mimeType: 'audio/wav', fileName: 'x.wav' })).rejects.toThrow('missing chunks');
+    await expect(restored.sealRecording(created.discussion.id, { chunkCount: 2, mimeType: 'audio/wav', fileName: 'x.wav', lastSequence: -1 })).rejects.toThrow('missing chunks');
     await restored.cancel(created.discussion.id);
     expect(restored.recordingChunks(created.discussion.id)).toEqual([]);
     await expect(restored.uploadRecordingChunk(created.discussion.id, 1, hash, new Blob([buffer]).stream())).rejects.toThrow('no longer accepts');
+  });
+
+  it('recovers an expired finalization lease and fences the previous owner', async () => {
+    const created = await create('job-restart');
+    const id = created.discussion.id;
+    const buffer = Buffer.from('invalid media');
+    await service.uploadRecordingChunk(id, 0, createHash('sha256').update(buffer).digest('hex'), new Blob([buffer]).stream());
+    const manifest = { chunkCount: 1, mimeType: 'audio/wav', fileName: 'meeting.wav', lastSequence: -1 };
+    const job = await service.sealRecording(id, manifest);
+    expect((await service.sealRecording(id, manifest)).id).toBe(job.id);
+    await expect(service.sealRecording(id, { ...manifest, fileName: 'other.wav' })).rejects.toThrow('manifest differs');
+    expect(claimRecordingJob('dead-worker')?.id).toBe(job.id);
+    expect(claimRecordingJob('second-worker')).toBeNull();
+    getSqliteDatabase().prepare('UPDATE discussion_recording_jobs SET lease_until=0 WHERE id=?').run(job.id);
+    const restored = new DiscussionService(notes, projects);
+    await restored.processRecordingJob();
+    expect(restored.recordingJob(id)?.state).toBe('failed');
+    expect((await restored.get(id))?.discussion.status).toBe('needs_attention');
+    expect(finishRecordingJob(job.id, 'dead-worker')).toBe(false);
+    expect(restored.recordingChunks(id)).toHaveLength(1);
+    await restored.retry(id);
+    expect(restored.recordingJob(id)).toMatchObject({ id: job.id, state: 'queued' });
+    await restored.cancel(id);
+    expect(restored.recordingJob(id)?.state).toBe('cancelled');
+    expect(claimRecordingJob('third-worker')).toBeNull();
+  });
+
+  it('recovers the job commit after the saved recording has already advanced to organization', async () => {
+    const created = await create('job-commit');
+    await uploadRecording(created.discussion.id, null, 2_000);
+    const job = service.recordingJob(created.discussion.id)!;
+    getSqliteDatabase().prepare("UPDATE discussion_recording_jobs SET state='running', lease_owner='dead-worker', lease_until=0 WHERE id=?").run(job.id);
+    updateDiscussionCapture(created.discussion.id, { status: 'organizing' });
+    await new DiscussionService(notes, projects).processRecordingJob();
+    expect(service.recordingJob(created.discussion.id)?.state).toBe('completed');
+    expect((await service.get(created.discussion.id))?.discussion.status).toBe('organizing');
+  });
+
+  it('does not publish a recording when cancellation races attachment persistence', async () => {
+    const created = await create('cancel-finalization');
+    const id = created.discussion.id;
+    await uploadRecording(id, null, 2_000, false);
+    await service.sealRecording(id, { chunkCount: 1, mimeType: 'audio/wav', fileName: 'meeting.wav', lastSequence: -1 });
+    let reachedAttachment!: () => void;
+    let releaseAttachment!: () => void;
+    const reached = new Promise<void>(resolve => { reachedAttachment = resolve; });
+    const release = new Promise<void>(resolve => { releaseAttachment = resolve; });
+    const add = notes.addAttachment.bind(notes);
+    const spy = vi.spyOn(notes, 'addAttachment').mockImplementationOnce(async (...args) => {
+      reachedAttachment();
+      await release;
+      return add(...args);
+    });
+    try {
+      const processing = service.processRecordingJob();
+      await reached;
+      const cancelling = service.cancel(id);
+      releaseAttachment();
+      await processing;
+      await cancelling;
+      expect(service.recordingJob(id)?.state).toBe('cancelled');
+      const capture = (await service.get(id))!.discussion;
+      expect(capture.status).toBe('cancelled');
+      expect(capture.audioAttachmentId).toBeUndefined();
+      expect(service.recordingChunks(id)).toEqual([]);
+    } finally { releaseAttachment(); spy.mockRestore(); }
+  });
+
+  it('continues into transcript processing after the submitting client disconnects', async () => {
+    const created = await create('close-after-seal');
+    const id = created.discussion.id;
+    await uploadRecording(id, null, 2_000, false);
+    await service.sealRecording(id, { chunkCount: 1, mimeType: 'audio/wav', fileName: 'meeting.wav', lastSequence: -1 });
+    const restored = new DiscussionService(notes, projects);
+    const sealer = new DiscussionSealer({
+      notes, getConfig: () => ({}) as never,
+      processRecordingJob: () => restored.processRecordingJob(),
+      transcribeRecording: async () => ({ text: 'The decision remains available after closing the tab.' }),
+    });
+    await sealer.tick();
+    expect((await restored.get(id))?.discussion).toMatchObject({ status: 'organizing', canonicalTranscript: 'The decision remains available after closing the tab.' });
+    expect(restored.recordingJob(id)?.state).toBe('completed');
   });
 
   function uploadSegment(discussionId: string, sequence: number, text: string) {
@@ -259,8 +369,6 @@ describe('discussion note document', () => {
     });
     await liveWorker.tick();
 
-    const stopped = await service.stop(created.discussion.id, 0, 8_000);
-    expect(stopped?.discussion.status).toBe('stopping');
     await uploadRecording(created.discussion.id, {
       name: 'discussion.webm', buffer: Buffer.from('audio'), mimeType: 'audio/webm',
     }, 8_000);
@@ -317,7 +425,6 @@ describe('discussion note document', () => {
 
   it('uses full recording only when live segments are incomplete', async () => {
     const created = await create('fallback');
-    await service.stop(created.discussion.id, 0, 8_000);
     await uploadRecording(created.discussion.id, {
       name: 'discussion.ogg', buffer: Buffer.from('audio'), mimeType: 'audio/ogg',
     }, 8_000);
@@ -340,9 +447,9 @@ describe('discussion note document', () => {
 
   it('requires attention when the original recording never arrives', async () => {
     const created = await create('missing-audio');
-    const stopped = await service.stop(created.discussion.id, -1, 5_000);
+    const stopped = updateDiscussionCapture(created.discussion.id, { status: 'stopping', recordingStoppedAt: Date.now(), durationMs: 5_000 });
     const sealer = new DiscussionSealer({ notes, getConfig: () => ({}) as never });
-    const firstStoppedAt = stopped!.discussion.recordingStoppedAt!;
+    const firstStoppedAt = stopped!.recordingStoppedAt!;
     await sealer.tick(firstStoppedAt + 2 * 60_000);
     expect((await service.get(created.discussion.id))?.discussion).toMatchObject({
       status: 'needs_attention', failureStage: 'audio_upload', failureCode: 'recording_missing',
@@ -354,7 +461,6 @@ describe('discussion note document', () => {
 
   it('falls back to the original recording when no live segment was emitted', async () => {
     const created = await create('short-recording');
-    await service.stop(created.discussion.id, -1, 2_000);
     await uploadRecording(created.discussion.id, {
       name: 'short.webm', buffer: Buffer.from('audio'), mimeType: 'audio/webm',
     }, 2_000);

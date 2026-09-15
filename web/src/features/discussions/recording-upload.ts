@@ -1,6 +1,6 @@
-import { DISCUSSION_CHUNK_MAX_BYTES } from '@xopcai/gateway-contract';
+import { DISCUSSION_CHUNK_MAX_BYTES, type DiscussionRecordingJob } from '@xopcai/gateway-contract';
 
-import { completeRecording, getRecordingChunks, uploadRecordingChunk } from './discussion-api';
+import { sealRecording, getRecordingJob, getDiscussion, getRecordingChunks, uploadRecordingChunk } from './discussion-api';
 import { deleteDiscussionDraft, getDiscussionDraftChunk, saveDiscussionDraft, saveDiscussionDraftChunk } from './discussion-draft-store';
 import type { DiscussionDraft } from './discussion-types';
 
@@ -9,8 +9,25 @@ async function checksum(blob: Blob): Promise<string> {
   return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, '0')).join('');
 }
 
+async function waitForRecording(id: string, initial: DiscussionRecordingJob) {
+  let job = initial;
+  const deadline = performance.now() + 5 * 60_000;
+  while (job.state === 'queued' || job.state === 'running') {
+    if (performance.now() >= deadline) throw new Error('Recording is still processing. Your draft is saved; retry to check its result.');
+    await new Promise(resolve => setTimeout(resolve, 1_000));
+    job = await getRecordingJob(id);
+  }
+  if (job.state !== 'completed') throw new Error(job.error ?? 'Recording processing was cancelled');
+  return getDiscussion(id);
+}
+
 /** Read and upload one persisted chunk at a time; never assemble a whole recording. */
 export async function uploadDraftRecording(draft: DiscussionDraft, id: string, onProgress: (percent: number) => void, complete = true) {
+  if (complete) {
+    const detail = await getDiscussion(id);
+    if (detail.discussion.audioAttachmentId) return detail;
+    if (detail.recordingJob?.state === 'queued' || detail.recordingJob?.state === 'running') return waitForRecording(id, detail.recordingJob);
+  }
   const existing = new Map((await getRecordingChunks(id)).map((chunk) => [chunk.sequence, chunk]));
   for (let index = 0; index < draft.chunkCount; index += 1) {
     const chunk = await getDiscussionDraftChunk(draft.id, index);
@@ -21,7 +38,10 @@ export async function uploadDraftRecording(draft: DiscussionDraft, id: string, o
     if (!existing.has(index)) await uploadRecordingChunk(id, index, chunk.blob, sha256);
     onProgress(Math.round((index + 1) / draft.chunkCount * 100));
   }
-  if (complete) return completeRecording(id, { chunkCount: draft.chunkCount, mimeType: draft.mimeType, fileName: draft.fileName ?? `meeting-${draft.startedAt}.${draft.mimeType.includes('mp4') ? 'm4a' : draft.mimeType.includes('ogg') ? 'ogg' : 'webm'}` });
+  if (complete) {
+    const job = await sealRecording(id, { lastSequence: draft.lastSequence, chunkCount: draft.chunkCount, mimeType: draft.mimeType, fileName: draft.fileName ?? `meeting-${draft.startedAt}.${draft.mimeType.includes('mp4') ? 'm4a' : draft.mimeType.includes('ogg') ? 'ogg' : 'webm'}` });
+    return waitForRecording(id, job);
+  }
 }
 
 export async function persistMeetingImport(file: File, id: string): Promise<DiscussionDraft> {

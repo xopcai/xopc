@@ -8,11 +8,13 @@ import {
   saveDiscussionDraft,
   saveDiscussionDraftChunk,
 } from './discussion-draft-store';
+import { CaptureClock } from './captureClock';
 import { LivePcmSegmenter, type LivePcmSegment } from './live-pcm-segmenter';
 import type { DiscussionDraft } from './discussion-types';
 
 const MAX_RECORDING_MS = DISCUSSION_MAX_DURATION_MS;
 const MIN_AVAILABLE_BYTES = 100 * 1024 * 1024;
+const MAX_PENDING_BYTES = 32 * 1024 * 1024;
 
 export type DiscussionRecorderPhase =
   | 'idle'
@@ -48,9 +50,10 @@ export function useDiscussionRecorder() {
   const streamRef = useRef<MediaStream | null>(null);
   const draftRef = useRef<DiscussionDraft | null>(null);
   const chunkIndexRef = useRef(0);
-  const accumulatedMsRef = useRef(0);
-  const segmentStartedAtRef = useRef(0);
+  const clockRef = useRef(new CaptureClock());
   const persistQueueRef = useRef(Promise.resolve());
+  const pendingBytesRef = useRef(0);
+  const storageErrorRef = useRef<Error | null>(null);
   const intervalRef = useRef<number | null>(null);
 
   const refreshRecoverableDrafts = useCallback(async () => {
@@ -82,38 +85,51 @@ export function useDiscussionRecorder() {
 
   const persistChunk = useCallback((blob: Blob) => {
     const active = draftRef.current;
-    if (!active || blob.size === 0) return;
+    if (!active || blob.size === 0 || storageErrorRef.current) return;
+    if (pendingBytesRef.current + blob.size > MAX_PENDING_BYTES) {
+      const error = new Error('Local storage cannot keep up with recording. Recording stopped; saved chunks can be recovered.');
+      storageErrorRef.current = error;
+      setError(error.message);
+      setPhase('error');
+      segmenterRef.current?.cancel();
+      stopTimersAndStream();
+      return;
+    }
+    pendingBytesRef.current += blob.size;
     const firstIndex = chunkIndexRef.current;
     chunkIndexRef.current += Math.ceil(blob.size / DISCUSSION_CHUNK_MAX_BYTES);
     persistQueueRef.current = persistQueueRef.current.then(async () => {
       for (let offset = 0, index = firstIndex; offset < blob.size; offset += DISCUSSION_CHUNK_MAX_BYTES, index += 1) {
+        if (storageErrorRef.current) return;
         const current = draftRef.current;
         if (!current || current.id !== active.id) return;
         const updated = {
           ...current, chunkCount: index + 1,
-          durationMs: Math.max(current.durationMs, accumulatedMsRef.current + (segmentStartedAtRef.current ? Date.now() - segmentStartedAtRef.current : 0)),
+          durationMs: Math.max(current.durationMs, clockRef.current.elapsedMs),
           updatedAt: Date.now(),
         };
         await saveDiscussionDraftChunk({ draftId: active.id, index, blob: blob.slice(offset, offset + DISCUSSION_CHUNK_MAX_BYTES), createdAt: Date.now() }, updated);
+        if (draftRef.current?.id !== active.id) return;
         draftRef.current = updated;
         setDraft(updated);
       }
     }).catch((caught) => {
-      setError(caught instanceof Error ? caught.message : 'Local recording storage failed');
+      storageErrorRef.current = caught instanceof Error ? caught : new Error('Local recording storage failed');
+      setError(storageErrorRef.current.message);
       setPhase('error');
       segmenterRef.current?.cancel();
       stopTimersAndStream();
+    }).finally(() => {
+      pendingBytesRef.current -= blob.size;
     });
   }, [stopTimersAndStream]);
 
   const stopOnce = useCallback(async (): Promise<DiscussionDraft | null> => {
+    if (storageErrorRef.current) throw storageErrorRef.current;
     const recorder = recorderRef.current;
     if (!recorder || recorder.state === 'inactive') return draftRef.current;
     setPhase('stopping');
-    if (recorder.state === 'recording' && segmentStartedAtRef.current) {
-      accumulatedMsRef.current += Date.now() - segmentStartedAtRef.current;
-      segmentStartedAtRef.current = 0;
-    }
+    clockRef.current.pause();
     const lastSequence = segmenterRef.current
       ? await segmenterRef.current.stop().catch(() => -1)
       : -1;
@@ -123,6 +139,7 @@ export function useDiscussionRecorder() {
       recorder.stop();
     });
     await persistQueueRef.current;
+    if (storageErrorRef.current) throw storageErrorRef.current;
     const current = draftRef.current;
     if (!current) {
       stopTimersAndStream();
@@ -134,7 +151,7 @@ export function useDiscussionRecorder() {
       ...current,
       state: 'stopped',
       lastSequence,
-      durationMs: Math.min(MAX_RECORDING_MS, Math.max(1_000, accumulatedMsRef.current)),
+      durationMs: Math.min(MAX_RECORDING_MS, Math.max(1_000, clockRef.current.elapsedMs)),
       updatedAt: Date.now(),
     };
     await saveDiscussionDraft(stopped);
@@ -168,6 +185,9 @@ export function useDiscussionRecorder() {
     setError(null);
     setPhase('requesting_permission');
     try {
+      await persistQueueRef.current;
+      storageErrorRef.current = null;
+      pendingBytesRef.current = 0;
       const estimate = await navigator.storage?.estimate?.();
       if (estimate?.quota != null && estimate.usage != null && estimate.quota - estimate.usage < MIN_AVAILABLE_BYTES) {
         throw new Error('Not enough local storage for a discussion recording.');
@@ -196,8 +216,8 @@ export function useDiscussionRecorder() {
       recorderRef.current = recorder;
       draftRef.current = nextDraft;
       chunkIndexRef.current = 0;
-      accumulatedMsRef.current = 0;
-      segmentStartedAtRef.current = now;
+      clockRef.current.reset();
+      clockRef.current.resume();
       persistQueueRef.current = Promise.resolve();
       recorder.ondataavailable = (event) => persistChunk(event.data);
       recorder.onerror = () => { setError('The microphone stopped unexpectedly. Saved audio can be recovered.'); void stop(); };
@@ -217,7 +237,7 @@ export function useDiscussionRecorder() {
       setElapsedMs(0);
       setPhase('recording');
       intervalRef.current = window.setInterval(() => {
-        const elapsed = accumulatedMsRef.current + (segmentStartedAtRef.current ? Date.now() - segmentStartedAtRef.current : 0);
+        const elapsed = clockRef.current.elapsedMs;
         setElapsedMs(elapsed);
         if (elapsed >= MAX_RECORDING_MS) void stop();
       }, 1_000);
@@ -235,11 +255,8 @@ export function useDiscussionRecorder() {
 
   const pause = useCallback(() => {
     if (recorderRef.current?.state !== 'recording') return;
-    if (segmentStartedAtRef.current) {
-      accumulatedMsRef.current += Date.now() - segmentStartedAtRef.current;
-      segmentStartedAtRef.current = 0;
-      setElapsedMs(accumulatedMsRef.current);
-    }
+    clockRef.current.pause();
+    setElapsedMs(clockRef.current.elapsedMs);
     recorderRef.current.pause();
     segmenterRef.current?.pause();
     setPhase('paused');
@@ -247,7 +264,7 @@ export function useDiscussionRecorder() {
 
   const resume = useCallback(() => {
     if (recorderRef.current?.state !== 'paused') return;
-    segmentStartedAtRef.current = Date.now();
+    clockRef.current.resume();
     recorderRef.current.resume();
     segmenterRef.current?.resume();
     setPhase('recording');
@@ -263,11 +280,12 @@ export function useDiscussionRecorder() {
   }, []);
 
   const restore = useCallback(async (candidate: DiscussionDraft) => {
+    await persistQueueRef.current;
+    storageErrorRef.current = null;
     const restored = { ...candidate, state: 'stopped' as const, updatedAt: Date.now() };
     await saveDiscussionDraft(restored);
     draftRef.current = restored;
-    accumulatedMsRef.current = restored.durationMs;
-    segmentStartedAtRef.current = 0;
+    clockRef.current.reset(restored.durationMs);
     setDraft(restored);
     setElapsedMs(restored.durationMs);
     setError(null);
@@ -275,6 +293,7 @@ export function useDiscussionRecorder() {
   }, []);
 
   const discard = useCallback(async (draftId: string) => {
+    await persistQueueRef.current;
     await deleteDiscussionDraft(draftId);
     if (draftRef.current?.id === draftId) {
       draftRef.current = null;
@@ -297,8 +316,7 @@ export function useDiscussionRecorder() {
 
   const reset = useCallback(() => {
     draftRef.current = null;
-    accumulatedMsRef.current = 0;
-    segmentStartedAtRef.current = 0;
+    clockRef.current.reset();
     setDraft(null);
     setElapsedMs(0);
     setError(null);

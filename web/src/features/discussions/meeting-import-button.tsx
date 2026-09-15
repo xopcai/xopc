@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { useLocaleStore } from '@/stores/locale-store';
 
-import { acknowledgeDiscussionConsent, createDiscussion, getDiscussionCaptureSettings, stopDiscussion } from './discussion-api';
+import { acknowledgeDiscussionConsent, createDiscussion, getDiscussionCaptureSettings } from './discussion-api';
 import { persistMeetingImport, uploadDraftRecording } from './recording-upload';
 import { deleteDiscussionDraft, saveDiscussionDraft } from './discussion-draft-store';
 
@@ -29,8 +29,7 @@ export function MeetingImportButton({ projectId }: { projectId?: string }) {
       const detail = await createDiscussion({ clientRequestId: item.requestId, contextProjectId: projectId, source: 'web', consentPolicyVersion: settings.consentPolicyVersion });
       item.discussionId = detail.discussion.id;
       await saveDiscussionDraft({ ...draft, serverDiscussionId: detail.discussion.id, projectId });
-      const complete = detail.discussion.audioAttachmentId ? detail : (await uploadDraftRecording(draft, detail.discussion.id, setProgress))!;
-      await stopDiscussion(detail.discussion.id, -1, complete.discussion.durationMs!);
+      if (!detail.discussion.audioAttachmentId) await uploadDraftRecording(draft, detail.discussion.id, setProgress);
       await deleteDiscussionDraft(item.requestId);
       pending.current = null;
       navigate(`/notes/${encodeURIComponent(detail.note.id)}`);

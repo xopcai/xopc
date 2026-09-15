@@ -162,6 +162,7 @@
       "resume": "Resume",
       "stop": "Finish",
       "finalizing": "Saving and organizing the note…",
+      "verifyingRecording": "Recording uploaded. Verifying and saving in the background…",
       "openNote": "Open note",
       "liveTranscript": "Live transcript",
       "waitingTranscript": "Listening…",
