@@ -45,7 +45,7 @@ function createMockSessionStore(opts: {
     firstKeptIndex: 20,
   };
 
-  return {
+  const store = {
     load: vi.fn().mockResolvedValue([
       { role: 'user', content: opts.needsCompaction ? 'x'.repeat(420_000) : 'hello' },
       { role: 'assistant', content: [{ type: 'text', text: 'hi' }] },
@@ -55,6 +55,13 @@ function createMockSessionStore(opts: {
     appendTranscriptCustomEntry: vi.fn().mockResolvedValue(undefined),
     prepareModelFallback: vi.fn().mockResolvedValue('prompt'),
   };
+  store.compact.mockImplementation(async () => {
+    if (compactResult.compacted) {
+      store.load.mockResolvedValue([{ role: 'user', content: compactResult.summary }]);
+    }
+    return compactResult;
+  });
+  return store;
 }
 
 function createMockAgentManager() {
@@ -317,6 +324,41 @@ describe('pre-turn auto-compaction', () => {
       true,
       expect.any(Object),
     );
+  });
+
+  it.each([false, true])('recovers hard overflow after normal compaction returns compacted=%s', async (compacted) => {
+    const sessionStore = createMockSessionStore({ needsCompaction: true });
+    const oversized = [{ role: 'user', content: 'x'.repeat(900_000) }] as AgentMessage[];
+    sessionStore.load.mockResolvedValue(oversized);
+    sessionStore.compact.mockResolvedValueOnce({
+      compacted, tokensBefore: 225_000, tokensAfter: 200_000, summary: '', firstKeptIndex: 0,
+    });
+    const result = await runEmbeddedTurnForSession({
+      sessionKey: 'agent:main:test-session',
+      userMessage: { role: 'user', content: 'hello' } as AgentMessage,
+      sessionStore: sessionStore as any,
+      agentManager: createMockAgentManager() as any,
+      modelManager: createMockModelManager() as any,
+      getConfig: () => configWithCompaction(true) as any,
+    });
+    expect(result.ok).toBe(true);
+    expect(sessionStore.compact).toHaveBeenCalledTimes(2);
+    expect(sessionStore.compact.mock.calls[1]?.[5]).toMatchObject({ summarizeAll: true });
+    expect(mockRunXopcEmbeddedTurn).toHaveBeenCalledOnce();
+  });
+
+  it('blocks the turn if full-history recovery still cannot fit the current input', async () => {
+    const sessionStore = createMockSessionStore({ needsCompaction: true });
+    await expect(runEmbeddedTurnForSession({
+      sessionKey: 'agent:main:test-session',
+      userMessage: { role: 'user', content: 'x'.repeat(900_000) } as AgentMessage,
+      sessionStore: sessionStore as any,
+      agentManager: createMockAgentManager() as any,
+      modelManager: createMockModelManager() as any,
+      getConfig: () => configWithCompaction(true) as any,
+    })).rejects.toThrow('reduce the current input');
+    expect(sessionStore.compact).toHaveBeenCalledTimes(2);
+    expect(mockRunXopcEmbeddedTurn).not.toHaveBeenCalled();
   });
 
   it('tries fallback model when the primary embedded turn fails', async () => {

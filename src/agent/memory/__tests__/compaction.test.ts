@@ -182,6 +182,13 @@ describe('SessionCompactor', () => {
       ], 19),
     ];
 
+    const stalled = await compactor.compact([
+      ...entries,
+      { entryId: 'boundary-18', seq: 18, createdAt: 18, row: secondBoundary },
+    ], model, undefined, true);
+    expect(stalled.compacted).toBe(false);
+    expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(1);
+
     const repeated = await compactor.compact(thirdPassEntries, model, undefined, true);
     const repeatedPrompt = String(
       vi.mocked(completeWithResolvedCredentials).mock.calls[1]?.[1].messages[0]?.content,
@@ -507,6 +514,35 @@ describe('SessionCompactor', () => {
     await expect(new SessionCompactor({ keepRecentTokens: 1, recentTurnsPreserve: 1 })
       .compact(sources(conversation()), { ...model, contextWindow: 4_096 }, undefined, true)).rejects.toThrow('context budget');
     expect(completeWithResolvedCredentials).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('summarizes a whole single tool turn for recovery (interrupted=%s)', async (interrupted) => {
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue(completion(ledger(1, 'PR #8569 review remains in progress.')));
+    const entries = sources([
+      { role: 'user', content: 'Review PR #8569', timestamp: 1 },
+      { role: 'assistant', content: [{ type: 'toolCall', id: 'call-1', name: 'work', arguments: {} }], timestamp: 2 },
+      ...(!interrupted ? [{ role: 'toolResult', toolCallId: 'call-1', toolName: 'work', content: [{ type: 'text', text: 'done' }], isError: false, timestamp: 3 }] : []),
+    ] as AgentMessage[]);
+    const result = await new SessionCompactor({ gapAudit: false })
+      .compact(entries, model, undefined, true, { summarizeAll: true });
+    expect(result.compacted).toBe(true);
+    expect(result.messages).toHaveLength(1);
+    expect(result.summary).toContain('PR #8569');
+    expect(result.handover?.sourceThroughSeq).toBe(entries.at(-1)!.seq);
+    expect(result.firstKeptIndex).toBe(entries.length);
+  });
+
+  it('recovers a single oversized message by summarizing every fragment', async () => {
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue(completion(ledger()));
+    const result = await new SessionCompactor({ summaryChunkTokens: 2_000, gapAudit: false })
+      .compact(sources([{ role: 'user', content: 'BEGIN-' + 'x'.repeat(22_000) + '-END' } as AgentMessage]),
+        model, undefined, true, { summarizeAll: true });
+    expect(result.compacted).toBe(true);
+    expect(result.messages).toHaveLength(1);
+    const prompts = vi.mocked(completeWithResolvedCredentials).mock.calls.map((call) => String(call[1].messages[0]?.content));
+    expect(prompts.length).toBeGreaterThan(2);
+    expect(prompts.join('')).toContain('BEGIN-');
+    expect(prompts.join('')).toContain('-END');
   });
 
   it('refuses to split a single active user and tool turn', async () => {
