@@ -77,7 +77,7 @@ export function AttachmentRenderer({
   authToken?: string;
   sessionKey?: string | null;
   projectId?: string | null;
-  /** User bubbles align voice pills to the right (WeChat-style). */
+  /** User bubbles align voice messages to the right (WeChat-style). */
   layout?: 'user' | 'assistant';
   /** When text is empty (attachment-only bubble), center audio so horizontal padding reads even. */
   centerUserVoiceRow?: boolean;
@@ -171,7 +171,7 @@ export function AttachmentRenderer({
                       : 'end'
                     : 'start'
                 }
-                variant={layout === 'user' ? 'compact' : 'default'}
+                embedded={layout === 'user'}
               />
             ))}
           </div>
