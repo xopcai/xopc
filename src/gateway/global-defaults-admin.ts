@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from 'node:util';
 
 import { AgentDefaultsSchema, type AgentDefaults } from '../agent-config/index.js';
 import type { Config } from '../config/schema.js';
+import { validateComputerModelChanges } from '../computer/model-config.js';
 import {
   GATEWAY_BUILTIN_TOOLS,
   type GatewayBuiltinToolSummary,
@@ -35,6 +36,11 @@ export function prepareUpdateGlobalDefaults(
   const parsed = AgentDefaultsSchema.safeParse(body.defaults);
   if (!parsed.success) {
     return { ok: false, error: `defaults ${parsed.error.issues[0]?.message ?? 'is invalid'}`, status: 400 };
+  }
+  try {
+    validateComputerModelChanges({ ...cfg, agents: { ...cfg.agents, defaults: parsed.data } }, cfg);
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error), status: 400 };
   }
   return {
     ok: true,

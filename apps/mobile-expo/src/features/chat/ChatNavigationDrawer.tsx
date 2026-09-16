@@ -1,13 +1,18 @@
-import { useRouter } from 'expo-router';
-import { memo, useCallback } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { memo, useCallback, useImperativeHandle, useRef, type ReactNode, type Ref } from 'react';
 import {
-  Modal,
+  BackHandler,
+  Keyboard,
   Pressable,
   ScrollView,
   StyleSheet,
   useWindowDimensions,
   View,
 } from 'react-native';
+import ReanimatedDrawerLayout, {
+  DrawerKeyboardDismissMode, DrawerLockMode, DrawerPosition, DrawerState, DrawerType,
+  type DrawerLayoutMethods,
+} from 'react-native-gesture-handler/ReanimatedDrawerLayout';
 import { Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -18,17 +23,23 @@ import { radii, spacing, typography, useTheme } from '../../theme';
 
 type NavigationItem = { icon: string; label: string; route: string; count?: number };
 
-export const ChatNavigationSheet = memo(function ChatNavigationSheet({
-  visible,
-  onDismiss,
+export type ChatNavigationDrawerHandle = { open: () => void };
+
+export const ChatNavigationDrawer = memo(function ChatNavigationDrawer({
+  ref,
+  children,
+  swipeEnabled,
+  onInteraction,
   currentConversationId,
   recentSessions,
   attentionCount,
   onSessionSelect,
   onNewChat,
 }: {
-  visible: boolean;
-  onDismiss: () => void;
+  ref?: Ref<ChatNavigationDrawerHandle>;
+  children: ReactNode;
+  swipeEnabled: boolean;
+  onInteraction: () => void;
   currentConversationId: string;
   recentSessions: SessionListItem[];
   attentionCount: number;
@@ -42,6 +53,32 @@ export const ChatNavigationSheet = memo(function ChatNavigationSheet({
   const m = useMessages();
   const copy = m.drawer;
   const drawerWidth = Math.min(windowWidth * 0.88, 360);
+  const drawerRef = useRef<DrawerLayoutMethods>(null);
+  const drawerActive = useRef(false);
+  const onDismiss = useCallback(() => drawerRef.current?.closeDrawer(), []);
+  const prepareToOpen = useCallback(() => {
+    Keyboard.dismiss();
+    onInteraction();
+  }, [onInteraction]);
+
+  useImperativeHandle(ref, () => ({
+    open: () => {
+      prepareToOpen();
+      drawerRef.current?.openDrawer();
+    },
+  }), [prepareToOpen]);
+
+  useFocusEffect(useCallback(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (!drawerActive.current) return false;
+      onDismiss();
+      return true;
+    });
+    return () => {
+      subscription.remove();
+      onDismiss();
+    };
+  }, [onDismiss]));
 
   const navigate = useCallback((route: string) => {
     onDismiss();
@@ -70,17 +107,25 @@ export const ChatNavigationSheet = memo(function ChatNavigationSheet({
     { icon: 'cog-outline', label: copy.settings, route: '/settings' },
   ];
 
-  if (!visible) return null;
-
   return (
-    <Modal
-      visible
-      transparent
-      animationType="none"
-      statusBarTranslucent
-      onRequestClose={onDismiss}
-    >
-      <View style={styles.overlay}>
+    <ReanimatedDrawerLayout
+      ref={drawerRef}
+      drawerPosition={DrawerPosition.LEFT}
+      drawerType={DrawerType.FRONT}
+      drawerWidth={drawerWidth}
+      drawerBackgroundColor={colors.surface.panel}
+      overlayColor={colors.overlay.scrim}
+      edgeWidth={spacing.xxl}
+      minSwipeDistance={spacing.md}
+      drawerLockMode={swipeEnabled ? DrawerLockMode.UNLOCKED : DrawerLockMode.LOCKED_CLOSED}
+      keyboardDismissMode={DrawerKeyboardDismissMode.ON_DRAG}
+      onDrawerStateChanged={(state, willShow) => {
+        if (state === DrawerState.DRAGGING) prepareToOpen();
+        if (willShow) drawerActive.current = true;
+      }}
+      onDrawerOpen={() => { drawerActive.current = true; }}
+      onDrawerClose={() => { drawerActive.current = false; }}
+      renderNavigationView={() => (
         <View
           testID="chat-navigation-drawer"
           style={[
@@ -93,7 +138,7 @@ export const ChatNavigationSheet = memo(function ChatNavigationSheet({
               borderRightColor: colors.border.subtle,
             },
           ]}
-          accessibilityViewIsModal
+          onAccessibilityEscape={onDismiss}
         >
           <View style={styles.header}>
             <Text style={[styles.headerTitle, { color: colors.text.primary }]}>{copy.chats}</Text>
@@ -179,16 +224,15 @@ export const ChatNavigationSheet = memo(function ChatNavigationSheet({
         </View>
           </ScrollView>
         </View>
-        <Pressable style={[styles.scrim, { backgroundColor: colors.overlay.scrim }]} onPress={onDismiss} accessible={false} />
-      </View>
-    </Modal>
+      )}
+    >
+      {children}
+    </ReanimatedDrawerLayout>
   );
 });
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, flexDirection: 'row' },
   drawer: { height: '100%', borderRightWidth: StyleSheet.hairlineWidth },
-  scrim: { flex: 1 },
   header: { minHeight: 56, flexDirection: 'row', alignItems: 'center', paddingLeft: spacing.content, paddingRight: spacing.sm },
   headerTitle: { ...typography.heading, flex: 1 },
   close: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },

@@ -12,6 +12,7 @@ export type ConfiguredModel = {
   reasoning?: boolean;
   thinking?: ModelThinkingCapabilities;
   vision?: boolean;
+  computerUse?: { profile: 'gui-plus-2026-02-26' | 'structured-tools-v1' };
   recommended?: boolean;
 };
 

@@ -66,6 +66,7 @@ export interface EndpointInvocationServiceOptions {
 }
 
 export interface EndpointInvocationResult {
+  invocationId?: string;
   content: EndpointToolContent[];
   details?: Record<string, unknown>;
 }
@@ -131,7 +132,7 @@ export class EndpointInvocationService {
     const invocationId = crypto.randomUUID();
     const startedAt = Date.now();
     const uploadGrant = tool.descriptor.resultKinds.includes('file')
-      ? this.options.uploads?.createGrant(invocationId, params.endpointId, startedAt)
+      ? this.options.uploads?.createGrant(invocationId, params.endpointId, startedAt, params.toolName === 'desktop.computer.control' ? 'computer-frame' : 'durable')
       : undefined;
     try {
       this.options.audit?.started({
@@ -268,7 +269,7 @@ export class EndpointInvocationService {
     const pending = this.take(invocationId);
     if (!pending) return;
     this.finishAudit(pending, { id: invocationId, status: 'succeeded', completedAt: Date.now() });
-    pending.resolve(result);
+    pending.resolve(pending.toolName === 'desktop.computer.control' ? { ...result, invocationId } : result);
   }
 
   private fail(invocationId: string, error: Error): void {

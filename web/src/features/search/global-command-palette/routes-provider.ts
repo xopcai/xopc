@@ -19,10 +19,11 @@ export type RouteHitSeed = {
  * Manifest-first agent management lives under `/agents`; browser automation
  * remains a standalone agent-related settings route.
  */
-const AGENT_SETTINGS_PALETTE_TABS: readonly Tab[] = ['settingsAgentBrowser'];
+const AGENT_SETTINGS_PALETTE_TABS: readonly Tab[] = ['settingsAgentBrowser', 'settingsComputerUse'];
 
 const AGENT_SETTINGS_ROUTE_KEYWORDS: Partial<Record<Tab, string[]>> = {
   settingsAgentBrowser: ['browser', 'playwright', 'automation'],
+  settingsComputerUse: ['computer use', 'compute use', 'desktop', '电脑操作', '桌面控制', 'GUI', 'BYOK'],
 };
 
 function buildAgentSettingsRouteSeeds(language: StoredLanguage, settingsMode: ReturnType<typeof useSettingsModeStore.getState>['mode']): RouteHitSeed[] {

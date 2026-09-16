@@ -36,18 +36,25 @@ interface CatalogPayload {
   }>;
 }
 
-type CapabilityId = 'vision' | 'image-generation' | 'stt' | 'tts';
+type CapabilityId = 'vision' | 'image-generation' | 'stt' | 'tts' | 'computer-use';
 
 interface CapabilityReadinessPayload {
   capabilities: Record<CapabilityId, {
     status: 'ready' | 'degraded' | 'unavailable' | 'disabled';
     selectionSource: string;
     primary?: { provider: string; model: string };
+    rejected?: Array<{ provider: string; model: string }>;
   }>;
 }
 
 function capabilityAction(capability: CapabilityId, zh: boolean) {
   switch (capability) {
+    case 'computer-use':
+      return {
+        href: '/settings/computer-use',
+        guidance: zh ? '选择兼容的电脑操作模型；本机权限需单独授权' : 'Select a compatible computer model; local access requires separate approval',
+        action: zh ? '配置电脑操作' : 'Configure computer use',
+      };
     case 'vision':
       return {
         href: `${capabilitySettingsPath('models')}?add=1`,
@@ -128,8 +135,9 @@ export function ModelCatalogStatus() {
   const failure = actionError ?? (error instanceof Error
     ? error.message
     : data?.sync.lastError ?? Object.values(data?.sync.sourceErrors ?? {})[0]);
-  const capabilityNeedsAttention = Object.values(readiness?.capabilities ?? {}).some(
-    (plan) => plan.status === 'degraded' || plan.status === 'unavailable',
+  const capabilityNeedsAttention = Object.entries(readiness?.capabilities ?? {}).some(
+    ([capability, plan]) => (plan.status === 'degraded' || plan.status === 'unavailable')
+      && (capability !== 'computer-use' || Boolean(plan.rejected?.length)),
   );
 
   const refresh = async () => {
@@ -170,7 +178,7 @@ export function ModelCatalogStatus() {
         </Button>
       </div>
       {readiness ? (
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {(Object.entries(readiness.capabilities) as Array<[
             CapabilityId,
             CapabilityReadinessPayload['capabilities'][CapabilityId],
@@ -179,9 +187,10 @@ export function ModelCatalogStatus() {
               ? (zh ? '图片理解' : 'Vision')
               : capability === 'image-generation'
                 ? (zh ? '图片生成' : 'Image generation')
-                : capability.toUpperCase();
+                : capability === 'computer-use' ? (zh ? '电脑操作模型' : 'Computer use model') : capability.toUpperCase();
             const automatic = plan.selectionSource !== 'explicit-config';
-            const needsAttention = plan.status === 'degraded' || plan.status === 'unavailable';
+            const unselected = capability === 'computer-use' && !plan.primary && !plan.rejected?.length;
+            const needsAttention = !unselected && (plan.status === 'degraded' || plan.status === 'unavailable');
             const action = capabilityAction(capability, zh);
             const content = (
               <>
@@ -189,11 +198,11 @@ export function ModelCatalogStatus() {
                   <span className="min-w-0 text-xs font-medium text-fg">{label}</span>
                   <span className={plan.status === 'ready'
                     ? 'shrink-0 text-xs text-emerald-600 dark:text-emerald-400'
-                    : plan.status === 'disabled'
+                    : plan.status === 'disabled' || unselected
                       ? 'shrink-0 text-xs text-fg-muted'
                       : 'shrink-0 text-xs text-amber-600 dark:text-amber-400'}>
-                    {plan.status === 'ready'
-                      ? (zh ? '可用' : 'Ready')
+                    {unselected ? (zh ? '未选择' : 'Not selected') : plan.status === 'ready'
+                      ? capability === 'computer-use' ? (zh ? '已配置' : 'Configured') : (zh ? '可用' : 'Ready')
                       : plan.status === 'disabled'
                         ? (zh ? '已关闭' : 'Off')
                         : (zh ? '需处理' : 'Needs attention')}
@@ -204,7 +213,7 @@ export function ModelCatalogStatus() {
                   : undefined}>
                   {plan.primary
                     ? `${automatic ? (zh ? '自动' : 'Auto') : (zh ? '显式' : 'Explicit')} · ${plan.primary.provider}/${plan.primary.model}`
-                    : (zh ? '无可用实现' : 'No available implementation')}
+                    : unselected ? (zh ? '不继承聊天模型' : 'Does not inherit chat model') : (zh ? '无可用实现' : 'No available implementation')}
                 </p>
                 {needsAttention ? (
                   <div className="mt-2 border-t border-edge-subtle pt-2">
@@ -222,14 +231,14 @@ export function ModelCatalogStatus() {
               </>
             );
 
-            return needsAttention ? (
+            return needsAttention || capability === 'computer-use' ? (
               <Link
                 key={capability}
                 to={action.href}
                 aria-label={`${label}：${action.action}`}
                 className={cn(
-                  'rounded-xl border border-amber-400/40 bg-amber-500/5 px-3 py-2',
-                  'transition-colors hover:border-amber-400/70 hover:bg-amber-500/10',
+                  'rounded-xl border px-3 py-2 transition-colors',
+                  needsAttention ? 'border-amber-400/40 bg-amber-500/5 hover:border-amber-400/70' : 'border-edge-subtle bg-surface-panel hover:bg-surface-hover',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                 )}
               >

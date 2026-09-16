@@ -125,6 +125,7 @@ function applyModelOverride(model: Model<Api>, override: ModelOverride): Model<A
 
 	// Deep merge compat
 	result.compat = mergeCompat(model.compat, override.compat);
+	if (override.computerUse) Object.assign(result, { computerUse: override.computerUse });
 
 	return result;
 }
@@ -346,6 +347,7 @@ export class ModelRegistry {
 			.filter((model) => model.availability === 'available' && model.kind === 'language')
 			.map((model) => ({
 				id: model.id,
+				computerUse: model.computerUse,
 				name: model.name,
 				api: source.api as Api,
 				provider: source.providerId,
@@ -517,6 +519,7 @@ export class ModelRegistry {
 
 				models.push({
 					id: modelDef.id,
+					computerUse: modelDef.computerUse,
 					name: modelDef.name ?? modelDef.id,
 					api: api as Api,
 					provider: providerName,

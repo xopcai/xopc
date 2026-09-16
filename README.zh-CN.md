@@ -44,6 +44,7 @@
 - [扩展与技能](#扩展与技能)
 - [配置示例](#配置示例)
 - [文档](#文档)
+- [社区交流](#社区交流)
 - [常见问题](#常见问题)
 - [安全](#安全)
 - [参与贡献](#参与贡献)
@@ -226,6 +227,21 @@ xopc extensions dev ./my-extension
 | [工作流](https://xopcai.github.io/xopc/zh/workflows) | 扇出子 Agent、看板、脚本 |
 
 更多：[工具](https://xopcai.github.io/xopc/zh/tools) · [移动端 App](https://xopcai.github.io/xopc/zh/mobile-app) · [语音](https://xopcai.github.io/xopc/zh/voice) · [远程访问](https://xopcai.github.io/xopc/zh/remote-access)
+
+---
+
+## 社区交流
+
+欢迎加入 xopc 社区，交流使用经验、分享作品，并一起参与项目建设。
+
+| 渠道 | 适合内容 |
+| --- | --- |
+| [GitHub Discussions](https://github.com/xopcai/xopc/discussions) | 技术问答、想法讨论和长期可检索的信息 |
+| [Discord](https://discord.gg/ZmK8FzZHG) | 实时交流、作品展示和贡献者协作 |
+| [微信群](https://xopcai.github.io/xopc/zh/community#wechat) | 中文交流、上手帮助和版本动态 |
+| [GitHub Issues](https://github.com/xopcai/xopc/issues) | 已确认的 Bug 和可执行的功能建议 |
+
+参与前请阅读[社区指南](https://xopcai.github.io/xopc/zh/community)和[行为准则](./CODE_OF_CONDUCT.md)。安全漏洞请通过 [GitHub Security Advisories](https://github.com/xopcai/xopc/security/advisories/new) 私下提交，不要发布到公开讨论区或交流群。
 
 ---
 
