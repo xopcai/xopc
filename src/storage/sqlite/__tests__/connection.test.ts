@@ -189,7 +189,11 @@ describe('openXopcDatabase', () => {
       previousSnapshot.close();
     }
     const report = JSON.parse(readFileSync(join(stateDir, `${backup}.report.json`), 'utf8')) as Record<string, unknown>;
-    expect(report).toMatchObject({ fromVersion: 177, targetVersion: 178, status: 'succeeded' });
+    expect(report).toMatchObject({
+      fromVersion: 177,
+      targetVersion: XOPC_DB_SCHEMA_VERSION,
+      status: 'succeeded',
+    });
     if (process.platform !== 'win32') {
       expect(statSync(join(stateDir, backup!)).mode & 0o777).toBe(0o600);
     }
