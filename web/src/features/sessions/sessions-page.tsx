@@ -576,15 +576,16 @@ export function SessionsPage() {
             ))}
           </div>
 
-          <div className="flex w-full min-w-0 items-center gap-2 rounded-xl bg-surface-base px-3 py-2 transition-colors lg:max-w-md dark:bg-surface-hover/40">
+          <div className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-xl bg-surface-base focus-within:ring-2 focus-within:ring-accent px-3 py-2 transition-colors lg:max-w-md dark:bg-surface-hover/40">
             <Search className="size-4 shrink-0 text-fg-disabled" strokeWidth={1.75} aria-hidden />
             <input
               type="search"
               value={searchInput}
               onChange={(e) => dispatch({ type: 'patch', patch: { searchInput: e.target.value } })}
               placeholder={s.searchPlaceholder}
+              aria-label={s.searchPlaceholder}
               data-debounced-query={debouncedSearch || undefined}
-              className="min-w-0 flex-1 border-0 bg-transparent text-sm text-fg placeholder:text-fg-disabled focus:outline-none focus:ring-0"
+              className="min-w-0 flex-1 border-0 bg-transparent text-base sm:text-sm text-fg placeholder:text-fg-disabled focus:outline-none focus:ring-0"
             />
           </div>
         </div>
@@ -596,7 +597,7 @@ export function SessionsPage() {
             aria-pressed={!channelFilter}
             onClick={() => dispatch({ type: 'patch', patch: { channelFilter: '' } })}
             className={cn(
-              'inline-flex items-center rounded-xl px-3 py-2 text-sm font-medium',
+              'touch-target inline-flex items-center rounded-xl px-3 py-2 text-sm font-medium',
               interaction.transition,
               interaction.focusRingPanel,
               !channelFilter
@@ -613,7 +614,7 @@ export function SessionsPage() {
               aria-pressed={channelFilter === chId}
               onClick={() => dispatch({ type: 'patch', patch: { channelFilter: chId } })}
               className={cn(
-                'inline-flex items-center rounded-xl px-3 py-2 text-sm font-medium',
+                'touch-target inline-flex items-center rounded-xl px-3 py-2 text-sm font-medium',
                 interaction.transition,
                 interaction.focusRingPanel,
                 channelFilter === chId
