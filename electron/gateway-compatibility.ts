@@ -1,4 +1,4 @@
-import { COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
+import { COMPUTER_DESCRIPTOR, COMPUTER_FRAME_MAX_BYTES } from '@xopcai/computer-control-contract';
 import { canonicalJson, ENDPOINT_PROTOCOL_VERSION } from '@xopcai/endpoint-tools-protocol';
 import { REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 import { RealtimeConnectionError } from '@xopcai/realtime-client';
@@ -30,6 +30,7 @@ export async function assertGatewayCompatibility(
   if (!response.ok || body?.ok !== true
     || body.payload?.realtimeProtocolVersion !== REALTIME_PROTOCOL_VERSION
     || body.payload?.endpointProtocolVersion !== ENDPOINT_PROTOCOL_VERSION
+    || body.payload?.computerFrameUploadMaxBytes !== COMPUTER_FRAME_MAX_BYTES
     || canonicalJson(contractFields(body.payload?.computerControl)) !== canonicalJson(contractFields(COMPUTER_DESCRIPTOR))) {
     throw new RealtimeConnectionError(GATEWAY_PROTOCOL_INCOMPATIBLE, false);
   }

@@ -104,11 +104,11 @@ export const ChatContextControl = memo(function ChatContextControl({
 
   return <>
     <View style={styles.strip}>
-      {context.isLoading ? <StaticLoadingIndicator size={16} /> : null}
       {chips.map((chip) => {
         const picker = chip.key === 'project' || (chip.key === 'environment' && summary?.work.project)
           ? chip.key as 'project' | 'environment' : null;
         const trigger = <Pressable
+          accessibilityState={{ busy: context.isLoading }}
           accessibilityRole="button"
           accessibilityLabel={`${chip.key === 'project' ? copy.chooseProject : chip.key === 'environment' ? copy.chooseEnvironment : copy.open}: ${chip.label}`}
           onPress={() => {
@@ -266,7 +266,7 @@ export const ChatContextControl = memo(function ChatContextControl({
 });
 
 const styles = StyleSheet.create({
-  strip: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  strip: { minHeight: 44, backgroundColor: 'transparent', flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   chip: { minHeight: 44, maxWidth: 160, flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.full, paddingHorizontal: spacing.sm },
   chipText: { ...typography.caption, flexShrink: 1 },
   sectionTitle: { ...typography.caption, marginTop: spacing.sm, marginBottom: spacing.xs, paddingHorizontal: spacing.sm },

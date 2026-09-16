@@ -104,7 +104,7 @@ it('keeps tabs hidden throughout the keyboard-to-accessory handoff', () => {
   expect(state.style().height).toBe(0);
 });
 it('assigns the root accessory safe area only while the keyboard is absent', () => {
-  act(() => root.render(createElement(ChatComposerDock, { root: true, panelOpen: true, bottomInset: 24, backgroundColor: 'white', children: null })));
+  act(() => root.render(createElement(ChatComposerDock, { root: true, panelOpen: true, bottomInset: 24, children: null })));
   expect(state.style().paddingBottom).toBe(24);
   state.progress.value = 1;
   expect(state.style().paddingBottom).toBe(0);

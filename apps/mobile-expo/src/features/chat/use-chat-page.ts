@@ -439,12 +439,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   );
 
   const handleNewChat = useCallback(() => {
-    const completeSelection = bootstrap.beginSessionSelection();
-    if (!root) {
-      chatSession.activeConversationIdRef.current = '';
-      chatSession.cancelRecovery();
-      chatSession.clearAllState();
-    }
+    const completeSelection = bootstrap.beginSessionSelection('home');
 
     const agentId = currentSessionAgentId || defaultAgentId;
     void (async () => {
@@ -461,13 +456,10 @@ export function useChatPage(options: UseChatPageOptions = {}) {
       if (!completeSelection(key)) return;
       chatSession.activeConversationIdRef.current = key;
       void queryClient.invalidateQueries({ queryKey: queryKeys.sessionsAll });
-      if (!root) {
-        openChat(router, key, { replace: true });
-      }
     })().catch((err) => {
       chatSession.setSnackMsg(err instanceof Error ? err.message : String(err));
     });
-  }, [currentSessionAgentId, defaultAgentId, root, router, chatSession, bootstrap, newSessionPreferences, queryClient, sessionContext.projectId]);
+  }, [currentSessionAgentId, defaultAgentId, chatSession, bootstrap, newSessionPreferences, queryClient, sessionContext.projectId]);
 
   const handleContextChange = useCallback((projectId: string | null, executionMode?: 'local_checkout' | 'managed_worktree') => {
     const completeSelection = bootstrap.beginSessionSelection();

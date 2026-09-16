@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 export const COMPUTER_CONTROL_TOOL = 'desktop.computer.control';
+export const COMPUTER_FRAME_MAX_BYTES = 5 * 1024 * 1024;
+export const COMPUTER_FRAME_MAX_PIXELS = 16_000_000;
 export const ComputerProfileSchema = z.enum(['gui-plus-2026-02-26', 'structured-tools-v1']);
 export type ComputerProfile = z.infer<typeof ComputerProfileSchema>;
 const Id = z.string().min(1).max(200);
@@ -68,7 +70,7 @@ export const COMPUTER_OUTPUT_SCHEMA = {
     { type: 'object', additionalProperties: false, required: ['type', 'value'], properties: { type: { const: 'json' }, value: { type: 'object' } } },
     { type: 'object', additionalProperties: false, required: ['type', 'fileId', 'name', 'mimeType', 'size', 'sha256'], properties: {
       type: { const: 'file' }, fileId: { type: 'string' }, name: { type: 'string' }, mimeType: { enum: ['image/png', 'image/jpeg'] },
-      size: { type: 'integer', minimum: 1, maximum: 5242880 }, sha256: { type: 'string' },
+      size: { type: 'integer', minimum: 1, maximum: COMPUTER_FRAME_MAX_BYTES }, sha256: { type: 'string' },
     } },
   ] },
 } as const;

@@ -26,7 +26,7 @@ function userMessageMediaCount(message: Message): number {
 
 function serverMessageReplacesOptimistic(server: Message, optimistic: Message): boolean {
   if (!isUserMessage(server) || !isUserMessage(optimistic)) return false;
-  if (optimistic.deliveryState === 'failed' || optimistic.deliveryState === 'sending') return false;
+  if (optimistic.deliveryState === 'failed') return false;
 
   const serverTimestamp = server.timestamp;
   const optimisticTimestamp = optimistic.timestamp;

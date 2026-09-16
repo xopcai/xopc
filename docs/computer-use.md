@@ -31,7 +31,9 @@ If a localized name is not found, the agent can list available apps rather than
 guessing a bundle ID. Only genuinely ambiguous targets require a user choice.
 
 `open` requires a discovered `appRef`, `mode` (`observe` or `control`) and an explicit
-`prepare` boolean. Preparation can launch the app or restore a selected window;
+`prepare` boolean. Preparation can launch the app or bring a selected window forward,
+including a visible window obscured by another app. Use preparation, not a model-driven
+click or global shortcut, when the task only asks to bring the app forward;
 it must be permitted by the user's task. It never accepts launch arguments or URLs.
 Multiple windows are supported: native stacking order selects the front visible
 window when unambiguous; otherwise the tool returns titled window references.
@@ -121,6 +123,15 @@ the current Gateway.
 
 ## Failure behavior
 
+- Screenshot uploads use the endpoint-file route's dedicated request limit, then
+  enforce the grant's 5MB frame limit and a 16-million-pixel decoded-image limit.
+  Ordinary API requests remain limited to 1MB. Frames are memory-only and consumed
+  once; cancellation and failed metadata validation clear retained pixel buffers.
+- Upload failures carry a `COMPUTER_FRAME_UPLOAD_*` code, `phase`, `diagnosticId`
+  and HTTP status when available. The diagnostic ID matches the Gateway request ID.
+  Raw response bodies, credentials and image contents are not exposed. Uploads
+  stop with their invocation and are never retried automatically. A failed
+  verification upload preserves any already-completed input receipt.
 - `GATEWAY_PROTOCOL_INCOMPATIBLE` means the desktop and Gateway have different
   realtime/endpoint protocols or Computer Use contracts, not bad model keys or
   missing macOS permissions. Update both to the same build and restart them.
@@ -143,7 +154,10 @@ the current Gateway.
   same image and model, before any input is dispatched. Both requests consume
   the model budget. No malformed JSON is repaired into an executable action.
 - No automatic provider fallback, HTTP retry or replay of an uncertain native
-  input. A changed target, expired observation or revoked grant fails closed.
+  input. A revoked grant fails closed. If a pre-dispatch check positively confirms
+  no input and detects changed evidence, the runtime takes one fresh observation
+  and makes a new prediction. The old proposal/approval is discarded. Repeated
+  changes stop with `COMPUTER_UI_UNSTABLE` rather than dispatching stale coordinates.
 - Failed opens release their sessions and provide an error code, recovery hint,
   and window candidates where appropriate. Tool failures are reported as errors,
   not successful empty observations. Do not repeat a failure without a state change.
@@ -151,6 +165,41 @@ the current Gateway.
   receipt can be completed while its business outcome remains unknown.
 - Passwords, verification codes, payments and security changes require manual
   handling. Terminal and password-manager targets are refused.
+
+## Task continuity, verification and handoff
+
+Each session keeps the last six completed input previews in bounded memory. The
+GUI model receives those previews with the current window, not old screenshots.
+Repeated identical input on an unchanged observed state stops before a third
+dispatch. This is loop detection, not a guarantee against duplicate business writes.
+
+`step` and `observe` accept an optional `expect`: either `{kind:"text",text:"Saved"}`
+or `{kind:"field",label:"Title",value:"Expected title"}`. Native scoped accessibility
+evidence returns `satisfied`, `not_met` or `unavailable`. A pre-existing satisfied
+condition skips input. `verified:true` confirms that condition only, not the whole
+task or a remote transaction. Missing/ambiguous accessibility evidence is unknown,
+not success. Delayed application changes require a later observation.
+
+Both GUI profiles support action, answer, finished claim and user takeover.
+`structured-tools-v1` uses a single `computer_proposal` function for control
+decisions and a separate read-only answer schema; no legacy action parser is kept.
+
+Responses expose local session action/request budgets and expiry. Managed models
+also expose available service ceilings from the platform catalog; these are not
+remaining account balances or quota reservations. Single-request output is bounded
+by the model/service ceiling and the runtime's 2048-token cap. Rate limits stop the
+request without automatic retry or provider switching.
+
+Close the desktop lease before using browser/application tools. Only a confirmed
+`stopped` response permits the handoff; `stop_unconfirmed` retains the tool gate.
+A successful close includes bounded factual recent actions. It does not authorize
+bypassing a prior refusal. History is cleared on close. A disconnected endpoint
+must reconnect (or confirm no such session) before the gate can be released.
+
+The [acceptance matrix](design/technical/computer-use-acceptance.md) defines 60
+real-application tasks and independent outcome checks. The report grader is not
+itself a desktop benchmark runner. Unit fixtures and synthetic hosted grounding
+tests do not certify unattended use or Codex-level success.
 
 ## Verification and packaging
 

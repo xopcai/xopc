@@ -204,22 +204,6 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
             </span>
           ) : null}
           {activeConversationId && hasMessages ? <SessionShareButton key={`share:${activeConversationId}`} conversationId={activeConversationId} /> : null}
-          {activeConversationId && hasMessages ? (
-            <button
-              type="button"
-              className={cn(
-                'rounded-md p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
-                sideChatOpen && 'bg-surface-hover text-fg',
-              )}
-              title={sideChatOpen ? m.sideChat.closePaneAria : m.sideChat.openPaneAria}
-              aria-label={sideChatOpen ? m.sideChat.closePaneAria : m.sideChat.openPaneAria}
-              aria-controls="app-side-chat-panel"
-              aria-expanded={sideChatOpen}
-              onClick={() => setSideChatOpen(activeConversationId, !sideChatOpen)}
-            >
-              <PanelRight className="size-4" strokeWidth={1.5} aria-hidden />
-            </button>
-          ) : null}
           {terminalAvailable ? (
             <button
               type="button"
@@ -256,6 +240,22 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
                 await refreshContext();
               }}
             />
+          ) : null}
+          {activeConversationId && hasMessages ? (
+            <button
+              type="button"
+              className={cn(
+                'rounded-md p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
+                sideChatOpen && 'bg-surface-hover text-fg',
+              )}
+              title={sideChatOpen ? m.sideChat.closePaneAria : m.sideChat.openPaneAria}
+              aria-label={sideChatOpen ? m.sideChat.closePaneAria : m.sideChat.openPaneAria}
+              aria-controls="app-side-chat-panel"
+              aria-expanded={sideChatOpen}
+              onClick={() => setSideChatOpen(activeConversationId, !sideChatOpen)}
+            >
+              <PanelRight className="size-4" strokeWidth={1.5} aria-hidden />
+            </button>
           ) : null}
         </div>
       ),

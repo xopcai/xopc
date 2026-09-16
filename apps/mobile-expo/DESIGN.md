@@ -40,7 +40,7 @@ The system takes Apple’s current HIG principles of hierarchy, harmony, consist
 
 ## 2. Product model and information architecture
 
-Chat is the application root. A cold launch opens the gateway’s fixed main conversation; opening a history or task conversation does not replace it. Progress collects decisions and ongoing work, Library holds durable material, and You holds preferences and connection settings. Detail routes push above the tab shell.
+Chat is the application root. A cold launch opens the gateway’s fixed main conversation; opening a history or task conversation does not replace it. Creating a new conversation replaces the home conversation in place; from a detail route it returns to the Chat tab. Progress collects decisions and ongoing work, Library holds durable material, and You holds preferences and connection settings. Detail routes push above the tab shell.
 
 The product has five modes. A person should always know which mode they are in.
 

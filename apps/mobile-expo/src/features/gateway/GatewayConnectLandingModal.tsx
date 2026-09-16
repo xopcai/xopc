@@ -106,6 +106,8 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
   const waiting = progress?.stage === 'approval';
   const title = help ? f.installTitle : progress ? (waiting ? f.waiting : progress.stage === 'completing' ? f.completing : f.connecting) : f.title;
 
+  if (!visible) return null;
+
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={() => { if (!busy) onRequestClose(); }}>
       <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom, backgroundColor: colors.surface.base }}>

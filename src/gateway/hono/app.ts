@@ -4,6 +4,7 @@ import { cors } from 'hono/cors';
 import { createMiddleware } from 'hono/factory';
 import { bodyLimit } from 'hono/body-limit';
 import { getConnInfo } from '@hono/node-server/conninfo';
+import { ENDPOINT_MAX_FILE_BYTES } from '@xopcai/endpoint-tools-protocol';
 
 import { resolveGatewayEffectiveHost } from '../../config/gateway-bind.js';
 import { createLogger } from '../../utils/logger.js';
@@ -272,7 +273,11 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       || (c.req.method === 'POST' && /^\/api\/sessions\/[^/]+\/inputs$/.test(c.req.path))
       || (c.req.method === 'POST' && /^\/api\/tasks\/[^/]+\/inputs$/.test(c.req.path))
       || (c.req.method === 'PATCH' && /^\/api\/sessions\/[^/]+\/inputs\/[^/]+$/.test(c.req.path));
-    const maxSize = isAttachmentInputRequest
+    const isEndpointUpload = c.req.method === 'POST'
+      && /^\/api\/endpoint-tools\/invocations\/[^/]+\/files$/.test(c.req.path);
+    const maxSize = isEndpointUpload
+      ? ENDPOINT_MAX_FILE_BYTES
+      : isAttachmentInputRequest
       ? SESSION_INPUT_BODY_MAX
       : c.req.path === '/api/skills/upload'
         ? SKILL_UPLOAD_BODY_MAX

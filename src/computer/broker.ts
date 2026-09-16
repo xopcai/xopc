@@ -1,11 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
-  ActionEnvelopeSchema, ComputerCommandSchema,
+  ActionEnvelopeSchema, ComputerCommandSchema, COMPUTER_FRAME_MAX_BYTES, COMPUTER_FRAME_MAX_PIXELS,
   type ComputerAction, type ComputerCommand, type ComputerModelBinding,
   type ComputerObservation, type ComputerReceipt, type ComputerTarget, type ComputerApp, type ComputerWindow,
 } from '@xopcai/computer-control-contract';
 import { ComputerConfigSchema, type ComputerConfig } from './config.js';
 import { ComputerTargetError } from './errors.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('ComputerBroker');
 
 export interface DriverObservation {
   target: ComputerTarget;
@@ -173,7 +176,7 @@ export class ComputerBroker {
     try {
     this.active(s);
     if (frame.target.appId !== s.appId || frame.target.processIdentity !== s.target!.processIdentity || frame.target.windowId !== s.target!.windowId) throw new Error('COMPUTER_TARGET_CHANGED');
-    if (frame.image.byteLength > 5 * 1024 * 1024 || frame.imageWidth * frame.imageHeight > 16_000_000) throw new Error('COMPUTER_FRAME_LIMIT');
+    if (frame.image.byteLength > COMPUTER_FRAME_MAX_BYTES || frame.imageWidth * frame.imageHeight > COMPUTER_FRAME_MAX_PIXELS) throw new Error('COMPUTER_FRAME_LIMIT');
     s.target = frame.target;
     s.observation = { id: randomUUID(), sessionId: s.id, brokerEpoch: this.epoch, generation: s.generation,
       target: frame.target, capturedAt: this.now(), imageWidth: frame.imageWidth, imageHeight: frame.imageHeight,
@@ -220,7 +223,7 @@ export class ComputerBroker {
       this.active(s);
       if (JSON.stringify(current.target) !== JSON.stringify(observed.target) || current.stateDigest !== observed.stateDigest || e.deadlineAt <= this.now()) {
         s.pending = undefined; s.observation = undefined; s.status = 'ready';
-        throw new Error('COMPUTER_APPROVAL_TARGET_CHANGED');
+        return { ...this.result(s), errorCode: 'COMPUTER_OBSERVATION_CHANGED' };
       }
       this.driver.validateAction?.(e.action);
     } finally { current.image.fill(0); }
@@ -235,9 +238,14 @@ export class ComputerBroker {
       // A changed screenshot is observation evidence, not proof of business success.
       receipt.verification = after.observation ? 'visual' : 'none';
       return { ...after, receipt };
-    } catch {
-      receipt.dispatch = 'unknown';
-      await this.stop();
+    } catch (error) {
+      if (receipt.dispatch === 'started') receipt.dispatch = 'unknown';
+      receipt.errorCode = error instanceof Error && /^COMPUTER_[A-Z_0-9]+$/.test(error.message)
+        ? error.message : receipt.dispatch === 'completed' ? 'COMPUTER_POST_ACTION_OBSERVATION_FAILED' : 'COMPUTER_NATIVE_ACTION_FAILED';
+      s.errorCode = receipt.errorCode;
+      await this.stop().catch(() => {
+        log.warn({ sessionId: s.id, actionId: e.actionId, phase: 'cleanup' }, 'Computer driver cleanup failed after session revocation');
+      });
       return { ...this.result(s), receipt };
     }
   }

@@ -96,7 +96,7 @@ export interface EndpointToolHostControllerOptions {
   getAvailability(): EndpointAvailability;
   authorize?(request: EndpointToolApprovalRequest): Promise<void>;
   confirm(request: EndpointToolApprovalRequest): Promise<boolean>;
-  uploadFile(grant: EndpointToolUploadGrant, file: EndpointToolFile): Promise<Extract<EndpointToolContent, { type: 'file' }>>;
+  uploadFile(grant: EndpointToolUploadGrant, file: EndpointToolFile, context: { signal: AbortSignal; invocationId: string }): Promise<Extract<EndpointToolContent, { type: 'file' }>>;
   createMessageId(): string;
   now?: () => number;
   afterSendDelayMs?: number;
@@ -204,7 +204,10 @@ export class EndpointToolHostController {
             this.send('tool.progress', { invocationId, ...progress });
           }
         },
-        uploadFile: (file) => this.options.uploadFile(uploadGrant, file),
+        uploadFile: (file) => {
+          this.assertExecutable(invocationId, invocation, descriptor, deadlineAt);
+          return this.options.uploadFile(uploadGrant, file, { signal: invocation.controller.signal, invocationId });
+        },
       });
       this.assertExecutable(invocationId, invocation, descriptor, deadlineAt);
       const content = endpointToolContentSchema.array().min(1).max(20).parse(result.content);
