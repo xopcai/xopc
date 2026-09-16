@@ -7,7 +7,7 @@ import {
 
 describe('lazy route bundles', () => {
   it('maps every import route family without swallowing nearby paths', () => {
-    for (const path of ['/api/imports/sources', '/api/imports/sources/codex/import', '/api/imports/sources/claude-code/import']) {
+    for (const path of ['/api/imports/sources', '/api/imports/sources/codex/scan', '/api/imports/sources/claude-code/scan', '/api/imports/inventories/id', '/api/imports/inventories/id/items/item/preview', '/api/imports/runs', '/api/imports/runs/id']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('imports');
     }
     for (const path of ['/api/imports-other', '/api/import', '/api/migrations']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('imports');

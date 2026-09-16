@@ -65,10 +65,63 @@ export class ImportError extends Error {
   }
 }
 
+export type InventoryStatus = 'ready' | 'existing' | 'conflict' | 'blocked';
+export interface InventoryItem {
+  id: string;
+  kind: 'skill' | 'context' | 'project';
+  parentId?: string;
+  name: string;
+  description: string;
+  displayPath: string;
+  scope: ImportScope;
+  status: InventoryStatus;
+  reason?: string;
+  suggested: boolean;
+  targetName?: string;
+}
+export interface ImportInventory {
+  id: string;
+  source: ImportSource;
+  createdAt: number;
+  expiresAt: number;
+  candidates: InventoryItem[];
+  notices: string[];
+  complete: boolean;
+}
+export interface StoredInventoryItem extends InventoryItem {
+  location: string;
+  scanId?: string;
+  candidate?: ImportCandidate;
+  targetRoot?: string;
+  projectId?: string;
+}
+export interface StoredInventory extends Omit<ImportInventory, 'candidates'> {
+  candidates: StoredInventoryItem[];
+  scanIds: string[];
+}
+export interface ImportSelection {
+  inventoryId: string;
+  candidateIds: string[];
+  requestId: string;
+  retryOf?: string;
+}
+export interface ImportRunItem {
+  candidateId: string;
+  kind: InventoryItem['kind'];
+  name: string;
+  status: 'pending' | 'imported' | 'existing' | 'failed';
+  targetId?: string;
+  jobId?: string;
+  error?: string;
+}
 export interface ProductImportResult {
   id: string;
   source: ImportSource;
   createdAt: number;
+  inventoryId: string;
+  selectionHash: string;
+  status: 'running' | 'completed' | 'partial';
+  items: ImportRunItem[];
   skills: number;
   context: number;
   projects: number;

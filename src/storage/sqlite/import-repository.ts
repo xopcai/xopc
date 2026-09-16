@@ -1,7 +1,7 @@
 import { requireXopcDatabase } from './connection.js';
-import type { ImportJob, ImportPlan, ImportScan, ProductImportResult } from '../../imports/types.js';
+import type { ImportJob, ImportPlan, ImportScan } from '../../imports/types.js';
 import { ImportError } from '../../imports/types.js';
-type Records = { scan: ImportScan; plan: ImportPlan; job: ImportJob; run: ProductImportResult };
+type Records = { scan: ImportScan; plan: ImportPlan; job: ImportJob };
 export class ImportRepository {
   constructor(readonly owner: string) {}
   get<K extends keyof Records>(kind: K, id: string): Records[K] {
@@ -18,15 +18,14 @@ export class ImportRepository {
     const row = requireXopcDatabase().db.prepare('SELECT payload FROM capability_imports WHERE owner = ? AND kind = ? AND idempotency_key = ?').get(this.owner, 'job', key) as { payload: string } | undefined;
     return row ? JSON.parse(row.payload) : undefined;
   }
-  latestRuns(): ProductImportResult[] {
-    return (requireXopcDatabase().db.prepare("SELECT payload FROM capability_imports WHERE owner = ? AND kind = 'run' ORDER BY created_at DESC LIMIT 100")
-      .all(this.owner) as Array<{ payload: string }>).map(r => JSON.parse(r.payload));
-  }
   static owners(): string[] {
     return (requireXopcDatabase().db.prepare('SELECT DISTINCT owner FROM capability_imports').all() as Array<{ owner: string }>).map(r => r.owner);
   }
   scansBefore(time: number): ImportScan[] {
     return (requireXopcDatabase().db.prepare('SELECT payload FROM capability_imports WHERE owner = ? AND kind = ? AND created_at < ?').all(this.owner, 'scan', time) as Array<{ payload: string }>).map(r => JSON.parse(r.payload));
+  }
+  deleteScan(id: string): void {
+    requireXopcDatabase().db.prepare("DELETE FROM capability_imports WHERE owner = ? AND kind = 'scan' AND id = ?").run(this.owner, id);
   }
   jobs(limit = 100): ImportJob[] {
     return (requireXopcDatabase().db.prepare('SELECT payload FROM capability_imports WHERE owner = ? AND kind = ? ORDER BY created_at DESC LIMIT ?').all(this.owner, 'job', limit) as Array<{ payload: string }>).map(r => JSON.parse(r.payload));

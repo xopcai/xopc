@@ -18,8 +18,9 @@ export interface ImportServiceOptions {
   stateDir: string;
   owner: string;
   validateTarget?: (target: ImportTarget) => void;
-  isConnected?: (candidate: ImportScan['candidates'][number]) => boolean;
+  isConnected?: (candidate: ImportScan['candidates'][number], workspaceRoot?: string) => boolean;
   reservedNames?: (target: ImportTarget) => string[];
+  isWorkspaceTrusted?: (root: string) => boolean;
   refreshSkills?: () => void | Promise<void>;
 }
 export class ImportService {
@@ -30,9 +31,16 @@ export class ImportService {
     this.root = join(canonicalTarget(options.stateDir), 'imports');
     mkdirSync(this.root, { recursive: true, mode: 0o700 });
   }
-  scan(input: ScanInput): ImportScan { return this.storeScan(scanLocal(input)); }
+  async scan(input: ScanInput): Promise<ImportScan> { return this.storeScan(await scanLocal(input), input.projectRoot); }
   getScan(id: string): ImportScan { return this.repo.get('scan', id); }
-  private storeScan(scan: ImportScan): ImportScan {
+  discardUnusedScan(id: string): void {
+    this.lock(() => {
+      if (this.repo.jobs(-1).some(job => job.plan.scanId === id)) return;
+      rmSync(join(this.root, id), { recursive: true, force: true });
+      this.repo.deleteScan(id);
+    });
+  }
+  storeScan(scan: ImportScan, workspaceRoot?: string): ImportScan {
     const dir = join(this.root, scan.id);
     mkdirSync(dir, { mode: 0o700 });
     for (const item of scan.candidates) {
@@ -41,7 +49,7 @@ export class ImportService {
       }
     }
     // Persist only the manifest in SQLite; executable bytes remain outside runtime roots.
-    const manifest = { ...scan, candidates: scan.candidates.map(c => ({ ...c, connected: this.options.isConnected?.(c) ?? false, files: c.files.map(f => ({ ...f, data: '' })) })) };
+    const manifest = { ...scan, candidates: scan.candidates.map(c => ({ ...c, connected: this.options.isConnected?.(c, workspaceRoot) ?? false, files: c.files.map(f => ({ ...f, data: '' })) })) };
     this.repo.save('scan', manifest);
     return manifest;
   }
@@ -51,57 +59,55 @@ export class ImportService {
     this.repo.save('plan', plan);
     return plan;
   }
-  async importSkills(scan: ImportScan, target: ImportTarget) {
+  describeSkills(scan: ImportScan, target: ImportTarget) {
     const inventory = targetInventory(target.root);
     const names = new Set([...(this.options.reservedNames?.(target) ?? []), ...inventory.flatMap(i => [i.directory, i.name])].map(n => n.toLowerCase()));
-    const choices: Array<Pick<ImportAction, 'candidateId' | 'operation'> & { name?: string }> = [];
-    const result = { imported: 0, skipped: 0, issues: [] as Array<{ name: string; reason: string }> };
-    const previous = new Map<string, { name: string }>();
+    const previous = new Map<string, string>();
     for (const job of this.repo.jobs(-1)) {
       if (job.plan.target.root !== canonicalTarget(target.root)) continue;
       const origin = this.getScan(job.plan.scanId);
       for (const item of job.items.filter(i => i.status === 'active')) {
         const candidate = origin.candidates.find(c => c.id === item.action.candidateId);
-        if (candidate?.source === scan.source && !previous.has(candidate.location)) previous.set(candidate.location, { name: item.action.name });
+        if (candidate?.source === scan.source && !previous.has(candidate.location)) previous.set(candidate.location, item.action.name);
       }
     }
-    for (const candidate of scan.candidates.filter(c => c.kind === 'skill')) {
-      if (candidate.connected) { result.skipped++; continue; }
-      if (candidate.compatibility !== 'compatible') {
-        result.issues.push({ name: candidate.name, reason: candidate.findings.join('; ') }); continue;
+    return scan.candidates.filter(c => c.kind === 'skill').map(candidate => {
+      let status: import('./types.js').InventoryStatus = 'ready';
+      let reason: string | undefined;
+      let targetName = candidate.name;
+      if (candidate.connected) status = 'existing';
+      else if (candidate.compatibility !== 'compatible') { status = 'blocked'; reason = candidate.findings.join('; '); }
+      else {
+        const prior = previous.get(candidate.location);
+        const priorTarget = prior && inventory.find(i => i.directory === prior);
+        const files = this.readSnapshot(scan.id, candidate.id);
+        if (priorTarget) {
+          targetName = priorTarget.directory;
+          status = fileHash(this.renameSkill(files, targetName)) === priorTarget.hash ? 'existing' : 'blocked';
+          if (status === 'blocked') reason = 'Previously imported content has changed; existing edits will be kept.';
+        } else if (inventory.some(i => i.name.toLowerCase() === candidate.name.toLowerCase() && i.hash === candidate.hash)) status = 'existing';
+        else if (names.has(targetName.toLowerCase())) {
+          targetName = `${candidate.source}-${candidate.name}`.slice(0, 63);
+          if (inventory.some(i => i.name === targetName && i.hash === fileHash(this.renameSkill(files, targetName)))) status = 'existing';
+          else if (names.has(targetName.toLowerCase())) { status = 'blocked'; reason = 'Both the original and product-prefixed names are in use.'; }
+          else status = 'conflict';
+        }
       }
-      const prior = previous.get(candidate.location);
-      const priorTarget = prior && inventory.find(i => i.directory === prior.name);
-      if (prior && priorTarget) {
-        const files = JSON.parse(readFileSync(join(this.root, scan.id, `${candidate.id}.json`), 'utf8')) as ImportFile[];
-        if (fileHash(this.renameSkill(files, prior.name)) === priorTarget.hash) result.skipped++;
-        else result.issues.push({ name: candidate.name, reason: 'The previously imported skill has changed. Existing content was kept.' });
-        continue;
-      }
-      const existing = inventory.find(i => i.name.toLowerCase() === candidate.name.toLowerCase());
-      if (existing?.hash === candidate.hash) { result.skipped++; continue; }
-      let name = candidate.name;
-      if (names.has(name.toLowerCase())) name = `${candidate.source}-${candidate.name}`.slice(0, 63);
-      const files = JSON.parse(readFileSync(join(this.root, scan.id, `${candidate.id}.json`), 'utf8')) as ImportFile[];
-      const hash = fileHash(this.renameSkill(files, name));
-      if (inventory.some(i => i.name === name && i.hash === hash)) { result.skipped++; continue; }
-      if (names.has(name.toLowerCase())) {
-        result.issues.push({ name: candidate.name, reason: 'An existing skill was kept. Manage it in Skills to make changes.' }); continue;
-      }
-      names.add(name.toLowerCase());
-      choices.push({ candidateId: candidate.id, operation: name === candidate.name ? 'create' : 'rename', name });
-    }
-    if (!choices.length) return result;
-    const plan = this.plan(scan.id, target, choices);
-    const staged = this.apply(plan.id, plan.id);
-    const job = await this.activate(staged.id, staged.items.filter(i => i.status === 'staged').map(i => i.action.candidateId));
-    for (const item of job.items) {
-      if (item.status === 'active') result.imported++;
-      else if (item.status === 'skipped') result.skipped++;
-      else result.issues.push({ name: item.action.name, reason: item.error ?? 'Could not import this skill. Try again.' });
-    }
-    return result;
+      if (status === 'ready' || status === 'conflict') names.add(targetName.toLowerCase());
+      return { candidate, status, reason, targetName };
+    });
   }
+  readSnapshot(scanId: string, candidateId: string): ImportFile[] {
+    const candidate = this.getScan(scanId).candidates.find(c => c.id === candidateId);
+    if (!candidate || candidate.kind !== 'skill' || candidate.compatibility !== 'compatible') throw new ImportError('not_found', 'Snapshot not found', 404);
+    const files = JSON.parse(readFileSync(join(this.root, scanId, `${candidateId}.json`), 'utf8')) as ImportFile[];
+    if (fileHash(files) !== candidate.hash) throw new ImportError('source_changed', 'Snapshot changed', 409);
+    return files;
+  }
+  jobByKey(key: string) { return this.repo.byKey(key); }
+  validateTarget(target: ImportTarget) { this.options.validateTarget?.(target); }
+  reservedNames(target: ImportTarget) { return this.options.reservedNames?.(target) ?? []; }
+  isWorkspaceTrusted(root: string) { return this.options.isWorkspaceTrusted?.(root) ?? false; }
   getPlan(id: string) { return this.repo.get('plan', id); }
   apply(planId: string, key: string): ImportJob {
     if (!key || key.length > 128) throw new ImportError('invalid_key', 'An idempotency key is required');

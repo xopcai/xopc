@@ -19,6 +19,39 @@
     "footnote": "Existing content is preserved. Context documents become searchable reference material. Tool connections need to be reconnected; passwords and sign-in sessions are not imported.",
     "openSkills": "View skills",
     "openProjects": "View projects",
-    "connections": "Connections"
+    "connections": "Connections",
+    "chooseTitle": "Import from {source}",
+    "chooseHint": "Choose what to bring into xopc. Projects and rules are not selected by default.",
+    "search": "Search names or paths",
+    "selected": "{skills} skills · {context} rules · {projects} projects selected",
+    "selectVisible": "Select available",
+    "clearVisible": "Clear",
+    "close": "Close",
+    "cancel": "Cancel",
+    "incomplete": "Some locations could not be scanned. Only the listed items can be imported.",
+    "projectHint": "Choose projects individually. Selecting a project also selects its available new skills; rules stay unchecked.",
+    "projectContents": "{skills} skills · {context} rules",
+    "chosenCount": "{count} selected",
+    "directoryOnly": "Project directory only",
+    "noContent": "No importable content found.",
+    "scanNotices": "Other content and scan notices",
+    "runningHint": "You can close this window and view the result later.",
+    "retryHint": "The result is uncertain. Retry the same selection to avoid duplicate writes.",
+    "importSelected": "Import selected content",
+    "preview": "View",
+    "previewTruncated": "Preview shortened. The full document will be imported.",
+    "existingProject": "Existing project — add selected content",
+    "retryFailed": "Retry failed items",
+    "kinds": {
+      "skill": "Skills",
+      "context": "Working rules",
+      "project": "Projects"
+    },
+    "statuses": {
+      "ready": "Available",
+      "existing": "Already available",
+      "conflict": "Import under this name",
+      "blocked": "Unavailable"
+    }
   }
 }
