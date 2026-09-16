@@ -1,8 +1,45 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ComputerModelAdapter, GUI_PLUS_SYSTEM_PROMPT, parseGuiPlusProposal, predictComputerStep, readComputerJson } from '../model-adapter.js';
+import { ComputerModelAdapter, GUI_PLUS_SYSTEM_PROMPT, GUI_PLUS_OBSERVATION_PROMPT, parseGuiPlusProposal, predictComputerStep, readComputerJson } from '../model-adapter.js';
+import { computerDiagnostic } from '../errors.js';
 
 const call = (arguments_: unknown) => `<tool_call>${JSON.stringify({ name: 'computer_use', arguments: arguments_ })}</tool_call>`;
 describe('GUI-Plus adapter', () => {
+  it('defines only answer in the read-only hosted function signature', () => {
+    const tool = JSON.parse(GUI_PLUS_OBSERVATION_PROMPT.match(/<tools>\n(.*)\n<\/tools>/)![1]);
+    expect(tool.function.parameters.properties.action.enum).toEqual(['answer']);
+    expect(tool.function.parameters.required).toEqual(['action', 'text']);
+    expect(GUI_PLUS_OBSERVATION_PROMPT).toContain('Include both XML tags');
+  });
+  it('corrects one malformed observation without advertising or executing actions', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(Response.json({ choices: [{ message: { content: JSON.stringify({ name: 'computer_use', arguments: { action: 'answer', text: 'blue' } }) } }] }))
+      .mockResolvedValueOnce(Response.json({ choices: [{ message: { content: call({ action: 'answer', text: 'blue' }) } }] }));
+    const adapter = new ComputerModelAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26' }, fetch);
+    expect(await predictComputerStep(adapter, { readOnly: true, goal: 'Describe', image: new Uint8Array([1]), mimeType: 'image/png', width: 1, height: 1, summary: '' }, () => {})).toEqual({ kind: 'answer', text: 'blue' });
+    const prompt = JSON.parse(fetch.mock.calls[1][1].body).messages[0].content;
+    expect(prompt).toContain('previous answer failed format validation');
+    expect(prompt).not.toMatch(/left_click|pressKeys|computer_proposal/);
+  });
+  it('preserves safe model rejection diagnostics without raw provider prose', async () => {
+    const requestId = crypto.randomUUID();
+    const fetch = vi.fn().mockResolvedValue(Response.json({ error: { code: 'max_input_tokens_exceeded', message: 'private prompt and secret key' } },
+      { status: 400, headers: { 'x-xopc-request-id': requestId } }));
+    const adapter = new ComputerModelAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26' }, fetch);
+    const error = await adapter.predict({ goal: 'Describe', readOnly: true, image: new Uint8Array([1]), mimeType: 'image/png', width: 1, height: 1, summary: '' }).catch(error => error);
+    expect(computerDiagnostic(error)).toMatchObject({ errorCode: 'COMPUTER_MODEL_HTTP_400', phase: 'model', httpStatus: 400,
+      requestId, serviceErrorCode: 'max_input_tokens_exceeded' });
+    expect(error.message).not.toMatch(/private|secret/);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+  it.each(['not json', 'x'.repeat(20_000), JSON.stringify({ error: { code: 'private-secret', message: 'private-secret' } })])('keeps the HTTP failure for invalid or untrusted error bodies', async body => {
+    const fetch = vi.fn().mockResolvedValue(new Response(body, { status: 400, headers: { 'x-xopc-request-id': 'private-secret' } }));
+    const adapter = new ComputerModelAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26' }, fetch);
+    const error = await adapter.predict({ goal: 'Describe', image: new Uint8Array(), mimeType: 'image/png', width: 1, height: 1, summary: '' }).catch(error => error);
+    expect(computerDiagnostic(error)).toMatchObject({ errorCode: 'COMPUTER_MODEL_HTTP_400', httpStatus: 400 });
+    expect(computerDiagnostic(error)?.requestId).toBeUndefined();
+    expect(computerDiagnostic(error)?.serviceErrorCode).toBeUndefined();
+    expect(error.message).not.toContain('private-secret');
+  });
   it('uses a flat hosted signature without advertising unsupported native actions', () => {
     const tool = JSON.parse(GUI_PLUS_SYSTEM_PROMPT.match(/<tools>\n(.*)\n<\/tools>/)![1]);
     expect(tool.function.parameters.type).toBe('object');

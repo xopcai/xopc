@@ -129,6 +129,12 @@ the current Gateway.
   once; cancellation and failed metadata validation clear retained pixel buffers.
 - Upload failures carry a `COMPUTER_FRAME_UPLOAD_*` code, `phase`, `diagnosticId`
   and HTTP status when available. The diagnostic ID matches the Gateway request ID.
+- Model HTTP failures carry `phase: model`, HTTP status, a local `diagnosticId`,
+  and a validated service `requestId` / allowlisted `serviceErrorCode` when available.
+  Raw provider messages are discarded because they can echo prompts or credentials.
+  `COMPUTER_MODEL_HTTP_400` with `max_input_tokens_exceeded` is a model-service input
+  rejection, not an OS permission error. Correlate the service request ID and fix
+  admission limits or the request contract before reopening; do not blindly retry.
   Raw response bodies, credentials and image contents are not exposed. Uploads
   stop with their invocation and are never retried automatically. A failed
   verification upload preserves any already-completed input receipt.
