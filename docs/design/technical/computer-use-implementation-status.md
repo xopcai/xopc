@@ -8,6 +8,19 @@ Status: core macOS preview implemented, platform gateway deployed, and controlle
 - Existing DASHSCOPE_API_KEY successfully called gui-plus-2026-02-26 with a synthetic PNG (HTTP 200). No personal screen was uploaded.
 - Both repositories have unrelated user changes; preserve these throughout development and deployment.
 
+## App discovery and observation delivery (2026-09-17)
+
+- Public operations are now discover/open/observe/step/close. Removed user-supplied bundle IDs and direct public act input, without a compatibility branch. Native act remains private and grant-checked.
+- Discovery uses the existing driver's installed/running catalog. App references are task-bound, bounded and expire after five minutes. Window references bind a process instance. Failed opens release runtime sessions; errors carry recovery hints and candidate windows.
+- Open explicitly declares observe/control and whether preparation is authorized. The host enforces read-only even under Full control. Starting and restoring are constrained native calls, never arbitrary launch arguments or scripts.
+- Multi-window selection performs bounded, screenshot-free AXWindow root checks to exclude menu/proxy surfaces. Incomplete metadata returns candidates, not guessed focus. Native tests found real proxy windows and added regressions. Multiple running instances of one bundle remain an explicit limitation.
+- observe(question) performs visual understanding on the frozen GUI connection, including structured-tools-v1. GUI-Plus answer is no longer conflated with human takeover. Empty AX content is reported as unavailable, with a visual-question recovery hint; it is not evidence of an empty page.
+- Review fixes include real pi error signaling (throw, not returned isError), cancellation ownership, operation serialization, cancellation before session creation, idle discovery daemon cleanup and refusal to guess after partial AX metadata.
+- Managed live test: xopc-cloud/computer-gui-plus-preview → Alibaba GUI-Plus passed synthetic button grounding and read-only label recognition in two model requests. Deployment-pin rejection remained HTTP 409. No personal desktop image was sent, no platform config or deployment changed.
+- Native fixture: real Electron main process + pinned Cua 0.28.2 passed app discovery, host read-only rejection, private native field input and post-input accessibility verification. Repeated runs also exposed intermittent empty native AX trees; valid screenshots remain available for visual questions, and semantic input still fails closed when its field cannot be grounded. These are controlled fixture checks, not a general desktop success benchmark.
+- Final regression: 18 test files / 139 tests passed; three opt-in direct-Alibaba cases skipped in this suite, with managed live inference verified separately above. Main/preload and packaged Gateway bundles, Web production build, root/Web typechecks and git diff whitespace checks passed. Signing/notarization and a new distributable installer are not part of this verification record.
+- Test sources: scripts/verify-computer-native.mts (Electron with the disposable Swift fixture) and scripts/verify-managed-computer.mts (synthetic hosted inference). The native fixture uses a distinct bundle identity so it cannot attach to earlier test apps.
+
 ## Delivery gates
 
 - [x] Strict shared contracts, config inheritance, BYOK and managed model adapters
