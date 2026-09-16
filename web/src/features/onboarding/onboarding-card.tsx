@@ -260,6 +260,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
       <div className="xopc-onboarding-ambient pointer-events-none absolute inset-0" aria-hidden />
       <header className="relative z-20 flex h-18 shrink-0 items-center justify-end px-5 sm:px-8 lg:px-10">
         <div className="flex items-center gap-2">
+          <Link to="/settings/imports" className="rounded-lg px-2 py-2 text-sm text-accent hover:underline" aria-disabled={busy} onClick={event => { if (busy) event.preventDefault(); }}>{messages(language).imports.title}</Link>
           <OnboardingLanguageSwitch
             value={language}
             onChange={(nextLanguage) => {

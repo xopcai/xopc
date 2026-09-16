@@ -19,7 +19,8 @@
     "desktop-app": "应用数据",
     "cron": "定时任务",
     "skills": "技能",
-    "keyboard-shortcuts": "快捷键"
+    "keyboard-shortcuts": "快捷键",
+    "imports": "导入能力"
   },
   "settingsPage": {
     "comingSoon": "设置 · {{title}}（即将推出）。"

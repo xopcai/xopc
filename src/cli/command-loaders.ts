@@ -40,6 +40,7 @@ export const REGISTRY_COMMAND_MODULES: Record<string, CommandLoader> = {
   voice: () => import('./commands/voice.js'),
   search: () => import('./commands/search.js'),
   auth: () => import('./commands/auth.js'),
+  import: () => import('./commands/import.js'),
   skills: () => import('./commands/skills.js'),
   connectors: () => import('./commands/connectors.js'),
   browser: () => import('./commands/browser.js'),

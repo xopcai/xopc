@@ -1055,6 +1055,8 @@ export class GatewayService {
 
     log.debug('Starting gateway service...');
     openXopcDatabase();
+    const { recoverCapabilityImports } = await import('../imports/runtime.js');
+    await recoverCapabilityImports();
     this.createNotificationService().start();
     this.startTime = Date.now();
     this.running = true;
