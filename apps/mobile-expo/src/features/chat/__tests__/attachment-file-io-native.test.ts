@@ -33,7 +33,9 @@ vi.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: vi.fn(),
 }));
 
-import { readUriAsBase64 } from '../attachment-file-io';
+import { getDocumentAsync } from 'expo-document-picker';
+
+import { pickAttachmentFromSource, readUriAsBase64 } from '../attachment-file-io';
 
 describe('readUriAsBase64 native files', () => {
   beforeEach(() => {
@@ -63,5 +65,33 @@ describe('readUriAsBase64 native files', () => {
       code: 'read_failed',
       fileName: 'voice.m4a',
     });
+  });
+});
+
+describe('local document attachments', () => {
+  beforeEach(() => {
+    fileState.entries.clear();
+    vi.clearAllMocks();
+  });
+
+  it('loads a selected document from the picker cache into the composer', async () => {
+    const uri = 'file:///cache/report.pdf';
+    fileState.entries.set(uri, { exists: true, size: 3, base64: 'YWJj' });
+    vi.mocked(getDocumentAsync).mockResolvedValue({
+      canceled: false,
+      assets: [{ uri, name: 'report.pdf', mimeType: 'application/pdf', size: 3, lastModified: 0 }],
+    });
+
+    await expect(pickAttachmentFromSource('document')).resolves.toMatchObject({
+      type: 'document', name: 'report.pdf', mimeType: 'application/pdf', content: 'YWJj', size: 3,
+    });
+    expect(getDocumentAsync).toHaveBeenCalledWith(expect.objectContaining({
+      copyToCacheDirectory: true,
+    }));
+  });
+
+  it('leaves the draft unchanged when document selection is cancelled', async () => {
+    vi.mocked(getDocumentAsync).mockResolvedValue({ canceled: true, assets: null });
+    await expect(pickAttachmentFromSource('document')).resolves.toBeNull();
   });
 });

@@ -57,3 +57,25 @@ describe('RealtimeSocketWriter', () => {
     expect(socket.send).not.toHaveBeenCalled();
   });
 });
+
+it('contains synchronous socket send failures, including retry timers', () => {
+  vi.useFakeTimers();
+  try {
+    const socket = {
+      readyState: 1, bufferedAmount: 600 * 1024,
+      close: vi.fn(), send: vi.fn(() => { throw new Error('socket closed during send'); }),
+    } as unknown as WebSocket;
+    const writer = new RealtimeSocketWriter(socket);
+    const message = {
+      protocolVersion: 1, messageId: 'retry', sentAt: Date.now(),
+      kind: 'realtime.pong', payload: {},
+    } as ServerRealtimeMessage;
+    writer.enqueue(message);
+    Object.assign(socket, { bufferedAmount: 0 });
+    expect(() => vi.runAllTimers()).not.toThrow();
+    expect(socket.close).toHaveBeenCalledWith(1011, 'Realtime delivery failed');
+    expect(writer.enqueue(message)).toBe(false);
+  } finally {
+    vi.useRealTimers();
+  }
+});

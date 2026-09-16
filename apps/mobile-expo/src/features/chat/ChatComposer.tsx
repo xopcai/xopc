@@ -7,7 +7,6 @@ import {
   type LayoutChangeEvent,
   DeviceEventEmitter,
   Keyboard,
-  ScrollView,
   Platform,
   Pressable,
   StyleSheet,
@@ -28,7 +27,7 @@ import {
 } from './composer.types';
 import { ComposerReferenceSheet } from './ComposerReferenceSheet';
 import type { ComposerReferenceItem, ReferenceKind } from '../../query/composer-references';
-import { ComposerActionSheet } from './composer-action-sheet';
+import { ComposerActionPanel } from './composer-action-panel';
 import { AtMentionPaletteBar } from './AtMentionPaletteBar';
 import { ComposerAttachmentStrip } from './composer-attachment-strip';
 import { ComposerContextChips } from './ComposerContextChips';
@@ -54,7 +53,6 @@ import { useChatVoiceRecording } from './use-chat-voice-recording';
 import { useVoiceCall } from '../voice/voice-call';
 import {
   COMPOSER_VOICE_CALL_OPTIONS,
-  resolveComposerVoiceCallOption,
   type ComposerVoiceCallMode,
 } from './composer-voice-call-options';
 
@@ -75,7 +73,6 @@ export const ChatComposer = memo(function ChatComposer({
   contextControl,
   onNewChat,
   onVoiceCallStart,
-  voiceCallMode,
   voiceCallUnavailable,
 }: {
   sessionKey: string;
@@ -148,6 +145,8 @@ export const ChatComposer = memo(function ChatComposer({
     attachmentPermissionDenied: cm.attachmentPermissionDenied,
     attachmentCameraPermissionDenied: cm.attachmentCameraPermissionDenied,
   });
+
+  useEffect(() => { att.closeSheet(); }, [sessionKey, disabled, att.closeSheet]);
 
   const atRangeActive = detectAtMentionRange(draft, cursorPos) !== null;
   const palette = useCommandPalette(draft, cursorPos, atRangeActive);
@@ -422,12 +421,18 @@ export const ChatComposer = memo(function ChatComposer({
   const voiceToggleDisabled = disabled || streaming || voiceInteractionActive || call.phase !== 'idle';
   const toggleMode = useCallback(() => {
     if (voiceToggleDisabled) return;
+    att.closeSheet();
     Keyboard.dismiss();
     setMode(current => current === 'voice' ? 'text' : 'voice');
-  }, [voiceToggleDisabled]);
+  }, [att.closeSheet, voiceToggleDisabled]);
 
   const openActionSheet = useCallback(() => {
     if (disabled || voiceInteractionActive) return;
+    if (att.sheetOpen) {
+      att.closeSheet();
+      return;
+    }
+    inputRef.current?.blur();
     Keyboard.dismiss();
     att.openSheet();
   }, [att, disabled, voiceInteractionActive]);
@@ -451,25 +456,9 @@ export const ChatComposer = memo(function ChatComposer({
     [cm.localFiles, cm.photos, cm.takePhoto, handleAttachmentPick],
   );
 
-  const voiceCallItem = useMemo(() => {
-    const option = resolveComposerVoiceCallOption(voiceCallMode);
-    return {
-      ...option,
-      key: 'voice-call',
-      label: m.voice.title,
-      onPress: () => onVoiceCallStart(voiceCallMode),
-    };
-  }, [m.voice.title, onVoiceCallStart, voiceCallMode]);
-
   const attachmentPickDisabled = disabled || streaming || voiceInteractionActive || att.attachments.length >= att.maxAttachments;
-  const callStartDisabled = disabled || streaming || voiceInteractionActive || call.phase !== 'idle'
-    || (voiceCallMode ? voiceCallUnavailable?.[voiceCallMode] === true : false);
   const sheetItems = [
-    { key: 'new-chat', icon: 'square-edit-outline', label: m.drawer.newChat,
-      disabled: disabled || voiceInteractionActive,
-      onPress: () => { Keyboard.dismiss(); onNewChat(); } },
-    { key: 'meeting-recording', icon: 'microphone-plus', label: m.recordings.title,
-      onPress: () => { Keyboard.dismiss(); router.push('/recordings'); } },
+    ...captureItems.map(item => ({ ...item, disabled: attachmentPickDisabled })),
     ...(call.phase === 'idle' ? COMPOSER_VOICE_CALL_OPTIONS.map(option => ({
       key: option.key,
       icon: option.icon,
@@ -481,65 +470,12 @@ export const ChatComposer = memo(function ChatComposer({
     { key: 'reference-note', icon: 'notebook-outline', label: cm.references.addNote, onPress: () => setReferenceKind('note') },
     { key: 'reference-task', icon: 'checkbox-marked-circle-outline', label: cm.references.addTask, onPress: () => setReferenceKind('task') },
     { key: 'reference-file', icon: 'folder-outline', label: cm.references.addFile, onPress: () => setReferenceKind('file') },
-    ...captureItems.filter(item => item.key !== 'document').map(item => ({ ...item, disabled: attachmentPickDisabled })),
+    { key: 'new-chat', icon: 'square-edit-outline', label: m.drawer.newChat,
+      disabled: disabled || voiceInteractionActive,
+      onPress: () => { Keyboard.dismiss(); onNewChat(); } },
+    { key: 'meeting-recording', icon: 'microphone-plus', label: m.recordings.title,
+      onPress: () => { Keyboard.dismiss(); router.push('/recordings'); } },
   ];
-
-  const renderCaptureChip = (
-    key: string,
-    icon: string,
-    label: string,
-    onPress: () => void,
-    itemDisabled: boolean,
-  ) => (
-    <Pressable
-      key={key}
-      style={({ pressed }) => [
-        styles.captureChip,
-        {
-          borderColor: colors.border.subtle,
-          backgroundColor: pressed ? colors.surface.hover : colors.surface.panel,
-          opacity: itemDisabled ? 0.45 : pressed ? 0.78 : 1,
-        },
-      ]}
-      onPress={onPress}
-      disabled={itemDisabled}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-    >
-      <Icon source={icon} size={17} color={itemDisabled ? colors.text.tertiary : accent} />
-      <Text style={[styles.captureLabel, { color: colors.text.primary }]} numberOfLines={1}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-
-  const renderCaptureRail = () => {
-    return (
-      <ScrollView
-        horizontal
-        style={styles.captureScroll}
-        contentContainerStyle={styles.captureRail}
-        showsHorizontalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {contextControl}
-        {call.phase === 'idle' ? (() => {
-          const itemDisabled = callStartDisabled;
-          return renderCaptureChip(
-            voiceCallItem.key,
-            voiceCallItem.icon,
-            voiceCallItem.label,
-            voiceCallItem.onPress,
-            itemDisabled,
-          );
-        })() : null}
-        {captureItems.map((item) => {
-          const itemDisabled = attachmentPickDisabled;
-          return renderCaptureChip(item.key, item.icon, item.label, item.onPress, itemDisabled);
-        })}
-      </ScrollView>
-    );
-  };
 
   const renderVoiceToggle = () => (
     <Pressable
@@ -578,9 +514,10 @@ export const ChatComposer = memo(function ChatComposer({
       hitSlop={4}
       accessibilityRole="button"
       accessibilityLabel={cm.moreActions}
+      accessibilityState={{ expanded: att.sheetOpen }}
     >
       <Icon
-        source="plus-circle-outline"
+        source={att.sheetOpen ? "close-circle-outline" : "plus-circle-outline"}
         size={24}
         color={disabled ? colors.text.tertiary : accent}
       />
@@ -645,7 +582,7 @@ export const ChatComposer = memo(function ChatComposer({
         ? 'top'
         : 'center') as 'top' | 'center',
     autoCapitalize: 'sentences' as const,
-    onFocus: () => setIsFocused(true),
+    onFocus: () => { att.closeSheet(); setIsFocused(true); },
     onBlur: () => setIsFocused(false),
   };
 
@@ -730,7 +667,7 @@ export const ChatComposer = memo(function ChatComposer({
         </View>
       ) : null}
 
-      {renderCaptureRail()}
+      {contextControl ? <View style={styles.contextControl}>{contextControl}</View> : null}
 
       <View
         style={[
@@ -834,7 +771,7 @@ export const ChatComposer = memo(function ChatComposer({
         )}
       </View>
 
-      {!referenceKind && <ComposerActionSheet visible={att.sheetOpen} items={sheetItems} onClose={att.closeSheet} />}
+      <ComposerActionPanel key={sessionKey} visible={att.sheetOpen} items={sheetItems} onClose={att.closeSheet} />
       {referenceKind && <ComposerReferenceSheet key={sessionKey} initialKind={referenceKind} sessionKey={sessionKey}
         selectedIds={[...contextRefs.map(ref => `${ref.kind}:${ref.sourceId}`), ...att.attachments.map(file => `file:${file.id}`)]}
         onClose={() => setReferenceKind(null)} onSelect={handleReferenceSelect} filesDisabled={attachmentPickDisabled} referencesFull={contextRefs.length >= MAX_COMPOSER_CONTEXT_REFS}
@@ -870,28 +807,7 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 18,
   },
-  captureScroll: { flexGrow: 0, flexShrink: 0 },
-  captureRail: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingBottom: spacing.sm,
-  },
-  captureChip: {
-    flexShrink: 0,
-    minHeight: 44,
-    borderRadius: radii.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-  },
-  captureLabel: {
-    ...typography.label,
-    fontWeight: '600',
-  },
+  contextControl: { paddingBottom: spacing.sm },
   compactRow: {
     flexDirection: 'row',
     alignItems: 'center',

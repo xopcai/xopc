@@ -325,6 +325,12 @@ export class AgentToolsFactory {
     const agentId = options?.agentId;
     const resolvedAgentId = agentId ?? (cfg ? resolveDefaultAgentId(cfg) : 'main');
     const currentSessionKey = () => options?.sessionKey ?? this.deps.getCurrentContext?.()?.sessionKey;
+    const deliveryContext = () => {
+      if (currentSessionKey()?.startsWith('heartbeat:')) {
+        throw new Error('Heartbeat notifications must be returned in the final response for policy-controlled delivery.');
+      }
+      return this.deps.getCurrentContext();
+    };
     const currentAccess = () => resolveUserContextSessionAccess(this.deps.getConfig?.(), currentSessionKey());
     const knowledgeWritePolicy = () => this.deps.getConfig?.()?.userContext.knowledgeMemory.writePolicy ?? 'deny';
     const currentProjectId = () => {
@@ -451,17 +457,17 @@ export class AgentToolsFactory {
       createWebExtractTool({ getConfig: () => this.deps.getConfig?.() }),
       // Note: TTS is NOT handled by send_message tool anymore
       // TTS is applied at the ChannelManager dispatch layer
-      createMessageTool(bus, () => this.deps.getCurrentContext()),
+      createMessageTool(bus, deliveryContext),
       ...(mergeTtsConfigFromAppConfig(cfg?.messages?.tts).enabled
         ? [
             createTextToSpeechTool({
               bus,
-              getContext: () => this.deps.getCurrentContext(),
+              getContext: deliveryContext,
               getConfig: () => this.deps.getConfig?.(),
             }),
           ]
         : []),
-      createSendMediaTool(workspace, bus, () => this.deps.getCurrentContext()),
+      createSendMediaTool(workspace, bus, deliveryContext),
       createPublishArtifactsTool(workspace),
       createReadMediaTool(),
       ...(isShareToolAvailable(cfg)

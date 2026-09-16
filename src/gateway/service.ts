@@ -1,3 +1,4 @@
+import { createBackgroundTask } from '../infra/background-task.js';
 import { buildTaskAgentContext } from '../agent/source-context/task-context.js';
 import { deliverProactiveCard } from '../proactive/inbox/delivery.js';
 import crypto from 'node:crypto';
@@ -718,6 +719,7 @@ export class GatewayService {
       messageBus: this.bus,
       sessionStore: this.sessionIndex.getStore(),
       getConfig: () => this.config,
+      getWorkspace: () => this.workspacePath,
     });
     return this.heartbeatService;
   }
@@ -763,11 +765,18 @@ export class GatewayService {
     return this.notificationService;
   }
 
-  dispatchTaskRuns(): void {
+  private readonly taskRunDispatch = createBackgroundTask(async () => {
     new TaskSignalService().tick();
     this.dispatchTaskEvents();
     this.createTaskRunDispatcher().dispatch();
-    void this.createWorkflowRunService().dispatchTaskRuns();
+    await this.createWorkflowRunService().dispatchTaskRuns();
+  }, (err) => {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    log.error({ err, errorMessage, phase: 'task_run_dispatch' }, `Task dispatch failed: ${errorMessage}`);
+  });
+
+  dispatchTaskRuns(): void {
+    this.taskRunDispatch();
   }
 
   async ensureTaskConversation(
@@ -1677,6 +1686,8 @@ export class GatewayService {
       return a.id.localeCompare(b.id);
     });
   }
+
+  heartbeatStatus() { return this.heartbeatService?.status() ?? null; }
 
   /**
    * Request an immediate heartbeat run (coalesced like interval/cron wakes).

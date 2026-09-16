@@ -40,6 +40,26 @@ describe('SQLite migrations', () => {
     rmSync(migrationsDir, { recursive: true, force: true });
   });
 
+  it('migrates proactive pause controls once without retaining old fields', () => {
+    const db = openEmptyDb();
+    try {
+      ensureSchemaMetaTable(db);
+      db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
+      setSchemaVersion(db, XOPC_DB_BASELINE_SCHEMA_VERSION);
+      applyPendingMigrations(db, { targetVersion: 175 });
+      db.prepare('INSERT INTO proactive_preferences(workspace_id, preferences_json, revision) VALUES (?, ?, ?)')
+        .run('paused', JSON.stringify({ level: 'off', pausedUntil: '2026-09-17T00:00:00Z' }), 4);
+      applyPendingMigrations(db);
+      const row = db.prepare('SELECT preferences_json, revision FROM proactive_preferences').get()!;
+      const preferences = JSON.parse(String(row.preferences_json));
+      expect(preferences).toMatchObject({ level: 'balanced', checksPaused: true, checksPausedUntil: '2026-09-17T00:00:00Z' });
+      expect(preferences).not.toHaveProperty('pausedUntil');
+      expect(row.revision).toBe(4);
+      expect(applyPendingMigrations(db)).toBe(XOPC_DB_SCHEMA_VERSION);
+      expect(db.prepare('SELECT preferences_json FROM proactive_preferences').get()?.preferences_json).toBe(row.preferences_json);
+    } finally { db.close(); }
+  });
+
   it('validateMigrationSequence rejects gaps in target versions', () => {
     expect(() =>
       validateMigrationSequence([

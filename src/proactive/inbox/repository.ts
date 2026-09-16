@@ -22,6 +22,7 @@ function itemFromRow(row: Row): InboxItem {
     id: s(row, 'inbox_item_id'), insightId: s(row, 'insight_id'), subscriptionId: s(row, 'subscription_id'),
     withdrawnAt: row.withdrawn_at ? s(row, 'withdrawn_at') : undefined, correlationKey: row.correlation_key ? s(row, 'correlation_key') : undefined,
     revision: Number(row.revision), notificationRevision: Number(row.notification_revision),
+    ...(row.actionable_until ? { actionableUntil: s(row, 'actionable_until') } : {}),
     ...(row.expires_at ? { expiresAt: s(row, 'expires_at') } : {}), status: s(row, 'status') as InboxStatus,
     ...(row.snoozed_until ? { snoozedUntil: s(row, 'snoozed_until') } : {}),
     ...(row.resolution ? { resolution: s(row, 'resolution') } : {}),
@@ -125,8 +126,8 @@ export function projectInsightsToInbox(now = new Date()): number {
         || row.decision_json !== previous.decision_json || (previous.expires_at && previous.expires_at <= nowIso));
       if (previous) {
         db.prepare(`UPDATE proactive_inbox_items SET insight_id = ?, updated_at = ?,
-          notification_revision = notification_revision + ? WHERE inbox_item_id = ?`)
-          .run(String(row.insight_id), nowIso, materialChange ? 1 : 0, id);
+          status = CASE WHEN ? THEN 'unread' ELSE status END, notification_revision = notification_revision + ? WHERE inbox_item_id = ?`)
+          .run(String(row.insight_id), nowIso, materialChange ? 1 : 0, materialChange ? 1 : 0, id);
       } else {
         db.prepare(`INSERT INTO proactive_inbox_items (inbox_item_id, insight_id, status, created_at, updated_at)
           VALUES (?, ?, 'unread', ?, ?)`).run(id, String(row.insight_id), nowIso, nowIso);
@@ -138,7 +139,7 @@ export function projectInsightsToInbox(now = new Date()): number {
           WHERE x.insight_id = ? AND e.type = 'connected_source.calendar_window.v1' ORDER BY e.occurred_at DESC LIMIT 1`).get(String(row.insight_id)) as { payload_json: string } | undefined;
         const meetingStart = meeting ? JSON.parse(meeting.payload_json).meetingStartsAt : undefined;
         const expiresAt = typeof meetingStart === 'string' && Number.isFinite(Date.parse(meetingStart)) ? meetingStart : new Date(now.getTime() + 7 * 86400000).toISOString();
-        db.prepare('UPDATE proactive_inbox_items SET expires_at = ? WHERE inbox_item_id = ?').run(expiresAt, id);
+        db.prepare('UPDATE proactive_inbox_items SET expires_at = ?, actionable_until = ? WHERE inbox_item_id = ?').run(expiresAt, typeof meetingStart === 'string' ? meetingStart : null, id);
       }
       const quietEnd = nextQuietHoursEnd(policy.quietHours, now)?.getTime() ?? now.getTime();
       const cooldownEnd = previous?.delivered_at ? Date.parse(previous.delivered_at) + 4 * 3600000 : now.getTime();

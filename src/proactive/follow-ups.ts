@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { sourceFreshness } from './source-freshness.js';
 import { z } from 'zod';
 
 import { listKnowledgeSourceItems } from '../storage/sqlite/knowledge-repository.js';
@@ -39,16 +40,15 @@ export function authorizedMailThread(follow: MailFollowUp) {
 export function mailFollowUpView(follow: MailFollowUp) {
   const thread = authorizedMailThread(follow);
   const latest = thread?.items.at(-1);
-  const sync = thread ? getSqliteDatabase().prepare('SELECT status, error, finished_at FROM knowledge_sync_runs WHERE source_instance_id = ? ORDER BY started_at DESC LIMIT 1').get(thread.origin.sourceInstanceId) as { status: string; error: string | null; finished_at: number | null } | undefined : undefined;
+  const sync = sourceFreshness(follow.source_item_id, Date.parse(follow.due_at) <= Date.now() ? follow.due_at : undefined);
   return {
     id: follow.id, subscriptionId: follow.subscription_id, instructions: follow.instructions, dueAt: follow.due_at,
     status: follow.status, revision: follow.revision, lastCheckedAt: follow.last_checked_at, sessionKey: follow.session_key,
-    sourceAvailable: Boolean(thread), enabled: effectiveProactivePolicy(follow.subscription_id).enabled,
+    sourceAvailable: Boolean(thread), enabled: follow.status === 'watching' && effectiveProactivePolicy(follow.subscription_id).enabled,
     subject: thread ? emailFields(thread.origin.normalizedText).subject ?? 'Email follow-up' : null,
     latestMessageAt: latest?.occurredAt ?? null,
     latestDirection: latest ? emailFields(latest.normalizedText).labels?.includes('SENT') ? 'sent' : emailFields(latest.normalizedText).labels?.includes('INBOX') ? 'received' : 'unknown' : null,
-    lastSyncedAt: sync?.finished_at ? new Date(sync.finished_at).toISOString() : null,
-    syncFailed: Boolean(sync?.error),
+    lastSyncedAt: sync.lastSyncedAt, syncFailed: sync.syncFailed, sourceFresh: sync.fresh,
   };
 }
 
@@ -117,15 +117,22 @@ export function continueMailFollowUp(workspace: string, id: string, sessionKey: 
 export function scanMailFollowUps(events: ProactiveEventService, now = new Date()) {
   const db = getSqliteDatabase(); let published = 0;
   for (const follow of db.prepare("SELECT * FROM proactive_follow_ups WHERE status = 'watching'").all() as MailFollowUp[]) {
-    if (!effectiveProactivePolicy(follow.subscription_id, now).enabled) continue;
+    const policy = effectiveProactivePolicy(follow.subscription_id, now);
+    if (!policy.enabled) continue;
     const thread = authorizedMailThread(follow);
     if (!thread) continue;
+    const freshness = sourceFreshness(follow.source_item_id, Date.parse(follow.due_at) <= now.getTime() ? follow.due_at : undefined, now.getTime());
+    if (!freshness.fresh) { db.prepare('UPDATE proactive_follow_ups SET last_fingerprint = NULL WHERE id = ?').run(follow.id); continue; }
     const fingerprint = `${follow.revision}:${thread.fingerprint}:${Date.parse(follow.due_at) <= now.getTime() ? 'due' : 'waiting'}`;
-    if (fingerprint !== follow.last_fingerprint) {
+    const awaitingSource = db.prepare(`SELECT 1 FROM proactive_runs r JOIN proactive_batch_events be USING(batch_id)
+      JOIN proactive_events e USING(event_id) WHERE r.subscription_id = ? AND r.status = 'retryable'
+      AND r.outcome_reason = 'source_stale' AND e.subject_kind = 'mail_follow_up' AND e.subject_id = ? LIMIT 1`)
+      .get(follow.subscription_id, follow.id);
+    if (fingerprint !== follow.last_fingerprint && !awaitingSource) {
       const result = events.publish({ type: 'proactive.follow_up.v1', schemaVersion: 1,
         source: { kind: 'connector', id: String(thread.origin.metadata.connectionId) }, subject: { kind: 'mail_follow_up', id: follow.id },
         actor: { kind: 'system' }, scope: { workspaceId: follow.workspace_id }, occurredAt: now.toISOString(),
-        dedupeKey: `mail-follow-up:${follow.id}:${fingerprint}`, sensitivity: 'personal', payload: { followUpId: follow.id } }, now);
+        dedupeKey: `mail-follow-up:${follow.id}:${fingerprint}:${freshness.version}:${policy.preferences.revision}`, sensitivity: 'personal', payload: { followUpId: follow.id } }, now);
       if (result.inserted) published++;
     }
     db.prepare('UPDATE proactive_follow_ups SET last_fingerprint = ?, last_checked_at = ? WHERE id = ?').run(fingerprint, now.toISOString(), follow.id);

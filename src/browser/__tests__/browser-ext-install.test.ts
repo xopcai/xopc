@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { EventEmitter } from 'node:events';
 import * as childProcess from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -18,12 +19,14 @@ import {
   ensureBrowserExtensionOnStartup,
   installBrowserNativeMessagingHost,
   resolveWindowsExtensionManager,
+  openBrowserExtensionInstallUi,
   validateBrowserExtLayout,
 } from '../providers/browser-ext-install.js';
 
 vi.mock('node:child_process', async (importOriginal) => ({
   ...await importOriginal<typeof import('node:child_process')>(),
   execFileSync: vi.fn(),
+  spawn: vi.fn(),
 }));
 
 function writeMinimalExtensionTree(root: string, version = '0.0.1'): void {
@@ -80,6 +83,15 @@ describe('browser-ext-install', () => {
       process.env.XOPC_STATE_DIR = prevStateDir;
     }
     rmSync(tempHome, { recursive: true, force: true });
+  });
+
+  it('handles an asynchronous failure to launch the file manager', async () => {
+    await ensureBrowserExtensionArtifacts({ cacheDir: binDir });
+    const child = Object.assign(new EventEmitter(), { unref: vi.fn() });
+    vi.mocked(childProcess.spawn).mockReturnValue(child as unknown as childProcess.ChildProcess);
+    await openBrowserExtensionInstallUi({ action: 'folder', cacheDir: binDir });
+    expect(() => child.emit('error', new Error('spawn ENOENT'))).not.toThrow();
+    expect(child.unref).toHaveBeenCalled();
   });
 
   it('validateBrowserExtLayout requires core files', () => {

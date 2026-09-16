@@ -100,6 +100,7 @@ function applyCardAction(card: ProactiveCard, workspaceId: string, input: Proact
   if (input.taskDraft && (input.actionId !== 'decide' || input.choice !== 'approve' || !card.taskDraft)) throw new Error('Task draft requires a pending approval');
   if (input.artifact && input.actionId !== 'edit_artifact') throw new Error('Artifact requires an edit action');
   if (input.instruction && input.actionId !== 'refine') throw new Error('Instruction requires a refine action');
+  if (input.feedbackReason && input.actionId !== 'not_useful') throw new Error('Feedback reason requires negative feedback');
   switch (input.actionId) {
     case 'edit_artifact': {
       if (!input.artifact || !card.artifact || input.artifact.kind !== card.artifact.kind) throw new Error('An existing artifact is required');
@@ -115,7 +116,7 @@ function applyCardAction(card: ProactiveCard, workspaceId: string, input: Proact
       break;
     }
     case 'useful':
-    case 'not_useful': service.feedback(card.id, input.actionId); break;
+    case 'not_useful': service.feedback(card.id, input.actionId, input.feedbackReason); break;
     case 'refine':
       if (!input.instruction) throw new Error('Refinement instruction required');
       service.instruct(card.id, input.instruction);

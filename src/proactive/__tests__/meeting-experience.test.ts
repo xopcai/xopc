@@ -4,6 +4,8 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { syncedSource } from './source-fixture.js';
+
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest, upsertConnectorConnection, upsertConnectorSyncPolicy, upsertKnowledgeSourceItems } from '../../storage/sqlite/index.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { delegationOverview } from '../experience.js';
@@ -31,6 +33,7 @@ describe('meeting preparation lifecycle', () => {
   });
   afterEach(() => { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); rmSync(dir, { recursive: true, force: true }); vi.useRealTimers(); });
   function meeting(start = '2026-09-13T10:00:00Z', revision = 'one', deletedAt?: string) {
+    syncedSource('calendar', 'events');
     upsertKnowledgeSourceItems([{ sourceInstanceId: 'calendar', collectionScope: 'events', externalId: 'review', itemType: 'calendar_event', occurredAt: start, contentHash: revision, normalizedText: JSON.stringify({ title: 'Customer review', start }), metadata: { workspaceId: 'workspace', connectionId: 'calendar', connectorId: 'googlecalendar' }, sensitivity: 'personal', retentionClass: 'bounded', synthesisPipeline: 'connected_knowledge', synthesisStatus: 'pending', ...(deletedAt ? { deletedAt } : {}) }]);
   }
   async function prepare(onExecute?: () => void) {

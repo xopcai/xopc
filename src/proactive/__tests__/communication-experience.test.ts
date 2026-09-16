@@ -4,6 +4,8 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { syncedSource } from './source-fixture.js';
+
 import { closeXopcDatabase, ensureSessionRecord, openXopcDatabase, resetXopcDatabaseSingletonForTest, upsertConnectorConnection, upsertConnectorSyncPolicy, upsertKnowledgeSourceItems } from '../../storage/sqlite/index.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { delegationOverview } from '../experience.js';
@@ -30,6 +32,7 @@ describe('delegated email follow-up', () => {
   });
   afterEach(() => { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); rmSync(dir, { recursive: true, force: true }); vi.useRealTimers(); });
   function email(externalId: string, labels: string[] = ['INBOX'], connectionId = 'mail') {
+    syncedSource(connectionId, 'inbox');
     upsertKnowledgeSourceItems([{ sourceInstanceId: connectionId, collectionScope: 'inbox', externalId, itemType: 'email', occurredAt: new Date().toISOString(), contentHash: `${externalId}-${labels.join()}`, normalizedText: JSON.stringify({ threadId: 'same-provider-id', subject: 'Confirm review', sender: 'customer@example.test', content: 'Please confirm the review date.', labels }), metadata: { workspaceId: 'workspace', connectionId, connectorId: 'gmail' }, sensitivity: 'personal', retentionClass: 'bounded', synthesisPipeline: 'connected_knowledge', synthesisStatus: 'pending' }]);
     return (getSqliteDatabase().prepare('SELECT item_id FROM knowledge_source_items WHERE external_id = ? AND source_instance_id = ?').get(externalId, connectionId) as { item_id: string }).item_id;
   }
@@ -69,9 +72,42 @@ describe('delegated email follow-up', () => {
     expect(scanMailFollowUps(events)).toBe(1);
     expect(listMailFollowUps('workspace')[0]).toMatchObject({ status: 'watching', latestDirection: 'received' });
   });
+  it('waits for a scoped successful sync at the deadline and resumes unchanged threads', () => {
+    const follow = start();
+    vi.setSystemTime(new Date('2026-09-14T08:00:00Z'));
+    expect(scanMailFollowUps(events)).toBe(0);
+    expect(listMailFollowUps('workspace')[0]).toMatchObject({ sourceFresh: false });
+    syncedSource('mail', 'another-folder');
+    expect(scanMailFollowUps(events)).toBe(0);
+    syncedSource('mail', 'inbox');
+    expect(scanMailFollowUps(events)).toBe(1);
+    expect(scanMailFollowUps(events)).toBe(0);
+    expect(listMailFollowUps('workspace')[0]).toMatchObject({ id: follow.id, sourceFresh: true });
+  });
+  it('retries stale evidence without model calls or consuming attempts, then prepares after sync', async () => {
+    start(); vi.setSystemTime(new Date('2026-09-13T09:00:00Z'));
+    expect(scanMailFollowUps(events)).toBe(0); await prepare();
+    expect(getSqliteDatabase().prepare('SELECT status, outcome_reason, attempt FROM proactive_runs').get()).toMatchObject({ status: 'retryable', outcome_reason: 'source_stale', attempt: 1 });
+    vi.setSystemTime(new Date('2026-09-13T09:02:00Z')); await prepare();
+    expect(getSqliteDatabase().prepare('SELECT attempt FROM proactive_runs').get()).toMatchObject({ attempt: 1 });
+    vi.setSystemTime(new Date('2026-09-13T09:04:00Z')); syncedSource('mail', 'inbox'); expect(scanMailFollowUps(events)).toBe(0); await prepare();
+    expect(delegationOverview('workspace').scenes.some(scene => scene.status === 'prepared')).toBe(true);
+  });
+  it('refines only the card thread and records a concrete feedback reason', async () => {
+    const first = start();
+    const second = startMailFollowUp('workspace', { sourceItemId: email('second', ['INBOX'], 'other'), instructions: 'Keep the other account unchanged', dueAt: '2026-09-14T08:00:00Z' });
+    await prepare();
+    const card = delegationOverview('workspace').scenes.find(scene => scene.card?.communication?.id === first.id)!.card!;
+    const rated = performCardAction(card.id, 'workspace', { actionId: 'not_useful', feedbackReason: 'bad_timing', expectedRevision: card.revision, idempotencyKey: 'feedback-thread-test' });
+    expect(getSqliteDatabase().prepare('SELECT note FROM proactive_feedback').get()).toMatchObject({ note: 'bad_timing' });
+    performCardAction(card.id, 'workspace', { actionId: 'refine', instruction: 'Only remind me about decisions.', expectedRevision: rated.revision, idempotencyKey: 'refine-thread-test' });
+    const follows = listMailFollowUps('workspace');
+    expect(follows.find(row => row.id === first.id)?.instructions).toContain('Only remind');
+    expect(follows.find(row => row.id === second.id)).toMatchObject({ revision: 1, instructions: 'Keep the other account unchanged' });
+  });
   it('checks once at the agreed time and suppresses unchanged repeats', () => {
     start(); expect(scanMailFollowUps(events)).toBe(0);
-    vi.setSystemTime(new Date('2026-09-14T08:00:00Z')); expect(scanMailFollowUps(events)).toBe(1);
+    vi.setSystemTime(new Date('2026-09-14T08:00:00Z')); syncedSource('mail', 'inbox'); expect(scanMailFollowUps(events)).toBe(1);
     vi.setSystemTime(new Date('2026-09-15T08:00:00Z')); expect(scanMailFollowUps(events)).toBe(0);
   });
   it('enforces scope, revision, duplicate identity, source authorization and explicit pause/end', async () => {

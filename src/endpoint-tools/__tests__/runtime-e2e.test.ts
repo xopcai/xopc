@@ -31,7 +31,7 @@ describe('endpoint tools over realtime', () => {
     for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
   });
 
-  it('authenticates, registers, invokes, and completes a tool on one connection', async () => {
+  it.each([false, true])('completes a tool and isolates disconnect cleanup errors (failure: %s)', async (failCleanup) => {
     const { privateKey, publicKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
     const encodedPublicKey = publicKey.export({ format: 'der', type: 'spki' }).toString('base64url');
     const root = mkdtempSync(join(tmpdir(), 'xopc-endpoint-e2e-'));
@@ -126,6 +126,9 @@ describe('endpoint tools over realtime', () => {
     });
     expect(result.content).toEqual([{ type: 'text', text: 'round trip' }]);
 
+    if (failCleanup) {
+      vi.spyOn(endpoints, 'remove').mockImplementation(() => { throw new Error('disconnect cleanup database failure'); });
+    }
     socket.close();
     runtime.close();
     endpoints.close();

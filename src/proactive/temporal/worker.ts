@@ -1,3 +1,4 @@
+import { sourceFreshness } from '../source-freshness.js';
 import { scanMailFollowUps } from '../follow-ups.js';
 import { effectiveProactivePolicy } from '../policy/service.js';
 import { listSubscriptions } from '../scenarios/repository.js';
@@ -90,6 +91,7 @@ export class ProactiveTemporalWorker {
           const startMs = item.occurredAt ? Date.parse(item.occurredAt) : Number.NaN;
           const window = meetingWindow(startMs, nowMs);
           if (!connectionId || !workspaceId || !activeWorkspaces.has(workspaceId) || !connectorId || !window
+            || !sourceFreshness(item.id, undefined, now.getTime()).fresh
             || !isMeetingWorthPreparing(item.normalizedText)
             || !authorizedConnectedSource(item.id, workspaceId, MEETING_SCENARIO, agentId)
             || item.sensitivity === 'secret' || item.sensitivity === 'regulated') {

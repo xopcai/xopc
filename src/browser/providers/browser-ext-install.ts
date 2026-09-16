@@ -664,7 +664,11 @@ interface ExtensionManagerTarget {
 }
 
 function spawnDetached(command: string, args: readonly string[]): void {
-  spawn(command, [...args], { stdio: 'ignore', detached: true }).unref();
+  const child = spawn(command, [...args], { stdio: 'ignore', detached: true });
+  child.on('error', (err) => {
+    log.error({ err, command, phase: 'open_browser_install_ui' }, `Unable to open browser setup: ${err.message}`);
+  });
+  child.unref();
 }
 
 function windowsExtensionManagerCandidates(env: NodeJS.ProcessEnv): ExtensionManagerTarget[] {

@@ -22,8 +22,6 @@ function saveSettings(id: string, value: unknown, revision: number) {
   const settings = ProactiveSubscriptionSettingsSchema.parse(value);
   getSqliteDatabase().prepare(`INSERT INTO proactive_subscription_settings(subscription_id, settings_json, revision) VALUES (?, ?, ?)
     ON CONFLICT(subscription_id) DO UPDATE SET settings_json = excluded.settings_json, revision = excluded.revision`).run(id, JSON.stringify(settings), revision);
-  getSqliteDatabase().prepare(`INSERT INTO proactive_schedule_state(subscription_id, next_due_at) VALUES (?, ?)
-    ON CONFLICT(subscription_id) DO UPDATE SET next_due_at = excluded.next_due_at`).run(id, new Date().toISOString());
 }
 
 export function createControlledSubscription(workspaceId: string, value: unknown) {
@@ -39,6 +37,7 @@ export function createControlledSubscription(workspaceId: string, value: unknown
     const sub = upsertSubscription({ ...input, scopeId, workspaceId });
     if (input.userInstructions || sub.activePromptRevisionId) publishPromptRevision(createPromptDraft(sub.id, input.userInstructions).id);
     saveSettings(sub.id, input, 1);
+    if (scopeKind === 'project') getSqliteDatabase().prepare('INSERT INTO proactive_schedule_state(subscription_id, next_due_at) VALUES (?, ?)').run(sub.id, new Date().toISOString());
     return controlledSubscriptions(workspaceId).find((item) => item.id === sub.id)!;
   });
 }
@@ -54,6 +53,18 @@ export function updateControlledSubscription(workspaceId: string, id: string, va
       publishPromptRevision(createPromptDraft(id, patch.userInstructions).id);
     }
     saveSettings(id, { ...current, ...patch }, current.revision + 1);
+    if (sub.scopeKind === 'project') {
+      const db = getSqliteDatabase();
+      const changedInstructions = patch.userInstructions !== undefined && patch.userInstructions !== current.userInstructions;
+      const resumed = patch.enabled === true && !sub.enabled;
+      if (changedInstructions || resumed) {
+        db.prepare('UPDATE proactive_schedule_state SET next_due_at = ?, last_fingerprint = NULL WHERE subscription_id = ?').run(new Date().toISOString(), id);
+      } else if (patch.scanIntervalMinutes !== undefined && patch.scanIntervalMinutes !== current.scanIntervalMinutes) {
+        const schedule = db.prepare('SELECT last_checked_at FROM proactive_schedule_state WHERE subscription_id = ?').get(id) as { last_checked_at: string | null } | undefined;
+        const next = Math.max(Date.now(), schedule?.last_checked_at ? Date.parse(schedule.last_checked_at) + (patch.scanIntervalMinutes ?? 120) * 60000 : Date.now());
+        db.prepare('UPDATE proactive_schedule_state SET next_due_at = ? WHERE subscription_id = ?').run(new Date(next).toISOString(), id);
+      }
+    }
     return controlledSubscriptions(workspaceId).find((item) => item.id === id)!;
   });
 }

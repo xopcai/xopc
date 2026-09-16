@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 
 import { app } from 'electron';
 
+import { createProcessDiagnosticWriter } from '../src/infra/process-diagnostics.js';
+
 import type { GatewayBindMode } from '../src/config/schema.js';
 
 import {
@@ -171,6 +173,10 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
   const cli = resolveCliEntry();
   const isPackaged = app.isPackaged;
   clearGatewayLogBuffer();
+  const logDir = process.env.XOPC_LOG_DIR || join(dirname(opts.configPath), 'logs');
+  const writeDiagnostic = createProcessDiagnosticWriter(join(logDir, 'gateway-supervisor.log'));
+  let stderrTail = '';
+  let expectedExit = false;
   const child = spawn(
     process.execPath,
     [
@@ -196,6 +202,7 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
         ELECTRON_RUN_AS_NODE: '1',
         XOPC_STATE_DIR: dirname(opts.configPath),
         XOPC_CONFIG_PATH: opts.configPath,
+        XOPC_GATEWAY_DIAGNOSTIC_PATH: join(logDir, 'gateway-process.log'),
         XOPC_WORKSPACE: opts.workspacePath,
         ...(isPackaged
           ? {
@@ -233,12 +240,18 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
     },
   );
 
+  writeDiagnostic('gateway_spawn', { childPid: child.pid, port: opts.port, packaged: isPackaged });
   gatewayChild = child;
   gatewayExitHandler = opts.onUnexpectedExit ?? null;
 
   // Drain stdout/stderr pipes to prevent Windows deadlock when buffers fill up.
   // In packaged mode, we capture logs but don't want to block the process.
   if (isPackaged && child.stdout && child.stderr) {
+    for (const [stream, name] of [[child.stdout, 'stdout'], [child.stderr, 'stderr']] as const) {
+      stream.on('error', (err) => {
+        writeDiagnostic('gateway_pipe_error', { childPid: child.pid, stream: name, err });
+      });
+    }
     child.stdout.on('data', (data: Buffer) => {
       const text = data.toString();
       appendGatewayLog(text);
@@ -246,6 +259,7 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
     });
     child.stderr.on('data', (data: Buffer) => {
       const text = data.toString();
+      stderrTail = (stderrTail + text).slice(-64 * 1024);
       appendGatewayLog(text);
       console.error(`[gateway:stderr] ${text.trimEnd()}`);
     });
@@ -253,6 +267,8 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
 
   child.on('exit', (code, signal) => {
     const wasCurrentChild = gatewayChild === child;
+    expectedExit = !wasCurrentChild;
+    writeDiagnostic('gateway_exit', { childPid: child.pid, code, signal, expectedExit });
     if (wasCurrentChild) {
       gatewayChild = null;
     }
@@ -272,7 +288,14 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
     }
   });
 
+  // 'close' follows stdio drain; 'exit' can arrive before the fatal stderr stack.
+  child.on('close', (code, signal) => {
+    if (stderrTail) writeDiagnostic('gateway_stderr', { childPid: child.pid, stderrTail });
+    writeDiagnostic('gateway_closed', { childPid: child.pid, code, signal, expectedExit });
+  });
+
   child.on('error', (err) => {
+    writeDiagnostic('gateway_process_error', { childPid: child.pid, err });
     console.error('[gateway] process error:', err);
     if (gatewayChild === child) {
       gatewayChild = null;

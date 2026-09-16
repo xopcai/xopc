@@ -2,7 +2,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { syncedSource } from './source-fixture.js';
 
 import {
   closeXopcDatabase,
@@ -25,6 +27,7 @@ describe('proactive temporal worker', () => {
   let stateDir: string;
 
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-08-15T01:00:00Z'));
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-proactive-temporal-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
@@ -46,6 +49,7 @@ describe('proactive temporal worker', () => {
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
+    vi.useRealTimers();
   });
 
   function storeMeeting(
@@ -54,6 +58,7 @@ describe('proactive temporal worker', () => {
     externalId = 'meeting-1',
     sourceUpdatedAt = '2026-08-15T01:00:00.000Z',
   ): void {
+    syncedSource('composio:googlecalendar:calendar-work', 'events', Date.parse('2026-08-15T01:00:00Z'));
     upsertKnowledgeSourceItems([{
       sourceInstanceId: 'composio:googlecalendar:calendar-work',
       collectionScope: 'events',
@@ -104,6 +109,7 @@ describe('proactive temporal worker', () => {
       .toMatchObject({ scanned: 1, published: 1, skipped: 0 });
     expect(await worker.tick(new Date('2026-08-15T01:01:00.000Z')))
       .toMatchObject({ scanned: 1, published: 0, skipped: 0 });
+    syncedSource('composio:googlecalendar:calendar-work', 'events', Date.parse('2026-08-15T10:30:00Z'));
     expect(await worker.tick(new Date('2026-08-15T10:30:00.000Z')))
       .toMatchObject({ scanned: 1, published: 1, skipped: 0 });
     expect(events.listEvents().map((event) => event.payload.window).sort()).toEqual(['24h', '2h']);
@@ -127,6 +133,11 @@ describe('proactive temporal worker', () => {
     });
     expect(context.evidenceIds).toContain(`task:${taskId}`);
     expect(JSON.stringify(context.content.meeting_workspace)).not.toContain('Private unrelated detail');
+    vi.setSystemTime(new Date('2026-08-15T12:00:00Z'));
+    const expired = await new ContextProviderRegistry().collect(getScenario('meeting_preparation')!, {
+      batchId: 'batch-1', eventIds: [events.listEvents()[0]!.id], subscriptionId: 'subscription-1',
+    });
+    expect(expired.content.connected_source).toEqual({ items: [] });
   });
 
   it('does not emit when proactive connector use is disabled', async () => {
@@ -199,7 +210,7 @@ describe('proactive temporal worker', () => {
     ]);
   });
   it('does not scan calendar items when global proactive is disabled', async () => {
-    updateProactivePreferences('/workspace', { expectedRevision: 0, level: 'off' });
+    updateProactivePreferences('/workspace', { expectedRevision: 0, checksPaused: true });
     const worker = new ProactiveTemporalWorker(new ProactiveEventService(() => []));
     expect(await worker.tick()).toEqual({ scanned: 0, published: 0, skipped: 0 });
   });

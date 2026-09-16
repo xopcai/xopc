@@ -108,6 +108,7 @@ export class KnowledgeIngestionService {
     const cursorBefore = this.state.getCursor(params.instanceId, params.collectionScope);
     const run = startKnowledgeSyncRun({
       sourceInstanceId: params.instanceId,
+      collectionScope: params.collectionScope,
       cursorBefore,
     });
     const controller = params.signal ? null : new AbortController();

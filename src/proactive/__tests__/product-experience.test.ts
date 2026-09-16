@@ -24,7 +24,7 @@ describe('delegated project work', () => {
   afterEach(() => { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); rmSync(dir, { recursive: true, force: true }); });
 
   it('saves a delegation while globally paused without claiming that checking has started', () => {
-    updateProactivePreferences('workspace', { expectedRevision: 0, level: 'off' });
+    updateProactivePreferences('workspace', { expectedRevision: 0, checksPaused: true });
     const project = new ProjectService().create({ name: 'Paused launch' });
     const sub = startDelegation('workspace', { scenarioKey: 'project_delivery_risk', projectId: project.id, instructions: 'Follow delivery when resumed.' });
     expect(delegationOverview('workspace').delegations[0]).toMatchObject({ id: sub.id, effectiveEnabled: false, checking: false });

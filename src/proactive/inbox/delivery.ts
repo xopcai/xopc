@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
 
 import { effectiveProactivePolicy, localProactiveDay, quietHoursEnd } from '../policy/service.js';
-import { viewingProactiveCards } from '../policy/presence.js';
+import { viewingProactiveCard } from '../policy/presence.js';
 import { nextDigestTime, queueDigest } from './digest.js';
 import { insightCorrelation } from './lifecycle.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
-import { insightSourcesAuthorized, insightSourcesChanged } from '../execution/authorization.js';
+import { insightSourcesAuthorized, insightSourcesChanged, insightSourcesFresh } from '../execution/authorization.js';
 import type { NotificationService } from '../../notifications/service.js';
 import { notificationPlanFromGatewayEvent } from '../../notifications/planner.js';
 import { runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
@@ -17,8 +17,10 @@ import type { InboxItem } from './types.js';
 export function deliverProactiveCard(item: InboxItem, notifications: NotificationService, publish: (type: string, payload: unknown) => void): void | { retryAt: string } {
   const result = runSqliteWriteTransaction(() => {
     const current = getInboxItem(item.id);
-    if (!current || current.withdrawnAt || !insightSourcesAuthorized(current.insightId) || current.status === 'resolved' || (current.expiresAt && Date.parse(current.expiresAt) <= Date.now())) return null;
+    if (!current || current.withdrawnAt || !insightSourcesAuthorized(current.insightId) || ['resolved', 'read'].includes(current.status) || (current.expiresAt && Date.parse(current.expiresAt) <= Date.now())) return null;
     if (current.insight.actionStatus !== 'completed' && insightSourcesChanged(current.insightId)) return null;
+    if (current.actionableUntil && Date.parse(current.actionableUntil) <= Date.now()) return null;
+    if (!insightSourcesFresh(current.insightId)) return { retryAt: new Date(Date.now() + 60000).toISOString() };
     if (current.status === 'snoozed') return { retryAt: current.snoozedUntil! };
     const policy = effectiveProactivePolicy(current.subscriptionId!);
     if (!policy.enabled || policy.settings.delivery === 'inbox') return null;
@@ -37,8 +39,8 @@ export function deliverProactiveCard(item: InboxItem, notifications: Notificatio
     const reason = createHash('sha256').update(JSON.stringify([current.insight.urgency, current.insight.decision ?? null])).digest('hex');
     const key = `proactive:${correlation}:${reason}:${localProactiveDay(new Date(), policy.preferences.timezone)}`;
     if (db.prepare('SELECT 1 FROM proactive_delivery_decisions WHERE notification_key = ?').get(key)) return null;
-    const visible = policy.preferences.suppressWhileViewing && viewingProactiveCards(policy.workspaceId);
-    if (visible) { db.prepare('INSERT INTO proactive_delivery_decisions VALUES (?, ?, ?, ?)').run(key, policy.workspaceId, 'visible_in_app', new Date().toISOString()); return null; }
+    const visible = policy.preferences.suppressWhileViewing && viewingProactiveCard(policy.workspaceId, current.id, current.notificationRevision!);
+    if (visible) return { retryAt: new Date(Date.now() + 60000).toISOString() };
     const decision = reserveProactiveNotification(current.subscriptionId!, key);
     if (decision instanceof Date) return { retryAt: decision.toISOString() };
     if (decision === 'suppressed') return null;
