@@ -1,5 +1,7 @@
+import { resolveSkillPresentation, type SkillLocalizations } from '@xopcai/composer-core/skill-localization';
+
+import { extensionLocale, t } from '../i18n';
 import { gatewayFetch } from './auth';
-import { t } from '../i18n';
 
 export type ComposerCommand = { id: string; name: string; description: string; wire: string; disabled?: boolean };
 export function findCommand(value: string, cursor: number) {
@@ -17,8 +19,15 @@ export async function loadComposerCommands(conversationId?: string): Promise<Com
     ...(commands.payload?.commands ?? []).map((command: { name: string; description: string }) => ({
       id: `command:${command.name}`, name: `/${command.name}`, description: command.description, wire: `/${command.name} `,
     })),
-    ...(skills.payload?.skills ?? []).map((skill: { name: string; description: string; availableForCurrentAgent: boolean }) => ({
-      id: `skill:${skill.name}`, name: skill.name, description: skill.description, wire: `/skill:${skill.name} `, disabled: !skill.availableForCurrentAgent,
-    })),
+    ...(skills.payload?.skills ?? []).map((skill: { name: string; description: string; localizations?: SkillLocalizations; availableForCurrentAgent: boolean }) => {
+      const presentation = resolveSkillPresentation(skill, extensionLocale());
+      return {
+        id: `skill:${skill.name}`,
+        name: presentation.displayName,
+        description: presentation.description,
+        wire: `/skill:${skill.name} `,
+        disabled: !skill.availableForCurrentAgent,
+      };
+    }),
   ];
 }

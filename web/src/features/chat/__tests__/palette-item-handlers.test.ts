@@ -155,6 +155,12 @@ describe('palette-item-handlers / skill', () => {
     expect(ctx.clearAttachments).not.toHaveBeenCalled();
   });
 
+  it('uses the canonical skill name when the displayed name is localized', () => {
+    const ctx = makeCtx({ initialText: '/会议', slashRange: { start: 0, end: 3, query: '会议' } });
+    applyPaletteItem({ ...skillItem, name: '会议行动闭环', canonicalName: 'meeting-to-actions' }, ctx);
+    expect(ctx.editor.valueRef.current).toBe('/skill:meeting-to-actions ');
+  });
+
   it('no-op when slashRange is null', () => {
     const ctx = makeCtx({ initialText: '', slashRange: null });
     applyPaletteItem(skillItem, ctx);

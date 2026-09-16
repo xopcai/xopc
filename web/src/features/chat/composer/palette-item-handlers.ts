@@ -72,7 +72,7 @@ const applySkillItem: PaletteItemHandler = (item, ctx) => {
     ctx.callbacks.onUnavailableSkill?.(item);
     return;
   }
-  const insert = `/skill:${item.name} `;
+  const insert = `/skill:${item.canonicalName ?? item.name} `;
   const next = replaceRange(ctx.editor.valueRef.current, range.start, range.end, insert);
   const pos = range.start + insert.length;
   ctx.editor.resetEditor({ nextText: next, caretOffset: pos, focus: true });

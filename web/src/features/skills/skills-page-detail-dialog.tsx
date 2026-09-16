@@ -38,6 +38,7 @@ type Props = Pick<
   | 'detailError'
   | 'setDetailError'
   | 'detailEnabled'
+  | 'detailPresentation'
   | 'detailDirectoryId'
   | 'detailManaged'
   | 'detailExternalUrl'
@@ -69,6 +70,7 @@ export function SkillsPageDetailDialog(p: Props) {
     detailError,
     setDetailError,
     detailEnabled,
+    detailPresentation,
     detailDirectoryId,
     detailManaged,
     detailExternalUrl,
@@ -108,7 +110,7 @@ export function SkillsPageDetailDialog(p: Props) {
           <div className="group flex min-h-[3.25rem] shrink-0 items-center gap-3 border-b border-edge px-4 py-3">
             <SkillCardIcon name={detailTitle || '?'} />
             <Dialog.Title className="min-w-0 flex-1 truncate text-base font-semibold text-fg">
-              {detailTitle || '—'}
+              {detailPresentation?.displayName || detailTitle || '—'}
             </Dialog.Title>
             <Dialog.Close asChild>
               <button
@@ -146,7 +148,11 @@ export function SkillsPageDetailDialog(p: Props) {
                     <p className="leading-relaxed">{sk.detailDisabledNotice}</p>
                   </div>
                 ) : null}
-                <SkillCatalogStructuredPreview preview={detailCatalogPreview} sk={sk} />
+                <SkillCatalogStructuredPreview
+                  preview={detailCatalogPreview}
+                  description={detailPresentation?.description}
+                  sk={sk}
+                />
               </>
             ) : detailSource === 'store' && detailMarketplacePreview ? (
               <SkillCatalogStructuredPreview preview={detailMarketplacePreview} sk={sk} />

@@ -267,7 +267,7 @@ export const ChatComposer = memo(function ChatComposer({
         reason,
       });
       if (item.availability?.status === 'agent-denied' && window.confirm(`${message}\n\n${m.chat.commandPalette.skillAddToAllowlistConfirm}`)) {
-        void addSkillToAgentAllowlist(currentAgentId, item.name, conversationId).catch((err) => {
+        void addSkillToAgentAllowlist(currentAgentId, item.canonicalName ?? item.name, conversationId).catch((err) => {
           window.alert(err instanceof Error ? err.message : String(err));
         });
         return;

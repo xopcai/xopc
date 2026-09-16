@@ -54,7 +54,8 @@ export function t(key: string, substitutions?: string | string[]): string {
 }
 
 export function extensionLocale(): string {
-  return activeLocale ?? chrome.i18n.getUILanguage().replaceAll('_', '-');
+  if (activeLocale) return activeLocale;
+  return typeof chrome === 'undefined' ? 'en' : chrome.i18n.getUILanguage().replaceAll('_', '-');
 }
 
 export async function loadExtensionLocalePreference(): Promise<ExtensionLocale> {
