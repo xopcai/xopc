@@ -119,6 +119,7 @@ export async function fetchAllPaletteItems(language: string): Promise<PaletteIte
       canonicalName: s.name,
       description: presentation.description,
       aliases: presentation.aliases,
+      searchTerms: presentation.searchTerms,
       category: 'skill',
       source: s.source,
     };

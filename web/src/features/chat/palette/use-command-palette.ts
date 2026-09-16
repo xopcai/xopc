@@ -188,6 +188,11 @@ export function paletteItemMatchRank(item: PaletteItem, q: string): number | nul
   if (item.kind === 'skill' && (item.source ?? '').toLowerCase().includes(needle)) {
     return 102;
   }
+  for (const term of item.searchTerms ?? []) {
+    if (term.toLowerCase().includes(needle)) {
+      return 103;
+    }
+  }
   return null;
 }
 
@@ -272,6 +277,7 @@ export function useCommandPalette(
           canonicalName: s.name,
           description: presentation.description,
           aliases: presentation.aliases,
+          searchTerms: presentation.searchTerms,
           category: 'skill',
           source: s.source,
           availability: {
