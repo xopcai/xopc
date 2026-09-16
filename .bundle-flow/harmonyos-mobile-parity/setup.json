@@ -1,0 +1,8 @@
+{
+  "repositories": {
+    "harmony": { "path": "/Users/micjoyce/develop/github/xopc/apps/mobile-harmony", "status": "ready" },
+    "common": { "path": "/Users/micjoyce/develop/github/xopc", "status": "ready" }
+  },
+  "toolchain": "/Users/micjoyce/command-line-tools",
+  "device_validation": "No connected targets at environment verification; recheck before validation."
+}

@@ -1,0 +1,100 @@
+name: Mobile HarmonyOS CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - "apps/mobile-harmony/**"
+      - "packages/gateway-contract/**"
+      - "src/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/mobile-harmony-ci.yml"
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "apps/mobile-harmony/**"
+      - "packages/gateway-contract/**"
+      - "src/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/mobile-harmony-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-harmony-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-checks:
+    name: Contracts, tests and types
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run harmony:verify --host-only
+
+  native-build:
+    name: API 26 unsigned HAP and APP
+    needs: host-checks
+    # Vendor download credentials must never be exposed to pull-request code.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      HARMONY_TOOLS_DIR: ${{ runner.temp }}/command-line-tools
+      HARMONY_TOOLS_SHA256: d53802c52d3d0a6a0836333c9e8f2bb73d9f6753d1658185539e2659c46df1ad
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Download verified Huawei command-line tools 26.0.0.821 (macOS ARM64)
+        env:
+          HARMONY_TOOLS_URL: ${{ secrets.HARMONY_TOOLS_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = arm64
+          if [ -z "$HARMONY_TOOLS_URL" ]; then
+            echo '::error::Set the HARMONY_TOOLS_URL repository secret to the official Huawei download URL.'
+            exit 1
+          fi
+          curl --fail --location --retry 3 --connect-timeout 30 --max-time 1800 --silent --show-error \
+            "$HARMONY_TOOLS_URL" --output "$RUNNER_TEMP/harmony-tools.zip"
+          echo "$HARMONY_TOOLS_SHA256  $RUNNER_TEMP/harmony-tools.zip" | shasum -a 256 --check
+          unzip -q "$RUNNER_TEMP/harmony-tools.zip" -d "$RUNNER_TEMP"
+          rm -- "$RUNNER_TEMP/harmony-tools.zip"
+          "$HARMONY_TOOLS_DIR/bin/ohpm" --version
+          "$HARMONY_TOOLS_DIR/bin/hvigorw" --version
+      - name: Install HarmonyOS dependencies
+        working-directory: apps/mobile-harmony
+        run: |
+          "$HARMONY_TOOLS_DIR/bin/ohpm" install --all
+          git diff --exit-code -- oh-package-lock.json5
+      - name: Build and lint native preview
+        run: node apps/mobile-harmony/scripts/build-ci.mjs
+      - name: Upload unsigned build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: harmony-api26-unsigned-${{ github.sha }}
+          path: apps/mobile-harmony/.test/ci/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Explain installation boundary
+        shell: bash
+        run: |
+          echo '### HarmonyOS development preview' >> "$GITHUB_STEP_SUMMARY"
+          echo 'API 26; unsigned Debug/Release HAP and Release APP. These are build evidence, not phone-install links.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Physical-device installation requires an appropriate Huawei signing profile. Phone-only distribution uses the Huawei testing channel after signing and its checks.' >> "$GITHUB_STEP_SUMMARY"

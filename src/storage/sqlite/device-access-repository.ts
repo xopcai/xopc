@@ -12,7 +12,7 @@ const REFRESH_PROOF_MAX_AGE_MS = 5 * 60 * 1_000;
 const ACCESS_TOKEN_PREFIX = 'xopc_at_';
 const REFRESH_TOKEN_PREFIX = 'xopc_rt_';
 
-export type DevicePlatform = 'ios' | 'android' | 'chrome';
+export type DevicePlatform = import('@xopcai/gateway-contract').DevicePlatform;
 export type DevicePublicKeyJwk = crypto.webcrypto.JsonWebKey;
 
 export type DeviceRecord = {
