@@ -18,6 +18,8 @@ export interface PaletteItem {
   kind: PaletteItemKind;
   id: string;
   name: string;
+  /** Stable machine name used in /skill:name wire tokens. */
+  canonicalName?: string;
   description: string;
   category?: string;
   /** Skill source (builtin, workspace, …) */

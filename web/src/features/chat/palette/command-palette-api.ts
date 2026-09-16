@@ -1,5 +1,6 @@
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import type { SkillLocalizations } from '@xopcai/composer-core/skill-localization';
 
 import { getSkills } from '@/features/skills/skill-list-api';
 
@@ -39,6 +40,7 @@ let _skillsGeneration = 0;
 export interface ChatSkillEntry {
   name: string;
   description: string;
+  localizations?: SkillLocalizations;
   source?: string;
   enabled: boolean;
   disableModelInvocation?: boolean;

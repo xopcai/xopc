@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { resolveSkillPresentation } from '@xopcai/composer-core/skill-localization';
 
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { listSkillNamesInWire } from '@/features/chat/composer/composer-editor-wire';
@@ -262,18 +263,23 @@ export function useCommandPalette(
         acceptsArgs: c.acceptsArgs,
         acceptsContext: c.acceptsContext,
       }));
-      const skillItems: PaletteItem[] = skillsPayload.skills.map((s) => ({
-        kind: 'skill' as const,
-        id: `skill:${s.name}`,
-        name: s.name,
-        description: s.description,
-        category: 'skill',
-        source: s.source,
-        availability: {
-          status: s.availableForCurrentAgent ? 'available' : (s.unavailableReason ?? 'agent-denied'),
-          reason: s.unavailableReason ?? undefined,
-        },
-      }));
+      const skillItems: PaletteItem[] = skillsPayload.skills.map((s) => {
+        const presentation = resolveSkillPresentation(s, language);
+        return {
+          kind: 'skill' as const,
+          id: `skill:${s.name}`,
+          name: presentation.displayName,
+          canonicalName: s.name,
+          description: presentation.description,
+          aliases: presentation.aliases,
+          category: 'skill',
+          source: s.source,
+          availability: {
+            status: s.availableForCurrentAgent ? 'available' : (s.unavailableReason ?? 'agent-denied'),
+            reason: s.unavailableReason ?? undefined,
+          },
+        };
+      });
       // Agents: only when there is more than one (matches header `showChatAgentSelector`).
       const agentsMessages = messages(language).agentsSettings;
       const agentItems: PaletteItem[] =
@@ -344,7 +350,7 @@ export function useCommandPalette(
       if (item.kind === 'agent' && !agentsAllowed) {
         continue;
       }
-      if (item.kind === 'skill' && alreadyPicked.has(item.name)) {
+      if (item.kind === 'skill' && alreadyPicked.has(item.canonicalName ?? item.name)) {
         continue;
       }
       if (item.kind === 'skill' && grouped && item.availability?.status !== 'available') {
