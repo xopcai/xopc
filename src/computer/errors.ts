@@ -6,6 +6,10 @@ export const ComputerDiagnosticSchema = z.object({
   phase: z.enum(['frame_upload', 'observe', 'model', 'dispatch']),
   diagnosticId: z.uuid(),
   httpStatus: z.number().int().min(100).max(599).optional(),
+  requestId: z.string().regex(/^(?:[a-f0-9]{32}|[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/i).optional(),
+  serviceErrorCode: z.enum(['max_input_tokens_exceeded', 'max_tokens_exceeded', 'model_capability_unsupported',
+    'unsupported_request_field', 'invalid_image', 'request_too_large', 'invalid_request',
+    'free_pool_unavailable', 'provider_error']).optional(),
 }).strict();
 
 export class ComputerOperationError extends Error {
@@ -31,6 +35,7 @@ export function computerRecovery(code: string): string {
     return 'Screenshot upload to the Gateway failed. No automatic retry. Report the diagnosticId and HTTP status; do not change model providers or bypass desktop controls.';
   }
   switch (code) {
+    case 'COMPUTER_MODEL_HTTP_400': return 'The configured model service rejected the request. No input was dispatched from this model request. Report serviceErrorCode, requestId and diagnosticId; check the model request format and input/output limits before reopening. Do not automatically retry or change providers.';
     case 'COMPUTER_RELEASE_UNCONFIRMED': return 'Desktop release was not confirmed. Do not switch to other tools. Stop desktop control locally or restore the endpoint connection, then call close again to confirm release.';
     case 'COMPUTER_MODEL_HTTP_429': return 'The configured model service is rate-limited. No input was dispatched from this model request. Check the service quota and retry only after it resets; do not automatically change providers.';
     case 'COMPUTER_MODEL_HTTP_409': return 'The pinned model deployment changed. No input was dispatched from this model request. Refresh the model catalog and reopen after reviewing the configured screenshot recipient.';

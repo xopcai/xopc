@@ -42,4 +42,13 @@ describe('computer tool error signaling', () => {
     expect(Object.keys((tool.parameters as any).properties)).not.toEqual(expect.arrayContaining(['appId', 'action']));
     expect(tool.description).not.toContain('user supplied bundle ID');
   });
+  it('retains model diagnostics and gives request-specific recovery guidance', async () => {
+    const f = setup();
+    const diagnostic = { errorCode: 'COMPUTER_MODEL_HTTP_400', phase: 'model' as const,
+      diagnosticId: crypto.randomUUID(), requestId: crypto.randomUUID(), httpStatus: 400,
+      serviceErrorCode: 'max_input_tokens_exceeded' as const };
+    f.execute.mockRejectedValue(new ComputerOperationError(diagnostic));
+    const error = await f.tool.execute('call', { op: 'observe', question: 'Describe' }, undefined, undefined).catch(error => error);
+    expect(JSON.parse(error.message)).toMatchObject({ status: 'error', ...diagnostic, nextAction: expect.stringContaining('input/output limits') });
+  });
 });

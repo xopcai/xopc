@@ -135,6 +135,20 @@ describe('agent to broker desktop lifecycle', () => {
     expect(f.images.every(image => image.every(b => b === 0))).toBe(true);
     expect(await f.runtime.execute('owner', { op: 'close' })).toMatchObject({ sessionId: 'none' });
   });
+  it('preserves a model HTTP rejection through runtime cleanup without retrying or dispatching', async () => {
+    const f = fixture(); await f.open(await f.discover(), 'observe');
+    const requestId = crypto.randomUUID();
+    f.fetch.mockResolvedValue(Response.json({ error: { code: 'max_input_tokens_exceeded', message: 'private prompt' } },
+      { status: 400, headers: { 'x-xopc-request-id': requestId } }));
+    const error = await f.runtime.execute('owner', { op: 'observe', question: 'Describe' }).catch(error => error);
+    expect(computerDiagnostic(error)).toMatchObject({ errorCode: 'COMPUTER_MODEL_HTTP_400', phase: 'model', httpStatus: 400,
+      serviceErrorCode: 'max_input_tokens_exceeded', requestId });
+    expect(f.fetch).toHaveBeenCalledTimes(1);
+    expect(f.driver.perform).not.toHaveBeenCalled();
+    expect(f.images.every(image => image.every(b => b === 0))).toBe(true);
+    expect(isComputerControlActive('owner')).toBe(false);
+    expect(await f.runtime.execute('owner', { op: 'close' })).toMatchObject({ sessionId: 'none' });
+  });
   it('consumes and clears frames even when response metadata is malformed', async () => {
     const f = fixture(); await f.open(await f.discover());
     const invoke = f.invoke.getMockImplementation()!;
