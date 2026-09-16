@@ -70,6 +70,7 @@ export type ElectronMenuMessages = {
     window: string;
   };
   tray: {
+    stopComputer: string;
     newChat: string;
     showWindow: string;
     toggleDesktopPet: string;
@@ -156,6 +157,7 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
       window: 'Window',
     },
     tray: {
+      stopComputer: 'Stop desktop control · Ctrl+Alt+Esc',
       newChat: 'New Chat',
       showWindow: 'Show Window',
       toggleDesktopPet: 'Show / Hide Pet',
@@ -240,6 +242,7 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
       window: '窗口',
     },
     tray: {
+      stopComputer: '停止桌面操作 · Ctrl+Alt+Esc',
       newChat: '新建聊天',
       showWindow: '显示窗口',
       toggleDesktopPet: '显示 / 隐藏宠物',

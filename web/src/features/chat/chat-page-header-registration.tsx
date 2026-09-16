@@ -1,4 +1,4 @@
-import { Loader2, Plus, SquareTerminal } from 'lucide-react';
+import { Loader2, PanelRight, Plus, SquareTerminal } from 'lucide-react';
 import type { SessionIdentityInput } from '@xopcai/gateway-contract';
 import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
 import { sessionIdentityLabel } from '@/features/sessions/session-identity-label';
@@ -19,6 +19,7 @@ import { useAppShellStore } from '@/stores/app-shell-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
+import { useSideChatStore } from '@/stores/side-chat-store';
 import { useMediaQuery } from '@/lib/use-media-query';
 import { useTerminalPanelStore } from '@/stores/terminal-panel-store';
 import { newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
@@ -80,6 +81,10 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   const workspaceAvailable = !contextError && (!contextSummary || Boolean(contextSummary.environment?.available));
   const m = messages(language);
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
+  const sideChatOpen = useSideChatStore((s) => (
+    activeConversationId ? s.panes[activeConversationId]?.open === true : false
+  ));
+  const setSideChatOpen = useSideChatStore((s) => s.setOpen);
   const terminalPanelOpen = useTerminalPanelStore((s) => activeConversationId ? Boolean(s.openByConversationId[activeConversationId]) : false);
   const toggleTerminalPanel = useTerminalPanelStore((s) => s.toggle);
   const openTerminalPanel = useTerminalPanelStore((s) => s.open);
@@ -199,6 +204,22 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
             </span>
           ) : null}
           {activeConversationId && hasMessages ? <SessionShareButton key={`share:${activeConversationId}`} conversationId={activeConversationId} /> : null}
+          {activeConversationId && hasMessages ? (
+            <button
+              type="button"
+              className={cn(
+                'rounded-md p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
+                sideChatOpen && 'bg-surface-hover text-fg',
+              )}
+              title={sideChatOpen ? m.sideChat.closePaneAria : m.sideChat.openPaneAria}
+              aria-label={sideChatOpen ? m.sideChat.closePaneAria : m.sideChat.openPaneAria}
+              aria-controls="app-side-chat-panel"
+              aria-expanded={sideChatOpen}
+              onClick={() => setSideChatOpen(activeConversationId, !sideChatOpen)}
+            >
+              <PanelRight className="size-4" strokeWidth={1.5} aria-hidden />
+            </button>
+          ) : null}
           {terminalAvailable ? (
             <button
               type="button"
@@ -265,6 +286,8 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     terminalPreparing,
     activeConversationId,
     hasMessages,
+    sideChatOpen,
+    setSideChatOpen,
     workspacePath,
     workspaceAvailable,
     refreshContext,
