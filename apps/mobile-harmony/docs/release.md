@@ -4,7 +4,7 @@
 
 ## 1. 内部验收前置条件
 
-- 已注册 Bundle Name `ai.xopc.mobile`、AGC APP ID `6917616647856901107`；当前仅配置 API 26，仍需核对实体目标设备版本。
+- 已注册 Bundle Name `ai.xopc.mobile`、AGC APP ID `6917616647856901107`；最低 API 23 / HarmonyOS 6.1，目标 SDK 26。首台验收设备为 Mate 60（HarmonyOS 6.1.0.135 SP8），仍需实体安装和功能验收。
 - 在 DevEco 本地配置签名、证书、Profile 和允许调试的真机；不在聊天粘贴私钥/密码，不提交签名文件。
 - 配置 AGC 应用与 Push Kit、服务账号和已批准的消息分类；只将服务账号文件放在 Gateway 服务端受限目录。
 - 准备可重置的测试 Gateway、有效 HTTPS/WSS、测试 Agent/STT 服务和测试账号；不能用真实个人任务/文件做删除验证。

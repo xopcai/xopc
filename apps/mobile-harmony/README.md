@@ -2,11 +2,11 @@
 
 Native ArkUI / ArkTS Stage application. The Gateway runs the agent; the phone is a secure client, not a Node.js host or WebView wrapper.
 
-**Status: development preview, not release-ready.** Debug and release-mode unsigned HAPs build on API 26. Tests distinguish host logic, native platform integration and real-device acceptance; see [verification](docs/verification.md) and [release gates](docs/release.md).
+**Status: development preview, not release-ready.** Builds use SDK 26 with a minimum runtime of HarmonyOS 6.1 / API 23. Tests distinguish host logic, native platform integration and real-device acceptance; see [verification](docs/verification.md) and [release gates](docs/release.md).
 
 ## Open and build
 
-Open this directory in DevEco Studio. Tested tooling: DevEco / command-line-tools 26.0.0.821, Hvigor 6.26.4, OHPM 26.0.0.630, API 26. The current compatible/target SDK is `26.0.0`; earlier HarmonyOS versions are **not** claimed supported.
+Open this directory in DevEco Studio. Tested tooling: DevEco / command-line-tools 26.0.0.821, Hvigor 6.26.4, OHPM 26.0.0.630, SDK 26. The compatible SDK is `6.1.0(23)` and target SDK remains `26.0.0`. The minimum targets Mate 60 on HarmonyOS 6.1; physical-device acceptance is still required. Earlier API versions are not supported.
 
 ```sh
 # In apps/mobile-harmony; Harmony packages use OHPM, Node packages use pnpm.

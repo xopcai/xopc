@@ -46,7 +46,7 @@ jobs:
       - run: pnpm run harmony:verify --host-only
 
   native-build:
-    name: API 26 unsigned HAP and APP
+    name: API 23+ unsigned HAP and APP (SDK 26)
     needs: host-checks
     # Vendor download credentials must never be exposed to pull-request code.
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
@@ -89,13 +89,17 @@ jobs:
       - name: Upload unsigned build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: harmony-api26-unsigned-${{ github.sha }}
-          path: apps/mobile-harmony/.test/ci/
+          name: harmony-api23plus-unsigned-${{ github.sha }}
+          path: |
+            apps/mobile-harmony/.test/ci/*-unsigned.hap
+            apps/mobile-harmony/.test/ci/*-unsigned.app
+            apps/mobile-harmony/.test/ci/build-info.json
+            apps/mobile-harmony/.test/ci/code-linter.json
           if-no-files-found: error
           retention-days: 14
       - name: Explain installation boundary
         shell: bash
         run: |
           echo '### HarmonyOS development preview' >> "$GITHUB_STEP_SUMMARY"
-          echo 'API 26; unsigned Debug/Release HAP and Release APP. These are build evidence, not phone-install links.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Minimum HarmonyOS 6.1 / API 23; target and compile SDK 26. Unsigned Debug/Release HAP and Release APP; build evidence, not phone-install links.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Physical-device installation requires an appropriate Huawei signing profile. Phone-only distribution uses the Huawei testing channel after signing and its checks.' >> "$GITHUB_STEP_SUMMARY"
