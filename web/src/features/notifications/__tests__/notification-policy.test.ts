@@ -8,7 +8,7 @@ const notification: ProductNotificationPresentation = {
   title: 'Done',
   body: 'Task',
   route: '/chat/session',
-  target: { kind: 'chat', sessionKey: 'session' },
+  target: { kind: 'chat', conversationId: 'session' },
   status: 'success',
   source: 'chat',
 };

@@ -6,7 +6,7 @@ import type { SessionMetadata } from '../../../session/types.js';
 
 function metadata(): SessionMetadata {
   return {
-    key: 'agent:main:webchat:default:direct:parent',
+    key: "0beb9c69-d789-4c8d-87be-22e9abe391a5",
     status: 'active' as SessionMetadata['status'],
     tags: [],
     createdAt: new Date(0).toISOString(),
@@ -18,7 +18,7 @@ function metadata(): SessionMetadata {
     sourceChannel: 'webchat',
     sourceChatId: 'parent',
     sessionType: 'chat',
-    sessionId: 'parent-session-id',
+    transcriptId: 'parent-session-id',
     cwd: '/tmp/side-chat-test',
   };
 }
@@ -43,7 +43,7 @@ describe('EphemeralSideChatManager', () => {
     const parentMessages: AgentMessage[] = [{ role: 'user', content: 'original', timestamp: 1 }];
     const manager = createManager({ messages: parentMessages });
     const sideChat = await manager.create({
-      parentSessionKey: metadata().key,
+      parentConversationId: metadata().key,
       clientInstanceId: 'tab-1',
       selections: [{ id: 'selection-1', type: 'text', text: 'selected text' }],
     });
@@ -51,7 +51,7 @@ describe('EphemeralSideChatManager', () => {
     parentMessages[0] = { role: 'user', content: 'mutated', timestamp: 2 };
     const runtimeMessages = await manager.getRuntime(sideChat.id, 'tab-1').loadMessages();
 
-    expect(sideChat.context.parentSessionId).toBe('parent-session-id');
+    expect(sideChat.context.parentTranscriptId).toBe('parent-session-id');
     expect(sideChat.context.parentMessageCount).toBe(1);
     expect(sideChat.context.contentHash).toMatch(/^[a-f0-9]{64}$/);
     expect(JSON.stringify(runtimeMessages)).toContain('original');
@@ -63,12 +63,12 @@ describe('EphemeralSideChatManager', () => {
 
   it('isolates side chats by client and enforces the per-client limit', async () => {
     const manager = createManager({ maxPerClient: 1 });
-    const sideChat = await manager.create({ parentSessionKey: metadata().key, clientInstanceId: 'tab-1' });
+    const sideChat = await manager.create({ parentConversationId: metadata().key, clientInstanceId: 'tab-1' });
 
     expect(() => manager.get(sideChat.id, 'tab-2')).toThrowError(SideChatError);
-    await expect(manager.create({ parentSessionKey: metadata().key, clientInstanceId: 'tab-1' }))
+    await expect(manager.create({ parentConversationId: metadata().key, clientInstanceId: 'tab-1' }))
       .rejects.toMatchObject({ code: 'LIMIT_REACHED' });
-    await expect(manager.create({ parentSessionKey: metadata().key, clientInstanceId: 'tab-2' }))
+    await expect(manager.create({ parentConversationId: metadata().key, clientInstanceId: 'tab-2' }))
       .resolves.toMatchObject({ clientInstanceId: 'tab-2' });
     await manager.disposeAll();
   });
@@ -77,7 +77,7 @@ describe('EphemeralSideChatManager', () => {
     const onBeforeDispose = vi.fn();
     const manager = createManager({ options: { onBeforeDispose } });
     const sideChat = await manager.create({
-      parentSessionKey: metadata().key,
+      parentConversationId: metadata().key,
       clientInstanceId: 'tab-1',
     });
     manager.getRuntime(sideChat.id, 'tab-1').openSessionManager('/tmp').appendMessage({
@@ -105,7 +105,7 @@ describe('EphemeralSideChatManager', () => {
   it('extends only on explicit activity and removes expired side chats', async () => {
     let now = 1_000;
     const manager = createManager({ now: () => now });
-    const sideChat = await manager.create({ parentSessionKey: metadata().key, clientInstanceId: 'tab-1' });
+    const sideChat = await manager.create({ parentConversationId: metadata().key, clientInstanceId: 'tab-1' });
 
     now = 1_500;
     const seen = manager.heartbeat(sideChat.id, 'tab-1');
@@ -125,10 +125,10 @@ describe('EphemeralSideChatManager', () => {
 
   it('rejects missing parents and oversized or malformed selections', async () => {
     const manager = createManager();
-    await expect(manager.create({ parentSessionKey: 'missing', clientInstanceId: 'tab-1' }))
+    await expect(manager.create({ parentConversationId: 'missing', clientInstanceId: 'tab-1' }))
       .rejects.toMatchObject({ code: 'PARENT_NOT_FOUND' });
     await expect(manager.create({
-      parentSessionKey: metadata().key,
+      parentConversationId: metadata().key,
       clientInstanceId: 'tab-1',
       selections: [{ id: 'bad', type: 'file-range', path: 'a.ts', startLine: 2, endLine: 1, text: 'x' }],
     })).rejects.toThrow('endLine must be >= startLine');
@@ -139,7 +139,7 @@ describe('EphemeralSideChatManager', () => {
     const onExpired = vi.fn();
     const onBeforeDispose = vi.fn();
     const manager = createManager({ now: () => now, options: { onExpired, onBeforeDispose } });
-    const chat = await manager.create({ parentSessionKey: metadata().key, clientInstanceId: 'owner' });
+    const chat = await manager.create({ parentConversationId: metadata().key, clientInstanceId: 'owner' });
     now = 1000;
     expect(() => manager.heartbeat(chat.id, 'other')).toThrow(expect.objectContaining({ code: 'NOT_FOUND' }));
     expect(onExpired).not.toHaveBeenCalled();
@@ -155,7 +155,7 @@ describe('EphemeralSideChatManager', () => {
   it('keeps long runs alive, then starts a full idle window when the run finishes', async () => {
     let now = 0;
     const manager = createManager({ now: () => now });
-    const chat = await manager.create({ parentSessionKey: metadata().key, clientInstanceId: 'owner' });
+    const chat = await manager.create({ parentConversationId: metadata().key, clientInstanceId: 'owner' });
     manager.setStatus(chat.id, 'owner', 'running', 'run-1');
     now = 100_000;
     await expect(manager.sweepExpired()).resolves.toBe(0);
@@ -170,7 +170,7 @@ describe('EphemeralSideChatManager', () => {
   it.each(['waiting-input', 'waiting-approval'] as const)('expires %s even though a run is still open', async (status) => {
     let now = 0;
     const manager = createManager({ now: () => now });
-    const chat = await manager.create({ parentSessionKey: metadata().key, clientInstanceId: 'owner' });
+    const chat = await manager.create({ parentConversationId: metadata().key, clientInstanceId: 'owner' });
     manager.setStatus(chat.id, 'owner', 'running');
     manager.setStatus(chat.id, 'owner', status);
     now = 500;
@@ -185,15 +185,15 @@ describe('EphemeralSideChatManager', () => {
     const gate = new Promise<void>((resolve) => { release = resolve; });
     const load = vi.fn(async () => { await gate; return []; });
     const manager = createManager({ maxPerClient: 1, options: { loadParentMessages: load } });
-    const first = manager.create({ parentSessionKey: metadata().key, clientInstanceId: 'owner' });
+    const first = manager.create({ parentConversationId: metadata().key, clientInstanceId: 'owner' });
     await vi.waitFor(() => expect(load).toHaveBeenCalledOnce());
-    await expect(manager.create({ parentSessionKey: metadata().key, clientInstanceId: 'owner' })).rejects.toMatchObject({ code: 'LIMIT_REACHED' });
+    await expect(manager.create({ parentConversationId: metadata().key, clientInstanceId: 'owner' })).rejects.toMatchObject({ code: 'LIMIT_REACHED' });
     release();
     await first;
     await manager.disposeAll();
     const failed = createManager({ maxPerClient: 1 });
-    await expect(failed.create({ parentSessionKey: 'missing', clientInstanceId: 'owner' })).rejects.toThrow();
-    await expect(failed.create({ parentSessionKey: metadata().key, clientInstanceId: 'owner' })).resolves.toHaveProperty('id');
+    await expect(failed.create({ parentConversationId: 'missing', clientInstanceId: 'owner' })).rejects.toThrow();
+    await expect(failed.create({ parentConversationId: metadata().key, clientInstanceId: 'owner' })).resolves.toHaveProperty('id');
     await failed.disposeAll();
   });
 
@@ -203,7 +203,7 @@ describe('EphemeralSideChatManager', () => {
     let first = '';
     let latest = '';
     for (let i = 0; i < 502; i++) {
-      const chat = await manager.create({ parentSessionKey: metadata().key, clientInstanceId: 'owner' });
+      const chat = await manager.create({ parentConversationId: metadata().key, clientInstanceId: 'owner' });
       first ||= chat.id;
       latest = chat.id;
       now += 1000;

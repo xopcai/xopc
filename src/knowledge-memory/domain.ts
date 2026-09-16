@@ -31,7 +31,7 @@ export interface KnowledgeItem {
   reviewAt?: number;
   originClass: KnowledgeOriginClass;
   sourceAgentId?: string;
-  sourceSessionId?: string;
+  sourceConversationId?: string;
   sourceTurnId?: string;
   derivedFromRecalledContext: boolean;
   source: Record<string, unknown>;
@@ -43,5 +43,5 @@ export interface KnowledgeVisibilityContext {
   agentId: string;
   workspaceId: string;
   projectId?: string;
-  sessionId: string;
+  conversationId: string;
 }

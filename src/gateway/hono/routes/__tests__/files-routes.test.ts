@@ -10,7 +10,7 @@ import { fileResourceId, fileSpaceId } from '../../../../files/file-service.js';
 import { effectiveWorkspacePathForSession } from '../../../../session/session-workspace.js';
 import { getSessionConfig, setSessionConfig } from '../../../../storage/sqlite/config-repository.js';
 import { getProjectForSession } from '../../../../projects/workspace.js';
-import { patchSessionMetadata } from '../../../../storage/sqlite/session-repository.js';
+import { ensureSessionRecord, patchSessionMetadata } from '../../../../storage/sqlite/session-repository.js';
 import { ProjectService } from '../../../../projects/index.js';
 import {
   closeXopcDatabase,
@@ -60,7 +60,8 @@ describe('files routes', () => {
     mkdirSync(agentRoot);
     mkdirSync(overrideRoot);
     writeFileSync(join(overrideRoot, 'report.md'), 'session report');
-    const key = 'agent:main:session:cold';
+    const key = "abc3aeed-ef6c-49ca-8a31-7afd92f4683f";
+    ensureSessionRecord(key, agentRoot, { agentId: "main" });
     setSessionConfig(key, { workingDirectoryOverride: overrideRoot }, agentRoot);
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
@@ -80,7 +81,8 @@ describe('files routes', () => {
     const overrideRoot = join(stateDir, 'override');
     const projectRoot = join(stateDir, 'project');
     for (const root of [agentRoot, overrideRoot, projectRoot]) mkdirSync(root);
-    const key = 'agent:main:session:project';
+    const key = "bd9a09c7-329c-4751-86e4-6d5a67d76e32";
+    ensureSessionRecord(key, agentRoot, { agentId: "main" });
     setSessionConfig(key, { workingDirectoryOverride: overrideRoot }, agentRoot);
     const project = new ProjectService().create({ name: 'Bound project', workspaceRoot: projectRoot });
     patchSessionMetadata(key, { projectId: project.id });
@@ -210,21 +212,22 @@ describe('files routes', () => {
     writeFileSync(outside, 'external');
     const { app } = appFor(root);
     const spaceId = fileSpaceId(realpathSync(root));
+    ensureSessionRecord("f964e453-e547-42a9-99ef-50633928e66a", root, { agentId: "main" });
     const resolveReference = (path: string) => app.request('/api/files/resolve-reference', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ spaceId, path, sessionKey: 'session-one' }),
+      body: JSON.stringify({ spaceId, path, conversationId: 'f964e453-e547-42a9-99ef-50633928e66a' }),
     });
     const response = await resolveReference(outside);
     expect(response.status).toBe(200);
     const { reference } = await response.json() as { reference: { fileRefId: string; capabilities: string[]; manageRoute?: string } };
     expect(reference.capabilities).toEqual(['openExternal', 'revealInFolder', 'copyPath']);
     expect(reference.manageRoute).toBe('/settings/gateway');
-    const action = (sessionKey: string, kind = 'openExternal') => app.request(`/api/files/references/${reference.fileRefId}/action`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: kind, sessionKey }),
+    const action = (conversationId: string, kind = 'openExternal') => app.request(`/api/files/references/${reference.fileRefId}/action`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: kind, conversationId }),
     });
-    expect((await action('session-two')).status).toBe(403);
-    expect((await action('session-one', 'edit')).status).toBe(403);
-    const opened = await action('session-one');
+    expect((await action('f964e453-e547-42a9-99ef-50633928e66b')).status).toBe(403);
+    expect((await action('f964e453-e547-42a9-99ef-50633928e66a', 'edit')).status).toBe(403);
+    const opened = await action('f964e453-e547-42a9-99ef-50633928e66a');
     expect(opened.status).toBe(200);
     expect(await opened.json()).toMatchObject({ absolutePath: realpathSync(outside) });
     expect((await app.request(`/api/files/${spaceId + '.' + Buffer.from('../report.pdf').toString('base64url')}/content`)).status).toBe(400);

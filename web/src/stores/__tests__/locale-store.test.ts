@@ -17,7 +17,7 @@ function jsonResponse(status = 200): Response {
 describe('gateway locale sync', () => {
   beforeEach(() => {
     __resetGatewayLanguageSyncForTests();
-    useGatewayStore.setState({ sessionKey: 'test-token' });
+    useGatewayStore.setState({ conversationId: 'test-token' });
   });
 
   afterEach(() => {

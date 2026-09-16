@@ -15,7 +15,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 type AttachmentTileProps = {
   attachment: MessageAttachment;
   authToken?: string;
-  sessionKey?: string | null;
+  conversationId?: string | null;
   showDelete?: boolean;
   onDelete?: () => void;
   /** How image thumbnails are sized inside attachment grids. */
@@ -31,7 +31,7 @@ type AttachmentTileProps = {
 export function AttachmentTile({
   attachment,
   authToken,
-  sessionKey,
+  conversationId,
   showDelete = false,
   onDelete,
   imageSize = 'thumbnail',
@@ -45,7 +45,7 @@ export function AttachmentTile({
   const missingAuthHintId = useId();
 
   const isImageMime = attachment.mimeType?.startsWith('image/') || attachment.type === 'image';
-  const imageSource = useAttachmentImageSrc(attachment, { authToken, sessionKey });
+  const imageSource = useAttachmentImageSrc(attachment, { authToken, conversationId });
 
   const needsGatewayBinary = Boolean(attachment.uri) && !getAttachmentBinaryPayload(attachment);
   const showMissingAuthHint = needsGatewayBinary && !String(authToken ?? '').trim();

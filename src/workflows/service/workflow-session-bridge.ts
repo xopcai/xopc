@@ -10,7 +10,7 @@ import type { WorkflowRunView } from '../domain/index.js';
 import { isTerminalWorkflowRunStatus } from '../domain/index.js';
 
 import { runViewToSnapshot } from './run-view-to-snapshot.js';
-import { buildWorkflowRunSessionKey } from './workflow-session-key.js';
+import { buildWorkflowRunConversationId } from './workflow-session-key.js';
 
 export const WORKFLOW_SESSION_TYPE = 'workflow-run';
 export const WORKFLOW_RUN_LINK_CONTEXT_KIND = 'workflow-run-link';
@@ -21,13 +21,13 @@ export interface PrepareWorkflowRunSessionParams {
   definitionId: string;
   definitionTitle: string;
   goal: string;
-  parentSessionKey?: string;
+  parentConversationId?: string;
   projectId?: string;
   triggerSource?: string;
 }
 
 export interface PrepareWorkflowRunSessionResult {
-  sessionKey: string;
+  conversationId: string;
 }
 
 export class WorkflowSessionBridge {
@@ -36,17 +36,17 @@ export class WorkflowSessionBridge {
   constructor(private readonly gateway: GatewayWorkflowHost) {}
 
   async prepareRunSession(params: PrepareWorkflowRunSessionParams): Promise<PrepareWorkflowRunSessionResult> {
-    const sessionKey = buildWorkflowRunSessionKey(params.agentId, params.runId);
+    const conversationId = buildWorkflowRunConversationId(params.agentId, params.runId);
     const goalText = formatWorkflowGoalUserMessage(params.definitionId, params.goal);
     const sessionName = truncateSessionName(params.goal.trim() || params.definitionTitle || params.definitionId);
 
     const store = this.gateway.sessionIndexInstance.getStore();
     const projectId =
       params.projectId?.trim() ||
-      (params.parentSessionKey?.trim()
-        ? (await store.getMetadata(params.parentSessionKey.trim()))?.projectId
+      (params.parentConversationId?.trim()
+        ? (await store.getMetadata(params.parentConversationId.trim()))?.projectId
         : undefined);
-    await store.resolveTranscriptPath(sessionKey, {
+    await store.resolveTranscriptPath(conversationId, {
       metadata: {
         sessionType: WORKFLOW_SESSION_TYPE,
         projectId,
@@ -62,7 +62,7 @@ export class WorkflowSessionBridge {
         },
       },
     });
-    await store.updateMetadata(sessionKey, {
+    await store.updateMetadata(conversationId, {
       sessionType: WORKFLOW_SESSION_TYPE,
       hiddenFromSessionList: true,
       workflowRunId: params.runId,
@@ -75,36 +75,36 @@ export class WorkflowSessionBridge {
         workflowDefinitionId: params.definitionId,
         workflowGoal: params.goal,
         ...(params.triggerSource ? { triggerSource: params.triggerSource } : {}),
-        ...(params.parentSessionKey ? { parentSessionKey: params.parentSessionKey } : {}),
+        ...(params.parentConversationId ? { parentConversationId: params.parentConversationId } : {}),
       },
     });
 
-    await store.appendTranscriptMessage(sessionKey, {
+    await store.appendTranscriptMessage(conversationId, {
       role: 'user',
       content: [{ type: 'text', text: goalText }],
       timestamp: Date.now(),
     });
 
-    if (params.parentSessionKey?.trim()) {
+    if (params.parentConversationId?.trim()) {
       await this.writeParentRunLink({
-        parentSessionKey: params.parentSessionKey.trim(),
+        parentConversationId: params.parentConversationId.trim(),
         runId: params.runId,
         ownerAgentId: params.agentId,
-        workflowSessionKey: sessionKey,
+        workflowConversationId: conversationId,
         definitionId: params.definitionId,
         goal: params.goal,
         status: 'running',
       });
     }
 
-    this.gateway.emit('session.updated', { key: sessionKey, name: sessionName });
-    return { sessionKey };
+    this.gateway.emit('session.updated', { key: conversationId, name: sessionName });
+    return { conversationId };
   }
 
   async handleRunViewUpdated(view: WorkflowRunView): Promise<void> {
     const runId = view.run.id;
-    const sessionKey = view.run.metadata?.sessionKey?.trim();
-    if (!sessionKey || !isTerminalWorkflowRunStatus(view.run.status)) {
+    const conversationId = view.run.metadata?.conversationId?.trim();
+    if (!conversationId || !isTerminalWorkflowRunStatus(view.run.status)) {
       return;
     }
     if (this.terminalPersistedRunIds.has(runId)) {
@@ -112,25 +112,25 @@ export class WorkflowSessionBridge {
     }
     this.terminalPersistedRunIds.add(runId);
 
-    await this.persistTerminalTranscript(sessionKey, view);
+    await this.persistTerminalTranscript(conversationId, view);
 
-    const parentSessionKey = readParentSessionKey(view);
-    if (parentSessionKey) {
+    const parentConversationId = readParentConversationId(view);
+    if (parentConversationId) {
       await this.writeParentRunLink({
-        parentSessionKey,
+        parentConversationId,
         runId,
         ownerAgentId: view.run.metadata?.agentId ?? '',
-        workflowSessionKey: sessionKey,
+        workflowConversationId: conversationId,
         definitionId: view.run.definitionId,
         goal: view.run.goal,
         status: view.run.status,
       });
     }
-    this.recordProjectWorkflowMemory(sessionKey, view);
+    this.recordProjectWorkflowMemory(conversationId, view);
     new TaskWorkflowCoordinator().handleTerminalRun(view);
   }
 
-  private async persistTerminalTranscript(sessionKey: string, view: WorkflowRunView): Promise<void> {
+  private async persistTerminalTranscript(conversationId: string, view: WorkflowRunView): Promise<void> {
     const store = this.gateway.sessionIndexInstance.getStore();
     const snapshot = runViewToSnapshot(view);
     const toolCallId = randomUUID();
@@ -142,7 +142,7 @@ export class WorkflowSessionBridge {
     };
     const isError = view.run.status === 'failed' || view.run.status === 'timeout';
 
-    await store.appendTranscriptMessage(sessionKey, {
+    await store.appendTranscriptMessage(conversationId, {
       role: 'assistant',
       content: [
         {
@@ -155,7 +155,7 @@ export class WorkflowSessionBridge {
       timestamp: Date.now(),
     } as unknown as Parameters<SessionStore['appendTranscriptMessage']>[1]);
 
-    await store.appendTranscriptMessage(sessionKey, {
+    await store.appendTranscriptMessage(conversationId, {
       role: 'toolResult',
       toolCallId,
       content: [{ type: 'text', text: JSON.stringify(envelope) }],
@@ -164,23 +164,23 @@ export class WorkflowSessionBridge {
       timestamp: Date.now(),
     } as unknown as Parameters<SessionStore['appendTranscriptMessage']>[1]);
 
-    await store.updateMetadata(sessionKey, {
+    await store.updateMetadata(conversationId, {
       status: SessionStatus.ACTIVE,
     });
   }
 
   private async writeParentRunLink(params: {
-    parentSessionKey: string;
+    parentConversationId: string;
     runId: string;
     ownerAgentId?: string;
-    workflowSessionKey: string;
+    workflowConversationId: string;
     definitionId: string;
     goal: string;
     status: WorkflowRunView['run']['status'];
   }): Promise<void> {
     const store = this.gateway.sessionIndexInstance.getStore();
     const text = formatParentRunLinkText(params);
-    await store.appendTranscriptContextEntry(params.parentSessionKey, {
+    await store.appendTranscriptContextEntry(params.parentConversationId, {
       kind: 'context',
       id: `workflow-run-link:${params.runId}`,
       text,
@@ -188,7 +188,7 @@ export class WorkflowSessionBridge {
         kind: WORKFLOW_RUN_LINK_CONTEXT_KIND,
         runId: params.runId,
         ...(params.ownerAgentId ? { ownerAgentId: params.ownerAgentId } : {}),
-        workflowSessionKey: params.workflowSessionKey,
+        workflowConversationId: params.workflowConversationId,
         definitionId: params.definitionId,
         goal: params.goal,
         status: params.status,
@@ -197,7 +197,7 @@ export class WorkflowSessionBridge {
     });
   }
 
-  private recordProjectWorkflowMemory(sessionKey: string, view: WorkflowRunView): void {
+  private recordProjectWorkflowMemory(conversationId: string, view: WorkflowRunView): void {
     const projectId = view.run.metadata?.projectId?.trim();
     const agentId = view.run.metadata?.agentId?.trim();
     if (!projectId || !agentId) return;
@@ -212,7 +212,7 @@ export class WorkflowSessionBridge {
       kind: 'task_lesson',
       scope: { type: 'project', id: projectId },
       sourceAgentId: agentId,
-      sourceSessionId: sessionKey,
+      sourceConversationId: conversationId,
       content: [
         `Workflow ${view.run.definitionId} finished with status ${view.run.status}.`,
         view.run.goal ? `Goal: ${view.run.goal}` : undefined,
@@ -249,12 +249,12 @@ function truncateSessionName(name: string): string {
   return `${trimmed.slice(0, 77)}…`;
 }
 
-function readParentSessionKey(view: WorkflowRunView): string | null {
+function readParentConversationId(view: WorkflowRunView): string | null {
   if (view.run.source.kind === 'chat') {
-    const originKey = view.run.source.sessionKey?.trim();
+    const originKey = view.run.source.conversationId?.trim();
     if (originKey) return originKey;
   }
-  const customParent = view.run.metadata?.origin?.sessionKey?.trim();
+  const customParent = view.run.metadata?.origin?.conversationId?.trim();
   if (customParent && view.run.metadata?.triggerSource === 'chat') {
     return customParent;
   }

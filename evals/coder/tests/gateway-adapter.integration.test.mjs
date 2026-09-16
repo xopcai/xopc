@@ -56,7 +56,7 @@ it('runs the evaluator through the real Gateway with a local scripted model serv
   const child = spawn(process.execPath, ['--import', 'tsx', 'src/cli/bin.ts', 'gateway', '--port', String(port), '--bind', 'loopback', '--no-hot-reload'], {
     cwd: repo, env: { ...process.env, XOPC_CONFIG: configPath, XOPC_CONFIG_PATH: configPath,
       XOPC_STATE_DIR: root, XOPC_HOME: root, XOPC_WORKSPACE: workspace, XOPC_MODELS_JSON: modelsPath,
-      XOPC_SKIP_CHANNELS: '1', XOPC_NO_RESPAWN: '1', XOPC_LOG_FILE: 'false', XOPC_LOG_LEVEL: 'error' },
+      XOPC_SKIP_CHANNELS: '1', XOPC_NO_RESPAWN: '1', XOPC_LOG_FILE: 'false', XOPC_LOG_LEVEL: 'info' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout.on('data', data => { logs = (logs + data).slice(-12000); });

@@ -79,7 +79,7 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const [selectingProjectId, setSelectingProjectId] = useState<string | null>(null);
   const navigate = useNavigate();
-  const token = useGatewayStore((state) => state.sessionKey);
+  const token = useGatewayStore((state) => state.conversationId);
   const language = useLocaleStore((state) => state.language);
   const workDiscoveryCopy = messages(language).onboarding.workDiscovery;
 

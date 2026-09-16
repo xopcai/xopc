@@ -6,7 +6,7 @@ import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import type { ProactiveSignalPublisher } from '../proactive/events/publisher.js';
 import { ProjectStore } from './project-store.js';
 import { inferProjectExecutionMode } from './project-kind.js';
-import { bindSessionToProject, listProjectSessionKeys, unbindSessionFromProject } from './session-bind.js';
+import { bindSessionToProject, listProjectConversationIds, unbindSessionFromProject } from './session-bind.js';
 import type { CreateProjectInput, Project, ProjectHealth, ProjectListQuery, ProjectListResult, ProjectMilestone, ProjectUpdate, ProjectWithDetails, SidebarProjectListQuery, UpdateProjectInput } from './types.js';
 import {
   canonicalWorkspacePath,
@@ -249,20 +249,20 @@ export class ProjectService {
     return this.store.createUpdate(projectId, input);
   }
 
-  attachSession(sessionKey: string, projectId: string): void {
-    bindSessionToProject(sessionKey, projectId);
+  attachSession(conversationId: string, projectId: string): void {
+    bindSessionToProject(conversationId, projectId);
   }
 
-  detachSession(sessionKey: string): void {
-    unbindSessionFromProject(sessionKey);
+  detachSession(conversationId: string): void {
+    unbindSessionFromProject(conversationId);
   }
 
-  listSessionKeys(projectId: string, limit?: number, offset?: number): string[] {
-    return listProjectSessionKeys(projectId, limit, offset);
+  listConversationIds(projectId: string, limit?: number, offset?: number): string[] {
+    return listProjectConversationIds(projectId, limit, offset);
   }
 
-  suggestProjectsForSession(sessionKey: string): ProjectSuggestion[] {
-    const session = getSessionMetadata(sessionKey);
+  suggestProjectsForSession(conversationId: string): ProjectSuggestion[] {
+    const session = getSessionMetadata(conversationId);
     if (!session) return [];
     const projects = this.list({ status: 'active', limit: 500 }).items;
     const haystack = [session.key, session.name, session.routing?.agentId, session.sourceChannel, ...(session.tags ?? [])]

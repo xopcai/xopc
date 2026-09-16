@@ -1506,13 +1506,13 @@ function RunDiagnosticsPanel({
   }
 
   const result = run.error || run.summary;
-  const processLink = run.sessionKey
-    ? `/chat/${encodeURIComponent(run.sessionKey)}`
+  const processLink = run.conversationId
+    ? `/chat/${encodeURIComponent(run.conversationId)}`
     : run.workflowRunId
       ? `/workflows?run=${encodeURIComponent(run.workflowRunId)}`
       : null;
-  const processLabel = run.sessionKey ? labels.runDetail.openConversation : labels.runDetail.openWorkflow;
-  const ProcessIcon = run.sessionKey ? MessageCircle : GitBranch;
+  const processLabel = run.conversationId ? labels.runDetail.openConversation : labels.runDetail.openWorkflow;
+  const ProcessIcon = run.conversationId ? MessageCircle : GitBranch;
   const ResultIcon = isActiveRun(run) ? Activity : needsAttention(run) ? CircleAlert : CheckCircle2;
 
   return (

@@ -49,12 +49,12 @@ export interface SessionShareManifest {
 }
 
 export interface SessionShareSource {
-  getMetadata(sessionKey: string): Promise<SessionMetadata | null>;
-  getSnapshot(sessionKey: string): Promise<CompactionSourceSnapshot | null>;
+  getMetadata(conversationId: string): Promise<SessionMetadata | null>;
+  getSnapshot(conversationId: string): Promise<CompactionSourceSnapshot | null>;
 }
 
 export interface SessionSharePreview {
-  sessionId: string;
+  transcriptId: string;
   cutoffSeq: number;
   metadataUpdatedAt: string;
   title: string;
@@ -66,7 +66,7 @@ export interface SessionSharePreview {
 }
 
 export interface CreateSessionShareInput {
-  expectedSessionId: string;
+  expectedTranscriptId: string;
   expectedCutoffSeq: number;
   expectedMetadataUpdatedAt: string;
   includeToolActivities?: boolean;
@@ -78,7 +78,7 @@ export interface CreateSessionShareInput {
 }
 
 export interface RefreshSessionShareInput {
-  expectedSessionId: string;
+  expectedTranscriptId: string;
   expectedCutoffSeq: number;
   expectedMetadataUpdatedAt: string;
   includeToolActivities?: boolean;
@@ -98,12 +98,12 @@ export class SessionShareService {
     private readonly source: SessionShareSource,
   ) {}
 
-  async preview(sessionKey: string): Promise<SessionSharePreview> {
-    const source = await this.loadSource(sessionKey);
+  async preview(conversationId: string): Promise<SessionSharePreview> {
+    const source = await this.loadSource(conversationId);
     const projection = projectSessionShare(source.snapshot.entries);
     this.validateMessages(projection.messages);
     return {
-      sessionId: source.snapshot.sessionId,
+      transcriptId: source.snapshot.transcriptId,
       cutoffSeq: source.snapshot.lastSeq,
       metadataUpdatedAt: source.metadata.updatedAt,
       title: source.metadata.name?.trim() || 'Shared conversation',
@@ -115,8 +115,8 @@ export class SessionShareService {
     };
   }
 
-  async create(sessionKey: string, input: CreateSessionShareInput): Promise<SessionShareRecord> {
-    const source = await this.loadExpectedSource(sessionKey, input);
+  async create(conversationId: string, input: CreateSessionShareInput): Promise<SessionShareRecord> {
+    const source = await this.loadExpectedSource(conversationId, input);
     const id = randomUUID();
     const projection = projectSessionShare(source.snapshot.entries);
     const includeToolActivities = input.includeToolActivities === true;
@@ -128,7 +128,7 @@ export class SessionShareService {
     try {
       return this.store.createSessionShare({
         id,
-        sourceSessionId: built.manifest.source.sessionId,
+        sourceTranscriptId: built.manifest.source.sessionId,
         cutoffSeq: built.manifest.source.cutoffSeq,
         artifactRelativePath: this.artifactRelativePath(id),
         artifactSize: built.totalSize,
@@ -147,11 +147,11 @@ export class SessionShareService {
     }
   }
 
-  async refresh(sessionKey: string, shareId: string, input: RefreshSessionShareInput): Promise<SessionShareRecord> {
+  async refresh(conversationId: string, shareId: string, input: RefreshSessionShareInput): Promise<SessionShareRecord> {
     const record = this.store.getById(shareId);
     if (!record || record.kind !== 'session') throw new Error('Session share not found');
-    const source = await this.loadExpectedSource(sessionKey, input);
-    if (source.snapshot.sessionId !== record.sourceSessionId) throw new Error('Session share belongs to a previous session');
+    const source = await this.loadExpectedSource(conversationId, input);
+    if (source.snapshot.transcriptId !== record.sourceTranscriptId) throw new Error('Session share belongs to a previous session');
 
     const previous = await this.readManifest(record);
     const includeToolActivities = input.includeToolActivities ?? record.includeToolActivities;
@@ -193,8 +193,8 @@ export class SessionShareService {
     }
   }
 
-  list(sessionId: string): SessionShareRecord[] {
-    return this.store.getSessionShares(sessionId);
+  list(transcriptId: string): SessionShareRecord[] {
+    return this.store.getSessionShares(transcriptId);
   }
 
   async readManifest(record: SessionShareRecord): Promise<SessionShareManifest> {
@@ -208,7 +208,7 @@ export class SessionShareService {
       || typeof manifest.title !== 'string'
       || typeof manifest.snapshotAt !== 'string'
       || !manifest.source
-      || manifest.source.sessionId !== record.sourceSessionId
+      || manifest.source.sessionId !== record.sourceTranscriptId
       || manifest.source.cutoffSeq !== record.cutoffSeq
       || !Array.isArray(manifest.messages)
       || !manifest.messages.every(isSessionShareMessage)
@@ -249,12 +249,12 @@ export class SessionShareService {
   }
 
   private async loadExpectedSource(
-    sessionKey: string,
-    expected: Pick<CreateSessionShareInput, 'expectedSessionId' | 'expectedCutoffSeq' | 'expectedMetadataUpdatedAt'>,
+    conversationId: string,
+    expected: Pick<CreateSessionShareInput, 'expectedTranscriptId' | 'expectedCutoffSeq' | 'expectedMetadataUpdatedAt'>,
   ): Promise<{ metadata: SessionMetadata; snapshot: CompactionSourceSnapshot }> {
-    const source = await this.loadSource(sessionKey);
+    const source = await this.loadSource(conversationId);
     if (
-      source.snapshot.sessionId !== expected.expectedSessionId
+      source.snapshot.transcriptId !== expected.expectedTranscriptId
       || source.snapshot.lastSeq !== expected.expectedCutoffSeq
       || source.metadata.updatedAt !== expected.expectedMetadataUpdatedAt
     ) {
@@ -263,12 +263,12 @@ export class SessionShareService {
     return source;
   }
 
-  private async loadSource(sessionKey: string): Promise<{ metadata: SessionMetadata; snapshot: CompactionSourceSnapshot }> {
+  private async loadSource(conversationId: string): Promise<{ metadata: SessionMetadata; snapshot: CompactionSourceSnapshot }> {
     const [metadata, snapshot] = await Promise.all([
-      this.source.getMetadata(sessionKey),
-      this.source.getSnapshot(sessionKey),
+      this.source.getMetadata(conversationId),
+      this.source.getSnapshot(conversationId),
     ]);
-    if (!metadata || !snapshot || !metadata.sessionId || metadata.sessionId !== snapshot.sessionId) {
+    if (!metadata || !snapshot || !metadata.transcriptId || metadata.transcriptId !== snapshot.transcriptId) {
       throw new Error('Session not found');
     }
     return { metadata, snapshot };
@@ -285,7 +285,7 @@ export class SessionShareService {
     return {
       schemaVersion: MANIFEST_SCHEMA_VERSION,
       shareId,
-      source: { sessionId: source.snapshot.sessionId, cutoffSeq: source.snapshot.lastSeq },
+      source: { sessionId: source.snapshot.transcriptId, cutoffSeq: source.snapshot.lastSeq },
       title: source.metadata.name?.trim() || 'Shared conversation',
       snapshotAt: new Date().toISOString(),
       messages: projection.messages.map((message) => ({

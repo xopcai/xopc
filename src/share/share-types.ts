@@ -92,7 +92,7 @@ export interface SessionShareRecord extends ShareRecordBase {
   kind: 'session';
   /** Sessions are state-owned objects, not workspace paths. */
   workspaceRelativePath: '';
-  sourceSessionId: string;
+  sourceTranscriptId: string;
   cutoffSeq: number;
   artifactRelativePath: string;
   messageCount: number;
@@ -119,7 +119,7 @@ export interface CreateShareParams {
   /** Optional description shown on the landing page. */
   description?: string;
   /** Session key to resolve workspace root. */
-  sessionKey?: string;
+  conversationId?: string;
   /** Agent id to resolve workspace root. */
   agentId?: string;
   /** Force directory share semantics (overrides auto-detection). */

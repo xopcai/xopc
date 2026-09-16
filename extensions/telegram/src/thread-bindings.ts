@@ -4,7 +4,7 @@
  */
 
 export interface TelegramThreadBinding {
-  sessionKey: string;
+  conversationId: string;
   chatId: string;
   threadId?: string;
   createdAtMs: number;

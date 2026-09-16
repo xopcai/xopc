@@ -4,13 +4,13 @@ import { fetchProject, type Project } from '@/features/projects/api';
 import { getSessionDetail } from '@/features/sessions/session-api';
 import { useGatewayStore } from '@/stores/gateway-store';
 
-export function useChatProjectScope(sessionKey?: string | null, draftProjectId?: string | null): Project | null {
-  const token = useGatewayStore((state) => state.sessionKey);
+export function useChatProjectScope(conversationId?: string | null, draftProjectId?: string | null): Project | null {
+  const token = useGatewayStore((state) => state.conversationId);
   const baseUrl = useGatewayStore((state) => state.baseUrl);
   const { data, error } = useSWR(
-    sessionKey || draftProjectId ? ['chat-project-scope', baseUrl, token, sessionKey, draftProjectId] : null,
+    conversationId || draftProjectId ? ['chat-project-scope', baseUrl, token, conversationId, draftProjectId] : null,
     async () => {
-      const projectId = sessionKey ? (await getSessionDetail(sessionKey)).projectId : draftProjectId;
+      const projectId = conversationId ? (await getSessionDetail(conversationId)).projectId : draftProjectId;
       return projectId ? fetchProject(projectId) : null;
     },
     { keepPreviousData: false, shouldRetryOnError: false },

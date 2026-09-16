@@ -93,8 +93,8 @@ function collectReferences(
   for (const agent of config.agents.list) {
     collectModelPolicy(out, agent.models, `agents.list.${agent.id}.models`);
   }
-  for (const [sessionKey, sessionConfig] of sessionConfigs) {
-    addRef(out, sessionConfig.modelOverride, `sessions.${sessionKey}.modelOverride`);
+  for (const [conversationId, sessionConfig] of sessionConfigs) {
+    addRef(out, sessionConfig.modelOverride, `sessions.${conversationId}.modelOverride`);
   }
   return out;
 }

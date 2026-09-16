@@ -12,45 +12,19 @@ type SidebarMutate = (
 
 const SIDEBAR_PAGE_SIZE = 20;
 
-function webchatPeerIdFromKey(sessionKey: string): string {
-  const m = /:direct:([^/]+)$/i.exec(sessionKey.trim());
-  return m?.[1]?.toLowerCase() ?? '';
-}
-
-function buildSidebarSessionStub(
-  key: string,
-  patch?: { name?: string | null; messageCount?: number },
-): SessionMetadata {
-  const now = new Date().toISOString();
-  return {
-    key,
-    name: patch?.name?.trim() || undefined,
-    status: 'active',
-    tags: [],
-    createdAt: now,
-    updatedAt: now,
-    lastAccessedAt: now,
-    messageCount: patch?.messageCount ?? 0,
-    estimatedTokens: 0,
-    compactedCount: 0,
-    sourceChannel: 'webchat',
-    sourceChatId: webchatPeerIdFromKey(key),
-    customData: {},
-  };
-}
-
 /**
- * Move or insert a session at the top of page 0 in the SWR cache.
+ * Move a known session to the top of page 0 in the SWR cache.
  * No-op when cache is empty — caller should `mutate()` to fetch from the server first.
  */
 export function upsertSidebarSessionRow(
   mutate: SidebarMutate,
-  sessionKey: string,
+  conversationId: string,
   patch?: { name?: string | null; messageCount?: number },
 ): void {
-  const key = sessionKey.trim();
+  const key = conversationId.trim();
   if (!key) return;
 
+  let missing = false;
   void mutate(
     (pages) => {
       if (!pages?.length || !pages[0]?.items) {
@@ -72,8 +46,9 @@ export function upsertSidebarSessionRow(
         return { ...page, items: kept };
       });
 
+      if (!existing) { missing = true; return pages; }
       const row: SessionMetadata = {
-        ...(existing ?? buildSidebarSessionStub(key, patch)),
+        ...existing,
         ...(patch?.name !== undefined ? { name: patch.name?.trim() || undefined } : {}),
         ...(patch?.messageCount !== undefined ? { messageCount: patch.messageCount } : {}),
         updatedAt: now,
@@ -86,19 +61,20 @@ export function upsertSidebarSessionRow(
       return stripped;
     },
     { revalidate: false },
-  );
+  ).then(() => { if (missing) void mutate(); });
 }
 
-/** Patch session name in place, or insert a stub at the top when the row is missing. */
+/** Patch a known row; fetch authoritative metadata when the row is missing. */
 export function patchSidebarSessionName(
   mutate: SidebarMutate,
-  sessionKey: string,
+  conversationId: string,
   name: string,
 ): void {
-  const key = sessionKey.trim();
+  const key = conversationId.trim();
   const title = name.trim();
   if (!key || !title) return;
 
+  let missing = false;
   void mutate(
     (pages) => {
       if (!pages?.length || !pages[0]?.items) return pages;
@@ -120,26 +96,18 @@ export function patchSidebarSessionName(
         return changed ? next : pages;
       }
 
-      const now = new Date().toISOString();
-      const row: SessionMetadata = {
-        ...buildSidebarSessionStub(key, { name: title }),
-        updatedAt: now,
-        lastAccessedAt: now,
-      };
-      const page0 = next[0];
-      const restPage0 = page0.items.slice(0, Math.max(0, SIDEBAR_PAGE_SIZE - 1));
-      next[0] = { ...page0, items: [row, ...restPage0] };
-      return next;
+      missing = true;
+      return pages;
     },
     { revalidate: false },
-  );
+  ).then(() => { if (missing) void mutate(); });
 }
 
-/** After list data is loaded, bump the active session to the top (or insert stub). */
+/** After list data is loaded, bump the active session to the top (or refresh missing metadata). */
 export function bumpSidebarSessionRow(
   mutate: SidebarMutate,
-  sessionKey: string,
+  conversationId: string,
   patch?: { name?: string | null; messageCount?: number },
 ): void {
-  upsertSidebarSessionRow(mutate, sessionKey, patch);
+  upsertSidebarSessionRow(mutate, conversationId, patch);
 }

@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { EmbeddedRunConflictError, EmbeddedRunRegistry } from '../runs.js';
 
 const identity = {
-  sessionKey: 'agent:main:test',
-  sessionId: 'session-1',
+  conversationId: 'agent:main:test',
+  transcriptId: 'session-1',
   runId: 'run-1',
 };
 
@@ -24,7 +24,7 @@ describe('EmbeddedRunRegistry', () => {
     const lease = registry.acquire(identity);
     const abort = vi.fn().mockResolvedValue(undefined);
 
-    await expect(registry.abortBySessionKey(identity.sessionKey)).resolves.toBe(true);
+    await expect(registry.abortByConversationId(identity.conversationId)).resolves.toBe(true);
     expect(lease.signal.aborted).toBe(true);
     await lease.attach({ steer: vi.fn() } as any, abort);
     expect(abort).toHaveBeenCalledOnce();
@@ -36,7 +36,7 @@ describe('EmbeddedRunRegistry', () => {
     const steer = vi.fn().mockResolvedValue(undefined);
     await lease.attach({ steer } as any, vi.fn());
 
-    await expect(registry.steerBySessionKey(identity.sessionKey, 'change course')).resolves.toBe(true);
+    await expect(registry.steerByConversationId(identity.conversationId, 'change course')).resolves.toBe(true);
     expect(steer).toHaveBeenCalledWith('change course');
     expect(registry.size()).toBe(1);
   });

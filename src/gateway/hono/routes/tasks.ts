@@ -54,7 +54,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
   const handoffs = new TaskHandoffService({
     getConfig: () => deps.service.currentConfig,
     sessionIndex: deps.service.sessionIndexInstance,
-    getActiveRunId: (sessionKey) => deps.service.getActiveWebchatRunId(sessionKey),
+    getActiveRunId: (conversationId) => deps.service.getActiveWebchatRunId(conversationId),
     abortRun: (runId) => deps.service.abortAgentRun(runId),
   });
 
@@ -179,7 +179,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
         conversation: result.conversation,
         ...(result.fromAgentId ? { fromAgentId: result.fromAgentId } : {}),
         toAgentId: result.toAgentId,
-        activeSessionKey: result.activeSessionKey,
+        activeConversationId: result.activeConversationId,
         assignmentEpoch: result.assignmentEpoch,
       });
     } catch (error) {
@@ -190,22 +190,22 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
 
   authenticated.post('/api/tasks/:id/inputs', deps.chatRateLimitMiddleware, async (c) => {
     const active = conversations.getActiveSession(c.req.param('id'));
-    if (!active?.sessionKey) {
+    if (!active?.conversationId) {
       return c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Task has no active conversation' } }, 404);
     }
-    const expectedSessionKey = c.req.header('X-Xopc-Expected-Session-Key')?.trim();
-    if (expectedSessionKey && expectedSessionKey !== active.sessionKey) {
+    const expectedConversationId = c.req.header('X-Xopc-Expected-Session-Key')?.trim();
+    if (expectedConversationId && expectedConversationId !== active.conversationId) {
       return c.json({ ok: false, error: { code: 'CONFLICT', message: 'Task executor changed; refresh the conversation' } }, 409);
     }
-    return submitSessionInput(c, deps, active.sessionKey);
+    return submitSessionInput(c, deps, active.conversationId);
   });
 
   authenticated.patch('/api/tasks/:id/conversation/config', taskRateLimit, async (c) => {
     const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
     if (!body) return c.json({ ok: false, error: 'Invalid configuration' }, 400);
     const active = conversations.getActiveSession(c.req.param('id'));
-    if (!active?.sessionKey) return c.json({ ok: false, error: 'Task has no active conversation' }, 404);
-    return patchChatModelConfig(c, deps.service, active.sessionKey, body);
+    if (!active?.conversationId) return c.json({ ok: false, error: 'Task has no active conversation' }, 404);
+    return patchChatModelConfig(c, deps.service, active.conversationId, body);
   });
 
   authenticated.get('/api/tasks/:id/conversation/history', async (c) => {
@@ -350,8 +350,8 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
         && (parsed.data.command.resolution as { kind?: string; decision?: string } | undefined)?.kind === 'task_approval'
         && (parsed.data.command.resolution as { decision?: string }).decision === 'deny')) {
       const activeRun = runs.getActiveRoot(c.req.param('id'));
-      if (activeRun?.sessionKey) {
-        const liveRunId = deps.service.getActiveWebchatRunId(activeRun.sessionKey);
+      if (activeRun?.conversationId) {
+        const liveRunId = deps.service.getActiveWebchatRunId(activeRun.conversationId);
         if (liveRunId) await deps.service.abortAgentRun(liveRunId);
       }
     }

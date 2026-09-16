@@ -87,7 +87,7 @@ function sessionTitle(s: SessionMetadata, unnamedLabel: string): string {
 }
 
 /** Active chat session key from `/chat/:key` (excludes `/chat/new`). */
-function chatSessionKeyFromPath(pathname: string): string | undefined {
+function chatConversationIdFromPath(pathname: string): string | undefined {
   const m = /^\/chat\/([^/]+)$/.exec(pathname);
   if (!m) return undefined;
   const seg = decodeURIComponent(m[1]);
@@ -517,7 +517,7 @@ function SidebarProjectSection({
   group,
   isExpanded,
   isCollapsed,
-  activeSessionKey,
+  activeConversationId,
   onToggleExpanded,
   onToggleCollapsed,
   onCreateProjectChat,
@@ -533,12 +533,12 @@ function SidebarProjectSection({
   sess,
   clipboard,
   defaultUnnamedTitle,
-  excludedSessionKeys,
+  excludedConversationIds,
 }: {
   group: ProjectSidebarGroup;
   isExpanded: boolean;
   isCollapsed: boolean;
-  activeSessionKey?: string;
+  activeConversationId?: string;
   onToggleExpanded: (projectId: string) => void;
   onToggleCollapsed: (projectId: string) => void;
   onCreateProjectChat: (project: Project) => void;
@@ -555,16 +555,16 @@ function SidebarProjectSection({
   clipboard: ReturnType<typeof messages>['clipboard'];
   defaultUnnamedTitle: string;
   /** Sessions rendered in the dedicated pinned section stay out of their project list. */
-  excludedSessionKeys?: ReadonlySet<string>;
+  excludedConversationIds?: ReadonlySet<string>;
 }) {
-  const unpinnedSessions = excludedSessionKeys
-    ? group.sessions.filter((session) => !excludedSessionKeys.has(session.key))
+  const unpinnedSessions = excludedConversationIds
+    ? group.sessions.filter((session) => !excludedConversationIds.has(session.key))
     : group.sessions;
   const visibleSessions = isExpanded ? unpinnedSessions : unpinnedSessions.slice(0, PROJECT_PREVIEW_LIMIT);
   const hasLoadedMore = unpinnedSessions.length > PROJECT_PREVIEW_LIMIT;
   const canToggleSessionLimit = group.sessionHasMore || hasLoadedMore;
   const showLess = isExpanded && !group.sessionHasMore && hasLoadedMore;
-  const hasActiveSession = unpinnedSessions.some((session) => session.key === activeSessionKey);
+  const hasActiveSession = unpinnedSessions.some((session) => session.key === activeConversationId);
 
   return (
     <section className="flex flex-col gap-0.5" aria-label={group.project.name}>
@@ -613,7 +613,7 @@ function SidebarProjectSection({
             <SidebarTaskRow
               key={session.key}
               session={session}
-              isActive={activeSessionKey === session.key}
+              isActive={activeConversationId === session.key}
               indented
               onNavigate={onNavigate}
               mutate={mutate}
@@ -662,7 +662,7 @@ function SidebarInboxSection({
   onToggleCollapsed,
   onCreateChat,
   onLoadMore,
-  activeSessionKey,
+  activeConversationId,
   onNavigate,
   mutate,
   onRequestRename,
@@ -671,7 +671,7 @@ function SidebarInboxSection({
   sess,
   clipboard,
   defaultUnnamedTitle,
-  excludedSessionKeys,
+  excludedConversationIds,
 }: {
   sessions: SessionMetadata[];
   hasMore: boolean;
@@ -680,7 +680,7 @@ function SidebarInboxSection({
   onToggleCollapsed: () => void;
   onCreateChat: () => void;
   onLoadMore: () => void;
-  activeSessionKey?: string;
+  activeConversationId?: string;
   onNavigate?: () => void;
   mutate: () => void;
   onRequestRename: (key: string) => void;
@@ -690,10 +690,10 @@ function SidebarInboxSection({
   clipboard: ReturnType<typeof messages>['clipboard'];
   defaultUnnamedTitle: string;
   /** Sessions rendered in the dedicated pinned section stay out of the inbox. */
-  excludedSessionKeys?: ReadonlySet<string>;
+  excludedConversationIds?: ReadonlySet<string>;
 }) {
-  const unpinnedSessions = excludedSessionKeys
-    ? sessions.filter((session) => !excludedSessionKeys.has(session.key))
+  const unpinnedSessions = excludedConversationIds
+    ? sessions.filter((session) => !excludedConversationIds.has(session.key))
     : sessions;
   if (unpinnedSessions.length === 0 && !hasMore) return null;
 
@@ -738,7 +738,7 @@ function SidebarInboxSection({
           <SidebarTaskRow
             key={session.key}
             session={session}
-            isActive={activeSessionKey === session.key}
+            isActive={activeConversationId === session.key}
             indented
             onNavigate={onNavigate}
             mutate={mutate}
@@ -773,7 +773,7 @@ function SidebarInboxSection({
 
 function SidebarPinnedSection({
   sessions,
-  activeSessionKey,
+  activeConversationId,
   onNavigate,
   mutate,
   onRequestRename,
@@ -784,7 +784,7 @@ function SidebarPinnedSection({
   defaultUnnamedTitle,
 }: {
   sessions: SessionMetadata[];
-  activeSessionKey?: string;
+  activeConversationId?: string;
   onNavigate?: () => void;
   mutate: () => void;
   onRequestRename: (key: string) => void;
@@ -806,7 +806,7 @@ function SidebarPinnedSection({
           <SidebarTaskRow
             key={session.key}
             session={session}
-            isActive={activeSessionKey === session.key}
+            isActive={activeConversationId === session.key}
             onNavigate={onNavigate}
             mutate={mutate}
             onRequestRename={onRequestRename}
@@ -834,7 +834,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
   const sess = m.sessions;
   const projectsText = m.projectsPage;
   const wd = m.chat.workingDirectory;
-  const token = useGatewayStore((s) => s.sessionKey);
+  const token = useGatewayStore((s) => s.conversationId);
   const discovery = useSessionDiscovery(gateway, token);
   const filterLabels = sb.sessionFilters;
   const listScrollRef = useRef<HTMLDivElement>(null);
@@ -858,7 +858,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
   }, [mutateChatAgents]);
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const activeSessionKey = chatSessionKeyFromPath(pathname);
+  const activeConversationId = chatConversationIdFromPath(pathname);
   const sidebarUpdatedAfter = useMemo(
     () => Date.now() - SIDEBAR_STALE_DAYS * 24 * 60 * 60 * 1000,
     [],
@@ -876,7 +876,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
   const [createProjectError, setCreateProjectError] = useState<string | null>(null);
   const [creatingProject, setCreatingProject] = useState(false);
   const [autoUnderstand, setAutoUnderstand] = useState(true);
-  const [includedSessionKey, setIncludedSessionKey] = useState<string | undefined>(() => activeSessionKey);
+  const [includedConversationId, setIncludedConversationId] = useState<string | undefined>(() => activeConversationId);
   const [projectsCollapsed, setProjectsCollapsed] = useState(false);
   const [inboxCollapsed, setInboxCollapsed] = useState(false);
   const [collapsedProjectIds, setCollapsedProjectIds] = useState<Set<string>>(() => new Set());
@@ -895,9 +895,9 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
     (pageIndex, previousPageData) => {
       if (!token) return null;
       if (previousPageData && !previousPageData.projects.hasMore) return null;
-      return ['sidebar-chat-list', token, includedSessionKey ?? '', pageIndex] as const;
+      return ['sidebar-chat-list', token, includedConversationId ?? '', pageIndex] as const;
     },
-    async ([, , includeSessionKey, pageIndex]: readonly [
+    async ([, , includeConversationId, pageIndex]: readonly [
       'sidebar-chat-list',
       string,
       string,
@@ -910,11 +910,11 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
         inboxLimit: pageIndex === 0 ? PAGE_SIZE : 1,
         inboxOffset: 0,
         staleDays: SIDEBAR_STALE_DAYS,
-        includeSessionKey: includeSessionKey || undefined,
+        includeConversationId: includeConversationId || undefined,
       });
     },
     {
-      // Changing includeSessionKey to reveal a freshly created chat must not
+      // Changing includeConversationId to reveal a freshly created chat must not
       // replace the visible list with the first-load skeleton.
       keepPreviousData: true,
       revalidateOnFocus: false,
@@ -975,7 +975,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
     }
     return out;
   }, [inboxItems, projectGroups]);
-  const visibleSessionKeys = useMemo(
+  const visibleConversationIds = useMemo(
     () => new Set(items.map((session) => session.key)),
     [items],
   );
@@ -991,7 +991,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
         .sort((a, b) => sessionUpdatedAtMs(b) - sessionUpdatedAtMs(a)),
     [items],
   );
-  const pinnedSessionKeys = useMemo(
+  const pinnedConversationIds = useMemo(
     () => new Set(pinnedSessions.map((session) => session.key)),
     [pinnedSessions],
   );
@@ -1037,7 +1037,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
     const onSessionTranscriptUpdated = (e: Event) => {
       if (shouldRefreshSidebarForTranscriptUpdate(
         (e as CustomEvent<unknown>).detail,
-        visibleSessionKeys,
+        visibleConversationIds,
       )) {
         refreshSidebar();
       }
@@ -1052,13 +1052,13 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
       window.removeEventListener('project-updated', onSessionListRefresh);
       window.removeEventListener('session-transcript-updated', onSessionTranscriptUpdated);
     };
-  }, [token, refreshSidebar, visibleSessionKeys]);
+  }, [token, refreshSidebar, visibleConversationIds]);
 
   useEffect(() => {
-    if (!token || !activeSessionKey || !data) return;
-    if (items.some((session) => session.key === activeSessionKey)) return;
-    setIncludedSessionKey((prev) => (prev === activeSessionKey ? prev : activeSessionKey));
-  }, [activeSessionKey, data, items, token]);
+    if (!token || !activeConversationId || !data) return;
+    if (items.some((session) => session.key === activeConversationId)) return;
+    setIncludedConversationId((prev) => (prev === activeConversationId ? prev : activeConversationId));
+  }, [activeConversationId, data, items, token]);
 
   const openRename = useCallback((key: string) => {
     const row = operationItems.find((s) => s.key === key);
@@ -1084,7 +1084,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
     try {
       await deleteSession(key);
       discovery.refresh();
-      if (activeSessionKey === key) {
+      if (activeConversationId === key) {
         navigate('/chat/new?projectScope=none', { state: { forceNewChat: true } });
       }
       refreshSidebar();
@@ -1180,7 +1180,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
           offset: group.sessions.length,
           updatedAfter: sidebarUpdatedAfter,
           includePinned: true,
-          includeSessionKey: activeSessionKey,
+          includeConversationId: activeConversationId,
         });
         setProjectSessionOverrides((prev) => {
           const existing = prev[projectId]?.sessions ?? group.sessions;
@@ -1209,7 +1209,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
         });
       }
     })();
-  }, [activeSessionKey, expandedProjects, loadingProjectIds, projectGroups, sidebarUpdatedAfter]);
+  }, [activeConversationId, expandedProjects, loadingProjectIds, projectGroups, sidebarUpdatedAfter]);
 
   const toggleProjectCollapsed = useCallback((projectId: string) => {
     setCollapsedProjectIds((prev) => {
@@ -1234,7 +1234,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
           offset: inboxItems.length,
           updatedAfter: sidebarUpdatedAfter,
           includePinned: true,
-          includeSessionKey: activeSessionKey,
+          includeConversationId: activeConversationId,
         });
         setInboxExtraItems((prev) => {
           const seen = new Set([...(firstInbox?.items ?? []), ...prev].map((session) => session.key));
@@ -1251,7 +1251,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
         setLoadingInboxMore(false);
       }
     })();
-  }, [activeSessionKey, firstInbox?.items, inboxHasMore, inboxItems.length, loadingInboxMore, sidebarUpdatedAfter]);
+  }, [activeConversationId, firstInbox?.items, inboxHasMore, inboxItems.length, loadingInboxMore, sidebarUpdatedAfter]);
 
   const createProjectChat = useCallback((project: Project) => {
     navigate(newChatHrefForProject(project.id), {
@@ -1325,7 +1325,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
         <div hidden={discovery.active || loadingFirst} className="px-2">
           <SidebarPinnedSection
             sessions={pinnedSessions}
-            activeSessionKey={activeSessionKey}
+            activeConversationId={activeConversationId}
             onNavigate={onNavigate}
             mutate={refreshSidebar}
             onRequestRename={openRename}
@@ -1387,7 +1387,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
                 {!discovery.items.length ? <p className="px-2 py-4 text-xs text-fg-muted">{filterLabels.empty}</p> : null}
                 <SessionDescriptionContext value={true}>
                   {discovery.items.map((session) => <SidebarTaskRow
-                    key={session.key} session={session} isActive={session.key === activeSessionKey}
+                    key={session.key} session={session} isActive={session.key === activeConversationId}
                     contextLabel={session.projectId ? discovery.projects?.find((project) => project.id === session.projectId)?.name ?? projectGroups.find((group) => group.project.id === session.projectId)?.project.name ?? session.projectId : filterLabels.unassigned}
                     onNavigate={onNavigate} mutate={() => { discovery.refresh(); refreshSidebar(); }}
                     onRequestRename={openRename} onRequestDelete={setDeleteKey}
@@ -1412,7 +1412,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
                           group={group}
                           isExpanded={expandedProjects.has(group.project.id)}
                           isCollapsed={collapsedProjectIds.has(group.project.id)}
-                          activeSessionKey={activeSessionKey}
+                          activeConversationId={activeConversationId}
                           onToggleExpanded={toggleProjectExpanded}
                           onToggleCollapsed={toggleProjectCollapsed}
                           onCreateProjectChat={(project) => void createProjectChat(project)}
@@ -1428,7 +1428,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
                           sess={sess}
                           clipboard={m.clipboard}
                           defaultUnnamedTitle={m.chat.newSession}
-                          excludedSessionKeys={pinnedSessionKeys}
+                          excludedConversationIds={pinnedConversationIds}
                         />
                       ))
                     : null}
@@ -1446,7 +1446,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
                   onNavigate?.();
                 }}
                 onLoadMore={loadMoreInbox}
-                activeSessionKey={activeSessionKey}
+                activeConversationId={activeConversationId}
                 onNavigate={onNavigate}
                 mutate={refreshSidebar}
                 onRequestRename={openRename}
@@ -1455,9 +1455,9 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
                 sess={sess}
                 clipboard={m.clipboard}
                 defaultUnnamedTitle={m.chat.newSession}
-                excludedSessionKeys={pinnedSessionKeys}
+                excludedConversationIds={pinnedConversationIds}
               />
-              {inboxItems.some((session) => resolveSessionIdentity(session).source === 'system') ? <details className="mt-3" open={inboxItems.some((session) => session.key === activeSessionKey && resolveSessionIdentity(session).source === 'system')}>
+              {inboxItems.some((session) => resolveSessionIdentity(session).source === 'system') ? <details className="mt-3" open={inboxItems.some((session) => session.key === activeConversationId && resolveSessionIdentity(session).source === 'system')}>
                 <summary className="cursor-pointer px-2 py-2 text-xs text-fg-muted">{language === 'zh' ? '系统活动' : 'System activity'}</summary>
               <SidebarInboxSection
                 sessions={inboxItems.filter((session) => resolveSessionIdentity(session).source === 'system')}
@@ -1470,7 +1470,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
                   onNavigate?.();
                 }}
                 onLoadMore={loadMoreInbox}
-                activeSessionKey={activeSessionKey}
+                activeConversationId={activeConversationId}
                 onNavigate={onNavigate}
                 mutate={refreshSidebar}
                 onRequestRename={openRename}
@@ -1479,7 +1479,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
                 sess={sess}
                 clipboard={m.clipboard}
                 defaultUnnamedTitle={m.chat.newSession}
-                excludedSessionKeys={pinnedSessionKeys}
+                excludedConversationIds={pinnedConversationIds}
               />
               </details> : null}
             </div>

@@ -26,31 +26,31 @@ describe('automatic read aloud', () => {
   it('does not replay history and reads a newly completed assistant reply once', () => {
     const history = findLatestAutoReadAloudCandidate({
       messages: [assistant('Old reply', 'old')],
-      sessionKey: 'main',
+      conversationId: 'main',
       language: 'en',
       title: 'AI response',
     });
     let tracker = advanceAutoReadAloud(undefined, {
-      sessionKey: 'main',
+      conversationId: 'main',
       enabled: true,
       streaming: false,
       candidate: history,
     }).tracker;
 
     tracker = advanceAutoReadAloud(tracker, {
-      sessionKey: 'main',
+      conversationId: 'main',
       enabled: true,
       streaming: true,
       candidate: history,
     }).tracker;
     const reply = findLatestAutoReadAloudCandidate({
       messages: [assistant('Old reply', 'old'), assistant('New reply', 'new')],
-      sessionKey: 'main',
+      conversationId: 'main',
       language: 'en',
       title: 'AI response',
     });
     const completed = advanceAutoReadAloud(tracker, {
-      sessionKey: 'main',
+      conversationId: 'main',
       enabled: true,
       streaming: false,
       candidate: reply,
@@ -59,7 +59,7 @@ describe('automatic read aloud', () => {
     expect(completed.input?.text).toBe('New reply');
     expect(completed.input?.source.preview).toBe('New reply');
     expect(advanceAutoReadAloud(completed.tracker, {
-      sessionKey: 'main',
+      conversationId: 'main',
       enabled: true,
       streaming: false,
       candidate: reply,
@@ -69,31 +69,31 @@ describe('automatic read aloud', () => {
   it('baselines replies received while disabled', () => {
     const oldCandidate = findLatestAutoReadAloudCandidate({
       messages: [assistant('Old reply', 'old')],
-      sessionKey: 'main',
+      conversationId: 'main',
       language: 'en',
       title: 'AI response',
     });
     let tracker: AutoReadAloudTracker = {
-      sessionKey: 'main',
+      conversationId: 'main',
       enabled: false,
       wasStreaming: true,
       lastSeenKey: oldCandidate?.key ?? null,
     };
     const newCandidate = findLatestAutoReadAloudCandidate({
       messages: [assistant('New reply', 'new')],
-      sessionKey: 'main',
+      conversationId: 'main',
       language: 'en',
       title: 'AI response',
     });
 
     tracker = advanceAutoReadAloud(tracker, {
-      sessionKey: 'main',
+      conversationId: 'main',
       enabled: false,
       streaming: false,
       candidate: newCandidate,
     }).tracker;
     const enabled = advanceAutoReadAloud(tracker, {
-      sessionKey: 'main',
+      conversationId: 'main',
       enabled: true,
       streaming: false,
       candidate: newCandidate,
@@ -105,26 +105,26 @@ describe('automatic read aloud', () => {
 
   it('reads the current reply when enabled before streaming completes', () => {
     let tracker: AutoReadAloudTracker = {
-      sessionKey: 'main',
+      conversationId: 'main',
       enabled: false,
       wasStreaming: true,
       lastSeenKey: null,
     };
     tracker = advanceAutoReadAloud(tracker, {
-      sessionKey: 'main',
+      conversationId: 'main',
       enabled: true,
       streaming: true,
       candidate: null,
     }).tracker;
     const reply = findLatestAutoReadAloudCandidate({
       messages: [assistant('Current reply', 'current')],
-      sessionKey: 'main',
+      conversationId: 'main',
       language: 'en',
       title: 'AI response',
     });
 
     const completed = advanceAutoReadAloud(tracker, {
-      sessionKey: 'main',
+      conversationId: 'main',
       enabled: true,
       streaming: false,
       candidate: reply,
@@ -136,19 +136,19 @@ describe('automatic read aloud', () => {
   it('waits for the persisted reply when streaming finishes before history updates', () => {
     const oldReply = findLatestAutoReadAloudCandidate({
       messages: [assistant('Old reply', 'old')],
-      sessionKey: 'main',
+      conversationId: 'main',
       language: 'en',
       title: 'AI response',
     });
     let tracker: AutoReadAloudTracker = {
-      sessionKey: 'main',
+      conversationId: 'main',
       enabled: true,
       wasStreaming: true,
       lastSeenKey: oldReply?.key ?? null,
     };
 
     const streamFinishedFirst = advanceAutoReadAloud(tracker, {
-      sessionKey: 'main',
+      conversationId: 'main',
       enabled: true,
       streaming: false,
       candidate: oldReply,
@@ -159,12 +159,12 @@ describe('automatic read aloud', () => {
 
     const persistedReply = findLatestAutoReadAloudCandidate({
       messages: [assistant('Old reply', 'old'), assistant('New reply', 'new')],
-      sessionKey: 'main',
+      conversationId: 'main',
       language: 'en',
       title: 'AI response',
     });
     const completed = advanceAutoReadAloud(tracker, {
-      sessionKey: 'main',
+      conversationId: 'main',
       enabled: true,
       streaming: false,
       candidate: persistedReply,
@@ -177,7 +177,7 @@ describe('automatic read aloud', () => {
   it('does not synthesize a second voice track for an audio reply', () => {
     const candidate = findLatestAutoReadAloudCandidate({
       messages: [assistant('Spoken reply', 'audio', true)],
-      sessionKey: 'main',
+      conversationId: 'main',
       language: 'en',
       title: 'AI response',
     });

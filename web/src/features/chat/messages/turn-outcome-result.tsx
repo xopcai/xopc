@@ -39,12 +39,12 @@ function attachmentFromDeliverable(deliverable: TurnOutcomeDeliverable): Message
 export function TurnOutcomeResult({
   outcome,
   authToken,
-  sessionKey,
+  conversationId,
   projectId,
 }: {
   outcome: TurnOutcome;
   authToken?: string;
-  sessionKey?: string | null;
+  conversationId?: string | null;
   projectId?: string | null;
 }) {
   const language = useLocaleStore((state) => state.language);
@@ -148,7 +148,7 @@ export function TurnOutcomeResult({
               <AttachmentRenderer
                 attachments={attachments}
                 authToken={authToken}
-                sessionKey={sessionKey}
+                conversationId={conversationId}
                 projectId={projectId}
                 layout="assistant"
               />

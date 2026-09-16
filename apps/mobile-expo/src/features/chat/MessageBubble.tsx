@@ -190,7 +190,7 @@ function renderAssistantContent(
   isStreaming: boolean,
   activity: AssistantActivityPresentation,
   showStreamingCursor: boolean,
-  sessionKey?: string | null,
+  conversationId?: string | null,
   allowTrailingMargin = false,
 ) {
   const nodes: React.ReactNode[] = [];
@@ -239,7 +239,7 @@ function renderAssistantContent(
               key={`text-${i}`}
               content={merged}
               allowTrailingMargin={allowTrailingMargin}
-              sessionKey={sessionKey}
+              conversationId={conversationId}
             />,
           );
         }
@@ -250,7 +250,7 @@ function renderAssistantContent(
       i++;
     } else if (block.type === 'audio') {
       if (!isStreaming) {
-        nodes.push(<AudioMessageBlock key={`audio-${i}`} audio={block} sessionKey={sessionKey} />);
+        nodes.push(<AudioMessageBlock key={`audio-${i}`} audio={block} conversationId={conversationId} />);
       }
       i++;
     } else if (block.type === 'review') {
@@ -276,7 +276,7 @@ export const MessageBubble = memo(function MessageBubble({
   isLatestAssistant = false,
   isStreaming = false,
   progress,
-  sessionKey,
+  conversationId,
   onUserMessageCopy,
   onUserMessageEdit,
   onUserMessageRetry,
@@ -290,7 +290,7 @@ export const MessageBubble = memo(function MessageBubble({
   isLatestAssistant?: boolean;
   isStreaming?: boolean;
   progress?: ProgressState | null;
-  sessionKey?: string;
+  conversationId?: string;
   onUserMessageCopy?: (text: string) => void;
   onUserMessageEdit?: (text: string) => void;
   onUserMessageRetry?: () => void;
@@ -384,7 +384,7 @@ export const MessageBubble = memo(function MessageBubble({
     () => (assistantFinalResultText ? buildSpeakableText(assistantFinalResultText) : ''),
     [assistantFinalResultText],
   );
-  const readAloudSourceId = `${sessionKey ?? 'chat'}:${message.id ?? message.timestamp ?? messageIndex}`;
+  const readAloudSourceId = `${conversationId ?? 'chat'}:${message.id ?? message.timestamp ?? messageIndex}`;
   const readAloudStatus = useReadAloudStore((state) => (
     state.source?.id === readAloudSourceId ? state.status : 'idle'
   ));
@@ -458,11 +458,11 @@ export const MessageBubble = memo(function MessageBubble({
               ? 'refresh'
               : 'volume-high',
         onPress: () => {
-          if (isLatestAssistant && sessionKey) enableContinuousReadAloud(sessionKey);
+          if (isLatestAssistant && conversationId) enableContinuousReadAloud(conversationId);
           requestReadAloud({
             source: {
               id: readAloudSourceId,
-              sessionKey,
+              conversationId,
               title: m.chat.messageReadAloudTitle,
               preview: speakableText,
             },
@@ -507,7 +507,7 @@ export const MessageBubble = memo(function MessageBubble({
     requestReadAloud,
     enableContinuousReadAloud,
     isLatestAssistant,
-    sessionKey,
+    conversationId,
     language,
     onAssistantCopy,
     onAssistantSaveToNote,
@@ -622,7 +622,7 @@ export const MessageBubble = memo(function MessageBubble({
                   <AudioMessageBlock
                     key={`user-audio-${i}`}
                     audio={block}
-                    sessionKey={sessionKey}
+                    conversationId={conversationId}
                     align="end"
                   />
                 ))}
@@ -640,7 +640,7 @@ export const MessageBubble = memo(function MessageBubble({
               </Text>
             ) : null}
             {userAttachments.length ? (
-              <AttachmentRenderer attachments={userAttachments} sessionKey={sessionKey} compact />
+              <AttachmentRenderer attachments={userAttachments} conversationId={conversationId} compact />
             ) : null}
           </View>
           <MessageActionsBar actions={userActions} align="right" />
@@ -662,7 +662,7 @@ export const MessageBubble = memo(function MessageBubble({
               isStreaming,
               assistantTurnView?.activity ?? { blocks: [], active: false, expandedByDefault: false },
               Boolean(assistantTurnView?.showStreamingCursor),
-              sessionKey,
+              conversationId,
               showAssistantDeliverables,
             )}
           </View>
@@ -670,7 +670,7 @@ export const MessageBubble = memo(function MessageBubble({
           {showAssistantDeliverables && assistantTurnView ? (
             <AssistantDeliverablesCard
               deliverables={assistantTurnView.deliverables}
-              sessionKey={sessionKey}
+              conversationId={conversationId}
             />
           ) : null}
 

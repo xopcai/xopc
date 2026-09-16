@@ -41,12 +41,12 @@ export function projectWorkspacePath(
  */
 export function effectiveWorkspacePathForSession(
   cfg: Config,
-  sessionKey: string,
+  conversationId: string,
   sessionAgentConfig: SessionAgentConfig | null | undefined,
   project?: Pick<Project, 'workspaceRoot'> | null,
 ): string {
-  const base = resolveEffectiveAgentProfileForSession(cfg, sessionKey).resolvedWorkspacePath;
-  const environment = getExecutionEnvironmentForSession(sessionKey);
+  const base = resolveEffectiveAgentProfileForSession(cfg, conversationId).resolvedWorkspacePath;
+  const environment = getExecutionEnvironmentForSession(conversationId);
   if (environment) return environment.rootPath;
   const projectWorkspace = projectWorkspacePath(project);
   if (projectWorkspace) {

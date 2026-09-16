@@ -166,14 +166,14 @@ export type ProjectActivityEvent = {
     kind: string;
     id?: string;
     name?: string;
-    sessionKey?: string;
+    conversationId?: string;
     agentId?: string;
   };
   initiator?: {
     kind: string;
     id?: string;
     name?: string;
-    sessionKey?: string;
+    conversationId?: string;
     agentId?: string;
   };
   source: {
@@ -374,8 +374,8 @@ export async function fetchProjectSessions(projectId: string): Promise<ProjectSe
   return res.sessions;
 }
 
-export async function summarizeProjectSession(projectId: string, sessionKey: string): Promise<void> {
-  await fetchJson(apiUrl(`/api/projects/${encodeURIComponent(projectId)}/sessions/${encodeURIComponent(sessionKey)}/summary-knowledge`), {
+export async function summarizeProjectSession(projectId: string, conversationId: string): Promise<void> {
+  await fetchJson(apiUrl(`/api/projects/${encodeURIComponent(projectId)}/sessions/${encodeURIComponent(conversationId)}/summary-knowledge`), {
     method: 'POST',
     body: JSON.stringify({}),
   });

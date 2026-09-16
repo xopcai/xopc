@@ -9,7 +9,7 @@ export type RuntimeStreamEvent = EmbeddedStreamEvent | { type: string; [key: str
 
 export interface ChatStreamMapperOptions {
   runId: string;
-  sessionKey: string;
+  conversationId: string;
   channel: string;
 }
 
@@ -420,7 +420,7 @@ export class ChatStreamMapper {
       if (items) {
         events.push(this.make('task_plan_updated', {
           messageId,
-          planId: `${this.opts.sessionKey}:todo`,
+          planId: `${this.opts.conversationId}:todo`,
           revision: nextTaskPlanRevision(),
           source: 'todo',
           scope: 'session',
@@ -450,7 +450,7 @@ export class ChatStreamMapper {
     return {
       type,
       runId: this.opts.runId,
-      sessionKey: this.opts.sessionKey,
+      conversationId: this.opts.conversationId,
       timestamp: Date.now(),
       payload,
     } as Extract<ChatStreamEvent, { type: T }>;

@@ -11,12 +11,12 @@ export const PPTX_PREVIEW_MAX_CHARS = 300_000;
 /** Build gateway read URL for a `media://` URI. */
 export function mediaUriToReadUrl(
   uri: string,
-  sessionKey?: string | null,
+  conversationId?: string | null,
   taskId?: string | null,
 ): string {
   const params = new URLSearchParams({ uri: uri.trim() });
-  if (sessionKey?.trim()) {
-    params.set('sessionKey', sessionKey.trim());
+  if (conversationId?.trim()) {
+    params.set('conversationId', conversationId.trim());
   }
   if (taskId?.trim()) {
     params.set('taskId', taskId.trim());

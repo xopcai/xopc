@@ -40,7 +40,7 @@ export function boundedWidgetLines(lines: string[]): string[] {
   return [...lines.slice(0, MAX_WIDGET_LINES), WIDGET_TRUNCATED_LINE];
 }
 
-export function createEmptySessionManager(cwd: string, sessionKey: string): TuiReadonlySessionManager {
+export function createEmptySessionManager(cwd: string, conversationId: string): TuiReadonlySessionManager {
   return {
     getEntries: () => [],
     getBranch: () => [],
@@ -50,7 +50,7 @@ export function createEmptySessionManager(cwd: string, sessionKey: string): TuiR
     getLabel: () => undefined,
     getHeader: () => null,
     getTree: () => [],
-    getSessionId: () => sessionKey,
+    getSessionId: () => conversationId,
     getSessionFile: () => undefined,
     getSessionDir: () => undefined,
     getSessionName: () => undefined,

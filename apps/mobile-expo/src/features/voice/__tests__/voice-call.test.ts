@@ -43,8 +43,8 @@ import { voiceCall } from '../voice-call';
 // Match the device runtime, not Node's more complete AbortSignal API.
 const requireReactNative = createRequire(import.meta.resolve('react-native/package.json'));
 const { AbortController: NativeAbortController } = requireReactNative('abort-controller/dist/abort-controller');
-const target = { gatewayId: 'gateway', sessionKey: 'chat', background: false, identity: 'original', name: 'Assistant' };
-const identity = { sessionId: 'original', name: 'Assistant' };
+const target = { gatewayId: 'gateway', conversationId: 'chat', background: false, identity: 'original', name: 'Assistant' };
+const identity = { transcriptId: 'original', name: 'Assistant' };
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -92,7 +92,7 @@ describe('mobile voice call entry with React Native AbortController', () => {
   it('checks identity and preflights when recovering a call', async () => {
     await voiceCall.start(target);
     await voiceCall.pause('NETWORK');
-    mocks.identity.mockResolvedValueOnce({ sessionId: 'changed' });
+    mocks.identity.mockResolvedValueOnce({ transcriptId: 'changed' });
     await voiceCall.resume();
     expect(mocks.identity).toHaveBeenCalledOnce();
     expect(mocks.identity).toHaveBeenCalledWith('gateway', 'chat', expect.anything(), 3_000);

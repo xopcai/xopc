@@ -41,7 +41,7 @@ function formatToolArgs(args: unknown): string {
 export async function renderStreamToTerminal(
   agent: AgentService,
   message: string,
-  sessionKey: string,
+  conversationId: string,
 ): Promise<string> {
   // Prepend envelope timestamp so the model knows the current date/time,
   // matching the behavior of channel pipelines and webchat gateway.
@@ -51,7 +51,7 @@ export async function renderStreamToTerminal(
     : prependEnvelopeTimestamp(message);
   const stream = agent.turnDispatcher.processDirectStreaming(
     stamped,
-    sessionKey,
+    conversationId,
     { type: 'system', source: 'cli' },
   );
 

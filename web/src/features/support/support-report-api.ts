@@ -6,7 +6,7 @@ export type SupportReportInput = {
   expected?: string;
   reproduction?: string;
   occurredAt?: string;
-  sessionKey?: string;
+  conversationId?: string;
   requestId?: string;
   clientContext?: {
     currentPage?: string;

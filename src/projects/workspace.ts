@@ -10,27 +10,27 @@ import type { Project } from './types.js';
 
 export function resolveProjectWorkspacePath(
   config: Config,
-  sessionKey: string,
+  conversationId: string,
   project: Project | null,
 ): string {
   const projectWorkspace = projectWorkspacePath(project);
   if (projectWorkspace) {
     return projectWorkspace;
   }
-  return resolveEffectiveAgentProfileForSession(config, sessionKey).resolvedWorkspacePath;
+  return resolveEffectiveAgentProfileForSession(config, conversationId).resolvedWorkspacePath;
 }
 
-export function getProjectForSession(sessionKey: string): Project | null {
+export function getProjectForSession(conversationId: string): Project | null {
   if (!isXopcDatabaseOpen()) {
     return null;
   }
-  const projectId = getSessionMetadata(sessionKey)?.projectId;
+  const projectId = getSessionMetadata(conversationId)?.projectId;
   if (!projectId) {
     return null;
   }
   return new ProjectStore().get(projectId);
 }
 
-export function getProjectWorkspacePathForSession(sessionKey: string): string | null {
-  return projectWorkspacePath(getProjectForSession(sessionKey));
+export function getProjectWorkspacePathForSession(conversationId: string): string | null {
+  return projectWorkspacePath(getProjectForSession(conversationId));
 }

@@ -18,8 +18,8 @@ describe('runGatewayAgent', () => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-gateway-agent-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
-    ensureSessionRecord('agent:main:webchat:default:direct:chat-thinking', stateDir);
-    ensureSessionRecord('agent:main:webchat:default:direct:chat-test', stateDir);
+    ensureSessionRecord("d3dcfc3b-3238-4056-8feb-c95014705996", stateDir, { agentId: "main" });
+    ensureSessionRecord("1f0d2f37-a857-4724-82d9-3eee13a09dff", stateDir, { agentId: "main" });
   });
 
   afterEach(() => {
@@ -29,7 +29,7 @@ describe('runGatewayAgent', () => {
   });
 
   it('coalesces thinking bursts before realtime publication', async () => {
-    const sessionKey = 'agent:main:webchat:default:direct:chat-thinking';
+    const conversationId = "d3dcfc3b-3238-4056-8feb-c95014705996";
     const broadcastEvents: Array<{ event?: { type?: string } }> = [];
     const deps = {
       config: {},
@@ -60,7 +60,7 @@ describe('runGatewayAgent', () => {
       runAbortControllers: new Map<string, AbortController>(),
       activeWebchatRunBySession: new Map<string, string>(),
       sessionIndex: {
-        getSessionMetadata: async () => ({ sessionId: 'session-thinking' }),
+        getSessionMetadata: async () => ({ transcriptId: 'session-thinking' }),
         updateSessionMetadata: async () => {},
         appendTranscriptCustomEntry: async () => {},
       },
@@ -78,7 +78,7 @@ describe('runGatewayAgent', () => {
       deps,
       'hello',
       'webchat',
-      sessionKey,
+      conversationId,
       { type: 'system', source: 'internal' },
     )) events.push(item);
 
@@ -89,8 +89,8 @@ describe('runGatewayAgent', () => {
   });
 
   it('does not replace or clear an existing active webchat run when this run fails', async () => {
-    const sessionKey = 'agent:main:webchat:default:direct:chat-test';
-    const activeWebchatRunBySession = new Map<string, string>([[sessionKey, 'existing-run']]);
+    const conversationId = "1f0d2f37-a857-4724-82d9-3eee13a09dff";
+    const activeWebchatRunBySession = new Map<string, string>([[conversationId, 'existing-run']]);
     const emitted: Array<{ type: string; payload: unknown }> = [];
 
     const deps = {
@@ -101,7 +101,7 @@ describe('runGatewayAgent', () => {
         beginInboundTurn: () => {},
         turnDispatcher: {
           processDirectStreaming: async function* () {
-            expect(activeWebchatRunBySession.get(sessionKey)).toBe('existing-run');
+            expect(activeWebchatRunBySession.get(conversationId)).toBe('existing-run');
             throw new Error('Agent is already processing');
           },
         },
@@ -118,7 +118,7 @@ describe('runGatewayAgent', () => {
       runAbortControllers: new Map<string, AbortController>(),
       activeWebchatRunBySession,
       sessionIndex: {
-        getSessionMetadata: async () => ({ sessionId: 'session-test' }),
+        getSessionMetadata: async () => ({ transcriptId: 'session-test' }),
         updateSessionMetadata: async () => {},
         appendTranscriptCustomEntry: async () => {},
       },
@@ -132,22 +132,22 @@ describe('runGatewayAgent', () => {
       deps,
       'hello',
       'webchat',
-      sessionKey,
+      conversationId,
       { type: 'system', source: 'internal' },
     )) {
       events.push(event);
     }
 
     expect(events.some((event) => event.type === 'error')).toBe(true);
-    expect(activeWebchatRunBySession.get(sessionKey)).toBe('existing-run');
+    expect(activeWebchatRunBySession.get(conversationId)).toBe('existing-run');
     expect(emitted.filter((event) => event.type === 'agent.run.ended')).toEqual([{
       type: 'agent.run.ended',
-      payload: expect.objectContaining({ sessionKey, status: 'error' }),
+      payload: expect.objectContaining({ conversationId, status: 'error' }),
     }]);
   });
 
   it('emits one global terminal event with safe session metadata', async () => {
-    const sessionKey = 'agent:main:webchat:default:direct:chat-test';
+    const conversationId = "1f0d2f37-a857-4724-82d9-3eee13a09dff";
     const emitted: Array<{ type: string; payload: unknown }> = [];
     const realtimeEvents: Array<{ topic: string; event: string; data: unknown }> = [];
     const deps = {
@@ -193,7 +193,7 @@ describe('runGatewayAgent', () => {
       runAbortControllers: new Map<string, AbortController>(),
       activeWebchatRunBySession: new Map<string, string>(),
       sessionIndex: {
-        getSessionMetadata: async () => ({ sessionId: 's1', name: 'Finish notifications' }),
+        getSessionMetadata: async () => ({ transcriptId: 's1', name: 'Finish notifications' }),
       },
       emit: (type: string, payload: unknown) => emitted.push({ type, payload }),
       publishRealtime: (topic: string, event: string, data: unknown) => {
@@ -206,7 +206,7 @@ describe('runGatewayAgent', () => {
       deps,
       'hello',
       'webchat',
-      sessionKey,
+      conversationId,
       { type: 'system', source: 'internal' },
       undefined,
       undefined,
@@ -220,30 +220,30 @@ describe('runGatewayAgent', () => {
       payload: expect.objectContaining({
         schemaVersion: 1,
         runId: 'run-terminal',
-        sessionKey,
+        conversationId,
         status: 'success',
         sessionTitle: 'Finish notifications',
         responsePreview: 'Here is the completed response with details. Second line.',
-        target: { kind: 'chat', sessionKey },
+        target: { kind: 'chat', conversationId },
       }),
     }]);
     expect(realtimeEvents.filter((event) => event.topic === 'sessions')).toEqual([
       {
         topic: 'sessions',
         event: 'run.started',
-        data: { sessionKey, runId: 'run-terminal' },
+        data: { conversationId, runId: 'run-terminal' },
       },
       {
         topic: 'sessions',
         event: 'run.completed',
-        data: { sessionKey, runId: 'run-terminal', status: 'success' },
+        data: { conversationId, runId: 'run-terminal', status: 'success' },
       },
     ]);
     expect(realtimeEvents.some((event) => event.event === 'turn_outcome')).toBe(true);
   });
 
   it('publishes a run-topic terminal when setup fails before active registration', async () => {
-    const sessionKey = 'agent:main:webchat:default:direct:chat-test';
+    const conversationId = "1f0d2f37-a857-4724-82d9-3eee13a09dff";
     const realtimeEvents: Array<{ topic: string; event: string; data: unknown }> = [];
     const completedTopics: string[] = [];
     const deps = {
@@ -261,7 +261,7 @@ describe('runGatewayAgent', () => {
       runAbortControllers: new Map<string, AbortController>(),
       activeWebchatRunBySession: new Map<string, string>(),
       sessionIndex: {
-        getSessionMetadata: async () => ({ sessionId: 's1' }),
+        getSessionMetadata: async () => ({ transcriptId: 's1' }),
         appendTranscriptCustomEntry: async () => {},
       },
       emit: () => {},
@@ -276,7 +276,7 @@ describe('runGatewayAgent', () => {
       deps,
       'hello',
       'webchat',
-      sessionKey,
+      conversationId,
       { type: 'system', source: 'internal' },
       undefined,
       undefined,
@@ -295,12 +295,12 @@ describe('runGatewayAgent', () => {
   });
 
   it.each(['throws', 'consumer_stops'])('reports cancellation and clears session ownership when %s', async (mode) => {
-    const sessionKey = 'agent:main:webchat:default:direct:chat-test';
+    const conversationId = "1f0d2f37-a857-4724-82d9-3eee13a09dff";
     const controller = new AbortController();
     const emitted: Array<{ type: string; payload: unknown }> = [];
     const deps = {
       config: {}, bus: {}, runAbortControllers: new Map(), activeWebchatRunBySession: new Map(),
-      sessionIndex: { getSessionMetadata: async () => ({ sessionId: 'session-test' }), updateSessionMetadata: async () => {} },
+      sessionIndex: { getSessionMetadata: async () => ({ transcriptId: 'session-test' }), updateSessionMetadata: async () => {} },
       agentService: {
         resolveUserTimezoneForSession: () => 'UTC', prepareInboundAttachments: async () => undefined,
         beginInboundTurn: () => {}, endInboundTurn: () => {}, getLastAssistantPlainText: () => '',
@@ -319,7 +319,7 @@ describe('runGatewayAgent', () => {
       publishRealtime: () => {}, completeRealtimeTopic: () => {},
     } as unknown as RunGatewayAgentDeps;
     const events = [];
-    for await (const event of runGatewayAgent(deps, 'hello', 'webchat', sessionKey, { type: 'channel', channel: 'webchat' }, undefined, undefined, { signal: controller.signal })) {
+    for await (const event of runGatewayAgent(deps, 'hello', 'webchat', conversationId, { type: 'channel', channel: 'webchat' }, undefined, undefined, { signal: controller.signal })) {
       events.push(event);
       if (mode === 'consumer_stops' && event.type === 'assistant_delta') { controller.abort(); break; }
     }

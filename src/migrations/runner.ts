@@ -4,13 +4,14 @@ import { dirname, join } from 'node:path';
 import { ConfigSchema, type Config } from '../config/schema.js';
 import { createLogger } from '../utils/logger.js';
 import { listRegisteredMigrations } from './registry.js';
+import { conversationRoutingConfigMigration } from './conversation-routing-config.js';
 import type { Migration, MigrationContext, MigrationLedger, MigrationPlanItem } from './types.js';
 
 const log = createLogger('Migrations');
 const MIGRATION_LEDGER_FILENAME = 'migrations.json';
 const CONFIG_BACKUP_COUNT = 10;
 
-export const CORE_MIGRATIONS: readonly Migration[] = [];
+export const CORE_MIGRATIONS: readonly Migration[] = [conversationRoutingConfigMigration];
 
 function listAllMigrations(): Migration[] {
   return [...CORE_MIGRATIONS, ...listRegisteredMigrations().map((entry) => entry.migration)];
@@ -49,14 +50,10 @@ function writeConfigWithBackupSync(configPath: string, config: Config): void {
   mkdirSync(dirname(configPath), { recursive: true });
   if (existsSync(configPath)) {
     rotateConfigBackupsSync(configPath);
-    try {
-      writeFileSync(`${configPath}.bak`, readFileSync(configPath, 'utf8'), 'utf8');
-    } catch {
-      // best-effort backup; atomic write below still proceeds
-    }
+    writeFileSync(`${configPath}.bak`, readFileSync(configPath, 'utf8'), { mode: 0o600 });
   }
   const tmp = `${configPath}.tmp-${process.pid}-${Date.now()}`;
-  writeFileSync(tmp, `${JSON.stringify(validated, null, 2)}\n`, 'utf8');
+  writeFileSync(tmp, `${JSON.stringify(validated, null, 2)}\n`, { mode: 0o600 });
   renameSync(tmp, configPath);
 }
 
@@ -183,6 +180,8 @@ export function applyMigrations(
 export function runBootstrapMigrationsSync(configPath: string, options: { stateDir?: string } = {}): MigrationApplyResult {
   if (!existsSync(configPath)) return { items: [], changed: false };
   const result = applyMigrations(configPath, { ...options, mode: 'auto-safe' });
+  const failedCutover = result.items.find(item => item.id === conversationRoutingConfigMigration.id && item.status === 'error');
+  if (failedCutover) throw new Error(failedCutover.message);
   if (result.changed) {
     log.info({ configPath, count: result.items.filter((item) => item.status === 'applied').length }, 'Applied bootstrap migrations');
   }

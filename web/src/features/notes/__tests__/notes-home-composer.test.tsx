@@ -25,7 +25,7 @@ function render() {
 
 describe('notes home composer', () => {
   it('retains selected files after resetting the native file input and hands them to the agent', async () => {
-    vi.mocked(prepareAgentNote).mockResolvedValue({ noteId: 'n1', sessionKey: 'chat' });
+    vi.mocked(prepareAgentNote).mockResolvedValue({ noteId: 'n1', conversationId: 'chat' });
     render();
     const file = new File(['source'], 'reference.txt', { type: 'text/plain' });
     const input = container.querySelector<HTMLInputElement>('input[type=file]')!;

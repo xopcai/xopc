@@ -9,7 +9,7 @@ import type { SessionManager } from '@/features/chat/session/session-manager';
 import { useChatSessionInit } from '@/features/chat/session/use-chat-session-init';
 import { resetNewChatHandoffInflightForTests } from '@/features/chat/session/new-chat-handoff';
 
-const sessionKey = 'agent:main:webchat:default:direct:chat_new';
+const conversationId = 'agent:main:webchat:default:direct:chat_new';
 
 describe('useChatSessionInit', () => {
   beforeEach(() => {
@@ -26,7 +26,7 @@ describe('useChatSessionInit', () => {
     const root = createRoot(container);
     const config = { model: 'test/model', thinkingLevel: 'medium', configVersion: 1 };
     const sessionManager = {
-      createSession: vi.fn(async () => ({ key: sessionKey, sessionId: 'new', messageCount: 0 })),
+      createSession: vi.fn(async () => ({ key: conversationId, sessionId: 'new', messageCount: 0 })),
       loadSessionAgentConfig: vi.fn(async () => config),
     } as unknown as SessionManager;
     const navigateToSession = vi.fn();
@@ -45,9 +45,9 @@ describe('useChatSessionInit', () => {
     try {
       await act(async () => root.render(<StrictMode><Harness /></StrictMode>));
       expect(sessionManager.createSession).toHaveBeenCalledOnce();
-      expect(adoptEmptySession).toHaveBeenCalledWith(sessionKey, null);
+      expect(adoptEmptySession).toHaveBeenCalledWith(conversationId, null);
       expect(navigateToSession).toHaveBeenCalledOnce();
-      expect(applyAgentConfig).toHaveBeenCalledWith(sessionKey, config);
+      expect(applyAgentConfig).toHaveBeenCalledWith(conversationId, config);
     } finally {
       await act(async () => root.unmount());
       container.remove();
@@ -82,7 +82,7 @@ describe('useChatSessionInit', () => {
         token: 'token',
         isNewRoute: false,
         forceNewChat: false,
-        decodedKey: sessionKey,
+        decodedKey: conversationId,
         locationKey: 'location-1',
         locationSearch: '',
         sessionMgrRef: { current: sessionManager },
@@ -93,7 +93,7 @@ describe('useChatSessionInit', () => {
       return null;
     }
 
-    useChatSessionStore.getState().setCommittedSnapshot(sessionKey, {
+    useChatSessionStore.getState().setCommittedSnapshot(conversationId, {
       messages: [],
       hasMore: false,
     });

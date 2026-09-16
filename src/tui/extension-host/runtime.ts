@@ -148,7 +148,7 @@ export interface CreateTuiExtensionRuntimeOptions {
   sendUserMessage?: TuiReplacedSessionContext['sendUserMessage'];
   sendMessage?: TuiReplacedSessionContext['sendMessage'];
   searchWorkspaceFiles?: (
-    sessionKey: string,
+    conversationId: string,
     query: string,
     options?: { limit?: number },
   ) => Promise<Array<{ name: string; path: string; isDirectory: boolean }>>;
@@ -231,7 +231,7 @@ export function createTuiExtensionRuntime(
     autocompleteProviders,
     slashCommands,
     new Set(opts.baseSlashCommands.map((command) => command.name)),
-    () => opts.getState().currentSessionKey,
+    () => opts.getState().currentConversationId,
     opts.cwd,
     opts.additionalSlashCommands ?? [],
   );
@@ -439,7 +439,7 @@ export function createTuiExtensionRuntime(
           assertActive();
           return opts.getSystemPromptOptions?.() ?? {
             cwd: opts.cwd,
-            sessionKey: opts.getState().currentSessionKey,
+            conversationId: opts.getState().currentConversationId,
             model: getTuiModelInfo(opts.getState()),
           };
         },
@@ -554,7 +554,7 @@ export function createTuiExtensionRuntime(
           get: () => {
             assertActive();
             return opts.getSessionManager?.() ??
-              createEmptySessionManager(opts.cwd, opts.getState().currentSessionKey);
+              createEmptySessionManager(opts.cwd, opts.getState().currentConversationId);
           },
         },
         modelRegistry: {
@@ -578,11 +578,11 @@ export function createTuiExtensionRuntime(
             return opts.cwd;
           },
         },
-        sessionKey: {
+        conversationId: {
           enumerable: true,
           get: () => {
             assertActive();
-            return opts.getState().currentSessionKey;
+            return opts.getState().currentConversationId;
           },
         },
       },
@@ -759,7 +759,7 @@ export function createTuiExtensionRuntime(
     createTuiExtensionHost({
       extensionId,
       surface,
-      getSessionKey: () => opts.getState().currentSessionKey,
+      getConversationId: () => opts.getState().currentConversationId,
       notify: (message, level) => notifyInChatLog(opts.chatLog, opts.tui, message, level),
       onTerminalInputAdded: (handler) => {
         const unregister = opts.addInputListener?.(handler);

@@ -43,17 +43,17 @@ export interface AgentOrchestratorConfig {
   /** Default workspace root when no per-session resolver is set. */
   workspaceRoot: string;
   /** Per-agent workspace root for attachments (optional; defaults to `workspaceRoot`). */
-  getWorkspaceRootForSession?: (sessionKey: string) => string;
+  getWorkspaceRootForSession?: (conversationId: string) => string;
   /** Agent home (`…/agents/<id>/`) for inbound/TTS files — keeps internal state out of the markdown workspace. */
-  getAgentInternalStorageRootForSession?: (sessionKey: string) => string;
+  getAgentInternalStorageRootForSession?: (conversationId: string) => string;
   /** Fire-and-forget after full session persist (e.g. LLM session title); not called from mid-turn snapshots. */
-  enqueueAutoTitle?: (sessionKey: string) => void;
+  enqueueAutoTitle?: (conversationId: string) => void;
   /** For per-turn timeout. */
   getConfig?: () => Config | undefined;
   /** Channel streaming: token/tool events from pi embedded session. */
-  onEmbeddedStreamEvent?: (sessionKey: string, event: EmbeddedStreamEvent) => void;
+  onEmbeddedStreamEvent?: (conversationId: string, event: EmbeddedStreamEvent) => void;
   /** Called after a successful embedded turn with assistant plain text. */
-  onEmbeddedTurnComplete?: (sessionKey: string, lastAssistantText?: string) => void;
+  onEmbeddedTurnComplete?: (conversationId: string, lastAssistantText?: string) => void;
 }
 
 export class AgentOrchestrator {
@@ -63,10 +63,10 @@ export class AgentOrchestrator {
   private sessionConfigStore: SessionConfigStore;
   private sessionHydrator: SessionHydrator;
   private getThinkingDefault: () => ThinkLevel | undefined;
-  private enqueueAutoTitle?: (sessionKey: string) => void;
+  private enqueueAutoTitle?: (conversationId: string) => void;
   private getConfig?: () => Config | undefined;
-  private onEmbeddedStreamEvent?: (sessionKey: string, event: EmbeddedStreamEvent) => void;
-  private onEmbeddedTurnComplete?: (sessionKey: string, lastAssistantText?: string) => void;
+  private onEmbeddedStreamEvent?: (conversationId: string, event: EmbeddedStreamEvent) => void;
+  private onEmbeddedTurnComplete?: (conversationId: string, lastAssistantText?: string) => void;
 
   constructor(config: AgentOrchestratorConfig) {
     this.agentManager = config.agentManager;
@@ -85,19 +85,16 @@ export class AgentOrchestrator {
    * Process a message through the agent orchestration pipeline
    */
   async process(msg: InboundMessage, context: SessionContext): Promise<void> {
-    const { sessionKey } = context;
+    const { conversationId } = context;
 
-    log.debug({ sessionKey }, 'Processing message through agent orchestrator');
+    log.debug({ conversationId }, 'Processing message through agent orchestrator');
 
-    await this.sessionHydrator.workspace(sessionKey);
+    await this.sessionHydrator.workspace(conversationId);
 
     // Run deterministic user-context maintenance without spending LLM tokens.
     if (
       typeof msg.content === 'string' &&
       (
-        sessionKey.startsWith('cron:') ||
-        sessionKey.includes(':cron:') ||
-        sessionKey.includes(':automation:') ||
         context.channel === 'cron' ||
         context.channel === 'automation'
       )
@@ -106,7 +103,7 @@ export class AgentOrchestrator {
       if (maintenanceJob) {
         const cfg = this.getConfig?.();
         if (!cfg) {
-          log.warn({ sessionKey }, 'Memory maintenance skipped: config unavailable');
+          log.warn({ conversationId }, 'Memory maintenance skipped: config unavailable');
           return;
         }
         const maintenance = cfg.userContext.userModel.maintenance;
@@ -121,43 +118,43 @@ export class AgentOrchestrator {
     }
 
     try {
-      await this.sessionHydrator.model(sessionKey);
+      await this.sessionHydrator.model(conversationId);
 
       const channelSystemPrompt =
         typeof context.metadata?.channelSystemPrompt === 'string'
           ? context.metadata.channelSystemPrompt.trim()
           : '';
       if (channelSystemPrompt) {
-        this.agentManager.getOrCreateAgent(sessionKey);
-        this.agentManager.applyTurnChannelSystemPrompt(sessionKey, channelSystemPrompt);
+        this.agentManager.getOrCreateAgent(conversationId);
+        this.agentManager.applyTurnChannelSystemPrompt(conversationId, channelSystemPrompt);
       }
 
       const thinkingDefault = this.getThinkingDefault();
       const thinkingLevel = await resolveEffectiveThinkingLevel(
         this.sessionConfigStore,
-        sessionKey,
+        conversationId,
         null,
         thinkingDefault,
       );
-      this.agentManager.setThinkingLevel(sessionKey, thinkingLevel);
+      this.agentManager.setThinkingLevel(conversationId, thinkingLevel);
 
       const persistedAttachments = await persistInboundAttachments(msg.attachments);
-      const modelRef = this.modelManager.getModelForSession(sessionKey);
+      const modelRef = this.modelManager.getModelForSession(conversationId);
       const userMessage = await buildTranscriptUserMessage({
         text: msg.content,
         prepared: persistedAttachments,
-        sessionKey,
+        conversationId,
         modelRef,
         config: this.getConfig?.(),
         agentManager: this.agentManager,
       });
-      setPendingTranscriptUserMessage(sessionKey, userMessage);
+      setPendingTranscriptUserMessage(conversationId, userMessage);
 
       const userPlainForMemory = extractAgentUserPlainText(userMessage);
       const turnId = randomUUID();
       const userContext = await this.agentManager.prepareUserTurnContext(
         userMessage,
-        sessionKey,
+        conversationId,
         turnId,
       );
       const userMessageForModel = userContext.modelMessage;
@@ -170,7 +167,7 @@ export class AgentOrchestrator {
       const turnResult = await (async () => {
         try {
           return await runEmbeddedTurnForSession({
-            sessionKey,
+            conversationId,
             runId: turnId,
             userMessage: userMessageForModel,
             llmImages: llmTurn.images,
@@ -179,27 +176,27 @@ export class AgentOrchestrator {
             modelManager: this.modelManager,
             thinkingOverride: thinkingLevel,
             getConfig: this.getConfig,
-            beforeTurn: () => this.agentManager.beginBackgroundReviewUserTurn(sessionKey),
-            onEvent: (event) => this.onEmbeddedStreamEvent?.(sessionKey, event),
+            beforeTurn: () => this.agentManager.beginBackgroundReviewUserTurn(conversationId),
+            onEvent: (event) => this.onEmbeddedStreamEvent?.(conversationId, event),
           });
         } finally {
-          clearPendingTranscriptUserMessage(sessionKey, userMessage);
+          clearPendingTranscriptUserMessage(conversationId, userMessage);
         }
       })();
 
-      const understandingReview = await this.agentManager.afterAgentTurn(sessionKey, userPlainForMemory, turnId);
+      const understandingReview = await this.agentManager.afterAgentTurn(conversationId, userPlainForMemory, turnId);
       void understandingReview;
-      this.agentManager.scheduleBackgroundReviewAfterUserTurn(sessionKey);
+      this.agentManager.scheduleBackgroundReviewAfterUserTurn(conversationId);
 
       if (turnResult.ok) {
-        this.onEmbeddedTurnComplete?.(sessionKey, turnResult.lastAssistantText);
-        this.enqueueAutoTitle?.(sessionKey);
+        this.onEmbeddedTurnComplete?.(conversationId, turnResult.lastAssistantText);
+        this.enqueueAutoTitle?.(conversationId);
       } else if (turnResult.errorMessage) {
-        log.warn({ sessionKey, errorMessage: turnResult.errorMessage }, 'Embedded inbound turn failed');
+        log.warn({ conversationId, errorMessage: turnResult.errorMessage }, 'Embedded inbound turn failed');
       }
 
     } catch (error) {
-      log.error({ err: error, sessionKey }, 'Error in agent orchestration');
+      log.error({ err: error, conversationId }, 'Error in agent orchestration');
       throw error;
     }
   }
@@ -214,8 +211,8 @@ export class AgentOrchestrator {
   /**
    * Check if agent is currently processing for a session
    */
-  isProcessing(sessionKey: string): boolean {
-    const agent = this.agentManager.getAgent(sessionKey);
+  isProcessing(conversationId: string): boolean {
+    const agent = this.agentManager.getAgent(conversationId);
     if (!agent) {
       return false;
     }
@@ -225,9 +222,9 @@ export class AgentOrchestrator {
   /**
    * Abort current agent execution for a session
    */
-  abort(sessionKey: string): void {
-    void abortEmbeddedRun(sessionKey);
-    const agent = this.agentManager.getAgent(sessionKey);
+  abort(conversationId: string): void {
+    void abortEmbeddedRun(conversationId);
+    const agent = this.agentManager.getAgent(conversationId);
     agent?.abort();
   }
 }

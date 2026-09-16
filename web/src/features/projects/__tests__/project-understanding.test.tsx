@@ -21,7 +21,7 @@ describe('quiet project understanding controls', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-    useGatewayStore.setState({ sessionKey: 'test' });
+    useGatewayStore.setState({ conversationId: 'test' });
     useLocaleStore.setState({ language: 'en' });
     container = document.createElement('div');
     document.body.appendChild(container);

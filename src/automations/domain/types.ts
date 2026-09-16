@@ -131,7 +131,7 @@ export interface AutomationRun {
   durationMs?: number;
   summary?: string;
   error?: string;
-  sessionKey?: string;
+  conversationId?: string;
   workflowRunId?: string;
   model?: string;
   deadlineAtMs?: number;
@@ -200,7 +200,7 @@ export interface AutomationMetrics {
 
 export interface PrepareAutomationAgentSessionInput {
   automationName?: string;
-  sessionKey: string;
+  conversationId: string;
   projectId?: string;
   agentId: string;
   peerId: string;
@@ -211,20 +211,20 @@ export interface PrepareAutomationAgentSessionInput {
 export interface AutomationDeps {
   agentService?: {
     sessionConfig?: {
-      applyAutomationWorkingDirectory?: (sessionKey: string, workingDirectory: string | undefined) => Promise<void>;
-      applyAutomationModelOverride?: (sessionKey: string, model: string | undefined) => Promise<boolean>;
+      applyAutomationWorkingDirectory?: (conversationId: string, workingDirectory: string | undefined) => Promise<void>;
+      applyAutomationModelOverride?: (conversationId: string, model: string | undefined) => Promise<boolean>;
     };
     turnDispatcher?: {
       processDirect: (
         message: string,
-        sessionKey: string,
+        conversationId: string,
         origin: TurnOrigin,
         attachments?: unknown[],
         thinking?: string,
         options?: { signal?: AbortSignal; runId?: string; deadlineAtMs?: number },
       ) => Promise<string>;
     };
-    getModelForSession?: (sessionKey: string) => string | undefined;
+    getModelForSession?: (conversationId: string) => string | undefined;
   };
   getDefaultAgentId?: () => string;
   prepareAgentSession?: (input: PrepareAutomationAgentSessionInput) => Promise<void>;
@@ -249,7 +249,7 @@ export interface AutomationActionTask {
   status: 'succeeded' | 'failed' | 'timeout' | 'cancelled';
   summary?: string;
   error?: string;
-  sessionKey?: string;
+  conversationId?: string;
   workflowRunId?: string;
   model?: string;
   deadlineAtMs?: number;

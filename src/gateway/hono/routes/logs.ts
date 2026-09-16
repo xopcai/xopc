@@ -29,8 +29,8 @@ export function registerLogsRoutes(authenticated: Hono, _deps: AuthenticatedRout
       q: query.q,
       module: query.module,
       requestId: query.requestId,
-      sessionKey: query.sessionKey,
-      sessionId: query.sessionId,
+      conversationId: query.conversationId,
+      transcriptId: query.transcriptId,
       limit: query.limit ? parseInt(query.limit) : 100,
       offset: query.offset ? parseInt(query.offset) : 0,
     });

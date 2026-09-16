@@ -7,7 +7,7 @@ import type { AgentService } from '../../agent/service.js';
 import type { Config } from '../../config/schema.js';
 import type { MessageBus } from '../../infra/bus/index.js';
 import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
-import { resolveWebchatSessionKey } from '../resolve-webchat-session-key.js';
+import { resolveWebchatConversationId } from '../resolve-webchat-session-key.js';
 import type { SessionIndex } from '../../session/index.js';
 import type { SessionMetadata } from '../../session/types.js';
 import {
@@ -15,7 +15,7 @@ import {
   inboundCorrelationMetadataFromAsyncLogContext,
   updateAsyncLogContext,
 } from '../../utils/logger.js';
-import { parseSessionKey } from '../../routing/session-key.js';
+import { getConversationRouting } from '../../routing/session-key.js';
 import { recordExplicitRelationshipFollowUp } from '../../user-context/relationship-continuity.js';
 import { resolveExecutionContext } from '../../tasks/execution-context.js';
 import { TaskRunCoordinator } from '../../tasks/task-run-coordinator.js';
@@ -94,39 +94,39 @@ export async function *runGatewayAgent(
   let terminalStatus: AgentStreamRunStatus = 'error';
   let runTopicCompleted = false;
 
-  let webchatSessionKey: string | undefined;
-  let webchatSessionId: string | undefined;
+  let webchatConversationId: string | undefined;
+  let webchatTranscriptId: string | undefined;
   let webchatMetadata: SessionMetadata | undefined;
   if (channel === 'webchat') {
-    const resolved = resolveWebchatSessionKey({ sessionKey: chatId });
+    const resolved = resolveWebchatConversationId({ conversationId: chatId });
     if (resolved.ok === false) {
       throw new Error(resolved.error);
     }
-    webchatSessionKey = resolved.sessionKey;
-    const meta = await sessionIndex.getSessionMetadata(webchatSessionKey);
+    webchatConversationId = resolved.conversationId;
+    const meta = await sessionIndex.getSessionMetadata(webchatConversationId);
     if (!meta) {
       throw new Error('Session not found; create sessions via POST /api/sessions');
     }
-    webchatSessionId = meta?.sessionId;
+    webchatTranscriptId = meta?.transcriptId;
     webchatMetadata = meta;
     runAbortControllers.set(runId, new AbortController());
   }
 
-  const streamSessionKey = webchatSessionKey ?? chatId;
-  if (webchatSessionKey) {
+  const streamConversationId = webchatConversationId ?? chatId;
+  if (webchatConversationId) {
     if (!webchatMetadata) throw new Error('Session metadata is unavailable');
-    const parsedSession = parseSessionKey(webchatSessionKey);
+    const parsedSession = getConversationRouting(webchatConversationId);
     if (!parsedSession) throw new Error('Resolved webchat session key is invalid');
-    if (!getConnectionResumeInput(webchatSessionKey, runId)) {
-      updateInteractionStateFromMessage({ sessionKey: webchatSessionKey, message });
+    if (!getConnectionResumeInput(webchatConversationId, runId)) {
+      updateInteractionStateFromMessage({ conversationId: webchatConversationId, message });
       recordExplicitRelationshipFollowUp({
-        sessionKey: webchatSessionKey,
+        conversationId: webchatConversationId,
         message,
       });
     }
     const executionContext = resolveExecutionContext({
       runId,
-      sessionKey: webchatSessionKey,
+      conversationId: webchatConversationId,
       channel,
       metadata: webchatMetadata,
     });
@@ -136,7 +136,7 @@ export async function *runGatewayAgent(
       fallbackObjective: message,
     });
   }
-  const mapper = new ChatStreamMapper({ runId, sessionKey: streamSessionKey, channel });
+  const mapper = new ChatStreamMapper({ runId, conversationId: streamConversationId, channel });
   let registeredActiveWebchatRun = false;
   const captureTaskEvent = (event: ChatStreamEvent): void => {
     if (event.type === 'task_plan_updated') {
@@ -168,18 +168,18 @@ export async function *runGatewayAgent(
   try {
     yield* emitAndYield(mapper.start());
 
-    if (channel === 'webchat' && webchatSessionKey) {
-      const sessionKey = webchatSessionKey;
+    if (channel === 'webchat' && webchatConversationId) {
+      const conversationId = webchatConversationId;
       updateAsyncLogContext({
-        sessionKey,
-        ...(webchatSessionId ? { sessionId: webchatSessionId } : {}),
+        conversationId,
+        ...(webchatTranscriptId ? { transcriptId: webchatTranscriptId } : {}),
       });
 
-      const timezone = agentService.resolveUserTimezoneForSession(sessionKey);
+      const timezone = agentService.resolveUserTimezoneForSession(conversationId);
       const stampedMessage = message.trimStart().startsWith('/')
         ? message
         : prependEnvelopeTimestamp(message, timezone);
-      const prepared = await agentService.prepareInboundAttachments(sessionKey, cappedAttachments);
+      const prepared = await agentService.prepareInboundAttachments(conversationId, cappedAttachments);
 
       const runAbort = runAbortControllers.get(runId);
       if (!runAbort) {
@@ -189,17 +189,17 @@ export async function *runGatewayAgent(
         ? AbortSignal.any([runOptions.signal, runAbort.signal])
         : runAbort.signal;
 
-      agentService.beginInboundTurn(sessionKey);
-      if (!activeWebchatRunBySession.has(sessionKey)) {
-        activeWebchatRunBySession.set(sessionKey, runId);
+      agentService.beginInboundTurn(conversationId);
+      if (!activeWebchatRunBySession.has(conversationId)) {
+        activeWebchatRunBySession.set(conversationId, runId);
         registeredActiveWebchatRun = true;
-        publishRealtime('sessions', 'run.started', { sessionKey, runId });
+        publishRealtime('sessions', 'run.started', { conversationId, runId });
       }
       let streamError: string | undefined;
       try {
         const eventStream = agentService.turnDispatcher.processDirectStreaming(
           stampedMessage,
-          sessionKey,
+          conversationId,
           origin,
           prepared,
           thinking,
@@ -215,8 +215,8 @@ export async function *runGatewayAgent(
           yield* emitAndYield([event]);
         }
 
-        const connectionSuspended = isConnectionSuspended(sessionKey, runId);
-        const clarificationSuspended = isClarificationSuspended(sessionKey, runId);
+        const connectionSuspended = isConnectionSuspended(conversationId, runId);
+        const clarificationSuspended = isClarificationSuspended(conversationId, runId);
         const suspended = connectionSuspended || clarificationSuspended;
         const endStatus = mergedSignal.aborted ? 'cancelled' : suspended ? 'suspended' : 'success';
         const endSummary = mergedSignal.aborted
@@ -252,7 +252,7 @@ export async function *runGatewayAgent(
             err: error,
             errorMessage: em,
             phase: 'gateway.agent_run',
-            sessionKey,
+            conversationId,
             runId,
             channel: 'webchat',
           },
@@ -274,18 +274,18 @@ export async function *runGatewayAgent(
           taskRunStatus = 'cancelled';
           taskRunSummary = 'Interrupted';
         }
-        if (registeredActiveWebchatRun && activeWebchatRunBySession.get(sessionKey) === runId) {
-          activeWebchatRunBySession.delete(sessionKey);
-          publishRealtime('sessions', 'run.completed', { sessionKey, runId, status: terminalStatus });
+        if (registeredActiveWebchatRun && activeWebchatRunBySession.get(conversationId) === runId) {
+          activeWebchatRunBySession.delete(conversationId);
+          publishRealtime('sessions', 'run.completed', { conversationId, runId, status: terminalStatus });
         }
         runAbortControllers.delete(runId);
-        const assistantPlainText = agentService.getLastAssistantPlainText(sessionKey);
-        const reviewHint = agentService.takeTaskReviewStreamHint(sessionKey);
+        const assistantPlainText = agentService.getLastAssistantPlainText(conversationId);
+        const reviewHint = agentService.takeTaskReviewStreamHint(conversationId);
         try {
           await agentService.outboundCoordinator.emitSessionTurnComplete({
-            sessionKey,
+            conversationId,
             channel: 'webchat',
-            chatId: sessionKey,
+            chatId: conversationId,
             inboundUserText: message,
             assistantPlainText,
             aborted: mergedSignal.aborted,
@@ -295,11 +295,11 @@ export async function *runGatewayAgent(
           });
         } catch (completionErr) {
           log.warn(
-            { err: completionErr, sessionKey },
+            { err: completionErr, conversationId },
             `Session turn complete failed: ${completionErr instanceof Error ? completionErr.message : String(completionErr)}`,
           );
         }
-        agentService.endInboundTurn(sessionKey);
+        agentService.endInboundTurn(conversationId);
       }
     }
 
@@ -317,14 +317,14 @@ export async function *runGatewayAgent(
       {
         type: 'assistant_message_start',
         runId,
-        sessionKey: streamSessionKey,
+        conversationId: streamConversationId,
         timestamp: Date.now(),
         payload: { messageId },
       },
       {
         type: 'assistant_delta',
         runId,
-        sessionKey: streamSessionKey,
+        conversationId: streamConversationId,
         timestamp: Date.now(),
         payload: { messageId, delta: 'Processing...\n' },
       },
@@ -334,14 +334,14 @@ export async function *runGatewayAgent(
       {
         type: 'assistant_delta',
         runId,
-        sessionKey: streamSessionKey,
+        conversationId: streamConversationId,
         timestamp: Date.now(),
         payload: { messageId, delta: 'Done\n' },
       },
       {
         type: 'assistant_message_end',
         runId,
-        sessionKey: streamSessionKey,
+        conversationId: streamConversationId,
         timestamp: Date.now(),
         payload: { messageId, presentation: 'answer' },
       },
@@ -386,8 +386,8 @@ export async function *runGatewayAgent(
         log.warn({ err, runId }, `Task run finalization failed: ${errorMessage}`);
       }
     }
-    if (webchatSessionKey) {
-      const metaAfter = await sessionIndex.getSessionMetadata(webchatSessionKey).catch(() => undefined);
+    if (webchatConversationId) {
+      const metaAfter = await sessionIndex.getSessionMetadata(webchatConversationId).catch(() => undefined);
       const normalizedResponse = terminalStatus === 'success'
         ? mapper.getLastAssistantText().replace(/\s+/g, ' ').trim()
         : '';
@@ -396,15 +396,15 @@ export async function *runGatewayAgent(
         ? `${responseCharacters.slice(0, 179).join('')}…`
         : normalizedResponse;
       if (metaAfter?.name) {
-        emit('session.updated', { key: webchatSessionKey, name: metaAfter.name });
+        emit('session.updated', { key: webchatConversationId, name: metaAfter.name });
       }
       const endedEvent: AgentRunEndedEvent = {
         schemaVersion: 1,
         runId,
-        sessionKey: webchatSessionKey,
+        conversationId: webchatConversationId,
         status: terminalStatus,
         completedAtMs: Date.now(),
-        target: { kind: 'chat', sessionKey: webchatSessionKey },
+        target: { kind: 'chat', conversationId: webchatConversationId },
         source: 'webchat',
         ...(metaAfter?.name?.trim() ? { sessionTitle: metaAfter.name.trim().slice(0, 100) } : {}),
         ...(responsePreview ? { responsePreview } : {}),

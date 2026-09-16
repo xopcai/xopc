@@ -92,7 +92,7 @@ function installRequestLimitListener(
     deps.lifecycleManager
       .emit(
         'llm_request',
-        context.sessionKey,
+        context.conversationId,
         { requestNumber: result.count, maxRequests: result.limit },
         context,
       )
@@ -102,7 +102,7 @@ function installRequestLimitListener(
           {
             err,
             errorMessage: em,
-            sessionKey: context.sessionKey,
+            conversationId: context.conversationId,
             requestNumber: result.count,
             maxRequests: result.limit,
           },
@@ -112,7 +112,7 @@ function installRequestLimitListener(
 
     if (result.shouldStop) {
       log.error(
-        { count: result.count, limit: result.limit, sessionKey: context.sessionKey },
+        { count: result.count, limit: result.limit, conversationId: context.conversationId },
         `Request limit reached (${result.count}/${result.limit}) for session`,
       );
     }
@@ -136,14 +136,14 @@ function installLifecycleHookListener(bus: SessionEventBus, lifecycleManager: Li
     lifecycleManager
       .emit(
         'llm_response',
-        context.sessionKey,
+        context.conversationId,
         { response: text, usage: (e.message as { usage?: unknown }).usage },
         context,
       )
       .catch((err) => {
         const em = err instanceof Error ? err.message : String(err);
         log.warn(
-          { err, errorMessage: em, sessionKey: context.sessionKey, responseChars: text.length },
+          { err, errorMessage: em, conversationId: context.conversationId, responseChars: text.length },
           `Lifecycle emit llm_response failed: ${em}`,
         );
       });
@@ -154,7 +154,7 @@ function installLifecycleHookListener(bus: SessionEventBus, lifecycleManager: Li
     lifecycleManager
       .emit(
         'tool_call_start',
-        context.sessionKey,
+        context.conversationId,
         {
           toolName: e.toolName,
           arguments: e.args || {},
@@ -166,7 +166,7 @@ function installLifecycleHookListener(bus: SessionEventBus, lifecycleManager: Li
       .catch((err) => {
         const em = err instanceof Error ? err.message : String(err);
         log.warn(
-          { err, errorMessage: em, sessionKey: context.sessionKey, tool: e.toolName },
+          { err, errorMessage: em, conversationId: context.conversationId, tool: e.toolName },
           `Lifecycle emit tool_call_start failed: ${em}`,
         );
       });
@@ -178,7 +178,7 @@ function installLifecycleHookListener(bus: SessionEventBus, lifecycleManager: Li
     lifecycleManager
       .emit(
         'tool_call_end',
-        context.sessionKey,
+        context.conversationId,
         {
           toolName: e.toolName,
           success: !e.isError,
@@ -191,7 +191,7 @@ function installLifecycleHookListener(bus: SessionEventBus, lifecycleManager: Li
       .catch((err) => {
         const em = err instanceof Error ? err.message : String(err);
         log.warn(
-          { err, errorMessage: em, sessionKey: context.sessionKey, tool: e.toolName },
+          { err, errorMessage: em, conversationId: context.conversationId, tool: e.toolName },
           `Lifecycle hook tool_call_end failed: ${em}`,
         );
       });
@@ -211,21 +211,21 @@ function installSystemReminderListener(bus: SessionEventBus, systemReminder: Sys
 function installToolChainListener(bus: SessionEventBus, toolChainTracker: ToolChainTracker): void {
   bus.on('turn_start', (_event, context) => {
     // One chain per LLM turn (pi-agent emits turn_start each round; turn_end clears the chain).
-    toolChainTracker.startChain(context.sessionKey);
+    toolChainTracker.startChain(context.conversationId);
   });
   bus.on('tool_execution_start', (event, context) => {
     const e = event as Extract<AgentEvent, { type: 'tool_execution_start' }>;
-    toolChainTracker.recordCall(context.sessionKey, e.toolName, e.args || {}, 0);
+    toolChainTracker.recordCall(context.conversationId, e.toolName, e.args || {}, 0);
   });
   bus.on('tool_execution_end', (event, context) => {
     const e = event as Extract<AgentEvent, { type: 'tool_execution_end' }>;
     const durationMs = (e as { durationMs?: number }).durationMs || 0;
-    const chain = toolChainTracker.getCurrentChain(context.sessionKey);
+    const chain = toolChainTracker.getCurrentChain(context.conversationId);
     if (!chain) return;
     const lastNode = chain.nodes[chain.nodes.length - 1];
     if (lastNode && lastNode.toolName === e.toolName) {
       toolChainTracker.recordResult(
-        context.sessionKey,
+        context.conversationId,
         lastNode.id,
         e.result,
         e.isError ? 'Tool execution failed' : undefined,
@@ -234,7 +234,7 @@ function installToolChainListener(bus: SessionEventBus, toolChainTracker: ToolCh
     }
   });
   bus.on('turn_end', (_event, context) => {
-    toolChainTracker.endChain(context.sessionKey);
+    toolChainTracker.endChain(context.conversationId);
   });
 }
 

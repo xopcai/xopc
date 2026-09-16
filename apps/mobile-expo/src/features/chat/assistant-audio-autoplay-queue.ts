@@ -2,7 +2,7 @@ export type AssistantAudioAutoplayItem = {
   key: string;
   uri: string;
   mimeType?: string;
-  sessionKey: string;
+  conversationId: string;
 };
 
 export type AssistantAudioAutoplayResult = 'completed' | 'interrupted';

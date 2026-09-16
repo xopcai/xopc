@@ -32,11 +32,11 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     const attempt = ++startAttempt.current;
     voice.cancelVoiceInput();
     setTarget(next);
-    void voice.startVoiceConversation(next.sessionKey).finally(() => { if (attempt === startAttempt.current) starting.current = false; });
+    void voice.startVoiceConversation(next.conversationId).finally(() => { if (attempt === startAttempt.current) starting.current = false; });
   };
   const context = {
     active,
-    sessionKey: active ? target?.sessionKey ?? null : null,
+    conversationId: active ? target?.conversationId ?? null : null,
     open: (next: VoiceCallTarget) => {
       start(next);
       setExpanded(true);
@@ -58,7 +58,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     setExpanded(false);
     setMore(false);
   };
-  const settingsPath = `/settings/capabilities/voice?returnTo=${encodeURIComponent(`/chat/${encodeURIComponent(target?.sessionKey ?? '')}`)}`;
+  const settingsPath = `/settings/capabilities/voice?returnTo=${encodeURIComponent(`/chat/${encodeURIComponent(target?.conversationId ?? '')}`)}`;
   const settingsLink = <Link to={settingsPath} onClick={() => setExpanded(false)} className="text-sm text-accent-fg hover:underline">{m.callSettings}</Link>;
 
   return <VoiceCallContext.Provider value={context}>
@@ -89,7 +89,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
               {voice.responseText ? <div><span className="mb-1 block text-xs text-fg-subtle">{target?.name}</span><MarkdownView content={voice.responseText} compact codeCopy={false} renderMermaid={false} /></div> : null}
             </div> : null}
             {target?.taskId ? <TaskSessionBanner taskId={target.taskId} /> : null}
-            {connected && target ? <VoiceCallWork key={target.sessionKey} voice={voice} sessionKey={target.sessionKey} m={m} /> : null}
+            {connected && target ? <VoiceCallWork key={target.conversationId} voice={voice} conversationId={target.conversationId} m={m} /> : null}
           </div>
           <footer className="flex shrink-0 flex-wrap items-center justify-center gap-2 border-t border-edge px-3 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-3">
             {active ? <>

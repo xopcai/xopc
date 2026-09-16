@@ -24,13 +24,13 @@ export interface ExecutionContextPlan {
 
 export interface ExecutionContextCoordinatorOptions {
   getConfig: () => Config | undefined;
-  getAccessForSession: (sessionKey: string) => {
+  getAccessForSession: (conversationId: string) => {
     userModel: boolean;
     knowledge: boolean;
     knowledgeSources: readonly KnowledgeSource[];
   };
-  getWorkspaceIdForSession: (sessionKey: string) => string;
-  getProjectIdForSession: (sessionKey: string) => string | undefined;
+  getWorkspaceIdForSession: (conversationId: string) => string;
+  getProjectIdForSession: (conversationId: string) => string | undefined;
 }
 
 export class ExecutionContextCoordinator {
@@ -38,21 +38,21 @@ export class ExecutionContextCoordinator {
 
   constructor(private readonly options: ExecutionContextCoordinatorOptions) {}
 
-  forgetSession(sessionKey: string): void {
-    this.currentBySession.delete(sessionKey);
+  forgetSession(conversationId: string): void {
+    this.currentBySession.delete(conversationId);
   }
 
   clear(): void {
     this.currentBySession.clear();
   }
 
-  getCurrent(sessionKey: string): ExecutionContext | undefined {
-    return this.currentBySession.get(sessionKey);
+  getCurrent(conversationId: string): ExecutionContext | undefined {
+    return this.currentBySession.get(conversationId);
   }
 
   async prepare(
     userMessage: AgentMessage,
-    sessionKey: string,
+    conversationId: string,
     turnId: string,
   ): Promise<ExecutionContextPlan> {
     const empty = (): ExecutionContextPlan => ({
@@ -63,24 +63,24 @@ export class ExecutionContextCoordinator {
       contextItemCount: 0,
     });
     const config = this.options.getConfig();
-    const access = this.options.getAccessForSession(sessionKey);
+    const access = this.options.getAccessForSession(conversationId);
     if (!config || !config.userContext.contextPlanning.enabled
       || (!access.userModel && !access.knowledge)) return empty();
 
-    const task = assembleTaskContext(sessionKey, extractAgentUserPlainText(userMessage));
+    const task = assembleTaskContext(conversationId, extractAgentUserPlainText(userMessage));
     const context = buildExecutionContext({
       query: task.retrievalQuery,
-      agentId: extractProfileAgentId(sessionKey, config),
-      workspaceId: this.options.getWorkspaceIdForSession(sessionKey),
-      projectId: this.options.getProjectIdForSession(sessionKey),
-      sessionId: sessionKey,
+      agentId: extractProfileAgentId(conversationId, config),
+      workspaceId: this.options.getWorkspaceIdForSession(conversationId),
+      projectId: this.options.getProjectIdForSession(conversationId),
+      conversationId: conversationId,
       maxAssertions: Math.min(config.userContext.contextPlanning.maxAssertions, task.allocation.maxResults),
       maxKnowledge: Math.min(config.userContext.contextPlanning.maxKnowledge, task.allocation.maxResults),
       includeUserModel: access.userModel,
       includeKnowledge: access.knowledge,
       knowledgeSources: access.knowledgeSources,
     });
-    this.currentBySession.set(sessionKey, context);
+    this.currentBySession.set(conversationId, context);
     const maxChars = Math.min(config.userContext.contextPlanning.maxChars, task.allocation.maxChars);
     const fitted = fitExecutionContextToChars(context, maxChars);
     const rendered = fitted.rendered;
@@ -88,7 +88,7 @@ export class ExecutionContextCoordinator {
       + fitted.context.goals.length + fitted.context.priorities.length + fitted.context.knowledge.length;
     recordExecutionContext(context, {
       turnId,
-      sessionId: sessionKey,
+      conversationId: conversationId,
       budget: {
         maxAssertions: Math.min(config.userContext.contextPlanning.maxAssertions, task.allocation.maxResults),
         maxKnowledge: Math.min(config.userContext.contextPlanning.maxKnowledge, task.allocation.maxResults),

@@ -1,8 +1,8 @@
 import type { AgentSession } from '@earendil-works/pi-coding-agent';
 
 export type EmbeddedRunIdentity = {
-  sessionKey: string;
-  sessionId: string;
+  conversationId: string;
+  transcriptId: string;
   runId: string;
 };
 
@@ -17,8 +17,8 @@ type PendingEmbeddedRun = EmbeddedRunIdentity & {
 };
 
 export class EmbeddedRunConflictError extends Error {
-  constructor(readonly sessionKey: string, readonly activeRunId: string) {
-    super(`Session '${sessionKey}' already has active embedded run '${activeRunId}'`);
+  constructor(readonly conversationId: string, readonly activeRunId: string) {
+    super(`Session '${conversationId}' already has active embedded run '${activeRunId}'`);
     this.name = 'EmbeddedRunConflictError';
   }
 }
@@ -31,14 +31,14 @@ export type EmbeddedRunLease = {
 
 /** Owns one process-local execution lease per session while leaving steer/abort on the control plane. */
 export class EmbeddedRunRegistry {
-  private readonly bySessionKey = new Map<string, PendingEmbeddedRun>();
+  private readonly byConversationId = new Map<string, PendingEmbeddedRun>();
 
   acquire(identity: EmbeddedRunIdentity): EmbeddedRunLease {
-    const active = this.bySessionKey.get(identity.sessionKey);
-    if (active) throw new EmbeddedRunConflictError(identity.sessionKey, active.runId);
+    const active = this.byConversationId.get(identity.conversationId);
+    if (active) throw new EmbeddedRunConflictError(identity.conversationId, active.runId);
 
     const entry: PendingEmbeddedRun = { ...identity, abortController: new AbortController() };
-    this.bySessionKey.set(identity.sessionKey, entry);
+    this.byConversationId.set(identity.conversationId, entry);
 
     return {
       signal: entry.abortController.signal,
@@ -47,27 +47,27 @@ export class EmbeddedRunRegistry {
         if (entry.abortController.signal.aborted) await abort();
       },
       release: () => {
-        if (this.bySessionKey.get(identity.sessionKey) === entry) {
-          this.bySessionKey.delete(identity.sessionKey);
+        if (this.byConversationId.get(identity.conversationId) === entry) {
+          this.byConversationId.delete(identity.conversationId);
         }
       },
     };
   }
 
-  getBySessionKey(sessionKey: string): EmbeddedRunHandle | undefined {
-    return this.bySessionKey.get(sessionKey)?.handle;
+  getByConversationId(conversationId: string): EmbeddedRunHandle | undefined {
+    return this.byConversationId.get(conversationId)?.handle;
   }
 
-  async abortBySessionKey(sessionKey: string): Promise<boolean> {
-    const entry = this.bySessionKey.get(sessionKey);
+  async abortByConversationId(conversationId: string): Promise<boolean> {
+    const entry = this.byConversationId.get(conversationId);
     if (!entry) return false;
     entry.abortController.abort(new Error('Embedded run aborted'));
     if (entry.handle) await entry.handle.abort();
     return true;
   }
 
-  async steerBySessionKey(sessionKey: string, text: string): Promise<boolean> {
-    const handle = this.getBySessionKey(sessionKey);
+  async steerByConversationId(conversationId: string, text: string): Promise<boolean> {
+    const handle = this.getByConversationId(conversationId);
     if (!handle) {
       return false;
     }
@@ -76,7 +76,7 @@ export class EmbeddedRunRegistry {
   }
 
   size(): number {
-    return this.bySessionKey.size;
+    return this.byConversationId.size;
   }
 }
 
@@ -86,14 +86,14 @@ export function acquireEmbeddedRunLease(identity: EmbeddedRunIdentity): Embedded
   return embeddedRunRegistry.acquire(identity);
 }
 
-export function getEmbeddedRunBySessionKey(sessionKey: string): EmbeddedRunHandle | undefined {
-  return embeddedRunRegistry.getBySessionKey(sessionKey);
+export function getEmbeddedRunByConversationId(conversationId: string): EmbeddedRunHandle | undefined {
+  return embeddedRunRegistry.getByConversationId(conversationId);
 }
 
-export function abortEmbeddedRun(sessionKey: string): Promise<boolean> {
-  return embeddedRunRegistry.abortBySessionKey(sessionKey);
+export function abortEmbeddedRun(conversationId: string): Promise<boolean> {
+  return embeddedRunRegistry.abortByConversationId(conversationId);
 }
 
-export function queueEmbeddedSteer(sessionKey: string, text: string): Promise<boolean> {
-  return embeddedRunRegistry.steerBySessionKey(sessionKey, text);
+export function queueEmbeddedSteer(conversationId: string, text: string): Promise<boolean> {
+  return embeddedRunRegistry.steerByConversationId(conversationId, text);
 }

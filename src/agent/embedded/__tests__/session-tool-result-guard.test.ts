@@ -11,7 +11,7 @@ describe('session-tool-result-guard', () => {
     const unsubscribe = onSessionTranscriptUpdate(listener);
 
     const sm = guardSessionManager(SessionManager.inMemory(process.cwd()), {
-      sessionKey: 'agent:main:test',
+      conversationId: 'agent:main:test',
     });
     sm.setActiveTurnId?.('turn-123');
     sm.appendMessage({
@@ -68,7 +68,7 @@ describe('session-tool-result-guard', () => {
     const listener = vi.fn();
     const unsubscribe = onSessionTranscriptUpdate(listener);
     const sm = guardSessionManager(SessionManager.inMemory(process.cwd()), {
-      sessionKey: 'agent:main:media-test',
+      conversationId: 'agent:main:media-test',
     });
 
     sm.appendMessage({

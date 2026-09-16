@@ -20,7 +20,7 @@ type ProjectWithKind = Project & {
 
 type UseWelcomeSuggestionContextOptions = {
   enabled: boolean;
-  sessionKey?: string | null;
+  conversationId?: string | null;
   sourceNoteId?: string | null;
   sourceNoteTitle?: string | null;
   sourceContextPending?: boolean;
@@ -61,7 +61,7 @@ async function inferWorkspaceSuggestionContext(path: string): Promise<WelcomeSug
 function contextStateKey({
   attempt,
   enabled,
-  sessionKey,
+  conversationId,
   sourceNoteId,
   sourceNoteTitle,
   sourceContextPending,
@@ -73,15 +73,15 @@ function contextStateKey({
   workflow,
 }: UseWelcomeSuggestionContextOptions & { attempt: number }): string {
   if (!enabled) return 'disabled';
-  if (sourceContextPending) return `pending:${sessionKey ?? ''}`;
+  if (sourceContextPending) return `pending:${conversationId ?? ''}`;
   if (task) return `task:${task.task.id}:${task.task.version}`;
   if (file) return `file:${file.name}:${file.type}`;
   if (workflow) return `workflow:${workflow.run.id}:${workflow.run.status}`;
   if (sourceNoteId) return `note:${sourceNoteId}:${sourceNoteTitle?.trim() ?? ''}`;
   if (workingDirectoryLocked && effectiveWorkspacePath?.trim()) {
-    return `workspace:${sessionKey ?? ''}:${effectiveWorkspacePath.trim()}`;
+    return `workspace:${conversationId ?? ''}:${effectiveWorkspacePath.trim()}`;
   }
-  if (sessionKey) return `session:${sessionKey}:attempt:${attempt}:failed:${sourceContextFailed ? '1' : '0'}`;
+  if (conversationId) return `session:${conversationId}:attempt:${attempt}:failed:${sourceContextFailed ? '1' : '0'}`;
   return 'empty';
 }
 
@@ -152,7 +152,7 @@ function immediateContextState(
       status: options.sourceContextFailed ? 'degraded' : 'ready',
     };
   }
-  if (options.sessionKey) {
+  if (options.conversationId) {
     return { key, context: { kind: 'empty' }, status: 'loading' };
   }
   return { key, context: { kind: 'empty' }, status: 'ready' };
@@ -160,7 +160,7 @@ function immediateContextState(
 
 export function useWelcomeSuggestionContext({
   enabled,
-  sessionKey,
+  conversationId,
   sourceNoteId,
   sourceNoteTitle,
   sourceContextPending = false,
@@ -176,7 +176,7 @@ export function useWelcomeSuggestionContext({
   const currentOptions = {
     attempt,
     enabled,
-    sessionKey,
+    conversationId,
     sourceNoteId,
     sourceNoteTitle,
     sourceContextPending,
@@ -257,7 +257,7 @@ export function useWelcomeSuggestionContext({
       };
     }
 
-    if (!sessionKey) {
+    if (!conversationId) {
       setState({ key: currentKey, context: { kind: 'empty' }, status: 'ready' });
       return undefined;
     }
@@ -268,7 +268,7 @@ export function useWelcomeSuggestionContext({
       let degraded = sourceContextFailed;
       let projectId: string | null = null;
       try {
-        const detail = await getSessionDetail(sessionKey);
+        const detail = await getSessionDetail(conversationId);
         projectId = (detail as { projectId?: string | null }).projectId?.trim() || null;
       } catch {
         degraded = true;
@@ -333,7 +333,7 @@ export function useWelcomeSuggestionContext({
       }
 
       try {
-        const config = await sessionManager.loadSessionAgentConfig(sessionKey);
+        const config = await sessionManager.loadSessionAgentConfig(conversationId);
         const path = config.workingDirectoryLocked ? config.effectiveWorkspacePath.trim() : '';
         if (cancelled) return;
         if (path) {
@@ -367,7 +367,7 @@ export function useWelcomeSuggestionContext({
     attempt,
     currentKey,
     enabled,
-    sessionKey,
+    conversationId,
     sessionManager,
     sourceContextFailed,
     sourceContextPending,

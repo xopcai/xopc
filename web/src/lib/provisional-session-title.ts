@@ -55,8 +55,8 @@ export function provisionalTitleFromUserText(raw: string): string | null {
   return cleaned.length > 0 ? cleaned : null;
 }
 
-export function dispatchSessionTitleUpdated(sessionKey: string, name: string): void {
-  const key = sessionKey.trim();
+export function dispatchSessionTitleUpdated(conversationId: string, name: string): void {
+  const key = conversationId.trim();
   const title = name.trim();
   if (!key || !title) return;
   window.dispatchEvent(

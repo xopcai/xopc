@@ -187,13 +187,13 @@ function parseReviewJson(raw: string, target: string): ReviewOutput {
 
 async function reviewModelRef(ctx: CommandContext): Promise<string | undefined> {
   const sessionOverride = await ctx.getSessionConfigStore?.()
-    ?.get(ctx.sessionKey)
+    ?.get(ctx.conversationId)
     .then((config) => config?.modelOverride?.trim())
     .catch(() => undefined);
   if (sessionOverride) return sessionOverride;
 
   try {
-    const profile = resolveEffectiveAgentProfileForSession(ctx.config, ctx.sessionKey);
+    const profile = resolveEffectiveAgentProfileForSession(ctx.config, ctx.conversationId);
     return profile.config.models.intents.review?.primary || profile.primaryModelRef;
   } catch {
     return undefined;
@@ -232,13 +232,13 @@ function buildReviewPrompt(params: {
 async function resolveWorkspace(ctx: CommandContext): Promise<string> {
   const sessionConfigStore = ctx.getSessionConfigStore?.();
   const sessionConfig = sessionConfigStore
-    ? await sessionConfigStore.get(ctx.sessionKey).catch(() => null)
+    ? await sessionConfigStore.get(ctx.conversationId).catch(() => null)
     : null;
   return effectiveWorkspacePathForSession(
     ctx.config,
-    ctx.sessionKey,
+    ctx.conversationId,
     sessionConfig,
-    getProjectForSession(ctx.sessionKey),
+    getProjectForSession(ctx.conversationId),
   );
 }
 

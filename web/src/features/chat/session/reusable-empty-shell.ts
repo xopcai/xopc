@@ -5,24 +5,9 @@ import {
 } from '@/features/chat/session/chat-session-store';
 import { normalizeAgentId } from '@/lib/agent-id';
 
-function parseAgentWebchatKey(key: string): { agentId: string; sourceChannel: string; peerId: string } | null {
-  const parts = key.trim().split(':');
-  if (parts.length < 6) return null;
-  const [scope, agentId, sourceChannel, accountId, peerKind, ...peerParts] = parts;
-  if (scope !== 'agent' || !agentId || !sourceChannel) return null;
-  if (accountId !== 'default' || peerKind !== 'direct') return null;
-  const peerId = peerParts.join(':').trim();
-  if (!peerId) return null;
-  return { agentId, sourceChannel, peerId };
-}
-
 function hasSourceBinding(customData: Record<string, unknown> | undefined): boolean {
   const sourceBinding = customData?.sourceBinding;
   return Boolean(sourceBinding && typeof sourceBinding === 'object');
-}
-
-function isGenericNewChatPeer(peerId: string | undefined): boolean {
-  return Boolean(peerId?.trim().startsWith('chat_'));
 }
 
 export type ReusableEmptyShellScope = {
@@ -38,19 +23,16 @@ function normalizeProjectId(projectId: string | null | undefined): string | unde
 export function isReusableEmptyShell(session: SessionInfo, scope: ReusableEmptyShellScope): boolean {
   const key = session.key?.trim();
   if (!key) return false;
-  const parsed = parseAgentWebchatKey(key);
-  if (!parsed) return false;
-  const sourceChannel = session.sourceChannel?.trim().toLowerCase() ?? parsed?.sourceChannel.toLowerCase();
+  const sourceChannel = session.sourceChannel?.trim().toLowerCase();
   if (sourceChannel !== 'webchat') return false;
-  if (session.customData?.genericNewChatShell === false) return false;
+  if (session.customData?.genericNewChatShell !== true) return false;
   if (hasSourceBinding(session.customData)) return false;
-  if (!isGenericNewChatPeer(parsed.peerId)) return false;
   // Session-list metadata can lag behind the optimistic user message in the
   // local slice. A session is empty only when neither source has a message.
   if ((session.messageCount ?? 0) !== 0 || (getChatSessionSnapshot(key)?.messages.length ?? 0) !== 0) {
     return false;
   }
-  const sessionAgent = (session.routing?.agentId ?? parsed?.agentId)?.trim().toLowerCase();
+  const sessionAgent = session.agentId?.trim().toLowerCase();
   if (!sessionAgent || sessionAgent !== normalizeAgentId(scope.agentId)) return false;
   const requestedProjectId = normalizeProjectId(scope.projectId);
   const sessionProjectId = normalizeProjectId(session.projectId);

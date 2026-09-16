@@ -100,10 +100,10 @@ describe('endpoint principal repository', () => {
     });
     expect(bindEndpointPrincipal('phone-1', principal.id, 100)).toBe(true);
     expect(setEndpointSessionBinding({
-      sessionKey: 'telegram:chat-1', endpointId: 'phone-1', boundAt: 200,
-    })).toEqual({ sessionKey: 'telegram:chat-1', endpointId: 'phone-1', boundAt: 200 });
+      conversationId: 'telegram:chat-1', endpointId: 'phone-1', boundAt: 200,
+    })).toEqual({ conversationId: 'telegram:chat-1', endpointId: 'phone-1', boundAt: 200 });
     expect(getEndpointSessionBinding('telegram:chat-1')).toEqual({
-      sessionKey: 'telegram:chat-1', endpointId: 'phone-1', boundAt: 200,
+      conversationId: 'telegram:chat-1', endpointId: 'phone-1', boundAt: 200,
     });
     expect(deleteEndpointSessionBinding('telegram:chat-1')).toBe(true);
     expect(getEndpointSessionBinding('telegram:chat-1')).toBeUndefined();
@@ -116,8 +116,8 @@ describe('endpoint principal repository', () => {
     });
     expect(bindEndpointPrincipal('browser:one', principal.id, 100)).toBe(true);
     expect(bindEndpointPrincipal('browser:two', principal.id, 100)).toBe(true);
-    setEndpointSessionBinding({ sessionKey: 'webchat:one', endpointId: 'browser:one', boundAt: 200 });
-    setEndpointSessionBinding({ sessionKey: 'webchat:two', endpointId: 'browser:two', boundAt: 200 });
+    setEndpointSessionBinding({ conversationId: 'webchat:one', endpointId: 'browser:one', boundAt: 200 });
+    setEndpointSessionBinding({ conversationId: 'webchat:two', endpointId: 'browser:two', boundAt: 200 });
 
     expect(deleteEndpointSessionBindingsByPrincipal(principal.id)).toBe(2);
     expect(getEndpointSessionBinding('webchat:one')).toBeUndefined();

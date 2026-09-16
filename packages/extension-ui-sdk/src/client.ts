@@ -30,18 +30,18 @@ export function createExtensionClient(options?: CreateExtensionClientOptions): E
     },
 
     agent: {
-      async sendMessage(message: string, opts?: { sessionKey?: string; newSession?: boolean }) {
-        return transport.request<{ sessionKey: string }>('agent.sendMessage', {
+      async sendMessage(message: string, opts?: { conversationId?: string; newSession?: boolean }) {
+        return transport.request<{ conversationId: string }>('agent.sendMessage', {
           message,
-          sessionKey: opts?.sessionKey,
+          conversationId: opts?.conversationId,
           newSession: opts?.newSession,
         });
       },
-      onStreamEvent(sessionKey: string, handler: StreamHandler) {
-        transport.emit('agent.subscribe', { sessionKey });
-        const unsub = transport.on(`agent.stream.${sessionKey}`, handler);
+      onStreamEvent(conversationId: string, handler: StreamHandler) {
+        transport.emit('agent.subscribe', { conversationId });
+        const unsub = transport.on(`agent.stream.${conversationId}`, handler);
         return () => {
-          transport.emit('agent.unsubscribe', { sessionKey });
+          transport.emit('agent.unsubscribe', { conversationId });
           unsub();
         };
       },
@@ -51,8 +51,8 @@ export function createExtensionClient(options?: CreateExtensionClientOptions): E
       async listSessions() {
         return transport.request<unknown[]>('session.list');
       },
-      async navigateToSession(sessionKey: string) {
-        await transport.request('session.navigate', { sessionKey });
+      async navigateToSession(conversationId: string) {
+        await transport.request('session.navigate', { conversationId });
       },
     },
 

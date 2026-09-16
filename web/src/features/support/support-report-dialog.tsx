@@ -111,9 +111,9 @@ export function SupportReportDialog({
     setStarting(true);
     setError(null);
     try {
-      const sessionKey = await startSupportInvestigationSession(report, investigationPrompt);
+      const conversationId = await startSupportInvestigationSession(report, investigationPrompt);
       onOpenChange(false);
-      window.dispatchEvent(new CustomEvent('navigate-to-chat', { detail: { sessionKey } }));
+      window.dispatchEvent(new CustomEvent('navigate-to-chat', { detail: { conversationId } }));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : copy.sessionFailed);
     } finally {

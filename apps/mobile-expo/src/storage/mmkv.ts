@@ -3,7 +3,7 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 export const KEYS = {
   profiles: 'gateway.profiles',
   activeId: 'gateway.activeId',
-  queryCachePrefix: 'gateway.queryCache:',
+  queryCachePrefix: 'gateway.queryCache:uuid:',
   pendingRunPrefix: 'xopc:pendingRun:',
   language: 'prefs.language',
   themePreference: 'prefs.themePreference',
@@ -78,7 +78,7 @@ export const storage: KeyValueStorage = {
   },
 };
 
-export function pendingRunStorageKey(sessionKey: string): string {
+export function pendingRunStorageKey(conversationId: string): string {
   const gatewayId = storage.getString(KEYS.activeId) ?? 'unassigned';
-  return `${KEYS.pendingRunPrefix}v2:${encodeURIComponent(gatewayId)}:${encodeURIComponent(sessionKey)}`;
+  return `${KEYS.pendingRunPrefix}v2:${encodeURIComponent(gatewayId)}:${encodeURIComponent(conversationId)}`;
 }

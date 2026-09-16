@@ -74,7 +74,7 @@ export class TaskContextRepository {
     rejectedItems?: unknown[];
     relationshipPolicy?: Record<string, unknown>;
     authorizationSnapshot?: Record<string, unknown>;
-    sessionKey?: string;
+    conversationId?: string;
     estimatedTokens?: number;
     allocation?: Record<string, unknown>;
     contentHash?: string;
@@ -84,7 +84,7 @@ export class TaskContextRepository {
     const traceId = randomUUID();
     getSqliteDatabase().prepare(
       `INSERT INTO context_snapshots (
-        snapshot_id, trace_id, owner_kind, owner_id, session_key, query,
+        snapshot_id, trace_id, owner_kind, owner_id, conversation_id, query,
         selected_items_json, rejected_items_json, consent_requests_json,
         relationship_policy_json, estimated_tokens, allocation_json,
         authorization_snapshot_json, content_hash, created_at
@@ -94,7 +94,7 @@ export class TaskContextRepository {
       traceId,
       input.ownerKind,
       input.ownerId,
-      input.sessionKey ?? null,
+      input.conversationId ?? null,
       input.query,
       JSON.stringify(input.selectedItems ?? []),
       JSON.stringify(input.rejectedItems ?? []),

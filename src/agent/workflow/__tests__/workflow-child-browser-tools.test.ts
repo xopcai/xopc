@@ -24,7 +24,7 @@ describe('workflow child browser tools', () => {
       receipt: { action: 'navigate', risk: 'read', durationMs: 1, verified: true },
     } }] }));
     const getBinding = vi.fn(() => ({
-      sessionKey: 'webchat:parent', endpointId: endpoint.endpointId, boundAt: 1,
+      conversationId: 'webchat:parent', endpointId: endpoint.endpointId, boundAt: 1,
     }));
     const endpointTools = {
       registry: {
@@ -41,7 +41,7 @@ describe('workflow child browser tools', () => {
       model: { provider: 'openai', id: 'test', input: ['text'] } as never,
       getConfig: () => ConfigSchema.parse({ browser: { enabled: true, driver: { kind: 'extension' } } }),
       endpointTools,
-      browserSessionKey: 'webchat:parent',
+      browserConversationId: 'webchat:parent',
     });
     const browser = tools.find((tool) => tool.name === 'browser_use');
 

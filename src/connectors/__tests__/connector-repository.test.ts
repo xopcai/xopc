@@ -114,7 +114,7 @@ describe('connector repository', () => {
       connectorId: 'composio-gmail',
       principalId: 'owner',
       agentId: 'main',
-      sessionKey: 'agent:main:chat:1',
+      conversationId: 'agent:main:chat:1',
       actionId: 'GMAIL_SEND_EMAIL',
       scope: 'write',
       decision: 'confirmation_required',

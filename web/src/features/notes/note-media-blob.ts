@@ -18,7 +18,7 @@ function cacheKey(noteId: string, attachmentId: string, token: string): string {
 }
 
 function resetCacheIfTokenChanged(): void {
-  const token = useGatewayStore.getState().sessionKey ?? '';
+  const token = useGatewayStore.getState().conversationId ?? '';
   if (token === cacheToken) return;
   for (const entry of blobCache.values()) {
     if (entry.objectUrl) URL.revokeObjectURL(entry.objectUrl);
@@ -29,7 +29,7 @@ function resetCacheIfTokenChanged(): void {
 
 async function fetchNoteMediaBlob(noteId: string, attachmentId: string): Promise<Blob> {
   resetCacheIfTokenChanged();
-  const token = useGatewayStore.getState().sessionKey ?? '';
+  const token = useGatewayStore.getState().conversationId ?? '';
   const key = cacheKey(noteId, attachmentId, token);
   let entry = blobCache.get(key);
   if (!entry) {
@@ -55,7 +55,7 @@ export async function acquireNoteMediaObjectUrl(
   attachmentId: string,
 ): Promise<string> {
   resetCacheIfTokenChanged();
-  const token = useGatewayStore.getState().sessionKey ?? '';
+  const token = useGatewayStore.getState().conversationId ?? '';
   const key = cacheKey(noteId, attachmentId, token);
   let entry = blobCache.get(key);
   if (!entry) {
@@ -77,7 +77,7 @@ export async function acquireNoteMediaObjectUrl(
 
 export function releaseNoteMediaObjectUrl(noteId: string, attachmentId: string): void {
   resetCacheIfTokenChanged();
-  const token = useGatewayStore.getState().sessionKey ?? '';
+  const token = useGatewayStore.getState().conversationId ?? '';
   const key = cacheKey(noteId, attachmentId, token);
   const entry = blobCache.get(key);
   if (!entry) return;

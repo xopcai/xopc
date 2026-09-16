@@ -171,7 +171,7 @@ export type PetFeedback = {
 };
 
 export type PetSessionUpdate = {
-  sessionKey: string;
+  conversationId: string;
   runId: string;
   sessionLabel: string;
   sequence: number;

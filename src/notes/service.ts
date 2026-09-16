@@ -426,10 +426,10 @@ export class NotesService {
     return this.updateNote(id, { aiDeep: { ...note.aiDeep, processedAt: Date.now(), catalysis: { status: note.aiDeep?.catalysis?.status ?? 'catalyzed', ...note.aiDeep?.catalysis, feedback } } });
   }
 
-  async linkNoteThread(id: string, sessionKey: string): Promise<Note | null> {
+  async linkNoteThread(id: string, conversationId: string): Promise<Note | null> {
     const note = await this.store.getNote(id);
     if (!note) return null;
-    const existingKeys = note.aiDeep?.catalysis?.linkedSessionKeys ?? [];
+    const existingKeys = note.aiDeep?.catalysis?.linkedConversationIds ?? [];
     return this.updateNote(id, {
       aiDeep: {
         ...note.aiDeep,
@@ -437,8 +437,8 @@ export class NotesService {
         catalysis: {
           status: note.aiDeep?.catalysis?.status ?? 'none',
           ...note.aiDeep?.catalysis,
-          sourceSessionKey: note.aiDeep?.catalysis?.sourceSessionKey ?? sessionKey,
-          linkedSessionKeys: Array.from(new Set([...existingKeys, sessionKey])),
+          sourceConversationId: note.aiDeep?.catalysis?.sourceConversationId ?? conversationId,
+          linkedConversationIds: Array.from(new Set([...existingKeys, conversationId])),
         },
       },
     }, 'sync');
@@ -447,7 +447,7 @@ export class NotesService {
   async listNoteThreads(id: string): Promise<string[] | null> {
     const note = await this.store.getNote(id);
     if (!note) return null;
-    return Array.from(new Set([note.aiDeep?.catalysis?.sourceSessionKey, ...(note.aiDeep?.catalysis?.linkedSessionKeys ?? [])].filter((key): key is string => Boolean(key))));
+    return Array.from(new Set([note.aiDeep?.catalysis?.sourceConversationId, ...(note.aiDeep?.catalysis?.linkedConversationIds ?? [])].filter((key): key is string => Boolean(key))));
   }
 
   async getAgentContextStatus(id: string, config?: Config, force = false): Promise<{ noteUpdatedAt: number; artifact: import('./agent-context.js').NoteAgentContextArtifact | null; stale: boolean } | null> {
@@ -567,14 +567,14 @@ export class NotesService {
 
   async moveToGroup(noteId: string, groupId: string | null): Promise<Note | null> { return this.updateNote(noteId, { groupId: groupId ?? undefined }); }
 
-  async createTask(title: string, source: CaptureSource, opts: { dueAt?: number; priority?: 'high' | 'medium' | 'low'; sourceSessionKey?: string; sourceNoteId?: string; groupId?: string } = {}): Promise<Note> {
+  async createTask(title: string, source: CaptureSource, opts: { dueAt?: number; priority?: 'high' | 'medium' | 'low'; sourceConversationId?: string; sourceNoteId?: string; groupId?: string } = {}): Promise<Note> {
     return this.createNote({
       title,
       markdown: `- [ ] ${title}`,
       kind: 'task',
       capturedVia: source,
       groupId: opts.groupId,
-      taskMeta: { done: false, dueAt: opts.dueAt, priority: opts.priority, sourceSessionKey: opts.sourceSessionKey, sourceNoteId: opts.sourceNoteId },
+      taskMeta: { done: false, dueAt: opts.dueAt, priority: opts.priority, sourceConversationId: opts.sourceConversationId, sourceNoteId: opts.sourceNoteId },
     });
   }
 

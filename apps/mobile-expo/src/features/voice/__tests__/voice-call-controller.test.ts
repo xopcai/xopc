@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { VoiceCallController, type CallDependencies } from '../voice-call-controller';
 import type { VoiceAudioSendResult, VoiceTransportCallbacks } from '../voice-transport';
 
-const target = { gatewayId: 'gateway', sessionKey: 'chat', background: false };
+const target = { gatewayId: 'gateway', conversationId: 'chat', background: false };
 function harness(bargeIn = true) {
   let callbacks: VoiceTransportCallbacks;
   let audioCallbacks: Parameters<CallDependencies['audio']['start']>[1];
@@ -311,9 +311,9 @@ describe('mobile persistent voice controller', () => {
   });
   it('keeps the same target when opened from another Chat', async () => {
     const h = harness(); await h.controller.start(target);
-    h.controller.expand(false); await h.controller.start({ ...target, sessionKey: 'other' });
+    h.controller.expand(false); await h.controller.start({ ...target, conversationId: 'other' });
     expect(h.deps.create).toHaveBeenCalledOnce();
-    expect(h.controller.getSnapshot().target?.sessionKey).toBe('chat');
+    expect(h.controller.getSnapshot().target?.conversationId).toBe('chat');
     expect(h.controller.getSnapshot().expanded).toBe(true);
     await h.controller.end();
   });

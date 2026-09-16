@@ -1,4 +1,4 @@
-import type { Context, Hono } from 'hono';
+import type { Context, Hono, MiddlewareHandler } from 'hono';
 
 import { resolveMimeType } from './share-store.js';
 import { getSiteShareStore } from './site-share-store.js';
@@ -40,7 +40,7 @@ export function extractSiteShareLabel(host: string | null | undefined, suffix: s
  * Also handles the subpath fallback `/site/:token/*` for environments without
  * wildcard DNS — same handler logic, just different prefix extraction.
  */
-export function createSiteShareMiddleware(service: GatewayService) {
+export function createSiteShareMiddleware(service: GatewayService): MiddlewareHandler {
   return async (c: Context, next: () => Promise<void>) => {
     const config = resolveSiteShareConfig(service);
     if (!config.enabled) return next();

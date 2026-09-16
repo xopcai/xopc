@@ -2,26 +2,26 @@ import type { EndpointConnectionSnapshot } from './registry.js';
 import { EndpointRegistry } from './registry.js';
 
 export interface EndpointSessionBinding {
-  sessionKey: string;
+  conversationId: string;
   endpointId: string;
   boundAt: number;
 }
 
 export interface EndpointSessionBindingStore {
-  get(sessionKey: string): EndpointSessionBinding | undefined;
+  get(conversationId: string): EndpointSessionBinding | undefined;
   set(binding: EndpointSessionBinding): EndpointSessionBinding;
-  delete(sessionKey: string): boolean;
+  delete(conversationId: string): boolean;
 }
 
 function memoryStore(): EndpointSessionBindingStore {
   const bindings = new Map<string, EndpointSessionBinding>();
   return {
-    get: (sessionKey) => bindings.get(sessionKey),
+    get: (conversationId) => bindings.get(conversationId),
     set: (binding) => {
-      bindings.set(binding.sessionKey, binding);
+      bindings.set(binding.conversationId, binding);
       return binding;
     },
-    delete: (sessionKey) => bindings.delete(sessionKey),
+    delete: (conversationId) => bindings.delete(conversationId),
   };
 }
 
@@ -31,28 +31,28 @@ export class EndpointBindingService {
     private readonly store: EndpointSessionBindingStore = memoryStore(),
   ) {}
 
-  bind(sessionKey: string, endpointId: string, now = Date.now()): EndpointSessionBinding {
-    const normalizedSessionKey = this.normalizeSessionKey(sessionKey);
+  bind(conversationId: string, endpointId: string, now = Date.now()): EndpointSessionBinding {
+    const normalizedConversationId = this.normalizeConversationId(conversationId);
     if (!this.registry.get(endpointId)) throw new Error('Endpoint is offline');
-    const binding = { sessionKey: normalizedSessionKey, endpointId, boundAt: now };
+    const binding = { conversationId: normalizedConversationId, endpointId, boundAt: now };
     return this.store.set(binding);
   }
 
-  get(sessionKey: string): EndpointSessionBinding | undefined {
-    return this.store.get(this.normalizeSessionKey(sessionKey));
+  get(conversationId: string): EndpointSessionBinding | undefined {
+    return this.store.get(this.normalizeConversationId(conversationId));
   }
 
-  resolve(sessionKey: string): EndpointConnectionSnapshot | undefined {
-    const binding = this.get(sessionKey);
+  resolve(conversationId: string): EndpointConnectionSnapshot | undefined {
+    const binding = this.get(conversationId);
     return binding ? this.registry.get(binding.endpointId) : undefined;
   }
 
-  unbind(sessionKey: string): boolean {
-    return this.store.delete(this.normalizeSessionKey(sessionKey));
+  unbind(conversationId: string): boolean {
+    return this.store.delete(this.normalizeConversationId(conversationId));
   }
 
-  private normalizeSessionKey(sessionKey: string): string {
-    const normalized = sessionKey.trim();
+  private normalizeConversationId(conversationId: string): string {
+    const normalized = conversationId.trim();
     if (!normalized || normalized.length > 500) throw new TypeError('Invalid session key');
     return normalized;
   }

@@ -2,23 +2,23 @@ import { describe, expect, it } from 'vitest';
 
 import {
   isViewingSession,
-  resolveViewSessionKey,
+  resolveViewConversationId,
   shouldApplyStreamUpdateToView,
   shouldRestoreLiveCacheToView,
 } from '@/features/chat/session/should-apply-stream-update';
 
 describe('session view isolation helpers', () => {
   it('resolves view key from route only', () => {
-    expect(resolveViewSessionKey('agent:main:web:abc')).toBe('agent:main:web:abc');
-    expect(resolveViewSessionKey('new')).toBeNull();
-    expect(resolveViewSessionKey(null)).toBeNull();
+    expect(resolveViewConversationId('agent:main:web:abc')).toBe('agent:main:web:abc');
+    expect(resolveViewConversationId('new')).toBeNull();
+    expect(resolveViewConversationId(null)).toBeNull();
   });
 
   it('applies stream updates only when stream matches routed session', () => {
     expect(
       shouldApplyStreamUpdateToView({
-        streamSessionKey: 'agent:main:web:abc',
-        routeSessionKey: 'agent:main:web:abc',
+        streamConversationId: 'agent:main:web:abc',
+        routeConversationId: 'agent:main:web:abc',
       }),
     ).toBe(true);
   });
@@ -26,8 +26,8 @@ describe('session view isolation helpers', () => {
   it('blocks stream updates on /chat/new even if state still points at old session', () => {
     expect(
       shouldApplyStreamUpdateToView({
-        streamSessionKey: 'agent:main:web:old',
-        routeSessionKey: 'new',
+        streamConversationId: 'agent:main:web:old',
+        routeConversationId: 'new',
       }),
     ).toBe(false);
   });
@@ -35,8 +35,8 @@ describe('session view isolation helpers', () => {
   it('blocks cross-session stream paint', () => {
     expect(
       shouldApplyStreamUpdateToView({
-        streamSessionKey: 'agent:main:web:old',
-        routeSessionKey: 'agent:main:web:fresh',
+        streamConversationId: 'agent:main:web:old',
+        routeConversationId: 'agent:main:web:fresh',
       }),
     ).toBe(false);
   });
@@ -45,7 +45,7 @@ describe('session view isolation helpers', () => {
     expect(
       isViewingSession({
         chatId: 'agent:main:web:old',
-        routeSessionKey: 'new',
+        routeConversationId: 'new',
       }),
     ).toBe(false);
   });
@@ -54,13 +54,13 @@ describe('session view isolation helpers', () => {
     expect(
       isViewingSession({
         chatId: 'agent:main:web:abc',
-        routeSessionKey: 'agent:main:web:abc',
+        routeConversationId: 'agent:main:web:abc',
       }),
     ).toBe(true);
     expect(
       isViewingSession({
         chatId: 'agent:main:web:old',
-        routeSessionKey: 'agent:main:web:fresh',
+        routeConversationId: 'agent:main:web:fresh',
       }),
     ).toBe(false);
   });
@@ -68,14 +68,14 @@ describe('session view isolation helpers', () => {
   it('only restores live cache for the routed session', () => {
     expect(
       shouldRestoreLiveCacheToView({
-        cacheSessionKey: 'agent:main:web:abc',
-        routeSessionKey: 'agent:main:web:abc',
+        cacheConversationId: 'agent:main:web:abc',
+        routeConversationId: 'agent:main:web:abc',
       }),
     ).toBe(true);
     expect(
       shouldRestoreLiveCacheToView({
-        cacheSessionKey: 'agent:main:web:old',
-        routeSessionKey: 'agent:main:web:fresh',
+        cacheConversationId: 'agent:main:web:old',
+        routeConversationId: 'agent:main:web:fresh',
       }),
     ).toBe(false);
   });

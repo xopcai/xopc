@@ -38,7 +38,7 @@ describe('relationship continuity', () => {
 
   it('stores explicit follow-up in structured user understanding with evidence', () => {
     const assertion = recordExplicitRelationshipFollowUp({
-      sessionKey: 'session-1', message: '明天问问我面试怎么样', nowMs: 0,
+      conversationId: 'session-1', message: '明天问问我面试怎么样', nowMs: 0,
     });
     expect(assertion).toMatchObject({
       kind: 'relationship', status: 'active', authority: 'user_explicit',

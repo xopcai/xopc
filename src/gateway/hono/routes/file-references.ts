@@ -7,7 +7,7 @@ import {
   buildFilePathClassifierContext,
   classifyFileLocation,
   displayNameForPath,
-  fileRefSessionKeysMatch,
+  fileRefConversationIdsMatch,
   resolveFileReferenceCandidate,
 } from '../../file-path-classifier.js';
 import { classifyFileReferenceFsError } from '../../file-reference-errors.js';
@@ -21,14 +21,14 @@ export function registerFileReferenceRoutes(app: Hono, deps: AuthenticatedRouteD
   const refs = new FileReferenceRegistry();
 
   app.post('/api/files/resolve-reference', async (c) => {
-    const body = await c.req.json<{ spaceId?: string; path?: string; sessionKey?: string }>();
+    const body = await c.req.json<{ spaceId?: string; path?: string; conversationId?: string }>();
     if (!body.spaceId || !body.path?.trim()) return c.json({ error: { message: 'spaceId and path are required' } }, 400);
     try {
       const space = await files.get(body.spaceId);
-      const sessionKey = body.sessionKey?.trim();
+      const conversationId = body.conversationId?.trim();
       const agentId = space.bindings.find((binding) => binding.kind === 'agent')?.id;
       const ctx = {
-        ...buildFilePathClassifierContext(deps.service.currentConfig, sessionKey || (agentId ? `agent:${agentId}:main` : undefined)),
+        ...buildFilePathClassifierContext(deps.service.currentConfig, conversationId, conversationId ? undefined : agentId),
         workspaceRoot: space.root,
       };
       const inputPath = body.path.trim();
@@ -48,7 +48,7 @@ export function registerFileReferenceRoutes(app: Hono, deps: AuthenticatedRouteD
       const classified = classifyFileLocation(absolutePath, ctx);
       const capabilities: FileReferenceCapability[] = info.isFile() || info.isDirectory()
         ? ['openExternal', 'revealInFolder', 'copyPath'] : ['copyPath'];
-      const ref = refs.register({ absolutePath, sessionKey, ...classified, capabilities });
+      const ref = refs.register({ absolutePath, conversationId, ...classified, capabilities });
       return c.json({ reference: {
         ...base, ...classified, fileRefId: ref.id, absolutePath,
         exists: true, isDirectory: info.isDirectory(), capabilities, mtimeMs: info.mtimeMs,
@@ -62,8 +62,8 @@ export function registerFileReferenceRoutes(app: Hono, deps: AuthenticatedRouteD
   app.post('/api/files/references/:id/action', async (c) => {
     const ref = refs.resolve(c.req.param('id'));
     if (!ref) return c.json({ error: { message: 'File reference expired' } }, 404);
-    const body = await c.req.json<{ action?: string; sessionKey?: string }>();
-    if (!fileRefSessionKeysMatch(ref.sessionKey, body.sessionKey)) return c.json({ error: { message: 'File reference forbidden' } }, 403);
+    const body = await c.req.json<{ action?: string; conversationId?: string }>();
+    if (!fileRefConversationIdsMatch(ref.conversationId, body.conversationId)) return c.json({ error: { message: 'File reference forbidden' } }, 403);
     if ((body.action !== 'openExternal' && body.action !== 'revealInFolder') || !ref.capabilities.includes(body.action)) {
       return c.json({ error: { message: 'Action not allowed' } }, 403);
     }

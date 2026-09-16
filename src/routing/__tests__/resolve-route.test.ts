@@ -1,13 +1,13 @@
+import { getConversationRouting } from '../session-key.js';
 import { describe, it, expect } from 'vitest';
 import {
   applyIdentityLinks,
   getDefaultAgentId,
   agentExists,
   pickFirstExistingAgentId,
-  buildRouteSessionKey,
-  deriveLastRoutePolicy,
+  buildRouteConversationId,
   resolveRoute,
-  resolveRouteFromSessionKey,
+  resolveRouteFromConversationId,
   type RoutingConfig,
 } from '../resolve-route.js';
 
@@ -119,9 +119,9 @@ describe('resolve-route', () => {
     });
   });
 
-  describe('buildRouteSessionKey', () => {
+  describe('buildRouteConversationId', () => {
     it('should build session key with all params', () => {
-      const key = buildRouteSessionKey(
+      const key = buildRouteConversationId(
         'main',
         'telegram',
         'default',
@@ -130,22 +130,12 @@ describe('resolve-route', () => {
         'thread-1',
         'scope-1'
       );
-      expect(key).toBe('agent:main:telegram:default:direct:123456:thread:thread-1:scope:scope-1');
+      expect(getConversationRouting(key)).toMatchObject({ agentId: 'main', source: 'telegram', peerId: '123456', threadId: 'thread-1', scopeId: 'scope-1' });
     });
 
     it('should build session key without optional params', () => {
-      const key = buildRouteSessionKey('main', 'telegram', 'default', 'dm', '123456');
-      expect(key).toBe('agent:main:telegram:default:direct:123456');
-    });
-  });
-
-  describe('deriveLastRoutePolicy', () => {
-    it('should return "main" when sessionKey equals mainSessionKey', () => {
-      expect(deriveLastRoutePolicy('key', 'key')).toBe('main');
-    });
-
-    it('should return "session" when different', () => {
-      expect(deriveLastRoutePolicy('session-key', 'main-key')).toBe('session');
+      const key = buildRouteConversationId('main', 'telegram', 'default', 'dm', '123456');
+      expect(getConversationRouting(key)).toMatchObject({ agentId: 'main', source: 'telegram', peerId: '123456' });
     });
   });
 
@@ -218,7 +208,7 @@ describe('resolve-route', () => {
         peerId: '123456',
       });
 
-      expect(result.sessionKey).toBe(result.mainSessionKey);
+      expect(result.conversationId).toMatch(/^[0-9a-f-]{36}$/);
       expect(result.lastRoutePolicy).toBe('main');
     });
 
@@ -237,8 +227,8 @@ describe('resolve-route', () => {
         peerId: '123456',
       });
 
-      expect(result.sessionKey).not.toBe(result.mainSessionKey);
-      expect(result.sessionKey).toContain('123456');
+
+      expect(getConversationRouting(result.conversationId)?.peerId).toBe('123456');
       expect(result.lastRoutePolicy).toBe('session');
     });
 
@@ -250,7 +240,7 @@ describe('resolve-route', () => {
         peerId: 'group-123',
       });
 
-      expect(result.sessionKey).toContain('group:group-123');
+      expect(getConversationRouting(result.conversationId)).toMatchObject({ peerKind: 'group', peerId: 'group-123' });
     });
 
     it('should handle thread in session key', () => {
@@ -262,7 +252,7 @@ describe('resolve-route', () => {
         threadId: 'thread-456',
       });
 
-      expect(result.sessionKey).toContain(':thread:thread-456');
+      expect(getConversationRouting(result.conversationId)?.threadId).toBe('thread-456');
     });
 
     it('should apply identity links', () => {
@@ -283,7 +273,7 @@ describe('resolve-route', () => {
         peerId: '123456',
       });
 
-      expect(result.sessionKey).toContain('canonical-user');
+      expect(getConversationRouting(result.conversationId)?.peerId).toBe('canonical-user');
     });
 
     it('should normalize values to lowercase', () => {
@@ -303,14 +293,14 @@ describe('resolve-route', () => {
         peerId: 'USER123',
       });
 
-      expect(result.sessionKey).toBe('agent:main:direct:user123');
+      expect(getConversationRouting(result.conversationId)?.peerId).toBe('user123');
     });
   });
 
-  describe('resolveRouteFromSessionKey', () => {
+  describe('resolveRouteFromConversationId', () => {
     it('should parse session key back to route info', () => {
-      const sessionKey = 'agent:main:telegram:default:direct:123456:thread:789';
-      const result = resolveRouteFromSessionKey(sessionKey, {});
+      const conversationId = buildRouteConversationId('main', 'telegram', 'default', 'direct', '123456', '789');
+      const result = resolveRouteFromConversationId(conversationId, {});
 
       expect(result).toEqual({
         agentId: 'main',
@@ -322,8 +312,8 @@ describe('resolve-route', () => {
     });
 
     it('should return null for invalid session key', () => {
-      expect(resolveRouteFromSessionKey('invalid', {})).toBeNull();
-      expect(resolveRouteFromSessionKey('', {})).toBeNull();
+      expect(() => resolveRouteFromConversationId('invalid', {})).toThrow();
+      expect(resolveRouteFromConversationId('', {})).toBeNull();
     });
   });
 });

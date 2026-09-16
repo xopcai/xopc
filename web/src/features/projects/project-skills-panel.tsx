@@ -83,7 +83,7 @@ export function ProjectSkillsPanel({ projectId, copy }: { projectId: string; cop
   const [inheritedItems, setInheritedItems] = useState<ProjectSkill[]>([]);
   const [sources, setSources] = useState<ProjectSkillSource[]>([]);
   const [sessions, setSessions] = useState<ProjectSession[]>([]);
-  const [selectedSessionKey, setSelectedSessionKey] = useState('');
+  const [selectedConversationId, setSelectedConversationId] = useState('');
   const [sessionSkills, setSessionSkills] = useState<ChatSkillsPayload | null>(null);
   const [sessionSkillsLoading, setSessionSkillsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -128,21 +128,21 @@ export function ProjectSkillsPanel({ projectId, copy }: { projectId: string; cop
   }, [projectId]);
 
   useEffect(() => {
-    if (!selectedSessionKey) {
+    if (!selectedConversationId) {
       setSessionSkills(null);
       return;
     }
-    const session = sessions.find((candidate) => candidate.key === selectedSessionKey);
+    const session = sessions.find((candidate) => candidate.key === selectedConversationId);
     let cancelled = false;
     setSessionSkills(null);
     setError('');
     setSessionSkillsLoading(true);
-    void getChatSkillsCached(session?.agentId ?? session?.routing?.agentId, selectedSessionKey, true)
+    void getChatSkillsCached(session?.agentId ?? session?.routing?.agentId, selectedConversationId, true)
       .then((payload) => { if (!cancelled) setSessionSkills(payload); })
       .catch((err: unknown) => { if (!cancelled) setError(err instanceof Error ? err.message : String(err)); })
       .finally(() => { if (!cancelled) setSessionSkillsLoading(false); });
     return () => { cancelled = true; };
-  }, [selectedSessionKey, sessions]);
+  }, [selectedConversationId, sessions]);
 
   useEffect(() => {
     if (installMode !== 'marketplace') return;
@@ -284,10 +284,10 @@ export function ProjectSkillsPanel({ projectId, copy }: { projectId: string; cop
         <div className="flex flex-wrap items-end justify-between gap-3 rounded-lg border border-edge bg-surface-panel p-4">
           <div>
             <p className="text-sm font-medium text-fg">{copy.sessionViewLabel}</p>
-            <p className="mt-1 text-xs text-fg-muted">{sessionSkillsLoading ? copy.sessionLoading : selectedSessionKey ? sessionSkills?.agentId : copy.sessionViewAll}</p>
+            <p className="mt-1 text-xs text-fg-muted">{sessionSkillsLoading ? copy.sessionLoading : selectedConversationId ? sessionSkills?.agentId : copy.sessionViewAll}</p>
           </div>
           <PopoverSelect
-            value={selectedSessionKey}
+            value={selectedConversationId}
             options={sessions.map((session) => ({
               value: session.key,
               label: session.name?.trim() || `${copy.sessionFallback} · ${session.key.slice(-12)}`,
@@ -295,7 +295,7 @@ export function ProjectSkillsPanel({ projectId, copy }: { projectId: string; cop
             placeholder={copy.sessionViewAll}
             emptyLabel={copy.sessionViewAll}
             triggerClassName="w-[min(24rem,calc(100vw-3rem))]"
-            onChange={setSelectedSessionKey}
+            onChange={setSelectedConversationId}
           />
         </div>
       ) : null}

@@ -37,7 +37,7 @@ type EnvironmentRow = {
 
 type BindingRow = {
   binding_id: string;
-  session_key: string;
+  conversation_id: string;
   environment_id: string;
   created_at: number;
   released_at: number | null;
@@ -88,7 +88,7 @@ function environmentFromRow(row: EnvironmentRow): ExecutionEnvironment {
 function bindingFromRow(row: BindingRow): ExecutionEnvironmentBinding {
   return {
     id: row.binding_id,
-    sessionKey: row.session_key,
+    conversationId: row.conversation_id,
     environmentId: row.environment_id,
     createdAt: row.created_at,
     ...(row.released_at == null ? {} : { releasedAt: row.released_at }),
@@ -241,7 +241,7 @@ export class ExecutionEnvironmentStore {
   }
 
   bind(input: BindExecutionEnvironmentInput): ExecutionEnvironmentBinding {
-    const sessionKey = requiredText(input.sessionKey, 'sessionKey');
+    const conversationId = requiredText(input.conversationId, 'conversationId');
     return runSqliteWriteTransaction((db) => {
       const environment = getEnvironmentRow(input.environmentId);
       if (!environment) throw new ExecutionEnvironmentNotFoundError(input.environmentId);
@@ -252,12 +252,12 @@ export class ExecutionEnvironmentStore {
       }
       const active = db.prepare(
         `SELECT * FROM execution_environment_bindings
-         WHERE session_key = ? AND released_at IS NULL`,
-      ).get(sessionKey) as BindingRow | undefined;
+         WHERE conversation_id = ? AND released_at IS NULL`,
+      ).get(conversationId) as BindingRow | undefined;
       if (active) {
         if (active.environment_id === input.environmentId) return bindingFromRow(active);
         throw new ExecutionEnvironmentConflictError(
-          `Session ${sessionKey} is already bound to ${active.environment_id}`,
+          `Session ${conversationId} is already bound to ${active.environment_id}`,
         );
       }
       if (environment.kind === 'managed_worktree') {
@@ -267,23 +267,23 @@ export class ExecutionEnvironmentStore {
         ).get(input.environmentId) as BindingRow | undefined;
         if (owner) {
           throw new ExecutionEnvironmentConflictError(
-            `Managed worktree ${input.environmentId} is already bound to session ${owner.session_key}`,
+            `Managed worktree ${input.environmentId} is already bound to session ${owner.conversation_id}`,
           );
         }
       }
       const binding: ExecutionEnvironmentBinding = {
         id: randomUUID(),
-        sessionKey,
+        conversationId,
         environmentId: input.environmentId,
         createdAt: Date.now(),
       };
       db.prepare(
         `INSERT INTO execution_environment_bindings (
-          binding_id, session_key, environment_id, created_at
+          binding_id, conversation_id, environment_id, created_at
         ) VALUES (?, ?, ?, ?)`,
       ).run(
         binding.id,
-        binding.sessionKey,
+        binding.conversationId,
         binding.environmentId,
         binding.createdAt,
       );
@@ -295,12 +295,12 @@ export class ExecutionEnvironmentStore {
   }
 
   resolveBinding(
-    sessionKey: string,
+    conversationId: string,
   ): ExecutionEnvironmentBinding | undefined {
     const row = getSqliteDatabase().prepare(
       `SELECT * FROM execution_environment_bindings
-       WHERE session_key = ? AND released_at IS NULL`,
-    ).get(sessionKey) as BindingRow | undefined;
+       WHERE conversation_id = ? AND released_at IS NULL`,
+    ).get(conversationId) as BindingRow | undefined;
     return row ? bindingFromRow(row) : undefined;
   }
 
@@ -314,18 +314,18 @@ export class ExecutionEnvironmentStore {
   }
 
   releaseBinding(
-    sessionKey: string,
+    conversationId: string,
     expectedEnvironmentId?: string,
   ): ExecutionEnvironmentBinding | undefined {
     return runSqliteWriteTransaction((db) => {
       const active = db.prepare(
         `SELECT * FROM execution_environment_bindings
-         WHERE session_key = ? AND released_at IS NULL`,
-      ).get(sessionKey) as BindingRow | undefined;
+         WHERE conversation_id = ? AND released_at IS NULL`,
+      ).get(conversationId) as BindingRow | undefined;
       if (!active) return undefined;
       if (expectedEnvironmentId && active.environment_id !== expectedEnvironmentId) {
         throw new ExecutionEnvironmentConflictError(
-          `Session ${sessionKey} is bound to ${active.environment_id}, not ${expectedEnvironmentId}`,
+          `Session ${conversationId} is bound to ${active.environment_id}, not ${expectedEnvironmentId}`,
         );
       }
       const releasedAt = Date.now();

@@ -9,13 +9,13 @@ import { getInteractionState, updateInteractionStateFromMessage } from '../inter
 
 describe('interaction state repository', () => {
   let stateDir: string;
-  const sessionKey = 'agent:main:webchat:interaction-state';
+  const conversationId = "7b86e8df-5a76-4773-8831-c03bfeb48f0c";
 
   beforeEach(() => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-interaction-state-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
-    ensureSessionRecord(sessionKey, stateDir);
+    ensureSessionRecord(conversationId, stateDir, { agentId: "main" });
   });
 
   afterEach(() => {
@@ -26,17 +26,17 @@ describe('interaction state repository', () => {
 
   it('keeps a rupture active until the user explicitly signals repair', () => {
     const rupture = updateInteractionStateFromMessage({
-      sessionKey,
+      conversationId,
       message: '你根本没理解我，别再给建议了',
       now: 1_000,
     });
     expect(rupture).toMatchObject({ supportNeed: 'listen', repairStatus: 'needed', source: 'explicit' });
 
-    const continued = updateInteractionStateFromMessage({ sessionKey, message: '我今天很累', now: 2_000 });
+    const continued = updateInteractionStateFromMessage({ conversationId, message: '我今天很累', now: 2_000 });
     expect(continued.repairStatus).toBe('needed');
 
-    const repaired = updateInteractionStateFromMessage({ sessionKey, message: '这样好多了，谢谢调整', now: 3_000 });
+    const repaired = updateInteractionStateFromMessage({ conversationId, message: '这样好多了，谢谢调整', now: 3_000 });
     expect(repaired.repairStatus).toBe('repaired');
-    expect(getInteractionState(sessionKey, repaired.expiresAt)).toBeUndefined();
+    expect(getInteractionState(conversationId, repaired.expiresAt)).toBeUndefined();
   });
 });

@@ -239,12 +239,12 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const language = useLocaleStore((state) => state.language);
-  const token = useGatewayStore((state) => state.sessionKey);
+  const token = useGatewayStore((state) => state.conversationId);
   const copy = useMemo(() => taskCopy(language), [language]);
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
   const workspacePanelOpen = useWorkspacePanelStore((state) => state.open);
-  const workspacePanelSessionKey = useWorkspacePanelStore((state) => state.sessionKeyOverride);
+  const workspacePanelConversationId = useWorkspacePanelStore((state) => state.conversationIdOverride);
   const openWorkspacePanelForSession = useWorkspacePanelStore((state) => state.openForSession);
   const setSideChatOpen = useSideChatStore((state) => state.setOpen);
   const {
@@ -599,15 +599,15 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   const canPause = detail.allowedCommands.includes('add_wait');
   const canApprove = !activeWait && detail.task.phase === 'review' && detail.allowedCommands.includes('close');
   const canReopen = detail.allowedCommands.includes('reopen');
-  const conversationSessionKey = detail.conversation.activeSessionKey;
+  const conversationConversationId = detail.conversation.activeConversationId;
   const conversationAgentId = detail.conversation.currentExecutorAgentId
     ?? detail.task.delegateAgentId
     ?? detail.task.ownerId;
   const conversationAgent = agents.find((agent) => agent.id === conversationAgentId);
   const taskWorkspaceOpen = Boolean(
-    conversationSessionKey
+    conversationConversationId
     && workspacePanelOpen
-    && workspacePanelSessionKey === conversationSessionKey,
+    && workspacePanelConversationId === conversationConversationId,
   );
   const needsUserAttention = detail.attention.some((item) => item.kind === 'input_required' || item.kind === 'approval_required');
   const acceptanceCriteria = detail.task.contract?.acceptanceCriteria ?? [];
@@ -671,7 +671,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
   const headerActions = (
     <div className="flex flex-wrap items-center justify-end gap-2">
       {taskActions}
-      {conversationSessionKey && presentation !== 'modal' ? (
+      {conversationConversationId && presentation !== 'modal' ? (
         <>
           <Button
             type="button"
@@ -680,8 +680,8 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
             aria-label={language === 'zh' ? '项目文件' : 'Project files'}
             aria-pressed={taskWorkspaceOpen}
             onClick={() => {
-              setSideChatOpen(conversationSessionKey, false);
-              openWorkspacePanelForSession(conversationSessionKey);
+              setSideChatOpen(conversationConversationId, false);
+              openWorkspacePanelForSession(conversationConversationId);
             }}
           >
             <FolderOpen className="size-3.5" aria-hidden />
@@ -811,7 +811,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
             {risks.length > 0 ? <details className="mt-4 border-t border-edge-subtle pt-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted hover:text-fg">{copy.contextRisks}</summary><div className="mt-3"><TextList items={risks} empty={copy.noDefinition} /></div></details> : null}
           </section>
 
-          {latestReceipt ? <section className={cn('p-5', recentlyChanged('runs', 'receipts') && 'task-detail-live-update')}><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><h2 className="text-sm font-semibold text-fg">{copy.latestResult}</h2><p className="mt-1 text-xs text-fg-muted">{language === 'zh' ? (latestReceipt.completionVerdict === 'achieved' ? '本次执行报告目标已达成，请结合下方验证依据验收。' : '这是阶段性结果，尚不能代表任务全部完成。') : (latestReceipt.completionVerdict === 'achieved' ? 'The run reports the goal achieved. Review the evidence below.' : 'This is a partial result; the task is not yet fully complete.')}</p><MarkdownView content={latestReceipt.summary} compact className="mt-2 text-sm leading-6 text-fg" /></div><span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs text-fg-muted">{copy.receiptStatuses[latestReceipt.status]} · {copy.verificationStatuses[latestReceipt.verification.status]}</span></div>{latestReceipt.remainingWork.length > 0 ? <div className="mt-4"><h3 className="text-xs font-medium text-fg-muted">{copy.remainingWork}</h3><div className="mt-2"><TextList items={latestReceipt.remainingWork} empty={copy.noRemainingWork} /></div></div> : null}{latestReceipt.nextAction ? <div className="mt-4 rounded-lg bg-surface-hover p-3"><p className="text-xs font-medium text-fg-muted">{copy.nextAction}</p><p className="mt-1 text-sm text-fg">{latestReceipt.nextAction}</p></div> : null}<div className="mt-4 flex flex-wrap items-center gap-2"><Button className="border-0 bg-surface-hover px-2 py-1 text-xs shadow-none" variant="secondary" onClick={() => void submitTaskFeedback(latestReceipt.runId, 'helpful')}>{copy.doneWell}</Button><Button className="px-2 py-1 text-xs" variant="ghost" onClick={() => void submitTaskFeedback(latestReceipt.runId, 'not_helpful')}>{copy.needsFix}</Button></div><TaskResultEvidence evidence={latestReceipt.evidence} projectId={detail.task.projectId} sessionKey={conversationSessionKey ?? undefined} language={language} />{detail.receipts.length > 1 ? <details className="mt-4 border-t border-edge-subtle pt-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted hover:text-fg">{copy.executionHistory.replace('{{count}}', String(detail.receipts.length - 1))}</summary><div className="mt-3 space-y-3">{detail.receipts.slice(1).map((receipt) => <article key={receipt.runId} className="rounded-lg bg-surface-hover p-3"><div className="flex items-start justify-between gap-3"><p className="text-sm text-fg">{receipt.summary}</p><span className="shrink-0 text-xs text-fg-subtle">{copy.receiptStatuses[receipt.status]}</span></div></article>)}</div></details> : null}</section> : null}
+          {latestReceipt ? <section className={cn('p-5', recentlyChanged('runs', 'receipts') && 'task-detail-live-update')}><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><h2 className="text-sm font-semibold text-fg">{copy.latestResult}</h2><p className="mt-1 text-xs text-fg-muted">{language === 'zh' ? (latestReceipt.completionVerdict === 'achieved' ? '本次执行报告目标已达成，请结合下方验证依据验收。' : '这是阶段性结果，尚不能代表任务全部完成。') : (latestReceipt.completionVerdict === 'achieved' ? 'The run reports the goal achieved. Review the evidence below.' : 'This is a partial result; the task is not yet fully complete.')}</p><MarkdownView content={latestReceipt.summary} compact className="mt-2 text-sm leading-6 text-fg" /></div><span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs text-fg-muted">{copy.receiptStatuses[latestReceipt.status]} · {copy.verificationStatuses[latestReceipt.verification.status]}</span></div>{latestReceipt.remainingWork.length > 0 ? <div className="mt-4"><h3 className="text-xs font-medium text-fg-muted">{copy.remainingWork}</h3><div className="mt-2"><TextList items={latestReceipt.remainingWork} empty={copy.noRemainingWork} /></div></div> : null}{latestReceipt.nextAction ? <div className="mt-4 rounded-lg bg-surface-hover p-3"><p className="text-xs font-medium text-fg-muted">{copy.nextAction}</p><p className="mt-1 text-sm text-fg">{latestReceipt.nextAction}</p></div> : null}<div className="mt-4 flex flex-wrap items-center gap-2"><Button className="border-0 bg-surface-hover px-2 py-1 text-xs shadow-none" variant="secondary" onClick={() => void submitTaskFeedback(latestReceipt.runId, 'helpful')}>{copy.doneWell}</Button><Button className="px-2 py-1 text-xs" variant="ghost" onClick={() => void submitTaskFeedback(latestReceipt.runId, 'not_helpful')}>{copy.needsFix}</Button></div><TaskResultEvidence evidence={latestReceipt.evidence} projectId={detail.task.projectId} conversationId={conversationConversationId ?? undefined} language={language} />{detail.receipts.length > 1 ? <details className="mt-4 border-t border-edge-subtle pt-4"><summary className="cursor-pointer text-sm font-medium text-fg-muted hover:text-fg">{copy.executionHistory.replace('{{count}}', String(detail.receipts.length - 1))}</summary><div className="mt-3 space-y-3">{detail.receipts.slice(1).map((receipt) => <article key={receipt.runId} className="rounded-lg bg-surface-hover p-3"><div className="flex items-start justify-between gap-3"><p className="text-sm text-fg">{receipt.summary}</p><span className="shrink-0 text-xs text-fg-subtle">{copy.receiptStatuses[receipt.status]}</span></div></article>)}</div></details> : null}</section> : null}
 
           {detail.context.length > 0 ? <section className={cn('p-5', recentlyChanged('context') && 'task-detail-live-update')}><h2 className="text-sm font-semibold text-fg">{copy.contextUsed}</h2><ul className="mt-4 grid gap-2 sm:grid-cols-2">{detail.context.map((item) => <li key={item.id} className="min-w-0 rounded-lg bg-surface-hover p-2.5"><span className="text-[11px] text-fg-subtle">{copy.contextRoleLabels[item.role]} · {copy.contextKindLabels[item.targetKind]}</span>{item.targetKind === 'url' && /^https?:\/\//.test(item.targetId) ? <a className="mt-1 block break-all text-sm text-accent hover:underline" href={item.targetId} target="_blank" rel="noreferrer">{item.title ?? item.targetId}</a> : <p className="mt-1 break-words text-sm text-fg">{item.title ?? item.targetId}</p>}</li>)}</ul></section> : null}
         </main>
@@ -867,8 +867,8 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
           </div>
           {presentation === 'modal' ? headerActions : null}
         </div>
-        {conversationSessionKey ? (
-          <div className="min-h-0 flex-1"><ChatPage embedded sessionKey={conversationSessionKey} taskId={taskId} /></div>
+        {conversationConversationId ? (
+          <div className="min-h-0 flex-1"><ChatPage embedded conversationId={conversationConversationId} taskId={taskId} /></div>
         ) : conversationLoading ? (
           <div className="flex min-h-0 flex-1 items-center justify-center p-8 text-center">
             <div className="max-w-xs"><MessageSquare className="mx-auto size-8 animate-pulse text-fg-subtle" /><p className="mt-3 text-sm font-medium text-fg">{language === 'zh' ? '正在创建任务会话' : 'Creating task conversation'}</p></div>
@@ -912,10 +912,10 @@ export function TaskDetailModal({ taskId, backgroundPath, onClose }: {
 }) {
   const language = useLocaleStore((state) => state.language);
   const { data: detail } = useTaskDetail(taskId);
-  const conversationSessionKey = detail?.conversation.activeSessionKey ?? null;
+  const conversationConversationId = detail?.conversation.activeConversationId ?? null;
   const workspacePanelOpen = useWorkspacePanelStore((state) => state.open);
   const workspacePanelWidth = useWorkspacePanelStore((state) => state.widthPx);
-  const workspaceSessionKey = useWorkspacePanelStore((state) => state.sessionKeyOverride);
+  const workspaceConversationId = useWorkspacePanelStore((state) => state.conversationIdOverride);
   const openWorkspacePanelForSession = useWorkspacePanelStore((state) => state.openForSession);
   const setSideChatOpen = useSideChatStore((state) => state.setOpen);
   const previewPath = useWorkspacePreviewStore((state) => state.path);
@@ -967,20 +967,20 @@ export function TaskDetailModal({ taskId, backgroundPath, onClose }: {
             <Dialog.Title className="font-medium text-fg">{language === 'zh' ? '任务详情' : 'Task details'}</Dialog.Title>
             <Dialog.Description className="sr-only">{language === 'zh' ? '查看并操作任务详情' : 'View and manage task details'}</Dialog.Description>
             <div className="flex shrink-0 items-center gap-1">
-              {conversationSessionKey ? (
+              {conversationConversationId ? (
                 <>
                   <button
                     type="button"
                     className={cn(
                       'flex size-8 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg',
-                      workspacePanelOpen && workspaceSessionKey === conversationSessionKey && 'bg-surface-hover text-fg',
+                      workspacePanelOpen && workspaceConversationId === conversationConversationId && 'bg-surface-hover text-fg',
                     )}
                     aria-label={language === 'zh' ? '项目文件' : 'Project files'}
                     title={language === 'zh' ? '项目文件' : 'Project files'}
-                    aria-pressed={workspacePanelOpen && workspaceSessionKey === conversationSessionKey}
+                    aria-pressed={workspacePanelOpen && workspaceConversationId === conversationConversationId}
                     onClick={() => {
-                      setSideChatOpen(conversationSessionKey, false);
-                      openWorkspacePanelForSession(conversationSessionKey);
+                      setSideChatOpen(conversationConversationId, false);
+                      openWorkspacePanelForSession(conversationConversationId);
                     }}
                   >
                     <FolderOpen className="size-4" aria-hidden />
@@ -1012,7 +1012,7 @@ export function TaskDetailModal({ taskId, backgroundPath, onClose }: {
           >
             <WorkspacePreviewPane
               allowOutsideChat
-              sessionKey={workspaceSessionKey ?? undefined}
+              conversationId={workspaceConversationId ?? undefined}
             />
           </div>
         ) : null}

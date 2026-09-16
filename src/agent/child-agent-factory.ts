@@ -23,7 +23,7 @@ export interface BuildChildToolsOptions {
   getConfig: () => Config | undefined;
   toolExecutorConfig?: Partial<ToolExecutorConfig>;
   endpointTools?: EndpointToolRuntime;
-  browserSessionKey?: string;
+  browserConversationId?: string;
 }
 
 export interface DelegateChildProgressHooks {
@@ -44,7 +44,7 @@ export interface DelegateChildHandleOptions {
   workspace: string;
   goal: string;
   context?: string;
-  requesterSessionKey?: string;
+  requesterConversationId?: string;
   allowedToolNames: string[];
   maxIterations: number;
   model: Model<Api>;
@@ -61,7 +61,7 @@ export interface DelegateChildHandleOptions {
   /** Optional live progress for workflow subagents. */
   progressHooks?: DelegateChildProgressHooks;
   transcriptRuntime?: EmbeddedTranscriptRuntime;
-  sessionKey?: string;
+  conversationId?: string;
   timeoutMs?: number;
   verifyChanges?: boolean;
 }
@@ -82,8 +82,8 @@ export interface DelegateChildHandle {
 /** Leaf workers use the same execution, transcript and verification harness as foreground turns. */
 export function createDelegateChildHandle(options: DelegateChildHandleOptions): DelegateChildHandle {
   const controller = new AbortController();
-  const sessionKey = options.sessionKey ?? `agent:subagent:internal:${randomUUID()}`;
-  const runtime = options.transcriptRuntime ?? new InMemoryTranscriptRuntime({ runtimeId: sessionKey, cwd: options.workspace });
+  const conversationId = options.conversationId ?? randomUUID();
+  const runtime = options.transcriptRuntime ?? new InMemoryTranscriptRuntime({ runtimeId: conversationId, cwd: options.workspace });
   let started = false;
   return {
     abort: () => controller.abort(new Error('Sub-agent cancelled')),
@@ -95,7 +95,7 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
       const tools = options.buildChildTools({ workspace: options.workspace, bus: options.bus,
         model: options.model, agentId: options.agentId, getConfig: options.getConfig,
         toolExecutorConfig: options.toolExecutorConfig,
-        browserSessionKey: options.requesterSessionKey ?? sessionKey,
+        browserConversationId: options.requesterConversationId ?? conversationId,
       }).filter(tool => allow.has(tool.name));
       const limit = Math.min(60, Math.max(1, Math.floor(options.maxIterations)));
       let toolIterations = 0, exhausted = false, tokens = 0;
@@ -117,7 +117,7 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
       };
       try {
         const result = await runXopcEmbeddedTurn({
-          sessionKey, runId: randomUUID(), workspaceDir: options.workspace,
+          conversationId, runId: randomUUID(), workspaceDir: options.workspace,
           userMessage: { role: 'user', content: options.goal, timestamp: Date.now() },
           model: options.model, modelRef: `${options.model.provider}/${options.model.id}`,
           tools, transcriptRuntime: runtime, turnPolicy: policy, abortSignal: controller.signal,
@@ -125,7 +125,7 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
           verifyChanges: options.verifyChanges,
           systemPrompt: buildSubagentSystemPrompt({ goal: options.goal, context: options.context,
             workspace: options.workspace, toolNames: tools.map(tool => tool.name),
-            responseLanguage: resolveResponseLanguageForSession(options.getConfig(), options.requesterSessionKey) }),
+            responseLanguage: resolveResponseLanguageForSession(options.getConfig(), options.requesterConversationId) }),
           onEvent: event => {
             const progress = options.progressHooks;
             if (event.type === 'message_end' && event.message.role === 'assistant') {

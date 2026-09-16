@@ -16,7 +16,7 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 export interface ComposerContextBarProps {
-  sessionKey: string | null;
+  conversationId: string | null;
   project?: { id: string; name: string } | null;
   workspacePath?: string | null;
   canChangeWorkspace: boolean;
@@ -28,16 +28,16 @@ export interface ComposerContextBarProps {
 
 const controlClass = 'inline-flex h-8 min-w-0 shrink-0 items-center justify-center gap-1.5 rounded-full px-2.5 text-sm text-fg transition-[background-color,transform] hover:bg-surface-hover active:scale-95 disabled:pointer-events-none disabled:opacity-45 motion-reduce:transition-none motion-reduce:transform-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
-export function ComposerContextBar({ sessionKey, project, workspacePath, canChangeWorkspace, disabled, environmentPicker, onProjectChange, onWorkspaceChange }: ComposerContextBarProps) {
+export function ComposerContextBar({ conversationId, project, workspacePath, canChangeWorkspace, disabled, environmentPicker, onProjectChange, onWorkspaceChange }: ComposerContextBarProps) {
   const language = useLocaleStore((state) => state.language);
   const m = messages(language);
   const copy = m.chat.composerContext;
-  const token = useGatewayStore((state) => state.sessionKey);
+  const token = useGatewayStore((state) => state.conversationId);
   const baseUrl = useGatewayStore((state) => state.baseUrl);
   const [query, setQuery] = useState('');
   const [search] = useDebounce(query, 200);
   const projects = useSWR(['composer-projects', baseUrl, token, search], () => fetchProjects({ status: 'active', search, sortBy: 'updatedAt', sortOrder: 'desc', limit: 50 }), { keepPreviousData: false, shouldRetryOnError: false });
-  const context = useSessionContext(sessionKey, false);
+  const context = useSessionContext(conversationId, false);
   const environment = context.error ? undefined : context.data?.environment;
   const rootPath = workspacePath?.trim() || environment?.rootPath || '';
   const [directoryError, setDirectoryError] = useState<string | null>(null);

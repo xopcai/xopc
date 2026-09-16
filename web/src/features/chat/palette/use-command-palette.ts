@@ -202,7 +202,7 @@ export function useCommandPalette(
     suppress?: boolean;
     isComposing?: boolean;
     currentAgentId?: string;
-    sessionKey?: string | null;
+    conversationId?: string | null;
   },
 ) {
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -249,7 +249,7 @@ export function useCommandPalette(
     async () => {
       const [commands, skillsPayload, agentsPayload] = await Promise.all([
         fetchCommandsCached(),
-        getChatSkillsCached(options?.currentAgentId, options?.sessionKey),
+        getChatSkillsCached(options?.currentAgentId, options?.conversationId),
         fetchChatAgents().catch(() => null),
       ]);
       const commandItems: PaletteItem[] = commands.map((c) => ({
@@ -290,7 +290,7 @@ export function useCommandPalette(
           : [];
       return [...skillItems, ...commandItems, ...agentItems];
     },
-    [language, options?.currentAgentId, options?.sessionKey, skillsVersion],
+    [language, options?.currentAgentId, options?.conversationId, skillsVersion],
     { enabled: paletteActive, initial: [] as PaletteItem[], errorData: [] },
   );
   const allItems = itemsResource.data;

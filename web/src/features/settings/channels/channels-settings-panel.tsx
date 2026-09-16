@@ -554,7 +554,7 @@ function ChannelSetupReadinessBanner({
 export function ChannelsSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
-  const hasToken = useGatewayStore((s) => Boolean(s.sessionKey));
+  const hasToken = useGatewayStore((s) => Boolean(s.conversationId));
   const navigate = useNavigate();
   const { channelId: routeChannelId } = useParams<{ channelId?: string }>();
   const activeChannelId = normalizeChannelRouteId(routeChannelId);

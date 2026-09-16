@@ -28,7 +28,7 @@ const log = createLogger('EmbeddedSessionRunner');
 const DEFAULT_IDLE_TTL_MS = 5 * 60_000;
 
 export type EmbeddedRunnerFingerprintInput = {
-  sessionId: string;
+  transcriptId: string;
   workspaceDir: string;
   modelRef: string;
   toolNames: readonly string[];
@@ -45,7 +45,7 @@ function providerCredentialRevision(providerId: string): string {
 export function buildEmbeddedRunnerFingerprint(input: EmbeddedRunnerFingerprintInput): string {
   const tools = [...input.toolNames].sort().join('\0');
   return createHash('sha256').update([
-    input.sessionId,
+    input.transcriptId,
     input.workspaceDir,
     input.modelRef,
     tools,
@@ -68,7 +68,7 @@ type PooledRunner = {
 
 export type AcquireEmbeddedSessionRunnerParams = {
   runtimeId: string;
-  sessionId: string;
+  transcriptId: string;
   workspaceDir: string;
   model: Model<Api>;
   modelRef: string;
@@ -174,7 +174,7 @@ export class EmbeddedSessionRunnerPool {
     this.stats.acquires += 1;
 
     const fingerprint = buildEmbeddedRunnerFingerprint({
-      sessionId: params.sessionId,
+      transcriptId: params.transcriptId,
       workspaceDir: params.workspaceDir,
       modelRef: params.modelRef,
       toolNames: params.tools.map((t) => t.name),
@@ -255,14 +255,14 @@ export class EmbeddedSessionRunnerPool {
   }
 
   private async createPooledRunner(params: AcquireEmbeddedSessionRunnerParams): Promise<PooledRunner> {
-    const { runtimeId, sessionId, workspaceDir, model, thinkingLevel, tools, systemPrompt } = params;
+    const { runtimeId, transcriptId, workspaceDir, model, thinkingLevel, tools, systemPrompt } = params;
 
     const settingsManager = createEmbeddedSettingsManager(workspaceDir);
 
     const piSm = guardSessionManager(
       params.transcriptRuntime.openSessionManager(workspaceDir),
       {
-        sessionKey: params.transcriptRuntime.persistent ? runtimeId : undefined,
+        conversationId: params.transcriptRuntime.persistent ? runtimeId : undefined,
         contextWindowTokens: model.contextWindow ?? 128_000,
         transformMessageForPersistence: params.transcriptRuntime.persistent
           ? (message) => transformUserMessageForPersistence(runtimeId, message)
@@ -301,7 +301,7 @@ export class EmbeddedSessionRunnerPool {
     session.agent.streamFunction = baseStreamFn;
 
     const fingerprint = buildEmbeddedRunnerFingerprint({
-      sessionId,
+      transcriptId,
       workspaceDir,
       modelRef: params.modelRef,
       toolNames,

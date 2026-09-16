@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  extractCreatedSessionKey,
+  extractCreatedConversationId,
   normalizeSessionActiveRunResponse,
   parseSessionActionResponse,
   parseSessionMessagePage,
@@ -20,7 +20,7 @@ describe('sessions backend response contract', () => {
     const response = {
       items: [
         {
-          key: 'agent:main:webchat:default:direct:chat_a',
+          key: "c0f12290-5df2-4203-8bfd-5d5f34467d20",
           name: 'Planning',
           status: 'active',
           tags: [],
@@ -39,7 +39,7 @@ describe('sessions backend response contract', () => {
             peerKind: 'direct',
             peerId: 'chat_a',
           },
-          sessionId: 'sess_a',
+          transcriptId: '117d8aa7-f120-54ad-a0dd-48a11ded92b1',
           sessionStartedAt: '2026-07-09T00:00:00.000Z',
           lastInteractionAt: '2026-07-09T00:10:00.000Z',
           customData: { genericNewChatShell: false },
@@ -54,14 +54,14 @@ describe('sessions backend response contract', () => {
     const parsed = parseSessionsListResponse(response);
     const first = tryParseSessionListItem(parsed.items[0]);
     expect(parsed.total).toBe(1);
-    expect(first?.key).toBe('agent:main:webchat:default:direct:chat_a');
+    expect(first?.key).toBe("c0f12290-5df2-4203-8bfd-5d5f34467d20");
     expect(first?.routing?.agentId).toBe('main');
   });
 
   it('accepts the gateway session detail response shape', () => {
     const response = {
       session: {
-        key: 'agent:main:webchat:default:direct:chat_a',
+        key: "c0f12290-5df2-4203-8bfd-5d5f34467d20",
         name: 'Planning',
         status: 'active',
         tags: [],
@@ -73,7 +73,7 @@ describe('sessions backend response contract', () => {
         compactedCount: 0,
         sourceChannel: 'webchat',
         sourceChatId: 'chat_a',
-        sessionId: 'sess_a',
+        transcriptId: '117d8aa7-f120-54ad-a0dd-48a11ded92b1',
         messages: [
           { role: 'user', content: 'hello', timestamp: '2026-07-09T00:00:01.000Z' },
           {
@@ -105,8 +105,8 @@ describe('sessions backend response contract', () => {
   it('accepts the gateway history page response shape', () => {
     const response = {
       session: {
-        key: 'agent:main:webchat:default:direct:chat_a',
-        sessionId: 'sess_a',
+        key: "c0f12290-5df2-4203-8bfd-5d5f34467d20",
+        transcriptId: '117d8aa7-f120-54ad-a0dd-48a11ded92b1',
         name: 'Planning',
         status: 'active',
         sourceChannel: 'webchat',
@@ -138,12 +138,12 @@ describe('sessions backend response contract', () => {
       payload: { active: true, runId: ' run-a ' },
     })).toEqual({ active: true, runId: 'run-a' });
 
-    expect(extractCreatedSessionKey({
+    expect(extractCreatedConversationId({
       session: {
-        key: ' agent:main:webchat:default:direct:chat_new ',
-        sessionId: 'sess_new',
+        key: ' 2f414f56-2a1f-4889-8328-d4f8510d3a95 ',
+        transcriptId: '23c6e1ec-2563-510e-be85-6d9e619d2f10',
       },
-    })).toBe('agent:main:webchat:default:direct:chat_new');
+    })).toBe("2f414f56-2a1f-4889-8328-d4f8510d3a95");
   });
 
   it('accepts gateway action and reset response shapes', () => {
@@ -153,10 +153,10 @@ describe('sessions backend response contract', () => {
     expect(parseSessionResetResponse({
       ok: true,
       reset: true,
-      sessionId: 'sess_new',
-      previousSessionId: 'sess_old',
-      session: { key: 'agent:main:webchat:default:direct:chat_a' },
-    }).previousSessionId).toBe('sess_old');
+      transcriptId: '23c6e1ec-2563-510e-be85-6d9e619d2f10',
+      previousTranscriptId: 'sess_old',
+      session: { key: "c0f12290-5df2-4203-8bfd-5d5f34467d20" },
+    }).previousTranscriptId).toBe('sess_old');
   });
 
   it('accepts gateway stats and resolve response shapes', () => {
@@ -175,11 +175,11 @@ describe('sessions backend response contract', () => {
     expect(parseSessionResolveResponse({
       ok: true,
       payload: {
-        sessionKey: 'agent:main:webchat:default:direct:chat_a',
-        sessionId: 'sess_a',
-        session: { key: 'agent:main:webchat:default:direct:chat_a', sessionId: 'sess_a' },
+        conversationId: "c0f12290-5df2-4203-8bfd-5d5f34467d20",
+        transcriptId: '117d8aa7-f120-54ad-a0dd-48a11ded92b1',
+        session: { key: "c0f12290-5df2-4203-8bfd-5d5f34467d20", transcriptId: '117d8aa7-f120-54ad-a0dd-48a11ded92b1' },
       },
-    }).payload?.sessionKey).toBe('agent:main:webchat:default:direct:chat_a');
+    }).payload?.conversationId).toBe("c0f12290-5df2-4203-8bfd-5d5f34467d20");
 
     expect(parseSessionResolveResponse({ ok: false, error: 'Session not found' }).error).toBe('Session not found');
   });
@@ -193,7 +193,7 @@ describe('sessions backend response contract', () => {
             project: { id: 'project-a', name: 'Project A' },
             sessions: [
               {
-                key: 'agent:main:webchat:default:direct:chat_a',
+                key: "c0f12290-5df2-4203-8bfd-5d5f34467d20",
                 status: 'active',
                 tags: [],
                 createdAt: '2026-07-09T00:00:00.000Z',

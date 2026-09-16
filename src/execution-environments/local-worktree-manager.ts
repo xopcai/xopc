@@ -246,7 +246,7 @@ export class LocalWorktreeManager {
     });
   }
 
-  async remove(environmentId: string, options?: { releaseSessionKey: string }): Promise<ExecutionEnvironment> {
+  async remove(environmentId: string, options?: { releaseConversationId: string }): Promise<ExecutionEnvironment> {
     const environment = this.store.getRequired(environmentId);
     if (environment.status === 'deleted') return environment;
     if (environment.kind === 'local_checkout') {
@@ -274,7 +274,7 @@ export class LocalWorktreeManager {
     }
     assertManagedPath(environment.rootPath, this.stateDir);
     const bindings = this.store.listBindings(environmentId);
-    if (bindings.some(binding => binding.sessionKey !== options?.releaseSessionKey)) {
+    if (bindings.some(binding => binding.conversationId !== options?.releaseConversationId)) {
       throw new ExecutionEnvironmentConflictError(`Managed worktree ${environmentId} still has active bindings`);
     }
     const deleting = environment.status === 'deleting' ? environment : this.store.transition({
@@ -308,7 +308,7 @@ export class LocalWorktreeManager {
           }
         }
       });
-      if (options?.releaseSessionKey) this.store.releaseBinding(options.releaseSessionKey, environmentId);
+      if (options?.releaseConversationId) this.store.releaseBinding(options.releaseConversationId, environmentId);
       const deleted = this.store.transition({
         environmentId,
         expectedVersion: deleting.version,

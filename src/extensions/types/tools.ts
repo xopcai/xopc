@@ -22,7 +22,7 @@ export interface ToolExecutionStartEvent {
   toolCallId: string;
   params: Record<string, unknown>;
   agentId?: string;
-  sessionKey?: string;
+  conversationId?: string;
 }
 
 export interface ToolExecutionUpdateEvent<TDetails = unknown> {
@@ -30,7 +30,7 @@ export interface ToolExecutionUpdateEvent<TDetails = unknown> {
   toolCallId: string;
   update: AgentToolResult<TDetails>;
   agentId?: string;
-  sessionKey?: string;
+  conversationId?: string;
 }
 
 export interface ToolExecutionEndEvent<TDetails = unknown> {
@@ -40,5 +40,5 @@ export interface ToolExecutionEndEvent<TDetails = unknown> {
   error?: Error;
   durationMs?: number;
   agentId?: string;
-  sessionKey?: string;
+  conversationId?: string;
 }

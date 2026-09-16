@@ -58,7 +58,7 @@ try {
   const cookie = login.headers.get('set-cookie').split(';')[0];
   assert.match(login.headers.get('set-cookie'), /HttpOnly/);
   const session = await login.json();
-  assert.match(session.sessionKey, /^browser:/);
+  assert.match(session.conversationId, /^browser:/);
   const authenticated = { Origin: origin, Cookie: cookie };
   assert.equal((await call('/api/browser-session', { headers: authenticated })).status, 200);
   assert.equal((await call('/api/browser-session', { method: 'DELETE', headers: { Cookie: cookie } })).status, 403);

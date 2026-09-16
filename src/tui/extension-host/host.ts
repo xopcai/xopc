@@ -31,7 +31,7 @@ const WIDGET_TRUNCATED_LINE = '... (widget truncated)';
 export interface TuiExtensionHostDeps {
   extensionId: string;
   surface: TuiExtensionSurface;
-  getSessionKey: () => string;
+  getConversationId: () => string;
   notify: (message: string, level?: TuiNotifyLevel) => void;
   onTerminalInputAdded: (handler: TuiTerminalInputHandler) => () => void;
   showOverlay: (component: Component) => void;

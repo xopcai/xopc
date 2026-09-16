@@ -8,7 +8,7 @@ export type ExecutionTrigger = 'user' | 'schedule' | 'webhook' | 'proactive' | '
 
 export interface ExecutionContext {
   runId: string;
-  sessionKey: string;
+  conversationId: string;
   channel: string;
   agentId?: string;
   executionEnvironmentId?: string;
@@ -49,18 +49,18 @@ function metadataTrigger(metadata: SessionMetadata): ExecutionTrigger {
 
 export function resolveExecutionContext(input: {
   runId: string;
-  sessionKey: string;
+  conversationId: string;
   channel: string;
   metadata: SessionMetadata;
   agentId?: string;
 }): ExecutionContext {
   const taskId = isXopcDatabaseOpen()
-    ? new TaskConversationRepository().resolveActiveExecutionSession(input.sessionKey)?.taskId
+    ? new TaskConversationRepository().resolveActiveExecutionSession(input.conversationId)?.taskId
     : undefined;
-  const environment = getExecutionEnvironmentForSession(input.sessionKey);
+  const environment = getExecutionEnvironmentForSession(input.conversationId);
   return {
     runId: input.runId,
-    sessionKey: input.sessionKey,
+    conversationId: input.conversationId,
     channel: input.channel,
     agentId: input.agentId,
     ...(environment ? {

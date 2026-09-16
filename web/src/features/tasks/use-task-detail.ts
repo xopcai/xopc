@@ -17,7 +17,7 @@ export function shouldRefreshTaskDetailFromChange(
 }
 
 export function useTaskDetail(taskId: string) {
-  const token = useGatewayStore((state) => state.sessionKey);
+  const token = useGatewayStore((state) => state.conversationId);
   const [lastChange, setLastChange] = useState<TaskChangedEvent | null>(null);
   const [conversationLoading, setConversationLoading] = useState(false);
   const [conversationError, setConversationError] = useState<unknown>(null);
@@ -48,7 +48,7 @@ export function useTaskDetail(taskId: string) {
 
   useEffect(() => {
     const detail = swr.data;
-    if (!detail || detail.conversation.activeSessionKey) return;
+    if (!detail || detail.conversation.activeConversationId) return;
     const marker = `${taskId}:${detail.task.version}`;
     if (ensureMarkerRef.current === marker) return;
     ensureMarkerRef.current = marker;

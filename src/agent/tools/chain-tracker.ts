@@ -23,7 +23,7 @@ export interface ToolCallNode {
 }
 
 export interface ToolChain {
-  sessionKey: string;
+  conversationId: string;
   startTime: number;
   endTime?: number;
   nodes: ToolCallNode[];
@@ -53,7 +53,7 @@ const DEFAULT_CONFIG: ToolChainTrackerConfig = {
 
 export class ToolChainTracker {
   private chains: Map<string, ToolChain> = new Map();
-  private currentChainId: Map<string, string> = new Map(); // sessionKey -> chainId
+  private currentChainId: Map<string, string> = new Map(); // conversationId -> chainId
   private config: ToolChainTrackerConfig;
 
   constructor(config: Partial<ToolChainTrackerConfig> = {}) {
@@ -63,14 +63,14 @@ export class ToolChainTracker {
   /**
    * Start a new tool chain for a session
    */
-  startChain(sessionKey: string): string {
+  startChain(conversationId: string): string {
     if (!this.config.enabled) {
       return '';
     }
 
-    const chainId = this.generateChainId(sessionKey);
+    const chainId = this.generateChainId(conversationId);
     const chain: ToolChain = {
-      sessionKey,
+      conversationId,
       startTime: Date.now(),
       nodes: [],
       totalCalls: 0,
@@ -80,9 +80,9 @@ export class ToolChainTracker {
     };
 
     this.chains.set(chainId, chain);
-    this.currentChainId.set(sessionKey, chainId);
+    this.currentChainId.set(conversationId, chainId);
 
-    log.debug({ sessionKey, chainId }, 'Started new tool chain');
+    log.debug({ conversationId, chainId }, 'Started new tool chain');
     return chainId;
   }
 
@@ -90,7 +90,7 @@ export class ToolChainTracker {
    * Record a tool call in the chain
    */
   recordCall(
-    sessionKey: string,
+    conversationId: string,
     toolName: string,
     params: Record<string, unknown>,
     durationMs: number = 0
@@ -99,10 +99,10 @@ export class ToolChainTracker {
       return '';
     }
 
-    const chainId = this.currentChainId.get(sessionKey);
+    const chainId = this.currentChainId.get(conversationId);
     if (!chainId) {
       log.warn(
-        { sessionKey, toolName },
+        { conversationId, toolName },
         `Tool chain: recordCall skipped — no active chain for session (missing turn_start?); tool=${toolName}`,
       );
       return '';
@@ -110,7 +110,7 @@ export class ToolChainTracker {
 
     const chain = this.chains.get(chainId);
     if (!chain) {
-      log.warn({ chainId, sessionKey, toolName }, `Tool chain: id ${chainId} missing from store; tool=${toolName}`);
+      log.warn({ chainId, conversationId, toolName }, `Tool chain: id ${chainId} missing from store; tool=${toolName}`);
       return '';
     }
 
@@ -142,7 +142,7 @@ export class ToolChainTracker {
    * Record tool call result
    */
   recordResult(
-    sessionKey: string,
+    conversationId: string,
     nodeId: string,
     result?: unknown,
     error?: string,
@@ -152,7 +152,7 @@ export class ToolChainTracker {
       return;
     }
 
-    const chainId = this.currentChainId.get(sessionKey);
+    const chainId = this.currentChainId.get(conversationId);
     if (!chainId) return;
 
     const chain = this.chains.get(chainId);
@@ -161,7 +161,7 @@ export class ToolChainTracker {
     const node = chain.nodes.find(n => n.id === nodeId);
     if (!node) {
       log.warn(
-        { nodeId, chainId, sessionKey, chainNodeCount: chain.nodes.length },
+        { nodeId, chainId, conversationId, chainNodeCount: chain.nodes.length },
         `Tool chain: recordResult skipped — node ${nodeId} not in chain`,
       );
       return;
@@ -189,8 +189,8 @@ export class ToolChainTracker {
   /**
    * End the current chain for a session
    */
-  endChain(sessionKey: string): void {
-    const chainId = this.currentChainId.get(sessionKey);
+  endChain(conversationId: string): void {
+    const chainId = this.currentChainId.get(conversationId);
     if (!chainId) return;
 
     const chain = this.chains.get(chainId);
@@ -207,19 +207,19 @@ export class ToolChainTracker {
       );
     }
 
-    this.currentChainId.delete(sessionKey);
+    this.currentChainId.delete(conversationId);
 
     // Auto-prune old chains
     if (this.config.autoPrune) {
-      this.pruneOldChains(sessionKey);
+      this.pruneOldChains(conversationId);
     }
   }
 
   /**
    * Get chain summary as text
    */
-  getChainSummary(sessionKey: string): string {
-    const chainId = this.currentChainId.get(sessionKey);
+  getChainSummary(conversationId: string): string {
+    const chainId = this.currentChainId.get(conversationId);
     if (!chainId) {
       return 'No active tool chain';
     }
@@ -232,7 +232,7 @@ export class ToolChainTracker {
     const lines: string[] = [
       `Tool Chain Summary (Chain: ${chainId})`,
       `================================`,
-      `Session: ${sessionKey}`,
+      `Session: ${conversationId}`,
       `Status: ${chain.endTime ? 'Completed' : 'Active'}`,
       `Duration: ${chain.endTime ? ((chain.endTime - chain.startTime) / 1000).toFixed(1) : 'Ongoing'}s`,
       '',
@@ -256,8 +256,8 @@ export class ToolChainTracker {
   /**
    * Get chain visualization (ASCII tree)
    */
-  getChainVisualization(sessionKey: string): string {
-    const chainId = this.currentChainId.get(sessionKey);
+  getChainVisualization(conversationId: string): string {
+    const chainId = this.currentChainId.get(conversationId);
     if (!chainId) return 'No active chain';
 
     const chain = this.chains.get(chainId);
@@ -281,16 +281,16 @@ export class ToolChainTracker {
   /**
    * Get all chains for a session
    */
-  getSessionChains(sessionKey: string): ToolChain[] {
+  getSessionChains(conversationId: string): ToolChain[] {
     return Array.from(this.chains.values())
-      .filter(chain => chain.sessionKey === sessionKey);
+      .filter(chain => chain.conversationId === conversationId);
   }
 
   /**
    * Get current active chain
    */
-  getCurrentChain(sessionKey: string): ToolChain | undefined {
-    const chainId = this.currentChainId.get(sessionKey);
+  getCurrentChain(conversationId: string): ToolChain | undefined {
+    const chainId = this.currentChainId.get(conversationId);
     if (!chainId) return undefined;
     return this.chains.get(chainId);
   }
@@ -323,11 +323,11 @@ export class ToolChainTracker {
   /**
    * Export chains as JSON
    */
-  exportChains(sessionKey?: string): string {
+  exportChains(conversationId?: string): string {
     let chains = Array.from(this.chains.values());
     
-    if (sessionKey) {
-      chains = chains.filter(c => c.sessionKey === sessionKey);
+    if (conversationId) {
+      chains = chains.filter(c => c.conversationId === conversationId);
     }
 
     return JSON.stringify({
@@ -371,8 +371,8 @@ export class ToolChainTracker {
   // Private Methods
   // ============================================================================
 
-  private generateChainId(sessionKey: string): string {
-    return `${sessionKey}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  private generateChainId(conversationId: string): string {
+    return `${conversationId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   }
 
   private generateNodeId(): string {
@@ -395,8 +395,8 @@ export class ToolChainTracker {
     }
   }
 
-  private pruneOldChains(sessionKey: string): void {
-    const sessionChains = this.getSessionChains(sessionKey);
+  private pruneOldChains(conversationId: string): void {
+    const sessionChains = this.getSessionChains(conversationId);
     
     if (sessionChains.length > this.config.maxChainsPerSession) {
       // Sort by start time and remove oldest

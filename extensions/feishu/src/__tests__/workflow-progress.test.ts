@@ -1,3 +1,11 @@
+import { requireXopcDatabase as openFixtureDatabase } from '../../../../src/storage/sqlite/connection.js';
+import { ensureSessionRecord as ensureFixtureConversation } from '../../../../src/storage/sqlite/session-repository.js';
+function seedConversationFixtures(): void {
+  openFixtureDatabase();
+  ensureFixtureConversation("8eadd690-5d00-41e6-8fc5-55e99aa7802a", '', {"agentId":"main","sourceChannel":"feishu","sourceChatId":"ou_aa11bb22cc33dd44","sessionType":"chat","routing":{"agentId":"main","source":"feishu","accountId":"default","peerKind":"direct","peerId":"ou_aa11bb22cc33dd44"}});
+  ensureFixtureConversation("46ea9f02-33cc-4aad-82ee-53d0cb30e051", '', {"agentId":"main","sourceChannel":"feishu","sourceChatId":"oc_55ee66ff77gg88hh","sessionType":"chat","routing":{"agentId":"main","source":"feishu","accountId":"default","peerKind":"group","peerId":"oc_55ee66ff77gg88hh"}});
+  ensureFixtureConversation("17d37cc6-455a-4ef3-800a-02c525fd8fcb", '', {"agentId":"main","sourceChannel":"telegram","sourceChatId":"123","sessionType":"chat","routing":{"agentId":"main","source":"telegram","accountId":"default","peerKind":"direct","peerId":"123"}});
+}
 import { describe, expect, it, vi } from 'vitest';
 
 import { createFeishuWorkflowProgressCapability } from '../workflow-progress.js';
@@ -45,8 +53,8 @@ import * as clientModule from '../transport/client/client.js';
 const editMock = vi.mocked(editMessageFeishu);
 const createMock = (clientModule as { __createMock: ReturnType<typeof vi.fn> }).__createMock;
 
-const DM_SESSION = 'agent:main:feishu:default:direct:ou_aa11bb22cc33dd44';
-const GROUP_SESSION = 'agent:main:feishu:group:oc_55ee66ff77gg88hh';
+const DM_SESSION = "8eadd690-5d00-41e6-8fc5-55e99aa7802a";
+const GROUP_SESSION = "46ea9f02-33cc-4aad-82ee-53d0cb30e051";
 
 function mkCap() {
   return createFeishuWorkflowProgressCapability({
@@ -56,6 +64,7 @@ function mkCap() {
 
 describe('feishu workflow progress capability', () => {
   it('declares the expected channel defaults', () => {
+    seedConversationFixtures();
     const cap = mkCap();
     expect(cap.channelId).toBe('feishu');
     expect(cap.supportsEdit).toBe(true);
@@ -64,11 +73,12 @@ describe('feishu workflow progress capability', () => {
   });
 
   it('sends with receive_id_type=open_id for DM targets', async () => {
+    seedConversationFixtures();
     createMock.mockClear();
     editMock.mockClear();
     const cap = mkCap();
     const r = await cap.postProgress({
-      sessionKey: DM_SESSION,
+      conversationId: DM_SESSION,
       text: 'workflow running…',
       isFinal: false,
     });
@@ -81,10 +91,11 @@ describe('feishu workflow progress capability', () => {
   });
 
   it('sends with receive_id_type=chat_id for group targets', async () => {
+    seedConversationFixtures();
     createMock.mockClear();
     const cap = mkCap();
     await cap.postProgress({
-      sessionKey: GROUP_SESSION,
+      conversationId: GROUP_SESSION,
       text: 'hi',
       isFinal: false,
     });
@@ -94,12 +105,13 @@ describe('feishu workflow progress capability', () => {
   });
 
   it('edits in place when previousMessageId is provided and not final', async () => {
+    seedConversationFixtures();
     editMock.mockClear();
     createMock.mockClear();
     editMock.mockResolvedValueOnce({ ok: true });
     const cap = mkCap();
     const r = await cap.postProgress({
-      sessionKey: DM_SESSION,
+      conversationId: DM_SESSION,
       text: 'updated',
       previousMessageId: 'om_prev',
       isFinal: false,
@@ -112,11 +124,12 @@ describe('feishu workflow progress capability', () => {
   });
 
   it('always sends a fresh message for the final update', async () => {
+    seedConversationFixtures();
     editMock.mockClear();
     createMock.mockClear();
     const cap = mkCap();
     await cap.postProgress({
-      sessionKey: DM_SESSION,
+      conversationId: DM_SESSION,
       text: 'done',
       previousMessageId: 'om_prev',
       isFinal: true,
@@ -126,12 +139,13 @@ describe('feishu workflow progress capability', () => {
   });
 
   it('swallows "not modified" edit errors and keeps id', async () => {
+    seedConversationFixtures();
     editMock.mockClear();
     createMock.mockClear();
     editMock.mockRejectedValueOnce(new Error('error code 230009 message_not_modified'));
     const cap = mkCap();
     const r = await cap.postProgress({
-      sessionKey: DM_SESSION,
+      conversationId: DM_SESSION,
       text: 'same',
       previousMessageId: 'om_prev',
       isFinal: false,
@@ -141,12 +155,13 @@ describe('feishu workflow progress capability', () => {
   });
 
   it('falls back to send when the edit target is gone', async () => {
+    seedConversationFixtures();
     editMock.mockClear();
     createMock.mockClear();
     editMock.mockRejectedValueOnce(new Error('error code 230002 message_not_found'));
     const cap = mkCap();
     const r = await cap.postProgress({
-      sessionKey: DM_SESSION,
+      conversationId: DM_SESSION,
       text: 'rebuild',
       previousMessageId: 'om_prev',
       isFinal: false,
@@ -156,13 +171,14 @@ describe('feishu workflow progress capability', () => {
   });
 
   it('rethrows non-recoverable edit errors so the broker can log', async () => {
+    seedConversationFixtures();
     editMock.mockClear();
     createMock.mockClear();
     editMock.mockRejectedValueOnce(new Error('99991 internal'));
     const cap = mkCap();
     await expect(
       cap.postProgress({
-        sessionKey: DM_SESSION,
+        conversationId: DM_SESSION,
         text: 'x',
         previousMessageId: 'om_prev',
         isFinal: false,
@@ -170,11 +186,12 @@ describe('feishu workflow progress capability', () => {
     ).rejects.toThrow(/internal/);
   });
 
-  it('throws when sessionKey is not feishu', async () => {
+  it('throws when conversationId is not feishu', async () => {
+    seedConversationFixtures();
     const cap = mkCap();
     await expect(
       cap.postProgress({
-        sessionKey: 'agent:main:telegram:default:direct:123',
+        conversationId: "17d37cc6-455a-4ef3-800a-02c525fd8fcb",
         text: 'x',
         isFinal: false,
       }),
@@ -182,11 +199,12 @@ describe('feishu workflow progress capability', () => {
   });
 
   it('clamps oversized text to Feishu limit', async () => {
+    seedConversationFixtures();
     createMock.mockClear();
     editMock.mockClear();
     const cap = mkCap();
     await cap.postProgress({
-      sessionKey: DM_SESSION,
+      conversationId: DM_SESSION,
       text: 'x'.repeat(10_000),
       isFinal: false,
     });

@@ -23,7 +23,7 @@ function run(rootPath: string, status: WorkDiscoveryRun['status']): WorkDiscover
     rootPath,
     status,
     projectId: `project:${rootPath}`,
-    sessionKey: `session:${rootPath}`,
+    conversationId: `session:${rootPath}`,
   };
 }
 

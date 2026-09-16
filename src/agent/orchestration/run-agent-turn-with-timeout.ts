@@ -29,9 +29,9 @@ export function isAgentTurnUnsettledError(err: unknown): err is AgentTurnUnsettl
   return err instanceof AgentTurnUnsettledError;
 }
 
-export function resolveAgentTurnTimeoutMs(config?: Config, sessionKey?: string): number {
+export function resolveAgentTurnTimeoutMs(config?: Config, conversationId?: string): number {
   if (!config) return DEFAULT_AGENT_TURN_TIMEOUT_MS;
-  const configured = resolveEffectiveAgentConfigForSession(config, sessionKey).config.runtime.timeoutMs;
+  const configured = resolveEffectiveAgentConfigForSession(config, conversationId).config.runtime.timeoutMs;
   if (!configured) return DEFAULT_AGENT_TURN_TIMEOUT_MS;
   return Math.min(MAX_AGENT_TURN_TIMEOUT_MS, Math.max(MIN_AGENT_TURN_TIMEOUT_MS, configured));
 }

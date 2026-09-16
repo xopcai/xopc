@@ -1,31 +1,31 @@
 import { getSqliteDatabase } from './transaction.js';
 
 export interface StoredEndpointSessionBinding {
-  sessionKey: string;
+  conversationId: string;
   endpointId: string;
   boundAt: number;
 }
 
 type BindingRow = {
-  session_key: string;
+  conversation_id: string;
   endpoint_id: string;
   bound_at: number;
 };
 
 function fromRow(row: BindingRow): StoredEndpointSessionBinding {
   return {
-    sessionKey: row.session_key,
+    conversationId: row.conversation_id,
     endpointId: row.endpoint_id,
     boundAt: row.bound_at,
   };
 }
 
-export function getEndpointSessionBinding(sessionKey: string): StoredEndpointSessionBinding | undefined {
+export function getEndpointSessionBinding(conversationId: string): StoredEndpointSessionBinding | undefined {
   const row = getSqliteDatabase().prepare(`
-    SELECT session_key, endpoint_id, bound_at
+    SELECT conversation_id, endpoint_id, bound_at
     FROM endpoint_session_bindings
-    WHERE session_key = ?
-  `).get(sessionKey) as BindingRow | undefined;
+    WHERE conversation_id = ?
+  `).get(conversationId) as BindingRow | undefined;
   return row ? fromRow(row) : undefined;
 }
 
@@ -33,19 +33,19 @@ export function setEndpointSessionBinding(
   binding: StoredEndpointSessionBinding,
 ): StoredEndpointSessionBinding {
   getSqliteDatabase().prepare(`
-    INSERT INTO endpoint_session_bindings (session_key, endpoint_id, bound_at)
+    INSERT INTO endpoint_session_bindings (conversation_id, endpoint_id, bound_at)
     VALUES (?, ?, ?)
-    ON CONFLICT(session_key) DO UPDATE SET
+    ON CONFLICT(conversation_id) DO UPDATE SET
       endpoint_id = excluded.endpoint_id,
       bound_at = excluded.bound_at
-  `).run(binding.sessionKey, binding.endpointId, binding.boundAt);
+  `).run(binding.conversationId, binding.endpointId, binding.boundAt);
   return binding;
 }
 
-export function deleteEndpointSessionBinding(sessionKey: string): boolean {
+export function deleteEndpointSessionBinding(conversationId: string): boolean {
   return getSqliteDatabase()
-    .prepare('DELETE FROM endpoint_session_bindings WHERE session_key = ?')
-    .run(sessionKey).changes > 0;
+    .prepare('DELETE FROM endpoint_session_bindings WHERE conversation_id = ?')
+    .run(conversationId).changes > 0;
 }
 
 export function deleteEndpointSessionBindingsByPrincipal(principalId: string): number {

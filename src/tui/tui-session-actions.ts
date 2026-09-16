@@ -1,6 +1,5 @@
 import type { TUI } from '@earendil-works/pi-tui';
 
-import { parseAgentSessionKey } from '../routing/agent-session-key.js';
 import {
   appendHistoryToChatLog,
   historyKeysHaveAppendOnlyPrefix,
@@ -22,7 +21,7 @@ export type SessionActionsContext = {
   chatLog: ChatLog;
   tui: TUI;
   state: TuiState;
-  resolveSessionKey: (raw?: string) => string;
+  resolveConversationId: (raw?: string) => string;
   updateHeader: () => void;
   updateFooter: () => void;
   setActivityStatus: (status: string) => void;
@@ -38,7 +37,7 @@ export function createSessionActions(context: SessionActionsContext) {
     chatLog,
     tui,
     state,
-    resolveSessionKey,
+    resolveConversationId,
     updateHeader,
     updateFooter,
     setActivityStatus,
@@ -51,17 +50,10 @@ export function createSessionActions(context: SessionActionsContext) {
   let refreshSessionInfoPromise: Promise<void> = Promise.resolve();
   let lastHistoryKeys: string[] = [];
 
-  const updateAgentFromSessionKey = (key: string) => {
-    const parsed = parseAgentSessionKey(key);
-    if (!parsed?.agentId) {
-      return;
-    }
-    onAgentIdChange?.(parsed.agentId);
-  };
-
   const runRefreshSessionInfo = async () => {
     try {
-      state.sessionInfo = await client.getSessionInfo(state.currentSessionKey);
+      state.sessionInfo = await client.getSessionInfo(state.currentConversationId);
+      if (state.sessionInfo.agentId) onAgentIdChange?.(state.sessionInfo.agentId);
       onSessionInfoChange?.();
       updateFooter();
       tui.requestRender();
@@ -90,7 +82,7 @@ export function createSessionActions(context: SessionActionsContext) {
   const loadHistory = async (opts?: { merge?: boolean }) => {
     try {
       const { messages } = await client.loadHistory({
-        sessionKey: state.currentSessionKey,
+        conversationId: state.currentConversationId,
         limit: historyLimit,
       });
       sessionSnapshot?.replaceFromHistory(messages);
@@ -130,7 +122,7 @@ export function createSessionActions(context: SessionActionsContext) {
     }
     try {
       const { messages } = await client.loadHistoryWindow({
-        sessionKey: state.currentSessionKey,
+        conversationId: state.currentConversationId,
         rowNumber: opts.rowNumber,
         before: opts.before,
         after: opts.after,
@@ -153,9 +145,8 @@ export function createSessionActions(context: SessionActionsContext) {
   };
 
   const setSession = async (rawKey: string) => {
-    const nextKey = resolveSessionKey(rawKey);
-    updateAgentFromSessionKey(nextKey);
-    state.currentSessionKey = nextKey;
+    const nextKey = resolveConversationId(rawKey);
+    state.currentConversationId = nextKey;
     state.activeRunId = null;
     setActivityStatus('idle');
     clearChatForSessionSwitch();
@@ -177,11 +168,11 @@ export function createSessionActions(context: SessionActionsContext) {
     setActivityStatus('idle');
     markRunIdleAfterAbort(state);
     tui.requestRender();
-    await client.abortChat({ sessionKey: state.currentSessionKey, runId }).catch(() => {});
+    await client.abortChat({ conversationId: state.currentConversationId, runId }).catch(() => {});
   };
 
   const resetCurrentSession = async () => {
-    await client.resetSession(state.currentSessionKey);
+    await client.resetSession(state.currentConversationId);
     clearChatForSessionSwitch();
     await loadHistory();
   };

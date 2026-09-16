@@ -10,8 +10,8 @@ export interface LogEntry {
   service?: string;
   extension?: string;
   requestId?: string;
-  sessionKey?: string;
-  sessionId?: string;
+  conversationId?: string;
+  transcriptId?: string;
   userId?: string;
   meta?: Record<string, unknown>;
   [key: string]: unknown;
@@ -24,8 +24,8 @@ export interface LogQuery {
   q?: string;
   module?: string;
   requestId?: string;
-  sessionKey?: string;
-  sessionId?: string;
+  conversationId?: string;
+  transcriptId?: string;
   limit?: number;
   offset?: number;
 }

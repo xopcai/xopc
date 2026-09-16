@@ -53,8 +53,8 @@ function sanitizeDoctorCheck(check: CheckResult, redactor: SupportRedactor): Sup
 
 function sanitizeLogEntry(entry: LogEntry, redactor: SupportRedactor): SupportLogEntry {
   redactor.addIdentifier(entry.requestId, 'request');
-  redactor.addIdentifier(entry.sessionKey, 'session');
-  redactor.addIdentifier(entry.sessionId, 'session');
+  redactor.addIdentifier(entry.conversationId, 'session');
+  redactor.addIdentifier(entry.transcriptId, 'session');
   const meta = asRecord(entry.meta);
   const error = asRecord(entry.err) ?? asRecord(meta?.err);
   const phase = typeof entry.phase === 'string'
@@ -77,7 +77,7 @@ function sanitizeLogEntry(entry: LogEntry, redactor: SupportRedactor): SupportLo
     module: redactor.text(entry.module, 300),
     phase: redactor.text(phase, 300),
     requestId: redactor.identifier(entry.requestId, 'request'),
-    sessionId: redactor.identifier(entry.sessionId, 'session'),
+    transcriptId: redactor.identifier(entry.transcriptId, 'session'),
     ...(sanitizedError && Object.values(sanitizedError).some(Boolean) ? { error: sanitizedError } : {}),
   };
 }
@@ -99,11 +99,11 @@ async function collectRelevantLogs(params: {
     const logs = await params.query({ ...base, requestId: params.input.requestId });
     if (logs.length > 0) return logs;
   }
-  if (params.input.sessionKey) {
-    const logs = await params.query({ ...base, sessionKey: params.input.sessionKey });
+  if (params.input.conversationId) {
+    const logs = await params.query({ ...base, conversationId: params.input.conversationId });
     if (logs.length > 0) return logs;
   }
-  if (params.input.requestId || params.input.sessionKey) return [];
+  if (params.input.requestId || params.input.conversationId) return [];
   return params.query(base);
 }
 
@@ -197,7 +197,7 @@ export async function collectSupportReport(
     options: { fix: false, json: true, deep: false, security: false },
   };
   redactor.addIdentifier(input.requestId, 'request');
-  redactor.addIdentifier(input.sessionKey, 'session');
+  redactor.addIdentifier(input.conversationId, 'session');
   let rawLogs: LogEntry[] = [];
   let logCollectionError: string | undefined;
   try {

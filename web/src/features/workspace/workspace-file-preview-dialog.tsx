@@ -41,7 +41,7 @@ export interface WorkspaceFilePreviewPanelProps {
   /** Project workspace root. Takes priority over chat session / agent workspace. */
   projectId?: string;
   /** Per-chat session workspace (takes priority over `agentId`). */
-  sessionKey?: string;
+  conversationId?: string;
   /** Chat agent workspace; omit to use gateway default agent root. */
   agentId?: string;
 }
@@ -51,14 +51,14 @@ export function WorkspaceFilePreviewPanel({
   onClose,
   targetLine,
   projectId,
-  sessionKey,
+  conversationId,
   agentId,
 }: WorkspaceFilePreviewPanelProps) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const resolvedTheme = useThemeStore((s) => s.resolved);
 
-  const state = useWorkspacePreviewState({ filePath, projectId, sessionKey, agentId });
+  const state = useWorkspacePreviewState({ filePath, projectId, conversationId, agentId });
   const {
     dialogOpen,
     loading,
@@ -194,7 +194,7 @@ export function WorkspaceFilePreviewPanel({
           onRevealInFolder: state.canRevealInFolder ? () => void handleRevealInFolder() : undefined,
           copyPath: { copied: pathCopied, onClick: () => void handleCopyPath() },
         }}
-        chat={{ createFile: state.createAttachmentFile, projectId, sessionKey, agentId, disabled: state.saveStatus === 'saving' }}
+        chat={{ createFile: state.createAttachmentFile, projectId, conversationId, agentId, disabled: state.saveStatus === 'saving' }}
         language={language}
         resolvedTheme={resolvedTheme}
         descriptor={state.descriptor}

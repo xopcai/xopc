@@ -15,7 +15,7 @@ export type ComposerReferenceItem = {
   size?: number;
 };
 
-export async function fetchComposerReferences(kind: ReferenceKind, sessionKey: string, search: string, path: string): Promise<ComposerReferenceItem[]> {
+export async function fetchComposerReferences(kind: ReferenceKind, conversationId: string, search: string, path: string): Promise<ComposerReferenceItem[]> {
   if (kind === 'note') {
     const result = await fetchNotes({ search: search || undefined, limit: 50, sortBy: 'updatedAt', sortOrder: 'desc' });
     return result.items.filter(note => note.status !== 'trashed').map(note => ({
@@ -27,7 +27,7 @@ export async function fetchComposerReferences(kind: ReferenceKind, sessionKey: s
       kind, id: task.id, title: task.title, description: task.body || '', version: String(task.version),
     }));
   }
-  const space = await fetchFileSpaceForContext('session', sessionKey);
+  const space = await fetchFileSpaceForContext('session', conversationId);
   const files = search ? await searchFiles(search, space.id) : await fetchFileChildren(space.id, path);
   return files.map(file => ({
     kind, id: file.id, title: file.name, description: file.relativePath, version: file.revision,

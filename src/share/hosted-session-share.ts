@@ -45,14 +45,14 @@ export interface HostedSessionShareManifest {
 }
 
 export interface HostedSessionShareSnapshot {
-  sessionId: string;
+  transcriptId: string;
   cutoffSeq: number;
   manifest: HostedSessionShareManifest;
   assets: Array<{ id: string; path: string; size: number }>;
 }
 
 export interface BuildHostedSessionShareInput {
-  expectedSessionId: string;
+  expectedTranscriptId: string;
   expectedCutoffSeq: number;
   expectedMetadataUpdatedAt: string;
   description?: string;
@@ -63,8 +63,8 @@ export interface BuildHostedSessionShareInput {
 export class HostedSessionShareBuilder {
   constructor(private readonly source: SessionShareSource) {}
 
-  async build(sessionKey: string, input: BuildHostedSessionShareInput): Promise<HostedSessionShareSnapshot> {
-    const source = await this.loadExpectedSource(sessionKey, input);
+  async build(conversationId: string, input: BuildHostedSessionShareInput): Promise<HostedSessionShareSnapshot> {
+    const source = await this.loadExpectedSource(conversationId, input);
     const projection = projectSessionShare(source.snapshot.entries);
     if (projection.messages.length === 0) throw new Error('Session has no shareable messages');
     if (projection.messages.length > MAX_MESSAGES) throw new Error(`Session has more than ${MAX_MESSAGES} shareable messages`);
@@ -100,7 +100,7 @@ export class HostedSessionShareBuilder {
 
     const selectedIds = new Set(selected);
     return {
-      sessionId: source.snapshot.sessionId,
+      transcriptId: source.snapshot.transcriptId,
       cutoffSeq: source.snapshot.lastSeq,
       manifest: {
         schemaVersion: 1,
@@ -120,18 +120,18 @@ export class HostedSessionShareBuilder {
   }
 
   private async loadExpectedSource(
-    sessionKey: string,
-    expected: Pick<BuildHostedSessionShareInput, 'expectedSessionId' | 'expectedCutoffSeq' | 'expectedMetadataUpdatedAt'>,
+    conversationId: string,
+    expected: Pick<BuildHostedSessionShareInput, 'expectedTranscriptId' | 'expectedCutoffSeq' | 'expectedMetadataUpdatedAt'>,
   ): Promise<{ metadata: SessionMetadata; snapshot: CompactionSourceSnapshot }> {
     const [metadata, snapshot] = await Promise.all([
-      this.source.getMetadata(sessionKey),
-      this.source.getSnapshot(sessionKey),
+      this.source.getMetadata(conversationId),
+      this.source.getSnapshot(conversationId),
     ]);
-    if (!metadata || !snapshot || !metadata.sessionId || metadata.sessionId !== snapshot.sessionId) {
+    if (!metadata || !snapshot || !metadata.transcriptId || metadata.transcriptId !== snapshot.transcriptId) {
       throw new Error('Session not found');
     }
     if (
-      snapshot.sessionId !== expected.expectedSessionId
+      snapshot.transcriptId !== expected.expectedTranscriptId
       || snapshot.lastSeq !== expected.expectedCutoffSeq
       || metadata.updatedAt !== expected.expectedMetadataUpdatedAt
     ) {
@@ -355,8 +355,8 @@ export interface HostedShareBinding extends HostedShareResult {
   kind: HostedPublicationKind;
   source: HostedPublicationSource;
   revisionSources: Record<string, HostedPublicationSource>;
-  workspaceContext?: { workspaceRoot?: string; sessionKey?: string; agentId?: string };
-  sessionId?: string;
+  workspaceContext?: { workspaceRoot?: string; conversationId?: string; agentId?: string };
+  transcriptId?: string;
   cutoffSeq?: number;
   title: string;
   description: string | null;
@@ -372,8 +372,8 @@ export interface HostedShareBinding extends HostedShareResult {
 export class HostedShareBindingStore {
   private readonly state = new DurableState<HostedShareBinding>('hosted-share-bindings');
 
-  async list(sessionId: string): Promise<HostedShareBinding[]> {
-    return this.state.values().filter(item => item.sessionId === sessionId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  async list(transcriptId: string): Promise<HostedShareBinding[]> {
+    return this.state.values().filter(item => item.transcriptId === transcriptId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
   async listBySource(kind: HostedPublicationSource['kind'], id: string): Promise<HostedShareBinding[]> {

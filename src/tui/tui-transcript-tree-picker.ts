@@ -146,10 +146,10 @@ export function formatUserMessageForkOpenedHint(keybindings: KeybindingsManager)
   return `Fork from message (${nav} · type to filter · ${confirm} fork · ${cancel} close)`;
 }
 
-export function defaultTranscriptForkKey(currentSessionKey: string, entryId: string): string {
+export function defaultTranscriptForkKey(currentConversationId: string, entryId: string): string {
   const suffix = randomUUID().slice(0, 8);
   const cleanEntry = entryId.replace(/[^a-z0-9_.-]+/gi, '-');
-  return `${currentSessionKey}:fork:${cleanEntry}-${suffix}`;
+  return `${currentConversationId}:fork:${cleanEntry}-${suffix}`;
 }
 
 function formatLabelTimestamp(timestamp: string, now = new Date()): string {

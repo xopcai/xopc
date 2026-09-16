@@ -31,12 +31,12 @@ export interface OutboundCoordinatorConfig {
   /** Reads the effective config snapshot (honours runtime overrides). */
   getConfig: () => Config | undefined;
   /** Resolves the last visible assistant text for a session (in-memory + agent fallback). */
-  getLastAssistantPlainText: (sessionKey: string) => string;
+  getLastAssistantPlainText: (conversationId: string) => string;
   reviewTaskTurn: (payload: SessionTurnCompletePayload) => Promise<void>;
 }
 
 export interface SessionTurnCompletePayload {
-  sessionKey: string;
+  conversationId: string;
   channel: string;
   chatId: string;
   inboundUserText: string;
@@ -52,7 +52,7 @@ export class OutboundCoordinator {
   private readonly hookHandler: HookHandler;
   private readonly streamManager: StreamManager;
   private readonly getConfig: () => Config | undefined;
-  private readonly getLastAssistantPlainText: (sessionKey: string) => string;
+  private readonly getLastAssistantPlainText: (conversationId: string) => string;
   private readonly reviewTaskTurn: OutboundCoordinatorConfig['reviewTaskTurn'];
 
   constructor(config: OutboundCoordinatorConfig) {
@@ -118,14 +118,14 @@ export class OutboundCoordinator {
       return;
     }
 
-    const finalContent = this.getLastAssistantPlainText(sessionContext.sessionKey);
+    const finalContent = this.getLastAssistantPlainText(sessionContext.conversationId);
     if (!finalContent?.trim()) {
       return;
     }
 
     const ackMax = this.getConfig()?.gateway?.heartbeat?.ackMaxChars ?? DEFAULT_ACK_MAX_CHARS;
     if (shouldSilence(finalContent, ackMax) || finalContent.trim() === NO_REPLY) {
-      log.debug({ sessionKey: sessionContext.sessionKey }, 'Silent reply — skipping outbound');
+      log.debug({ conversationId: sessionContext.conversationId }, 'Silent reply — skipping outbound');
       return;
     }
 
@@ -156,8 +156,8 @@ export class OutboundCoordinator {
 
   /** Run extension completion hooks and independently review an attached Task. */
   async emitSessionTurnComplete(payload: SessionTurnCompletePayload): Promise<void> {
-    await this.hookHandler.triggerWithSessionKey(payload.sessionKey, 'webchat_turn_complete', {
-      sessionKey: payload.sessionKey,
+    await this.hookHandler.triggerWithConversationId(payload.conversationId, 'webchat_turn_complete', {
+      conversationId: payload.conversationId,
       channel: payload.channel,
       chatId: payload.chatId,
       inboundUserText: payload.inboundUserText,

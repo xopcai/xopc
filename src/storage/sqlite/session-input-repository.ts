@@ -1,4 +1,4 @@
-import { readCurrentSessionId } from './session-instance-repository.js';
+import { readCurrentTranscriptId } from './session-instance-repository.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 import { turnOriginSchema, type TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
@@ -15,9 +15,9 @@ export type SessionInputPayload =
 
 export type SessionInput = {
   id: string;
-  sessionKey: string;
+  conversationId: string;
   clientMessageId: string;
-  expectedSessionId?: string;
+  expectedTranscriptId?: string;
   requestedDelivery: SessionInputDelivery;
   effectiveDelivery: SessionInputDelivery;
   status: SessionInputStatus;
@@ -40,7 +40,7 @@ export type SessionInput = {
 };
 
 export type SessionInputState = {
-  sessionKey: string;
+  conversationId: string;
   revision: number;
   activeRunId?: string;
   activeInputId?: string;
@@ -48,7 +48,7 @@ export type SessionInputState = {
 };
 
 type InputRow = {
-  id: string; session_key: string; client_message_id: string; expected_session_id: string | null;
+  id: string; conversation_id: string; client_message_id: string; expected_transcript_id: string | null;
   requested_delivery: SessionInputDelivery; effective_delivery: SessionInputDelivery;
   task_run_id: string | null;
   kind: SessionInput['kind']; payload_json: string | null;
@@ -61,8 +61,8 @@ type InputRow = {
 
 function mapInput(row: InputRow): SessionInput {
   return {
-    id: row.id, sessionKey: row.session_key, clientMessageId: row.client_message_id,
-    expectedSessionId: row.expected_session_id ?? undefined,
+    id: row.id, conversationId: row.conversation_id, clientMessageId: row.client_message_id,
+    expectedTranscriptId: row.expected_transcript_id ?? undefined,
     requestedDelivery: row.requested_delivery, effectiveDelivery: row.effective_delivery,
     status: row.status, content: row.content, kind: row.kind,
     taskRunId: row.task_run_id ?? undefined,
@@ -78,35 +78,35 @@ function mapInput(row: InputRow): SessionInput {
   };
 }
 
-const SELECT_INPUTS = `SELECT id, session_key, client_message_id, expected_session_id, requested_delivery,
+const SELECT_INPUTS = `SELECT id, conversation_id, client_message_id, expected_transcript_id, requested_delivery,
   effective_delivery, status, content, attachments_json, context_refs_json, context_snapshots_json,
   thinking, origin_json, position, kind, payload_json, task_run_id,
   target_run_id, run_id, version, error, created_at_ms, updated_at_ms
   FROM session_inputs`;
 
-function ensureRuntime(db: ReturnType<typeof getSqliteDatabase>, sessionKey: string): void {
-  db.prepare(`INSERT INTO session_input_runtime(session_key, revision, updated_at_ms)
-    VALUES (?, 0, ?) ON CONFLICT(session_key) DO NOTHING`).run(sessionKey, Date.now());
+function ensureRuntime(db: ReturnType<typeof getSqliteDatabase>, conversationId: string): void {
+  db.prepare(`INSERT INTO session_input_runtime(conversation_id, revision, updated_at_ms)
+    VALUES (?, 0, ?) ON CONFLICT(conversation_id) DO NOTHING`).run(conversationId, Date.now());
 }
 
-export function bumpSessionInputRevision(db: ReturnType<typeof getSqliteDatabase>, sessionKey: string): number {
-  ensureRuntime(db, sessionKey);
+export function bumpSessionInputRevision(db: ReturnType<typeof getSqliteDatabase>, conversationId: string): number {
+  ensureRuntime(db, conversationId);
   db.prepare(`UPDATE session_input_runtime SET revision = revision + 1, updated_at_ms = ?
-    WHERE session_key = ?`).run(Date.now(), sessionKey);
-  return (db.prepare(`SELECT revision FROM session_input_runtime WHERE session_key = ?`)
-    .get(sessionKey) as { revision: number }).revision;
+    WHERE conversation_id = ?`).run(Date.now(), conversationId);
+  return (db.prepare(`SELECT revision FROM session_input_runtime WHERE conversation_id = ?`)
+    .get(conversationId) as { revision: number }).revision;
 }
 
-export function getSessionInputState(sessionKey: string): SessionInputState {
+export function getSessionInputState(conversationId: string): SessionInputState {
   const db = getSqliteDatabase();
   const runtime = db.prepare(`SELECT revision, active_run_id, active_input_id
-    FROM session_input_runtime WHERE session_key = ?`).get(sessionKey) as
+    FROM session_input_runtime WHERE conversation_id = ?`).get(conversationId) as
       { revision: number; active_run_id: string | null; active_input_id: string | null } | undefined;
-  const rows = db.prepare(`${SELECT_INPUTS} WHERE session_key = ? AND status IN
+  const rows = db.prepare(`${SELECT_INPUTS} WHERE conversation_id = ? AND status IN
     ('queued','running','injecting','interrupted') ORDER BY position, created_at_ms, id`)
-    .all(sessionKey) as InputRow[];
+    .all(conversationId) as InputRow[];
   return {
-    sessionKey,
+    conversationId,
     revision: runtime?.revision ?? 0,
     activeRunId: runtime?.active_run_id ?? undefined,
     activeInputId: runtime?.active_input_id ?? undefined,
@@ -118,24 +118,24 @@ export function getSessionInputState(sessionKey: string): SessionInputState {
 }
 
 /** Durable active webchat runs claimed by the session-input coordinator. */
-export function listActiveSessionInputRuns(): Array<{ sessionKey: string; runId: string }> {
-  const rows = getSqliteDatabase().prepare(`SELECT session_key, active_run_id
+export function listActiveSessionInputRuns(): Array<{ conversationId: string; runId: string }> {
+  const rows = getSqliteDatabase().prepare(`SELECT conversation_id, active_run_id
     FROM session_input_runtime WHERE active_run_id IS NOT NULL`).all() as Array<{
-      session_key: string;
+      conversation_id: string;
       active_run_id: string;
     }>;
-  return rows.map((row) => ({ sessionKey: row.session_key, runId: row.active_run_id }));
+  return rows.map((row) => ({ conversationId: row.conversation_id, runId: row.active_run_id }));
 }
 
-export function findSessionInput(sessionKey: string, clientMessageId: string): SessionInput | undefined {
-  const row = getSqliteDatabase().prepare(`${SELECT_INPUTS} WHERE session_key = ? AND client_message_id = ?`)
-    .get(sessionKey, clientMessageId) as InputRow | undefined;
+export function findSessionInput(conversationId: string, clientMessageId: string): SessionInput | undefined {
+  const row = getSqliteDatabase().prepare(`${SELECT_INPUTS} WHERE conversation_id = ? AND client_message_id = ?`)
+    .get(conversationId, clientMessageId) as InputRow | undefined;
   return row ? mapInput(row) : undefined;
 }
 
-export function getSessionInputById(sessionKey: string, id: string): SessionInput | undefined {
-  const row = getSqliteDatabase().prepare(`${SELECT_INPUTS} WHERE session_key = ? AND id = ?`)
-    .get(sessionKey, id) as InputRow | undefined;
+export function getSessionInputById(conversationId: string, id: string): SessionInput | undefined {
+  const row = getSqliteDatabase().prepare(`${SELECT_INPUTS} WHERE conversation_id = ? AND id = ?`)
+    .get(conversationId, id) as InputRow | undefined;
   return row ? mapInput(row) : undefined;
 }
 
@@ -144,7 +144,7 @@ export class SessionInstanceChangedError extends Error {
 }
 
 export function insertSessionInput(input: {
-  id: string; sessionKey: string; clientMessageId: string; expectedSessionId?: string;
+  id: string; conversationId: string; clientMessageId: string; expectedTranscriptId?: string;
   requestedDelivery: SessionInputDelivery; effectiveDelivery: SessionInputDelivery;
   status: 'queued' | 'injecting'; content: string; attachments?: unknown[];
   taskRunId?: string;
@@ -153,72 +153,72 @@ export function insertSessionInput(input: {
   thinking?: string; origin: TurnOrigin; targetRunId?: string;
 }): SessionInput {
   return runSqliteWriteTransaction((db) => {
-    const existing = db.prepare(`${SELECT_INPUTS} WHERE session_key = ? AND client_message_id = ?`)
-      .get(input.sessionKey, input.clientMessageId) as InputRow | undefined;
+    const existing = db.prepare(`${SELECT_INPUTS} WHERE conversation_id = ? AND client_message_id = ?`)
+      .get(input.conversationId, input.clientMessageId) as InputRow | undefined;
     if (existing) return mapInput(existing);
-    if (input.expectedSessionId && readCurrentSessionId(db, input.sessionKey) !== input.expectedSessionId) throw new SessionInstanceChangedError();
+    if (input.expectedTranscriptId && readCurrentTranscriptId(db, input.conversationId) !== input.expectedTranscriptId) throw new SessionInstanceChangedError();
     const now = Date.now();
     const max = db.prepare(`SELECT COALESCE(MAX(position), 0) AS value FROM session_inputs
-      WHERE session_key = ? AND status IN ('queued','running','injecting','interrupted')`)
-      .get(input.sessionKey) as { value: number };
-    db.prepare(`INSERT INTO session_inputs(id, session_key, client_message_id, expected_session_id,
+      WHERE conversation_id = ? AND status IN ('queued','running','injecting','interrupted')`)
+      .get(input.conversationId) as { value: number };
+    db.prepare(`INSERT INTO session_inputs(id, conversation_id, client_message_id, expected_transcript_id,
       requested_delivery, effective_delivery, status, content, attachments_json,
       context_refs_json, context_snapshots_json, thinking, origin_json, position,
       target_run_id, version, created_at_ms, updated_at_ms, kind, payload_json, task_run_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`)
-      .run(input.id, input.sessionKey, input.clientMessageId, input.expectedSessionId ?? null, input.requestedDelivery,
+      .run(input.id, input.conversationId, input.clientMessageId, input.expectedTranscriptId ?? null, input.requestedDelivery,
         input.effectiveDelivery, input.status, input.content,
         input.attachments ? JSON.stringify(input.attachments) : null,
         input.contextRefs ? JSON.stringify(input.contextRefs) : null,
         input.contextSnapshots ? JSON.stringify(input.contextSnapshots) : null,
         input.thinking ?? null, JSON.stringify(input.origin), max.value + 1,
         input.targetRunId ?? null, now, now, input.kind ?? 'message', input.payload ? JSON.stringify(input.payload) : null, input.taskRunId ?? null);
-    bumpSessionInputRevision(db, input.sessionKey);
+    bumpSessionInputRevision(db, input.conversationId);
     return mapInput(db.prepare(`${SELECT_INPUTS} WHERE id = ?`).get(input.id) as InputRow);
   });
 }
 
-export function claimNextSessionInput(sessionKey: string, runId: string): SessionInput | undefined {
+export function claimNextSessionInput(conversationId: string, runId: string): SessionInput | undefined {
   return runSqliteWriteTransaction((db) => {
-    ensureRuntime(db, sessionKey);
-    const runtime = db.prepare(`SELECT active_run_id FROM session_input_runtime WHERE session_key = ?`)
-      .get(sessionKey) as { active_run_id: string | null };
+    ensureRuntime(db, conversationId);
+    const runtime = db.prepare(`SELECT active_run_id FROM session_input_runtime WHERE conversation_id = ?`)
+      .get(conversationId) as { active_run_id: string | null };
     if (runtime.active_run_id) return undefined;
     const changed = db.prepare(`UPDATE session_inputs SET status = 'interrupted', error = 'Session changed before delivery',
-      version = version + 1, updated_at_ms = ? WHERE session_key = ? AND status = 'queued'
-      AND expected_session_id IS NOT NULL AND expected_session_id IS NOT ?`)
-      .run(Date.now(), sessionKey, readCurrentSessionId(db, sessionKey)).changes;
-    if (changed) bumpSessionInputRevision(db, sessionKey);
-    const row = db.prepare(`${SELECT_INPUTS} WHERE session_key = ? AND effective_delivery = 'next'
-      AND status = 'queued' ORDER BY position, created_at_ms, id LIMIT 1`).get(sessionKey) as InputRow | undefined;
+      version = version + 1, updated_at_ms = ? WHERE conversation_id = ? AND status = 'queued'
+      AND expected_transcript_id IS NOT NULL AND expected_transcript_id IS NOT ?`)
+      .run(Date.now(), conversationId, readCurrentTranscriptId(db, conversationId)).changes;
+    if (changed) bumpSessionInputRevision(db, conversationId);
+    const row = db.prepare(`${SELECT_INPUTS} WHERE conversation_id = ? AND effective_delivery = 'next'
+      AND status = 'queued' ORDER BY position, created_at_ms, id LIMIT 1`).get(conversationId) as InputRow | undefined;
     if (!row) return undefined;
     const now = Date.now();
     db.prepare(`UPDATE session_inputs SET status = 'running', run_id = ?, version = version + 1,
       updated_at_ms = ? WHERE id = ?`).run(runId, now, row.id);
     db.prepare(`UPDATE session_input_runtime SET active_run_id = ?, active_input_id = ?,
-      revision = revision + 1, updated_at_ms = ? WHERE session_key = ?`)
-      .run(runId, row.id, now, sessionKey);
+      revision = revision + 1, updated_at_ms = ? WHERE conversation_id = ?`)
+      .run(runId, row.id, now, conversationId);
     return mapInput(db.prepare(`${SELECT_INPUTS} WHERE id = ?`).get(row.id) as InputRow);
   });
 }
 
-export function finishSessionInputRun(sessionKey: string, runId: string, status: 'completed' | 'failed' | 'cancelled' | 'suspended', error?: string): boolean {
+export function finishSessionInputRun(conversationId: string, runId: string, status: 'completed' | 'failed' | 'cancelled' | 'suspended', error?: string): boolean {
   return runSqliteWriteTransaction((db) => {
-    const runtime = db.prepare(`SELECT active_input_id, active_run_id FROM session_input_runtime WHERE session_key = ?`)
-      .get(sessionKey) as { active_input_id: string | null; active_run_id: string | null } | undefined;
+    const runtime = db.prepare(`SELECT active_input_id, active_run_id FROM session_input_runtime WHERE conversation_id = ?`)
+      .get(conversationId) as { active_input_id: string | null; active_run_id: string | null } | undefined;
     if (!runtime || runtime.active_run_id !== runId) return false;
     const now = Date.now();
     if (runtime.active_input_id) db.prepare(`UPDATE session_inputs SET status = ?, error = ?,
       version = version + 1, updated_at_ms = ? WHERE id = ?`)
       .run(status, error ?? null, now, runtime.active_input_id);
     db.prepare(`UPDATE session_inputs SET status = ?, error = ?, version = version + 1,
-      updated_at_ms = ? WHERE session_key = ? AND target_run_id = ? AND status = 'injecting'`)
+      updated_at_ms = ? WHERE conversation_id = ? AND target_run_id = ? AND status = 'injecting'`)
       .run(status === 'completed' ? 'completed' : 'interrupted',
         status === 'completed' ? null : 'Current reply ended before steer delivery was confirmed',
-        now, sessionKey, runId);
+        now, conversationId, runId);
     db.prepare(`UPDATE session_input_runtime SET active_run_id = NULL, active_input_id = NULL,
       revision = revision + 1, updated_at_ms = ?
-      WHERE session_key = ?`).run(now, sessionKey);
+      WHERE conversation_id = ?`).run(now, conversationId);
     return true;
   });
 }
@@ -232,13 +232,13 @@ export function setSessionInputStatus(id: string, status: SessionInputStatus, pa
       .run(status, patch?.effectiveDelivery ?? row.effective_delivery,
         patch?.targetRunId !== undefined ? patch.targetRunId : row.target_run_id,
         patch?.error ?? row.error, Date.now(), id);
-    bumpSessionInputRevision(db, row.session_key);
+    bumpSessionInputRevision(db, row.conversation_id);
     return true;
   });
 }
 
 export function mutateQueuedSessionInput(input: {
-  sessionKey: string;
+  conversationId: string;
   id: string;
   version: number;
   content?: string;
@@ -249,12 +249,12 @@ export function mutateQueuedSessionInput(input: {
   position?: number;
 }): boolean {
   return runSqliteWriteTransaction((db) => {
-    const row = db.prepare(`${SELECT_INPUTS} WHERE id = ? AND session_key = ?`).get(input.id, input.sessionKey) as InputRow | undefined;
+    const row = db.prepare(`${SELECT_INPUTS} WHERE id = ? AND conversation_id = ?`).get(input.id, input.conversationId) as InputRow | undefined;
     if (!row || row.kind !== 'message' || row.status !== 'queued' || row.version !== input.version) return false;
     const now = Date.now();
     if (input.position !== undefined) {
-      const rows = db.prepare(`${SELECT_INPUTS} WHERE session_key = ? AND status = 'queued' ORDER BY position, created_at_ms, id`)
-        .all(input.sessionKey) as InputRow[];
+      const rows = db.prepare(`${SELECT_INPUTS} WHERE conversation_id = ? AND status = 'queued' ORDER BY position, created_at_ms, id`)
+        .all(input.conversationId) as InputRow[];
       const ordered = rows.filter((item) => item.id !== input.id);
       ordered.splice(Math.max(0, Math.min(input.position, ordered.length)), 0, row);
       const stmt = db.prepare(`UPDATE session_inputs SET position = ?, version = version + 1, updated_at_ms = ? WHERE id = ?`);
@@ -268,31 +268,31 @@ export function mutateQueuedSessionInput(input: {
           input.contextSnapshots ? JSON.stringify(input.contextSnapshots) : row.context_snapshots_json,
           input.thinking ?? row.thinking, now, input.id);
     }
-    bumpSessionInputRevision(db, input.sessionKey);
+    bumpSessionInputRevision(db, input.conversationId);
     return true;
   });
 }
 
-export function cancelQueuedSessionInput(sessionKey: string, id: string, version: number): boolean {
+export function cancelQueuedSessionInput(conversationId: string, id: string, version: number): boolean {
   return runSqliteWriteTransaction((db) => {
     const result = db.prepare(`UPDATE session_inputs SET status = 'cancelled', version = version + 1,
-      updated_at_ms = ? WHERE id = ? AND session_key = ? AND version = ? AND kind = 'message' AND status IN ('queued','interrupted')`)
-      .run(Date.now(), id, sessionKey, version);
+      updated_at_ms = ? WHERE id = ? AND conversation_id = ? AND version = ? AND kind = 'message' AND status IN ('queued','interrupted')`)
+      .run(Date.now(), id, conversationId, version);
     if (Number(result.changes) === 0) return false;
-    bumpSessionInputRevision(db, sessionKey);
+    bumpSessionInputRevision(db, conversationId);
     return true;
   });
 }
 
 export function recoverSessionInputState(): string[] {
   return runSqliteWriteTransaction((db) => {
-    const keys = db.prepare(`SELECT DISTINCT session_key FROM session_inputs WHERE status IN ('queued','running','injecting')`)
-      .all() as Array<{ session_key: string }>;
+    const keys = db.prepare(`SELECT DISTINCT conversation_id FROM session_inputs WHERE status IN ('queued','running','injecting')`)
+      .all() as Array<{ conversation_id: string }>;
     const now = Date.now();
     db.prepare(`UPDATE session_inputs SET status = 'interrupted', error = 'Gateway restarted during delivery',
       version = version + 1, updated_at_ms = ? WHERE status IN ('running','injecting')`).run(now);
     db.prepare(`UPDATE session_input_runtime SET active_run_id = NULL, active_input_id = NULL,
       revision = revision + 1, updated_at_ms = ?`).run(now);
-    return keys.map((row) => row.session_key);
+    return keys.map((row) => row.conversation_id);
   });
 }

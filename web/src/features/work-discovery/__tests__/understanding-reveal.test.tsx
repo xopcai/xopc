@@ -12,7 +12,7 @@ const run: WorkDiscoveryRun = {
   status: 'completed',
   rootPath: '/work/xopc',
   projectId: 'project-1',
-  sessionKey: 'session-1',
+  conversationId: 'session-1',
   result: {
     projectSummary: 'xopc is a software project.',
     currentState: 'The onboarding flow is being refined.',

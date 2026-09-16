@@ -123,7 +123,7 @@ export class XopcChannelBridge {
       this.pushEvent({
         cursor: ++this.cursor,
         type: 'message',
-        sessionKey: String(data.sessionKey ?? data.key ?? ''),
+        conversationId: String(data.conversationId ?? data.key ?? ''),
         raw: data,
       });
     }
@@ -152,28 +152,28 @@ export class XopcChannelBridge {
     return sessions.map((row) => toConversation(row)).filter((c): c is ConversationDescriptor => c !== null);
   }
 
-  async getConversation(sessionKey: string): Promise<ConversationDescriptor | null> {
+  async getConversation(conversationId: string): Promise<ConversationDescriptor | null> {
     const client = this.client!;
     try {
-      const row = await client.getJson<SessionRow>(`/api/sessions/${encodeURIComponent(sessionKey)}`);
+      const row = await client.getJson<SessionRow>(`/api/sessions/${encodeURIComponent(conversationId)}`);
       return toConversation(row);
     } catch {
       return null;
     }
   }
 
-  async readMessages(sessionKey: string, limit: number): Promise<Array<Record<string, unknown>>> {
+  async readMessages(conversationId: string, limit: number): Promise<Array<Record<string, unknown>>> {
     const client = this.client!;
     const payload = await client.getJson<{
       messages?: Array<Record<string, unknown>>;
-    }>(`/api/sessions/${encodeURIComponent(sessionKey)}/messages?limit=${limit}`);
+    }>(`/api/sessions/${encodeURIComponent(conversationId)}/messages?limit=${limit}`);
     return payload.messages ?? [];
   }
 
   pollEvents(filter: WaitFilter, limit: number): { events: QueueEvent[]; nextCursor: number } {
     const events = this.queue
       .filter((e) => e.cursor > filter.afterCursor)
-      .filter((e) => !filter.sessionKey || ('sessionKey' in e && e.sessionKey === filter.sessionKey))
+      .filter((e) => !filter.conversationId || ('conversationId' in e && e.conversationId === filter.conversationId))
       .slice(0, limit);
     const nextCursor = events.length > 0 ? events[events.length - 1]!.cursor : filter.afterCursor;
     return { events, nextCursor };
@@ -191,9 +191,9 @@ export class XopcChannelBridge {
     return null;
   }
 
-  async sendMessage(params: { sessionKey: string; text: string }): Promise<Record<string, unknown>> {
+  async sendMessage(params: { conversationId: string; text: string }): Promise<Record<string, unknown>> {
     const client = this.client!;
-    return client.postJson(`/api/sessions/${encodeURIComponent(params.sessionKey)}/inputs`, {
+    return client.postJson(`/api/sessions/${encodeURIComponent(params.conversationId)}/inputs`, {
       clientMessageId: crypto.randomUUID(),
       delivery: 'next',
       content: params.text,

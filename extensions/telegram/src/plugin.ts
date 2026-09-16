@@ -25,7 +25,7 @@ import type {
   ChannelStreamingAdapter,
   ChannelCommandAdapter,
 } from '@xopcai/xopc/channels/plugin-types.js';
-import { generateSessionKey } from '@xopcai/xopc/chat-commands/session-key.js';
+import { generateConversationId } from '@xopcai/xopc/chat-commands/session-key.js';
 import { answerClarificationChoiceFromChannel } from '@xopcai/xopc/gateway/clarify-runtime.js';
 
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
@@ -250,10 +250,10 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
       bus: this.bus,
       config: this.cfg,
       accountManager: this.accountManager,
-      getSessionModel: (sessionKey) => sm?.getModelForSession(sessionKey),
-      setSessionModel: (sessionKey, modelId) => {
+      getSessionModel: (conversationId) => sm?.getModelForSession(conversationId),
+      setSessionModel: (conversationId, modelId) => {
         if (!sm) return;
-        void sm.switchModelForSession(sessionKey, modelId);
+        void sm.switchModelForSession(conversationId, modelId);
       },
     });
     const adapters = createTelegramPluginAdapters({
@@ -270,9 +270,9 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
       config: this.cfg,
       accountManager: this.accountManager,
       accessControl,
-      sessionKeyService: {
-        generateSessionKey: (opts) =>
-          generateSessionKey({
+      conversationIdService: {
+        generateConversationId: (opts) =>
+          generateConversationId({
             source: 'telegram',
             chatId: opts.chatId,
             senderId: opts.senderId,

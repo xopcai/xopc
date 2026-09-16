@@ -10,7 +10,7 @@ import type { AgentActivityDetailLevel } from '@/features/gateway/agent-run-stre
 import type { PetFeedback, PetSessionUpdate } from '@/types/electron';
 
 export type AgentStreamDetail = {
-  sessionKey?: string;
+  conversationId?: string;
   event?: unknown;
   activityDetailLevel?: AgentActivityDetailLevel;
 };
@@ -101,14 +101,14 @@ export function mapAgentStreamEvent(
   sessionLabel: string,
   labels: DesktopPetNarrativeLabels,
 ): PetSessionUpdate | null {
-  if (!detail.sessionKey) return null;
+  if (!detail.conversationId) return null;
   const event = record(detail.event);
   const payload = record(event.payload);
   const type = text(event.type);
   if (!type) return null;
   const runId = text(event.runId) ?? 'active';
   const base = {
-    sessionKey: detail.sessionKey,
+    conversationId: detail.conversationId,
     runId,
     sessionLabel,
     sequence,

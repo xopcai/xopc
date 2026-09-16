@@ -23,12 +23,12 @@ export async function restartGatewayAfterConfigChange(): Promise<{ ok: boolean; 
 }
 
 export async function waitForGatewayApiReady(
-  sessionKey: string,
+  conversationId: string,
   params: { timeoutMs?: number; intervalMs?: number } = {},
 ): Promise<boolean> {
   const timeoutMs = params.timeoutMs ?? 90_000;
   const intervalMs = params.intervalMs ?? 500;
-  if (!sessionKey) throw new Error('Gateway session is unavailable');
+  if (!conversationId) throw new Error('Gateway session is unavailable');
   const deadline = Date.now() + timeoutMs;
 
   const pollOnce = async (): Promise<boolean> => {

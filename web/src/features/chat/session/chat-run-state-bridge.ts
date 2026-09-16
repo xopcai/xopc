@@ -18,7 +18,7 @@ import { useChatSessionStore } from '@/features/chat/session/chat-session-store'
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
-type SessionRun = { sessionKey: string; runId: string };
+type SessionRun = { conversationId: string; runId: string };
 type CompletedSessionRun = SessionRun & { status: AgentStreamRunStatus };
 
 const RECONCILE_INTERVAL_MS = 4_000;
@@ -26,9 +26,9 @@ const RECONCILE_INTERVAL_MS = 4_000;
 function parseSessionRun(value: unknown): SessionRun | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const row = value as Record<string, unknown>;
-  const sessionKey = typeof row.sessionKey === 'string' ? row.sessionKey.trim() : '';
+  const conversationId = typeof row.conversationId === 'string' ? row.conversationId.trim() : '';
   const runId = typeof row.runId === 'string' ? row.runId.trim() : '';
-  return sessionKey && runId ? { sessionKey, runId } : null;
+  return conversationId && runId ? { conversationId, runId } : null;
 }
 
 function parseCompletedSessionRun(value: unknown): CompletedSessionRun | null {
@@ -47,8 +47,8 @@ async function fetchActiveSessionRuns(): Promise<SessionRun[]> {
   return body.payload.runs.map(parseSessionRun).filter((run): run is SessionRun => Boolean(run));
 }
 
-function dispatchTranscriptRefresh(sessionKey: string): void {
-  window.dispatchEvent(new CustomEvent('session-transcript-updated', { detail: { key: sessionKey } }));
+function dispatchTranscriptRefresh(conversationId: string): void {
+  window.dispatchEvent(new CustomEvent('session-transcript-updated', { detail: { key: conversationId } }));
 }
 
 /**
@@ -62,40 +62,40 @@ export function startChatRunStateBridge(): () => void {
   let reconcilePromise: Promise<void> | undefined;
   const terminalRuns = new Map<string, number>();
 
-  const runKey = ({ sessionKey, runId }: SessionRun) => `${sessionKey}\u0000${runId}`;
+  const runKey = ({ conversationId, runId }: SessionRun) => `${conversationId}\u0000${runId}`;
 
-  const recordStarted = ({ sessionKey, runId }: SessionRun, dispatch = false) => {
-    if (terminalRuns.has(runKey({ sessionKey, runId }))) return;
-    if (readPendingAgentRunId(sessionKey) !== runId) setPendingAgentRun(sessionKey, runId);
-    chatRunManager.setResumeRunId(sessionKey, runId);
-    markChatRunRunning(sessionKey);
+  const recordStarted = ({ conversationId, runId }: SessionRun, dispatch = false) => {
+    if (terminalRuns.has(runKey({ conversationId, runId }))) return;
+    if (readPendingAgentRunId(conversationId) !== runId) setPendingAgentRun(conversationId, runId);
+    chatRunManager.setResumeRunId(conversationId, runId);
+    markChatRunRunning(conversationId);
     if (dispatch) {
-      window.dispatchEvent(new CustomEvent('run-started', { detail: { sessionKey, runId } }));
+      window.dispatchEvent(new CustomEvent('run-started', { detail: { conversationId, runId } }));
     }
   };
 
-  const recordInactive = ({ sessionKey, runId }: SessionRun) => {
-    const handled = chatRunManager.reconcileInactive(sessionKey, runId);
-    const cleared = clearPendingAgentRunIfMatches(sessionKey, runId);
-    if (!handled && cleared) useChatSessionStore.getState().clearStreamingState(sessionKey);
+  const recordInactive = ({ conversationId, runId }: SessionRun) => {
+    const handled = chatRunManager.reconcileInactive(conversationId, runId);
+    const cleared = clearPendingAgentRunIfMatches(conversationId, runId);
+    if (!handled && cleared) useChatSessionStore.getState().clearStreamingState(conversationId);
     if (handled || cleared) {
-      clearChatRunPresence(sessionKey);
-      dispatchTranscriptRefresh(sessionKey);
+      clearChatRunPresence(conversationId);
+      dispatchTranscriptRefresh(conversationId);
     }
   };
 
-  const recordCompleted = ({ sessionKey, runId, status }: CompletedSessionRun) => {
-    terminalRuns.set(runKey({ sessionKey, runId }), Date.now());
-    const handled = chatRunManager.reconcileTerminal(sessionKey, runId, status);
-    const cleared = clearPendingAgentRunIfMatches(sessionKey, runId);
+  const recordCompleted = ({ conversationId, runId, status }: CompletedSessionRun) => {
+    terminalRuns.set(runKey({ conversationId, runId }), Date.now());
+    const handled = chatRunManager.reconcileTerminal(conversationId, runId, status);
+    const cleared = clearPendingAgentRunIfMatches(conversationId, runId);
     if (!handled && cleared) {
-      useChatSessionStore.getState().clearStreamingState(sessionKey);
-      const visible = useChatSessionStore.getState().focusedSessionKey === sessionKey;
-      if (status === 'error') markChatRunFailed(sessionKey, !visible);
-      else if (status === 'suspended') markChatRunWaiting(sessionKey);
-      else if (status === 'success') markChatRunCompleted(sessionKey, !visible);
-      else clearChatRunPresence(sessionKey);
-      dispatchTranscriptRefresh(sessionKey);
+      useChatSessionStore.getState().clearStreamingState(conversationId);
+      const visible = useChatSessionStore.getState().focusedConversationId === conversationId;
+      if (status === 'error') markChatRunFailed(conversationId, !visible);
+      else if (status === 'suspended') markChatRunWaiting(conversationId);
+      else if (status === 'success') markChatRunCompleted(conversationId, !visible);
+      else clearChatRunPresence(conversationId);
+      dispatchTranscriptRefresh(conversationId);
     }
   };
 
@@ -117,18 +117,18 @@ export function startChatRunStateBridge(): () => void {
         for (const [key, completedAt] of terminalRuns) {
           if (completedAt < terminalCutoff) terminalRuns.delete(key);
         }
-        const activeBySession = new Map(activeRuns.map((run) => [run.sessionKey, run.runId]));
+        const activeBySession = new Map(activeRuns.map((run) => [run.conversationId, run.runId]));
         const pendingAtStartBySession = new Map(
-          pendingAtStart.map((run) => [run.sessionKey, run.runId]),
+          pendingAtStart.map((run) => [run.conversationId, run.runId]),
         );
         for (const run of activeRuns) {
-          const pendingNow = readPendingAgentRunId(run.sessionKey);
-          const pendingBefore = pendingAtStartBySession.get(run.sessionKey);
+          const pendingNow = readPendingAgentRunId(run.conversationId);
+          const pendingBefore = pendingAtStartBySession.get(run.conversationId);
           if (pendingNow && pendingNow !== pendingBefore && pendingNow !== run.runId) continue;
           recordStarted(run, true);
         }
         for (const pending of pendingAtStart) {
-          if (activeBySession.get(pending.sessionKey) !== pending.runId) recordInactive(pending);
+          if (activeBySession.get(pending.conversationId) !== pending.runId) recordInactive(pending);
         }
       })
       .catch(() => {

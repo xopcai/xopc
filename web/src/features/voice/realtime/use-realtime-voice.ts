@@ -101,7 +101,7 @@ export interface UseRealtimeVoiceReturn {
   endedReason: string | null;
   mode: VoiceSessionMode;
   startVoiceInput: () => Promise<void>;
-  startVoiceConversation: (sessionKey: string, mode?: VoiceMode) => Promise<void>;
+  startVoiceConversation: (conversationId: string, mode?: VoiceMode) => Promise<void>;
   interruptResponse: () => void;
   toggleMute: () => void;
   cancelVoiceInput: () => void;
@@ -126,7 +126,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
   const [failureKind, setFailureKind] = useState<VoiceCaptureFailureKind | null>(null);
   const [settingsRequired, setSettingsRequired] = useState(false);
   const [endedReason, setEndedReason] = useState<string | null>(null);
-  const callSessionKeyRef = useRef<string | undefined>(undefined);
+  const callConversationIdRef = useRef<string | undefined>(undefined);
   const controllerRef = useRef<AbortController | null>(null);
   const [mode, setMode] = useState<VoiceSessionMode>('dictation');
 
@@ -250,7 +250,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     setEndedReason(reason);
     const current = phaseRef.current;
     if (current === 'idle' || current === 'error' || finalizingRef.current) return;
-    if (!callSessionKeyRef.current) {
+    if (!callConversationIdRef.current) {
       if (current === 'transcribing' && reason === 'input_committed') { void finishDictation(); return; }
       // Keep recognized text recoverable until the user chooses Finish or Cancel.
       stopTimer(); stopMedia(); captureRef.current?.cancel(); captureRef.current = null; clientRef.current = null;
@@ -269,7 +269,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
       const elapsedMs = performance.now() - startedAt;
       setElapsedSec(Math.max(0, elapsedMs / 1_000));
       if (elapsedMs >= maxSessionMsRef.current && phaseRef.current === 'recording') {
-        if (!callSessionKeyRef.current) { confirmRef.current(); return; }
+        if (!callConversationIdRef.current) { confirmRef.current(); return; }
         setEndedReason('session_limit');
         clientRef.current?.stop('user_finished');
         finishIdle();
@@ -285,7 +285,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
       if (purpose === 'dictation') showComposerNotification('error', m.callCaptureBusy);
       return;
     }
-    callSessionKeyRef.current = conversationKey;
+    callConversationIdRef.current = conversationKey;
     const controller = new AbortController();
     controllerRef.current = controller;
     setError(null);
@@ -306,7 +306,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
         if (!isCurrent()) { void player.close(); return; }
       }
       stage = 'session';
-      await VoiceSessionClient.preflight({ purpose, ...(purpose === 'conversation' ? { mode: callMode, sessionKey: conversationKey } : {}), signal: controller.signal });
+      await VoiceSessionClient.preflight({ purpose, ...(purpose === 'conversation' ? { mode: callMode, conversationId: conversationKey } : {}), signal: controller.signal });
       if (!isCurrent()) return;
       stage = 'permission';
       const electronSystem = window.electronAPI?.system;
@@ -338,7 +338,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
       const client = await VoiceSessionClient.connect({
         purpose,
         signal: controller.signal,
-        ...(purpose === 'conversation' ? { mode: callMode, sessionKey: conversationKey } : {}),
+        ...(purpose === 'conversation' ? { mode: callMode, conversationId: conversationKey } : {}),
         onEvent: (event) => {
           if (!isCurrent()) return;
           if (event.type === 'input.transcript.delta' || event.type === 'input.transcript.final') {
@@ -510,7 +510,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
   }, [disabled, handleSessionClose, m, reset, startTimer, stopMedia, stopTimer, updatePhase]);
 
   const confirmVoiceInput = useCallback(() => {
-    if (callSessionKeyRef.current) return;
+    if (callConversationIdRef.current) return;
     if (phaseRef.current === 'error' && dictationRef.current.size) { void finishDictation(); return; }
     if (phaseRef.current !== 'recording') return;
     updatePhase('transcribing');
@@ -549,7 +549,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions): UseRealtimeV
     if (phaseRef.current !== 'error') return;
     reset();
     updatePhase('idle');
-    void beginCapture(mode, callModeRef.current, callSessionKeyRef.current);
+    void beginCapture(mode, callModeRef.current, callConversationIdRef.current);
   }, [beginCapture, mode, reset, updatePhase]);
 
   const startVoiceInput = useCallback(() => beginCapture('dictation'), [beginCapture]);

@@ -21,7 +21,7 @@ describe('fetchMediaUriBlob', () => {
   it('loads canonical workspace file artifacts through the files API', async () => {
     const result = await fetchMediaUriBlob({
       uri: 'xopc-file:space-id.cmVwb3J0cy9zYWxlcy54bHN4',
-      sessionKey: 'session-1',
+      conversationId: 'session-1',
     });
 
     expect(result.ok).toBe(true);
@@ -31,10 +31,10 @@ describe('fetchMediaUriBlob', () => {
   });
 
   it('keeps persisted media on the media endpoint', async () => {
-    await fetchMediaUriBlob({ uri: 'media://outbound/report.xlsx', sessionKey: 'session-1' });
+    await fetchMediaUriBlob({ uri: 'media://outbound/report.xlsx', conversationId: 'session-1' });
 
     expect(apiFetchMock).toHaveBeenCalledWith(
-      '/api/media/read?uri=media%3A%2F%2Foutbound%2Freport.xlsx&sessionKey=session-1',
+      '/api/media/read?uri=media%3A%2F%2Foutbound%2Freport.xlsx&conversationId=session-1',
     );
   });
 });

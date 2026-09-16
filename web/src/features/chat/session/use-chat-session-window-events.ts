@@ -13,15 +13,15 @@ import { useChatSessionStore } from '@/features/chat/session/chat-session-store'
 import type { SessionManager } from '@/features/chat/session/session-manager';
 
 export function useChatSessionWindowEvents(opts: {
-  sessionKey: string | null;
-  sessionKeyRef: MutableRefObject<string | null>;
+  conversationId: string | null;
+  conversationIdRef: MutableRefObject<string | null>;
   sendingRef: MutableRefObject<boolean>;
   streamingRef: MutableRefObject<boolean>;
   sessionMgrRef: MutableRefObject<SessionManager>;
   loadSessionById: (key: string, offset: number) => Promise<unknown>;
   loadTimelineById: (key: string) => Promise<unknown>;
   applyAgentConfig: (
-    sessionKey: string,
+    conversationId: string,
     cfg: {
       model: string;
       thinkingLevel?: string | null;
@@ -36,8 +36,8 @@ export function useChatSessionWindowEvents(opts: {
   ) => void;
 }): void {
   const {
-    sessionKey,
-    sessionKeyRef,
+    conversationId,
+    conversationIdRef,
     sessionMgrRef,
     loadSessionById,
     loadTimelineById,
@@ -57,18 +57,18 @@ export function useChatSessionWindowEvents(opts: {
   useEffect(() => {
     const handler = (e: Event) => {
       const d = (e as CustomEvent<{ key?: string }>).detail;
-      if (!d?.key || d.key !== sessionKey) return;
-      void loadSessionById(sessionKey, 0);
-      void loadTimelineById(sessionKey);
+      if (!d?.key || d.key !== conversationId) return;
+      void loadSessionById(conversationId, 0);
+      void loadTimelineById(conversationId);
     };
     window.addEventListener('session-transcript-updated', handler);
     return () => window.removeEventListener('session-transcript-updated', handler);
-  }, [sessionKey, loadSessionById, loadTimelineById]);
+  }, [conversationId, loadSessionById, loadTimelineById]);
 
   useEffect(() => {
     const onConfigReload = (event: Event) => {
       if (isSkillsOnlyConfigReload((event as CustomEvent<unknown>).detail)) return;
-      const key = sessionKeyRef.current;
+      const key = conversationIdRef.current;
       if (!key) return;
       void sessionMgrRef.current
         .loadSessionAgentConfig(key)
@@ -79,5 +79,5 @@ export function useChatSessionWindowEvents(opts: {
     };
     window.addEventListener('config-reload', onConfigReload);
     return () => window.removeEventListener('config-reload', onConfigReload);
-  }, [sessionKeyRef, sessionMgrRef, applyAgentConfig]);
+  }, [conversationIdRef, sessionMgrRef, applyAgentConfig]);
 }

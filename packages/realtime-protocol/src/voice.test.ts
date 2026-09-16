@@ -18,9 +18,9 @@ describe('voice realtime protocol', () => {
   };
 
   it('accepts conversation modes and rejects them for dictation', () => {
-    expect(createVoiceSessionRequestSchema.safeParse({ purpose: 'conversation', sessionKey: 'test', ...negotiation }).success).toBe(true);
+    expect(createVoiceSessionRequestSchema.safeParse({ purpose: 'conversation', conversationId: 'test', ...negotiation }).success).toBe(true);
     for (const mode of ['assistant', 'natural']) {
-      expect(createVoiceSessionRequestSchema.safeParse({ purpose: 'conversation', sessionKey: 'test', mode, ...negotiation }).success).toBe(true);
+      expect(createVoiceSessionRequestSchema.safeParse({ purpose: 'conversation', conversationId: 'test', mode, ...negotiation }).success).toBe(true);
       expect(createVoiceSessionRequestSchema.safeParse({ purpose: 'dictation', mode, ...negotiation }).success).toBe(false);
     }
   });

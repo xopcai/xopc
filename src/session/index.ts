@@ -60,8 +60,8 @@ export {
 export { resolveSessionLifecycleTimestamps, type SessionLifecycleEntry } from './lifecycle-timestamps.js';
 export {
   resolveSession,
-  resolveSessionKeyForRequest,
-  type SessionKeyResolution,
+  resolveConversationIdForRequest,
+  type ConversationIdResolution,
   type SessionResolution,
 } from './resolve-session.js';
 export {
@@ -94,8 +94,8 @@ export {
   fallbackTitleFromMessages,
   getSessionTitleSource,
   shouldRefineSessionTitleWithLlm,
-  isWebchatSessionKey,
-  shouldAutoTitleSessionKey,
+  isWebchatConversationId,
+  shouldAutoTitleConversationId,
   type SessionTitleSource,
 } from './session-title.js';
 

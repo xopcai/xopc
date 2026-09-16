@@ -1,6 +1,6 @@
 export type ClarificationChannelRuntime = {
   answerChoice(requestId: string, choiceIndex: number, idempotencyKey: string): boolean;
-  answerText(sessionKey: string, text: string, idempotencyKey: string): boolean;
+  answerText(conversationId: string, text: string, idempotencyKey: string): boolean;
 };
 
 let runtime: ClarificationChannelRuntime | null = null;
@@ -18,9 +18,9 @@ export function answerClarificationChoiceFromChannel(
 }
 
 export function answerClarificationTextFromChannel(
-  sessionKey: string,
+  conversationId: string,
   text: string,
   idempotencyKey: string,
 ): boolean {
-  return runtime?.answerText(sessionKey, text, idempotencyKey) ?? false;
+  return runtime?.answerText(conversationId, text, idempotencyKey) ?? false;
 }

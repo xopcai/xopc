@@ -14,14 +14,14 @@ vi.mock('@/features/chat/session/new-chat-handoff', () => ({
   openNewChatHandoff: vi.fn(async () => 'new-session'),
 }));
 
-const sessionKey = 'agent:main:webchat:default:direct:chat_auth_error';
+const conversationId = 'agent:main:webchat:default:direct:chat_auth_error';
 
 describe('useChatSessionLoad', () => {
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
       .IS_REACT_ACT_ENVIRONMENT = true;
     useChatSessionStore.setState({
-      focusedSessionKey: sessionKey,
+      focusedConversationId: conversationId,
       initLoading: false,
       loadingMore: false,
       shellError: null,
@@ -36,7 +36,7 @@ describe('useChatSessionLoad', () => {
     function Harness() {
       ({ createNewSession } = useChatSessionLoad({
         sessionMgrRef: { current: {} as SessionManager },
-        routeSessionKeyRef: { current: sessionKey },
+        routeConversationIdRef: { current: conversationId },
         sendingRef: { current: false },
         streamingRef: { current: false },
         loadingSessionRef: { current: false },
@@ -45,7 +45,7 @@ describe('useChatSessionLoad', () => {
         navigateToSession: vi.fn(),
         resolveAgentIdForPost: () => 'main',
         detachForNewConversation: vi.fn(),
-        sessionKey,
+        conversationId,
         sessionAgentId: 'main',
         currentProjectId: 'inherited-project',
         hasMore: false,
@@ -97,7 +97,7 @@ describe('useChatSessionLoad', () => {
     function Harness() {
       ({ loadSessionById } = useChatSessionLoad({
         sessionMgrRef: { current: sessionManager },
-        routeSessionKeyRef: { current: sessionKey },
+        routeConversationIdRef: { current: conversationId },
         sendingRef: { current: false },
         streamingRef: { current: false },
         loadingSessionRef: { current: false },
@@ -106,7 +106,7 @@ describe('useChatSessionLoad', () => {
         navigateToSession: vi.fn(),
         resolveAgentIdForPost: () => 'main',
         detachForNewConversation: vi.fn(),
-        sessionKey,
+        conversationId,
         sessionAgentId: 'main',
         currentProjectId: null,
         hasMore: false,
@@ -120,7 +120,7 @@ describe('useChatSessionLoad', () => {
     useChatSessionStore.getState().setShellError('provider_auth_invalid');
 
     await act(async () => {
-      await loadSessionById?.(sessionKey, 0);
+      await loadSessionById?.(conversationId, 0);
     });
 
     expect(useChatSessionStore.getState().shellError).toBe('provider_auth_invalid');
@@ -144,7 +144,7 @@ describe('useChatSessionLoad', () => {
     function Harness() {
       ({ loadSessionById } = useChatSessionLoad({
         sessionMgrRef: { current: sessionManager },
-        routeSessionKeyRef: { current: sessionKey },
+        routeConversationIdRef: { current: conversationId },
         sendingRef: { current: false },
         streamingRef: { current: false },
         loadingSessionRef: { current: false },
@@ -153,7 +153,7 @@ describe('useChatSessionLoad', () => {
         navigateToSession: vi.fn(),
         resolveAgentIdForPost: () => 'main',
         detachForNewConversation: vi.fn(),
-        sessionKey,
+        conversationId,
         sessionAgentId: 'main',
         currentProjectId: null,
         hasMore: false,
@@ -165,7 +165,7 @@ describe('useChatSessionLoad', () => {
       root.render(<Harness />);
     });
     await act(async () => {
-      await loadSessionById?.(sessionKey, 0);
+      await loadSessionById?.(conversationId, 0);
     });
 
     expect(JSON.parse(useChatSessionStore.getState().shellError ?? '{}')).toMatchObject({
@@ -204,7 +204,7 @@ describe('useChatSessionLoad', () => {
     function Harness() {
       ({ onSessionWorkingDirectoryChange } = useChatSessionLoad({
         sessionMgrRef: { current: sessionManager },
-        routeSessionKeyRef: { current: sessionKey },
+        routeConversationIdRef: { current: conversationId },
         sendingRef: { current: false },
         streamingRef: { current: false },
         loadingSessionRef: { current: false },
@@ -213,7 +213,7 @@ describe('useChatSessionLoad', () => {
         navigateToSession: vi.fn(),
         resolveAgentIdForPost: () => 'main',
         detachForNewConversation: vi.fn(),
-        sessionKey,
+        conversationId,
         sessionAgentId: 'main',
         currentProjectId: null,
         hasMore: false,
@@ -228,10 +228,10 @@ describe('useChatSessionLoad', () => {
       await onSessionWorkingDirectoryChange?.('  /Users/example/projects/next  ');
     });
 
-    expect(sessionManager.patchSessionAgentConfig).toHaveBeenCalledWith(sessionKey, {
+    expect(sessionManager.patchSessionAgentConfig).toHaveBeenCalledWith(conversationId, {
       workingDirectory: '/Users/example/projects/next',
     });
-    expect(useChatSessionStore.getState().sessions[sessionKey]).toMatchObject({
+    expect(useChatSessionStore.getState().sessions[conversationId]).toMatchObject({
       effectiveWorkspacePath: '/Users/example/projects/next',
       workspaceSource: 'session_override',
     });

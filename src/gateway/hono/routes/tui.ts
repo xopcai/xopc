@@ -6,8 +6,8 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 
 export function registerTuiRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   authenticated.get('/api/tui/startup-resources', (c) => {
-    const sessionKey = c.req.query('sessionKey')?.trim() || undefined;
-    const payload = collectTuiStartupResources(deps.service.currentConfig as Config, sessionKey);
+    const conversationId = c.req.query('conversationId')?.trim() || undefined;
+    const payload = collectTuiStartupResources(deps.service.currentConfig as Config, conversationId);
     return c.json({ ok: true, payload });
   });
 }

@@ -6,7 +6,7 @@ import type { SessionInfo } from '@/features/chat/chat.types';
 import { chooseModelThinking, modelPreferenceForAgent, type SessionCreateRequest } from '@xopcai/gateway-contract';
 import { type Message } from '@/features/chat/messages/messages.types';
 import { modelSupportsReasoning } from '@/features/chat/model/model-capabilities';
-import { isViewingSession, resolveViewSessionKey } from '@/features/chat/session/chat-session-view';
+import { isViewingSession, resolveViewConversationId } from '@/features/chat/session/chat-session-view';
 import {
   shouldShowHistoryLoading,
   useChatSessionStore,
@@ -21,7 +21,7 @@ import {
 
 export function useChatSessionLoad(deps: {
   sessionMgrRef: RefObject<SessionManager>;
-  routeSessionKeyRef: RefObject<string | null>;
+  routeConversationIdRef: RefObject<string | null>;
   sendingRef: RefObject<boolean>;
   streamingRef: RefObject<boolean>;
   loadingSessionRef: RefObject<boolean>;
@@ -32,7 +32,7 @@ export function useChatSessionLoad(deps: {
   resolveAgentIdForPost: () => string | undefined;
   detachForNewConversation: () => void;
 
-  sessionKey: string | null;
+  conversationId: string | null;
   sessionAgentId: string;
   currentProjectId: string | null;
   taskId?: string;
@@ -40,7 +40,7 @@ export function useChatSessionLoad(deps: {
 }) {
   const {
     sessionMgrRef,
-    routeSessionKeyRef,
+    routeConversationIdRef,
     sendingRef,
     streamingRef,
     loadingSessionRef,
@@ -49,7 +49,7 @@ export function useChatSessionLoad(deps: {
     navigateToSession,
     resolveAgentIdForPost,
     detachForNewConversation,
-    sessionKey,
+    conversationId,
     sessionAgentId,
     currentProjectId,
     taskId,
@@ -63,7 +63,7 @@ export function useChatSessionLoad(deps: {
   const sessionNamePollGenRef = useRef(0);
 
   const refreshModelThinkingSupport = useCallback((modelId: string): Promise<void> => {
-    const key = store().focusedSessionKey;
+    const key = store().focusedConversationId;
     if (!modelId.trim()) {
       const gen = ++thinkingSupportGenRef.current;
       if (gen === thinkingSupportGenRef.current && key) {
@@ -74,7 +74,7 @@ export function useChatSessionLoad(deps: {
     const gen = ++thinkingSupportGenRef.current;
     return modelSupportsReasoning(modelId).then((supports) => {
       if (gen !== thinkingSupportGenRef.current) return;
-      const focused = store().focusedSessionKey;
+      const focused = store().focusedConversationId;
       if (focused && store().sessions[focused]?.model === modelId) store().patchSessionMeta(focused, { modelSupportsThinking: supports });
     });
   }, [thinkingSupportGenRef]);
@@ -93,7 +93,7 @@ export function useChatSessionLoad(deps: {
   );
 
   const pollSessionNameAfterTurn = useCallback(() => {
-    const key = store().focusedSessionKey;
+    const key = store().focusedConversationId;
     if (!key) return;
     const existingName = store().sessions[key]?.name;
     if (existingName?.trim()) return;
@@ -105,11 +105,11 @@ export function useChatSessionLoad(deps: {
     const pollAttempt = (attempt: number): void => {
       if (attempt >= maxAttempts) return;
       if (gen !== sessionNamePollGenRef.current) return;
-      if (store().focusedSessionKey !== key) return;
+      if (store().focusedConversationId !== key) return;
       if (store().sessions[key]?.name?.trim()) return;
       window.setTimeout(() => {
         if (gen !== sessionNamePollGenRef.current) return;
-        if (store().focusedSessionKey !== key) return;
+        if (store().focusedConversationId !== key) return;
         if (store().sessions[key]?.name?.trim()) return;
         void sessionMgrRef.current
           .fetchSessionName(key)
@@ -134,9 +134,9 @@ export function useChatSessionLoad(deps: {
     (chatId: string) =>
       isViewingSession({
         chatId,
-        routeSessionKey: routeSessionKeyRef.current,
+        routeConversationId: routeConversationIdRef.current,
       }),
-    [routeSessionKeyRef],
+    [routeConversationIdRef],
   );
 
   const applyLoadedSessionSnapshot = useCallback(
@@ -211,7 +211,7 @@ export function useChatSessionLoad(deps: {
                 ? JSON.stringify(buildSessionNotFoundErrorPayload(message))
                 : 'Failed to load session',
             );
-            const routedViewKey = resolveViewSessionKey(routeSessionKeyRef.current);
+            const routedViewKey = resolveViewConversationId(routeConversationIdRef.current);
             if (routedViewKey && routedViewKey === k) {
               return undefined;
             }
@@ -227,8 +227,8 @@ export function useChatSessionLoad(deps: {
               void openNewChatHandoff({
                 sessionMgr: sessionMgrRef.current,
                 agentId: aid,
-                currentSessionKey: null,
-                routeSessionKey: null,
+                currentConversationId: null,
+                routeConversationId: null,
                 navigateToSession,
                 replaceNavigate: true,
                 onOpened: (key) => {
@@ -261,7 +261,7 @@ export function useChatSessionLoad(deps: {
       }
     },
     [
-      routeSessionKeyRef,
+      routeConversationIdRef,
       isStillViewingSession,
       sendingRef,
       streamingRef,
@@ -275,7 +275,7 @@ export function useChatSessionLoad(deps: {
   );
 
   const loadMoreMessages = useCallback(async () => {
-    const key = store().focusedSessionKey;
+    const key = store().focusedConversationId;
     if (!key || store().loadingMore || !hasMore) return;
     store().setLoadingMore(true);
     try {
@@ -286,10 +286,10 @@ export function useChatSessionLoad(deps: {
   }, [hasMore, loadSessionById, messagesLenRef]);
 
   const updateModelConfig = useCallback(async (modelId: string, level?: string) => {
-    if (!sessionKey) throw new Error('No active session');
-    const current = store().sessions[sessionKey];
+    if (!conversationId) throw new Error('No active session');
+    const current = store().sessions[conversationId];
     if (current?.modelConfigSaving) throw new Error('Model configuration is being saved');
-    store().patchSessionMeta(sessionKey, { modelConfigSaving: true });
+    store().patchSessionMeta(conversationId, { modelConfigSaving: true });
     try {
       store().setShellError(null);
       if (level === undefined) {
@@ -301,44 +301,44 @@ export function useChatSessionLoad(deps: {
       }
       const cfg = taskId
         ? await sessionMgrRef.current.patchTaskConversationModel(taskId, modelId, level, current?.configVersion)
-        : await sessionMgrRef.current.patchSessionAgentConfig(sessionKey, {
+        : await sessionMgrRef.current.patchSessionAgentConfig(conversationId, {
             model: modelId, thinkingLevel: level, configVersion: current?.configVersion,
           });
-      patchSessionAgentConfigView(sessionKey, cfg);
+      patchSessionAgentConfigView(conversationId, cfg);
       rememberAgentModel(sessionAgentId, { modelRef: cfg.model, thinkingLevel: cfg.thinkingLevel });
       void refreshModelThinkingSupport(cfg.model);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to update model configuration';
       store().setShellError(message);
-      const cfg = await sessionMgrRef.current.loadSessionAgentConfig(sessionKey).catch(() => null);
-      if (cfg) patchSessionAgentConfigView(sessionKey, cfg);
+      const cfg = await sessionMgrRef.current.loadSessionAgentConfig(conversationId).catch(() => null);
+      if (cfg) patchSessionAgentConfigView(conversationId, cfg);
       throw error;
     } finally {
-      store().patchSessionMeta(sessionKey, { modelConfigSaving: false });
+      store().patchSessionMeta(conversationId, { modelConfigSaving: false });
     }
-  }, [sessionKey, sessionAgentId, taskId, sessionMgrRef, refreshModelThinkingSupport]);
+  }, [conversationId, sessionAgentId, taskId, sessionMgrRef, refreshModelThinkingSupport]);
 
   const onSessionModelChange = updateModelConfig;
   const onSessionThinkingLevelChange = useCallback(async (level: string) => {
-    const model = sessionKey ? store().sessions[sessionKey]?.model : undefined;
+    const model = conversationId ? store().sessions[conversationId]?.model : undefined;
     if (model) await updateModelConfig(model, level);
-  }, [sessionKey, updateModelConfig]);
+  }, [conversationId, updateModelConfig]);
   const onSessionWorkingDirectoryChange = useCallback(
     async (path: string) => {
       const nextPath = path.trim();
-      if (!sessionKey || !nextPath) return;
+      if (!conversationId || !nextPath) return;
       try {
         store().setShellError(null);
-        await sessionMgrRef.current.patchSessionAgentConfig(sessionKey, {
+        await sessionMgrRef.current.patchSessionAgentConfig(conversationId, {
           workingDirectory: nextPath,
         });
-        await applySessionAgentConfig(sessionKey);
+        await applySessionAgentConfig(conversationId);
       } catch (error) {
         store().setShellError(error instanceof Error ? error.message : 'Failed to update working directory');
         throw error;
       }
     },
-    [applySessionAgentConfig, sessionKey, sessionMgrRef],
+    [applySessionAgentConfig, conversationId, sessionMgrRef],
   );
   const createNewSession = useCallback(
     async (opts?: { forceNew?: boolean; projectId?: string | null; temporary?: boolean; executionMode?: SessionCreateRequest['executionMode'] }) => {
@@ -351,8 +351,8 @@ export function useChatSessionLoad(deps: {
       await openNewChatHandoff({
         sessionMgr: sessionMgrRef.current,
         agentId: aid,
-        currentSessionKey: sessionKey,
-        routeSessionKey: sessionKey,
+        currentConversationId: conversationId,
+        routeConversationId: conversationId,
         forceNew: opts?.forceNew,
         temporary: opts?.temporary,
         executionMode: opts?.executionMode,
@@ -379,7 +379,7 @@ export function useChatSessionLoad(deps: {
       navigateToSession,
       resolveAgentIdForPost,
       currentProjectId,
-      sessionKey,
+      conversationId,
       sessionMgrRef,
       applySessionAgentConfig,
     ],

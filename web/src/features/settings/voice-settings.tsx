@@ -212,7 +212,7 @@ export function VoiceSettingsPanel() {
   const showAdvanced = useShowAdvancedSettings();
   const captions = useVoicePreferencesStore((state) => state.captions);
   const setCaptions = useVoicePreferencesStore((state) => state.setCaptions);
-  const token = useGatewayStore((st) => st.sessionKey);
+  const token = useGatewayStore((st) => st.conversationId);
   const hasToken = Boolean(token);
 
   useEffect(() => {

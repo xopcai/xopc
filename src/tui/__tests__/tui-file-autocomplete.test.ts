@@ -11,7 +11,7 @@ describe('TUI file autocomplete', () => {
     ]);
     const provider = createTuiFileAutocompleteProvider(search);
 
-    const suggestions = await provider('serv', { cwd: '/repo', sessionKey: 'agent:main:main' });
+    const suggestions = await provider('serv', { cwd: '/repo', conversationId: 'agent:main:main' });
 
     expect(search).toHaveBeenCalledWith('agent:main:main', 'serv', { limit: 15 });
     expect(suggestions).toEqual([
@@ -34,7 +34,7 @@ describe('TUI file autocomplete', () => {
     const search = vi.fn(async () => []);
     const provider = createTuiFileAutocompleteProvider(search);
 
-    const suggestions = await provider('skill:review', { cwd: '/repo', sessionKey: 'agent:main:main' });
+    const suggestions = await provider('skill:review', { cwd: '/repo', conversationId: 'agent:main:main' });
 
     expect(search).not.toHaveBeenCalled();
     expect(suggestions).toEqual([]);

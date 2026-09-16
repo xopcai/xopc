@@ -17,8 +17,8 @@ type Props = {
   onCopiedMessage: () => void;
   onCopiedJson: () => void;
   onFilterByRequestId?: (requestId: string) => void;
-  onFilterBySessionId?: (sessionId: string) => void;
-  onOpenChat?: (target: { sessionKey?: string; sessionId?: string }) => void;
+  onFilterByTranscriptId?: (transcriptId: string) => void;
+  onOpenChat?: (target: { conversationId?: string; transcriptId?: string }) => void;
 };
 
 export function LogsDetailDrawer({
@@ -29,7 +29,7 @@ export function LogsDetailDrawer({
   onCopiedMessage,
   onCopiedJson,
   onFilterByRequestId,
-  onFilterBySessionId,
+  onFilterByTranscriptId,
   onOpenChat,
 }: Props) {
   return (
@@ -98,16 +98,16 @@ export function LogsDetailDrawer({
                   message: L.message,
                   metadata: L.metadata,
                   requestId: L.requestId,
-                  sessionKey: L.sessionKey,
-                  sessionId: L.sessionId,
+                  conversationId: L.conversationId,
+                  transcriptId: L.transcriptId,
                   phase: L.phase,
                   stackTrace: L.stackTrace,
                   filterByRequestId: L.filterByRequestId,
-                  filterBySessionId: L.filterBySessionId,
+                  filterByTranscriptId: L.filterByTranscriptId,
                   openChat: L.openChat,
                 }}
                 onFilterByRequestId={onFilterByRequestId}
-                onFilterBySessionId={onFilterBySessionId}
+                onFilterByTranscriptId={onFilterByTranscriptId}
                 onOpenChat={onOpenChat}
               />
             ) : null}

@@ -66,7 +66,7 @@ vi.mock('../read-aloud-cache', () => ({
 import { useReadAloudStore, type ReadAloudInput } from '../read-aloud-store';
 
 const input: ReadAloudInput = {
-  source: { id: 'message-1', sessionKey: 'session-1', title: 'AI response' },
+  source: { id: 'message-1', conversationId: 'session-1', title: 'AI response' },
   text: 'A readable response.',
   language: 'en-US',
 };
@@ -91,10 +91,10 @@ describe('read aloud store', () => {
 
   it('keeps continuous reading scoped to one chat', () => {
     useReadAloudStore.getState().enableContinuous('session-1');
-    expect(useReadAloudStore.getState().continuousSessionKey).toBe('session-1');
+    expect(useReadAloudStore.getState().continuousConversationId).toBe('session-1');
 
     useReadAloudStore.getState().disableContinuous();
-    expect(useReadAloudStore.getState().continuousSessionKey).toBeNull();
+    expect(useReadAloudStore.getState().continuousConversationId).toBeNull();
   });
 
   it('keeps the store idle when an app background event pauses without an active source', () => {
@@ -118,7 +118,7 @@ describe('read aloud store', () => {
     });
     expect(mocks.players[0]?.replace).toHaveBeenCalledWith({ uri: 'file:///speech-0.mp3' });
     expect(mocks.startLiveActivity).toHaveBeenCalledWith(expect.objectContaining({
-      sessionKey: input.source.sessionKey,
+      conversationId: input.source.conversationId,
       status: 'preparing',
       title: input.source.title,
     }));

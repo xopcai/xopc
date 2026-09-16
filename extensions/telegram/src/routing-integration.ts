@@ -8,9 +8,7 @@
 import type { Context } from 'grammy';
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import {
-  buildSessionKey,
   resolveRoute,
-  applyIdentityLinks,
   type RouteContext,
 } from '@xopcai/xopc/routing/index.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
@@ -36,7 +34,7 @@ export interface TelegramRoutingContext {
 /**
  * Generate session key with routing integration
  */
-export function generateSessionKeyWithRouting(
+export function generateConversationIdWithRouting(
   ctx: TelegramRoutingContext,
   config: Config
 ): string {
@@ -55,39 +53,22 @@ export function generateSessionKeyWithRouting(
 
   // Resolve route using bindings
   const route = resolveRoute({
-    config,
+    config: { ...config, session: { ...config.session, dmScope: 'per-account-channel-peer' } },
     ...routeInput,
     threadId: ctx.threadId,
   });
 
-  // Apply identity links for cross-platform user merging
-  const identityLinks = config.session?.identityLinks ?? {};
-  const originalPeerId = ctx.isGroup ? ctx.chatId : ctx.senderId;
-  const finalPeerId = applyIdentityLinks(
-    originalPeerId,
-    channel,
-    identityLinks
-  );
-  
-  // Rebuild session key with final peerId
-  const finalSessionKey = buildSessionKey({
-    agentId: route.agentId,
-    source: channel,
-    accountId: route.accountId,
-    peerKind: ctx.isGroup ? 'group' : 'dm',
-    peerId: finalPeerId,
-    threadId: ctx.threadId,
-  });
+  const finalConversationId = route.conversationId;
 
   log.debug({
     accountId: ctx.accountId,
     chatId: ctx.chatId,
     senderId: ctx.senderId,
-    sessionKey: finalSessionKey,
+    conversationId: finalConversationId,
     agentId: route.agentId,
   }, 'Generated session key with routing');
 
-  return finalSessionKey;
+  return finalConversationId;
 }
 
 /**

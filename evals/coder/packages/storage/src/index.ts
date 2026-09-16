@@ -28,7 +28,7 @@ export interface RunRecordInput {
 export interface RunCompletionInput {
   status: string;
   finalText: string;
-  sessionKey?: string;
+  conversationId?: string;
   agentRunId?: string;
   usage?: Record<string, number>;
   runtimeIdentity?: Record<string, unknown>;
@@ -249,7 +249,7 @@ export class EvalStore {
     `).run(
       input.status,
       new Date().toISOString(),
-      input.sessionKey ?? null,
+      input.conversationId ?? null,
       input.agentRunId ?? null,
       redactText(input.finalText),
       JSON.stringify(redactSensitive(input.usage ?? {})),

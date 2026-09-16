@@ -20,11 +20,11 @@ import {
 const chatEvent = {
   schemaVersion: 1,
   runId: 'run-chat',
-  sessionKey: 'session-1',
+  conversationId: 'session-1',
   status: 'success',
   completedAtMs: 1,
   source: 'webchat',
-  target: { kind: 'chat', sessionKey: 'session-1' },
+  target: { kind: 'chat', conversationId: 'session-1' },
 };
 
 describe('NotificationService', () => {
@@ -100,7 +100,7 @@ describe('NotificationService', () => {
 
     service.handleGatewayEvent('work-discovery.completed', {
       runId: 'run-understanding',
-      sessionKey: 'session-understanding',
+      conversationId: 'session-understanding',
       status: 'completed',
     });
 
@@ -111,7 +111,7 @@ describe('NotificationService', () => {
         target: {
           kind: 'work_discovery',
           runId: 'run-understanding',
-          sessionKey: 'session-understanding',
+          conversationId: 'session-understanding',
         },
       }),
     ]);

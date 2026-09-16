@@ -144,10 +144,10 @@ function textFromTranscriptContent(content: unknown): string {
     .join('\n');
 }
 
-function buildSessionSummaryKnowledgeContent(sessionKey: string, explicitSummary?: string): string {
+function buildSessionSummaryKnowledgeContent(conversationId: string, explicitSummary?: string): string {
   const summary = explicitSummary?.trim();
   if (summary) return summary;
-  const rows = loadTranscriptRowsForSession(sessionKey)
+  const rows = loadTranscriptRowsForSession(conversationId)
     .filter((row) => {
       if (!row || typeof row !== 'object') return false;
       const record = row as unknown as Record<string, unknown>;
@@ -166,8 +166,8 @@ function buildSessionSummaryKnowledgeContent(sessionKey: string, explicitSummary
     })
     .filter(Boolean);
   return lines.length > 0
-    ? [`Session summary for ${sessionKey}:`, ...lines].join('\n')
-    : `Session summary for ${sessionKey}: no transcript content available.`;
+    ? [`Session summary for ${conversationId}:`, ...lines].join('\n')
+    : `Session summary for ${conversationId}: no transcript content available.`;
 }
 
 
@@ -311,8 +311,8 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
   });
 
   authenticated.get('/api/projects/suggestions', async (c) => {
-    const sessionKey = c.req.query('sessionKey')?.trim();
-    return c.json({ ok: true, suggestions: sessionKey ? service.projects.suggestProjectsForSession(sessionKey) : [] });
+    const conversationId = c.req.query('conversationId')?.trim();
+    return c.json({ ok: true, suggestions: conversationId ? service.projects.suggestProjectsForSession(conversationId) : [] });
   });
 
   authenticated.post('/api/projects/infer-defaults', async (c) => {
@@ -359,16 +359,16 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     }
     if (!match) return c.json({ ok: true, project: null });
 
-    const sessionKey = textField(body, 'sessionKey')?.trim();
+    const conversationId = textField(body, 'conversationId')?.trim();
     const projectDefaultAgentId = normalizeProjectAgentId(match.project.defaultAgentId);
     const shouldBindRequestedSession = !projectDefaultAgentId || projectDefaultAgentId === normalizeProjectAgentId(agentId);
-    if (sessionKey && shouldBindRequestedSession) {
-      const existingSession = getSessionMetadata(sessionKey);
+    if (conversationId && shouldBindRequestedSession) {
+      const existingSession = getSessionMetadata(conversationId);
       if (!existingSession) {
-        await service.sessionIndexInstance.saveMessages(sessionKey, [], {
+        await service.sessionIndexInstance.saveMessages(conversationId, [], {
           metadata: {
             sourceChannel: 'tui',
-            sourceChatId: `default:direct:${sessionKey}`,
+            sourceChatId: `default:direct:${conversationId}`,
             sessionType: 'chat',
             projectId: match.project.id,
             routing: {
@@ -376,12 +376,12 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
               source: 'tui',
               accountId: 'default',
               peerKind: 'direct',
-              peerId: sessionKey,
+              peerId: conversationId,
             },
           },
         });
       }
-      service.projects.attachSession(sessionKey, match.project.id);
+      service.projects.attachSession(conversationId, match.project.id);
     }
 
     return c.json({ ok: true, ...match });
@@ -651,7 +651,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
 
   authenticated.get('/api/projects/:id/sessions', async (c) => {
     try {
-      const keys = service.projects.listSessionKeys(c.req.param('id'), parseLimit(c.req.query('limit'), 100));
+      const keys = service.projects.listConversationIds(c.req.param('id'), parseLimit(c.req.query('limit'), 100));
       const sessions = await Promise.all(keys.map((key) => service.sessions.getSession(key)));
       return c.json({
         ok: true,
@@ -663,62 +663,62 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
   });
 
 
-  authenticated.post('/api/projects/:id/sessions/:sessionKey', async (c) => {
+  authenticated.post('/api/projects/:id/sessions/:conversationId', async (c) => {
     try {
-      service.projects.attachSession(c.req.param('sessionKey'), c.req.param('id'));
-      const session = await service.sessions.getSession(c.req.param('sessionKey'));
+      service.projects.attachSession(c.req.param('conversationId'), c.req.param('id'));
+      const session = await service.sessions.getSession(c.req.param('conversationId'));
       return c.json({ ok: true, session });
     } catch (error) {
       return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 404);
     }
   });
 
-  authenticated.delete('/api/projects/:id/sessions/:sessionKey', async (c) => {
+  authenticated.delete('/api/projects/:id/sessions/:conversationId', async (c) => {
     try {
       const projectId = c.req.param('id');
-      const sessionKey = c.req.param('sessionKey');
+      const conversationId = c.req.param('conversationId');
       if (!service.projects.get(projectId)) {
         return c.json({ ok: false, error: 'Project not found' }, 404);
       }
-      const session = await service.sessions.getSession(sessionKey);
+      const session = await service.sessions.getSession(conversationId);
       if (!session) {
         return c.json({ ok: false, error: 'Session not found' }, 404);
       }
       if (session.projectId !== projectId) {
         return c.json({ ok: false, error: 'Session is not attached to this project' }, 409);
       }
-      service.projects.detachSession(sessionKey);
+      service.projects.detachSession(conversationId);
       return c.json({ ok: true });
     } catch (error) {
       return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 404);
     }
   });
 
-  authenticated.post('/api/projects/:id/sessions/:sessionKey/summary-knowledge', async (c) => {
+  authenticated.post('/api/projects/:id/sessions/:conversationId/summary-knowledge', async (c) => {
     const projectId = c.req.param('id');
-    const sessionKey = c.req.param('sessionKey');
+    const conversationId = c.req.param('conversationId');
     const project = service.projects.get(projectId);
     if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
-    const session = getSessionMetadata(sessionKey);
+    const session = getSessionMetadata(conversationId);
     if (!session) return c.json({ ok: false, error: 'Session not found' }, 404);
     if (session.projectId !== projectId) {
       return c.json({ ok: false, error: 'Session is not attached to this project' }, 409);
     }
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     const content = buildSessionSummaryKnowledgeContent(
-      sessionKey,
+      conversationId,
       typeof body.summary === 'string' ? body.summary : undefined,
     );
     const record = writeKnowledgeItem({
       kind: 'episode',
       scope: { type: 'project', id: projectId },
       sourceAgentId: session.routing?.agentId ?? 'main',
-      sourceSessionId: sessionKey,
+      sourceConversationId: conversationId,
       content,
-      canonicalKey: `project-session-summary:${projectId}:${sessionKey}`,
+      canonicalKey: `project-session-summary:${projectId}:${conversationId}`,
       source: {
         provider: 'project-summary',
-        sessionEntryId: sessionKey,
+        sessionEntryId: conversationId,
       },
       confidence: typeof body.confidence === 'number' ? body.confidence : 0.7,
       importance: 0.6,

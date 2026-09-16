@@ -12,7 +12,7 @@ describe('createTuiExtensionRuntime context and widgets', () => {
 it('invokes extension shortcuts with TUI context', async () => {
     const registry = new ExtensionRegistryImpl();
     const state = {
-      currentSessionKey: 'agent:main:main',
+      currentConversationId: 'agent:main:main',
       activeRunId: null as string | null,
       isCompacting: false,
       pendingInputCount: 0,
@@ -31,7 +31,7 @@ it('invokes extension shortcuts with TUI context', async () => {
           hasUI: boolean;
           signal: AbortSignal | undefined;
           cwd: string;
-          sessionKey: string;
+          conversationId: string;
           trusted: boolean;
           uiEditorText: string;
           uiTheme: unknown;
@@ -87,7 +87,7 @@ it('invokes extension shortcuts with TUI context', async () => {
           hasUI: ctx.hasUI,
           signal: ctx.signal,
           cwd: ctx.cwd,
-          sessionKey: ctx.sessionKey,
+          conversationId: ctx.conversationId,
           trusted: ctx.isProjectTrusted(),
           uiEditorText: ctx.ui.getEditorText(),
           uiTheme: ctx.ui.theme,
@@ -195,7 +195,7 @@ it('invokes extension shortcuts with TUI context', async () => {
       hasUI: true,
       signal: abortController.signal,
       cwd: '/tmp/work',
-      sessionKey: 'agent:main:main',
+      conversationId: 'agent:main:main',
       trusted: true,
       uiEditorText: 'draft from editor',
       systemPrompt: 'system prompt text',
@@ -254,7 +254,7 @@ it('invokes extension shortcuts with TUI context', async () => {
   it('exposes live TUI context to extension slash commands', async () => {
     const registry = new ExtensionRegistryImpl();
     const state = {
-      currentSessionKey: 'agent:main:main',
+      currentConversationId: 'agent:main:main',
       activeRunId: null as string | null,
       isCompacting: false,
       pendingInputCount: 0,
@@ -314,7 +314,7 @@ it('invokes extension shortcuts with TUI context', async () => {
     expect(context?.hasUI).toBe(true);
     expect(context?.signal).toBeUndefined();
     expect(context?.cwd).toBe('/tmp/work');
-    expect(context?.sessionKey).toBe('agent:main:main');
+    expect(context?.conversationId).toBe('agent:main:main');
     expect(context?.isProjectTrusted()).toBe(false);
     expect(context?.sessionManager.getSessionId()).toBe('agent:main:main');
     expect(context?.sessionManager.getCwd()).toBe('/tmp/work');
@@ -353,7 +353,7 @@ it('invokes extension shortcuts with TUI context', async () => {
     expect(context?.getSystemPrompt()).toBe('system prompt');
     expect(context?.getSystemPromptOptions()).toEqual({
       cwd: '/tmp/work',
-      sessionKey: 'agent:main:main',
+      conversationId: 'agent:main:main',
       model: {
         provider: 'openai',
         id: 'gpt-5',
@@ -378,7 +378,7 @@ it('invokes extension shortcuts with TUI context', async () => {
     const forkContext = runtime.slashCommands[0]?.getContext();
     await forkContext?.fork('row-2', { position: 'at' });
     expect(forkSession).toHaveBeenCalledWith('row-2', { position: 'at' });
-    expect(() => forkContext?.sessionKey).toThrow('This extension ctx is stale');
+    expect(() => forkContext?.conversationId).toThrow('This extension ctx is stale');
 
     const switchContext = runtime.slashCommands[0]?.getContext();
     await switchContext?.switchSession('agent:main:other');
@@ -422,7 +422,7 @@ it('invokes extension shortcuts with TUI context', async () => {
         setExtensionLines: () => {},
         setExtensionStatusParts: () => {},
       } as never,
-      getState: () => ({ currentSessionKey: 'agent:main:main', sessionInfo: {} }) as never,
+      getState: () => ({ currentConversationId: 'agent:main:main', sessionInfo: {} }) as never,
       baseSlashCommands: [],
       cwd: '/tmp/work',
       fdPath: null,
@@ -466,7 +466,7 @@ it('invokes extension shortcuts with TUI context', async () => {
         setExtensionLines: () => {},
         setExtensionStatusParts: () => {},
       } as never,
-      getState: () => ({ currentSessionKey: 'agent:main:main', sessionInfo: {} }) as never,
+      getState: () => ({ currentConversationId: 'agent:main:main', sessionInfo: {} }) as never,
       baseSlashCommands: [],
       cwd: '/tmp/work',
       fdPath: null,
@@ -492,7 +492,7 @@ it('invokes extension shortcuts with TUI context', async () => {
     const footerBranches: Array<string | null> = [];
     let branchChangeUnsubscribe: (() => void) | undefined;
     const state = {
-      currentSessionKey: 'agent:main:main',
+      currentConversationId: 'agent:main:main',
       connectionStatus: 'connected',
       activityStatus: 'idle',
       isCompacting: false,
@@ -504,7 +504,7 @@ it('invokes extension shortcuts with TUI context', async () => {
     const header = new TuiHeader(() => ({
       version: '0.0.0',
       connectionLabel: 'connected',
-      sessionKey: 'agent:main:main',
+      conversationId: 'agent:main:main',
       showHints: false,
     }));
     const bottomBar = new TuiBottomBar(() => state as never, () => 'medium');
@@ -575,7 +575,7 @@ it('invokes extension shortcuts with TUI context', async () => {
     const disposeAbove = vi.fn();
     const disposeBelow = vi.fn();
     const state = {
-      currentSessionKey: 'agent:main:main',
+      currentConversationId: 'agent:main:main',
       connectionStatus: 'connected',
       activityStatus: 'idle',
       isCompacting: false,
@@ -587,7 +587,7 @@ it('invokes extension shortcuts with TUI context', async () => {
     const header = new TuiHeader(() => ({
       version: '0.0.0',
       connectionLabel: 'connected',
-      sessionKey: 'agent:main:main',
+      conversationId: 'agent:main:main',
       showHints: false,
     }));
     const bottomBar = new TuiBottomBar(() => state as never, () => 'medium');
@@ -657,7 +657,7 @@ it('invokes extension shortcuts with TUI context', async () => {
         setExtensionLines: () => {},
         setExtensionStatusParts: () => {},
       } as never,
-      getState: () => ({ currentSessionKey: 'agent:main:main', sessionInfo: {} }) as never,
+      getState: () => ({ currentConversationId: 'agent:main:main', sessionInfo: {} }) as never,
       baseSlashCommands: [],
       cwd: '/tmp/work',
       fdPath: null,
@@ -708,7 +708,7 @@ it('invokes extension shortcuts with TUI context', async () => {
         setExtensionLines: () => {},
         setExtensionStatusParts: () => {},
       } as never,
-      getState: () => ({ currentSessionKey: 'agent:main:main', sessionInfo: {} }) as never,
+      getState: () => ({ currentConversationId: 'agent:main:main', sessionInfo: {} }) as never,
       baseSlashCommands: [],
       cwd: '/tmp/work',
       fdPath: null,

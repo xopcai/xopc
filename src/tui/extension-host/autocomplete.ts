@@ -31,7 +31,7 @@ export class ChainedAutocompleteProvider implements AutocompleteProvider {
     private readonly extraProviders: TuiAutocompleteProvider[],
     private readonly extensionSlashCommands: ExtensionSlashCommandAutocompleteItem[],
     private readonly baseSlashCommandNames: Set<string>,
-    private readonly getSessionKey: () => string,
+    private readonly getConversationId: () => string,
     private readonly cwd: string,
     private readonly additionalSlashCommands: ExtensionSlashCommandAutocompleteItem[] = [],
   ) {}
@@ -79,11 +79,11 @@ export class ChainedAutocompleteProvider implements AutocompleteProvider {
 
     const query = atMatch[1] ?? '';
     const prefix = `@${query}`;
-    const sessionKey = this.getSessionKey();
+    const conversationId = this.getConversationId();
     const items: AutocompleteItem[] = [];
 
     for (const provider of this.extraProviders) {
-      const suggestions = await provider(query, { cwd: this.cwd, sessionKey });
+      const suggestions = await provider(query, { cwd: this.cwd, conversationId });
       for (const s of suggestions) {
         const value = s.value ?? `@${s.name}`;
         items.push({

@@ -1,7 +1,7 @@
 import { normalizeOptionalString } from '../utils/string-coerce.js';
 
 export type SessionTranscriptUpdate = {
-  sessionKey?: string;
+  conversationId?: string;
   message?: unknown;
   messageId?: string;
 };
@@ -18,12 +18,12 @@ export function onSessionTranscriptUpdate(listener: SessionTranscriptListener): 
 }
 
 export function emitSessionTranscriptUpdate(update: SessionTranscriptUpdate): void {
-  const sessionKey = normalizeOptionalString(update.sessionKey);
-  if (!sessionKey) {
+  const conversationId = normalizeOptionalString(update.conversationId);
+  if (!conversationId) {
     return;
   }
   const nextUpdate: SessionTranscriptUpdate = {
-    ...(sessionKey ? { sessionKey } : {}),
+    ...(conversationId ? { conversationId } : {}),
     ...(update.message !== undefined ? { message: update.message } : {}),
     ...(normalizeOptionalString(update.messageId)
       ? { messageId: normalizeOptionalString(update.messageId) }

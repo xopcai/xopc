@@ -9,9 +9,9 @@ import {
 } from './parse-workflow-run-links';
 
 /** Parent-session pointer cards persisted as `kind: 'context'` transcript rows. */
-export function useSessionWorkflowRunLinks(sessionKey: string | null | undefined) {
-  const token = useGatewayStore((s) => s.sessionKey);
-  const trimmedKey = sessionKey?.trim() || null;
+export function useSessionWorkflowRunLinks(conversationId: string | null | undefined) {
+  const token = useGatewayStore((s) => s.conversationId);
+  const trimmedKey = conversationId?.trim() || null;
 
   return useSWR(
     token && trimmedKey ? ['session-workflow-run-links', trimmedKey, token] : null,

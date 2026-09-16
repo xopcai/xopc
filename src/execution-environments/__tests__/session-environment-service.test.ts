@@ -1,3 +1,9 @@
+import { requireXopcDatabase as openFixtureDatabase } from '../../storage/sqlite/connection.js';
+import { ensureSessionRecord as ensureFixtureConversation } from '../../storage/sqlite/session-repository.js';
+function seedConversationFixtures(): void {
+  openFixtureDatabase();
+  ensureFixtureConversation("93f3b84c-0412-4376-8038-5f50e2da49d8", '', {"agentId":"main","sourceChannel":"webchat","sourceChatId":"environment-test","sessionType":"chat","routing":{"agentId":"main","source":"webchat","accountId":"default","peerKind":"direct","peerId":"environment-test"}});
+}
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -17,7 +23,7 @@ import { LocalWorktreeManager } from '../local-worktree-manager.js';
 import { SessionEnvironmentService } from '../session-environment-service.js';
 import { ExecutionEnvironmentStore } from '../store.js';
 
-const SESSION_KEY = 'agent:main:webchat:default:direct:environment-test';
+const CONVERSATION_ID = "93f3b84c-0412-4376-8038-5f50e2da49d8";
 
 const config = ConfigSchema.parse({
   agents: {
@@ -62,54 +68,58 @@ describe('SessionEnvironmentService', () => {
   });
 
   it('binds a session to its isolated worktree and removes it on release', async () => {
+    seedConversationFixtures();
     const project = new ProjectService().create({ workspaceRoot: repositoryRoot });
     expect(project.executionMode).toBe('managed_worktree');
 
-    const environment = await service.attach({ sessionKey: SESSION_KEY, project });
+    const environment = await service.attach({ conversationId: CONVERSATION_ID, project });
 
     expect(environment).toMatchObject({ kind: 'managed_worktree', status: 'ready' });
     expect(existsSync(environment.rootPath)).toBe(true);
-    expect(effectiveWorkspacePathForSession(config, SESSION_KEY, null, project)).toBe(environment.rootPath);
+    expect(effectiveWorkspacePathForSession(config, CONVERSATION_ID, null, project)).toBe(environment.rootPath);
 
-    await service.release(SESSION_KEY);
+    await service.release(CONVERSATION_ID);
 
-    expect(service.get(SESSION_KEY)).toBeUndefined();
+    expect(service.get(CONVERSATION_ID)).toBeUndefined();
     expect(existsSync(environment.rootPath)).toBe(false);
   });
 
   it('requires an explicit release before changing execution mode', async () => {
+    seedConversationFixtures();
     const project = new ProjectService().create({
       workspaceRoot: repositoryRoot,
       executionMode: 'local_checkout',
     });
-    await service.attach({ sessionKey: SESSION_KEY, project });
+    await service.attach({ conversationId: CONVERSATION_ID, project });
 
     await expect(service.attach({
-      sessionKey: SESSION_KEY,
+      conversationId: CONVERSATION_ID,
       project,
       mode: 'managed_worktree',
     })).rejects.toThrow(/release it before switching/);
   });
 
   it('keeps worktree changes after releasing the session when cleanup is unsafe', async () => {
+    seedConversationFixtures();
     const project = new ProjectService().create({ workspaceRoot: repositoryRoot });
-    const environment = await service.attach({ sessionKey: SESSION_KEY, project });
+    const environment = await service.attach({ conversationId: CONVERSATION_ID, project });
     writeFileSync(join(environment.rootPath, 'unfinished.txt'), 'Keep this work');
 
-    await expect(service.release(SESSION_KEY)).rejects.toThrow();
+    await expect(service.release(CONVERSATION_ID)).rejects.toThrow();
 
-    expect(service.get(SESSION_KEY)?.id).toBe(environment.id);
-    expect((await service.attach({ sessionKey: SESSION_KEY, project })).status).toBe('ready');
+    expect(service.get(CONVERSATION_ID)?.id).toBe(environment.id);
+    expect((await service.attach({ conversationId: CONVERSATION_ID, project })).status).toBe('ready');
     expect(existsSync(join(environment.rootPath, 'unfinished.txt'))).toBe(true);
   });
 
   it('can release a session while explicitly retaining its managed worktree', async () => {
+    seedConversationFixtures();
     const project = new ProjectService().create({ workspaceRoot: repositoryRoot });
-    const environment = await service.attach({ sessionKey: SESSION_KEY, project });
+    const environment = await service.attach({ conversationId: CONVERSATION_ID, project });
 
-    await service.release(SESSION_KEY, false);
+    await service.release(CONVERSATION_ID, false);
 
-    expect(service.get(SESSION_KEY)).toBeUndefined();
+    expect(service.get(CONVERSATION_ID)).toBeUndefined();
     expect(existsSync(environment.rootPath)).toBe(true);
   });
 });

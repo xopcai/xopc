@@ -20,7 +20,7 @@ interface XopcAdapterConfig {
 interface ActiveRun {
   baseUrl: string;
   token?: string;
-  sessionKey: string;
+  conversationId: string;
   agentRunId?: string;
   cleanupSession: boolean;
 }
@@ -86,13 +86,13 @@ export class XopcGatewayAdapter implements AgentAdapter {
     }), 'session creation');
     const createBody = record(await createResponse.json());
     const session = record(createBody.session);
-    const sessionKey = typeof session.key === 'string' ? session.key : undefined;
-    if (!sessionKey) throw new Error('xopc session creation response did not include session.key');
+    const conversationId = typeof session.key === 'string' ? session.key : undefined;
+    if (!conversationId) throw new Error('xopc session creation response did not include session.key');
 
     this.activeRuns.set(request.runId, {
       baseUrl,
       ...(token ? { token } : {}),
-      sessionKey,
+      conversationId,
       cleanupSession: config.cleanupSession ?? true,
     });
 
@@ -103,7 +103,7 @@ export class XopcGatewayAdapter implements AgentAdapter {
       ...(thinkingLevel ? { thinkingLevel } : {}),
     };
     await requireOk(await fetch(
-      `${baseUrl}/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`,
+      `${baseUrl}/api/sessions/${encodeURIComponent(conversationId)}/agent-config`,
       {
         method: 'PATCH',
         headers: requestHeaders,
@@ -122,7 +122,7 @@ export class XopcGatewayAdapter implements AgentAdapter {
         },
       ).catch(() => undefined),
       fetch(
-        `${baseUrl}/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`,
+        `${baseUrl}/api/sessions/${encodeURIComponent(conversationId)}/agent-config`,
         {
           headers: requestHeaders,
           signal,
@@ -153,7 +153,7 @@ export class XopcGatewayAdapter implements AgentAdapter {
     let failure: string | undefined;
     let usage: Record<string, number> | undefined;
     const agentRunId = await runRealtimeInput({
-      baseUrl, headers: requestHeaders, sessionKey, message: request.evalCase.task, signal,
+      baseUrl, headers: requestHeaders, conversationId, message: request.evalCase.task, signal,
       ...(thinkingLevel ? { thinking: thinkingLevel } : {}),
       onRunId: runId => {
         const active = this.activeRuns.get(request.runId);
@@ -185,7 +185,7 @@ export class XopcGatewayAdapter implements AgentAdapter {
     return {
       status: failure ? 'failed' : 'completed',
       finalText,
-      sessionKey,
+      conversationId,
       ...(agentRunId ? { agentRunId } : {}),
       ...(usage ? { usage } : {}),
       ...(runtimeIdentity ? { runtimeIdentity } : {}),
@@ -207,7 +207,7 @@ export class XopcGatewayAdapter implements AgentAdapter {
     const active = this.activeRuns.get(runId);
     this.activeRuns.delete(runId);
     if (!active?.cleanupSession) return;
-    await fetch(`${active.baseUrl}/api/sessions/${encodeURIComponent(active.sessionKey)}`, {
+    await fetch(`${active.baseUrl}/api/sessions/${encodeURIComponent(active.conversationId)}`, {
       method: 'DELETE',
       headers: headers(active.token, 'application/json'),
     }).catch(() => {});

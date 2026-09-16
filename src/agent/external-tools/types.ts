@@ -34,7 +34,7 @@ export interface ExternalToolExecutionContext {
 export interface ExternalToolTurnContext {
   channel: string;
   chatId: string;
-  sessionKey: string;
+  conversationId: string;
   origin: TurnOrigin;
 }
 

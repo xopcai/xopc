@@ -1,13 +1,13 @@
 export function canStartChatBootstrap(input: {
   gatewayReady: boolean;
   gatewayOnline: boolean;
-  urlSessionKey: string;
+  urlConversationId: string;
   resumeLookupComplete: boolean;
   alreadyAttempted: boolean;
 }): boolean {
   return input.gatewayReady
     && input.gatewayOnline
-    && !input.urlSessionKey
+    && !input.urlConversationId
     && input.resumeLookupComplete
     && !input.alreadyAttempted;
 }

@@ -33,7 +33,7 @@ type TaskRunRow = {
   contract_version: number;
   context_snapshot_id: string | null;
   policy_snapshot_json: string | null;
-  session_key: string | null;
+  conversation_id: string | null;
   queued_at: number;
   scheduled_at: number | null;
   started_at: number | null;
@@ -104,7 +104,7 @@ function fromRow(row: TaskRunRow): TaskRun {
     ...(row.policy_snapshot_json
       ? { policySnapshot: parseJson<Record<string, unknown>>(row.policy_snapshot_json) }
       : {}),
-    ...(row.session_key ? { sessionKey: row.session_key } : {}),
+    ...(row.conversation_id ? { conversationId: row.conversation_id } : {}),
     queuedAt: row.queued_at,
     ...(row.scheduled_at === null ? {} : { scheduledAt: row.scheduled_at }),
     ...(row.started_at === null ? {} : { startedAt: row.started_at }),
@@ -169,7 +169,7 @@ export interface TaskRunCreateInput {
   idempotencyKey: string;
   contractVersion: number;
   scheduledAt?: number;
-  sessionKey?: string;
+  conversationId?: string;
   retryPolicy?: Record<string, unknown>;
   retryOfRunId?: string;
   now?: number;
@@ -191,7 +191,7 @@ export class TaskRunRepository {
         `INSERT INTO task_runs (
           run_id, task_id, root_run_id, parent_run_id, attempt, status,
           executor_kind, executor_ref_json, trigger_json, correlation_id,
-          causation_id, idempotency_key, contract_version, session_key,
+          causation_id, idempotency_key, contract_version, conversation_id,
           queued_at, scheduled_at, retry_policy_json, retry_of_run_id, version
         ) VALUES (?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       ).run(
@@ -207,7 +207,7 @@ export class TaskRunRepository {
         input.causationId ?? null,
         input.idempotencyKey,
         input.contractVersion,
-        input.sessionKey ?? null,
+        input.conversationId ?? null,
         now,
         input.scheduledAt ?? null,
         JSON.stringify(input.retryPolicy ?? {}),
@@ -304,7 +304,7 @@ export class TaskRunRepository {
     expectedVersion: number;
     contextSnapshotId: string;
     policySnapshot: Record<string, unknown>;
-    sessionKey?: string;
+    conversationId?: string;
     timeoutAt?: number;
     actor?: ActorRef;
     now?: number;
@@ -318,7 +318,7 @@ export class TaskRunRepository {
       fields: {
         context_snapshot_id: input.contextSnapshotId,
         policy_snapshot_json: JSON.stringify(input.policySnapshot),
-        session_key: input.sessionKey ?? null,
+        conversation_id: input.conversationId ?? null,
         started_at: now,
         heartbeat_at: now,
         timeout_at: input.timeoutAt ?? null,
@@ -607,7 +607,7 @@ export class TaskRunRepository {
     now: number;
   }): TaskRun | undefined {
     const allowedColumns = new Set([
-      'context_snapshot_id', 'policy_snapshot_json', 'session_key', 'started_at',
+      'context_snapshot_id', 'policy_snapshot_json', 'conversation_id', 'started_at',
       'heartbeat_at', 'timeout_at', 'lease_owner', 'lease_expires_at',
     ]);
     const entries = Object.entries(input.fields);

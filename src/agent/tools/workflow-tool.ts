@@ -56,7 +56,7 @@ export type WorkflowToolInput = {
 
 export interface WorkflowToolDeps {
   catalog: WorkflowCatalog;
-  getCurrentSessionKey?: () => string | undefined;
+  getCurrentConversationId?: () => string | undefined;
   getConfig: () => import('../../config/schema.js').Config | undefined;
   startWorkflowRun?: (params: StartWorkflowRunServiceParams) => Promise<WorkflowRunServiceResult>;
 }
@@ -64,9 +64,9 @@ export interface WorkflowToolDeps {
 type WorkflowToolDetails =
   | {
       runId: string;
-      sessionKey: string;
+      conversationId: string;
       definitionId: string;
-      parentSessionKey: string | null;
+      parentConversationId: string | null;
       delivery: ProductDeliveryEnvelope;
     }
   | { error: string };
@@ -78,7 +78,7 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
     description: [
       'Start a multi-agent workflow run in its own chat session.',
       'Use `name` for a workflow from the visual workflow catalog.',
-      'Returns immediately with runId + sessionKey — track progress in the linked chat session.',
+      'Returns immediately with runId + conversationId — track progress in the linked chat session.',
     ].join(' '),
     parameters: WorkflowToolSchema,
 
@@ -95,7 +95,7 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
 
       let definitionId: string;
       try {
-        definitionId = resolveDefinitionId(params, deps.catalog, deps.getConfig(), deps.getCurrentSessionKey?.());
+        definitionId = resolveDefinitionId(params, deps.catalog, deps.getConfig(), deps.getCurrentConversationId?.());
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         return {
@@ -105,13 +105,13 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
       }
 
       const config = deps.getConfig();
-      const parentSessionKey = deps.getCurrentSessionKey?.()?.trim();
-      const agentId = extractProfileAgentId(parentSessionKey, config);
+      const parentConversationId = deps.getCurrentConversationId?.()?.trim();
+      const agentId = extractProfileAgentId(parentConversationId, config);
 
       const goal = params.goal?.trim() || '';
       const taskRunId = params.taskRunId?.trim();
-      const source = parentSessionKey
-        ? ({ kind: 'chat' as const, sessionKey: parentSessionKey })
+      const source = parentConversationId
+        ? ({ kind: 'chat' as const, conversationId: parentConversationId })
         : ({ kind: 'api' as const });
       const inputEnvelope = taskRunId
         ? {
@@ -128,7 +128,7 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
           taskRunId,
           input: inputEnvelope ? undefined : params.args,
           inputEnvelope,
-          parentSessionKey,
+          parentConversationId,
           source,
         });
 
@@ -162,7 +162,7 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
             },
             {
               kind: 'session',
-              id: result.sessionKey,
+              id: result.conversationId,
               title: goal || definitionId,
               capabilities: ['open', 'continue_in_chat'],
             },
@@ -174,16 +174,16 @@ export function createWorkflowTool(deps: WorkflowToolDeps): AgentTool {
             {
               type: 'text',
               text: appendProductDeliveryText(
-                `${summary}\n\nsessionKey: ${result.sessionKey}`,
+                `${summary}\n\nconversationId: ${result.conversationId}`,
                 delivery,
               ),
             },
           ],
           details: {
             runId: result.runId,
-            sessionKey: result.sessionKey,
+            conversationId: result.conversationId,
             definitionId,
-            parentSessionKey: parentSessionKey ?? null,
+            parentConversationId: parentConversationId ?? null,
             delivery,
           },
         };
@@ -203,7 +203,7 @@ function resolveDefinitionId(
   params: WorkflowToolInput,
   catalog: WorkflowCatalog,
   config: import('../../config/schema.js').Config | undefined,
-  sessionKey: string | undefined,
+  conversationId: string | undefined,
 ): string {
   const name = params.name?.trim();
   if (name) {
@@ -212,7 +212,7 @@ function resolveDefinitionId(
   }
   const configuredDefault = config
     ? (() => {
-        const policy = resolveEffectiveAgentProfileForSession(config, sessionKey).config.workflows;
+        const policy = resolveEffectiveAgentProfileForSession(config, conversationId).config.workflows;
         return policy.default;
       })()
     : undefined;

@@ -6,7 +6,7 @@ import { DurableVoiceAgentBroker } from '../agentBroker.js';
 
 function input(overrides: Partial<SessionInput> = {}): SessionInput {
   return {
-    id: 'task-1', sessionKey: 'chat', clientMessageId: 'voice:session:turn',
+    id: 'task-1', conversationId: 'chat', clientMessageId: 'voice:session:turn',
     requestedDelivery: 'next', effectiveDelivery: 'next', status: 'running', content: 'hello',
     kind: 'message', origin: { type: 'channel', channel: 'voice' }, position: 1, runId: 'run-1',
     version: 1, createdAtMs: 1, updatedAtMs: 1, ...overrides,
@@ -22,7 +22,7 @@ function event(type: string): RealtimeEvent {
 
 function setup(options: { activeRunId?: string; row?: SessionInput } = {}) {
   const row = options.row ?? input();
-  const state: SessionInputState = { sessionKey: 'chat', revision: 1, inputs: [row],
+  const state: SessionInputState = { conversationId: 'chat', revision: 1, inputs: [row],
     ...(options.activeRunId ? { activeRunId: options.activeRunId } : {}) };
   const unsubscribe = vi.fn();
   const deps = {
@@ -38,7 +38,7 @@ describe('DurableVoiceAgentBroker', () => {
   it('submits with a stable id and replays the assigned run', async () => {
     const { broker, deps } = setup();
     const controller = new AbortController();
-    const task = await broker.delegate({ sessionKey: 'chat', expectedSessionId: 'session', turnId: 'turn', text: 'hello', signal: controller.signal });
+    const task = await broker.delegate({ conversationId: 'chat', expectedTranscriptId: 'session', turnId: 'turn', text: 'hello', signal: controller.signal });
     expect(deps.submit).toHaveBeenCalledWith(expect.objectContaining({
       clientMessageId: 'voice:session:turn', delivery: 'next',
       origin: { type: 'channel', channel: 'voice' },
@@ -53,7 +53,7 @@ describe('DurableVoiceAgentBroker', () => {
   it('accepts the legacy stream terminal event during rolling updates', async () => {
     const { broker, deps } = setup();
     deps.subscribe.mockReturnValue({ initial: [event('stream_end')], cursor: 1, unsubscribe: vi.fn() });
-    const task = await broker.delegate({ sessionKey: 'chat', expectedSessionId: 'session', turnId: 'turn', text: 'hello', signal: new AbortController().signal });
+    const task = await broker.delegate({ conversationId: 'chat', expectedTranscriptId: 'session', turnId: 'turn', text: 'hello', signal: new AbortController().signal });
     const types: string[] = [];
     for await (const value of task.events) types.push(value.type);
     expect(types).toEqual(['stream_end']);
@@ -61,7 +61,7 @@ describe('DurableVoiceAgentBroker', () => {
 
   it('steers an active run and starts after the current event cursor', async () => {
     const { broker, deps } = setup({ activeRunId: 'run-1', row: input({ runId: undefined, targetRunId: 'run-1', effectiveDelivery: 'steer' }) });
-    const task = await broker.delegate({ sessionKey: 'chat', expectedSessionId: 'session', turnId: 'turn', text: 'hello', signal: new AbortController().signal });
+    const task = await broker.delegate({ conversationId: 'chat', expectedTranscriptId: 'session', turnId: 'turn', text: 'hello', signal: new AbortController().signal });
     expect(deps.submit).toHaveBeenCalledWith(expect.objectContaining({ delivery: 'steer' }));
     expect(deps.currentSequence).toHaveBeenCalledWith('run:run-1');
     await task.events[Symbol.asyncIterator]().next();
@@ -71,7 +71,7 @@ describe('DurableVoiceAgentBroker', () => {
   it('disconnect only detaches delivery while explicit task cancellation stops the run', async () => {
     const { broker, deps, unsubscribe } = setup();
     const controller = new AbortController();
-    const task = await broker.delegate({ sessionKey: 'chat', expectedSessionId: 'session', turnId: 'turn', text: 'hello', signal: controller.signal });
+    const task = await broker.delegate({ conversationId: 'chat', expectedTranscriptId: 'session', turnId: 'turn', text: 'hello', signal: controller.signal });
     const iterator = task.events[Symbol.asyncIterator]();
     await iterator.next();
     controller.abort();

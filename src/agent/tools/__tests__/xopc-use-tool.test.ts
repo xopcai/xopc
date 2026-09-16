@@ -1,3 +1,9 @@
+import { requireXopcDatabase as openFixtureDatabase } from '../../../storage/sqlite/connection.js';
+import { ensureSessionRecord as ensureFixtureConversation } from '../../../storage/sqlite/session-repository.js';
+function seedConversationFixtures(): void {
+  openFixtureDatabase();
+  ensureFixtureConversation("d2727fdb-ecad-4efa-86e1-46af39a71a2c", '', {"agentId":"main","sourceChannel":"tui","sourceChatId":"xopc-use","sessionType":"chat","routing":{"agentId":"main","source":"tui","accountId":"default","peerKind":"direct","peerId":"xopc-use"}});
+}
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -18,7 +24,7 @@ import {
 import type { LocalAppService } from '../../../local-apps/index.js';
 import { createXopcUseTool } from '../xopc-use-tool.js';
 
-const SESSION_KEY = 'agent:main:tui:xopc-use';
+const CONVERSATION_ID = "d2727fdb-ecad-4efa-86e1-46af39a71a2c";
 
 function parseToolJson(result: Awaited<ReturnType<ReturnType<typeof createXopcUseTool>['execute']>>) {
   const text = result.content[0]?.type === 'text' ? result.content[0].text : '{}';
@@ -36,7 +42,7 @@ describe('xopc_use tool', () => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-use-tool-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
-    ensureSessionRecord(SESSION_KEY, stateDir);
+    ensureSessionRecord(CONVERSATION_ID, stateDir, { agentId: "main" });
     projects = new ProjectService();
     automations = new AutomationService();
     await automations.initialize();
@@ -53,10 +59,11 @@ describe('xopc_use tool', () => {
   });
 
   it('creates and updates a project through one entry point', async () => {
+    seedConversationFixtures();
     const tool = createXopcUseTool({
       getCurrentAgentId: () => 'main',
       getProjectService: () => projects,
-      getCurrentSessionKey: () => SESSION_KEY,
+      getCurrentConversationId: () => CONVERSATION_ID,
     });
 
     const created = parseToolJson(await tool.execute('call-1', {
@@ -94,20 +101,21 @@ describe('xopc_use tool', () => {
     const page = activity.listForProject({ projectId: created.project.id });
     expect(page.items[0]).toMatchObject({
       type: 'project.status_changed',
-      actor: { kind: 'agent', agentId: 'main', sessionKey: SESSION_KEY },
-      initiator: { kind: 'user', sessionKey: SESSION_KEY },
+      actor: { kind: 'agent', agentId: 'main', conversationId: CONVERSATION_ID },
+      initiator: { kind: 'user', conversationId: CONVERSATION_ID },
       source: { kind: 'xopc_use', toolCallId: 'call-2' },
     });
   });
 
   it('creates and lists automations in the current session project', async () => {
+    seedConversationFixtures();
     const project = projects.create({ name: 'Automation Project' });
     const otherProject = projects.create({ name: 'Other Automation Project' });
-    patchSessionMetadata(SESSION_KEY, { projectId: project.id });
+    patchSessionMetadata(CONVERSATION_ID, { projectId: project.id });
     const tool = createXopcUseTool({
       getAutomationService: () => automations,
       getProjectService: () => projects,
-      getCurrentSessionKey: () => SESSION_KEY,
+      getCurrentConversationId: () => CONVERSATION_ID,
     });
 
     const createdResult = await tool.execute('call-project-automation', {
@@ -170,6 +178,7 @@ describe('xopc_use tool', () => {
   });
 
   it('deletes an automation without delivering a stale product link', async () => {
+    seedConversationFixtures();
     const automation = await automations.create({
       name: 'Disposable automation',
       trigger: { kind: 'manual' },
@@ -193,11 +202,12 @@ describe('xopc_use tool', () => {
   });
 
   it('resolves an existing workspace project', async () => {
+    seedConversationFixtures();
     const workspaceRoot = mkdtempSync(join(stateDir, 'workspace-'));
     const project = projects.create({ name: 'Workspace Project', workspaceRoot });
     const tool = createXopcUseTool({
       getProjectService: () => projects,
-      getCurrentSessionKey: () => SESSION_KEY,
+      getCurrentConversationId: () => CONVERSATION_ID,
     });
 
     const result = parseToolJson(await tool.execute('call-1', {
@@ -212,9 +222,10 @@ describe('xopc_use tool', () => {
   });
 
   it('operates project planning fields, milestones, and immutable updates', async () => {
+    seedConversationFixtures();
     const tool = createXopcUseTool({
       getCurrentAgentId: () => 'main',
-      getCurrentSessionKey: () => SESSION_KEY,
+      getCurrentConversationId: () => CONVERSATION_ID,
       getProjectService: () => projects,
     });
     const created = parseToolJson(await tool.execute('call-project-create', {
@@ -269,10 +280,11 @@ describe('xopc_use tool', () => {
   });
 
   it('accepts path as a project workspace alias', async () => {
+    seedConversationFixtures();
     const workspaceRoot = mkdtempSync(join(stateDir, 'workspace-'));
     const tool = createXopcUseTool({
       getProjectService: () => projects,
-      getCurrentSessionKey: () => SESSION_KEY,
+      getCurrentConversationId: () => CONVERSATION_ID,
     });
 
     const created = parseToolJson(await tool.execute('call-1', {
@@ -286,9 +298,10 @@ describe('xopc_use tool', () => {
   });
 
   it('creates and appends to a note', async () => {
+    seedConversationFixtures();
     const tool = createXopcUseTool({
       getNotesService: () => notes,
-      getCurrentSessionKey: () => SESSION_KEY,
+      getCurrentConversationId: () => CONVERSATION_ID,
     });
 
     const created = parseToolJson(await tool.execute('call-1', {
@@ -310,6 +323,7 @@ describe('xopc_use tool', () => {
   });
 
   it('previews and permanently deletes a note', async () => {
+    seedConversationFixtures();
     const note = await notes.createNote({
       title: 'Disposable',
       markdown: 'Remove this note.',
@@ -317,7 +331,7 @@ describe('xopc_use tool', () => {
     });
     const tool = createXopcUseTool({
       getNotesService: () => notes,
-      getCurrentSessionKey: () => SESSION_KEY,
+      getCurrentConversationId: () => CONVERSATION_ID,
     });
 
     const preview = parseToolJson(await tool.execute('call-note-delete-preview', {
@@ -353,13 +367,14 @@ describe('xopc_use tool', () => {
   });
 
   it('creates and lists notes in the current session project', async () => {
+    seedConversationFixtures();
     const project = projects.create({ name: 'Project Notes' });
     const otherProject = projects.create({ name: 'Other Notes' });
-    patchSessionMetadata(SESSION_KEY, { projectId: project.id });
+    patchSessionMetadata(CONVERSATION_ID, { projectId: project.id });
     const tool = createXopcUseTool({
       getNotesService: () => notes,
       getProjectService: () => projects,
-      getCurrentSessionKey: () => SESSION_KEY,
+      getCurrentConversationId: () => CONVERSATION_ID,
     });
 
     const createdResult = await tool.execute('call-project-note', {
@@ -399,6 +414,7 @@ describe('xopc_use tool', () => {
   });
 
   it('previews a note edit without mutating the note', async () => {
+    seedConversationFixtures();
     const note = await notes.createNote({
       title: 'Preview',
       markdown: 'First line\nSecond line',
@@ -406,7 +422,7 @@ describe('xopc_use tool', () => {
     });
     const tool = createXopcUseTool({
       getNotesService: () => notes,
-      getCurrentSessionKey: () => SESSION_KEY,
+      getCurrentConversationId: () => CONVERSATION_ID,
     });
 
     const result = parseToolJson(await tool.execute('call-1', {
@@ -423,9 +439,10 @@ describe('xopc_use tool', () => {
   });
 
   it('does not mutate on dryRun', async () => {
+    seedConversationFixtures();
     const tool = createXopcUseTool({
       getProjectService: () => projects,
-      getCurrentSessionKey: () => SESSION_KEY,
+      getCurrentConversationId: () => CONVERSATION_ID,
     });
 
     const result = parseToolJson(await tool.execute('call-1', {
@@ -440,10 +457,11 @@ describe('xopc_use tool', () => {
   });
 
   it('captures a task by default and returns a task delivery reference', async () => {
+    seedConversationFixtures();
     const project = projects.create({ name: 'Task Project' });
     const tool = createXopcUseTool({
       getCurrentAgentId: () => 'main',
-      getCurrentSessionKey: () => SESSION_KEY,
+      getCurrentConversationId: () => CONVERSATION_ID,
       getProjectService: () => projects,
     });
 
@@ -511,10 +529,11 @@ describe('xopc_use tool', () => {
   });
 
   it('previews and permanently deletes an idle task', async () => {
+    seedConversationFixtures();
     const dispatchTaskEvents = vi.fn();
     const tool = createXopcUseTool({
       getCurrentAgentId: () => 'main',
-      getCurrentSessionKey: () => SESSION_KEY,
+      getCurrentConversationId: () => CONVERSATION_ID,
       dispatchTaskEvents,
     });
     const created = parseToolJson(await tool.execute('call-task-delete-create', {
@@ -557,9 +576,10 @@ describe('xopc_use tool', () => {
   });
 
   it('cancels a TaskRun with optimistic concurrency and records a receipt', async () => {
+    seedConversationFixtures();
     const tool = createXopcUseTool({
       getCurrentAgentId: () => 'main',
-      getCurrentSessionKey: () => SESSION_KEY,
+      getCurrentConversationId: () => CONVERSATION_ID,
       dispatchTaskRuns: vi.fn(),
     });
     const started = parseToolJson(await tool.execute('call-start-for-cancel', {
@@ -600,10 +620,11 @@ describe('xopc_use tool', () => {
   });
 
   it('starts a task and adds a wait through typed commands', async () => {
+    seedConversationFixtures();
     const dispatchTaskRuns = vi.fn();
     const tool = createXopcUseTool({
       getCurrentAgentId: () => 'main',
-      getCurrentSessionKey: () => SESSION_KEY,
+      getCurrentConversationId: () => CONVERSATION_ID,
       dispatchTaskRuns,
     });
 
@@ -671,9 +692,10 @@ describe('xopc_use tool', () => {
   });
 
   it('updates task dependencies with optimistic concurrency', async () => {
+    seedConversationFixtures();
     const tool = createXopcUseTool({
       getCurrentAgentId: () => 'main',
-      getCurrentSessionKey: () => SESSION_KEY,
+      getCurrentConversationId: () => CONVERSATION_ID,
     });
     const dependency = parseToolJson(await tool.execute('call-dependency', {
       mode: 'task',
@@ -711,6 +733,7 @@ describe('xopc_use tool', () => {
   });
 
   it('creates a local app and returns an inline delivery reference', async () => {
+    seedConversationFixtures();
     const app = {
       id: 'app-1',
       projectId: 'project-1',
@@ -727,7 +750,7 @@ describe('xopc_use tool', () => {
     } as unknown as LocalAppService;
     const tool = createXopcUseTool({
       getLocalAppService: () => localApps,
-      getCurrentSessionKey: () => SESSION_KEY,
+      getCurrentConversationId: () => CONVERSATION_ID,
     });
 
     const result = await tool.execute('call-local-app', {
@@ -747,9 +770,10 @@ describe('xopc_use tool', () => {
   });
 
   it('returns an exact settings jump target without changing config', async () => {
+    seedConversationFixtures();
     const tool = createXopcUseTool({
       getProjectService: () => projects,
-      getCurrentSessionKey: () => SESSION_KEY,
+      getCurrentConversationId: () => CONVERSATION_ID,
     });
     const result = await tool.execute('call-settings', {
       mode: 'settings',

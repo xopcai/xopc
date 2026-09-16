@@ -15,7 +15,7 @@ async function readJson(request: IncomingMessage): Promise<Record<string, any>> 
 
 async function fixture(mode: 'success' | 'gap' | 'pending' | 'error' = 'success') {
   const requests: Array<{ method: string; url: string; body: Record<string, any> }> = [];
-  const sessionKey = 'agent:coder:webchat:default:direct:eval';
+  const sessionKey = "15bff135-c1f5-49d2-84fd-7354f2da218d";
   const turnToken = 't'.repeat(40);
   let registered: Record<string, any>;
   let signatureValid = false;
@@ -43,7 +43,7 @@ async function fixture(mode: 'success' | 'gap' | 'pending' | 'error' = 'success'
   });
   const sockets = new WebSocketServer({ server, path: '/api/realtime/v1/ws' });
   sockets.on('connection', socket => {
-    const send = (kind: string, payload: unknown) => socket.send(JSON.stringify({ protocolVersion: 1, messageId: randomUUID(), sentAt: Date.now(), kind, payload }));
+    const send = (kind: string, payload: unknown) => socket.send(JSON.stringify({ protocolVersion: 2, messageId: randomUUID(), sentAt: Date.now(), kind, payload }));
     socket.on('message', raw => {
       const frame = JSON.parse(String(raw));
       if (frame.kind === 'realtime.hello') {

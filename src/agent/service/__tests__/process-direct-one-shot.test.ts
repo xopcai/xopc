@@ -43,7 +43,7 @@ describe('one-shot turn outcome', () => {
     mocks.run.mockResolvedValue({ ok: false, errorMessage: 'Model attempt budget exhausted' });
     const { deps, endDirectRequestContext } = setup();
     await expect(runProcessDirect(deps, {
-      content: 'hello', sessionKey: 'agent:main:automation:run',
+      content: 'hello', conversationId: 'agent:main:automation:run',
       origin: { type: 'system', source: 'automation' },
     })).rejects.toThrow('Model attempt budget exhausted');
     expect(endDirectRequestContext).toHaveBeenCalledOnce();
@@ -53,7 +53,7 @@ describe('one-shot turn outcome', () => {
     mocks.run.mockResolvedValue({ ok: true });
     const { deps, onTurnComplete } = setup();
     await expect(runProcessDirect(deps, {
-      content: 'hello', sessionKey: 'agent:main:automation:run',
+      content: 'hello', conversationId: 'agent:main:automation:run',
       origin: { type: 'system', source: 'automation' },
     })).resolves.toBe('');
     expect(onTurnComplete).toHaveBeenCalledWith('agent:main:automation:run', undefined);
@@ -62,13 +62,13 @@ describe('one-shot turn outcome', () => {
   it('reveals automation command sessions after persisting their reply', async () => {
     mocks.slash.mockResolvedValue({ matched: true, aggregatedText: 'Command completed' });
     const { deps, onTurnComplete } = setup();
-    const sessionKey = 'agent:main:automation:run';
+    const conversationId = 'agent:main:automation:run';
     await expect(runProcessDirect(deps, {
-      content: '/status', sessionKey, origin: { type: 'system', source: 'automation' },
+      content: '/status', conversationId, origin: { type: 'system', source: 'automation' },
     })).resolves.toBe('Command completed');
     expect(deps.sessionStore.appendTranscriptMessage).toHaveBeenCalledOnce();
-    expect(deps.sessionStore.updateMetadata).toHaveBeenCalledWith(sessionKey, { hiddenFromSessionList: false });
-    expect(onTurnComplete).toHaveBeenCalledWith(sessionKey, 'Command completed');
+    expect(deps.sessionStore.updateMetadata).toHaveBeenCalledWith(conversationId, { hiddenFromSessionList: false });
+    expect(onTurnComplete).toHaveBeenCalledWith(conversationId, 'Command completed');
     expect(mocks.run).not.toHaveBeenCalled();
   });
 });

@@ -10,7 +10,7 @@ describe('collectSupportReport', () => {
       message: 'Failed request-private at /Users/alice/.xopc/xopc.json token=super-secret-token-value',
       module: 'Gateway',
       requestId: 'request-private',
-      sessionId: 'session-private',
+      transcriptId: 'session-private',
       meta: {
         phase: 'startup',
         ignoredPrivateField: 'must not be exported',
@@ -50,7 +50,7 @@ describe('collectSupportReport', () => {
     expect(report.markdown).not.toContain('request-private');
     expect(JSON.stringify(report)).not.toContain('must not be exported');
     expect(report.logs[0]?.requestId).toMatch(/^request_/);
-    expect(report.logs[0]?.sessionId).toMatch(/^session_/);
+    expect(report.logs[0]?.transcriptId).toMatch(/^session_/);
   });
 
   it('still creates a report when diagnostics cannot be collected', async () => {
@@ -74,7 +74,7 @@ describe('collectSupportReport', () => {
     const report = await collectSupportReport({
       problem: 'No reply',
       requestId: 'request-1',
-      sessionKey: 'session-1',
+      conversationId: 'session-1',
     }, {
       now: () => new Date('2026-09-02T02:00:00.000Z'),
       collectDoctor: async () => [],
@@ -82,7 +82,7 @@ describe('collectSupportReport', () => {
     });
 
     expect(queryLogs).toHaveBeenCalledTimes(2);
-    expect(queryLogs.mock.calls[1]?.[0]).toEqual(expect.objectContaining({ sessionKey: 'session-1' }));
+    expect(queryLogs.mock.calls[1]?.[0]).toEqual(expect.objectContaining({ conversationId: 'session-1' }));
     expect(report.logs).toHaveLength(1);
   });
 
@@ -91,7 +91,7 @@ describe('collectSupportReport', () => {
     const report = await collectSupportReport({
       problem: 'No reply',
       requestId: 'request-1',
-      sessionKey: 'session-1',
+      conversationId: 'session-1',
     }, {
       now: () => new Date('2026-09-02T02:00:00.000Z'),
       collectDoctor: async () => [],

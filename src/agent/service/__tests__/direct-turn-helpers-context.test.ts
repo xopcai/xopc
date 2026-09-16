@@ -12,7 +12,7 @@ const sourceContexts = [{
 }];
 
 const commandContext = {
-  sessionKey: 'agent:main:webchat:default:direct:test',
+  conversationId: 'agent:main:webchat:default:direct:test',
   channel: 'webchat',
   chatId: 'test',
 };

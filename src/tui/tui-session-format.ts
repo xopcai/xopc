@@ -39,13 +39,16 @@ export function sessionMetadataToTuiItem(meta: SessionMetadata): TuiSessionItem 
         : null;
   return {
     key: meta.key,
+    agentId: meta.agentId,
+    sourceChannel: meta.sourceChannel,
+    generatedShell: meta.customData?.genericNewChatShell === true,
     displayName: meta.name,
     updatedAt: Date.parse(meta.updatedAt),
     totalTokens: meta.estimatedTokens ?? null,
     messageCount: meta.messageCount,
     model: modelRef,
-    forkedFromSessionKey:
-      typeof cd?.forkedFromSessionKey === 'string' ? cd.forkedFromSessionKey : undefined,
+    forkedFromConversationId:
+      typeof cd?.forkedFromConversationId === 'string' ? cd.forkedFromConversationId : undefined,
     cwd: meta.cwd,
   };
 }

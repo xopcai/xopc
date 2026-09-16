@@ -1,3 +1,9 @@
+import { requireXopcDatabase as openFixtureDatabase } from '../../../storage/sqlite/connection.js';
+import { ensureSessionRecord as ensureFixtureConversation } from '../../../storage/sqlite/session-repository.js';
+function seedConversationFixtures(): void {
+  openFixtureDatabase();
+  ensureFixtureConversation("36306a76-4714-453e-8ac5-e8c73142b05d", '', {"agentId":"coder","sourceChannel":"webchat","sourceChatId":"test","sessionType":"chat","routing":{"agentId":"coder","source":"webchat","accountId":"default","peerKind":"direct","peerId":"test"}});
+}
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -45,10 +51,11 @@ describe('Omni voice persona context', () => {
   });
 
   it('loads the selected session agent instead of the default agent', () => {
+    seedConversationFixtures();
     const current = config();
     const snapshot = buildVoicePersonaContext({
       getConfig: () => current,
-      sessionKey: 'agent:coder:webchat:default:direct:test',
+      conversationId: "36306a76-4714-453e-8ac5-e8c73142b05d",
     });
     expect(snapshot.block).toContain('Agent id: coder');
     expect(snapshot.block).toContain('Agent name: Code Voice');
@@ -58,6 +65,7 @@ describe('Omni voice persona context', () => {
   });
 
   it('keeps every persona source within the fixed live-voice budget', () => {
+    seedConversationFixtures();
     const block = buildVoicePersonaBlock({
       agentId: 'coder',
       name: 'Code Voice',
@@ -73,10 +81,11 @@ describe('Omni voice persona context', () => {
   });
 
   it('invalidates the snapshot when agent instructions or profile files change', () => {
+    seedConversationFixtures();
     let current = config();
     const snapshot = buildVoicePersonaContext({
       getConfig: () => current,
-      sessionKey: 'agent:coder:webchat:default:direct:test',
+      conversationId: "36306a76-4714-453e-8ac5-e8c73142b05d",
     });
     expect(snapshot.isCurrent()).toBe(true);
     current = config('Speak with more warmth.');
@@ -85,7 +94,7 @@ describe('Omni voice persona context', () => {
     current = config();
     const fileSnapshot = buildVoicePersonaContext({
       getConfig: () => current,
-      sessionKey: 'agent:coder:webchat:default:direct:test',
+      conversationId: "36306a76-4714-453e-8ac5-e8c73142b05d",
     });
     writeFileSync(join(stateDir, 'agents', 'coder', 'profile', 'SOUL.md'), 'CODER_ONLY_PERSONA changed and longer');
     expect(fileSnapshot.isCurrent()).toBe(false);

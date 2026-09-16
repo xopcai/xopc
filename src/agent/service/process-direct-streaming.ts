@@ -1,3 +1,5 @@
+import { resolveAgentMainConversationId } from '../../routing/agent-session-key.js';
+import { resolveDefaultAgentId } from '../agent-scope.js';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
@@ -58,56 +60,56 @@ export type ProcessDirectStreamLog = {
 
 export interface ProcessDirectStreamingDeps {
   log: ProcessDirectStreamLog;
-  resolveSessionEndpoint: (sessionKey: string) => Promise<{ channel: string; chatId: string }>;
+  resolveSessionEndpoint: (conversationId: string) => Promise<{ channel: string; chatId: string }>;
   initDirectStreamingSession: (
-    sessionKey: string,
+    conversationId: string,
     channel: string,
     chatId: string,
     origin: TurnOrigin,
   ) => SessionContext;
   registerWebchatStreamPublisher: (
-    sessionKey: string,
+    conversationId: string,
     publisher: (event: { type: string; [key: string]: unknown }) => void,
   ) => void;
-  unregisterWebchatStreamPublisher: (sessionKey: string) => void;
+  unregisterWebchatStreamPublisher: (conversationId: string) => void;
   agentManager: AgentInstanceGateway;
-  hydrateSessionWorkspaceFromStore: (sessionKey: string) => Promise<void>;
-  hydrateSessionModelFromStore: (sessionKey: string) => Promise<void>;
+  hydrateSessionWorkspaceFromStore: (conversationId: string) => Promise<void>;
+  hydrateSessionModelFromStore: (conversationId: string) => Promise<void>;
   sessionStore: SessionStore;
   modelManager: ModelManager;
-  applyResolvedThinkingLevel: (sessionKey: string, thinking?: string | null) => Promise<void>;
+  applyResolvedThinkingLevel: (conversationId: string, thinking?: string | null) => Promise<void>;
   getConfig: () => Config | undefined;
   sessionConfigStore: SessionConfigStore;
   commandHandler: Pick<CommandHandler, 'executeCommandAndAggregateReply'>;
   prepareInboundAttachments: (
-    sessionKey: string,
+    conversationId: string,
     attachments?: DirectStreamInboundAttachment[],
   ) => Promise<MediaRef[] | undefined>;
   buildTranscriptUserMessage: (
     content: string,
     prepared: MediaRef[] | undefined,
-    sessionKey: string,
+    conversationId: string,
   ) => Promise<TranscriptUserMessage>;
   recordTaskReviewStreamHint?: (
-    sessionKey: string,
+    conversationId: string,
     task: { skipTaskReview: boolean },
   ) => void;
-  onTurnComplete?: (sessionKey: string, lastAssistantText?: string) => void;
-  enqueueProvisionalSessionTitle?: (sessionKey: string, userText: string) => void;
+  onTurnComplete?: (conversationId: string, lastAssistantText?: string) => void;
+  enqueueProvisionalSessionTitle?: (conversationId: string, userText: string) => void;
   /** Disk-only transcript sync (slash receipt already streamed as tokens). */
-  reloadWebchatTranscript?: (sessionKey: string) => void;
+  reloadWebchatTranscript?: (conversationId: string) => void;
   maybeEmitWebchatTts: (
-    sessionKey: string,
+    conversationId: string,
     hadInboundVoice: boolean,
   ) => Promise<{ type: 'tts_audio'; uri: string; mimeType: string; name: string } | null>;
   endDirectRequestContext: () => void;
-  resetSession: (sessionKey: string) => Promise<{ sessionId: string; previousSessionId: string } | null>;
+  resetSession: (conversationId: string) => Promise<{ transcriptId: string; previousTranscriptId: string } | null>;
   sourceContextResolver?: AgentSourceContextResolver;
 }
 
 export interface ProcessDirectStreamingInput {
   content: string;
-  sessionKey?: string;
+  conversationId?: string;
   origin: TurnOrigin;
   attachments?: DirectStreamInboundAttachment[];
   thinking?: string;
@@ -262,12 +264,12 @@ export async function* runProcessDirectStreaming(
   deps: ProcessDirectStreamingDeps,
   input: ProcessDirectStreamingInput,
 ): AsyncGenerator<ProcessDirectStreamEvent, void, unknown> {
-  const sessionKey = input.sessionKey ?? 'agent:main:main';
-  const isConnectionResume = Boolean(input.runId && getConnectionResumeInput(sessionKey, input.runId));
-  const isClarificationResume = Boolean(input.runId && getClarificationResumeInput(sessionKey, input.runId));
+  const conversationId = input.conversationId ?? resolveAgentMainConversationId({ agentId: resolveDefaultAgentId(deps.getConfig()) });
+  const isConnectionResume = Boolean(input.runId && getConnectionResumeInput(conversationId, input.runId));
+  const isClarificationResume = Boolean(input.runId && getClarificationResumeInput(conversationId, input.runId));
   const isInternalResume = isConnectionResume || isClarificationResume;
-  const { channel, chatId } = await deps.resolveSessionEndpoint(sessionKey);
-  const context = deps.initDirectStreamingSession(sessionKey, channel, chatId, input.origin);
+  const { channel, chatId } = await deps.resolveSessionEndpoint(conversationId);
+  const context = deps.initDirectStreamingSession(conversationId, channel, chatId, input.origin);
 
   const queue = new AsyncQueue<ProcessDirectStreamEvent>({
     maxBuffered: MAX_BUFFERED_STREAM_EVENTS,
@@ -291,9 +293,9 @@ export async function* runProcessDirectStreaming(
     let provider: string | undefined;
     let modelRef: string | undefined;
     try {
-      const resolved = deps.modelManager.getResolvedModelForSession(sessionKey);
+      const resolved = deps.modelManager.getResolvedModelForSession(conversationId);
       provider = resolved.provider;
-      modelRef = deps.modelManager.getModelForSession(sessionKey);
+      modelRef = deps.modelManager.getModelForSession(conversationId);
     } catch {
       /* ignore — format without provider context */
     }
@@ -301,7 +303,7 @@ export async function* runProcessDirectStreaming(
   };
 
   if (channel === 'webchat') {
-    deps.registerWebchatStreamPublisher(sessionKey, pushVisible);
+    deps.registerWebchatStreamPublisher(conversationId, pushVisible);
   }
 
   const signal = input.signal;
@@ -324,7 +326,7 @@ export async function* runProcessDirectStreaming(
       if (cfg) {
         const turn = await initSessionTurn({
           cfg,
-          sessionKey,
+          conversationId,
           body: input.content,
           resetSession: deps.resetSession,
         });
@@ -339,9 +341,9 @@ export async function* runProcessDirectStreaming(
         if (turn.isNewSession) {
           deps.log.debug(
             {
-              sessionKey,
-              sessionId: turn.sessionId,
-              previousSessionId: turn.previousSessionId,
+              conversationId,
+              transcriptId: turn.transcriptId,
+              previousTranscriptId: turn.previousTranscriptId,
               resetTriggered: turn.resetTriggered,
               staleRollover: turn.staleRollover,
             },
@@ -350,15 +352,15 @@ export async function* runProcessDirectStreaming(
         }
       }
 
-      await hydratePerTurnState(deps, sessionKey, input.thinking);
+      await hydratePerTurnState(deps, conversationId, input.thinking);
       {
         const defReason = channel === 'webchat'
           ? resolveConfiguredActivityDetailDefault(cfg)
           : 'stream';
-        reasoningLevel = await resolveEffectiveReasoningLevel(deps.sessionConfigStore, sessionKey, defReason);
+        reasoningLevel = await resolveEffectiveReasoningLevel(deps.sessionConfigStore, conversationId, defReason);
       }
 
-      const prepared = await deps.prepareInboundAttachments(sessionKey, input.attachments);
+      const prepared = await deps.prepareInboundAttachments(conversationId, input.attachments);
 
       const sttCfg = mergeSttConfigFromAppConfig(deps.getConfig()?.tools?.media?.audio, deps.getConfig()?.tools?.media);
       const voiceMerge = await mergeVoiceTranscriptsIntoUserText(prepared, turnBody, sttCfg);
@@ -388,7 +390,7 @@ export async function* runProcessDirectStreaming(
         }
         abortHandled = true;
         userAborted = true;
-        void abortEmbeddedRun(sessionKey);
+        void abortEmbeddedRun(conversationId);
         queue.close();
       };
       if (signal) {
@@ -402,7 +404,7 @@ export async function* runProcessDirectStreaming(
       const slash = await tryRunSlashCommand(
         deps,
         {
-          sessionKey,
+          conversationId,
           channel,
           chatId,
           senderId: context.senderId,
@@ -445,18 +447,18 @@ export async function* runProcessDirectStreaming(
         return;
       }
 
-      const skillTurn = deps.agentManager.prepareSkillTurn(sessionKey, mergedUserText);
+      const skillTurn = deps.agentManager.prepareSkillTurn(conversationId, mergedUserText);
       const textForAgent = skillTurn.text;
-      const userMessage = await deps.buildTranscriptUserMessage(textForAgent, prepared, sessionKey);
+      const userMessage = await deps.buildTranscriptUserMessage(textForAgent, prepared, conversationId);
       const turnSourceContexts = input.sourceContexts ?? [];
       const sourceContexts = [...turnSourceContexts];
       if (deps.sourceContextResolver) {
-        const metadata = await deps.sessionStore.getMetadata(sessionKey).catch(() => null);
+        const metadata = await deps.sessionStore.getMetadata(conversationId).catch(() => null);
         const sourceBinding = metadata?.customData && typeof metadata.customData === 'object'
           ? (metadata.customData as Record<string, unknown>).sourceBinding
           : undefined;
         if (isSessionSourceBinding(sourceBinding)) {
-          const sourceContext = await deps.sourceContextResolver(sourceBinding, sessionKey);
+          const sourceContext = await deps.sourceContextResolver(sourceBinding, conversationId);
           if (sourceContext && !sourceContexts.some(
             (context) => context.kind === sourceContext.kind && context.sourceId === sourceContext.sourceId,
           )) {
@@ -476,18 +478,18 @@ export async function* runProcessDirectStreaming(
             : undefined,
         });
         if (textForAgent.trim()) {
-          deps.enqueueProvisionalSessionTitle?.(sessionKey, textForAgent);
+          deps.enqueueProvisionalSessionTitle?.(conversationId, textForAgent);
         }
       }
 
       const pendingUserMessage = (sourceContexts.length > 0
         ? injectSourceContextsIntoUserMessage(userMessage, sourceContexts)
         : userMessage) as TranscriptUserMessage;
-      if (!isInternalResume) setPendingTranscriptUserMessage(sessionKey, pendingUserMessage);
+      if (!isInternalResume) setPendingTranscriptUserMessage(conversationId, pendingUserMessage);
 
       try {
         const result = await deps.agentManager.withSkillCapabilities(
-          sessionKey,
+          conversationId,
           skillTurn.activatedCapabilityNames,
           () =>
             runDirectAgentTurn(
@@ -498,7 +500,7 @@ export async function* runProcessDirectStreaming(
                 config: deps.getConfig(),
               },
               {
-                sessionKey,
+                conversationId,
                 userMessage,
                 abortSignal: signal,
                 sourceContexts,
@@ -519,20 +521,20 @@ export async function* runProcessDirectStreaming(
         );
 
         if (result.lastAssistantText) {
-          deps.onTurnComplete?.(sessionKey, result.lastAssistantText);
+          deps.onTurnComplete?.(conversationId, result.lastAssistantText);
         }
         if (!result.ok && result.errorMessage && !abortHandled) {
           pushVisible({ type: 'error', content: formatStreamError(result.errorMessage) });
         }
       } finally {
-        if (!isInternalResume) clearPendingTranscriptUserMessage(sessionKey, pendingUserMessage);
+        if (!isInternalResume) clearPendingTranscriptUserMessage(conversationId, pendingUserMessage);
       }
     } catch (err) {
       if (err instanceof AsyncQueueOverflowError) {
         streamOverflowed = true;
-        await abortEmbeddedRun(sessionKey).catch(() => false);
+        await abortEmbeddedRun(conversationId).catch(() => false);
         deps.log.warn(
-          { err, sessionKey, maxBuffered: err.maxBuffered },
+          { err, conversationId, maxBuffered: err.maxBuffered },
           'Aborted agent stream because the consumer could not keep up with critical events',
         );
       } else if (!abortHandled) {
@@ -542,18 +544,18 @@ export async function* runProcessDirectStreaming(
     } finally {
       if (queue.droppedCount > 0) {
         deps.log.warn(
-          { sessionKey, droppedEvents: queue.droppedCount },
+          { conversationId, droppedEvents: queue.droppedCount },
           'Coalesced stream progress events because the consumer fell behind',
         );
       }
       if (!userAborted && !streamOverflowed && channel === 'webchat' && !explicitTtsEmitted && input.presentation !== 'voice') {
         try {
-          const ttsAudioEvent = await deps.maybeEmitWebchatTts(sessionKey, inboundVoice);
+          const ttsAudioEvent = await deps.maybeEmitWebchatTts(conversationId, inboundVoice);
           if (ttsAudioEvent) {
             queue.push(ttsAudioEvent);
           }
         } catch (ttsErr) {
-          deps.log.warn({ err: ttsErr, sessionKey }, 'Failed to emit TTS audio before stream close');
+          deps.log.warn({ err: ttsErr, conversationId }, 'Failed to emit TTS audio before stream close');
         }
       }
       queue.close();
@@ -573,9 +575,9 @@ export async function* runProcessDirectStreaming(
           content: [{ type: 'text' as const, text: mergedUserText }],
           timestamp: Date.now(),
         } as AgentMessage;
-        await deps.sessionStore.appendTranscriptMessage(sessionKey, userMsg);
+        await deps.sessionStore.appendTranscriptMessage(conversationId, userMsg);
         for (const traceRow of slashTraceRows) {
-          await deps.sessionStore.appendTranscriptContextEntry(sessionKey, traceRow);
+          await deps.sessionStore.appendTranscriptContextEntry(conversationId, traceRow);
         }
         if (webchatSlashReceipt?.trim()) {
           const assistantMsg = {
@@ -588,18 +590,18 @@ export async function* runProcessDirectStreaming(
               ? { metadata: slashCommandMetadata }
               : {}),
           } as AgentMessage;
-          await deps.sessionStore.appendTranscriptMessage(sessionKey, assistantMsg);
+          await deps.sessionStore.appendTranscriptMessage(conversationId, assistantMsg);
         }
-        deps.reloadWebchatTranscript?.(sessionKey);
+        deps.reloadWebchatTranscript?.(conversationId);
       } catch (err) {
-        deps.log.warn({ err, sessionKey }, 'Failed to persist webchat slash command receipt');
+        deps.log.warn({ err, conversationId }, 'Failed to persist webchat slash command receipt');
       }
     }
 
-    deps.recordTaskReviewStreamHint?.(sessionKey, { skipTaskReview: ranSlashCommand });
+    deps.recordTaskReviewStreamHint?.(conversationId, { skipTaskReview: ranSlashCommand });
   } finally {
     if (channel === 'webchat') {
-      deps.unregisterWebchatStreamPublisher(sessionKey);
+      deps.unregisterWebchatStreamPublisher(conversationId);
     }
     deps.endDirectRequestContext();
   }
