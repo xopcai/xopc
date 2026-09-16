@@ -3,20 +3,21 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useChatChromeStore } from '../navigation/chat-chrome-store';
+import { ChatComposerDock } from './ChatComposerDock';
 import { ConnectionInterventionBanner } from '../gateway/ConnectionInterventionBanner';
 import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_DEFAULT } from '../../constants/toast';
 import { queryKeys } from '../../query/keys';
 import { voiceStatusOptions } from '../../query/voice';
 import { usePreferencesStore } from '../../stores/preferences-store';
-import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding } from '../../theme';
 
 import { AgentPickerSheet } from './AgentPickerSheet';
 import { ChatComposer } from './ChatComposer';
 import { ChatContextControl } from './ChatContextControl';
+import { ChatQueueTray } from './ChatQueueTray';
 import { ChatHeader, CHAT_HEADER_TOP_PADDING_AFTER_SAFE_AREA } from './ChatHeader';
 import { ChatNavigationDrawer, type ChatNavigationDrawerHandle } from './ChatNavigationDrawer';
 import { StaticChatToast } from './StaticChatToast';
@@ -46,8 +47,14 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
   const page = useChatPage({ root });
   const [composerContextRefs, setComposerContextRefs] = useState<ComposerContextRef[]>([]);
   const navigationRef = useRef<ChatNavigationDrawerHandle>(null);
-  const [composerActionsOpen, setComposerActionsOpen] = useState(false);
-  const closeComposerActions = useCallback(() => setComposerActionsOpen(false), []);
+  const [detailActionsOpen, setDetailActionsOpen] = useState(false);
+  const rootActionsOpen = useChatChromeStore(state => state.actionPanelOpen);
+  const composerActionsOpen = root ? rootActionsOpen : detailActionsOpen;
+  const setComposerActionsOpen = useCallback((open: boolean) => {
+    if (root) useChatChromeStore.getState().setActionPanelOpen(open);
+    else setDetailActionsOpen(open);
+  }, [root]);
+  const closeComposerActions = useCallback(() => setComposerActionsOpen(false), [setComposerActionsOpen]);
   const dismissActionsOnOutsideTouch = useCallback(() => {
     closeComposerActions();
     // Observe the touch without taking it from message links, selection, or scrolling.
@@ -148,7 +155,6 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
       onInteraction={closeComposerActions}
       currentConversationId={conversationId}
       recentSessions={recentSessionsQuery.data?.items ?? []}
-      attentionCount={attentionItems.length}
       onSessionSelect={handleSessionSelect}
       onNewChat={handleNewChat}
     >
@@ -252,14 +258,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
           />
         </View>
 
-        <KeyboardStickyView
-          offset={{ closed: 0, opened: 0 }}
-          style={{
-            backgroundColor: canvasBg,
-            marginBottom: FLOATING_BOTTOM_OFFSET,
-            paddingBottom: floatingBottomPadding(insets.bottom),
-          }}
-        >
+        <ChatComposerDock root={root} panelOpen={composerActionsOpen} bottomInset={insets.bottom} backgroundColor={canvasBg}>
           <View onStartShouldSetResponderCapture={dismissActionsOnOutsideTouch}>
           <ContinuousReadAloudBar conversationId={conversationId} />
           <ClarifyPrompt
@@ -274,14 +273,16 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
             <ChatAttentionTray gatewayId={activeGatewayId} items={attentionItems} />
           ) : null}
           </View>
+          {conversationId ? <ChatQueueTray key={`${activeGatewayId}:${conversationId}`} conversationId={conversationId} /> : null}
           <ChatComposer
+            mainConversation={root}
             actionsOpen={composerActionsOpen}
             onActionsOpenChange={setComposerActionsOpen}
             contextControl={conversationId ? <ChatContextControl
               conversationId={conversationId}
               draftRefs={composerContextRefs}
               onRemoveDraftRef={(sourceId, kind) => setComposerContextRefs((refs) => refs.filter((ref) => ref.sourceId !== sourceId || ref.kind !== kind))}
-              onAddSource={() => dispatchMobileComposerAppend('@')}
+              onAddSource={() => dispatchMobileComposerAppend(conversationId, '@')}
               onChangeScope={handleContextChange}
             /> : null}
             conversationId={conversationId}
@@ -302,7 +303,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
               assistant: Boolean(voiceStatusQuery.data && !voiceStatusQuery.data.capabilities.assistant.available),
             }}
           />
-        </KeyboardStickyView>
+        </ChatComposerDock>
         </View>
       </View>
 

@@ -12,12 +12,12 @@ import { AppToast } from '../../components/AppToast';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { ListSelectionCheckbox } from '../../components/ListSelectionCheckbox';
-import { SwipeableRow, type SwipeAction } from '../../components/SwipeableRow';
+import { ListItemMenu, type ListItemAction } from '../../components/ListItemMenu';
 import { LIST_DELAY_LONG_PRESS, LIST_DELETE_UNDO_MS } from '../../constants/list-interaction';
 import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_SHORT } from '../../constants/toast';
 import { dismissOrRoot, noteDetailRoute } from '../../lib/navigation';
 import { useFlatListEndReached } from '../../lib/use-flat-list-end-reached';
-import { useDelayedDelete } from '../../hooks/use-delayed-delete';
+import { useImmediateDelete } from '../../hooks/use-immediate-delete';
 import { useListSelection } from '../../hooks/use-list-selection';
 import { useMessages, t } from '../../i18n/messages';
 import { recordUsageEvent } from '../../product/usage-metrics';
@@ -87,10 +87,8 @@ export function InboxScreen() {
   } = useListSelection<string>();
   const {
     hiddenIds: pendingDeleteIds,
-    undoId: pendingUndoId,
-    scheduleDelete,
-    undoDelete,
-  } = useDelayedDelete<string>();
+    deleteImmediately,
+  } = useImmediateDelete<string>();
 
   const inboxQuery = useInfiniteQuery({
     queryKey: queryKeys.notes('inbox'),
@@ -265,13 +263,13 @@ export function InboxScreen() {
     router.push(noteDetailRoute(item.id));
   }, [router, selectionMode, toggleSelected]);
 
-  const handleItemLongPress = useCallback((item: NoteIndexEntry) => {
+  const handleItemSelect = useCallback((item: NoteIndexEntry) => {
     if (selectionMode) return;
     startSelection();
     toggleSelected(item.id);
   }, [selectionMode, startSelection, toggleSelected]);
 
-  const handleSwipeAction = useCallback((item: NoteIndexEntry, action: SwipeAction) => {
+  const handleMenuAction = useCallback((item: NoteIndexEntry, action: ListItemAction) => {
     if (action.key === 'task') {
       router.push({
         pathname: '/tasks/create',
@@ -285,7 +283,7 @@ export function InboxScreen() {
     }
 
     if (action.key === 'delete') {
-      scheduleDelete(
+      deleteImmediately(
         item.id,
         async () => {
           await deleteNote(item.id);
@@ -295,7 +293,7 @@ export function InboxScreen() {
       );
       setSnackMsg(pm.deleted);
     }
-  }, [archiveMutation, invalidateInbox, pm.actionFailed, pm.deleted, router, scheduleDelete]);
+  }, [archiveMutation, invalidateInbox, pm.actionFailed, pm.deleted, router, deleteImmediately]);
 
   const batchActions = useMemo(() => [
     {
@@ -321,7 +319,7 @@ export function InboxScreen() {
     const selected = selectedIds.has(item.id);
     const isFirst = index === 0;
     const isLast = index === items.length - 1;
-    const row = (
+    const row = (openMenu: () => void) => (
       <Pressable
         style={({ pressed }) => [
           styles.itemCard,
@@ -342,7 +340,7 @@ export function InboxScreen() {
           selected && styles.itemCardSelected,
         ]}
         onPress={() => handleItemPress(item)}
-        onLongPress={() => handleItemLongPress(item)}
+        onLongPress={openMenu}
         delayLongPress={LIST_DELAY_LONG_PRESS}
         accessibilityState={selectionMode ? { selected } : undefined}
       >
@@ -365,18 +363,17 @@ export function InboxScreen() {
       </Pressable>
     );
 
-    if (selectionMode) return row;
 
-    const actions: SwipeAction[] = [
-      { key: 'task', icon: 'checkbox-marked-circle-outline', color: 'blue', label: m.tasksPage.create },
-      { key: 'archive', icon: 'archive-arrow-down-outline', color: 'blue', label: pm.archive },
-      { key: 'delete', icon: 'trash-can-outline', color: 'red', label: pm.delete, destructive: true },
+    const actions: ListItemAction[] = [
+      { key: 'task', icon: 'checkbox-marked-circle-outline', label: m.tasksPage.create },
+      { key: 'archive', icon: 'archive-arrow-down-outline', label: pm.archive },
+      { key: 'delete', icon: 'trash-can-outline', label: pm.delete, destructive: true },
     ];
 
     return (
-      <SwipeableRow actions={actions} onActionPress={(action) => handleSwipeAction(item, action)}>
+      <ListItemMenu title={item.title || pm.untitledNote} enabled={!selectionMode} onSelect={() => handleItemSelect(item)} actions={actions} onActionPress={(action) => handleMenuAction(item, action)}>
         {row}
-      </SwipeableRow>
+      </ListItemMenu>
     );
   }, [
     colors.accent.primary,
@@ -386,9 +383,9 @@ export function InboxScreen() {
     colors.border.subtle,
     colors.surface.hover,
     colors.surface.panel,
-    handleItemLongPress,
+    handleItemSelect,
     handleItemPress,
-    handleSwipeAction,
+    handleMenuAction,
     items.length,
     m.tasksPage.create,
     pm.archive,
@@ -514,12 +511,10 @@ export function InboxScreen() {
           setSnackMsg('');
           setOrganizeUndo(undefined);
         }}
-        duration={pendingUndoId && snackMsg === pm.deleted || organizeUndo?.toastMessage === snackMsg
+        duration={organizeUndo?.toastMessage === snackMsg
           ? LIST_DELETE_UNDO_MS
           : TOAST_DURATION_SHORT}
-        action={pendingUndoId && snackMsg === pm.deleted
-          ? { label: li.undo, onPress: () => undoDelete() }
-          : organizeUndo?.toastMessage === snackMsg
+        action={organizeUndo?.toastMessage === snackMsg
             ? { label: li.undo, onPress: () => void undoOrganize() }
             : undefined}
         bottomLift={TOAST_BOTTOM_LIFT_ABOVE_BAR}

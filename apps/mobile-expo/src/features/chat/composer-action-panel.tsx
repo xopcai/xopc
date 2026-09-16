@@ -1,6 +1,7 @@
+import { useFocusEffect } from 'expo-router';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { BackHandler, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
+import { useKeyboardHandler, useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import { Icon, Text } from 'react-native-paper';
 import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -22,10 +23,16 @@ export const ComposerActionPanel = memo(function ComposerActionPanel({ visible, 
   const reducedMotion = useReducedMotion();
   const keyboard = useReanimatedKeyboardAnimation();
   const expansion = useSharedValue(0);
+  const keyboardOpening = useSharedValue(false);
   const [width, setWidth] = useState(0);
   const [page, setPage] = useState(0);
   const pagerRef = useRef<ScrollView>(null);
   const pendingAction = useRef<(() => void) | null>(null);
+  const transition = useRef(0);
+  useFocusEffect(useCallback(() => () => {
+    pendingAction.current = null;
+    transition.current += 1;
+  }, []));
   const rowHeight = TILE_SIZE + spacing.sm + spacing.md + typography.label.lineHeight * fontScale * 2;
   const chromeHeight = spacing.lg + spacing.xl + spacing.lg;
   const rows = screenHeight * 0.45 >= rowHeight * 2 + chromeHeight ? 2 : 1;
@@ -34,13 +41,33 @@ export const ComposerActionPanel = memo(function ComposerActionPanel({ visible, 
   const pageSize = columns * rows;
   const pageCount = Math.ceil(items.length / pageSize);
 
-  const finishClose = useCallback(() => {
+  const closeForKeyboard = useCallback(() => {
+    pendingAction.current = null;
+    onClose();
+  }, [onClose]);
+
+  useKeyboardHandler({
+    onStart: event => {
+      'worklet';
+      keyboardOpening.value = event.height > 0;
+      if (event.height > 0) scheduleOnRN(closeForKeyboard);
+    },
+    onEnd: event => {
+      'worklet';
+      keyboardOpening.value = event.height > 0;
+      if (event.height > 0) scheduleOnRN(closeForKeyboard);
+    },
+  }, [closeForKeyboard]);
+
+  const finishClose = useCallback((id: number) => {
+    if (id !== transition.current) return;
     const action = pendingAction.current;
     pendingAction.current = null;
     action?.();
   }, []);
 
   useEffect(() => {
+    const id = ++transition.current;
     if (visible) {
       pendingAction.current = null;
       // Start at the keyboard's current lift rather than collapsing toward zero first.
@@ -52,9 +79,12 @@ export const ComposerActionPanel = memo(function ComposerActionPanel({ visible, 
       duration: reducedMotion ? 0 : motion.duration.standard,
       easing: visible ? motion.easing.enter : motion.easing.exit,
     }, finished => {
-      if (finished && !visible) scheduleOnRN(finishClose);
+      if (finished && !visible) scheduleOnRN(finishClose, id);
     });
-    return () => cancelAnimation(expansion);
+    return () => {
+      transition.current += 1;
+      cancelAnimation(expansion);
+    };
   }, [expansion, finishClose, keyboard.height, panelHeight, reducedMotion, visible]);
 
   useEffect(() => {
@@ -74,6 +104,7 @@ export const ComposerActionPanel = memo(function ComposerActionPanel({ visible, 
   const animatedStyle = useAnimatedStyle(() => ({
     // The sticky composer already follows the keyboard; reserve only the remaining space.
     height: Math.max(0, expansion.value - Math.abs(keyboard.height.value)),
+    opacity: keyboardOpening.value ? 0 : 1,
   }));
 
   return (

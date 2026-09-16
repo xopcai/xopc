@@ -35,31 +35,31 @@ The system takes Apple’s current HIG principles of hierarchy, harmony, consist
 - Do not imitate Apple Notes or ChatGPT pixel-for-pixel.
 - Do not use a gradient page background, glass-card grids, neon AI effects, illustration-led empty states, or decorative status colors.
 - Do not make every control a pill, every object a card, or every list item elevated.
-- Do not add a permanent bottom tab bar merely to resemble a consumer app. Chat owns the bottom composer; global destinations belong in the leading navigation drawer.
+- Use four stable destinations: Chat, Progress, Library, and You. The rounded floating tab dock uses one moving selection capsule; it yields to the keyboard while composing. Do not duplicate global navigation in the conversation drawer.
 - Do not use AI sparkle imagery or a second brand accent as a substitute for useful product feedback.
 
 ## 2. Product model and information architecture
 
-Chat is the application root. A cold launch resumes the most recent usable conversation; when none exists it opens a new conversation. Secondary destinations remain available from the leading navigation control without competing with the composer.
+Chat is the application root. A cold launch opens the gateway’s fixed main conversation; opening a history or task conversation does not replace it. Progress collects decisions and ongoing work, Library holds durable material, and You holds preferences and connection settings. Detail routes push above the tab shell.
 
 The product has five modes. A person should always know which mode they are in.
 
 | Mode | Purpose | Primary surface | Primary action | Entry / exit |
 |---|---|---|---|---|
-| **Chat** | Ask, continue, and direct an agent | Conversation | Send a message | Root; cold launch resumes the latest conversation |
-| **Attention** | Resolve decisions and blocked work | Attention tray / list | Decide or acknowledge | Composer tray, navigation badge, notification |
+| **Chat** | Ask, continue, and direct an agent | Conversation | Send a message | Chat tab; cold launch opens the fixed main conversation |
+| **Attention** | Resolve decisions and blocked work | Attention tray / list | Decide or acknowledge | Composer tray, Progress tab, notification |
 | **Capture** | Save without interrupting the moment | Inbox composer / capture sheet | Save | Bottom capture control; dismiss returns to context |
-| **Library** | Find and organize durable material | Inbox, Notes, Sessions, Files | Open or filter | Leading navigation; back returns to prior context |
+| **Library** | Find and organize durable material | Inbox, Notes, Sessions, Files | Open or filter | Library tab; back returns to prior context |
 | **Focus** | Read, edit, converse, or run a task | Note, Chat, Automation detail | Contextual to the task | Push; back preserves context |
 
 ### 2.1 Chat root
 
-- Preserve the established Chat header and trailing actions. The leading control opens global navigation on the root and becomes Back on pushed chat routes.
+- Preserve the established Chat header and trailing actions. The leading control opens conversation history on the root and becomes Back on pushed chat routes.
 - Keep the composer visible and make it the dominant action.
 - Show urgent, unseen decisions in a compact tray immediately above the composer. The tray disappears when empty or dismissed.
-- Dismissing the tray marks the current versions as seen. It returns only for a new item, a changed item, or an escalation; unresolved items remain in Attention and on the navigation badge.
-- Tapping the tray opens a short bottom sheet. The complete queue lives in the Attention destination.
-- The leading navigation contains recent conversations followed by Tasks, Projects, Inbox, Notes, Files, Automation, Agents, and Settings.
+- Dismissing the tray marks the current versions as seen. It returns only for a new item, a changed item, or an escalation; unresolved items remain in Progress.
+- Tapping the tray opens a short bottom sheet. The complete queue lives in Progress.
+- The leading drawer contains conversation history. Tasks, projects, and automation live under Progress; Inbox, Notes, and Files under Library; agents and settings under You.
 - Show a gateway banner only for unavailable, starting, or degraded conditions.
 
 ### 2.2 Capture and Inbox
@@ -69,7 +69,7 @@ Inbox is a temporal landing zone, not an unstructured second Notes list.
 - The bottom composer is always the strongest capture affordance. It opens as a single line, grows only while typing, and gives direct attachment, voice, and send feedback.
 - A compact count/summary can appear above the list only when it helps triage (for example, “6 unreviewed”). It must not duplicate each row’s state.
 - AI organize is a contextual toolbar action. The sheet previews the outcome in plain language and supports undo; it never presents speculative AI as fact.
-- Archive is the primary completion action in row swipe. Delete is deliberately farther away and always reversible through undo where possible.
+- Archive and delete live in the long-press menu. Delete is visually distinguished as destructive. Note deletion commits immediately without an undo countdown.
 
 ### 2.3 Notes and Library
 
@@ -297,7 +297,7 @@ Standard row contract:
 - Full row opens the primary object; trailing action never steals the row tap.
 - Primary title: one line. Preview: at most two lines when the object needs it. Metadata: one coherent line.
 - Leading avatar/icon is optional and purposeful. Trailing metadata aligns consistently.
-- Long press enters selection. Swipe exposes reversible quick actions. Multi-select disables swipe.
+- Long press opens the row action menu. Multi-select is an explicit menu choice. Selected rows toggle on tap.
 - Press feedback changes surface and may translate 1pt; it must be immediate and stable.
 
 ### 5.2 Controls
@@ -358,9 +358,9 @@ Motion must explain a relationship: where content came from, what changed, or wh
 | `ambient` | 600ms max | only low-amplitude streaming/progress feedback |
 
 - Respect `useReducedMotion`; remove transform, blur, and nonessential repeating motion when enabled.
-- List rows do not bounce on scroll. Swipe action reveal follows the finger directly and includes a label, icon, semantic color, and an undo/confirmation path.
+- List rows do not bounce on scroll. Long-press menus use labeled actions, neutral icons, and the error color for destructive actions.
 - Use haptics for entering selection, committing a capture, sending a message, completing a meaningful action, and warning before a destructive state. Do not haptic ordinary navigation or every tap.
-- Route transitions should use platform-native behavior wherever Expo Router provides it; custom motion is reserved for the navigation drawer and small state continuity.
+- Route transitions should use platform-native behavior wherever Expo Router provides it; custom motion is reserved for the tab selection capsule, navigation drawer, and small state continuity.
 
 ## 7. Accessibility and adaptive design
 
@@ -383,7 +383,7 @@ Accessibility is a product requirement and a measure of craft.
 - `src/theme/paper-theme.ts` maps those semantic values into React Native Paper. It must not introduce a competing MD3 visual system.
 - Motion comes from `src/motion/`; all custom animated components use the reduced-motion helper.
 - Reuse `FloatingHeader` only after it is upgraded into the two header modes above. Do not clone a local header to bypass the design system.
-- Continue using the established `SwipeableRow`, selection, batch action, toast, bottom sheet, keyboard, and safe-area primitives. Improve the primitives centrally rather than inventing feature-local variants.
+- Continue using the established `ListItemMenu`, selection, batch action, toast, bottom sheet, keyboard, and safe-area primitives. Improve the primitives centrally rather than inventing feature-local variants.
 - User-facing content remains in the i18n catalog.
 
 ### 8.2 Token migration requirements
@@ -403,7 +403,7 @@ These observations come from the current implementation and directly motivate th
 | Area | Current issue | Target correction |
 |---|---|---|
 | Header | `FloatingHeader` renders a filled circle + central filled pill + filled circle for almost every destination | Introduce large/compact native header modes; material only when floating over content |
-| Root navigation | The former workspace landing surface competed with the primary chat intent | Open in Chat, resume the latest conversation, and keep secondary destinations in the leading drawer |
+| Root navigation | The former workspace landing surface competed with the primary chat intent | Open the fixed main Chat and use Progress, Library, and You for the other root destinations |
 | Collections | Note, inbox, and session objects are nearly all bordered, rounded cards with shadows | Make plain/grouped rows the default; preserve featured cards only for intentional summaries |
 | Note rows | Title, chips, tag chips, status chip, task chip, pin chip, and timestamp compete in one compact card | Show title, preview, one metadata line, and only high-value tags/states |
 | Chat | The feature has rich state, which risks a visual stack of controls and blocks | Make transcript reading-first and progressively disclose operational/AI detail |
@@ -439,7 +439,7 @@ These are the screens that establish the product’s perceived quality. Do not d
 ### Phase 3 — system completion
 
 - Migrate Sessions, Files, Settings, Gateways, Agents, Automations, Sharing, onboarding/pairing, dialogs, sheets, toasts, and all empty/error/offline states.
-- Standardize selection, swipe, undo, search, and list loading behavior across every collection.
+- Standardize long-press menus, explicit selection, immediate note deletion, search, and list loading behavior across every collection.
 - Remove obsolete v2 styles and compatibility aliases once no screen uses them.
 
 ### Definition of done
@@ -456,3 +456,9 @@ A redesigned screen is complete only when all of the following are true:
 8. The screen feels more legible and more alive through hierarchy and feedback, not through added decoration.
 
 The final experience should feel inevitable: open XOPC, immediately see what matters, capture or ask with one confident action, and return to work without managing the interface.
+
+### List actions and note deletion
+
+- Long press opens a contextual action menu. Multi-select is an explicit menu action and initially selects that row. There are no swipe action drawers and long press never selects a row directly.
+- A menu closes fully before executing its action or presenting the next surface.
+- Deleting a note commits immediately. Lists remove it optimistically and restore it on failure. Detail deletion returns to the prior surface after the request succeeds; it never shows an undo countdown page. Optional feedback uses the shared non-blocking toast.

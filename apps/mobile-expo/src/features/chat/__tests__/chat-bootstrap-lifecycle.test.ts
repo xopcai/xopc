@@ -60,7 +60,7 @@ beforeEach(() => {
   environment.gatewayId = 'a';
   environment.focused = true;
   useChatSelectionStore.setState({ selections: {} });
-  storage.delete(KEYS.lastChatSessionByGateway);
+  storage.delete(KEYS.mainChatSessionByGateway);
   renderedKeys.length = 0;
   vi.mocked(fetchSessionResumeStatus).mockResolvedValue('available');
   vi.mocked(fetchSessionsList).mockResolvedValue(page('server-latest'));
@@ -99,24 +99,19 @@ describe('chat startup lifecycle', () => {
     expect(takeNewChatConversationId).not.toHaveBeenCalled();
   });
 
-  it('waits for a real first lookup instead of using old cached recent sessions', async () => {
-    const request = deferred<SessionsPage>();
+  it('creates a main conversation independently of recent sessions', async () => {
     client.setQueryData(['sessions', 'recent', 'a'], page('old-cache'));
-    vi.mocked(fetchSessionsList).mockReturnValue(request.promise);
-    await render();
-    expect(result.waitingForResume).toBe(true);
-    expect(result.pendingBootstrapKey).toBe('');
-    await act(async () => request.resolve(page('latest')));
-    await selected('latest');
+    await render(); await selected('created');
+    expect(fetchSessionsList).not.toHaveBeenCalled();
+    expect(takeNewChatConversationId).toHaveBeenCalledOnce();
     expect(renderedKeys).not.toContain('old-cache');
   });
 
-  it('falls back only after the saved chat is confirmed unavailable', async () => {
+  it('replaces the main conversation only after confirmed deletion', async () => {
     useChatSelectionStore.getState().select('a', 'deleted');
     vi.mocked(fetchSessionResumeStatus).mockImplementation(async key => key === 'deleted' ? 'unavailable' : 'available');
-    vi.mocked(fetchSessionsList).mockResolvedValue(page('deleted', 'fallback'));
-    await render(); await selected('fallback');
-    expect(useChatSelectionStore.getState().selections.a.key).toBe('fallback');
+    await render(); await selected('created');
+    expect(fetchSessionsList).not.toHaveBeenCalled();
   });
 
   it('does not let late validation or list results override a manual selection', async () => {
@@ -131,17 +126,17 @@ describe('chat startup lifecycle', () => {
     expect(fetchSessionsList).not.toHaveBeenCalled();
   });
 
-  it('does not override manual selection with a late first lookup', async () => {
-    const request = deferred<SessionsPage>();
-    vi.mocked(fetchSessionsList).mockReturnValue(request.promise);
+  it('does not override a selection with a late main conversation creation', async () => {
+    const request = deferred<string>();
+    vi.mocked(takeNewChatConversationId).mockReturnValue(request.promise);
     await render();
     await act(async () => result.setPendingBootstrapKey('chosen'));
-    await act(async () => request.resolve(page('server-latest')));
+    await act(async () => request.resolve('late'));
     await tick();
     expect(result.pendingBootstrapKey).toBe('chosen');
   });
 
-  it('ignores late creation after a new user choice and persists successful creation immediately', async () => {
+  it('ignores late creation after a new user choice and opens new chats without replacing the main conversation', async () => {
     useChatSelectionStore.getState().select('a', 'saved');
     await render();
     let finish!: (key: string) => boolean;
@@ -149,19 +144,19 @@ describe('chat startup lifecycle', () => {
     await act(async () => result.setPendingBootstrapKey('chosen'));
     await act(async () => { expect(finish('late-create')).toBe(false); });
     await act(async () => { finish = result.beginSessionSelection(); });
-    await act(async () => { expect(finish('new-chat')).toBe(true); });
-    expect(JSON.parse(storage.getString(KEYS.lastChatSessionByGateway)!)).toEqual({ a: 'new-chat' });
+    await act(async () => { expect(finish('new-chat')).toBe(false); });
+    expect(JSON.parse(storage.getString(KEYS.mainChatSessionByGateway)!)).toEqual({ a: 'chosen' });
+    expect(openChat).toHaveBeenCalledWith(environment.router, 'new-chat');
   });
 
-  it('does not create a session on lookup error, and supports retry', async () => {
-    vi.mocked(fetchSessionsList).mockRejectedValue(new Error('offline'));
+  it('shows a failed creation and supports an explicit retry', async () => {
+    vi.mocked(takeNewChatConversationId).mockRejectedValue(new Error('offline'));
     await render(); await tick();
-    expect(takeNewChatConversationId).not.toHaveBeenCalled();
-    expect(result.bootstrapError).toBe('Retry startup');
-    vi.mocked(fetchSessionsList).mockResolvedValue(page());
+    expect(result.bootstrapError).toBe('offline');
+    vi.mocked(takeNewChatConversationId).mockResolvedValue('created');
     await act(async () => result.retryBootstrapSession());
     await selected('created');
-    expect(takeNewChatConversationId).toHaveBeenCalledTimes(1);
+    expect(takeNewChatConversationId).toHaveBeenCalledTimes(2);
   });
 
   it('keeps gateway selections isolated and ignores an old gateway response', async () => {
@@ -183,7 +178,8 @@ describe('chat startup lifecycle', () => {
   it('gives explicit routes priority and does not let the covered root navigate', async () => {
     useChatSelectionStore.getState().select('a', 'saved');
     await render({ urlConversationId: 'deep-link', shouldNavigateToRoute: true });
-    expect(useChatSelectionStore.getState().selections.a.key).toBe('deep-link');
+    expect(result.pendingBootstrapKey).toBe('deep-link');
+    expect(useChatSelectionStore.getState().selections.a.key).toBe('saved');
     expect(fetchSessionsList).not.toHaveBeenCalled();
     expect(fetchSessionResumeStatus).not.toHaveBeenCalled();
     environment.focused = false;
@@ -191,16 +187,16 @@ describe('chat startup lifecycle', () => {
     expect(openChat).not.toHaveBeenCalled();
   });
 
-  it('keeps the covered root on its own projection, then restores the foreground choice on focus', async () => {
+  it('keeps the covered root on its own projection, and returns to the main conversation on focus', async () => {
     useChatSelectionStore.getState().select('a', 'root-chat');
     await render();
     environment.focused = false;
     await render();
-    await act(async () => { useChatSelectionStore.getState().select('a', 'detail-chat'); });
+    await act(async () => { useChatSelectionStore.getState().select(JSON.stringify(['a', 'detail-chat']), 'detail-chat'); });
     expect(result.pendingBootstrapKey).toBe('root-chat');
     environment.focused = true;
     await render();
-    expect(result.pendingBootstrapKey).toBe('detail-chat');
+    expect(result.pendingBootstrapKey).toBe('root-chat');
   });
 
   it('rejects a creation completion from before leaving and re-entering the screen', async () => {

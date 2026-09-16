@@ -10,7 +10,7 @@ function memoryStorage(): KeyValueStorage {
   return { getString: key => memory.get(key), set: (key, value) => { memory.set(key, String(value)); }, delete: key => { memory.delete(key); } };
 }
 
-describe('last chat selection', () => {
+describe('main chat selection', () => {
   it('restores the latest selection synchronously after a process restart, independently per gateway', () => {
     const kv = memoryStorage();
     const first = createChatSelectionStore(kv);
@@ -42,9 +42,15 @@ describe('last chat selection', () => {
     expect(createChatSelectionStore(kv).getState().selections).toEqual({ b: { key: 'keep', revision: 0 } });
   });
 
+  it('does not import the old recent-conversation preference into the main conversation', () => {
+    const kv = memoryStorage();
+    kv.set('chat.lastSessionByGateway', JSON.stringify({ a: 'recent-task-chat' }));
+    expect(createChatSelectionStore(kv).getState().selections).toEqual({});
+  });
+
   it('ignores corrupt storage and can select from an empty state', () => {
     const kv = memoryStorage();
-    kv.set(KEYS.lastChatSessionByGateway, 'invalid JSON');
+    kv.set(KEYS.mainChatSessionByGateway, 'invalid JSON');
     const state = createChatSelectionStore(kv);
     expect(state.getState().selections).toEqual({});
     expect(state.getState().selectIfCurrent('a', EMPTY_CHAT_SELECTION, 'new')).toBe(true);

@@ -8,6 +8,7 @@ export type MessageSubmission = {
   expectedTranscriptId?: string;
   taskId?: string;
   content: string;
+  delivery: 'next' | 'steer';
   attachments: WireAttachment[];
   contextRefs: WireContextRef[];
 };

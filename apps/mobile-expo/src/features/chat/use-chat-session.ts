@@ -108,7 +108,7 @@ export interface UseChatSessionReturn {
   sessionDataUpdatedAtRef: React.MutableRefObject<number>;
 
   // Actions
-  send: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => Promise<boolean>;
+  send: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[], delivery?: 'next' | 'steer') => Promise<boolean>;
   retryMessage: (message: Message) => Promise<void>;
   abort: () => void;
   cancelRecovery: () => void;
@@ -635,17 +635,21 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     };
     const isCurrent = () => mountedRef.current && activeConversationIdRef.current === input.conversationId
       && useGatewayStore.getState().activeGatewayId === input.gatewayId;
+    const continuingRun = streamingRef.current;
     sendingRef.current = true;
     runBusyRef.current = true;
-    activeMessageIdRef.current = input.clientMessageId;
     updateMessage('sending');
-    clearStreamingMessage();
-    setProgress(null);
-    streamRecoveryRef.current.cancelRecovery();
+    if (!continuingRun) {
+      activeMessageIdRef.current = input.clientMessageId;
+      clearStreamingMessage();
+      setProgress(null);
+      streamRecoveryRef.current.cancelRecovery();
+    }
     let runId: string | undefined;
     try {
       ({ runId } = await senderRef.current.sendMessage(input));
       updateMessage('sent');
+      void queryClient.invalidateQueries({ queryKey: ['session-inputs', input.gatewayId, input.conversationId] });
     } catch (error) {
       useLocalMessagesStore.getState().update(
         targetScope,
@@ -653,13 +657,19 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       );
       if (isCurrent()) {
         sendingRef.current = false;
-        runBusyRef.current = false;
+        runBusyRef.current = streamingRef.current;
         setSnackMsg(error instanceof Error ? error.message : m.chat.sendFailed);
       }
       return;
     }
     if (!isCurrent()) return;
     sendingRef.current = false;
+    if (continuingRun) {
+      // The previous run can finish while the queue POST is in flight. Resolve the
+      // current server run instead of replaying its now-stale acknowledgement.
+      if (!senderRef.current.isStreamingFor(input.conversationId)) streamRecoveryRef.current.wake();
+      return;
+    }
     if (!runId) {
       runBusyRef.current = false;
       finalizeMessage(input.conversationId);
@@ -676,11 +686,11 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       if (streamRecoveryRef.current.recover(error)) return;
       await reconcileSessionHead(input.conversationId);
     });
-  }, [buildCallbacks, clearStreamingMessage, finalizeMessage, m.chat.sendFailed, reconcileSessionHead]);
+  }, [buildCallbacks, clearStreamingMessage, finalizeMessage, m.chat.sendFailed, queryClient, reconcileSessionHead]);
 
-  const send = useCallback(async (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]): Promise<boolean> => {
+  const send = useCallback(async (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[], delivery: 'next' | 'steer' = 'next'): Promise<boolean> => {
     if (!canSendComposerDraft(text, attachments?.length ?? 0, contextRefs?.length ?? 0) || !conversationId || !activeGatewayId
-      || runBusyRef.current || sendingRef.current
+      || awaitingSessionRefresh || sendingRef.current
       || readLocalMessages(scope).some(message => message.deliveryState === 'sending')) return false;
     const input: MessageSubmission = {
       clientMessageId: randomUUID(),
@@ -689,6 +699,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       expectedTranscriptId: readCachedSessionDetail(activeGatewayId, conversationId)?.transcriptId,
       taskId,
       content: text.trim(),
+      delivery,
       attachments: capAttachments(attachments) ?? [],
       contextRefs: (contextRefs ?? []).map(({ kind, sourceId, expectedVersion }) => ({ kind, sourceId, expectedVersion })),
     };
@@ -702,15 +713,15 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     await submitMessage(input);
     // The message now owns its content, including when submission failed.
     return true;
-  }, [activeGatewayId, scope, conversationId, setOptimisticMessages, submitMessage, taskId]);
+  }, [activeGatewayId, awaitingSessionRefresh, scope, conversationId, setOptimisticMessages, submitMessage, taskId]);
 
   const retryMessage = useCallback(async (message: Message): Promise<void> => {
     const current = readLocalMessages(scope).find(row => row.id === message.id);
     if (current?.deliveryState !== 'failed' || !current.submission
-      || runBusyRef.current || sendingRef.current
+      || awaitingSessionRefresh || sendingRef.current
       || readLocalMessages(scope).some(row => row.deliveryState === 'sending')) return;
     await submitMessage(current.submission);
-  }, [scope, submitMessage]);
+  }, [awaitingSessionRefresh, scope, submitMessage]);
 
   // ── Abort ────────────────────────────────────────────────
   const abort = useCallback(() => {

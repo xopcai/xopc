@@ -1,3 +1,7 @@
+import { useRouter } from 'expo-router';
+import { useComposerHandoff } from '../chat/composer-handoff';
+import { useGatewayStore } from '../../stores/gateway-store';
+import { useChatSelectionStore } from '../chat/chat-selection-store';
 import { fetchGatewayAsset, fetchPublicAsset } from '../../api/gateway-assets';
 import { useEffect, useMemo, useState } from 'react';
 import { Directory, File, Paths } from 'expo-file-system';
@@ -10,14 +14,15 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { ActivityIndicator, Text } from 'react-native-paper';
+import { Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { ShareAutoRequest } from '../../api/share';
 import { TOAST_DURATION_SHORT } from '../../constants/toast';
 import { t, useMessages } from '../../i18n/messages';
 import { fetchFileContent } from '../../query/files';
-import { useTheme } from '../../theme';
+import { useReducedMotion } from '../../motion';
+import { radii, spacing, useTheme } from '../../theme';
 import { FilePreviewHeader } from './FilePreviewHeader';
 import { ShareSheet } from '../share/ShareSheet';
 import { HtmlPreviewPane } from '../chat/HtmlPreviewPane';
@@ -47,6 +52,7 @@ export type FilePreviewModalProps = {
   visible: boolean;
   file: PreviewableFile | null;
   onClose: () => void;
+  conversationId?: string | null;
 };
 
 type PreviewKind = 'image' | 'markdown' | 'html' | 'text' | 'binary';
@@ -196,7 +202,10 @@ function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-export function FilePreviewModal({ visible, file, onClose }: FilePreviewModalProps) {
+export function FilePreviewModal({ visible, file, onClose, conversationId }: FilePreviewModalProps) {
+  const router = useRouter();
+  const reducedMotion = useReducedMotion();
+  const gatewayId = useGatewayStore(state => state.activeGatewayId);
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const m = useMessages();
@@ -280,7 +289,7 @@ export function FilePreviewModal({ visible, file, onClose }: FilePreviewModalPro
   const muted = colors.text.secondary;
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+    <Modal visible={visible} animationType={reducedMotion ? 'none' : 'slide'} presentationStyle="fullScreen" onRequestClose={onClose}>
       <View style={[styles.root, { backgroundColor: surface, paddingTop: insets.top }]}> 
         <FilePreviewHeader
           title={title}
@@ -291,7 +300,16 @@ export function FilePreviewModal({ visible, file, onClose }: FilePreviewModalPro
           share={file?.fileId ? {
             onPress: () => setShareTarget({ fileId: file.fileId!, audience: 'friend' }),
           } : undefined}
-          moreActions={[{
+          moreActions={[...(file?.fileId && gatewayId ? [{
+            key: 'continue', label: m.mobileExperience.continueFile, icon: 'message-outline',
+            onPress: () => {
+              const mainId = useChatSelectionStore.getState().selections[gatewayId]?.key;
+              const target = conversationId && conversationId !== mainId ? conversationId : null;
+              useComposerHandoff.getState().set({ gatewayId, conversationId: target, text: `${m.mobileExperience.fileContext}「${file.name}」 (fileId: ${file.fileId})\n` });
+              onClose();
+              router.dismissTo(target ? `/chat/${encodeURIComponent(target)}` : '/');
+            },
+          }] : []), {
             key: 'download',
             label: cm.filePreviewDownload,
             icon: 'download-outline',
@@ -316,9 +334,12 @@ export function FilePreviewModal({ visible, file, onClose }: FilePreviewModalPro
 
         <View style={styles.body}>
           {loading ? (
-            <View style={styles.center}>
-              <ActivityIndicator />
-              <Text style={{ color: muted }}>{cm.filePreviewLoading}</Text>
+            <View style={styles.previewSkeleton} accessible accessibilityLabel={cm.filePreviewLoading} accessibilityState={{ busy: true }}>
+              <View style={[styles.skeletonTitle, { backgroundColor: colors.surface.input }]} />
+              <View style={[styles.skeletonPreview, { backgroundColor: colors.surface.input }]} />
+              {['100%', '92%', '100%', '76%', '88%'].map((width, index) => (
+                <View key={index} style={[styles.skeletonLine, { width: width as `${number}%`, backgroundColor: colors.surface.input }]} />
+              ))}
             </View>
           ) : error ? (
             <View style={styles.center}>
@@ -374,6 +395,10 @@ export function FilePreviewModal({ visible, file, onClose }: FilePreviewModalPro
 }
 
 const styles = StyleSheet.create({
+  previewSkeleton: { padding: spacing.lg, gap: spacing.md },
+  skeletonTitle: { height: spacing.xl, width: '60%', borderRadius: radii.sm },
+  skeletonPreview: { height: 160, borderRadius: radii.lg, marginVertical: spacing.sm },
+  skeletonLine: { height: spacing.md, borderRadius: radii.sm },
   root: {
     flex: 1,
   },

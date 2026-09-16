@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
 import { ListSelectionCheckbox } from '../../components/ListSelectionCheckbox';
-import { SwipeableRow, type SwipeAction } from '../../components/SwipeableRow';
+import { ListItemMenu, type ListItemAction } from '../../components/ListItemMenu';
 import { LIST_DELAY_LONG_PRESS } from '../../constants/list-interaction';
 import { useMessages } from '../../i18n/messages';
 import type { NoteIndexEntry, NoteStatus } from '../../query/notes';
@@ -31,8 +31,8 @@ function statusLabel(
 export type NoteCardProps = {
   note: NoteIndexEntry;
   onPress: (note: NoteIndexEntry) => void;
-  onLongPress?: (note: NoteIndexEntry) => void;
-  onSwipeAction?: (note: NoteIndexEntry, action: SwipeAction) => void;
+  onSelect?: (note: NoteIndexEntry) => void;
+  onMenuAction?: (note: NoteIndexEntry, action: ListItemAction) => void;
   selectionMode?: boolean;
   selected?: boolean;
   isFirst?: boolean;
@@ -42,8 +42,8 @@ export type NoteCardProps = {
 export const NoteCard = memo(function NoteCard({
   note,
   onPress,
-  onLongPress,
-  onSwipeAction,
+  onSelect,
+  onMenuAction,
   selectionMode = false,
   selected = false,
   isFirst = false,
@@ -82,20 +82,20 @@ export const NoteCard = memo(function NoteCard({
     .filter((part): part is string => Boolean(part));
 
   const handlePress = useCallback(() => onPress(note), [note, onPress]);
-  const handleLongPress = useCallback(() => onLongPress?.(note), [note, onLongPress]);
-  const handleSwipeAction = useCallback((action: SwipeAction) => {
-    onSwipeAction?.(note, action);
-  }, [note, onSwipeAction]);
+  const handleSelect = useCallback(() => onSelect?.(note), [note, onSelect]);
+  const handleMenuAction = useCallback((action: ListItemAction) => {
+    onMenuAction?.(note, action);
+  }, [note, onMenuAction]);
 
-  const swipeActions = useMemo<SwipeAction[]>(() => [
+  const menuActions = useMemo<ListItemAction[]>(() => [
     note.pinned
-      ? { key: 'unpin', icon: 'pin-off-outline', color: 'green', label: pm.unpin }
-      : { key: 'pin', icon: 'pin-outline', color: 'green', label: pm.pin },
-    { key: 'archive', icon: 'archive-arrow-down-outline', color: 'blue', label: pm.archive },
-    { key: 'delete', icon: 'trash-can-outline', color: 'red', label: pm.delete, destructive: true },
+      ? { key: 'unpin', icon: 'pin-off-outline', label: pm.unpin }
+      : { key: 'pin', icon: 'pin-outline', label: pm.pin },
+    { key: 'archive', icon: 'archive-arrow-down-outline', label: pm.archive },
+    { key: 'delete', icon: 'trash-can-outline', label: pm.delete, destructive: true },
   ], [note.pinned, pm.archive, pm.delete, pm.pin, pm.unpin]);
 
-  const cardContent = (
+  const cardContent = (openMenu: () => void) => (
     <Pressable
       style={({ pressed }) => [
         styles.card,
@@ -116,7 +116,7 @@ export const NoteCard = memo(function NoteCard({
         selected && styles.selectedCard,
       ]}
       onPress={handlePress}
-      onLongPress={handleLongPress}
+      onLongPress={openMenu}
       delayLongPress={LIST_DELAY_LONG_PRESS}
       accessibilityState={selectionMode ? { selected } : undefined}
     >
@@ -150,15 +150,10 @@ export const NoteCard = memo(function NoteCard({
     </Pressable>
   );
 
-  if (!selectionMode && onSwipeAction) {
-    return (
-      <SwipeableRow actions={swipeActions} onActionPress={handleSwipeAction} enabled={!selectionMode}>
-        {cardContent}
-      </SwipeableRow>
-    );
-  }
-
-  return cardContent;
+  return <ListItemMenu title={displayTitle} actions={menuActions} onActionPress={handleMenuAction}
+    onSelect={onSelect ? handleSelect : undefined} enabled={!selectionMode}>
+    {cardContent}
+  </ListItemMenu>;
 });
 
 const styles = StyleSheet.create({

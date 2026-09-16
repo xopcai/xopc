@@ -13,7 +13,7 @@ export default function FileOpenRoute() {
   const router = useRouter();
   const labels = useMessages().filesPage;
   const { colors } = useTheme();
-  const { fileId = '' } = useLocalSearchParams<{ fileId?: string }>();
+  const { fileId = '', conversationId } = useLocalSearchParams<{ fileId?: string; conversationId?: string }>();
   const file = useQuery({ queryKey: ['files', 'resource', fileId], queryFn: () => fetchFileResource(fileId), enabled: Boolean(fileId) });
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface.base }}>
@@ -21,6 +21,7 @@ export default function FileOpenRoute() {
       {file.isLoading ? <FileListSkeleton /> : !file.data ? <FileLoadError error={file.error} onRetry={() => void file.refetch()} /> : null}
       <FilePreviewModal
         visible={Boolean(file.data)}
+        conversationId={conversationId}
         file={file.data ? { fileId: file.data.id, name: file.data.name, mimeType: file.data.mimeType, workspaceRelativePath: file.data.relativePath } : null}
         onClose={() => router.back()}
       />
