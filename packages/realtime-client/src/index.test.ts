@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 import { ENDPOINT_PROTOCOL_VERSION } from '@xopcai/endpoint-tools-protocol';
-import { RealtimeClient, type RealtimeWebSocket } from './index.js';
+import { RealtimeClient, RealtimeConnectionError, type RealtimeWebSocket } from './index.js';
 
 class FakeSocket implements RealtimeWebSocket {
   readyState = 0;
@@ -229,7 +229,7 @@ describe('RealtimeClient', () => {
     vi.useRealTimers();
   });
 
-  it('does not retry a connection closed for an oversized event', async () => {
+  it.each([1009, 4409])('does not retry terminal close code %s', async (code) => {
     vi.useFakeTimers();
     const sockets: FakeSocket[] = [];
     const onStateChange = vi.fn();
@@ -251,13 +251,29 @@ describe('RealtimeClient', () => {
     sockets[0]!.onmessage?.({ data: serverMessage('realtime.ready', readyPayload()) });
 
     sockets[0]!.onerror?.({});
-    sockets[0]!.onclose?.({ code: 1009, reason: 'Realtime event exceeds delivery limit' });
+    sockets[0]!.onclose?.({ code, reason: 'Terminal connection error' });
     await vi.advanceTimersByTimeAsync(60_000);
 
     expect(sockets).toHaveLength(1);
-    expect(onStateChange).toHaveBeenLastCalledWith('error', 'Realtime event exceeds delivery limit');
+    expect(onStateChange).toHaveBeenLastCalledWith('error', 'Terminal connection error');
     client.disconnect();
     vi.useRealTimers();
+  });
+
+  it('stops retrying an incompatible preflight before creating a socket', async () => {
+    vi.useFakeTimers();
+    const issueTicket = vi.fn(async () => { throw new RealtimeConnectionError('GATEWAY_PROTOCOL_INCOMPATIBLE', false); });
+    const createWebSocket = vi.fn(() => new FakeSocket());
+    const onStateChange = vi.fn();
+    const client = new RealtimeClient({ clientId: 'test', clientKind: 'desktop',
+      getWebSocketUrl: () => 'ws://gateway/realtime', issueTicket, createWebSocket, onStateChange });
+    try {
+      client.connect();
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(issueTicket).toHaveBeenCalledTimes(1);
+      expect(createWebSocket).not.toHaveBeenCalled();
+      expect(onStateChange).toHaveBeenLastCalledWith('error', 'GATEWAY_PROTOCOL_INCOMPATIBLE');
+    } finally { client.disconnect(); vi.useRealTimers(); }
   });
 
   it('closes a half-open socket when server heartbeats stop', async () => {

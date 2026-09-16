@@ -121,6 +121,14 @@ the current Gateway.
 
 ## Failure behavior
 
+- `GATEWAY_PROTOCOL_INCOMPATIBLE` means the desktop and Gateway have different
+  realtime/endpoint protocols or Computer Use contracts, not bad model keys or
+  missing macOS permissions. Update both to the same build and restart them.
+  For a packaged app, stop an independently running incompatible Gateway, then
+  retry startup so the app can launch its bundled service. The app never kills
+  another service, rotates device identity, or relaxes tool validation to recover.
+  Startup and desktop reconnects check the authenticated compatibility endpoint;
+  incompatible handshakes close with 4409 instead of the authentication code 4401.
 - If a desktop device identity has been revoked, open Settings → Integrations →
   Computer use and select **Re-register desktop device**. Only explicit approval
   in the native dialog replaces the device key and reconnects it. Cancelling
@@ -152,6 +160,13 @@ XOPC_COMPUTER_LIVE_TEST=1 pnpm exec vitest run src/computer/__tests__/model-live
 node --import tsx scripts/verify-managed-computer.mts
 pnpm run electron:build
 ```
+
+The desktop and embedded Gateway now compile directly from current sources.
+`electron:package` runs `node scripts/verify-electron-gateway-compatibility.mjs`
+before staging an installer. This starts the built Gateway on a temporary port
+with clean, isolated state and checks it using the built desktop preflight.
+Missing or incompatible artifacts fail packaging; the verifier does not touch
+your running Gateway, personal data, model credentials, or desktop applications.
 
 Live model tests generate synthetic pixels, never capture your desktop. The
 native fixture source is `scripts/computer-fixture.swift`; use

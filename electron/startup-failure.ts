@@ -2,6 +2,7 @@ export type GatewayStartupFailureKind =
   | 'database_schema_too_new'
   | 'database_migration_gap'
   | 'port_in_use'
+  | 'gateway_protocol_incompatible'
   | 'gateway_timeout'
   | 'unknown';
 

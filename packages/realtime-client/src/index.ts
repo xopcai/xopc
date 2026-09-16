@@ -14,6 +14,13 @@ import {
 
 export type RealtimeConnectionState = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error';
 
+export class RealtimeConnectionError extends Error {
+  constructor(message: string, readonly retryable: boolean) {
+    super(message);
+    this.name = 'RealtimeConnectionError';
+  }
+}
+
 export interface RealtimeWebSocket {
   readonly readyState: number;
   onopen: ((event: unknown) => void) | null;
@@ -57,7 +64,7 @@ function frameText(data: unknown): string {
 }
 
 function isNonRetryableCloseCode(code: number | undefined): boolean {
-  return code === 1009 || code === 4400 || code === 4401 || code === 4413;
+  return code === 1009 || code === 4400 || code === 4401 || code === 4409 || code === 4413;
 }
 
 export class RealtimeClient {
@@ -250,7 +257,8 @@ export class RealtimeClient {
         );
       };
     } catch (error) {
-      failAttempt(error instanceof Error ? error.message : 'Realtime connection failed');
+      failAttempt(error instanceof Error ? error.message : 'Realtime connection failed',
+        !(error instanceof RealtimeConnectionError) || error.retryable);
     }
   }
 

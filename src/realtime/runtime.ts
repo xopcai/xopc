@@ -18,6 +18,7 @@ import {
 import type { RawData, WebSocket } from 'ws';
 
 import type { EndpointToolRuntime } from '../endpoint-tools/runtime.js';
+import { EndpointToolPolicyError } from '../endpoint-tools/policy.js';
 import type { EndpointTransport } from '../endpoint-tools/registry.js';
 import { createLogger } from '../utils/logger.js';
 import { createPreauthConnectionBudget } from '../gateway/security/preauth-connection-budget.js';
@@ -279,6 +280,11 @@ export class RealtimeRuntime {
             endpointId = message.payload.endpoint.endpointId;
             endpointReady = { endpointId, turnToken: registration.turnToken };
           } catch (error) {
+            if (error instanceof EndpointToolPolicyError) {
+              log.warn({ err: error, principalId: message.payload.endpoint.principalId }, 'Realtime endpoint contract is incompatible');
+              socket.close(4409, 'GATEWAY_PROTOCOL_INCOMPATIBLE');
+              return;
+            }
             log.warn({ err: error, principalId: message.payload.endpoint.principalId }, 'Realtime endpoint authentication failed');
             socket.close(4401, 'Realtime endpoint authentication failed');
             return;
