@@ -45,6 +45,7 @@ export interface SessionRoutingMeta {
 
 export interface SessionListItem {
   agentId?: string;
+  projectId?: string;
   key: string;
   transcriptId?: string;
   name?: string;
@@ -293,6 +294,7 @@ export const sessionRoutingMetaSchema = z
 export const sessionListItemSchema = z
   .object({
     agentId: z.string().optional(),
+    projectId: z.string().optional(),
     key: z.string(),
     transcriptId: transcriptIdSchema.optional(),
     name: z.string().optional(),

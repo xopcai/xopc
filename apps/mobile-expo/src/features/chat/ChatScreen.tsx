@@ -68,7 +68,6 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
     agentsQuery,
     modelsQuery,
     sessionHistoryQuery,
-    recentSessionsQuery,
     currentSessionAgentId,
     effectiveModelId,
     agentName,
@@ -154,7 +153,6 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
       swipeEnabled={root}
       onInteraction={closeComposerActions}
       currentConversationId={conversationId}
-      recentSessions={recentSessionsQuery.data?.items ?? []}
       onSessionSelect={handleSessionSelect}
       onNewChat={handleNewChat}
     >

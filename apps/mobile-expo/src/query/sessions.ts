@@ -124,6 +124,8 @@ export async function fetchSessionsList(
     offset?: number;
     search?: string;
     channel?: string | null;
+    projectId?: string;
+    unassigned?: boolean;
     signal?: AbortSignal;
   },
 ): Promise<SessionsPage> {
@@ -139,6 +141,8 @@ export async function fetchSessionsList(
       offset,
       search: search || undefined,
       channel,
+      projectId: options?.projectId?.trim() || undefined,
+      unassigned: options?.unassigned || undefined,
       sortBy: 'updatedAt',
       sortOrder: 'desc',
     }),
@@ -159,7 +163,8 @@ export async function fetchSessionsList(
   }
   // Persist only the unfiltered first page so cold-start hydration matches
   // the next live first request.
-  if (offset === 0 && !search && useGatewayStore.getState().activeGatewayId === gatewayId) {
+  if (offset === 0 && !search && !options?.projectId && !options?.unassigned
+    && useGatewayStore.getState().activeGatewayId === gatewayId) {
     writeCachedSessions(gatewayId, items);
   }
   return {
