@@ -74,7 +74,7 @@ export function SettingsFormSectionHeader({
               id={iconInteractive.id}
               onClick={iconInteractive.onClick}
               aria-label={iconInteractive.ariaLabel}
-              className={leadingInteractiveClass}
+              className={cn('touch-target', leadingInteractiveClass)}
             >
               {lead}
             </button>
@@ -91,7 +91,7 @@ export function SettingsFormSectionHeader({
             id={iconInteractive.id}
             onClick={iconInteractive.onClick}
             aria-label={iconInteractive.ariaLabel}
-            className={leadingInteractiveClass}
+            className={cn('touch-target', leadingInteractiveClass)}
           >
             {lead}
           </button>

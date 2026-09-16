@@ -7,9 +7,9 @@ export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'segmented';
 
 const variantClass: Record<ButtonVariant, string> = {
   primary:
-    'bg-accent text-white shadow-surface hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+    'bg-accent text-white shadow-none sm:shadow-surface hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
   secondary:
-    'bg-surface-panel text-fg border border-edge shadow-surface hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel dark:border-edge',
+    'bg-surface-panel text-fg border border-edge shadow-none sm:shadow-surface hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel dark:border-edge',
   ghost:
     'text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
   /** Pill track segments: no hover styling — visual state is only selected vs unselected (`segmentedThumb*` + focus ring there). */
@@ -36,7 +36,7 @@ export function Button({
       ref={ref}
       type={asChild ? undefined : type}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium',
+        'touch-target inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium',
         'transition-colors duration-150 ease-out transition-transform',
         'active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100',
         'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',

@@ -2478,7 +2478,7 @@ function AutomationForm({
   );
 }
 
-const inputClass = 'w-full rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none focus:border-accent';
+const inputClass = 'min-h-11 w-full rounded-lg border border-edge bg-surface-base px-3 py-2 text-base sm:min-h-0 sm:text-sm text-fg outline-none focus:border-accent';
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

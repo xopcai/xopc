@@ -1,22 +1,22 @@
 import { useState } from 'react';
-import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
-import { useAnimatedReaction } from 'react-native-reanimated';
+import { KeyboardController, useKeyboardHandler } from 'react-native-keyboard-controller';
 import { scheduleOnRN } from 'react-native-worklets';
 
-/** Bottom inset for scrollable chat content while the IME is visible. */
+/** Reserve the keyboard destination without re-rendering the message list on every frame. */
 export function useKeyboardListPadding(): number {
-  const { height } = useReanimatedKeyboardAnimation();
-  const [padding, setPadding] = useState(0);
+  const [padding, setPadding] = useState(() => KeyboardController.state().height);
 
-  useAnimatedReaction(
-    () => Math.abs(height.value),
-    (next, prev) => {
-      if (next !== prev) {
-        scheduleOnRN(setPadding, next);
-      }
+  useKeyboardHandler({
+    onStart: event => {
+      'worklet';
+      // Reserve room before opening; retain it throughout an interactive dismissal.
+      if (event.height > 0) scheduleOnRN(setPadding, event.height);
     },
-    [height],
-  );
+    onEnd: event => {
+      'worklet';
+      scheduleOnRN(setPadding, event.height);
+    },
+  }, []);
 
   return padding;
 }

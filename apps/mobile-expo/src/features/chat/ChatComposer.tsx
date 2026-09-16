@@ -1,5 +1,5 @@
 /**
- * Chat composer — Kimi-style compact/expanded input, attachments, text / voice modes.
+ * Chat composer — content-sized input, attachments, and text / voice modes.
  */
 import { useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -60,6 +60,8 @@ type InputMode = 'text' | 'voice';
 
 export const ChatComposer = memo(function ChatComposer({
   sessionKey,
+  actionsOpen,
+  onActionsOpenChange,
   disabled,
   streaming,
   onSend,
@@ -67,7 +69,6 @@ export const ChatComposer = memo(function ChatComposer({
   placeholder,
   suggestionDraft,
   onConsumeSuggestionDraft,
-  keyboardVisible = false,
   contextRefs,
   onContextRefsChange,
   contextControl,
@@ -76,6 +77,8 @@ export const ChatComposer = memo(function ChatComposer({
   voiceCallUnavailable,
 }: {
   sessionKey: string;
+  actionsOpen: boolean;
+  onActionsOpenChange: (open: boolean) => void;
   disabled: boolean;
   streaming: boolean;
   onSend: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => Promise<boolean>;
@@ -83,7 +86,6 @@ export const ChatComposer = memo(function ChatComposer({
   placeholder?: string;
   suggestionDraft?: string;
   onConsumeSuggestionDraft?: () => void;
-  keyboardVisible?: boolean;
   contextRefs: ComposerContextRef[];
   onContextRefsChange: (refs: ComposerContextRef[]) => void;
   contextControl?: ReactNode;
@@ -92,6 +94,7 @@ export const ChatComposer = memo(function ChatComposer({
   voiceCallMode?: ComposerVoiceCallMode;
   voiceCallUnavailable?: Partial<Record<ComposerVoiceCallMode, boolean>>;
 }) {
+  const onCloseActions = useCallback(() => onActionsOpenChange(false), [onActionsOpenChange]);
   const m = useMessages();
   const cm = m.chat;
   const { colors, elevation } = useTheme();
@@ -103,7 +106,6 @@ export const ChatComposer = memo(function ChatComposer({
   const [inputHeight, setInputHeight] = useState(MIN_COMPOSER_INPUT_HEIGHT);
   const [inputWidth, setInputWidth] = useState(0);
   const [cursorPos, setCursorPos] = useState(0);
-  const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
@@ -146,7 +148,7 @@ export const ChatComposer = memo(function ChatComposer({
     attachmentCameraPermissionDenied: cm.attachmentCameraPermissionDenied,
   });
 
-  useEffect(() => { att.closeSheet(); }, [sessionKey, disabled, att.closeSheet]);
+  useEffect(() => { onCloseActions(); }, [sessionKey, disabled, onCloseActions]);
 
   const atRangeActive = detectAtMentionRange(draft, cursorPos) !== null;
   const palette = useCommandPalette(draft, cursorPos, atRangeActive);
@@ -253,14 +255,12 @@ export const ChatComposer = memo(function ChatComposer({
 
   const isExpanded = useMemo(
     () =>
-      isFocused ||
       draft.length > 0 ||
       att.attachments.length > 0 ||
       contextRefs.length > 0 ||
-      keyboardVisible ||
       palette.open ||
       atPicker.open,
-    [atPicker.open, isFocused, draft.length, att.attachments.length, contextRefs.length, keyboardVisible, palette.open],
+    [atPicker.open, draft.length, att.attachments.length, contextRefs.length, palette.open],
   );
 
   useEffect(() => {
@@ -268,9 +268,9 @@ export const ChatComposer = memo(function ChatComposer({
   }, [streaming]);
 
   useEffect(() => {
-    if (!isFocused || draft.length > 0) return;
+    if (draft.length > 0) return;
     setInputHeight(MIN_COMPOSER_INPUT_HEIGHT);
-  }, [isFocused, draft.length]);
+  }, [draft.length]);
 
   /** Typing updates draft only; cursor comes from TextInput selection events. */
   const onDraftInputChange = useCallback(
@@ -421,21 +421,21 @@ export const ChatComposer = memo(function ChatComposer({
   const voiceToggleDisabled = disabled || streaming || voiceInteractionActive || call.phase !== 'idle';
   const toggleMode = useCallback(() => {
     if (voiceToggleDisabled) return;
-    att.closeSheet();
+    onCloseActions();
     Keyboard.dismiss();
     setMode(current => current === 'voice' ? 'text' : 'voice');
-  }, [att.closeSheet, voiceToggleDisabled]);
+  }, [onCloseActions, voiceToggleDisabled]);
 
   const openActionSheet = useCallback(() => {
     if (disabled || voiceInteractionActive) return;
-    if (att.sheetOpen) {
-      att.closeSheet();
+    if (actionsOpen) {
+      onCloseActions();
       return;
     }
     inputRef.current?.blur();
     Keyboard.dismiss();
-    att.openSheet();
-  }, [att, disabled, voiceInteractionActive]);
+    onActionsOpenChange(true);
+  }, [actionsOpen, onActionsOpenChange, onCloseActions, disabled, voiceInteractionActive]);
 
   const handleAttachmentPick = useCallback(
     async (source: Parameters<typeof att.addFromSource>[0]) => {
@@ -514,10 +514,10 @@ export const ChatComposer = memo(function ChatComposer({
       hitSlop={4}
       accessibilityRole="button"
       accessibilityLabel={cm.moreActions}
-      accessibilityState={{ expanded: att.sheetOpen }}
+      accessibilityState={{ expanded: actionsOpen }}
     >
       <Icon
-        source={att.sheetOpen ? "close-circle-outline" : "plus-circle-outline"}
+        source={actionsOpen ? "close-circle-outline" : "plus-circle-outline"}
         size={24}
         color={disabled ? colors.text.tertiary : accent}
       />
@@ -582,8 +582,7 @@ export const ChatComposer = memo(function ChatComposer({
         ? 'top'
         : 'center') as 'top' | 'center',
     autoCapitalize: 'sentences' as const,
-    onFocus: () => { att.closeSheet(); setIsFocused(true); },
-    onBlur: () => setIsFocused(false),
+    onFocus: onCloseActions,
   };
 
   const contextNotice = att.snack || snack;
@@ -593,7 +592,7 @@ export const ChatComposer = memo(function ChatComposer({
   };
 
   return (
-    <View style={[styles.wrap, { borderTopColor: 'transparent' }]}>
+    <View style={styles.wrap}>
       {callInChat && <Text style={{ color: colors.text.secondary }}>{m.voice.finishCallToSend}</Text>}
       <VoiceRecordingCard
         visible={voiceInteractionActive}
@@ -670,6 +669,7 @@ export const ChatComposer = memo(function ChatComposer({
       {contextControl ? <View style={styles.contextControl}>{contextControl}</View> : null}
 
       <View
+        onTouchStart={event => event.stopPropagation()}
         style={[
           styles.shell,
           elevation.raised,
@@ -769,9 +769,8 @@ export const ChatComposer = memo(function ChatComposer({
             {streaming ? renderStreamingRightActions() : renderMoreButton()}
           </View>
         )}
+        <ComposerActionPanel key={sessionKey} visible={actionsOpen} items={sheetItems} onClose={onCloseActions} />
       </View>
-
-      <ComposerActionPanel key={sessionKey} visible={att.sheetOpen} items={sheetItems} onClose={att.closeSheet} />
       {referenceKind && <ComposerReferenceSheet key={sessionKey} initialKind={referenceKind} sessionKey={sessionKey}
         selectedIds={[...contextRefs.map(ref => `${ref.kind}:${ref.sourceId}`), ...att.attachments.map(file => `file:${file.id}`)]}
         onClose={() => setReferenceKind(null)} onSelect={handleReferenceSelect} filesDisabled={attachmentPickDisabled} referencesFull={contextRefs.length >= MAX_COMPOSER_CONTEXT_REFS}

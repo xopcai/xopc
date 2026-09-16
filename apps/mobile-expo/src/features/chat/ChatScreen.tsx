@@ -46,11 +46,12 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
   const page = useChatPage({ root });
   const [composerContextRefs, setComposerContextRefs] = useState<ComposerContextRef[]>([]);
   const [navigationVisible, setNavigationVisible] = useState(false);
+  const [composerActionsOpen, setComposerActionsOpen] = useState(false);
+  const closeComposerActions = useCallback(() => setComposerActionsOpen(false), []);
   const {
     sessionKey,
     urlSessionKey,
     colors,
-    keyboardVisible,
     m,
     agentsQuery,
     modelsQuery,
@@ -136,7 +137,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
   const canvasBg = colors.surface.base;
 
   return (
-    <View style={[styles.screen, { backgroundColor: canvasBg }]}>
+    <View style={[styles.screen, { backgroundColor: canvasBg }]} onTouchStart={closeComposerActions}>
       <ChatHeader
         agentName={agentName}
           modelName={modelName}
@@ -254,6 +255,8 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
             <ChatAttentionTray gatewayId={activeGatewayId} items={attentionItems} />
           ) : null}
           <ChatComposer
+            actionsOpen={composerActionsOpen}
+            onActionsOpenChange={setComposerActionsOpen}
             contextControl={sessionKey ? <ChatContextControl
               sessionKey={sessionKey}
               draftRefs={composerContextRefs}
@@ -265,7 +268,6 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
             disabled={composerDisabled}
             streaming={chat.streaming}
             onSend={handleComposerSend}
-            keyboardVisible={keyboardVisible}
             onAbort={chat.abort}
             placeholder={m.chat.inputPlaceholder}
             suggestionDraft={composerSuggestion}

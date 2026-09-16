@@ -32,7 +32,7 @@ import { clampSettingsRailWidthPx, useSettingsRailStore } from '@/stores/setting
 /** Aligned with `SidebarNav` secondary links (§4.3 — same rail rhythm as main app sidebar). */
 function settingsNavLinkClass({ isActive }: { isActive: boolean }) {
   return cn(
-    'flex w-full shrink-0 items-center gap-2.5 rounded-xl px-4 py-2 text-sm font-medium leading-6 transition-colors duration-200 ease-out',
+    'touch-target flex w-full shrink-0 items-center gap-2.5 rounded-xl px-4 py-2 text-sm font-medium leading-6 transition-colors duration-200 ease-out',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
     isActive
       ? 'bg-accent-soft text-accent-fg'
@@ -42,14 +42,14 @@ function settingsNavLinkClass({ isActive }: { isActive: boolean }) {
 
 /** Compact control — hover only on the pill, not full rail width. */
 const backLinkClass = cn(
-  'inline-flex max-w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors duration-200 ease-out',
+  'touch-target inline-flex max-w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors duration-200 ease-out',
   'text-fg-muted hover:bg-surface-hover hover:text-fg',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
   'sm:px-4',
 );
 
 const mobileToolbarButtonClass = cn(
-  'inline-flex size-10 shrink-0 items-center justify-center rounded-xl text-fg-muted transition-colors duration-200 ease-out',
+  'inline-flex size-11 shrink-0 items-center justify-center rounded-xl text-fg-muted transition-colors duration-200 ease-out',
   'hover:bg-surface-hover hover:text-fg',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
   APP_CHROME_NO_DRAG_CLASS,

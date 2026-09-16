@@ -53,15 +53,15 @@ export function ConfirmDialog({
           className={cn(
             'xopc-dialog-content fixed left-1/2 top-1/2 w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2',
             SETTINGS_SHELL_CONTENT_Z,
-            'rounded-2xl border border-edge bg-surface-panel p-6 shadow-popover outline-none dark:border-edge',
+            'rounded-2xl border border-edge bg-surface-panel p-5 sm:p-6 shadow-popover outline-none dark:border-edge',
           )}
         >
           <Dialog.Title className="text-base font-semibold text-fg">{title}</Dialog.Title>
-          <Dialog.Description className="mt-2 max-h-[min(50vh,16rem)] overflow-y-auto text-sm text-fg-muted whitespace-pre-wrap break-all">
+          <Dialog.Description className="mt-2 max-h-[min(50vh,16rem)] overflow-y-auto text-sm text-fg-muted overscroll-contain whitespace-pre-wrap break-words">
             {description}
           </Dialog.Description>
           {checkboxLabel ? (
-            <label htmlFor={checkboxId} className="mt-5 flex w-fit cursor-pointer items-center gap-2.5 text-sm text-fg">
+            <label htmlFor={checkboxId} className="touch-target mt-5 flex w-fit cursor-pointer items-center gap-2.5 text-sm text-fg">
               <input
                 id={checkboxId}
                 type="checkbox"
@@ -72,7 +72,7 @@ export function ConfirmDialog({
               <span>{checkboxLabel}</span>
             </label>
           ) : null}
-          <div className="mt-6 flex justify-end gap-2">
+          <div className="mt-6 flex flex-wrap justify-end gap-2">
             <Button type="button" variant="secondary" onClick={onCancel}>
               {cancelLabel}
             </Button>

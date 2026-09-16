@@ -23,7 +23,6 @@ export function useComposerAttachments(messages: ComposerAttachmentMessages) {
   const attachmentsRef = useRef(attachments);
   attachmentsRef.current = attachments;
 
-  const [sheetOpen, setSheetOpen] = useState(false);
   const [snack, setSnack] = useState('');
 
   const clearAttachments = useCallback(() => {
@@ -91,17 +90,11 @@ export function useComposerAttachments(messages: ComposerAttachmentMessages) {
     [messages],
   );
 
-  const openSheet = useCallback(() => setSheetOpen(true), []);
-  const closeSheet = useCallback(() => setSheetOpen(false), []);
-
   const dismissSnack = useCallback(() => setSnack(''), []);
 
   return {
     attachments,
-    sheetOpen,
     snack,
-    openSheet,
-    closeSheet,
     addFromSource,
     removeAttachment,
     replaceAttachment,
