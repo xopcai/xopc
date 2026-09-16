@@ -32,4 +32,4 @@ it('scans 101 historical directories without creating projects or knowledge', as
   const skill = inventory.candidates.find(c => c.kind === 'skill')!;
   expect(previewInventoryItem(service, 'owner', inventory.id, skill.id).text).toContain('Make reports');
   expect(() => previewInventoryItem(service, 'other', inventory.id, skill.id)).toThrow('not found');
-});
+}, 30_000); // Scans and persists a real 101-directory inventory on shared CI disks.
