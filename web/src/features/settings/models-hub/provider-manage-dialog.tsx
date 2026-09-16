@@ -126,7 +126,7 @@ export function ProviderManageDialog({
         />
         <Dialog.Content
           className={cn(
-            'fixed left-1/2 top-1/2 flex max-h-[85vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base shadow-xl',
+            'fixed left-1/2 top-1/2 flex h-[min(85vh,720px)] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base shadow-xl',
             SETTINGS_SHELL_CONTENT_Z,
           )}
         >
@@ -178,6 +178,7 @@ function ManageBuiltinProvider({
   const row = builtinRows.find((r) => r.id === providerId);
   const enrichment = PROVIDER_ENRICHMENT[providerId];
   const providerModels = allModels.filter((m) => m.provider === providerId);
+  const [computerOnly, setComputerOnly] = useState(false);
 
   const [apiKey, setApiKey] = useState(row?.apiKey ?? '');
   const [saving, setSaving] = useState(false);
@@ -534,14 +535,16 @@ function ManageBuiltinProvider({
             <span className="text-sm font-medium text-fg">
               {labels.modelsLabel} ({providerModels.length})
             </span>
+            <label className="mb-2 flex items-center gap-2 text-xs text-fg-muted"><input type="checkbox" className="ui-checkbox" checked={computerOnly} onChange={event => setComputerOnly(event.target.checked)} />{language === 'zh' ? '仅电脑操作模型' : 'Computer Use only'}</label>
             <div className="max-h-40 overflow-y-auto rounded-lg border border-edge-subtle bg-surface-panel/40 p-2">
               <div className="flex flex-wrap gap-1.5">
-                {providerModels.map((model) => (
+                {providerModels.filter(model => !computerOnly || model.computerUse).map((model) => (
                   <span
                     key={model.id}
                     className="inline-block rounded-md bg-surface-hover px-2 py-1 text-xs text-fg-muted"
                   >
                     {modelDisplayName(model, language)}
+                    {model.computerUse ? ' · Computer Use' : ''}
                   </span>
                 ))}
               </div>
@@ -632,6 +635,7 @@ function ManageCustomProvider({
   const [baseUrl, setBaseUrl] = useState(existingProvider?.baseUrl ?? '');
   const [apiKey, setApiKey] = useState(existingProvider?.apiKey ?? '');
   const [models, setModels] = useState<CustomModel[]>(existingProvider?.models ?? []);
+  const [computerOnly, setComputerOnly] = useState(false);
   const [modelDiscoveryEnabled, setModelDiscoveryEnabled] = useState(
     existingProvider?.modelDiscovery?.enabled === true,
   );
@@ -819,17 +823,19 @@ function ManageCustomProvider({
               {ms.addModel}
             </Button>
           </div>
-          {models.length === 0 ? (
+          <label className="mb-2 flex items-center gap-2 text-xs text-fg-muted"><input type="checkbox" className="ui-checkbox" checked={computerOnly} onChange={event => setComputerOnly(event.target.checked)} />{language === 'zh' ? '仅电脑操作模型' : 'Computer Use only'}</label>
+          {models.filter(model => !computerOnly || model.computerUse).length === 0 ? (
             <p className="text-xs text-fg-muted">{ms.modelsEmpty}</p>
           ) : (
             <ul className="space-y-2">
-              {models.map((mod) => (
+              {models.filter(model => !computerOnly || model.computerUse).map((mod) => (
                 <li
                   key={mod.id}
                   className="flex items-center justify-between gap-2 rounded-lg border border-edge-subtle bg-surface-panel/40 px-3 py-2"
                 >
                   <div className="min-w-0">
                     <div className="truncate text-sm font-medium text-fg">{mod.id}</div>
+                    {mod.computerUse && <span className="text-xs text-fg-muted">Computer Use</span>}
                     {mod.name && mod.name !== mod.id ? (
                       <div className="truncate text-xs text-fg-muted">{mod.name}</div>
                     ) : null}

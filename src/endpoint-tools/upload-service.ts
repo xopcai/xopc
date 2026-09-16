@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import sharp from 'sharp';
 
 import {
   ENDPOINT_MAX_FILE_BYTES,
@@ -12,6 +13,7 @@ export const ENDPOINT_UPLOAD_MAX_BYTES = ENDPOINT_MAX_FILE_BYTES;
 const DEFAULT_MAX_FILES = 8;
 
 interface UploadGrantRecord {
+  profile: 'durable' | 'computer-frame';
   invocationId: string;
   endpointId: string;
   token: string;
@@ -44,20 +46,25 @@ export class EndpointUploadError extends Error {}
 export class EndpointUploadService {
   private readonly grants = new Map<string, UploadGrantRecord>();
   private readonly files = new Map<string, EndpointUploadedFile>();
+  private readonly frames = new Map<string, { bytes: Buffer; expiresAt: number; endpointId: string }>();
+  private readonly pruneTimer: ReturnType<typeof setInterval>;
 
   constructor(private readonly rootDir: string) {
     mkdirSync(rootDir, { recursive: true, mode: 0o700 });
+    this.pruneTimer = setInterval(() => this.pruneFrames(Date.now()), 1000);
+    this.pruneTimer.unref();
   }
 
-  createGrant(invocationId: string, endpointId: string, now = Date.now()): EndpointUploadGrant {
+  createGrant(invocationId: string, endpointId: string, now = Date.now(), profile: 'durable' | 'computer-frame' = 'durable'): EndpointUploadGrant {
     const token = crypto.randomUUID();
     const grant: UploadGrantRecord = {
+      profile,
       invocationId,
       endpointId,
       token,
       expiresAt: now + GRANT_TTL_MS,
-      maxBytes: ENDPOINT_UPLOAD_MAX_BYTES,
-      maxFiles: DEFAULT_MAX_FILES,
+      maxBytes: profile === 'computer-frame' ? 5 * 1024 * 1024 : ENDPOINT_UPLOAD_MAX_BYTES,
+      maxFiles: profile === 'computer-frame' ? 1 : DEFAULT_MAX_FILES,
       uploadedFileIds: [],
     };
     this.grants.set(invocationId, grant);
@@ -78,6 +85,7 @@ export class EndpointUploadService {
     mimeType: string;
     bytes: Uint8Array;
     now?: number;
+    validatedFrame?: boolean;
   }): EndpointUploadedFile {
     const grant = this.grants.get(params.invocationId);
     const now = params.now ?? Date.now();
@@ -89,6 +97,7 @@ export class EndpointUploadService {
       throw new EndpointUploadError('Upload grant is invalid');
     }
     if (grant.expiresAt <= now) throw new EndpointUploadError('Upload grant expired');
+    if (grant.profile === 'computer-frame' && !params.validatedFrame) throw new EndpointUploadError('Computer frame requires image validation');
     if (grant.uploadedFileIds.length >= grant.maxFiles) {
       throw new EndpointUploadError('Upload grant file limit exceeded');
     }
@@ -102,7 +111,16 @@ export class EndpointUploadService {
     const fileId = crypto.randomUUID();
     const path = join(this.rootDir, fileId);
     const sha256 = crypto.createHash('sha256').update(params.bytes).digest('hex');
-    writeFileSync(path, params.bytes, { flag: 'wx', mode: 0o600 });
+    if (grant.profile === 'durable') writeFileSync(path, params.bytes, { flag: 'wx', mode: 0o600 });
+    else {
+      this.pruneFrames(now);
+      const frames = [...this.frames.values()];
+      if (frames.reduce((n, f) => n + f.bytes.length, params.bytes.length) > 128 * 1024 * 1024
+        || frames.filter((f) => f.endpointId === grant.endpointId).reduce((n, f) => n + f.bytes.length, params.bytes.length) > 32 * 1024 * 1024) {
+        throw new EndpointUploadError('Computer frame memory budget exceeded');
+      }
+      this.frames.set(fileId, { bytes: Buffer.from(params.bytes), expiresAt: now + 120_000, endpointId: grant.endpointId });
+    }
     const file: EndpointUploadedFile = {
       fileId,
       invocationId: params.invocationId,
@@ -110,7 +128,7 @@ export class EndpointUploadService {
       mimeType: params.mimeType,
       size: params.bytes.byteLength,
       sha256,
-      path,
+      path: grant.profile === 'computer-frame' ? '' : path,
     };
     this.files.set(fileId, file);
     grant.uploadedFileIds.push(fileId);
@@ -146,18 +164,66 @@ export class EndpointUploadService {
   }
 
   getFile(fileId: string): EndpointUploadedFile | undefined {
-    return this.files.get(fileId);
+    const file = this.files.get(fileId);
+    return file?.path ? file : undefined;
   }
 
   readFile(fileId: string): Uint8Array | undefined {
     const file = this.files.get(fileId);
-    return file ? readFileSync(file.path) : undefined;
+    return file?.path ? readFileSync(file.path) : undefined;
+  }
+
+  getGrantLimits(invocationId: string, endpointId: string, token: string) {
+    const grant = this.grants.get(invocationId);
+    const actual = Buffer.from(token), expected = Buffer.from(grant?.token ?? '');
+    if (!grant || grant.endpointId !== endpointId || actual.length !== expected.length
+      || !crypto.timingSafeEqual(actual, expected) || grant.expiresAt <= Date.now()) throw new EndpointUploadError('Upload grant is invalid or expired');
+    return { maxBytes: grant.maxBytes, profile: grant.profile };
+  }
+
+  async uploadValidated(params: Parameters<EndpointUploadService['upload']>[0]): Promise<EndpointUploadedFile> {
+    const grant = this.getGrantLimits(params.invocationId, params.endpointId, params.token);
+    if (params.bytes.length > grant.maxBytes) throw new EndpointUploadError('Uploaded file is too large');
+    if (grant.profile === 'computer-frame') {
+      const metadata = await sharp(params.bytes, { limitInputPixels: 16_000_000 }).metadata();
+      const format = params.mimeType === 'image/png' ? 'png' : params.mimeType === 'image/jpeg' ? 'jpeg' : undefined;
+      if (!format || metadata.format !== format || !metadata.width || !metadata.height
+        || metadata.width * metadata.height > 16_000_000 || (metadata.pages ?? 1) !== 1) throw new EndpointUploadError('Invalid computer frame image');
+      // Force a bounded decode; valid headers alone do not prove a valid image payload.
+      const decoded = await sharp(params.bytes, { limitInputPixels: 16_000_000, failOn: 'warning' }).raw().toBuffer();
+      decoded.fill(0);
+      return this.upload({ ...params, validatedFrame: true });
+    }
+    return this.upload(params);
+  }
+
+  /** Single-consumer handoff, inaccessible through generic attachment routes. */
+  takeComputerFrame(fileId: string, invocationId: string): Uint8Array | undefined {
+    this.pruneFrames(Date.now());
+    if (this.files.get(fileId)?.invocationId !== invocationId) return undefined;
+    const frame = this.frames.get(fileId);
+    if (!frame) return undefined;
+    const bytes = Buffer.from(frame.bytes);
+    this.deleteFile(fileId);
+    return bytes;
+  }
+
+  private pruneFrames(now: number): void {
+    for (const [id, frame] of this.frames) if (frame.expiresAt <= now) this.deleteFile(id);
+  }
+
+  close(): void {
+    clearInterval(this.pruneTimer);
+    for (const id of this.frames.keys()) this.deleteFile(id);
+    this.grants.clear();
   }
 
   private deleteFile(fileId: string): void {
     const file = this.files.get(fileId);
     if (!file) return;
-    rmSync(file.path, { force: true });
+    if (file.path) rmSync(file.path, { force: true });
+    this.frames.get(fileId)?.bytes.fill(0);
+    this.frames.delete(fileId);
     this.files.delete(fileId);
   }
 }

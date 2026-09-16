@@ -44,6 +44,7 @@
 - [Extensions &amp; skills](#extensions--skills)
 - [Configuration](#configuration)
 - [Documentation](#documentation)
+- [Community](#community)
 - [FAQ](#faq)
 - [Security](#security)
 - [Contributing](#contributing)
@@ -226,6 +227,21 @@ Full reference: **[Configuration](https://xopcai.github.io/xopc/configuration)**
 | [Workflows](https://xopcai.github.io/xopc/workflows) | Fan-out subagents, board UI, scripts |
 
 Also: [Tools](https://xopcai.github.io/xopc/tools) · [Mobile app](https://xopcai.github.io/xopc/mobile-app) · [Voice](https://xopcai.github.io/xopc/voice) · [Remote access](https://xopcai.github.io/xopc/remote-access)
+
+---
+
+## Community
+
+Join the xopc community to ask questions, share what you are building, and help shape the project.
+
+| Channel | Best for |
+| --- | --- |
+| [GitHub Discussions](https://github.com/xopcai/xopc/discussions) | Questions, ideas, and searchable technical discussions |
+| [Discord](https://discord.gg/ZmK8FzZHG) | Real-time chat, showcases, and contributor coordination |
+| [WeChat community](https://xopcai.github.io/xopc/community#wechat) | Chinese-language discussion, onboarding help, and release updates |
+| [GitHub Issues](https://github.com/xopcai/xopc/issues) | Confirmed bugs and actionable feature requests |
+
+Read the [community guide](https://xopcai.github.io/xopc/community) and [Code of Conduct](./CODE_OF_CONDUCT.md) before participating. Report security vulnerabilities through [GitHub Security Advisories](https://github.com/xopcai/xopc/security/advisories/new), not in a public community channel.
 
 ---
 

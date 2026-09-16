@@ -196,8 +196,9 @@ export function registerEndpointToolRoutes(
       return c.json({ ok: false, error: { code: 'RESULT_TOO_LARGE', message: 'Uploaded file is too large' } }, 413);
     }
     try {
-      const bytes = await readBoundedBody(c.req.raw.body, ENDPOINT_UPLOAD_MAX_BYTES);
-      const file = deps.service.endpointTools.uploads.upload({
+      const limits = deps.service.endpointTools.uploads.getGrantLimits(invocationId, endpointId, token);
+      const bytes = await readBoundedBody(c.req.raw.body, limits.maxBytes);
+      const file = await deps.service.endpointTools.uploads.uploadValidated({
         invocationId,
         endpointId,
         token,

@@ -1,6 +1,6 @@
 /** Stage the minimal Electron app directory consumed by electron-builder. */
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,7 +12,7 @@ import {
 import { prepareNodePtyPackage, resolveNodePtyPackage } from './prepare-node-pty.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const packDir = join(tmpdir(), 'xopc-electron-pack');
+const packDir = mkdtempSync(join(tmpdir(), 'xopc-electron-pack-'));
 
 const APP_COPY_PATHS = [
   { from: 'out/main', to: 'out/main' },
@@ -175,6 +175,14 @@ export function prepareElectronPackDir(
   pruneElectronRuntimeDeps(packDir, target);
   stageRipgrepBinary(packDir, target);
   stageVoiceHotkeyHelper(repoRoot, packDir, target);
+  const computerDriverDir = join(packDir, '_pack-resources', 'computer-driver');
+  mkdirSync(computerDriverDir, { recursive: true });
+  if (target.platform === 'darwin') {
+    const driver = join(repoRoot, '.cache', 'computer-driver', '0.28.2', 'cua-driver');
+    if (!existsSync(driver)) throw new Error('Run node scripts/setup-computer-driver.mjs before packaging macOS Computer Use.');
+    cpSync(driver, join(computerDriverDir, 'cua-driver'));
+    cpSync(join(repoRoot, 'electron/resources/computer-driver-LICENSE.txt'), join(computerDriverDir, 'computer-driver-LICENSE.txt'));
+  }
   rmSync(join(packDir, 'node_modules', '@vscode', `ripgrep-${target.platform}-${target.arch}`), {
     recursive: true,
     force: true,

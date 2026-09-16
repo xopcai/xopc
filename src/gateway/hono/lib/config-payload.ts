@@ -139,6 +139,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
         })),
       defaults: config.agents.defaults,
     },
+    computer: config.computer,
     channels: channelsPayload,
     providers: Object.fromEntries(
       await Promise.all(

@@ -1,4 +1,5 @@
 import { getModelThinking } from '../../../providers/model-thinking.js';
+import { computerModelProfile } from '../../../computer/model-policy.js';
 import type { Hono } from 'hono';
 
 import {
@@ -154,7 +155,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
       ...(catalog.state === 'unavailable' ? [{ code: 'catalog_never_loaded', capability: null }] : []),
       ...(catalog.state === 'stale' ? [{ code: 'catalog_stale', capability: null }] : []),
       ...Object.values(capabilities)
-        .filter((plan) => authorized && catalog.modelCount > 0 && plan.status === 'unavailable')
+        .filter((plan) => authorized && catalog.modelCount > 0 && plan.status === 'unavailable' && plan.capability !== 'computer-use')
         .map((plan) => ({ code: 'capability_not_published', capability: plan.capability })),
     ];
     return c.json({
@@ -365,12 +366,13 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
       name: m.name,
       ...catalogDisplayNames(m.provider, m.id),
       provider: m.provider,
+      ...(computerModelProfile(m) ? { computerUse: { profile: computerModelProfile(m)! } } : {}),
       contextWindow: m.contextWindow ?? 128000,
       maxTokens: m.maxTokens ?? 4096,
       reasoning: m.reasoning ?? false,
       thinking: getModelThinking(m),
       vision: m.input?.includes('image') ?? false,
-      recommended: isRecommendedModel(m.provider, m.id),
+      recommended: !computerModelProfile(m) && isRecommendedModel(m.provider, m.id),
       cost: {
         input: m.cost?.input ?? 0,
         output: m.cost?.output ?? 0,

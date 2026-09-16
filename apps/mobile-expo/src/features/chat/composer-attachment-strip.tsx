@@ -1,9 +1,9 @@
 import { GatewayImage as Image } from '../../components/GatewayImage';
 import { memo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
-import { useTheme } from '../../theme';
+import { radii, spacing, typography, useTheme } from '../../theme';
 import { isEditableImageAttachment } from './attachment-file-io-core';
 import { AudioMessageBlock } from './AudioMessageBlock';
 import type { ComposerAttachment } from './composer.types';
@@ -59,14 +59,12 @@ export const ComposerAttachmentStrip = memo(function ComposerAttachmentStrip({
   onReplace,
   removeLabel,
   editLabel,
-  readOnly = false,
 }: {
   attachments: ComposerAttachment[];
   onRemove: (index: number) => void;
   onReplace?: (index: number, attachment: ComposerAttachment) => void;
   removeLabel: string;
   editLabel?: string;
-  readOnly?: boolean;
 }) {
   const { colors } = useTheme();
   const [preview, setPreview] = useState<PreviewableFile | null>(null);
@@ -81,80 +79,36 @@ export const ComposerAttachmentStrip = memo(function ComposerAttachmentStrip({
 
   return (
     <>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        {items.map((att, index) => {
-          const uri = thumbnailUri(att);
-          const audio = isAudioAttachment(att);
-          return (
-            <View
-              key={att.id}
-              style={[styles.tileWrap, { borderColor: border }]}
-            >
-              <Pressable
-                style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
-                onPress={() => {
-                  if (audio && !att.workspaceRelativePath) {
-                    setAudioPreview(attachmentToAudioContent(att));
-                    return;
-                  }
-                  setPreview(attachmentToPreviewable(att));
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={att.name}
-              >
-                {uri ? (
-                  <Image
-                    source={{
-                      uri,
-                    }}
-                    style={styles.image}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={[styles.docTile, { backgroundColor: chipBg }]}>
-                    <Icon source={audio ? 'microphone' : 'file-outline'} size={28} color={muted} />
-                    <Text style={[styles.docName, { color: muted }]} numberOfLines={2}>
-                      {att.name}
-                    </Text>
-                  </View>
-                )}
+      {items.map((att, index) => {
+        const uri = thumbnailUri(att);
+        const audio = isAudioAttachment(att);
+        return (
+          <View key={att.id} style={[styles.chip, { borderColor: border, backgroundColor: chipBg }]}>
+            <Pressable style={styles.open}
+              onPress={() => {
+                if (audio && !att.workspaceRelativePath) {
+                  setAudioPreview(attachmentToAudioContent(att));
+                  return;
+                }
+                setPreview(attachmentToPreviewable(att));
+              }} accessibilityRole="button" accessibilityLabel={att.name}>
+              {uri ? <Image source={{ uri }} style={styles.thumbnail} resizeMode="cover" />
+                : <Icon source={audio ? 'microphone' : 'file-outline'} size={16} color={muted} />}
+              <Text numberOfLines={1} style={[styles.label, { color: colors.text.primary }]}>{att.name}</Text>
+            </Pressable>
+            {onReplace && editLabel && isEditableImageAttachment(att) ? (
+              <Pressable style={styles.action} onPress={() => setEditing({ index, attachment: att })}
+                accessibilityRole="button" accessibilityLabel={`${editLabel}: ${att.name}`}>
+                <Icon source="pencil-outline" size={16} color={muted} />
               </Pressable>
-              {!readOnly && onReplace && editLabel && isEditableImageAttachment(att) ? (
-                <Pressable
-                  style={styles.editHit}
-                  onPress={() => setEditing({ index, attachment: att })}
-                  hitSlop={6}
-                  accessibilityRole="button"
-                  accessibilityLabel={editLabel}
-                >
-                  <View style={[styles.editBadge, { backgroundColor: colors.surface.panel }]}>
-                    <Icon source="pencil-outline" size={16} color={colors.text.primary} />
-                  </View>
-                </Pressable>
-              ) : null}
-              {!readOnly ? (
-                <Pressable
-                  style={styles.removeHit}
-                  onPress={() => onRemove(index)}
-                  hitSlop={6}
-                  accessibilityRole="button"
-                  accessibilityLabel={removeLabel}
-                >
-                  <View style={[styles.removeBadge, { backgroundColor: colors.text.primary }]}>
-                    <Icon source="close" size={14} color={colors.text.inverse} />
-                  </View>
-                </Pressable>
-              ) : null}
-            </View>
-          );
-        })}
-      </ScrollView>
+            ) : null}
+            <Pressable style={styles.action} onPress={() => onRemove(index)}
+              accessibilityRole="button" accessibilityLabel={`${removeLabel}: ${att.name}`}>
+              <Icon source="close" size={14} color={muted} />
+            </Pressable>
+          </View>
+        );
+      })}
       <ImageEditorModal
         visible={Boolean(editing)}
         attachment={editing?.attachment ?? null}
@@ -184,75 +138,12 @@ export const ComposerAttachmentStrip = memo(function ComposerAttachmentStrip({
   );
 });
 
-const TILE = 72;
-
 const styles = StyleSheet.create({
-  scroll: {
-    maxHeight: TILE + 16,
-  },
-  scrollContent: {
-    paddingHorizontal: 10,
-    paddingTop: 8,
-    paddingBottom: 4,
-    gap: 8,
-  },
-  tileWrap: {
-    width: TILE,
-    height: TILE,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'visible',
-  },
-  tile: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-  },
-  docTile: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 6,
-    gap: 4,
-  },
-  docName: {
-    fontSize: 10,
-    textAlign: 'center',
-  },
-  removeHit: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    zIndex: 2,
-  },
-  editHit: {
-    position: 'absolute',
-    left: -4,
-    bottom: -4,
-    zIndex: 2,
-  },
-  editBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  removeBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pressed: {
-    opacity: 0.85,
-  },
+  chip: { minHeight: 44, maxWidth: 240, flexShrink: 0, flexDirection: 'row', alignItems: 'center', borderRadius: radii.full, borderWidth: StyleSheet.hairlineWidth, paddingLeft: spacing.sm },
+  open: { minHeight: 44, flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  thumbnail: { width: spacing.xxl, height: spacing.xxl, borderRadius: radii.sm },
+  label: { ...typography.caption, flexShrink: 1 },
+  action: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   audioBackdrop: {
     flex: 1,
     justifyContent: 'center',

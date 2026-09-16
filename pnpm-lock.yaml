@@ -206,6 +206,12 @@ importers:
       '@xopcai/browser-control-contract':
         specifier: workspace:*
         version: link:packages/browser-control-contract
+      '@xopcai/computer-control-contract':
+        specifier: workspace:*
+        version: link:packages/computer-control-contract
+      '@xopcai/endpoint-tools-client':
+        specifier: workspace:*
+        version: link:packages/endpoint-tools-client
       '@xopcai/endpoint-tools-protocol':
         specifier: workspace:*
         version: link:packages/endpoint-tools-protocol
@@ -844,6 +850,12 @@ importers:
         version: 6.4.3(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.51.2)(tsx@4.22.3)(yaml@2.9.0)
 
   packages/composer-core: {}
+
+  packages/computer-control-contract:
+    dependencies:
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
 
   packages/endpoint-tools-client:
     dependencies:

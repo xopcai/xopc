@@ -4,6 +4,7 @@ import { getImageGenerationProvider } from '../agent/image/generation/provider-r
 import { parseImageGenerationModelRef } from '../agent/image/generation/model-ref.js';
 import { getModelCatalogStore, type ModelCatalogSnapshot } from './model-catalog-store.js';
 import { getModelRegistry, type ModelRegistry } from './model-registry.js';
+import { isComputerModel } from '../computer/model-policy.js';
 
 export interface ModelReferenceHealth {
   ref: string;
@@ -15,7 +16,7 @@ export interface ModelReferenceHealth {
 interface CollectedReference {
   ref: string;
   location: string;
-  kind: 'text' | 'image-generation';
+  kind: 'text' | 'image-generation' | 'computer-use';
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -76,6 +77,7 @@ function collectModelPolicy(out: CollectedReference[], value: unknown, location:
     }
   }
   collectToolModel(out, policy.imageUnderstanding, `${location}.imageUnderstanding`);
+  collectToolModel(out, policy.computerUse, `${location}.computerUse`, 'computer-use');
   collectToolModel(
     out,
     policy.imageGeneration,
@@ -104,12 +106,12 @@ function suggestedRef(ref: string, catalog: ModelCatalogSnapshot): string | unde
   const source = Object.values(catalog.sources).find((entry) => entry.providerId === providerId);
   if (!source) return undefined;
   const available = new Set(source.models
-    .filter((model) => model.availability === 'available')
+    .filter((model) => model.availability === 'available' && !model.computerUse)
     .map((model) => model.id));
   if (source.recommendedModel && available.has(source.recommendedModel)) {
     return `${providerId}/${source.recommendedModel}`;
   }
-  const first = source.models.find((model) => model.availability === 'available');
+  const first = source.models.find((model) => model.availability === 'available' && !model.computerUse);
   return first ? `${providerId}/${first.id}` : undefined;
 }
 
@@ -142,7 +144,7 @@ export function auditModelReferences(
     .map(([ref, references]): ModelReferenceHealth => {
       const available = references.every((reference) => reference.kind === 'image-generation'
         ? resolveImageGenerationModel(ref)
-        : Boolean(registry.resolve(ref)));
+        : reference.kind === 'computer-use' ? isComputerModel(registry.resolve(ref)) : Boolean(registry.resolve(ref)));
       const availability = available ? 'available' : 'unavailable';
       const textOnly = references.every((reference) => reference.kind === 'text');
       const suggestion = availability === 'unavailable' && textOnly

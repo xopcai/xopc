@@ -3,6 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { buildRouteSeeds } from '@/features/search/global-command-palette/routes-provider';
 
 describe('buildRouteSeeds', () => {
+  it('finds the dedicated computer use settings page', () => {
+    const computer = buildRouteSeeds('zh').find(s => s.path === '/settings/computer-use');
+    expect(computer).toBeDefined();
+    expect(computer?.keywords).toContain('电脑操作');
+  });
   it('maps browser settings to the standalone browser route', () => {
     const seeds = buildRouteSeeds('en');
     const browser = seeds.find((s) => s.id === 'route:settings:agent:settingsAgentBrowser');

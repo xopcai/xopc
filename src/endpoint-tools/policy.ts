@@ -1,4 +1,5 @@
 import Ajv2020 from 'ajv/dist/2020.js';
+import { COMPUTER_INPUT_SCHEMA, COMPUTER_OUTPUT_SCHEMA } from '@xopcai/computer-control-contract';
 
 import {
   BROWSER_CONTROL_ENDPOINT_INPUT_SCHEMA,
@@ -43,6 +44,7 @@ function contract(
 }
 
 const POLICY_BY_TOOL: Readonly<Record<string, TrustedToolContract>> = {
+  'desktop.computer.control': contract('computer.session-scoped', COMPUTER_OUTPUT_SCHEMA, ['json', 'file'], ['computer-control'], [], COMPUTER_INPUT_SCHEMA),
   'web.file.pick': contract('personal.foreground-read', ENDPOINT_FILE_OUTPUT_SCHEMA, ['file'], ['file-read']),
   'web.file.download': contract('user.foreground-write', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], ['file-download']),
   'web.page.get_selection': contract('public.foreground-read', ENDPOINT_TEXT_OUTPUT_SCHEMA, ['text'], []),
@@ -186,6 +188,13 @@ export class EndpointToolPolicy {
           || descriptor.supportsCancellation !== true
           || descriptor.idempotent !== false) {
           throw new EndpointToolPolicyError(`Browser tool ${descriptor.name} violates its trusted policy`);
+        }
+        return;
+      case 'computer.session-scoped':
+        this.assertFields(descriptor, 'write', 'never', false, 'personal');
+        if (descriptor.timeoutMs !== 30_000 || descriptor.maxConcurrency !== 1
+          || !descriptor.supportsCancellation || descriptor.idempotent) {
+          throw new EndpointToolPolicyError('Computer transport violates its trusted policy');
         }
         return;
       default:

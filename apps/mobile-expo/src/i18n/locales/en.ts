@@ -411,6 +411,7 @@ export const en = {
       thisTurn: 'This turn · current version',
       remove: 'Remove',
       addSource: 'Add file, folder, or note',
+      folderLocked: 'The working folder is fixed for this conversation.',
       changeFolder: 'Change working folder',
       useFolder: 'Use this folder',
       parentFolder: 'Parent folder',

@@ -28,6 +28,7 @@ Global options such as `--config <path>` and `--workspace <path>` select a diffe
 | `tunnel` | Manage public tunnel access |
 | `gateway` | Run and manage the Gateway |
 | `history` | Export Session history for external tools such as ctx |
+| `import` | Select Skills, context, and Projects to import from another AI app |
 | `session` | List and manage Sessions |
 | `project` | Manage long-running Projects |
 | `doctor` | Diagnose installation, data, and security issues |

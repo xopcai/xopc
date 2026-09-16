@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { getAllProviders, getModelsByProvider } from '../index.js';
-import { getRecommendedModelsForProvider } from '../presentation.js';
+import { getRecommendedModelsForProvider, modelToCatalogView } from '../presentation.js';
 
 describe('provider presentation catalog', () => {
+  it('does not recommend a GUI actor even when its public alias matches a chat recommendation', () => {
+    expect(modelToCatalogView({ provider: 'openai', id: 'gpt-5', name: 'GUI alias', api: 'openai-completions',
+      input: ['text', 'image'], computerUse: { profile: 'structured-tools-v1' } } as never).recommended).toBe(false);
+  });
   it('does not expose tunnel authorization as a model provider', () => {
     expect(getAllProviders()).not.toContain('xopc-tunnel');
   });

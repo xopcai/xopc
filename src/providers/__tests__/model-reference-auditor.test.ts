@@ -5,6 +5,12 @@ import { auditModelReferences } from '../model-reference-auditor.js';
 import type { ModelRegistry } from '../model-registry.js';
 
 describe('auditModelReferences', () => {
+  it('audits GUI bindings without suggesting ordinary chat models', () => {
+    const config = { agents: { defaults: { models: { computerUse: { primary: 'cloud/gui', fallbacks: [] } } }, list: [] } } as unknown as Config;
+    const registry = { resolve: () => ({ api: 'openai-completions', input: ['text', 'image'] }) } as unknown as ModelRegistry;
+    const report = auditModelReferences(config, new Map(), { registry, catalog: { sources: {} } });
+    expect(report).toEqual([{ ref: 'cloud/gui', availability: 'unavailable', locations: ['agents.defaults.models.computerUse.primary'] }]);
+  });
   it('reports unavailable references with their locations and replacement', () => {
     const config = {
       agents: {

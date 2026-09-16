@@ -1,12 +1,14 @@
 export type ModelRoute = { primary: string; fallbacks: string[] };
 export type ModelIntent = 'fast' | 'reasoning' | 'coding' | 'review' | 'vision' | 'understanding';
 export type AgentModelsDefaults = {
+  computerUse?: ModelRoute;
   chat: ModelRoute;
   intents: Partial<Record<ModelIntent, ModelRoute>>;
   imageUnderstanding?: ModelRoute;
   imageGeneration?: ModelRoute & { timeoutMs?: number; autoProviderFallback: boolean };
 };
 export type AgentModelsOverride = {
+  computerUse?: ModelRoute | null;
   chat?: ModelRoute;
   intents?: Partial<Record<ModelIntent, ModelRoute | null>>;
   imageUnderstanding?: ModelRoute | null;
