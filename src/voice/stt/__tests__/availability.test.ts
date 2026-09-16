@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { isSTTAvailable } from '../availability.js';
 import { getModelCatalogStore, resetModelCatalogStore } from '../../../providers/model-catalog-store.js';
+import { voiceFixture } from '../../__tests__/voice-fixture.js';
 
 afterEach(() => resetModelCatalogStore());
 
@@ -13,7 +14,7 @@ describe('isSTTAvailable', () => {
     }, [{
       id: 'stt', name: 'STT', kind: 'stt', input: ['audio'], output: ['text'],
       operations: ['audio.transcription'], reasoning: false, contextWindow: 128_000,
-      maxOutputTokens: null,
+      maxOutputTokens: null, voice: voiceFixture(['transcription']),
     }]);
     expect(isSTTAvailable({
       enabled: true,

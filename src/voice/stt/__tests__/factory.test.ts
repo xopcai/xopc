@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { resolveSTTProviderChain, resolveSTTProviderConfig } from '../factory.js';
 import '../providers/index.js';
 import { getModelCatalogStore, resetModelCatalogStore } from '../../../providers/model-catalog-store.js';
+import { voiceFixture } from '../../__tests__/voice-fixture.js';
 
 afterEach(() => resetModelCatalogStore());
 
@@ -108,6 +109,7 @@ describe('resolveSTTProviderChain', () => {
       id, name: id, kind: 'stt' as const, input: ['audio' as const], output: ['text' as const],
       operations: ['audio.transcription' as const], reasoning: false,
       contextWindow: 128_000, maxOutputTokens: null,
+      voice: voiceFixture(['transcription']),
     })));
 
     const chain = resolveSTTProviderChain({
