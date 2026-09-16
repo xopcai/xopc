@@ -23,9 +23,9 @@ let root: ReturnType<typeof createRoot> | undefined;
 const previousApi = window.electronAPI;
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; window.electronAPI = previousApi; vi.clearAllMocks(); });
 
-async function renderPanel() {
+async function renderPanel(zh = true) {
   const container = document.createElement('div'); root = createRoot(container);
-  await act(async () => root!.render(<MemoryRouter><ComputerSettingsPanel zh /></MemoryRouter>));
+  await act(async () => root!.render(<MemoryRouter><ComputerSettingsPanel zh={zh} /></MemoryRouter>));
   return container;
 }
 
@@ -75,7 +75,7 @@ it('wires missing macOS permissions and keeps stop usable during a pending permi
   expect(requestScreen).toHaveBeenCalledOnce();
   await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="打开设置: 辅助功能"]')!.click());
   expect(requestAccessibility).toHaveBeenCalledOnce();
-  const stopButton = [...container.querySelectorAll('button')].find(button => button.textContent === '停止电脑操作')!;
+  const stopButton = [...container.querySelectorAll('button')].find(button => button.textContent === '停止桌面操作')!;
   expect(stopButton.disabled).toBe(false);
   await act(async () => stopButton.click());
   expect(stop).toHaveBeenCalledOnce();
@@ -86,7 +86,7 @@ it('does not offer native control actions on unsupported platforms', async () =>
   window.electronAPI = { platform: 'win32', computer: { status: vi.fn() }, system: {} } as any;
   const container = await renderPanel();
   expect(container.textContent).toContain('本机桌面控制目前仅支持 macOS');
-  expect(container.textContent).not.toContain('停止电脑操作');
+  expect(container.textContent).not.toContain('停止桌面操作');
   expect(window.electronAPI!.computer!.status).not.toHaveBeenCalled();
 });
 
@@ -108,7 +108,7 @@ it('changes full control only through native settings and reflects cancellation 
   expect(toggle.getAttribute('aria-checked')).toBe('false');
   await act(async () => toggle.click());
   expect(toggle.getAttribute('aria-checked')).toBe('true');
-  expect(container.textContent).toContain('仅本机记住');
+  expect(container.textContent).toContain('仅本机保存');
   await act(async () => toggle.click());
   expect(setFullControl.mock.calls.map(args => args[0])).toEqual([true, true, false]);
   expect(toggle.getAttribute('aria-checked')).toBe('false');
@@ -133,12 +133,25 @@ it('refreshes stop state immediately and requires explicit resume', async () => 
   const resume = vi.fn(async () => { paused = false; return status(); });
   window.electronAPI = { platform: 'darwin', computer: { status: async () => status(), stop: async () => { paused = true; return { ok: true }; }, resume } } as any;
   const container = await renderPanel();
-  await act(async () => [...container.querySelectorAll('button')].find(item => item.textContent === '停止电脑操作')!.click());
+  await act(async () => [...container.querySelectorAll('button')].find(item => item.textContent === '停止桌面操作')!.click());
   expect(container.textContent).toContain('桌面操作已停止');
   expect(container.textContent).toContain('自动重试不会恢复');
   await act(async () => [...container.querySelectorAll('button')].find(item => item.textContent === '恢复桌面控制')!.click());
   expect(resume).toHaveBeenCalledOnce();
   expect(container.textContent).not.toContain('自动重试不会恢复');
+});
+
+it('translates an existing stop notice when the app language changes', async () => {
+  window.electronAPI = { platform: 'darwin', computer: {
+    status: async () => ({ connected: true, fullControl: false, controlPaused: false, permissions: { accessibility: true, screenRecording: 'granted' } }),
+    stop: async () => ({ ok: true }),
+  } } as any;
+  const container = await renderPanel();
+  await act(async () => [...container.querySelectorAll('button')].find(item => item.textContent === '停止桌面操作')!.click());
+  expect(container.textContent).toContain('桌面操作已停止');
+  await act(async () => root!.render(<MemoryRouter><ComputerSettingsPanel zh={false} /></MemoryRouter>));
+  expect(container.textContent).toContain('Desktop operations stopped.');
+  expect(container.textContent).not.toContain('桌面操作已停止');
 });
 
 async function changeModel(container: HTMLElement, value: string) {

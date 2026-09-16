@@ -40,7 +40,7 @@ function tunnelStatusLabel(
 
 function buildContextMenu(actions: TrayActions, t: ElectronMenuMessages): Menu {
   return Menu.buildFromTemplate([
-    ...(actions.stopComputer ? [{ label: '停止电脑操作 · Ctrl+Alt+Esc', click: actions.stopComputer }, { type: 'separator' as const }] : []),
+    ...(actions.stopComputer ? [{ label: t.tray.stopComputer, click: actions.stopComputer }, { type: 'separator' as const }] : []),
     {
       label: t.tray.newChat,
       click: () => {

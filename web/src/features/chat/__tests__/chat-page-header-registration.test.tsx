@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
 import { usePageHeaderStore } from '@/stores/page-header-store';
+import { useSideChatStore } from '@/stores/side-chat-store';
 import { useTerminalPanelStore } from '@/stores/terminal-panel-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 
@@ -52,6 +53,7 @@ describe('ChatPageHeaderRegistration', () => {
       height: 300,
     });
     useWorkspacePanelStore.setState({ open: false, conversationIdOverride: null });
+    useSideChatStore.setState({ panes: {}, tabs: [], pendingCreate: null });
     Object.defineProperty(window, 'electronAPI', { configurable: true, value: undefined });
     container = document.createElement('div');
     document.body.append(container);
@@ -303,5 +305,39 @@ describe('ChatPageHeaderRegistration', () => {
       open: true,
       conversationIdOverride: 'session-1',
     });
+  });
+
+  it('shows the side chat toggle only for a non-empty main chat', () => {
+    const renderHeader = (hasMessages: boolean) => {
+      act(() => {
+        root.render(
+          <MemoryRouter initialEntries={['/chat/session-1']}>
+            <ChatPageHeaderRegistration
+              chatHeadline="Project planning"
+              chatAgents={[]}
+              showChatAgentSelector={false}
+              chatAgentId="main"
+              onChatAgentChange={() => {}}
+              chatAgentDisabled={false}
+              conversationId="session-1"
+              hasMessages={hasMessages}
+            />
+            <HeaderEnd />
+          </MemoryRouter>,
+        );
+      });
+    };
+
+    renderHeader(false);
+    expect(container.querySelector('[aria-label="Open side chat"]')).toBeNull();
+
+    renderHeader(true);
+    const openButton = container.querySelector<HTMLButtonElement>('[aria-label="Open side chat"]');
+    expect(openButton).not.toBeNull();
+    expect(openButton?.getAttribute('aria-expanded')).toBe('false');
+
+    act(() => openButton!.click());
+    expect(useSideChatStore.getState().panes['session-1']?.open).toBe(true);
+    expect(container.querySelector('[aria-label="Collapse side chat"]')).not.toBeNull();
   });
 });
