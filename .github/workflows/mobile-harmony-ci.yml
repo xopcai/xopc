@@ -2,6 +2,11 @@ name: Mobile HarmonyOS CI
 
 on:
   workflow_dispatch:
+    inputs:
+      sign_test_hap:
+        description: Sign an encrypted debug HAP for registered test devices only
+        type: boolean
+        default: false
   push:
     branches: [main, master]
     paths:
@@ -46,11 +51,12 @@ jobs:
       - run: pnpm run harmony:verify --host-only
 
   native-build:
-    name: API 23+ unsigned HAP and APP (SDK 26)
+    name: API 23+ HAP and APP (SDK 26)
     needs: host-checks
     # Vendor download credentials must never be exposed to pull-request code.
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: macos-15
+    environment: harmony-testing
     timeout-minutes: 45
     env:
       HARMONY_TOOLS_SHA256: d53802c52d3d0a6a0836333c9e8f2bb73d9f6753d1658185539e2659c46df1ad
@@ -86,6 +92,32 @@ jobs:
           git diff --exit-code -- oh-package-lock.json5
       - name: Build and lint native preview
         run: node apps/mobile-harmony/scripts/build-ci.mjs
+      - uses: actions/setup-java@v5
+        if: github.event_name == 'workflow_dispatch' && inputs.sign_test_hap
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Sign and encrypt test-only HAP
+        if: github.event_name == 'workflow_dispatch' && inputs.sign_test_hap
+        env:
+          HARMONY_TEST_KEY_ALIAS: ${{ secrets.HARMONY_TEST_KEY_ALIAS }}
+          HARMONY_TEST_STORE_PASSWORD: ${{ secrets.HARMONY_TEST_STORE_PASSWORD }}
+          HARMONY_TEST_KEY_PASSWORD: ${{ secrets.HARMONY_TEST_KEY_PASSWORD }}
+          HARMONY_TEST_KEYSTORE_BASE64: ${{ secrets.HARMONY_TEST_KEYSTORE_BASE64 }}
+          HARMONY_TEST_PROFILE_BASE64: ${{ secrets.HARMONY_TEST_PROFILE_BASE64 }}
+          HARMONY_TEST_CERT_BASE64: ${{ secrets.HARMONY_TEST_CERT_BASE64 }}
+          HARMONY_TEST_ARTIFACT_KEY: ${{ secrets.HARMONY_TEST_ARTIFACT_KEY }}
+        run: node apps/mobile-harmony/scripts/sign-test-hap.mjs
+      - name: Upload encrypted test package
+        if: github.event_name == 'workflow_dispatch' && inputs.sign_test_hap
+        uses: actions/upload-artifact@v4
+        with:
+          name: harmony-api23plus-test-encrypted-${{ github.sha }}
+          path: |
+            apps/mobile-harmony/.test/ci/xopc-test-signed.hap.enc
+            apps/mobile-harmony/.test/ci/signed-build-info.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Upload unsigned build artifacts
         uses: actions/upload-artifact@v4
         with:
