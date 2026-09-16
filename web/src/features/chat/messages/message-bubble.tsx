@@ -291,7 +291,8 @@ export const MessageBubble = memo(function MessageBubble({
     source: {
       type: 'chat-message' as const,
       id: `${sessionKey ?? 'chat'}:${message.timestamp ?? messageIndex ?? copyMarkdown.length}`,
-      title: m.chat.messageReadAloudTitle,
+      title: speakableText.split('\n')[0]?.slice(0, 48) || m.chat.messageReadAloudTitle,
+      href: sessionKey ? `#/chat/${encodeURIComponent(sessionKey)}` : undefined,
     },
     text: speakableText,
     language: detectSpeechLanguage(speakableText, language),

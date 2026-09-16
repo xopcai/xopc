@@ -4,6 +4,7 @@ import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useVoicePlayerStore } from '@/features/notes/voice-player-store';
 
+import { claimReadAloudMediaSession, releaseReadAloudMediaSession, updateReadAloudMediaSession } from './read-aloud-media-session';
 import { splitSpeakableText } from './read-aloud-text';
 
 const CONSENT_STORAGE_KEY = 'xopc:read-aloud-online-consent:v1';
@@ -13,6 +14,7 @@ export type ReadAloudSource = {
   type: 'chat-message' | 'note' | 'selection';
   id: string;
   title: string;
+  href?: string;
 };
 
 export type ReadAloudInput = {
@@ -21,7 +23,7 @@ export type ReadAloudInput = {
   language: 'en-US' | 'zh-CN';
 };
 
-export type ReadAloudStatus = 'idle' | 'preparing' | 'playing' | 'paused' | 'error';
+export type ReadAloudStatus = 'idle' | 'preparing' | 'playing' | 'paused' | 'ended' | 'error';
 
 type ReadAloudState = {
   source: ReadAloudSource | null;
@@ -30,6 +32,8 @@ type ReadAloudState = {
   chunkCount: number;
   currentTime: number;
   duration: number;
+  durationComplete: boolean;
+  currentText: string;
   rate: number;
   error: string | null;
   consentRequired: boolean;
@@ -40,6 +44,7 @@ type ReadAloudState = {
   resume: () => void;
   stop: () => void;
   setRate: (rate: number) => void;
+  seek: (time: number) => void;
 };
 
 const initialState = {
@@ -49,6 +54,8 @@ const initialState = {
   chunkCount: 0,
   currentTime: 0,
   duration: 0,
+  durationComplete: false,
+  currentText: '',
   rate: 1,
   error: null,
   consentRequired: false,
@@ -63,6 +70,9 @@ let chunkDurations: number[] = [];
 let chunkRequests = new Map<number, Promise<string>>();
 let requestController: AbortController | null = null;
 let generation = 0;
+let playbackOperation = 0;
+let loadedChunkIndex: number | null = null;
+let offsetOnLoad: number | null = null;
 let sessionConsent = false;
 
 function hasConsent(): boolean {
@@ -119,27 +129,43 @@ async function ensureChunk(index: number, runGeneration: number): Promise<string
   try {
     return await promise;
   } finally {
-    chunkRequests.delete(index);
+    if (chunkRequests.get(index) === promise) chunkRequests.delete(index);
   }
 }
 
-async function playChunk(index: number, runGeneration: number): Promise<void> {
+async function playChunk(index: number, offset = 0, autoplay = true): Promise<void> {
+  const runGeneration = generation;
+  const operation = ++playbackOperation;
   const audio = getAudio();
-  useReadAloudStore.setState({ status: 'preparing', currentChunkIndex: index, error: null });
+  useReadAloudStore.setState({ status: 'preparing', currentChunkIndex: index, currentText: chunks[index] ?? '', currentTime: completedDuration(index) + offset, error: null });
+  audio.pause();
   try {
     const url = await ensureChunk(index, runGeneration);
-    if (runGeneration !== generation) return;
-    audio.src = url;
+    if (runGeneration !== generation || operation !== playbackOperation) return;
+    if (loadedChunkIndex !== index || audio.getAttribute('src') !== url) {
+      loadedChunkIndex = index;
+      offsetOnLoad = offset;
+      audio.src = url;
+    } else if (audio.readyState === 0) {
+      offsetOnLoad = offset;
+    } else {
+      offsetOnLoad = null;
+      audio.currentTime = offset;
+    }
     audio.playbackRate = useReadAloudStore.getState().rate;
-    await audio.play();
-    if (runGeneration !== generation) return;
-    useReadAloudStore.setState({ status: 'playing' });
-    window.dispatchEvent(new CustomEvent('xopc-voice-playback-start', { detail: { id: PLAYBACK_ID } }));
+    if (autoplay) await audio.play();
+    if (runGeneration !== generation || operation !== playbackOperation) return;
+    useReadAloudStore.setState({ status: autoplay ? 'playing' : 'paused' });
+    if (autoplay) {
+      useVoicePlayerStore.getState().pause();
+      window.dispatchEvent(new CustomEvent('xopc-voice-playback-start', { detail: { id: PLAYBACK_ID } }));
+      claimReadAloudMediaSession({ ...useReadAloudStore.getState(), position: () => useReadAloudStore.getState().currentTime });
+      updateReadAloudMediaSession(useReadAloudStore.getState());
+    }
     if (index + 1 < chunks.length) void ensureChunk(index + 1, runGeneration).catch(() => undefined);
   } catch (error) {
-    if (runGeneration !== generation || (error instanceof DOMException && error.name === 'AbortError')) return;
-    const message = error instanceof Error ? error.message : String(error);
-    useReadAloudStore.setState({ status: 'error', error: message });
+    if (runGeneration !== generation || operation !== playbackOperation || (error instanceof DOMException && error.name === 'AbortError')) return;
+    useReadAloudStore.setState({ status: 'error', error: error instanceof Error ? error.message : String(error) });
   }
 }
 
@@ -148,45 +174,66 @@ function getAudio(): HTMLAudioElement {
   audioElement = new Audio();
   audioElement.preload = 'metadata';
   audioElement.addEventListener('loadedmetadata', () => {
-    if (!audioElement) return;
-    const index = useReadAloudStore.getState().currentChunkIndex;
-    if (Number.isFinite(audioElement.duration)) chunkDurations[index] = audioElement.duration;
-    useReadAloudStore.setState({ duration: chunkDurations.reduce((sum, value) => sum + (value || 0), 0) });
+    if (!audioElement || loadedChunkIndex === null || !activeInput) return;
+    if (Number.isFinite(audioElement.duration) && audioElement.duration > 0) chunkDurations[loadedChunkIndex] = audioElement.duration;
+    if (offsetOnLoad !== null) { audioElement.currentTime = offsetOnLoad; offsetOnLoad = null; }
+    useReadAloudStore.setState({
+      duration: chunkDurations.reduce((sum, value) => sum + value, 0),
+      durationComplete: chunkDurations.length > 0 && chunkDurations.every((value) => value > 0),
+    });
   });
   audioElement.addEventListener('timeupdate', () => {
-    if (!audioElement) return;
-    const index = useReadAloudStore.getState().currentChunkIndex;
-    useReadAloudStore.setState({ currentTime: completedDuration(index) + audioElement.currentTime });
+    if (!audioElement || loadedChunkIndex === null || offsetOnLoad !== null) return;
+    const state = useReadAloudStore.getState();
+    if (state.status !== 'playing' && state.status !== 'paused') return;
+    useReadAloudStore.setState({ currentTime: completedDuration(loadedChunkIndex) + audioElement.currentTime });
   });
   audioElement.addEventListener('pause', () => {
     const state = useReadAloudStore.getState();
     if (state.status === 'playing') useReadAloudStore.setState({ status: 'paused' });
   });
   audioElement.addEventListener('ended', () => {
+    const status = useReadAloudStore.getState().status;
+    if (!activeInput || (status !== 'playing' && status !== 'paused')) return;
     const next = useReadAloudStore.getState().currentChunkIndex + 1;
     if (next < chunks.length) {
-      void playChunk(next, generation);
+      void playChunk(next);
     } else {
-      useReadAloudStore.setState({ status: 'paused', currentTime: 0, currentChunkIndex: 0 });
-      if (audioElement) audioElement.currentTime = 0;
+      useReadAloudStore.setState({ status: 'ended', currentTime: useReadAloudStore.getState().duration });
     }
   });
   audioElement.addEventListener('error', () => {
-    if (useReadAloudStore.getState().status !== 'idle') {
-      useReadAloudStore.setState({ status: 'error', error: 'Audio playback failed' });
+    if (useReadAloudStore.getState().status === 'idle') return;
+    // A failed audio decode must be fetched again when the user retries.
+    if (loadedChunkIndex !== null) {
+      const url = chunkUrls[loadedChunkIndex];
+      if (url) URL.revokeObjectURL(url);
+      chunkUrls[loadedChunkIndex] = null;
+      chunkDurations[loadedChunkIndex] = 0;
+      loadedChunkIndex = null;
     }
+    playbackOperation += 1;
+    useReadAloudStore.setState({ status: 'error', error: 'Audio playback failed', durationComplete: false });
   });
 
   window.addEventListener('xopc-voice-recording-start', () => useReadAloudStore.getState().pause());
   window.addEventListener('xopc-voice-playback-start', (event) => {
     const otherId = (event as CustomEvent<{ id?: string }>).detail?.id;
-    if (otherId && otherId !== PLAYBACK_ID) useReadAloudStore.getState().pause();
+    if (otherId && otherId !== PLAYBACK_ID) {
+      releaseReadAloudMediaSession();
+      useReadAloudStore.getState().pause();
+    }
   });
   return audioElement;
 }
 
 function stopPlayback(): void {
+  releaseReadAloudMediaSession();
   generation += 1;
+  playbackOperation += 1;
+  loadedChunkIndex = null;
+  offsetOnLoad = null;
+  useReadAloudStore.setState({ ...initialState, rate: useReadAloudStore.getState().rate });
   requestController?.abort();
   requestController = null;
   if (audioElement) {
@@ -197,14 +244,13 @@ function stopPlayback(): void {
   releaseUrls();
   chunks = [];
   activeInput = null;
-  useReadAloudStore.setState({ ...initialState, rate: useReadAloudStore.getState().rate });
 }
 
 function startPlayback(input: ReadAloudInput): void {
   stopPlayback();
   const nextChunks = splitSpeakableText(input.text);
   if (!nextChunks.length) {
-    useReadAloudStore.setState({ status: 'error', error: 'There is no readable text' });
+    useReadAloudStore.setState({ source: input.source, status: 'error', error: 'There is no readable text' });
     return;
   }
   activeInput = input;
@@ -212,7 +258,6 @@ function startPlayback(input: ReadAloudInput): void {
   chunkUrls = Array.from({ length: chunks.length }, () => null);
   chunkDurations = Array.from({ length: chunks.length }, () => 0);
   requestController = new AbortController();
-  const runGeneration = generation;
   useVoicePlayerStore.getState().pause();
   useReadAloudStore.setState({
     source: input.source,
@@ -224,7 +269,7 @@ function startPlayback(input: ReadAloudInput): void {
     error: null,
     consentRequired: false,
   });
-  void playChunk(0, runGeneration);
+  void playChunk(0);
 }
 
 export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
@@ -233,11 +278,11 @@ export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
   requestStart: (input) => {
     const state = get();
     const isSameSource = state.source?.type === input.source.type && state.source.id === input.source.id;
-    if (isSameSource && state.status === 'playing' && activeInput?.text === input.text) {
+    if (isSameSource && (state.status === 'playing' || state.status === 'preparing') && activeInput?.text === input.text) {
       get().pause();
       return;
     }
-    if (isSameSource && state.status === 'paused' && activeInput?.text === input.text) {
+    if (isSameSource && (state.status === 'paused' || state.status === 'ended' || state.status === 'error') && activeInput?.text === input.text) {
       get().resume();
       return;
     }
@@ -264,25 +309,38 @@ export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
   },
 
   pause: () => {
-    if (get().status === 'preparing') {
-      stopPlayback();
-      return;
-    }
-    if (audioElement && !audioElement.paused) audioElement.pause();
+    const state = get();
+    if (state.status !== 'playing' && state.status !== 'preparing') return;
+    playbackOperation += 1;
+    audioElement?.pause();
+    set({ status: 'paused' });
   },
 
   resume: () => {
     const state = get();
-    if (!state.source || !activeInput) return;
-    if (audioElement?.src && audioElement.currentTime > 0) {
-      audioElement.playbackRate = state.rate;
-      void audioElement.play().then(() => set({ status: 'playing' })).catch((error) => {
-        set({ status: 'error', error: error instanceof Error ? error.message : String(error) });
-      });
+    if (!state.source || !activeInput || state.status === 'preparing' || state.status === 'playing') return;
+    const index = state.status === 'ended' ? 0 : state.currentChunkIndex;
+    const offset = state.status === 'ended' ? 0 : Math.max(0, state.currentTime - completedDuration(index));
+    void playChunk(index, offset);
+  },
+
+  seek: (time) => {
+    const state = get();
+    if (!state.durationComplete || !Number.isFinite(time) || !activeInput) return;
+    const target = Math.max(0, Math.min(time, state.duration));
+    if (target === state.duration) {
+      playbackOperation += 1;
+      audioElement?.pause();
+      set({ status: 'ended', currentTime: target });
       return;
     }
-    requestController = new AbortController();
-    void playChunk(state.currentChunkIndex, generation);
+    let index = 0;
+    let offset = target;
+    while (index < chunkDurations.length - 1 && offset >= chunkDurations[index]) {
+      offset -= chunkDurations[index];
+      index += 1;
+    }
+    void playChunk(index, offset, state.status === 'playing');
   },
 
   stop: stopPlayback,
@@ -293,3 +351,5 @@ export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
     set({ rate: safeRate });
   },
 }));
+
+useReadAloudStore.subscribe(updateReadAloudMediaSession);

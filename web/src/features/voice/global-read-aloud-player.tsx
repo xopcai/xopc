@@ -1,193 +1,95 @@
-import { GripVertical, Loader2, Pause, Play, Volume2, X } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronDown, Pause, Play, RotateCcw, X } from 'lucide-react';
+import { useId, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { PopoverSelect } from '@/components/ui/popover-select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
-import {
-  clampFloatingPlayerPosition,
-  type FloatingPlayerPosition,
-} from './floating-player-position';
+import { useReadAloudDock } from './read-aloud-dock';
 import { useReadAloudStore } from './read-aloud-store';
 
-type DragState = {
-  pointerId: number;
-  offsetX: number;
-  offsetY: number;
-  width: number;
-  height: number;
-};
-
 function formatTime(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
-  const minutes = Math.floor(seconds / 60);
-  return `${minutes}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
+  const value = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+  return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, '0')}`;
 }
 
+const controlClass = 'inline-flex size-11 shrink-0 items-center justify-center rounded-full text-fg hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-safe:transition-colors';
+
 export function GlobalReadAloudPlayer() {
-  const language = useLocaleStore((state) => state.language);
+  const zh = useLocaleStore((state) => state.language) === 'zh';
   const state = useReadAloudStore();
-  const zh = language === 'zh';
+  const dock = useReadAloudDock();
+  const [expanded, setExpanded] = useState(false);
+  const detailsId = useId();
   const visible = state.source && state.status !== 'idle';
-  const progress = state.duration > 0 ? Math.min(100, (state.currentTime / state.duration) * 100) : 0;
-  const rates = [0.75, 1, 1.25, 1.5, 2];
-  const nextRate = rates[(rates.indexOf(state.rate) + 1) % rates.length] ?? 1;
-  const playerRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<DragState | null>(null);
-  const [position, setPosition] = useState<FloatingPlayerPosition | null>(null);
-  const [dragging, setDragging] = useState(false);
-
-  const clampPosition = useCallback((next: FloatingPlayerPosition, width: number, height: number) => (
-    clampFloatingPlayerPosition(
-      next,
-      { width, height },
-      { width: window.innerWidth, height: window.innerHeight },
-    )
-  ), []);
-
-  const handlePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0 || !(event.target instanceof Element)) return;
-    if (event.target.closest('button, a, input, select, textarea, [role="button"]')) return;
-    const player = playerRef.current;
-    if (!player) return;
-    const rect = player.getBoundingClientRect();
-    dragRef.current = {
-      pointerId: event.pointerId,
-      offsetX: event.clientX - rect.left,
-      offsetY: event.clientY - rect.top,
-      width: rect.width,
-      height: rect.height,
-    };
-    setPosition(clampPosition({ x: rect.left, y: rect.top }, rect.width, rect.height));
-    setDragging(true);
-    player.setPointerCapture(event.pointerId);
-    event.preventDefault();
-  }, [clampPosition]);
-
-  const handlePointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    setPosition(clampPosition(
-      { x: event.clientX - drag.offsetX, y: event.clientY - drag.offsetY },
-      drag.width,
-      drag.height,
-    ));
-  }, [clampPosition]);
-
-  const finishDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    dragRef.current = null;
-    setDragging(false);
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!visible) return;
-    const keepInsideViewport = () => {
-      const rect = playerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      setPosition((current) => current
-        ? clampPosition(current, rect.width, rect.height)
-        : current);
-    };
-    keepInsideViewport();
-    window.addEventListener('resize', keepInsideViewport);
-    return () => window.removeEventListener('resize', keepInsideViewport);
-  }, [clampPosition, visible]);
-
-  return (
-    <>
-      {visible ? (
-        <div className="pointer-events-none fixed inset-0 z-50">
-          <div
-            ref={playerRef}
-            className={cn(
-              'pointer-events-auto isolate absolute flex w-[min(20rem,calc(100%-1.5rem))] touch-none items-center gap-2 rounded-xl border border-edge-strong bg-surface-panel p-2.5 shadow-popover',
-              !position && 'bottom-3 left-1/2 -translate-x-1/2 sm:bottom-5',
-              dragging ? 'cursor-grabbing select-none' : 'cursor-grab',
-            )}
-            style={position ? { left: position.x, top: position.y } : undefined}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={finishDrag}
-            onPointerCancel={finishDrag}
-          >
-            <div
-              className="flex shrink-0 items-center self-stretch text-fg-subtle"
-              title={zh ? '拖动可移动播放器' : 'Drag to move the player'}
-            >
-              <GripVertical className="size-4" aria-hidden />
-            </div>
-            <button
-              type="button"
-              onClick={state.status === 'playing' ? state.pause : state.resume}
-              disabled={state.status === 'preparing'}
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-white transition-transform active:scale-95 disabled:opacity-70"
-              aria-label={state.status === 'playing' ? (zh ? '暂停朗读' : 'Pause reading') : (zh ? '继续朗读' : 'Resume reading')}
-            >
-              {state.status === 'preparing' ? (
-                <Loader2 className="size-4 animate-spin" aria-hidden />
-              ) : state.status === 'playing' ? (
-                <Pause className="size-4" aria-hidden />
-              ) : (
-                <Play className="ml-0.5 size-4" aria-hidden />
-              )}
-            </button>
-
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <Volume2 className="size-3.5 shrink-0 text-accent" aria-hidden />
-                <span className="truncate text-xs font-medium text-fg">{state.source?.title}</span>
-                <span className="shrink-0 text-[10px] text-fg-subtle">
-                  {state.currentChunkIndex + 1}/{state.chunkCount}
-                </span>
-              </div>
-              <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-active">
-                <div
-                  className={cn('h-full rounded-full bg-accent transition-[width] duration-200', state.status === 'preparing' && 'animate-pulse')}
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-              <div className="mt-1 flex items-center justify-between text-[10px] tabular-nums text-fg-subtle">
-                <span>{state.error ?? `${formatTime(state.currentTime)} / ${state.duration ? formatTime(state.duration) : '—'}`}</span>
-                <button
-                  type="button"
-                  onClick={() => state.setRate(nextRate)}
-                  className="rounded px-1 py-0.5 text-fg-muted hover:bg-surface-hover hover:text-fg"
-                  aria-label={zh ? '切换播放速度' : 'Change playback speed'}
-                >
-                  {state.rate}×
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={state.stop}
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg"
-              aria-label={zh ? '停止朗读' : 'Stop reading'}
-            >
-              <X className="size-4" aria-hidden />
-            </button>
-          </div>
+  const preparing = state.status === 'preparing';
+  const playing = state.status === 'playing';
+  const failed = state.status === 'error';
+  const ended = state.status === 'ended';
+  const status = preparing ? (zh ? '正在准备语音' : 'Preparing audio')
+    : failed ? (zh ? '朗读失败，请重试' : 'Unable to play. Try again')
+      : ended ? (zh ? '播放完毕' : 'Finished') : playing ? (zh ? '正在朗读' : 'Reading aloud') : (zh ? '已暂停' : 'Paused');
+  const player = visible ? (
+    <section aria-label={zh ? '语音播报' : 'Read aloud'} className={cn('shrink-0', dock ? 'pb-2' : 'px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2')}>
+      <div className="mx-auto w-full max-w-3xl overflow-hidden rounded-xl border border-edge bg-surface-panel">
+        <div className="flex min-h-16 items-center gap-1 p-2">
+          <button type="button" onClick={() => setExpanded(!expanded)} aria-expanded={expanded} aria-controls={detailsId}
+            className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-fg">{state.source?.title}</span>
+              <span className="block text-xs text-fg-muted"><span role="status">{status}</span>{!failed && !preparing ? <span className="tabular-nums"> · {formatTime(state.currentTime)}</span> : null}</span>
+            </span>
+            <ChevronDown aria-hidden className={cn('size-4 shrink-0 text-fg-muted', expanded && 'rotate-180')} />
+          </button>
+          <button type="button" onClick={playing ? state.pause : state.resume} disabled={preparing}
+            className={cn(controlClass, 'disabled:opacity-50')}
+            aria-label={ended ? (zh ? '重新播放' : 'Replay') : failed ? (zh ? '重试朗读' : 'Retry reading') : playing ? (zh ? '暂停朗读' : 'Pause reading') : (zh ? '继续朗读' : 'Resume reading')}>
+            {preparing ? <Skeleton className="size-5 rounded-full" /> : failed ? <RotateCcw className="size-5" aria-hidden /> : playing ? <Pause className="size-5" aria-hidden /> : <Play className="size-5" aria-hidden />}
+          </button>
+          <button type="button" onClick={state.stop} className={controlClass} aria-label={zh ? '停止朗读' : 'Stop reading'}><X className="size-5" aria-hidden /></button>
         </div>
-      ) : null}
+        {state.durationComplete ? <div className="h-0.5 bg-surface-active" aria-hidden><div className="h-full bg-accent" style={{ width: `${Math.min(100, state.currentTime / state.duration * 100)}%` }} /></div> : null}
+        {expanded ? <div id={detailsId} className="space-y-3 border-t border-edge-subtle p-4">
+          {state.durationComplete ? <ReadAloudProgress key={`${state.source?.type}:${state.source?.id}`} duration={state.duration} currentTime={state.currentTime} disabled={preparing} onSeek={state.seek} label={zh ? '播放进度' : 'Playback position'} /> : null}
+          {state.currentText ? <p className="max-h-28 overflow-y-auto overscroll-contain whitespace-pre-wrap break-words text-sm text-fg-muted">{state.currentText}</p> : null}
+          {state.source?.href ? <a href={state.source.href} className="inline-flex min-h-11 items-center rounded-lg text-sm text-accent-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{zh ? '返回来源' : 'Return to source'}</a> : null}
+          {failed ? <p role="alert" className="break-words text-sm text-fg-muted">{state.error}</p> : null}
+          <PopoverSelect contentClassName="[&_button]:min-h-11" value={String(state.rate)} allowEmpty={false} placeholder="1×" ariaLabel={zh ? '播放速度' : 'Playback speed'}
+            options={[0.75, 1, 1.25, 1.5, 2].map((rate) => ({ value: String(rate), label: `${rate}×` }))}
+            triggerClassName="min-h-11 w-28" onChange={(value) => state.setRate(Number(value))} />
+        </div> : null}
+      </div>
+    </section>
+  ) : null;
 
-      <ConfirmDialog
-        open={state.consentRequired}
-        title={zh ? '使用在线朗读' : 'Use online read aloud'}
-        description={zh
-          ? '朗读默认使用 Microsoft Edge 在线语音服务，待朗读文本会发送至 Microsoft 进行语音合成。'
-          : 'Read aloud uses Microsoft Edge online speech by default. The text will be sent to Microsoft for speech synthesis.'}
-        confirmLabel={zh ? '同意并朗读' : 'Agree and read'}
-        cancelLabel={zh ? '取消' : 'Cancel'}
-        onConfirm={state.acceptConsent}
-        onCancel={state.declineConsent}
-      />
-    </>
-  );
+  return <>
+    {dock ? createPortal(player, dock) : player}
+    <ConfirmDialog open={state.consentRequired} title={zh ? '使用在线朗读' : 'Use online read aloud'}
+      description={zh ? '朗读默认使用 Microsoft Edge 在线语音服务，待朗读文本会发送至 Microsoft 进行语音合成。' : 'Read aloud uses Microsoft Edge online speech by default. The text will be sent to Microsoft for speech synthesis.'}
+      confirmLabel={zh ? '同意并朗读' : 'Agree and read'} cancelLabel={zh ? '取消' : 'Cancel'} onConfirm={state.acceptConsent} onCancel={state.declineConsent} />
+  </>;
+}
+
+function ReadAloudProgress({ duration, currentTime, disabled, onSeek, label }: {
+  duration: number;
+  currentTime: number;
+  disabled: boolean;
+  onSeek: (time: number) => void;
+  label: string;
+}) {
+  const [preview, setPreview] = useState<number | null>(null);
+  const commit = () => {
+    if (preview === null) return;
+    onSeek(preview);
+    setPreview(null);
+  };
+  return <label className="block text-xs text-fg-muted">
+    <span className="flex justify-between gap-3"><span>{label}</span><span className="tabular-nums">{formatTime(preview ?? currentTime)} / {formatTime(duration)}</span></span>
+    <input type="range" min={0} max={duration} step={0.1} value={preview ?? Math.min(currentTime, duration)} disabled={disabled}
+      onChange={(event) => setPreview(Number(event.target.value))} onPointerUp={commit} onKeyUp={commit} onBlur={commit}
+      onPointerCancel={() => setPreview(null)} className="block h-11 w-full accent-accent" />
+  </label>;
 }

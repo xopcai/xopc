@@ -178,6 +178,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   onModelChange,
   modelDisabled,
 }: ComposerToolbarProps) {
+  if (voiceActive) return null;
   return (
     <ComposerToolbarRow>
       <ComposerAttachButton

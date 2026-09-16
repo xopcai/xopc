@@ -24,7 +24,7 @@ export function ComposerVoiceInputButton({
     <button
       type="button"
       className={cn(
-        'relative inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-fg-subtle hover:bg-surface-hover hover:text-fg',
+        'relative inline-flex size-11 sm:size-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-fg-subtle hover:bg-surface-hover hover:text-fg',
         interaction.transition,
         interaction.press,
         interaction.focusRingPanel,
