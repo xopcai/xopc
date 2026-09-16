@@ -1,0 +1,13 @@
+{
+  "plan_id": "harmonyos-mobile-parity",
+  "title": "HarmonyOS native mobile core parity",
+  "status": "in_progress",
+  "tech_spec_status": "confirmed",
+  "confirmed_at": "2026-09-17",
+  "authorization": "User explicitly authorised autonomous implementation and validation of all phases; request involvement only when required or destructive.",
+  "complexity": "high",
+  "platforms": ["harmony"],
+  "reference_platforms": ["android", "ios"],
+  "current_phase": 6,
+  "total_phases": 7
+}

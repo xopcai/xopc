@@ -12,6 +12,8 @@ import type {
   NotificationPreferences,
 } from '../../../notifications/types.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+import { getDevice } from '../../../storage/sqlite/device-access-repository.js';
+import { harmonyPushConfig } from '../../../notifications/harmony-push.js';
 
 function stringField(value: unknown, maxLength: number): string | null {
   return typeof value === 'string' && value.trim().length > 0 && value.trim().length <= maxLength
@@ -36,7 +38,7 @@ function parsePreferences(value: unknown): Partial<NotificationPreferences> | nu
 }
 
 function parsePlatform(value: unknown): NotificationDevicePlatform | null {
-  return value === 'ios' || value === 'android' ? value : null;
+  return value === 'ios' || value === 'android' || value === 'harmonyos' ? value : null;
 }
 
 function parsePermission(value: unknown): NotificationPermission | null {
@@ -68,6 +70,12 @@ export function registerDevicePushRoutes(authenticated: Hono): void {
     const appVersion = body?.appVersion === undefined ? undefined : stringField(body.appVersion, 128);
     if (!pushToken || !platform || !permissions || !locale || preferences === null || appVersion === null) {
       return c.json({ ok: false, error: 'Invalid push registration' }, 400);
+    }
+    if (getDevice(deviceId)?.platform !== platform) {
+      return c.json({ ok: false, error: 'Push platform must match the paired device' }, 400);
+    }
+    if (platform === 'harmonyos' && !harmonyPushConfig()) {
+      return c.json({ ok: false, error: 'Harmony push is not configured on this Gateway' }, 503);
     }
     const device = registerNotificationDevice({
       deviceId, pushToken, platform, permissions, preferences, locale, appVersion,

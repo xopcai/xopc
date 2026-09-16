@@ -1,0 +1,11 @@
+{
+  "modelVersion": "6.0.2",
+  "name": "xopc-harmony",
+  "version": "0.1.0",
+  "description": "Native HarmonyOS client for xopc Gateway",
+  "dependencies": {},
+  "devDependencies": {
+    "@ohos/hypium": "1.0.28"
+  },
+  "dynamicDependencies": {}
+}

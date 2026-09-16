@@ -22,7 +22,7 @@ const log = createLogger('Sqlite:Migrations');
 export const XOPC_DB_BASELINE_SCHEMA_VERSION = 165;
 
 /** Latest schema version this release supports (increment when adding migrations). */
-export const XOPC_DB_SCHEMA_VERSION = 178;
+export const XOPC_DB_SCHEMA_VERSION = 179;
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 
@@ -62,16 +62,25 @@ function migrationByTarget(
 
 function applySingleMigration(db: DatabaseSync, migration: SqlMigration): ConversationMigrationSummary | undefined {
   log.info({ targetVersion: migration.targetVersion, file: migration.filename }, 'Applying SQLite migration');
-  db.exec('BEGIN IMMEDIATE');
+  // Rebuild the referenced parent table without firing ON DELETE CASCADE.
+  const rebuildDevices = migration.targetVersion === 179;
+  const foreignKeysEnabled = Number(db.prepare('PRAGMA foreign_keys').get()?.foreign_keys) === 1;
+  if (rebuildDevices) db.exec('PRAGMA foreign_keys = OFF');
+  let transactionStarted = false;
   try {
+    db.exec('BEGIN IMMEDIATE');
+    transactionStarted = true;
     db.exec(migration.sql);
     const summary = migration.targetVersion === 178 ? migrateConversationUuids(db) : undefined;
+    if (rebuildDevices && db.prepare('PRAGMA foreign_key_check').all().length > 0) {
+      throw new Error('Device platform migration would violate foreign key integrity');
+    }
     setSchemaVersion(db, migration.targetVersion);
     db.exec('COMMIT');
     return summary;
   } catch (error) {
     try {
-      db.exec('ROLLBACK');
+      if (transactionStarted) db.exec('ROLLBACK');
     } catch {
       /* preserve original error */
     }
@@ -80,6 +89,8 @@ function applySingleMigration(db: DatabaseSync, migration: SqlMigration): Conver
       `SQLite migration to v${migration.targetVersion} (${migration.filename}) failed: ${em}`,
       { cause: error },
     );
+  } finally {
+    if (rebuildDevices && foreignKeysEnabled) db.exec('PRAGMA foreign_keys = ON');
   }
 }
 

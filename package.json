@@ -52,6 +52,8 @@
     "mobile:typecheck": "pnpm -C apps/mobile-expo run typecheck",
     "mobile:test": "pnpm -C apps/mobile-expo test",
     "mobile:test:stream": "pnpm --filter @xopcai/agent-stream-client test",
+    "harmony:verify": "tsx apps/mobile-harmony/scripts/verify.mts",
+    "harmony:test:server": "tsx apps/mobile-harmony/scripts/native-test-server.mts",
     "mobile:release:patch": "bash scripts/apps/mobile-expo/release-patch.sh",
     "mobile:configure:ios:github": "bash scripts/apps/mobile-expo/configure-ios-github-secrets.sh",
     "mobile:release:ios:testflight": "bash scripts/apps/mobile-expo/release-ios-testflight.sh",

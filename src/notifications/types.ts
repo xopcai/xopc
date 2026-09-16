@@ -1,4 +1,4 @@
-export type NotificationDevicePlatform = 'ios' | 'android';
+export type NotificationDevicePlatform = 'ios' | 'android' | 'harmonyos';
 export type NotificationPermission = 'granted' | 'denied' | 'unknown';
 export type NotificationLanguage = 'en' | 'zh';
 

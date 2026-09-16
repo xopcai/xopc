@@ -1,0 +1,13 @@
+{
+  "active": "harmonyos-mobile-parity",
+  "requirements": {
+    "harmonyos-mobile-parity": {
+      "description": "新增纯血鸿蒙移动端，对齐现有 Expo 移动端核心功能，并规划测试、灰度与发布",
+      "current_phase": "coding",
+      "completed_phases": ["analyse", "plan"],
+      "invalidated_phases": [],
+      "platforms": ["harmony"],
+      "project_root": "/Users/micjoyce/develop/github/xopc"
+    }
+  }
+}
