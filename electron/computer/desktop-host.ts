@@ -6,7 +6,7 @@ import WebSocket from 'ws';
 import { EndpointToolHostController, EndpointToolRegistry } from '@xopcai/endpoint-tools-client';
 import { createDesktopEndpointToolDefinitions } from '@xopcai/endpoint-tools-client/desktop-tools';
 import { endpointHelloSigningPayload, type EndpointHelloPayload, type EndpointTurnClaim } from '@xopcai/endpoint-tools-protocol';
-import { RealtimeClient, type RealtimeWebSocket } from '@xopcai/realtime-client';
+import { RealtimeClient, RealtimeConnectionError, type RealtimeWebSocket } from '@xopcai/realtime-client';
 import { COMPUTER_DESCRIPTOR, ComputerCommandSchema } from '@xopcai/computer-control-contract';
 import { ComputerBroker, type ComputerApproval } from '../../src/computer/broker.js';
 import { CuaComputerDriver } from './cua-driver.js';
@@ -15,6 +15,7 @@ import { getElectronShellLanguage, showEndpointNotification } from '../ipc/syste
 import { computerApprovalCopy, getComputerMessages } from './messages.js';
 import { MIME_TYPE_BY_EXTENSION } from '../ipc/file-ipc.js';
 import { normalizeExternalHttpUrl } from '../external-url.js';
+import { assertGatewayCompatibility, GATEWAY_PROTOCOL_INCOMPATIBLE } from '../gateway-compatibility.js';
 import { writeTextAtomic } from '../../src/infra/write-file-atomic.js';
 
 type Identity = { principalId: string; publicKey: string; encryptedPrivateKey: string };
@@ -110,9 +111,14 @@ export class DesktopEndpointHost {
     clearTimeout(this.retry);
     this.connecting = true;
     try { await this.connect(); this.error = undefined; }
-    catch {
-      if (!this.reenrollmentRequired) this.error = 'Desktop endpoint is not ready. Check the local Gateway and keychain.';
-      if (!this.stopped && !this.reenrollmentRequired) this.retry = setTimeout(() => { void this.start(); }, 2000); }
+    catch (error) {
+      if (!this.reenrollmentRequired) this.error = error instanceof Error && error.message === GATEWAY_PROTOCOL_INCOMPATIBLE
+        ? getComputerMessages(getElectronShellLanguage()).protocolIncompatible
+        : 'Desktop endpoint is not ready. Check the local Gateway and keychain.';
+      if (!this.stopped && !this.reenrollmentRequired && !(error instanceof RealtimeConnectionError && !error.retryable)) {
+        this.retry = setTimeout(() => { void this.start(); }, 2000);
+      }
+    }
     finally { this.connecting = false; }
   }
   private createIdentity(): { data: Identity; privateKey: string } {
@@ -179,7 +185,10 @@ export class DesktopEndpointHost {
       return result.json();
     };
     const identity = await this.identity();
-    const registerIdentity = () => request('/api/endpoint-tools/principals', { principalId: identity.data.principalId, publicKey: identity.data.publicKey, kind: 'desktop', platform: process.platform, displayName: 'xopc Desktop' });
+    const registerIdentity = async () => {
+      await assertGatewayCompatibility(connection, this.lifetime.signal);
+      return request('/api/endpoint-tools/principals', { principalId: identity.data.principalId, publicKey: identity.data.publicKey, kind: 'desktop', platform: process.platform, displayName: 'xopc Desktop' });
+    };
     await registerIdentity();
     if (this.stopped) return;
     const endpointId = `${identity.data.principalId}:${randomUUID()}`;
@@ -244,7 +253,8 @@ export class DesktopEndpointHost {
     const clientId = randomUUID();
     const realtime = new RealtimeClient({ clientId, clientKind: 'desktop', createMessageId: randomUUID,
       onStateChange: (state, error) => {
-        if (!this.reenrollmentRequired) this.error = state === 'connected' ? undefined : error;
+        if (!this.reenrollmentRequired) this.error = state === 'connected' ? undefined
+          : error === GATEWAY_PROTOCOL_INCOMPATIBLE ? getComputerMessages(getElectronShellLanguage()).protocolIncompatible : error;
       },
       issueTicket: async (signal) => (await request('/api/realtime/tickets', { clientId, clientKind: 'desktop' }, signal)).payload.ticket,
       getWebSocketUrl: () => base.replace('http:', 'ws:') + '/api/realtime/v1/ws',

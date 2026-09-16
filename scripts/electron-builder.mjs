@@ -66,6 +66,10 @@ const electronPlatform = extra.includes('--mac')
       ? 'linux'
       : process.platform;
 const electronArch = extra.includes('--arm64') ? 'arm64' : extra.includes('--x64') ? 'x64' : process.arch;
+const compatibility = spawnSync(process.execPath, [join(root, 'scripts/verify-electron-gateway-compatibility.mjs')], {
+  stdio: 'inherit', cwd: root, env,
+});
+if (compatibility.status !== 0) process.exit(compatibility.status ?? 1);
 const packDir = prepareElectronPackDir(root, { platform: electronPlatform, arch: electronArch });
 const entitlementsPath = join(packDir, '_pack-resources/entitlements.mac.plist').replace(/\\/g, '/');
 const effectivePackConfig = join(packDir, 'electron-builder.effective.yml');

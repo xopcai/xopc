@@ -6,6 +6,10 @@ import type { WebSocket as WebSocketType } from 'ws';
 
 import { REALTIME_MAX_CLIENT_FRAME_BYTES, REALTIME_PROTOCOL_VERSION, parseServerRealtimeMessage } from '@xopcai/realtime-protocol';
 import { RealtimeRuntime } from '../runtime.js';
+import { COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
+import { endpointHelloSigningPayload, type EndpointHelloPayload } from '@xopcai/endpoint-tools-protocol';
+import { generateKeyPairSync, sign } from 'node:crypto';
+import { EndpointToolRuntime } from '../../endpoint-tools/runtime.js';
 
 const { WebSocket } = createRequire(import.meta.url)('ws') as typeof import('ws');
 
@@ -44,6 +48,51 @@ describe('RealtimeRuntime', () => {
     socket?.close();
     runtime?.close();
     if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
+  });
+
+  it.each(['compatible', 'old-contract', 'bad-signature'])('handles desktop %s without confusing protocol and auth failures', async (variant) => {
+    const { publicKey, privateKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+    const principal = { id: 'desktop-test', kind: 'desktop' as const, displayName: 'Desktop', platform: 'darwin',
+      publicKey: publicKey.export({ format: 'der', type: 'spki' }).toString('base64url'), createdAt: Date.now() };
+    const endpoints = new EndpointToolRuntime({ auth: {
+      getPrincipal: () => principal, bindEndpoint: () => true, touchPrincipal: () => {},
+    } });
+    runtime = new RealtimeRuntime(endpoints);
+    server = createServer();
+    server.on('upgrade', (request, connection, head) => {
+      if (!runtime!.handleUpgrade(request, connection, head)) connection.destroy();
+    });
+    await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing test address');
+    const hello: EndpointHelloPayload = {
+      principalId: principal.id, endpointId: 'desktop-instance', connectionInstanceId: crypto.randomUUID(),
+      displayName: principal.displayName, kind: principal.kind, platform: principal.platform, appVersion: 'test',
+      availability: 'foreground', nonce: crypto.randomUUID(), signedAt: Date.now(), signature: 'pending-signature',
+      tools: [JSON.parse(JSON.stringify(COMPUTER_DESCRIPTOR))],
+    };
+    if (variant === 'old-contract') hello.tools[0]!.inputSchema = {};
+    hello.signature = sign('sha256', Buffer.from(endpointHelloSigningPayload(hello)),
+      { key: privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url');
+    if (variant === 'bad-signature') hello.signature = 'x'.repeat(86);
+    const issued = runtime.tickets.issue('desktop-client', 'desktop', { principalId: 'owner', scopes: ['gateway.admin'] });
+    socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/realtime/v1/ws`);
+    await waitForOpen(socket);
+    const messages = collectMessages(socket);
+    const closed = new Promise<{ code: number; reason: string }>((resolve) => socket!.once('close', (code, reason) => resolve({ code, reason: reason.toString() })));
+    try {
+      socket.send(JSON.stringify({ protocolVersion: REALTIME_PROTOCOL_VERSION, messageId: crypto.randomUUID(),
+        kind: 'realtime.hello', sentAt: Date.now(), payload: {
+          ticket: issued.ticket, clientId: 'desktop-client', clientKind: 'desktop', subscriptions: [], endpoint: hello,
+        } }));
+      if (variant === 'compatible') {
+        await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.ready', payload: { endpoint: { endpointId: hello.endpointId } } });
+      } else {
+        await expect(closed).resolves.toEqual(variant === 'old-contract'
+          ? { code: 4409, reason: 'GATEWAY_PROTOCOL_INCOMPATIBLE' }
+          : { code: 4401, reason: 'Realtime endpoint authentication failed' });
+      }
+    } finally { endpoints.close(); }
   });
 
   it('authenticates with a one-time ticket and resumes a topic from a cursor', async () => {

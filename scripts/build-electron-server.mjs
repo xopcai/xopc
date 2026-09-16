@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Bundle the gateway CLI into a single ESM file under out/server/index.js for Electron packaging.
- * Run after `pnpm run build` so dist/src/cli/bin.js exists. Invoked by electron:server:build.
+ * Bundle current sources, just like the desktop main process. Never reuse stale dist code.
+ * Run after `pnpm run build` for generated runtime assets. Invoked by electron:server:build.
  */
 import * as esbuild from 'esbuild';
 import { cpSync, existsSync, mkdirSync } from 'node:fs';
@@ -11,14 +12,14 @@ import { fileURLToPath } from 'node:url';
 import { ELECTRON_GATEWAY_EXTERNALS } from './electron-runtime-externals.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const entry = join(root, 'dist/src/cli/bin.js');
+const entry = join(root, 'src/cli/bin.ts');
 const outfile = join(root, 'out/server/index.js');
-const voiceRuntimeEntry = join(root, 'dist/src/voice/local/runtime-worker.js');
+const voiceRuntimeEntry = join(root, 'src/voice/local/runtime-worker.ts');
 const voiceRuntimeOutfile = join(root, 'out/server/voice-runtime.js');
 
 if (!existsSync(entry)) {
   console.error(
-    `[build-electron-server] Missing ${entry}. Run \`pnpm run build\` first, then retry.\n`,
+    `[build-electron-server] Missing source entry ${entry}. Run from a complete source checkout.\n`,
   );
   process.exit(1);
 }
@@ -61,7 +62,7 @@ if (!bundledOpenAiCodexOAuth) {
 }
 
 if (!existsSync(voiceRuntimeEntry)) {
-  console.error(`[build-electron-server] Missing ${voiceRuntimeEntry}. Run \`pnpm run build\` first.`);
+  console.error(`[build-electron-server] Missing source entry ${voiceRuntimeEntry}. Run from a complete source checkout.`);
   process.exit(1);
 }
 await esbuild.build({

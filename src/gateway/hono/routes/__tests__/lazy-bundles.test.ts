@@ -6,6 +6,12 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps the compatibility preflight without intercepting endpoint core routes', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/compatibility')?.id).toBe('endpoint-compatibility');
+    for (const path of ['/api/endpoint-tools/principals', '/api/endpoint-tools/compatibility-other']) {
+      expect(findAuthenticatedLazyRouteBundle(path)).toBeUndefined();
+    }
+  });
   it('maps every import route family without swallowing nearby paths', () => {
     for (const path of ['/api/imports/sources', '/api/imports/sources/codex/scan', '/api/imports/sources/claude-code/scan', '/api/imports/inventories/id', '/api/imports/inventories/id/items/item/preview', '/api/imports/runs', '/api/imports/runs/id']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('imports');

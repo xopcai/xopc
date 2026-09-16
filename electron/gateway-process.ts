@@ -9,6 +9,7 @@ import { app } from 'electron';
 import { createProcessDiagnosticWriter } from '../src/infra/process-diagnostics.js';
 
 import type { GatewayBindMode } from '../src/config/schema.js';
+import { assertGatewayCompatibility, GATEWAY_PROTOCOL_INCOMPATIBLE } from './gateway-compatibility.js';
 
 import {
   GatewayStartupError,
@@ -105,6 +106,7 @@ export async function resolveGatewayStartupMode(params: {
   bindHost: string;
 }): Promise<'reuse' | 'spawn'> {
   if (await acceptsConfiguredGatewayToken(params.port, params.token)) {
+    await checkGatewayCompatibility(params);
     return 'reuse';
   }
 
@@ -119,6 +121,18 @@ export async function resolveGatewayStartupMode(params: {
       `Gateway port ${params.port} is already in use, but the process on that port does not accept the configured xopc gateway token.`,
     ),
   );
+}
+
+async function checkGatewayCompatibility(connection: { port: number; token: string }): Promise<void> {
+  try {
+    await assertGatewayCompatibility(connection);
+  } catch (error) {
+    if (error instanceof Error && error.message === GATEWAY_PROTOCOL_INCOMPATIBLE) {
+      throw new GatewayStartupError({ kind: 'gateway_protocol_incompatible', port: connection.port,
+        message: 'Desktop and Gateway protocols differ. Update both to the same build and restart the Gateway.' });
+    }
+    throw error;
+  }
 }
 
 function resolvePackagedAppPath(...segments: string[]): string {
@@ -335,8 +349,12 @@ export async function waitForGatewayReady(
         headers: { Authorization: `Bearer ${token}` },
         signal: AbortSignal.timeout(2000),
       });
-      if (res.ok) return port;
-    } catch {
+      if (res.ok) {
+        await checkGatewayCompatibility({ port, token });
+        return port;
+      }
+    } catch (error) {
+      if (error instanceof GatewayStartupError) throw error;
       /* retry */
     }
     await new Promise((r) => setTimeout(r, 250));
