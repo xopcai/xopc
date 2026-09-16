@@ -6,6 +6,11 @@ import type { DatabaseSync } from 'node:sqlite';
 import { requireNodeSqlite } from '../../../infra/node-sqlite.js';
 import { windowsDatabaseOwners } from './conversation-windows-owners.js';
 
+function isSkippableProcError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException).code;
+  return code === 'ENOENT' || code === 'EACCES' || code === 'EPERM';
+}
+
 function databaseOwners(databasePath: string): string[] {
   if (process.platform === 'win32') return windowsDatabaseOwners(databasePath);
   if (process.platform === 'linux') {
@@ -19,11 +24,11 @@ function databaseOwners(databasePath: string): string[] {
           try {
             if (paths.has(readlinkSync(`/proc/${pid}/fd/${fd}`))) { owners.push(pid); break; }
           } catch (error) {
-            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+            if (!isSkippableProcError(error)) throw error;
           }
         }
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        if (!isSkippableProcError(error)) throw error;
       }
     }
     return owners;
