@@ -10,6 +10,7 @@ import {
   dialog,
   globalShortcut,
   ipcMain,
+  powerMonitor,
   session,
   shell,
   type BrowserWindowConstructorOptions,
@@ -64,6 +65,8 @@ import {
   toggleDesktopPet,
 } from './desktop-pet/window.js';
 import { assertTrustedRenderer } from './ipc/trusted-renderer.js';
+import { DesktopEndpointHost } from './computer/desktop-host.js';
+import { getGatewayConnection } from './gateway-process.js';
 import {
   getLoadingPageDataUrl,
   getRendererCrashPageDataUrl,
@@ -120,6 +123,7 @@ import {
 
 /** Track the main window for gateway exit notifications. */
 let mainWindow: BrowserWindow | null = null;
+let desktopEndpointHost: DesktopEndpointHost | undefined;
 let mainWindowNavigationReady = false;
 let pendingMainWindowNavigation: string | null = null;
 
@@ -693,6 +697,10 @@ function createWindow(): void {
   });
 
   mainWindow = win;
+  for (const event of ['hide', 'minimize', 'blur', 'focus', 'show', 'restore'] as const) {
+    win.on(event, () => desktopEndpointHost?.visibilityChanged());
+  }
+  win.webContents.on('render-process-gone', () => { void desktopEndpointHost?.broker.stop(); });
   mainWindowNavigationReady = false;
   registerMainWindowStatePersistence(win);
   if (initialWindowState.isMaximized) {
@@ -759,6 +767,7 @@ function createWindow(): void {
       quit: () => {
         app.quit();
       },
+      stopComputer: () => { void desktopEndpointHost?.broker.stop(); },
     },
     menuMessages,
   );
@@ -1000,6 +1009,22 @@ app.whenReady().then(async () => {
   const electronUserPaths = getElectronUserPaths();
   const gatewayConfig = await ensureGatewayConfigForElectron(electronUserPaths);
   registerGatewayConnection({ port: gatewayConfig.port, token: gatewayConfig.token });
+  desktopEndpointHost = new DesktopEndpointHost({ connection: getGatewayConnection, window: () => mainWindow });
+  void desktopEndpointHost.start();
+  if (!globalShortcut.register('Control+Alt+Escape', () => { void desktopEndpointHost?.broker.stop(); })) {
+    console.warn('[Computer] Emergency shortcut unavailable; use the tray or settings Stop control.');
+  }
+  powerMonitor.on('lock-screen', () => { void desktopEndpointHost?.broker.stop(); });
+  powerMonitor.on('suspend', () => { void desktopEndpointHost?.broker.stop(); });
+  const assertMainComputerRenderer = (event: IpcMainInvokeEvent) => {
+    assertTrustedRenderer(event);
+    if (event.sender !== mainWindow?.webContents || event.senderFrame !== mainWindow?.webContents.mainFrame) {
+      throw new Error('Computer IPC requires the main frame');
+    }
+  };
+  ipcMain.handle('computer:status', (event) => { assertMainComputerRenderer(event); return desktopEndpointHost?.snapshot(); });
+  ipcMain.handle('computer:stop', async (event) => { assertMainComputerRenderer(event); await desktopEndpointHost?.broker.stop(); return { ok: true }; });
+  ipcMain.handle('computer:reenroll', async (event) => { assertMainComputerRenderer(event); await desktopEndpointHost?.reenroll(); return desktopEndpointHost?.snapshot(); });
   const { fileIpcRoots } = gatewayConfig;
   registerFileIpc(ipcMain, { allowedRoots: fileIpcRoots });
   registerSearchIpc(ipcMain, { allowedRoots: fileIpcRoots });
@@ -1297,7 +1322,7 @@ app.on('before-quit', (event) => {
 
   event.preventDefault();
   if (!quitCleanupPromise) {
-    quitCleanupPromise = stopGatewayProcessAndWait().finally(() => {
+    quitCleanupPromise = Promise.all([stopGatewayProcessAndWait(), desktopEndpointHost?.close()]).then(() => {}).finally(() => {
       quitCleanupComplete = true;
       app.quit();
     });

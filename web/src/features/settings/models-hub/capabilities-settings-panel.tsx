@@ -25,6 +25,7 @@ import { revalidateModelsHubCaches } from './models-hub-cache';
 import { ProviderManageDialog } from './provider-manage-dialog';
 import { ModelCatalogStatus } from './model-catalog-status';
 import { XopcCloudAccountCard } from './xopc-cloud-account-card';
+import { ComputerModelSettings } from '../computer/computer-model-settings';
 
 interface SectionDefinition {
   id: CapabilitySettingsSectionId;
@@ -122,6 +123,7 @@ export function CapabilitiesSettingsPanel() {
           <>
             {xopcCloudConfigured ? <XopcCloudAccountCard labels={c.xopcCloudAccount} /> : null}
             <ModelCatalogStatus />
+            <ComputerModelSettings zh={language === 'zh'} />
             <ConnectedProvidersGrid
               labels={c.connectedProviders}
               data={providerData}

@@ -10,6 +10,8 @@ import {
   type ModelCatalogSnapshot,
 } from '../../providers/model-catalog-store.js';
 import { isProviderConfiguredSync } from '../../providers/index.js';
+import { resolveModel } from '../../providers/index.js';
+import { isComputerModel } from '../../computer/model-policy.js';
 import { compareCatalogModels } from '../../providers/model-catalog-ranking.js';
 import {
   DEFAULT_LOCAL_VOICE_MODEL_ID,
@@ -44,6 +46,7 @@ export function buildCapabilityPlansForConfig(
   const tts = config.messages?.tts;
   const policies: Record<CapabilityId, CapabilityPolicy> = {
     vision: { explicit: refs(getAgentDefaultImageModelConfig(config)) },
+    'computer-use': { explicit: refs(config.agents.defaults.models.computerUse) },
     'image-generation': {
       explicit: refs(getAgentDefaultImageGenerationModelConfig(config, agentId)),
     },
@@ -149,6 +152,9 @@ function explicitReady(
   providerReady: (providerId: string) => boolean,
 ): boolean {
   if (!providerReady(provider)) return false;
+  if (capability === 'computer-use' && provider !== 'xopc-cloud') {
+    try { return isComputerModel(resolveModel(`${provider}/${model}`)); } catch { return false; }
+  }
   if (provider !== 'xopc-cloud') return true;
   return (catalog.sources['xopc-cloud']?.models ?? []).some((entry) =>
     entry.id === model && matchesCapability(entry, capability));
@@ -184,7 +190,9 @@ function matchesCapability(model: CatalogModel, capability: CapabilityId): boole
   if (model.availability !== 'available') return false;
   switch (capability) {
     case 'vision':
-      return model.kind === 'language' && model.input.includes('image');
+      return model.kind === 'language' && model.input.includes('image') && !model.computerUse;
+    case 'computer-use':
+      return model.operations.includes('chat.completions') && isComputerModel({ ...model, api: 'openai-completions' });
     case 'image-generation':
       return model.kind === 'image' && model.operations.includes('images.generate');
     case 'stt':

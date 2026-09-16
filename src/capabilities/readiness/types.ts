@@ -1,4 +1,4 @@
-export type CapabilityId = 'vision' | 'image-generation' | 'stt' | 'tts';
+export type CapabilityId = 'vision' | 'image-generation' | 'stt' | 'tts' | 'computer-use';
 
 export type CandidateSource =
   | 'native-model'

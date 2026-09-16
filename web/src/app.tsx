@@ -15,6 +15,7 @@ import { ExtensionProvider } from '@/features/extensions/extension-provider';
 import {
   loadAgentsSettingsPage,
   loadAgentBrowserSettingsPage,
+  loadComputerSettingsPage,
   loadExtensionsPage,
   loadAutomationsPage,
   loadBrowserAutomationsPage,
@@ -74,6 +75,7 @@ const AgentsSettingsDetailPage = lazy(() =>
 const AgentBrowserSettingsPage = lazy(() =>
   loadAgentBrowserSettingsPage().then((m) => ({ default: m.AgentBrowserSettingsPage })),
 );
+const ComputerSettingsPage = lazy(() => loadComputerSettingsPage().then(m => ({ default: m.ComputerSettingsPage })));
 const ChannelsPage = lazy(() => loadChannelsPage().then((m) => ({ default: m.ChannelsSettingsPanel })));
 const ExtensionsPage = lazy(() => loadExtensionsPage().then((m) => ({ default: m.ExtensionsPage })));
 const ExtensionPage = lazy(() => loadExtensionPage().then((m) => ({ default: m.ExtensionPage })));
@@ -467,6 +469,14 @@ const router = createHashRouter([
             element: (
               <Suspense fallback={<SecondaryRouteFallback />}>
                 <LogsPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'computer-use',
+            element: (
+              <Suspense fallback={<SettingsRouteFallback />}>
+                <ComputerSettingsPage />
               </Suspense>
             ),
           },

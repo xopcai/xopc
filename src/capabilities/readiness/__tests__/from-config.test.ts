@@ -23,6 +23,20 @@ function catalog(): ModelCatalogSnapshot {
 }
 
 describe('buildCapabilityPlansForConfig', () => {
+  it('requires explicit GUI selection and never uses a different recipient or vision fallback', () => {
+    const snapshot = catalog();
+    const cloud = snapshot.sources['xopc-cloud'];
+    cloud.models = [{ ...cloud.models[0], id: 'gui', computerUse: { profile: 'gui-plus-2026-02-26' } }];
+    const config = ConfigSchema.parse({});
+    const options = { catalog: snapshot, providerReady: () => true, localSttReady: false };
+    expect(buildCapabilityPlansForConfig(config, options)['computer-use'].primary).toBeUndefined();
+    expect(buildCapabilityPlansForConfig(config, options).vision.primary).toBeUndefined();
+    config.agents.defaults.models.computerUse = { primary: 'xopc-cloud/gui', fallbacks: [] };
+    expect(buildCapabilityPlansForConfig(config, options)['computer-use']).toMatchObject({ status: 'ready', fallbacks: [], primary: { model: 'gui' } });
+    cloud.models[0].availability = 'unavailable';
+    expect(buildCapabilityPlansForConfig(config, options)['computer-use']).toMatchObject({ status: 'unavailable', fallbacks: [] });
+    expect(buildCapabilityPlansForConfig(config, options)['computer-use'].primary).toBeUndefined();
+  });
   it('makes every cloud capability ready without persisted modality config', () => {
     const config = ConfigSchema.parse({});
     const plans = buildCapabilityPlansForConfig(config, {

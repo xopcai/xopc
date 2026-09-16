@@ -17,8 +17,10 @@ describe('settings navigation information architecture', () => {
       'settingsModels',
       'settingsVoice',
       'settingsSearch',
-      'settingsAgentBrowser',
       'settingsAgentDefaults',
+    ]);
+    expect(SETTINGS_SHELL_NAV_GROUPS.find(group => group.id === 'integrations')?.tabs).toEqual([
+      'settingsComputerUse', 'settingsAgentBrowser',
     ]);
     expect(connection?.tabs).toEqual(['settingsDevices', 'settingsTunnel', 'settingsShares']);
     expect(system?.tabs).toEqual(['settingsGateway', 'settingsRuntimes', 'settingsImports', 'sessions', 'logs']);
@@ -32,12 +34,17 @@ describe('settings navigation information architecture', () => {
     expect(zh.settingsNavGroups.connection).toBe('设备与连接');
     expect(en.settingsNavGroups.capabilities).toBe('Intelligence');
     expect(en.settingsNavGroups.connection).toBe('Devices & connections');
+    expect(zh.settingsNavGroups.integrations).toBe('集成');
+    expect(en.settingsNavGroups.integrations).toBe('Integrations');
   });
 
   it('maps each intelligence destination directly and keeps image models under Models', () => {
     expect(pathForTab('settingsModels')).toBe('/settings/capabilities/models');
     expect(pathForTab('settingsVoice')).toBe('/settings/capabilities/voice');
     expect(pathForTab('settingsSearch')).toBe('/settings/capabilities/search');
+    expect(pathForTab('settingsComputerUse')).toBe('/settings/computer-use');
+    expect(isSettingsTabActiveAtPath('settingsComputerUse', '/settings/computer-use')).toBe(true);
+    expect(isSettingsTabActiveAtPath('settingsAgentBrowser', '/settings/computer-use')).toBe(false);
     expect(isSettingsTabActiveAtPath('settingsModels', '/settings/capabilities/image')).toBe(true);
     expect(isSettingsTabActiveAtPath('settingsVoice', '/settings/capabilities/image')).toBe(false);
   });

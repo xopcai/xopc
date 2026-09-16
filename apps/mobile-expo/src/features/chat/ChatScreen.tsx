@@ -1,7 +1,7 @@
 /** Chat-first root and session detail surface. */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { Icon, Text } from 'react-native-paper';
@@ -18,7 +18,7 @@ import { AgentPickerSheet } from './AgentPickerSheet';
 import { ChatComposer } from './ChatComposer';
 import { ChatContextControl } from './ChatContextControl';
 import { ChatHeader, CHAT_HEADER_TOP_PADDING_AFTER_SAFE_AREA } from './ChatHeader';
-import { ChatNavigationSheet } from './ChatNavigationSheet';
+import { ChatNavigationDrawer, type ChatNavigationDrawerHandle } from './ChatNavigationDrawer';
 import { StaticChatToast } from './StaticChatToast';
 import { ContinuousReadAloudBar } from './ContinuousReadAloudBar';
 import { ClarifyPrompt } from './ClarifyPrompt';
@@ -45,9 +45,14 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
   const queryClient = useQueryClient();
   const page = useChatPage({ root });
   const [composerContextRefs, setComposerContextRefs] = useState<ComposerContextRef[]>([]);
-  const [navigationVisible, setNavigationVisible] = useState(false);
+  const navigationRef = useRef<ChatNavigationDrawerHandle>(null);
   const [composerActionsOpen, setComposerActionsOpen] = useState(false);
   const closeComposerActions = useCallback(() => setComposerActionsOpen(false), []);
+  const dismissActionsOnOutsideTouch = useCallback(() => {
+    closeComposerActions();
+    // Observe the touch without taking it from message links, selection, or scrolling.
+    return false;
+  }, [closeComposerActions]);
   const {
     conversationId,
     urlConversationId,
@@ -137,7 +142,18 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
   const canvasBg = colors.surface.base;
 
   return (
-    <View style={[styles.screen, { backgroundColor: canvasBg }]} onTouchStart={closeComposerActions}>
+    <ChatNavigationDrawer
+      ref={navigationRef}
+      swipeEnabled={root}
+      onInteraction={closeComposerActions}
+      currentConversationId={conversationId}
+      recentSessions={recentSessionsQuery.data?.items ?? []}
+      attentionCount={attentionItems.length}
+      onSessionSelect={handleSessionSelect}
+      onNewChat={handleNewChat}
+    >
+    <View style={[styles.screen, { backgroundColor: canvasBg }]}>
+      <View onStartShouldSetResponderCapture={dismissActionsOnOutsideTouch}>
       <ChatHeader
         agentName={agentName}
           modelName={modelName}
@@ -146,7 +162,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
           paddingTop={headerPaddingTop}
           pillText={colors.text.primary}
           onBackPress={root ? undefined : handleBack}
-          onNavigationPress={root ? () => setNavigationVisible(true) : undefined}
+          onNavigationPress={root ? () => navigationRef.current?.open() : undefined}
           onAgentPress={openAgentsPicker}
           onModelSelect={handleModelSelect}
           onFilesPress={conversationId ? () => router.push(`/files/context/session/${encodeURIComponent(conversationId)}` as never) : undefined}
@@ -158,10 +174,13 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
         onReconnect={openReconnectLanding}
       />
 
+      </View>
+
       {call.phase !== 'idle' && !call.expanded ? <View style={styles.voiceCallSpacer} /> : null}
 
       <View style={[styles.chatBody, { backgroundColor: canvasBg }]}>
         <View style={styles.chatBodyInner}>
+        <View style={styles.listFill} onStartShouldSetResponderCapture={dismissActionsOnOutsideTouch}>
         {!urlConversationId && bootstrap.bootstrapError ? (
           <View style={[styles.bootstrapError, { borderColor: colors.semantic.error }]}>
             <Icon source="alert" size={18} color={colors.semantic.errorBold} />
@@ -174,7 +193,6 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
           </View>
         ) : null}
 
-        <View style={styles.listFill}>
           <MessageList
             messages={displayMessages}
             reasoningLevel={reasoningLevel}
@@ -242,6 +260,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
             paddingBottom: floatingBottomPadding(insets.bottom),
           }}
         >
+          <View onStartShouldSetResponderCapture={dismissActionsOnOutsideTouch}>
           <ContinuousReadAloudBar conversationId={conversationId} />
           <ClarifyPrompt
             prompt={chat.clarifyPrompt}
@@ -254,6 +273,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
           {!chat.clarifyPrompt ? (
             <ChatAttentionTray gatewayId={activeGatewayId} items={attentionItems} />
           ) : null}
+          </View>
           <ChatComposer
             actionsOpen={composerActionsOpen}
             onActionsOpenChange={setComposerActionsOpen}
@@ -302,16 +322,9 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
         onSelect={handleAgentSelect}
         onDismiss={() => setAgentSheetVisible(false)}
       />
-      <ChatNavigationSheet
-        visible={navigationVisible}
-        onDismiss={() => setNavigationVisible(false)}
-        currentConversationId={conversationId}
-        recentSessions={recentSessionsQuery.data?.items ?? []}
-        attentionCount={attentionItems.length}
-        onSessionSelect={handleSessionSelect}
-        onNewChat={handleNewChat}
-      />
+
     </View>
+    </ChatNavigationDrawer>
   );
 }
 

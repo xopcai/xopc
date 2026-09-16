@@ -3,6 +3,7 @@ import { readFileSync, rmSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 
 import { z } from 'zod';
+import { ComputerProfileSchema } from '@xopcai/computer-control-contract';
 
 import { resolveXopcCloudCatalogCachePath } from '../config/paths-state.js';
 import { writeTextAtomic } from '../infra/write-file-atomic.js';
@@ -49,6 +50,7 @@ const catalogModelSchema = z.object({
   availability: z.enum(['available', 'unavailable']),
   kind: z.enum(['language', 'image', 'stt', 'tts', 'omni']),
   voice: voiceManifestSchema.optional(),
+  computerUse: z.object({ profile: ComputerProfileSchema }).strict().optional(),
   input: z.array(z.enum(['text', 'image', 'audio'])),
   output: z.array(z.enum(['text', 'image', 'audio'])),
   operations: z.array(z.enum([

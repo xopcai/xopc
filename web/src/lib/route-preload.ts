@@ -14,6 +14,7 @@ export const loadLogsPage = () => import('@/pages/logs-page');
 export const loadSettingsPage = () => import('@/pages/settings-page');
 export const loadAgentsSettingsPage = () => import('@/features/settings/agents');
 export const loadAgentBrowserSettingsPage = () => import('@/features/settings/browser/browser-settings-page');
+export const loadComputerSettingsPage = () => import('@/features/settings/computer/computer-settings-page');
 export const loadChannelsPage = () => import('@/features/settings/channels-settings');
 export const loadExtensionsPage = () => import('@/pages/apps-page');
 export const loadExtensionPage = () => import('@/features/extensions/extension-page');
@@ -79,6 +80,7 @@ function preloadSettingsSection(path: string) {
   if (section === 'shares') return preload(loadSharesSettingsPanel);
   if (section === 'agent-defaults') return preload(loadAgentDefaultsSettingsPanel);
   if (section === 'agent-browser') return preload(loadAgentBrowserSettingsPage);
+  if (section === 'computer-use') return preload(loadComputerSettingsPage);
 }
 
 export function preloadRouteForPath(to: string) {

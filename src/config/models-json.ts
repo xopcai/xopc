@@ -7,9 +7,11 @@
  */
 
 import { z } from 'zod';
+import { ComputerProfileSchema } from '@xopcai/computer-control-contract';
 import { existsSync, readFileSync } from 'fs';
 import { writeTextAtomicSync } from '../infra/write-file-atomic.js';
 import { resolveModelsJsonPath } from './paths.js';
+import { isComputerModel } from '../computer/model-policy.js';
 
 // Re-export for convenience
 export { resolveModelsJsonPath as getModelsJsonPath } from './paths.js';
@@ -128,6 +130,7 @@ export const ImageGenerationProviderSchema = z.object({
 // ============================================
 
 export const CustomModelSchema = z.object({
+  computerUse: z.object({ profile: ComputerProfileSchema }).strict().optional(),
 	id: z.string().min(1),
 	name: z.string().min(1).optional(),
 	api: z.enum([
@@ -161,6 +164,7 @@ export const CustomModelSchema = z.object({
 // ============================================
 
 export const ModelOverrideSchema = z.object({
+  computerUse: z.object({ profile: ComputerProfileSchema }).strict().optional(),
 	name: z.string().min(1).optional(),
 	reasoning: z.boolean().optional(),
 	thinkingLevelMap: z.partialRecord(z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']), z.string().nullable()).optional(),
@@ -409,6 +413,10 @@ export function validateModelsConfig(config: unknown): ValidationResult {
 		if (providerConfig.models) {
 			for (let i = 0; i < providerConfig.models.length; i++) {
 				const model = providerConfig.models[i];
+				if (model.computerUse && !isComputerModel({ ...model, api: model.api ?? providerConfig.api })) {
+					errors.push({ path: `providers.${providerName}.models[${i}].computerUse`,
+						message: 'Computer Use requires image input and the openai-completions API', severity: 'error' });
+				}
 				if (!model.api && !providerConfig.api) {
 					errors.push({
 						path: `providers.${providerName}.models[${i}].api`,

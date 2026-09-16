@@ -26,10 +26,12 @@ export const ComposerActionPanel = memo(function ComposerActionPanel({ visible, 
   const [page, setPage] = useState(0);
   const pagerRef = useRef<ScrollView>(null);
   const pendingAction = useRef<(() => void) | null>(null);
-  const rowHeight = spacing.xxxl + spacing.lg + spacing.sm + typography.label.lineHeight * fontScale * 2;
-  const panelHeight = Math.min(screenHeight * 0.45, rowHeight * 2 + spacing.xl * 2 + spacing.lg);
+  const rowHeight = TILE_SIZE + spacing.sm + spacing.md + typography.label.lineHeight * fontScale * 2;
+  const chromeHeight = spacing.lg + spacing.xl + spacing.lg;
+  const rows = screenHeight * 0.45 >= rowHeight * 2 + chromeHeight ? 2 : 1;
+  const panelHeight = rowHeight * rows + chromeHeight;
   const columns = width > 0 && width < (TILE_SIZE + spacing.sm) * 4 + spacing.md * 2 ? 3 : 4;
-  const pageSize = columns * 2;
+  const pageSize = columns * rows;
   const pageCount = Math.ceil(items.length / pageSize);
 
   const finishClose = useCallback(() => {
@@ -83,15 +85,15 @@ export const ComposerActionPanel = memo(function ComposerActionPanel({ visible, 
       importantForAccessibility={visible ? 'auto' : 'no-hide-descendants'}
     >
       <View style={{ height: panelHeight }}>
-        <ScrollView ref={pagerRef} horizontal pagingEnabled showsHorizontalScrollIndicator={false}
+        <ScrollView ref={pagerRef} horizontal pagingEnabled directionalLockEnabled showsHorizontalScrollIndicator={false}
+          alwaysBounceVertical={false} bounces={false} contentInsetAdjustmentBehavior="never"
           keyboardShouldPersistTaps="always" style={styles.pager}
           onMomentumScrollEnd={event => {
             if (width > 0) setPage(Math.round(event.nativeEvent.contentOffset.x / width));
           }}
         >
           {Array.from({ length: pageCount }, (_, pageIndex) => (
-            <ScrollView key={`${pageIndex}:${width}`} style={{ width }} contentContainerStyle={styles.grid}
-              showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="always">
+            <View key={pageIndex} style={[styles.grid, { width }]}>
               {items.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize).map(item => (
                 <Pressable key={item.key} style={[styles.cell, { width: `${100 / columns}%`, minHeight: rowHeight, opacity: item.disabled ? 0.4 : 1 }]}
                   disabled={item.disabled} accessibilityRole="button" accessibilityLabel={item.label}
@@ -105,11 +107,11 @@ export const ComposerActionPanel = memo(function ComposerActionPanel({ visible, 
                     <View style={[styles.tile, { backgroundColor: pressed ? colors.surface.hover : colors.surface.input }]}>
                       <Icon source={item.icon} size={spacing.xxl} color={colors.text.primary} />
                     </View>
-                    <Text style={[styles.label, { color: colors.text.secondary }]}>{item.label}</Text>
+                    <Text numberOfLines={2} style={[styles.label, { color: colors.text.secondary }]}>{item.label}</Text>
                   </>}
                 </Pressable>
               ))}
-            </ScrollView>
+            </View>
           ))}
         </ScrollView>
         <View style={styles.dots} accessible={false}>
@@ -125,7 +127,7 @@ export const ComposerActionPanel = memo(function ComposerActionPanel({ visible, 
 const styles = StyleSheet.create({
   panel: { overflow: 'hidden' },
   pager: { flex: 1 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: spacing.md, paddingTop: spacing.lg },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', alignContent: 'flex-start', paddingHorizontal: spacing.md, paddingTop: spacing.lg },
   cell: { alignItems: 'center', paddingHorizontal: spacing.xs, paddingBottom: spacing.md, gap: spacing.sm },
   tile: { width: TILE_SIZE, height: TILE_SIZE, borderRadius: radii.xl, alignItems: 'center', justifyContent: 'center' },
   label: { ...typography.label, textAlign: 'center' },

@@ -1,6 +1,8 @@
 import { getConnectionResumeInput, isConnectionSuspended } from '../../storage/sqlite/connection-wait-repository.js';
+import { isComputerControlActive, stopComputerControl } from '../../computer/control-guard.js';
 import {
   getClarificationResumeInput,
+  getClarification,
   isClarificationSuspended,
 } from '../../storage/sqlite/clarification-wait-repository.js';
 import type { Agent, AgentMessage } from '@earendil-works/pi-agent-core';
@@ -365,6 +367,14 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     let clarificationStopped = false;
     params.turnPolicy?.reset();
     session.agent.beforeToolCall = async (context, signal) => {
+      const resume = getClarificationResumeInput(conversationId, runId);
+      const wait = resume?.payload?.waitId ? getClarification(resume.payload.waitId) : undefined;
+      if (wait?.approvalKey?.startsWith('computer:') && wait.answer !== '已在桌面端处理，继续') {
+        await stopComputerControl(conversationId);
+      }
+      if (isComputerControlActive(conversationId) && !['computer_use', 'clarify'].includes(context.toolCall.name)) {
+        return { block: true, reason: 'A desktop-control lease is active. Only computer_use and clarification are admitted until it is released. Never use shell, browser or raw MCP to bypass a desktop refusal.' };
+      }
       if (connectionStopped) return { block: true, reason: 'Waiting for the user to connect an app.', terminate: true };
       if (clarificationStopped) return { block: true, reason: 'Waiting for the user to answer.', terminate: true };
       const decision = await params.turnPolicy?.beforeToolCall(context, signal);

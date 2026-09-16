@@ -137,6 +137,18 @@ export function isShellNotificationGranted(): boolean {
   return prefs.notificationAuthStatus === 'granted';
 }
 
+export function showEndpointNotification(input: unknown): { ok: true } | { ok: false; error: string } {
+  const notificationInput = parseEndpointNotificationInput(input);
+  if (!notificationInput) return { ok: false, error: 'INVALID_ARGUMENTS' };
+  if (!prefs.notifyEnabled) return { ok: false, error: 'NOTIFICATIONS_DISABLED' };
+  if (!Notification.isSupported()) return { ok: false, error: 'NOTIFICATIONS_UNSUPPORTED' };
+  if (!isShellNotificationGranted()) return { ok: false, error: 'PERMISSION_DENIED' };
+  try {
+    new Notification({ ...notificationInput, silent: !prefs.notifySoundEnabled }).show();
+    return { ok: true };
+  } catch { return { ok: false, error: 'NOTIFICATION_FAILED' }; }
+}
+
 async function persistNotificationAuthStatus(status: TccTriState): Promise<void> {
   if (prefs.notificationAuthStatus === status) {
     return;
@@ -727,17 +739,7 @@ export function registerSystemSettingsIpc(
     'system-settings:show-endpoint-notification',
     (event, input: unknown): { ok: true } | { ok: false; error: string } => {
       assertTrustedRenderer(event);
-      const notificationInput = parseEndpointNotificationInput(input);
-      if (!notificationInput) return { ok: false, error: 'INVALID_ARGUMENTS' };
-      if (!prefs.notifyEnabled) return { ok: false, error: 'NOTIFICATIONS_DISABLED' };
-      if (!Notification.isSupported()) return { ok: false, error: 'NOTIFICATIONS_UNSUPPORTED' };
-      if (!isShellNotificationGranted()) return { ok: false, error: 'PERMISSION_DENIED' };
-      try {
-        new Notification({ ...notificationInput, silent: !prefs.notifySoundEnabled }).show();
-        return { ok: true };
-      } catch {
-        return { ok: false, error: 'NOTIFICATION_FAILED' };
-      }
+      return showEndpointNotification(input);
     },
   );
 
