@@ -61,5 +61,9 @@ export function paletteItemMatchRank(item: PaletteItem, q: string): number | nul
   const desc = (item.description ?? '').toLowerCase();
   if (desc.includes(needle)) return 100;
 
+  for (const term of item.searchTerms ?? []) {
+    if (term.toLowerCase().includes(needle)) return 101;
+  }
+
   return null; // no match
 }

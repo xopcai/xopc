@@ -15,6 +15,7 @@ export interface SkillPresentation {
   displayName: string;
   description: string;
   aliases: string[];
+  searchTerms: string[];
 }
 
 export function resolveSkillPresentation(skill: LocalizableSkill, language: string): SkillPresentation {
@@ -23,9 +24,12 @@ export function resolveSkillPresentation(skill: LocalizableSkill, language: stri
   const displayName = selected?.displayName.trim() || skill.name;
   const description = selected?.description.trim() || skill.description;
   const aliases = new Set<string>([skill.name]);
+  const searchTerms = new Set<string>([skill.description]);
   for (const localization of Object.values(skill.localizations ?? {})) {
     if (localization?.displayName.trim()) aliases.add(localization.displayName.trim());
+    if (localization?.description.trim()) searchTerms.add(localization.description.trim());
   }
   aliases.delete(displayName);
-  return { displayName, description, aliases: [...aliases] };
+  searchTerms.delete(description);
+  return { displayName, description, aliases: [...aliases], searchTerms: [...searchTerms] };
 }
