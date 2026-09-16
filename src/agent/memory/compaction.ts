@@ -73,6 +73,8 @@ export interface CompactionConfig {
 }
 
 export interface CompactionExecutionOptions {
+  /** Between-turn recovery only: replace all raw history with a cited handover. */
+  summarizeAll?: boolean;
   sessionKey?: string;
   fallbackModels?: Array<Model<Api>>;
   signal?: AbortSignal;
@@ -259,6 +261,7 @@ export class SessionCompactor {
       recentTurnsPreserve: this.config.recentTurnsPreserve,
       keepRecentTokens: this.config.keepRecentTokens,
       force,
+      summarizeAll: options.summarizeAll,
     });
     if (!plan) {
       return {
@@ -274,7 +277,14 @@ export class SessionCompactor {
     const previous = findPreviousBoundary(entries);
     const delta = plan.sourceEntries.filter((entry) => entry.seq > (previous?.handover.sourceThroughSeq ?? 0));
     if (delta.length === 0) {
-      throw new Error('Compaction source did not advance beyond the previous boundary');
+      return {
+        summary: '',
+        messages: rawMessages,
+        firstKeptIndex: 0,
+        tokensBefore,
+        tokensAfter: tokensBefore,
+        compacted: false,
+      };
     }
     const models = [...new Map([model, ...(options.fallbackModels ?? [])]
       .map((candidate) => [`${candidate.provider}/${candidate.id}`, candidate])).values()];

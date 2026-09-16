@@ -78,9 +78,21 @@ export function planCompactionSource(params: {
   recentTurnsPreserve: number;
   keepRecentTokens: number;
   force: boolean;
+  summarizeAll?: boolean;
 }): CompactionSourcePlan | null {
   const rawEntries = params.entries.filter(isModelSource);
   const allMessages = buildSessionContextForLlm(rawEntries.map((entry) => entry.row));
+  // Recovery between turns can summarize the entire tool exchange without
+  // retaining an orphaned tool result or splitting an unfinished tool call.
+  if (params.force && params.summarizeAll && rawEntries.length > 0) {
+    return {
+      sourceEntries: rawEntries,
+      keptEntries: [],
+      keptMessages: [],
+      allMessages,
+      sourceThroughSeq: rawEntries.at(-1)!.seq,
+    };
+  }
   if ((!params.force && allMessages.length < params.minMessagesBeforeCompact)
     || (params.force && allMessages.length < 2)) {
     return null;

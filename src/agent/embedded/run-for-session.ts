@@ -381,8 +381,8 @@ async function maybeAutoCompactBeforeTurn(opts: {
   const activeTranscriptBytes = serializedTranscriptBytes(messages);
   const byteLimitExceeded =
     policy.enabled && activeTranscriptBytes > policy.maxActiveTranscriptBytes;
-  const budget = evaluateContextBudget({
-    messages,
+  const evaluateBudget = (history: AgentMessage[]) => evaluateContextBudget({
+    messages: history,
     contextWindow,
     systemPrompt,
     currentUserMessage: userMessage,
@@ -391,8 +391,10 @@ async function maybeAutoCompactBeforeTurn(opts: {
     triggerThreshold: policy.triggerThreshold,
     reserveTokens: policy.reserveTokens,
     minToolResultKeepChars: policy.minToolResultKeepChars,
-    canCompact: messages.length >= policy.minMessagesBeforeCompact,
+    canCompact: history.length >= policy.minMessagesBeforeCompact,
   });
+  const budget = evaluateBudget(messages);
+  let mustRecover = byteLimitExceeded || budget.estimatedTokens > budget.hardLimitTokens;
 
   if (
     !byteLimitExceeded &&
@@ -441,7 +443,7 @@ async function maybeAutoCompactBeforeTurn(opts: {
         (candidate) => `${candidate.provider}/${candidate.id}` !== summaryRef,
       );
     }
-    const result = await sessionStore.compact(
+    let result = await sessionStore.compact(
       sessionKey,
       messages,
       summaryModel,
@@ -450,10 +452,41 @@ async function maybeAutoCompactBeforeTurn(opts: {
       { fallbackModels: summaryFallbackModels, signal: abortSignal },
     );
 
+    let currentMessages = messages;
     if (result.compacted) {
-      // Evict the cached agent so the next turn reloads from the compacted transcript
       agentManager.removeAgent(sessionKey);
+      currentMessages = await sessionStore.load(sessionKey);
+    }
+    const remainingBudget = evaluateBudget(currentMessages);
+    mustRecover = serializedTranscriptBytes(currentMessages) > policy.maxActiveTranscriptBytes
+      || remainingBudget.estimatedTokens > remainingBudget.hardLimitTokens;
+    if (mustRecover) {
+      abortSignal?.throwIfAborted();
+      log.warn(
+        { sessionKey, estimatedTokens: remainingBudget.estimatedTokens, phase: 'pre_turn_recovery' },
+        'Compacting entire transcript because retained history exceeds the context budget',
+      );
+      result = await sessionStore.compact(
+        sessionKey,
+        currentMessages,
+        summaryModel,
+        undefined,
+        true,
+        { fallbackModels: summaryFallbackModels, signal: abortSignal, summarizeAll: true },
+      );
+      if (result.compacted) agentManager.removeAgent(sessionKey);
+      const recoveredMessages = await sessionStore.load(sessionKey);
+      const recoveredBudget = evaluateBudget(recoveredMessages);
+      if (!result.compacted
+        || serializedTranscriptBytes(recoveredMessages) > policy.maxActiveTranscriptBytes
+        || recoveredBudget.estimatedTokens > recoveredBudget.hardLimitTokens) {
+        throw new Error(
+          `Context budget still exceeded after full-history compaction (${recoveredBudget.estimatedTokens}/${recoveredBudget.hardLimitTokens} tokens); reduce the current input or system/tool context`,
+        );
+      }
+    }
 
+    if (result.compacted) {
       log.info(
         { sessionKey, tokensBefore: result.tokensBefore, tokensAfter: result.tokensAfter },
         'Pre-turn auto-compaction completed',
@@ -467,13 +500,6 @@ async function maybeAutoCompactBeforeTurn(opts: {
         summary: result.summary.length > 200 ? `${result.summary.slice(0, 200)}…` : result.summary,
       });
     } else {
-      if (byteLimitExceeded || budget.estimatedTokens > budget.hardLimitTokens) {
-        throw new Error(
-          byteLimitExceeded
-            ? `Active transcript size exceeded (${activeTranscriptBytes}/${policy.maxActiveTranscriptBytes} bytes) but no safe compaction range was available`
-            : `Context budget exceeded (${budget.estimatedTokens}/${budget.hardLimitTokens} tokens) but no safe compaction range was available`,
-        );
-      }
       onEvent?.({ type: 'compaction', status: 'skipped' });
     }
   } catch (err) {
@@ -483,7 +509,7 @@ async function maybeAutoCompactBeforeTurn(opts: {
       `Pre-turn auto-compaction failed: ${errorMessage}`,
     );
     onEvent?.({ type: 'compaction', status: 'skipped' });
-    if (byteLimitExceeded || budget.estimatedTokens > budget.hardLimitTokens) {
+    if (mustRecover || byteLimitExceeded || budget.estimatedTokens > budget.hardLimitTokens) {
       throw err;
     }
   }
