@@ -118,7 +118,7 @@ export class VoiceSessionClient {
         if (typeof message.data !== 'string') {
           try {
             const frame = decodeVoiceAudioFrame(new Uint8Array(message.data));
-            if (client.receive.audio(frame)) options.onAudio?.(frame.audio.slice().buffer as ArrayBuffer, frame.responseId);
+            if (client.receive.audio(frame)) options.onAudio?.(frame.audio.slice().buffer, frame.responseId);
           } catch { socket.close(4400, 'Invalid voice audio frame'); }
           return;
         }
