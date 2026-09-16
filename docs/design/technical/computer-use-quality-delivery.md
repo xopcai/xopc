@@ -52,7 +52,8 @@ only the successful subset. A zero incident count is not a universal safety guar
 1. Evaluation: missing runs remain in the denominator; model claims, human takeover
    and fixture-only evidence cannot count as autonomous production certification.
 2. Runtime: recover only for `ready` + `COMPUTER_OBSERVATION_CHANGED` + no receipt;
-   return `condition_satisfied`, not whole-task success. Preserve original approved
+   return `condition_satisfied` for exact field/selected-state predicates, not
+   whole-task success or merely pre-existing navigation text. Preserve original approved
    conditions and clear in-memory history on close.
 3. Handoff: retain the other-tool gate if release times out/fails. Accept a matching
    stopped reply or explicit absent-session response, not an assumed local stop.
@@ -97,6 +98,52 @@ The measurements do not establish that this prompt/layout fixes format reliabili
 Do not mark the hosted gate green or silently replace the configured model. A
 larger fixed benchmark and an explicitly approved alternative hosted candidate
 are needed before selecting a production-quality default.
+
+## Window/action regression audit, 2026-09-17
+
+- Hidden multi-surface apps: `prepare:true` can activate the authorized app before
+  re-enumeration and exact-window binding. No app activation during unprepared
+  observation. Failed/degraded window probes remain unknown candidates, not
+  silently excluded windows; native visibility/stacking resolves only when possible.
+- Model validation: bounded failure reasons replace opaque parse errors. GUI typing
+  requires a grounded coordinate, zero scrolling and empty answers are rejected,
+  and converted actions pass the same strict validator. One format correction
+  includes the previous invalid reply as ephemeral feedback to the same recipient.
+  No coordinate repair, provider fallback, or replay after dispatch.
+- Other execution defects: web text fields use their validated screenshot point
+  to establish renderer focus; native fields retain token-bound writes. Enter,
+  Esc and arrow aliases map to native keys; Shift+Tab is no longer incorrectly
+  blocked as an app-switch shortcut. Right/double clicks, wheel direction and
+  bounded wait retain their existing native action semantics.
+- Evidence: large accessibility summaries preserve whole JSON records. Clipped
+  trees and web AXValue-only writes cannot establish exact field success. A
+  pre-existing text match neither skips the requested action nor proves its
+  effect. `expect:{kind:"selected",label:"Memories"}` requires native selected
+  state instead of inferring navigation from its label.
+
+Validation evidence (not real-app certification):
+
+- 188 targeted tests passed; nine opt-in live cases were skipped in the unit run.
+  Core TypeScript and lint checks passed. Node, Electron main/preload and embedded
+  Gateway builds passed, followed by authenticated built-artifact preflight and
+  screenshot-upload admission checks. The first preflight encountered stale v178
+  generated assets beside the worktree's v179 sources; rebuilding Node assets
+  before the embedded Gateway resolved it without editing unrelated migrations.
+- Native Electron harness passed against a disposable Swift fixture: discovery,
+  read-only enforcement and native field write/read-back. No personal app operated.
+- xopc Cloud synthetic Continue observation/click smoke passed in three model
+  requests. The expanded synthetic navigation and double-click predictions failed
+  JSON validation; HTTP 429 then blocked the rest of the matrix. A navigation
+  retry after adding feedback also failed on the larger multi-control image.
+- A separate direct Alibaba protocol comparison, using the existing test key and
+  at most two requests, reproduced a missing `[` in the initial coordinate JSON.
+  The second request with the failed reply as feedback returned valid coordinates
+  inside the synthetic Memories button. No native action was executed.
+
+The hosted-quality gate remains **not passed**: one repaired example is not a
+reliability benchmark, and cloud rate limiting prevented full live action coverage.
+The user's other-machine Today window scenario still needs native acceptance
+after rebuilding Electron; deterministic window fixtures are not that evidence.
 
 ## Managed screenshot admission fix, 2026-09-17
 

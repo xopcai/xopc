@@ -121,6 +121,8 @@ describe('GUI-Plus adapter', () => {
     const first = JSON.parse(fetch.mock.calls[0][1].body), second = JSON.parse(fetch.mock.calls[1][1].body);
     expect(first.messages[1]).toEqual(second.messages[1]);
     expect(second.messages[0].content).toContain('previous output failed format validation');
+    expect(second.messages[2]).toEqual({ role: 'assistant', content: '<tool_call>broken JSON</tool_call>' });
+    expect(second.messages[3].content).toContain('invalid_json');
   });
   it.each(['COMPUTER_MODEL_HTTP_429', 'COMPUTER_MODEL_INVALID_JSON', 'COMPUTER_MODEL_INCOMPLETE_RESPONSE'])('never re-predicts for %s', async error => {
     const predict = vi.fn().mockRejectedValue(new Error(error));
@@ -142,16 +144,31 @@ describe('GUI-Plus adapter', () => {
     await expect(predictComputerStep({ predict } as any, { goal: 'Click', image: new Uint8Array(), mimeType: 'image/png', width: 1, height: 1, summary: '' }, () => {})).rejects.toThrow('COMPUTER_INVALID_MODEL_OUTPUT');
     expect(predict).toHaveBeenCalledTimes(2);
   });
+  it('corrects the observed missing-coordinate-bracket failure with same-recipient feedback', async () => {
+    const raw = '<tool_call>{"name":"computer_use","arguments":{"action":"left_click","coordinate":497, 100]}}</tool_call>';
+    const fetch = vi.fn().mockResolvedValueOnce(Response.json({ choices: [{ message: { content: raw } }] }))
+      .mockResolvedValueOnce(Response.json({ choices: [{ message: { content: call({ action: 'left_click', coordinate: [497, 100] }) } }] }));
+    const adapter = new ComputerModelAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26' }, fetch);
+    expect(await predictComputerStep(adapter, { goal: 'Select Memories', image: new Uint8Array([1]), mimeType: 'image/png', width: 800, height: 600, summary: '' }, () => {}))
+      .toMatchObject({ action: { point: { x: 397, y: 60 } } });
+    const request = JSON.parse(fetch.mock.calls[1][1].body);
+    expect(request.messages[2]).toEqual({ role: 'assistant', content: raw });
+    expect(request.messages[3].content).toContain('No action was executed');
+  });
   it('fails closed on malformed JSON without echoing private model content', async () => {
-    expect(() => parseGuiPlusProposal('<tool_call>private sensitive output</tool_call>', 800, 600)).toThrow(/^COMPUTER_INVALID_MODEL_OUTPUT$/);
-    expect(() => parseGuiPlusProposal('<tool_call>{"name":"computer_use","arguments":{"action":"left_click","coordinate":[500,500],}}</tool_call>', 800, 600)).toThrow(/^COMPUTER_INVALID_MODEL_OUTPUT$/);
+    for (const raw of ['private sensitive output', '{"name":"computer_use","arguments":{"action":"left_click","coordinate":[500,500],}}']) {
+      let error: unknown;
+      try { parseGuiPlusProposal(`<tool_call>${raw}</tool_call>`, 800, 600); } catch (caught) { error = caught; }
+      expect(computerDiagnostic(error)).toMatchObject({ errorCode: 'COMPUTER_INVALID_MODEL_OUTPUT', validationReason: 'invalid_json' });
+      expect(String(error)).not.toContain('private sensitive');
+    }
     await expect(readComputerJson(new Response('private upstream response'), 1024)).rejects.toThrow(/^COMPUTER_MODEL_INVALID_JSON$/);
   });
   it('maps normalized coordinates to the actual image without aspect distortion', () => {
     expect(parseGuiPlusProposal(call({ action: 'left_click', coordinate: [250, 1000] }), 800, 600)).toEqual({ kind: 'action', action: { kind: 'click', point: { x: 200, y: 599 }, button: 'left', count: 1 } });
   });
   it('preserves Unicode and whitespace without implicit submission', () => {
-    expect(parseGuiPlusProposal(call({ action: 'type', text: '  测试\n ' }), 1, 1)).toMatchObject({ action: { text: '  测试\n ' } });
+    expect(parseGuiPlusProposal(call({ action: 'type', text: '  测试\n ', coordinate: [500, 500] }), 1, 1)).toMatchObject({ action: { text: '  测试\n ' } });
   });
   it.each([
     { action: 'triple_click', coordinate: [1, 1] }, { action: 'left_click', coordinate: [-1, 200] },
@@ -166,6 +183,23 @@ describe('GUI-Plus adapter', () => {
   });
   it('preserves the scroll axis and direction', () => {
     expect(parseGuiPlusProposal(call({ action: 'hscroll', coordinate: [500, 500], pixels: 100 }), 800, 600)).toMatchObject({ action: { deltaX: -100, deltaY: 0 } });
+  });
+  it.each([
+    [{ action: 'right_click', coordinate: [250, 500] }, { kind: 'click', point: { x: 200, y: 300 }, button: 'right', count: 1 }],
+    [{ action: 'double_click', coordinate: [250, 500] }, { kind: 'click', point: { x: 200, y: 300 }, button: 'left', count: 2 }],
+    [{ action: 'key', keys: ['shift', 'tab'] }, { kind: 'pressKeys', keys: ['shift', 'tab'] }],
+    [{ action: 'scroll', coordinate: [500, 500], pixels: -200 }, { kind: 'scroll', point: { x: 400, y: 300 }, deltaY: 200, deltaX: 0 }],
+    [{ action: 'wait', time: 0.5 }, { kind: 'wait', durationMs: 500 }],
+  ])('maps supported GUI action %j', (args, action) => {
+    expect(parseGuiPlusProposal(call(args), 800, 600)).toEqual({ kind: 'action', action });
+  });
+  it.each([
+    { action: 'key', keys: ['invalid key!'] }, { action: 'answer', text: '' },
+    { action: 'scroll', coordinate: [1, 1], pixels: 0 },
+  ])('classifies invalid converted actions without leaking Zod output: %j', args => {
+    let error: unknown;
+    try { parseGuiPlusProposal(call(args), 800, 600); } catch (caught) { error = caught; }
+    expect(computerDiagnostic(error)).toMatchObject({ errorCode: 'COMPUTER_INVALID_MODEL_OUTPUT', validationReason: 'invalid_arguments' });
   });
   it('requires TLS and forbids credentials in the URL', () => {
     expect(() => new ComputerModelAdapter({ modelId: 'm', baseUrl: 'http://example.com/v1', apiKey: 'test', profile: 'structured-tools-v1' })).toThrow();
