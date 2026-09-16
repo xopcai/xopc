@@ -1,0 +1,23 @@
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { afterEach, expect, it } from 'vitest';
+import { scanLocal } from '../scanner.js';
+import { createImportPlan } from '../planner.js';
+const home = mkdtempSync(join(tmpdir(), 'import-plan-'));
+afterEach(() => rmSync(home, { recursive: true, force: true }));
+it('requires explicit conflict resolution and preserves scope', () => {
+  const source = join(home, '.claude/skills/report');
+  const target = join(home, 'target');
+  mkdirSync(source, { recursive: true });
+  mkdirSync(join(target, 'report'), { recursive: true });
+  const md = '---\nname: report\ndescription: Make reports\n---\nReports';
+  writeFileSync(join(source, 'SKILL.md'), md);
+  writeFileSync(join(target, 'report/SKILL.md'), md + ' old');
+  const scan = scanLocal({ source: 'claude-code', home });
+  const candidateId = scan.candidates[0].id;
+  expect(() => createImportPlan(scan, { root: target }, [{ candidateId, operation: 'create' }])).toThrow('Name is already used');
+  expect(createImportPlan(scan, { root: target }, [{ candidateId, operation: 'replace' }]).actions[0].beforeHash).toBeTruthy();
+  scan.candidates[0].scope = 'project';
+  expect(() => createImportPlan(scan, { root: target }, [{ candidateId, operation: 'rename', name: 'new-report' }])).toThrow('project-scoped');
+});

@@ -19,7 +19,8 @@
     "desktop-app": "Application data",
     "cron": "Scheduled tasks",
     "skills": "Skills",
-    "keyboard-shortcuts": "Keyboard shortcuts"
+    "keyboard-shortcuts": "Keyboard shortcuts",
+    "imports": "Import capabilities"
   },
   "settingsPage": {
     "comingSoon": "Settings · {{title}} (coming soon)."
