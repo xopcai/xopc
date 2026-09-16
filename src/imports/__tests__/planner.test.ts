@@ -6,7 +6,7 @@ import { scanLocal } from '../scanner.js';
 import { createImportPlan } from '../planner.js';
 const home = mkdtempSync(join(tmpdir(), 'import-plan-'));
 afterEach(() => rmSync(home, { recursive: true, force: true }));
-it('requires explicit conflict resolution and preserves scope', () => {
+it('requires explicit conflict resolution and preserves scope', async () => {
   const source = join(home, '.claude/skills/report');
   const target = join(home, 'target');
   mkdirSync(source, { recursive: true });
@@ -14,7 +14,7 @@ it('requires explicit conflict resolution and preserves scope', () => {
   const md = '---\nname: report\ndescription: Make reports\n---\nReports';
   writeFileSync(join(source, 'SKILL.md'), md);
   writeFileSync(join(target, 'report/SKILL.md'), md + ' old');
-  const scan = scanLocal({ source: 'claude-code', home });
+  const scan = await scanLocal({ source: 'claude-code', home });
   const candidateId = scan.candidates[0].id;
   expect(() => createImportPlan(scan, { root: target }, [{ candidateId, operation: 'create' }])).toThrow('Name is already used');
   expect(createImportPlan(scan, { root: target }, [{ candidateId, operation: 'replace' }]).actions[0].beforeHash).toBeTruthy();

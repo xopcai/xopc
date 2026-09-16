@@ -1,0 +1,35 @@
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { beforeEach, afterEach, expect, it, vi } from 'vitest';
+import { openXopcDatabase, closeXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/connection.js';
+import { listKnowledgeItems } from '../../knowledge-memory/index.js';
+import { ProjectService } from '../../projects/project-service.js';
+import { createRuntimeImportService } from '../runtime.js';
+import { scanProduct, previewInventoryItem } from '../inventory.js';
+let home: string;
+beforeEach(() => {
+  home = mkdtempSync(join(tmpdir(), 'import-inventory-'));
+  vi.stubEnv('HOME', home); vi.stubEnv('XOPC_STATE_DIR', join(home, 'xopc'));
+  vi.stubEnv('CLAUDE_CONFIG_DIR', join(home, '.claude'));
+  resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(home, 'test.db') });
+  mkdirSync(join(home, '.claude/skills/reports'), { recursive: true });
+  writeFileSync(join(home, '.claude/skills/reports/SKILL.md'), '---\nname: reports\ndescription: Reporting\n---\nMake reports');
+  writeFileSync(join(home, '.claude/CLAUDE.md'), 'Prefer concise answers');
+});
+afterEach(() => { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); vi.unstubAllEnvs(); rmSync(home, { recursive: true, force: true }); });
+it('scans 101 historical directories without creating projects or knowledge', async () => {
+  const paths = Array.from({ length: 101 }, (_, i) => join(home, `temporary-${i}`));
+  paths.forEach(path => mkdirSync(path));
+  writeFileSync(join(home, '.claude.json'), JSON.stringify({ projects: Object.fromEntries(paths.map(p => [p, {}])) }));
+  const service = createRuntimeImportService('owner');
+  const inventory = await scanProduct(service, 'claude-code', 'owner');
+  expect(inventory.candidates.filter(c => c.kind === 'project')).toHaveLength(101);
+  expect(new ProjectService().list().items).toEqual([]);
+  expect(listKnowledgeItems()).toEqual([]);
+  expect(inventory.candidates.filter(c => c.suggested).map(c => c.kind)).toEqual(['skill']);
+  expect(JSON.stringify(inventory)).not.toContain('Make reports');
+  const skill = inventory.candidates.find(c => c.kind === 'skill')!;
+  expect(previewInventoryItem(service, 'owner', inventory.id, skill.id).text).toContain('Make reports');
+  expect(() => previewInventoryItem(service, 'other', inventory.id, skill.id)).toThrow('not found');
+});
