@@ -80,7 +80,7 @@ export type WorkDiscoveryRun = {
   stage?: WorkDiscoveryStage;
   rootPath: string;
   projectId: string;
-  sessionKey: string;
+  conversationId: string;
   snapshot?: {
     projectKind: 'coding' | 'general' | 'unknown';
     sampledPathCount: number;

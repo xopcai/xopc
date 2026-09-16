@@ -332,7 +332,7 @@ export const TaskCreateResponseSchema = z.object({
 
 export const TaskConversationStateSchema = z.object({
   taskId: z.string(),
-  activeSessionKey: z.string().optional(),
+  activeConversationId: z.string().optional(),
   currentExecutorAgentId: z.string().optional(),
   assignmentEpoch: z.number().int().nonnegative(),
   status: z.enum(['idle', 'active']),
@@ -342,7 +342,7 @@ export const TaskConversationStateSchema = z.object({
 export const TaskSessionLinkSchema = z.object({
   id: z.string(),
   taskId: z.string(),
-  sessionKey: z.string(),
+  conversationId: z.string(),
   role: z.enum(['primary', 'discussion', 'execution']),
   agentId: z.string().optional(),
   runId: z.string().optional(),
@@ -365,7 +365,7 @@ export const TaskHandoffResponseSchema = z.object({
   conversation: TaskConversationStateSchema,
   fromAgentId: z.string().optional(),
   toAgentId: z.string(),
-  activeSessionKey: z.string(),
+  activeConversationId: z.string(),
   assignmentEpoch: z.number().int().positive(),
 });
 

@@ -13,10 +13,10 @@ export function getGatewayFileSpaceService(service: GatewayService): FileSpaceSe
   const created = new FileSpaceService(
     () => service.currentConfig,
     service.projects,
-    (sessionKey) => service.sessions.getEffectiveWorkspacePath(sessionKey),
-    () => listSessionWorkspaceOverrides().map(({ sessionKey, workingDirectoryOverride }) => ({
-      sessionKey,
-      root: effectiveWorkspacePathForSession(service.currentConfig, sessionKey, { workingDirectoryOverride }, getProjectForSession(sessionKey)),
+    (conversationId) => service.sessions.getEffectiveWorkspacePath(conversationId),
+    () => listSessionWorkspaceOverrides().map(({ conversationId, workingDirectoryOverride }) => ({
+      conversationId,
+      root: effectiveWorkspacePathForSession(service.currentConfig, conversationId, { workingDirectoryOverride }, getProjectForSession(conversationId)),
     })),
   );
   services.set(service, created);

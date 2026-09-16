@@ -8,8 +8,8 @@ type WorkflowRunIndexRow = {
   definition_version: string;
   task_run_id: string | null;
   project_id: string | null;
-  session_key: string;
-  parent_session_key: string | null;
+  conversation_id: string;
+  parent_conversation_id: string | null;
   status: WorkflowRunSummary['status'];
   source_kind: string;
   source_json: string;
@@ -48,9 +48,9 @@ function resultPreview(view: WorkflowRunView): string | null {
   return result.summary.slice(0, 500);
 }
 
-function parentSessionKey(view: WorkflowRunView): string | null {
-  if (view.run.source.kind === 'chat') return view.run.source.sessionKey;
-  const originKey = view.run.metadata?.origin?.sessionKey;
+function parentConversationId(view: WorkflowRunView): string | null {
+  if (view.run.source.kind === 'chat') return view.run.source.conversationId;
+  const originKey = view.run.metadata?.origin?.conversationId;
   return originKey?.trim() || null;
 }
 
@@ -58,13 +58,13 @@ export class WorkflowRunIndexStore {
   upsert(agentId: string, view: WorkflowRunView): void {
     const run = view.run;
     const metadata = run.metadata;
-    const sessionKey = metadata?.sessionKey;
-    if (!sessionKey) return;
+    const conversationId = metadata?.conversationId;
+    if (!conversationId) return;
     runSqliteWriteTransaction((db) => {
       db.prepare(
         `INSERT OR REPLACE INTO workflow_runs (
           run_id, agent_id, definition_id, definition_version, task_run_id,
-          project_id, session_key, parent_session_key, status, source_kind, source_json,
+          project_id, conversation_id, parent_conversation_id, status, source_kind, source_json,
           metadata_json, title,
           created_at_ms, started_at_ms, completed_at_ms, metrics_json,
           result_preview, error_message
@@ -76,8 +76,8 @@ export class WorkflowRunIndexStore {
         run.definitionVersion,
         metadata?.taskRunId ?? null,
         metadata?.projectId ?? null,
-        sessionKey,
-        parentSessionKey(view),
+        conversationId,
+        parentConversationId(view),
         run.status,
         run.source.kind,
         JSON.stringify(run.source),

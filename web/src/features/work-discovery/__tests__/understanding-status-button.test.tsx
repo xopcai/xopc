@@ -24,7 +24,7 @@ const completedRun: WorkDiscoveryRun = {
   status: 'completed',
   rootPath: '/work/xopc',
   projectId: 'project-1',
-  sessionKey: 'session-1',
+  conversationId: 'session-1',
   result: {
     projectSummary: 'The onboarding flow is the current focus.',
     currentState: 'The user is improving understanding onboarding.',

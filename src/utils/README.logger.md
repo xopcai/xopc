@@ -4,7 +4,7 @@
 
 The logger module provides:
 
-- Contextual logging with `requestId` / `sessionId` via AsyncLocalStorage
+- Contextual logging with `requestId` / `transcriptId` via AsyncLocalStorage
 - Automatic log rotation and cleanup
 - Graceful shutdown with log flushing
 - Configuration via `XOPC_*` environment variables
@@ -42,7 +42,7 @@ runWithLogContext({ requestId: 'req-123', userId: 'user-456' }, () => {
 const baseLog = createLogger('AgentService');
 
 const sessionLog = baseLog.withContext({
-  sessionId: 'session-789',
+  transcriptId: 'session-789',
   userId: 'user-456',
 });
 

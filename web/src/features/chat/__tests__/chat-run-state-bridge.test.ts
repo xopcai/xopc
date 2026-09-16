@@ -17,12 +17,12 @@ vi.mock('@/stores/gateway-store', () => ({
 }));
 
 describe('chat run state bridge', () => {
-  const sessionKey = 'agent:main:webchat:default:direct:state-bridge';
+  const conversationId = 'agent:main:webchat:default:direct:state-bridge';
   const cleanups: Array<() => void> = [];
 
   beforeEach(() => {
     sessionStorage.clear();
-    useChatSessionStore.setState({ focusedSessionKey: sessionKey, sessions: {} });
+    useChatSessionStore.setState({ focusedConversationId: conversationId, sessions: {} });
     useChatRunPresenceStore.setState({ runs: {} });
     vi.mocked(apiFetch).mockReset();
     vi.mocked(apiFetch).mockResolvedValue(new Response(JSON.stringify({
@@ -36,22 +36,22 @@ describe('chat run state bridge', () => {
   });
 
   it('uses sessions.run.completed to clear a lost run-topic terminal', async () => {
-    useChatSessionStore.getState().seedSessionIfEmpty(sessionKey, [], true, true);
+    useChatSessionStore.getState().seedSessionIfEmpty(conversationId, [], true, true);
     const cleanup = startChatRunStateBridge();
     cleanups.push(cleanup);
     await vi.waitFor(() => expect(apiFetch).toHaveBeenCalled());
 
     window.dispatchEvent(new CustomEvent('run-started', {
-      detail: { sessionKey, runId: 'run-lost-terminal' },
+      detail: { conversationId, runId: 'run-lost-terminal' },
     }));
-    expect(hasPendingAgentRunForChat(sessionKey)).toBe(true);
+    expect(hasPendingAgentRunForChat(conversationId)).toBe(true);
 
     window.dispatchEvent(new CustomEvent('run-completed', {
-      detail: { sessionKey, runId: 'run-lost-terminal', status: 'success' },
+      detail: { conversationId, runId: 'run-lost-terminal', status: 'success' },
     }));
 
-    expect(hasPendingAgentRunForChat(sessionKey)).toBe(false);
-    expect(useChatSessionStore.getState().sessions[sessionKey]).toMatchObject({
+    expect(hasPendingAgentRunForChat(conversationId)).toBe(false);
+    expect(useChatSessionStore.getState().sessions[conversationId]).toMatchObject({
       sending: false,
       streaming: false,
       streamingMsg: null,
@@ -59,17 +59,17 @@ describe('chat run state bridge', () => {
   });
 
   it('clears stale pending state from an authoritative inactive snapshot', async () => {
-    setPendingAgentRun(sessionKey, 'run-stale');
+    setPendingAgentRun(conversationId, 'run-stale');
     const cleanup = startChatRunStateBridge();
     cleanups.push(cleanup);
 
-    await vi.waitFor(() => expect(hasPendingAgentRunForChat(sessionKey)).toBe(false));
+    await vi.waitFor(() => expect(hasPendingAgentRunForChat(conversationId)).toBe(false));
   });
 
   it('re-announces active runs discovered after a missed realtime event', async () => {
     vi.mocked(apiFetch).mockResolvedValue(new Response(JSON.stringify({
       ok: true,
-      payload: { runs: [{ sessionKey, runId: 'run-active' }] },
+      payload: { runs: [{ conversationId, runId: 'run-active' }] },
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
     const started = vi.fn();
     window.addEventListener('run-started', started);
@@ -79,8 +79,8 @@ describe('chat run state bridge', () => {
       window.removeEventListener('run-started', started);
     });
 
-    await vi.waitFor(() => expect(hasPendingAgentRunForChat(sessionKey)).toBe(true));
+    await vi.waitFor(() => expect(hasPendingAgentRunForChat(conversationId)).toBe(true));
     expect(started).toHaveBeenCalled();
-    expect(useChatRunPresenceStore.getState().runs[sessionKey]?.status).toBe('running');
+    expect(useChatRunPresenceStore.getState().runs[conversationId]?.status).toBe('running');
   });
 });

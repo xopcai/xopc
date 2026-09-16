@@ -11,26 +11,31 @@ import {
 } from '@/features/chat/session/webchat-empty-shell-cache';
 
 const emptyA: SessionInfo = {
-  key: 'agent:main:webchat:default:direct:chat_a',
+  key: '4f38f9b5-6c58-5886-8d28-c9bde2ce4632',
   updatedAt: '2026-06-14T12:00:00.000Z',
   messageCount: 0,
   sourceChannel: 'webchat',
+  agentId: 'main',
   routing: { agentId: 'main' },
+  customData: { genericNewChatShell: true },
 };
 
 const emptyB: SessionInfo = {
-  key: 'agent:main:webchat:default:direct:chat_b',
+  key: '442747f2-1e76-5112-872e-8db85364354e',
   updatedAt: '2026-06-14T11:00:00.000Z',
   messageCount: 0,
   sourceChannel: 'webchat',
+  agentId: 'main',
   routing: { agentId: 'main' },
+  customData: { genericNewChatShell: true },
 };
 
 const noteEmpty: SessionInfo = {
-  key: 'agent:main:webchat:default:direct:note_abc_1783324340003',
+  key: 'af2b88e4-fda5-5159-9e3e-e6dd93de4289',
   updatedAt: '2026-06-14T13:00:00.000Z',
   messageCount: 0,
   sourceChannel: 'webchat',
+  agentId: 'main',
   routing: { agentId: 'main' },
   customData: {
     sourceBinding: { kind: 'note', sourceId: 'abc', version: '1', attachedAt: 1 },
@@ -39,7 +44,7 @@ const noteEmpty: SessionInfo = {
 
 function mockSessionMgr(sessions: SessionInfo[]): SessionManager {
   const created: SessionInfo = {
-    key: 'agent:main:webchat:default:direct:chat_new',
+    key: '79d704ce-e4d0-5e23-b3a7-90c0b38c6dbf',
     updatedAt: '',
     messageCount: 0,
   };
@@ -52,7 +57,7 @@ function mockSessionMgr(sessions: SessionInfo[]): SessionManager {
 describe('resolveNewChatTarget', () => {
   it.each(['local_checkout', 'managed_worktree'] as const)('creates an explicitly selected %s without reusing an empty shell', async (executionMode) => {
     const mgr = mockSessionMgr([{ ...emptyA, projectId: 'project-a' }]);
-    const result = await resolveNewChatTarget({ sessionMgr: mgr, agentId: 'main', projectId: 'project-a', currentSessionKey: emptyA.key, executionMode });
+    const result = await resolveNewChatTarget({ sessionMgr: mgr, agentId: 'main', projectId: 'project-a', currentConversationId: emptyA.key, executionMode });
     expect(result.kind).toBe('create');
     expect(mgr.loadSessions).not.toHaveBeenCalled();
     expect(mgr.createSession).toHaveBeenCalledWith({ agentId: 'main', projectId: 'project-a', executionMode });
@@ -91,9 +96,9 @@ describe('resolveNewChatTarget', () => {
     const result = await resolveNewChatTarget({
       sessionMgr: mgr,
       agentId: 'main',
-      currentSessionKey: emptyA.key,
+      currentConversationId: emptyA.key,
     });
-    expect(result).toEqual({ kind: 'noop', sessionKey: emptyA.key });
+    expect(result).toEqual({ kind: 'noop', conversationId: emptyA.key });
     expect(mgr.loadSessions).toHaveBeenCalled();
   });
 
@@ -107,7 +112,7 @@ describe('resolveNewChatTarget', () => {
     const result = await resolveNewChatTarget({
       sessionMgr: mgr,
       agentId: 'main',
-      currentSessionKey: emptyA.key,
+      currentConversationId: emptyA.key,
     });
 
     expect(result.kind).toBe('create');
@@ -119,11 +124,11 @@ describe('resolveNewChatTarget', () => {
     const result = await resolveNewChatTarget({
       sessionMgr: mgr,
       agentId: 'main',
-      currentSessionKey: 'agent:main:webchat:default:direct:chat_busy',
+      currentConversationId: '283811f2-901f-5902-af84-52838c6765d7',
     });
     expect(result.kind).toBe('reuse');
     if (result.kind === 'reuse') {
-      expect(result.sessionKey).toBe(emptyA.key);
+      expect(result.conversationId).toBe(emptyA.key);
     }
     expect(mgr.loadSessions).toHaveBeenCalled();
   });
@@ -170,17 +175,19 @@ describe('resolveNewChatTarget', () => {
     });
     expect(result.kind).toBe('reuse');
     if (result.kind === 'reuse') {
-      expect(result.sessionKey).toBe(projectA.key);
+      expect(result.conversationId).toBe(projectA.key);
     }
   });
 
   it('merges created empty shells from cache when server list lags', async () => {
     const created: SessionInfo = {
-      key: 'agent:main:webchat:default:direct:chat_created',
+      key: 'a5d1bccb-be3a-5d79-815f-9656be8ccea3',
       updatedAt: '2026-06-14T13:00:00.000Z',
       messageCount: 0,
       sourceChannel: 'webchat',
-      routing: { agentId: 'main' },
+      agentId: 'main',
+  routing: { agentId: 'main' },
+  customData: { genericNewChatShell: true },
     };
     addWebchatEmptyShellToCache(created);
     const mgr = mockSessionMgr([]);
@@ -190,7 +197,7 @@ describe('resolveNewChatTarget', () => {
     });
     expect(result.kind).toBe('reuse');
     if (result.kind === 'reuse') {
-      expect(result.sessionKey).toBe(created.key);
+      expect(result.conversationId).toBe(created.key);
     }
   });
 

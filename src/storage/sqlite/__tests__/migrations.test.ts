@@ -432,7 +432,7 @@ describe('SQLite migrations', () => {
       expect(environmentColumns).not.toContain('host_id');
       expect(environmentColumns).not.toContain('managed');
       const bindingColumns = db.prepare('PRAGMA table_info(execution_environment_bindings)').all().map((row) => row.name);
-      expect(bindingColumns).toContain('session_key');
+      expect(bindingColumns).toContain('conversation_id');
       expect(bindingColumns).not.toContain('subject_kind');
       expect(bindingColumns).not.toContain('epoch');
       const configColumns = db.prepare('PRAGMA table_info(session_config)').all().map((row) => row.name);
@@ -1085,7 +1085,10 @@ describe('SQLite migrations', () => {
 
   it('removes persisted runtime-only messages and unsafe compaction rows at v60', () => {
     const db = openEmptyDb();
-    ensureXopcDatabaseSchema(db);
+    ensureSchemaMetaTable(db);
+    db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
+    setSchemaVersion(db, XOPC_DB_BASELINE_SCHEMA_VERSION);
+    applyPendingMigrations(db, { targetVersion: 177 });
     db.exec(`
       INSERT INTO sessions (
         session_key, agent_id, session_id, created_at, updated_at, last_accessed_at,
@@ -1295,7 +1298,7 @@ describe('SQLite migrations', () => {
       db.prepare(`INSERT INTO session_inputs(id,session_key,client_message_id,expected_session_id,
         requested_delivery,effective_delivery,status,content,origin_json,position,version,created_at_ms,updated_at_ms,context_snapshots_json)
         VALUES ('input','session','client','instance','next','next','queued','Original request','{"type":"system","source":"internal"}',1,3,10,11,'[]')`).run();
-      applyPendingMigrations(db);
+      applyPendingMigrations(db, { targetVersion: 177 });
       expect(db.prepare('SELECT content, expected_session_id, status, kind, version, context_snapshots_json FROM session_inputs').get())
         .toEqual({ content: 'Original request', expected_session_id: 'instance', status: 'queued', kind: 'message', version: 3, context_snapshots_json: '[]' });
       expect(() => db.prepare("UPDATE session_inputs SET status = 'suspended' WHERE id = 'input'").run()).not.toThrow();
@@ -1320,7 +1323,7 @@ describe('SQLite migrations', () => {
         (session_key, endpoint_id, bound_at)
         VALUES ('session-existing', 'endpoint-existing', 3)`).run();
 
-      expect(applyPendingMigrations(db)).toBe(XOPC_DB_SCHEMA_VERSION);
+      expect(applyPendingMigrations(db, { targetVersion: 177 })).toBe(177);
       expect(db.prepare('SELECT principal_id FROM endpoint_instance_bindings').get())
         .toEqual({ principal_id: 'existing' });
       expect(db.prepare('SELECT endpoint_id FROM endpoint_session_bindings').get())

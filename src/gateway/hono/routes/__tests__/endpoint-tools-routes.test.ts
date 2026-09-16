@@ -108,7 +108,7 @@ describe('endpoint tool principal routes', () => {
 
   it('creates and removes an explicit session endpoint binding', async () => {
     const binding = {
-      sessionKey: 'telegram:chat-1',
+      conversationId: 'telegram:chat-1',
       endpointId: 'mobile-1',
       boundAt: 42,
     };

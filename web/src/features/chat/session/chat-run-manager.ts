@@ -14,67 +14,67 @@ class ChatRunManager {
     return ChatRunManager.instance;
   }
 
-  senderFor(sessionKey: string): MessageSender {
-    let sender = this.senders.get(sessionKey);
+  senderFor(conversationId: string): MessageSender {
+    let sender = this.senders.get(conversationId);
     if (!sender) {
       sender = new MessageSender();
-      this.senders.set(sessionKey, sender);
+      this.senders.set(conversationId, sender);
     }
     return sender;
   }
 
-  isStreamingFor(sessionKey: string): boolean {
-    return this.senders.get(sessionKey)?.isStreamingFor(sessionKey) ?? false;
+  isStreamingFor(conversationId: string): boolean {
+    return this.senders.get(conversationId)?.isStreamingFor(conversationId) ?? false;
   }
 
-  isTrackingRun(sessionKey: string, runId: string): boolean {
-    return this.senders.get(sessionKey)?.isTrackingRun(sessionKey, runId) ?? false;
+  isTrackingRun(conversationId: string, runId: string): boolean {
+    return this.senders.get(conversationId)?.isTrackingRun(conversationId, runId) ?? false;
   }
 
-  getResumeRunId(sessionKey: string): string | null {
-    return this.resumeRunIds.get(sessionKey) ?? null;
+  getResumeRunId(conversationId: string): string | null {
+    return this.resumeRunIds.get(conversationId) ?? null;
   }
 
-  setResumeRunId(sessionKey: string, runId: string | null): void {
-    if (runId) this.resumeRunIds.set(sessionKey, runId);
-    else this.resumeRunIds.delete(sessionKey);
+  setResumeRunId(conversationId: string, runId: string | null): void {
+    if (runId) this.resumeRunIds.set(conversationId, runId);
+    else this.resumeRunIds.delete(conversationId);
   }
 
-  setUserAborted(sessionKey: string, aborted: boolean): void {
-    if (aborted) this.userAbortedSessions.add(sessionKey);
-    else this.userAbortedSessions.delete(sessionKey);
+  setUserAborted(conversationId: string, aborted: boolean): void {
+    if (aborted) this.userAbortedSessions.add(conversationId);
+    else this.userAbortedSessions.delete(conversationId);
   }
 
-  takeUserAborted(sessionKey: string): boolean {
-    return this.userAbortedSessions.delete(sessionKey);
+  takeUserAborted(conversationId: string): boolean {
+    return this.userAbortedSessions.delete(conversationId);
   }
 
-  resetRunTracking(sessionKey: string): void {
-    this.resumeRunIds.delete(sessionKey);
-    this.userAbortedSessions.delete(sessionKey);
+  resetRunTracking(conversationId: string): void {
+    this.resumeRunIds.delete(conversationId);
+    this.userAbortedSessions.delete(conversationId);
   }
 
-  abort(sessionKey: string): void {
-    this.senders.get(sessionKey)?.abort();
-    this.senders.delete(sessionKey);
-    this.resetRunTracking(sessionKey);
+  abort(conversationId: string): void {
+    this.senders.get(conversationId)?.abort();
+    this.senders.delete(conversationId);
+    this.resetRunTracking(conversationId);
   }
 
-  reconcileTerminal(sessionKey: string, runId: string, status: AgentStreamRunStatus): boolean {
-    const handled = this.senders.get(sessionKey)?.reconcileTerminal(sessionKey, runId, status) ?? false;
-    if (this.resumeRunIds.get(sessionKey) === runId) this.resumeRunIds.delete(sessionKey);
+  reconcileTerminal(conversationId: string, runId: string, status: AgentStreamRunStatus): boolean {
+    const handled = this.senders.get(conversationId)?.reconcileTerminal(conversationId, runId, status) ?? false;
+    if (this.resumeRunIds.get(conversationId) === runId) this.resumeRunIds.delete(conversationId);
     return handled;
   }
 
-  reconcileInactive(sessionKey: string, runId: string): boolean {
-    const handled = this.senders.get(sessionKey)?.reconcileInactive(sessionKey, runId) ?? false;
-    if (this.resumeRunIds.get(sessionKey) === runId) this.resumeRunIds.delete(sessionKey);
+  reconcileInactive(conversationId: string, runId: string): boolean {
+    const handled = this.senders.get(conversationId)?.reconcileInactive(conversationId, runId) ?? false;
+    if (this.resumeRunIds.get(conversationId) === runId) this.resumeRunIds.delete(conversationId);
     return handled;
   }
 
-  releaseIdleSender(sessionKey: string): void {
-    const sender = this.senders.get(sessionKey);
-    if (sender && !sender.isSending) this.senders.delete(sessionKey);
+  releaseIdleSender(conversationId: string): void {
+    const sender = this.senders.get(conversationId);
+    if (sender && !sender.isSending) this.senders.delete(conversationId);
   }
 }
 

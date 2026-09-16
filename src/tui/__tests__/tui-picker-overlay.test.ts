@@ -366,7 +366,7 @@ it('prefilters searchable picker rows from an initial query', () => {
           ],
         })),
       },
-      state: { currentSessionKey: 'agent:main:main', sessionInfo: {} },
+      state: { currentConversationId: 'agent:main:main', sessionInfo: {} },
       openOverlay: (component: Component) => {
         overlay = component;
       },
@@ -408,7 +408,7 @@ it('prefilters searchable picker rows from an initial query', () => {
           ],
         })),
       },
-      state: { currentSessionKey: 'agent:main:main', sessionInfo: {} },
+      state: { currentConversationId: 'agent:main:main', sessionInfo: {} },
       openOverlay: (component: Component) => {
         overlay = component;
       },

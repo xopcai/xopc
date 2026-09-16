@@ -4,7 +4,7 @@ import { reconnectGatewayRealtime, startGatewayRealtime } from '@/features/gatew
 import { useGatewayStore } from '@/stores/gateway-store';
 
 export function useGatewayRealtime(): void {
-  const token = useGatewayStore((state) => state.sessionKey);
+  const token = useGatewayStore((state) => state.conversationId);
   useEffect(() => {
     return startGatewayRealtime();
   }, [token]);

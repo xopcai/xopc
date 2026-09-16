@@ -1,32 +1,27 @@
+import { createConversation } from '../../storage/sqlite/conversation-repository.js';
 import { describe, expect, it } from 'vitest';
 
 import {
   fallbackTitleFromMessages,
   provisionalTitleFromUserText,
   sanitizeGeneratedSessionTitle,
-  shouldAutoTitleSessionKey,
+  shouldAutoTitleConversationId,
   shouldRefineSessionTitleWithLlm,
 } from '../session-title.ts';
 
-describe('shouldAutoTitleSessionKey', () => {
-  it('allows webchat, telegram, weixin-style keys', () => {
-    expect(shouldAutoTitleSessionKey('agent:main:webchat:default:direct:chat_abc')).toBe(true);
-    expect(shouldAutoTitleSessionKey('agent:main:telegram:acc_default:direct:123456')).toBe(true);
-    expect(shouldAutoTitleSessionKey('agent:main:weixin:acc_default:direct:openid123')).toBe(true);
-  });
-
-  it('rejects cron sessions', () => {
-    expect(shouldAutoTitleSessionKey('agent:main:cron:job-123')).toBe(false);
-  });
-
-  it('rejects heartbeat keys', () => {
-    expect(shouldAutoTitleSessionKey('heartbeat:main')).toBe(false);
-    expect(shouldAutoTitleSessionKey('heartbeat:isolated:ts')).toBe(false);
+describe('shouldAutoTitleConversationId', () => {
+  it('titles channel conversations but not scheduled or heartbeat conversations', () => {
+    for (const sourceChannel of ['webchat', 'telegram', 'weixin']) {
+      expect(shouldAutoTitleConversationId(createConversation({ agentId: 'main', sourceChannel }).key)).toBe(true);
+    }
+    for (const sessionType of ['cron', 'heartbeat'] as const) {
+      expect(shouldAutoTitleConversationId(createConversation({ agentId: 'main', sessionType, sourceChannel: sessionType }).key)).toBe(false);
+    }
   });
 
   it('rejects empty key', () => {
-    expect(shouldAutoTitleSessionKey('')).toBe(false);
-    expect(shouldAutoTitleSessionKey('   ')).toBe(false);
+    expect(shouldAutoTitleConversationId('')).toBe(false);
+    expect(shouldAutoTitleConversationId('   ')).toBe(false);
   });
 });
 

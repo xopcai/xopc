@@ -26,7 +26,7 @@ export class TaskRunCoordinator {
     if (runs.listActiveWaits(task.id).length > 0) return undefined;
     let run = runs.get(input.runId);
     if (run && (run.taskId !== task.id || run.parentRunId
-      || (run.sessionKey && run.sessionKey !== input.context.sessionKey))) return undefined;
+      || (run.conversationId && run.conversationId !== input.context.conversationId))) return undefined;
     if (!run) {
       if (runs.getActiveRoot(task.id)) return undefined;
       const agentId = task.delegateAgentId ?? input.context.agentId;
@@ -40,7 +40,7 @@ export class TaskRunCoordinator {
         correlationId: input.runId,
         idempotencyKey: input.runId,
         contractVersion: task.latestContractVersion,
-        sessionKey: input.context.sessionKey,
+        conversationId: input.context.conversationId,
       });
       if (task.phase !== 'active') {
         tasks.setLifecycle({ taskId: task.id, expectedVersion: task.version, phase: 'active' });
@@ -51,7 +51,7 @@ export class TaskRunCoordinator {
       const snapshot = context.captureSnapshot({
         ownerKind: 'task_run',
         ownerId: run.id,
-        sessionKey: input.context.sessionKey,
+        conversationId: input.context.conversationId,
         query: task.contract?.objective ?? input.fallbackObjective,
         selectedItems: context.list(task.id),
         authorizationSnapshot: { grants: context.listActiveGrants(task.id) },
@@ -61,7 +61,7 @@ export class TaskRunCoordinator {
         expectedVersion: run.version,
         contextSnapshotId: snapshot.id,
         policySnapshot: { executorKind: 'agent' },
-        sessionKey: input.context.sessionKey,
+        conversationId: input.context.conversationId,
       }) ?? run;
     }
     return run.status === 'running' ? new TaskRunCoordinator(run.id) : undefined;

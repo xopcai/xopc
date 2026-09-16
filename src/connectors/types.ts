@@ -216,7 +216,7 @@ export type ConnectorExecutionAuditRecord = {
   connectorId: string;
   principalId: string;
   agentId?: string;
-  sessionKey?: string;
+  conversationId?: string;
   actionId: string;
   scope: ConnectorScope;
   decision: ConnectorExecutionDecision;
@@ -234,7 +234,7 @@ export type ConnectorApprovalRecord = {
   connectorId: string;
   connectionId?: string;
   agentId?: string;
-  sessionKey?: string;
+  conversationId?: string;
   actionId: string;
   scope: ConnectorScope;
   argumentsHash: string;

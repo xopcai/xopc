@@ -1,6 +1,6 @@
 /** Assembled snapshot for `/context` (list, detail markdown, or JSON). */
 export type SessionContextReportInput = {
-  sessionKey: string;
+  conversationId: string;
   mode: 'list' | 'detail' | 'json';
   model: string;
   workspacePath: string;
@@ -19,7 +19,7 @@ export type SessionContextReportInput = {
 
 export function formatSessionContextReport(input: SessionContextReportInput): string {
   const {
-    sessionKey,
+    conversationId,
     mode,
     model,
     workspacePath,
@@ -37,7 +37,7 @@ export function formatSessionContextReport(input: SessionContextReportInput): st
   } = input;
 
   const payload: Record<string, unknown> = {
-    sessionKey,
+    conversationId,
     model,
     workspacePath,
     agentId,
@@ -61,7 +61,7 @@ export function formatSessionContextReport(input: SessionContextReportInput): st
   const lines: string[] = [
     '📎 *Context overview*',
     '',
-    `• Session: \`${sessionKey}\``,
+    `• Session: \`${conversationId}\``,
     `• Model: \`${model}\``,
     `• Agent profile: \`${agentId}\``,
     `• Workspace: \`${workspacePath}\``,

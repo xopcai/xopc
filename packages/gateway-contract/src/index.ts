@@ -8,6 +8,7 @@ export * from './project-monitoring.js';
 export * from './project-operating.js';
 export * from './sessions.js';
 export * from './session-identity.js';
+export * from './conversation-identity.js';
 export * from './session-input-reliability.js';
 export * from './welcome-suggestions.js';
 export * from './home.js';

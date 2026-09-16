@@ -61,7 +61,7 @@ type AuditRow = {
   connector_id: string;
   principal_id: string;
   agent_id: string | null;
-  session_key: string | null;
+  conversation_id: string | null;
   action_id: string;
   scope: ConnectorExecutionAuditRecord['scope'];
   decision: ConnectorExecutionAuditRecord['decision'];
@@ -85,7 +85,7 @@ type ApprovalRow = {
   connector_id: string;
   connection_id: string | null;
   agent_id: string | null;
-  session_key: string | null;
+  conversation_id: string | null;
   action_id: string;
   scope: ConnectorApprovalRecord['scope'];
   arguments_hash: string;
@@ -183,7 +183,7 @@ function auditFromRow(row: AuditRow): ConnectorExecutionAuditRecord {
     connectorId: row.connector_id,
     principalId: row.principal_id,
     agentId: row.agent_id ?? undefined,
-    sessionKey: row.session_key ?? undefined,
+    conversationId: row.conversation_id ?? undefined,
     actionId: row.action_id,
     scope: row.scope,
     decision: row.decision,
@@ -217,7 +217,7 @@ function approvalFromRow(row: ApprovalRow): ConnectorApprovalRecord {
     connectorId: row.connector_id,
     connectionId: row.connection_id ?? undefined,
     agentId: row.agent_id ?? undefined,
-    sessionKey: row.session_key ?? undefined,
+    conversationId: row.conversation_id ?? undefined,
     actionId: row.action_id,
     scope: row.scope,
     argumentsHash: row.arguments_hash,
@@ -242,7 +242,7 @@ export function createConnectorApproval(
   runSqliteWriteTransaction((db) => {
     db.prepare(`
       INSERT INTO connector_approvals (
-        id, principal_id, connector_id, connection_id, agent_id, session_key, action_id,
+        id, principal_id, connector_id, connection_id, agent_id, conversation_id, action_id,
         scope, arguments_hash, arguments_preview_json, status, expires_at, created_at,
         decided_at, consumed_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -252,7 +252,7 @@ export function createConnectorApproval(
       record.connectorId,
       record.connectionId ?? null,
       record.agentId ?? null,
-      record.sessionKey ?? null,
+      record.conversationId ?? null,
       record.actionId,
       record.scope,
       record.argumentsHash,
@@ -274,7 +274,7 @@ export function getConnectorApproval(id: string): ConnectorApprovalRecord | unde
 
 export function listConnectorApprovals(options: {
   principalId?: string;
-  sessionKey?: string;
+  conversationId?: string;
   status?: ConnectorApprovalRecord['status'];
   limit?: number;
 } = {}): ConnectorApprovalRecord[] {
@@ -284,9 +284,9 @@ export function listConnectorApprovals(options: {
     clauses.push('principal_id = ?');
     values.push(options.principalId);
   }
-  if (options.sessionKey) {
-    clauses.push('session_key = ?');
-    values.push(options.sessionKey);
+  if (options.conversationId) {
+    clauses.push('conversation_id = ?');
+    values.push(options.conversationId);
   }
   if (options.status) {
     clauses.push('status = ?');
@@ -588,7 +588,7 @@ export function appendConnectorExecutionAudit(
     db.prepare(`
       INSERT INTO connector_execution_audit (
         id, installation_id, connection_id, connector_id, principal_id, agent_id,
-        session_key, action_id, scope, decision, result_status, duration_ms, error_code, created_at
+        conversation_id, action_id, scope, decision, result_status, duration_ms, error_code, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       record.id,
@@ -597,7 +597,7 @@ export function appendConnectorExecutionAudit(
       record.connectorId,
       record.principalId,
       record.agentId ?? null,
-      record.sessionKey ?? null,
+      record.conversationId ?? null,
       record.actionId,
       record.scope,
       record.decision,

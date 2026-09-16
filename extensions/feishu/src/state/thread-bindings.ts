@@ -2,7 +2,7 @@ type BindingRecord = {
   accountId: string;
   conversationId: string;
   parentConversationId?: string;
-  targetSessionKey: string;
+  targetConversationId: string;
   boundAt: number;
   lastActivityAt: number;
   metadata?: Record<string, unknown>;
@@ -32,7 +32,7 @@ export function bindFeishuConversation(params: {
   accountId: string;
   conversationId: string;
   parentConversationId?: string;
-  targetSessionKey: string;
+  targetConversationId: string;
   metadata?: Record<string, unknown>;
 }): BindingRecord {
   const now = Date.now();
@@ -40,7 +40,7 @@ export function bindFeishuConversation(params: {
     accountId: params.accountId,
     conversationId: params.conversationId,
     parentConversationId: params.parentConversationId,
-    targetSessionKey: params.targetSessionKey,
+    targetConversationId: params.targetConversationId,
     boundAt: now,
     lastActivityAt: now,
     metadata: params.metadata,
@@ -49,18 +49,18 @@ export function bindFeishuConversation(params: {
   return rec;
 }
 
-export function listBindingsBySessionKey(accountId: string, targetSessionKey: string): BindingRecord[] {
+export function listBindingsByConversationId(accountId: string, targetConversationId: string): BindingRecord[] {
   const out: BindingRecord[] = [];
   for (const rec of getState().byAccountConversation.values()) {
-    if (rec.accountId === accountId && rec.targetSessionKey === targetSessionKey) out.push(rec);
+    if (rec.accountId === accountId && rec.targetConversationId === targetConversationId) out.push(rec);
   }
   return out;
 }
 
-export function unbindBySessionKey(accountId: string, targetSessionKey: string): BindingRecord[] {
+export function unbindByConversationId(accountId: string, targetConversationId: string): BindingRecord[] {
   const removed: BindingRecord[] = [];
   for (const rec of getState().byAccountConversation.values()) {
-    if (rec.accountId !== accountId || rec.targetSessionKey !== targetSessionKey) continue;
+    if (rec.accountId !== accountId || rec.targetConversationId !== targetConversationId) continue;
     getState().byAccountConversation.delete(key(rec.accountId, rec.conversationId));
     removed.push(rec);
   }

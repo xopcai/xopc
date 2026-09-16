@@ -1,6 +1,6 @@
 import type { Config } from '../config/schema.js';
 import type { KnowledgeSource } from '../knowledge-memory/index.js';
-import { parseSessionKey } from '../routing/session-key.js';
+import { getConversationRouting } from '../routing/session-key.js';
 import { getSessionConfig } from '../storage/sqlite/config-repository.js';
 
 export interface UserContextSessionAccess {
@@ -14,13 +14,13 @@ export interface UserContextSessionAccess {
 /** One policy boundary for every shared-context read and write path. */
 export function resolveUserContextSessionAccess(
   config: Config | undefined,
-  sessionKey: string | undefined,
+  conversationId: string | undefined,
 ): UserContextSessionAccess {
-  if (!config || !sessionKey) {
+  if (!config || !conversationId) {
     return { enabled: false, userModel: false, knowledge: false, crossSessionHistory: false, knowledgeSources: [] };
   }
-  const session = parseSessionKey(sessionKey);
-  const mode = getSessionConfig(sessionKey)?.userContextMode ?? 'enabled';
+  const session = getConversationRouting(conversationId);
+  const mode = getSessionConfig(conversationId)?.userContextMode ?? 'enabled';
   const enabled = Boolean(config.userContext.enabled && session?.peerKind === 'direct' && mode === 'enabled');
   return {
     enabled,

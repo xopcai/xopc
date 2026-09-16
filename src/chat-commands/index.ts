@@ -51,7 +51,7 @@ export type {
 } from './types.js';
 
 // Session display helpers
-export { generateSessionKey, getSessionDisplayName, type SessionKeyContext } from './session-key.js';
+export { generateConversationId, getSessionDisplayName, type ConversationIdContext } from './session-key.js';
 
 // Command parsing helpers
 export { normalizeTelegramCommandName, parseSlashCommand } from './command-parse.js';

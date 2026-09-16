@@ -30,7 +30,7 @@ describe('session input origin', () => {
   it('persists the exact endpoint that submitted a queued turn', () => {
     const inserted = insertSessionInput({
       id: 'input-1',
-      sessionKey: 'agent:main:webchat:default:direct:user',
+      conversationId: 'agent:main:webchat:default:direct:user',
       clientMessageId: 'message-1',
       requestedDelivery: 'next',
       effectiveDelivery: 'next',
@@ -40,7 +40,7 @@ describe('session input origin', () => {
     });
 
     expect(inserted.origin).toEqual({ type: 'endpoint', endpointId: 'tab-1' });
-    expect(findSessionInput(inserted.sessionKey, inserted.clientMessageId)?.origin).toEqual({
+    expect(findSessionInput(inserted.conversationId, inserted.clientMessageId)?.origin).toEqual({
       type: 'endpoint',
       endpointId: 'tab-1',
     });

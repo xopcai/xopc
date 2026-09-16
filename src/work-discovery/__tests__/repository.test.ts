@@ -45,7 +45,7 @@ describe('work discovery repository', () => {
     ).run('project-1', 'Project', 'project', 1, 1);
     db.prepare(
       `INSERT INTO sessions (
-        session_key, agent_id, session_id, created_at, updated_at, last_accessed_at
+        conversation_id, agent_id, active_transcript_id, created_at, updated_at, last_accessed_at
        ) VALUES (?, ?, ?, ?, ?, ?)`,
     ).run('session-1', 'main', 'session-id-1', 1, 1, 1);
   });
@@ -65,7 +65,7 @@ describe('work discovery repository', () => {
       stage: 'next_steps',
       rootPath: '/workspace',
       projectId: 'project-1',
-      sessionKey: 'session-1',
+      conversationId: 'session-1',
       agentId: 'main',
       modelRef: 'provider/model',
       scanPolicyVersion: 1,
@@ -109,7 +109,7 @@ describe('work discovery repository', () => {
       stage: 'next_steps',
       rootPath: '/workspace',
       projectId: 'project-1',
-      sessionKey: 'session-1',
+      conversationId: 'session-1',
       agentId: 'main',
       modelRef: 'provider/model',
       scanPolicyVersion: 1,
@@ -202,7 +202,7 @@ describe('work discovery repository', () => {
       status: 'queued',
       rootPath: '/refresh-workspace',
       projectId: 'project-1',
-      sessionKey: 'session-1',
+      conversationId: 'session-1',
       agentId: 'main',
       modelRef: 'provider/model',
       scanPolicyVersion: 1,

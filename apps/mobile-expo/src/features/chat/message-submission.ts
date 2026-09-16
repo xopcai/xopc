@@ -4,8 +4,8 @@ import type { WireAttachment, WireContextRef } from './composer.types';
 export type MessageSubmission = {
   clientMessageId: string;
   gatewayId: string;
-  sessionKey: string;
-  expectedSessionId?: string;
+  conversationId: string;
+  expectedTranscriptId?: string;
   taskId?: string;
   content: string;
   attachments: WireAttachment[];

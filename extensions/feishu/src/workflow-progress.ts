@@ -10,7 +10,7 @@
  * default throttle leaves comfortable headroom even when several workflows
  * run concurrently.
  *
- * Routing: sessionKey `main:feishu:<accountId>:<dm|group|channel>:<peerId>`.
+ * Routing: conversationId `main:feishu:<accountId>:<dm|group|channel>:<peerId>`.
  * - DM peerId is an `open_id` (starts with `ou_`) → use `receive_id_type=open_id`.
  * - Group / channel peerId is a `chat_id` → use `receive_id_type=chat_id`.
  *
@@ -26,7 +26,7 @@ import type {
   WorkflowProgressPostInput,
 } from '@xopcai/xopc/agent/workflow/channel-capability.js';
 import type { Config } from '@xopcai/xopc/config/schema.js';
-import { parseSessionKey } from '@xopcai/xopc/routing/session-key.js';
+import { getConversationRouting } from '@xopcai/xopc/routing/session-key.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 
 import { resolveFeishuAccount } from './state/accounts.js';
@@ -50,15 +50,15 @@ export function createFeishuWorkflowProgressCapability(opts: {
       if (!cfg) {
         throw new Error('feishu workflow progress: no config loaded');
       }
-      const target = resolveTarget(input.sessionKey);
+      const target = resolveTarget(input.conversationId);
       if (!target) {
-        throw new Error(`feishu workflow progress: cannot route sessionKey "${input.sessionKey}"`);
+        throw new Error(`feishu workflow progress: cannot route conversationId "${input.conversationId}"`);
       }
 
       const account = resolveFeishuAccount(cfg, target.accountId);
       if (!account.configured) {
         throw new Error(
-          `feishu workflow progress: account "${target.accountId}" not configured (sessionKey "${input.sessionKey}")`,
+          `feishu workflow progress: account "${target.accountId}" not configured (conversationId "${input.conversationId}")`,
         );
       }
 
@@ -83,7 +83,7 @@ export function createFeishuWorkflowProgressCapability(opts: {
           }
           if (isEditTargetGone(err)) {
             log.debug(
-              { sessionKey: input.sessionKey, previousMessageId: input.previousMessageId },
+              { conversationId: input.conversationId, previousMessageId: input.previousMessageId },
               'edit target gone; falling back to fresh send',
             );
             // fall through to fresh send below
@@ -118,8 +118,8 @@ interface ResolvedTarget {
   peerId: string;
 }
 
-function resolveTarget(sessionKey: string): ResolvedTarget | null {
-  const parsed = parseSessionKey(sessionKey);
+function resolveTarget(conversationId: string): ResolvedTarget | null {
+  const parsed = getConversationRouting(conversationId);
   if (!parsed) return null;
   if (parsed.source !== 'feishu') return null;
   if (!parsed.peerId) return null;

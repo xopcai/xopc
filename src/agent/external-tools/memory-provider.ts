@@ -14,7 +14,7 @@ import type {
 export interface MemoryToolProviderDeps {
   getMemoryManager?: () => MemoryManager;
   disabledTools?: Set<string>;
-  getSessionKey: () => string | undefined;
+  getConversationId: () => string | undefined;
   canAccess: () => boolean;
   hookRunner?: ExtensionHookRunner;
   toolExecutorConfig?: Partial<ToolExecutorConfig>;
@@ -65,7 +65,7 @@ export class MemoryToolProvider implements ExternalToolProvider {
     let executionArgs = args;
     if (this.deps.hookRunner) {
       const hook = await this.deps.hookRunner.runBeforeToolCall(resolved.tool.name, args, {
-        sessionKey: this.deps.getSessionKey(),
+        conversationId: this.deps.getConversationId(),
       });
       if (!hook.allowed) throw new Error(hook.reason ?? 'Memory provider tool call blocked by policy hook.');
       executionArgs = hook.params ?? args;

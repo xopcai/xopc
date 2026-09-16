@@ -1,7 +1,7 @@
 export interface WakeRequest {
   reason?: string;
   agentId?: string;
-  sessionKey?: string;
+  conversationId?: string;
   coalesceMs?: number;
 }
 

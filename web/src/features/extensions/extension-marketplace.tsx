@@ -71,7 +71,7 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const copy = m.extensionsPage;
-  const hasToken = useGatewayStore((s) => Boolean(s.sessionKey));
+  const hasToken = useGatewayStore((s) => Boolean(s.conversationId));
   const extensions = useExtensions();
   const { mutate } = useSWRConfig();
   const [ui, dispatch] = useReducer(uiPatchReducer<MarketplaceUi>, initialMarketplaceUi);
@@ -340,7 +340,7 @@ function ExtensionMarketplaceDetailDialog({
 }) {
   const [busy, setBusy] = useState(false);
   const [riskAccepted, setRiskAccepted] = useState(false);
-  const hasToken = useGatewayStore((s) => Boolean(s.sessionKey));
+  const hasToken = useGatewayStore((s) => Boolean(s.conversationId));
   const key = hasToken ? `ext-mp-detail-${packageName}` : null;
   const { data, error, isLoading } = useSWR(
     key,

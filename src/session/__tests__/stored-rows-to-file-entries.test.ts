@@ -5,7 +5,7 @@ import { storedRowsToFileEntries } from '../stored-rows-to-file-entries.js';
 describe('storedRowsToFileEntries', () => {
   it('hydrates extension custom rows into pi custom entries', () => {
     const entries = storedRowsToFileEntries({
-      sessionId: 'session-1',
+      transcriptId: 'session-1',
       cwd: '/repo',
       rows: [
         { type: 'custom', customType: 'preset-state', data: { enabled: true } },

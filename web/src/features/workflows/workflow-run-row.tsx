@@ -13,7 +13,7 @@ import {
   isRunActive,
   isRunRetriable,
   resolveRunCardTitle,
-  resolveRunSessionKey,
+  resolveRunConversationId,
   resolveRunWorkflowLabel,
 } from './workflow-board.utils';
 import { formatDuration, interpolate, statusTone } from './workflow-page.utils';
@@ -40,7 +40,7 @@ export const WorkflowRunRow = memo(function WorkflowRunRow({
   const labels = messages(language).workflows;
   const active = isRunActive(run);
   const retriable = isRunRetriable(run);
-  const hasChat = Boolean(resolveRunSessionKey(run));
+  const hasChat = Boolean(resolveRunConversationId(run));
   const timeMs = run.startedAtMs ?? run.createdAtMs;
   const durationMs = active ? nowMs - timeMs : run.metrics.durationMs;
   const durationText = formatDuration(durationMs);

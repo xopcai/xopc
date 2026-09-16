@@ -25,8 +25,8 @@ export interface FilePathClassifierContext {
   agentId: string;
 }
 
-export function buildFilePathClassifierContext(cfg: Config, sessionKeyRaw?: string): FilePathClassifierContext {
-  const agentId = extractProfileAgentId(sessionKeyRaw, cfg);
+export function buildFilePathClassifierContext(cfg: Config, conversationIdRaw?: string, explicitAgentId?: string): FilePathClassifierContext {
+  const agentId = explicitAgentId ?? extractProfileAgentId(conversationIdRaw, cfg);
   const stateDir = resolveStateDir();
   return {
     workspaceRoot: '',
@@ -46,7 +46,7 @@ export function looksLikeHostAbsolutePath(pathRaw: string): boolean {
   return isAbsolute(p) || /^[A-Za-z]:[\\/]/.test(p) || p.startsWith('\\\\');
 }
 
-export function fileRefSessionKeysMatch(registered?: string, query?: string): boolean {
+export function fileRefConversationIdsMatch(registered?: string, query?: string): boolean {
   return (registered ?? '').trim() === (query ?? '').trim();
 }
 

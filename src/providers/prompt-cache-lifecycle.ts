@@ -5,8 +5,8 @@ import type { PromptCachePolicy } from './prompt-cache-plan.js';
 const cacheTouchByScope = new Map<string, number>();
 const MAX_CACHE_TOUCHES = 512;
 
-function scopeKey(sessionKey: string, model: Model<Api>): string {
-  return `${sessionKey}\0${model.provider}/${model.id}`;
+function scopeKey(conversationId: string, model: Model<Api>): string {
+  return `${conversationId}\0${model.provider}/${model.id}`;
 }
 
 export function resolvePromptCacheTtlMs(model: Model<Api>, policy: PromptCachePolicy): number {
@@ -17,13 +17,13 @@ export function resolvePromptCacheTtlMs(model: Model<Api>, policy: PromptCachePo
 }
 
 export function recordPromptCacheTouch(
-  sessionKey: string,
+  conversationId: string,
   model: Model<Api>,
   usage: { cacheRead?: number; cacheWrite?: number },
   now = Date.now(),
 ): void {
   if ((usage.cacheRead ?? 0) <= 0 && (usage.cacheWrite ?? 0) <= 0) return;
-  const key = scopeKey(sessionKey, model);
+  const key = scopeKey(conversationId, model);
   cacheTouchByScope.delete(key);
   cacheTouchByScope.set(key, now);
   while (cacheTouchByScope.size > MAX_CACHE_TOUCHES) {
@@ -34,13 +34,13 @@ export function recordPromptCacheTouch(
 }
 
 export function isPromptCacheExpired(
-  sessionKey: string,
+  conversationId: string,
   model: Model<Api>,
   policy: PromptCachePolicy,
   now = Date.now(),
 ): boolean {
   if (policy.mode === 'off') return false;
-  const touchedAt = cacheTouchByScope.get(scopeKey(sessionKey, model));
+  const touchedAt = cacheTouchByScope.get(scopeKey(conversationId, model));
   return touchedAt !== undefined && now - touchedAt >= resolvePromptCacheTtlMs(model, policy);
 }
 

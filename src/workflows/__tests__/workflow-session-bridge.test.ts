@@ -69,7 +69,7 @@ describe('WorkflowSessionBridge project association', () => {
       projectId: project.id,
     });
 
-    await expect(store.getMetadata(result.sessionKey)).resolves.toMatchObject({
+    await expect(store.getMetadata(result.conversationId)).resolves.toMatchObject({
       projectId: project.id,
       sessionType: 'workflow-run',
     });
@@ -78,9 +78,9 @@ describe('WorkflowSessionBridge project association', () => {
   it('inherits projectId from parent sessions', async () => {
     const projects = new ProjectService();
     const project = projects.create({ name: 'Parent Project' });
-    const parentSessionKey = 'agent:main:webchat:default:direct:parent-project-session';
-    ensureSessionRecord(parentSessionKey, process.cwd());
-    projects.attachSession(parentSessionKey, project.id);
+    const parentConversationId = "1f945181-2799-4582-8fb0-490ce87010fa";
+    ensureSessionRecord(parentConversationId, process.cwd(), { agentId: "main" });
+    projects.attachSession(parentConversationId, project.id);
 
     const result = await bridge.prepareRunSession({
       runId: 'run-parent-project',
@@ -88,10 +88,10 @@ describe('WorkflowSessionBridge project association', () => {
       definitionId: 'wf',
       definitionTitle: 'Workflow',
       goal: 'Do workflow work',
-      parentSessionKey,
+      parentConversationId,
     });
 
-    await expect(store.getMetadata(result.sessionKey)).resolves.toMatchObject({
+    await expect(store.getMetadata(result.conversationId)).resolves.toMatchObject({
       projectId: project.id,
       sessionType: 'workflow-run',
     });

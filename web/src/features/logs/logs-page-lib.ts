@@ -158,16 +158,16 @@ export function logMatchesClientFilters(
     dateFrom: string;
     dateTo: string;
     requestIdFilter: string;
-    sessionIdFilter: string;
+    transcriptIdFilter: string;
   },
 ): boolean {
   if (filters.selectedLevels.size > 0 && !filters.selectedLevels.has(log.level)) return false;
   if (filters.moduleFilter && moduleLabel(log) !== filters.moduleFilter) return false;
   if (filters.requestIdFilter && log.requestId !== filters.requestIdFilter) return false;
   if (
-    filters.sessionIdFilter &&
-    log.sessionId !== filters.sessionIdFilter &&
-    log.sessionKey !== filters.sessionIdFilter
+    filters.transcriptIdFilter &&
+    log.transcriptId !== filters.transcriptIdFilter &&
+    log.conversationId !== filters.transcriptIdFilter
   ) return false;
 
   if (filters.dateFrom) {
@@ -188,8 +188,8 @@ export function logMatchesClientFilters(
       moduleLabel(log),
       phaseLabel(log),
       log.requestId,
-      log.sessionKey,
-      log.sessionId,
+      log.conversationId,
+      log.transcriptId,
       extractErrorDetail(log)?.message,
       extractErrorDetail(log)?.stack,
     ]

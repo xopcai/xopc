@@ -1,3 +1,9 @@
+import { requireXopcDatabase as openFixtureDatabase } from '../../storage/sqlite/connection.js';
+import { ensureSessionRecord as ensureFixtureConversation } from '../../storage/sqlite/session-repository.js';
+function seedConversationFixtures(): void {
+  openFixtureDatabase();
+  ensureFixtureConversation("06457abd-5401-40e9-8812-7511ee1ffd70", '', {"agentId":"coder","sourceChannel":"telegram","sourceChatId":"123","sessionType":"chat","routing":{"agentId":"coder","source":"telegram","accountId":"acc_default","peerKind":"direct","peerId":"123"}});
+}
 import { describe, expect, it } from 'vitest';
 
 import { ConfigSchema } from '../schema.js';
@@ -38,6 +44,7 @@ function config() {
 
 describe('agent profile', () => {
   it('resolves global defaults and atomic agent overrides', () => {
+    seedConversationFixtures();
     const profile = resolveEffectiveAgentProfile(config(), 'coder');
     expect(profile.primaryModelRef).toBe('anthropic/claude-opus-4-1');
     expect(profile.fallbacks).toEqual([]);
@@ -48,6 +55,7 @@ describe('agent profile', () => {
   });
 
   it('returns provenance for the effective view', () => {
+    seedConversationFixtures();
     const resolved = resolveEffectiveAgentConfigForAgent(config(), 'coder');
     expect(resolved.sources['models.chat.primary']).toBe('agent');
     expect(resolved.sources['models.intents.review.primary']).toBe('global');
@@ -55,9 +63,11 @@ describe('agent profile', () => {
   });
 
   it('selects the session agent and falls back to the configured default', () => {
+    seedConversationFixtures();
     expect(
-      resolveEffectiveAgentProfileForSession(config(), 'agent:coder:telegram:acc_default:direct:123').agentId,
+      resolveEffectiveAgentProfileForSession(config(), "06457abd-5401-40e9-8812-7511ee1ffd70").agentId,
     ).toBe('coder');
-    expect(resolveEffectiveAgentProfileForSession(config(), 'invalid').agentId).toBe('main');
+    expect(() => resolveEffectiveAgentProfileForSession(config(), 'invalid')).toThrow();
+    expect(resolveEffectiveAgentProfileForSession(config(), undefined).agentId).toBe('main');
   });
 });

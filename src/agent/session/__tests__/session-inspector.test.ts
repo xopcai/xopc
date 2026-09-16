@@ -5,7 +5,7 @@ import { SessionInspector } from '../session-inspector.js';
 
 describe('SessionInspector', () => {
   it('uses the effective session context window for context usage', async () => {
-    const sessionKey = 'agent:main:webchat:default:direct:ctx-window';
+    const conversationId = 'agent:main:webchat:default:direct:ctx-window';
     const messages = [{ role: 'user', content: 'hello' }];
     const sessionHydrator = { model: vi.fn(async () => undefined) };
     const getContextWindow = vi.fn(() => 32_000);
@@ -24,11 +24,11 @@ describe('SessionInspector', () => {
       getContextWindow,
     });
 
-    const usage = await inspector.contextUsage(sessionKey);
+    const usage = await inspector.contextUsage(conversationId);
 
-    expect(sessionHydrator.model).toHaveBeenCalledWith(sessionKey);
-    expect(getContextWindow).toHaveBeenCalledWith(sessionKey);
-    expect(estimateTokenUsage).toHaveBeenCalledWith(sessionKey, messages);
+    expect(sessionHydrator.model).toHaveBeenCalledWith(conversationId);
+    expect(getContextWindow).toHaveBeenCalledWith(conversationId);
+    expect(estimateTokenUsage).toHaveBeenCalledWith(conversationId, messages);
     expect(usage).toEqual({
       estimatedTokens: 8_000,
       contextWindow: 32_000,

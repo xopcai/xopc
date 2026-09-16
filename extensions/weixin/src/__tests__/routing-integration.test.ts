@@ -1,9 +1,10 @@
+import { requireConversation } from '@xopcai/xopc/storage/sqlite/conversation-repository.js';
 import { describe, expect, it } from 'vitest';
 
 import type { Config } from '@xopcai/xopc/config/schema.js';
-import { generateWeixinSessionKeyWithRouting } from '../routing-integration.js';
+import { generateWeixinConversationIdWithRouting } from '../routing-integration.js';
 
-describe('generateWeixinSessionKeyWithRouting', () => {
+describe('generateWeixinConversationIdWithRouting', () => {
   const config: Config = {
     agents: {
       default: 'main',
@@ -22,11 +23,11 @@ describe('generateWeixinSessionKeyWithRouting', () => {
   };
 
   it('uses the configured Weixin channel agent binding', () => {
-    expect(
-      generateWeixinSessionKeyWithRouting(
+    expect(requireConversation(
+      generateWeixinConversationIdWithRouting(
         { accountId: 'default', senderId: 'user@im.wechat' },
         config,
       ),
-    ).toBe('agent:data-analyst:weixin:default:direct:user@im.wechat');
+    )).toMatchObject({ agentId: 'data-analyst', routing: { source: 'weixin', peerId: 'user@im.wechat' } });
   });
 });

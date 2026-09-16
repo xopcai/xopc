@@ -25,7 +25,7 @@ const log = createLogger('TaskJudge');
 const MAX_HISTORY_CHARS = 24_000;
 
 export interface TaskTurnCompletion {
-  sessionKey: string;
+  conversationId: string;
   channel: string;
   chatId: string;
   assistantPlainText: string;
@@ -113,11 +113,11 @@ export function codingCompletionEvidence(rows: readonly TranscriptStoredRow[]): 
 
 function resolveJudgeModel(
   config: Config | undefined,
-  sessionKey: string,
+  conversationId: string,
   runtimeModel?: string,
 ): string | undefined {
   if (config) {
-    const profile = resolveEffectiveAgentProfileForSession(config, sessionKey);
+    const profile = resolveEffectiveAgentProfileForSession(config, conversationId);
     if (profile.primaryModelRef?.trim()) return profile.primaryModelRef.trim();
   }
   return runtimeModel?.trim() || (config ? getAgentDefaultModelRef(config) : undefined);
@@ -137,21 +137,21 @@ export class TaskJudgeService {
 
   async reviewTurn(payload: TaskTurnCompletion): Promise<void> {
     if (payload.skipTaskReview || payload.aborted || payload.streamError) return;
-    const taskId = this.#conversations.resolveActiveExecutionSession(payload.sessionKey)?.taskId;
+    const taskId = this.#conversations.resolveActiveExecutionSession(payload.conversationId)?.taskId;
     if (!taskId) return;
 
     const task = this.#tasks.get(taskId);
     if (!task?.contract) return;
     const run = this.#runs.getActiveRoot(taskId);
-    if (!run || run.status !== 'running' || run.sessionKey !== payload.sessionKey) return;
+    if (!run || run.status !== 'running' || run.conversationId !== payload.conversationId) return;
 
     let runtimeModel: string | undefined;
     try {
-      runtimeModel = this.options.modelManager.getModelForSession(payload.sessionKey);
+      runtimeModel = this.options.modelManager.getModelForSession(payload.conversationId);
     } catch {
       runtimeModel = undefined;
     }
-    const modelRef = resolveJudgeModel(this.options.getConfig(), payload.sessionKey, runtimeModel);
+    const modelRef = resolveJudgeModel(this.options.getConfig(), payload.conversationId, runtimeModel);
     if (!modelRef) return;
 
     let model: ReturnType<typeof resolveModel>;
@@ -162,8 +162,8 @@ export class TaskJudgeService {
       return;
     }
 
-    const history = compactHistory(await this.options.sessionStore.loadMessages(payload.sessionKey));
-    const proof = codingCompletionEvidence(await this.options.sessionStore.loadTranscriptRows(payload.sessionKey));
+    const history = compactHistory(await this.options.sessionStore.loadMessages(payload.conversationId));
+    const proof = codingCompletionEvidence(await this.options.sessionStore.loadTranscriptRows(payload.conversationId));
     const criteria = task.contract.acceptanceCriteria;
     const prompt = [
       'You are an independent task verifier. Be strict and evidence-driven.',
@@ -236,7 +236,7 @@ export class TaskJudgeService {
         },
       });
     } catch (error) {
-      log.warn({ err: error, taskId, sessionKey: payload.sessionKey }, 'Task review failed');
+      log.warn({ err: error, taskId, conversationId: payload.conversationId }, 'Task review failed');
     }
   }
 }

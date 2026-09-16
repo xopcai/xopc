@@ -5,9 +5,9 @@ import type { SessionIndex } from '../../session/index.js';
 
 describe('GatewaySessionsApi.forkAtTurn', () => {
   it('generates a fresh webchat key and routing metadata on the server', async () => {
-    const sourceKey = 'agent:main:webchat:default:direct:source';
+    const sourceKey = "186828a5-4b36-42e0-85cc-6cd0114bd4c7";
     const forkSessionAtTurn = vi.fn(async (_sourceKey, options) => ({
-      sessionKey: options.targetKey,
+      conversationId: options.targetKey,
       rowCount: 2,
       lastTurnId: options.lastTurnId,
     }));
@@ -33,11 +33,11 @@ describe('GatewaySessionsApi.forkAtTurn', () => {
 
     const result = await api.forkAtTurn(sourceKey, 'turn-1');
 
-    expect(result.sessionKey).toMatch(/^agent:main:webchat:default:direct:chat_/);
-    expect(result.sessionKey).not.toBe(sourceKey);
+    expect(result.conversationId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(result.conversationId).not.toBe(sourceKey);
     const options = forkSessionAtTurn.mock.calls[0]?.[1];
     expect(options).toMatchObject({
-      targetKey: result.sessionKey,
+      targetKey: result.conversationId,
       lastTurnId: 'turn-1',
       targetMetadata: {
         sourceChannel: 'webchat',
@@ -54,7 +54,7 @@ describe('GatewaySessionsApi.forkAtTurn', () => {
   });
 
   it('rejects the active turn before creating a target session', async () => {
-    const sourceKey = 'agent:main:webchat:default:direct:source';
+    const sourceKey = "186828a5-4b36-42e0-85cc-6cd0114bd4c7";
     const forkSessionAtTurn = vi.fn();
     const sessionIndex = {
       getSessionMetadata: async () => ({

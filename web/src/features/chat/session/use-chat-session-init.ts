@@ -27,7 +27,7 @@ import {
 import { openNewChatHandoff } from '@/features/chat/session/new-chat-handoff';
 import { readNewSessionPreferences } from '@/features/chat/session/new-session-preferences';
 import type { SessionManager } from '@/features/chat/session/session-manager';
-import { lastNonNewSessionKeyRef } from '@/features/chat/session/use-chat-session-route';
+import { lastNonNewConversationIdRef } from '@/features/chat/session/use-chat-session-route';
 
 export interface ProjectSessionPreparation {
   project: Project;
@@ -53,7 +53,7 @@ export function useChatSessionInit(opts: {
   restoreLiveCacheIfNeeded: (key: string) => boolean;
   adoptEmptySession: (key: string, name: string | null) => void;
   applyAgentConfig: (
-    sessionKey: string,
+    conversationId: string,
     cfg: {
       model: string;
       thinkingLevel?: string | null;
@@ -176,8 +176,8 @@ export function useChatSessionInit(opts: {
       const open = (executionMode?: SessionCreateRequest['executionMode'], config?: SessionInitialAgentConfig) => openNewChatHandoff({
         sessionMgr: runtime.sessionMgrRef.current,
         agentId: spec.agentId,
-        currentSessionKey: lastNonNewSessionKeyRef.current,
-        routeSessionKey: null,
+        currentConversationId: lastNonNewConversationIdRef.current,
+        routeConversationId: null,
         forceNew: spec.forceNew,
         temporary: spec.temporary,
         projectId: spec.projectId,
@@ -254,8 +254,8 @@ export function useChatSessionInit(opts: {
         return openNewChatHandoff({
           sessionMgr: runtime.sessionMgrRef.current,
           agentId: aid,
-          currentSessionKey: null,
-          routeSessionKey: null,
+          currentConversationId: null,
+          routeConversationId: null,
           navigateToSession: runtime.navigateToSession,
           onOpened: (key) => {
             runtime.adoptEmptySession(key, null);

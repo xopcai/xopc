@@ -9,8 +9,8 @@ describe('buildSubagentContextSection', () => {
       goal: 'Fix the bug in auth.ts',
       context: 'See tests/auth.test.ts',
       workspace: '/workspace/main',
-      requesterSessionKey: 'agent:main:webchat:direct:u1',
-      childSessionKey: 'subagent:task-1',
+      requesterConversationId: 'agent:main:webchat:direct:u1',
+      childConversationId: 'subagent:task-1',
     });
     expect(section).toContain('# Subagent Context');
     expect(section).toContain('Fix the bug in auth.ts');

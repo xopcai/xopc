@@ -10,13 +10,13 @@ import {
   type CompactionResult,
 } from '../memory/compaction.js';
 import type { SessionStore } from '../../session/store.js';
-import type { XopcTranscriptCompactionEntry } from '../../session/session-context-for-llm.js';
+import { buildSessionContextForLlm, type XopcTranscriptCompactionEntry } from '../../session/session-context-for-llm.js';
 import type { TranscriptSourceEntry } from '../../storage/sqlite/transcript-repository.js';
 import { openSqliteHydratingSessionManager } from './sqlite-hydrating-session-manager.js';
 
 export interface EmbeddedTranscriptRuntime {
   readonly runtimeId: string;
-  readonly sessionId: string;
+  readonly transcriptId: string;
   readonly persistent: boolean;
 
   openSessionManager(cwd: string): SessionManager;
@@ -31,23 +31,23 @@ export interface EmbeddedTranscriptRuntime {
 }
 
 export async function createSqliteTranscriptRuntime(params: {
-  sessionKey: string;
+  conversationId: string;
   sessionStore: SessionStore;
 }): Promise<EmbeddedTranscriptRuntime> {
-  const identity = await params.sessionStore.resolveTranscriptPath(params.sessionKey);
+  const identity = await params.sessionStore.resolveTranscriptPath(params.conversationId);
   return {
-    runtimeId: params.sessionKey,
-    sessionId: identity.sessionId,
+    runtimeId: params.conversationId,
+    transcriptId: identity.transcriptId,
     persistent: true,
     openSessionManager: (cwd) => openSqliteHydratingSessionManager({
-      sessionKey: params.sessionKey,
-      sessionId: identity.sessionId,
+      conversationId: params.conversationId,
+      transcriptId: identity.transcriptId,
       cwd,
     }),
-    loadMessages: () => params.sessionStore.load(params.sessionKey),
+    loadMessages: () => params.sessionStore.load(params.conversationId),
     compact: (messages, model, instructions, force, options) =>
       params.sessionStore.compact(
-        params.sessionKey,
+        params.conversationId,
         messages,
         model,
         instructions,
@@ -60,7 +60,7 @@ export async function createSqliteTranscriptRuntime(params: {
 export class InMemoryTranscriptRuntime implements EmbeddedTranscriptRuntime {
   readonly persistent = false;
   readonly runtimeId: string;
-  readonly sessionId: string;
+  readonly transcriptId: string;
 
   private readonly sessionManager: SessionManager;
   private readonly compactor = new SessionCompactor();
@@ -73,8 +73,8 @@ export class InMemoryTranscriptRuntime implements EmbeddedTranscriptRuntime {
     initialMessages?: readonly AgentMessage[];
   }) {
     this.runtimeId = params.runtimeId;
-    this.sessionId = crypto.randomUUID();
-    this.sessionManager = SessionManager.inMemory(params.cwd, { id: this.sessionId });
+    this.transcriptId = crypto.randomUUID();
+    this.sessionManager = SessionManager.inMemory(params.cwd, { id: this.transcriptId });
     for (const message of params.initialMessages ?? []) {
       if (message.role === 'compactionSummary') {
         this.sessionManager.appendCustomMessageEntry(
@@ -100,7 +100,7 @@ export class InMemoryTranscriptRuntime implements EmbeddedTranscriptRuntime {
   }
 
   async loadMessages(): Promise<AgentMessage[]> {
-    return [...this.sessionManager.buildSessionContext().messages];
+    return buildSessionContextForLlm(this.sourceEntries().map((entry) => entry.row));
   }
 
   captureBaseline(): void {
@@ -114,6 +114,20 @@ export class InMemoryTranscriptRuntime implements EmbeddedTranscriptRuntime {
       .flatMap((entry) => entry.type === 'message' ? [entry.message] : []);
   }
 
+  private sourceEntries(): TranscriptSourceEntry[] {
+    const branch = this.sessionManager.getBranch();
+    return branch.flatMap((entry, index): TranscriptSourceEntry[] => {
+      const compaction = this.compactionRows.get(entry.id);
+      if (compaction) {
+        return [{ entryId: entry.id, seq: index + 1, createdAt: Date.now(), row: compaction }];
+      }
+      if (entry.type === 'custom_message') return [{ entryId: entry.id, seq: index + 1, createdAt: Date.now(),
+        row: { role: 'custom', customType: entry.customType, content: entry.content, display: entry.display } }];
+      if (entry.type !== 'message') return [];
+      return [{ entryId: entry.id, seq: index + 1, createdAt: Date.now(), row: entry.message }];
+    });
+  }
+
   async compact(
     _messages: AgentMessage[],
     model: Model<Api>,
@@ -122,25 +136,18 @@ export class InMemoryTranscriptRuntime implements EmbeddedTranscriptRuntime {
     options?: CompactionExecutionOptions,
   ): Promise<CompactionResult> {
     const branch = this.sessionManager.getBranch();
-    const sources = branch.flatMap((entry, index): TranscriptSourceEntry[] => {
-      const compaction = this.compactionRows.get(entry.id);
-      if (compaction) {
-        return [{ entryId: entry.id, seq: index + 1, createdAt: Date.now(), row: compaction }];
-      }
-      if (entry.type !== 'message') return [];
-      return [{ entryId: entry.id, seq: index + 1, createdAt: Date.now(), row: entry.message }];
-    });
+    const sources = this.sourceEntries();
     const result = await this.compactor.compact(sources, model, instructions, force, options);
     if (!result.compacted || !result.handover || !result.audit) return result;
 
-    const messageEntries = branch
-      .filter((entry): entry is Extract<typeof entry, { type: 'message' }> => entry.type === 'message');
-    const firstKept = messageEntries[result.firstKeptIndex];
-    if (!firstKept) return { ...result, compacted: false };
+    options?.signal?.throwIfAborted();
+    if (this.sessionManager.getBranch().at(-1)?.id !== branch.at(-1)?.id) {
+      throw new Error('Session changed while compaction was running');
+    }
 
     this.sessionManager.appendCompaction(
       result.summary,
-      firstKept.id,
+      result.firstKeptEntryId ?? '',
       result.tokensBefore,
       {
         plannerVersion: result.plannerVersion,

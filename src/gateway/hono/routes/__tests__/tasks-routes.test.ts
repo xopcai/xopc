@@ -50,8 +50,8 @@ describe('task routes', () => {
 
   it('aborts the live conversation after persisting a pause', async () => {
     const task = new TaskRepository().create({ title: 'Pause route', objective: 'Wait' });
-    ensureSessionRecord('session', stateDir);
-    new TaskRunRepository().create({ taskId: task.id, sessionKey: 'session', executorKind: 'agent',
+    ensureSessionRecord('5c2dd4d5-11cb-4b7d-91c3-ceba1691edfa', stateDir, { agentId: "main" });
+    new TaskRunRepository().create({ taskId: task.id, conversationId: '5c2dd4d5-11cb-4b7d-91c3-ceba1691edfa', executorKind: 'agent',
       executorRef: { agentId: 'main' }, trigger: { kind: 'manual' }, correlationId: 'pause-route',
       idempotencyKey: 'pause-route', contractVersion: task.latestContractVersion });
     const response = await app.request(`/api/tasks/${task.id}/commands`, { method: 'POST',

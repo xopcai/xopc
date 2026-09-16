@@ -184,7 +184,7 @@ export interface RunRequest {
 export interface AgentRunResult {
   status: 'completed' | 'failed' | 'aborted';
   finalText: string;
-  sessionKey?: string;
+  conversationId?: string;
   agentRunId?: string;
   usage?: Record<string, number>;
   runtimeIdentity?: Record<string, unknown>;

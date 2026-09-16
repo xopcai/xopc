@@ -38,7 +38,7 @@ function AgentsSkeleton() {
 }
 
 export function AgentsSettingsPanel() {
-  const token = useGatewayStore((state) => state.sessionKey);
+  const token = useGatewayStore((state) => state.conversationId);
   const language = useLocaleStore((state) => state.language);
   const zh = language === 'zh';
   const agentsMessages = messages(language).agentsSettings;

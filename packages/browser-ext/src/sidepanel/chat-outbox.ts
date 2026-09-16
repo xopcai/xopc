@@ -21,32 +21,32 @@ function transactionResult<T>(
   });
 }
 
-export async function readBrowserOutbox<T>(sessionKey: string): Promise<T | undefined> {
+export async function readBrowserOutbox<T>(conversationId: string): Promise<T | undefined> {
   const database = await openDatabase();
   try {
     return await transactionResult<T | undefined>(
       database,
       'readonly',
-      (store) => store.get(sessionKey),
+      (store) => store.get(conversationId),
     );
   } finally {
     database.close();
   }
 }
 
-export async function writeBrowserOutbox<T>(sessionKey: string, value: T): Promise<void> {
+export async function writeBrowserOutbox<T>(conversationId: string, value: T): Promise<void> {
   const database = await openDatabase();
   try {
-    await transactionResult(database, 'readwrite', (store) => store.put(value, sessionKey));
+    await transactionResult(database, 'readwrite', (store) => store.put(value, conversationId));
   } finally {
     database.close();
   }
 }
 
-export async function deleteBrowserOutbox(sessionKey: string): Promise<void> {
+export async function deleteBrowserOutbox(conversationId: string): Promise<void> {
   const database = await openDatabase();
   try {
-    await transactionResult(database, 'readwrite', (store) => store.delete(sessionKey));
+    await transactionResult(database, 'readwrite', (store) => store.delete(conversationId));
   } finally {
     database.close();
   }

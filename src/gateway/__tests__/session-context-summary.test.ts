@@ -28,7 +28,7 @@ describe('session context summary', () => {
   let directory: string;
   let projectId: string;
   let config: ReturnType<typeof ConfigSchema.parse>;
-  const sessionKey = 'agent:main:webchat:default:direct:summary';
+  const conversationId = "648c72d6-227a-4e0f-8095-c47cfbe44d4f";
   const owner = ['gateway.admin'] as const;
   const git = (...args: string[]) => execFileSync('git', args, { cwd: directory, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   const note = (id: string, status: 'inbox' | 'trashed' = 'inbox') => upsertNoteRecord({
@@ -37,7 +37,7 @@ describe('session context summary', () => {
   });
   const activeTask = () => {
     const task = new TaskRepository().create({ title: 'Current task', objective: 'PRIVATE OBJECTIVE', projectId });
-    new TaskConversationRepository().activateExecutionSession({ taskId: task.id, sessionKey, agentId: 'main' });
+    new TaskConversationRepository().activateExecutionSession({ taskId: task.id, conversationId, agentId: 'main' });
     return task;
   };
   const link = (taskId: string, targetId: string) => new TaskContextRepository().add({
@@ -50,7 +50,7 @@ describe('session context summary', () => {
     openXopcDatabase({ path: join(directory, 'xopc.db') });
     config = ConfigSchema.parse({ agents: { list: [{ id: 'main', workspace: directory }] } });
     projectId = new ProjectStore().create({ name: 'Project', workspaceRoot: directory }).id;
-    ensureSessionRecord(sessionKey, directory, { projectId, customData: {
+    ensureSessionRecord(conversationId, directory, { agentId: "main", projectId, customData: {
       sourceBinding: { kind: 'note', sourceId: 'note-a', version: 'v1', attachedAt: 1 }, secret: 'PRIVATE DATA',
     } });
     note('note-a');
@@ -67,7 +67,7 @@ describe('session context summary', () => {
     link(task.id, 'note-a');
     new TaskRepository().create({ title: 'Unrelated task', objective: 'Other', projectId });
     getSqliteDatabase().exec('PRAGMA query_only = ON');
-    const result = await getSessionContextSummary(config, sessionKey, owner);
+    const result = await getSessionContextSummary(config, conversationId, owner);
     expect(result?.work).toEqual({ project: { id: projectId, title: 'Project' }, task: { id: task.id, title: task.title, phase: task.phase } });
     expect(result?.sources).toEqual([{ kind: 'note', id: 'note-a', title: 'Title note-a', origins: [{ kind: 'session', version: 'v1' }, { kind: 'task' }] }]);
     expect(result?.environment).toEqual({ kind: 'local_checkout', rootPath: directory, available: true });
@@ -77,14 +77,14 @@ describe('session context summary', () => {
 
   it('does not infer a current task from project membership', async () => {
     new TaskRepository().create({ title: 'Unrelated', objective: 'Other', projectId });
-    expect((await getSessionContextSummary(config, sessionKey, owner))?.work.task).toBeUndefined();
+    expect((await getSessionContextSummary(config, conversationId, owner))?.work.task).toBeUndefined();
   });
 
   it('hides deleted and trashed titles, never using stored edge labels', async () => {
     const task = activeTask();
     link(task.id, 'deleted');
     note('note-a', 'trashed');
-    const result = await getSessionContextSummary(config, sessionKey, owner);
+    const result = await getSessionContextSummary(config, conversationId, owner);
     expect(result?.sources).toHaveLength(2);
     expect(result?.sources.every((source) => source.unavailable && !source.title)).toBe(true);
     expect(JSON.stringify(result)).not.toMatch(/Title|STALE/);
@@ -93,7 +93,7 @@ describe('session context summary', () => {
   it('bounds the source list and reports overflow', async () => {
     const task = activeTask();
     for (let i = 0; i < 30; i++) link(task.id, `source-${i}`);
-    const result = await getSessionContextSummary(config, sessionKey, owner);
+    const result = await getSessionContextSummary(config, conversationId, owner);
     expect(result?.sources).toHaveLength(20);
     expect(result?.sourcesHasMore).toBe(true);
     expect(result?.sources[0]?.id).toBe('note-a');
@@ -101,7 +101,7 @@ describe('session context summary', () => {
 
   it('omits cross-resource data when the device only has sessions.read', async () => {
     activeTask();
-    const result = await getSessionContextSummary(config, sessionKey, ['sessions.read']);
+    const result = await getSessionContextSummary(config, conversationId, ['sessions.read']);
     expect(result).toMatchObject({ work: {}, sources: [], unavailableSections: ['work', 'sources', 'environment'] });
     expect(result?.environment).toBeUndefined();
     expect(JSON.stringify(result)).not.toContain(projectId);
@@ -110,7 +110,7 @@ describe('session context summary', () => {
   it('does not reveal task references without tasks.read', async () => {
     const task = activeTask();
     link(task.id, 'task-only-note');
-    const result = await getSessionContextSummary(config, sessionKey, ['sessions.read', 'workspace.read']);
+    const result = await getSessionContextSummary(config, conversationId, ['sessions.read', 'workspace.read']);
     expect(result?.work.task).toBeUndefined();
     expect(result?.sources.map((source) => source.id)).toEqual(['note-a']);
   });
@@ -119,9 +119,9 @@ describe('session context summary', () => {
     git('init', '--initial-branch=summary-test');
     git('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '--allow-empty', '-m', 'Initial');
     const sha = git('rev-parse', 'HEAD');
-    expect((await getSessionContextSummary(config, sessionKey, owner))?.environment).toMatchObject({ branch: 'summary-test', headSha: sha, detached: false });
+    expect((await getSessionContextSummary(config, conversationId, owner))?.environment).toMatchObject({ branch: 'summary-test', headSha: sha, detached: false });
     git('checkout', '--detach');
-    expect((await getSessionContextSummary(config, sessionKey, owner))?.environment).toMatchObject({ headSha: sha, detached: true });
+    expect((await getSessionContextSummary(config, conversationId, owner))?.environment).toMatchObject({ headSha: sha, detached: true });
     expect(git('rev-parse', 'HEAD')).toBe(sha);
   });
 
@@ -130,9 +130,9 @@ describe('session context summary', () => {
     mkdirSync(rootPath);
     const store = new ExecutionEnvironmentStore();
     const environment = await new LocalWorktreeManager({ store }).registerLocalCheckout({ workspacePath: rootPath });
-    store.bind({ sessionKey, environmentId: environment.id });
+    store.bind({ conversationId, environmentId: environment.id });
     rmSync(rootPath, { recursive: true });
-    expect((await getSessionContextSummary(config, sessionKey, owner))?.environment).toMatchObject({ rootPath, available: false });
+    expect((await getSessionContextSummary(config, conversationId, owner))?.environment).toMatchObject({ rootPath, available: false });
   });
 
   it('reports the managed worktree HEAD and fails closed when its Git metadata disappears', async () => {
@@ -143,12 +143,12 @@ describe('session context summary', () => {
     repoGit('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '--allow-empty', '-m', 'Initial');
     const store = new ExecutionEnvironmentStore();
     const environment = await new LocalWorktreeManager({ store, stateDir: directory }).provisionManagedWorktree({ projectId, repositoryPath });
-    store.bind({ sessionKey, environmentId: environment.id });
-    expect((await getSessionContextSummary(config, sessionKey, owner))?.environment).toMatchObject({
+    store.bind({ conversationId, environmentId: environment.id });
+    expect((await getSessionContextSummary(config, conversationId, owner))?.environment).toMatchObject({
       kind: 'managed_worktree', rootPath: environment.rootPath, available: true, detached: true, headSha: repoGit('rev-parse', 'HEAD'),
     });
     rmSync(join(environment.rootPath, '.git'));
-    expect((await getSessionContextSummary(config, sessionKey, owner))?.environment).toEqual({
+    expect((await getSessionContextSummary(config, conversationId, owner))?.environment).toEqual({
       kind: 'managed_worktree', rootPath: environment.rootPath, available: false,
     });
   });
@@ -161,9 +161,9 @@ describe('session context summary', () => {
       registerSessionsRoutes(app, { service: { isGatewayReady: () => true, currentConfig: config } as GatewayService });
       return app;
     };
-    expect((await appFor(['workspace.read']).request(`/api/sessions/${encodeURIComponent(sessionKey)}/context-summary`)).status).toBe(403);
+    expect((await appFor(['workspace.read']).request(`/api/sessions/${encodeURIComponent(conversationId)}/context-summary`)).status).toBe(403);
     expect((await appFor(['sessions.read']).request('/api/sessions/missing/context-summary')).status).toBe(404);
-    const response = await appFor(['sessions.read']).request(`/api/sessions/${encodeURIComponent(sessionKey)}/context-summary`);
+    const response = await appFor(['sessions.read']).request(`/api/sessions/${encodeURIComponent(conversationId)}/context-summary`);
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect((await response.json()).summary.work).toEqual({});

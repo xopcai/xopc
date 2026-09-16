@@ -39,13 +39,13 @@ export function registerSiteShareRoutes(authenticated: Hono, deps: Authenticated
   const store = getSiteShareStore(resolveSiteShareConfig(service));
 
   async function resolveWorkspaceRoot(
-    sessionKey: string | undefined,
+    conversationId: string | undefined,
     agentId: string | undefined,
   ): Promise<string | null> {
     const cfg = service.currentConfig;
-    if (sessionKey) {
+    if (conversationId) {
       try {
-        return await service.sessions.getEffectiveWorkspacePath(sessionKey);
+        return await service.sessions.getEffectiveWorkspacePath(conversationId);
       } catch {
         /* fall through */
       }
@@ -77,7 +77,7 @@ export function registerSiteShareRoutes(authenticated: Hono, deps: Authenticated
     const kind = body.kind === 'static' || body.kind === 'proxy' ? body.kind : null;
     if (!kind) return c.json({ ok: false, error: { message: "kind must be 'static' or 'proxy'" } }, 400);
 
-    const sessionKey = typeof body.sessionKey === 'string' ? body.sessionKey.trim() : undefined;
+    const conversationId = typeof body.conversationId === 'string' ? body.conversationId.trim() : undefined;
     const agentId = typeof body.agentId === 'string' ? body.agentId.trim() : undefined;
     const path = typeof body.path === 'string' ? body.path.trim() : undefined;
     const upstreamUrl = typeof body.upstreamUrl === 'string' ? body.upstreamUrl.trim() : undefined;
@@ -99,7 +99,7 @@ export function registerSiteShareRoutes(authenticated: Hono, deps: Authenticated
 
     let workspaceRoot: string | null = null;
     if (kind === 'static') {
-      workspaceRoot = await resolveWorkspaceRoot(sessionKey, agentId);
+      workspaceRoot = await resolveWorkspaceRoot(conversationId, agentId);
       if (!workspaceRoot) {
         return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
       }
@@ -118,7 +118,7 @@ export function registerSiteShareRoutes(authenticated: Hono, deps: Authenticated
         spaFallback,
         rewriteMode,
         forwardWebSocket,
-        sessionKey,
+        conversationId,
         agentId,
         workspaceRoot,
         gatewayTokenHash: hashPrincipal(principalId),

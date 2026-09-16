@@ -46,7 +46,7 @@ function runtime(bound = false) {
       )),
     },
     bindings: {
-      get: vi.fn(() => bound ? { sessionKey: 'session-1', endpointId, boundAt: 1 } : undefined),
+      get: vi.fn(() => bound ? { conversationId: 'session-1', endpointId, boundAt: 1 } : undefined),
       resolve: vi.fn(() => bound ? endpoint : undefined),
     },
     invocations: { invoke },
@@ -60,7 +60,7 @@ describe('EndpointToolProvider', () => {
       getCurrentContext: () => ({
         channel: 'webchat',
         chatId: 'chat-1',
-        sessionKey: 'session-1',
+        conversationId: 'session-1',
         origin: { type: 'endpoint', endpointId },
       }),
     });
@@ -81,7 +81,7 @@ describe('EndpointToolProvider', () => {
       getCurrentContext: () => ({
         channel: 'telegram',
         chatId: 'chat-1',
-        sessionKey: 'session-1',
+        conversationId: 'session-1',
         origin: { type: 'channel', channel: 'telegram' },
       }),
     });
@@ -94,7 +94,7 @@ describe('EndpointToolProvider', () => {
       getCurrentContext: () => ({
         channel: 'telegram',
         chatId: 'chat-1',
-        sessionKey: 'session-1',
+        conversationId: 'session-1',
         origin: { type: 'channel', channel: 'telegram' },
       }),
     });
@@ -111,7 +111,7 @@ describe('EndpointToolProvider', () => {
       getCurrentContext: () => ({
         channel: 'webchat',
         chatId: 'chat-1',
-        sessionKey: 'session-1',
+        conversationId: 'session-1',
         origin: { type: 'endpoint', endpointId },
       }),
     });

@@ -397,7 +397,7 @@ export class ComposioSessionsAdapter {
     action: ConnectorActionMetadata;
     args?: Record<string, unknown>;
     agentId?: string;
-    sessionKey?: string;
+    conversationId?: string;
     confirmed?: boolean;
   }): Promise<{ decision: 'allowed'; result: unknown } | { decision: 'denied' | 'confirmation_required'; reason: string }> {
     const evaluation = evaluateConnectorExecutionPolicy({
@@ -414,7 +414,7 @@ export class ComposioSessionsAdapter {
         connectorId: input.installation.connectorId,
         principalId: input.context.principalId,
         agentId: input.agentId,
-        sessionKey: input.sessionKey,
+        conversationId: input.conversationId,
         actionId: input.action.actionId,
         scope: input.action.scope,
         decision: evaluation.decision,
@@ -453,7 +453,7 @@ export class ComposioSessionsAdapter {
         connectorId: input.installation.connectorId,
         principalId: input.context.principalId,
         agentId: input.agentId,
-        sessionKey: input.sessionKey,
+        conversationId: input.conversationId,
         actionId: input.action.actionId,
         scope: input.action.scope,
         decision: 'allowed',
@@ -469,7 +469,7 @@ export class ComposioSessionsAdapter {
         connectorId: input.installation.connectorId,
         principalId: input.context.principalId,
         agentId: input.agentId,
-        sessionKey: input.sessionKey,
+        conversationId: input.conversationId,
         actionId: input.action.actionId,
         scope: input.action.scope,
         decision: 'allowed',

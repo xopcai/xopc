@@ -33,7 +33,7 @@ type HomeWorkflowRun = {
   definitionId: string;
   title: string;
   status: WorkflowRunSummary['status'];
-  sessionKey?: string;
+  conversationId?: string;
   createdAtMs: number;
   startedAtMs?: number;
   completedAtMs?: number;
@@ -54,7 +54,7 @@ interface HomeGatewayPort {
   readonly projects: ProjectService;
   readonly proactiveInbox: ProactiveInboxService;
   readonly sessions: {
-    listActiveRuns(): Array<{ sessionKey: string; runId: string }>;
+    listActiveRuns(): Array<{ conversationId: string; runId: string }>;
     getSession(key: string): Promise<{
       name?: string;
       updatedAt: string;
@@ -71,7 +71,7 @@ function toHomeWorkflowRun(run: WorkflowRunSummary): HomeWorkflowRun {
     definitionId: run.definitionId,
     title: run.title,
     status: run.status,
-    sessionKey: run.metadata?.sessionKey,
+    conversationId: run.metadata?.conversationId,
     createdAtMs: run.createdAtMs,
     startedAtMs: run.startedAtMs,
     completedAtMs: run.completedAtMs,
@@ -315,8 +315,8 @@ export function buildHomeWorkbench(input: {
     const openAction: HomeAction = {
       type: 'open',
       label: copy.viewProgress,
-      href: run.sessionKey
-        ? `/chat/${encodeURIComponent(run.sessionKey)}`
+      href: run.conversationId
+        ? `/chat/${encodeURIComponent(run.conversationId)}`
         : `/workflows?runId=${encodeURIComponent(run.id)}`,
     };
     return {
@@ -398,7 +398,7 @@ export class HomeQueryService {
       Promise.resolve(listConnectorApprovals({ principalId: 'local-owner', status: 'pending', limit: 100 })),
       Promise.all(activeRuns.map(async (run) => ({
         ...run,
-        session: await this.service.sessions.getSession(run.sessionKey),
+        session: await this.service.sessions.getSession(run.conversationId),
       }))),
     ]);
     const runningConversations = activeRunSessions
@@ -407,7 +407,7 @@ export class HomeQueryService {
         const session = item.session!;
         const updatedAt = Date.parse(session.lastInteractionAt ?? session.updatedAt);
         return {
-          sessionKey: item.sessionKey,
+          conversationId: item.conversationId,
           runId: item.runId,
           ...(session.name?.trim() ? { title: session.name.trim() } : {}),
           ...(session.routing?.agentId ? { agentId: session.routing.agentId } : {}),
@@ -501,7 +501,7 @@ export class HomeQueryService {
           reason: run.status === 'timeout' ? 'run_timeout' : 'run_failed',
           href: `/workflows?runId=${encodeURIComponent(run.id)}`,
           updatedAt: run.completedAtMs ?? run.startedAtMs ?? run.createdAtMs,
-          sessionKey: run.sessionKey,
+          conversationId: run.conversationId,
         })),
       ...latestAutomationRuns
         .filter((run) => run.status === 'failed' || run.status === 'timeout')
@@ -521,7 +521,7 @@ export class HomeQueryService {
           reason: run.status === 'timeout' ? 'run_timeout' : 'run_failed',
           href: `/automations?run=${encodeURIComponent(run.id)}`,
           updatedAt: run.endedAtMs ?? run.startedAtMs ?? run.createdAtMs,
-          sessionKey: run.sessionKey,
+          conversationId: run.conversationId,
         })),
     ].sort((left, right) => right.updatedAt - left.updatedAt);
     const governed = this.#attentionGovernor.project({

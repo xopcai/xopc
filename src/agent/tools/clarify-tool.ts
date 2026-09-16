@@ -35,7 +35,7 @@ export type ClarifyRequestResult =
   | { status: 'waiting'; waitId: string; expiresAt?: number };
 
 export type GatewayClarifyRequestFn = (
-  context: { sessionKey: string; runId: string; toolCallId: string },
+  context: { conversationId: string; runId: string; toolCallId: string },
   request: ClarifyRequestPayload,
 ) => Promise<ClarifyRequestResult>;
 

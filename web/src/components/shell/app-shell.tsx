@@ -56,9 +56,9 @@ function NavigateToChatListener() {
   const navigate = useNavigate();
   useEffect(() => {
     const handler = (e: Event) => {
-      const d = (e as CustomEvent<{ sessionKey: string }>).detail;
-      if (d?.sessionKey) {
-        navigate(`/chat/${encodeURIComponent(d.sessionKey)}`);
+      const d = (e as CustomEvent<{ conversationId: string }>).detail;
+      if (d?.conversationId) {
+        navigate(`/chat/${encodeURIComponent(d.conversationId)}`);
       }
     };
     window.addEventListener('navigate-to-chat', handler);
@@ -85,13 +85,13 @@ function ExtensionNavigateListener() {
 }
 
 export function AppShell() {
-  const token = useGatewayStore((state) => state.sessionKey);
+  const token = useGatewayStore((state) => state.conversationId);
   const baseUrl = useGatewayStore((state) => state.baseUrl);
   return <VoiceCallProvider key={`${baseUrl}:${token ?? ''}`}><ReadAloudDockProvider><AppShellContent /></ReadAloudDockProvider></VoiceCallProvider>;
 }
 
 function AppShellContent() {
-  const token = useGatewayStore((s) => s.sessionKey);
+  const token = useGatewayStore((s) => s.conversationId);
   const { pathname, search } = useLocation();
   const navigate = useNavigate();
   const isSettingsRoute = pathname.startsWith('/settings');
@@ -99,14 +99,14 @@ function AppShellContent() {
   const language = useLocaleStore((s) => s.language);
   const updateReminder = useUpdateReminder();
   const previewPath = useWorkspacePreviewStore((s) => s.path);
-  const chatPathSessionKey = pathname.startsWith('/chat/task/')
+  const chatPathConversationId = pathname.startsWith('/chat/task/')
     ? ''
     : pathname.startsWith('/chat/') ? pathname.slice('/chat/'.length) : '';
-  const parentSessionKey = chatPathSessionKey && chatPathSessionKey !== 'new'
-    ? decodeURIComponent(chatPathSessionKey)
+  const parentConversationId = chatPathConversationId && chatPathConversationId !== 'new'
+    ? decodeURIComponent(chatPathConversationId)
     : null;
   const sideChatOpen = useSideChatStore((s) => (
-    parentSessionKey ? s.panes[parentSessionKey]?.open === true : false
+    parentConversationId ? s.panes[parentConversationId]?.open === true : false
   ));
   const showWorkDiscoveryOverlay = pathname === '/user-model' && isWorkDiscoveryOverlaySearch(search);
   const taskModalId = pathname.startsWith('/tasks/')
@@ -257,8 +257,8 @@ function AppShellContent() {
                 {!isSettingsRoute && !pathname.startsWith('/chat') && !previewPath ? <MobilePrimaryNav /> : null}
               </div>
               {!isSettingsRoute ? (
-                sideChatOpen && parentSessionKey && !taskModalId
-                  ? <SideChatColumn parentSessionKey={parentSessionKey} />
+                sideChatOpen && parentConversationId && !taskModalId
+                  ? <SideChatColumn parentConversationId={parentConversationId} />
                   : <WorkspaceColumn elevated={Boolean(taskModalId)} />
               ) : null}
             </div>

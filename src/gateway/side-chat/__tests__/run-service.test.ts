@@ -7,11 +7,11 @@ import type { SessionMetadata } from '../../../session/types.js';
 import { EphemeralSideChatManager, type EphemeralSideChatManagerOptions } from '../manager.js';
 import { SideChatRunService } from '../run-service.js';
 
-const parentSessionKey = 'main:webchat:default:direct:parent';
+const parentConversationId = 'main:webchat:default:direct:parent';
 
 function parentMetadata(): SessionMetadata {
   return {
-    key: parentSessionKey,
+    key: parentConversationId,
     status: 'active' as SessionMetadata['status'],
     tags: [],
     createdAt: new Date(0).toISOString(),
@@ -23,7 +23,7 @@ function parentMetadata(): SessionMetadata {
     sourceChannel: 'webchat',
     sourceChatId: 'parent',
     sessionType: 'chat',
-    sessionId: 'parent-id',
+    transcriptId: 'parent-id',
     cwd: '/tmp',
   };
 }
@@ -54,7 +54,7 @@ async function setup(runEphemeralTurn: AgentService['runEphemeralTurn'], options
     publishRealtime: (topic, event, data) => published.push({ topic, event, data }),
     completeRealtimeTopic: (topic) => completed.push(topic),
   });
-  const sideChat = await manager.create({ parentSessionKey, clientInstanceId: 'tab-1' });
+  const sideChat = await manager.create({ parentConversationId, clientInstanceId: 'tab-1' });
   return { manager, service, sideChat, published, completed, agentRunner };
 }
 
@@ -78,8 +78,8 @@ describe('SideChatRunService', () => {
       'run_start', 'user_message', 'assistant_message_start', 'assistant_delta', 'assistant_message_end', 'run_end',
     ]));
     expect(runEphemeralTurn).toHaveBeenCalledWith(expect.objectContaining({
-      parentSessionKey,
-      executionSessionKey: expect.stringContaining(`side-chat:${ctx.sideChat.id}`),
+      parentConversationId,
+      executionConversationId: expect.stringContaining(`side-chat:${ctx.sideChat.id}`),
       transcriptRuntime: expect.objectContaining({ persistent: false }),
     }));
     expect(ctx.manager.get(ctx.sideChat.id, 'tab-1').status).toBe('idle');

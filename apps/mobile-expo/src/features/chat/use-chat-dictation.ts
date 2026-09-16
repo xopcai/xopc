@@ -11,7 +11,7 @@ import { useGatewayStore } from '../../stores/gateway-store';
 import { useMessages } from '../../i18n/messages';
 import { DictationTranscript } from './dictation-transcript';
 
-export function useChatDictation(sessionKey: string, insert: (text: string) => void) {
+export function useChatDictation(conversationId: string, insert: (text: string) => void) {
   const { voice: m } = useMessages();
   const [phase, setPhase] = useState<'idle' | 'connecting' | 'recording' | 'processing' | 'error'>('idle');
   const [text, setText] = useState('');
@@ -44,7 +44,7 @@ export function useChatDictation(sessionKey: string, insert: (text: string) => v
     const gateway = useGatewayStore.subscribe((next, previous) => { if (next.activeGatewayId !== previous.activeGatewayId || next.unauthorized) cancel(); });
     const subscription = AppState.addEventListener('change', next => { if (next === 'background') cancel(); });
     return () => { consent.remove(); gateway(); subscription.remove(); state.current.generation++; void cleanup(); };
-  }, [sessionKey, cancel, cleanup]);
+  }, [conversationId, cancel, cleanup]);
   const start = useCallback(async () => {
     if (state.current.audio) return;
     const current = state.current;

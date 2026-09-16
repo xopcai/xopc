@@ -148,7 +148,7 @@ describe('TaskApplicationService', () => {
     const first = createRunningTask('first-owner');
     const second = createRunningTask('second-owner');
     expect(TaskRunCoordinator.start({ runId: first.run.id, fallbackObjective: 'Other request', context: {
-      runId: first.run.id, taskId: second.task.id, sessionKey: 'session', channel: 'webchat', origin: 'task', triggerKind: 'user',
+      runId: first.run.id, taskId: second.task.id, conversationId: 'session', channel: 'webchat', origin: 'task', triggerKind: 'user',
     } })).toBeUndefined();
   });
 

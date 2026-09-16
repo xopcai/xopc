@@ -223,7 +223,7 @@ function GlobalQuickCaptureModal({ onClose }: { onClose: () => void }) {
 export function GlobalQuickCaptureHost() {
   const [open, setOpen] = useState(false);
   const [recordingShortcut, setRecordingShortcut] = useState(false);
-  const token = useGatewayStore((s) => s.sessionKey);
+  const token = useGatewayStore((s) => s.conversationId);
   const shortcut = useQuickCaptureShortcutStore((s) => s.shortcut);
 
   useEffect(() => {

@@ -42,7 +42,7 @@ vi.mock('@/features/gateway/gateway-realtime', () => ({
 import { apiFetch } from '@/lib/fetch';
 
 describe('resolveResumeRunId', () => {
-  const sessionKey = 'agent:main:webchat:default:direct:abc';
+  const conversationId = 'agent:main:webchat:default:direct:abc';
   const storage = new Map<string, string>();
 
   beforeEach(() => {
@@ -71,7 +71,7 @@ describe('resolveResumeRunId', () => {
       json: async () => ({ payload: { active: true, runId: 'run-gateway' } }),
     } as Response);
 
-    await expect(fetchSessionActiveRun(sessionKey)).resolves.toEqual({
+    await expect(fetchSessionActiveRun(conversationId)).resolves.toEqual({
       active: true,
       runId: 'run-gateway',
     });
@@ -83,9 +83,9 @@ describe('resolveResumeRunId', () => {
       json: async () => ({ payload: { active: true, runId: 'run-gateway' } }),
     } as Response);
 
-    const runId = await resolveResumeRunId(sessionKey);
+    const runId = await resolveResumeRunId(conversationId);
     expect(runId).toBe('run-gateway');
-    expect(sessionStorage.getItem(pendingAgentRunStorageKey(sessionKey))).toContain('run-gateway');
+    expect(sessionStorage.getItem(pendingAgentRunStorageKey(conversationId))).toContain('run-gateway');
   });
 
   it('clears stale sessionStorage when gateway authoritatively reports inactive', async () => {
@@ -93,18 +93,18 @@ describe('resolveResumeRunId', () => {
       ok: true,
       json: async () => ({ payload: { active: false } }),
     } as Response);
-    setPendingAgentRun(sessionKey, 'run-local');
+    setPendingAgentRun(conversationId, 'run-local');
 
-    const runId = await resolveResumeRunId(sessionKey);
+    const runId = await resolveResumeRunId(conversationId);
     expect(runId).toBeNull();
-    expect(hasPendingAgentRunForChat(sessionKey)).toBe(false);
+    expect(hasPendingAgentRunForChat(conversationId)).toBe(false);
   });
 
   it('falls back to sessionStorage only when the gateway lookup is unavailable', async () => {
     vi.mocked(apiFetch).mockRejectedValue(new Error('gateway starting'));
-    setPendingAgentRun(sessionKey, 'run-local');
+    setPendingAgentRun(conversationId, 'run-local');
 
-    await expect(resolveResumeRunId(sessionKey)).resolves.toBe('run-local');
+    await expect(resolveResumeRunId(conversationId)).resolves.toBe('run-local');
   });
 });
 
@@ -112,8 +112,8 @@ describe('selectDisplayMessages', () => {
   it('returns empty when view key mismatches session key', () => {
     expect(
       selectDisplayMessages({
-        viewSessionKey: 'a',
-        sessionKey: 'b',
+        viewConversationId: 'a',
+        conversationId: 'b',
         messages: [{ role: 'user', content: [], timestamp: 1 }],
         streamingMsg: null,
       }),
@@ -122,7 +122,7 @@ describe('selectDisplayMessages', () => {
 });
 
 describe('MessageSender abort', () => {
-  const sessionKey = 'agent:main:webchat:default:direct:abort-me';
+  const conversationId = 'agent:main:webchat:default:direct:abort-me';
   const storage = new Map<string, string>();
 
   beforeEach(() => {
@@ -152,15 +152,15 @@ describe('MessageSender abort', () => {
       _trackedRunId?: string;
     };
     internals._abort = new AbortController();
-    internals._chatId = sessionKey;
+    internals._chatId = conversationId;
     internals._trackedRunId = 'run-abort';
-    setPendingAgentRun(sessionKey, 'run-abort');
+    setPendingAgentRun(conversationId, 'run-abort');
     vi.mocked(window.dispatchEvent).mockClear();
 
     sender.abort();
 
-    expect(sender.isStreamingFor(sessionKey)).toBe(false);
-    expect(hasPendingAgentRunForChat(sessionKey)).toBe(false);
+    expect(sender.isStreamingFor(conversationId)).toBe(false);
+    expect(hasPendingAgentRunForChat(conversationId)).toBe(false);
     expect(window.dispatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'xopc-pending-agent-run-changed' }),
     );
@@ -168,7 +168,7 @@ describe('MessageSender abort', () => {
 });
 
 describe('MessageSender terminal state', () => {
-  const sessionKey = 'agent:main:webchat:default:direct:complete-me';
+  const conversationId = 'agent:main:webchat:default:direct:complete-me';
   const storage = new Map<string, string>();
 
   beforeEach(() => {
@@ -221,16 +221,16 @@ describe('MessageSender terminal state', () => {
   it('submits task chat input through the task endpoint with an active-session guard', async () => {
     const sender = new MessageSender();
     vi.mocked(apiFetch).mockResolvedValue(new Response(JSON.stringify({
-      payload: { sessionKey, state: { inputs: [] } },
+      payload: { conversationId, state: { inputs: [] } },
     }), { status: 202, headers: { 'Content-Type': 'application/json' } }));
 
-    await sender.send('continue', sessionKey, undefined, undefined, undefined, 'task-1');
+    await sender.send('continue', conversationId, undefined, undefined, undefined, 'task-1');
 
     expect(apiFetch).toHaveBeenCalledWith(
       expect.stringContaining('/api/tasks/task-1/inputs'),
       expect.objectContaining({
         method: 'POST',
-        headers: expect.objectContaining({ 'X-Xopc-Expected-Session-Key': sessionKey }),
+        headers: expect.objectContaining({ 'X-Xopc-Expected-Session-Key': conversationId }),
       }),
     );
   });
@@ -238,10 +238,10 @@ describe('MessageSender terminal state', () => {
   it('submits edited messages through the turn replacement endpoint', async () => {
     const sender = new MessageSender();
     vi.mocked(apiFetch).mockResolvedValue(new Response(JSON.stringify({
-      payload: { sessionKey, state: { inputs: [] } },
+      payload: { conversationId, state: { inputs: [] } },
     }), { status: 202, headers: { 'Content-Type': 'application/json' } }));
 
-    await sender.send('edited', sessionKey, undefined, 'medium', undefined, undefined, 'turn-old');
+    await sender.send('edited', conversationId, undefined, 'medium', undefined, undefined, 'turn-old');
 
     expect(apiFetch).toHaveBeenCalledWith(
       expect.stringContaining(`/turns/turn-old/replace`),
@@ -258,7 +258,7 @@ describe('MessageSender terminal state', () => {
         location: { origin: 'http://localhost:3000' },
         dispatchEvent: vi.fn((event: Event) => {
           if (event.type === 'xopc-pending-agent-run-changed') {
-            streamingStatesAtNotification.push(sender.isStreamingFor(sessionKey));
+            streamingStatesAtNotification.push(sender.isStreamingFor(conversationId));
           }
           return true;
         }),
@@ -281,11 +281,11 @@ describe('MessageSender terminal state', () => {
 
       let pending: Promise<unknown>;
       if (method === 'send') {
-        pending = sender.send('hello', sessionKey);
+        pending = sender.send('hello', conversationId);
       } else {
-        setPendingAgentRun(sessionKey, 'run-complete');
+        setPendingAgentRun(conversationId, 'run-complete');
         streamingStatesAtNotification.length = 0;
-        pending = sender.resume('run-complete', sessionKey);
+        pending = sender.resume('run-complete', conversationId);
       }
       await vi.waitFor(() => expect(realtimeState.listener).toBeDefined());
       realtimeState.listener?.onEvent({
@@ -295,7 +295,7 @@ describe('MessageSender terminal state', () => {
         data: {
           type: 'run_end',
           runId: 'run-complete',
-          sessionKey,
+          conversationId,
           timestamp: Date.now(),
           payload: { status: 'success' },
         },
@@ -303,8 +303,8 @@ describe('MessageSender terminal state', () => {
       await pending;
 
       expect(streamingStatesAtNotification).toEqual([true, false]);
-      expect(sender.isStreamingFor(sessionKey)).toBe(false);
-      expect(hasPendingAgentRunForChat(sessionKey)).toBe(false);
+      expect(sender.isStreamingFor(conversationId)).toBe(false);
+      expect(hasPendingAgentRunForChat(conversationId)).toBe(false);
     },
   );
 
@@ -314,17 +314,17 @@ describe('MessageSender terminal state', () => {
       location: { origin: 'http://localhost:3000' },
       dispatchEvent: vi.fn(),
     });
-    setPendingAgentRun(sessionKey, 'run-expired');
+    setPendingAgentRun(conversationId, 'run-expired');
 
-    const pending = sender.resume('run-expired', sessionKey);
+    const pending = sender.resume('run-expired', conversationId);
     await vi.waitFor(() => expect(realtimeState.listener).toBeDefined());
     realtimeState.listener?.onGap?.({
       topic: 'run:run-expired', requestedSeq: 0, earliestSeq: 1, recoverable: false,
     });
     await expect(pending).resolves.toBe(false);
 
-    expect(sender.isStreamingFor(sessionKey)).toBe(false);
-    expect(hasPendingAgentRunForChat(sessionKey)).toBe(false);
+    expect(sender.isStreamingFor(conversationId)).toBe(false);
+    expect(hasPendingAgentRunForChat(conversationId)).toBe(false);
   });
 
   it('settles from the sessions-topic terminal when run_end is lost', async () => {
@@ -335,15 +335,15 @@ describe('MessageSender terminal state', () => {
       onToolStart: vi.fn(), onToolEnd: vi.fn(), onProgress: vi.fn(), onResult, onError: vi.fn(),
     } satisfies MessagingCallbacks;
 
-    const pending = sender.resume('run-reconciled', sessionKey, callbacks);
+    const pending = sender.resume('run-reconciled', conversationId, callbacks);
     await vi.waitFor(() => expect(realtimeState.listener).toBeDefined());
-    expect(sender.reconcileTerminal(sessionKey, 'run-reconciled', 'success')).toBe(true);
+    expect(sender.reconcileTerminal(conversationId, 'run-reconciled', 'success')).toBe(true);
     await expect(pending).resolves.toBe(true);
 
     expect(onResult).toHaveBeenCalledWith({
-      runId: 'run-reconciled', sessionKey, status: 'success',
+      runId: 'run-reconciled', conversationId, status: 'success',
     });
-    expect(hasPendingAgentRunForChat(sessionKey)).toBe(false);
+    expect(hasPendingAgentRunForChat(conversationId)).toBe(false);
   });
 
   it('delivers an empty canonical task plan as a clear snapshot', async () => {
@@ -381,7 +381,7 @@ describe('MessageSender terminal state', () => {
       throw new Error(`Unexpected request: ${String(url)}`);
     });
 
-    const pending = sender.send('clear todos', sessionKey, undefined, undefined, callbacks);
+    const pending = sender.send('clear todos', conversationId, undefined, undefined, callbacks);
     await vi.waitFor(() => expect(realtimeState.listener).toBeDefined());
     realtimeState.listener?.onEvent({
       topic: 'run:run-plan',
@@ -390,7 +390,7 @@ describe('MessageSender terminal state', () => {
       data: {
         type: 'task_plan_updated',
         runId: 'run-plan',
-        sessionKey,
+        conversationId,
         timestamp: Date.now(),
         payload: {
           planId: 'session:todo', revision: 2, source: 'todo', scope: 'session', items: [],
@@ -402,7 +402,7 @@ describe('MessageSender terminal state', () => {
       seq: 2,
       event: 'run_end',
       data: {
-        type: 'run_end', runId: 'run-plan', sessionKey, timestamp: Date.now(),
+        type: 'run_end', runId: 'run-plan', conversationId, timestamp: Date.now(),
         payload: { status: 'success' },
       },
     });

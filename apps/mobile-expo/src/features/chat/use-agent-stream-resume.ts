@@ -10,14 +10,14 @@ import { hasPendingAgentRunForSession, setPendingAgentRun } from '../gateway/pen
  * and trigger resume when the active chat is idle.
  */
 export function useAgentStreamResume(opts: {
-  sessionKey: string;
+  conversationId: string;
   senderRef: RefObject<AgentMessageSender>;
-  activeSessionKeyRef: RefObject<string>;
+  activeConversationIdRef: RefObject<string>;
   wakeRecovery: () => void;
   streaming: boolean;
   sending: boolean;
 }): void {
-  const { sessionKey, senderRef, activeSessionKeyRef, wakeRecovery, streaming, sending } = opts;
+  const { conversationId, senderRef, activeConversationIdRef, wakeRecovery, streaming, sending } = opts;
   const wakeRecoveryRef = useRef(wakeRecovery);
   const sendingRef = useRef(sending);
   wakeRecoveryRef.current = wakeRecovery;
@@ -25,35 +25,35 @@ export function useAgentStreamResume(opts: {
 
   useEffect(() => {
     return subscribeGatewayEvent('run-started', (detail) => {
-      const event = detail as { sessionKey?: string; runId?: string };
-      if (!event.sessionKey || !event.runId?.trim()) return;
+      const event = detail as { conversationId?: string; runId?: string };
+      if (!event.conversationId || !event.runId?.trim()) return;
 
-      setPendingAgentRun(event.sessionKey, event.runId);
+      setPendingAgentRun(event.conversationId, event.runId);
 
-      if (activeSessionKeyRef.current !== event.sessionKey || sendingRef.current) return;
+      if (activeConversationIdRef.current !== event.conversationId || sendingRef.current) return;
       const sender = senderRef.current;
-      if (sender.isStreamingFor(event.sessionKey)) return;
+      if (sender.isStreamingFor(event.conversationId)) return;
 
       queueMicrotask(() => {
-        if (activeSessionKeyRef.current !== event.sessionKey || sendingRef.current) return;
-        if (senderRef.current.isStreamingFor(event.sessionKey)) return;
+        if (activeConversationIdRef.current !== event.conversationId || sendingRef.current) return;
+        if (senderRef.current.isStreamingFor(event.conversationId)) return;
         wakeRecoveryRef.current();
       });
     });
-  }, [activeSessionKeyRef, senderRef]);
+  }, [activeConversationIdRef, senderRef]);
 
   const streamBusyRef = useRef(false);
   useEffect(() => {
     const busy = streaming || sending;
     const wasBusy = streamBusyRef.current;
     streamBusyRef.current = busy;
-    if (!wasBusy || busy || !sessionKey) return;
+    if (!wasBusy || busy || !conversationId) return;
 
     queueMicrotask(() => {
-      if (activeSessionKeyRef.current !== sessionKey) return;
-      if (senderRef.current.isStreamingFor(sessionKey)) return;
-      if (!hasPendingAgentRunForSession(sessionKey)) return;
+      if (activeConversationIdRef.current !== conversationId) return;
+      if (senderRef.current.isStreamingFor(conversationId)) return;
+      if (!hasPendingAgentRunForSession(conversationId)) return;
       wakeRecoveryRef.current();
     });
-  }, [streaming, sending, sessionKey, activeSessionKeyRef, senderRef]);
+  }, [streaming, sending, conversationId, activeConversationIdRef, senderRef]);
 }

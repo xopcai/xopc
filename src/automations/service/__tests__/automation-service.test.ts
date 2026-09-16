@@ -69,7 +69,7 @@ describe('AutomationService', () => {
       summary: 'done: summarize today',
       model: 'openai/gpt-4o-mini',
     });
-    expect(completed?.sessionKey).toContain('automation');
+    expect(completed?.conversationId).toMatch(/^[0-9a-f-]{36}$/);
 
     const updated = await service.get(automation.id);
     expect(updated?.state.lastRunStatus).toBe('succeeded');
@@ -144,7 +144,7 @@ describe('AutomationService', () => {
     service.setDeps({
       agentService: {
         turnDispatcher: {
-          processDirect: async (_message, _sessionKey, _origin, _attachments, _thinking, options) => {
+          processDirect: async (_message, _conversationId, _origin, _attachments, _thinking, options) => {
             receivedSignal = options?.signal;
             await new Promise<void>((resolve) => {
               if (options?.signal?.aborted) resolve();
@@ -164,7 +164,7 @@ describe('AutomationService', () => {
     const queued = await service.runNow(automation.id);
     const linked = await waitFor(
       () => service.getRun(queued.id),
-      (run) => Boolean(run?.sessionKey && run.deadlineAtMs),
+      (run) => Boolean(run?.conversationId && run.deadlineAtMs),
     );
     expect(linked?.status).toBe('running');
 
@@ -220,7 +220,7 @@ describe('AutomationService', () => {
       workflowRunService: {
         startWorkflowRun: async (params) => {
           workflowCalls.push(params);
-          return { ok: true, runId: 'workflow-run-1', sessionKey: 'agent:main:webchat:workflow-run-1' };
+          return { ok: true, runId: 'workflow-run-1', conversationId: "42620690-2638-43a2-868f-3128fc4005f5" };
         },
       },
     });
@@ -261,7 +261,7 @@ describe('AutomationService', () => {
         startWorkflowRun: async () => ({
           ok: true,
           runId: 'workflow-run-wait',
-          sessionKey: 'agent:main:webchat:workflow-run-wait',
+          conversationId: "9a9db6c1-d104-47c6-818f-f9c22339585f",
         }),
         readWorkflowRunView: async () => ({
           run: {
@@ -289,12 +289,12 @@ describe('AutomationService', () => {
 
   it('retries a failed action within the same durable run', async () => {
     let calls = 0;
-    const sessionKeys: string[] = [];
+    const conversationIds: string[] = [];
     service.setDeps({
       agentService: {
         turnDispatcher: {
-          processDirect: async (_message, sessionKey) => {
-            sessionKeys.push(sessionKey);
+          processDirect: async (_message, conversationId) => {
+            conversationIds.push(conversationId);
             calls += 1;
             if (calls === 1) throw new Error('temporary provider failure');
             return 'recovered';
@@ -316,8 +316,8 @@ describe('AutomationService', () => {
     );
 
     expect(calls).toBe(2);
-    expect(new Set(sessionKeys).size).toBe(1);
-    expect(completed?.sessionKey).toBe(sessionKeys[0]);
+    expect(new Set(conversationIds).size).toBe(1);
+    expect(completed?.conversationId).toBe(conversationIds[0]);
     expect(completed).toMatchObject({ status: 'succeeded', attemptNumber: 2, rootRunId: queued.id });
     expect((await service.listRunEvents(queued.id)).map((event) => event.type))
       .toContain('action.retry_scheduled');
@@ -333,11 +333,11 @@ describe('AutomationService', () => {
     });
     const queued = await service.runNow(automation.id);
     const completed = await waitFor(() => service.getRun(queued.id), (run) => run?.status === 'failed');
-    expect(completed?.sessionKey).toContain(queued.id);
+    expect(completed?.conversationId).toMatch(/^[0-9a-f-]{36}$/);
     expect(completed?.error).toBe('No available model candidates');
     const events = await service.listRunEvents(queued.id);
     expect(events.find((event) => event.type === 'action.failed')?.data).toMatchObject({
-      sessionKey: completed?.sessionKey,
+      conversationId: completed?.conversationId,
     });
   });
 
@@ -395,7 +395,7 @@ describe('AutomationService', () => {
       workflowRunService: {
         startWorkflowRun: async (params) => {
           workflowCalls.push(params);
-          return { ok: true, runId: 'workflow-run-1', sessionKey: 'agent:main:webchat:workflow-run-1' };
+          return { ok: true, runId: 'workflow-run-1', conversationId: "42620690-2638-43a2-868f-3128fc4005f5" };
         },
       },
     });
@@ -494,7 +494,7 @@ describe('AutomationService', () => {
       workflowRunService: {
         startWorkflowRun: async (params) => {
           workflowCalls.push(params);
-          return { ok: true, runId: 'workflow-run-1', sessionKey: 'agent:main:webchat:workflow-run-1' };
+          return { ok: true, runId: 'workflow-run-1', conversationId: "42620690-2638-43a2-868f-3128fc4005f5" };
         },
       },
     });

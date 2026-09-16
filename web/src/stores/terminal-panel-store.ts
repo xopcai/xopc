@@ -12,10 +12,10 @@ export type TerminalTab = {
 const EMPTY_TERMINAL_TABS: TerminalTab[] = [];
 
 export function selectTerminalTabs(
-  tabsBySessionKey: Record<string, TerminalTab[]>,
-  sessionKey: string,
+  tabsByConversationId: Record<string, TerminalTab[]>,
+  conversationId: string,
 ): TerminalTab[] {
-  return tabsBySessionKey[sessionKey] ?? EMPTY_TERMINAL_TABS;
+  return tabsByConversationId[conversationId] ?? EMPTY_TERMINAL_TABS;
 }
 
 let terminalKeySequence = 0;
@@ -33,87 +33,87 @@ export function clampTerminalHeight(height: number): number {
 }
 
 type TerminalPanelState = {
-  openBySessionKey: Record<string, boolean>;
-  tabsBySessionKey: Record<string, TerminalTab[]>;
-  activeTabKeyBySessionKey: Record<string, string | undefined>;
+  openByConversationId: Record<string, boolean>;
+  tabsByConversationId: Record<string, TerminalTab[]>;
+  activeTabKeyByConversationId: Record<string, string | undefined>;
   height: number;
-  open: (sessionKey: string) => void;
-  toggle: (sessionKey: string) => void;
-  close: (sessionKey: string) => void;
-  addTerminal: (sessionKey: string) => string;
-  closeTerminal: (sessionKey: string, terminalKey: string) => void;
-  setActiveTerminal: (sessionKey: string, terminalKey: string) => void;
+  open: (conversationId: string) => void;
+  toggle: (conversationId: string) => void;
+  close: (conversationId: string) => void;
+  addTerminal: (conversationId: string) => string;
+  closeTerminal: (conversationId: string, terminalKey: string) => void;
+  setActiveTerminal: (conversationId: string, terminalKey: string) => void;
   setHeight: (height: number) => void;
 };
 
 export const useTerminalPanelStore = create<TerminalPanelState>((set, get) => ({
-  openBySessionKey: {},
-  tabsBySessionKey: {},
-  activeTabKeyBySessionKey: {},
+  openByConversationId: {},
+  tabsByConversationId: {},
+  activeTabKeyByConversationId: {},
   height: TERMINAL_HEIGHT_DEFAULT,
-  open: (sessionKey) => {
+  open: (conversationId) => {
     const state = get();
-    if (state.tabsBySessionKey[sessionKey]?.length) {
-      set({ openBySessionKey: { ...state.openBySessionKey, [sessionKey]: true } });
+    if (state.tabsByConversationId[conversationId]?.length) {
+      set({ openByConversationId: { ...state.openByConversationId, [conversationId]: true } });
       return;
     }
     const key = createTerminalKey();
     set({
-      openBySessionKey: { ...state.openBySessionKey, [sessionKey]: true },
-      tabsBySessionKey: { ...state.tabsBySessionKey, [sessionKey]: [{ key }] },
-      activeTabKeyBySessionKey: { ...state.activeTabKeyBySessionKey, [sessionKey]: key },
+      openByConversationId: { ...state.openByConversationId, [conversationId]: true },
+      tabsByConversationId: { ...state.tabsByConversationId, [conversationId]: [{ key }] },
+      activeTabKeyByConversationId: { ...state.activeTabKeyByConversationId, [conversationId]: key },
     });
   },
-  toggle: (sessionKey) => {
+  toggle: (conversationId) => {
     const state = get();
-    const nextOpen = !state.openBySessionKey[sessionKey];
-    if (!nextOpen || state.tabsBySessionKey[sessionKey]?.length) {
-      set({ openBySessionKey: { ...state.openBySessionKey, [sessionKey]: nextOpen } });
+    const nextOpen = !state.openByConversationId[conversationId];
+    if (!nextOpen || state.tabsByConversationId[conversationId]?.length) {
+      set({ openByConversationId: { ...state.openByConversationId, [conversationId]: nextOpen } });
       return;
     }
-    state.open(sessionKey);
+    state.open(conversationId);
   },
-  close: (sessionKey) => set((state) => ({
-    openBySessionKey: { ...state.openBySessionKey, [sessionKey]: false },
+  close: (conversationId) => set((state) => ({
+    openByConversationId: { ...state.openByConversationId, [conversationId]: false },
   })),
-  addTerminal: (sessionKey) => {
+  addTerminal: (conversationId) => {
     const state = get();
-    const tabs = state.tabsBySessionKey[sessionKey] ?? [];
+    const tabs = state.tabsByConversationId[conversationId] ?? [];
     if (tabs.length >= TERMINALS_PER_SESSION_MAX) {
-      return state.activeTabKeyBySessionKey[sessionKey] ?? tabs[0].key;
+      return state.activeTabKeyByConversationId[conversationId] ?? tabs[0].key;
     }
     const key = createTerminalKey();
     set({
-      tabsBySessionKey: { ...state.tabsBySessionKey, [sessionKey]: [...tabs, { key }] },
-      activeTabKeyBySessionKey: { ...state.activeTabKeyBySessionKey, [sessionKey]: key },
+      tabsByConversationId: { ...state.tabsByConversationId, [conversationId]: [...tabs, { key }] },
+      activeTabKeyByConversationId: { ...state.activeTabKeyByConversationId, [conversationId]: key },
     });
     return key;
   },
-  closeTerminal: (sessionKey, terminalKey) => set((state) => {
-    const tabs = state.tabsBySessionKey[sessionKey] ?? [];
+  closeTerminal: (conversationId, terminalKey) => set((state) => {
+    const tabs = state.tabsByConversationId[conversationId] ?? [];
     const closingIndex = tabs.findIndex((tab) => tab.key === terminalKey);
     if (closingIndex < 0) return state;
     const remaining = tabs.filter((tab) => tab.key !== terminalKey);
-    const activeKey = state.activeTabKeyBySessionKey[sessionKey];
+    const activeKey = state.activeTabKeyByConversationId[conversationId];
     const nextActiveKey = activeKey === terminalKey
       ? remaining[Math.min(closingIndex, remaining.length - 1)]?.key
       : activeKey;
     return {
-      tabsBySessionKey: { ...state.tabsBySessionKey, [sessionKey]: remaining },
-      activeTabKeyBySessionKey: {
-        ...state.activeTabKeyBySessionKey,
-        [sessionKey]: nextActiveKey,
+      tabsByConversationId: { ...state.tabsByConversationId, [conversationId]: remaining },
+      activeTabKeyByConversationId: {
+        ...state.activeTabKeyByConversationId,
+        [conversationId]: nextActiveKey,
       },
     };
   }),
-  setActiveTerminal: (sessionKey, terminalKey) => set((state) => {
-    if (!(state.tabsBySessionKey[sessionKey] ?? []).some((tab) => tab.key === terminalKey)) {
+  setActiveTerminal: (conversationId, terminalKey) => set((state) => {
+    if (!(state.tabsByConversationId[conversationId] ?? []).some((tab) => tab.key === terminalKey)) {
       return state;
     }
     return {
-      activeTabKeyBySessionKey: {
-        ...state.activeTabKeyBySessionKey,
-        [sessionKey]: terminalKey,
+      activeTabKeyByConversationId: {
+        ...state.activeTabKeyByConversationId,
+        [conversationId]: terminalKey,
       },
     };
   }),

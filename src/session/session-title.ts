@@ -5,7 +5,7 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { type UserMessage } from '@earendil-works/pi-ai/compat';
 
-import { isCronSessionKey, parseSessionKey } from '../routing/session-key.js';
+import { isCronConversationId, getConversationRouting } from '../routing/session-key.js';
 import { resolveModel } from '../providers/index.js';
 import { completeWithResolvedCredentials } from '../providers/model-call.js';
 import { createLogger } from '../utils/logger.js';
@@ -114,18 +114,17 @@ function firstAssistantText(messages: AgentMessage[]): string {
   return '';
 }
 
-export function isWebchatSessionKey(sessionKey: string): boolean {
-  const p = parseSessionKey(sessionKey);
-  if (p?.source === 'webchat') return true;
-  return sessionKey.includes(':webchat:');
+export function isWebchatConversationId(conversationId: string): boolean {
+  const p = getConversationRouting(conversationId);
+  return p?.source === 'webchat';
 }
 
 /** Whether to run LLM/fallback session naming for this key (excludes cron, heartbeat). */
-export function shouldAutoTitleSessionKey(sessionKey: string): boolean {
-  const raw = (sessionKey ?? '').trim();
+export function shouldAutoTitleConversationId(conversationId: string): boolean {
+  const raw = (conversationId ?? '').trim();
   if (!raw) return false;
-  if (isCronSessionKey(raw)) return false;
-  if (raw.toLowerCase().startsWith('heartbeat:')) return false;
+  if (isCronConversationId(raw)) return false;
+  if (getConversationRouting(raw)?.source === 'heartbeat') return false;
   return true;
 }
 
@@ -269,7 +268,7 @@ Title:`;
   }
 }
 
-export type SessionTitleUpdatedHook = (sessionKey: string, name: string) => void | Promise<void>;
+export type SessionTitleUpdatedHook = (conversationId: string, name: string) => void | Promise<void>;
 
 /** Whether post-turn LLM refine may run (provisional or still unnamed; not user-locked). */
 export function shouldRefineSessionTitleWithLlm(
@@ -299,13 +298,13 @@ function canAutoWriteTitle(meta: { name?: string; customData?: Record<string, un
  */
 export async function maybeSetProvisionalSessionTitle(
   sessionStore: SessionStore,
-  sessionKey: string,
+  conversationId: string,
   userText?: string,
   onUpdated?: SessionTitleUpdatedHook,
 ): Promise<void> {
-  if (!shouldAutoTitleSessionKey(sessionKey)) return;
+  if (!shouldAutoTitleConversationId(conversationId)) return;
 
-  let meta = await sessionStore.getMetadata(sessionKey);
+  let meta = await sessionStore.getMetadata(conversationId);
   if (!meta) return;
   if (!canAutoWriteTitle(meta)) return;
 
@@ -314,20 +313,20 @@ export async function maybeSetProvisionalSessionTitle(
     title = provisionalTitleFromUserText(userText);
   }
   if (!title) {
-    const messages = await sessionStore.load(sessionKey);
+    const messages = await sessionStore.load(conversationId);
     if (!messages.length) return;
     title = fallbackTitleFromMessages(messages);
   }
   if (!title) return;
 
   try {
-    await sessionStore.updateMetadata(sessionKey, {
+    await sessionStore.updateMetadata(conversationId, {
       name: title,
       customData: { ...(meta.customData ?? {}), titleSource: 'provisional' },
     });
-    await onUpdated?.(sessionKey, title);
+    await onUpdated?.(conversationId, title);
   } catch (err) {
-    log.warn({ err, sessionKey }, 'Session title: provisional updateMetadata failed');
+    log.warn({ err, conversationId }, 'Session title: provisional updateMetadata failed');
   }
 }
 
@@ -336,22 +335,22 @@ export async function maybeSetProvisionalSessionTitle(
  */
 export async function maybeRefineSessionTitleWithLlm(
   sessionStore: SessionStore,
-  sessionKey: string,
+  conversationId: string,
   modelRef: string | undefined,
   onUpdated?: SessionTitleUpdatedHook,
 ): Promise<void> {
-  if (!shouldAutoTitleSessionKey(sessionKey)) return;
+  if (!shouldAutoTitleConversationId(conversationId)) return;
 
-  let messages = await sessionStore.load(sessionKey);
+  let messages = await sessionStore.load(conversationId);
   if (!messages.length) return;
 
-  let meta = await sessionStore.getMetadata(sessionKey);
+  let meta = await sessionStore.getMetadata(conversationId);
   if (!meta) {
-    await sessionStore.saveMessages(sessionKey, messages);
-    meta = await sessionStore.getMetadata(sessionKey);
+    await sessionStore.saveMessages(conversationId, messages);
+    meta = await sessionStore.getMetadata(conversationId);
   }
   if (!meta) {
-    log.warn({ sessionKey }, 'Session title: metadata missing after save');
+    log.warn({ conversationId }, 'Session title: metadata missing after save');
     return;
   }
   if (!shouldRefineSessionTitleWithLlm(meta)) return;
@@ -377,7 +376,7 @@ export async function maybeRefineSessionTitleWithLlm(
   if (existing === title) {
     if (source !== 'llm') {
       try {
-        await sessionStore.updateMetadata(sessionKey, {
+        await sessionStore.updateMetadata(conversationId, {
           customData: { ...(meta.customData ?? {}), titleSource: 'llm' },
         });
       } catch {
@@ -388,12 +387,12 @@ export async function maybeRefineSessionTitleWithLlm(
   }
 
   try {
-    await sessionStore.updateMetadata(sessionKey, {
+    await sessionStore.updateMetadata(conversationId, {
       name: title,
       customData: { ...(meta.customData ?? {}), titleSource: 'llm' },
     });
-    await onUpdated?.(sessionKey, title);
+    await onUpdated?.(conversationId, title);
   } catch (err) {
-    log.warn({ err, sessionKey }, 'Session title: refine updateMetadata failed');
+    log.warn({ err, conversationId }, 'Session title: refine updateMetadata failed');
   }
 }

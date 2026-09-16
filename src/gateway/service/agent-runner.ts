@@ -72,19 +72,19 @@ export class GatewayAgentRunner {
 
   constructor(opts: GatewayAgentRunnerOptions) {
     this.opts = opts;
-    this.unsubscribeConnectionWait = onConnectionWaitChanged(sessionKey => {
-      const revision = this.inputs.snapshot(sessionKey).revision;
-      opts.emit('session.connection-wait.changed', { sessionKey, revision });
-      opts.publishRealtime('sessions', 'session.connection-wait.changed', { sessionKey, revision });
+    this.unsubscribeConnectionWait = onConnectionWaitChanged(conversationId => {
+      const revision = this.inputs.snapshot(conversationId).revision;
+      opts.emit('session.connection-wait.changed', { conversationId, revision });
+      opts.publishRealtime('sessions', 'session.connection-wait.changed', { conversationId, revision });
     });
     this.inputs = new SessionInputCoordinator({
       beforeExecute: opts.validateConnectionResume,
-      sessionExists: async (sessionKey) => Boolean(await opts.sessionIndex.getSessionMetadata(sessionKey)),
+      sessionExists: async (conversationId) => Boolean(await opts.sessionIndex.getSessionMetadata(conversationId)),
       execute: async (input) => {
         const generator = this.runAgent(
           input.content,
           'webchat',
-          input.sessionKey,
+          input.conversationId,
           input.origin,
           input.attachments,
           input.thinking,
@@ -101,8 +101,8 @@ export class GatewayAgentRunner {
         }
         return result;
       },
-      prepareAttachments: async (sessionKey, attachments) => {
-        const media = await opts.getAgentService().prepareInboundAttachments(sessionKey, attachments);
+      prepareAttachments: async (conversationId, attachments) => {
+        const media = await opts.getAgentService().prepareInboundAttachments(conversationId, attachments);
         if (!media?.length) return undefined;
         return media.map((ref) => ({
           id: ref.id,
@@ -133,31 +133,31 @@ export class GatewayAgentRunner {
           contexts.filter((context): context is AgentSourceContext => context !== null),
         );
       },
-      steer: (sessionKey, content) => opts.getAgentService().turnDispatcher.steerWebchatSession(sessionKey, content),
+      steer: (conversationId, content) => opts.getAgentService().turnDispatcher.steerWebchatSession(conversationId, content),
       emit: opts.emit,
     });
   }
 
   // ── Read-only accessors (so peers don't get a Map ref) ────────────────
 
-  /** True when a webchat agent run is currently in-flight for `sessionKey`. */
-  hasActiveRun(sessionKey: string): boolean {
-    return this.activeWebchatRunBySession.has(sessionKey);
+  /** True when a webchat agent run is currently in-flight for `conversationId`. */
+  hasActiveRun(conversationId: string): boolean {
+    return this.activeWebchatRunBySession.has(conversationId);
   }
 
-  getActiveRunId(sessionKey: string): string | undefined {
-    return this.activeWebchatRunBySession.get(sessionKey)
-      ?? this.inputs.snapshot(sessionKey).activeRunId;
+  getActiveRunId(conversationId: string): string | undefined {
+    return this.activeWebchatRunBySession.get(conversationId)
+      ?? this.inputs.snapshot(conversationId).activeRunId;
   }
 
-  listActiveRuns(): Array<{ sessionKey: string; runId: string }> {
+  listActiveRuns(): Array<{ conversationId: string; runId: string }> {
     const runs = new Map(
-      listActiveSessionInputRuns().map(({ sessionKey, runId }) => [sessionKey, runId]),
+      listActiveSessionInputRuns().map(({ conversationId, runId }) => [conversationId, runId]),
     );
-    for (const [sessionKey, runId] of this.activeWebchatRunBySession) {
-      runs.set(sessionKey, runId);
+    for (const [conversationId, runId] of this.activeWebchatRunBySession) {
+      runs.set(conversationId, runId);
     }
-    return [...runs].map(([sessionKey, runId]) => ({ sessionKey, runId }));
+    return [...runs].map(([conversationId, runId]) => ({ conversationId, runId }));
   }
 
   disposeClarifications(): void {
@@ -166,21 +166,21 @@ export class GatewayAgentRunner {
   }
 
   registerExternalWebchatRun(
-    sessionKey: string,
+    conversationId: string,
     runId: string,
     publish: (event: ClarificationStreamEvent) => void,
     options?: { beforeClarificationResponse?: () => boolean },
   ): void {
-    this.activeWebchatRunBySession.set(sessionKey, runId);
-    this.externalStreamBySession.set(sessionKey, publish);
-    if (options?.beforeClarificationResponse) this.externalClarificationResponses.set(sessionKey, options.beforeClarificationResponse);
+    this.activeWebchatRunBySession.set(conversationId, runId);
+    this.externalStreamBySession.set(conversationId, publish);
+    if (options?.beforeClarificationResponse) this.externalClarificationResponses.set(conversationId, options.beforeClarificationResponse);
   }
 
-  unregisterExternalWebchatRun(sessionKey: string, runId: string): void {
-    if (this.activeWebchatRunBySession.get(sessionKey) === runId) {
-      this.activeWebchatRunBySession.delete(sessionKey);
-      this.externalStreamBySession.delete(sessionKey);
-      this.externalClarificationResponses.delete(sessionKey);
+  unregisterExternalWebchatRun(conversationId: string, runId: string): void {
+    if (this.activeWebchatRunBySession.get(conversationId) === runId) {
+      this.activeWebchatRunBySession.delete(conversationId);
+      this.externalStreamBySession.delete(conversationId);
+      this.externalClarificationResponses.delete(conversationId);
     }
   }
 
@@ -248,29 +248,29 @@ export class GatewayAgentRunner {
 
   replaceLatestSessionTurn(input: ReplaceLatestTurnInput) {
     return this.inputs.replaceLatestTurn(input, async () => {
-      const activeRunId = this.activeWebchatRunBySession.get(input.sessionKey)
-        ?? this.inputs.snapshot(input.sessionKey).activeRunId;
+      const activeRunId = this.activeWebchatRunBySession.get(input.conversationId)
+        ?? this.inputs.snapshot(input.conversationId).activeRunId;
       if (activeRunId) await this.abortAgentRun(activeRunId);
 
       const { evictEmbeddedSessionRunner } = await import('../../agent/embedded/session-runner.js');
-      evictEmbeddedSessionRunner(input.sessionKey, 'gateway_user_turn_replaced');
-      this.opts.getAgentService().evictSessionAgent(input.sessionKey);
+      evictEmbeddedSessionRunner(input.conversationId, 'gateway_user_turn_replaced');
+      this.opts.getAgentService().evictSessionAgent(input.conversationId);
     });
   }
 
-  getSessionInputState(sessionKey: string) {
-    return this.inputs.snapshot(sessionKey);
+  getSessionInputState(conversationId: string) {
+    return this.inputs.snapshot(conversationId);
   }
 
-  updateSessionInput(sessionKey: string, id: string, body: {
+  updateSessionInput(conversationId: string, id: string, body: {
     version: number; content?: string; attachments?: UserTurnAttachment[]; contextRefs?: TurnContextRef[];
     thinking?: string; position?: number;
   }) {
-    return this.inputs.update(sessionKey, id, body);
+    return this.inputs.update(conversationId, id, body);
   }
 
-  removeSessionInput(sessionKey: string, id: string, version: number) {
-    return this.inputs.remove(sessionKey, id, version);
+  removeSessionInput(conversationId: string, id: string, version: number) {
+    return this.inputs.remove(conversationId, id, version);
   }
 
   recoverSessionInputs(): void {
@@ -303,7 +303,7 @@ export class GatewayAgentRunner {
     }
     c.abort();
     const { abortEmbeddedRun } = await import('../../agent/embedded/runs.js');
-    await Promise.all(keysToMark.map((sessionKey) => abortEmbeddedRun(sessionKey).catch(() => false)));
+    await Promise.all(keysToMark.map((conversationId) => abortEmbeddedRun(conversationId).catch(() => false)));
     await completion;
     return { aborted: true, idle: true };
   }
@@ -312,8 +312,8 @@ export class GatewayAgentRunner {
     return this.ephemeralClarifications.answer(requestId, answer);
   }
 
-  getClarificationState(sessionKey: string) {
-    return getClarificationSnapshot(sessionKey);
+  getClarificationState(conversationId: string) {
+    return getClarificationSnapshot(conversationId);
   }
 
   resolveClarificationResponse(input: {
@@ -326,7 +326,7 @@ export class GatewayAgentRunner {
     const result = resolveClarification(input);
     if (result.ok) {
       this.opts.emit('clarification.updated', result.clarification);
-      if (result.queued) void this.inputs.drain(result.clarification.sessionKey);
+      if (result.queued) void this.inputs.drain(result.clarification.conversationId);
     }
     return result;
   }
@@ -348,8 +348,8 @@ export class GatewayAgentRunner {
     }).ok;
   }
 
-  answerClarificationText(sessionKey: string, answer: string, idempotencyKey: string): boolean {
-    const wait = getClarificationSnapshot(sessionKey)?.clarification;
+  answerClarificationText(conversationId: string, answer: string, idempotencyKey: string): boolean {
+    const wait = getClarificationSnapshot(conversationId)?.clarification;
     if (!wait || wait.status !== 'open' || !answer.trim()) return false;
     return this.resolveClarificationResponse({
       id: wait.id,
@@ -361,10 +361,10 @@ export class GatewayAgentRunner {
   }
 
   /** Same execution path as scheduled continuation, but lets callers observe failures. */
-  async runScheduledWebchatTurn(sessionKey: string, userTurn: UserTurnInput): Promise<void> {
+  async runScheduledWebchatTurn(conversationId: string, userTurn: UserTurnInput): Promise<void> {
     const clientMessageId = crypto.randomUUID();
     const accepted = await this.inputs.submit({
-      sessionKey,
+      conversationId,
       clientMessageId,
       delivery: 'next',
       content: userTurn.text,
@@ -372,19 +372,19 @@ export class GatewayAgentRunner {
       origin: { type: 'system', source: 'workflow' },
     });
     if (accepted.ok === false) throw new Error(`Scheduled session input was rejected: ${accepted.code}`);
-    await this.inputs.waitForCompletion(sessionKey, clientMessageId);
+    await this.inputs.waitForCompletion(conversationId, clientMessageId);
   }
 
-  async runScheduledWebchatContinuation(sessionKey: string, message: string): Promise<void> {
-    await this.runScheduledWebchatTurn(sessionKey, { text: message });
+  async runScheduledWebchatContinuation(conversationId: string, message: string): Promise<void> {
+    await this.runScheduledWebchatTurn(conversationId, { text: message });
   }
 
   /** Background drain for extension-initiated webchat turns (`scheduleWebchatContinuation`). */
-  async drainScheduledWebchatContinuation(sessionKey: string, message: string): Promise<void> {
+  async drainScheduledWebchatContinuation(conversationId: string, message: string): Promise<void> {
     try {
-      await this.runScheduledWebchatContinuation(sessionKey, message);
+      await this.runScheduledWebchatContinuation(conversationId, message);
     } catch (err) {
-      log.warn({ err, sessionKey }, 'Scheduled webchat continuation failed');
+      log.warn({ err, conversationId }, 'Scheduled webchat continuation failed');
     }
   }
 
@@ -400,32 +400,32 @@ export class GatewayAgentRunner {
    * runner does not import AgentService statically.
    */
   async requestClarification(opts: {
-    sessionKey: string;
+    conversationId: string;
     runId: string;
     toolCallId: string;
     request: ClarifyRequestPayload;
     publishStreamFor: (runId: string) => (event: ClarificationStreamEvent) => void;
   }): Promise<ClarifyRequestResult> {
-    const { sessionKey, request, publishStreamFor } = opts;
-    const runId = this.activeWebchatRunBySession.get(sessionKey) ?? opts.runId;
-    const publishStream = this.externalStreamBySession.get(sessionKey)
+    const { conversationId, request, publishStreamFor } = opts;
+    const runId = this.activeWebchatRunBySession.get(conversationId) ?? opts.runId;
+    const publishStream = this.externalStreamBySession.get(conversationId)
       ?? (runId ? publishStreamFor(runId) : undefined);
-    const metadata = await this.opts.sessionIndex.getSessionMetadata(sessionKey).catch(() => null);
+    const metadata = await this.opts.sessionIndex.getSessionMetadata(conversationId).catch(() => null);
     const routing = metadata?.routing;
     const deliver =
       routing?.source === 'telegram'
         ? async (ctx: {
-            sessionKey: string;
+            conversationId: string;
             requestId: string;
             request: ClarifyRequestPayload;
           }) => {
             await this.deliverTelegramClarify(ctx);
           }
         : undefined;
-    const persistedSession = getClarificationSnapshot(sessionKey);
-    if (!persistedSession && this.externalStreamBySession.has(sessionKey)) {
+    const persistedSession = getClarificationSnapshot(conversationId);
+    if (!persistedSession && this.externalStreamBySession.has(conversationId)) {
       return this.ephemeralClarifications.start({
-        beforeResponse: this.externalClarificationResponses.get(sessionKey),
+        beforeResponse: this.externalClarificationResponses.get(conversationId),
         runId,
         publish: publishStream!,
         request,
@@ -437,7 +437,7 @@ export class GatewayAgentRunner {
       );
     }
     const wait = createClarificationWait({
-      sessionKey,
+      conversationId,
       runId: opts.runId,
       toolCallId: opts.toolCallId,
       kind: request.kind === 'approval' ? 'approval' : 'input',
@@ -457,17 +457,17 @@ export class GatewayAgentRunner {
       createdAt: wait.createdAt,
       version: wait.version,
     };
-    if (this.activeWebchatRunBySession.has(sessionKey)) publishStream?.(event);
-    if (deliver) await deliver({ sessionKey, requestId: wait.id, request });
+    if (this.activeWebchatRunBySession.has(conversationId)) publishStream?.(event);
+    if (deliver) await deliver({ conversationId, requestId: wait.id, request });
     return { status: 'waiting' as const, waitId: wait.id, expiresAt: wait.expiresAt };
   }
 
   private async deliverTelegramClarify(ctx: {
-    sessionKey: string;
+    conversationId: string;
     requestId: string;
     request: ClarifyRequestPayload;
   }): Promise<void> {
-    const metadata = await this.opts.sessionIndex.getSessionMetadata(ctx.sessionKey).catch(() => null);
+    const metadata = await this.opts.sessionIndex.getSessionMetadata(ctx.conversationId).catch(() => null);
     const routing = metadata?.routing;
     if (!routing || routing.source !== 'telegram') {
       return;

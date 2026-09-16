@@ -58,7 +58,7 @@ describe('proactive product event bridge', () => {
     ['note.created', { noteId: 'note-1' }, 'note.created.v1'],
     ['note.updated', { noteId: 'note-1' }, 'note.updated.v1'],
     ['workflow.run.completed', { runId: 'run-1' }, 'workflow.run.completed.v1'],
-    ['session.transcript.updated', { sessionKey: 'session-1' }, 'session.transcript.updated.v1'],
+    ['session.transcript.updated', { conversationId: 'session-1' }, 'session.transcript.updated.v1'],
     ['discussion.completed', { discussionId: 'discussion-1' }, 'discussion.completed.v1'],
   ])('versions the %s product event for the proactive event envelope', (type, payload, expectedType) => {
     const mapped = mapProductEventToProactive({

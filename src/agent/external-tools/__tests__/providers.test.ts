@@ -1,3 +1,11 @@
+import { requireXopcDatabase as openFixtureDatabase } from '../../../storage/sqlite/connection.js';
+import { ensureSessionRecord as ensureFixtureConversation } from '../../../storage/sqlite/session-repository.js';
+function seedConversationFixtures(): void {
+  openFixtureDatabase();
+  ensureFixtureConversation("3db2ad68-50a3-4bf7-8f9b-500b430780f9", '', {"agentId":"main","sourceChannel":"webchat","sourceChatId":"test","sessionType":"chat","routing":{"agentId":"main","source":"webchat","accountId":"local","peerKind":"direct","peerId":"test"}});
+  ensureFixtureConversation("78fcccd3-a14f-4a70-87d9-69d9471f63d7", '', {"agentId":"main","sourceChannel":"webchat","sourceChatId":"test","sessionType":"chat","routing":{"agentId":"main","source":"webchat","accountId":"default","peerKind":"direct","peerId":"test"}});
+  ensureFixtureConversation("6d9217fe-77c7-411d-8cc9-92aabe81a2d0", '', {"agentId":"main","sourceChannel":"main","sourceChatId":"","sessionType":"chat","routing":{"agentId":"main","source":"main","accountId":"default","peerKind":"direct","peerId":""}});
+}
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -11,6 +19,7 @@ import type { SessionMcpRuntime } from '../../mcp/bundle-mcp-types.js';
 
 describe('external tool providers', () => {
   it('preserves extension ownership and executes through the delegated boundary', async () => {
+    seedConversationFixtures();
     const registry = new ExtensionRegistryImpl();
     const execute = vi.fn(async () => ({
       content: [{ type: 'text' as const, text: 'extension-ok' }],
@@ -29,7 +38,7 @@ describe('external tool providers', () => {
     } as AgentTool, 'demo-extension');
     const provider = new ExtensionToolProvider({
       registry,
-      getSessionKey: () => 'agent:main:webchat:local:dm:test',
+      getConversationId: () => "3db2ad68-50a3-4bf7-8f9b-500b430780f9",
       toolExecutorConfig: { enableTimeout: false, enableRetry: false },
     });
 
@@ -55,6 +64,7 @@ describe('external tool providers', () => {
   });
 
   it('discovers and executes MCP tools without materializing model-visible tools', async () => {
+    seedConversationFixtures();
     const callTool = vi.fn(async () => ({
       content: [{ type: 'text' as const, text: 'mcp-ok' }],
     }));
@@ -85,7 +95,7 @@ describe('external tool providers', () => {
     const provider = new McpToolProvider({
       workspace: '/tmp/workspace',
       getConfig: () => ({ mcp: { servers: { 'demo server': { command: 'demo' } } } }) as Config,
-      getSessionKey: () => undefined,
+      getConversationId: () => undefined,
       getRuntime: vi.fn(async () => runtime),
     });
 
@@ -107,6 +117,7 @@ describe('external tool providers', () => {
   });
 
   it('enforces flat MCP tool and timeout policies', async () => {
+    seedConversationFixtures();
     const callTool = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'ok' }] }));
     const runtime = {
       markUsed: vi.fn(),
@@ -146,7 +157,7 @@ describe('external tool providers', () => {
     const provider = new McpToolProvider({
       workspace: '/tmp/workspace',
       getConfig: () => config,
-      getSessionKey: () => 'agent:main:webchat:default:direct:test',
+      getConversationId: () => "78fcccd3-a14f-4a70-87d9-69d9471f63d7",
       getRuntime: vi.fn(async () => runtime),
     });
 
@@ -156,6 +167,7 @@ describe('external tool providers', () => {
   });
 
   it('catalogs dynamic memory provider tools instead of injecting them', async () => {
+    seedConversationFixtures();
     const execute = vi.fn(async () => ({
       content: [{ type: 'text' as const, text: 'memory-ok' }],
       details: {},
@@ -170,7 +182,7 @@ describe('external tool providers', () => {
       getMemoryManager: () => ({
         getExternalToolEntries: () => [{ providerId: 'remote-memory', tool }],
       }) as unknown as MemoryManager,
-      getSessionKey: () => undefined,
+      getConversationId: () => undefined,
       canAccess: () => true,
       toolExecutorConfig: { enableTimeout: false, enableRetry: false },
     });
@@ -187,6 +199,7 @@ describe('external tool providers', () => {
   });
 
   it('hides external memory tools when memory access is disabled', async () => {
+    seedConversationFixtures();
     const provider = new MemoryToolProvider({
       getMemoryManager: () => ({
         getExternalToolEntries: () => [{
@@ -194,7 +207,7 @@ describe('external tool providers', () => {
           tool: { name: 'remote_memory_query' } as AgentTool,
         }],
       }) as unknown as MemoryManager,
-      getSessionKey: () => 'agent:main:main',
+      getConversationId: () => "6d9217fe-77c7-411d-8cc9-92aabe81a2d0",
       canAccess: () => false,
     });
 

@@ -16,7 +16,7 @@ import {
 import type { ResetEditorOptions } from '@/features/chat/composer/composer.types';
 
 export function useComposerInputHistoryWalk(opts: {
-  sessionKey: string | null;
+  conversationId: string | null;
   editorRef: MutableRefObject<HTMLDivElement | null>;
   valueRef: MutableRefObject<string>;
   resetEditor: (opts?: ResetEditorOptions) => void;
@@ -26,7 +26,7 @@ export function useComposerInputHistoryWalk(opts: {
   onWireInputClearWalk: (wire: string, caret: number) => void;
   tryInputHistoryArrow: (dir: 'up' | 'down') => boolean;
 } {
-  const { sessionKey, editorRef, valueRef, resetEditor, onWireInput } = opts;
+  const { conversationId, editorRef, valueRef, resetEditor, onWireInput } = opts;
 
   const walkRef = useRef<{ index: number; stash: string } | null>(null);
 
@@ -36,7 +36,7 @@ export function useComposerInputHistoryWalk(opts: {
 
   useEffect(() => {
     clearWalk();
-  }, [sessionKey, clearWalk]);
+  }, [conversationId, clearWalk]);
 
   useEffect(() => {
     void loadComposerInputHistory();

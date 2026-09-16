@@ -10,7 +10,7 @@
  *                                                       ▼
  *                                          WorkflowProgressBroker
  *                                                       │
- *                                  per-(sessionKey, toolCallId) state
+ *                                  per-(conversationId, toolCallId) state
  *                                                       │
  *                                   ┌───────────────────┼───────────────────┐
  *                                   ▼                   ▼                   ▼
@@ -49,7 +49,7 @@ interface ChannelResolvedSettings {
   mode: WorkflowProgressMode;
 }
 
-/** Per-(sessionKey, toolCallId) progress state. */
+/** Per-(conversationId, toolCallId) progress state. */
 interface RunState {
   /** Latest snapshot seen for this run. Always overwritten on update. */
   snapshot: WorkflowSnapshot;
@@ -82,7 +82,7 @@ export interface BrokerListenerHandle {
 export interface SessionBusLike {
   registerListener(
     type: AgentEvent['type'] | 'all',
-    listener: (event: AgentEvent, context: { sessionKey: string }) => void,
+    listener: (event: AgentEvent, context: { conversationId: string }) => void,
   ): () => void;
 }
 
@@ -124,7 +124,7 @@ export class WorkflowProgressBroker {
       if (e.toolName !== WORKFLOW_TOOL_NAME) return;
       const snap = extractWorkflowSnapshot(e.partialResult);
       if (!snap) return;
-      this.onUpdate(ctx.sessionKey, e.toolCallId, snap);
+      this.onUpdate(ctx.conversationId, e.toolCallId, snap);
     });
 
     const offEnd = bus.registerListener('tool_execution_end', (event, ctx) => {
@@ -133,7 +133,7 @@ export class WorkflowProgressBroker {
       // tool_end ships the final envelope in `result`; reach in for the
       // authoritative snapshot (durationMs / result / final counts).
       const snap = extractWorkflowSnapshot(e.result, { fromResultEnvelope: true });
-      this.onEnd(ctx.sessionKey, e.toolCallId, snap);
+      this.onEnd(ctx.conversationId, e.toolCallId, snap);
     });
 
     return {
@@ -148,21 +148,21 @@ export class WorkflowProgressBroker {
   // ── Core state machine ──────────────────────────────────────────────────────
 
   /** Visible for tests — direct entry path bypassing the SessionBus glue. */
-  onUpdate(sessionKey: string, toolCallId: string, snapshot: WorkflowSnapshot): void {
-    const key = stateKey(sessionKey, toolCallId);
+  onUpdate(conversationId: string, toolCallId: string, snapshot: WorkflowSnapshot): void {
+    const key = stateKey(conversationId, toolCallId);
     const state = this.getOrCreateState(key, snapshot);
     state.prevSnapshot = state.snapshot;
     state.snapshot = snapshot;
 
     const isKey = isKeyEvent(state.prevSnapshot, snapshot);
     for (const cap of this.subscribers) {
-      this.dispatchToChannel(state, sessionKey, cap, { isFinal: false, isKey });
+      this.dispatchToChannel(state, conversationId, cap, { isFinal: false, isKey });
     }
   }
 
   /** Visible for tests — direct entry path bypassing the SessionBus glue. */
-  onEnd(sessionKey: string, toolCallId: string, snapshot: WorkflowSnapshot | null): void {
-    const key = stateKey(sessionKey, toolCallId);
+  onEnd(conversationId: string, toolCallId: string, snapshot: WorkflowSnapshot | null): void {
+    const key = stateKey(conversationId, toolCallId);
     const state = this.states.get(key);
     if (!state) return;
     if (snapshot) state.snapshot = snapshot;
@@ -170,7 +170,7 @@ export class WorkflowProgressBroker {
     for (const cap of this.subscribers) {
       // Always flush the final message — bypass throttle and any pending timer.
       this.cancelPending(state, cap.channelId);
-      this.dispatchToChannel(state, sessionKey, cap, { isFinal: true, isKey: true });
+      this.dispatchToChannel(state, conversationId, cap, { isFinal: true, isKey: true });
     }
     // State is GC'd lazily after a small grace period so any straggler
     // `update` event arriving after `end` is silently dropped (instead of
@@ -182,7 +182,7 @@ export class WorkflowProgressBroker {
 
   private dispatchToChannel(
     state: RunState,
-    sessionKey: string,
+    conversationId: string,
     cap: ChannelProgressCapability,
     flags: { isFinal: boolean; isKey: boolean },
   ): void {
@@ -195,26 +195,26 @@ export class WorkflowProgressBroker {
     // Key events and the final message bypass throttle.
     if (flags.isFinal || flags.isKey) {
       this.cancelPending(state, cap.channelId);
-      void this.sendNow(state, sessionKey, cap, cfg, flags.isFinal);
+      void this.sendNow(state, conversationId, cap, cfg, flags.isFinal);
       return;
     }
 
     const elapsed = this.now() - chState.lastSentAt;
     const wait = Math.max(0, cfg.throttleMs - elapsed);
     if (wait === 0) {
-      void this.sendNow(state, sessionKey, cap, cfg, false);
+      void this.sendNow(state, conversationId, cap, cfg, false);
       return;
     }
     if (chState.pendingTimer) return; // already scheduled; latest snapshot will be picked up
     chState.pendingTimer = setTimeout(() => {
       chState.pendingTimer = undefined;
-      void this.sendNow(state, sessionKey, cap, cfg, false);
+      void this.sendNow(state, conversationId, cap, cfg, false);
     }, wait);
   }
 
   private async sendNow(
     state: RunState,
-    sessionKey: string,
+    conversationId: string,
     cap: ChannelProgressCapability,
     cfg: ChannelResolvedSettings,
     isFinal: boolean,
@@ -232,7 +232,7 @@ export class WorkflowProgressBroker {
 
     const previousMessageId = cfg.mode === 'edit' ? chState.lastMessageId : undefined;
     const task = cap
-      .postProgress({ sessionKey, text, previousMessageId, isFinal, mode: cfg.mode })
+      .postProgress({ conversationId, text, previousMessageId, isFinal, mode: cfg.mode })
       .then((r) => {
         chState.lastMessageId = r.messageId;
         chState.lastSentAt = this.now();
@@ -240,7 +240,7 @@ export class WorkflowProgressBroker {
       .catch((err) => {
         const msg = err instanceof Error ? err.message : String(err);
         log.warn(
-          { err, errorMessage: msg, channelId: cap.channelId, sessionKey },
+          { err, errorMessage: msg, channelId: cap.channelId, conversationId },
           `workflow progress postProgress failed: ${msg}`,
         );
       })
@@ -336,8 +336,8 @@ export function _resetWorkflowProgressBrokerForTests(): void {
 
 // ── Pure helpers ────────────────────────────────────────────────────────────
 
-function stateKey(sessionKey: string, toolCallId: string | undefined): string {
-  return `${sessionKey}${toolCallId ?? ''}`;
+function stateKey(conversationId: string, toolCallId: string | undefined): string {
+  return `${conversationId}${toolCallId ?? ''}`;
 }
 
 /**

@@ -37,14 +37,14 @@ function terminalTheme() {
   };
 }
 
-export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
+export function ChatTerminalDock({ conversationId }: { conversationId: string }) {
   const language = useLocaleStore((state) => state.language);
   const m = messages(language).chat.terminal;
   const api = window.electronAPI?.terminal;
-  const open = useTerminalPanelStore((state) => Boolean(state.openBySessionKey[sessionKey]));
+  const open = useTerminalPanelStore((state) => Boolean(state.openByConversationId[conversationId]));
   const height = useTerminalPanelStore((state) => state.height);
-  const tabs = useTerminalPanelStore((state) => selectTerminalTabs(state.tabsBySessionKey, sessionKey));
-  const terminalKey = useTerminalPanelStore((state) => state.activeTabKeyBySessionKey[sessionKey]);
+  const tabs = useTerminalPanelStore((state) => selectTerminalTabs(state.tabsByConversationId, conversationId));
+  const terminalKey = useTerminalPanelStore((state) => state.activeTabKeyByConversationId[conversationId]);
   const closePanel = useTerminalPanelStore((state) => state.close);
   const addTerminal = useTerminalPanelStore((state) => state.addTerminal);
   const closeTerminal = useTerminalPanelStore((state) => state.closeTerminal);
@@ -54,7 +54,7 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalIdRef = useRef<string | null>(null);
   const resizeDragRef = useRef<{ startY: number; startHeight: number } | null>(null);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [transcriptId, setSessionId] = useState<string | null>(null);
   const [resolvingSession, setResolvingSession] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rendered, setRendered] = useState(open);
@@ -100,10 +100,10 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
     let cancelled = false;
     setResolvingSession(true);
     setError(null);
-    void resolveSession({ sessionKey })
+    void resolveSession({ conversationId })
       .then((resolved) => {
         if (cancelled) return;
-        setSessionId(resolved.sessionId);
+        setSessionId(resolved.transcriptId);
         setResolvingSession(false);
       })
       .catch((cause) => {
@@ -114,10 +114,10 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
     return () => {
       cancelled = true;
     };
-  }, [api, rendered, sessionKey]);
+  }, [api, rendered, conversationId]);
 
   useEffect(() => {
-    if (!rendered || !api || !sessionId || !terminalKey || !containerRef.current) return;
+    if (!rendered || !api || !transcriptId || !terminalKey || !containerRef.current) return;
     setError(null);
     const terminal = new Terminal({
       cursorBlink: true,
@@ -180,8 +180,8 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
       try {
         fitAddon.fit();
         const descriptor = await api.create({
-          sessionKey,
-          sessionId,
+          conversationId,
+          transcriptId,
           terminalKey,
           ...terminalDimensions(terminal),
         });
@@ -220,15 +220,15 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
       removeError();
       terminal.dispose();
     };
-  }, [api, m.exited, rendered, sessionId, sessionKey, terminalKey]);
+  }, [api, m.exited, rendered, transcriptId, conversationId, terminalKey]);
 
   const closeTerminalTab = useCallback((key: string) => {
-    closeTerminal(sessionKey, key);
-    if (!api || !sessionId) return;
-    void api.dispose(sessionId, key).catch((cause) => {
+    closeTerminal(conversationId, key);
+    if (!api || !transcriptId) return;
+    void api.dispose(transcriptId, key).catch((cause) => {
       setError(cause instanceof Error ? cause.message : String(cause));
     });
-  }, [api, closeTerminal, sessionId, sessionKey]);
+  }, [api, closeTerminal, transcriptId, conversationId]);
 
   if (!api || !rendered) return null;
 
@@ -277,7 +277,7 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
                   role="tab"
                   aria-selected={active}
                   className="flex h-full min-w-0 items-center gap-2 pl-2 text-xs"
-                  onClick={() => setActiveTerminal(sessionKey, tab.key)}
+                  onClick={() => setActiveTerminal(conversationId, tab.key)}
                 >
                   <SquareTerminal className="size-3.5 shrink-0" />
                   <span className="max-w-32 truncate">{m.title} {index + 1}</span>
@@ -301,22 +301,22 @@ export function ChatTerminalDock({ sessionKey }: { sessionKey: string }) {
           title={m.newTerminal}
           aria-label={m.newTerminal}
           disabled={tabs.length >= TERMINALS_PER_SESSION_MAX}
-          onClick={() => addTerminal(sessionKey)}
+          onClick={() => addTerminal(conversationId)}
         >
           <Plus className="size-4" />
         </button>
         <span className="flex-1" />
-        <button type="button" className="shrink-0 rounded p-1.5 text-fg-muted hover:bg-fg/5 hover:text-fg" title={m.hide} onClick={() => closePanel(sessionKey)}><X className="size-3.5" /></button>
+        <button type="button" className="shrink-0 rounded p-1.5 text-fg-muted hover:bg-fg/5 hover:text-fg" title={m.hide} onClick={() => closePanel(conversationId)}><X className="size-3.5" /></button>
       </header>
       {!terminalKey ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-fg-muted">
           <span>{m.noTerminals}</span>
-          <Button variant="secondary" onClick={() => addTerminal(sessionKey)}>
+          <Button variant="secondary" onClick={() => addTerminal(conversationId)}>
             <Plus className="size-4" />
             {m.newTerminal}
           </Button>
         </div>
-      ) : !sessionId && resolvingSession ? (
+      ) : !transcriptId && resolvingSession ? (
         <div className="min-h-0 flex-1 space-y-3 px-4 pt-1" aria-busy="true" aria-label={m.preparing}>
           <Skeleton className="h-3 w-52 max-w-full bg-fg/5" />
           <Skeleton className="h-3 w-32 max-w-full bg-fg/5" />

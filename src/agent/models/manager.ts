@@ -53,13 +53,13 @@ export class ModelManager {
    * Set the config-derived default model for a session (from effective agent profile).
    * Cleared by {@link updateFromConfig} or {@link clearSessionProfileDefault}.
    */
-  setSessionProfileDefault(sessionKey: string, modelRef: string, fallbacks: string[] = []): void {
-    this.sessionProfileDefaults.set(sessionKey, modelRef);
+  setSessionProfileDefault(conversationId: string, modelRef: string, fallbacks: string[] = []): void {
+    this.sessionProfileDefaults.set(conversationId, modelRef);
     const cleanFallbacks = fallbacks.map((ref) => ref.trim()).filter(Boolean);
     if (cleanFallbacks.length > 0) {
-      this.sessionProfileFallbacks.set(sessionKey, cleanFallbacks);
+      this.sessionProfileFallbacks.set(conversationId, cleanFallbacks);
     } else {
-      this.sessionProfileFallbacks.delete(sessionKey);
+      this.sessionProfileFallbacks.delete(conversationId);
     }
   }
 
@@ -68,17 +68,17 @@ export class ModelManager {
    * session agent. An existing per-session override always wins.
    */
   resolveInitialModelForSession(
-    sessionKey: string,
+    conversationId: string,
     profileModelRef: string,
     fallbacks: string[] = [],
   ): string {
-    this.setSessionProfileDefault(sessionKey, profileModelRef, fallbacks);
-    return this.getModelForSession(sessionKey);
+    this.setSessionProfileDefault(conversationId, profileModelRef, fallbacks);
+    return this.getModelForSession(conversationId);
   }
 
-  clearSessionProfileDefault(sessionKey: string): void {
-    this.sessionProfileDefaults.delete(sessionKey);
-    this.sessionProfileFallbacks.delete(sessionKey);
+  clearSessionProfileDefault(conversationId: string): void {
+    this.sessionProfileDefaults.delete(conversationId);
+    this.sessionProfileFallbacks.delete(conversationId);
   }
 
   /**
@@ -98,48 +98,48 @@ export class ModelManager {
   /**
    * Switch model for a specific session
    */
-  async switchModelForSession(sessionKey: string, modelId: string): Promise<boolean> {
+  async switchModelForSession(conversationId: string, modelId: string): Promise<boolean> {
     try {
       resolveModel(modelId);
-      this.sessionModels.set(sessionKey, modelId);
-      log.info({ sessionKey, modelId }, 'Model switched for session');
+      this.sessionModels.set(conversationId, modelId);
+      log.info({ conversationId, modelId }, 'Model switched for session');
       return true;
     } catch (err) {
-      log.error({ err, sessionKey, modelId }, 'Failed to switch model');
+      log.error({ err, conversationId, modelId }, 'Failed to switch model');
       return false;
     }
   }
 
   /** Restore persisted identity even if its provider is temporarily unavailable. */
-  restoreSessionModel(sessionKey: string, modelRef: string, fixed: boolean): void {
-    this.sessionModels.set(sessionKey, modelRef);
-    if (fixed) this.fixedSessionModels.add(sessionKey);
-    else this.fixedSessionModels.delete(sessionKey);
+  restoreSessionModel(conversationId: string, modelRef: string, fixed: boolean): void {
+    this.sessionModels.set(conversationId, modelRef);
+    if (fixed) this.fixedSessionModels.add(conversationId);
+    else this.fixedSessionModels.delete(conversationId);
   }
 
   /** Drop in-memory session override so the global default is used again. */
-  clearSessionModelOverride(sessionKey: string): void {
-    this.sessionModels.delete(sessionKey);
-    this.fixedSessionModels.delete(sessionKey);
+  clearSessionModelOverride(conversationId: string): void {
+    this.sessionModels.delete(conversationId);
+    this.fixedSessionModels.delete(conversationId);
   }
 
   /**
    * Resolved pi-ai model for session (for transcript policy, tools, etc.)
    */
-  getResolvedModelForSession(sessionKey: string): Model<Api> {
-    return resolveModel(this.getModelForSession(sessionKey));
+  getResolvedModelForSession(conversationId: string): Model<Api> {
+    return resolveModel(this.getModelForSession(conversationId));
   }
 
   /**
    * Get model for session, checking session override first
    */
-  getModelForSession(sessionKey: string): string {
-    const sessionModel = this.sessionModels.get(sessionKey);
+  getModelForSession(conversationId: string): string {
+    const sessionModel = this.sessionModels.get(conversationId);
     if (sessionModel) {
       return sessionModel;
     }
 
-    const profileDefault = this.sessionProfileDefaults.get(sessionKey);
+    const profileDefault = this.sessionProfileDefaults.get(conversationId);
     if (profileDefault) {
       return profileDefault;
     }
@@ -150,14 +150,14 @@ export class ModelManager {
   /**
    * Apply model to agent if different from current
    */
-  async applyModelForSession(agent: Agent, sessionKey: string): Promise<void> {
-    const targetModelId = this.getModelForSession(sessionKey);
+  async applyModelForSession(agent: Agent, conversationId: string): Promise<void> {
+    const targetModelId = this.getModelForSession(conversationId);
 
     let found: Model<Api>;
     try {
       found = resolveModel(targetModelId);
     } catch (err) {
-      log.error({ err, sessionKey, modelId: targetModelId }, 'Failed to apply model');
+      log.error({ err, conversationId, modelId: targetModelId }, 'Failed to apply model');
       return;
     }
 
@@ -172,26 +172,26 @@ export class ModelManager {
     this.currentModelName = targetModelId;
     this.currentProvider = found.provider || 'unknown';
 
-    log.info({ sessionKey, modelId: targetModelId }, 'Applied model for session');
+    log.info({ conversationId, modelId: targetModelId }, 'Applied model for session');
   }
 
   /**
    * Ordered model candidates for the session.
    */
-  getFallbackCandidatesForSession(sessionKey: string): ModelCandidate[] {
-    const ref = this.getModelForSession(sessionKey);
+  getFallbackCandidatesForSession(conversationId: string): ModelCandidate[] {
+    const ref = this.getModelForSession(conversationId);
     const parsed = parseModelRef(ref);
     if (!parsed) {
       return [];
     }
-    if (this.fixedSessionModels.has(sessionKey)) return [parsed];
+    if (this.fixedSessionModels.has(conversationId)) return [parsed];
     return resolveFallbackCandidates({
       cfg: this.config,
       provider: parsed.provider,
       model: parsed.model,
-      fallbacksOverride: this.sessionModels.has(sessionKey)
+      fallbacksOverride: this.sessionModels.has(conversationId)
         ? undefined
-        : this.sessionProfileFallbacks.get(sessionKey),
+        : this.sessionProfileFallbacks.get(conversationId),
     });
   }
 

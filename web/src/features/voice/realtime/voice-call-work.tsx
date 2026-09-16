@@ -12,14 +12,14 @@ import { useGatewayStore } from '@/stores/gateway-store';
 
 import type { UseRealtimeVoiceReturn } from './use-realtime-voice';
 
-export function VoiceCallWork({ voice, sessionKey, m }: { voice: UseRealtimeVoiceReturn; sessionKey: string; m: ChatMessages }) {
-  const token = useGatewayStore((state) => state.sessionKey);
+export function VoiceCallWork({ voice, conversationId, m }: { voice: UseRealtimeVoiceReturn; conversationId: string; m: ChatMessages }) {
+  const token = useGatewayStore((state) => state.conversationId);
   const [pending, setPending] = useState(false);
   const submitting = useRef(false);
   const clarificationAttempt = useRef<{ signature: string; idempotencyKey: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const approvals = useSWR(token ? ['voice-approvals', sessionKey, token] : null, () => listConnectorApprovals(), { refreshInterval: 3_000 });
-  const scopedApprovals = approvals.data?.filter((approval) => approval.sessionKey === sessionKey) ?? [];
+  const approvals = useSWR(token ? ['voice-approvals', conversationId, token] : null, () => listConnectorApprovals(), { refreshInterval: 3_000 });
+  const scopedApprovals = approvals.data?.filter((approval) => approval.conversationId === conversationId) ?? [];
   const run = async (action: () => Promise<unknown>) => {
     if (submitting.current) return;
     submitting.current = true; setPending(true); setError(null);

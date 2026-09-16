@@ -3,13 +3,13 @@ type SubmissionOutboxEntry = {
   fingerprint: string;
 };
 
-function key(sessionKey: string): string {
-  return `xopc:submission:${sessionKey}`;
+function key(conversationId: string): string {
+  return `xopc:submission:${conversationId}`;
 }
 
-export function claimSubmissionId(sessionKey: string, fingerprint: string): string {
+export function claimSubmissionId(conversationId: string, fingerprint: string): string {
   try {
-    const raw = sessionStorage.getItem(key(sessionKey));
+    const raw = sessionStorage.getItem(key(conversationId));
     if (raw) {
       const entry = JSON.parse(raw) as Partial<SubmissionOutboxEntry>;
       if (entry.fingerprint === fingerprint && typeof entry.clientMessageId === 'string') {
@@ -21,19 +21,19 @@ export function claimSubmissionId(sessionKey: string, fingerprint: string): stri
   }
   const clientMessageId = crypto.randomUUID();
   try {
-    sessionStorage.setItem(key(sessionKey), JSON.stringify({ clientMessageId, fingerprint }));
+    sessionStorage.setItem(key(conversationId), JSON.stringify({ clientMessageId, fingerprint }));
   } catch {
     /* in-memory retry still uses the same id */
   }
   return clientMessageId;
 }
 
-export function completeSubmission(sessionKey: string, clientMessageId: string): void {
+export function completeSubmission(conversationId: string, clientMessageId: string): void {
   try {
-    const raw = sessionStorage.getItem(key(sessionKey));
+    const raw = sessionStorage.getItem(key(conversationId));
     if (!raw) return;
     const entry = JSON.parse(raw) as Partial<SubmissionOutboxEntry>;
-    if (entry.clientMessageId === clientMessageId) sessionStorage.removeItem(key(sessionKey));
+    if (entry.clientMessageId === clientMessageId) sessionStorage.removeItem(key(conversationId));
   } catch {
     /* ignore unavailable storage */
   }

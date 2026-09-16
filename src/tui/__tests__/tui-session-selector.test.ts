@@ -345,8 +345,8 @@ describe('SessionSelector focus', () => {
         { key: 'agent:main:bromo', displayName: 'Bromo' },
       ],
       {
-        onResume: (sessionKey) => {
-          resumed = sessionKey;
+        onResume: (conversationId) => {
+          resumed = conversationId;
         },
         onRename: async () => ({ ok: true }),
         onDelete: async () => ({ ok: true }),
@@ -374,8 +374,8 @@ describe('SessionSelector focus', () => {
         { key: 'agent:main:bromo', displayName: 'Bromo' },
       ],
       {
-        onResume: (sessionKey) => {
-          resumed = sessionKey;
+        onResume: (conversationId) => {
+          resumed = conversationId;
         },
         onRename: async () => ({ ok: true }),
         onDelete: async () => ({ ok: true }),

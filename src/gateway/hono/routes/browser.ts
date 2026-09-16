@@ -112,26 +112,26 @@ function chromeDevicePrincipal(c: Context) {
   return device?.platform === 'chrome' && device.revokedAt === undefined ? principal : undefined;
 }
 
-function canManageBrowserSession(c: Context, service: AuthenticatedRouteDeps['service'], sessionKey: string): boolean {
+function canManageBrowserSession(c: Context, service: AuthenticatedRouteDeps['service'], conversationId: string): boolean {
   const principal = chromeDevicePrincipal(c);
-  if (principal) return getBrowserTabBinding(sessionKey)?.principalId === principal.deviceId;
+  if (principal) return getBrowserTabBinding(conversationId)?.principalId === principal.deviceId;
   return isLocalOwnerRequest(c, service);
 }
 
 export function registerBrowserRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
 
-  authenticated.get('/api/browser/tab-bindings/:sessionKey', (c) => {
-    const sessionKey = c.req.param('sessionKey').trim();
-    const binding = getBrowserTabBinding(sessionKey);
+  authenticated.get('/api/browser/tab-bindings/:conversationId', (c) => {
+    const conversationId = c.req.param('conversationId').trim();
+    const binding = getBrowserTabBinding(conversationId);
     if (!binding) return c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Tab binding not found' } }, 404);
-    if (!canManageBrowserSession(c, service, sessionKey)) {
+    if (!canManageBrowserSession(c, service, conversationId)) {
       return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Tab binding belongs to another device' } }, 403);
     }
     return c.json({ ok: true, payload: binding });
   });
 
-  authenticated.put('/api/browser/tab-bindings/:sessionKey', async (c) => {
+  authenticated.put('/api/browser/tab-bindings/:conversationId', async (c) => {
     const principal = chromeDevicePrincipal(c);
     if (!principal?.deviceId) {
       return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Chrome device access required' } }, 403);
@@ -145,25 +145,25 @@ export function registerBrowserRoutes(authenticated: Hono, deps: AuthenticatedRo
       || endpoint?.kind !== 'browser' || endpoint.principalId !== principal.deviceId) {
       return c.json({ ok: false, error: { code: 'INVALID_ENDPOINT', message: 'Browser endpoint is not active' } }, 401);
     }
-    const sessionKey = c.req.param('sessionKey').trim();
-    if (!sessionKey || !await service.sessions.getSession(sessionKey)) {
+    const conversationId = c.req.param('conversationId').trim();
+    if (!conversationId || !await service.sessions.getSession(conversationId)) {
       return c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Session not found' } }, 404);
     }
     const { turnToken: _turnToken, ...bindingInput } = parsed.data;
     const binding = setBrowserTabBinding({
       ...bindingInput,
-      sessionKey,
+      conversationId,
       principalId: principal.deviceId,
     });
     return c.json({ ok: true, payload: binding });
   });
 
-  authenticated.delete('/api/browser/tab-bindings/:sessionKey', (c) => {
-    const sessionKey = c.req.param('sessionKey').trim();
-    if (!canManageBrowserSession(c, service, sessionKey)) {
+  authenticated.delete('/api/browser/tab-bindings/:conversationId', (c) => {
+    const conversationId = c.req.param('conversationId').trim();
+    if (!canManageBrowserSession(c, service, conversationId)) {
       return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Tab binding belongs to another device' } }, 403);
     }
-    return c.json({ ok: true, payload: { removed: deleteBrowserTabBinding(sessionKey) } });
+    return c.json({ ok: true, payload: { removed: deleteBrowserTabBinding(conversationId) } });
   });
 
   authenticated.get('/api/browser/extension-status', async (c) => {
@@ -298,11 +298,11 @@ export function registerBrowserRoutes(authenticated: Hono, deps: AuthenticatedRo
   });
 
   authenticated.get('/api/browser/approvals', (c) => {
-    const sessionKey = c.req.query('sessionKey');
-    if (!isLocalOwnerRequest(c, service) && (!sessionKey || !canManageBrowserSession(c, service, sessionKey))) {
+    const conversationId = c.req.query('conversationId');
+    if (!isLocalOwnerRequest(c, service) && (!conversationId || !canManageBrowserSession(c, service, conversationId))) {
       return c.json({ ok: false, error: 'Local owner access required.' }, 403);
     }
-    return c.json({ ok: true, approvals: listBrowserApprovals(sessionKey) });
+    return c.json({ ok: true, approvals: listBrowserApprovals(conversationId) });
   });
 
   authenticated.post('/api/browser/approvals/respond', strictRateLimitMiddleware, async (c) => {
@@ -311,7 +311,7 @@ export function registerBrowserRoutes(authenticated: Hono, deps: AuthenticatedRo
       ? listBrowserApprovals().find((candidate) => candidate.id === body.id)
       : undefined;
     if (!isLocalOwnerRequest(c, service)
-      && (!approval || !canManageBrowserSession(c, service, approval.sessionKey))) {
+      && (!approval || !canManageBrowserSession(c, service, approval.conversationId))) {
       return c.json({ ok: false, error: 'Local owner access required.' }, 403);
     }
     if (typeof body?.id !== 'string' || (body.decision !== 'approved' && body.decision !== 'denied')) {

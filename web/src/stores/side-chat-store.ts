@@ -6,7 +6,7 @@ import type { Attachment } from '@/features/chat/attachments/attachment-utils';
 import { buildSideChatReading, SIDE_CHAT_READING_BYTES, type SideChatReading } from '@/features/side-chat/side-chat-reading';
 import { useGatewayStore } from './gateway-store';
 
-const STORAGE_KEY = 'xopc:side-chat-panes:v2';
+const STORAGE_KEY = 'xopc:side-chat-panes:v3';
 export const SIDE_CHAT_WIDTH_MIN = 360;
 export const SIDE_CHAT_WIDTH_MAX = 760;
 export const SIDE_CHAT_WIDTH_DEFAULT = 520;
@@ -17,7 +17,7 @@ type StoredState = {
   tabs: SideChatTab[];
   widthPx: number;
 };
-type PendingCreate = { requestId: string; parentSessionKey: string; selections: SideChatSelection[] };
+type PendingCreate = { requestId: string; parentConversationId: string; selections: SideChatSelection[] };
 export type SideChatDraft = { text: string; attachments: Attachment[] };
 const EMPTY_DRAFT: SideChatDraft = { text: '', attachments: [] };
 
@@ -33,18 +33,18 @@ function readState(): StoredState {
   try {
     const parsed = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || '{}') as Partial<StoredState>;
     const tabs = Array.isArray(parsed.tabs)
-      ? parsed.tabs.filter((tab): tab is SideChatTab => Boolean(tab?.id && tab.parentSessionKey))
+      ? parsed.tabs.filter((tab): tab is SideChatTab => Boolean(tab?.id && tab.parentConversationId))
       : [];
     const rawPanes = parsed.panes && typeof parsed.panes === 'object' ? parsed.panes : {};
-    const panes = Object.fromEntries(Object.entries(rawPanes).map(([parentSessionKey, pane]) => {
-      const sessionTabs = tabs.filter((tab) => tab.parentSessionKey === parentSessionKey);
+    const panes = Object.fromEntries(Object.entries(rawPanes).map(([parentConversationId, pane]) => {
+      const sessionTabs = tabs.filter((tab) => tab.parentConversationId === parentConversationId);
       const activeId = typeof pane?.activeId === 'string' && sessionTabs.some((tab) => tab.id === pane.activeId)
         ? pane.activeId
         : sessionTabs.at(-1)?.id ?? null;
-      return [parentSessionKey, { open: pane?.open === true && sessionTabs.length > 0, activeId }];
+      return [parentConversationId, { open: pane?.open === true && sessionTabs.length > 0, activeId }];
     }));
     for (const tab of tabs) {
-      panes[tab.parentSessionKey] ??= { open: false, activeId: tab.id };
+      panes[tab.parentConversationId] ??= { open: false, activeId: tab.id };
     }
     return {
       panes,
@@ -70,13 +70,13 @@ type SideChatPaneState = StoredState & {
   replaceTab: (oldId: string, tab: SideChatTab) => void;
   reset: () => void;
   pendingCreate: PendingCreate | null;
-  requestCreate: (parentSessionKey: string, selections?: SideChatSelection[]) => void;
-  claimPendingCreate: (parentSessionKey: string, requestId: string) => PendingCreate | null;
+  requestCreate: (parentConversationId: string, selections?: SideChatSelection[]) => void;
+  claimPendingCreate: (parentConversationId: string, requestId: string) => PendingCreate | null;
   addTab: (tab: SideChatTab) => void;
   removeTab: (id: string) => void;
   setActive: (id: string) => void;
   setTabRunId: (id: string, runId?: string) => void;
-  setOpen: (parentSessionKey: string, open: boolean) => void;
+  setOpen: (parentConversationId: string, open: boolean) => void;
   setWidthPx: (width: number) => void;
 };
 
@@ -90,9 +90,9 @@ export const useSideChatStore = create<SideChatPaneState>((set, get) => {
       persist({ panes: state.panes, tabs: state.tabs, widthPx: state.widthPx });
     });
   };
-  const updatePane = (parentSessionKey: string, patch: Partial<SessionSideChatPane>) => {
-    const current = get().panes[parentSessionKey] ?? { open: false, activeId: null };
-    commit({ panes: { ...get().panes, [parentSessionKey]: { ...current, ...patch } } });
+  const updatePane = (parentConversationId: string, patch: Partial<SessionSideChatPane>) => {
+    const current = get().panes[parentConversationId] ?? { open: false, activeId: null };
+    commit({ panes: { ...get().panes, [parentConversationId]: { ...current, ...patch } } });
   };
 
   return {
@@ -137,9 +137,9 @@ export const useSideChatStore = create<SideChatPaneState>((set, get) => {
         tabs: state.tabs.map((existing) => existing.id === oldId ? { ...tab, fresh: true } : existing),
         panes: {
           ...state.panes,
-          [tab.parentSessionKey]: {
-            open: state.panes[tab.parentSessionKey]?.open ?? false,
-            activeId: state.panes[tab.parentSessionKey]?.activeId === oldId ? tab.id : state.panes[tab.parentSessionKey]?.activeId ?? tab.id,
+          [tab.parentConversationId]: {
+            open: state.panes[tab.parentConversationId]?.open ?? false,
+            activeId: state.panes[tab.parentConversationId]?.activeId === oldId ? tab.id : state.panes[tab.parentConversationId]?.activeId ?? tab.id,
           },
         },
       });
@@ -149,13 +149,13 @@ export const useSideChatStore = create<SideChatPaneState>((set, get) => {
       commit({ panes: {}, tabs: [] });
     },
     pendingCreate: null,
-    requestCreate: (parentSessionKey, selections = []) => {
-      set({ pendingCreate: { requestId: crypto.randomUUID(), parentSessionKey, selections } });
-      updatePane(parentSessionKey, { open: true });
+    requestCreate: (parentConversationId, selections = []) => {
+      set({ pendingCreate: { requestId: crypto.randomUUID(), parentConversationId, selections } });
+      updatePane(parentConversationId, { open: true });
     },
-    claimPendingCreate: (parentSessionKey, requestId) => {
+    claimPendingCreate: (parentConversationId, requestId) => {
       const pending = get().pendingCreate;
-      if (!pending || pending.parentSessionKey !== parentSessionKey || pending.requestId !== requestId) {
+      if (!pending || pending.parentConversationId !== parentConversationId || pending.requestId !== requestId) {
         return null;
       }
       set({ pendingCreate: null });
@@ -163,12 +163,12 @@ export const useSideChatStore = create<SideChatPaneState>((set, get) => {
     },
     addTab: (tab) => {
       const tabs = [...get().tabs.filter((existing) => existing.id !== tab.id), tab];
-      const current = get().panes[tab.parentSessionKey] ?? { open: false, activeId: null };
+      const current = get().panes[tab.parentConversationId] ?? { open: false, activeId: null };
       commit({
         tabs,
         panes: {
           ...get().panes,
-          [tab.parentSessionKey]: { ...current, activeId: tab.id, open: true },
+          [tab.parentConversationId]: { ...current, activeId: tab.id, open: true },
         },
       });
     },
@@ -181,31 +181,31 @@ export const useSideChatStore = create<SideChatPaneState>((set, get) => {
       delete readings[id];
       set({ drafts, readings });
       const tabs = get().tabs.filter((tab) => tab.id !== id);
-      const sessionTabs = tabs.filter((tab) => tab.parentSessionKey === removed.parentSessionKey);
-      const current = get().panes[removed.parentSessionKey] ?? { open: false, activeId: null };
+      const sessionTabs = tabs.filter((tab) => tab.parentConversationId === removed.parentConversationId);
+      const current = get().panes[removed.parentConversationId] ?? { open: false, activeId: null };
       const activeId = current.activeId === id ? sessionTabs.at(-1)?.id ?? null : current.activeId;
       commit({
         tabs,
         panes: {
           ...get().panes,
-          [removed.parentSessionKey]: { open: sessionTabs.length > 0 && current.open, activeId },
+          [removed.parentConversationId]: { open: sessionTabs.length > 0 && current.open, activeId },
         },
       });
     },
     setActive: (id) => {
       const tab = get().tabs.find((candidate) => candidate.id === id);
-      if (tab) updatePane(tab.parentSessionKey, { activeId: id, open: true });
+      if (tab) updatePane(tab.parentConversationId, { activeId: id, open: true });
     },
     setTabRunId: (id, runId) => commit({
       tabs: get().tabs.map((tab) => tab.id === id ? { ...tab, runId } : tab),
     }),
-    setOpen: (parentSessionKey, open) => updatePane(parentSessionKey, { open }),
+    setOpen: (parentConversationId, open) => updatePane(parentConversationId, { open }),
     setWidthPx: (widthPx) => commit({ widthPx: clampWidth(widthPx) }),
   };
 });
 
 useGatewayStore.subscribe((state, previous) => {
-  if (state.baseUrl !== previous.baseUrl || (previous.sessionKey !== undefined && state.sessionKey !== previous.sessionKey)) {
+  if (state.baseUrl !== previous.baseUrl || (previous.conversationId !== undefined && state.conversationId !== previous.conversationId)) {
     useSideChatStore.getState().reset();
     try { sessionStorage.removeItem('xopc:side-chat-client-id'); } catch { /* Storage may be disabled. */ }
   }

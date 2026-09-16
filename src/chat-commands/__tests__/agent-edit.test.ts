@@ -1,3 +1,9 @@
+import { requireXopcDatabase as openFixtureDatabase } from '../../storage/sqlite/connection.js';
+import { ensureSessionRecord as ensureFixtureConversation } from '../../storage/sqlite/session-repository.js';
+function seedConversationFixtures(): void {
+  openFixtureDatabase();
+  ensureFixtureConversation("2950de4b-b68b-4653-88b2-10d5fe6f494c", '', {"agentId":"coder","sourceChannel":"webchat","sourceChatId":"test-session","sessionType":"chat","routing":{"agentId":"coder","source":"webchat","accountId":"default","peerKind":"direct","peerId":"test-session"}});
+}
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -22,7 +28,7 @@ function createConfig(): Config {
 
 function createContext(config: Config): CommandContext {
   return {
-    sessionKey: 'agent:coder:webchat:default:direct:test-session',
+    conversationId: "2950de4b-b68b-4653-88b2-10d5fe6f494c",
     source: 'webui',
     channelId: 'webui',
     chatId: 'test-session',
@@ -55,6 +61,7 @@ describe('/agent-edit', () => {
   });
 
   it('shows the requested profile file preview for the current session agent', async () => {
+    seedConversationFixtures();
     const config = createConfig();
     const profileDir = resolveAgentProfileDir(config, 'coder');
     await mkdir(profileDir, { recursive: true });
@@ -70,6 +77,7 @@ describe('/agent-edit', () => {
   });
 
   it('rejects unsupported profile file names', async () => {
+    seedConversationFixtures();
     const result = await commandRegistry.execute('agent-edit', createContext(createConfig()), '../xopc.json');
 
     expect(result.success).toBe(false);

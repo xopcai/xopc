@@ -196,7 +196,7 @@ export class BrowserRuntime {
   }
 
   private authorize(
-    sessionKey: string,
+    conversationId: string,
     input: BrowserActionInput,
     risk: BrowserRiskLevel,
     explicitPolicy?: 'allow' | 'ask' | 'deny',
@@ -206,8 +206,8 @@ export class BrowserRuntime {
     const policy = explicitPolicy ?? (input.action === 'upload' ? security.uploads : security.consequentialActions);
     if (!browserRiskNeedsApproval(risk) || policy === 'allow') return null;
     if (policy === 'deny') return failure('APPROVAL_REQUIRED', `Browser action is denied by policy (${risk}).`);
-    if (consumeBrowserApproval(input.approvalId, sessionKey, input)) return null;
-    const approval = createBrowserApproval(sessionKey, input, risk, browserApprovalSummary(input, target));
+    if (consumeBrowserApproval(input.approvalId, conversationId, input)) return null;
+    const approval = createBrowserApproval(conversationId, input, risk, browserApprovalSummary(input, target));
     this.options.emit?.('browser.approval.required', approval);
     return {
       ok: false,

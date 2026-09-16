@@ -22,7 +22,7 @@ export type PetFeedback = {
 export interface ChatStreamEnvelope<TType extends string, TPayload> {
   type: TType;
   runId: string;
-  sessionKey: string;
+  conversationId: string;
   timestamp: number;
   payload: TPayload;
 }

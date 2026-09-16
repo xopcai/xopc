@@ -21,7 +21,7 @@ const TAB_SESSION_PREFIX = 'xopc.browser.tab-session.';
 
 export type BrowserChatSession = {
   key: string;
-  sessionId?: string;
+  transcriptId?: string;
   title: string;
   updatedAt: string;
 };
@@ -81,8 +81,8 @@ export type BrowserChatSnapshot = {
   pendingDelivery: boolean;
   queuedInputs?: Array<{ id: string; version: number; content: string }>;
   sessions: BrowserChatSession[];
-  sessionKey?: string;
-  sessionId?: string;
+  conversationId?: string;
+  transcriptId?: string;
   messages: BrowserChatMessage[];
   streamingText: string;
   runId?: string;
@@ -107,7 +107,7 @@ type BrowserOutboxRequest = {
   content: string;
   clientMessageId: string;
   delivery: 'next';
-  expectedSessionId?: string;
+  expectedTranscriptId?: string;
   configVersion?: number;
   origin: { type: 'endpoint'; endpointId: string; token: string };
   browserContexts?: BrowserPageContextInput[];
@@ -201,13 +201,13 @@ function mapMessage(value: unknown, index: number): BrowserChatMessage | undefin
   };
 }
 
-function mapClarification(value: unknown, sessionKey: string): BrowserClarification | undefined {
+function mapClarification(value: unknown, conversationId: string): BrowserClarification | undefined {
   if (!value || typeof value !== 'object') return undefined;
   const envelope = value as Record<string, unknown>;
   const row = envelope.clarification && typeof envelope.clarification === 'object'
     ? envelope.clarification as Record<string, unknown>
     : envelope;
-  if (row.status !== 'open' || row.sessionKey !== sessionKey
+  if (row.status !== 'open' || row.conversationId !== conversationId
     || typeof row.id !== 'string' || typeof row.question !== 'string') return undefined;
   const choices = Array.isArray(row.choices)
     ? row.choices.filter((choice): choice is string => typeof choice === 'string' && Boolean(choice.trim()))
@@ -326,8 +326,8 @@ export class BrowserChatClient {
         if (!(cause instanceof GatewayRequestError) || cause.status !== 404) throw cause;
         await chrome.storage.session.remove([ACTIVE_CHAT_KEY, ...(tabKey ? [tabKey] : [])]);
         this.update({
-          sessionKey: undefined,
-          sessionId: undefined,
+          conversationId: undefined,
+          transcriptId: undefined,
           messages: [],
           sessionLoading: false,
           modelConfig: undefined,
@@ -383,24 +383,24 @@ export class BrowserChatClient {
   }
 
   private async bindSessionEndpoint(): Promise<void> {
-    const sessionKey = this.snapshot.sessionKey;
+    const conversationId = this.snapshot.conversationId;
     const endpointId = this.turnClaim?.endpointId;
-    if (!sessionKey || !endpointId) return;
-    const desired = `${sessionKey}\n${endpointId}`;
+    if (!conversationId || !endpointId) return;
+    const desired = `${conversationId}\n${endpointId}`;
     if (this.endpointBinding === desired) return;
     if (this.endpointBindingTask) {
       await this.endpointBindingTask;
       if (this.endpointBinding === desired) return;
     }
     const task = json(await gatewayFetch(
-      `/api/endpoint-tools/bindings/${encodeURIComponent(sessionKey)}`,
+      `/api/endpoint-tools/bindings/${encodeURIComponent(conversationId)}`,
       {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ endpointId }),
       },
     )).then(() => {
-      if (this.snapshot.sessionKey === sessionKey && this.turnClaim?.endpointId === endpointId) {
+      if (this.snapshot.conversationId === conversationId && this.turnClaim?.endpointId === endpointId) {
         this.endpointBinding = desired;
       }
     });
@@ -423,7 +423,7 @@ export class BrowserChatClient {
       if (typeof row.key !== 'string') return [];
       return [{
         key: row.key,
-        ...(typeof row.sessionId === 'string' ? { sessionId: row.sessionId } : {}),
+        ...(typeof row.transcriptId === 'string' ? { transcriptId: row.transcriptId } : {}),
         title: [row.name, row.title, row.displayName].find((item) => typeof item === 'string' && item.trim()) as string || t('newChat'),
         updatedAt: typeof row.updatedAt === 'string' ? row.updatedAt : '',
       }];
@@ -432,7 +432,7 @@ export class BrowserChatClient {
   }
 
   async createSession(): Promise<void> {
-    const response = await json<{ session: { key: string; sessionId?: string } }>(await gatewayFetch('/api/sessions', {
+    const response = await json<{ session: { key: string; transcriptId?: string } }>(await gatewayFetch('/api/sessions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ channel: 'webchat', createdSurface: 'browser_extension' }),
@@ -441,12 +441,12 @@ export class BrowserChatClient {
     await this.openSession(response.session.key);
   }
 
-  async openSession(sessionKey: string): Promise<void> {
+  async openSession(conversationId: string): Promise<void> {
     if (this.runTopic) this.realtime?.unsubscribe(this.runTopic);
     this.runTopic = undefined;
     this.update({
-      sessionKey,
-      sessionId: this.snapshot.sessions.find((candidate) => candidate.key === sessionKey)?.sessionId,
+      conversationId,
+      transcriptId: this.snapshot.sessions.find((candidate) => candidate.key === conversationId)?.transcriptId,
       messages: [],
       streamingText: '',
       runId: undefined,
@@ -460,10 +460,10 @@ export class BrowserChatClient {
       modelConfig: undefined,
       error: undefined,
     });
-    await chrome.storage.session.set({ [ACTIVE_CHAT_KEY]: sessionKey });
+    await chrome.storage.session.set({ [ACTIVE_CHAT_KEY]: conversationId });
     const tabId = await activeTabId();
     if (tabId !== undefined) {
-      await chrome.storage.session.set({ [`${TAB_SESSION_PREFIX}${tabId}`]: sessionKey });
+      await chrome.storage.session.set({ [`${TAB_SESSION_PREFIX}${tabId}`]: conversationId });
     }
     try {
       await Promise.all([
@@ -472,30 +472,30 @@ export class BrowserChatClient {
         this.reloadClarification(),
         this.reloadTabBinding(),
       ]);
-      if (this.snapshot.sessionKey !== sessionKey) return;
+      if (this.snapshot.conversationId !== conversationId) return;
       await this.bindSessionEndpoint();
-      if (this.snapshot.sessionKey !== sessionKey) return;
+      if (this.snapshot.conversationId !== conversationId) return;
       const run = await json<{ payload?: { active?: boolean; runId?: string } }>(await gatewayFetch(
-        `/api/sessions/${encodeURIComponent(sessionKey)}/run`,
+        `/api/sessions/${encodeURIComponent(conversationId)}/run`,
       ));
-      if (this.snapshot.sessionKey !== sessionKey) return;
+      if (this.snapshot.conversationId !== conversationId) return;
       if (run.payload?.active && run.payload.runId) await this.followRun(run.payload.runId);
       await this.reloadBrowserApproval();
-      if (this.snapshot.sessionKey !== sessionKey) return;
-      this.update({ pendingDelivery: Boolean(await readBrowserOutbox<BrowserOutboxRequest>(sessionKey)) });
+      if (this.snapshot.conversationId !== conversationId) return;
+      this.update({ pendingDelivery: Boolean(await readBrowserOutbox<BrowserOutboxRequest>(conversationId)) });
       if (this.snapshot.endpointReady) await this.recoverOutbox();
     } catch (cause) {
-      if (this.snapshot.sessionKey !== sessionKey) return;
+      if (this.snapshot.conversationId !== conversationId) return;
       throw cause;
     } finally {
-      if (this.snapshot.sessionKey === sessionKey) {
-        await chrome.storage.session.set({ [ACTIVE_CHAT_KEY]: sessionKey });
+      if (this.snapshot.conversationId === conversationId) {
+        await chrome.storage.session.set({ [ACTIVE_CHAT_KEY]: conversationId });
         this.update({ sessionLoading: false });
       }
     }
   }
 
-  get currentSessionKey(): string | undefined { return this.snapshot.sessionKey; }
+  get currentConversationId(): string | undefined { return this.snapshot.conversationId; }
 
   async send(content: string, browserContexts: BrowserPageContextInput[] = [], attachments: BrowserAttachment[] = []): Promise<'sent' | 'queued'> {
     if (this.sendingInput) throw new Error(t('errorWaitQueuedMessage'));
@@ -511,20 +511,20 @@ export class BrowserChatClient {
   ): Promise<'sent' | 'queued'> {
     const text = content.trim();
     if (!text && attachments.length === 0) return 'sent';
-    if (!this.snapshot.sessionKey) throw new Error(t('errorOpenChatBeforeSending'));
+    if (!this.snapshot.conversationId) throw new Error(t('errorOpenChatBeforeSending'));
     if (this.snapshot.submitting || this.snapshot.pendingDelivery || this.recoveringOutbox) {
       throw new Error(t('errorWaitQueuedMessage'));
     }
     if (!this.turnClaim) throw new Error(t('errorEndpointNotReady'));
-    const sessionKey = this.snapshot.sessionKey;
+    const conversationId = this.snapshot.conversationId;
     await this.bindSessionEndpoint();
-    if (this.snapshot.sessionKey !== sessionKey) throw new Error(t('errorChatChanged'));
+    if (this.snapshot.conversationId !== conversationId) throw new Error(t('errorChatChanged'));
     const clientMessageId = crypto.randomUUID();
     const request: BrowserOutboxRequest = {
       content: text,
       clientMessageId,
       delivery: 'next',
-      expectedSessionId: this.snapshot.sessionId,
+      expectedTranscriptId: this.snapshot.transcriptId,
       ...(this.snapshot.modelConfig?.fixedModel ? { configVersion: this.snapshot.modelConfig.configVersion } : {}),
       origin: { type: 'endpoint', endpointId: this.turnClaim.endpointId, token: this.turnClaim.token },
       ...(browserContexts.length ? { browserContexts } : {}),
@@ -535,7 +535,7 @@ export class BrowserChatClient {
     let deliveryAccepted = false;
     this.update({ submitting: true, pendingDelivery: false });
     try {
-      await writeBrowserOutbox(sessionKey, request);
+      await writeBrowserOutbox(conversationId, request);
       outboxStored = true;
       this.update({
         messages: this.snapshot.runId ? this.snapshot.messages : [...this.snapshot.messages, {
@@ -555,26 +555,26 @@ export class BrowserChatClient {
         error: undefined,
       });
       const response = await json<{ payload: { state: { activeRunId?: string; inputs?: Array<{ clientMessageId?: string; runId?: string }> } } }>(
-        await gatewayFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/inputs`, {
+        await gatewayFetch(`/api/sessions/${encodeURIComponent(conversationId)}/inputs`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(request),
         }),
       );
       deliveryAccepted = true;
-      await deleteBrowserOutbox(sessionKey);
+      await deleteBrowserOutbox(conversationId);
       outboxStored = false;
-      if (this.snapshot.sessionKey !== sessionKey) return 'sent';
+      if (this.snapshot.conversationId !== conversationId) return 'sent';
       const runId = response.payload.state.inputs?.find((input) => input.clientMessageId === clientMessageId)?.runId
         ?? response.payload.state.activeRunId
-        ?? await this.waitForRun(sessionKey, clientMessageId);
-      if (this.snapshot.sessionKey !== sessionKey) return 'sent';
+        ?? await this.waitForRun(conversationId, clientMessageId);
+      if (this.snapshot.conversationId !== conversationId) return 'sent';
       if (runId) await this.followRun(runId);
       else await this.reloadMessages();
       return 'sent';
     } catch (cause) {
       if (deliveryAccepted) {
-        if (this.snapshot.sessionKey === sessionKey) {
+        if (this.snapshot.conversationId === conversationId) {
           this.update({
             pendingDelivery: false,
             error: t('errorSentStatusUnknown'),
@@ -583,24 +583,24 @@ export class BrowserChatClient {
         return 'sent';
       }
       if (outboxStored && isRetryableDeliveryError(cause)) {
-        if (this.snapshot.sessionKey === sessionKey) {
+        if (this.snapshot.conversationId === conversationId) {
           this.update({ pendingDelivery: true, error: undefined });
         }
         return 'queued';
       }
-      if (outboxStored) await deleteBrowserOutbox(sessionKey);
-      if (this.snapshot.sessionKey === sessionKey) this.update({ messages: previousMessages });
+      if (outboxStored) await deleteBrowserOutbox(conversationId);
+      if (this.snapshot.conversationId === conversationId) this.update({ messages: previousMessages });
       throw cause;
     } finally {
-      if (this.snapshot.sessionKey === sessionKey) this.update({ submitting: false });
+      if (this.snapshot.conversationId === conversationId) this.update({ submitting: false });
     }
   }
 
   private async recoverOutbox(): Promise<void> {
-    const sessionKey = this.snapshot.sessionKey;
-    if (!sessionKey || !this.turnClaim || this.recoveringOutbox) return;
+    const conversationId = this.snapshot.conversationId;
+    if (!conversationId || !this.turnClaim || this.recoveringOutbox) return;
     if (Date.now() - this.lastOutboxRecoveryAt < 3_000) return;
-    const pending = await readBrowserOutbox<BrowserOutboxRequest>(sessionKey);
+    const pending = await readBrowserOutbox<BrowserOutboxRequest>(conversationId);
     if (!pending?.clientMessageId || typeof pending.content !== 'string') return;
     this.recoveringOutbox = true;
     this.lastOutboxRecoveryAt = Date.now();
@@ -613,23 +613,23 @@ export class BrowserChatClient {
       };
       const response = await json<{
         payload: { state: { activeRunId?: string; inputs?: Array<{ clientMessageId?: string; runId?: string }> } };
-      }>(await gatewayFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/inputs`, {
+      }>(await gatewayFetch(`/api/sessions/${encodeURIComponent(conversationId)}/inputs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
       }));
       deliveryAccepted = true;
-      await deleteBrowserOutbox(sessionKey);
-      if (this.snapshot.sessionKey !== sessionKey) return;
+      await deleteBrowserOutbox(conversationId);
+      if (this.snapshot.conversationId !== conversationId) return;
       this.update({ pendingDelivery: false, error: undefined });
       const runId = response.payload.state.inputs?.find((input) => input.clientMessageId === request.clientMessageId)?.runId
         ?? response.payload.state.activeRunId
-        ?? await this.waitForRun(sessionKey, request.clientMessageId);
-      if (this.snapshot.sessionKey !== sessionKey) return;
+        ?? await this.waitForRun(conversationId, request.clientMessageId);
+      if (this.snapshot.conversationId !== conversationId) return;
       if (runId) await this.followRun(runId);
       else await this.reloadMessages();
     } catch (cause) {
-      if (this.snapshot.sessionKey === sessionKey) {
+      if (this.snapshot.conversationId === conversationId) {
         if (deliveryAccepted) {
           this.update({
             pendingDelivery: false,
@@ -638,7 +638,7 @@ export class BrowserChatClient {
         } else if (isRetryableDeliveryError(cause)) {
           this.update({ pendingDelivery: true, error: undefined });
         } else {
-          await deleteBrowserOutbox(sessionKey);
+          await deleteBrowserOutbox(conversationId);
           this.update({
             pendingDelivery: false,
             messages: this.snapshot.messages.filter((message) => message.id !== pending.clientMessageId),
@@ -653,16 +653,16 @@ export class BrowserChatClient {
 
   async refreshInputs(): Promise<void> {
     const requestId = ++this.inputsRequest;
-    const sessionKey = this.snapshot.sessionKey;
-    if (!sessionKey) return;
+    const conversationId = this.snapshot.conversationId;
+    if (!conversationId) return;
     const result = await json<{ payload: { activeRunId?: string; inputs?: Array<{ id: string; version: number; content: string; status: string }> } }>(
-      await gatewayFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/input-state`),
+      await gatewayFetch(`/api/sessions/${encodeURIComponent(conversationId)}/input-state`),
     );
-    if (this.snapshot.sessionKey !== sessionKey || requestId !== this.inputsRequest) return;
+    if (this.snapshot.conversationId !== conversationId || requestId !== this.inputsRequest) return;
     this.update({ queuedInputs: (result.payload.inputs ?? []).filter(input => input.status === 'queued') });
     if (result.payload.activeRunId !== this.snapshot.runId) {
       await this.reloadMessages();
-      if (this.snapshot.sessionKey !== sessionKey || requestId !== this.inputsRequest) return;
+      if (this.snapshot.conversationId !== conversationId || requestId !== this.inputsRequest) return;
       if (result.payload.activeRunId) await this.followRun(result.payload.activeRunId);
       else {
         if (this.runTopic) this.realtime?.unsubscribe(this.runTopic);
@@ -673,23 +673,23 @@ export class BrowserChatClient {
   }
 
   async editInput(id: string, version: number, content: string): Promise<void> {
-    const key = this.snapshot.sessionKey;
+    const key = this.snapshot.conversationId;
     if (!key) return;
     try {
       await json(await gatewayFetch(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(id)}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version, content }),
       }));
-    } finally { if (this.snapshot.sessionKey === key) await this.refreshInputs(); }
+    } finally { if (this.snapshot.conversationId === key) await this.refreshInputs(); }
   }
 
   async cancelInput(id: string, version: number): Promise<void> {
-    const key = this.snapshot.sessionKey;
+    const key = this.snapshot.conversationId;
     if (!key) return;
     try {
       await json(await gatewayFetch(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(id)}?version=${version}`, { method: 'DELETE' }));
-      if (this.snapshot.sessionKey === key) await this.reloadMessages();
+      if (this.snapshot.conversationId === key) await this.reloadMessages();
     } finally {
-      if (this.snapshot.sessionKey === key) await this.refreshInputs();
+      if (this.snapshot.conversationId === key) await this.refreshInputs();
     }
   }
 
@@ -711,9 +711,9 @@ export class BrowserChatClient {
   }
 
   async updateModel(model: string): Promise<void> {
-    const sessionKey = this.snapshot.sessionKey;
+    const conversationId = this.snapshot.conversationId;
     const current = this.snapshot.modelConfig;
-    if (!sessionKey || !current) return;
+    if (!conversationId || !current) return;
     const selected = this.snapshot.models.find((candidate) => candidate.id === model);
     const thinkingLevel = selected?.thinking?.options?.includes(current.thinkingLevel)
       ? current.thinkingLevel
@@ -743,11 +743,11 @@ export class BrowserChatClient {
   }
 
   async bindActiveTab(mode: BrowserTabBindingMode): Promise<void> {
-    const sessionKey = this.snapshot.sessionKey;
-    if (!sessionKey || !this.turnClaim) throw new Error(t('errorOpenChatForEndpoint'));
+    const conversationId = this.snapshot.conversationId;
+    if (!conversationId || !this.turnClaim) throw new Error(t('errorOpenChatForEndpoint'));
     const descriptor = await currentTabDescriptor();
     const result = await json<{ payload: BrowserTabBinding }>(await gatewayFetch(
-      `/api/browser/tab-bindings/${encodeURIComponent(sessionKey)}`,
+      `/api/browser/tab-bindings/${encodeURIComponent(conversationId)}`,
       {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -759,7 +759,7 @@ export class BrowserChatClient {
         }),
       },
     ));
-    if (this.snapshot.sessionKey !== sessionKey) return;
+    if (this.snapshot.conversationId !== conversationId) return;
     if (this.snapshot.tabBinding) {
       await chrome.storage.session.remove(`${TAB_BINDING_PREFIX}${this.snapshot.tabBinding.id}`);
     }
@@ -768,11 +768,11 @@ export class BrowserChatClient {
   }
 
   async unbindActiveTab(): Promise<void> {
-    const sessionKey = this.snapshot.sessionKey;
+    const conversationId = this.snapshot.conversationId;
     const binding = this.snapshot.tabBinding;
-    if (!sessionKey) return;
-    await json(await gatewayFetch(`/api/browser/tab-bindings/${encodeURIComponent(sessionKey)}`, { method: 'DELETE' }));
-    if (this.snapshot.sessionKey !== sessionKey) return;
+    if (!conversationId) return;
+    await json(await gatewayFetch(`/api/browser/tab-bindings/${encodeURIComponent(conversationId)}`, { method: 'DELETE' }));
+    if (this.snapshot.conversationId !== conversationId) return;
     if (binding) await chrome.storage.session.remove(`${TAB_BINDING_PREFIX}${binding.id}`);
     this.update({ tabBinding: undefined });
   }
@@ -788,11 +788,11 @@ export class BrowserChatClient {
     await this.reloadBrowserApproval();
   }
 
-  private async waitForRun(sessionKey: string, clientMessageId: string): Promise<string | undefined> {
+  private async waitForRun(conversationId: string, clientMessageId: string): Promise<string | undefined> {
     for (let attempt = 0; attempt < 20; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 100));
       const state = await json<{ payload: { activeRunId?: string; inputs?: Array<{ clientMessageId?: string; runId?: string }> } }>(
-        await gatewayFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/input-state`),
+        await gatewayFetch(`/api/sessions/${encodeURIComponent(conversationId)}/input-state`),
       );
       const runId = state.payload.inputs?.find((input) => input.clientMessageId === clientMessageId)?.runId
         ?? state.payload.activeRunId;
@@ -805,11 +805,11 @@ export class BrowserChatClient {
   private async followRun(runId: string): Promise<void> {
     const topic = `run:${runId}`;
     if (this.runTopic === topic) return;
-    const sessionKey = this.snapshot.sessionKey;
+    const conversationId = this.snapshot.conversationId;
     if (this.runTopic) this.realtime?.unsubscribe(this.runTopic);
     this.runTopic = topic;
     const stored = await chrome.storage.session.get(`${CURSOR_PREFIX}${runId}`);
-    if (this.snapshot.sessionKey !== sessionKey || this.runTopic !== topic) return;
+    if (this.snapshot.conversationId !== conversationId || this.runTopic !== topic) return;
     const cursor = typeof stored[`${CURSOR_PREFIX}${runId}`] === 'number' ? stored[`${CURSOR_PREFIX}${runId}`] : undefined;
     this.update({ runId, streamingText: '' });
     this.realtime?.subscribe(topic, cursor);
@@ -818,10 +818,10 @@ export class BrowserChatClient {
   private async onRealtimeEvent(topic: string, seq: number, event: string, data: unknown): Promise<void> {
     if (topic === 'gateway') {
       if (event === 'clarification.updated') {
-        const sessionKey = this.snapshot.sessionKey;
-        if (sessionKey && data && typeof data === 'object'
-          && (data as Record<string, unknown>).sessionKey === sessionKey) {
-          this.update({ clarification: mapClarification(data, sessionKey) });
+        const conversationId = this.snapshot.conversationId;
+        if (conversationId && data && typeof data === 'object'
+          && (data as Record<string, unknown>).conversationId === conversationId) {
+          this.update({ clarification: mapClarification(data, conversationId) });
         }
       }
       if (event === 'browser.approval.required') await this.reloadBrowserApproval();
@@ -855,18 +855,18 @@ export class BrowserChatClient {
   }
 
   private async reloadMessages(): Promise<void> {
-    const sessionKey = this.snapshot.sessionKey;
-    if (!sessionKey) return;
+    const conversationId = this.snapshot.conversationId;
+    if (!conversationId) return;
     const result = await json<{
       payload: { messages?: unknown[] };
-    }>(await gatewayFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/messages?limit=200`));
+    }>(await gatewayFetch(`/api/sessions/${encodeURIComponent(conversationId)}/messages?limit=200`));
     const messages = (result.payload.messages ?? []).flatMap((value, index) => {
       const message = mapMessage(value, index);
       return message ? [message] : [];
     });
-    if (this.snapshot.sessionKey !== sessionKey) return;
-    const session = this.snapshot.sessions.find((candidate) => candidate.key === sessionKey);
-    this.update({ messages, sessionId: session?.sessionId });
+    if (this.snapshot.conversationId !== conversationId) return;
+    const session = this.snapshot.sessions.find((candidate) => candidate.key === conversationId);
+    this.update({ messages, transcriptId: session?.transcriptId });
   }
 
   private async loadModels(): Promise<void> {
@@ -896,16 +896,16 @@ export class BrowserChatClient {
   }
 
   private async reloadModelConfig(): Promise<void> {
-    const sessionKey = this.snapshot.sessionKey;
-    if (!sessionKey) return;
+    const conversationId = this.snapshot.conversationId;
+    if (!conversationId) return;
     const result = await json<{ payload?: Record<string, unknown> }>(await gatewayFetch(
-      `/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`,
+      `/api/sessions/${encodeURIComponent(conversationId)}/agent-config`,
     ));
     const config = result.payload;
     if (!config || typeof config.model !== 'string' || typeof config.thinkingLevel !== 'string') {
       throw new Error(t('errorInvalidModelConfig'));
     }
-    if (this.snapshot.sessionKey !== sessionKey) return;
+    if (this.snapshot.conversationId !== conversationId) return;
     this.update({ modelConfig: {
       model: config.model,
       thinkingLevel: config.thinkingLevel,
@@ -915,11 +915,11 @@ export class BrowserChatClient {
   }
 
   private async patchModelConfig(patch: { model?: string; thinkingLevel?: string }): Promise<void> {
-    const sessionKey = this.snapshot.sessionKey;
+    const conversationId = this.snapshot.conversationId;
     const current = this.snapshot.modelConfig;
-    if (!sessionKey || !current) return;
+    if (!conversationId || !current) return;
     const result = await json<{ payload?: Record<string, unknown> }>(await gatewayFetch(
-      `/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`,
+      `/api/sessions/${encodeURIComponent(conversationId)}/agent-config`,
       {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -930,7 +930,7 @@ export class BrowserChatClient {
     if (!config || typeof config.model !== 'string' || typeof config.thinkingLevel !== 'string') {
       throw new Error(t('errorInvalidModelConfig'));
     }
-    if (this.snapshot.sessionKey !== sessionKey) return;
+    if (this.snapshot.conversationId !== conversationId) return;
     this.update({ modelConfig: {
       model: config.model,
       thinkingLevel: config.thinkingLevel,
@@ -940,52 +940,52 @@ export class BrowserChatClient {
   }
 
   private async reloadClarification(): Promise<void> {
-    const sessionKey = this.snapshot.sessionKey;
-    if (!sessionKey) return;
+    const conversationId = this.snapshot.conversationId;
+    if (!conversationId) return;
     const result = await json<{ payload: unknown }>(await gatewayFetch(
-      `/api/sessions/${encodeURIComponent(sessionKey)}/clarification`,
+      `/api/sessions/${encodeURIComponent(conversationId)}/clarification`,
     ));
-    if (this.snapshot.sessionKey === sessionKey) {
-      this.update({ clarification: mapClarification(result.payload, sessionKey) });
+    if (this.snapshot.conversationId === conversationId) {
+      this.update({ clarification: mapClarification(result.payload, conversationId) });
     }
   }
 
   private async reloadTabBinding(): Promise<void> {
-    const sessionKey = this.snapshot.sessionKey;
-    if (!sessionKey) return;
-    const response = await gatewayFetch(`/api/browser/tab-bindings/${encodeURIComponent(sessionKey)}`);
+    const conversationId = this.snapshot.conversationId;
+    if (!conversationId) return;
+    const response = await gatewayFetch(`/api/browser/tab-bindings/${encodeURIComponent(conversationId)}`);
     if (response.status === 404) {
-      if (this.snapshot.sessionKey === sessionKey) this.update({ tabBinding: undefined });
+      if (this.snapshot.conversationId === conversationId) this.update({ tabBinding: undefined });
       return;
     }
     const result = await json<{ payload: BrowserTabBinding }>(response);
-    if (this.snapshot.sessionKey !== sessionKey) return;
+    if (this.snapshot.conversationId !== conversationId) return;
     await chrome.storage.session.set({ [`${TAB_BINDING_PREFIX}${result.payload.id}`]: result.payload });
     this.update({ tabBinding: result.payload });
   }
 
   private async reloadBrowserApproval(): Promise<void> {
-    const sessionKey = this.snapshot.sessionKey;
-    if (!sessionKey || !this.snapshot.tabBinding) {
+    const conversationId = this.snapshot.conversationId;
+    if (!conversationId || !this.snapshot.tabBinding) {
       this.update({ browserApproval: undefined });
       return;
     }
     const result = await json<{ approvals: BrowserApproval[] }>(await gatewayFetch(
-      `/api/browser/approvals?sessionKey=${encodeURIComponent(sessionKey)}`,
+      `/api/browser/approvals?conversationId=${encodeURIComponent(conversationId)}`,
     ));
-    if (this.snapshot.sessionKey === sessionKey) {
+    if (this.snapshot.conversationId === conversationId) {
       this.update({ browserApproval: result.approvals.find((approval) => approval.status === 'pending') });
     }
   }
 
   private async reconcileAbortedRun(runId: string): Promise<void> {
-    const sessionKey = this.snapshot.sessionKey;
-    if (!sessionKey) return;
+    const conversationId = this.snapshot.conversationId;
+    if (!conversationId) return;
     for (let attempt = 0; attempt < 10; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 200));
-      if (this.snapshot.sessionKey !== sessionKey || this.snapshot.runId !== runId) return;
+      if (this.snapshot.conversationId !== conversationId || this.snapshot.runId !== runId) return;
       const run = await json<{ payload?: { active?: boolean; runId?: string } }>(await gatewayFetch(
-        `/api/sessions/${encodeURIComponent(sessionKey)}/run`,
+        `/api/sessions/${encodeURIComponent(conversationId)}/run`,
       ));
       if (!run.payload?.active || run.payload.runId !== runId) {
         if (this.runTopic) this.realtime?.unsubscribe(this.runTopic);
@@ -994,7 +994,7 @@ export class BrowserChatClient {
         try {
           await this.reloadMessages();
         } finally {
-          if (this.snapshot.sessionKey === sessionKey) {
+          if (this.snapshot.conversationId === conversationId) {
             this.update({ runId: undefined, streamingText: '', stopping: false });
           }
         }

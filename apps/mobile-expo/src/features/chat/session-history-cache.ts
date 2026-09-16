@@ -20,34 +20,34 @@ function isSessionMessagePage(value: unknown): value is SessionMessagePage {
 
 export function readCachedSessionHistoryHead(
   profileId: string | null | undefined,
-  sessionKey: string,
+  conversationId: string,
 ): SessionMessagePage | null {
-  const normalizedSessionKey = sessionKey.trim();
-  if (!profileId || !normalizedSessionKey) return null;
+  const normalizedConversationId = conversationId.trim();
+  if (!profileId || !normalizedConversationId) return null;
 
   const page = readQueryCache<SessionMessagePage>(
     QUERY_CACHE_NAMESPACES.sessionHistory,
     profileId,
-    normalizedSessionKey,
+    normalizedConversationId,
     { maxAgeMs: Infinity },
   );
-  if (!isSessionMessagePage(page) || page.session.key !== normalizedSessionKey) return null;
+  if (!isSessionMessagePage(page) || page.session.key !== normalizedConversationId) return null;
   return page;
 }
 
 export function writeCachedSessionHistoryHead(
   profileId: string | null | undefined,
-  sessionKey: string,
+  conversationId: string,
   page: SessionMessagePage | null,
 ): void {
-  const normalizedSessionKey = sessionKey.trim();
-  if (!profileId || !normalizedSessionKey || !isSessionMessagePage(page)) return;
-  if (page.session.key !== normalizedSessionKey) return;
+  const normalizedConversationId = conversationId.trim();
+  if (!profileId || !normalizedConversationId || !isSessionMessagePage(page)) return;
+  if (page.session.key !== normalizedConversationId) return;
 
   writeQueryCache(
     QUERY_CACHE_NAMESPACES.sessionHistory,
     profileId,
-    normalizedSessionKey,
+    normalizedConversationId,
     page,
   );
 }

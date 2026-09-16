@@ -55,13 +55,13 @@ function saveConfigSnapshot(configPath: string | undefined, config: Config): voi
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
 }
 
-function rememberCompleted(sessionKey: string, state: TerminalRecord): void {
-  completedSessions.set(sessionKey, state);
-  setTimeout(() => completedSessions.delete(sessionKey), 10 * 60_000);
+function rememberCompleted(conversationId: string, state: TerminalRecord): void {
+  completedSessions.set(conversationId, state);
+  setTimeout(() => completedSessions.delete(conversationId), 10 * 60_000);
 }
 
-export function getWeixinGatewayQrLoginStatus(sessionKey: string): WeixinGatewayQrLoginStatus {
-  const done = completedSessions.get(sessionKey);
+export function getWeixinGatewayQrLoginStatus(conversationId: string): WeixinGatewayQrLoginStatus {
+  const done = completedSessions.get(conversationId);
   if (done) {
     if (done.ok === true) {
       return { phase: "done", ok: true, accountId: done.accountId };
@@ -69,7 +69,7 @@ export function getWeixinGatewayQrLoginStatus(sessionKey: string): WeixinGateway
     return { phase: "done", ok: false, message: done.message };
   }
 
-  const snap = getWeixinActiveLoginSnapshot(sessionKey);
+  const snap = getWeixinActiveLoginSnapshot(conversationId);
   if (snap) {
     return {
       phase: "polling",
@@ -100,7 +100,7 @@ export type WeixinGatewayQrLoginStartOptions = {
  */
 export async function startWeixinGatewayQrLogin(
   opts: WeixinGatewayQrLoginStartOptions,
-): Promise<{ ok: true; sessionKey: string; qrcodeUrl: string } | { ok: false; message: string }> {
+): Promise<{ ok: true; conversationId: string; qrcodeUrl: string } | { ok: false; message: string }> {
   const configPath = opts.configPath ?? process.env.XOPC_CONFIG_PATH;
   const cfg = loadConfigSnapshot(configPath, opts.initialConfig);
   const { baseUrl, routeTag } = getWeixinLoginApiContext(cfg, opts.account);
@@ -118,11 +118,11 @@ export async function startWeixinGatewayQrLogin(
     return { ok: false, message: startResult.message || "Failed to get QR code" };
   }
 
-  const sessionKey = startResult.sessionKey;
+  const conversationId = startResult.conversationId;
 
   void (async () => {
     const waitResult = await waitForWeixinLogin({
-      sessionKey,
+      conversationId,
       timeoutMs,
       verbose,
       routeTag,
@@ -132,7 +132,7 @@ export async function startWeixinGatewayQrLogin(
 
     if (!waitResult.connected || !waitResult.botToken || !waitResult.accountId) {
       const message = waitResult.message || "Login did not complete";
-      rememberCompleted(sessionKey, { phase: "done", ok: false, message });
+      rememberCompleted(conversationId, { phase: "done", ok: false, message });
       await opts.onPersisted?.({ ok: false, message });
       return;
     }
@@ -152,7 +152,7 @@ export async function startWeixinGatewayQrLogin(
     } catch (err) {
       const message = `Saved login failed: ${String(err)}`;
       logger.error(message);
-      rememberCompleted(sessionKey, { phase: "done", ok: false, message });
+      rememberCompleted(conversationId, { phase: "done", ok: false, message });
       await opts.onPersisted?.({ ok: false, message });
       return;
     }
@@ -161,15 +161,15 @@ export async function startWeixinGatewayQrLogin(
       const nextCfg = mergeWeixinConfigAfterLogin(cfg as Config, normalizedId);
       saveConfigSnapshot(configPath, nextCfg);
       await opts.onPersisted?.({ ok: true, accountId: normalizedId, message: "OK", config: nextCfg });
-      rememberCompleted(sessionKey, { phase: "done", ok: true, accountId: normalizedId });
+      rememberCompleted(conversationId, { phase: "done", ok: true, accountId: normalizedId });
       return;
     } catch (err) {
       logger.warn(`Config merge failed (credentials saved on disk): ${String(err)}`);
     }
 
     await opts.onPersisted?.({ ok: true, accountId: normalizedId, message: "OK", config: cfg as Config });
-    rememberCompleted(sessionKey, { phase: "done", ok: true, accountId: normalizedId });
+    rememberCompleted(conversationId, { phase: "done", ok: true, accountId: normalizedId });
   })();
 
-  return { ok: true, sessionKey, qrcodeUrl: startResult.qrcodeUrl };
+  return { ok: true, conversationId, qrcodeUrl: startResult.qrcodeUrl };
 }

@@ -33,7 +33,7 @@ vi.mock('@/features/work-discovery/work-discovery-page', () => ({
 }));
 
 vi.mock('@/stores/gateway-store', () => ({
-  useGatewayStore: (selector: (state: { sessionKey: string }) => unknown) => selector({ sessionKey: 'browser:test' }),
+  useGatewayStore: (selector: (state: { conversationId: string }) => unknown) => selector({ conversationId: 'browser:test' }),
 }));
 
 vi.mock('@/stores/locale-store', () => ({

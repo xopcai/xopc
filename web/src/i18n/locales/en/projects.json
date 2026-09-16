@@ -466,7 +466,7 @@
       "clearSearch": "Clear session search",
       "noMatches": "No matching sessions",
       "fallbackTitle": "Chat session",
-      "sessionKey": "Session key",
+      "conversationId": "Conversation ID",
       "agent": "Agent",
       "updated": "Updated",
       "meta": "{{agent}} · {{messages}}",

@@ -61,6 +61,6 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
     const result = await service.createWorkflowRunService().retryWorkflowRun({ agentId: agents.defaultId, runId });
     if (result.ok === false) return c.json({ ok: false, error: result.message, code: result.code }, result.httpStatus);
     acknowledgeHomeAttention(kind, runId);
-    return c.json({ ok: true, runId: result.runId, sessionKey: result.sessionKey }, 202);
+    return c.json({ ok: true, runId: result.runId, conversationId: result.conversationId }, 202);
   });
 }

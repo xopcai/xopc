@@ -153,15 +153,15 @@
         async sendMessage(message, opts) {
           return transport.request("agent.sendMessage", {
             message,
-            sessionKey: opts?.sessionKey,
+            conversationId: opts?.conversationId,
             newSession: opts?.newSession
           });
         },
-        onStreamEvent(sessionKey, handler) {
-          transport.emit("agent.subscribe", { sessionKey });
-          const unsub = transport.on(`agent.stream.${sessionKey}`, handler);
+        onStreamEvent(conversationId, handler) {
+          transport.emit("agent.subscribe", { conversationId });
+          const unsub = transport.on(`agent.stream.${conversationId}`, handler);
           return () => {
-            transport.emit("agent.unsubscribe", { sessionKey });
+            transport.emit("agent.unsubscribe", { conversationId });
             unsub();
           };
         }
@@ -170,8 +170,8 @@
         async listSessions() {
           return transport.request("session.list");
         },
-        async navigateToSession(sessionKey) {
-          await transport.request("session.navigate", { sessionKey });
+        async navigateToSession(conversationId) {
+          await transport.request("session.navigate", { conversationId });
         }
       },
       config: {
@@ -311,12 +311,12 @@
         try {
           unsubStream?.();
           unsubStream = void 0;
-          const { sessionKey } = await client.agent.sendMessage(agInput.value.trim() || "Hi", {
+          const { conversationId } = await client.agent.sendMessage(agInput.value.trim() || "Hi", {
             newSession: true
           });
-          agLog.textContent += `sessionKey: ${sessionKey}
+          agLog.textContent += `conversationId: ${conversationId}
 `;
-          unsubStream = client.agent.onStreamEvent(sessionKey, (ev2) => {
+          unsubStream = client.agent.onStreamEvent(conversationId, (ev2) => {
             agLog.textContent += `${JSON.stringify(ev2)}
 `;
             agLog.scrollTop = agLog.scrollHeight;
@@ -341,7 +341,7 @@
     const sePre = pre("\u2026", "100px");
     const skInput = document.createElement("input");
     skInput.type = "text";
-    skInput.placeholder = "sessionKey to open";
+    skInput.placeholder = "conversationId to open";
     skInput.style.cssText = "width:100%;padding:6px 8px;border-radius:6px;border:1px solid rgba(127,127,127,.4);background:transparent;color:inherit;font-size:11px;";
     se.body.appendChild(
       btn("List sessions", async () => {
@@ -355,7 +355,7 @@
     );
     se.body.appendChild(skInput);
     se.body.appendChild(
-      btn("Navigate to sessionKey above", async () => {
+      btn("Navigate to conversationId above", async () => {
         const k = skInput.value.trim();
         if (!k) return;
         await client.session.navigateToSession(k);

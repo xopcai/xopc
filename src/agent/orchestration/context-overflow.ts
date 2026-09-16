@@ -1,4 +1,6 @@
 const CONTEXT_OVERFLOW_PATTERNS = [
+  /context budget.*(?:exceed|limit)/i,
+  /\b413\b|(?:request|payload) (?:body )?(?:is )?too large|content too large/i,
   /context(?:_|\s|-)*(?:length|window).*(?:exceed|limit|maximum|too (?:large|long))/i,
   /\bexceed(?:s|ed)?\s+(?:the\s+)?context(?:_|\s|-)*(?:length|window)\b/i,
   /maximum context length/i,

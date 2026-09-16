@@ -12,8 +12,8 @@ describe('side chat store session isolation', () => {
     const { useSideChatStore } = await import('@/stores/side-chat-store');
     const store = useSideChatStore.getState();
 
-    store.addTab({ id: 'side-a', parentSessionKey: 'session-a', title: 'A' });
-    useSideChatStore.getState().addTab({ id: 'side-b', parentSessionKey: 'session-b', title: 'B' });
+    store.addTab({ id: 'side-a', parentConversationId: 'session-a', title: 'A' });
+    useSideChatStore.getState().addTab({ id: 'side-b', parentConversationId: 'session-b', title: 'B' });
 
     expect(useSideChatStore.getState().panes).toMatchObject({
       'session-a': { open: true, activeId: 'side-a' },
@@ -28,7 +28,7 @@ describe('side chat store session isolation', () => {
     expect(useSideChatStore.getState().panes['session-a']).toEqual({ open: false, activeId: null });
     expect(useSideChatStore.getState().panes['session-b']).toEqual({ open: true, activeId: 'side-b' });
     expect(useSideChatStore.getState().tabs).toEqual([
-      { id: 'side-b', parentSessionKey: 'session-b', title: 'B' },
+      { id: 'side-b', parentConversationId: 'session-b', title: 'B' },
     ]);
   });
 
@@ -49,7 +49,7 @@ describe('side chat store session isolation', () => {
     const { useSideChatStore } = await import('@/stores/side-chat-store');
     const state = useSideChatStore.getState();
     for (let i = 0; i < 8; i++) {
-      state.addTab({ id: `side-${i}`, parentSessionKey: 'parent', title: 'Side chat' });
+      state.addTab({ id: `side-${i}`, parentConversationId: 'parent', title: 'Side chat' });
       state.rememberMessages(`side-${i}`, [{ role: 'assistant', content: [
         { type: 'text', text: 'x'.repeat(900_000) },
         { type: 'tool_use', id: 'tool', name: 'exec', status: 'done', result: 'private-tool-output' },
@@ -71,11 +71,11 @@ describe('side chat store session isolation', () => {
     const { useSideChatStore } = await import('@/stores/side-chat-store');
     const { useGatewayStore } = await import('@/stores/gateway-store');
     const state = useSideChatStore.getState();
-    state.addTab({ id: 'old', parentSessionKey: 'parent', title: 'Side chat' });
+    state.addTab({ id: 'old', parentConversationId: 'parent', title: 'Side chat' });
     state.setDraftText('old', 'unsent');
     state.setDraftAttachments('old', [{ name: 'notes.txt', type: 'document', mimeType: 'text/plain', size: 5, content: 'aGVsbG8=' }]);
     state.markEnded('old', 'idle');
-    state.replaceTab('old', { id: 'new', parentSessionKey: 'parent', title: 'Side chat' });
+    state.replaceTab('old', { id: 'new', parentConversationId: 'parent', title: 'Side chat' });
     expect(useSideChatStore.getState().drafts).toEqual({
       new: { text: 'unsent', attachments: [{ name: 'notes.txt', type: 'document', mimeType: 'text/plain', size: 5, content: 'aGVsbG8=' }] },
     });

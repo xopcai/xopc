@@ -264,8 +264,8 @@ export class FileSpaceService {
   constructor(
     private readonly getConfig: () => Config,
     private readonly projects: ProjectService,
-    private readonly resolveSessionWorkspace: (sessionKey: string) => string | Promise<string>,
-    private readonly listSessionWorkspaces: () => Array<{ sessionKey: string; root: string }> | Promise<Array<{ sessionKey: string; root: string }>> = () => [],
+    private readonly resolveSessionWorkspace: (conversationId: string) => string | Promise<string>,
+    private readonly listSessionWorkspaces: () => Array<{ conversationId: string; root: string }> | Promise<Array<{ conversationId: string; root: string }>> = () => [],
   ) {}
 
   private async createSpace(
@@ -305,8 +305,8 @@ export class FileSpaceService {
       offset += page.items.length;
     }
     const merged = new Map<string, ResolvedFileSpace>();
-    for (const { sessionKey, root } of await this.listSessionWorkspaces()) {
-      const space = await this.createSpace(root, sessionKey, [{ kind: 'session', id: sessionKey }]);
+    for (const { conversationId, root } of await this.listSessionWorkspaces()) {
+      const space = await this.createSpace(root, conversationId, [{ kind: 'session', id: conversationId }]);
       if (space) spaces.push(space);
     }
     for (const space of [...spaces, ...this.dynamicSpaces.values()]) {

@@ -59,13 +59,13 @@ export type RealtimeVoiceStatus = z.infer<typeof realtimeVoiceStatusSchema>;
 export const createVoiceSessionRequestSchema = z.strictObject({
   purpose: voicePurposeSchema,
   mode: voiceModeSchema.optional(),
-  sessionKey: z.string().min(1).max(512).optional(),
+  conversationId: z.string().min(1).max(512).optional(),
   language: voiceLanguageSchema.optional(),
   supportedProtocolVersions: z.tuple([z.literal(VOICE_REALTIME_PROTOCOL_VERSION)]),
   mediaPreferences: z.tuple([z.literal('websocket-pcm')]),
 }).superRefine((value, context) => {
-  if (value.purpose === 'conversation' && !value.sessionKey) {
-    context.addIssue({ code: 'custom', path: ['sessionKey'], message: 'sessionKey is required for conversation' });
+  if (value.purpose === 'conversation' && !value.conversationId) {
+    context.addIssue({ code: 'custom', path: ['conversationId'], message: 'conversationId is required for conversation' });
   }
   if (value.purpose !== 'conversation' && value.mode !== undefined) {
     context.addIssue({ code: 'custom', path: ['mode'], message: 'mode is only supported for conversation' });

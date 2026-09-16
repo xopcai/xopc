@@ -13,5 +13,5 @@ export {
   getOrCreateSessionMcpRuntime,
   getSessionMcpRuntimeManager,
   retireSessionMcpRuntime,
-  retireSessionMcpRuntimeForSessionKey,
+  retireSessionMcpRuntimeForConversationId,
 } from "./bundle-mcp-runtime.js";

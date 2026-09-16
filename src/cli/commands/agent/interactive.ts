@@ -10,7 +10,7 @@ import { renderStreamToTerminal } from './stream-renderer.js';
 
 export interface InteractiveOptions {
   workspace: string;
-  sessionKey: string;
+  conversationId: string;
   continuingSession: boolean;
 }
 
@@ -21,9 +21,9 @@ export async function startInteractiveChat(
   agent: AgentService,
   options: InteractiveOptions
 ): Promise<void> {
-  const { sessionKey: initialSessionKey, continuingSession } = options;
+  const { conversationId: initialConversationId, continuingSession } = options;
   
-  let sessionKey = initialSessionKey;
+  let conversationId = initialConversationId;
 
   if (continuingSession) {
     console.log('🧠 Interactive chat mode - Continuing session\n');
@@ -51,14 +51,14 @@ export async function startInteractiveChat(
     }
     
     if (trimmed.startsWith(':session ')) {
-      const newSessionKey = trimmed.slice(9).trim();
+      const newConversationId = trimmed.slice(9).trim();
       const manager = await getSessionIndex();
-      const session = await manager.getSessionMetadata(newSessionKey);
+      const session = await manager.getSessionMetadata(newConversationId);
       if (session) {
-        sessionKey = newSessionKey;
-        console.log(`🔄 Switched to session: ${sessionKey}\n`);
+        conversationId = newConversationId;
+        console.log(`🔄 Switched to session: ${conversationId}\n`);
       } else {
-        console.log(`❌ Session not found: ${newSessionKey}\n`);
+        console.log(`❌ Session not found: ${newConversationId}\n`);
       }
       rl.prompt();
       return;
@@ -76,7 +76,7 @@ export async function startInteractiveChat(
     }
 
     rl.pause();
-    await renderStreamToTerminal(agent, input, sessionKey);
+    await renderStreamToTerminal(agent, input, conversationId);
     rl.resume();
     rl.prompt();
   });

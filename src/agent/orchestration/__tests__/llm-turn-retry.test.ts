@@ -70,7 +70,7 @@ describe('llm-turn-retry', () => {
     } as unknown as import('@earendil-works/pi-agent-core').Agent;
 
     await maybeRetryTurnAfterTransientLlmFailure(agent, {
-      sessionKey: 'sk',
+      conversationId: 'sk',
       log: { warn: vi.fn() },
       maxContinues: 1,
       baseDelayMs: 0,
@@ -99,7 +99,7 @@ describe('llm-turn-retry', () => {
     } as unknown as import('@earendil-works/pi-agent-core').Agent;
 
     await expect(maybeRetryTurnAfterTransientLlmFailure(agent, {
-      sessionKey: 'sk',
+      conversationId: 'sk',
       log: { warn: vi.fn() },
       signal: controller.signal,
     })).rejects.toMatchObject({ name: 'AbortError' });

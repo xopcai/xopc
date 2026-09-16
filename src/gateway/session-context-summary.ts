@@ -19,11 +19,11 @@ import { hasGatewayScope, type GatewayScope } from './security/gateway-scopes.js
 const log = createLogger('SessionContextSummary');
 const SOURCE_LIMIT = 20;
 
-async function readEnvironment(config: Config, sessionKey: string, projectId?: string): Promise<SessionContextSummary['environment']> {
-  const bound = getExecutionEnvironmentForSession(sessionKey);
+async function readEnvironment(config: Config, conversationId: string, projectId?: string): Promise<SessionContextSummary['environment']> {
+  const bound = getExecutionEnvironmentForSession(conversationId);
   const project = projectId ? new ProjectStore().get(projectId) : undefined;
   const rootPath = bound?.rootPath
-    ?? effectiveWorkspacePathForSession(config, sessionKey, getSessionConfig(sessionKey), project);
+    ?? effectiveWorkspacePathForSession(config, conversationId, getSessionConfig(conversationId), project);
   const available = (!bound || bound.status === 'ready')
     && await stat(rootPath).then((info) => info.isDirectory(), () => false);
   const environment: NonNullable<SessionContextSummary['environment']> = {
@@ -59,20 +59,20 @@ async function readEnvironment(config: Config, sessionKey: string, projectId?: s
 /** A bounded metadata-only query. It never prepares Note context or starts an agent. */
 export async function getSessionContextSummary(
   config: Config,
-  sessionKey: string,
+  conversationId: string,
   scopes: readonly GatewayScope[],
 ): Promise<SessionContextSummary | null> {
-  const metadata = getSessionMetadata(sessionKey);
+  const metadata = getSessionMetadata(conversationId);
   if (!metadata) return null;
   const summary: SessionContextSummary = {
-    sessionKey, observedAt: new Date().toISOString(), work: {},
+    conversationId, observedAt: new Date().toISOString(), work: {},
     sources: [], sourcesHasMore: false, unavailableSections: [],
   };
   const canReadWorkspace = hasGatewayScope(scopes, 'workspace.read');
   const canReadTasks = hasGatewayScope(scopes, 'tasks.read');
   const unavailable = (section: SessionContextSummary['unavailableSections'][number], err?: unknown) => {
     if (!summary.unavailableSections.includes(section)) summary.unavailableSections.push(section);
-    if (err) log.warn({ err, sessionKey, section }, 'Context summary section unavailable');
+    if (err) log.warn({ err, conversationId, section }, 'Context summary section unavailable');
   };
 
   if (canReadWorkspace) {
@@ -85,7 +85,7 @@ export async function getSessionContextSummary(
 
   if (canReadTasks) {
     try {
-      const taskId = new TaskConversationRepository().resolveActiveExecutionSession(sessionKey)?.taskId;
+      const taskId = new TaskConversationRepository().resolveActiveExecutionSession(conversationId)?.taskId;
       const task = taskId ? new TaskRepository().get(taskId) : undefined;
       if (task) summary.work.task = { id: task.id, title: task.title.slice(0, 240), phase: task.phase };
       else if (taskId) unavailable('work');
@@ -124,7 +124,7 @@ export async function getSessionContextSummary(
       }));
     } catch (err) { unavailable('sources', err); }
     try {
-      summary.environment = await readEnvironment(config, sessionKey, metadata.projectId);
+      summary.environment = await readEnvironment(config, conversationId, metadata.projectId);
     } catch (err) { unavailable('environment', err); }
   } else {
     unavailable('sources');

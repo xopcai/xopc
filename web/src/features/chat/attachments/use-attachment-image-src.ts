@@ -25,7 +25,7 @@ function blobWithAttachmentMime(blob: Blob, mimeType: string | undefined): Blob 
  */
 export function useAttachmentImageSrc(
   attachment: MessageAttachment,
-  opts: { authToken?: string; sessionKey?: string | null },
+  opts: { authToken?: string; conversationId?: string | null },
 ): { src: string; error: boolean } {
   const isImage =
     attachment.type === 'image' ||
@@ -39,7 +39,7 @@ export function useAttachmentImageSrc(
     return resolveDataUrlForDisplay(mime, inlinePayload);
   }, [inlinePayload, attachment.mimeType]);
 
-  const requestKey = `${attachment.uri ?? ''}\n${opts.sessionKey ?? ''}\n${attachment.taskId ?? ''}`;
+  const requestKey = `${attachment.uri ?? ''}\n${opts.conversationId ?? ''}\n${attachment.taskId ?? ''}`;
   const [remote, setRemote] = useState<{
     key: string;
     blobUrl?: string;
@@ -63,7 +63,7 @@ export function useAttachmentImageSrc(
     void (async () => {
       const result = await fetchMediaUriBlob({
         uri: attachment.uri!,
-        sessionKey: opts.sessionKey,
+        conversationId: opts.conversationId,
         taskId: attachment.taskId,
       });
       if (cancelled) return;
@@ -80,7 +80,7 @@ export function useAttachmentImageSrc(
       cancelled = true;
       if (revoke) URL.revokeObjectURL(revoke);
     };
-  }, [inlineSrc, attachment.taskId, attachment.uri, isImage, opts.authToken, opts.sessionKey, requestKey]);
+  }, [inlineSrc, attachment.taskId, attachment.uri, isImage, opts.authToken, opts.conversationId, requestKey]);
 
   const activeRemote = remote?.key === requestKey ? remote : undefined;
   return {

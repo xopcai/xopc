@@ -30,27 +30,27 @@ import type { ReviewOutput } from '../../review/review-types.js';
 export type RunProcessDirectDeps = {
   log: ProcessDirectStreamLog;
   config: Config;
-  resolveSessionEndpoint: (sessionKey: string) => Promise<{ channel: string; chatId: string }>;
+  resolveSessionEndpoint: (conversationId: string) => Promise<{ channel: string; chatId: string }>;
   initSessionContext: (
-    sessionKey: string,
+    conversationId: string,
     channel: string,
     chatId: string,
     origin: TurnOrigin,
   ) => void;
-  hydrateSessionWorkspaceFromStore: (sessionKey: string) => Promise<void>;
-  hydrateSessionModelFromStore: (sessionKey: string) => Promise<void>;
+  hydrateSessionWorkspaceFromStore: (conversationId: string) => Promise<void>;
+  hydrateSessionModelFromStore: (conversationId: string) => Promise<void>;
   agentManager: AgentInstanceGateway;
   sessionStore: SessionStore;
   modelManager: ModelManager;
-  applyResolvedThinkingLevel: (sessionKey: string, thinking?: string | null) => Promise<void>;
+  applyResolvedThinkingLevel: (conversationId: string, thinking?: string | null) => Promise<void>;
   prepareInboundAttachments: (
-    sessionKey: string,
+    conversationId: string,
     attachments?: InboundAttachmentInput[],
   ) => Promise<MediaRef[] | undefined>;
   commandHandler: Pick<CommandHandler, 'executeCommandAndAggregateReply'>;
-  onTurnComplete?: (sessionKey: string, lastAssistantText?: string) => void;
+  onTurnComplete?: (conversationId: string, lastAssistantText?: string) => void;
   endDirectRequestContext: () => void;
-  resetSession: (sessionKey: string) => Promise<{ sessionId: string; previousSessionId: string } | null>;
+  resetSession: (conversationId: string) => Promise<{ transcriptId: string; previousTranscriptId: string } | null>;
 };
 
 function isReviewOutput(value: unknown): value is ReviewOutput {
@@ -62,7 +62,7 @@ export async function runProcessDirect(
   deps: RunProcessDirectDeps,
   input: {
     content: string;
-    sessionKey: string;
+    conversationId: string;
     origin: TurnOrigin;
     attachments?: InboundAttachmentInput[];
     thinking?: string;
@@ -71,15 +71,15 @@ export async function runProcessDirect(
     deadlineAtMs?: number;
   },
 ): Promise<string> {
-  const { channel, chatId } = await deps.resolveSessionEndpoint(input.sessionKey);
-  deps.initSessionContext(input.sessionKey, channel, chatId, input.origin);
+  const { channel, chatId } = await deps.resolveSessionEndpoint(input.conversationId);
+  deps.initSessionContext(input.conversationId, channel, chatId, input.origin);
 
   try {
     let turnBody = input.content;
     let resetTriggeredAtInit = false;
     const turn = await initSessionTurn({
       cfg: deps.config,
-      sessionKey: input.sessionKey,
+      conversationId: input.conversationId,
       body: input.content,
       resetSession: deps.resetSession,
     });
@@ -89,19 +89,19 @@ export async function runProcessDirect(
     }
     turnBody = turn.bodyStripped;
 
-    await hydratePerTurnState(deps, input.sessionKey, input.thinking);
-    const prepared = await deps.prepareInboundAttachments(input.sessionKey, input.attachments);
+    await hydratePerTurnState(deps, input.conversationId, input.thinking);
+    const prepared = await deps.prepareInboundAttachments(input.conversationId, input.attachments);
 
     const slash = await tryRunSlashCommand(
       deps,
-      { sessionKey: input.sessionKey, channel, chatId },
+      { conversationId: input.conversationId, channel, chatId },
       turnBody,
       { skipResetCommands: resetTriggeredAtInit },
     );
     if (slash.matched) {
       const trimmed = slash.aggregatedText.trim();
       if (trimmed) {
-        await deps.sessionStore.appendTranscriptMessage(input.sessionKey, {
+        await deps.sessionStore.appendTranscriptMessage(input.conversationId, {
           role: 'assistant',
           content: isReviewOutput(slash.metadata?.review)
             ? [slash.metadata.review]
@@ -112,37 +112,37 @@ export async function runProcessDirect(
             : {}),
         } as AgentMessage);
         if (input.origin.type === 'system' && input.origin.source === 'automation') {
-          await deps.sessionStore.updateMetadata(input.sessionKey, { hiddenFromSessionList: false });
+          await deps.sessionStore.updateMetadata(input.conversationId, { hiddenFromSessionList: false });
         }
-        deps.onTurnComplete?.(input.sessionKey, trimmed);
+        deps.onTurnComplete?.(input.conversationId, trimmed);
       }
       return slash.aggregatedText ?? '';
     }
 
-    const skillTurn = deps.agentManager.prepareSkillTurn(input.sessionKey, turnBody);
+    const skillTurn = deps.agentManager.prepareSkillTurn(input.conversationId, turnBody);
     const textForDirect = skillTurn.text;
     const userMessage = await buildDirectUserMessageContent({
       content: textForDirect,
       attachments: prepared,
-      sessionKey: input.sessionKey,
+      conversationId: input.conversationId,
       config: deps.config,
       agentManager: deps.agentManager,
       modelManager: deps.modelManager,
     });
 
     const pendingUserMessage = userMessage as TranscriptUserMessage;
-    setPendingTranscriptUserMessage(input.sessionKey, pendingUserMessage);
+    setPendingTranscriptUserMessage(input.conversationId, pendingUserMessage);
 
     const result = await (async () => {
       try {
         return await deps.agentManager.withSkillCapabilities(
-          input.sessionKey,
+          input.conversationId,
           skillTurn.activatedCapabilityNames,
           () =>
             runDirectAgentTurn(
               { ...deps, config: deps.config },
               {
-                sessionKey: input.sessionKey,
+                conversationId: input.conversationId,
                 runId: input.runId,
                 userMessage,
                 abortSignal: input.signal,
@@ -151,11 +151,11 @@ export async function runProcessDirect(
             ),
         );
       } finally {
-        clearPendingTranscriptUserMessage(input.sessionKey, pendingUserMessage);
+        clearPendingTranscriptUserMessage(input.conversationId, pendingUserMessage);
       }
     })();
 
-    deps.onTurnComplete?.(input.sessionKey, result.lastAssistantText);
+    deps.onTurnComplete?.(input.conversationId, result.lastAssistantText);
     if (!result.ok) {
       throw new Error(result.errorMessage ?? 'Agent turn failed');
     }

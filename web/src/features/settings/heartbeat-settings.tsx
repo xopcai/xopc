@@ -176,7 +176,7 @@ export function HeartbeatSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const h = m.heartbeatSettings;
-  const token = useGatewayStore((st) => st.sessionKey);
+  const token = useGatewayStore((st) => st.conversationId);
   const hasToken = Boolean(token);
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = parseHeartbeatSettingsTab(searchParams.get('tab'));

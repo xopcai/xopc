@@ -121,16 +121,16 @@ describe('ExecutionEnvironmentStore', () => {
       reason: 'test',
     });
 
-    const first = store.bind({ sessionKey: 'session-a', environmentId: environment.id });
-    const repeated = store.bind({ sessionKey: 'session-a', environmentId: environment.id });
+    const first = store.bind({ conversationId: 'session-a', environmentId: environment.id });
+    const repeated = store.bind({ conversationId: 'session-a', environmentId: environment.id });
     expect(repeated).toEqual(first);
     expect(() => store.bind({
-      sessionKey: 'session-b',
+      conversationId: 'session-b',
       environmentId: environment.id,
     })).toThrow(/already bound/);
 
     store.releaseBinding('session-a', environment.id);
-    const rebound = store.bind({ sessionKey: 'session-a', environmentId: environment.id });
+    const rebound = store.bind({ conversationId: 'session-a', environmentId: environment.id });
     expect(rebound.id).not.toBe(first.id);
     expect(store.listBindings(environment.id, true)).toHaveLength(2);
   });
@@ -155,8 +155,8 @@ describe('ExecutionEnvironmentStore', () => {
       reason: 'test',
     });
 
-    expect(store.bind({ sessionKey: 'session-a', environmentId: environment.id })).toBeTruthy();
-    expect(store.bind({ sessionKey: 'session-b', environmentId: environment.id })).toBeTruthy();
+    expect(store.bind({ conversationId: 'session-a', environmentId: environment.id })).toBeTruthy();
+    expect(store.bind({ conversationId: 'session-b', environmentId: environment.id })).toBeTruthy();
   });
 
   it('retains environments for cleanup after their project is deleted', () => {

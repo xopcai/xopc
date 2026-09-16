@@ -61,7 +61,7 @@ export function DesktopPetEventBridge() {
     const pet = window.electronAPI?.pet;
     if (!isElectron() || !pet) return;
     const send = (update: PetSessionUpdate) => {
-      lastSentRef.current.set(update.sessionKey, update);
+      lastSentRef.current.set(update.conversationId, update);
       void pet.sendEvent(update).catch(() => {});
     };
     const flush = () => {
@@ -69,29 +69,29 @@ export function DesktopPetEventBridge() {
       for (const update of pendingRef.current.values()) send(update);
       pendingRef.current.clear();
     };
-    const titleFor = (sessionKey: string) => {
-      const cached = titleRef.current.get(sessionKey);
-      if (!cached && !titleLoadingRef.current.has(sessionKey)) {
-        titleLoadingRef.current.add(sessionKey);
-        void apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}?offset=0&limit=1`))
+    const titleFor = (conversationId: string) => {
+      const cached = titleRef.current.get(conversationId);
+      if (!cached && !titleLoadingRef.current.has(conversationId)) {
+        titleLoadingRef.current.add(conversationId);
+        void apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}?offset=0&limit=1`))
           .then(async (response) => response.ok ? (await response.json() as { session?: { name?: string } }).session?.name?.trim() : undefined)
           .then((title) => {
-            if (title) titleRef.current.set(sessionKey, title);
+            if (title) titleRef.current.set(conversationId, title);
           })
           .catch(() => undefined)
-          .finally(() => titleLoadingRef.current.delete(sessionKey));
+          .finally(() => titleLoadingRef.current.delete(conversationId));
       }
       return cached ?? t.fallbackSessionLabel;
     };
     const onStream = (event: Event) => {
       const detail = (event as CustomEvent<AgentStreamDetail>).detail;
-      if (!detail.sessionKey) return;
-      const sessionLabel = titleFor(detail.sessionKey);
-      const next = (sequenceRef.current.get(detail.sessionKey ?? "") ?? 0) + 1;
+      if (!detail.conversationId) return;
+      const sessionLabel = titleFor(detail.conversationId);
+      const next = (sequenceRef.current.get(detail.conversationId ?? "") ?? 0) + 1;
       const update = mapAgentStreamEvent(detail, next, sessionLabel, petNarrativeLabels(t));
       if (!update) return;
-      sequenceRef.current.set(update.sessionKey, next);
-      const baseline = pendingRef.current.get(update.sessionKey) ?? lastSentRef.current.get(update.sessionKey);
+      sequenceRef.current.set(update.conversationId, next);
+      const baseline = pendingRef.current.get(update.conversationId) ?? lastSentRef.current.get(update.conversationId);
       const terminal = update.state === "error" || update.state === "waiting" || update.state === "success";
       const animationChanged = !baseline
         || baseline.runId !== update.runId
@@ -100,11 +100,11 @@ export function DesktopPetEventBridge() {
         || baseline.animation !== update.animation
         || baseline.action !== update.action;
       if (terminal || animationChanged) {
-        pendingRef.current.delete(update.sessionKey);
+        pendingRef.current.delete(update.conversationId);
         send(update);
         return;
       }
-      pendingRef.current.set(update.sessionKey, update);
+      pendingRef.current.set(update.conversationId, update);
       if (timerRef.current === null) timerRef.current = window.setTimeout(flush, 500);
     };
     window.addEventListener(AGENT_STREAM_EVENT, onStream);

@@ -6,8 +6,8 @@ import { apiUrl } from '@/lib/url';
 import { closeOAuthAuthorizationWindow, openOAuthAuthorizationUrl, reserveOAuthAuthorizationWindow } from '@/features/settings/oauth-authorization-window';
 
 export type ConnectionActionName = 'connect' | 'check' | 'continue' | 'skip' | 'cancel' | 'select_account' | 'confirm_scope' | 'replace_source';
-export function useConnectionWait(sessionKey: string) {
-  const path = `/api/sessions/${encodeURIComponent(sessionKey)}/connection-wait`;
+export function useConnectionWait(conversationId: string) {
+  const path = `/api/sessions/${encodeURIComponent(conversationId)}/connection-wait`;
   const { data, mutate, isLoading } = useSWR(path, async path => {
     const response = await fetchJson<{ payload: ConnectionWaitSnapshot }>(apiUrl(path));
     return response.payload;
@@ -28,10 +28,10 @@ export function useConnectionWait(sessionKey: string) {
     try {
       const response = await fetchJson<{ payload: { snapshot: ConnectionWaitSnapshot; authorizationUrl?: string } }>(apiUrl(`${path}/actions`), {
         method: 'POST', body: JSON.stringify({ action, needKey, accountId, candidateRef, waitId: wait.id,
-          expectedSessionId: snapshot.sessionId, expectedVersion: wait.version, idempotencyKey: crypto.randomUUID() }),
+          expectedTranscriptId: snapshot.transcriptId, expectedVersion: wait.version, idempotencyKey: crypto.randomUUID() }),
       });
       const next = response.payload.snapshot;
-      await mutate(previous => !previous || previous.sessionId !== next.sessionId || next.revision >= previous.revision ? next : previous, false);
+      await mutate(previous => !previous || previous.transcriptId !== next.transcriptId || next.revision >= previous.revision ? next : previous, false);
       if (response.payload.authorizationUrl) {
         if (!await openOAuthAuthorizationUrl(response.payload.authorizationUrl, popup)) throw new Error('Unable to open the authorization window. Allow pop-ups, then retry.');
       } else closeOAuthAuthorizationWindow(popup);
@@ -43,11 +43,11 @@ export function useConnectionWait(sessionKey: string) {
   }, [path, mutate]);
   useEffect(() => {
     const refresh = (event: Event) => {
-      const detail = (event as CustomEvent<{ sessionKey?: string; revision?: number }>).detail;
-      if (detail?.sessionKey === sessionKey && (detail.revision ?? Infinity) > (current.current?.revision ?? 0)) void mutate();
+      const detail = (event as CustomEvent<{ conversationId?: string; revision?: number }>).detail;
+      if (detail?.conversationId === conversationId && (detail.revision ?? Infinity) > (current.current?.revision ?? 0)) void mutate();
     };
     window.addEventListener('session-connection-wait-changed', refresh);
     return () => window.removeEventListener('session-connection-wait-changed', refresh);
-  }, [sessionKey, mutate]);
+  }, [conversationId, mutate]);
   return { wait: data?.wait, isLoading, busy, error, act };
 }

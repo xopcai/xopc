@@ -28,6 +28,8 @@ import { acquireEmbeddedSessionRunner, evictEmbeddedSessionRunner } from './sess
 import { createSqliteTranscriptRuntime } from './transcript-runtime.js';
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
 import { projectContextForModel } from '../memory/context-budget.js';
+import { assessContext, recoverContext, ContextRecoveryError } from '../memory/context-recovery.js';
+import { resolveCompactionPolicy, type ResolvedCompactionPolicy } from '../memory/compaction-policy.js';
 import { isContextOverflowError } from '../orchestration/context-overflow.js';
 import {
   buildPromptCacheSnapshot,
@@ -136,41 +138,51 @@ function userMessageToPromptText(message: AgentMessage): string {
 async function maybeRecoverContextOverflow(params: {
   agent: Agent;
   model: Model<Api>;
-  sessionKey: string;
+  conversationId: string;
   transcriptRuntime: NonNullable<RunXopcEmbeddedTurnParams['transcriptRuntime']>;
   abortSignal?: AbortSignal;
   onEvent?: RunXopcEmbeddedTurnParams['onEvent'];
+  policy: ResolvedCompactionPolicy;
 }): Promise<boolean> {
   const errorMessage = getAssistantTurnErrorMessage(params.agent);
   if (!errorMessage || !isContextOverflowError(errorMessage)) return false;
 
   const messages = stripTrailingErrorAssistantMessages(params.agent.state.messages);
   log.warn(
-    { sessionKey: params.sessionKey, errorMessage, messageCount: messages.length },
+    { conversationId: params.conversationId, errorMessage, messageCount: messages.length },
     'Provider rejected the context window; compacting and retrying the same turn',
   );
   params.onEvent?.({ type: 'compaction', status: 'started' });
 
-  const result = await params.transcriptRuntime.compact(
-    messages,
-    params.model,
-    'Preserve the current pending user request verbatim and retain every fact needed to answer it.',
-    true,
-    { signal: params.abortSignal },
-  );
-  if (!result.compacted) {
-    throw new Error(`Context overflow recovery could not find a safe compaction range: ${errorMessage}`);
-  }
-
-  params.agent.state.messages = await params.transcriptRuntime.loadMessages();
-  params.abortSignal?.throwIfAborted();
-  params.onEvent?.({
-    type: 'compaction',
-    status: 'completed',
-    tokensBefore: result.tokensBefore,
-    tokensAfter: result.tokensAfter,
-    summary: result.summary.length > 200 ? `${result.summary.slice(0, 200)}…` : result.summary,
+  const summaryModel = params.policy.model
+    ? (await import('../../providers/index.js')).resolveModel(params.policy.model) as Model<Api>
+    : params.model;
+  const recovered = await recoverContext({
+    conversationId: params.conversationId,
+    transcript: params.transcriptRuntime,
+    policy: params.policy,
+    budget: {
+      contextWindow: params.model.contextWindow ?? 128_000,
+      systemPrompt: params.agent.state.systemPrompt,
+      tools: params.agent.state.tools,
+      reserveTokens: params.policy.reserveTokens,
+      triggerThreshold: params.policy.triggerThreshold,
+      minToolResultKeepChars: params.policy.minToolResultKeepChars,
+    },
+    summaryModel,
+    fallbackModels: summaryModel === params.model ? [] : [params.model],
+    signal: params.abortSignal,
+    providerRejected: true,
+    preserveLastUser: true,
+  }).catch((error: unknown) => {
+    params.onEvent?.({ type: 'compaction', status: 'skipped' });
+    throw error;
   });
+  params.agent.state.messages = stripTrailingErrorAssistantMessages(recovered.messages);
+  params.abortSignal?.throwIfAborted();
+  params.onEvent?.({ type: 'compaction', status: 'completed',
+    tokensBefore: recovered.result?.tokensBefore, tokensAfter: recovered.result?.tokensAfter,
+    summary: recovered.result?.summary.slice(0, 200) });
   await params.agent.continue();
   await params.agent.waitForIdle();
   return true;
@@ -178,7 +190,7 @@ async function maybeRecoverContextOverflow(params: {
 
 export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Promise<RunXopcEmbeddedTurnResult> {
   const {
-    sessionKey,
+    conversationId,
     runId,
     userMessage,
     model,
@@ -193,9 +205,10 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
   const timeoutMs = params.timeoutMs || resolveAgentTurnTimeoutMs();
   const resolvedModel = requireEmbeddedModel(model, params.modelRef);
   const promptCachePolicy = resolvePromptCachePolicy(params.promptCachePolicy);
+  const compactionPolicy = params.compactionPolicy ?? resolveCompactionPolicy();
   const transcriptRuntime = params.transcriptRuntime ?? (
     sessionStore
-      ? await createSqliteTranscriptRuntime({ sessionKey, sessionStore })
+      ? await createSqliteTranscriptRuntime({ conversationId, sessionStore })
       : undefined
   );
   if (!transcriptRuntime) {
@@ -209,15 +222,15 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
 
   try {
     runLease = acquireEmbeddedRunLease({
-      sessionKey,
-      sessionId: transcriptRuntime.sessionId,
+      conversationId,
+      transcriptId: transcriptRuntime.transcriptId,
       runId,
     });
     const instructions = await RepositoryInstructions.open(workspaceDir);
     const rootInstructions = await instructions.load('.', true);
     runner = await acquireEmbeddedSessionRunner({
       runtimeId: transcriptRuntime.runtimeId,
-      sessionId: transcriptRuntime.sessionId,
+      transcriptId: transcriptRuntime.transcriptId,
       workspaceDir,
       model: resolvedModel,
       modelRef: params.modelRef,
@@ -236,6 +249,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       await session.abort();
       return { ok: false, errorMessage: 'aborted' };
     }
+    session.agent.state.messages = stripTrailingErrorAssistantMessages(await transcriptRuntime.loadMessages());
     runner.piSm.setActiveTurnId?.(runId);
 
     const streamFnWithXopcExtensions = wrapStreamFnForXopcExtensions(
@@ -260,8 +274,10 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
         contextWindow: streamModel.contextWindow ?? 128_000,
         systemPrompt: effectiveContext.systemPrompt,
         tools: effectiveContext.tools,
+        reserveTokens: compactionPolicy.reserveTokens,
+        minToolResultKeepChars: compactionPolicy.minToolResultKeepChars,
         canCompact: false,
-        reason: isPromptCacheExpired(sessionKey, streamModel, promptCachePolicy)
+        reason: isPromptCacheExpired(conversationId, streamModel, promptCachePolicy)
           ? 'cache_expired'
           : 'normal',
       });
@@ -272,7 +288,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
         };
         log.warn(
           {
-            sessionKey,
+            conversationId,
             runId,
             prunedToolResults: projection.prunedToolResults,
             prunedImages: projection.prunedImages,
@@ -283,17 +299,30 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
         );
       }
 
+      const assessed = assessContext({
+        messages: effectiveContext.messages as AgentMessage[],
+        contextWindow: streamModel.contextWindow ?? 128_000,
+        systemPrompt: effectiveContext.systemPrompt, tools: effectiveContext.tools,
+        reserveTokens: compactionPolicy.reserveTokens,
+        minToolResultKeepChars: compactionPolicy.minToolResultKeepChars,
+      }, compactionPolicy.maxActiveTranscriptBytes);
+      if (!assessed.fits) {
+        throw new ContextRecoveryError('unrecoverable',
+          `Context budget exceeded before provider request (${assessed.evaluation.estimatedTokens}/${assessed.evaluation.hardLimitTokens} tokens)`);
+      }
+      effectiveContext = { ...effectiveContext, messages: assessed.messages as typeof effectiveContext.messages };
+
       const promptCacheSnapshot = buildPromptCacheSnapshot({
         model: streamModel,
         systemPrompt: effectiveContext.systemPrompt,
         tools: effectiveContext.tools,
         reasoning: options?.reasoning,
       });
-      const promptCacheChanges = observePromptCacheSnapshot(sessionKey, promptCacheSnapshot);
+      const promptCacheChanges = observePromptCacheSnapshot(conversationId, promptCacheSnapshot);
 
       log.debug(
         {
-          sessionKey,
+          conversationId,
           runId,
           reusedRunner: reused,
           modelRef: `${streamModel.provider}/${streamModel.id}`,
@@ -330,7 +359,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     if (checkpoint?.type === 'custom' && (params.resumeLastUserMessage || lastStart > lastSummary)) {
       verification.restore(checkpoint.data, params.resumeLastUserMessage === true && lastSummary >= lastStart);
     }
-    runner.piSm.appendCustomEntry('coding_run_started', { runId, workspace: workspaceDir, required: params.verifyChanges ?? sessionKey.startsWith('agent:coder:'), ...await verification.summary() });
+    runner.piSm.appendCustomEntry('coding_run_started', { runId, workspace: workspaceDir, required: params.verifyChanges ?? false, ...await verification.summary() });
     let policyStopped = false;
     let connectionStopped = false;
     let clarificationStopped = false;
@@ -351,8 +380,8 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       return decision;
     };
     session.agent.afterToolCall = async (context) => {
-      connectionStopped ||= isConnectionSuspended(sessionKey, runId);
-      clarificationStopped ||= isClarificationSuspended(sessionKey, runId);
+      connectionStopped ||= isConnectionSuspended(conversationId, runId);
+      clarificationStopped ||= isClarificationSuspended(conversationId, runId);
       const scoped = context.toolCall.name === 'read_file' ? await instructions.forTool(context.toolCall.name, context.args) : '';
       const checked = await verification.afterTool(context);
       if (scoped) checked.result.content.unshift({ type: 'text', text: scoped });
@@ -366,10 +395,10 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
 
     unsubscribe = subscribeEmbeddedSessionEvents(session, (event) => {
       if (event.type === 'message_end' && event.message.role === 'assistant') {
-        recordPromptCacheTouch(sessionKey, resolvedModel, event.message.usage);
+        recordPromptCacheTouch(conversationId, resolvedModel, event.message.usage);
       }
       if (event.type === 'tool_execution_end') {
-        markTurnToolResult(sessionKey, runId, event.toolName);
+        markTurnToolResult(conversationId, runId, event.toolName);
       }
       onEvent?.({ ...event, runId });
     }, params.onAgentEvent);
@@ -383,8 +412,8 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       await runAgentTurnWithTimeout(
         session.agent,
         async () => {
-          const connectionResume = getConnectionResumeInput(sessionKey, runId);
-          const clarificationResume = getClarificationResumeInput(sessionKey, runId);
+          const connectionResume = getConnectionResumeInput(conversationId, runId);
+          const clarificationResume = getClarificationResumeInput(conversationId, runId);
           if (connectionResume) {
             await session.sendCustomMessage({ customType: 'connection_resume', content: connectionResume.content, display: false }, { triggerTurn: true });
           } else if (clarificationResume) {
@@ -397,25 +426,26 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
             await session.prompt(text, images.length > 0 ? { images } : undefined);
           }
           await session.agent.waitForIdle();
-          clarificationStopped ||= isClarificationSuspended(sessionKey, runId);
+          clarificationStopped ||= isClarificationSuspended(conversationId, runId);
           if (connectionStopped || clarificationStopped) return;
           await maybeRetryTurnAfterTransientLlmFailure(session.agent, {
-            sessionKey,
+            conversationId,
             log,
             signal: runAbortSignal,
           });
           await maybeRecoverContextOverflow({
             agent: session.agent,
             model: resolvedModel,
-            sessionKey,
+            conversationId,
             transcriptRuntime,
+            policy: compactionPolicy,
             abortSignal: runAbortSignal,
             onEvent,
           });
           // One bounded continuation closes accidental early completion without
           // forcing impossible checks or bypassing user cancellation and budgets.
           const pending = await verification.pendingContext();
-          if ((params.verifyChanges ?? sessionKey.startsWith('agent:coder:')) && pending && !policyStopped && !runAbortSignal.aborted
+          if ((params.verifyChanges ?? false) && pending && !policyStopped && !runAbortSignal.aborted
             && !isAssistantTurnFailed(session.agent) && !isAssistantTurnAborted(session.agent)) {
             await session.sendCustomMessage({
               customType: 'coding_verification', content: pending, display: false,
@@ -426,9 +456,9 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
         timeoutMs,
       );
 
-      if (connectionStopped) runner.piSm.appendCustomEntry('connection_required', { runId, sessionKey });
-      if (clarificationStopped) runner.piSm.appendCustomEntry('clarification_required', { runId, sessionKey });
-      runner.piSm.appendCustomEntry('coding_verification', { runId, workspace: workspaceDir, required: params.verifyChanges ?? sessionKey.startsWith('agent:coder:'), ...await verification.summary() });
+      if (connectionStopped) runner.piSm.appendCustomEntry('connection_required', { runId, conversationId });
+      if (clarificationStopped) runner.piSm.appendCustomEntry('clarification_required', { runId, conversationId });
+      runner.piSm.appendCustomEntry('coding_verification', { runId, workspace: workspaceDir, required: params.verifyChanges ?? false, ...await verification.summary() });
 
       if (runAbortSignal.aborted) {
         return { ok: false, errorMessage: 'aborted' };
@@ -464,13 +494,13 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
   } catch (err) {
     if (err instanceof EmbeddedRunConflictError) {
       const em = err.message;
-      log.warn({ sessionKey, runId, activeRunId: err.activeRunId }, `Embedded run rejected: ${em}`);
+      log.warn({ conversationId, runId, activeRunId: err.activeRunId }, `Embedded run rejected: ${em}`);
       onEvent?.({ type: 'error', content: em, runId });
       return { ok: false, retryable: false, errorMessage: em };
     }
     quarantineRunner = isAgentTurnUnsettledError(err);
     const em = err instanceof Error ? err.message : String(err);
-    log.error({ err, sessionKey, runId }, `Embedded run failed: ${em}`);
+    log.error({ err, conversationId, runId }, `Embedded run failed: ${em}`);
     onEvent?.({ type: 'error', content: em, runId });
     return { ok: false, errorMessage: em };
   } finally {

@@ -1,3 +1,10 @@
+import { requireXopcDatabase as openFixtureDatabase } from '../../../storage/sqlite/connection.js';
+import { ensureSessionRecord as ensureFixtureConversation } from '../../../storage/sqlite/session-repository.js';
+function seedConversationFixtures(): void {
+  openFixtureDatabase();
+  ensureFixtureConversation("6d9217fe-77c7-411d-8cc9-92aabe81a2d0", '', {"agentId":"main","sourceChannel":"main","sourceChatId":"","sessionType":"chat","routing":{"agentId":"main","source":"main","accountId":"default","peerKind":"direct","peerId":""}});
+  ensureFixtureConversation("8dcb9403-0300-4c1e-8c5b-3f7d71f46360", '', {"agentId":"main","sourceChannel":"cron","sourceChatId":"nightly","sessionType":"cron","routing":{"agentId":"main","source":"cron","accountId":"default","peerKind":"direct","peerId":"nightly"}});
+}
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -71,6 +78,7 @@ describe('compaction ledger promotion', () => {
   });
 
   it('stages every ledger item but promotes only trusted durable kinds', () => {
+    seedConversationFixtures();
     const sources: TranscriptSourceEntry[] = [
       source('user-clean', 1, { role: 'user', content: 'Use SQLite.', turnId: 'turn-clean', timestamp: 1 } as never),
       source('assistant-clean', 2, { role: 'assistant', content: [{ type: 'text', text: 'Decision recorded.' }], turnId: 'turn-clean' } as never),
@@ -79,8 +87,8 @@ describe('compaction ledger promotion', () => {
       source('assistant-tool', 5, { role: 'assistant', content: [{ type: 'text', text: 'Constraint found.' }], turnId: 'turn-tool' } as never),
     ];
     const result = promoteCompactionLedger({
-      sessionKey: 'agent:main:main',
-      sessionId: 'session-1',
+      conversationId: "6d9217fe-77c7-411d-8cc9-92aabe81a2d0",
+      transcriptId: 'session-1',
       sourceAgentId: 'main',
       workspaceId: stateDir,
       handover: handover(),
@@ -107,9 +115,10 @@ describe('compaction ledger promotion', () => {
   });
 
   it('does not promote clean ledger items from automation sessions', () => {
+    seedConversationFixtures();
     const interactive = promoteCompactionLedger({
-      sessionKey: 'agent:main:main',
-      sessionId: 'session-interactive',
+      conversationId: "6d9217fe-77c7-411d-8cc9-92aabe81a2d0",
+      transcriptId: 'session-interactive',
       sourceAgentId: 'main',
       workspaceId: stateDir,
       handover: handover(),
@@ -120,8 +129,8 @@ describe('compaction ledger promotion', () => {
       writePolicy: 'allow',
     });
     const result = promoteCompactionLedger({
-      sessionKey: 'agent:main:cron:nightly',
-      sessionId: 'session-cron',
+      conversationId: "8dcb9403-0300-4c1e-8c5b-3f7d71f46360",
+      transcriptId: 'session-cron',
       sourceAgentId: 'main',
       workspaceId: stateDir,
       handover: handover(),
@@ -136,8 +145,9 @@ describe('compaction ledger promotion', () => {
   });
 
   it('stages durable knowledge for confirmation and performs no writes when denied', () => {
+    seedConversationFixtures();
     const input = {
-      sessionKey: 'agent:main:main',
+      conversationId: "6d9217fe-77c7-411d-8cc9-92aabe81a2d0",
       sourceAgentId: 'main',
       workspaceId: stateDir,
       handover: handover(),
@@ -148,14 +158,14 @@ describe('compaction ledger promotion', () => {
     };
     const confirmed = promoteCompactionLedger({
       ...input,
-      sessionId: 'session-confirm',
+      transcriptId: 'session-confirm',
       writePolicy: 'confirm',
     });
     expect(getKnowledgeItem(confirmed.durableRecordIds[0]!)?.status).toBe('candidate');
 
     const denied = promoteCompactionLedger({
       ...input,
-      sessionId: 'session-deny',
+      transcriptId: 'session-deny',
       writePolicy: 'deny',
     });
     expect(denied).toEqual({

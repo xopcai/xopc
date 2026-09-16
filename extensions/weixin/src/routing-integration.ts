@@ -7,7 +7,7 @@ export type WeixinRoutingContext = {
 };
 
 /** Resolve a direct-message session key through the shared channel binding rules. */
-export function generateWeixinSessionKeyWithRouting(
+export function generateWeixinConversationIdWithRouting(
   context: WeixinRoutingContext,
   config: Config,
 ): string {
@@ -17,5 +17,5 @@ export function generateWeixinSessionKeyWithRouting(
     accountId: context.accountId,
     peerKind: 'dm',
     peerId: context.senderId,
-  }).sessionKey;
+  }).conversationId;
 }

@@ -23,7 +23,7 @@ describe('delegated email follow-up', () => {
     vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-09-13T08:00:00Z'));
     dir = mkdtempSync(join(tmpdir(), 'xopc-mail-follow-up-'));
     resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(dir, 'xopc.db') });
-    ensureSessionRecord('chat:test', dir);
+    ensureSessionRecord('1921ff79-c8b9-418b-a2a8-e95a4742d4f1', dir, { agentId: "main" });
     for (const id of ['mail', 'other']) {
       upsertConnectorConnection({ id, connectorId: 'gmail', provider: 'composio', principalId: 'local-owner', providerConnectionId: `test-${id}`, identity: {}, status: 'active', isDefault: true, metadata: {} });
       upsertConnectorSyncPolicy({ accountId: `account:${id}`, scanEnabled: true, proactiveEnabled: true });
@@ -57,10 +57,10 @@ describe('delegated email follow-up', () => {
     expect(overview.scenes).toEqual([expect.objectContaining({ kind: 'communication_follow_up', status: 'prepared', title: 'Confirm review', card: expect.objectContaining({ id: first.id }) })]);
     const edited = performCardAction(first.id, 'workspace', { actionId: 'edit_artifact', expectedRevision: first.revision, idempotencyKey: 'edit-mail-draft', artifact: { ...first.artifact!, content: 'Hello, which date works for you?' } });
     expect(edited.artifact?.content).toContain('which date');
-    expect(continueMailFollowUp('workspace', follow.id, 'chat:test').connectionId).toBe('mail');
-    expect(getCard(first.id, 'workspace').communication?.sessionKey).toBe('chat:test');
-    getSqliteDatabase().prepare("DELETE FROM sessions WHERE session_key = 'chat:test'").run();
-    expect(getCard(first.id, 'workspace').communication?.sessionKey).toBeNull();
+    expect(continueMailFollowUp('workspace', follow.id, '1921ff79-c8b9-418b-a2a8-e95a4742d4f1').connectionId).toBe('mail');
+    expect(getCard(first.id, 'workspace').communication?.conversationId).toBe('1921ff79-c8b9-418b-a2a8-e95a4742d4f1');
+    getSqliteDatabase().prepare("DELETE FROM sessions WHERE conversation_id = '1921ff79-c8b9-418b-a2a8-e95a4742d4f1'").run();
+    expect(getCard(first.id, 'workspace').communication?.conversationId).toBeNull();
     expect(scanMailFollowUps(events)).toBe(0);
     vi.setSystemTime(new Date('2026-09-13T09:00:00Z')); email('sent', ['SENT']);
     expect(getCard(first.id, 'workspace').status).toBe('expired');
@@ -117,7 +117,7 @@ describe('delegated email follow-up', () => {
     expect(() => startMailFollowUp('foreign', input)).toThrow(/Authorize/);
     const paused = updateMailFollowUp('workspace', follow.id, { expectedRevision: 1, status: 'paused' });
     expect(getCard(card.id, 'workspace').status).toBe('expired');
-    expect(() => continueMailFollowUp('workspace', follow.id, 'chat:test')).toThrow(/Resume/);
+    expect(() => continueMailFollowUp('workspace', follow.id, '1921ff79-c8b9-418b-a2a8-e95a4742d4f1')).toThrow(/Resume/);
     expect(() => updateMailFollowUp('workspace', follow.id, { expectedRevision: 1, status: 'watching' })).toThrow(/changed/);
     expect(() => updateMailFollowUp('foreign', follow.id, { expectedRevision: paused.revision, status: 'watching' })).toThrow(/not found/);
     updateMailFollowUp('workspace', follow.id, { expectedRevision: paused.revision, status: 'completed' });

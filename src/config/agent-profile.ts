@@ -5,7 +5,7 @@ import {
 } from '../agent-config/index.js';
 import { normalizeAgentId, resolveAgentWorkspaceDir } from '../agent/agent-scope.js';
 import { agentExists, getDefaultAgentId } from '../routing/resolve-route.js';
-import { parseSessionKey } from '../routing/session-key.js';
+import { getConversationRouting } from '../routing/session-key.js';
 import type { Config } from './schema.js';
 
 export { resolveAgentWorkspaceDir } from '../agent/agent-scope.js';
@@ -33,21 +33,20 @@ function findAgent(config: Config, agentId: string) {
   return config.agents.list.find((agent) => agent.enabled !== false && normalizeAgentId(agent.id) === id);
 }
 
-export function extractProfileAgentId(sessionKey: string | undefined | null, config: Config): string {
-  const parsed = parseSessionKey(sessionKey ?? '');
-  if (!parsed) return getDefaultAgentId(config);
-  const id = parsed.agentId;
-  if (id === 'subagent' || id.startsWith('subagent:') || !agentExists(id, config)) {
-    return getDefaultAgentId(config);
+export function extractProfileAgentId(conversationId: string | undefined | null, config: Config): string {
+  if (!conversationId) return getDefaultAgentId(config);
+  const routing = getConversationRouting(conversationId);
+  if (!routing || !agentExists(routing.agentId, config)) {
+    throw new Error(`Conversation agent is unavailable: ${conversationId}`);
   }
-  return id.toLowerCase();
+  return routing.agentId;
 }
 
 export function resolveEffectiveAgentConfigForAgent(
   config: Config,
   agentId: string,
 ): ResolveEffectiveAgentConfigResult {
-  const agent = findAgent(config, agentId) ?? findAgent(config, getDefaultAgentId(config));
+  const agent = findAgent(config, agentId);
   if (!agent) throw new Error(`No enabled agent found for "${agentId}"`);
   return resolveEffectiveAgentConfig({
     agent,
@@ -58,9 +57,9 @@ export function resolveEffectiveAgentConfigForAgent(
 
 export function resolveEffectiveAgentConfigForSession(
   config: Config,
-  sessionKey: string | undefined | null,
+  conversationId: string | undefined | null,
 ): ResolveEffectiveAgentConfigResult {
-  return resolveEffectiveAgentConfigForAgent(config, extractProfileAgentId(sessionKey, config));
+  return resolveEffectiveAgentConfigForAgent(config, extractProfileAgentId(conversationId, config));
 }
 
 export function resolveEffectiveAgentProfile(config: Config, agentId: string): EffectiveAgentProfile {
@@ -89,7 +88,7 @@ export function resolveEffectiveAgentProfile(config: Config, agentId: string): E
 
 export function resolveEffectiveAgentProfileForSession(
   config: Config,
-  sessionKey: string | undefined | null,
+  conversationId: string | undefined | null,
 ): EffectiveAgentProfile {
-  return resolveEffectiveAgentProfile(config, extractProfileAgentId(sessionKey, config));
+  return resolveEffectiveAgentProfile(config, extractProfileAgentId(conversationId, config));
 }

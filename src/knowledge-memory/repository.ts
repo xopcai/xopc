@@ -31,7 +31,7 @@ type KnowledgeRow = {
   review_at: number | null;
   origin_class: KnowledgeOriginClass;
   source_agent_id: string | null;
-  source_session_id: string | null;
+  source_conversation_id: string | null;
   source_turn_id: string | null;
   derived_from_recalled_context: number;
   source_json: string;
@@ -55,7 +55,7 @@ export interface WriteKnowledgeInput {
   reviewAt?: number;
   originClass: KnowledgeOriginClass;
   sourceAgentId?: string;
-  sourceSessionId?: string;
+  sourceConversationId?: string;
   sourceTurnId?: string;
   derivedFromRecalledContext?: boolean;
   source?: Record<string, unknown>;
@@ -81,7 +81,7 @@ function fromRow(row: KnowledgeRow): KnowledgeItem {
     ...(row.review_at === null ? {} : { reviewAt: row.review_at }),
     originClass: row.origin_class,
     ...(row.source_agent_id ? { sourceAgentId: row.source_agent_id } : {}),
-    ...(row.source_session_id ? { sourceSessionId: row.source_session_id } : {}),
+    ...(row.source_conversation_id ? { sourceConversationId: row.source_conversation_id } : {}),
     ...(row.source_turn_id ? { sourceTurnId: row.source_turn_id } : {}),
     derivedFromRecalledContext: row.derived_from_recalled_context === 1,
     source: JSON.parse(row.source_json),
@@ -118,13 +118,13 @@ export function writeKnowledgeItem(input: WriteKnowledgeInput): { item: Knowledg
     if (existing) {
       db.prepare(`UPDATE knowledge_items SET kind = ?, content = ?, record_class = ?, status = ?, confidence = ?,
         importance = ?, valid_from = ?, valid_to = ?, expires_at = ?, review_at = ?,
-        origin_class = ?, source_agent_id = ?, source_session_id = ?, source_turn_id = ?,
+        origin_class = ?, source_agent_id = ?, source_conversation_id = ?, source_turn_id = ?,
         derived_from_recalled_context = ?, source_json = ?, updated_at = ? WHERE knowledge_id = ?`)
         .run(input.kind, input.content.trim(), input.recordClass ?? 'memory',
           input.status ?? (input.originClass === 'owner' ? 'active' : 'candidate'),
           input.confidence, input.importance, input.validFrom ?? null, input.validTo ?? null,
           input.expiresAt ?? null, input.reviewAt ?? null, input.originClass, input.sourceAgentId ?? null,
-          input.sourceSessionId ?? null, input.sourceTurnId ?? null, input.derivedFromRecalledContext ? 1 : 0,
+          input.sourceConversationId ?? null, input.sourceTurnId ?? null, input.derivedFromRecalledContext ? 1 : 0,
           JSON.stringify(input.source ?? {}), now, existing.knowledge_id);
       db.prepare('DELETE FROM knowledge_items_fts WHERE knowledge_id = ?').run(existing.knowledge_id);
       db.prepare('INSERT INTO knowledge_items_fts(content, knowledge_id) VALUES (?, ?)')
@@ -140,7 +140,7 @@ export function writeKnowledgeItem(input: WriteKnowledgeInput): { item: Knowledg
     db.prepare(`INSERT INTO knowledge_items (
       knowledge_id, principal_id, kind, scope_type, scope_id, content, canonical_key, record_class,
       status, confidence, importance, valid_from, valid_to, expires_at, review_at,
-      origin_class, source_agent_id, source_session_id, source_turn_id,
+      origin_class, source_agent_id, source_conversation_id, source_turn_id,
       derived_from_recalled_context, source_json, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(id, principalId, input.kind, input.scope.type, input.scope.id ?? null, input.content.trim(),
@@ -148,7 +148,7 @@ export function writeKnowledgeItem(input: WriteKnowledgeInput): { item: Knowledg
         input.status ?? (input.originClass === 'owner' ? 'active' : 'candidate'),
         input.confidence, input.importance, input.validFrom ?? null, input.validTo ?? null,
         input.expiresAt ?? null, input.reviewAt ?? null, input.originClass,
-        input.sourceAgentId ?? null, input.sourceSessionId ?? null, input.sourceTurnId ?? null,
+        input.sourceAgentId ?? null, input.sourceConversationId ?? null, input.sourceTurnId ?? null,
         input.derivedFromRecalledContext ? 1 : 0, JSON.stringify(input.source ?? {}), now, now);
     db.prepare('INSERT INTO knowledge_items_fts(content, knowledge_id) VALUES (?, ?)')
       .run(input.content.trim(), id);
@@ -201,7 +201,7 @@ export function setKnowledgeStatus(id: string, status: KnowledgeStatus, now = Da
 function visibilityClause(context: KnowledgeVisibilityContext): { sql: string; values: string[] } {
   const parts = ["k.scope_type = 'global'", "(k.scope_type = 'agent' AND k.scope_id = ?)",
     "(k.scope_type = 'workspace' AND k.scope_id = ?)", "(k.scope_type = 'session' AND k.scope_id = ?)"];
-  const values = [context.agentId ?? '', context.workspaceId ?? '', context.sessionId ?? ''];
+  const values = [context.agentId ?? '', context.workspaceId ?? '', context.conversationId ?? ''];
   if (context.projectId) {
     parts.push("(k.scope_type = 'project' AND k.scope_id = ?)");
     values.push(context.projectId);

@@ -21,10 +21,10 @@ import {
   writeCachedSessionHistoryHead,
 } from '../session-history-cache';
 
-function page(sessionKey: string, text: string): SessionMessagePage {
+function page(conversationId: string, text: string): SessionMessagePage {
   return {
     session: {
-      key: sessionKey,
+      key: conversationId,
       messages: [{ role: 'user', content: text }],
     },
     pagination: {
@@ -50,20 +50,20 @@ describe('session history head cache', () => {
     } finally { clock.mockRestore(); }
   });
   it('keeps the same session key isolated between gateways', () => {
-    const sessionKey = 'agent:main:webchat:default:direct:shared';
-    writeCachedSessionHistoryHead('gateway-a', sessionKey, page(sessionKey, 'from a'));
-    writeCachedSessionHistoryHead('gateway-b', sessionKey, page(sessionKey, 'from b'));
+    const conversationId = 'agent:main:webchat:default:direct:shared';
+    writeCachedSessionHistoryHead('gateway-a', conversationId, page(conversationId, 'from a'));
+    writeCachedSessionHistoryHead('gateway-b', conversationId, page(conversationId, 'from b'));
 
-    expect(readCachedSessionHistoryHead('gateway-a', sessionKey)?.session.messages[0]?.content)
+    expect(readCachedSessionHistoryHead('gateway-a', conversationId)?.session.messages[0]?.content)
       .toBe('from a');
-    expect(readCachedSessionHistoryHead('gateway-b', sessionKey)?.session.messages[0]?.content)
+    expect(readCachedSessionHistoryHead('gateway-b', conversationId)?.session.messages[0]?.content)
       .toBe('from b');
   });
 
   it('does not expose cached history without a gateway identity', () => {
-    const sessionKey = 'agent:main:webchat:default:direct:shared';
-    writeCachedSessionHistoryHead('gateway-a', sessionKey, page(sessionKey, 'cached'));
+    const conversationId = 'agent:main:webchat:default:direct:shared';
+    writeCachedSessionHistoryHead('gateway-a', conversationId, page(conversationId, 'cached'));
 
-    expect(readCachedSessionHistoryHead(null, sessionKey)).toBeNull();
+    expect(readCachedSessionHistoryHead(null, conversationId)).toBeNull();
   });
 });

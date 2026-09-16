@@ -90,7 +90,7 @@ export const ChatComposer = memo(function ChatComposer({
   disabled,
   sending,
   streaming,
-  sessionKey,
+  conversationId,
   composerContext,
   contextRefs,
   setContextRefs,
@@ -130,8 +130,8 @@ export const ChatComposer = memo(function ChatComposer({
   disabled: boolean;
   sending: boolean;
   streaming: boolean;
-  sessionKey: string | null;
-  composerContext?: Omit<ComposerContextBarProps, 'sessionKey' | 'disabled'> & { disabled?: boolean };
+  conversationId: string | null;
+  composerContext?: Omit<ComposerContextBarProps, 'conversationId' | 'disabled'> & { disabled?: boolean };
   contextRefs: ComposerContextRef[];
   setContextRefs: Dispatch<SetStateAction<ComposerContextRef[]>>;
   welcomeDraftSeed?: { id: number; text: string } | null;
@@ -176,7 +176,7 @@ export const ChatComposer = memo(function ChatComposer({
 }) {
   const call = useVoiceCall();
   const preparingCallRef = useRef(false);
-  disabled = disabled || call.sessionKey === sessionKey && call.active;
+  disabled = disabled || call.conversationId === conversationId && call.active;
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -198,12 +198,12 @@ export const ChatComposer = memo(function ChatComposer({
   thinkingLevelRef.current = thinkingLevel;
 
   useEffect(() => {
-    if (!sessionKey || workspaceTrustDismissedFor === sessionKey) {
+    if (!conversationId || workspaceTrustDismissedFor === conversationId) {
       setWorkspaceTrustPrompt(null);
       return;
     }
     let cancelled = false;
-    void getWorkspaceTrust(sessionKey)
+    void getWorkspaceTrust(conversationId)
       .then((state) => {
         if (cancelled) return;
         setWorkspaceTrustPrompt(state.required && !state.trusted && state.decision === null ? state : null);
@@ -214,12 +214,12 @@ export const ChatComposer = memo(function ChatComposer({
     return () => {
       cancelled = true;
     };
-  }, [sessionKey, workspaceTrustDismissedFor]);
+  }, [conversationId, workspaceTrustDismissedFor]);
 
   const trustWorkspace = useCallback(() => {
-    if (!sessionKey || workspaceTrustSaving) return;
+    if (!conversationId || workspaceTrustSaving) return;
     setWorkspaceTrustSaving(true);
-    void setWorkspaceTrust(sessionKey, true)
+    void setWorkspaceTrust(conversationId, true)
       .then(() => {
         setWorkspaceTrustPrompt(null);
       })
@@ -231,7 +231,7 @@ export const ChatComposer = memo(function ChatComposer({
         );
       })
       .finally(() => setWorkspaceTrustSaving(false));
-  }, [m.chat.commandPalette, sessionKey, workspaceTrustSaving]);
+  }, [m.chat.commandPalette, conversationId, workspaceTrustSaving]);
 
   const att = useComposerAttachments({ chat: m.chat });
   const onExternalTextReplace = useCallback((detail?: FillChatComposerDetail) => {
@@ -267,19 +267,19 @@ export const ChatComposer = memo(function ChatComposer({
         reason,
       });
       if (item.availability?.status === 'agent-denied' && window.confirm(`${message}\n\n${m.chat.commandPalette.skillAddToAllowlistConfirm}`)) {
-        void addSkillToAgentAllowlist(currentAgentId, item.name, sessionKey).catch((err) => {
+        void addSkillToAgentAllowlist(currentAgentId, item.name, conversationId).catch((err) => {
           window.alert(err instanceof Error ? err.message : String(err));
         });
         return;
       }
       window.alert(message);
     },
-    [currentAgentId, m.chat.commandPalette, sessionKey],
+    [currentAgentId, m.chat.commandPalette, conversationId],
   );
 
   const editor = useComposerEditor({
     disabled,
-    autoFocusKey: sessionKey,
+    autoFocusKey: conversationId,
     welcomeDraftSeed,
     onExternalTextReplace,
     shouldSyncSelectionRef,
@@ -299,11 +299,11 @@ export const ChatComposer = memo(function ChatComposer({
     );
     if (!file) return;
     void att.processFiles([file]).then(() => editor.editorRef.current?.focus());
-  }, [attachmentHandoffId, att.processFiles, editor.editorRef, sessionKey, setSearchParams]);
+  }, [attachmentHandoffId, att.processFiles, editor.editorRef, conversationId, setSearchParams]);
 
   const { onUserTextCommitted, onWireInputClearWalk, tryInputHistoryArrow } =
     useComposerInputHistoryWalk({
-      sessionKey,
+      conversationId,
       editorRef: editor.editorRef,
       valueRef: editor.valueRef,
       resetEditor: editor.resetEditor,
@@ -329,7 +329,7 @@ export const ChatComposer = memo(function ChatComposer({
   );
 
   const pickers = useComposerPickers({
-    sessionKey,
+    conversationId,
     editorValue: editor.value,
     editorCursor: editor.cursor,
     isComposing: editor.isComposing,
@@ -565,8 +565,8 @@ export const ChatComposer = memo(function ChatComposer({
 
   return (
     <div className="relative flex min-h-0 w-full flex-col">
-      {sessionKey ? <ConnectionActionBar key={sessionKey} sessionKey={sessionKey} /> : null}
-      {composerContext ? <ComposerContextBar {...composerContext} sessionKey={sessionKey} disabled={(composerContext.disabled ?? disabled) || sending || streaming} /> : null}
+      {conversationId ? <ConnectionActionBar key={conversationId} conversationId={conversationId} /> : null}
+      {composerContext ? <ComposerContextBar {...composerContext} conversationId={conversationId} disabled={(composerContext.disabled ?? disabled) || sending || streaming} /> : null}
     <ComposerFrame
       dragging={att.isDragging}
       onDragOver={(e) => {
@@ -591,7 +591,7 @@ export const ChatComposer = memo(function ChatComposer({
         if (!workspaceFile) return;
         try {
           const blob = await fetchWorkspaceFileBlob(workspaceFile.path, {
-            sessionKey: workspaceFile.sessionKey,
+            conversationId: workspaceFile.conversationId,
             agentId: workspaceFile.agentId,
             projectId: workspaceFile.projectId,
           });
@@ -679,7 +679,7 @@ export const ChatComposer = memo(function ChatComposer({
             loading={pickers.atPicker.loading}
             query={pickers.atPicker.query}
             noResults={pickers.atPicker.error ?? m.chat.atMention.noResults}
-            sessionKey={sessionKey}
+            conversationId={conversationId}
             recentLabel={m.chat.atMention.recentBadge}
             filesLabel={m.chat.atMention.files}
             notesLabel={m.chat.atMention.notes}
@@ -793,13 +793,13 @@ export const ChatComposer = memo(function ChatComposer({
           onThinkingChange={onThinkingChange}
           voiceActive={voice.voiceActive}
           onStartVoiceInput={voice.startVoiceInput}
-          voiceConversationEnabled={Boolean(sessionKey || prepareVoiceSession) && !runBusyState}
+          voiceConversationEnabled={Boolean(conversationId || prepareVoiceSession) && !runBusyState}
           onStartVoiceConversation={() => {
             if (preparingCallRef.current) return;
-            if (sessionKey) { call.open({ sessionKey, name: voiceAgentName || currentAgentId || 'xopc', taskId: voiceTaskId }); return; }
+            if (conversationId) { call.open({ conversationId, name: voiceAgentName || currentAgentId || 'xopc', taskId: voiceTaskId }); return; }
             if (!prepareVoiceSession) return;
             preparingCallRef.current = true;
-            void prepareVoiceSession().then((key) => call.open({ sessionKey: key, name: voiceAgentName || currentAgentId || 'xopc', taskId: voiceTaskId }))
+            void prepareVoiceSession().then((key) => call.open({ conversationId: key, name: voiceAgentName || currentAgentId || 'xopc', taskId: voiceTaskId }))
               .catch((error: unknown) => showComposerNotification('error', error instanceof Error ? error.message : m.chat.callFailed))
               .finally(() => { preparingCallRef.current = false; });
           }}
@@ -814,7 +814,7 @@ export const ChatComposer = memo(function ChatComposer({
       </div>
       <ReviewLauncherDialog
         open={reviewOpen}
-        sessionKey={sessionKey}
+        conversationId={conversationId}
         disabled={disabled || runBusyState}
         chat={m.chat}
         onClose={() => setReviewOpen(false)}
@@ -833,7 +833,7 @@ export const ChatComposer = memo(function ChatComposer({
         onConfirm={trustWorkspace}
         onCancel={() => {
           setWorkspaceTrustPrompt(null);
-          setWorkspaceTrustDismissedFor(sessionKey);
+          setWorkspaceTrustDismissedFor(conversationId);
         }}
       />
     </ComposerFrame>

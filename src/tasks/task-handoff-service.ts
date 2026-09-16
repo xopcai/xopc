@@ -1,6 +1,6 @@
 import { listAgentEntries, normalizeAgentId } from '../agent/agent-scope.js';
 import type { Config } from '../config/schema.js';
-import { buildSessionKey, sanitizeSegment } from '../routing/session-key.js';
+import { resolveConversationId, sanitizeSegment } from '../routing/session-key.js';
 import type { SessionIndex } from '../session/index.js';
 import { createLogger } from '../utils/logger.js';
 
@@ -21,7 +21,7 @@ export interface TaskHandoffResult {
   snapshot: TaskHandoffSnapshot;
   fromAgentId?: string;
   toAgentId: string;
-  activeSessionKey: string;
+  activeConversationId: string;
   assignmentEpoch: number;
 }
 
@@ -31,7 +31,7 @@ export class TaskHandoffService {
   constructor(private readonly deps: {
     getConfig: () => Config;
     sessionIndex: SessionIndex;
-    getActiveRunId: (sessionKey: string) => string | undefined;
+    getActiveRunId: (conversationId: string) => string | undefined;
     abortRun: (runId: string) => Promise<unknown>;
   }) {}
 
@@ -74,7 +74,7 @@ export class TaskHandoffService {
       idempotencyKey: input.idempotencyKey,
     });
     if (duplicate) {
-      await this.abortPreviousSession(duplicate.fromSessionKey);
+      await this.abortPreviousSession(duplicate.fromConversationId);
       const state = conversations.requireState(task.id);
       return {
         task,
@@ -82,7 +82,7 @@ export class TaskHandoffService {
         snapshot: duplicate,
         ...(duplicate.fromAgentId ? { fromAgentId: duplicate.fromAgentId } : {}),
         toAgentId,
-        activeSessionKey: duplicate.toSessionKey,
+        activeConversationId: duplicate.toConversationId,
         assignmentEpoch: duplicate.assignmentEpoch,
       };
     }
@@ -94,7 +94,7 @@ export class TaskHandoffService {
 
     const assignmentEpoch = previousState.assignmentEpoch + 1;
     const peerId = sanitizeSegment(`task-${task.id}-assignment-${assignmentEpoch}`);
-    const sessionKey = buildSessionKey({
+    const conversationId = resolveConversationId({
       agentId: toAgentId,
       source: 'webchat',
       accountId: 'default',
@@ -124,7 +124,7 @@ export class TaskHandoffService {
       } : {}),
     };
 
-    await this.deps.sessionIndex.saveMessages(sessionKey, [], { metadata: {
+    await this.deps.sessionIndex.saveMessages(conversationId, [], { metadata: {
       sourceChannel: 'webchat',
       sourceChatId: `default:direct:${peerId}`,
       sessionType: 'chat',
@@ -148,17 +148,17 @@ export class TaskHandoffService {
       completed = conversations.completeHandoff({
         taskId: task.id,
         expectedTaskVersion: input.expectedVersion,
-        toSessionKey: sessionKey,
+        toConversationId: conversationId,
         toAgentId,
         idempotencyKey: input.idempotencyKey,
         payload,
       });
     } catch (error) {
-      await this.deps.sessionIndex.delete(sessionKey);
+      await this.deps.sessionIndex.delete(conversationId);
       throw error;
     }
-    const oldSessionKey = completed.snapshot.fromSessionKey;
-    await this.abortPreviousSession(oldSessionKey);
+    const oldConversationId = completed.snapshot.fromConversationId;
+    await this.abortPreviousSession(oldConversationId);
 
     return {
       task: tasks.require(task.id),
@@ -166,19 +166,19 @@ export class TaskHandoffService {
       snapshot: completed.snapshot,
       ...(completed.snapshot.fromAgentId ? { fromAgentId: completed.snapshot.fromAgentId } : {}),
       toAgentId,
-      activeSessionKey: sessionKey,
+      activeConversationId: conversationId,
       assignmentEpoch: completed.state.assignmentEpoch,
     };
   }
 
-  private async abortPreviousSession(sessionKey: string | undefined): Promise<void> {
-    if (!sessionKey) return;
-    const activeRunId = this.deps.getActiveRunId(sessionKey);
+  private async abortPreviousSession(conversationId: string | undefined): Promise<void> {
+    if (!conversationId) return;
+    const activeRunId = this.deps.getActiveRunId(conversationId);
     if (!activeRunId) return;
     try {
       await this.deps.abortRun(activeRunId);
     } catch (error) {
-      log.warn({ err: error, sessionKey, runId: activeRunId }, 'Previous task executor did not stop cleanly');
+      log.warn({ err: error, conversationId, runId: activeRunId }, 'Previous task executor did not stop cleanly');
     }
   }
 }

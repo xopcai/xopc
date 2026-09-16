@@ -17,7 +17,7 @@ interface VoiceSessionClientOptions {
   signal?: AbortSignal;
   purpose: 'dictation' | 'conversation';
   mode?: VoiceMode;
-  sessionKey?: string;
+  conversationId?: string;
   onEvent: (event: VoiceServerEvent) => void;
   onAudio?: (audio: ArrayBuffer, responseId: string) => void;
   onClose?: (reason: string) => void;
@@ -53,10 +53,10 @@ export class VoiceSessionClient {
     readonly session: CreateVoiceSessionResponse,
   ) {}
 
-  static async preflight(options: Pick<VoiceSessionClientOptions, 'purpose' | 'mode' | 'sessionKey' | 'signal'>): Promise<void> {
+  static async preflight(options: Pick<VoiceSessionClientOptions, 'purpose' | 'mode' | 'conversationId' | 'signal'>): Promise<void> {
     await fetchJson(apiUrl('/api/voice/realtime/preflight'), {
       method: 'POST', signal: options.signal,
-      body: JSON.stringify({ purpose: options.purpose, mode: options.mode, sessionKey: options.sessionKey,
+      body: JSON.stringify({ purpose: options.purpose, mode: options.mode, conversationId: options.conversationId,
         supportedProtocolVersions: [VOICE_REALTIME_PROTOCOL_VERSION], mediaPreferences: ['websocket-pcm'] }),
     });
   }
@@ -71,7 +71,7 @@ export class VoiceSessionClient {
         body: JSON.stringify({
           purpose: options.purpose,
           ...(options.mode ? { mode: options.mode } : {}),
-          ...(options.sessionKey ? { sessionKey: options.sessionKey } : {}),
+          ...(options.conversationId ? { conversationId: options.conversationId } : {}),
           supportedProtocolVersions: [VOICE_REALTIME_PROTOCOL_VERSION],
           mediaPreferences: ['websocket-pcm'],
         }),

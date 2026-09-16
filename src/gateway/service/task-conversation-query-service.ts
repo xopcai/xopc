@@ -14,7 +14,7 @@ export class TaskConversationQueryService {
   async getMessagePage(taskId: string, options: { limit: number; offset: number; before?: number }) {
     const links = this.#executionSessions(taskId);
     if (links.length === 0) return null;
-    const probes = await Promise.all(links.map((link) => this.sessions.getMessagePage(link.sessionKey, { limit: 1 })));
+    const probes = await Promise.all(links.map((link) => this.sessions.getMessagePage(link.conversationId, { limit: 1 })));
     if (probes.some((page) => !page)) return null;
     const pages = probes as MessagePage[];
     const total = pages.reduce((sum, page) => sum + page.pagination.total, 0);
@@ -27,7 +27,7 @@ export class TaskConversationQueryService {
       const localStart = Math.max(0, start - cursor);
       const localEnd = Math.min(sessionTotal, end - cursor);
       if (localStart < localEnd) {
-        const page = await this.sessions.getMessagePage(links[index]!.sessionKey, {
+        const page = await this.sessions.getMessagePage(links[index]!.conversationId, {
           offset: sessionTotal - localEnd,
           limit: localEnd - localStart,
         });
@@ -59,8 +59,8 @@ export class TaskConversationQueryService {
     let turnOffset = 0;
     for (const [index, link] of links.entries()) {
       const [items, page] = await Promise.all([
-        this.sessions.getTimeline(link.sessionKey),
-        this.sessions.getMessagePage(link.sessionKey, { limit: 1 }),
+        this.sessions.getTimeline(link.conversationId),
+        this.sessions.getMessagePage(link.conversationId, { limit: 1 }),
       ]);
       if (!items || !page) return null;
       if (index > 0) {

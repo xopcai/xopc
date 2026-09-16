@@ -173,17 +173,17 @@ async function runWorkflowFromCommand(ctx: CommandContext, args: string) {
     return { content: `error: ${message}`, success: false };
   }
 
-  const agentId = extractProfileAgentId(ctx.sessionKey, ctx.config);
+  const agentId = extractProfileAgentId(ctx.conversationId, ctx.config);
   const source =
     ctx.source === 'webui' || ctx.channelId === 'webchat'
-      ? ({ kind: 'webui' as const, sessionKey: ctx.sessionKey })
-      : ({ kind: 'chat' as const, sessionKey: ctx.sessionKey });
+      ? ({ kind: 'webui' as const, conversationId: ctx.conversationId })
+      : ({ kind: 'chat' as const, conversationId: ctx.conversationId });
   const result = await ctx.workflowRunApis.startWorkflowRun({
     agentId,
     definitionId: parsed.name,
     goal: parsed.goal,
     input: parsed.input,
-    parentSessionKey: ctx.sessionKey,
+    parentConversationId: ctx.conversationId,
     source,
   });
 
@@ -206,7 +206,7 @@ async function runWorkflowFromCommand(ctx: CommandContext, args: string) {
     `Started workflow **${parsed.name}**.`,
     bulletList([
       { label: 'runId', detail: code(result.runId) },
-      { label: 'sessionKey', detail: code(result.sessionKey) },
+      { label: 'conversationId', detail: code(result.conversationId) },
     ]),
   );
 
@@ -218,8 +218,8 @@ async function runWorkflowFromCommand(ctx: CommandContext, args: string) {
         ok: true,
         definitionId: parsed.name,
         runId: result.runId,
-        sessionKey: result.sessionKey,
-        parentSessionKey: ctx.sessionKey,
+        conversationId: result.conversationId,
+        parentConversationId: ctx.conversationId,
       },
     },
   };

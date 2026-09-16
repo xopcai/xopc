@@ -2,17 +2,17 @@ import { useLayoutEffect, useRef } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
 import {
-  decodeConcreteSessionKey,
-  parseRoutedSessionKey,
-  resolveViewSessionKey,
+  decodeConcreteConversationId,
+  parseRoutedConversationId,
+  resolveViewConversationId,
 } from '@/features/chat/session/chat-session-view';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 
 /** Latest routed session key (safe to read during render; updated synchronously from URL). */
-const routedFocusedSessionKeyRef = { current: null as string | null };
+const routedFocusedConversationIdRef = { current: null as string | null };
 
 /** Last `/chat/:key` before navigating to `/chat/new` (for empty-shell reuse). */
-const lastNonNewSessionKeyCell = { current: null as string | null };
+const lastNonNewConversationIdCell = { current: null as string | null };
 
 export function isForcedNewChatNavigation(state: unknown): boolean {
   return Boolean(
@@ -22,40 +22,40 @@ export function isForcedNewChatNavigation(state: unknown): boolean {
   );
 }
 
-/** URL → focused session key; keeps {@link useChatSessionStore} `focusedSessionKey` in sync. */
-export function useChatSessionRoute(fixedSessionKey?: string) {
+/** URL → focused session key; keeps {@link useChatSessionStore} `focusedConversationId` in sync. */
+export function useChatSessionRoute(fixedConversationId?: string) {
   const location = useLocation();
-  const { sessionKey: sessionKeyParam } = useParams();
+  const { conversationId: conversationIdParam } = useParams();
 
-  const isNewRoute = fixedSessionKey ? false : location.pathname.endsWith('/new');
+  const isNewRoute = fixedConversationId ? false : location.pathname.endsWith('/new');
   const forceNewChat = isNewRoute && isForcedNewChatNavigation(location.state);
-  const decodedKey = fixedSessionKey ?? decodeConcreteSessionKey(isNewRoute, sessionKeyParam);
-  const routedSessionKey = parseRoutedSessionKey(isNewRoute, decodedKey);
-  const viewSessionKey = resolveViewSessionKey(routedSessionKey);
-  const routedFocusedSessionKey = isNewRoute ? null : (decodedKey ?? null);
+  const decodedKey = fixedConversationId ?? decodeConcreteConversationId(isNewRoute, conversationIdParam);
+  const routedConversationId = parseRoutedConversationId(isNewRoute, decodedKey);
+  const viewConversationId = resolveViewConversationId(routedConversationId);
+  const routedFocusedConversationId = isNewRoute ? null : (decodedKey ?? null);
 
-  const routeSessionKeyRef = useRef(routedSessionKey);
-  routeSessionKeyRef.current = routedSessionKey;
-  routedFocusedSessionKeyRef.current = routedFocusedSessionKey;
+  const routeConversationIdRef = useRef(routedConversationId);
+  routeConversationIdRef.current = routedConversationId;
+  routedFocusedConversationIdRef.current = routedFocusedConversationId;
   if (!isNewRoute && decodedKey) {
-    lastNonNewSessionKeyCell.current = decodedKey;
+    lastNonNewConversationIdCell.current = decodedKey;
   }
 
   useLayoutEffect(() => {
-    const current = useChatSessionStore.getState().focusedSessionKey;
-    if (current !== routedFocusedSessionKey) {
-      useChatSessionStore.getState().setFocusedSessionKey(routedFocusedSessionKey);
+    const current = useChatSessionStore.getState().focusedConversationId;
+    if (current !== routedFocusedConversationId) {
+      useChatSessionStore.getState().setFocusedConversationId(routedFocusedConversationId);
     }
-  }, [routedFocusedSessionKey]);
+  }, [routedFocusedConversationId]);
 
   return {
     isNewRoute,
     forceNewChat,
     decodedKey,
-    routedSessionKey,
-    viewSessionKey,
-    routedFocusedSessionKey,
-    routeSessionKeyRef,
+    routedConversationId,
+    viewConversationId,
+    routedFocusedConversationId,
+    routeConversationIdRef,
     locationKey: location.key,
     locationSearch: location.search,
     locationState: location.state,
@@ -63,19 +63,19 @@ export function useChatSessionRoute(fixedSessionKey?: string) {
 }
 
 /** Ref-shaped accessor for the last concrete chat session key (not `/chat/new`). */
-export const lastNonNewSessionKeyRef = {
+export const lastNonNewConversationIdRef = {
   get current(): string | null {
-    return lastNonNewSessionKeyCell.current;
+    return lastNonNewConversationIdCell.current;
   },
 };
 
 /** Ref-shaped accessor for hooks that expect `RefObject<string | null>`. */
-export const focusedSessionKeyRef = {
+export const focusedConversationIdRef = {
   get current(): string | null {
-    return routedFocusedSessionKeyRef.current;
+    return routedFocusedConversationIdRef.current;
   },
   set current(value: string | null) {
-    routedFocusedSessionKeyRef.current = value;
-    useChatSessionStore.getState().setFocusedSessionKey(value);
+    routedFocusedConversationIdRef.current = value;
+    useChatSessionStore.getState().setFocusedConversationId(value);
   },
 };

@@ -33,7 +33,7 @@ describe('agent run stream event bridge', () => {
     cleanups.push(cleanup);
 
     window.dispatchEvent(new CustomEvent('run-started', {
-      detail: { sessionKey: 'agent:main:webchat:test', runId: 'run-1' },
+      detail: { conversationId: 'agent:main:webchat:test', runId: 'run-1' },
     }));
 
     expect(subscribe).toHaveBeenCalledWith(
@@ -97,7 +97,7 @@ describe('agent run stream event bridge', () => {
     });
     cleanups.push(cleanup);
     const event = new CustomEvent('run-started', {
-      detail: { sessionKey: 'agent:main:webchat:test', runId: 'run-1' },
+      detail: { conversationId: 'agent:main:webchat:test', runId: 'run-1' },
     });
 
     window.dispatchEvent(event);
@@ -126,7 +126,7 @@ describe('agent run stream event bridge', () => {
     });
     cleanups.push(cleanup);
     window.dispatchEvent(new CustomEvent('run-started', {
-      detail: { sessionKey: 'agent:main:webchat:test', runId: 'run-thinking' },
+      detail: { conversationId: 'agent:main:webchat:test', runId: 'run-thinking' },
     }));
 
     listener?.onEvent({

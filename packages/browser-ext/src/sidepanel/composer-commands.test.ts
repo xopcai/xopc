@@ -13,7 +13,7 @@ describe('composer command discovery', () => {
     gatewayFetch.mockResolvedValueOnce(new Response(JSON.stringify({ payload: { commands: [{ name: 'new', description: 'New chat' }] } })))
       .mockResolvedValueOnce(new Response(JSON.stringify({ payload: { skills: [{ name: 'review', description: 'Review', availableForCurrentAgent: false }] } })));
     const items = await loadComposerCommands('agent:other:chat');
-    expect(gatewayFetch).toHaveBeenCalledWith('/api/chat/skills?sessionKey=agent%3Aother%3Achat');
+    expect(gatewayFetch).toHaveBeenCalledWith('/api/chat/skills?conversationId=agent%3Aother%3Achat');
     expect(items[0].wire).toBe('/new ');
     expect(items[1]).toMatchObject({ wire: '/skill:review ', disabled: true });
   });

@@ -25,58 +25,58 @@ import type { AgentTurnPolicy } from './orchestration/agent-turn-policy.js';
 export interface AgentInstanceGateway {
   // ── Per-session resolved state ─────────────────────────────────────────
   /**
-   * Effective markdown workspace root for `sessionKey`, honouring any
+   * Effective markdown workspace root for `conversationId`, honouring any
    * `workingDirectoryOverride` previously set via `setSessionWorkspaceOverride`.
    */
-  getResolvedWorkspaceForSession(sessionKey: string): string;
+  getResolvedWorkspaceForSession(conversationId: string): string;
 
   /**
    * Apply (or clear) the per-session workspace override. Passing `null`
    * removes the override so the session falls back to the agent default.
    */
-  setSessionWorkspaceOverride(sessionKey: string, absolutePath: string | null): void;
+  setSessionWorkspaceOverride(conversationId: string, absolutePath: string | null): void;
 
   // ── Per-session runtime mutators ───────────────────────────────────────
-  setThinkingLevel(sessionKey: string, level: ThinkingLevel): void;
-  setModelForSession(sessionKey: string, modelId: string): boolean;
+  setThinkingLevel(conversationId: string, level: ThinkingLevel): void;
+  setModelForSession(conversationId: string, modelId: string): boolean;
 
   // ── Agent instance lifecycle ───────────────────────────────────────────
-  getOrCreateAgent(sessionKey: string): Agent;
-  getAgent(sessionKey: string): Agent | undefined;
-  /** Returns true when an agent instance existed for `sessionKey` and was removed. */
-  removeAgent(sessionKey: string): boolean;
+  getOrCreateAgent(conversationId: string): Agent;
+  getAgent(conversationId: string): Agent | undefined;
+  /** Returns true when an agent instance existed for `conversationId` and was removed. */
+  removeAgent(conversationId: string): boolean;
 
   /** Create isolated policy state for one user-visible agent run. */
-  createAgentTurnPolicy(sessionKey: string): AgentTurnPolicy;
+  createAgentTurnPolicy(conversationId: string): AgentTurnPolicy;
   /** Publish events from the actual embedded runtime to session observers. */
-  emitRuntimeEvent(sessionKey: string, event: AgentEvent): void;
+  emitRuntimeEvent(conversationId: string, event: AgentEvent): void;
 
   // ── Read-through accessors ─────────────────────────────────────────────
   /** Last assistant text from the in-memory agent (empty when no agent / no assistant yet). */
-  getLastAssistantContent(sessionKey: string): string | null;
+  getLastAssistantContent(conversationId: string): string | null;
 
   // ── Turn-time hooks (called by direct-turn helpers + orchestrator) ────
   /** Build the bounded, policy-filtered context used for this model turn. */
   prepareUserTurnContext(
     userMessage: AgentMessage,
-    sessionKey: string,
+    conversationId: string,
     turnId: string,
   ): Promise<import('./context/coordinator.js').ExecutionContextPlan>;
 
   /** Post-turn: capture durable structured user context according to policy. */
-  afterAgentTurn(sessionKey: string, userPlainText: string, turnId: string): Promise<import('../user-model/capture/index.js').UserModelCaptureResult | undefined>;
+  afterAgentTurn(conversationId: string, userPlainText: string, turnId: string): Promise<import('../user-model/capture/index.js').UserModelCaptureResult | undefined>;
 
   /** Bump the per-session "turns since memory review" counter. */
-  beginBackgroundReviewUserTurn(sessionKey: string): void;
+  beginBackgroundReviewUserTurn(conversationId: string): void;
 
   /** Fire-and-forget review (memory + skill nudges) once the main turn finishes. */
-  scheduleBackgroundReviewAfterUserTurn(sessionKey: string): void;
+  scheduleBackgroundReviewAfterUserTurn(conversationId: string): void;
 
   // ── Skill prompt expansion (`/skill:name` shorthand) ──────────────────
   expandSkillUserText(text: string): string;
-  prepareSkillTurn(sessionKey: string, text: string): { text: string; activatedCapabilityNames: string[] };
+  prepareSkillTurn(conversationId: string, text: string): { text: string; activatedCapabilityNames: string[] };
   withSkillCapabilities<T>(
-    sessionKey: string,
+    conversationId: string,
     capabilityNames: readonly string[],
     run: () => Promise<T>,
   ): Promise<T>;

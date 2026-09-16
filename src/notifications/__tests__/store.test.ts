@@ -69,7 +69,7 @@ describe('notification persistence', () => {
       dedupeKey: 'chat.completed:run-1',
       notification: {
         type: 'chat.completed' as const,
-        target: { kind: 'chat' as const, sessionKey: 'session-1' },
+        target: { kind: 'chat' as const, conversationId: 'session-1' },
         priority: 'normal' as const,
         title: { en: 'Response ready', zh: '回答已就绪' },
         payload: { runId: 'run-1' },

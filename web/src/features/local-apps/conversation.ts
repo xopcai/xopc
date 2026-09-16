@@ -10,9 +10,9 @@ export function selectLocalAppCoderSession(sessions: ProjectSession[]): ProjectS
   return sessions.find((session) => sessionAgentId(session) === 'coder') ?? null;
 }
 
-export function localAppConversationUrl(sessionKey: string, draft?: string): string {
+export function localAppConversationUrl(conversationId: string, draft?: string): string {
   const params = new URLSearchParams({ skill: LOCAL_APP_CODER_SKILL });
   const trimmedDraft = draft?.trim();
   if (trimmedDraft) params.set('draft', trimmedDraft);
-  return `/chat/${encodeURIComponent(sessionKey)}?${params.toString()}`;
+  return `/chat/${encodeURIComponent(conversationId)}?${params.toString()}`;
 }

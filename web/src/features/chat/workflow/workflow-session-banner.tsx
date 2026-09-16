@@ -32,7 +32,7 @@ export const WorkflowSessionBanner = memo(function WorkflowSessionBanner({
   onAbortCurrentTurn,
 }: {
   view: WorkflowRunView;
-  sessionKey: string | null;
+  conversationId: string | null;
   onAbortCurrentTurn?: () => void;
 }) {
   const language = useLocaleStore((s) => s.language);

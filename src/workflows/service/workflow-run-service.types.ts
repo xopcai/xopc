@@ -12,7 +12,7 @@ export interface StartWorkflowRunServiceParams {
   agentId: string;
   definitionId: string;
   taskRunId?: string;
-  parentSessionKey?: string;
+  parentConversationId?: string;
   projectId?: string;
   contextRefs?: WorkflowRunContextRef[];
   contextSnapshotId?: string;
@@ -31,7 +31,7 @@ export interface StartWorkflowRunServiceParams {
 export interface StartWorkflowRunServiceResult {
   ok: true;
   runId: string;
-  sessionKey: string;
+  conversationId: string;
 }
 
 export type WorkflowRunServiceErrorCode =

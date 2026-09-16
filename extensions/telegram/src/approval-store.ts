@@ -5,7 +5,7 @@ export type TelegramApprovalStatus = 'pending' | 'approved' | 'denied' | 'expire
 export interface TelegramPendingApproval {
   id: string;
   accountId: string;
-  sessionKey: string;
+  conversationId: string;
   chatId: string;
   toolName: string;
   summary: string;
@@ -20,7 +20,7 @@ const pending = new Map<string, TelegramPendingApproval>();
 
 export function createTelegramPendingApproval(params: {
   accountId: string;
-  sessionKey: string;
+  conversationId: string;
   chatId: string;
   toolName: string;
   summary: string;
@@ -31,7 +31,7 @@ export function createTelegramPendingApproval(params: {
   const entry: TelegramPendingApproval = {
     id,
     accountId: params.accountId,
-    sessionKey: params.sessionKey,
+    conversationId: params.conversationId,
     chatId: params.chatId,
     toolName: params.toolName,
     summary: params.summary,

@@ -58,8 +58,8 @@ export function buildReviewCommand(opts: {
   return appendInstructions('/review --uncommitted', opts.instructions);
 }
 
-export async function fetchReviewContext(sessionKey: string): Promise<ReviewContext> {
-  const params = new URLSearchParams({ sessionKey });
+export async function fetchReviewContext(conversationId: string): Promise<ReviewContext> {
+  const params = new URLSearchParams({ conversationId });
   const res = await apiFetch(apiUrl(`/api/review/context?${params.toString()}`));
   const data = (await res.json().catch(() => ({}))) as {
     ok?: boolean;

@@ -9,7 +9,7 @@ const MAX_TRACKED_TASKS = 256;
 export interface VoiceAgentEvent { type: string; payload?: Record<string, unknown> }
 export interface VoiceAgentTask { taskId: string; runId: string; events: AsyncIterable<VoiceAgentEvent> }
 export interface VoiceAgentBroker {
-  delegate(input: { sessionKey: string; expectedSessionId: string; turnId: string; text: string; signal: AbortSignal }): Promise<VoiceAgentTask>;
+  delegate(input: { conversationId: string; expectedTranscriptId: string; turnId: string; text: string; signal: AbortSignal }): Promise<VoiceAgentTask>;
   cancel(taskId: string): Promise<boolean>;
 }
 
@@ -18,8 +18,8 @@ type SubmitResult =
   | { ok: false; code: string };
 type BrokerDependencies = {
   submit(input: SubmitSessionInput): Promise<SubmitResult>;
-  find(sessionKey: string, clientMessageId: string): SessionInput | undefined;
-  snapshot(sessionKey: string): SessionInputState;
+  find(conversationId: string, clientMessageId: string): SessionInput | undefined;
+  snapshot(conversationId: string): SessionInputState;
   currentSequence(topic: string): number;
   subscribe(topic: string, afterSeq: number, listener: (event: RealtimeEvent) => void): RealtimeSubscriptionHandle;
   cancelRun(runId: string): Promise<void>;
@@ -47,24 +47,24 @@ export class DurableVoiceAgentBroker implements VoiceAgentBroker {
   private readonly runByTask = new Map<string, string>();
   constructor(private readonly deps: BrokerDependencies) {}
 
-  async delegate(input: { sessionKey: string; expectedSessionId: string; turnId: string; text: string; signal: AbortSignal }): Promise<VoiceAgentTask> {
-    const clientMessageId = `voice:${input.expectedSessionId}:${input.turnId}`;
-    const activeRunId = this.deps.snapshot(input.sessionKey).activeRunId;
+  async delegate(input: { conversationId: string; expectedTranscriptId: string; turnId: string; text: string; signal: AbortSignal }): Promise<VoiceAgentTask> {
+    const clientMessageId = `voice:${input.expectedTranscriptId}:${input.turnId}`;
+    const activeRunId = this.deps.snapshot(input.conversationId).activeRunId;
     const activeRunCursor = activeRunId ? this.deps.currentSequence(`run:${activeRunId}`) : 0;
-    const result = await this.deps.submit({ sessionKey: input.sessionKey, expectedSessionId: input.expectedSessionId,
+    const result = await this.deps.submit({ conversationId: input.conversationId, expectedTranscriptId: input.expectedTranscriptId,
       clientMessageId, delivery: activeRunId ? 'steer' : 'next', content: input.text,
       origin: { type: 'channel', channel: 'voice' } });
     if (result.ok === false) throw new Error(`Voice task submission failed: ${result.code}`);
 
     const deadline = Date.now() + RUN_ASSIGNMENT_TIMEOUT_MS;
-    let row = this.deps.find(input.sessionKey, clientMessageId);
+    let row = this.deps.find(input.conversationId, clientMessageId);
     while (!row?.runId && !row?.targetRunId) {
       if (row && ['completed', 'cancelled', 'failed', 'interrupted'].includes(row.status)) {
         throw new Error(row.error ?? `Voice task ended before assignment: ${row.status}`);
       }
       if (Date.now() >= deadline) throw new Error('Voice task run assignment timed out');
       await sleep(RUN_ASSIGNMENT_POLL_MS, input.signal);
-      row = this.deps.find(input.sessionKey, clientMessageId);
+      row = this.deps.find(input.conversationId, clientMessageId);
     }
     const runId = row.runId ?? row.targetRunId!;
     this.runByTask.set(row.id, runId);

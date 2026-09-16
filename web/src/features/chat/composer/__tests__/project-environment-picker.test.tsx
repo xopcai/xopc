@@ -36,9 +36,9 @@ describe('composer project environment selection and first send', () => {
   };
   const attachments = [{ type: 'file', name: 'draft.txt', data: 'keep' }];
   const refs = [{ kind: 'note' as const, sourceId: 'draft', title: 'Draft note', expectedVersion: 'v1' }];
-  type Props = { prepared?: ProjectSessionPreparation | null; sessionKey?: string | null; ready?: boolean; sender?: typeof onSend };
-  function Harness({ prepared = preparation, sessionKey = null, ready = false, sender = onSend }: Props) {
-    selection = useProjectSessionComposer({ preparation: prepared, sessionKey, ready, onSend: sender });
+  type Props = { prepared?: ProjectSessionPreparation | null; conversationId?: string | null; ready?: boolean; sender?: typeof onSend };
+  function Harness({ prepared = preparation, conversationId = null, ready = false, sender = onSend }: Props) {
+    selection = useProjectSessionComposer({ preparation: prepared, conversationId, ready, onSend: sender });
     return <>
       {prepared ? <ProjectEnvironmentPicker selection={selection} /> : null}
       <button disabled={selection.busy} onClick={() => void selection.prepareSession()}>Terminal</button>
@@ -59,7 +59,7 @@ describe('composer project environment selection and first send', () => {
     commit.mockReset();
     vi.mocked(fetchJson).mockReset().mockResolvedValue({ options: { localAvailable: true } });
     localStorage.clear();
-    useGatewayStore.setState({ sessionKey: undefined });
+    useGatewayStore.setState({ conversationId: undefined });
     useLocaleStore.setState({ language: 'en' });
     cache = new Map();
     container = document.createElement('div');
@@ -95,9 +95,9 @@ describe('composer project environment selection and first send', () => {
     expect(commit).not.toHaveBeenCalled();
     await act(async () => finish('created'));
     const currentSender = vi.fn();
-    await render({ prepared: null, sessionKey: 'created', sender: currentSender });
+    await render({ prepared: null, conversationId: 'created', sender: currentSender });
     expect(currentSender).not.toHaveBeenCalled();
-    await render({ prepared: null, sessionKey: 'created', ready: true, sender: currentSender });
+    await render({ prepared: null, conversationId: 'created', ready: true, sender: currentSender });
     expect(currentSender).toHaveBeenCalledExactlyOnceWith('Keep draft', attachments, undefined, refs);
     expect(onSend).not.toHaveBeenCalled();
     expect(commit).toHaveBeenCalledOnce();
@@ -113,7 +113,7 @@ describe('composer project environment selection and first send', () => {
     expect(onSend).not.toHaveBeenCalled();
 
     await act(async () => finish('created'));
-    await render({ prepared: null, sessionKey: 'created', ready: true });
+    await render({ prepared: null, conversationId: 'created', ready: true });
     expect(onSend).not.toHaveBeenCalled();
     expect(commit).not.toHaveBeenCalled();
   });
@@ -128,7 +128,7 @@ describe('composer project environment selection and first send', () => {
     expect(commit).not.toHaveBeenCalled();
     expect(submit().disabled).toBe(false);
     await act(async () => submit().click());
-    await render({ prepared: null, sessionKey: 'created', ready: true });
+    await render({ prepared: null, conversationId: 'created', ready: true });
     expect(create.mock.calls).toEqual([['managed_worktree'], ['managed_worktree']]);
     expect(onSend).toHaveBeenCalledOnce();
     expect(commit).toHaveBeenCalledOnce();
@@ -182,7 +182,7 @@ describe('composer project environment selection and first send', () => {
     create.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
     await render();
     await act(async () => submit().click());
-    await render({ prepared: null, sessionKey: 'another', ready: true });
+    await render({ prepared: null, conversationId: 'another', ready: true });
     await act(async () => finish('created'));
     expect(onSend).not.toHaveBeenCalled();
     expect(commit).not.toHaveBeenCalled();
@@ -191,8 +191,8 @@ describe('composer project environment selection and first send', () => {
   it('cancels pending sends when gateway credentials change', async () => {
     await render();
     await act(async () => submit().click());
-    await act(async () => useGatewayStore.setState({ sessionKey: 'different-gateway' }));
-    await render({ prepared: null, sessionKey: 'created', ready: true });
+    await act(async () => useGatewayStore.setState({ conversationId: 'different-gateway' }));
+    await render({ prepared: null, conversationId: 'created', ready: true });
     expect(onSend).not.toHaveBeenCalled();
     expect(commit).not.toHaveBeenCalled();
   });
@@ -213,12 +213,12 @@ describe('composer project environment selection and first send', () => {
     expect(executionModePreferenceForProject(readNewSessionPreferences(), 'code')).toBe('managed_worktree');
 
     const nextPreparation = { ...preparation };
-    await render({ prepared: nextPreparation, sessionKey: null });
+    await render({ prepared: nextPreparation, conversationId: null });
     expect(select().textContent).toBe('New local worktree');
   });
 
   it('leaves an existing session submission and explicit thinking level unchanged', async () => {
-    await render({ prepared: null, sessionKey: 'existing', ready: true });
+    await render({ prepared: null, conversationId: 'existing', ready: true });
     await act(async () => submit().click());
     expect(create).not.toHaveBeenCalled();
     expect(onSend).toHaveBeenCalledExactlyOnceWith('Keep draft', attachments, 'off', refs);

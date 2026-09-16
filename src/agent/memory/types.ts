@@ -63,7 +63,7 @@ export interface MemoryEvidence {
   evidenceId?: string;
   sourceItemId?: string;
   relation?: MemoryEvidenceRelation;
-  sessionKey?: string;
+  conversationId?: string;
   turnId?: string;
   toolCallId?: string;
   sourceText?: string;
@@ -74,7 +74,7 @@ export interface MemoryEvidence {
 export interface MemoryScope {
   userId: string;
   workspaceId?: string;
-  sessionKey?: string;
+  conversationId?: string;
   projectId?: string;
 }
 

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -24,7 +25,7 @@ describe('session discovery across stored history', () => {
     rmSync(dir, { recursive: true, force: true });
   });
   function seed(id: string, metadata: SessionMetadataSeed) {
-    return ensureSessionRecord(`agent:main:chat:default:dm:${id}`, dir, { name: id, sourceChannel: 'webchat', hiddenFromSessionList: false, ...metadata });
+    return ensureSessionRecord(randomUUID(), dir, { agentId: metadata.routing?.agentId ?? 'main', name: id, sourceChannel: 'webchat', hiddenFromSessionList: false, ...metadata });
   }
 
   it('uses identical creation identities for icons and SQL filters, including automation workflows', () => {
@@ -73,8 +74,8 @@ describe('session discovery across stored history', () => {
     const db = getSqliteDatabase();
     for (let i = 0; i < 510; i++) {
       const row = seed(`unrelated-title-${i}`, { sourceChannel: i === 509 ? 'cli' : 'webchat' });
-      db.prepare('INSERT INTO transcript_fts(content, session_key, session_id, entry_id) VALUES (?, ?, ?, ?)')
-        .run('needlecontent', row.key, row.sessionId!, `entry-${i}`);
+      db.prepare('INSERT INTO transcript_fts(content, conversation_id, transcript_id, entry_id) VALUES (?, ?, ?, ?)')
+        .run('needlecontent', row.key, row.transcriptId!, `entry-${i}`);
     }
     expect(listSessionMetadata({ search: 'needlecontent' }).total).toBe(510);
     expect(listSessionMetadata({ search: 'needlecontent', sources: ['terminal'] }).items.map((r) => r.name)).toEqual(['unrelated-title-509']);

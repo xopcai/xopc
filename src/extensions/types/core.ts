@@ -80,7 +80,7 @@ export interface ExtensionRuntime {
    * Queue another durable webchat input after the current run unlocks.
    * Only injected in the Gateway process.
    */
-  scheduleWebchatContinuation?: (sessionKey: string, message: string) => void;
+  scheduleWebchatContinuation?: (conversationId: string, message: string) => void;
   /** Set or clear a TUI transcript label, when running inside an interactive TUI host. */
   setLabel?: (entryId: string, label: string | undefined) => void;
   /** Send a user-visible message through the active interactive host. */
@@ -340,7 +340,7 @@ export type ExtensionCommandHandler = (
 ) => Promise<ExtensionCommandResult | void> | ExtensionCommandResult | void;
 
 export interface ExtensionCommandContext {
-  sessionKey: string;
+  conversationId: string;
   source: string;
   isGroup: boolean;
   config: Config;

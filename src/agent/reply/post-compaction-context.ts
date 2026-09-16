@@ -137,7 +137,7 @@ export function readPostCompactionContextFromAgentsMd(
 
 export function readPostCompactionContext(params: {
   cfg?: Config;
-  sessionKey?: string;
+  conversationId?: string;
   agentId?: string;
   nowMs?: number;
   userTimezone?: string;
@@ -149,9 +149,9 @@ export function readPostCompactionContext(params: {
     return null;
   }
   let agentId = params.agentId;
-  if (!agentId && params.sessionKey) {
+  if (!agentId && params.conversationId) {
     try {
-      agentId = resolveEffectiveAgentProfileForSession(cfg, params.sessionKey).agentId;
+      agentId = resolveEffectiveAgentProfileForSession(cfg, params.conversationId).agentId;
     } catch {
       return null;
     }

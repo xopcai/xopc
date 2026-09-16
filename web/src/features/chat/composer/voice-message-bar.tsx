@@ -24,16 +24,16 @@ type Props = {
   att: MessageAttachment;
   align?: 'start' | 'end' | 'center';
   embedded?: boolean;
-  sessionKey?: string | null;
+  conversationId?: string | null;
 };
 
 export function VoiceMessageBar(props: Props) {
-  const { att, sessionKey } = props;
+  const { att, conversationId } = props;
   // Reset playback and release the previous source when a message attachment changes.
-  return <VoiceClip key={JSON.stringify([att.uri, att.content, att.data, att.taskId, sessionKey])} {...props} />;
+  return <VoiceClip key={JSON.stringify([att.uri, att.content, att.data, att.taskId, conversationId])} {...props} />;
 }
 
-function VoiceClip({ att, align = 'start', embedded = false, sessionKey }: Props) {
+function VoiceClip({ att, align = 'start', embedded = false, conversationId }: Props) {
   const language = useLocaleStore((state) => state.language);
   const zh = language === 'zh';
   const m = messages(language).chat;
@@ -63,7 +63,7 @@ function VoiceClip({ att, align = 'start', embedded = false, sessionKey }: Props
           return;
         }
         if (!att.uri) throw new Error('Missing audio source');
-        const response = await apiFetch(apiUrl(mediaUriToReadUrl(att.uri, sessionKey, att.taskId)), { signal: controller.signal });
+        const response = await apiFetch(apiUrl(mediaUriToReadUrl(att.uri, conversationId, att.taskId)), { signal: controller.signal });
         if (!response.ok) throw new Error('Audio unavailable');
         const blob = await response.blob();
         if (controller.signal.aborted) return;
@@ -75,7 +75,7 @@ function VoiceClip({ att, align = 'start', embedded = false, sessionKey }: Props
     };
     void load();
     return () => { controller.abort(); if (url) URL.revokeObjectURL(url); };
-  }, [raw, att.mimeType, att.uri, att.taskId, sessionKey, attempt]);
+  }, [raw, att.mimeType, att.uri, att.taskId, conversationId, attempt]);
 
   useEffect(() => {
     const audio = audioRef.current;

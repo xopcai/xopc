@@ -133,7 +133,7 @@ export function ConnectorsPage() {
   const m = messages(language);
   const cs = m.connectorsSettings;
   const mcp = m.mcpSettings;
-  const token = useGatewayStore((state) => state.sessionKey);
+  const token = useGatewayStore((state) => state.conversationId);
   const hasToken = Boolean(token);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();

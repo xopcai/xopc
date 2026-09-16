@@ -19,16 +19,16 @@ describe('session context panel', () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
   let cache: Map<string, State<SessionContextSummary>>;
-  const summary = (sessionKey: string): SessionContextSummary => ({
-    sessionKey, observedAt: new Date().toISOString(), work: { project: { id: sessionKey, title: `Project ${sessionKey}` } },
+  const summary = (conversationId: string): SessionContextSummary => ({
+    conversationId, observedAt: new Date().toISOString(), work: { project: { id: conversationId, title: `Project ${conversationId}` } },
     sources: [{ kind: 'note', id: 'note-a', title: 'Source note', origins: [{ kind: 'session', version: 'v1' }] }],
     sourcesHasMore: false, unavailableSections: [],
     environment: { kind: 'managed_worktree', rootPath: '/tmp/worktree', available: true, detached: true, headSha: '1234567890' },
   });
   const render = async (props: Partial<SessionContextPanelProps> = {}) => {
-    const merged = { sessionKey: 'one', ...props };
+    const merged = { conversationId: 'one', ...props };
     await act(async () => root.render(<SWRConfig value={{ provider: () => cache, dedupingInterval: 0 }}><MemoryRouter>
-      <SessionContextPanel key={merged.sessionKey ?? 'new'} {...merged} />
+      <SessionContextPanel key={merged.conversationId ?? 'new'} {...merged} />
     </MemoryRouter></SWRConfig>));
   };
   const toggle = async () => { await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Session context"]')!.click()); };
@@ -39,7 +39,7 @@ describe('session context panel', () => {
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
-    useGatewayStore.setState({ sessionKey: undefined });
+    useGatewayStore.setState({ conversationId: undefined });
     vi.mocked(fetchJson).mockReset().mockImplementation(async (url) => ({ summary: summary(String(url).includes('/two/') ? 'two' : 'one') }));
   });
   afterEach(() => { act(() => root.unmount()); container.remove(); vi.restoreAllMocks(); });
@@ -51,7 +51,7 @@ describe('session context panel', () => {
   });
 
   it('shows draft context before session creation without requesting a missing session', async () => {
-    await render({ sessionKey: null, project: { id: 'draft', name: 'Draft project' }, draftRefs: [{ kind: 'note', sourceId: 'draft-note', title: 'Draft source', expectedVersion: 'v2' }] });
+    await render({ conversationId: null, project: { id: 'draft', name: 'Draft project' }, draftRefs: [{ kind: 'note', sourceId: 'draft-note', title: 'Draft source', expectedVersion: 'v2' }] });
     await toggle();
     expect(fetchJson).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain('Draft project');
@@ -72,7 +72,7 @@ describe('session context panel', () => {
   it('closes on session switch and never shows the previous session while loading', async () => {
     await render(); await toggle();
     vi.mocked(fetchJson).mockImplementation(() => new Promise(() => {}));
-    await render({ sessionKey: 'two' });
+    await render({ conversationId: 'two' });
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(document.body.textContent).not.toContain('Project one');
     await toggle();
@@ -83,7 +83,7 @@ describe('session context panel', () => {
   it('does not reuse a summary after gateway credentials change', async () => {
     await render(); await toggle();
     vi.mocked(fetchJson).mockImplementation(() => new Promise(() => {}));
-    await act(async () => useGatewayStore.setState({ sessionKey: 'another-device' }));
+    await act(async () => useGatewayStore.setState({ conversationId: 'another-device' }));
     expect(document.body.textContent).not.toContain('Project one');
   });
 
@@ -121,7 +121,7 @@ describe('session context panel', () => {
   });
 
   it('keeps new-project context closed and never displays an environment picker in the header', async () => {
-    await render({ sessionKey: null, project: { id: 'code', name: 'Code', workspaceRoot: '/repo' } });
+    await render({ conversationId: null, project: { id: 'code', name: 'Code', workspaceRoot: '/repo' } });
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     await toggle();
     expect(document.body.textContent).toContain('Code');

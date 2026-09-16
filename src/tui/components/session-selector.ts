@@ -19,9 +19,9 @@ import { SearchableSelectList } from './searchable-select-list.js';
 import { fuzzyMatchLower, normalizeLowercaseStringOrEmpty } from './fuzzy-filter.js';
 
 export type SessionSelectorCallbacks = {
-  onResume: (sessionKey: string) => void;
-  onRename: (sessionKey: string, name: string) => Promise<{ ok: boolean; error?: string }>;
-  onDelete: (sessionKey: string) => Promise<{ ok: boolean; error?: string }>;
+  onResume: (conversationId: string) => void;
+  onRename: (conversationId: string, name: string) => Promise<{ ok: boolean; error?: string }>;
+  onDelete: (conversationId: string) => Promise<{ ok: boolean; error?: string }>;
   onCancel: () => void;
   requestRender: () => void;
 };
@@ -177,7 +177,7 @@ export class SessionSelector implements Component, Focusable {
     private readonly callbacks: SessionSelectorCallbacks,
     private readonly keybindings?: KeybindingsManager,
     private readonly currentCwd?: string,
-    private readonly currentSessionKey?: string,
+    private readonly currentConversationId?: string,
   ) {
     this.sessions = sessions;
     this.list = new SearchableSelectList(
@@ -290,7 +290,7 @@ export class SessionSelector implements Component, Focusable {
   private triggerDeleteForSelectedSession(): void {
     const item = this.list.getSelectedItem();
     if (!item) return;
-    if (item.value === this.currentSessionKey) {
+    if (item.value === this.currentConversationId) {
       this.pendingDeleteKey = null;
       this.setFooterHint('Cannot delete the active session');
       this.callbacks.requestRender();
@@ -367,14 +367,14 @@ export class SessionSelector implements Component, Focusable {
 
     if (this.pendingDeleteKey) {
       if (this.matchesAction(keyData, 'tui.select.confirm', ['enter'])) {
-        const sessionKey = this.pendingDeleteKey;
+        const conversationId = this.pendingDeleteKey;
         this.pendingDeleteKey = null;
-        void this.callbacks.onDelete(sessionKey).then((result) => {
+        void this.callbacks.onDelete(conversationId).then((result) => {
           if (result.ok) {
-            this.sessions = this.sessions.filter((s) => s.key !== sessionKey);
+            this.sessions = this.sessions.filter((s) => s.key !== conversationId);
             this.refreshList();
           }
-          this.setFooterHint(result.ok ? `Deleted ${sessionKey}` : (result.error ?? 'Delete failed'));
+          this.setFooterHint(result.ok ? `Deleted ${conversationId}` : (result.error ?? 'Delete failed'));
           this.callbacks.requestRender();
         });
         return;

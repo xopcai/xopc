@@ -1,3 +1,6 @@
+import { conversationIdSchema } from '@xopcai/gateway-contract';
+import { ConversationAlreadyExistsError, createConversation } from '../../../storage/sqlite/conversation-repository.js';
+import { deleteSessionRecord } from '../../../storage/sqlite/session-repository.js';
 import { patchChatModelConfig } from './chat-model-config.js';
 import { randomUUID } from 'node:crypto';
 
@@ -7,7 +10,6 @@ import { SessionDiscoveryQuerySchema } from '@xopcai/gateway-contract';
 import { getSessionContextSummary } from '../../session-context-summary.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 
-import { buildSessionKey } from '../../../routing/session-key.js';
 import { resolveProjectAgentId } from '../../../projects/index.js';
 import type { SessionMetadataSeed } from '../../../storage/sqlite/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -121,7 +123,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     const inboxOffset = parseOffset(c.req.query('inboxOffset'));
     const staleDays = parsePositiveInt(c.req.query('staleDays'), DEFAULT_SIDEBAR_STALE_DAYS, 3650);
     const updatedAfter = Date.now() - staleDays * 24 * 60 * 60 * 1000;
-    const includeSessionKey = c.req.query('includeSessionKey')?.trim() || undefined;
+    const includeConversationId = c.req.query('includeConversationId')?.trim() || undefined;
 
     const projects = service.projects.listWithSidebarSessions({
       status: 'active',
@@ -129,7 +131,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       offset: projectOffset,
       updatedAfter,
       includePinned: true,
-      includeSessionKey,
+      includeConversationId,
     });
     const projectItems = await Promise.all(
       projects.items.map(async (project) => {
@@ -139,7 +141,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
           offset: 0,
           updatedAfter,
           includePinned: true,
-          includeSessionKey,
+          includeConversationId,
           sortBy: 'updatedAt',
           sortOrder: 'desc',
         });
@@ -157,7 +159,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       offset: inboxOffset,
       updatedAfter,
       includePinned: true,
-      includeSessionKey,
+      includeConversationId,
       sortBy: 'updatedAt',
       sortOrder: 'desc',
     });
@@ -178,6 +180,9 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
   // POST /api/sessions - Create a new session. Empty-shell reuse is a client concern.
   authenticated.post('/api/sessions', async (c) => {
     const body = await c.req.json().catch(() => ({}));
+    if (body.conversationId !== undefined && !conversationIdSchema.safeParse(body.conversationId).success) {
+      return c.json({ ok: false, error: 'conversationId must be a UUID' }, 400);
+    }
     const channel = typeof body.channel === 'string' && body.channel.trim() ? body.channel.trim() : 'webchat';
     const projectId = typeof body.projectId === 'string' && body.projectId.trim() ? body.projectId.trim() : undefined;
     const routingCfg = service.currentConfig;
@@ -192,34 +197,44 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     if (requestedExecutionMode && !project) {
       return c.json({ ok: false, error: 'An execution mode requires a project' }, 400);
     }
-    const agentId = resolveProjectAgentId({
-      config: routingCfg,
-      projects: service.projects,
-      explicitAgentId: typeof body.agentId === 'string' ? body.agentId : undefined,
-      projectId,
-    });
+    let agentId: string;
+    try {
+      agentId = resolveProjectAgentId({
+        config: routingCfg,
+        projects: service.projects,
+        explicitAgentId: typeof body.agentId === 'string' ? body.agentId : undefined,
+        projectId,
+      });
+    } catch (error) {
+      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
+    }
     const requestedChatId = typeof body.chat_id === 'string' && body.chat_id.trim()
       ? body.chat_id.trim()
       : undefined;
     const chatId = requestedChatId ?? `chat_${randomUUID()}`;
-    const sessionKey = buildSessionKey({
-      agentId,
-      source: channel,
-      accountId: 'default',
-      peerKind: 'direct',
-      peerId: chatId,
-    });
+    const metadata = {
+      agentId, ...buildDirectSessionMetadata({ agentId, source: channel, accountId: 'default', peerId: chatId }),
+      ...(channel === 'tui' ? { hiddenFromSessionList: true, customData: { genericNewChatShell: true } } : {}),
+    };
+    let conversationId: string;
+    try {
+      conversationId = createConversation(metadata, '', body.conversationId).key;
+    } catch (error) {
+      if (error instanceof ConversationAlreadyExistsError) return c.json({ ok: false, error: error.message }, 409);
+      throw error;
+    }
 
     let environment;
     if (project && (project.workspaceRoot?.trim() || requestedExecutionMode)) {
       try {
         environment = await environments.attach({
-          sessionKey,
+          conversationId,
           project,
           mode: requestedExecutionMode,
           baseRef: typeof body.baseRef === 'string' ? body.baseRef : undefined,
         });
       } catch (error) {
+        deleteSessionRecord(conversationId);
         return c.json({
           ok: false,
           code: 'execution_environment_unavailable',
@@ -229,21 +244,16 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     }
 
     try {
-      await service.sessionIndexInstance.saveMessages(sessionKey, [], {
-        metadata: buildDirectSessionMetadata({
-          agentId,
-          source: channel,
-          accountId: 'default',
-          peerId: chatId,
-        }),
+      await service.sessionIndexInstance.saveMessages(conversationId, [], {
+        metadata,
       });
 
       if (projectId) {
-        service.projects.attachSession(sessionKey, projectId);
+        service.projects.attachSession(conversationId, projectId);
       }
     } catch (error) {
-      await service.sessions.delete(sessionKey).catch(() => undefined);
-      await environments.release(sessionKey).catch(() => undefined);
+      await service.sessions.delete(conversationId).catch(() => undefined);
+      await environments.release(conversationId).catch(() => undefined);
       throw error;
     }
     const rawInitialConfig = body.initialAgentConfig && typeof body.initialAgentConfig === 'object'
@@ -261,11 +271,11 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       ...(body.temporary === true ? { userContextMode: 'temporary' as const } : {}),
     };
     if (channel === 'webchat' && model) {
-      const result = await service.sessions.initializeChatModel(sessionKey, model, thinkingLevel);
+      const result = await service.sessions.initializeChatModel(conversationId, model, thinkingLevel);
       if (!result.ok) {
-        await service.sessions.delete(sessionKey).catch(() => undefined);
-        await environments.release(sessionKey).catch((error) => {
-          log.warn({ err: error, sessionKey }, 'Invalid new session model and execution environment cleanup failed');
+        await service.sessions.delete(conversationId).catch(() => undefined);
+        await environments.release(conversationId).catch((error) => {
+          log.warn({ err: error, conversationId }, 'Invalid new session model and execution environment cleanup failed');
         });
         return c.json({ ok: false, error: result.error }, 400);
       }
@@ -273,21 +283,21 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       delete initialAgentConfig.thinkingLevel;
     }
     if (Object.keys(initialAgentConfig).length > 0) {
-      const result = await service.sessions.patchAgentConfig(sessionKey, initialAgentConfig);
+      const result = await service.sessions.patchAgentConfig(conversationId, initialAgentConfig);
       if (!result.ok) {
-        await service.sessions.delete(sessionKey).catch(() => undefined);
-        await environments.release(sessionKey).catch((error) => {
-          log.warn({ err: error, sessionKey }, 'Invalid new session config and execution environment cleanup failed');
+        await service.sessions.delete(conversationId).catch(() => undefined);
+        await environments.release(conversationId).catch((error) => {
+          log.warn({ err: error, conversationId }, 'Invalid new session config and execution environment cleanup failed');
         });
         return c.json({ ok: false, error: result.error }, 400);
       }
     }
     if (body.createdSurface === 'browser_extension') {
-      await service.sessions.patch(sessionKey, { customData: { createdSurface: 'browser_extension' } });
+      await service.sessions.patch(conversationId, { customData: { createdSurface: 'browser_extension' } });
     }
-    const session = await service.sessions.getSession(sessionKey);
-    const agentConfig = channel === 'webchat' ? await service.sessions.getFixedAgentConfig(sessionKey) : undefined;
-    return c.json({ session, agentConfig, ...(environment ? { environment } : {}) }, 201);
+    const session = await service.sessions.getSession(conversationId);
+    const agentConfig = channel === 'webchat' ? await service.sessions.getFixedAgentConfig(conversationId) : undefined;
+    return c.json({ conversationId, session, agentConfig, ...(environment ? { environment } : {}) }, 201);
   });
 
   // GET /api/sessions - List sessions
@@ -323,7 +333,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       unassigned: query.unassigned === 'true',
       updatedAfter: query.updatedAfter ? parseInt(query.updatedAfter) : undefined,
       includePinned: query.includePinned === 'true',
-      includeSessionKey: query.includeSessionKey,
+      includeConversationId: query.includeConversationId,
       limit: query.limit ? parseInt(query.limit) : undefined,
       offset: query.offset ? parseInt(query.offset) : undefined,
     });
@@ -343,11 +353,11 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true, payload: { chatIds } });
   });
 
-  // GET /api/sessions/resolve?sessionId=... - Resolve OpenClaw-style session id to canonical key.
+  // GET /api/sessions/resolve?transcriptId=... - Find the conversation owning an active transcript.
   authenticated.get('/api/sessions/resolve', async (c) => {
     const result = await service.sessions.resolveSession({
-      sessionId: c.req.query('sessionId'),
-      sessionKey: c.req.query('sessionKey') ?? c.req.query('key'),
+      transcriptId: c.req.query('transcriptId'),
+      conversationId: c.req.query('conversationId'),
     });
     if (!result) {
       return c.json({ ok: false, error: 'Session not found' }, 404);
@@ -355,13 +365,12 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true, payload: result });
   });
 
-  // POST /api/sessions/resolve - Resolve by JSON body (`sessionId`, `sessionKey`, or `key`).
+  // POST /api/sessions/resolve - Resolve by JSON body (`transcriptId` or `conversationId`).
   authenticated.post('/api/sessions/resolve', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const result = await service.sessions.resolveSession({
-      sessionId: typeof body.sessionId === 'string' ? body.sessionId : undefined,
-      sessionKey: typeof body.sessionKey === 'string' ? body.sessionKey : undefined,
-      key: typeof body.key === 'string' ? body.key : undefined,
+      transcriptId: typeof body.transcriptId === 'string' ? body.transcriptId : undefined,
+      conversationId: typeof body.conversationId === 'string' ? body.conversationId : undefined,
     });
     if (!result) {
       return c.json({ ok: false, error: 'Session not found' }, 404);
@@ -626,7 +635,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     try {
       await service.sessions.restoreBeforeCompactionBoundary(key, compactionId);
     } catch (err) {
-      logRouteError(log, c, err, 'gateway.route.sessions', { operation: 'restoreCompactionBoundary', sessionKey: key });
+      logRouteError(log, c, err, 'gateway.route.sessions', { operation: 'restoreCompactionBoundary', conversationId: key });
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('not found')) {
         return c.json({ ok: false, error: msg }, 404);
@@ -888,8 +897,8 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({
       ok: true,
       reset: true,
-      sessionId: result.sessionId,
-      previousSessionId: result.previousSessionId,
+      transcriptId: result.transcriptId,
+      previousTranscriptId: result.previousTranscriptId,
       session,
     });
   });
@@ -905,7 +914,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     if (result.deleted) {
       deleteBrowserTabBinding(key);
       await environments.release(key).catch((error) => {
-        log.warn({ err: error, sessionKey: key }, 'Session deleted but execution environment cleanup failed');
+        log.warn({ err: error, conversationId: key }, 'Session deleted but execution environment cleanup failed');
       });
     }
     return c.json(result);
@@ -965,7 +974,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
   authenticated.get('/api/subagents/:key', async (c) => {
     const key = c.req.param('key');
     // Verify it's a subagent session
-    if (!key.startsWith('subagent:')) {
+    if ((await service.sessions.getSession(key))?.sessionType !== 'workflow-subagent') {
       return c.json({ error: 'Not a subagent session' }, 400);
     }
     const includeRaw = c.req.query('include') ?? '';

@@ -6,19 +6,19 @@ import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
 
-export function useSessionContext(sessionKey: string | null, open: boolean) {
-  const token = useGatewayStore((state) => state.sessionKey);
+export function useSessionContext(conversationId: string | null, open: boolean) {
+  const token = useGatewayStore((state) => state.conversationId);
   const baseUrl = useGatewayStore((state) => state.baseUrl);
   const result = useSWR(
-    sessionKey ? ['session-context', baseUrl, token, sessionKey] : null,
+    conversationId ? ['session-context', baseUrl, token, conversationId] : null,
     async () => (await fetchJson<{ summary: SessionContextSummary }>(
-      apiUrl(`/api/sessions/${encodeURIComponent(sessionKey!)}/context-summary`),
+      apiUrl(`/api/sessions/${encodeURIComponent(conversationId!)}/context-summary`),
     )).summary,
     { keepPreviousData: false, revalidateOnFocus: open, revalidateOnReconnect: open, shouldRetryOnError: false },
   );
   const { mutate } = result;
   useEffect(() => {
-    if (!open || !sessionKey) return;
+    if (!open || !conversationId) return;
     void mutate();
     let timer: number | undefined;
     const refresh = () => {
@@ -31,6 +31,6 @@ export function useSessionContext(sessionKey: string | null, open: boolean) {
       window.clearTimeout(timer);
       for (const event of events) window.removeEventListener(event, refresh);
     };
-  }, [open, sessionKey, mutate]);
+  }, [open, conversationId, mutate]);
   return result;
 }

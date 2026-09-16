@@ -13,7 +13,7 @@ describe('side chat lifecycle routes', () => {
       now: () => now,
       idleTtlMs: 1000,
       startSweepTimer: false,
-      getParentMetadata: async () => ({ sessionId: 'parent-id', key: 'parent' }) as SessionMetadata,
+      getParentMetadata: async () => ({ transcriptId: 'parent-id', key: 'parent' }) as SessionMetadata,
       loadParentMessages: async () => [],
       getDefaultModelRef: () => 'openai/test',
       getWorkspacePath: () => '/tmp',
@@ -23,7 +23,7 @@ describe('side chat lifecycle routes', () => {
       service: { sideChats: manager },
       chatRateLimitMiddleware: async (_c, next) => { await next(); },
     } as unknown as AuthenticatedRouteDeps);
-    const chat = await manager.create({ parentSessionKey: 'parent', clientInstanceId: 'owner' });
+    const chat = await manager.create({ parentConversationId: 'parent', clientInstanceId: 'owner' });
     const request = (operation: string, owner = 'owner') => app.request(`/api/side-chats/${chat.id}/${operation}`, {
       method: 'POST', headers: { 'x-xopc-client-instance-id': owner },
     });
@@ -45,7 +45,7 @@ describe('side chat lifecycle routes', () => {
   it('accepts attachment-only inputs and passes validated attachments to the run service', async () => {
     const manager = new EphemeralSideChatManager({
       startSweepTimer: false,
-      getParentMetadata: async () => ({ sessionId: 'parent-id', key: 'parent' }) as SessionMetadata,
+      getParentMetadata: async () => ({ transcriptId: 'parent-id', key: 'parent' }) as SessionMetadata,
       loadParentMessages: async () => [],
       getDefaultModelRef: () => 'openai/test',
       getWorkspacePath: () => '/tmp',
@@ -56,7 +56,7 @@ describe('side chat lifecycle routes', () => {
       service: { sideChats: manager, sideChatRuns: { submit } },
       chatRateLimitMiddleware: async (_c, next) => { await next(); },
     } as unknown as AuthenticatedRouteDeps);
-    const chat = await manager.create({ parentSessionKey: 'parent', clientInstanceId: 'owner' });
+    const chat = await manager.create({ parentConversationId: 'parent', clientInstanceId: 'owner' });
     const attachment = { type: 'file', name: 'notes.txt', mimeType: 'text/plain', data: 'aGVsbG8=' };
 
     const response = await app.request(`/api/side-chats/${chat.id}/inputs`, {

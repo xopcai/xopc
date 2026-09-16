@@ -5,7 +5,7 @@ import {
 } from '@xopcai/endpoint-tools-protocol';
 import { z } from 'zod';
 
-export const REALTIME_PROTOCOL_VERSION = 1 as const;
+export const REALTIME_PROTOCOL_VERSION = 2 as const;
 export const REALTIME_MAX_CLIENT_FRAME_BYTES = 256 * 1024;
 export const REALTIME_HELLO_TIMEOUT_MS = 5_000;
 export const REALTIME_HEARTBEAT_INTERVAL_MS = 15_000;

@@ -16,10 +16,10 @@ const MAX_TURN_CONTEXTS = 5;
 export async function submitSessionInput(
   c: Context,
   deps: AuthenticatedRouteDeps,
-  sessionKey: string,
+  conversationId: string,
 ) {
   const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
-  if (!body || !sessionKey) {
+  if (!body || !conversationId) {
     return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid request' } }, 400);
   }
   const attachments = Array.isArray(body.attachments) ? body.attachments : undefined;
@@ -47,14 +47,14 @@ export async function submitSessionInput(
     && deps.service.endpointTools.registry.get(origin.data.endpointId)?.kind !== 'browser') {
     return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Browser context requires a browser endpoint' } }, 403);
   }
-  if (body.expectedSessionId !== undefined && (typeof body.expectedSessionId !== 'string' || !body.expectedSessionId || body.expectedSessionId.length > 128)) {
+  if (body.expectedTranscriptId !== undefined && (typeof body.expectedTranscriptId !== 'string' || !body.expectedTranscriptId || body.expectedTranscriptId.length > 128)) {
     return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid session identity' } }, 400);
   }
-  return withModelConfigLock(sessionKey, async () => {
-    if (deps.service.voiceRealtime?.hasConversation(sessionKey)) {
+  return withModelConfigLock(conversationId, async () => {
+    if (deps.service.voiceRealtime?.hasConversation(conversationId)) {
       return c.json({ ok: false, error: { code: 'SESSION_BUSY', message: 'End the voice call before sending text' } }, 409);
     }
-    const selection = body.configVersion !== undefined ? await deps.service.sessions.getAgentConfig(sessionKey) : undefined;
+    const selection = body.configVersion !== undefined ? await deps.service.sessions.getAgentConfig(conversationId) : undefined;
     if (selection) {
       if (!Number.isSafeInteger(body.configVersion) || selection.configVersion !== body.configVersion || !selection.fixedModel) {
         return c.json({ ok: false, error: { code: 'CONFIG_CHANGED', message: 'Model configuration changed. Refresh before sending.' } }, 409);
@@ -69,8 +69,8 @@ export async function submitSessionInput(
       }
     }
     const result = await deps.service.submitSessionInput({
-      expectedSessionId: body.expectedSessionId as string | undefined,
-      sessionKey,
+      expectedTranscriptId: body.expectedTranscriptId as string | undefined,
+      conversationId,
       clientMessageId: typeof body.clientMessageId === 'string' ? body.clientMessageId : '',
       delivery,
       content,
@@ -86,18 +86,18 @@ export async function submitSessionInput(
         result.code === 'SESSION_CHANGED' || result.code === 'QUEUE_FULL' || result.code === 'CONTEXT_UNAVAILABLE' ? 409 : 400,
       );
     }
-    return c.json({ ok: true, payload: { ...result, sessionKey } }, 202);
+    return c.json({ ok: true, payload: { ...result, conversationId } }, 202);
   });
 }
 
 export async function replaceLatestSessionTurn(
   c: Context,
   deps: AuthenticatedRouteDeps,
-  sessionKey: string,
+  conversationId: string,
   targetTurnId: string,
 ) {
   const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
-  if (!body || !sessionKey || !targetTurnId) {
+  if (!body || !conversationId || !targetTurnId) {
     return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid request' } }, 400);
   }
   const attachments = Array.isArray(body.attachments) ? body.attachments : undefined;
@@ -116,11 +116,11 @@ export async function replaceLatestSessionTurn(
     return c.json({ ok: false, error: { code: 'INVALID_ENDPOINT', message: 'Endpoint connection is not active' } }, 401);
   }
 
-  return withModelConfigLock(sessionKey, async () => {
-    if (deps.service.voiceRealtime?.hasConversation(sessionKey)) {
+  return withModelConfigLock(conversationId, async () => {
+    if (deps.service.voiceRealtime?.hasConversation(conversationId)) {
       return c.json({ ok: false, error: { code: 'SESSION_BUSY', message: 'End the voice call before editing a turn' } }, 409);
     }
-    const selection = body.configVersion !== undefined ? await deps.service.sessions.getAgentConfig(sessionKey) : undefined;
+    const selection = body.configVersion !== undefined ? await deps.service.sessions.getAgentConfig(conversationId) : undefined;
     if (selection) {
       if (!Number.isSafeInteger(body.configVersion) || selection.configVersion !== body.configVersion || !selection.fixedModel) {
         return c.json({ ok: false, error: { code: 'CONFIG_CHANGED', message: 'Model configuration changed. Refresh before sending.' } }, 409);
@@ -135,7 +135,7 @@ export async function replaceLatestSessionTurn(
       }
     }
     const result = await deps.service.replaceLatestSessionTurn({
-      sessionKey,
+      conversationId,
       targetTurnId,
       clientMessageId: typeof body.clientMessageId === 'string' ? body.clientMessageId : '',
       delivery: 'next',
@@ -158,6 +158,6 @@ export async function replaceLatestSessionTurn(
             : 'Replacement input was not accepted';
       return c.json({ ok: false, error: { code: result.code, message } }, status);
     }
-    return c.json({ ok: true, payload: { ...result, sessionKey } }, 202);
+    return c.json({ ok: true, payload: { ...result, conversationId } }, 202);
   });
 }

@@ -29,8 +29,8 @@ export type AtMentionItem = AtMentionFileItem | AtMentionNoteItem;
 const EMPTY_QUERY_CACHE_TTL_MS = 30_000;
 let emptyQueryCache: { key: string; at: number; items: AtMentionFileItem[] } | null = null;
 
-function cacheKey(sessionKey: string): string {
-  return sessionKey.trim();
+function cacheKey(conversationId: string): string {
+  return conversationId.trim();
 }
 
 function mapFileEntries(entries: Array<{ name: string; path: string; isDirectory: boolean }>): AtMentionFileItem[] {
@@ -45,9 +45,9 @@ function mapFileEntries(entries: Array<{ name: string; path: string; isDirectory
 /** Fuzzy filename / path search over the session workspace. */
 export async function searchWorkspaceFiles(
   query: string,
-  options: { sessionKey?: string; agentId?: string; limit?: number },
+  options: { conversationId?: string; agentId?: string; limit?: number },
 ): Promise<AtMentionFileItem[]> {
-  const sk = options.sessionKey?.trim();
+  const sk = options.conversationId?.trim();
   const aid = options.agentId?.trim();
   const limit = options.limit ?? 15;
   const q = query.trim();
@@ -59,7 +59,7 @@ export async function searchWorkspaceFiles(
     }
   }
 
-  const requestOptions = { sessionKey: sk, agentId: aid };
+  const requestOptions = { conversationId: sk, agentId: aid };
   const entries = q.length === 0
     ? await listWorkspaceDir('', requestOptions)
     : await searchManagedFiles(q, requestOptions, limit);
@@ -75,10 +75,10 @@ export async function searchWorkspaceFiles(
 /** List one directory level (browse mode). */
 export async function fetchWorkspaceBrowseEntries(
   dir: string,
-  options: { sessionKey?: string; agentId?: string },
+  options: { conversationId?: string; agentId?: string },
 ): Promise<WorkspaceEntry[]> {
   return listWorkspaceDir(dir, {
-    sessionKey: options.sessionKey,
+    conversationId: options.conversationId,
     agentId: options.agentId,
   });
 }

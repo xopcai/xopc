@@ -28,7 +28,7 @@ export type FileReferenceCapability =
 export interface RegisteredFileReference {
   id: string;
   absolutePath: string;
-  sessionKey?: string;
+  conversationId?: string;
   scope: FileReferenceScope;
   locationKind?: FileReferenceLocationKind;
   capabilities: FileReferenceCapability[];
@@ -37,7 +37,7 @@ export interface RegisteredFileReference {
 
 export interface RegisterFileReferenceInput {
   absolutePath: string;
-  sessionKey?: string;
+  conversationId?: string;
   scope: FileReferenceScope;
   locationKind?: FileReferenceLocationKind;
   capabilities: FileReferenceCapability[];
@@ -55,7 +55,7 @@ export class FileReferenceRegistry {
     const ref: RegisteredFileReference = {
       id,
       absolutePath: input.absolutePath,
-      sessionKey: input.sessionKey?.trim() || undefined,
+      conversationId: input.conversationId?.trim() || undefined,
       scope: input.scope,
       locationKind: input.locationKind,
       capabilities: [...new Set(input.capabilities)],

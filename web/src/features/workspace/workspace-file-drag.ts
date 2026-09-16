@@ -3,7 +3,7 @@ export const WORKSPACE_FILE_DRAG_TYPE = 'application/x-xopc-workspace-file';
 export type WorkspaceFileDragPayload = {
   path: string;
   name: string;
-  sessionKey?: string;
+  conversationId?: string;
   agentId?: string;
   projectId?: string;
 };
@@ -32,8 +32,8 @@ export function readWorkspaceFileDrag(
     return {
       path,
       name,
-      ...(typeof value.sessionKey === 'string' && value.sessionKey.trim()
-        ? { sessionKey: value.sessionKey.trim() }
+      ...(typeof value.conversationId === 'string' && value.conversationId.trim()
+        ? { conversationId: value.conversationId.trim() }
         : {}),
       ...(typeof value.agentId === 'string' && value.agentId.trim()
         ? { agentId: value.agentId.trim() }

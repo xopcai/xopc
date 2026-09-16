@@ -48,15 +48,15 @@ describe('resolveWorkspaceFileReference', () => {
     apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({ space })))
       .mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: 'Outside workspace' } }), { status: 400 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ reference })));
-    await expect(resolveWorkspaceFileReference('/tmp/report.pdf', { sessionKey: 'session' })).resolves.toEqual(reference);
+    await expect(resolveWorkspaceFileReference('/tmp/report.pdf', { conversationId: 'session' })).resolves.toEqual(reference);
     expect(apiFetch).toHaveBeenNthCalledWith(3, '/api/files/resolve-reference', {
-      method: 'POST', body: JSON.stringify({ spaceId: space.id, path: '/tmp/report.pdf', sessionKey: 'session' }),
+      method: 'POST', body: JSON.stringify({ spaceId: space.id, path: '/tmp/report.pdf', conversationId: 'session' }),
     });
   });
 
   it('returns no managed reference when the path is unavailable', async () => {
     apiFetch.mockResolvedValue(new Response(JSON.stringify({ error: { message: 'Not found' } }), { status: 404 }));
-    await expect(resolveWorkspaceFileReference('missing.html', { sessionKey: 'session' })).resolves.toBeNull();
+    await expect(resolveWorkspaceFileReference('missing.html', { conversationId: 'session' })).resolves.toBeNull();
   });
 
   it('uploads a file into the requested subdirectory', async () => {
