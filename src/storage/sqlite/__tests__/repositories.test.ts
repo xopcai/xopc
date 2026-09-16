@@ -390,7 +390,13 @@ describe('sqlite repositories', () => {
       tokensAfter: 10,
     });
     expect(boundary).not.toBeNull();
+    expect(loadLlmMessagesForSession(SESSION_KEY).map((row) => (row as AgentMessage).content))
+      .toEqual(['summary']);
+    expect(loadCompactionSourceSnapshot(SESSION_KEY)!.entries.slice(0, 2).map((entry) =>
+      (entry.row as AgentMessage).content)).toEqual(['keep', 'me']);
     appendTranscriptEntry(SESSION_KEY, userMessage('later'));
+    expect(loadLlmMessagesForSession(SESSION_KEY).map((row) => (row as AgentMessage).content))
+      .toEqual(['summary', 'later']);
 
     restoreBeforeCompactionBoundary(SESSION_KEY, boundary!.entry_id);
 
