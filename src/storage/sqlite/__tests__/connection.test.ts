@@ -161,11 +161,17 @@ describe('openXopcDatabase', () => {
 
   it('creates a verified backup and report before the UUID cutover', () => {
     const old = new DatabaseSync(dbPath);
-    ensureSchemaMetaTable(old);
-    old.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
-    setSchemaVersion(old, XOPC_DB_BASELINE_SCHEMA_VERSION);
-    applyPendingMigrations(old, { targetVersion: 177 });
-    old.close();
+    try {
+      // Batch fixture DDL so shared CI disks do not fsync every schema statement.
+      old.exec('BEGIN');
+      ensureSchemaMetaTable(old);
+      old.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
+      setSchemaVersion(old, XOPC_DB_BASELINE_SCHEMA_VERSION);
+      old.exec('COMMIT');
+      applyPendingMigrations(old, { targetVersion: 177 });
+    } finally {
+      old.close();
+    }
     const previousBackup = 'xopc.db.pre-v178-previous.bak';
     const previousBackupPath = join(stateDir, previousBackup);
     copyFileSync(dbPath, previousBackupPath);
@@ -187,7 +193,7 @@ describe('openXopcDatabase', () => {
     if (process.platform !== 'win32') {
       expect(statSync(join(stateDir, backup!)).mode & 0o777).toBe(0o600);
     }
-  });
+  }, 30_000); // Real migrations, backup fsync, and integrity checks run on disk.
 
   it('returns the same singleton for repeated open calls', () => {
     const first = openXopcDatabase({ path: dbPath });
