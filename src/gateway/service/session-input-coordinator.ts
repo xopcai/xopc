@@ -52,8 +52,8 @@ function contextRefsMatchFrozenSnapshot(
 }
 
 export type SubmitSessionInput = {
-  expectedSessionId?: string;
-  sessionKey: string;
+  expectedTranscriptId?: string;
+  conversationId: string;
   clientMessageId: string;
   delivery: SessionInputDelivery;
   content: string;
@@ -74,11 +74,11 @@ export class SessionInputCoordinator {
 
   constructor(private readonly deps: {
     beforeExecute?: (input: SessionInput) => Promise<boolean>;
-    sessionExists: (sessionKey: string) => Promise<boolean>;
+    sessionExists: (conversationId: string) => Promise<boolean>;
     execute: (input: {
       runId: string;
       taskRunId?: string;
-      sessionKey: string;
+      conversationId: string;
       content: string;
       attachments?: UserTurnAttachment[];
       sourceContexts?: AgentSourceContext[];
@@ -86,36 +86,36 @@ export class SessionInputCoordinator {
       origin: TurnOrigin;
     }) => Promise<{ status: string; summary: string }>;
     prepareAttachments: (
-      sessionKey: string,
+      conversationId: string,
       attachments?: UserTurnAttachment[],
     ) => Promise<UserTurnAttachment[] | undefined>;
     prepareContexts: (contextRefs?: TurnContextRef[]) => Promise<AgentSourceContext[] | undefined>;
-    steer: (sessionKey: string, content: string) => Promise<boolean>;
+    steer: (conversationId: string, content: string) => Promise<boolean>;
     emit: (type: string, payload: unknown) => void;
   }) {}
 
-  snapshot(sessionKey: string): SessionInputState {
-    return getSessionInputState(sessionKey);
+  snapshot(conversationId: string): SessionInputState {
+    return getSessionInputState(conversationId);
   }
 
-  private publish(sessionKey: string): SessionInputState {
-    const state = this.snapshot(sessionKey);
+  private publish(conversationId: string): SessionInputState {
+    const state = this.snapshot(conversationId);
     this.deps.emit('session.input-state', state);
     return state;
   }
 
-  private async runSubmissionExclusive<T>(sessionKey: string, operation: () => Promise<T>): Promise<T> {
-    const previous = this.submissionTails.get(sessionKey) ?? Promise.resolve();
+  private async runSubmissionExclusive<T>(conversationId: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.submissionTails.get(conversationId) ?? Promise.resolve();
     let release = () => {};
     const current = new Promise<void>((resolve) => { release = resolve; });
     const tail = previous.then(() => current);
-    this.submissionTails.set(sessionKey, tail);
+    this.submissionTails.set(conversationId, tail);
     await previous;
     try {
       return await operation();
     } finally {
       release();
-      if (this.submissionTails.get(sessionKey) === tail) this.submissionTails.delete(sessionKey);
+      if (this.submissionTails.get(conversationId) === tail) this.submissionTails.delete(conversationId);
     }
   }
 
@@ -123,9 +123,9 @@ export class SessionInputCoordinator {
     | { ok: true; effectiveDelivery: SessionInputDelivery; state: SessionInputState }
     | { ok: false; code: 'BAD_REQUEST' | 'QUEUE_FULL' | 'CONTEXT_UNAVAILABLE' | 'SESSION_CHANGED' }
   > {
-    const sessionKey = input.sessionKey.trim();
+    const conversationId = input.conversationId.trim();
     try {
-      return await this.runSubmissionExclusive(sessionKey, () => this.submitLocked({ ...input, sessionKey }));
+      return await this.runSubmissionExclusive(conversationId, () => this.submitLocked({ ...input, conversationId }));
     } catch (error) {
       if (error instanceof SessionInstanceChangedError) return { ok: false, code: 'SESSION_CHANGED' };
       throw error;
@@ -139,37 +139,37 @@ export class SessionInputCoordinator {
     | { ok: true; effectiveDelivery: 'next'; state: SessionInputState }
     | { ok: false; code: 'BAD_REQUEST' | 'TARGET_NOT_FOUND' | 'NOT_LATEST' | 'SESSION_BUSY' | 'CONTEXT_UNAVAILABLE' }
   > {
-    const sessionKey = input.sessionKey.trim();
-    return this.runSubmissionExclusive(sessionKey, async () => {
+    const conversationId = input.conversationId.trim();
+    return this.runSubmissionExclusive(conversationId, async () => {
       const clientMessageId = input.clientMessageId.trim();
       const content = input.content.trim();
       const targetTurnId = input.targetTurnId.trim();
-      if (!sessionKey || !clientMessageId || !targetTurnId
+      if (!conversationId || !clientMessageId || !targetTurnId
         || (!content && !input.attachments?.length && !input.sourceContexts?.length)) {
         return { ok: false, code: 'BAD_REQUEST' };
       }
-      if (!await this.deps.sessionExists(sessionKey)) return { ok: false, code: 'BAD_REQUEST' };
+      if (!await this.deps.sessionExists(conversationId)) return { ok: false, code: 'BAD_REQUEST' };
 
-      const existing = findSessionInput(sessionKey, clientMessageId);
+      const existing = findSessionInput(conversationId, clientMessageId);
       if (existing) {
-        return { ok: true, effectiveDelivery: 'next', state: this.snapshot(sessionKey) };
+        return { ok: true, effectiveDelivery: 'next', state: this.snapshot(conversationId) };
       }
 
-      const target = validateLatestSessionTurnTarget(sessionKey, targetTurnId);
+      const target = validateLatestSessionTurnTarget(conversationId, targetTurnId);
       if (target.ok === false) return target;
 
       await beforeReplace();
-      const attachments = await this.deps.prepareAttachments(sessionKey, input.attachments);
+      const attachments = await this.deps.prepareAttachments(conversationId, input.attachments);
       let sourceContexts: AgentSourceContext[] | undefined;
       try {
         const resolved = await this.deps.prepareContexts(input.contextRefs) ?? [];
         sourceContexts = fitSourceContextsToBudget([...resolved, ...(input.sourceContexts ?? [])]);
       } catch (err) {
-        log.warn({ err, sessionKey }, 'Session input context preparation failed');
+        log.warn({ err, conversationId }, 'Session input context preparation failed');
         return { ok: false, code: 'CONTEXT_UNAVAILABLE' };
       }
       const result = replaceLatestSessionTurnAndQueueInput({
-        sessionKey,
+        conversationId,
         targetTurnId,
         clientMessageId,
         content,
@@ -182,8 +182,8 @@ export class SessionInputCoordinator {
       if (result.ok === false) return result;
 
       if (!result.idempotent) {
-        cancelConnectionObjective(sessionKey);
-        supersedeActiveClarification(sessionKey);
+        cancelConnectionObjective(conversationId);
+        supersedeActiveClarification(conversationId);
         const replacement = {
           role: 'user',
           content,
@@ -195,8 +195,8 @@ export class SessionInputCoordinator {
         });
       }
 
-      void this.drain(sessionKey);
-      return { ok: true, effectiveDelivery: 'next', state: this.publish(sessionKey) };
+      void this.drain(conversationId);
+      return { ok: true, effectiveDelivery: 'next', state: this.publish(conversationId) };
     });
   }
 
@@ -204,33 +204,33 @@ export class SessionInputCoordinator {
     | { ok: true; effectiveDelivery: SessionInputDelivery; state: SessionInputState }
     | { ok: false; code: 'BAD_REQUEST' | 'QUEUE_FULL' | 'CONTEXT_UNAVAILABLE' | 'SESSION_CHANGED' }
   > {
-    const sessionKey = input.sessionKey;
+    const conversationId = input.conversationId;
     const clientMessageId = input.clientMessageId.trim();
     const content = input.content.trim();
-    if (!sessionKey || !clientMessageId
+    if (!conversationId || !clientMessageId
       || (!content && !input.attachments?.length && !input.sourceContexts?.length)) {
       return { ok: false, code: 'BAD_REQUEST' };
     }
-    if (!await this.deps.sessionExists(sessionKey)) return { ok: false, code: 'BAD_REQUEST' };
+    if (!await this.deps.sessionExists(conversationId)) return { ok: false, code: 'BAD_REQUEST' };
 
-    const existing = findSessionInput(sessionKey, clientMessageId);
+    const existing = findSessionInput(conversationId, clientMessageId);
     if (existing) {
-      return { ok: true, effectiveDelivery: existing.effectiveDelivery, state: this.snapshot(sessionKey) };
+      return { ok: true, effectiveDelivery: existing.effectiveDelivery, state: this.snapshot(conversationId) };
     }
-    if (this.snapshot(sessionKey).inputs.length >= MAX_PENDING_INPUTS) {
+    if (this.snapshot(conversationId).inputs.length >= MAX_PENDING_INPUTS) {
       return { ok: false, code: 'QUEUE_FULL' };
     }
 
-    const attachments = await this.deps.prepareAttachments(sessionKey, input.attachments);
+    const attachments = await this.deps.prepareAttachments(conversationId, input.attachments);
     let sourceContexts: AgentSourceContext[] | undefined;
     try {
       const resolved = await this.deps.prepareContexts(input.contextRefs) ?? [];
       sourceContexts = fitSourceContextsToBudget([...resolved, ...(input.sourceContexts ?? [])]);
     } catch (err) {
-      log.warn({ err, sessionKey }, 'Session input context preparation failed');
+      log.warn({ err, conversationId }, 'Session input context preparation failed');
       return { ok: false, code: 'CONTEXT_UNAVAILABLE' };
     }
-    const runtime = this.snapshot(sessionKey);
+    const runtime = this.snapshot(conversationId);
     const canSteer = input.origin.type !== 'endpoint'
       && input.delivery === 'steer'
       && runtime.activeRunId !== undefined
@@ -238,9 +238,9 @@ export class SessionInputCoordinator {
       && !sourceContexts?.length;
     const effectiveDelivery: SessionInputDelivery = canSteer ? 'steer' : 'next';
     const row = insertSessionInput({
-      expectedSessionId: input.expectedSessionId,
+      expectedTranscriptId: input.expectedTranscriptId,
       id: crypto.randomUUID(),
-      sessionKey,
+      conversationId,
       clientMessageId,
       requestedDelivery: input.delivery,
       effectiveDelivery,
@@ -254,45 +254,45 @@ export class SessionInputCoordinator {
       targetRunId: canSteer ? runtime.activeRunId : undefined,
     });
 
-    invalidateConnectionResumeIntent(sessionKey);
-    supersedeActiveClarification(sessionKey);
+    invalidateConnectionResumeIntent(conversationId);
+    supersedeActiveClarification(conversationId);
     if (canSteer) {
-      const accepted = await this.deps.steer(sessionKey, content);
+      const accepted = await this.deps.steer(conversationId, content);
       if (!accepted) {
         setSessionInputStatus(row.id, 'queued', { effectiveDelivery: 'next', targetRunId: null });
-        void this.drain(sessionKey);
-        return { ok: true, effectiveDelivery: 'next', state: this.publish(sessionKey) };
+        void this.drain(conversationId);
+        return { ok: true, effectiveDelivery: 'next', state: this.publish(conversationId) };
       }
-      return { ok: true, effectiveDelivery: 'steer', state: this.publish(sessionKey) };
+      return { ok: true, effectiveDelivery: 'steer', state: this.publish(conversationId) };
     }
 
-    void this.drain(sessionKey);
-    return { ok: true, effectiveDelivery: 'next', state: this.publish(sessionKey) };
+    void this.drain(conversationId);
+    return { ok: true, effectiveDelivery: 'next', state: this.publish(conversationId) };
   }
 
-  async drain(sessionKey: string): Promise<void> {
-    if (this.draining.has(sessionKey)) return;
-    this.draining.add(sessionKey);
+  async drain(conversationId: string): Promise<void> {
+    if (this.draining.has(conversationId)) return;
+    this.draining.add(conversationId);
     try {
       while (true) {
         const runId = crypto.randomUUID();
-        const input = claimNextSessionInput(sessionKey, runId);
+        const input = claimNextSessionInput(conversationId, runId);
         if (!input) return;
         if ((this.deps.beforeExecute && !await this.deps.beforeExecute(input))
           || !consumeConnectionResume(input)
           || !consumeClarificationResume(input)) {
-          finishSessionInputRun(sessionKey, runId, 'cancelled');
-          this.publish(sessionKey);
+          finishSessionInputRun(conversationId, runId, 'cancelled');
+          this.publish(conversationId);
           continue;
         }
-        if (input.kind === 'connection_resume') publishConnectionWait(sessionKey);
-        this.publish(sessionKey);
+        if (input.kind === 'connection_resume') publishConnectionWait(conversationId);
+        this.publish(conversationId);
         let result: { status: string; summary: string };
         try {
           result = await this.deps.execute({
             runId,
             taskRunId: input.taskRunId,
-            sessionKey,
+            conversationId,
             content: input.content,
             attachments: input.attachments as UserTurnAttachment[] | undefined,
             sourceContexts: input.contextSnapshots,
@@ -302,59 +302,59 @@ export class SessionInputCoordinator {
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           result = { status: 'error', summary: message };
-          log.warn({ err: error, sessionKey, runId, inputId: input.id }, 'Session input execution failed');
+          log.warn({ err: error, conversationId, runId, inputId: input.id }, 'Session input execution failed');
         }
         const terminal = result.status === 'suspended' ? 'suspended' : result.status === 'ok'
           ? 'completed'
           : result.status === 'aborted'
             ? 'cancelled'
             : 'failed';
-        finishSessionInputRun(sessionKey, runId, terminal, terminal === 'failed' ? result.summary : undefined);
-        this.publish(sessionKey);
+        finishSessionInputRun(conversationId, runId, terminal, terminal === 'failed' ? result.summary : undefined);
+        this.publish(conversationId);
       }
     } finally {
-      this.draining.delete(sessionKey);
+      this.draining.delete(conversationId);
     }
   }
 
-  async update(sessionKey: string, id: string, body: {
+  async update(conversationId: string, id: string, body: {
     version: number; content?: string; attachments?: UserTurnAttachment[]; contextRefs?: TurnContextRef[];
     thinking?: string; position?: number;
   }): Promise<{ ok: boolean; state: SessionInputState; contextUnavailable?: boolean }> {
     const attachments = body.attachments === undefined
       ? undefined
-      : await this.deps.prepareAttachments(sessionKey, body.attachments);
+      : await this.deps.prepareAttachments(conversationId, body.attachments);
     let sourceContexts: AgentSourceContext[] | undefined;
     if (body.contextRefs !== undefined) {
-      const existing = getSessionInputById(sessionKey, id);
+      const existing = getSessionInputById(conversationId, id);
       if (!contextRefsMatchFrozenSnapshot(body.contextRefs, existing?.contextRefs)) {
         try {
           sourceContexts = await this.deps.prepareContexts(body.contextRefs) ?? [];
         } catch (err) {
-          log.warn({ err, sessionKey, inputId: id }, 'Queued input context preparation failed');
-          return { ok: false, contextUnavailable: true, state: this.snapshot(sessionKey) };
+          log.warn({ err, conversationId, inputId: id }, 'Queued input context preparation failed');
+          return { ok: false, contextUnavailable: true, state: this.snapshot(conversationId) };
         }
       }
     }
     const ok = mutateQueuedSessionInput({
-      sessionKey,
+      conversationId,
       id,
       ...body,
       attachments,
       contextRefs: sourceContexts?.map(summarizeSourceContext),
       contextSnapshots: sourceContexts,
     });
-    return { ok, state: ok ? this.publish(sessionKey) : this.snapshot(sessionKey) };
+    return { ok, state: ok ? this.publish(conversationId) : this.snapshot(conversationId) };
   }
 
-  remove(sessionKey: string, id: string, version: number): { ok: boolean; state: SessionInputState } {
-    const ok = cancelQueuedSessionInput(sessionKey, id, version);
-    return { ok, state: ok ? this.publish(sessionKey) : this.snapshot(sessionKey) };
+  remove(conversationId: string, id: string, version: number): { ok: boolean; state: SessionInputState } {
+    const ok = cancelQueuedSessionInput(conversationId, id, version);
+    return { ok, state: ok ? this.publish(conversationId) : this.snapshot(conversationId) };
   }
 
-  async waitForCompletion(sessionKey: string, clientMessageId: string): Promise<void> {
+  async waitForCompletion(conversationId: string, clientMessageId: string): Promise<void> {
     while (true) {
-      const row = findSessionInput(sessionKey, clientMessageId);
+      const row = findSessionInput(conversationId, clientMessageId);
       if (!row) throw new Error('Session input disappeared before completion');
       if (row.status === 'completed' || row.status === 'suspended') return;
       if (row.status === 'failed' || row.status === 'cancelled' || row.status === 'interrupted') {
@@ -365,9 +365,9 @@ export class SessionInputCoordinator {
   }
 
   recover(): void {
-    for (const sessionKey of recoverSessionInputState()) {
-      this.publish(sessionKey);
-      void this.drain(sessionKey);
+    for (const conversationId of recoverSessionInputState()) {
+      this.publish(conversationId);
+      void this.drain(conversationId);
     }
   }
 }

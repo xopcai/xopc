@@ -21,7 +21,7 @@
  */
 
 import type { ChannelProgressCapability, WorkflowProgressPostInput } from '@xopcai/xopc/agent/workflow/channel-capability.js';
-import { parseSessionKey } from '@xopcai/xopc/routing/session-key.js';
+import { getConversationRouting } from '@xopcai/xopc/routing/session-key.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 
 import type { TelegramAccountManager } from './account-manager.js';
@@ -44,14 +44,14 @@ export function createTelegramWorkflowProgressCapability(
     defaultMode: 'edit',
 
     async postProgress(input: WorkflowProgressPostInput) {
-      const target = resolveTarget(input.sessionKey);
+      const target = resolveTarget(input.conversationId);
       if (!target) {
-        throw new Error(`telegram workflow progress: cannot route sessionKey "${input.sessionKey}"`);
+        throw new Error(`telegram workflow progress: cannot route conversationId "${input.conversationId}"`);
       }
       const bot = accountManager.getBot(target.accountId);
       if (!bot) {
         throw new Error(
-          `telegram workflow progress: no bot for accountId "${target.accountId}" (sessionKey "${input.sessionKey}")`,
+          `telegram workflow progress: no bot for accountId "${target.accountId}" (conversationId "${input.conversationId}")`,
         );
       }
 
@@ -76,7 +76,7 @@ export function createTelegramWorkflowProgressCapability(
           }
           if (isEditTargetGone(err)) {
             log.debug(
-              { sessionKey: input.sessionKey, previousMessageId: input.previousMessageId },
+              { conversationId: input.conversationId, previousMessageId: input.previousMessageId },
               'edit target gone; falling back to sendMessage',
             );
             // fall through to the send path below
@@ -101,8 +101,8 @@ interface ResolvedTarget {
   threadId?: string;
 }
 
-function resolveTarget(sessionKey: string): ResolvedTarget | null {
-  const parsed = parseSessionKey(sessionKey);
+function resolveTarget(conversationId: string): ResolvedTarget | null {
+  const parsed = getConversationRouting(conversationId);
   if (!parsed) return null;
   if (parsed.source !== 'telegram') return null;
   if (!parsed.peerId) return null;

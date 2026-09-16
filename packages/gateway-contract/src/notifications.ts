@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const NotificationTargetSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('chat'), sessionKey: z.string().min(1) }),
+  z.object({ kind: z.literal('chat'), conversationId: z.string().min(1) }),
   z.object({ kind: z.literal('task'), taskId: z.string().min(1) }),
   z.object({
     kind: z.literal('automation_run'),
@@ -13,7 +13,7 @@ export const NotificationTargetSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('work_discovery'),
     runId: z.string().min(1),
-    sessionKey: z.string().min(1),
+    conversationId: z.string().min(1),
   }),
 ]);
 
@@ -72,7 +72,7 @@ export function notificationTargetRoute(
 ): string {
   switch (target.kind) {
     case 'chat':
-      return `/chat/${encodeURIComponent(target.sessionKey)}`;
+      return `/chat/${encodeURIComponent(target.conversationId)}`;
     case 'task':
       return `/tasks/${encodeURIComponent(target.taskId)}`;
     case 'automation_run':
@@ -88,7 +88,7 @@ export function notificationTargetRoute(
     case 'work_discovery':
       return surface === 'web'
         ? `/user-model?workDiscovery=review&run=${encodeURIComponent(target.runId)}`
-        : `/chat/${encodeURIComponent(target.sessionKey)}`;
+        : `/chat/${encodeURIComponent(target.conversationId)}`;
   }
 }
 

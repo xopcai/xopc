@@ -20,18 +20,18 @@ export function parseWorkspaceFileLink(value: string): WorkspaceFileLinkTarget |
   }
 }
 
-export function workspaceFileLinkRoute(value: string, sessionKey?: string | null): {
+export function workspaceFileLinkRoute(value: string, conversationId?: string | null): {
   pathname: '/workspace/file';
-  params: { path: string; sessionKey?: string };
+  params: { path: string; conversationId?: string };
 } | null {
   const target = parseWorkspaceFileLink(value);
   if (!target) return null;
-  const normalizedSessionKey = sessionKey?.trim();
+  const normalizedConversationId = conversationId?.trim();
   return {
     pathname: '/workspace/file',
     params: {
       path: target.path,
-      ...(normalizedSessionKey ? { sessionKey: normalizedSessionKey } : {}),
+      ...(normalizedConversationId ? { conversationId: normalizedConversationId } : {}),
     },
   };
 }

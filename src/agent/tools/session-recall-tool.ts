@@ -26,7 +26,7 @@ interface SessionRecallParams {
 
 export interface SessionRecallToolDeps {
   getSessionStore: () => SessionStore;
-  getCurrentSessionKey: () => string | undefined;
+  getCurrentConversationId: () => string | undefined;
 }
 
 function excerpt(content: string, query: string, maxChars: number): string {
@@ -50,8 +50,8 @@ export function createSessionRecallTool(deps: SessionRecallToolDeps): AgentTool 
 
     async execute(_toolCallId, params): Promise<any> {
       const input = params as SessionRecallParams;
-      const sessionKey = deps.getCurrentSessionKey();
-      if (!sessionKey) {
+      const conversationId = deps.getCurrentConversationId();
+      if (!conversationId) {
         return {
           content: [{ type: 'text', text: 'session_recall is unavailable outside an active session.' }],
           details: { error: 'missing_session' },
@@ -60,7 +60,7 @@ export function createSessionRecallTool(deps: SessionRecallToolDeps): AgentTool 
       const query = input.query.trim();
       const limit = Math.min(20, Math.max(1, input.limit ?? 8));
       const maxChars = Math.min(20_000, Math.max(500, input.maxCharsPerResult ?? 6_000));
-      const matches = deps.getSessionStore().recallSession(sessionKey, query, {
+      const matches = deps.getSessionStore().recallSession(conversationId, query, {
         limit,
         ...(input.beforeSeq ? { beforeSeq: input.beforeSeq } : {}),
       });

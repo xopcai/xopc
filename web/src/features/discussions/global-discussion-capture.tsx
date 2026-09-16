@@ -36,7 +36,7 @@ function formatDuration(durationMs: number): string {
 
 export function GlobalDiscussionCaptureHost() {
   const navigate = useNavigate();
-  const token = useGatewayStore((state) => state.sessionKey);
+  const token = useGatewayStore((state) => state.conversationId);
   const language = useLocaleStore((state) => state.language);
   const copy = messages(language).notes.discussionCapture;
   const recorder = useDiscussionRecorder();

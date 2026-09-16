@@ -3,11 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { TaskConversationQueryService } from '../../gateway/service/task-conversation-query-service.js';
 import type { TaskSessionLink } from '../task-conversation-repository.js';
 
-function link(sessionKey: string, assignmentEpoch: number, status: TaskSessionLink['status']): TaskSessionLink {
+function link(conversationId: string, assignmentEpoch: number, status: TaskSessionLink['status']): TaskSessionLink {
   return {
     id: `link-${assignmentEpoch}`,
     taskId: 'task-1',
-    sessionKey,
+    conversationId,
     role: 'execution',
     agentId: `agent-${assignmentEpoch}`,
     assignmentEpoch,
@@ -23,13 +23,13 @@ describe('TaskConversationQueryService', () => {
       ['old', [{ role: 'user', content: 'old-1' }, { role: 'assistant', content: 'old-2' }]],
       ['active', [{ role: 'user', content: 'new-1' }, { role: 'assistant', content: 'new-2' }]],
     ]);
-    const getMessagePage = vi.fn(async (sessionKey: string, options: { limit?: number; offset?: number }) => {
-      const all = rows.get(sessionKey)!;
+    const getMessagePage = vi.fn(async (conversationId: string, options: { limit?: number; offset?: number }) => {
+      const all = rows.get(conversationId)!;
       const limit = options.limit ?? 50;
       const end = all.length - (options.offset ?? 0);
       const messages = all.slice(Math.max(0, end - limit), end);
       return {
-        session: { key: sessionKey, messages },
+        session: { key: conversationId, messages },
         pagination: { total: all.length, limit, offset: options.offset ?? 0, hasMore: end - limit > 0 },
       };
     });
@@ -48,14 +48,14 @@ describe('TaskConversationQueryService', () => {
   });
 
   it('adds an execution boundary to the combined timeline', async () => {
-    const getMessagePage = vi.fn(async (sessionKey: string) => ({
-      session: { key: sessionKey, messages: [] },
+    const getMessagePage = vi.fn(async (conversationId: string) => ({
+      session: { key: conversationId, messages: [] },
       pagination: { total: 1, limit: 1, offset: 0, hasMore: false },
     }));
-    const getTimeline = vi.fn(async (sessionKey: string) => [{
-      id: `${sessionKey}-turn`,
+    const getTimeline = vi.fn(async (conversationId: string) => [{
+      id: `${conversationId}-turn`,
       kind: 'turn' as const,
-      title: sessionKey,
+      title: conversationId,
       depth: 0,
       turn: 0,
       displayIndex: 0,

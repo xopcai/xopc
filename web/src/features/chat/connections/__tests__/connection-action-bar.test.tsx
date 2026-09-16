@@ -12,7 +12,7 @@ vi.mock('@/stores/locale-store', () => ({ useLocaleStore: (select: (state: { lan
 describe('single connection action area', () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
-  const render = async () => { await act(async () => root.render(<ConnectionActionBar sessionKey="one" />)); };
+  const render = async () => { await act(async () => root.render(<ConnectionActionBar conversationId="one" />)); };
   const click = async (text: string) => {
     const button = [...document.querySelectorAll('button')].find(node => node.textContent?.trim() === text);
     expect(button, text).toBeTruthy();
@@ -22,7 +22,7 @@ describe('single connection action area', () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     vi.clearAllMocks();
     mocked.state.wait = {
-      id: 'wait', sessionKey: 'one', sessionId: 'instance', principalId: 'local-owner', agentId: 'main', objectiveId: 'objective', objectiveRevision: 1, objectiveUpdatedAt: 1,
+      id: 'wait', conversationId: 'one', transcriptId: 'instance', principalId: 'local-owner', agentId: 'main', objectiveId: 'objective', objectiveRevision: 1, objectiveUpdatedAt: 1,
       originInputId: 'input', originRunId: 'run', summary: 'Summarize unread email from last week', status: 'open', phase: 'needs_connection', version: 1, createdAt: 1, updatedAt: 1,
       needs: [{ key: 'gmail', connectorId: 'composio-gmail', label: 'Gmail', capabilities: ['email.read'], phase: 'connect', accounts: [] }],
     };

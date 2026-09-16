@@ -14,8 +14,8 @@ import { resolveResumeRunId } from './resolve-resume-run-id';
 type TryAgentStreamResume = (runId: string) => void | Promise<void>;
 
 type UseAgentStreamRecoveryOptions = {
-  sessionKey: string;
-  activeSessionKeyRef: RefObject<string>;
+  conversationId: string;
+  activeConversationIdRef: RefObject<string>;
   tryResume: TryAgentStreamResume;
   onParked: () => void;
   onReconcile: () => void | Promise<void>;
@@ -42,8 +42,8 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
 /** Owns silent fast recovery and low-frequency parked retries. */
 export function useAgentStreamRecovery(options: UseAgentStreamRecoveryOptions) {
   const {
-    sessionKey,
-    activeSessionKeyRef,
+    conversationId,
+    activeConversationIdRef,
     tryResume,
     onParked,
     onReconcile,
@@ -82,7 +82,7 @@ export function useAgentStreamRecovery(options: UseAgentStreamRecoveryOptions) {
   }, [clearParkedTimer]);
 
   const runRecovery = useCallback(async () => {
-    if (!sessionKey || activeGenerationRef.current !== 0) return;
+    if (!conversationId || activeGenerationRef.current !== 0) return;
     clearParkedTimer();
     if (AppState.currentState !== 'active') {
       onParkedRef.current();
@@ -101,11 +101,11 @@ export function useAgentStreamRecovery(options: UseAgentStreamRecoveryOptions) {
         if (
           controller.signal.aborted ||
           generation !== generationRef.current ||
-          activeSessionKeyRef.current !== sessionKey
+          activeConversationIdRef.current !== conversationId
         ) return;
         let runId: string | null;
         try {
-          runId = await resolveResumeRunId(sessionKey);
+          runId = await resolveResumeRunId(conversationId);
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           if (!isTransientNetworkError(message)) {
@@ -136,7 +136,7 @@ export function useAgentStreamRecovery(options: UseAgentStreamRecoveryOptions) {
         if (
           controller.signal.aborted ||
           generation !== generationRef.current ||
-          activeSessionKeyRef.current !== sessionKey
+          activeConversationIdRef.current !== conversationId
         ) return;
         try {
           await tryResumeRef.current(runId);
@@ -156,7 +156,7 @@ export function useAgentStreamRecovery(options: UseAgentStreamRecoveryOptions) {
       if (abortRef.current === controller) abortRef.current = null;
       if (activeGenerationRef.current === generation) activeGenerationRef.current = 0;
     }
-  }, [activeSessionKeyRef, clearParkedTimer, park, sessionKey]);
+  }, [activeConversationIdRef, clearParkedTimer, park, conversationId]);
   runRecoveryRef.current = () => { void runRecovery(); };
 
   const recover = useCallback((error: unknown): boolean => {
@@ -167,16 +167,16 @@ export function useAgentStreamRecovery(options: UseAgentStreamRecoveryOptions) {
   }, [runRecovery]);
 
   const wake = useCallback(() => {
-    if (!sessionKey) return;
+    if (!conversationId) return;
     abortRef.current?.abort();
     abortRef.current = null;
     generationRef.current += 1;
     activeGenerationRef.current = 0;
     clearParkedTimer();
     void runRecovery();
-  }, [clearParkedTimer, runRecovery, sessionKey]);
+  }, [clearParkedTimer, runRecovery, conversationId]);
 
-  useEffect(() => () => cancelRecovery(), [cancelRecovery, sessionKey]);
+  useEffect(() => () => cancelRecovery(), [cancelRecovery, conversationId]);
 
   return { recover, wake, markRecoverySucceeded: cancelRecovery, cancelRecovery };
 }

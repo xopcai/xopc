@@ -15,7 +15,7 @@ type FilePreviewProps = PreviewRuntimeRenderProps & {
   header: Omit<FilePreviewHeaderProps, 'name' | 'controller' | 'actions' | 'editInNewChat'>;
   chat?: {
     createFile: () => Promise<File>;
-    sessionKey?: string | null;
+    conversationId?: string | null;
     projectId?: string | null;
     agentId?: string;
     disabled?: boolean;
@@ -35,7 +35,7 @@ export function FilePreview({ header, chat, ...source }: FilePreviewProps) {
     try {
       const [file, session] = await Promise.all([
         chat.createFile(),
-        chat.sessionKey ? getSessionDetail(chat.sessionKey).catch(() => null) : Promise.resolve(null),
+        chat.conversationId ? getSessionDetail(chat.conversationId).catch(() => null) : Promise.resolve(null),
       ]);
       if (file.size > MAX_WEBCHAT_ATTACHMENT_FILE_BYTES) {
         showComposerNotification('warning', m.chat.attachmentFileTooLarge, {

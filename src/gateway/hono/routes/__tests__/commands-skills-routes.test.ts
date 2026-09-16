@@ -7,10 +7,10 @@ import { registerCommandsSkillsRoutes } from '../commands-skills.js';
 function createApp() {
   const app = new Hono();
   const getAgentSkillsApi = vi.fn(() => ({ agentId: 'main', skills: [] }));
-  const getSessionSkillsApi = vi.fn(async (sessionKey: string) => ({
+  const getSessionSkillsApi = vi.fn(async (conversationId: string) => ({
     agentId: 'main',
     workspacePath: '/project',
-    sessionKey,
+    conversationId,
     skills: [{ name: 'project-skill' }],
   }));
   const getSessionWorkspaceTrustApi = vi.fn(async () => ({
@@ -19,7 +19,7 @@ function createApp() {
     decision: null,
     trusted: false,
   }));
-  const setSessionWorkspaceTrustApi = vi.fn(async (_sessionKey: string, trusted: boolean) => ({
+  const setSessionWorkspaceTrustApi = vi.fn(async (_conversationId: string, trusted: boolean) => ({
     workspacePath: '/project',
     required: true,
     decision: trusted,
@@ -45,16 +45,16 @@ function createApp() {
 }
 
 describe('commands and skills routes', () => {
-  it('loads chat skills from the effective session workspace when sessionKey is present', async () => {
+  it('loads chat skills from the effective session workspace when conversationId is present', async () => {
     const { app, getAgentSkillsApi, getSessionSkillsApi } = createApp();
-    const sessionKey = 'agent:main:webchat:default:direct:project-chat';
+    const conversationId = 'agent:main:webchat:default:direct:project-chat';
 
     const response = await app.request(
-      `/api/chat/skills?agentId=main&sessionKey=${encodeURIComponent(sessionKey)}`,
+      `/api/chat/skills?agentId=main&conversationId=${encodeURIComponent(conversationId)}`,
     );
 
     expect(response.status).toBe(200);
-    expect(getSessionSkillsApi).toHaveBeenCalledWith(sessionKey);
+    expect(getSessionSkillsApi).toHaveBeenCalledWith(conversationId);
     expect(getAgentSkillsApi).not.toHaveBeenCalled();
     await expect(response.json()).resolves.toMatchObject({
       ok: true,
@@ -74,21 +74,21 @@ describe('commands and skills routes', () => {
 
   it('reads and persists trust only for the session workspace', async () => {
     const { app, getSessionWorkspaceTrustApi, setSessionWorkspaceTrustApi } = createApp();
-    const sessionKey = 'agent:main:webchat:default:direct:project-chat';
+    const conversationId = 'agent:main:webchat:default:direct:project-chat';
 
     const read = await app.request(
-      `/api/chat/workspace-trust?sessionKey=${encodeURIComponent(sessionKey)}`,
+      `/api/chat/workspace-trust?conversationId=${encodeURIComponent(conversationId)}`,
     );
     expect(read.status).toBe(200);
-    expect(getSessionWorkspaceTrustApi).toHaveBeenCalledWith(sessionKey);
+    expect(getSessionWorkspaceTrustApi).toHaveBeenCalledWith(conversationId);
 
     const update = await app.request('/api/chat/workspace-trust', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ sessionKey, trusted: true }),
+      body: JSON.stringify({ conversationId, trusted: true }),
     });
     expect(update.status).toBe(200);
-    expect(setSessionWorkspaceTrustApi).toHaveBeenCalledWith(sessionKey, true);
+    expect(setSessionWorkspaceTrustApi).toHaveBeenCalledWith(conversationId, true);
   });
 
   it('rejects malformed trust updates', async () => {

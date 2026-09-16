@@ -11,68 +11,68 @@ import {
 describe('terminal panel store', () => {
   beforeEach(() => {
     useTerminalPanelStore.setState({
-      openBySessionKey: {},
-      tabsBySessionKey: {},
-      activeTabKeyBySessionKey: {},
+      openByConversationId: {},
+      tabsByConversationId: {},
+      activeTabKeyByConversationId: {},
       height: 300,
     });
   });
 
   it('tracks panel visibility per session', () => {
     useTerminalPanelStore.getState().toggle('session-a');
-    expect(useTerminalPanelStore.getState().openBySessionKey).toEqual({ 'session-a': true });
-    expect(useTerminalPanelStore.getState().tabsBySessionKey['session-a']).toHaveLength(1);
+    expect(useTerminalPanelStore.getState().openByConversationId).toEqual({ 'session-a': true });
+    expect(useTerminalPanelStore.getState().tabsByConversationId['session-a']).toHaveLength(1);
 
     useTerminalPanelStore.getState().close('session-a');
-    expect(useTerminalPanelStore.getState().openBySessionKey['session-a']).toBe(false);
+    expect(useTerminalPanelStore.getState().openByConversationId['session-a']).toBe(false);
   });
 
   it('opens a panel idempotently and provisions its first terminal', () => {
     useTerminalPanelStore.getState().open('session-a');
-    const firstKey = useTerminalPanelStore.getState().activeTabKeyBySessionKey['session-a'];
+    const firstKey = useTerminalPanelStore.getState().activeTabKeyByConversationId['session-a'];
     useTerminalPanelStore.getState().open('session-a');
 
-    expect(useTerminalPanelStore.getState().openBySessionKey['session-a']).toBe(true);
-    expect(useTerminalPanelStore.getState().tabsBySessionKey['session-a']).toEqual([{ key: firstKey }]);
+    expect(useTerminalPanelStore.getState().openByConversationId['session-a']).toBe(true);
+    expect(useTerminalPanelStore.getState().tabsByConversationId['session-a']).toEqual([{ key: firstKey }]);
   });
 
   it('returns a stable empty tab snapshot for sessions without terminals', () => {
-    const tabsBySessionKey = useTerminalPanelStore.getState().tabsBySessionKey;
+    const tabsByConversationId = useTerminalPanelStore.getState().tabsByConversationId;
 
-    expect(selectTerminalTabs(tabsBySessionKey, 'missing-a')).toBe(
-      selectTerminalTabs(tabsBySessionKey, 'missing-a'),
+    expect(selectTerminalTabs(tabsByConversationId, 'missing-a')).toBe(
+      selectTerminalTabs(tabsByConversationId, 'missing-a'),
     );
-    expect(selectTerminalTabs(tabsBySessionKey, 'missing-a')).toBe(
-      selectTerminalTabs(tabsBySessionKey, 'missing-b'),
+    expect(selectTerminalTabs(tabsByConversationId, 'missing-a')).toBe(
+      selectTerminalTabs(tabsByConversationId, 'missing-b'),
     );
   });
 
   it('adds, switches, and closes independent terminal tabs', () => {
     useTerminalPanelStore.getState().toggle('session-a');
-    const first = useTerminalPanelStore.getState().activeTabKeyBySessionKey['session-a']!;
+    const first = useTerminalPanelStore.getState().activeTabKeyByConversationId['session-a']!;
     const second = useTerminalPanelStore.getState().addTerminal('session-a');
 
     expect(second).not.toBe(first);
-    expect(useTerminalPanelStore.getState().tabsBySessionKey['session-a']).toHaveLength(2);
-    expect(useTerminalPanelStore.getState().activeTabKeyBySessionKey['session-a']).toBe(second);
+    expect(useTerminalPanelStore.getState().tabsByConversationId['session-a']).toHaveLength(2);
+    expect(useTerminalPanelStore.getState().activeTabKeyByConversationId['session-a']).toBe(second);
 
     useTerminalPanelStore.getState().setActiveTerminal('session-a', first);
-    expect(useTerminalPanelStore.getState().activeTabKeyBySessionKey['session-a']).toBe(first);
+    expect(useTerminalPanelStore.getState().activeTabKeyByConversationId['session-a']).toBe(first);
 
     useTerminalPanelStore.getState().closeTerminal('session-a', first);
-    expect(useTerminalPanelStore.getState().tabsBySessionKey['session-a']).toEqual([{ key: second }]);
-    expect(useTerminalPanelStore.getState().activeTabKeyBySessionKey['session-a']).toBe(second);
+    expect(useTerminalPanelStore.getState().tabsByConversationId['session-a']).toEqual([{ key: second }]);
+    expect(useTerminalPanelStore.getState().activeTabKeyByConversationId['session-a']).toBe(second);
   });
 
   it('keeps the panel open when its final terminal tab is closed', () => {
     useTerminalPanelStore.getState().toggle('session-a');
-    const terminalKey = useTerminalPanelStore.getState().activeTabKeyBySessionKey['session-a']!;
+    const terminalKey = useTerminalPanelStore.getState().activeTabKeyByConversationId['session-a']!;
 
     useTerminalPanelStore.getState().closeTerminal('session-a', terminalKey);
 
-    expect(useTerminalPanelStore.getState().tabsBySessionKey['session-a']).toEqual([]);
-    expect(useTerminalPanelStore.getState().activeTabKeyBySessionKey['session-a']).toBeUndefined();
-    expect(useTerminalPanelStore.getState().openBySessionKey['session-a']).toBe(true);
+    expect(useTerminalPanelStore.getState().tabsByConversationId['session-a']).toEqual([]);
+    expect(useTerminalPanelStore.getState().activeTabKeyByConversationId['session-a']).toBeUndefined();
+    expect(useTerminalPanelStore.getState().openByConversationId['session-a']).toBe(true);
   });
 
   it('clamps panel height', () => {

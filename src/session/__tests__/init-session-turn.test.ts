@@ -26,12 +26,12 @@ const baseCfg = {
   },
 } as Config;
 
-const sessionKey = 'agent:main:telegram:default:direct:1';
+const conversationId = 'agent:main:telegram:default:direct:1';
 
 function baseMetadata(overrides: Partial<SessionMetadata> = {}): SessionMetadata {
   const now = new Date().toISOString();
   return {
-    key: sessionKey,
+    key: conversationId,
     status: SessionStatus.ACTIVE,
     tags: [],
     createdAt: now,
@@ -49,11 +49,11 @@ function baseMetadata(overrides: Partial<SessionMetadata> = {}): SessionMetadata
 
 function mockExistingEntry(sessionStartedAt: number) {
   vi.mocked(getSessionMetadata).mockImplementation((key) => {
-    if (key !== sessionKey) {
+    if (key !== conversationId) {
       return null;
     }
     return baseMetadata({
-      sessionId: 'old-id',
+      transcriptId: 'old-id',
       sessionStartedAt: new Date(sessionStartedAt).toISOString(),
     });
   });
@@ -67,13 +67,13 @@ describe('initSessionTurn', () => {
   it('calls resetSession on explicit /new trigger when session exists', async () => {
     mockExistingEntry(Date.now());
     const resetSession = vi.fn().mockResolvedValue({
-      sessionId: 'new-id',
-      previousSessionId: 'old-id',
+      transcriptId: 'new-id',
+      previousTranscriptId: 'old-id',
     });
 
     const result = await initSessionTurn({
       cfg: baseCfg,
-      sessionKey,
+      conversationId,
       body: '/new',
       resetSession,
     });
@@ -83,8 +83,8 @@ describe('initSessionTurn', () => {
       resetTriggered: true,
       bareReset: true,
       isNewSession: true,
-      sessionId: 'new-id',
-      previousSessionId: 'old-id',
+      transcriptId: 'new-id',
+      previousTranscriptId: 'old-id',
       ackMessage: '✅ New session started.',
     });
   });
@@ -92,13 +92,13 @@ describe('initSessionTurn', () => {
   it('calls resetSession on stale daily rollover without trigger', async () => {
     mockExistingEntry(Date.now() - 48 * 60 * 60_000);
     const resetSession = vi.fn().mockResolvedValue({
-      sessionId: 'fresh-id',
-      previousSessionId: 'old-id',
+      transcriptId: 'fresh-id',
+      previousTranscriptId: 'old-id',
     });
 
     const result = await initSessionTurn({
       cfg: baseCfg,
-      sessionKey,
+      conversationId,
       body: 'hello after idle',
       resetSession,
     });
@@ -126,7 +126,7 @@ describe('initSessionTurn', () => {
 
     const result = await initSessionTurn({
       cfg,
-      sessionKey,
+      conversationId,
       body: 'continue the same conversation',
       resetSession,
     });
@@ -136,7 +136,7 @@ describe('initSessionTurn', () => {
       resetTriggered: false,
       staleRollover: false,
       isNewSession: false,
-      sessionId: 'old-id',
+      transcriptId: 'old-id',
       bodyStripped: 'continue the same conversation',
     });
   });
@@ -144,8 +144,8 @@ describe('initSessionTurn', () => {
   it('still honors explicit reset triggers without an implicit reset policy', async () => {
     mockExistingEntry(Date.now() - 48 * 60 * 60_000);
     const resetSession = vi.fn().mockResolvedValue({
-      sessionId: 'new-id',
-      previousSessionId: 'old-id',
+      transcriptId: 'new-id',
+      previousTranscriptId: 'old-id',
     });
     const cfg = {
       ...baseCfg,
@@ -158,7 +158,7 @@ describe('initSessionTurn', () => {
 
     const result = await initSessionTurn({
       cfg,
-      sessionKey,
+      conversationId,
       body: '/new',
       resetSession,
     });
@@ -168,19 +168,19 @@ describe('initSessionTurn', () => {
       resetTriggered: true,
       staleRollover: false,
       isNewSession: true,
-      sessionId: 'new-id',
+      transcriptId: 'new-id',
     });
   });
 
   it('strips tail after /reset and does not bare-ack', async () => {
     const resetSession = vi.fn().mockResolvedValue({
-      sessionId: 'new-id',
-      previousSessionId: 'old-id',
+      transcriptId: 'new-id',
+      previousTranscriptId: 'old-id',
     });
 
     const result = await initSessionTurn({
       cfg: baseCfg,
-      sessionKey: 'agent:main:main',
+      conversationId: 'agent:main:main',
       body: '/reset continue here',
       resetSession,
     });
@@ -195,7 +195,7 @@ describe('initSessionTurn', () => {
 
     const result = await initSessionTurn({
       cfg: baseCfg,
-      sessionKey: 'agent:main:brand-new-key',
+      conversationId: 'agent:main:brand-new-key',
       body: 'hello',
       resetSession,
     });

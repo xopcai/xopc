@@ -1,132 +1,50 @@
-import { describe, expect, it } from 'vitest';
-
-import {
-  bumpSidebarSessionRow,
-  patchSidebarSessionName,
-  upsertSidebarSessionRow,
-} from '@/features/sessions/patch-sidebar-session-meta';
+import { describe, expect, it, vi } from 'vitest';
+import { bumpSidebarSessionRow, patchSidebarSessionName, upsertSidebarSessionRow } from '@/features/sessions/patch-sidebar-session-meta';
 import type { SessionMetadata } from '@/features/sessions/session.types';
 
-const KEY = 'agent:main:webchat:default:direct:chat_test';
-
-function stub(key: string, updatedAt: string): SessionMetadata {
-  return {
-    key,
-    status: 'active',
-    tags: [],
-    createdAt: updatedAt,
-    updatedAt,
-    lastAccessedAt: updatedAt,
-    messageCount: 0,
-    estimatedTokens: 0,
-    compactedCount: 0,
-    sourceChannel: 'webchat',
-    sourceChatId: 'chat_test',
-  };
+const ID = '402d49db-7bd4-4cdd-9ba1-a8e16de1f061';
+const OTHER = '402d49db-7bd4-4cdd-9ba1-a8e16de1f062';
+function session(key: string): SessionMetadata {
+  return { key, agentId: 'coder', status: 'active', tags: [], createdAt: '2026-01-01',
+    updatedAt: '2026-01-01', lastAccessedAt: '2026-01-01', messageCount: 0,
+    estimatedTokens: 0, compactedCount: 0, sourceChannel: 'webchat', sourceChatId: 'peer' };
+}
+type Pages = { items: SessionMetadata[]; hasMore: boolean }[];
+function cache(items?: SessionMetadata[]) {
+  let pages: Pages | undefined = items ? [{ items, hasMore: false }] : undefined;
+  const mutate = vi.fn(async (update?: Pages | ((pages?: Pages) => Pages | undefined)) => {
+    if (typeof update === 'function') pages = update(pages);
+    return pages;
+  });
+  return { mutate, read: () => pages };
 }
 
-type Pages = { items: SessionMetadata[]; hasMore: boolean }[];
-
-describe('upsertSidebarSessionRow', () => {
-  it('no-ops when cache is empty (does not block server fetch)', async () => {
-    let pages: Pages | undefined;
-    const mutate = async (
-      updater?: Pages | ((p?: Pages) => Pages | undefined),
-    ) => {
-      if (typeof updater === 'function') {
-        pages = updater(pages);
-      }
-      return pages;
-    };
-
-    upsertSidebarSessionRow(mutate, KEY, { name: 'Hello' });
+describe('sidebar conversation metadata', () => {
+  it('keeps an unloaded cache available for the initial fetch', async () => {
+    const c = cache();
+    upsertSidebarSessionRow(c.mutate, ID);
     await Promise.resolve();
-
-    expect(pages).toBeUndefined();
+    expect(c.read()).toBeUndefined();
   });
-
-  it('moves an existing session to the top when cache is loaded', async () => {
-    let pages: Pages = [
-      {
-        items: [stub('agent:main:webchat:default:direct:other', '2026-01-01T00:00:00.000Z')],
-        hasMore: false,
-      },
-    ];
-    const mutate = async (
-      updater?: Pages | ((p?: Pages) => Pages | undefined),
-    ) => {
-      if (typeof updater === 'function') {
-        pages = updater(pages) ?? pages;
-      }
-      return pages;
-    };
-
-    upsertSidebarSessionRow(mutate, KEY, { name: 'New chat title' });
+  it('moves a known conversation while preserving its authoritative agent and route', async () => {
+    const c = cache([session(OTHER), session(ID)]);
+    bumpSidebarSessionRow(c.mutate, ID, { name: 'New title' });
     await Promise.resolve();
-
-    expect(pages[0]?.items[0]?.key).toBe(KEY);
-    expect(pages[0]?.items[0]?.name).toBe('New chat title');
+    expect(c.read()?.[0].items[0]).toMatchObject({ key: ID, agentId: 'coder', sourceChatId: 'peer', name: 'New title' });
+    expect(c.read()?.[0].items).toHaveLength(2);
   });
-});
-
-describe('patchSidebarSessionName', () => {
-  it('updates name on an existing row', async () => {
-    let pages: Pages = [{ items: [stub(KEY, '2026-01-01T00:00:00.000Z')], hasMore: false }];
-    const mutate = async (
-      updater?: Pages | ((p?: Pages) => Pages | undefined),
-    ) => {
-      if (typeof updater === 'function') {
-        pages = updater(pages) ?? pages;
-      }
-      return pages;
-    };
-
-    patchSidebarSessionName(mutate, KEY, 'From user message');
+  it('patches an existing title in place', async () => {
+    const c = cache([session(OTHER), session(ID)]);
+    patchSidebarSessionName(c.mutate, ID, 'Renamed');
     await Promise.resolve();
-
-    expect(pages[0]?.items[0]?.name).toBe('From user message');
+    expect(c.read()?.[0].items[1].name).toBe('Renamed');
   });
-
-  it('inserts a stub at the top when the row is missing', async () => {
-    let pages: Pages = [
-      {
-        items: [stub('agent:main:webchat:default:direct:other', '2026-01-01T00:00:00.000Z')],
-        hasMore: false,
-      },
-    ];
-    const mutate = async (
-      updater?: Pages | ((p?: Pages) => Pages | undefined),
-    ) => {
-      if (typeof updater === 'function') {
-        pages = updater(pages) ?? pages;
-      }
-      return pages;
-    };
-
-    patchSidebarSessionName(mutate, KEY, 'First message title');
+  it.each([upsertSidebarSessionRow, patchSidebarSessionName])('fetches missing metadata instead of guessing an agent from the ID', async (patch) => {
+    const c = cache([session(OTHER)]);
+    if (patch === patchSidebarSessionName) patchSidebarSessionName(c.mutate, ID, 'Title');
+    else upsertSidebarSessionRow(c.mutate, ID, { name: 'Title' });
     await Promise.resolve();
-
-    expect(pages[0]?.items[0]?.key).toBe(KEY);
-    expect(pages[0]?.items[0]?.name).toBe('First message title');
-    expect(pages[0]?.items).toHaveLength(2);
-  });
-});
-
-describe('bumpSidebarSessionRow', () => {
-  it('delegates to upsert when cache exists', async () => {
-    let pages: Pages = [{ items: [], hasMore: true }];
-    const mutate = async (
-      updater?: Pages | ((p?: Pages) => Pages | undefined),
-    ) => {
-      if (typeof updater === 'function') {
-        pages = updater(pages) ?? pages;
-      }
-      return pages;
-    };
-
-    bumpSidebarSessionRow(mutate, KEY, { name: 'Hi' });
-    await Promise.resolve();
-
-    expect(pages[0]?.items[0]?.key).toBe(KEY);
+    expect(c.mutate).toHaveBeenLastCalledWith();
+    expect(c.read()?.[0].items).toEqual([session(OTHER)]);
   });
 });

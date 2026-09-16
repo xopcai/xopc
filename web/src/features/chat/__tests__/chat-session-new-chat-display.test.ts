@@ -15,7 +15,7 @@ const oldMessages: Message[] = [
 describe('new chat display isolation', () => {
   beforeEach(() => {
     useChatSessionStore.setState({
-      focusedSessionKey: oldKey,
+      focusedConversationId: oldKey,
       sessions: {},
     });
     useChatSessionStore.getState().setCommittedSnapshot(oldKey, {
@@ -29,8 +29,8 @@ describe('new chat display isolation', () => {
     const slice = useChatSessionStore.getState().sessions[oldKey];
     expect(
       selectDisplayMessages({
-        viewSessionKey: null,
-        sessionKey: null,
+        viewConversationId: null,
+        conversationId: null,
         messages: slice?.messages ?? [],
         streamingMsg: null,
       }),
@@ -43,8 +43,8 @@ describe('new chat display isolation', () => {
 
     expect(
       selectDisplayMessages({
-        viewSessionKey: newKey,
-        sessionKey: newKey,
+        viewConversationId: newKey,
+        conversationId: newKey,
         messages: newSlice?.messages ?? [],
         streamingMsg: null,
       }),
@@ -53,8 +53,8 @@ describe('new chat display isolation', () => {
     const oldSlice = useChatSessionStore.getState().sessions[oldKey];
     expect(
       selectDisplayMessages({
-        viewSessionKey: newKey,
-        sessionKey: oldKey,
+        viewConversationId: newKey,
+        conversationId: oldKey,
         messages: oldSlice?.messages ?? [],
         streamingMsg: oldSlice?.streamingMsg ?? null,
       }),

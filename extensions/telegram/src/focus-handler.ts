@@ -1,6 +1,6 @@
 import type { Context } from 'grammy';
 import type { Config } from '@xopcai/xopc/config/index.js';
-import { generateSessionKey } from '@xopcai/xopc/chat-commands/session-key.js';
+import { generateConversationId } from '@xopcai/xopc/chat-commands/session-key.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 import {
   clearTelegramThreadBinding,
@@ -31,10 +31,10 @@ export async function handleTelegramFocusCommand(params: {
     return;
   }
 
-  const sessionKey =
+  const conversationId =
     parts.length > 1 && parts[1] && !parts[1].startsWith('/')
       ? parts.slice(1).join(' ').trim()
-      : generateSessionKey({
+      : generateConversationId({
           source: 'telegram',
           chatId,
           senderId,
@@ -44,7 +44,7 @@ export async function handleTelegramFocusCommand(params: {
         });
 
   setTelegramThreadBinding({
-    sessionKey,
+    conversationId,
     chatId,
     threadId: threadId != null ? String(threadId) : undefined,
     createdAtMs: Date.now(),
@@ -52,22 +52,22 @@ export async function handleTelegramFocusCommand(params: {
   });
 
   log.info(
-    { accountId, chatId, threadId, sessionKey, conversationId: buildTelegramConversationId(chatId, threadId) },
+    { accountId, chatId, threadId, conversationId, externalConversationId: buildTelegramConversationId(chatId, threadId) },
     'Telegram thread focus set',
   );
 
-  await ctx.reply(`Focused on session:\n${sessionKey}`);
+  await ctx.reply(`Focused on session:\n${conversationId}`);
 }
 
-export function resolveTelegramFocusedSessionKey(params: {
+export function resolveTelegramFocusedConversationId(params: {
   chatId: string;
   threadId?: string;
-  defaultSessionKey: string;
+  defaultConversationId: string;
 }): string {
   const binding = getTelegramThreadBinding(params.chatId, params.threadId);
   if (!binding) {
-    return params.defaultSessionKey;
+    return params.defaultConversationId;
   }
   binding.lastActivityMs = Date.now();
-  return binding.sessionKey;
+  return binding.conversationId;
 }

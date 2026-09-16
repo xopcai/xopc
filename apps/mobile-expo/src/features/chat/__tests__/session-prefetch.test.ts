@@ -20,7 +20,7 @@ import { createSession } from '../../../query/sessions';
 import {
   prefetchNewChatSession,
   resetSessionPrefetchCacheForTests,
-  takeNewChatSessionKey,
+  takeNewChatConversationId,
 } from '../session-prefetch';
 
 const mockedCreate = vi.mocked(createSession);
@@ -40,7 +40,7 @@ afterEach(() => {
 
 describe('server session prefetch', () => {
   it('takes a server-created session key', async () => {
-    await expect(takeNewChatSessionKey({ agentId: 'main', projectId: null })).resolves.toBe(
+    await expect(takeNewChatConversationId({ agentId: 'main', projectId: null })).resolves.toBe(
       'agent:main:webchat:default:direct:server-owned',
     );
     expect(mockedCreate).toHaveBeenCalledTimes(1);
@@ -49,7 +49,7 @@ describe('server session prefetch', () => {
 
   it('prefetch then take reuses the prefetched server key', async () => {
     prefetchNewChatSession({ agentId: 'main', projectId: null });
-    await expect(takeNewChatSessionKey({ agentId: 'main', projectId: null })).resolves.toBe(
+    await expect(takeNewChatConversationId({ agentId: 'main', projectId: null })).resolves.toBe(
       'agent:main:webchat:default:direct:server-owned',
     );
     expect(mockedCreate).toHaveBeenCalledTimes(1);
@@ -59,10 +59,10 @@ describe('server session prefetch', () => {
     prefetchNewChatSession({ agentId: 'main', projectId: null });
     prefetchNewChatSession({ agentId: 'other', projectId: null });
 
-    await expect(takeNewChatSessionKey({ agentId: 'main', projectId: null })).resolves.toBe(
+    await expect(takeNewChatConversationId({ agentId: 'main', projectId: null })).resolves.toBe(
       'agent:main:webchat:default:direct:server-owned',
     );
-    await expect(takeNewChatSessionKey({ agentId: 'other', projectId: null })).resolves.toBe(
+    await expect(takeNewChatConversationId({ agentId: 'other', projectId: null })).resolves.toBe(
       'agent:other:webchat:default:direct:server-owned',
     );
     expect(mockedCreate).toHaveBeenCalledTimes(2);
@@ -70,7 +70,7 @@ describe('server session prefetch', () => {
 
   it('keeps explicit execution environments in separate cache entries', async () => {
     prefetchNewChatSession({ agentId: 'main', projectId: 'project-1', executionMode: 'local_checkout' });
-    await takeNewChatSessionKey({ agentId: 'main', projectId: 'project-1', executionMode: 'managed_worktree' });
+    await takeNewChatConversationId({ agentId: 'main', projectId: 'project-1', executionMode: 'managed_worktree' });
 
     expect(mockedCreate).toHaveBeenCalledWith({ agentId: 'main', projectId: 'project-1', executionMode: 'local_checkout' });
     expect(mockedCreate).toHaveBeenCalledWith({ agentId: 'main', projectId: 'project-1', executionMode: 'managed_worktree' });

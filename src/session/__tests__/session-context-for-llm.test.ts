@@ -23,7 +23,7 @@ describe('session-context-for-llm', () => {
     const rows = [{ role: 'custom' as const, customType: 'voice_call', details: { callId: 'call', startedAt: 100 } }];
     expect(buildSessionContextForLlm(rows)).toEqual([]);
     expect(buildSessionDisplayMessages(rows)).toEqual([]);
-    expect(storedRowsToFileEntries({ sessionId: 'session', cwd: '/tmp', rows }).filter((entry) => entry.type !== 'session')).toEqual([]);
+    expect(storedRowsToFileEntries({ transcriptId: 'session', cwd: '/tmp', rows }).filter((entry) => entry.type !== 'session')).toEqual([]);
   });
   it('restores native speech with its actual role and excludes unconfirmed interrupted output', () => {
     const rows = [

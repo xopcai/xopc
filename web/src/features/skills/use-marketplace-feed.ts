@@ -13,7 +13,7 @@ export function useMarketplaceFeed(options: {
   sort: 'downloads' | 'newest';
 }) {
   const baseUrl = useGatewayStore((state) => state.baseUrl);
-  const token = useGatewayStore((state) => state.sessionKey);
+  const token = useGatewayStore((state) => state.conversationId);
   const getKey = (index: number, previous: Page | null) => {
     if (!options.enabled || !options.provider) return null;
     if (previous && (!previous.items.length || previous.meta.page >= previous.meta.totalPages)) return null;

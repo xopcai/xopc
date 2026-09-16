@@ -55,9 +55,9 @@ const MAX_RECENT_ACTIVITIES = 12;
 let currentRelationshipMoment: DesktopPetRelationshipMoment | undefined;
 
 function currentActivities(now = Date.now()): PetSessionUpdate[] {
-  for (const [sessionKey, activity] of recentActivities) {
+  for (const [conversationId, activity] of recentActivities) {
     if (activity.state === "success" && now - activity.timestamp > RECENT_SUCCESS_TTL_MS) {
-      recentActivities.delete(sessionKey);
+      recentActivities.delete(conversationId);
     }
   }
   return [...recentActivities.values()]
@@ -66,13 +66,13 @@ function currentActivities(now = Date.now()): PetSessionUpdate[] {
 }
 
 function rememberActivity(event: PetSessionUpdate): void {
-  const prior = recentActivities.get(event.sessionKey);
+  const prior = recentActivities.get(event.conversationId);
   if (prior && prior.runId === event.runId && event.sequence <= prior.sequence) return;
-  recentActivities.set(event.sessionKey, event);
+  recentActivities.set(event.conversationId, event);
   const retained = currentActivities();
   if (recentActivities.size <= MAX_RECENT_ACTIVITIES) return;
   recentActivities.clear();
-  for (const activity of retained) recentActivities.set(activity.sessionKey, activity);
+  for (const activity of retained) recentActivities.set(activity.conversationId, activity);
 }
 
 function scaleFromPrefs(prefs: DesktopPetPrefs): number {
@@ -263,9 +263,9 @@ export async function sendDesktopPetEvent(event: PetSessionUpdate): Promise<void
   win.webContents.send("desktop-pet:event", event);
 }
 
-export function acknowledgeDesktopPetEvent(sessionKey: string, runId: string): void {
-  const activity = recentActivities.get(sessionKey);
-  if (activity?.runId === runId) recentActivities.delete(sessionKey);
+export function acknowledgeDesktopPetEvent(conversationId: string, runId: string): void {
+  const activity = recentActivities.get(conversationId);
+  if (activity?.runId === runId) recentActivities.delete(conversationId);
 }
 
 export function setDesktopPetClickThrough(enabled: boolean): void {

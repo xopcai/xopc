@@ -102,7 +102,7 @@ export interface RetryTransientTurnOptions {
   /** Initial deterministic backoff. Each later retry doubles it. */
   baseDelayMs?: number;
   signal?: AbortSignal;
-  sessionKey: string;
+  conversationId: string;
   log: {
     warn: (obj: Record<string, unknown>, msg: string) => void;
   };
@@ -150,7 +150,7 @@ export async function maybeRetryTurnAfterTransientLlmFailure(
     const failureKind = classifyLlmFailure(errMsg);
     if (failureKind !== 'transient_network') {
       options.log.warn(
-        { sessionKey: options.sessionKey, errorMessage: errMsg, failureKind },
+        { conversationId: options.conversationId, errorMessage: errMsg, failureKind },
         'Assistant turn ended with error (not retrying as transient)',
       );
       return;
@@ -160,7 +160,7 @@ export async function maybeRetryTurnAfterTransientLlmFailure(
     const retryDelayMs = baseDelayMs * (2 ** (continues - 1));
     options.log.warn(
       {
-        sessionKey: options.sessionKey,
+        conversationId: options.conversationId,
         errorMessage: errMsg,
         failureKind,
         continueAttempt: continues,

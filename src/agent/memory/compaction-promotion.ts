@@ -42,8 +42,8 @@ const KNOWLEDGE_KIND_BY_HANDOVER_KIND: Record<HandoverItemKind, KnowledgeKind> =
 };
 
 export interface PromoteCompactionLedgerInput {
-  sessionKey: string;
-  sessionId: string;
+  conversationId: string;
+  transcriptId: string;
   sourceAgentId: string;
   workspaceId: string;
   projectId?: string;
@@ -177,7 +177,7 @@ export function promoteCompactionLedger(
     durableRecordIds: [],
     rejectedRecordIds: [],
   };
-  const sessionKind = resolveMemorySessionKind(input.sessionKey);
+  const sessionKind = resolveMemorySessionKind(input.conversationId);
 
   for (const item of input.handover.items) {
     const classified = classifyItemProvenance(item, sourceById, entriesByTurn, entriesByRound);
@@ -191,9 +191,9 @@ export function promoteCompactionLedger(
     const active = item.status === 'active';
     const episode = writeKnowledgeItem({
       kind: KNOWLEDGE_KIND_BY_HANDOVER_KIND[item.kind],
-      scope: { type: 'session', id: input.sessionKey },
+      scope: { type: 'session', id: input.conversationId },
       content: item.text,
-      canonicalKey: `compaction:${input.sessionId}:${item.id}`,
+      canonicalKey: `compaction:${input.transcriptId}:${item.id}`,
       confidence: input.audit.status === 'passed' ? 0.82 : 0.65,
       status: active
         ? (input.writePolicy === 'allow' && originClass !== 'untrusted' ? 'active' : 'candidate')
@@ -201,7 +201,7 @@ export function promoteCompactionLedger(
       importance: importanceFor(item),
       originClass,
       sourceAgentId: input.sourceAgentId,
-      sourceSessionId: input.sessionKey,
+      sourceConversationId: input.conversationId,
       sourceTurnId: item.sources[0] ? rowTurnId(sourceById.get(item.sources[0].entryId)) : undefined,
       derivedFromRecalledContext: classified.derivedFromRecalledContext,
       source: {
@@ -223,7 +223,7 @@ export function promoteCompactionLedger(
       const existingDurable = !active
         ? listKnowledgeItems({ limit: 2_000 }).find((entry) => entry.canonicalKey === `durable:${item.kind}:${stableId('fact', item.text)}`)
         : undefined;
-      if (existingDurable?.sourceSessionId === input.sessionKey) {
+      if (existingDurable?.sourceConversationId === input.conversationId) {
         setKnowledgeStatus(existingDurable.id, 'archived');
       }
       result.rejectedRecordIds.push(episode.item.id);
@@ -242,7 +242,7 @@ export function promoteCompactionLedger(
       status: input.writePolicy === 'allow' ? 'active' : 'candidate',
       importance: importanceFor(item),
       originClass: 'agent',
-      sourceSessionId: input.sessionKey,
+      sourceConversationId: input.conversationId,
       sourceTurnId: item.sources[0] ? rowTurnId(sourceById.get(item.sources[0].entryId)) : undefined,
       derivedFromRecalledContext: false,
       source: {

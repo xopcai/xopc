@@ -6,7 +6,7 @@ export type BrowserTarget =
   | { kind: 'attached_tab'; bindingId: string }
   | { kind: 'endpoint'; endpointId: string };
 
-export const BROWSER_EXTENSION_PROTOCOL_VERSION = 4;
+export const BROWSER_EXTENSION_PROTOCOL_VERSION = 5;
 
 export const BROWSER_CONTROL_ENDPOINT_TOOL_NAME = 'browser.control';
 

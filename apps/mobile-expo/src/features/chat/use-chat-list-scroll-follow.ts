@@ -11,7 +11,7 @@ export function useChatListScrollFollow({
   messages,
   loadingOlder = false,
   keyboardPadding,
-  sessionKey,
+  conversationId,
   onAtBottomChange,
   getMessageKey,
 }: {
@@ -19,7 +19,7 @@ export function useChatListScrollFollow({
   messages: Message[];
   loadingOlder?: boolean;
   keyboardPadding: number;
-  sessionKey?: string;
+  conversationId?: string;
   onAtBottomChange?: (isAtBottom: boolean) => void;
   getMessageKey: (msg: Message, index: number) => string;
 }) {
@@ -28,7 +28,7 @@ export function useChatListScrollFollow({
   const momentumRef = useRef(false);
   const dragStartYRef = useRef(0);
   const frameRef = useRef<number | null>(null);
-  const previousRef = useRef({ sessionKey, lastKey: '', length: 0 });
+  const previousRef = useRef({ conversationId, lastKey: '', length: 0 });
   const metricsRef = useRef({ offsetY: 0, contentHeight: 0, viewportHeight: 0 });
   const contentLayoutHeightRef = useRef(0);
   const buttonVisibleRef = useRef(false);
@@ -69,7 +69,7 @@ export function useChatListScrollFollow({
     const previous = previousRef.current;
     const last = messages[messages.length - 1];
     const lastKey = last ? getMessageKey(last, messages.length - 1) : '';
-    if (previous.sessionKey !== sessionKey) {
+    if (previous.conversationId !== conversationId) {
       cancelFollow();
       draggingRef.current = false;
       momentumRef.current = false;
@@ -87,8 +87,8 @@ export function useChatListScrollFollow({
       // Assistant rows follow only while already pinned; history readers stay undisturbed.
       scheduleFollow();
     }
-    previousRef.current = { sessionKey, lastKey, length: messages.length };
-  }, [sessionKey, messages, getMessageKey, cancelFollow, onAtBottomChange, setPinned, scheduleFollow]);
+    previousRef.current = { conversationId, lastKey, length: messages.length };
+  }, [conversationId, messages, getMessageKey, cancelFollow, onAtBottomChange, setPinned, scheduleFollow]);
 
   useEffect(() => cancelFollow, [cancelFollow]);
   useEffect(() => { scheduleFollow(); }, [keyboardPadding, scheduleFollow]);
@@ -167,7 +167,7 @@ export function useChatListScrollFollow({
   }, [listRef, setPinned]);
 
   return {
-    listKey: sessionKey ?? '',
+    listKey: conversationId ?? '',
     showScrollToBottom,
     scrollToBottom,
     onContentSizeChange,

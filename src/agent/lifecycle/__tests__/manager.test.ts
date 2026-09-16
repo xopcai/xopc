@@ -44,7 +44,7 @@ describe('LifecycleManager', () => {
     expect(handlerFn).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'llm_request',
-        sessionKey: 'test-session',
+        conversationId: 'test-session',
         payload: {
           requestNumber: 1,
           maxRequests: 10,

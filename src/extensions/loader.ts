@@ -138,7 +138,7 @@ export class ExtensionLoader {
   private _runtimeContext?: {
     bus?: MessageBus;
     sessionManager?: SessionIndex;
-    scheduleWebchatContinuation?: (sessionKey: string, message: string) => void;
+    scheduleWebchatContinuation?: (conversationId: string, message: string) => void;
     setLabel?: (entryId: string, label: string | undefined) => void;
     sendUserMessage?: import('./types/index.js').ExtensionRuntime['sendUserMessage'];
     appendEntry?: import('./types/index.js').ExtensionRuntime['appendEntry'];
@@ -300,7 +300,7 @@ export class ExtensionLoader {
   setRuntimeContext(ctx: {
     bus?: MessageBus;
     sessionManager?: SessionIndex;
-    scheduleWebchatContinuation?: (sessionKey: string, message: string) => void;
+    scheduleWebchatContinuation?: (conversationId: string, message: string) => void;
     setLabel?: (entryId: string, label: string | undefined) => void;
     sendUserMessage?: import('./types/index.js').ExtensionRuntime['sendUserMessage'];
     appendEntry?: import('./types/index.js').ExtensionRuntime['appendEntry'];

@@ -73,7 +73,7 @@ const listCommand: CommandDefinition = {
           ...s,
           name: getSessionDisplayName(s.key),
         })),
-        currentSession: ctx.sessionKey,
+        currentSession: ctx.conversationId,
       };
       
       return {

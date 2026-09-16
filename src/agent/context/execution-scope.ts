@@ -32,7 +32,7 @@ export type ExecutionObjective =
     };
 
 export interface ExecutionScope {
-  sessionKey: string;
+  conversationId: string;
   projectId?: string;
   objective?: ExecutionObjective;
 }
@@ -43,8 +43,8 @@ function bounded(value: string | undefined, max = MAX_OBJECTIVE_TEXT): string | 
   return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
 }
 
-function taskObjective(sessionKey: string): ExecutionObjective | undefined {
-  const taskId = new TaskConversationRepository().resolveActiveExecutionSession(sessionKey)?.taskId;
+function taskObjective(conversationId: string): ExecutionObjective | undefined {
+  const taskId = new TaskConversationRepository().resolveActiveExecutionSession(conversationId)?.taskId;
   const task = taskId ? new TaskRepository().get(taskId) : undefined;
   if (!task) return undefined;
   const contract = task.contract;
@@ -60,11 +60,11 @@ function taskObjective(sessionKey: string): ExecutionObjective | undefined {
   };
 }
 
-function workflowObjective(sessionKey: string): ExecutionObjective | undefined {
-  const metadata = getSessionMetadata(sessionKey);
+function workflowObjective(conversationId: string): ExecutionObjective | undefined {
+  const metadata = getSessionMetadata(conversationId);
   if (!metadata) return undefined;
-  if (metadata.sessionType === 'workflow-subagent' && metadata.parentSessionKey) {
-    return workflowObjective(metadata.parentSessionKey);
+  if (metadata.sessionType === 'workflow-subagent' && metadata.parentConversationId) {
+    return workflowObjective(metadata.parentConversationId);
   }
   if (metadata.sessionType !== 'workflow-run') return undefined;
   const objective = bounded(
@@ -85,13 +85,13 @@ function workflowObjective(sessionKey: string): ExecutionObjective | undefined {
   };
 }
 
-export function resolveExecutionScope(sessionKey: string): ExecutionScope {
-  if (!isXopcDatabaseOpen()) return { sessionKey };
-  const metadata = getSessionMetadata(sessionKey);
+export function resolveExecutionScope(conversationId: string): ExecutionScope {
+  if (!isXopcDatabaseOpen()) return { conversationId };
+  const metadata = getSessionMetadata(conversationId);
   return {
-    sessionKey,
+    conversationId,
     projectId: metadata?.projectId,
-    objective: taskObjective(sessionKey) ?? workflowObjective(sessionKey),
+    objective: taskObjective(conversationId) ?? workflowObjective(conversationId),
   };
 }
 
@@ -134,12 +134,12 @@ export function formatCurrentWorkForPrompt(scope: ExecutionScope): string | unde
 }
 
 export function buildExecutionScopeContextForPrompt(
-  sessionKey: string,
+  conversationId: string,
   options: { includeKnowledge?: boolean; knowledgeSources?: readonly KnowledgeSource[] } = {},
 ): string | undefined {
-  const scope = resolveExecutionScope(sessionKey);
+  const scope = resolveExecutionScope(conversationId);
   const sections = [
-    buildActiveProjectContextForPrompt(sessionKey, {
+    buildActiveProjectContextForPrompt(conversationId, {
       knowledgeQuery: scope.objective?.objective,
       includeKnowledge: options.includeKnowledge,
       knowledgeSources: options.knowledgeSources,

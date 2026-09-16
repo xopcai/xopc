@@ -7,11 +7,12 @@ import { isLocalModelBaseUrl } from '../providers/model-call.js';
 import { resolveModel } from '../providers/index.js';
 import { ActivityService } from '../activity/service.js';
 import type { ProjectService } from '../projects/project-service.js';
-import { buildSessionKey } from '../routing/session-key.js';
+import { resolveConversationId } from '../routing/session-key.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
 import type { SessionIndex } from '../session/manager.js';
 import {
   ensureSessionRecord,
+  patchSessionMetadata,
   type SessionMetadataSeed,
 } from '../storage/sqlite/index.js';
 import { createContextEvidence } from '../storage/sqlite/context-evidence-repository.js';
@@ -369,13 +370,14 @@ export class WorkDiscoveryService {
     const rootPath = project.workspaceRoot ?? resolveEffectiveAgentProfile(config, agentId).resolvedWorkspacePath;
     const id = randomUUID();
     const peerId = `project-understanding-${id}`;
-    const sessionKey = buildSessionKey({ agentId, source: 'webchat', accountId: 'default', peerKind: 'direct', peerId });
-    ensureSessionRecord(sessionKey, rootPath, {
+    const conversationId = resolveConversationId({ agentId, source: 'webchat', accountId: 'default', peerKind: 'direct', peerId });
+    ensureSessionRecord(conversationId, rootPath, {
       ...sessionMetadata(agentId, peerId), projectId,
     });
+    patchSessionMetadata(conversationId, { ...sessionMetadata(agentId, peerId), projectId });
     const run = createWorkDiscoveryRun({
       id, idempotencyKey: id, source: 'manual_selected_directory', mode: 'background',
-      status: 'queued', rootPath, projectId, sessionKey, agentId,
+      status: 'queued', rootPath, projectId, conversationId, agentId,
       modelRef: getAgentDefaultModelRef(config) ?? '',
       scanPolicyVersion: WORK_DISCOVERY_SCAN_POLICY_VERSION, createdAt: Date.now(),
     });
@@ -870,17 +872,17 @@ export class WorkDiscoveryService {
     if (!match) throw new Error('Selected folder cannot be used as a project workspace');
     const projectAgentId = match.project.defaultAgentId || agentId;
     const peerId = `work-discovery-${randomUUID()}`;
-    const sessionKey = buildSessionKey({
+    const conversationId = resolveConversationId({
       agentId: projectAgentId,
       source: 'webchat',
       accountId: 'default',
       peerKind: 'direct',
       peerId,
     });
-    await this.options.sessions.saveMessages(sessionKey, [], {
+    await this.options.sessions.saveMessages(conversationId, [], {
       metadata: sessionMetadata(projectAgentId, peerId),
     });
-    this.options.projects.attachSession(sessionKey, match.project.id);
+    this.options.projects.attachSession(conversationId, match.project.id);
     const now = Date.now();
     const run = createWorkDiscoveryRun({
       id: randomUUID(),
@@ -889,13 +891,13 @@ export class WorkDiscoveryService {
       status: 'queued',
       rootPath,
       projectId: match.project.id,
-      sessionKey,
+      conversationId,
       agentId: projectAgentId,
       modelRef,
       scanPolicyVersion: WORK_DISCOVERY_SCAN_POLICY_VERSION,
       createdAt: now,
     });
-    await this.options.sessions.appendTranscriptContextEntry(sessionKey, {
+    await this.options.sessions.appendTranscriptContextEntry(conversationId, {
       text: 'Work discovery was explicitly requested for the selected folder.',
       data: {
         type: 'work_discovery',
@@ -912,13 +914,13 @@ export class WorkDiscoveryService {
       type: 'work_discovery.started',
       primaryObject: { kind: 'project', id: match.project.id, title: match.project.name },
       actor: { kind: 'system' },
-      initiator: { kind: 'user', sessionKey },
+      initiator: { kind: 'user', conversationId },
       source: { kind: 'gateway_api', runId: run.id },
       visibility: 'audit',
       payload: { policyVersion: WORK_DISCOVERY_SCAN_POLICY_VERSION, source: input.source },
       scopes: [
         { scopeKind: 'project', scopeId: match.project.id, reason: 'object_owner' },
-        { scopeKind: 'session', scopeId: sessionKey, reason: 'runtime_context' },
+        { scopeKind: 'session', scopeId: conversationId, reason: 'runtime_context' },
       ],
     });
     const controller = new AbortController();
@@ -945,7 +947,7 @@ export class WorkDiscoveryService {
     this.options.emit(`work-discovery.${suffix}`, {
       runId: run.id,
       projectId: run.projectId,
-      sessionKey: run.sessionKey,
+      conversationId: run.conversationId,
       status: run.status,
       stage: run.stage,
       ...(run.status === 'completed' ? { result: run.result } : {}),
@@ -1088,14 +1090,14 @@ export class WorkDiscoveryService {
       }
       current = updateWorkDiscoveryRun(run.id, { status: 'analyzing', stage: 'next_steps' })!;
       this.publish(current);
-      if (run.mode !== 'background') await this.options.sessions.appendTranscriptCustomMessageEntry(run.sessionKey, {
+      if (run.mode !== 'background') await this.options.sessions.appendTranscriptCustomMessageEntry(run.conversationId, {
         customType: 'work-discovery-result',
         content: workDiscoveryResultMarkdown(result),
         display: true,
         details: { runId: run.id, result },
       });
       const project = this.options.projects.get(run.projectId);
-      if (run.mode !== 'background') await this.options.sessions.updateSessionMetadata(run.sessionKey, {
+      if (run.mode !== 'background') await this.options.sessions.updateSessionMetadata(run.conversationId, {
         name: project ? `Continue work on ${project.name}` : 'Continue recent work',
         hiddenFromSessionList: false,
       });
@@ -1123,8 +1125,8 @@ export class WorkDiscoveryService {
       this.activity.record({
         type: 'work_discovery.completed',
         primaryObject: { kind: 'project', id: run.projectId, title: project?.name },
-        actor: { kind: 'agent', agentId: run.agentId, sessionKey: run.sessionKey },
-        initiator: { kind: 'user', sessionKey: run.sessionKey },
+        actor: { kind: 'agent', agentId: run.agentId, conversationId: run.conversationId },
+        initiator: { kind: 'user', conversationId: run.conversationId },
         source: { kind: 'system', runId: run.id },
         payload: {
           policyVersion: run.scanPolicyVersion,
@@ -1133,12 +1135,12 @@ export class WorkDiscoveryService {
         },
         scopes: [
           { scopeKind: 'project', scopeId: run.projectId, reason: 'object_owner' },
-          { scopeKind: 'session', scopeId: run.sessionKey, reason: 'runtime_context' },
+          { scopeKind: 'session', scopeId: run.conversationId, reason: 'runtime_context' },
         ],
       });
       this.publish(current);
-      if (run.mode !== 'background') this.options.emit('session.transcript_updated', { key: run.sessionKey });
-      log.info({ runId: run.id, projectId: run.projectId, sessionKey: run.sessionKey, durationMs: Date.now() - startedAt }, 'Work discovery completed');
+      if (run.mode !== 'background') this.options.emit('session.transcript_updated', { key: run.conversationId });
+      log.info({ runId: run.id, projectId: run.projectId, conversationId: run.conversationId, durationMs: Date.now() - startedAt }, 'Work discovery completed');
     } catch (error) {
       if (run.mode === 'background' && this.stopped) {
         updateWorkDiscoveryRun(run.id, { status: 'queued', errorCode: undefined, errorMessage: undefined });
@@ -1159,13 +1161,13 @@ export class WorkDiscoveryService {
         type: canceled ? 'work_discovery.canceled' : 'work_discovery.failed',
         primaryObject: { kind: 'project', id: run.projectId },
         actor: { kind: 'system' },
-        initiator: { kind: 'user', sessionKey: run.sessionKey },
+        initiator: { kind: 'user', conversationId: run.conversationId },
         source: { kind: 'system', runId: run.id },
         visibility: 'audit',
         payload: { errorCode: code },
         scopes: [
           { scopeKind: 'project', scopeId: run.projectId, reason: 'object_owner' },
-          { scopeKind: 'session', scopeId: run.sessionKey, reason: 'runtime_context' },
+          { scopeKind: 'session', scopeId: run.conversationId, reason: 'runtime_context' },
         ],
       });
       log.warn({ err: error, runId: run.id, projectId: run.projectId, phase: 'analysis', errorCode: code }, `Work discovery failed: ${message}`);
@@ -1296,7 +1298,7 @@ export class WorkDiscoveryService {
         investigationId: investigation.id,
         projectId: run.projectId,
         sourceType: 'user_statement',
-        sourceRef: `session://${createHash('sha256').update(run.sessionKey).digest('hex').slice(0, 16)}/recognition`,
+        sourceRef: `session://${createHash('sha256').update(run.conversationId).digest('hex').slice(0, 16)}/recognition`,
         observation,
         contentHash: createHash('sha256').update(observation).digest('hex'),
         observedAt: Date.now(),
@@ -1314,7 +1316,7 @@ export class WorkDiscoveryService {
       : input.decision === 'confirmed'
         ? 'The user confirmed the work discovery understanding.'
         : 'The user left work discovery without confirming the suggested understanding.';
-    await this.options.sessions.appendTranscriptContextEntry(run.sessionKey, {
+    await this.options.sessions.appendTranscriptContextEntry(run.conversationId, {
       text: feedbackText,
       data: {
         type: 'work_discovery_recognition_feedback',
@@ -1326,7 +1328,7 @@ export class WorkDiscoveryService {
     this.activity.record({
       type: `work_discovery.recognition_${input.decision}`,
       primaryObject: { kind: 'project', id: run.projectId },
-      actor: { kind: 'user', sessionKey: run.sessionKey },
+      actor: { kind: 'user', conversationId: run.conversationId },
       source: { kind: 'gateway_api', runId: run.id },
       payload: {
         decision: input.decision,
@@ -1334,13 +1336,13 @@ export class WorkDiscoveryService {
       },
       scopes: [
         { scopeKind: 'project', scopeId: run.projectId, reason: 'object_owner' },
-        { scopeKind: 'session', scopeId: run.sessionKey, reason: 'runtime_context' },
+        { scopeKind: 'session', scopeId: run.conversationId, reason: 'runtime_context' },
       ],
     });
     this.options.emit('work-discovery.recognition-feedback', {
       runId: run.id,
       projectId: run.projectId,
-      sessionKey: run.sessionKey,
+      conversationId: run.conversationId,
       decision: input.decision,
     });
     return { ...run, feedback };
@@ -1353,12 +1355,12 @@ export class WorkDiscoveryService {
     this.activity.record({
       type: 'work_discovery.suggestion_selected',
       primaryObject: { kind: 'project', id: run.projectId },
-      actor: { kind: 'user', sessionKey: run.sessionKey },
+      actor: { kind: 'user', conversationId: run.conversationId },
       source: { kind: 'gateway_api', runId },
       payload: { suggestionId, title: suggestion.title },
       scopes: [
         { scopeKind: 'project', scopeId: run.projectId, reason: 'object_owner' },
-        { scopeKind: 'session', scopeId: run.sessionKey, reason: 'runtime_context' },
+        { scopeKind: 'session', scopeId: run.conversationId, reason: 'runtime_context' },
       ],
     });
     return run;

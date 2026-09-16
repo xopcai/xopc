@@ -43,9 +43,9 @@ export interface AgentServiceConfig {
    * When omitted, `AgentService` creates its own `SessionStore` (CLI / embedded).
    */
   sessionStore?: SessionStore;
-  onSessionMetadataUpdated?: (sessionKey: string, patch?: { name?: string }) => void;
+  onSessionMetadataUpdated?: (conversationId: string, patch?: { name?: string }) => void;
   /** Gateway: transcript append notification. */
-  onSessionTranscriptUpdated?: (sessionKey: string) => void;
+  onSessionTranscriptUpdated?: (conversationId: string) => void;
   /** Gateway/TUI: local skill catalog changed or skill config toggles changed. */
   onSkillsUpdated?: (payload: { reason: 'disk' | 'config' }) => void;
   /**
@@ -62,7 +62,7 @@ export interface AgentServiceConfig {
 export interface AgentContext {
   channel: string;
   chatId: string;
-  sessionKey: string;
+  conversationId: string;
   senderId?: string;
   isGroup?: boolean;
 }

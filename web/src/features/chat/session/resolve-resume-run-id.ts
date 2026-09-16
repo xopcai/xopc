@@ -13,8 +13,8 @@ import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
 /** Gateway source of truth for in-flight webchat runs (Phase 1). */
-export async function fetchSessionActiveRun(sessionKey: string): Promise<SessionActiveRunPayload> {
-  const key = String(sessionKey ?? '').trim();
+export async function fetchSessionActiveRun(conversationId: string): Promise<SessionActiveRunPayload> {
+  const key = String(conversationId ?? '').trim();
   if (!key) return { active: false };
   const res = await apiFetch(apiUrl(buildSessionRunPath(key)));
   if (!res.ok) throw new Error(`Active run lookup failed (${res.status})`);
@@ -25,8 +25,8 @@ export async function fetchSessionActiveRun(sessionKey: string): Promise<Session
  * Resolve run id for realtime resume: gateway first, sessionStorage fallback.
  * Syncs sessionStorage when gateway reports an active run.
  */
-export async function resolveResumeRunId(sessionKey: string): Promise<string | null> {
-  const key = String(sessionKey ?? '').trim();
+export async function resolveResumeRunId(conversationId: string): Promise<string | null> {
+  const key = String(conversationId ?? '').trim();
   if (!key) return null;
   const fallbackAtStart = readPendingAgentRunId(key);
 

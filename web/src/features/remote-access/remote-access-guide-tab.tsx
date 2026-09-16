@@ -69,7 +69,7 @@ export function RemoteAccessGuideTab({ onOpenTab }: { onOpenTab: (tab: RemoteAcc
   const language = useLocaleStore((s) => s.language);
   const ra = messages(language).remoteAccess;
   const g = ra.guide;
-  const hasToken = Boolean(useGatewayStore((s) => s.sessionKey));
+  const hasToken = Boolean(useGatewayStore((s) => s.conversationId));
 
   const { data: exposure } = useSWR(hasToken ? 'exposure-status' : null, fetchExposureStatus, {
     refreshInterval: 30_000,

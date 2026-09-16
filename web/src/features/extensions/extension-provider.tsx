@@ -29,7 +29,7 @@ export function ExtensionProvider({ children }: { children: React.ReactNode }) {
     routerRef.current = newRouter;
   }
   const router = routerRef.current;
-  const hasToken = useGatewayStore((s) => Boolean(s.sessionKey));
+  const hasToken = useGatewayStore((s) => Boolean(s.conversationId));
   const { data, isLoading, mutate } = useSWR(
     hasToken ? 'gateway-extensions-list' : null,
     () => fetchJson<ExtensionsListResponse>(apiUrl('/api/extensions')),
@@ -67,9 +67,9 @@ export function ExtensionProvider({ children }: { children: React.ReactNode }) {
 
   const handleAgentStreamEvent = useCallback(
     (event: Event) => {
-      const detail = (event as CustomEvent<{ sessionKey?: string; event?: unknown }>).detail;
-      if (!detail?.sessionKey) return;
-      router.forwardAgentStreamEvent(detail.sessionKey, detail.event ?? detail);
+      const detail = (event as CustomEvent<{ conversationId?: string; event?: unknown }>).detail;
+      if (!detail?.conversationId) return;
+      router.forwardAgentStreamEvent(detail.conversationId, detail.event ?? detail);
     },
     [router],
   );

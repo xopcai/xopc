@@ -82,13 +82,13 @@ const settingsCommand: CommandDefinition = {
   scope: ['global', 'private', 'group'],
   handler: async (ctx: CommandContext) => {
     const model = ctx.getCurrentModel();
-    const sessionKey = ctx.sessionKey;
+    const conversationId = ctx.conversationId;
 
     const content = joinBlocks(
       section('⚙️ Current Settings'),
       kvList([
         { key: 'Model', value: model },
-        { key: 'Session', value: sessionKey },
+        { key: 'Session', value: conversationId },
         { key: 'Platform', value: ctx.source },
         { key: 'Group', value: ctx.isGroup ? 'Yes' : 'No' },
       ]),

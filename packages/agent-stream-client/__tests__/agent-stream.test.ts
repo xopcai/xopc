@@ -8,7 +8,7 @@ function envelope(type: string, runId: string, payload: object, seq?: number): o
   return {
     type,
     runId,
-    sessionKey: 'chat_a',
+    conversationId: 'chat_a',
     timestamp: 1,
     ...(seq !== undefined ? { seq } : {}),
     payload,
@@ -72,7 +72,7 @@ describe('dispatchAgentStreamEvent', () => {
       'run_start',
       JSON.stringify(envelope('run_start', 'run-1', { channel: 'webchat' })),
       cb,
-      { sessionKey: 'agent:main:webchat:default:direct:chat_a', savePendingRunId },
+      { conversationId: 'agent:main:webchat:default:direct:chat_a', savePendingRunId },
     );
     expect(savePendingRunId).toHaveBeenCalledWith('agent:main:webchat:default:direct:chat_a', 'run-1');
     expect(cb.onStreamStart).toHaveBeenCalled();
@@ -376,7 +376,7 @@ describe('dispatchAgentStreamEvent', () => {
     dispatchAgentStreamEvent('error', JSON.stringify(envelope('error', 'run-2', { code: 'X', message: 'boom' })), cb);
     expect(cb.onResult).toHaveBeenCalledWith({
       runId: 'run-1',
-      sessionKey: 'chat_a',
+      conversationId: 'chat_a',
       status: 'success',
     });
     expect(cb.onError).toHaveBeenCalledWith('boom');

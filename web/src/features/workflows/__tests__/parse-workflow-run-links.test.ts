@@ -15,7 +15,7 @@ describe('parseWorkflowRunLinksFromTranscriptRows', () => {
         data: {
           kind: WORKFLOW_RUN_LINK_CONTEXT_KIND,
           runId: 'run-1',
-          workflowSessionKey: 'agent:main:webchat:default:direct:wf_run-1',
+          workflowConversationId: 'agent:main:webchat:default:direct:wf_run-1',
           definitionId: 'audit_repo',
           goal: 'Check repo',
           status: 'running',
@@ -27,7 +27,7 @@ describe('parseWorkflowRunLinksFromTranscriptRows', () => {
     expect(parseWorkflowRunLinksFromTranscriptRows(rows)).toEqual([
       expect.objectContaining({
         runId: 'run-1',
-        workflowSessionKey: 'agent:main:webchat:default:direct:wf_run-1',
+        workflowConversationId: 'agent:main:webchat:default:direct:wf_run-1',
         definitionId: 'audit_repo',
       }),
     ]);
@@ -42,7 +42,7 @@ describe('parseWorkflowRunLinksFromTranscriptRows', () => {
           kind: WORKFLOW_RUN_LINK_CONTEXT_KIND,
           runId: 'run-1',
           ownerAgentId: 'researcher',
-          workflowSessionKey: 'agent:researcher:webchat:default:direct:wf_run-1',
+          workflowConversationId: 'agent:researcher:webchat:default:direct:wf_run-1',
           definitionId: 'audit_repo',
           goal: 'Check repo',
           status: 'running',
@@ -55,7 +55,7 @@ describe('parseWorkflowRunLinksFromTranscriptRows', () => {
         data: {
           kind: WORKFLOW_RUN_LINK_CONTEXT_KIND,
           runId: 'run-1',
-          workflowSessionKey: 'agent:researcher:webchat:default:direct:wf_run-1',
+          workflowConversationId: 'agent:researcher:webchat:default:direct:wf_run-1',
           definitionId: 'audit_repo',
           goal: 'Check repo',
           status: 'succeeded',

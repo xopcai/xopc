@@ -31,24 +31,24 @@ import { useChatSessionAgents } from '@/features/chat/session/use-chat-session-a
 import { useChatSessionInit } from '@/features/chat/session/use-chat-session-init';
 import { usePreparedSessionModel } from '@/features/chat/session/use-prepared-session-model';
 import { useChatSessionLoad } from '@/features/chat/session/use-chat-session-load';
-import { focusedSessionKeyRef, useChatSessionRoute } from '@/features/chat/session/use-chat-session-route';
+import { focusedConversationIdRef, useChatSessionRoute } from '@/features/chat/session/use-chat-session-route';
 import { useChatSessionStreaming } from '@/features/chat/session/use-chat-session-streaming';
 import { useChatSessionWindowEvents } from '@/features/chat/session/use-chat-session-window-events';
 
 /** @see docs/design/technical/new-session-preferences.md */
-export function useChatSession(options?: { fixedSessionKey?: string; taskId?: string }) {
+export function useChatSession(options?: { fixedConversationId?: string; taskId?: string }) {
   const navigate = useNavigate();
   const {
     isNewRoute,
     forceNewChat,
     decodedKey,
-    viewSessionKey,
-    routedFocusedSessionKey,
-    routeSessionKeyRef,
+    viewConversationId,
+    routedFocusedConversationId,
+    routeConversationIdRef,
     locationKey,
     locationSearch,
     locationState,
-  } = useChatSessionRoute(options?.fixedSessionKey);
+  } = useChatSessionRoute(options?.fixedConversationId);
 
   const sessionMgrRef = useRef(new SessionManager());
   const loadingSessionRef = useRef(false);
@@ -70,17 +70,17 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
 
   const messagesLenRef = useRef(0);
 
-  const focusedSessionKey = routedFocusedSessionKey;
+  const focusedConversationId = routedFocusedConversationId;
   const initLoading = useChatSessionStore((s) => s.initLoading);
   const loadingMore = useChatSessionStore((s) => s.loadingMore);
   const shellError = useChatSessionStore((s) => s.shellError);
-  /** URL is visible-session truth; do not read the store via lagging `focusedSessionKey`. */
-  const visibleSessionKey = viewSessionKey;
+  /** URL is visible-session truth; do not read the store via lagging `focusedConversationId`. */
+  const visibleConversationId = viewConversationId;
   const sessionSlice = useChatSessionStore((s) =>
-    visibleSessionKey ? s.sessions[visibleSessionKey] : undefined,
+    visibleConversationId ? s.sessions[visibleConversationId] : undefined,
   );
 
-  const streamLive = visibleSessionKey ? isSessionSliceLive(sessionSlice) : false;
+  const streamLive = visibleConversationId ? isSessionSliceLive(sessionSlice) : false;
   const streaming = streamLive ? (sessionSlice?.streaming ?? false) : false;
   const sending = streamLive ? (sessionSlice?.sending ?? false) : false;
   const progress = streamLive ? (sessionSlice?.progress ?? null) : null;
@@ -99,14 +99,14 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
   const userContextMode = sessionSlice?.userContextMode ?? 'enabled';
 
   useEffect(() => {
-    if (!visibleSessionKey || sending || streaming) return;
-    void sessionMgrRef.current.loadSessionAgentConfig(visibleSessionKey)
-      .then((cfg) => patchSessionAgentConfigView(visibleSessionKey, cfg)).catch(() => undefined);
-  }, [visibleSessionKey, sending, streaming]);
+    if (!visibleConversationId || sending || streaming) return;
+    void sessionMgrRef.current.loadSessionAgentConfig(visibleConversationId)
+      .then((cfg) => patchSessionAgentConfigView(visibleConversationId, cfg)).catch(() => undefined);
+  }, [visibleConversationId, sending, streaming]);
 
   useEffect(() => {
     const refresh = (event: Event) => {
-      const key = (event as CustomEvent<{ sessionKey: string }>).detail.sessionKey;
+      const key = (event as CustomEvent<{ conversationId: string }>).detail.conversationId;
       void sessionMgrRef.current.loadSessionAgentConfig(key).then((cfg) => patchSessionAgentConfigView(key, cfg)).catch(() => undefined);
     };
     window.addEventListener('session-model-config-stale', refresh);
@@ -132,20 +132,20 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
     currentSessionProjectId,
   } = useChatSessionAgents({
     navigate,
-    sessionKeyRef: focusedSessionKeyRef,
-    sessionKey: focusedSessionKey,
+    conversationIdRef: focusedConversationIdRef,
+    conversationId: focusedConversationId,
     isNewRoute,
     locationState,
     locationSearch,
   });
 
-  const sessionRoutePending = Boolean(decodedKey !== undefined && focusedSessionKey !== decodedKey);
+  const sessionRoutePending = Boolean(decodedKey !== undefined && focusedConversationId !== decodedKey);
   const sessionContentLoading = Boolean(
     decodedKey && sessionSlice?.historyStatus === 'loading' && !sessionRoutePending,
   );
   const showSessionLoading = useMemo(
-    () => initLoading && (focusedSessionKey == null || decodedKey === undefined),
-    [initLoading, focusedSessionKey, decodedKey],
+    () => initLoading && (focusedConversationId == null || decodedKey === undefined),
+    [initLoading, focusedConversationId, decodedKey],
   );
   const conversationPhase = resolveChatConversationPhase({
     isNewRoute,
@@ -163,21 +163,21 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
     [navigate],
   );
 
-  const shouldApplyStreamUpdate = useCallback((streamSessionKey: string) => {
+  const shouldApplyStreamUpdate = useCallback((streamConversationId: string) => {
     return shouldApplyStreamUpdateToView({
-      streamSessionKey,
-      routeSessionKey: routeSessionKeyRef.current,
+      streamConversationId,
+      routeConversationId: routeConversationIdRef.current,
     });
-  }, [routeSessionKeyRef]);
+  }, [routeConversationIdRef]);
 
   const resetVisibleChatShell = useCallback(() => {
     resetChatViewState({ sendingRef, streamingRef });
   }, []);
 
   const fq = useChatFollowUpClarify({
-    sessionKey: focusedSessionKey,
+    conversationId: focusedConversationId,
     decodedKey,
-    sessionKeyRef: focusedSessionKeyRef,
+    conversationIdRef: focusedConversationIdRef,
     sendingRef,
     streamingRef,
     modelSupportsThinking,
@@ -187,10 +187,10 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
 
   const detachForNewConversation = useCallback(() => {
     fq.clearVisibleClarify();
-    const key = focusedSessionKeyRef.current;
+    const key = focusedConversationIdRef.current;
     if (key) chatRunManager.resetRunTracking(key);
     detachChatViewOnly(resetVisibleChatShell);
-  }, [fq.clearVisibleClarify, focusedSessionKeyRef, resetVisibleChatShell]);
+  }, [fq.clearVisibleClarify, focusedConversationIdRef, resetVisibleChatShell]);
 
   const {
     refreshModelThinkingSupport,
@@ -204,7 +204,7 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
     createNewSession,
   } = useChatSessionLoad({
     sessionMgrRef,
-    routeSessionKeyRef,
+    routeConversationIdRef,
     sendingRef,
     streamingRef,
     loadingSessionRef,
@@ -213,7 +213,7 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
     navigateToSession,
     resolveAgentIdForPost,
     detachForNewConversation,
-    sessionKey: focusedSessionKey,
+    conversationId: focusedConversationId,
     sessionAgentId: displayAgentId,
     currentProjectId: currentSessionProjectId,
     hasMore,
@@ -223,8 +223,8 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
   const restoreLiveCacheIfNeeded = useCallback((key: string) => {
     if (
       !shouldRestoreLiveCacheToView({
-        cacheSessionKey: key,
-        routeSessionKey: routeSessionKeyRef.current,
+        cacheConversationId: key,
+        routeConversationId: routeConversationIdRef.current,
       })
     ) {
       return false;
@@ -238,7 +238,7 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
     sendingRef.current = snap.sending;
     streamingRef.current = snap.streaming;
     return true;
-  }, [routeSessionKeyRef]);
+  }, [routeConversationIdRef]);
 
   const {
     tryResumeAgentRun,
@@ -250,11 +250,11 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
     retryUserMessageRound,
   } =
     useChatSessionStreaming({
-      sessionKey: focusedSessionKey,
+      conversationId: focusedConversationId,
       taskId: options?.taskId,
       thinkingLevel,
       modelSupportsThinking,
-      sessionKeyRef: focusedSessionKeyRef,
+      conversationIdRef: focusedConversationIdRef,
       sendingRef,
       streamingRef,
       sessionMgrRef,
@@ -276,12 +276,12 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
   const displayMessages = useMemo(
     () =>
       selectDisplayMessages({
-        viewSessionKey,
-        sessionKey: visibleSessionKey,
+        viewConversationId,
+        conversationId: visibleConversationId,
         messages: sessionSlice?.messages ?? [],
         streamingMsg: streamLive ? (sessionSlice?.streamingMsg ?? null) : null,
       }),
-    [viewSessionKey, visibleSessionKey, sessionSlice?.messages, sessionSlice?.streamingMsg, streamLive],
+    [viewConversationId, visibleConversationId, sessionSlice?.messages, sessionSlice?.streamingMsg, streamLive],
   );
 
   const adoptEmptySession = useCallback((key: string, name: string | null) => {
@@ -291,7 +291,7 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
 
   const applyAgentConfig = useCallback(
     (
-      sessionKey: string,
+      conversationId: string,
       cfg: {
         model: string;
         thinkingLevel?: string | null;
@@ -306,7 +306,7 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
         workspaceSource?: 'execution_environment' | 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
       },
     ) => {
-      patchSessionAgentConfigView(sessionKey, cfg);
+      patchSessionAgentConfigView(conversationId, cfg);
       void refreshModelThinkingSupport(cfg.model);
     },
     [refreshModelThinkingSupport],
@@ -322,28 +322,28 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
     async (key: string) => {
       try {
         const items = await sessionMgrRef.current.loadTimeline(key, options?.taskId);
-        if (routeSessionKeyRef.current !== key) return;
+        if (routeConversationIdRef.current !== key) return;
         setTimelineItems(items);
       } catch {
-        if (routeSessionKeyRef.current === key) {
+        if (routeConversationIdRef.current === key) {
           setTimelineItems([]);
         }
       }
     },
-    [routeSessionKeyRef, options?.taskId],
+    [routeConversationIdRef, options?.taskId],
   );
 
   useEffect(() => {
-    if (isNewRoute || !focusedSessionKey) {
+    if (isNewRoute || !focusedConversationId) {
       setTimelineItems([]);
       return;
     }
-    void loadTimelineById(focusedSessionKey);
-  }, [focusedSessionKey, isNewRoute, loadTimelineById]);
+    void loadTimelineById(focusedConversationId);
+  }, [focusedConversationId, isNewRoute, loadTimelineById]);
 
   useChatSessionWindowEvents({
-    sessionKey: focusedSessionKey,
-    sessionKeyRef: focusedSessionKeyRef,
+    conversationId: focusedConversationId,
+    conversationIdRef: focusedConversationIdRef,
     sendingRef,
     streamingRef,
     sessionMgrRef,
@@ -382,19 +382,19 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
 
   useEffect(() => {
     const onRunStarted = (e: Event) => {
-      const detail = (e as CustomEvent<{ sessionKey?: string; runId?: string }>).detail;
-      const streamSessionKey = detail?.sessionKey;
+      const detail = (e as CustomEvent<{ conversationId?: string; runId?: string }>).detail;
+      const streamConversationId = detail?.conversationId;
       const runId = detail?.runId;
-      if (!streamSessionKey || !runId?.trim()) return;
-      setPendingAgentRun(streamSessionKey, runId);
-      chatRunManager.setResumeRunId(streamSessionKey, runId);
-      if (!shouldApplyStreamUpdate(streamSessionKey)) return;
-      if (chatRunManager.isTrackingRun(streamSessionKey, runId)) return;
+      if (!streamConversationId || !runId?.trim()) return;
+      setPendingAgentRun(streamConversationId, runId);
+      chatRunManager.setResumeRunId(streamConversationId, runId);
+      if (!shouldApplyStreamUpdate(streamConversationId)) return;
+      if (chatRunManager.isTrackingRun(streamConversationId, runId)) return;
 
       queueMicrotask(() => {
-        if (!shouldApplyStreamUpdate(streamSessionKey)) return;
-        if (chatRunManager.isTrackingRun(streamSessionKey, runId)) return;
-        void tryResumeAgentRun(streamSessionKey, getSessionMessages(streamSessionKey));
+        if (!shouldApplyStreamUpdate(streamConversationId)) return;
+        if (chatRunManager.isTrackingRun(streamConversationId, runId)) return;
+        void tryResumeAgentRun(streamConversationId, getSessionMessages(streamConversationId));
       });
     };
     window.addEventListener('run-started', onRunStarted);
@@ -407,7 +407,7 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
     streamBusyRef.current = busy;
     if (!wasBusy || busy) return;
 
-    const key = focusedSessionKeyRef.current;
+    const key = focusedConversationIdRef.current;
     if (!key) return;
     queueMicrotask(() => {
       if (!key || !shouldApplyStreamUpdate(key)) return;
@@ -425,7 +425,7 @@ export function useChatSession(options?: { fixedSessionKey?: string; taskId?: st
     },
     session: {
       projectPreparation: preparedModel.preparation,
-      sessionKey: focusedSessionKey,
+      conversationId: focusedConversationId,
       sessionName,
       decodedKey,
       sessionRoutePending,

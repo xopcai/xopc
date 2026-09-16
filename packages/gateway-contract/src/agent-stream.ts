@@ -107,7 +107,7 @@ export type AgentStreamRunStatus = 'success' | 'error' | 'cancelled' | 'suspende
 
 export type AgentStreamRunEndPayload = {
   runId: string;
-  sessionKey: string;
+  conversationId: string;
   status: AgentStreamRunStatus;
   summary?: string;
 };
@@ -116,7 +116,7 @@ export type AgentStreamRunEndPayload = {
 export type AgentRunEndedEvent = {
   schemaVersion: 1;
   runId: string;
-  sessionKey: string;
+  conversationId: string;
   status: AgentStreamRunStatus;
   completedAtMs: number;
   target: import('./notifications.js').NotificationTarget;

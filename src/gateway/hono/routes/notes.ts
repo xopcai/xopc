@@ -7,7 +7,7 @@ import type { Hono } from 'hono';
 import { stream } from 'hono/streaming';
 
 import { ObjectLinkService } from '../../../activity/service.js';
-import { buildSessionKey } from '../../../routing/session-key.js';
+import { resolveConversationId } from '../../../routing/session-key.js';
 import { agentExists, getDefaultAgentId } from '../../../routing/resolve-route.js';
 import type { CaptureChannel, CaptureSource, Note, NoteKind, NoteStatus, SnapshotTrigger } from '../../../notes/types.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -302,7 +302,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       attachedAt: Date.now(),
     };
     const forceNew = body.forceNew === true;
-    const existingKey = note.aiDeep?.catalysis?.sourceSessionKey;
+    const existingKey = note.aiDeep?.catalysis?.sourceConversationId;
     if (!forceNew && existingKey) {
       const existingSession = await service.sessions.getSession(existingKey);
       if (existingSession) {
@@ -315,12 +315,12 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
             sourceBinding,
           },
         });
-        return c.json({ session: existingSession, sessionKey: existingKey, reused: true, sourceBinding });
+        return c.json({ session: existingSession, conversationId: existingKey, reused: true, sourceBinding });
       }
     }
 
     const peerId = `note_${noteId}_${Date.now()}`;
-    const sessionKey = buildSessionKey({
+    const conversationId = resolveConversationId({
       agentId,
       source: 'webchat',
       accountId: 'default',
@@ -328,7 +328,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       peerId,
     });
 
-    await service.sessionIndexInstance.saveMessages(sessionKey, [], {
+    await service.sessionIndexInstance.saveMessages(conversationId, [], {
       metadata: {
         ...(projectId ? { projectId } : {}),
         sourceChannel: 'webchat',
@@ -345,8 +345,8 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       },
     });
 
-    const meta = await service.sessionIndexInstance.getSessionMetadata(sessionKey);
-    await service.sessionIndexInstance.updateSessionMetadata(sessionKey, {
+    const meta = await service.sessionIndexInstance.getSessionMetadata(conversationId);
+    await service.sessionIndexInstance.updateSessionMetadata(conversationId, {
       ...(projectId ? { projectId } : {}),
       name: noteThreadName(note),
       tags: Array.from(new Set([...(meta?.tags ?? []), 'note'])),
@@ -357,9 +357,9 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       },
     });
 
-    await service.notesServiceInstance.linkNoteThread(noteId, sessionKey);
-    const session = await service.sessions.getSession(sessionKey);
-    return c.json({ session, sessionKey, reused: false, sourceBinding }, 201);
+    await service.notesServiceInstance.linkNoteThread(noteId, conversationId);
+    const session = await service.sessions.getSession(conversationId);
+    return c.json({ session, conversationId, reused: false, sourceBinding }, 201);
   });
 
   function noteContextStatusPayload(result: NonNullable<Awaited<ReturnType<typeof service.notesServiceInstance.getAgentContextStatus>>>) {
@@ -708,7 +708,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     const note = await service.notesServiceInstance.createTask(title, source, {
       dueAt: typeof body.dueAt === 'number' ? body.dueAt : undefined,
       priority: body.priority === 'high' || body.priority === 'medium' || body.priority === 'low' ? body.priority : undefined,
-      sourceSessionKey: typeof body.sourceSessionKey === 'string' ? body.sourceSessionKey : undefined,
+      sourceConversationId: typeof body.sourceConversationId === 'string' ? body.sourceConversationId : undefined,
       sourceNoteId: typeof body.sourceNoteId === 'string' ? body.sourceNoteId : undefined,
       groupId: typeof body.groupId === 'string' ? body.groupId : undefined,
     });

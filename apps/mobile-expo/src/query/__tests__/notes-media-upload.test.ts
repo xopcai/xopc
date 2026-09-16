@@ -175,7 +175,7 @@ describe('openNoteConversation', () => {
     mockedApiFetch.mockResolvedValue({
       ok: true,
       json: async () => ({
-        sessionKey: 'agent:main:webchat:default:direct:note_1',
+        conversationId: 'agent:main:webchat:default:direct:note_1',
         reused: false,
         sourceBinding: {
           kind: 'note',

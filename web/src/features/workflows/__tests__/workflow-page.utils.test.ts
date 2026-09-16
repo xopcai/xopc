@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { WorkflowRunView } from '@/features/workflows/workflow-api';
 import {
   collectWorkflowRunDiagnostics,
-  resolveWorkflowSessionKey,
+  resolveWorkflowConversationId,
   workflowChatHref,
 } from '@/features/workflows/workflow-page.utils';
 
@@ -17,9 +17,9 @@ function minimalView(overrides: Partial<WorkflowRunView['run']>): WorkflowRunVie
       goal: 'Check repo',
       input: {},
       status: 'succeeded',
-      source: { kind: 'webui', sessionKey: 'agent:main:webchat:default:direct:wf_run-1' },
+      source: { kind: 'webui', conversationId: 'd72b7a76-8f3b-459d-b19b-bd0c519482d7' },
       metadata: {
-        sessionKey: 'agent:main:webchat:default:direct:wf_run-1',
+        conversationId: 'd72b7a76-8f3b-459d-b19b-bd0c519482d7',
         triggerSource: 'webui',
         definition: {} as never,
       },
@@ -43,28 +43,28 @@ function minimalView(overrides: Partial<WorkflowRunView['run']>): WorkflowRunVie
   };
 }
 
-describe('resolveWorkflowSessionKey', () => {
+describe('resolveWorkflowConversationId', () => {
   it('returns the dedicated workflow web chat session key', () => {
     const view = minimalView({});
-    expect(resolveWorkflowSessionKey(view)).toBe('agent:main:webchat:default:direct:wf_run-1');
+    expect(resolveWorkflowConversationId(view)).toBe('d72b7a76-8f3b-459d-b19b-bd0c519482d7');
   });
 
   it('returns null when metadata session key is not a web chat session', () => {
     const view = minimalView({
-      metadata: { sessionKey: 'telegram:123', triggerSource: 'im', definition: {} as never },
+      metadata: { conversationId: 'telegram:123', triggerSource: 'im', definition: {} as never },
     });
-    expect(resolveWorkflowSessionKey(view)).toBeNull();
+    expect(resolveWorkflowConversationId(view)).toBeNull();
   });
 });
 
 describe('workflowChatHref', () => {
   it('builds a chat route for the workflow session', () => {
-    const key = 'agent:main:webchat:default:direct:wf_run-1';
+    const key = 'd72b7a76-8f3b-459d-b19b-bd0c519482d7';
     expect(workflowChatHref(key)).toBe(`/chat/${encodeURIComponent(key)}`);
   });
 
   it('adds a draft handoff when provided', () => {
-    const key = 'agent:main:webchat:default:direct:wf_run-1';
+    const key = 'd72b7a76-8f3b-459d-b19b-bd0c519482d7';
     expect(workflowChatHref(key, 'Next step?')).toBe(
       `/chat/${encodeURIComponent(key)}?draft=Next+step%3F`,
     );
@@ -82,7 +82,7 @@ describe('collectWorkflowRunDiagnostics', () => {
         id: 'reviewer',
         label: 'Reviewer',
         status: 'error',
-        sessionKey: 'agent:main:webchat:default:direct:wf_run-1:reviewer',
+        conversationId: 'd72b7a76-8f3b-459d-b19b-bd0c519482d7:reviewer',
         transcriptMessageCount: 2,
         error: 'Model failed',
         steps: [

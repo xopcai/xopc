@@ -1,3 +1,4 @@
+import { requireConversation } from '../storage/sqlite/conversation-repository.js';
 /**
  * Complete Routing Integration E2E Test
  * 
@@ -13,8 +14,8 @@
 
 import { describe, it, expect } from 'vitest';
 import type { Config } from '../config/schema.js';
-import { parseSessionKey, type BindingRule } from '../routing/index.js';
-import { generateSessionKeyWithRouting } from '../channels/telegram/index.js';
+import { getConversationRouting, type BindingRule } from '../routing/index.js';
+import { generateConversationIdWithRouting } from '../channels/telegram/index.js';
 describe('Complete Routing E2E Flow', () => {
 
   describe('Scenario 1: Simple DM Message Flow', () => {
@@ -38,7 +39,7 @@ describe('Complete Routing E2E Flow', () => {
       };
 
       // Step 1: Generate session key
-      const sessionKey = generateSessionKeyWithRouting(
+      const conversationId = generateConversationIdWithRouting(
         {
           accountId: inboundMessage.accountId,
           chatId: inboundMessage.chatId,
@@ -50,7 +51,7 @@ describe('Complete Routing E2E Flow', () => {
       );
 
       // Step 2: Parse and validate
-      const parsed = parseSessionKey(sessionKey);
+      const parsed = getConversationRouting(conversationId);
       expect(parsed).toBeTruthy();
       expect(parsed?.agentId).toBe('main');
       expect(parsed?.peerKind).toBe('direct');
@@ -100,7 +101,7 @@ describe('Complete Routing E2E Flow', () => {
         content: 'How do I fix this bug?',
       };
 
-      const sessionKey1 = generateSessionKeyWithRouting(
+      const conversationId1 = generateConversationIdWithRouting(
         {
           accountId: programmingGroupMsg.accountId,
           chatId: programmingGroupMsg.chatId,
@@ -110,7 +111,7 @@ describe('Complete Routing E2E Flow', () => {
         config
       );
 
-      const parsed1 = parseSessionKey(sessionKey1);
+      const parsed1 = getConversationRouting(conversationId1);
       expect(parsed1?.agentId).toBe('coder');
 
       // Message to research group
@@ -122,7 +123,7 @@ describe('Complete Routing E2E Flow', () => {
         content: 'Find papers about AI',
       };
 
-      const sessionKey2 = generateSessionKeyWithRouting(
+      const conversationId2 = generateConversationIdWithRouting(
         {
           accountId: researchGroupMsg.accountId,
           chatId: researchGroupMsg.chatId,
@@ -132,7 +133,7 @@ describe('Complete Routing E2E Flow', () => {
         config
       );
 
-      const parsed2 = parseSessionKey(sessionKey2);
+      const parsed2 = getConversationRouting(conversationId2);
       expect(parsed2?.agentId).toBe('researcher');
 
       // Message to general group (default routing)
@@ -144,7 +145,7 @@ describe('Complete Routing E2E Flow', () => {
         content: 'General question',
       };
 
-      const sessionKey3 = generateSessionKeyWithRouting(
+      const conversationId3 = generateConversationIdWithRouting(
         {
           accountId: generalGroupMsg.accountId,
           chatId: generalGroupMsg.chatId,
@@ -154,7 +155,7 @@ describe('Complete Routing E2E Flow', () => {
         config
       );
 
-      const parsed3 = parseSessionKey(sessionKey3);
+      const parsed3 = getConversationRouting(conversationId3);
       expect(parsed3?.agentId).toBe('main');
     });
   });
@@ -181,7 +182,7 @@ describe('Complete Routing E2E Flow', () => {
       };
 
       // Alice sends message on Telegram
-      const aliceTgKey = generateSessionKeyWithRouting(
+      const aliceTgKey = generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: 'channel1',
@@ -192,7 +193,7 @@ describe('Complete Routing E2E Flow', () => {
       );
 
       // Alice sends message on Discord
-      const aliceDiscordKey = generateSessionKeyWithRouting(
+      const aliceDiscordKey = generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: 'channel2',
@@ -204,7 +205,7 @@ describe('Complete Routing E2E Flow', () => {
       );
 
       // Alice sends message on Feishu
-      const aliceFeishuKey = generateSessionKeyWithRouting(
+      const aliceFeishuKey = generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: 'channel3',
@@ -216,9 +217,9 @@ describe('Complete Routing E2E Flow', () => {
       );
 
       // All should resolve to canonical name 'alice'
-      const tgParsed = parseSessionKey(aliceTgKey);
-      const discordParsed = parseSessionKey(aliceDiscordKey);
-      const feishuParsed = parseSessionKey(aliceFeishuKey);
+      const tgParsed = getConversationRouting(aliceTgKey);
+      const discordParsed = getConversationRouting(aliceDiscordKey);
+      const feishuParsed = getConversationRouting(aliceFeishuKey);
 
       expect(tgParsed?.peerId).toBe('alice');
       expect(discordParsed?.peerId).toBe('alice');
@@ -270,11 +271,11 @@ describe('Complete Routing E2E Flow', () => {
         isGroup: false,
       };
 
-      const personalKey = generateSessionKeyWithRouting(personalMsg, config);
-      const workKey = generateSessionKeyWithRouting(workMsg, config);
+      const personalKey = generateConversationIdWithRouting(personalMsg, config);
+      const workKey = generateConversationIdWithRouting(workMsg, config);
 
-      const personalParsed = parseSessionKey(personalKey);
-      const workParsed = parseSessionKey(workKey);
+      const personalParsed = getConversationRouting(personalKey);
+      const workParsed = getConversationRouting(workKey);
 
       // Different agents
       expect(personalParsed?.agentId).toBe('main');
@@ -309,7 +310,7 @@ describe('Complete Routing E2E Flow', () => {
         threadId: '999',
       };
 
-      const sessionKey = generateSessionKeyWithRouting(
+      const conversationId = generateConversationIdWithRouting(
         {
           accountId: topicMsg.accountId,
           chatId: topicMsg.chatId,
@@ -320,13 +321,13 @@ describe('Complete Routing E2E Flow', () => {
         config
       );
 
-      expect(sessionKey).toContain(':thread:999');
+      expect(requireConversation(conversationId).routing?.threadId).toBe('999');
 
-      const parsed = parseSessionKey(sessionKey);
+      const parsed = getConversationRouting(conversationId);
       expect(parsed?.threadId).toBe('999');
 
       // Verify thread messages are isolated from parent group
-      const parentGroupKey = generateSessionKeyWithRouting(
+      const parentGroupKey = generateConversationIdWithRouting(
         {
           accountId: topicMsg.accountId,
           chatId: topicMsg.chatId,
@@ -336,8 +337,8 @@ describe('Complete Routing E2E Flow', () => {
         config
       );
 
-      expect(parentGroupKey).not.toContain(':thread:');
-      expect(parentGroupKey).not.toBe(sessionKey);
+      expect(requireConversation(parentGroupKey).routing?.threadId).toBeUndefined();
+      expect(parentGroupKey).not.toBe(conversationId);
     });
   });
 
@@ -374,7 +375,7 @@ describe('Complete Routing E2E Flow', () => {
       };
 
       // Should match expert (highest priority, exact peer match)
-      const expertKey = generateSessionKeyWithRouting(
+      const expertKey = generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: '-1009999999',
@@ -383,10 +384,10 @@ describe('Complete Routing E2E Flow', () => {
         },
         config
       );
-      expect(parseSessionKey(expertKey)?.agentId).toBe('expert');
+      expect(getConversationRouting(expertKey)?.agentId).toBe('expert');
 
       // Should match specialist (group match, higher than generalist)
-      const specialistKey = generateSessionKeyWithRouting(
+      const specialistKey = generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: '-1001111111',
@@ -395,10 +396,10 @@ describe('Complete Routing E2E Flow', () => {
         },
         config
       );
-      expect(parseSessionKey(specialistKey)?.agentId).toBe('specialist');
+      expect(getConversationRouting(specialistKey)?.agentId).toBe('specialist');
 
       // Should match generalist (only channel match)
-      const generalistKey = generateSessionKeyWithRouting(
+      const generalistKey = generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: '123456',
@@ -407,7 +408,7 @@ describe('Complete Routing E2E Flow', () => {
         },
         config
       );
-      expect(parseSessionKey(generalistKey)?.agentId).toBe('generalist');
+      expect(getConversationRouting(generalistKey)?.agentId).toBe('generalist');
     });
   });
 
@@ -538,11 +539,11 @@ describe('Complete Routing E2E Flow', () => {
       ];
 
       for (const scenario of scenarios) {
-        const sessionKey = generateSessionKeyWithRouting(
+        const conversationId = generateConversationIdWithRouting(
           scenario.input as any,
           config
         );
-        const parsed = parseSessionKey(sessionKey);
+        const parsed = getConversationRouting(conversationId);
         
         expect(parsed?.agentId).toBe(
           scenario.expectedAgent,

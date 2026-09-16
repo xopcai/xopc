@@ -136,7 +136,7 @@ describe('AttachmentPreviewDialog shared header', () => {
     Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
-    await act(async () => root.render(<AttachmentPreviewDialog open authToken="token" sessionKey="session-a"
+    await act(async () => root.render(<AttachmentPreviewDialog open authToken="token" conversationId="session-a"
       attachment={{ name: 'report.md', uri: 'media://outbound/report.md', mimeType: 'text/markdown' }} onClose={vi.fn()} />));
     openMenu();
     const download = menuItem(labels.download);
@@ -153,13 +153,13 @@ describe('AttachmentPreviewDialog shared header', () => {
   });
 
   it.each([
-    { uri: 'media://outbound/index.html', expected: { uri: 'media://outbound/index.html', sessionKey: 'session-a' } },
+    { uri: 'media://outbound/index.html', expected: { uri: 'media://outbound/index.html', conversationId: 'session-a' } },
     { uri: 'xopc-file:project-file', expected: { fileId: 'project-file' } },
   ])('shares a delivered HTML file after confirmation ($uri)', async ({ uri, expected }) => {
     vi.mocked(fetchMediaUriBuffer).mockResolvedValue({ ok: true, buffer: new TextEncoder().encode('<h1>Report</h1>').buffer });
     vi.mocked(createShare).mockReset();
     vi.mocked(createShare).mockRejectedValue(new Error('Test response'));
-    await act(async () => root.render(<AttachmentPreviewDialog open authToken="token" sessionKey="session-a"
+    await act(async () => root.render(<AttachmentPreviewDialog open authToken="token" conversationId="session-a"
       attachment={{ name: 'index.html', uri, mimeType: 'text/html' }} onClose={vi.fn()} />));
     const button = document.querySelector<HTMLButtonElement>(`[aria-label="${labels.shareLink}"]`);
     expect(button).not.toBeNull();

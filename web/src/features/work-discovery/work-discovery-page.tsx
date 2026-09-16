@@ -429,13 +429,13 @@ export function WorkDiscoveryPage({
     }
   };
 
-  const openConversation = (sessionKey: string, draft?: string, autoSend = false) => {
+  const openConversation = (conversationId: string, draft?: string, autoSend = false) => {
     const params = new URLSearchParams();
     if (draft) params.set('draft', draft);
     if (draft && autoSend) params.set('autoSend', '1');
     const query = params.toString();
     onNavigateAway?.();
-    navigate(`/chat/${encodeURIComponent(sessionKey)}${query ? `?${query}` : ''}`);
+    navigate(`/chat/${encodeURIComponent(conversationId)}${query ? `?${query}` : ''}`);
   };
 
   const selectBatchRun = (next: WorkDiscoveryRun) => {
@@ -480,7 +480,7 @@ export function WorkDiscoveryPage({
     const draft = discussOnly
       ? `${language === 'zh' ? '先帮我评估这个方向，不要修改文件：' : 'First assess this direction without changing files:'}\n\n${suggestion.actionPrompt}`
       : suggestion.actionPrompt;
-    openConversation(run.sessionKey, draft);
+    openConversation(run.conversationId, draft);
   };
 
   const reviewMemory = async (
@@ -551,7 +551,7 @@ export function WorkDiscoveryPage({
       );
       setRun(next);
       replaceBatchRun(next);
-      openConversation(run.sessionKey, starter, true);
+      openConversation(run.conversationId, starter, true);
       return true;
     } catch (cause) {
       setError(errorText(cause));
@@ -965,7 +965,7 @@ export function WorkDiscoveryPage({
               </div>
             ) : null}
             <div className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-3">
-              <button type="button" className="text-sm text-fg-muted hover:text-fg hover:underline" onClick={() => openConversation(run.sessionKey)}>{copy.doSomethingElse}</button>
+              <button type="button" className="text-sm text-fg-muted hover:text-fg hover:underline" onClick={() => openConversation(run.conversationId)}>{copy.doSomethingElse}</button>
               <button type="button" className="text-sm text-fg-muted hover:text-fg hover:underline" onClick={() => setPageState('recognition')}>{copy.correctUnderstanding}</button>
             </div>
           </section>
@@ -980,7 +980,7 @@ export function WorkDiscoveryPage({
               <Button className="h-11 flex-1 bg-accent text-white hover:bg-accent-hover" onClick={() => void retryWorkDiscoveryRun(run.id).then(applyRun)}>{copy.retry}</Button>
               <Button variant="secondary" className="h-11 flex-1" onClick={() => { setRun(null); setPreview(null); setPageState('intro'); }}>{copy.chooseDifferent}</Button>
             </div>
-            <button type="button" className="mt-6 text-sm text-fg-muted hover:text-fg hover:underline" onClick={() => openConversation(run.sessionKey)}>{copy.openConversation}</button>
+            <button type="button" className="mt-6 text-sm text-fg-muted hover:text-fg hover:underline" onClick={() => openConversation(run.conversationId)}>{copy.openConversation}</button>
           </section>
         ) : null}
       </main>

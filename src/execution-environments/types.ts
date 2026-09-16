@@ -33,7 +33,7 @@ export interface ExecutionEnvironment {
 
 export interface ExecutionEnvironmentBinding {
   id: string;
-  sessionKey: string;
+  conversationId: string;
   environmentId: string;
   createdAt: number;
   releasedAt?: number;
@@ -69,7 +69,7 @@ export interface ExecutionEnvironmentListQuery {
 }
 
 export interface BindExecutionEnvironmentInput {
-  sessionKey: string;
+  conversationId: string;
   environmentId: string;
 }
 

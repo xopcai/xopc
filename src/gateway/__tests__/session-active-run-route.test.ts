@@ -6,20 +6,20 @@ import type { GatewayService } from '../service.js';
 
 describe('GET /api/sessions/:key/run', () => {
   it('returns active run from gateway service', async () => {
-    const sessionKey = 'agent:main:webchat:default:direct:abc';
+    const conversationId = "17305fb5-e9c2-4028-8aa3-1b2b6b86fedc";
     const service = {
       isGatewayReady: () => true,
       sessions: {
-        getSession: async (key: string) => (key === sessionKey ? { key } : null),
+        getSession: async (key: string) => (key === conversationId ? { key } : null),
         getActiveRun: (key: string) =>
-          key === sessionKey ? { active: true, runId: 'run-123' } : { active: false },
+          key === conversationId ? { active: true, runId: 'run-123' } : { active: false },
       },
     } as unknown as GatewayService;
 
     const app = new Hono();
     registerSessionsRoutes(app, { service });
 
-    const res = await app.request(`/api/sessions/${encodeURIComponent(sessionKey)}/run`);
+    const res = await app.request(`/api/sessions/${encodeURIComponent(conversationId)}/run`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; payload: { active: boolean; runId?: string } };
     expect(body.ok).toBe(true);
@@ -45,7 +45,7 @@ describe('GET /api/sessions/:key/run', () => {
 
 describe('GET /api/session-runs', () => {
   it('returns the authoritative active-run snapshot', async () => {
-    const runs = [{ sessionKey: 'agent:main:webchat:default:direct:abc', runId: 'run-123' }];
+    const runs = [{ conversationId: "17305fb5-e9c2-4028-8aa3-1b2b6b86fedc", runId: 'run-123' }];
     const service = {
       isGatewayReady: () => true,
       sessions: { listActiveRuns: () => runs },
@@ -61,10 +61,10 @@ describe('GET /api/session-runs', () => {
 
 describe('POST /api/sessions/:key/fork-at-turn', () => {
   it('delegates using only the turn id and returns the server-generated session', async () => {
-    const sourceKey = 'agent:main:webchat:default:direct:source';
-    const forkedKey = 'agent:main:webchat:default:direct:server-generated';
+    const sourceKey = "186828a5-4b36-42e0-85cc-6cd0114bd4c7";
+    const forkedKey = "a4c30700-493a-443f-8754-c4b2ee89c70b";
     const forkAtTurn = vi.fn(async () => ({
-      sessionKey: forkedKey,
+      conversationId: forkedKey,
       rowCount: 4,
       lastTurnId: 'turn-1',
       session: { key: forkedKey, messages: [] },
@@ -81,7 +81,7 @@ describe('POST /api/sessions/:key/fork-at-turn', () => {
 
     expect(res.status).toBe(201);
     expect(forkAtTurn).toHaveBeenCalledWith(sourceKey, 'turn-1');
-    await expect(res.json()).resolves.toMatchObject({ ok: true, sessionKey: forkedKey });
+    await expect(res.json()).resolves.toMatchObject({ ok: true, conversationId: forkedKey });
   });
 
   it('rejects a missing turn id before touching the service', async () => {
@@ -126,14 +126,14 @@ describe('GET /api/sessions/:key/history', () => {
 });
 
 describe('/api/sessions/resolve', () => {
-  it('resolves sessionId to canonical session key', async () => {
-    const sessionKey = 'agent:main:webchat:default:direct:abc';
-    const sessionId = 'session-123';
+  it('resolves transcriptId to canonical session key', async () => {
+    const conversationId = "17305fb5-e9c2-4028-8aa3-1b2b6b86fedc";
+    const transcriptId = 'session-123';
     const service = {
       sessions: {
-        resolveSession: async (input: { sessionId?: string }) =>
-          input.sessionId === sessionId
-            ? { sessionKey, sessionId, session: { key: sessionKey, sessionId } }
+        resolveSession: async (input: { transcriptId?: string }) =>
+          input.transcriptId === transcriptId
+            ? { conversationId, transcriptId, session: { key: conversationId, transcriptId } }
             : null,
       },
     } as unknown as GatewayService;
@@ -141,12 +141,12 @@ describe('/api/sessions/resolve', () => {
     const app = new Hono();
     registerSessionsRoutes(app, { service });
 
-    const res = await app.request(`/api/sessions/resolve?sessionId=${encodeURIComponent(sessionId)}`);
+    const res = await app.request(`/api/sessions/resolve?transcriptId=${encodeURIComponent(transcriptId)}`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       ok: boolean;
-      payload: { sessionKey: string; sessionId: string };
+      payload: { conversationId: string; transcriptId: string };
     };
-    expect(body).toEqual({ ok: true, payload: { sessionKey, sessionId, session: { key: sessionKey, sessionId } } });
+    expect(body).toEqual({ ok: true, payload: { conversationId, transcriptId, session: { key: conversationId, transcriptId } } });
   });
 });

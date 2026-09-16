@@ -7,7 +7,7 @@ import { formatKeyIds } from '../format-tui-hotkeys.js';
 export type TuiHeaderModel = {
   version: string;
   connectionLabel: string;
-  sessionKey: string;
+  conversationId: string;
   showHints: boolean;
 };
 
@@ -54,8 +54,8 @@ export class TuiHeader implements Component {
       return rendered.map((line) => truncateToWidth(line, width, theme.dim('…')));
     }
 
-    const { version, connectionLabel, sessionKey, showHints } = this.getModel();
-    const title = theme.header(`xopc tui v${version} — ${connectionLabel} — ${sessionKey}`);
+    const { version, connectionLabel, conversationId, showHints } = this.getModel();
+    const title = theme.header(`xopc tui v${version} — ${connectionLabel} — ${conversationId}`);
     const lines = [truncateToWidth(title, width, theme.dim('…'))];
 
     if (showHints) {

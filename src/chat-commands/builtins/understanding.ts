@@ -21,7 +21,7 @@ const rememberCommand: CommandDefinition = {
   acceptsArgs: true,
   examples: ['/remember I prefer concise updates', '/remember --session This chat is about launch planning'],
   handler: async (ctx: CommandContext, args: string) => {
-    const mode = (await ctx.getSessionConfigStore?.().get(ctx.sessionKey))?.userContextMode;
+    const mode = (await ctx.getSessionConfigStore?.().get(ctx.conversationId))?.userContextMode;
     if (mode === 'temporary') {
       return { content: 'This conversation is temporary, so it cannot save user understanding.', success: false };
     }
@@ -37,7 +37,7 @@ const rememberCommand: CommandDefinition = {
       normalizedValue: content.toLocaleLowerCase(),
       statement: content,
       kind: 'derived_insight',
-      scope: sessionOnly ? { type: 'session', id: ctx.sessionKey } : { type: 'global' },
+      scope: sessionOnly ? { type: 'session', id: ctx.conversationId } : { type: 'global' },
       authority: 'user_explicit',
       confidence: 1,
       declaredImportance: 0.8,
@@ -77,12 +77,12 @@ const learningCommand: CommandDefinition = {
       return { content: 'Usage: /learning on | off | temporary | status', success: false };
     }
     if (action !== 'status') {
-      await store.update(ctx.sessionKey, {
+      await store.update(ctx.conversationId, {
         userContextMode: action === 'on' ? 'enabled' : action as 'off' | 'temporary',
       });
     }
     const globallyEnabled = ctx.config.userContext.enabled;
-    const mode = (await store.get(ctx.sessionKey))?.userContextMode ?? 'enabled';
+    const mode = (await store.get(ctx.conversationId))?.userContextMode ?? 'enabled';
     const enabled = globallyEnabled && mode === 'enabled';
     return {
       content: enabled

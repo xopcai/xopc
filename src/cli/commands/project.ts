@@ -217,14 +217,14 @@ function createProjectCommand(ctx: CLIContext): Command {
       .description('Attach a session to a project')
       .argument('<session-key>', 'Session key')
       .argument('<project>', 'Project id or slug')
-      .action(async (sessionKey, projectRef) => {
+      .action(async (conversationId, projectRef) => {
         await withProjects(ctx, (projects) => {
           const project = resolveProject(projects, projectRef);
           if (!project) {
             console.error(`Project not found: ${projectRef}`);
             process.exit(1);
           }
-          projects.attachSession(sessionKey, project.id);
+          projects.attachSession(conversationId, project.id);
           console.log(`Attached session to ${project.name}`);
         });
       }),
@@ -234,9 +234,9 @@ function createProjectCommand(ctx: CLIContext): Command {
     new Command('detach-session')
       .description('Detach a session from its project')
       .argument('<session-key>', 'Session key')
-      .action(async (sessionKey) => {
+      .action(async (conversationId) => {
         await withProjects(ctx, (projects) => {
-          projects.detachSession(sessionKey);
+          projects.detachSession(conversationId);
           console.log('Detached session from project.');
         });
       }),
@@ -254,7 +254,7 @@ function createProjectCommand(ctx: CLIContext): Command {
             console.error(`Project not found: ${projectRef}`);
             process.exit(1);
           }
-          const keys = projects.listSessionKeys(project.id, Number(options.limit) || 20);
+          const keys = projects.listConversationIds(project.id, Number(options.limit) || 20);
           if (!keys.length) {
             console.log('No sessions.');
             return;

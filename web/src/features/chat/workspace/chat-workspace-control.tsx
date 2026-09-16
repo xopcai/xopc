@@ -13,14 +13,14 @@ import { useSideChatStore } from '@/stores/side-chat-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 
 export function ChatWorkspaceControl({
-  sessionKey,
+  conversationId,
   workspacePath,
   canChangeWorkspace,
   disabled,
   available = true,
   onWorkspaceChange,
 }: {
-  sessionKey: string | null;
+  conversationId: string | null;
   workspacePath?: string | null;
   canChangeWorkspace: boolean;
   disabled: boolean;
@@ -50,8 +50,8 @@ export function ChatWorkspaceControl({
   const pickerDisabled = disabled || directoryPicker.picking;
 
   const openProjectFiles = () => {
-    if (sessionKey) setSideChatOpen(sessionKey, false);
-    openWorkspacePanelForSession(sessionKey ?? '');
+    if (conversationId) setSideChatOpen(conversationId, false);
+    openWorkspacePanelForSession(conversationId ?? '');
   };
 
   return (

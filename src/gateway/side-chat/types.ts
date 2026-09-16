@@ -37,8 +37,8 @@ export type SideChatSelection =
     };
 
 export interface SideChatContextSnapshot {
-  parentSessionKey: string;
-  parentSessionId: string;
+  parentConversationId: string;
+  parentTranscriptId: string;
   parentMessageCount: number;
   createdAt: string;
   selections: SideChatSelection[];
@@ -52,7 +52,7 @@ export interface SideChatConfig {
 
 export interface SideChatView {
   id: string;
-  parentSessionKey: string;
+  parentConversationId: string;
   clientInstanceId: string;
   status: SideChatStatus;
   createdAt: string;
@@ -74,7 +74,7 @@ export interface SideChatView {
 }
 
 export interface CreateSideChatInput {
-  parentSessionKey: string;
+  parentConversationId: string;
   clientInstanceId: string;
   selections?: SideChatSelection[];
   config?: Partial<SideChatConfig>;

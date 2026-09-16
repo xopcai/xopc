@@ -15,9 +15,9 @@ vi.mock('@xopcai/realtime-client', () => ({
 }));
 
 vi.mock('./chat-outbox', () => ({
-  readBrowserOutbox: vi.fn(async (sessionKey: string) => outbox.get(sessionKey)),
-  writeBrowserOutbox: vi.fn(async (sessionKey: string, value: unknown) => { outbox.set(sessionKey, value); }),
-  deleteBrowserOutbox: vi.fn(async (sessionKey: string) => { outbox.delete(sessionKey); }),
+  readBrowserOutbox: vi.fn(async (conversationId: string) => outbox.get(conversationId)),
+  writeBrowserOutbox: vi.fn(async (conversationId: string, value: unknown) => { outbox.set(conversationId, value); }),
+  deleteBrowserOutbox: vi.fn(async (conversationId: string) => { outbox.delete(conversationId); }),
 }));
 
 import { BrowserChatClient, type BrowserChatSnapshot } from './chat-client';
@@ -69,7 +69,7 @@ function stubChrome() {
 
 function readyClient(): BrowserChatClient {
   const client = new BrowserChatClient();
-  internals(client).update({ sessionKey: 'chat:one', endpointReady: true });
+  internals(client).update({ conversationId: 'chat:one', endpointReady: true });
   internals(client).turnClaim = { endpointId: 'browser:one', token: 'turn-token' };
   return client;
 }
@@ -189,11 +189,11 @@ describe('BrowserChatClient delivery safety', () => {
     gatewayFetch.mockReturnValueOnce(new Promise<Response>((resolve) => { finishRequest = resolve; }));
 
     const loading = internals(client).reloadMessages();
-    internals(client).update({ sessionKey: 'chat:two', messages: [] });
+    internals(client).update({ conversationId: 'chat:two', messages: [] });
     finishRequest(response({ payload: { messages: [{ role: 'assistant', content: 'old chat' }] } }));
     await loading;
 
-    expect(internals(client).snapshot.sessionKey).toBe('chat:two');
+    expect(internals(client).snapshot.conversationId).toBe('chat:two');
     expect(internals(client).snapshot.messages).toEqual([]);
   });
 
@@ -249,7 +249,7 @@ describe('composer delivery concurrency', () => {
     let resolveBinding!: (response: Response) => void;
     gatewayFetch.mockImplementationOnce(() => new Promise(resolve => { resolveBinding = resolve; }));
     const sending = client.send('belongs to one');
-    internals(client).update({ sessionKey: 'chat:two' });
+    internals(client).update({ conversationId: 'chat:two' });
     resolveBinding(response({ ok: true }));
     await expect(sending).rejects.toThrow('errorChatChanged');
     expect(gatewayFetch.mock.calls.some(([url]) => String(url).endsWith('/inputs'))).toBe(false);

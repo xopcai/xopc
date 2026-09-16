@@ -4,7 +4,7 @@ import { getEmbeddedExecutionSession, runWithEmbeddedExecutionSession } from '..
 
 describe('embedded execution context', () => {
   it('isolates concurrent ephemeral interaction routes', async () => {
-    const readLater = (sessionKey: string) => runWithEmbeddedExecutionSession(sessionKey, async () => {
+    const readLater = (conversationId: string) => runWithEmbeddedExecutionSession(conversationId, async () => {
       await Promise.resolve();
       return getEmbeddedExecutionSession();
     });

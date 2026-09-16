@@ -1,4 +1,4 @@
-import { bindFeishuConversation, unbindBySessionKey } from './state/thread-bindings.js';
+import { bindFeishuConversation, unbindByConversationId } from './state/thread-bindings.js';
 
 function normLower(v: unknown): string {
   return typeof v === 'string' ? v.trim().toLowerCase() : '';
@@ -8,7 +8,7 @@ function stripProviderPrefix(raw: string): string {
   return raw.replace(/^(feishu|lark):/i, '').trim();
 }
 
-export async function handleFeishuSubagentSpawning(event: any, ctx: { requesterSessionKey?: string } = {}) {
+export async function handleFeishuSubagentSpawning(event: any, ctx: { requesterConversationId?: string } = {}) {
   if (!event?.threadRequested) return undefined;
   const requesterChannel = normLower(event?.requester?.channel);
   if (requesterChannel !== 'feishu') return undefined;
@@ -34,9 +34,9 @@ export async function handleFeishuSubagentSpawning(event: any, ctx: { requesterS
     accountId,
     conversationId,
     parentConversationId: isChatTarget ? withoutProvider : undefined,
-    targetSessionKey: String(event.childSessionKey),
+    targetConversationId: String(event.childConversationId),
     metadata: {
-      requesterSessionKey: ctx.requesterSessionKey,
+      requesterConversationId: ctx.requesterConversationId,
       deliveryTo: to,
       deliveryThreadId: threadId || undefined,
       agentId: event?.agentId,
@@ -49,8 +49,8 @@ export async function handleFeishuSubagentSpawning(event: any, ctx: { requesterS
 
 export function handleFeishuSubagentEnded(event: any) {
   const accountId = String(event?.accountId ?? '').trim() || 'default';
-  const sk = String(event?.targetSessionKey ?? '').trim();
+  const sk = String(event?.targetConversationId ?? '').trim();
   if (!sk) return;
-  unbindBySessionKey(accountId, sk);
+  unbindByConversationId(accountId, sk);
 }
 

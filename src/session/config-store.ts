@@ -30,33 +30,33 @@ export class SessionConfigStore {
     log.debug('Session config store initialized (SQLite)');
   }
 
-  async get(sessionKey: string): Promise<SessionAgentConfig | null> {
+  async get(conversationId: string): Promise<SessionAgentConfig | null> {
     this.requireDatabase();
-    return getSqliteSessionConfig(sessionKey);
+    return getSqliteSessionConfig(conversationId);
   }
 
-  async set(sessionKey: string, config: SessionAgentConfig): Promise<void> {
+  async set(conversationId: string, config: SessionAgentConfig): Promise<void> {
     this.requireDatabase();
-    setSqliteSessionConfig(sessionKey, config, this.cwd);
-    log.debug({ sessionKey }, 'Session config saved');
+    setSqliteSessionConfig(conversationId, config, this.cwd);
+    log.debug({ conversationId }, 'Session config saved');
   }
 
-  async update(sessionKey: string, partial: Partial<SessionAgentConfig>): Promise<SessionAgentConfig> {
+  async update(conversationId: string, partial: Partial<SessionAgentConfig>): Promise<SessionAgentConfig> {
     this.requireDatabase();
-    const updated = updateSqliteSessionConfig(sessionKey, partial, this.cwd);
-    log.debug({ sessionKey }, 'Session config updated');
+    const updated = updateSqliteSessionConfig(conversationId, partial, this.cwd);
+    log.debug({ conversationId }, 'Session config updated');
     return updated;
   }
 
-  async delete(sessionKey: string): Promise<void> {
+  async delete(conversationId: string): Promise<void> {
     this.requireDatabase();
-    deleteSqliteSessionConfig(sessionKey);
-    log.debug({ sessionKey }, 'Session config deleted');
+    deleteSqliteSessionConfig(conversationId);
+    log.debug({ conversationId }, 'Session config deleted');
   }
 
-  async has(sessionKey: string): Promise<boolean> {
+  async has(conversationId: string): Promise<boolean> {
     this.requireDatabase();
-    return hasSessionConfig(sessionKey);
+    return hasSessionConfig(conversationId);
   }
 
   async getAll(): Promise<Map<string, SessionAgentConfig>> {
@@ -86,27 +86,27 @@ export class SessionConfigStore {
 
 export async function resolveThinkingLevel(
   sessionConfigStore: SessionConfigStore,
-  sessionKey: string,
+  conversationId: string,
   agentDefault?: ThinkLevel,
 ): Promise<ThinkLevel | undefined> {
-  const config = await sessionConfigStore.get(sessionKey);
+  const config = await sessionConfigStore.get(conversationId);
   return config?.thinkingLevel ?? agentDefault;
 }
 
 export async function resolveReasoningLevel(
   sessionConfigStore: SessionConfigStore,
-  sessionKey: string,
+  conversationId: string,
   agentDefault?: ReasoningLevel,
 ): Promise<ReasoningLevel | undefined> {
-  const config = await sessionConfigStore.get(sessionKey);
+  const config = await sessionConfigStore.get(conversationId);
   return config?.reasoningLevel ?? agentDefault;
 }
 
 export async function resolveVerboseLevel(
   sessionConfigStore: SessionConfigStore,
-  sessionKey: string,
+  conversationId: string,
   agentDefault?: VerboseLevel,
 ): Promise<VerboseLevel | undefined> {
-  const config = await sessionConfigStore.get(sessionKey);
+  const config = await sessionConfigStore.get(conversationId);
   return config?.verboseLevel ?? agentDefault;
 }

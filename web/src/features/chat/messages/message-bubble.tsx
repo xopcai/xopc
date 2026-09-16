@@ -80,7 +80,7 @@ const userMessageFooterAction = cn(
 export const MessageBubble = memo(function MessageBubble({
   message,
   authToken,
-  sessionKey,
+  conversationId,
   projectId,
   isStreaming,
   progress,
@@ -104,7 +104,7 @@ export const MessageBubble = memo(function MessageBubble({
 }: {
   message: Message;
   authToken?: string;
-  sessionKey?: string | null;
+  conversationId?: string | null;
   projectId?: string | null;
   isStreaming: boolean;
   progress: ProgressState | null;
@@ -290,13 +290,13 @@ export const MessageBubble = memo(function MessageBubble({
   const readAloudInput = useMemo(() => ({
     source: {
       type: 'chat-message' as const,
-      id: `${sessionKey ?? 'chat'}:${message.timestamp ?? messageIndex ?? copyMarkdown.length}`,
+      id: `${conversationId ?? 'chat'}:${message.timestamp ?? messageIndex ?? copyMarkdown.length}`,
       title: speakableText.split('\n')[0]?.slice(0, 48) || m.chat.messageReadAloudTitle,
-      href: sessionKey ? `#/chat/${encodeURIComponent(sessionKey)}` : undefined,
+      href: conversationId ? `#/chat/${encodeURIComponent(conversationId)}` : undefined,
     },
     text: speakableText,
     language: detectSpeechLanguage(speakableText, language),
-  }), [copyMarkdown.length, language, m.chat.messageReadAloudTitle, message.timestamp, messageIndex, sessionKey, speakableText]);
+  }), [copyMarkdown.length, language, m.chat.messageReadAloudTitle, message.timestamp, messageIndex, conversationId, speakableText]);
   const userCopyText = useMemo(() => {
     if (!isUser) return '';
     return extractUserMessagePlainText(message.content);
@@ -325,9 +325,9 @@ export const MessageBubble = memo(function MessageBubble({
     }
   }, []);
   const completeProgressiveRender = useCallback(() => {
-    if (!sessionKey || !message.renderKey) return;
-    useChatSessionStore.getState().completeProgressiveRender(sessionKey, message.renderKey);
-  }, [message.renderKey, sessionKey]);
+    if (!conversationId || !message.renderKey) return;
+    useChatSessionStore.getState().completeProgressiveRender(conversationId, message.renderKey);
+  }, [message.renderKey, conversationId]);
   const handleCopyPlain = useCallback(() => {
     if (!copyPlainText) return;
     void copyTextToClipboard(copyPlainText).then((ok) => {
@@ -598,7 +598,7 @@ export const MessageBubble = memo(function MessageBubble({
                     cardLabels={cardLabels}
                     imagePreviewLabel={m.chat.attachmentPreviewImage}
                     onImagePreview={openInlineImagePreview}
-                    sessionKey={sessionKey}
+                    conversationId={conversationId}
                     projectId={projectId}
                     workflowOptions={{
                       labels: workflowCardLabels(language),
@@ -635,7 +635,7 @@ export const MessageBubble = memo(function MessageBubble({
               <AssistantTurnTasks
                 view={assistantTurnView}
                 authToken={authToken}
-                sessionKey={sessionKey}
+                conversationId={conversationId}
                 projectId={projectId}
                 compactProductDelivery={compactProductDelivery}
                 sourcesLabel={m.chat.searchSourcesHeading.replace(
@@ -650,7 +650,7 @@ export const MessageBubble = memo(function MessageBubble({
                 <AttachmentRenderer
                   attachments={attachmentsForBubble}
                   authToken={authToken}
-                  sessionKey={sessionKey}
+                  conversationId={conversationId}
                   layout="user"
                   centerUserVoiceRow={userCopyText.length === 0}
                 />
@@ -658,7 +658,7 @@ export const MessageBubble = memo(function MessageBubble({
                 <AssistantAttachmentList
                   attachments={attachmentsForBubble}
                   authToken={authToken}
-                  sessionKey={sessionKey}
+                  conversationId={conversationId}
                   projectId={projectId}
                 />
               )
@@ -799,7 +799,7 @@ export const MessageBubble = memo(function MessageBubble({
                 )}
               </button>
             ) : null}
-            {responseFeedbackEnabled && sessionKey && message.timestamp ? (
+            {responseFeedbackEnabled && conversationId && message.timestamp ? (
               <>
                 <button
                   type="button"
@@ -991,7 +991,7 @@ export const MessageBubble = memo(function MessageBubble({
         open={inlineImagePreview !== null}
         attachment={inlineImagePreview}
         authToken={authToken}
-        sessionKey={sessionKey}
+        conversationId={conversationId}
         onClose={() => setInlineImagePreview(null)}
       />
     </article>

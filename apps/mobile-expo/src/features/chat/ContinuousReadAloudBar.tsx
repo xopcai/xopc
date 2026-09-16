@@ -7,21 +7,21 @@ import { radii, spacing, typography, useTheme } from '../../theme';
 import { useReadAloudStore } from '../voice/read-aloud-store';
 
 export const ContinuousReadAloudBar = memo(function ContinuousReadAloudBar({
-  sessionKey,
+  conversationId,
 }: {
-  sessionKey: string;
+  conversationId: string;
 }) {
   const { colors } = useTheme();
   const { chat: m } = useMessages();
-  const active = useReadAloudStore((state) => state.continuousSessionKey === sessionKey);
-  const sourceSessionKey = useReadAloudStore((state) => state.source?.sessionKey);
+  const active = useReadAloudStore((state) => state.continuousConversationId === conversationId);
+  const sourceConversationId = useReadAloudStore((state) => state.source?.conversationId);
   const disableContinuous = useReadAloudStore((state) => state.disableContinuous);
   const stop = useReadAloudStore((state) => state.stop);
 
   const handleStop = useCallback(() => {
     disableContinuous();
-    if (sourceSessionKey === sessionKey) stop();
-  }, [disableContinuous, sessionKey, sourceSessionKey, stop]);
+    if (sourceConversationId === conversationId) stop();
+  }, [disableContinuous, conversationId, sourceConversationId, stop]);
 
   if (!active) return null;
 

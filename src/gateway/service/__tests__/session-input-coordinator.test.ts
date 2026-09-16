@@ -17,7 +17,7 @@ import {
 
 describe('SessionInputCoordinator', () => {
   let dir: string;
-  const sessionKey = 'agent:main:webchat:default:direct:test';
+  const conversationId = "78fcccd3-a14f-4a70-87d9-69d9471f63d7";
   const origin = { type: 'channel' as const, channel: 'webchat' };
 
   beforeEach(() => {
@@ -48,21 +48,21 @@ describe('SessionInputCoordinator', () => {
     });
 
     const first = await coordinator.submit({
-      sessionKey, clientMessageId: 'client-1', delivery: 'next', content: 'one', origin,
+      conversationId, clientMessageId: 'client-1', delivery: 'next', content: 'one', origin,
     });
     const second = await coordinator.submit({
-      sessionKey, clientMessageId: 'client-2', delivery: 'next', content: 'two', origin,
+      conversationId, clientMessageId: 'client-2', delivery: 'next', content: 'two', origin,
     });
 
     expect(first.ok).toBe(true);
     expect(second.ok).toBe(true);
     expect(execute).toHaveBeenCalledTimes(1);
-    expect(coordinator.snapshot(sessionKey).inputs.map((row) => row.status)).toEqual(['running', 'queued']);
+    expect(coordinator.snapshot(conversationId).inputs.map((row) => row.status)).toEqual(['running', 'queued']);
 
     completions.shift()?.({ status: 'ok', summary: 'done' });
     await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(2));
     completions.shift()?.({ status: 'ok', summary: 'done' });
-    await vi.waitFor(() => expect(coordinator.snapshot(sessionKey).inputs).toEqual([]));
+    await vi.waitFor(() => expect(coordinator.snapshot(conversationId).inputs).toEqual([]));
 
     const revisions = emitted.map((value) => (value as { revision: number }).revision);
     expect(revisions).toEqual([...revisions].sort((a, b) => a - b));
@@ -83,22 +83,22 @@ describe('SessionInputCoordinator', () => {
       emit: () => {},
     });
 
-    await coordinator.submit({ sessionKey, clientMessageId: 'active', delivery: 'next', content: 'active', origin });
+    await coordinator.submit({ conversationId, clientMessageId: 'active', delivery: 'next', content: 'active', origin });
     const fallback = await coordinator.submit({
-      sessionKey, clientMessageId: 'steer-retry', delivery: 'steer', content: 'guide', origin,
+      conversationId, clientMessageId: 'steer-retry', delivery: 'steer', content: 'guide', origin,
     });
     const duplicate = await coordinator.submit({
-      sessionKey, clientMessageId: 'steer-retry', delivery: 'steer', content: 'duplicate', origin,
+      conversationId, clientMessageId: 'steer-retry', delivery: 'steer', content: 'duplicate', origin,
     });
 
     expect(fallback.ok && fallback.effectiveDelivery).toBe('next');
     expect(duplicate.ok && duplicate.state.inputs.filter((row) => row.clientMessageId === 'steer-retry')).toHaveLength(1);
-    expect(coordinator.snapshot(sessionKey).inputs.map((row) => row.status)).toEqual(['running', 'queued']);
+    expect(coordinator.snapshot(conversationId).inputs.map((row) => row.status)).toEqual(['running', 'queued']);
 
     complete({ status: 'ok', summary: 'done' });
     await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(2));
     complete({ status: 'ok', summary: 'done' });
-    await vi.waitFor(() => expect(coordinator.snapshot(sessionKey).inputs).toEqual([]));
+    await vi.waitFor(() => expect(coordinator.snapshot(conversationId).inputs).toEqual([]));
   });
 
   it('tracks an accepted steer against the active run until that run completes', async () => {
@@ -112,17 +112,17 @@ describe('SessionInputCoordinator', () => {
       emit: () => {},
     });
 
-    await coordinator.submit({ sessionKey, clientMessageId: 'active', delivery: 'next', content: 'active', origin });
+    await coordinator.submit({ conversationId, clientMessageId: 'active', delivery: 'next', content: 'active', origin });
     const steered = await coordinator.submit({
-      sessionKey, clientMessageId: 'steer-1', delivery: 'steer', content: 'adjust', origin,
+      conversationId, clientMessageId: 'steer-1', delivery: 'steer', content: 'adjust', origin,
     });
 
     expect(steered.ok && steered.effectiveDelivery).toBe('steer');
-    expect(coordinator.snapshot(sessionKey).inputs.map((row) => row.status)).toEqual(['running', 'injecting']);
+    expect(coordinator.snapshot(conversationId).inputs.map((row) => row.status)).toEqual(['running', 'injecting']);
 
     complete({ status: 'ok', summary: 'done' });
-    await expect(coordinator.waitForCompletion(sessionKey, 'steer-1')).resolves.toBeUndefined();
-    expect(coordinator.snapshot(sessionKey).inputs).toEqual([]);
+    await expect(coordinator.waitForCompletion(conversationId, 'steer-1')).resolves.toBeUndefined();
+    expect(coordinator.snapshot(conversationId).inputs).toEqual([]);
   });
 
   it('keeps the frozen Note snapshot when queued text is edited without changing its refs', async () => {
@@ -153,10 +153,10 @@ describe('SessionInputCoordinator', () => {
     });
 
     await coordinator.submit({
-      sessionKey, clientMessageId: 'active', delivery: 'next', content: 'active', origin,
+      conversationId, clientMessageId: 'active', delivery: 'next', content: 'active', origin,
     });
     await coordinator.submit({
-      sessionKey,
+      conversationId,
       clientMessageId: 'queued-note',
       delivery: 'next',
       content: 'before edit',
@@ -164,9 +164,9 @@ describe('SessionInputCoordinator', () => {
       origin,
     });
 
-    const queued = coordinator.snapshot(sessionKey).inputs.find((input) => input.clientMessageId === 'queued-note');
+    const queued = coordinator.snapshot(conversationId).inputs.find((input) => input.clientMessageId === 'queued-note');
     expect(queued).toBeDefined();
-    const updated = await coordinator.update(sessionKey, queued!.id, {
+    const updated = await coordinator.update(conversationId, queued!.id, {
       version: queued!.version,
       content: 'after edit',
       contextRefs: [{ kind: 'note', sourceId: 'note-1', expectedVersion: 'v1' }],
@@ -174,7 +174,7 @@ describe('SessionInputCoordinator', () => {
 
     expect(updated.ok).toBe(true);
     expect(prepareContexts).toHaveBeenCalledTimes(2);
-    expect(getSessionInputById(sessionKey, queued!.id)).toMatchObject({
+    expect(getSessionInputById(conversationId, queued!.id)).toMatchObject({
       content: 'after edit',
       contextSnapshots: [{ sourceId: 'note-1', version: 'v1', text: 'original snapshot' }],
     });
@@ -186,13 +186,13 @@ describe('SessionInputCoordinator', () => {
       sourceContexts: [{ sourceId: 'note-1', version: 'v1', text: 'original snapshot' }],
     });
     completions.shift()?.({ status: 'ok', summary: 'done' });
-    await vi.waitFor(() => expect(coordinator.snapshot(sessionKey).inputs).toEqual([]));
+    await vi.waitFor(() => expect(coordinator.snapshot(conversationId).inputs).toEqual([]));
   });
 
   it('runs replacement cleanup before atomically queuing the edited latest turn', async () => {
-    ensureSessionRecord(sessionKey, '/tmp/workspace');
-    appendTranscriptEntry(sessionKey, { role: 'user', content: 'old', turnId: 'turn-1' } as never);
-    appendTranscriptEntry(sessionKey, {
+    ensureSessionRecord(conversationId, '/tmp/workspace', { agentId: "main" });
+    appendTranscriptEntry(conversationId, { role: 'user', content: 'old', turnId: 'turn-1' } as never);
+    appendTranscriptEntry(conversationId, {
       role: 'assistant',
       content: 'partial',
       turnId: 'turn-1',
@@ -213,7 +213,7 @@ describe('SessionInputCoordinator', () => {
     });
 
     const result = await coordinator.replaceLatestTurn({
-      sessionKey,
+      conversationId,
       targetTurnId: 'turn-1',
       clientMessageId: 'edited-client',
       delivery: 'next',
@@ -227,12 +227,12 @@ describe('SessionInputCoordinator', () => {
     expect(result.state.inputs.find((input) => input.id === result.state.activeInputId))
       .toMatchObject({ clientMessageId: 'edited-client', status: 'running' });
     expect(beforeReplace).toHaveBeenCalledOnce();
-    expect(loadTranscriptRowsForSession(sessionKey)).toEqual([]);
+    expect(loadTranscriptRowsForSession(conversationId)).toEqual([]);
     await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce());
     expect(execute.mock.calls[0]?.[0]).toMatchObject({ content: 'edited' });
 
     complete({ status: 'ok', summary: 'done' });
-    await vi.waitFor(() => expect(coordinator.snapshot(sessionKey).inputs).toEqual([]));
+    await vi.waitFor(() => expect(coordinator.snapshot(conversationId).inputs).toEqual([]));
   });
 
   it('freezes browser page context before a turn executes', async () => {
@@ -260,7 +260,7 @@ describe('SessionInputCoordinator', () => {
     };
 
     await coordinator.submit({
-      sessionKey,
+      conversationId,
       clientMessageId: 'page-turn',
       delivery: 'next',
       content: 'summarize',
@@ -268,7 +268,7 @@ describe('SessionInputCoordinator', () => {
       origin,
     });
 
-    const stored = getSessionInputById(sessionKey, coordinator.snapshot(sessionKey).activeInputId!);
+    const stored = getSessionInputById(conversationId, coordinator.snapshot(conversationId).activeInputId!);
     expect(stored?.contextSnapshots).toEqual([expect.objectContaining({ text: 'Frozen page body' })]);
     browserContext.text = 'mutated after submit';
     await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce());

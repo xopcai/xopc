@@ -16,7 +16,7 @@ export function normalizeWeixinAccountId(raw: string): string {
 }
 
 /**
- * Peer id as in session keys / context-token map (same rules as `buildSessionKey` peer segment).
+ * Peer id as in session keys / context-token map (same rules as `resolveConversationId` peer segment).
  */
 export function canonicalWeixinPeerId(rawPeerId: string): string {
   const t = rawPeerId.trim();

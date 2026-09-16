@@ -383,10 +383,10 @@ export class ProjectStore {
       if (query.includePinned) {
         clauses.push(`s.status = 'pinned'`);
       }
-      const includeSessionKey = query.includeSessionKey?.trim();
-      if (includeSessionKey) {
-        clauses.push(`s.session_key = ?`);
-        params.push(includeSessionKey);
+      const includeConversationId = query.includeConversationId?.trim();
+      if (includeConversationId) {
+        clauses.push(`s.conversation_id = ?`);
+        params.push(includeConversationId);
       }
       sessionConditions.push(`(${clauses.join(' OR ')})`);
     }
@@ -394,7 +394,7 @@ export class ProjectStore {
     // A new project must be visible before its first conversation is created.
     const whereParts = [
       ...projectConditions,
-      ...(sessionConditions.length ? [`(s.session_key IS NULL OR (${sessionConditions.join(' AND ')}))`] : []),
+      ...(sessionConditions.length ? [`(s.conversation_id IS NULL OR (${sessionConditions.join(' AND ')}))`] : []),
     ];
     const where = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
     const limit = clampLimit(query.limit, 50);
@@ -521,12 +521,12 @@ export class ProjectStore {
   getRecentSessions(id: string, limit = 5): ProjectWithDetails['recentSessions'] {
     const rows = getSqliteDatabase()
       .prepare(
-        `SELECT session_key, name, updated_at, agent_id FROM sessions
+        `SELECT conversation_id, name, updated_at, agent_id FROM sessions
          WHERE project_id = ? AND hidden_from_session_list = 0 ORDER BY updated_at DESC LIMIT ?`,
       )
-      .all(id, clampLimit(limit, 5)) as Array<{ session_key: string; name: string | null; updated_at: number; agent_id: string }>;
+      .all(id, clampLimit(limit, 5)) as Array<{ conversation_id: string; name: string | null; updated_at: number; agent_id: string }>;
     return rows.map((row) => ({
-      key: row.session_key,
+      key: row.conversation_id,
       name: row.name ?? undefined,
       updatedAt: new Date(row.updated_at).toISOString(),
       agentId: row.agent_id,

@@ -21,16 +21,16 @@ import {
 
 describe('clarification wait repository', () => {
   let dir: string;
-  const sessionKey = 'agent:main:webchat:default:direct:clarify';
+  const conversationId = "5f8923f9-52c1-47a6-8174-bfe092661681";
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'xopc-clarification-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(dir, 'xopc.db') });
-    ensureSessionRecord(sessionKey, dir);
+    ensureSessionRecord(conversationId, dir, { agentId: "main" });
     insertSessionInput({
       id: 'origin-input',
-      sessionKey,
+      conversationId,
       clientMessageId: 'origin-client',
       requestedDelivery: 'next',
       effectiveDelivery: 'next',
@@ -38,7 +38,7 @@ describe('clarification wait repository', () => {
       content: 'Prepare the release',
       origin: { type: 'system', source: 'internal' },
     });
-    claimNextSessionInput(sessionKey, 'origin-run');
+    claimNextSessionInput(conversationId, 'origin-run');
   });
 
   afterEach(() => {
@@ -50,7 +50,7 @@ describe('clarification wait repository', () => {
   it('persists an input wait and resumes it after an arbitrarily late answer', () => {
     const createdAt = 1_000;
     const wait = createClarificationWait({
-      sessionKey,
+      conversationId,
       runId: 'origin-run',
       toolCallId: 'tool-1',
       kind: 'input',
@@ -59,9 +59,9 @@ describe('clarification wait repository', () => {
       now: createdAt,
     });
     expect(wait.expiresAt).toBeUndefined();
-    expect(getActiveClarification(sessionKey)?.id).toBe(wait.id);
+    expect(getActiveClarification(conversationId)?.id).toBe(wait.id);
 
-    finishSessionInputRun(sessionKey, 'origin-run', 'suspended');
+    finishSessionInputRun(conversationId, 'origin-run', 'suspended');
     const resolved = resolveClarification({
       id: wait.id,
       expectedVersion: wait.version,
@@ -72,7 +72,7 @@ describe('clarification wait repository', () => {
     });
     expect(resolved).toMatchObject({ ok: true, queued: true, idempotent: false });
 
-    const resume = claimNextSessionInput(sessionKey, 'resume-run');
+    const resume = claimNextSessionInput(conversationId, 'resume-run');
     expect(resume).toMatchObject({ kind: 'clarification_resume' });
     expect(resume?.content).toContain('User response: staging');
     expect(consumeClarificationResume(resume!)).toBe(true);
@@ -81,21 +81,21 @@ describe('clarification wait repository', () => {
 
   it('deduplicates tool retries and response retries', () => {
     const first = createClarificationWait({
-      sessionKey,
+      conversationId,
       runId: 'origin-run',
       toolCallId: 'tool-1',
       kind: 'input',
       question: 'Choose?',
     });
     const duplicate = createClarificationWait({
-      sessionKey,
+      conversationId,
       runId: 'origin-run',
       toolCallId: 'tool-1',
       kind: 'input',
       question: 'Choose?',
     });
     expect(duplicate.id).toBe(first.id);
-    finishSessionInputRun(sessionKey, 'origin-run', 'suspended');
+    finishSessionInputRun(conversationId, 'origin-run', 'suspended');
 
     const firstResponse = resolveClarification({
       id: first.id,
@@ -117,7 +117,7 @@ describe('clarification wait repository', () => {
 
   it('expires approvals but never auto-approves them', () => {
     const wait = createClarificationWait({
-      sessionKey,
+      conversationId,
       runId: 'origin-run',
       toolCallId: 'approval-1',
       kind: 'approval',
@@ -126,7 +126,7 @@ describe('clarification wait repository', () => {
       suggestedAnswer: 'Deny',
       now: 1_000,
     });
-    finishSessionInputRun(sessionKey, 'origin-run', 'suspended');
+    finishSessionInputRun(conversationId, 'origin-run', 'suspended');
     const result = resolveClarification({
       id: wait.id,
       expectedVersion: wait.version,
@@ -141,13 +141,13 @@ describe('clarification wait repository', () => {
 
   it('rejects concurrent answers using the wait version', () => {
     const wait = createClarificationWait({
-      sessionKey,
+      conversationId,
       runId: 'origin-run',
       toolCallId: 'tool-1',
       kind: 'input',
       question: 'Choose?',
     });
-    finishSessionInputRun(sessionKey, 'origin-run', 'suspended');
+    finishSessionInputRun(conversationId, 'origin-run', 'suspended');
     expect(resolveClarification({
       id: wait.id,
       expectedVersion: wait.version,
@@ -166,25 +166,25 @@ describe('clarification wait repository', () => {
 
   it('keeps cancel separate from letting the agent decide', () => {
     const cancelled = createClarificationWait({
-      sessionKey,
+      conversationId,
       runId: 'origin-run',
       toolCallId: 'tool-cancel',
       kind: 'input',
       question: 'Choose?',
       suggestedAnswer: 'A',
     });
-    finishSessionInputRun(sessionKey, 'origin-run', 'suspended');
+    finishSessionInputRun(conversationId, 'origin-run', 'suspended');
     expect(resolveClarification({
       id: cancelled.id,
       expectedVersion: cancelled.version,
       idempotencyKey: 'cancel-1',
       action: 'cancel',
     })).toMatchObject({ ok: true, queued: false });
-    expect(claimNextSessionInput(sessionKey, 'after-cancel')).toBeUndefined();
+    expect(claimNextSessionInput(conversationId, 'after-cancel')).toBeUndefined();
 
     insertSessionInput({
       id: 'second-origin-input',
-      sessionKey,
+      conversationId,
       clientMessageId: 'second-origin-client',
       requestedDelivery: 'next',
       effectiveDelivery: 'next',
@@ -192,22 +192,22 @@ describe('clarification wait repository', () => {
       content: 'Continue planning',
       origin: { type: 'system', source: 'internal' },
     });
-    claimNextSessionInput(sessionKey, 'second-origin-run');
+    claimNextSessionInput(conversationId, 'second-origin-run');
     const delegated = createClarificationWait({
-      sessionKey,
+      conversationId,
       runId: 'second-origin-run',
       toolCallId: 'tool-decide',
       kind: 'input',
       question: 'Choose again?',
     });
-    finishSessionInputRun(sessionKey, 'second-origin-run', 'suspended');
+    finishSessionInputRun(conversationId, 'second-origin-run', 'suspended');
     expect(resolveClarification({
       id: delegated.id,
       expectedVersion: delegated.version,
       idempotencyKey: 'decide-1',
       action: 'agent_decide',
     })).toMatchObject({ ok: true, queued: true });
-    expect(claimNextSessionInput(sessionKey, 'after-decide')?.content)
+    expect(claimNextSessionInput(conversationId, 'after-decide')?.content)
       .toContain('Use your best judgment');
   });
 });

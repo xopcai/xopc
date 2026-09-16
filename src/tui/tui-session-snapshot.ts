@@ -70,7 +70,7 @@ export class TuiSessionSnapshot {
   private nextId = 1;
 
   constructor(
-    private readonly getSessionKey: () => string,
+    private readonly getConversationId: () => string,
     private readonly getCwdValue: () => string,
     private readonly getSessionNameValue: () => string | undefined,
     private readonly getSessionFileValue: () => string | undefined = () => undefined,
@@ -176,7 +176,7 @@ export class TuiSessionSnapshot {
       getLabel: (entryId) => this.entries.find((entry) => entry.id === entryId)?.userLabel,
       getHeader: () => this.createHeader(),
       getTree: () => this.createTree(),
-      getSessionId: () => this.getSessionKey(),
+      getSessionId: () => this.getConversationId(),
       getSessionFile: () => this.getSessionFileValue(),
       getSessionDir: () => this.getSessionDirValue(),
       getSessionName: () => this.getSessionNameValue(),
@@ -227,7 +227,7 @@ export class TuiSessionSnapshot {
     return {
       type: 'session',
       version: 3,
-      id: this.getSessionKey(),
+      id: this.getConversationId(),
       timestamp,
       cwd: this.getCwdValue(),
     };

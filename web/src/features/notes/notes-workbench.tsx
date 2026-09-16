@@ -149,7 +149,7 @@ export function NotesWorkbench({
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const n = m.notes;
-  const token = useGatewayStore((s) => s.sessionKey);
+  const token = useGatewayStore((s) => s.conversationId);
   const hasToken = Boolean(token);
 
   const [ui, dispatch] = useReducer(uiPatchReducer<NotesUi>, initialUi);

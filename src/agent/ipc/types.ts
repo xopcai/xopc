@@ -40,7 +40,7 @@ export interface TaskPayload {
   /** Task priority */
   priority?: IPCPriority;
   /** Associated session key */
-  sessionKey?: string;
+  conversationId?: string;
   /** Agent to receive result callback */
   callbackAgentId?: string;
 }
@@ -98,7 +98,7 @@ export interface EventPayload {
   /** Event data */
   data?: unknown;
   /** Source session */
-  sessionKey?: string;
+  conversationId?: string;
 }
 
 export interface AgentEventMessage extends AgentIPCMessage {
@@ -157,7 +157,7 @@ export function createTaskMessage(
   options: {
     context?: string;
     priority?: IPCPriority;
-    sessionKey?: string;
+    conversationId?: string;
     callbackAgentId?: string;
     timeoutMs?: number;
   } = {}
@@ -172,7 +172,7 @@ export function createTaskMessage(
       task,
       context: options.context,
       priority: options.priority || 'normal',
-      sessionKey: options.sessionKey,
+      conversationId: options.conversationId,
       callbackAgentId: options.callbackAgentId,
     },
     timeoutMs: options.timeoutMs,

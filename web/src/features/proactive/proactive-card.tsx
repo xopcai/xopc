@@ -40,8 +40,8 @@ export function ProactiveCardView({ card, copy, refresh, detail = false }: { car
   const handoff = `${card.communication
     ? (zh ? '继续办理这件事。请读取最新卡片、成果和邮件往来，展示完整草稿与收件人让我确认后再发送：' : 'Read the latest card, artifact and email thread. Show the full draft and recipients for my approval before sending: ')
     : (zh ? '继续讨论这件事，请先读取最新卡片和成果：' : 'Continue this work. First read the latest card and artifact: ')}xopc_use mode=proactive command=${card.communication ? 'continue_card' : 'get_card'} args={"id":"${card.id}"}`;
-  const handoffHref = card.communication?.sessionKey
-    ? `/chat/${encodeURIComponent(card.communication.sessionKey)}?${new URLSearchParams({ draft: handoff, autoSend: '1' })}`
+  const handoffHref = card.communication?.conversationId
+    ? `/chat/${encodeURIComponent(card.communication.conversationId)}?${new URLSearchParams({ draft: handoff, autoSend: '1' })}`
     : newChatAutoSendHref(handoff, undefined, { projectScope: 'none' })!;
   const field = 'mt-2 w-full rounded-lg border border-edge bg-surface-base p-3 text-sm text-fg';
   async function act(actionId: ProactiveCardAction['actionId'], extra: Partial<ProactiveCardAction> = {}) {

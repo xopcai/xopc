@@ -1,3 +1,6 @@
+import { patchSessionMetadata } from '../storage/sqlite/session-repository.js';
+import { getSessionMetadata } from '../storage/sqlite/session-repository.js';
+import { resolveAgentMainConversationId } from '../routing/agent-session-key.js';
 import { createBackgroundTask } from '../infra/background-task.js';
 import { buildTaskAgentContext } from '../agent/source-context/task-context.js';
 import { deliverProactiveCard } from '../proactive/inbox/delivery.js';
@@ -101,7 +104,7 @@ import {
 
 import { disposeAllSessionMcpRuntimes } from '../agent/mcp/bundle-mcp-tools.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
-import { buildSessionKey, sanitizeSegment } from '../routing/session-key.js';
+import { resolveConversationId, sanitizeSegment } from '../routing/session-key.js';
 import { scheduleGatewayUpdateCheck } from '../infra/update-startup.js';
 import { resolveChannelConnectDeferSet } from './resolve-channel-connect-defer.js';
 import { restartGatewayProcessWithFreshPid } from './respawn.js';
@@ -185,16 +188,16 @@ export class GatewayService {
   readonly realtime = new RealtimeRuntime(this.endpointTools, this.isRealtimePrincipalActive);
   readonly voiceRealtime = new VoiceRealtimeRuntime({
     isPrincipalActive: this.isRealtimePrincipalActive,
-    getConversationContext: async (sessionKey, expectedSessionId) => {
-      const before = await this.sessionIndex.getSessionMetadata(sessionKey);
-      if (before?.sessionId !== expectedSessionId) throw new Error('Conversation changed before voice connection');
-      const messages = await this.sessionIndex.loadMessages(sessionKey);
-      const after = await this.sessionIndex.getSessionMetadata(sessionKey);
-      if (after?.sessionId !== expectedSessionId) throw new Error('Conversation changed while loading voice context');
-      const profile = resolveEffectiveAgentProfileForSession(this.config, sessionKey);
+    getConversationContext: async (conversationId, expectedTranscriptId) => {
+      const before = await this.sessionIndex.getSessionMetadata(conversationId);
+      if (before?.transcriptId !== expectedTranscriptId) throw new Error('Conversation changed before voice connection');
+      const messages = await this.sessionIndex.loadMessages(conversationId);
+      const after = await this.sessionIndex.getSessionMetadata(conversationId);
+      if (after?.transcriptId !== expectedTranscriptId) throw new Error('Conversation changed while loading voice context');
+      const profile = resolveEffectiveAgentProfileForSession(this.config, conversationId);
       const persona = buildVoicePersonaContext({
         getConfig: () => this.config,
-        sessionKey,
+        conversationId,
         maxChars: voicePersonaBudget(this.config.voice.realtime.omni.instructions),
       });
       const context = {
@@ -203,28 +206,28 @@ export class GatewayService {
         isCurrent: persona.isCurrent,
       };
       const memory = buildVoiceMemoryContext({
-        getConfig: () => this.config, sessionKey,
-        workspaceId: getSessionConfig(sessionKey)?.workingDirectoryOverride ?? profile.resolvedWorkspacePath,
+        getConfig: () => this.config, conversationId,
+        workspaceId: getSessionConfig(conversationId)?.workingDirectoryOverride ?? profile.resolvedWorkspacePath,
         projectId: after?.projectId, history: messages,
         maxChars: voiceMemoryBudget(this.config.voice.realtime.omni.instructions, context),
       });
       return { ...context, ...(memory ? { memory } : {}) };
     },
-    getSessionIdentity: async (sessionKey) => (await this.sessionIndex.getSessionMetadata(sessionKey))?.sessionId,
-    recordOmniTranscript: async (sessionKey, callId, entry, expectedSessionId) => {
-      await this.sessionIndex.appendTranscriptCustomMessageEntry(sessionKey, {
-        expectedSessionId,
+    getSessionIdentity: async (conversationId) => (await this.sessionIndex.getSessionMetadata(conversationId))?.transcriptId,
+    recordOmniTranscript: async (conversationId, callId, entry, expectedTranscriptId) => {
+      await this.sessionIndex.appendTranscriptCustomMessageEntry(conversationId, {
+        expectedTranscriptId,
         customType: 'voice_omni_transcript',
         content: entry.text,
         display: true,
         details: { callId, itemId: entry.itemId, role: entry.role, interrupted: entry.interrupted, engine: 'omni' },
       });
-      this.emit('session.transcript_updated', { key: sessionKey });
+      this.emit('session.transcript_updated', { key: conversationId });
     },
     getConfig: () => this.config,
-    sessionExists: async (sessionKey) => Boolean(await this.sessionIndex.getSessionMetadata(sessionKey)),
-    sessionBusy: (sessionKey) => Boolean(this.agentRunner.getActiveRunId(sessionKey)) || this.agentRunner.inputs.snapshot(sessionKey).inputs.some((input) => input.status === 'queued'),
-    recordInterruption: (entry) => this.sessionIndex.appendTranscriptContextEntry(entry.sessionKey, {
+    sessionExists: async (conversationId) => Boolean(await this.sessionIndex.getSessionMetadata(conversationId)),
+    sessionBusy: (conversationId) => Boolean(this.agentRunner.getActiveRunId(conversationId)) || this.agentRunner.inputs.snapshot(conversationId).inputs.some((input) => input.status === 'queued'),
+    recordInterruption: (entry) => this.sessionIndex.appendTranscriptContextEntry(entry.conversationId, {
       text: 'Voice response was interrupted before playback completed.',
       data: {
         type: 'voice_response_interrupted',
@@ -237,7 +240,7 @@ export class GatewayService {
     agentBroker: new DurableVoiceAgentBroker({
       submit: (input) => this.agentRunner.submitSessionInput(input),
       find: findSessionInput,
-      snapshot: (sessionKey) => this.agentRunner.inputs.snapshot(sessionKey),
+      snapshot: (conversationId) => this.agentRunner.inputs.snapshot(conversationId),
       currentSequence: (topic) => this.realtime.broker.currentSequence(topic),
       subscribe: (topic, afterSeq, listener) => this.realtime.broker.subscribe(topic, afterSeq, listener),
       cancelRun: async (runId) => { await this.agentRunner.abortAgentRun(runId); },
@@ -546,10 +549,10 @@ export class GatewayService {
 
     let sideChatRuns: SideChatRunService | undefined;
     this.sideChats = new EphemeralSideChatManager({
-      getParentMetadata: (sessionKey) => this.sessionIndex.getSessionMetadata(sessionKey),
-      loadParentMessages: (sessionKey) => this.sessionIndex.getStore().load(sessionKey),
-      getDefaultModelRef: (sessionKey) => this.ensureAgentService().getModelForSession(sessionKey),
-      getDefaultThinkingLevel: (sessionKey) => this.ensureAgentService().getThinkingLevelForSession(sessionKey),
+      getParentMetadata: (conversationId) => this.sessionIndex.getSessionMetadata(conversationId),
+      loadParentMessages: (conversationId) => this.sessionIndex.getStore().load(conversationId),
+      getDefaultModelRef: (conversationId) => this.ensureAgentService().getModelForSession(conversationId),
+      getDefaultThinkingLevel: (conversationId) => this.ensureAgentService().getThinkingLevelForSession(conversationId),
       getWorkspacePath: (metadata) => metadata.cwd || this.currentWorkspacePath,
       onBeforeDispose: async (sideChatId, clientInstanceId, messages) => {
         await sideChatRuns?.cancelRun(sideChatId, clientInstanceId);
@@ -625,12 +628,12 @@ export class GatewayService {
       model: getAgentDefaultModelRef(this.config),
       config: this.config,
       sessionStore: this.sessionIndex.getStore(),
-      onSessionMetadataUpdated: (sessionKey, patch) => {
-        this.sessionIndex.emit('sessionUpdated', { key: sessionKey, name: patch?.name });
-        this.emit('session.updated', { key: sessionKey, name: patch?.name });
+      onSessionMetadataUpdated: (conversationId, patch) => {
+        this.sessionIndex.emit('sessionUpdated', { key: conversationId, name: patch?.name });
+        this.emit('session.updated', { key: conversationId, name: patch?.name });
       },
-      onSessionTranscriptUpdated: (sessionKey) => {
-        this.emit('session.transcript_updated', { key: sessionKey });
+      onSessionTranscriptUpdated: (conversationId) => {
+        this.emit('session.transcript_updated', { key: conversationId });
       },
       onSkillsUpdated: (payload) => {
         this.emit('config.reload', {
@@ -663,14 +666,14 @@ export class GatewayService {
       },
       gatewayClarify: {
         requestClarification: (context, request) => {
-          const executionSessionKey = getEmbeddedExecutionSession() ?? context.sessionKey;
+          const executionConversationId = getEmbeddedExecutionSession() ?? context.conversationId;
           return this.agentRunner.requestClarification({
-            sessionKey: executionSessionKey,
+            conversationId: executionConversationId,
             runId: context.runId,
             toolCallId: context.toolCallId,
             request,
             publishStreamFor: (_runId) => (event: ClarificationStreamEvent) => {
-              this._agentService!.turnDispatcher.enqueueWebchatStreamEvent(executionSessionKey, event);
+              this._agentService!.turnDispatcher.enqueueWebchatStreamEvent(executionConversationId, event);
             },
           });
         },
@@ -731,18 +734,18 @@ export class GatewayService {
       this.taskRunDispatcher = new TaskRunDispatcher({
         workerId: 'gateway-agent',
         ensureSession: async (taskId, runId, requestedAgentId) => {
-          return (await this.ensureTaskConversation(taskId, { runId, requestedAgentId })).sessionKey;
+          return (await this.ensureTaskConversation(taskId, { runId, requestedAgentId })).conversationId;
         },
-        runAgent: async (runId, sessionKey, message) => {
+        runAgent: async (runId, conversationId, message) => {
           const clientMessageId = `task:${runId}`;
-          const session = await this.sessionIndex.getSessionMetadata(sessionKey);
+          const session = await this.sessionIndex.getSessionMetadata(conversationId);
           if (!session) throw new Error('Task session is unavailable');
-          insertSessionInput({ id: crypto.randomUUID(), sessionKey, clientMessageId, expectedSessionId: session.sessionId,
+          insertSessionInput({ id: crypto.randomUUID(), conversationId, clientMessageId, expectedTranscriptId: session.transcriptId,
             requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: message,
             origin: { type: 'system', source: 'workflow' }, taskRunId: runId,
           });
-          void this.agentRunner.inputs.drain(sessionKey);
-          await this.agentRunner.inputs.waitForCompletion(sessionKey, clientMessageId);
+          void this.agentRunner.inputs.drain(conversationId);
+          await this.agentRunner.inputs.waitForCompletion(conversationId, clientMessageId);
         },
       });
     }
@@ -783,7 +786,7 @@ export class GatewayService {
     taskId: string,
     options: { runId?: string; requestedAgentId?: string } = {},
   ): Promise<{
-    sessionKey: string;
+    conversationId: string;
     agentId: string;
     created: boolean;
     conversation: ReturnType<TaskConversationRepository['requireState']>;
@@ -803,23 +806,22 @@ export class GatewayService {
       }
       const conversation = conversations.activateExecutionSession({
         taskId: task.id,
-        sessionKey: active.sessionKey,
+        conversationId: active.conversationId,
         agentId,
         runId: options.runId,
       });
-      return { sessionKey: active.sessionKey, agentId, created: false, conversation };
+      return { conversationId: active.conversationId, agentId, created: false, conversation };
     }
 
     const peerId = `task-${sanitizeSegment(task.id) || Date.now()}`;
-    const sessionKey = buildSessionKey({
+    const conversationId = resolveConversationId({
       agentId,
       source: 'webchat',
       accountId: 'default',
       peerKind: 'direct',
       peerId,
     });
-    if (!await this.sessionIndex.getSessionMetadata(sessionKey)) {
-      await this.sessionIndex.saveMessages(sessionKey, [], { metadata: {
+    patchSessionMetadata(conversationId, {
         sourceChannel: 'webchat',
         sourceChatId: `default:direct:${peerId}`,
         sessionType: 'chat',
@@ -836,16 +838,15 @@ export class GatewayService {
           triggerKind: 'user',
           ...(options.runId ? { taskRunId: options.runId } : {}),
         },
-      } });
-    }
-    if (task.projectId) this.projects.attachSession(sessionKey, task.projectId);
+    });
+    if (task.projectId) this.projects.attachSession(conversationId, task.projectId);
     const conversation = conversations.activateExecutionSession({
       taskId: task.id,
-      sessionKey,
+      conversationId,
       agentId,
       runId: options.runId,
     });
-    return { sessionKey, agentId, created: true, conversation };
+    return { conversationId, agentId, created: true, conversation };
   }
 
   dispatchTaskEvents(): void {
@@ -861,7 +862,7 @@ export class GatewayService {
   readonly connectionRecovery = new ConnectionRecoveryService({
     getConfig: () => this.config,
     saveConfig: (config) => this.saveConfig(config),
-    drain: (sessionKey) => { void this.agentRunner.inputs.drain(sessionKey); },
+    drain: (conversationId) => { void this.agentRunner.inputs.drain(conversationId); },
   });
 
   submitSessionInput(...args: Parameters<GatewayAgentRunner['submitSessionInput']>) {
@@ -888,16 +889,16 @@ export class GatewayService {
     return this.agentRunner.abortAgentRun(runId);
   }
 
-  getActiveWebchatRunId(sessionKey: string): string | undefined {
-    return this.agentRunner.getActiveRunId(sessionKey);
+  getActiveWebchatRunId(conversationId: string): string | undefined {
+    return this.agentRunner.getActiveRunId(conversationId);
   }
 
   answerEphemeralClarification(requestId: string, answer: string): boolean {
     return this.agentRunner.answerEphemeralClarification(requestId, answer);
   }
 
-  getClarificationState(sessionKey: string) {
-    return this.agentRunner.getClarificationState(sessionKey);
+  getClarificationState(conversationId: string) {
+    return this.agentRunner.getClarificationState(conversationId);
   }
 
   resolveClarificationResponse(input: Parameters<GatewayAgentRunner['resolveClarificationResponse']>[0]) {
@@ -1103,8 +1104,8 @@ export class GatewayService {
     registerClarificationChannelRuntime({
       answerChoice: (requestId, choiceIndex, idempotencyKey) =>
         this.agentRunner.answerClarificationChoice(requestId, choiceIndex, idempotencyKey),
-      answerText: (sessionKey, text, idempotencyKey) =>
-        this.agentRunner.answerClarificationText(sessionKey, text, idempotencyKey),
+      answerText: (conversationId, text, idempotencyKey) =>
+        this.agentRunner.answerClarificationText(conversationId, text, idempotencyKey),
     });
 
     this.ensureAgentService();
@@ -1123,9 +1124,9 @@ export class GatewayService {
       this.extensionLoader.setRuntimeContext({
         bus: this.bus,
         sessionManager: this.sessionIndex,
-        scheduleWebchatContinuation: (sessionKey: string, continuationMessage: string) => {
+        scheduleWebchatContinuation: (conversationId: string, continuationMessage: string) => {
           queueMicrotask(() => {
-            void this.agentRunner.drainScheduledWebchatContinuation(sessionKey, continuationMessage);
+            void this.agentRunner.drainScheduledWebchatContinuation(conversationId, continuationMessage);
           });
         },
       });
@@ -1916,10 +1917,10 @@ export class GatewayService {
   }
 
   /** Process a message directly through the agent (for CLI mode). */
-  async processDirect(content: string, sessionKey = 'agent:main:main'): Promise<string> {
+  async processDirect(content: string, conversationId = resolveAgentMainConversationId({ agentId: getDefaultAgentId(this.config) })): Promise<string> {
     return this.agentService.turnDispatcher.processDirect(
       content,
-      sessionKey,
+      conversationId,
       { type: 'system', source: 'internal' },
     );
   }
@@ -1975,12 +1976,12 @@ export class GatewayService {
       });
     });
     this.stopSessionTranscriptAutomationEvents = onSessionTranscriptUpdate((update) => {
-      if (!update.sessionKey || update.sessionKey.includes(':automation:')) return;
+      if (!update.conversationId || getSessionMetadata(update.conversationId)?.sourceChannel === 'automation') return;
       publishAutomationProductEvent({
         type: 'session.transcript.updated',
         source: 'sessions',
         payload: {
-          sessionKey: update.sessionKey,
+          conversationId: update.conversationId,
           messageId: update.messageId,
           hasMessage: update.message !== undefined,
         },

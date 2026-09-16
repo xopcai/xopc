@@ -98,7 +98,7 @@ export type ContextEvidence = {
   sourceRef: string;
   sourceRunId?: string;
   sourceItemId?: string;
-  sessionId?: string;
+  conversationId?: string;
   turnId?: string;
   messageId?: string;
   contentHash?: string;

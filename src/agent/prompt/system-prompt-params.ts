@@ -1,28 +1,28 @@
 import type { Config } from '../../config/schema.js';
 import { listChannelPlugins } from '../../channels/plugins/registry.js';
 import { PACKAGE_VERSION } from '../../package-version.js';
-import { isCronSessionKey, isSubagentSessionKey, parseSessionKey } from '../../routing/session-key.js';
+import { isCronConversationId, isSubagentConversationId, getConversationRouting } from '../../routing/session-key.js';
 import type { ProviderSystemPromptContribution } from './contribution.js';
 import { normalizePromptSection } from './cache-boundary.js';
 import type { MemoryCitationsMode, PromptMode, SilentReplyPromptMode } from './types.js';
 
 export type { RuntimeInfoInput } from './sections/workspace-runtime.js';
 
-export function resolvePromptMode(sessionKey?: string): PromptMode {
-  if (!sessionKey) {
+export function resolvePromptMode(conversationId?: string): PromptMode {
+  if (!conversationId) {
     return 'full';
   }
-  if (isSubagentSessionKey(sessionKey) || isCronSessionKey(sessionKey)) {
+  if (isSubagentConversationId(conversationId) || isCronConversationId(conversationId)) {
     return 'minimal';
   }
   return 'full';
 }
 
-export function resolveRuntimeChannel(sessionKey?: string): string | undefined {
-  if (!sessionKey) {
+export function resolveRuntimeChannel(conversationId?: string): string | undefined {
+  if (!conversationId) {
     return undefined;
   }
-  const parsed = parseSessionKey(sessionKey);
+  const parsed = getConversationRouting(conversationId);
   return parsed?.source;
 }
 
@@ -67,7 +67,7 @@ export function buildOverridablePromptSection(params: {
 
 export interface SystemPromptBuildParams {
   workspaceDir: string;
-  sessionKey?: string;
+  conversationId?: string;
   promptMode?: PromptMode;
   toolNames?: string[];
   toolSummaries?: Record<string, string>;
@@ -92,7 +92,7 @@ export function resolveSystemPromptBuildParams(
   config: Config,
   params: {
     workspaceDir: string;
-    sessionKey?: string;
+    conversationId?: string;
     toolNames?: string[];
     toolSummaries?: Record<string, string>;
     userTimezone?: string;
@@ -112,12 +112,12 @@ export function resolveSystemPromptBuildParams(
     includeMemorySection?: boolean;
   },
 ): SystemPromptBuildParams {
-  const sessionKey = params.sessionKey;
-  const channel = resolveRuntimeChannel(sessionKey);
+  const conversationId = params.conversationId;
+  const channel = resolveRuntimeChannel(conversationId);
   return {
     workspaceDir: params.workspaceDir,
-    sessionKey,
-    promptMode: params.promptMode ?? resolvePromptMode(sessionKey),
+    conversationId,
+    promptMode: params.promptMode ?? resolvePromptMode(conversationId),
     toolNames: params.toolNames,
     toolSummaries: params.toolSummaries,
     runtimeInfo: {

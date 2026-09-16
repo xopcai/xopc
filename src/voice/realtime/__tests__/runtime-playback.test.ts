@@ -75,7 +75,7 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     server.listen(0, '127.0.0.1');
     await once(server, 'listening');
     const session = createVoiceSessionResponseSchema.parse(await runtime.createSession({
-      purpose: 'conversation', mode: 'assistant', sessionKey: 'agent:main:webchat:default:direct:voice',
+      purpose: 'conversation', mode: 'assistant', conversationId: 'agent:main:webchat:default:direct:voice',
       supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'],
     }, 'user-1'));
     expect(session.bargeIn).toBe(bargeIn);
@@ -150,7 +150,7 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     finish();
     await closed;
     expect(runtime.hasConversation('agent:main:webchat:default:direct:voice')).toBe(false);
-    await expect(runtime.createSession({ purpose: 'conversation', mode: 'assistant', sessionKey: 'agent:main:webchat:default:direct:voice', supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] }, 'user-1')).resolves.toHaveProperty('ticket');
+    await expect(runtime.createSession({ purpose: 'conversation', mode: 'assistant', conversationId: 'agent:main:webchat:default:direct:voice', supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] }, 'user-1')).resolves.toHaveProperty('ticket');
   });
 
   it('rejects acknowledgements for audio that was never sent', async () => {

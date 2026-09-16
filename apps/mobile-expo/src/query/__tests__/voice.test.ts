@@ -11,13 +11,13 @@ beforeEach(() => vi.clearAllMocks());
 
 describe('voice confirmation queries', () => {
   it('only exposes pending, unexpired confirmations for the selected session', async () => {
-    const item = { id: 'approval', sessionKey: 'chat/a', status: 'pending', expiresAt: new Date(Date.now() + 60_000).toISOString() };
+    const item = { id: 'approval', conversationId: 'chat/a', status: 'pending', expiresAt: new Date(Date.now() + 60_000).toISOString() };
     api.mockResolvedValue(new Response(JSON.stringify({ payload: { approvals: [item,
-      { ...item, sessionKey: 'other' }, { ...item, status: 'approved' }, { ...item, expiresAt: '2000-01-01' },
+      { ...item, conversationId: 'other' }, { ...item, status: 'approved' }, { ...item, expiresAt: '2000-01-01' },
     ] } })));
     const signal = new AbortController().signal;
     await expect(voiceApprovalsOptions('gateway', 'chat/a').queryFn({ signal })).resolves.toEqual([item]);
-    expect(api).toHaveBeenCalledWith('/api/connectors/approvals?status=pending&sessionKey=chat%2Fa', { signal });
+    expect(api).toHaveBeenCalledWith('/api/connectors/approvals?status=pending&conversationId=chat%2Fa', { signal });
   });
 
   it.each([403, 404])('retains HTTP %s and stops automatic polling until an explicit refresh', async status => {
@@ -33,7 +33,7 @@ describe('voice confirmation queries', () => {
     api.mockResolvedValue(new Response('{}'));
     await respondVoiceApproval('approval', 'approved', 'chat/a');
     expect(api).toHaveBeenCalledWith('/api/connectors/approvals/respond', {
-      method: 'POST', body: JSON.stringify({ id: 'approval', decision: 'approved', sessionKey: 'chat/a' }),
+      method: 'POST', body: JSON.stringify({ id: 'approval', decision: 'approved', conversationId: 'chat/a' }),
     });
   });
 });

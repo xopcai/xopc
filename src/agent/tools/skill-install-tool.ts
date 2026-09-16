@@ -9,7 +9,7 @@ export interface SkillInstallToolOptions {
   skillId?: string;
   target?: SkillInstallTarget;
   /** Current session whose resolved workspace should receive workspace installs. */
-  sessionKey?: string;
+  conversationId?: string;
   /** Explicit workspace override for workspace installs. */
   workspace?: string;
   force?: boolean;
@@ -30,7 +30,7 @@ export interface MarketplaceSkillInstallToolOptions {
   name: string;
   version?: string;
   target?: SkillInstallTarget;
-  sessionKey?: string;
+  conversationId?: string;
   force?: boolean;
 }
 
@@ -48,7 +48,7 @@ export interface SkillInstallToolDeps {
   installSkillFromMarketplace?: (
     opts: MarketplaceSkillInstallToolOptions,
   ) => Promise<MarketplaceSkillInstallToolResult>;
-  getSessionKey?: () => string | undefined;
+  getConversationId?: () => string | undefined;
 }
 
 const SkillInstallSchema = Type.Object({
@@ -106,7 +106,7 @@ export function createSkillInstallTool(deps: SkillInstallToolDeps): AgentTool {
       const provider = clean(params.provider);
       const name = clean(params.name);
       const target = isSkillInstallTarget(params.target) ? params.target : 'global';
-      const sessionKey = deps.getSessionKey?.();
+      const conversationId = deps.getConversationId?.();
 
       if (provider || name) {
         if (provider !== 'store' && provider !== 'skillhub' && provider !== 'clawhub') {
@@ -133,7 +133,7 @@ export function createSkillInstallTool(deps: SkillInstallToolDeps): AgentTool {
             name,
             version: clean(params.version),
             target,
-            sessionKey,
+            conversationId,
             force: params.force === true,
           });
           return {
@@ -179,7 +179,7 @@ export function createSkillInstallTool(deps: SkillInstallToolDeps): AgentTool {
           path: clean(params.path),
           skillId: clean(params.skillId),
           target,
-          sessionKey,
+          conversationId,
           force: params.force === true,
           strictScan: params.strictScan === true,
         });

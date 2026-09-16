@@ -173,16 +173,16 @@ export class GatewayMarketplaceService {
     return this.opts.getAgentService().getAgentSkillAvailability(agentId);
   }
 
-  getSessionSkillsApi(sessionKey: string): Promise<AgentSkillAvailabilityPayload> {
-    return this.opts.getAgentService().getSessionSkillAvailability(sessionKey);
+  getSessionSkillsApi(conversationId: string): Promise<AgentSkillAvailabilityPayload> {
+    return this.opts.getAgentService().getSessionSkillAvailability(conversationId);
   }
 
-  getSessionWorkspaceTrustApi(sessionKey: string): Promise<WorkspaceTrustState> {
-    return this.opts.getAgentService().getSessionWorkspaceTrust(sessionKey);
+  getSessionWorkspaceTrustApi(conversationId: string): Promise<WorkspaceTrustState> {
+    return this.opts.getAgentService().getSessionWorkspaceTrust(conversationId);
   }
 
-  setSessionWorkspaceTrustApi(sessionKey: string, trusted: boolean): Promise<WorkspaceTrustState> {
-    return this.opts.getAgentService().setSessionWorkspaceTrust(sessionKey, trusted);
+  setSessionWorkspaceTrustApi(conversationId: string, trusted: boolean): Promise<WorkspaceTrustState> {
+    return this.opts.getAgentService().setSessionWorkspaceTrust(conversationId, trusted);
   }
 
   getSkillMarkdownSource(skillName: string): SkillMarkdownPreviewPayload | null {

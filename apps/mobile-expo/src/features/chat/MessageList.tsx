@@ -89,7 +89,7 @@ export const MessageList = memo(function MessageList({
   hasOlder,
   onLoadOlder,
   onAtBottomChange,
-  sessionKey,
+  conversationId,
   welcomeTitle,
   welcomeSubtitle,
   welcomeStarters,
@@ -114,7 +114,7 @@ export const MessageList = memo(function MessageList({
   onLoadOlder?: () => void;
   onAtBottomChange?: (isAtBottom: boolean) => void;
   /** Pass the current session key so we can reset scroll state on session switch. */
-  sessionKey?: string;
+  conversationId?: string;
   welcomeTitle?: string;
   welcomeSubtitle?: string;
   welcomeStarters?: MobileWelcomeStarter[];
@@ -158,7 +158,7 @@ export const MessageList = memo(function MessageList({
     messages,
     loadingOlder,
     keyboardPadding,
-    sessionKey,
+    conversationId,
     onAtBottomChange,
     getMessageKey: messageKey,
   });
@@ -219,7 +219,7 @@ export const MessageList = memo(function MessageList({
             isLatestAssistant={index === latestAssistantIndex}
             isStreaming={isStreamRow}
             progress={isStreamRow ? progress : null}
-            sessionKey={sessionKey}
+            conversationId={conversationId}
             onUserMessageCopy={onUserMessageCopy}
             onUserMessageEdit={onUserMessageEdit}
             onUserMessageRetry={item.deliveryState === 'failed' && onUserMessageRetry
@@ -248,7 +248,7 @@ export const MessageList = memo(function MessageList({
       onAssistantRegenerate,
       streaming,
       progress,
-      sessionKey,
+      conversationId,
     ],
   );
 

@@ -222,8 +222,8 @@ function matchesQuery(entry: ParsedLogEntry, query: LogQuery): boolean {
   if (query.extension && entry.extension !== query.extension) return false;
   if (query.service && entry.service !== query.service) return false;
   if (query.requestId && entry.requestId !== query.requestId) return false;
-  if (query.sessionKey && entry.sessionKey !== query.sessionKey) return false;
-  if (query.sessionId && entry.sessionId !== query.sessionId) return false;
+  if (query.conversationId && entry.conversationId !== query.conversationId) return false;
+  if (query.transcriptId && entry.transcriptId !== query.transcriptId) return false;
 
   return true;
 }

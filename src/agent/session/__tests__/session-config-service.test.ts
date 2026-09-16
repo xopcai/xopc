@@ -1,3 +1,9 @@
+import { requireXopcDatabase as openFixtureDatabase } from '../../../storage/sqlite/connection.js';
+import { ensureSessionRecord as ensureFixtureConversation } from '../../../storage/sqlite/session-repository.js';
+function seedConversationFixtures(): void {
+  openFixtureDatabase();
+  ensureFixtureConversation("2461fb35-c457-4336-853e-bf6af54eb0c9", '', {"agentId":"main","sourceChannel":"webchat","sourceChatId":"project-session-config","sessionType":"chat","routing":{"agentId":"main","source":"webchat","accountId":"default","peerKind":"direct","peerId":"project-session-config"}});
+}
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,7 +21,7 @@ import {
 import { SessionConfigStore } from '../../../session/config-store.js';
 import { SessionConfigService } from '../session-config-service.js';
 
-const SESSION_KEY = 'agent:main:webchat:default:direct:project-session-config';
+const CONVERSATION_ID = "2461fb35-c457-4336-853e-bf6af54eb0c9";
 
 const minimalConfig = ConfigSchema.parse({
   agents: {
@@ -46,14 +52,15 @@ describe('SessionConfigService project workspace', () => {
   });
 
   it('rejects manual working directory changes for project sessions with a workspace root', async () => {
-    ensureSessionRecord(SESSION_KEY, process.cwd());
+    seedConversationFixtures();
+    ensureSessionRecord(CONVERSATION_ID, process.cwd(), { agentId: "main" });
     const projects = new ProjectService();
     mkdirSync(join(stateDir, 'project-root'), { recursive: true });
     const project = projects.create({
       name: 'Workspace Locked Project',
       workspaceRoot: join(stateDir, 'project-root'),
     });
-    projects.attachSession(SESSION_KEY, project.id);
+    projects.attachSession(CONVERSATION_ID, project.id);
 
     const sessionConfigStore = new SessionConfigStore(stateDir, process.cwd());
     const updateSpy = vi.spyOn(sessionConfigStore, 'update');
@@ -77,7 +84,7 @@ describe('SessionConfigService project workspace', () => {
       getConfig: () => minimalConfig,
     });
 
-    const result = await service.patch(SESSION_KEY, {
+    const result = await service.patch(CONVERSATION_ID, {
       workingDirectory: join(stateDir, 'other-root'),
     });
 
@@ -89,7 +96,8 @@ describe('SessionConfigService project workspace', () => {
   });
 
   it('stores and clears the activity detail session override', async () => {
-    ensureSessionRecord(SESSION_KEY, process.cwd());
+    seedConversationFixtures();
+    ensureSessionRecord(CONVERSATION_ID, process.cwd(), { agentId: "main" });
     const sessionConfigStore = new SessionConfigStore(stateDir, process.cwd());
     const service = new SessionConfigService({
       sessionStore: { load: vi.fn(async () => []) } as never,
@@ -99,15 +107,16 @@ describe('SessionConfigService project workspace', () => {
       getConfig: () => minimalConfig,
     });
 
-    expect(await service.patch(SESSION_KEY, { activityDetailLevel: 'stream' })).toEqual({ ok: true });
-    expect((await sessionConfigStore.get(SESSION_KEY))?.reasoningLevel).toBe('stream');
+    expect(await service.patch(CONVERSATION_ID, { activityDetailLevel: 'stream' })).toEqual({ ok: true });
+    expect((await sessionConfigStore.get(CONVERSATION_ID))?.reasoningLevel).toBe('stream');
 
-    expect(await service.patch(SESSION_KEY, { activityDetailLevel: null })).toEqual({ ok: true });
-    expect((await sessionConfigStore.get(SESSION_KEY))?.reasoningLevel).toBeUndefined();
+    expect(await service.patch(CONVERSATION_ID, { activityDetailLevel: null })).toEqual({ ok: true });
+    expect((await sessionConfigStore.get(CONVERSATION_ID))?.reasoningLevel).toBeUndefined();
   });
 
   it('prefers the new activity detail field over the legacy field', async () => {
-    ensureSessionRecord(SESSION_KEY, process.cwd());
+    seedConversationFixtures();
+    ensureSessionRecord(CONVERSATION_ID, process.cwd(), { agentId: "main" });
     const sessionConfigStore = new SessionConfigStore(stateDir, process.cwd());
     const service = new SessionConfigService({
       sessionStore: { load: vi.fn(async () => []) } as never,
@@ -117,17 +126,18 @@ describe('SessionConfigService project workspace', () => {
       getConfig: () => minimalConfig,
     });
 
-    const result = await service.patch(SESSION_KEY, {
+    const result = await service.patch(CONVERSATION_ID, {
       activityDetailLevel: 'off',
       reasoningLevel: 'stream',
     });
 
     expect(result).toEqual({ ok: true });
-    expect((await sessionConfigStore.get(SESSION_KEY))?.reasoningLevel).toBe('off');
+    expect((await sessionConfigStore.get(CONVERSATION_ID))?.reasoningLevel).toBe('off');
   });
 
   it('persists temporary user-context mode and rejects unknown modes', async () => {
-    ensureSessionRecord(SESSION_KEY, process.cwd());
+    seedConversationFixtures();
+    ensureSessionRecord(CONVERSATION_ID, process.cwd(), { agentId: "main" });
     const sessionConfigStore = new SessionConfigStore(stateDir, process.cwd());
     const service = new SessionConfigService({
       sessionStore: { load: vi.fn(async () => []) } as never,
@@ -137,9 +147,9 @@ describe('SessionConfigService project workspace', () => {
       getConfig: () => minimalConfig,
     });
 
-    expect(await service.patch(SESSION_KEY, { userContextMode: 'temporary' })).toEqual({ ok: true });
-    expect((await sessionConfigStore.get(SESSION_KEY))?.userContextMode).toBe('temporary');
-    expect(await service.patch(SESSION_KEY, { userContextMode: 'invalid' as never }))
+    expect(await service.patch(CONVERSATION_ID, { userContextMode: 'temporary' })).toEqual({ ok: true });
+    expect((await sessionConfigStore.get(CONVERSATION_ID))?.userContextMode).toBe('temporary');
+    expect(await service.patch(CONVERSATION_ID, { userContextMode: 'invalid' as never }))
       .toEqual({ ok: false, error: 'Invalid user context mode' });
   });
   function modelFixture() {
@@ -159,41 +169,45 @@ describe('SessionConfigService project workspace', () => {
   }
 
   it('commits model and level together and rejects stale writers without runtime changes', async () => {
+    seedConversationFixtures();
     const { service, sessionConfigStore, runtime } = modelFixture();
-    expect(await service.patch(SESSION_KEY, { model: 'test/first', thinkingLevel: 'high', fixedModel: true, configVersion: 0 })).toEqual({ ok: true });
-    const saved = await sessionConfigStore.get(SESSION_KEY);
+    expect(await service.patch(CONVERSATION_ID, { model: 'test/first', thinkingLevel: 'high', fixedModel: true, configVersion: 0 })).toEqual({ ok: true });
+    const saved = await sessionConfigStore.get(CONVERSATION_ID);
     expect(saved).toMatchObject({ modelOverride: 'test/first', thinkingLevel: 'high', fixedModel: true });
     runtime.setModelForSession.mockClear();
-    expect(await service.patch(SESSION_KEY, { model: 'test/second', thinkingLevel: 'off', configVersion: saved!.updatedAt })).toMatchObject({ ok: false, code: 'INVALID_THINKING' });
-    expect(await sessionConfigStore.get(SESSION_KEY)).toEqual(saved);
-    expect(await service.patch(SESSION_KEY, { model: 'test/second', thinkingLevel: 'low', configVersion: 0 })).toMatchObject({ ok: false, code: 'CONFIG_CHANGED' });
+    expect(await service.patch(CONVERSATION_ID, { model: 'test/second', thinkingLevel: 'off', configVersion: saved!.updatedAt })).toMatchObject({ ok: false, code: 'INVALID_THINKING' });
+    expect(await sessionConfigStore.get(CONVERSATION_ID)).toEqual(saved);
+    expect(await service.patch(CONVERSATION_ID, { model: 'test/second', thinkingLevel: 'low', configVersion: 0 })).toMatchObject({ ok: false, code: 'CONFIG_CHANGED' });
     expect(runtime.setModelForSession).not.toHaveBeenCalled();
-    expect(await service.patch(SESSION_KEY, { model: 'test/second', thinkingLevel: 'max', configVersion: saved!.updatedAt })).toEqual({ ok: true });
-    expect((await sessionConfigStore.get(SESSION_KEY))!.updatedAt).toBeGreaterThan(saved!.updatedAt!);
+    expect(await service.patch(CONVERSATION_ID, { model: 'test/second', thinkingLevel: 'max', configVersion: saved!.updatedAt })).toEqual({ ok: true });
+    expect((await sessionConfigStore.get(CONVERSATION_ID))!.updatedAt).toBeGreaterThan(saved!.updatedAt!);
   });
 
   it('keeps persisted configuration authoritative if runtime synchronization fails', async () => {
+    seedConversationFixtures();
     const { service, sessionConfigStore, runtime } = modelFixture();
     runtime.setModelForSession.mockImplementation(() => { throw new Error('Runtime unavailable'); });
-    expect(await service.patch(SESSION_KEY, { model: 'test/first', thinkingLevel: 'high', fixedModel: true })).toEqual({ ok: true });
-    expect(await sessionConfigStore.get(SESSION_KEY)).toMatchObject({ modelOverride: 'test/first', thinkingLevel: 'high' });
-    expect(runtime.removeAgent).toHaveBeenCalledWith(SESSION_KEY);
+    expect(await service.patch(CONVERSATION_ID, { model: 'test/first', thinkingLevel: 'high', fixedModel: true })).toEqual({ ok: true });
+    expect(await sessionConfigStore.get(CONVERSATION_ID)).toMatchObject({ modelOverride: 'test/first', thinkingLevel: 'high' });
+    expect(runtime.removeAgent).toHaveBeenCalledWith(CONVERSATION_ID);
   });
 
   it('restores unavailable models visibly and normalizes stale effort preferences for new chats', async () => {
+    seedConversationFixtures();
     const { service, sessionConfigStore, modelManager } = modelFixture();
-    await service.initializeModelSelection(SESSION_KEY, 'test/missing', 'high');
-    expect(await sessionConfigStore.get(SESSION_KEY)).toMatchObject({ modelOverride: 'test/missing', fixedModel: true });
-    expect(modelManager.restoreSessionModel).toHaveBeenCalledWith(SESSION_KEY, 'test/missing', true);
-    await service.initializeModelSelection(SESSION_KEY, 'test/first', 'adaptive');
-    expect(await sessionConfigStore.get(SESSION_KEY)).toMatchObject({ modelOverride: 'test/first', thinkingLevel: 'medium' });
+    await service.initializeModelSelection(CONVERSATION_ID, 'test/missing', 'high');
+    expect(await sessionConfigStore.get(CONVERSATION_ID)).toMatchObject({ modelOverride: 'test/missing', fixedModel: true });
+    expect(modelManager.restoreSessionModel).toHaveBeenCalledWith(CONVERSATION_ID, 'test/missing', true);
+    await service.initializeModelSelection(CONVERSATION_ID, 'test/first', 'adaptive');
+    expect(await sessionConfigStore.get(CONVERSATION_ID)).toMatchObject({ modelOverride: 'test/first', thinkingLevel: 'medium' });
   });
 
   it('saves model selection for a lazy session without mutating an absent Agent', async () => {
+    seedConversationFixtures();
     const { service, sessionConfigStore, runtime } = modelFixture();
     runtime.getAgent.mockReturnValue(undefined as never);
-    expect(await service.patch(SESSION_KEY, { model: 'test/first', thinkingLevel: 'high' })).toEqual({ ok: true });
-    expect(await sessionConfigStore.get(SESSION_KEY)).toMatchObject({ modelOverride: 'test/first', thinkingLevel: 'high' });
+    expect(await service.patch(CONVERSATION_ID, { model: 'test/first', thinkingLevel: 'high' })).toEqual({ ok: true });
+    expect(await sessionConfigStore.get(CONVERSATION_ID)).toMatchObject({ modelOverride: 'test/first', thinkingLevel: 'high' });
     expect(runtime.setModelForSession).not.toHaveBeenCalled();
     expect(runtime.setThinkingLevel).not.toHaveBeenCalled();
   });

@@ -11,14 +11,14 @@
 
 import { describe, it, expect, bench } from 'vitest';
 import {
-  buildSessionKey,
-  parseSessionKey,
+  resolveConversationId,
+  getConversationRouting,
   resolveRoute,
   applyIdentityLinks,
   type BindingRule,
   type RouteContext,
 } from '../index.js';
-import { generateSessionKeyWithRouting } from '../../channels/telegram/index.js';
+import { generateConversationIdWithRouting } from '../../channels/telegram/index.js';
 import type { Config } from '../../config/schema.js';
 
 // =============================================================================
@@ -27,8 +27,8 @@ import type { Config } from '../../config/schema.js';
 
 describe('Routing Benchmarks', () => {
   describe('Session Key Generation', () => {
-    bench('buildSessionKey - basic', () => {
-      buildSessionKey({
+    bench('resolveConversationId - basic', () => {
+      resolveConversationId({
         agentId: 'main',
         source: 'telegram',
         accountId: 'acc_default',
@@ -37,8 +37,8 @@ describe('Routing Benchmarks', () => {
       });
     });
 
-    bench('buildSessionKey - with thread', () => {
-      buildSessionKey({
+    bench('resolveConversationId - with thread', () => {
+      resolveConversationId({
         agentId: 'main',
         source: 'discord',
         accountId: 'acc_work',
@@ -48,8 +48,8 @@ describe('Routing Benchmarks', () => {
       });
     });
 
-    bench('buildSessionKey - with all options', () => {
-      buildSessionKey({
+    bench('resolveConversationId - with all options', () => {
+      resolveConversationId({
         agentId: 'main',
         source: 'telegram',
         accountId: 'acc_default',
@@ -60,8 +60,8 @@ describe('Routing Benchmarks', () => {
       });
     });
 
-    bench('buildSessionKey - sanitize input', () => {
-      buildSessionKey({
+    bench('resolveConversationId - sanitize input', () => {
+      resolveConversationId({
         agentId: 'Main Agent!',
         source: 'telegram',
         accountId: 'acc_@default',
@@ -75,16 +75,16 @@ describe('Routing Benchmarks', () => {
     const simpleKey = 'agent:main:telegram:acc_default:direct:123456';
     const complexKey = 'agent:main:telegram:group:-1001234567:thread:999:scope:project-a';
 
-    bench('parseSessionKey - simple', () => {
-      parseSessionKey(simpleKey);
+    bench('getConversationRouting - simple', () => {
+      getConversationRouting(simpleKey);
     });
 
-    bench('parseSessionKey - complex', () => {
-      parseSessionKey(complexKey);
+    bench('getConversationRouting - complex', () => {
+      getConversationRouting(complexKey);
     });
 
-    bench('parseSessionKey - invalid', () => {
-      parseSessionKey('invalid-key');
+    bench('getConversationRouting - invalid', () => {
+      getConversationRouting('invalid-key');
     });
   });
 
@@ -174,7 +174,7 @@ describe('Routing Benchmarks', () => {
   // =============================================================================
 
   describe('Identity Links Application', () => {
-    const baseSessionKey = 'agent:main:telegram:acc_default:direct:123456';
+    const baseConversationId = 'agent:main:telegram:acc_default:direct:123456';
     
     const smallIdentityLinks = {
       'alice': ['telegram:123456'],
@@ -189,28 +189,28 @@ describe('Routing Benchmarks', () => {
     );
 
     bench('applyIdentityLinks - no match', () => {
-      applyIdentityLinks(baseSessionKey, smallIdentityLinks, {
+      applyIdentityLinks(baseConversationId, smallIdentityLinks, {
         channel: 'telegram',
         peerId: '999999',
       });
     });
 
     bench('applyIdentityLinks - small map match', () => {
-      applyIdentityLinks(baseSessionKey, smallIdentityLinks, {
+      applyIdentityLinks(baseConversationId, smallIdentityLinks, {
         channel: 'telegram',
         peerId: '123456',
       });
     });
 
     bench('applyIdentityLinks - large map no match', () => {
-      applyIdentityLinks(baseSessionKey, largeIdentityLinks, {
+      applyIdentityLinks(baseConversationId, largeIdentityLinks, {
         channel: 'telegram',
         peerId: '999999',
       });
     });
 
     bench('applyIdentityLinks - large map match', () => {
-      applyIdentityLinks(baseSessionKey, largeIdentityLinks, {
+      applyIdentityLinks(baseConversationId, largeIdentityLinks, {
         channel: 'telegram',
         peerId: '100050',
       });
@@ -250,8 +250,8 @@ describe('Routing Benchmarks', () => {
       },
     };
 
-    bench('generateSessionKeyWithRouting - simple', () => {
-      generateSessionKeyWithRouting(
+    bench('generateConversationIdWithRouting - simple', () => {
+      generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: '123456',
@@ -262,8 +262,8 @@ describe('Routing Benchmarks', () => {
       );
     });
 
-    bench('generateSessionKeyWithRouting - with bindings', () => {
-      generateSessionKeyWithRouting(
+    bench('generateConversationIdWithRouting - with bindings', () => {
+      generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: '-1001234567',
@@ -274,8 +274,8 @@ describe('Routing Benchmarks', () => {
       );
     });
 
-    bench('generateSessionKeyWithRouting - with identity links', () => {
-      generateSessionKeyWithRouting(
+    bench('generateConversationIdWithRouting - with identity links', () => {
+      generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: '123456',
@@ -294,7 +294,7 @@ describe('Routing Benchmarks', () => {
   describe('Stress Tests', () => {
     bench('Stress: 1000 session keys generation', () => {
       for (let i = 0; i < 1000; i++) {
-        buildSessionKey({
+        resolveConversationId({
           agentId: 'main',
           source: 'telegram',
           accountId: `acc_${i % 10}`,
@@ -356,13 +356,13 @@ describe('Routing Benchmarks', () => {
       );
 
       for (const key of keys) {
-        parseSessionKey(key);
+        getConversationRouting(key);
       }
     });
 
     bench('Memory: build 10000 keys', () => {
       for (let i = 0; i < 10000; i++) {
-        buildSessionKey({
+        resolveConversationId({
           agentId: 'main',
           source: 'telegram',
           accountId: 'acc_default',
@@ -381,7 +381,7 @@ describe('Routing Benchmarks', () => {
     it('should generate session key in < 100μs', () => {
       const start = performance.now();
       for (let i = 0; i < 100; i++) {
-        buildSessionKey({
+        resolveConversationId({
           agentId: 'main',
           source: 'telegram',
           accountId: 'acc_default',
@@ -400,7 +400,7 @@ describe('Routing Benchmarks', () => {
       const key = 'agent:main:telegram:acc_default:direct:123456:thread:789';
       
       for (let i = 0; i < 100; i++) {
-        parseSessionKey(key);
+        getConversationRouting(key);
       }
       
       const duration = performance.now() - start;

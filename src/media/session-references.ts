@@ -56,8 +56,8 @@ export function isMediaUriReferencedByLiveSession(uri: string): boolean {
     .prepare(
       `SELECT 1 AS referenced
        FROM transcript_entries e
-       JOIN transcripts t ON t.session_id = e.session_id
-       JOIN sessions s ON s.session_key = t.session_key
+       JOIN transcripts t ON t.transcript_id = e.transcript_id
+       JOIN sessions s ON s.conversation_id = t.conversation_id
        WHERE e.payload_json LIKE ? ESCAPE '\\'
        LIMIT 1`,
     )

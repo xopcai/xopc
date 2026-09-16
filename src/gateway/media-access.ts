@@ -10,14 +10,14 @@ import type { GatewayService } from './service.js';
 export async function resolveScopedMediaReference(
   service: GatewayService,
   uri: string,
-  scope: { sessionKey?: string; taskId?: string },
+  scope: { conversationId?: string; taskId?: string },
 ) {
-  const { sessionKey, taskId } = scope;
-  if (!sessionKey && !taskId) throw new FileServiceError(400, 'Missing media scope');
+  const { conversationId, taskId } = scope;
+  if (!conversationId && !taskId) throw new FileServiceError(400, 'Missing media scope');
   const media = await resolveMediaReference(uri);
-  const sessionReferencesUri = sessionKey
-    ? messagesReferenceMediaUri(await service.sessionIndexInstance.loadMessages(sessionKey), media.uri)
-      || pendingTranscriptReferencesMediaUri(sessionKey, media.uri)
+  const sessionReferencesUri = conversationId
+    ? messagesReferenceMediaUri(await service.sessionIndexInstance.loadMessages(conversationId), media.uri)
+      || pendingTranscriptReferencesMediaUri(conversationId, media.uri)
     : false;
   const taskReferencesUri = taskId && new TaskRepository().get(taskId)
     ? new TaskContextRepository().list(taskId)

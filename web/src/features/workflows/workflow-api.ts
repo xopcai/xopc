@@ -136,15 +136,15 @@ export interface WorkflowRunMetrics {
 }
 
 export type WorkflowRunSource =
-  | { kind: 'chat'; sessionKey: string; messageId?: string }
-  | { kind: 'webui'; sessionKey?: string; requestId?: string }
+  | { kind: 'chat'; conversationId: string; messageId?: string }
+  | { kind: 'webui'; conversationId?: string; requestId?: string }
   | { kind: 'automation'; automationId: string; runId?: string; scheduledAtMs?: number }
   | { kind: 'api'; requestId?: string; idempotencyKey?: string }
   | { kind: 'im'; channel: string; chatId: string; messageId?: string; userId?: string }
   | Record<string, unknown>;
 
 export interface WorkflowRunMetadata {
-  sessionKey: string;
+  conversationId: string;
   triggerSource: string;
   agentId?: string;
   projectId?: string;
@@ -222,7 +222,7 @@ export interface WorkflowRunCorrelation {
 
 export interface WorkflowRunOrigin {
   channel: string;
-  sessionKey?: string;
+  conversationId?: string;
   chatId?: string;
   messageId?: string;
   automationId?: string;
@@ -355,7 +355,7 @@ export interface WorkflowAgentView {
   status: WorkflowAgentStatus;
   prompt?: string;
   invocation?: WorkflowAgentInvocationSnapshot;
-  sessionKey: string;
+  conversationId: string;
   transcriptMessageCount: number;
   currentStep?: string;
   resultPreview?: string;
@@ -445,7 +445,7 @@ export interface StartWorkflowRunOptions {
   goal?: string;
   input?: unknown;
   agentId?: string;
-  parentSessionKey?: string;
+  parentConversationId?: string;
   concurrency?: number;
   maxSubagents?: number;
   tokenBudget?: number | null;
@@ -453,11 +453,11 @@ export interface StartWorkflowRunOptions {
 
 export interface StartWorkflowRunResult {
   runId: string;
-  sessionKey: string;
+  conversationId: string;
 }
 
 export interface WorkflowAgentSession {
-  sessionKey: string;
+  conversationId: string;
   metadata: {
     sessionType: 'workflow-subagent';
     workflowRunId?: string;

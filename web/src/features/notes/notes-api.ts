@@ -78,8 +78,8 @@ export interface NoteCatalysisMeta {
   confidence?: number;
   report?: NoteCatalysisReport;
   reportNoteId?: string;
-  sourceSessionKey?: string;
-  linkedSessionKeys?: string[];
+  sourceConversationId?: string;
+  linkedConversationIds?: string[];
   linkedWorkflowRunIds?: string[];
   linkedShareIds?: string[];
 }
@@ -371,8 +371,8 @@ export interface NoteSourceBinding {
 export async function openNoteChat(
   id: string,
   opts: { forceNew?: boolean; projectId?: string } = {},
-): Promise<{ sessionKey: string; reused: boolean; session?: NoteChatSessionSummary; sourceBinding?: NoteSourceBinding }> {
-  return fetchJson<{ sessionKey: string; reused: boolean; session?: NoteChatSessionSummary; sourceBinding?: NoteSourceBinding }>(
+): Promise<{ conversationId: string; reused: boolean; session?: NoteChatSessionSummary; sourceBinding?: NoteSourceBinding }> {
+  return fetchJson<{ conversationId: string; reused: boolean; session?: NoteChatSessionSummary; sourceBinding?: NoteSourceBinding }>(
     apiUrl(`/api/notes/${encodeURIComponent(id)}/chat`),
     {
       method: 'POST',
@@ -408,7 +408,7 @@ export async function appendNoteContent(id: string, content: string, heading?: s
 
 export async function createTaskNote(
   title: string,
-  opts: { sourceSessionKey?: string | null; sourceNoteId?: string | null; priority?: 'high' | 'medium' | 'low' } = {},
+  opts: { sourceConversationId?: string | null; sourceNoteId?: string | null; priority?: 'high' | 'medium' | 'low' } = {},
 ): Promise<Note> {
   const result = await fetchJson<{ note: Note }>(apiUrl('/api/notes/task'), {
     method: 'POST',
@@ -416,7 +416,7 @@ export async function createTaskNote(
       title,
       channel: 'web',
       priority: opts.priority,
-      sourceSessionKey: opts.sourceSessionKey || undefined,
+      sourceConversationId: opts.sourceConversationId || undefined,
       sourceNoteId: opts.sourceNoteId || undefined,
     }),
   });

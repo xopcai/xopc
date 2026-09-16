@@ -1,4 +1,4 @@
-import { getCurrentSessionId } from './session-repository.js';
+import { getCurrentTranscriptId } from './session-repository.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 export type SessionTaskPlanItemStatus =
@@ -14,7 +14,7 @@ export type SessionTaskPlanItem = {
 };
 
 export type SessionTaskPlan = {
-  sessionId: string;
+  transcriptId: string;
   planId: string;
   items: SessionTaskPlanItem[];
   revision: number;
@@ -22,7 +22,7 @@ export type SessionTaskPlan = {
 };
 
 type Row = {
-  session_id: string;
+  transcript_id: string;
   plan_id: string;
   items_json: string;
   revision: number;
@@ -57,7 +57,7 @@ function parseItems(value: string): SessionTaskPlanItem[] {
 
 function fromRow(row: Row): SessionTaskPlan {
   return {
-    sessionId: row.session_id,
+    transcriptId: row.transcript_id,
     planId: row.plan_id,
     items: parseItems(row.items_json),
     revision: row.revision,
@@ -66,21 +66,21 @@ function fromRow(row: Row): SessionTaskPlan {
 }
 
 export function getSessionTaskPlan(
-  sessionKey: string,
+  conversationId: string,
   planId = 'todo',
 ): SessionTaskPlan | undefined {
-  const sessionId = getCurrentSessionId(sessionKey);
-  if (!sessionId) return undefined;
+  const transcriptId = getCurrentTranscriptId(conversationId);
+  if (!transcriptId) return undefined;
   const row = getSqliteDatabase().prepare(
-    `SELECT session_id, plan_id, items_json, revision, updated_at
+    `SELECT transcript_id, plan_id, items_json, revision, updated_at
      FROM session_task_plans
-     WHERE session_id = ? AND plan_id = ?`,
-  ).get(sessionId, planId) as Row | undefined;
+     WHERE transcript_id = ? AND plan_id = ?`,
+  ).get(transcriptId, planId) as Row | undefined;
   return row ? fromRow(row) : undefined;
 }
 
 export function setSessionTaskPlan(input: {
-  sessionKey: string;
+  conversationId: string;
   planId?: string;
   items: SessionTaskPlanItem[];
   now?: number;
@@ -90,37 +90,37 @@ export function setSessionTaskPlan(input: {
     (item) => item.status === 'pending' || item.status === 'in_progress',
   );
   if (!hasOpenItem) {
-    deleteSessionTaskPlan(input.sessionKey, planId);
+    deleteSessionTaskPlan(input.conversationId, planId);
     return undefined;
   }
-  const sessionId = getCurrentSessionId(input.sessionKey);
-  if (!sessionId) return undefined;
+  const transcriptId = getCurrentTranscriptId(input.conversationId);
+  if (!transcriptId) return undefined;
   const now = input.now ?? Date.now();
   runSqliteWriteTransaction((db) => {
     db.prepare(
-      `INSERT INTO session_task_plans (session_id, plan_id, items_json, revision, updated_at)
+      `INSERT INTO session_task_plans (transcript_id, plan_id, items_json, revision, updated_at)
        VALUES (?, ?, ?, 1, ?)
-       ON CONFLICT(session_id, plan_id) DO UPDATE SET
+       ON CONFLICT(transcript_id, plan_id) DO UPDATE SET
          items_json = excluded.items_json,
          revision = session_task_plans.revision + 1,
          updated_at = excluded.updated_at`,
-    ).run(sessionId, planId, JSON.stringify(input.items), now);
+    ).run(transcriptId, planId, JSON.stringify(input.items), now);
   });
-  return getSessionTaskPlan(input.sessionKey, planId);
+  return getSessionTaskPlan(input.conversationId, planId);
 }
 
 function deleteSessionTaskPlan(
-  sessionKey: string,
+  conversationId: string,
   planId = 'todo',
 ): boolean {
-  const sessionId = getCurrentSessionId(sessionKey);
-  if (!sessionId) return false;
+  const transcriptId = getCurrentTranscriptId(conversationId);
+  if (!transcriptId) return false;
   let deleted = false;
   runSqliteWriteTransaction((db) => {
     const result = db.prepare(
       `DELETE FROM session_task_plans
-       WHERE session_id = ? AND plan_id = ?`,
-    ).run(sessionId, planId);
+       WHERE transcript_id = ? AND plan_id = ?`,
+    ).run(transcriptId, planId);
     deleted = result.changes > 0;
   });
   return deleted;

@@ -5,7 +5,7 @@ import type { InboundMessage } from '@xopcai/xopc/channels/transport-types.js';
 
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import type { ChannelSecurityContext } from '@xopcai/xopc/channels/plugin-types.js';
-import { generateSessionKey } from '@xopcai/xopc/chat-commands/session-key.js';
+import { generateConversationId } from '@xopcai/xopc/chat-commands/session-key.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 
 import type { ResolvedFeishuAccount } from '../../state/accounts.js';
@@ -201,7 +201,7 @@ export function createFeishuWebhookMonitor(deps: FeishuWebhookMonitorDeps) {
     if (!normalizedText) return;
 
     const threadId = msg?.thread_id ?? msg?.threadId ?? undefined;
-    const sessionKey = generateSessionKey({
+    const conversationId = generateConversationId({
       source: 'feishu',
       chatId,
       senderId,
@@ -212,7 +212,7 @@ export function createFeishuWebhookMonitor(deps: FeishuWebhookMonitorDeps) {
 
     recordFeishuMessageBinding({
       messageId,
-      sessionKey,
+      conversationId,
       accountId: account.accountId,
       chatId,
       senderId,
@@ -248,7 +248,7 @@ export function createFeishuWebhookMonitor(deps: FeishuWebhookMonitorDeps) {
       chat_id: chatId,
       content: normalizedText,
       metadata: {
-        sessionKey,
+        conversationId,
         accountId: account.accountId,
         messageId,
         threadId,

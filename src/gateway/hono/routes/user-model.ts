@@ -395,7 +395,7 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
       context: {
         agentId: c.req.query('agentId') ?? 'main',
         workspaceId: c.req.query('workspaceId') ?? '',
-        sessionId: c.req.query('sessionId') ?? '',
+        conversationId: c.req.query('sessionId') ?? '',
         ...(c.req.query('projectId') ? { projectId: c.req.query('projectId') } : {}),
       },
       recordClass: 'memory',

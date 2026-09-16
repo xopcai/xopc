@@ -27,7 +27,7 @@ export interface SessionTrackerConfig {
 export class SessionTracker {
   private sessionUsage: Map<string, SessionUsage> = new Map();
   private sessionLastActivity: Map<string, number> = new Map();
-  private sessionModels: Map<string, string> = new Map(); // sessionKey -> modelId
+  private sessionModels: Map<string, string> = new Map(); // conversationId -> modelId
   private cleanupInterval?: NodeJS.Timeout;
   
   private readonly maxSessions: number;
@@ -60,17 +60,17 @@ export class SessionTracker {
     let deletedCount = 0;
 
     // Find expired sessions
-    for (const [sessionKey, lastActivity] of this.sessionLastActivity) {
+    for (const [conversationId, lastActivity] of this.sessionLastActivity) {
       if (now - lastActivity > this.sessionTtlMs) {
-        sessionsToDelete.push(sessionKey);
+        sessionsToDelete.push(conversationId);
       }
     }
 
     // Delete expired sessions
-    for (const sessionKey of sessionsToDelete) {
-      this.sessionUsage.delete(sessionKey);
-      this.sessionLastActivity.delete(sessionKey);
-      this.sessionModels.delete(sessionKey);
+    for (const conversationId of sessionsToDelete) {
+      this.sessionUsage.delete(conversationId);
+      this.sessionLastActivity.delete(conversationId);
+      this.sessionModels.delete(conversationId);
       deletedCount++;
     }
 
@@ -80,10 +80,10 @@ export class SessionTracker {
         .sort((a, b) => a[1] - b[1]);
       
       const toRemove = sorted.slice(0, this.sessionUsage.size - this.maxSessions);
-      for (const [sessionKey] of toRemove) {
-        this.sessionUsage.delete(sessionKey);
-        this.sessionLastActivity.delete(sessionKey);
-        this.sessionModels.delete(sessionKey);
+      for (const [conversationId] of toRemove) {
+        this.sessionUsage.delete(conversationId);
+        this.sessionLastActivity.delete(conversationId);
+        this.sessionModels.delete(conversationId);
         deletedCount++;
       }
     }
@@ -96,50 +96,50 @@ export class SessionTracker {
   /**
    * Update last activity timestamp for a session
    */
-  touchSession(sessionKey: string): void {
-    this.sessionLastActivity.set(sessionKey, Date.now());
+  touchSession(conversationId: string): void {
+    this.sessionLastActivity.set(conversationId, Date.now());
   }
 
   /**
    * Get usage for a session
    */
-  getUsage(sessionKey: string): SessionUsage | undefined {
-    return this.sessionUsage.get(sessionKey);
+  getUsage(conversationId: string): SessionUsage | undefined {
+    return this.sessionUsage.get(conversationId);
   }
 
   /**
    * Update usage for a session
    */
-  updateUsage(sessionKey: string, usage: Partial<SessionUsage>): void {
-    const current = this.sessionUsage.get(sessionKey) ?? { prompt: 0, completion: 0, total: 0 };
+  updateUsage(conversationId: string, usage: Partial<SessionUsage>): void {
+    const current = this.sessionUsage.get(conversationId) ?? { prompt: 0, completion: 0, total: 0 };
     
     if (usage.prompt !== undefined) current.prompt += usage.prompt;
     if (usage.completion !== undefined) current.completion += usage.completion;
     if (usage.total !== undefined) current.total += usage.total;
     
-    this.sessionUsage.set(sessionKey, current);
-    this.touchSession(sessionKey);
+    this.sessionUsage.set(conversationId, current);
+    this.touchSession(conversationId);
   }
 
   /**
    * Set model for a session
    */
-  setModel(sessionKey: string, modelId: string): void {
-    this.sessionModels.set(sessionKey, modelId);
-    this.touchSession(sessionKey);
+  setModel(conversationId: string, modelId: string): void {
+    this.sessionModels.set(conversationId, modelId);
+    this.touchSession(conversationId);
   }
 
   /**
    * Get model for a session
    */
-  getModel(sessionKey: string): string | undefined {
-    return this.sessionModels.get(sessionKey);
+  getModel(conversationId: string): string | undefined {
+    return this.sessionModels.get(conversationId);
   }
 
   /**
    * Get all session keys
    */
-  getSessionKeys(): string[] {
+  getConversationIds(): string[] {
     return Array.from(this.sessionUsage.keys());
   }
 
@@ -153,10 +153,10 @@ export class SessionTracker {
   /**
    * Delete a session
    */
-  deleteSession(sessionKey: string): boolean {
-    const hadUsage = this.sessionUsage.delete(sessionKey);
-    this.sessionLastActivity.delete(sessionKey);
-    this.sessionModels.delete(sessionKey);
+  deleteSession(conversationId: string): boolean {
+    const hadUsage = this.sessionUsage.delete(conversationId);
+    this.sessionLastActivity.delete(conversationId);
+    this.sessionModels.delete(conversationId);
     return hadUsage;
   }
 

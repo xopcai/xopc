@@ -59,7 +59,7 @@ import {
 type InputMode = 'text' | 'voice';
 
 export const ChatComposer = memo(function ChatComposer({
-  sessionKey,
+  conversationId,
   actionsOpen,
   onActionsOpenChange,
   disabled,
@@ -76,7 +76,7 @@ export const ChatComposer = memo(function ChatComposer({
   onVoiceCallStart,
   voiceCallUnavailable,
 }: {
-  sessionKey: string;
+  conversationId: string;
   actionsOpen: boolean;
   onActionsOpenChange: (open: boolean) => void;
   disabled: boolean;
@@ -100,7 +100,7 @@ export const ChatComposer = memo(function ChatComposer({
   const { colors, elevation } = useTheme();
 
   const [referenceKind, setReferenceKind] = useState<ReferenceKind | null>(null);
-  useEffect(() => setReferenceKind(null), [sessionKey, disabled]);
+  useEffect(() => setReferenceKind(null), [conversationId, disabled]);
   const [mode, setMode] = useState<InputMode>('text');
   const [draft, setDraft] = useState('');
   const [inputHeight, setInputHeight] = useState(MIN_COMPOSER_INPUT_HEIGHT);
@@ -148,15 +148,15 @@ export const ChatComposer = memo(function ChatComposer({
     attachmentCameraPermissionDenied: cm.attachmentCameraPermissionDenied,
   });
 
-  useEffect(() => { onCloseActions(); }, [sessionKey, disabled, onCloseActions]);
+  useEffect(() => { onCloseActions(); }, [conversationId, disabled, onCloseActions]);
 
   const atRangeActive = detectAtMentionRange(draft, cursorPos) !== null;
   const palette = useCommandPalette(draft, cursorPos, atRangeActive);
-  const atPicker = useAtMentionPicker(draft, cursorPos, sessionKey, palette.open);
+  const atPicker = useAtMentionPicker(draft, cursorPos, conversationId, palette.open);
 
   const [snack, setSnack] = useState('');
-  const restoredDraftSessionKeyRef = useRef<string | null>(null);
-  const skipDraftPersistSessionKeyRef = useRef<string | null>(null);
+  const restoredDraftConversationIdRef = useRef<string | null>(null);
+  const skipDraftPersistConversationIdRef = useRef<string | null>(null);
   const runBusy = streaming || disabled;
   const hasDraft = canSendComposerDraft(draft, att.attachments.length, contextRefs.length);
   /** Programmatic draft updates (palette, suggestions, restore) set cursor explicitly. */
@@ -200,9 +200,9 @@ export const ChatComposer = memo(function ChatComposer({
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [updateDraft]);
   const call = useVoiceCall();
-  const callInChat = call.phase !== 'idle' && call.target?.sessionKey === sessionKey;
+  const callInChat = call.phase !== 'idle' && call.target?.conversationId === conversationId;
   const voice = useChatVoiceRecording({
-    sessionKey, disabled: mode !== 'voice' || runBusy || call.phase !== 'idle',
+    conversationId, disabled: mode !== 'voice' || runBusy || call.phase !== 'idle',
     onRecorded, onTranscribed, onRecordingDraft, onError: setSnack,
   });
   const voiceInteractionActive = voice.stage !== 'idle';
@@ -214,17 +214,17 @@ export const ChatComposer = memo(function ChatComposer({
   }, []);
 
   useEffect(() => {
-    const normalizedSessionKey = sessionKey.trim();
-    restoredDraftSessionKeyRef.current = normalizedSessionKey;
-    skipDraftPersistSessionKeyRef.current = normalizedSessionKey;
+    const normalizedConversationId = conversationId.trim();
+    restoredDraftConversationIdRef.current = normalizedConversationId;
+    skipDraftPersistConversationIdRef.current = normalizedConversationId;
 
-    if (!normalizedSessionKey) {
+    if (!normalizedConversationId) {
       resetEditor();
       onContextRefsChange([]);
       return;
     }
 
-    const snapshot = readComposerDraftSnapshot(normalizedSessionKey);
+    const snapshot = readComposerDraftSnapshot(normalizedConversationId);
     att.restoreAttachments(snapshot?.workspaceFiles ?? []);
     if (!snapshot) {
       resetEditor();
@@ -237,21 +237,21 @@ export const ChatComposer = memo(function ChatComposer({
     setInputHeight(estimateComposerInputHeight(snapshot.text));
     setMode('text');
     onContextRefsChange(snapshot.contextRefs);
-  }, [att.restoreAttachments, onContextRefsChange, resetEditor, sessionKey]);
+  }, [att.restoreAttachments, onContextRefsChange, resetEditor, conversationId]);
 
   useEffect(() => {
-    const normalizedSessionKey = sessionKey.trim();
-    if (!normalizedSessionKey) return;
-    if (restoredDraftSessionKeyRef.current !== normalizedSessionKey) return;
-    if (skipDraftPersistSessionKeyRef.current === normalizedSessionKey) {
-      skipDraftPersistSessionKeyRef.current = null;
+    const normalizedConversationId = conversationId.trim();
+    if (!normalizedConversationId) return;
+    if (restoredDraftConversationIdRef.current !== normalizedConversationId) return;
+    if (skipDraftPersistConversationIdRef.current === normalizedConversationId) {
+      skipDraftPersistConversationIdRef.current = null;
       return;
     }
 
-    writeComposerDraftSnapshot(normalizedSessionKey, { text: draft, cursorPos, contextRefs,
+    writeComposerDraftSnapshot(normalizedConversationId, { text: draft, cursorPos, contextRefs,
       workspaceFiles: att.attachments.filter(file => Boolean(file.workspaceRelativePath) && !file.content && !file.uri && !file.localUri),
     });
-  }, [att.attachments, contextRefs, cursorPos, draft, sessionKey]);
+  }, [att.attachments, contextRefs, cursorPos, draft, conversationId]);
 
   const isExpanded = useMemo(
     () =>
@@ -370,7 +370,7 @@ export const ChatComposer = memo(function ChatComposer({
     )
       .then((accepted) => {
         if (accepted) {
-          clearComposerDraftSnapshot(sessionKey);
+          clearComposerDraftSnapshot(conversationId);
           return;
         }
         updateDraft(previousDraft);
@@ -384,7 +384,7 @@ export const ChatComposer = memo(function ChatComposer({
         onContextRefsChange(previousContextRefs);
         requestAnimationFrame(() => inputRef.current?.focus());
       });
-  }, [att, canSendIdle, contextRefs, draft, onContextRefsChange, onSend, resetEditor, runBusy, sessionKey, updateDraft]);
+  }, [att, canSendIdle, contextRefs, draft, onContextRefsChange, onSend, resetEditor, runBusy, conversationId, updateDraft]);
 
   const handleAbort = useCallback(() => {
     onAbort();
@@ -769,9 +769,9 @@ export const ChatComposer = memo(function ChatComposer({
             {streaming ? renderStreamingRightActions() : renderMoreButton()}
           </View>
         )}
-        <ComposerActionPanel key={sessionKey} visible={actionsOpen} items={sheetItems} onClose={onCloseActions} />
+        <ComposerActionPanel key={conversationId} visible={actionsOpen} items={sheetItems} onClose={onCloseActions} />
       </View>
-      {referenceKind && <ComposerReferenceSheet key={sessionKey} initialKind={referenceKind} sessionKey={sessionKey}
+      {referenceKind && <ComposerReferenceSheet key={conversationId} initialKind={referenceKind} conversationId={conversationId}
         selectedIds={[...contextRefs.map(ref => `${ref.kind}:${ref.sourceId}`), ...att.attachments.map(file => `file:${file.id}`)]}
         onClose={() => setReferenceKind(null)} onSelect={handleReferenceSelect} filesDisabled={attachmentPickDisabled} referencesFull={contextRefs.length >= MAX_COMPOSER_CONTEXT_REFS}
         onLocalFile={() => { setReferenceKind(null); requestAnimationFrame(() => void handleAttachmentPick('document')); }} />}

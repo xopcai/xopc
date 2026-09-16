@@ -47,12 +47,12 @@ describe('resolveProjectAgentId', () => {
     })).toBe('global-agent');
   });
 
-  it('falls back from a stale task agent to the project default', () => {
-    expect(resolveProjectAgentId({
+  it('rejects an explicitly selected missing agent', () => {
+    expect(() => resolveProjectAgentId({
       config,
       projects: projects('project-agent'),
       explicitAgentId: 'missing-agent',
       projectId: 'project-1',
-    })).toBe('project-agent');
+    })).toThrow('Agent not found: missing-agent');
   });
 });

@@ -9,7 +9,7 @@ describe('tui command handler controls', () => {
     const calls: string[] = [];
     const handler = createTuiCommandHandler({
       state: {
-        currentSessionKey: 'agent:main:main',
+        currentConversationId: 'agent:main:main',
         toolsExpanded: false,
         showThinking: false,
       } as never,
@@ -48,7 +48,7 @@ it('handles thinking command through native TUI controls', async () => {
     let level: string | undefined;
     const handler = createTuiCommandHandler({
       state: {
-        currentSessionKey: 'agent:main:main',
+        currentConversationId: 'agent:main:main',
         toolsExpanded: false,
         showThinking: false,
       } as never,
@@ -99,7 +99,7 @@ it('handles thinking command through native TUI controls', async () => {
     let level: string | undefined;
     const handler = createTuiCommandHandler({
       state: {
-        currentSessionKey: 'agent:main:main',
+        currentConversationId: 'agent:main:main',
         sessionInfo: { reasoningLevel: 'stream' },
         toolsExpanded: false,
         showThinking: false,
@@ -139,7 +139,7 @@ it('handles thinking command through native TUI controls', async () => {
     const levels: string[] = [];
     const handler = createTuiCommandHandler({
       state: {
-        currentSessionKey: 'agent:main:main',
+        currentConversationId: 'agent:main:main',
         sessionInfo: { verboseLevel: 'full' },
         toolsExpanded: false,
         showThinking: false,
@@ -179,7 +179,7 @@ it('handles thinking command through native TUI controls', async () => {
     let copied = 0;
     const handler = createTuiCommandHandler({
       state: {
-        currentSessionKey: 'agent:main:main',
+        currentConversationId: 'agent:main:main',
         toolsExpanded: false,
         showThinking: false,
       } as never,
@@ -211,7 +211,7 @@ it('handles thinking command through native TUI controls', async () => {
     let renamed: string | undefined;
     const handler = createTuiCommandHandler({
       state: {
-        currentSessionKey: 'agent:main:main',
+        currentConversationId: 'agent:main:main',
         sessionInfo: { displayName: 'Existing name' },
         toolsExpanded: false,
         showThinking: false,
@@ -254,7 +254,7 @@ it('handles thinking command through native TUI controls', async () => {
     }));
     const handler = createTuiCommandHandler({
       state: {
-        currentSessionKey: 'agent:main:main',
+        currentConversationId: 'agent:main:main',
         isConnected: false,
         connectionStatus: 'offline',
         activityStatus: 'idle',
@@ -319,7 +319,7 @@ it('handles thinking command through native TUI controls', async () => {
     let forkedRawKey: string | undefined;
     const handler = createTuiCommandHandler({
       state: {
-        currentSessionKey: 'agent:main:main',
+        currentConversationId: 'agent:main:main',
         isConnected: true,
         connectionStatus: 'ready',
         activityStatus: 'idle',
@@ -418,7 +418,7 @@ it('handles thinking command through native TUI controls', async () => {
     let request: unknown;
     const handler = createTuiCommandHandler({
       state: {
-        currentSessionKey: 'agent:main:main',
+        currentConversationId: 'agent:main:main',
         sessionInfo: {},
         toolsExpanded: false,
         showThinking: false,
@@ -451,7 +451,7 @@ it('handles thinking command through native TUI controls', async () => {
     const questions: string[] = [];
     const handler = createTuiCommandHandler({
       state: {
-        currentSessionKey: 'agent:main:main',
+        currentConversationId: 'agent:main:main',
         sessionInfo: {},
         toolsExpanded: false,
         showThinking: false,
@@ -490,7 +490,7 @@ it('handles thinking command through native TUI controls', async () => {
     const systems: string[] = [];
     const handler = createTuiCommandHandler({
       state: {
-        currentSessionKey: 'agent:main:main',
+        currentConversationId: 'agent:main:main',
         sessionInfo: {},
         toolsExpanded: false,
         showThinking: false,
@@ -525,7 +525,7 @@ it('handles thinking command through native TUI controls', async () => {
     const systems: string[] = [];
     const handler = createTuiCommandHandler({
       state: {
-        currentSessionKey: 'agent:main:main',
+        currentConversationId: 'agent:main:main',
         sessionInfo: {},
         toolsExpanded: false,
         showThinking: false,
@@ -553,7 +553,7 @@ it('handles thinking command through native TUI controls', async () => {
     const requestExit = vi.fn();
     const handler = createTuiCommandHandler({
       state: {
-        currentSessionKey: 'agent:main:main',
+        currentConversationId: 'agent:main:main',
         sessionInfo: {},
         toolsExpanded: false,
         showThinking: false,

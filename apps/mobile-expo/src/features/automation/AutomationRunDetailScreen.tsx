@@ -106,9 +106,9 @@ export function AutomationRunDetailScreen() {
 
         <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
           <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.result}</Text>
-          {run.sessionKey ? <Button mode="contained-tonal" icon="message-outline" onPress={() => openChat(router, run.sessionKey!)}>{labels.openChat}</Button> : null}
+          {run.conversationId ? <Button mode="contained-tonal" icon="message-outline" onPress={() => openChat(router, run.conversationId!)}>{labels.openChat}</Button> : null}
           {run.workflowRunId ? <Button mode="contained-tonal" icon="source-branch" onPress={() => router.push(`/workflows/runs/${run.workflowRunId}${run.actionSnapshot.kind === 'workflow' && run.actionSnapshot.agentId ? `?agentId=${encodeURIComponent(run.actionSnapshot.agentId)}` : ''}`)}>{labels.openWorkflow}</Button> : null}
-          {!run.sessionKey && !run.workflowRunId ? <Text style={[styles.body, { color: colors.text.tertiary }]}>{labels.noLinkedResult}</Text> : null}
+          {!run.conversationId && !run.workflowRunId ? <Text style={[styles.body, { color: colors.text.tertiary }]}>{labels.noLinkedResult}</Text> : null}
         </View>
 
         <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.timeline}</Text>

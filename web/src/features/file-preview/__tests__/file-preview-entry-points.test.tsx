@@ -70,7 +70,7 @@ describe('common file preview header', () => {
     const labels = messages(language).workspace;
     const entries = [
       { name: 'workspace', editable: true, canChat: true, element: <WorkspaceFilePreviewPanel filePath="report.html" projectId="project-a" onClose={vi.fn()} /> },
-      { name: 'attachment', editable: false, canChat: true, element: <AttachmentPreviewDialog open sessionKey="session-a" attachment={{
+      { name: 'attachment', editable: false, canChat: true, element: <AttachmentPreviewDialog open conversationId="session-a" attachment={{
         name: 'report.html', mimeType: 'text/html', data: btoa('<h1>Report</h1>'), uri: 'media://outbound/report.html',
       }} onClose={vi.fn()} /> },
       { name: 'share', editable: false, canChat: false, element: <Routes><Route path="/share/:token" element={<SharePreviewPage />} /></Routes> },
@@ -106,7 +106,7 @@ describe('common file preview header', () => {
         loading={false} loadError={null} textContent="original bytes" binaryBuffer={null}
         actions={{ canDownload: true, onDownload: vi.fn() }}
         header={{ expanded: false, onClose }}
-        chat={{ createFile: async () => file, sessionKey: 'source-session' }}
+        chat={{ createFile: async () => file, conversationId: 'source-session' }}
       />
       <LocationProbe />
     </MemoryRouter>));

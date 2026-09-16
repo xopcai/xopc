@@ -7,7 +7,7 @@ import { join } from 'node:path';
 
 import type { CommandContext, CommandDefinition } from './types.js';
 import { commandRegistry } from './registry.js';
-import { resolveAgentIdFromSessionKey } from '../routing/agent-session-key.js';
+import { resolveAgentIdFromConversationId } from '../routing/agent-session-key.js';
 import { normalizeAgentId, resolveAgentProfileDir } from '../agent/agent-scope.js';
 import { WORKSPACE_FILES } from '../config/paths.js';
 
@@ -107,7 +107,7 @@ const agentEditCommand: CommandDefinition = {
       };
     }
 
-    const agentId = normalizeAgentId(resolveAgentIdFromSessionKey(ctx.sessionKey));
+    const agentId = normalizeAgentId(resolveAgentIdFromConversationId(ctx.conversationId));
     const profileDir = resolveAgentProfileDir(ctx.config, agentId);
     const namesToShow = fileName ? [fileName] : [WORKSPACE_FILES.SOUL, WORKSPACE_FILES.IDENTITY];
 

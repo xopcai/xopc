@@ -71,7 +71,7 @@ export function AgentAvatarDisplay(props: {
   className?: string;
   token?: string | null;
 }) {
-  const storeToken = useGatewayStore((s) => s.sessionKey);
+  const storeToken = useGatewayStore((s) => s.conversationId);
   const token = props.token !== undefined ? props.token : storeToken;
   const { agentId, avatar, size = 44 } = props;
 

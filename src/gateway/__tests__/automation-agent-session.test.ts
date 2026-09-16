@@ -46,10 +46,10 @@ describe('prepareAutomationAgentSession', () => {
 
   it('persists project ownership and automation routing metadata', async () => {
     const project = projects.create({ name: 'Automation Project' });
-    const sessionKey = 'agent:main:automation:default:dm:automation-1-run-1';
+    const conversationId = "e300a857-a7cf-456e-8b1d-d6bfc8ad2844";
 
     await prepareAutomationAgentSession(store, projects, {
-      sessionKey,
+      conversationId,
       projectId: project.id,
       agentId: 'main',
       peerId: 'automation-1-run-1',
@@ -57,7 +57,7 @@ describe('prepareAutomationAgentSession', () => {
       runId: 'run-1',
     });
 
-    await expect(store.getMetadata(sessionKey)).resolves.toMatchObject({
+    await expect(store.getMetadata(conversationId)).resolves.toMatchObject({
       projectId: project.id,
       sourceChannel: 'automation',
       sourceChatId: 'default:dm:automation-1-run-1',
@@ -75,39 +75,39 @@ describe('prepareAutomationAgentSession', () => {
         latestAutomationRunId: 'run-1',
       },
     });
-    expect(projects.listSessionKeys(project.id)).toContain(sessionKey);
+    expect(projects.listConversationIds(project.id)).toContain(conversationId);
   });
 
   it('hides new automation shells until a user message is persisted without changing existing sessions', async () => {
-    const sessionKey = 'agent:main:automation:default:dm:new-run';
+    const conversationId = "2d73ace2-6b0a-4a42-841a-fa5c37ffa41a";
     const input = {
-      sessionKey, agentId: 'main', peerId: 'new-run',
+      conversationId, agentId: 'main', peerId: 'new-run',
       automationId: 'automation-1', runId: 'run-1', automationName: 'Daily brief',
     };
     await prepareAutomationAgentSession(store, projects, input);
-    expect(await store.getMetadata(sessionKey)).toMatchObject({
+    expect(await store.getMetadata(conversationId)).toMatchObject({
       hiddenFromSessionList: true, name: 'Daily brief', messageCount: 0,
     });
-    expect((await store.list()).items.map((s) => s.key)).not.toContain(sessionKey);
-    await store.appendTranscriptMessage(sessionKey, {
+    expect((await store.list()).items.map((s) => s.key)).not.toContain(conversationId);
+    await store.appendTranscriptMessage(conversationId, {
       role: 'user', content: 'Summarize today', timestamp: Date.now(),
     });
-    await store.updateMetadata(sessionKey, { name: 'My title' });
+    await store.updateMetadata(conversationId, { name: 'My title' });
     await prepareAutomationAgentSession(store, projects, input);
-    expect(await store.getMetadata(sessionKey)).toMatchObject({
+    expect(await store.getMetadata(conversationId)).toMatchObject({
       hiddenFromSessionList: false, name: 'My title', messageCount: 1,
     });
-    expect((await store.list()).items.map((s) => s.key)).toContain(sessionKey);
+    expect((await store.list()).items.map((s) => s.key)).toContain(conversationId);
   });
 
   it('leaves historical empty sessions visible and unnamed', async () => {
-    const sessionKey = 'agent:main:automation:default:dm:legacy';
-    await store.resolveTranscriptPath(sessionKey);
+    const conversationId = "73966681-34eb-4553-89db-c79ec0d5f23a";
+    await store.resolveTranscriptPath(conversationId, { metadata: { agentId: "main" } });
     await prepareAutomationAgentSession(store, projects, {
-      sessionKey, agentId: 'main', peerId: 'legacy', automationId: 'old', runId: 'new',
+      conversationId, agentId: 'main', peerId: 'legacy', automationId: 'old', runId: 'new',
       automationName: 'Daily brief',
     });
-    const metadata = await store.getMetadata(sessionKey);
+    const metadata = await store.getMetadata(conversationId);
     expect(metadata?.hiddenFromSessionList).toBe(false);
     expect(metadata?.name).toBeUndefined();
     expect(metadata?.messageCount).toBe(0);
@@ -116,9 +116,9 @@ describe('prepareAutomationAgentSession', () => {
   it('keeps continuous sessions synchronized when the automation project changes', async () => {
     const first = projects.create({ name: 'First Project' });
     const second = projects.create({ name: 'Second Project' });
-    const sessionKey = 'agent:main:automation:default:dm:automation-continuous';
+    const conversationId = "a34a14ec-4939-45b2-8692-aafb63917c38";
     const base = {
-      sessionKey,
+      conversationId,
       agentId: 'main',
       peerId: 'automation-continuous',
       automationId: 'automation-continuous',
@@ -126,18 +126,18 @@ describe('prepareAutomationAgentSession', () => {
 
     await prepareAutomationAgentSession(store, projects, { ...base, projectId: first.id, runId: 'run-1' });
     await prepareAutomationAgentSession(store, projects, { ...base, projectId: second.id, runId: 'run-2' });
-    await expect(store.getMetadata(sessionKey)).resolves.toMatchObject({
+    await expect(store.getMetadata(conversationId)).resolves.toMatchObject({
       projectId: second.id,
       customData: { latestAutomationRunId: 'run-2' },
     });
-    expect(projects.listSessionKeys(first.id)).not.toContain(sessionKey);
-    expect(projects.listSessionKeys(second.id)).toContain(sessionKey);
+    expect(projects.listConversationIds(first.id)).not.toContain(conversationId);
+    expect(projects.listConversationIds(second.id)).toContain(conversationId);
 
     await prepareAutomationAgentSession(store, projects, { ...base, runId: 'run-3' });
-    await expect(store.getMetadata(sessionKey)).resolves.toMatchObject({
+    await expect(store.getMetadata(conversationId)).resolves.toMatchObject({
       customData: { latestAutomationRunId: 'run-3' },
     });
-    expect((await store.getMetadata(sessionKey))?.projectId).toBeUndefined();
-    expect(projects.listSessionKeys(second.id)).not.toContain(sessionKey);
+    expect((await store.getMetadata(conversationId))?.projectId).toBeUndefined();
+    expect(projects.listConversationIds(second.id)).not.toContain(conversationId);
   });
 });

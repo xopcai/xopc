@@ -86,7 +86,7 @@ export interface WorkflowCardProps {
   block: ToolUseContent;
   /** Live elapsed-time anchor; set when the block transitions to running. */
   startedAt?: number;
-  sessionKey?: string | null;
+  conversationId?: string | null;
   labels: WorkflowCardLabels;
   className?: string;
 }

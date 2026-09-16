@@ -72,10 +72,10 @@ describe('sessionMetadataToTuiItem', () => {
       compactedCount: 0,
       sourceChannel: 'webchat',
       sourceChatId: 'fork',
-      customData: { forkedFromSessionKey: 'agent:main:main' },
+      customData: { forkedFromConversationId: 'agent:main:main' },
     });
 
-    expect(item.forkedFromSessionKey).toBe('agent:main:main');
+    expect(item.forkedFromConversationId).toBe('agent:main:main');
   });
 });
 

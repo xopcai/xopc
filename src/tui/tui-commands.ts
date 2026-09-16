@@ -31,7 +31,6 @@ import { createWorkflowCatalog } from '../agent/workflow/catalog.js';
 import {
   isValidAgentId,
   normalizeAgentId,
-  parseAgentSessionKey,
 } from '../routing/agent-session-key.js';
 import {
   normalizeReasoningLevel,
@@ -99,7 +98,7 @@ export function getSlashCommands(
   const abortKey = keyLabel(keybindings, 'app.interrupt', 'Escape');
   const toolsKey = keyLabel(keybindings, 'app.tools.expand', 'Ctrl+O');
   const thinkingKey = keyLabel(keybindings, 'app.thinking.toggle', 'Ctrl+T');
-  const sessionKey = keyLabel(keybindings, 'app.session.resume', 'Ctrl+Shift+P');
+  const conversationId = keyLabel(keybindings, 'app.session.resume', 'Ctrl+Shift+P');
   const modelCycleKey = keyLabel(keybindings, 'app.model.cycleForward', 'Ctrl+P');
   return [
     { name: 'help', description: 'Show available commands' },
@@ -123,7 +122,7 @@ export function getSlashCommands(
     { name: 'agent', description: 'Show or switch agent for this TUI session' },
     { name: 'agents', description: 'List available agents' },
     { name: 'tui-default-agent', description: 'Set default agent for new TUI sessions' },
-    { name: 'new', description: 'Start a new isolated TUI session (tui-{uuid})' },
+    { name: 'new', description: 'Start a new isolated TUI conversation' },
     { name: 'fork', description: 'Fork current session transcript into a new session' },
     { name: 'clone', description: 'Duplicate current session transcript into a new session' },
     { name: 'trust', description: 'Manage project trust and show extension security policy' },
@@ -131,7 +130,7 @@ export function getSlashCommands(
     { name: 'reset', description: 'Reset current session transcript and reload history' },
     { name: 'clear', description: 'Clear the TUI view without resetting the session' },
     { name: 'list', description: 'List sessions' },
-    { name: 'resume', description: `Open session picker (or ${sessionKey})` },
+    { name: 'resume', description: `Open session picker (or ${conversationId})` },
     { name: 'tree', description: 'Show grouped session tree' },
     { name: 'timeline', description: 'Jump to a previous turn in the current session' },
     { name: 'scoped-models', description: `Choose models for ${modelCycleKey} cycling` },
@@ -313,7 +312,7 @@ export type CommandHandlerDeps = {
   listSessions?: () => TuiSessionItem[] | Promise<TuiSessionItem[]>;
   listAgents?: () => TuiAgentInfo[] | Promise<TuiAgentInfo[]>;
   setTuiDefaultAgent?: (agentId: string) => { agentId: string } | Promise<{ agentId: string }>;
-  switchAgentSession?: (sessionKey: string, agentId: string) => void | Promise<void>;
+  switchAgentSession?: (conversationId: string, agentId: string) => void | Promise<void>;
   getSessionStats?: () => TuiSessionStats | Promise<TuiSessionStats>;
   getStartupResources?: () => TuiStartupResources | undefined;
   loadTranscriptTree?: () => TuiTranscriptTreeEntry[] | Promise<TuiTranscriptTreeEntry[]>;
@@ -329,11 +328,11 @@ export type CommandHandlerDeps = {
   createShare?: (request: TuiShareRequest) => void | Promise<void>;
   startWorkflowRun?: (request: { definitionId: string; goal?: string }) => {
     runId: string;
-    sessionKey: string;
+    conversationId: string;
     definitionId: string;
   } | Promise<{
     runId: string;
-    sessionKey: string;
+    conversationId: string;
     definitionId: string;
   }>;
   authProfiles?: {
@@ -502,13 +501,13 @@ function formatAgentsList(agents: TuiAgentInfo[], currentAgentId?: string): stri
 }
 
 function formatCurrentAgent(state: TuiState): string {
-  const parsed = parseAgentSessionKey(state.currentSessionKey);
+  const parsed = state.sessionInfo;
   if (!parsed) {
-    return `Current session is not an agent session.\nSession: ${state.currentSessionKey}`;
+    return `Current session is not an agent session.\nSession: ${state.currentConversationId}`;
   }
   const lines = [
     `Current agent: ${parsed.agentId}`,
-    `Session: ${state.currentSessionKey}`,
+    `Session: ${state.currentConversationId}`,
   ];
   const workspace = state.sessionInfo.effectiveWorkspacePath?.trim();
   if (workspace) lines.push(`Workspace: ${workspace}`);
@@ -606,8 +605,8 @@ function runTuiProjectCommand(state: TuiState, args: string): string {
   const subcommand = parts[0]?.toLowerCase();
   return withTuiProjects((projects) => {
     if (!subcommand || subcommand === 'status') {
-      const projectId = getSessionMetadata(state.currentSessionKey)?.projectId;
-      if (!projectId) return `No project selected.\nSession: ${state.currentSessionKey}`;
+      const projectId = getSessionMetadata(state.currentConversationId)?.projectId;
+      if (!projectId) return `No project selected.\nSession: ${state.currentConversationId}`;
       const project = projects.getWithDetails(projectId);
       return project ? formatTuiProject(project) : `Current project not found: ${projectId}`;
     }
@@ -638,7 +637,7 @@ function runTuiProjectCommand(state: TuiState, args: string): string {
         ...(defaultAgentId ? { defaultAgentId } : {}),
         ...(parsed.projectKind ? { projectKind: parsed.projectKind } : {}),
       });
-      projects.attachSession(state.currentSessionKey, project.id);
+      projects.attachSession(state.currentConversationId, project.id);
       state.sessionInfo.projectId = project.id;
       return `Created and attached project:\n${formatTuiProject(project)}`;
     }
@@ -648,13 +647,13 @@ function runTuiProjectCommand(state: TuiState, args: string): string {
       if (!ref) return `Usage: /project ${subcommand} <id-or-slug>`;
       const project = resolveTuiProject(projects, ref);
       if (!project) return `Project not found: ${ref}`;
-      projects.attachSession(state.currentSessionKey, project.id);
+      projects.attachSession(state.currentConversationId, project.id);
       state.sessionInfo.projectId = project.id;
       return `Attached current session to project: ${project.name}`;
     }
 
     if (subcommand === 'detach') {
-      projects.detachSession(state.currentSessionKey);
+      projects.detachSession(state.currentConversationId);
       state.sessionInfo.projectId = undefined;
       return 'Detached current session from project.';
     }
@@ -671,7 +670,7 @@ function runTuiProjectCommand(state: TuiState, args: string): string {
     if (subcommand === 'set-agent') {
       const agentId = normalizeProjectAgentId(parts[1]);
       if (!agentId) return 'Usage: /project set-agent <agent-id>';
-      const currentProjectId = getSessionMetadata(state.currentSessionKey)?.projectId;
+      const currentProjectId = getSessionMetadata(state.currentConversationId)?.projectId;
       if (!currentProjectId) return 'No current project.';
       const cfg = loadConfig(resolveConfigPath());
       if (!isValidProjectAgentId(cfg, agentId)) return `Agent not found: ${parts[1]}`;
@@ -680,7 +679,7 @@ function runTuiProjectCommand(state: TuiState, args: string): string {
     }
 
     if (subcommand === 'clear-agent') {
-      const currentProjectId = getSessionMetadata(state.currentSessionKey)?.projectId;
+      const currentProjectId = getSessionMetadata(state.currentConversationId)?.projectId;
       if (!currentProjectId) return 'No current project.';
       projects.update(currentProjectId, { defaultAgentId: null });
       return 'Project default agent cleared.';
@@ -688,17 +687,17 @@ function runTuiProjectCommand(state: TuiState, args: string): string {
 
     if (subcommand === 'sessions') {
       const ref = parts[1];
-      const currentProjectId = getSessionMetadata(state.currentSessionKey)?.projectId;
+      const currentProjectId = getSessionMetadata(state.currentConversationId)?.projectId;
       const project = ref ? resolveTuiProject(projects, ref) : currentProjectId ? projects.get(currentProjectId) : null;
       if (!project) return ref ? `Project not found: ${ref}` : 'No current project.';
-      const keys = projects.listSessionKeys(project.id, 20);
+      const keys = projects.listConversationIds(project.id, 20);
       if (!keys.length) return `No sessions in ${project.name}.`;
       return [`Sessions in ${project.name}:`, ...keys.map((key) => `- ${key}`)].join('\n');
     }
 
     if (subcommand === 'tasks') {
       const ref = parts[1];
-      const currentProjectId = getSessionMetadata(state.currentSessionKey)?.projectId;
+      const currentProjectId = getSessionMetadata(state.currentConversationId)?.projectId;
       const project = ref ? resolveTuiProject(projects, ref) : currentProjectId ? projects.get(currentProjectId) : null;
       if (!project) return ref ? `Project not found: ${ref}` : 'No current project.';
       const tasks = new TaskRepository().listByProject(project.id, 20);
@@ -747,7 +746,7 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
     await abortActive();
     if (resetSession) {
       await resetSession();
-      chatLog.addSystem(`session ${state.currentSessionKey} reset`);
+      chatLog.addSystem(`session ${state.currentConversationId} reset`);
     } else {
       chatLog.clearAll();
       chatLog.addSystem('Session cleared (reset not available in this mode).');
@@ -820,7 +819,7 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         }
         void Promise.resolve(deps.listAgents?.() ?? [])
           .then((agents) => {
-            const current = parseAgentSessionKey(state.currentSessionKey)?.agentId;
+            const current = state.sessionInfo?.agentId;
             chatLog.addSystem(formatAgentsList(agents, current));
             tui.requestRender();
           })
@@ -838,8 +837,8 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
           return;
         }
         void (async () => {
-          const parsedCurrent = parseAgentSessionKey(state.currentSessionKey);
-          if (!parsedCurrent) {
+          const parsedCurrent = state.sessionInfo;
+          if (!parsedCurrent.agentId) {
             chatLog.addSystem('Cannot switch agent: current session is not an agent session.');
             tui.requestRender();
             return;
@@ -861,8 +860,8 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
             tui.requestRender();
             return;
           }
-          const targetSessionKey = `agent:${targetAgentId}:${parsedCurrent.rest}`;
-          if (targetSessionKey === state.currentSessionKey) {
+          const targetConversationId = randomUUID();
+          if (targetAgentId === state.sessionInfo.agentId) {
             chatLog.addSystem(`Already using agent: ${targetAgentId}`);
             tui.requestRender();
             return;
@@ -872,8 +871,8 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
             tui.requestRender();
             return;
           }
-          await deps.switchAgentSession(targetSessionKey, targetAgentId);
-          chatLog.addSystem(`Switched to agent: ${targetAgentId}\nSession: ${targetSessionKey}`);
+          await deps.switchAgentSession(targetConversationId, targetAgentId);
+          chatLog.addSystem(`Switched to agent: ${targetAgentId}\nSession: ${targetConversationId}`);
           tui.requestRender();
         })().catch((err: unknown) => {
           const errorMessage = err instanceof Error ? err.message : String(err);
@@ -891,7 +890,7 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
                 'Usage: /tui-default-agent <agent-id>',
                 'This changes new TUI sessions only; the current session is unchanged.',
                 '',
-                formatAgentsList(agents, parseAgentSessionKey(state.currentSessionKey)?.agentId),
+                formatAgentsList(agents, state.sessionInfo?.agentId),
               ].join('\n'));
               tui.requestRender();
             })
@@ -1076,7 +1075,7 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
       case 'list':
         void Promise.resolve(deps.listSessions?.() ?? []).then((sessions) => {
           chatLog.addSystem(
-            formatTuiSessionListInfo(sessions, { currentSessionKey: state.currentSessionKey }),
+            formatTuiSessionListInfo(sessions, { currentConversationId: state.currentConversationId }),
           );
           tui.requestRender();
         });
@@ -1097,7 +1096,7 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         if (uiOverlays) return;
         void Promise.resolve(deps.listSessions?.() ?? []).then((sessions) => {
           chatLog.addSystem(
-            formatTuiSessionTreeInfo(sessions, { currentSessionKey: state.currentSessionKey }),
+            formatTuiSessionTreeInfo(sessions, { currentConversationId: state.currentConversationId }),
           );
           tui.requestRender();
         });
@@ -1414,10 +1413,10 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
             await abortActive();
             if (deps.newSession) {
               await deps.newSession();
-              chatLog.addSystem(`new session: ${state.currentSessionKey}`);
+              chatLog.addSystem(`new session: ${state.currentConversationId}`);
             } else if (setSession) {
-              await setSession(`tui-${randomUUID()}`);
-              chatLog.addSystem(`new session: ${state.currentSessionKey}`);
+              await setSession(randomUUID());
+              chatLog.addSystem(`new session: ${state.currentConversationId}`);
             } else {
               chatLog.clearAll();
               chatLog.addSystem('New session requires gateway or local session support.');
@@ -1493,7 +1492,7 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         goal: commandArgs.trim() || undefined,
       })).then((result) => {
         chatLog.addSystem(
-          `Workflow started: ${result.definitionId}\nrunId: ${result.runId}\nsessionKey: ${result.sessionKey}`,
+          `Workflow started: ${result.definitionId}\nrunId: ${result.runId}\nconversationId: ${result.conversationId}`,
         );
         tui.requestRender();
       }).catch((err: unknown) => {

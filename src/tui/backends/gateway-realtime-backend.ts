@@ -81,7 +81,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
   private readonly clientId = `tui-${crypto.randomUUID()}`;
   private realtime: RealtimeClient | null = null;
   private activeRunId: string | null = null;
-  private observedSessionKey: string | null = null;
+  private observedConversationId: string | null = null;
   private chatAbort: AbortController | null = null;
 
   onEvent?: (evt: TuiEvent) => void;
@@ -106,7 +106,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
     this.realtime?.disconnect();
     this.realtime = null;
     this.activeRunId = null;
-    this.observedSessionKey = null;
+    this.observedConversationId = null;
     this.chatAbort?.abort();
     this.chatAbort = null;
   }
@@ -136,12 +136,12 @@ export class GatewayRealtimeBackend implements TuiBackend {
   // ── Agent chat ──
 
   async sendChat(opts: ChatSendOptions): Promise<{ runId: string }> {
-    this.observedSessionKey = opts.sessionKey;
+    this.observedConversationId = opts.conversationId;
     this.chatAbort?.abort();
     this.chatAbort = new AbortController();
     const signal = this.chatAbort.signal;
     const clientMessageId = crypto.randomUUID();
-    const res = await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(opts.sessionKey)}/inputs`, this.credential, {
+    const res = await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(opts.conversationId)}/inputs`, this.credential, {
       method: 'POST',
       body: JSON.stringify({
         clientMessageId, delivery: 'next',
@@ -158,12 +158,12 @@ export class GatewayRealtimeBackend implements TuiBackend {
     const state = json?.payload?.state;
     const own = state?.inputs?.find((input) => input.clientMessageId === clientMessageId);
     const runId = state?.activeRunId ?? crypto.randomUUID();
-    if (state?.activeRunId && own?.id === state.activeInputId) void this.resumeChat({ sessionKey: opts.sessionKey, runId });
+    if (state?.activeRunId && own?.id === state.activeInputId) void this.resumeChat({ conversationId: opts.conversationId, runId });
     return { runId };
   }
 
   async searchWorkspaceFiles(
-    sessionKey: string,
+    conversationId: string,
     query: string,
     options?: { limit?: number },
   ): Promise<TuiWorkspaceFileSearchEntry[]> {
@@ -173,7 +173,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
       params.set('limit', String(options?.limit ?? 15));
       const context = await gatewayFetch(
         this.baseUrl,
-        `/api/files/contexts/session/${encodeURIComponent(sessionKey)}`,
+        `/api/files/contexts/session/${encodeURIComponent(conversationId)}`,
         this.credential,
       );
       if (!context.ok) return [];
@@ -192,13 +192,13 @@ export class GatewayRealtimeBackend implements TuiBackend {
       } satisfies TuiWorkspaceFileSearchEntry));
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      log.warn({ err, sessionKey, errorMessage }, `Gateway workspace file search failed: ${errorMessage}`);
+      log.warn({ err, conversationId, errorMessage }, `Gateway workspace file search failed: ${errorMessage}`);
       return [];
     }
   }
 
-  async getReviewContext(sessionKey: string): Promise<ReviewContext> {
-    const params = new URLSearchParams({ sessionKey });
+  async getReviewContext(conversationId: string): Promise<ReviewContext> {
+    const params = new URLSearchParams({ conversationId });
     const res = await gatewayFetch(this.baseUrl, `/api/review/context?${params.toString()}`, this.credential);
     const json = (await res.json().catch(() => ({}))) as {
       ok?: boolean;
@@ -218,31 +218,31 @@ export class GatewayRealtimeBackend implements TuiBackend {
       body: JSON.stringify({
         definitionId: opts.definitionId,
         agentId: opts.agentId,
-        parentSessionKey: opts.sessionKey,
-        source: { kind: 'chat', sessionKey: opts.sessionKey },
+        parentConversationId: opts.conversationId,
+        source: { kind: 'chat', conversationId: opts.conversationId },
         ...(goal ? { goal } : {}),
         ...(opts.input !== undefined ? { input: opts.input } : {}),
       }),
     });
     const json = (await res.json().catch(() => ({}))) as {
       runId?: string;
-      sessionKey?: string;
+      conversationId?: string;
       error?: string;
       code?: string;
     };
-    if (!res.ok || !json.runId || !json.sessionKey) {
+    if (!res.ok || !json.runId || !json.conversationId) {
       throw new Error(json.error ?? `Workflow start failed (${res.status})`);
     }
     return {
       runId: json.runId,
-      sessionKey: json.sessionKey,
+      conversationId: json.conversationId,
       definitionId: opts.definitionId,
     };
   }
 
   async resolveStartupProject(opts: {
     workspacePath: string;
-    sessionKey: string;
+    conversationId: string;
     agentId: string;
     autoCreate?: boolean;
   }): Promise<TuiStartupProjectResult> {
@@ -264,8 +264,8 @@ export class GatewayRealtimeBackend implements TuiBackend {
     };
   }
 
-  async resumeChat(opts: { sessionKey: string; runId: string }): Promise<{ ok: boolean; reason?: string }> {
-    this.observedSessionKey = opts.sessionKey;
+  async resumeChat(opts: { conversationId: string; runId: string }): Promise<{ ok: boolean; reason?: string }> {
+    this.observedConversationId = opts.conversationId;
     this.chatAbort?.abort();
     this.chatAbort = new AbortController();
     this.unsubscribeActiveRun();
@@ -274,7 +274,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
     return { ok: true };
   }
 
-  async abortChat(opts: { sessionKey: string; runId: string }): Promise<{ ok: boolean }> {
+  async abortChat(opts: { conversationId: string; runId: string }): Promise<{ ok: boolean }> {
     this.chatAbort?.abort();
     this.chatAbort = null;
     this.unsubscribeActiveRun();
@@ -290,10 +290,10 @@ export class GatewayRealtimeBackend implements TuiBackend {
     }
   }
 
-  async submitChatInput(opts: { sessionKey: string; message: string; delivery: 'next' | 'steer' }): Promise<{ ok: boolean; effectiveDelivery?: 'next' | 'steer' }> {
-    this.observedSessionKey = opts.sessionKey;
+  async submitChatInput(opts: { conversationId: string; message: string; delivery: 'next' | 'steer' }): Promise<{ ok: boolean; effectiveDelivery?: 'next' | 'steer' }> {
+    this.observedConversationId = opts.conversationId;
     try {
-      const res = await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(opts.sessionKey)}/inputs`, this.credential, {
+      const res = await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(opts.conversationId)}/inputs`, this.credential, {
         method: 'POST',
         body: JSON.stringify({
           clientMessageId: crypto.randomUUID(),
@@ -309,8 +309,8 @@ export class GatewayRealtimeBackend implements TuiBackend {
     }
   }
 
-  async getChatInputState(sessionKey: string): Promise<TuiChatInputState> {
-    const res = await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(sessionKey)}/input-state`, this.credential);
+  async getChatInputState(conversationId: string): Promise<TuiChatInputState> {
+    const res = await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(conversationId)}/input-state`, this.credential);
     if (!res.ok) throw new Error(`Input state failed (${res.status})`);
     const json = await res.json() as { payload: TuiChatInputState };
     return json.payload;
@@ -318,7 +318,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
 
   // ── REST helpers ──
 
-  async getStartupResources(sessionKey: string): Promise<TuiStartupResources> {
+  async getStartupResources(conversationId: string): Promise<TuiStartupResources> {
     const empty: TuiStartupResources = {
       context: [],
       skills: [],
@@ -328,7 +328,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
     try {
       const res = await gatewayFetch(
         this.baseUrl,
-        `/api/tui/startup-resources?sessionKey=${encodeURIComponent(sessionKey)}`,
+        `/api/tui/startup-resources?conversationId=${encodeURIComponent(conversationId)}`,
         this.credential,
       );
       if (!res.ok) return empty;
@@ -343,16 +343,16 @@ export class GatewayRealtimeBackend implements TuiBackend {
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      log.warn({ err: error, sessionKey, errorMessage }, `Failed to load startup resources: ${errorMessage}`);
+      log.warn({ err: error, conversationId, errorMessage }, `Failed to load startup resources: ${errorMessage}`);
       return empty;
     }
   }
 
-  async loadHistory(opts: { sessionKey: string; limit?: number }): Promise<{ messages: HistoryMessage[] }> {
+  async loadHistory(opts: { conversationId: string; limit?: number }): Promise<{ messages: HistoryMessage[] }> {
     try {
       const res = await gatewayFetch(
         this.baseUrl,
-        `/api/sessions/${encodeURIComponent(opts.sessionKey)}?include=transcriptRows`,
+        `/api/sessions/${encodeURIComponent(opts.conversationId)}?include=transcriptRows`,
         this.credential,
       );
       if (!res.ok) return { messages: [] };
@@ -372,7 +372,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
     }
   }
 
-  async loadHistoryWindow(opts: { sessionKey: string; rowNumber: number; before?: number; after?: number }) {
+  async loadHistoryWindow(opts: { conversationId: string; rowNumber: number; before?: number; after?: number }) {
     const params = new URLSearchParams({
       rowNumber: String(opts.rowNumber),
       before: String(opts.before ?? 80),
@@ -381,7 +381,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
     try {
       const res = await gatewayFetch(
         this.baseUrl,
-        `/api/sessions/${encodeURIComponent(opts.sessionKey)}/transcript/window?${params.toString()}`,
+        `/api/sessions/${encodeURIComponent(opts.conversationId)}/transcript/window?${params.toString()}`,
         this.credential,
       );
       if (!res.ok) {
@@ -412,7 +412,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
       log.warn(
         {
           err: error,
-          sessionKey: opts.sessionKey,
+          conversationId: opts.conversationId,
           rowNumber: opts.rowNumber,
           errorMessage,
         },
@@ -422,11 +422,11 @@ export class GatewayRealtimeBackend implements TuiBackend {
     }
   }
 
-  async loadTranscriptTree(sessionKey: string): Promise<TuiTranscriptTreeEntry[]> {
+  async loadTranscriptTree(conversationId: string): Promise<TuiTranscriptTreeEntry[]> {
     try {
       const res = await gatewayFetch(
         this.baseUrl,
-        `/api/sessions/${encodeURIComponent(sessionKey)}?include=transcriptRows`,
+        `/api/sessions/${encodeURIComponent(conversationId)}?include=transcriptRows`,
         this.credential,
       );
       if (!res.ok) return [];
@@ -439,16 +439,16 @@ export class GatewayRealtimeBackend implements TuiBackend {
       return buildTuiTranscriptTree(rows);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      log.warn({ err: error, sessionKey, errorMessage }, `Failed to load transcript tree: ${errorMessage}`);
+      log.warn({ err: error, conversationId, errorMessage }, `Failed to load transcript tree: ${errorMessage}`);
       return [];
     }
   }
 
-  async loadTimeline(sessionKey: string): Promise<SessionTimelineItem[]> {
+  async loadTimeline(conversationId: string): Promise<SessionTimelineItem[]> {
     try {
       const res = await gatewayFetch(
         this.baseUrl,
-        `/api/sessions/${encodeURIComponent(sessionKey)}/timeline`,
+        `/api/sessions/${encodeURIComponent(conversationId)}/timeline`,
         this.credential,
       );
       if (!res.ok) return [];
@@ -456,16 +456,16 @@ export class GatewayRealtimeBackend implements TuiBackend {
       return Array.isArray(json.items) ? (json.items as SessionTimelineItem[]) : [];
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      log.warn({ err: error, sessionKey, errorMessage }, `Failed to load timeline: ${errorMessage}`);
+      log.warn({ err: error, conversationId, errorMessage }, `Failed to load timeline: ${errorMessage}`);
       return [];
     }
   }
 
-  async getSessionStats(sessionKey: string): Promise<TuiSessionStats> {
+  async getSessionStats(conversationId: string): Promise<TuiSessionStats> {
     try {
       const res = await gatewayFetch(
         this.baseUrl,
-        `/api/sessions/${encodeURIComponent(sessionKey)}?include=transcriptRows`,
+        `/api/sessions/${encodeURIComponent(conversationId)}?include=transcriptRows`,
         this.credential,
       );
       if (!res.ok) return computeTuiSessionStats([]);
@@ -478,7 +478,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
       return computeTuiSessionStats(rows);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      log.warn({ err: error, sessionKey, errorMessage }, `Failed to load session stats: ${errorMessage}`);
+      log.warn({ err: error, conversationId, errorMessage }, `Failed to load session stats: ${errorMessage}`);
       return computeTuiSessionStats([]);
     }
   }
@@ -490,6 +490,8 @@ export class GatewayRealtimeBackend implements TuiBackend {
       const json = (await res.json()) as {
         items?: Array<{
           key: string;
+          agentId: string;
+          sourceChannel?: string;
           name?: string;
           updatedAt?: string;
           estimatedTokens?: number;
@@ -500,6 +502,9 @@ export class GatewayRealtimeBackend implements TuiBackend {
       };
       return (json.items ?? []).map((s) => ({
         key: s.key,
+        agentId: s.agentId,
+        sourceChannel: s.sourceChannel,
+        generatedShell: s.customData?.genericNewChatShell === true,
         displayName: s.name,
         updatedAt: s.updatedAt ? Date.parse(s.updatedAt) : undefined,
         totalTokens: s.estimatedTokens ?? null,
@@ -510,8 +515,8 @@ export class GatewayRealtimeBackend implements TuiBackend {
             : typeof s.customData?.modelRef === 'string'
               ? s.customData.modelRef
               : null,
-        forkedFromSessionKey:
-          typeof s.customData?.forkedFromSessionKey === 'string' ? s.customData.forkedFromSessionKey : undefined,
+        forkedFromConversationId:
+          typeof s.customData?.forkedFromConversationId === 'string' ? s.customData.forkedFromConversationId : undefined,
         cwd: typeof s.cwd === 'string' ? s.cwd : undefined,
       }));
     } catch {
@@ -565,16 +570,26 @@ export class GatewayRealtimeBackend implements TuiBackend {
     };
   }
 
-  async getSessionInfo(sessionKey: string): Promise<SessionInfo> {
+  async createConversation(agentId: string, conversationId?: string): Promise<string> {
+    const res = await gatewayFetch(this.baseUrl, '/api/sessions', this.credential, {
+      method: 'POST', body: JSON.stringify({ agentId, conversationId, channel: 'tui' }),
+    });
+    if (!res.ok) throw new Error(`Conversation creation failed (${res.status})`);
+    const result = await res.json() as { conversationId: string };
+    return result.conversationId;
+  }
+
+  async getSessionInfo(conversationId: string): Promise<SessionInfo> {
     const out: SessionInfo = {};
     try {
-      const sessionPath = `/api/sessions/${encodeURIComponent(sessionKey)}`;
+      const sessionPath = `/api/sessions/${encodeURIComponent(conversationId)}`;
       const [sessionRes, agentCfgRes] = await Promise.all([
         gatewayFetch(this.baseUrl, sessionPath, this.credential),
         gatewayFetch(this.baseUrl, `${sessionPath}/agent-config`, this.credential),
       ]);
 
       type SessionRow = {
+        agentId: string;
         name?: string;
         estimatedTokens?: number;
         customData?: Record<string, unknown>;
@@ -586,6 +601,8 @@ export class GatewayRealtimeBackend implements TuiBackend {
         const json = (await sessionRes.json()) as { session?: SessionRow };
         session = json.session;
         if (session) {
+          out.agentId = session.agentId;
+          out.generatedShell = session.customData?.genericNewChatShell === true;
           if (session.name) out.displayName = session.name;
           if (session.estimatedTokens != null) out.totalTokens = session.estimatedTokens;
           if (session.projectId?.trim()) out.projectId = session.projectId.trim();
@@ -679,20 +696,20 @@ export class GatewayRealtimeBackend implements TuiBackend {
     }
   }
 
-  async resetSession(sessionKey: string): Promise<void> {
-    await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(sessionKey)}/reset`, this.credential, {
+  async resetSession(conversationId: string): Promise<void> {
+    await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(conversationId)}/reset`, this.credential, {
       method: 'POST',
     }).catch(() => {});
   }
 
   async compactSession(
-    sessionKey: string,
+    conversationId: string,
     options?: { force?: boolean; instructions?: string },
   ): Promise<TuiCompactionResult> {
     try {
       const res = await gatewayFetch(
         this.baseUrl,
-        `/api/sessions/${encodeURIComponent(sessionKey)}/compaction/run`,
+        `/api/sessions/${encodeURIComponent(conversationId)}/compaction/run`,
         this.credential,
         {
           method: 'POST',
@@ -736,11 +753,11 @@ export class GatewayRealtimeBackend implements TuiBackend {
     }
   }
 
-  async exportSession(sessionKey: string, format: ExportFormat): Promise<string> {
+  async exportSession(conversationId: string, format: ExportFormat): Promise<string> {
     const params = new URLSearchParams({ format });
     const res = await gatewayFetch(
       this.baseUrl,
-      `/api/sessions/${encodeURIComponent(sessionKey)}/export?${params.toString()}`,
+      `/api/sessions/${encodeURIComponent(conversationId)}/export?${params.toString()}`,
       this.credential,
     );
     if (!res.ok) {
@@ -751,30 +768,30 @@ export class GatewayRealtimeBackend implements TuiBackend {
   }
 
   async importSession(
-    targetSessionKey: string,
+    targetConversationId: string,
     jsonContent: string,
-  ): Promise<{ sessionKey: string; rowCount: number }> {
+  ): Promise<{ conversationId: string; rowCount: number }> {
     const res = await gatewayFetch(this.baseUrl, '/api/sessions/import', this.credential, {
       method: 'POST',
       body: JSON.stringify({
-        targetKey: targetSessionKey,
+        targetKey: targetConversationId,
         content: jsonContent,
       }),
     });
     const json = (await res.json().catch(() => ({}))) as {
       ok?: boolean;
       error?: string;
-      sessionKey?: string;
+      conversationId?: string;
       rowCount?: number;
     };
-    if (!res.ok || json.ok === false || !json.sessionKey) {
+    if (!res.ok || json.ok === false || !json.conversationId) {
       throw new Error(json.error ?? `Import failed (${res.status})`);
     }
-    return { sessionKey: json.sessionKey, rowCount: json.rowCount ?? 0 };
+    return { conversationId: json.conversationId, rowCount: json.rowCount ?? 0 };
   }
 
   async createShare(
-    sessionKey: string,
+    conversationId: string,
     request: TuiShareRequest,
     options?: { agentId?: string },
   ): Promise<TuiShareResult> {
@@ -786,7 +803,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
         mode: request.mode,
         title: request.title,
         description: request.description,
-        sessionKey,
+        conversationId,
         agentId: options?.agentId,
       }),
     });
@@ -827,10 +844,10 @@ export class GatewayRealtimeBackend implements TuiBackend {
     };
   }
 
-  async btwQuery(sessionKey: string, question: string): Promise<{ text: string; error?: string }> {
+  async btwQuery(conversationId: string, question: string): Promise<{ text: string; error?: string }> {
     const res = await gatewayFetch(
       this.baseUrl,
-      `/api/sessions/${encodeURIComponent(sessionKey)}/btw`,
+      `/api/sessions/${encodeURIComponent(conversationId)}/btw`,
       this.credential,
       { method: 'POST', body: JSON.stringify({ question }) },
     );
@@ -841,61 +858,61 @@ export class GatewayRealtimeBackend implements TuiBackend {
   }
 
   async forkSession(
-    sourceSessionKey: string,
-    targetSessionKey: string,
-  ): Promise<{ sessionKey: string; rowCount: number }> {
+    sourceConversationId: string,
+    targetConversationId: string,
+  ): Promise<{ conversationId: string; rowCount: number }> {
     const res = await gatewayFetch(
       this.baseUrl,
-      `/api/sessions/${encodeURIComponent(sourceSessionKey)}/fork`,
+      `/api/sessions/${encodeURIComponent(sourceConversationId)}/fork`,
       this.credential,
-      { method: 'POST', body: JSON.stringify({ targetKey: targetSessionKey }) },
+      { method: 'POST', body: JSON.stringify({ targetKey: targetConversationId }) },
     );
     const json = (await res.json().catch(() => ({}))) as {
       ok?: boolean;
       error?: string;
-      sessionKey?: string;
+      conversationId?: string;
       rowCount?: number;
     };
-    if (!res.ok || json.ok === false || !json.sessionKey) {
+    if (!res.ok || json.ok === false || !json.conversationId) {
       throw new Error(json.error ?? `Fork failed (${res.status})`);
     }
-    return { sessionKey: json.sessionKey, rowCount: json.rowCount ?? 0 };
+    return { conversationId: json.conversationId, rowCount: json.rowCount ?? 0 };
   }
 
   async forkSessionAt(
-    sourceSessionKey: string,
-    targetSessionKey: string,
+    sourceConversationId: string,
+    targetConversationId: string,
     entryId: string,
-  ): Promise<{ sessionKey: string; rowCount: number }> {
+  ): Promise<{ conversationId: string; rowCount: number }> {
     const throughRow = transcriptTreeEntryIdToRowNumber(entryId);
     if (throughRow == null) {
       throw new Error(`Invalid transcript entry: ${entryId}`);
     }
     const res = await gatewayFetch(
       this.baseUrl,
-      `/api/sessions/${encodeURIComponent(sourceSessionKey)}/fork-row`,
+      `/api/sessions/${encodeURIComponent(sourceConversationId)}/fork-row`,
       this.credential,
       {
         method: 'POST',
-        body: JSON.stringify({ targetKey: targetSessionKey, throughRow }),
+        body: JSON.stringify({ targetKey: targetConversationId, throughRow }),
       },
     );
     const json = (await res.json().catch(() => ({}))) as {
       ok?: boolean;
       error?: string;
-      sessionKey?: string;
+      conversationId?: string;
       rowCount?: number;
     };
-    if (!res.ok || json.ok === false || !json.sessionKey) {
+    if (!res.ok || json.ok === false || !json.conversationId) {
       throw new Error(json.error ?? `Fork failed (${res.status})`);
     }
-    return { sessionKey: json.sessionKey, rowCount: json.rowCount ?? 0 };
+    return { conversationId: json.conversationId, rowCount: json.rowCount ?? 0 };
   }
 
-  async setTranscriptLabel(sessionKey: string, entryId: string, label: string | undefined): Promise<{ ok: boolean }> {
+  async setTranscriptLabel(conversationId: string, entryId: string, label: string | undefined): Promise<{ ok: boolean }> {
     const res = await gatewayFetch(
       this.baseUrl,
-      `/api/sessions/${encodeURIComponent(sessionKey)}/transcript/label`,
+      `/api/sessions/${encodeURIComponent(conversationId)}/transcript/label`,
       this.credential,
       { method: 'POST', body: JSON.stringify({ targetId: entryId, label }) },
     );
@@ -909,10 +926,10 @@ export class GatewayRealtimeBackend implements TuiBackend {
     return { ok: true };
   }
 
-  async appendCustomEntry(sessionKey: string, customType: string, data?: unknown): Promise<{ ok: boolean }> {
+  async appendCustomEntry(conversationId: string, customType: string, data?: unknown): Promise<{ ok: boolean }> {
     const res = await gatewayFetch(
       this.baseUrl,
-      `/api/sessions/${encodeURIComponent(sessionKey)}/transcript/custom`,
+      `/api/sessions/${encodeURIComponent(conversationId)}/transcript/custom`,
       this.credential,
       { method: 'POST', body: JSON.stringify({ customType, data }) },
     );
@@ -927,7 +944,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
   }
 
   async appendCustomMessage(
-    sessionKey: string,
+    conversationId: string,
     message: {
       customType: string;
       content?: string | unknown[];
@@ -937,7 +954,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
   ): Promise<{ ok: boolean }> {
     const res = await gatewayFetch(
       this.baseUrl,
-      `/api/sessions/${encodeURIComponent(sessionKey)}/transcript/custom-message`,
+      `/api/sessions/${encodeURIComponent(conversationId)}/transcript/custom-message`,
       this.credential,
       { method: 'POST', body: JSON.stringify(message) },
     );
@@ -952,7 +969,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
   }
 
   async appendBashExecution(
-    sessionKey: string,
+    conversationId: string,
     entry: {
       command: string;
       output?: string;
@@ -965,7 +982,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
   ): Promise<{ ok: boolean }> {
     const res = await gatewayFetch(
       this.baseUrl,
-      `/api/sessions/${encodeURIComponent(sessionKey)}/transcript/bash`,
+      `/api/sessions/${encodeURIComponent(conversationId)}/transcript/bash`,
       this.credential,
       { method: 'POST', body: JSON.stringify(entry) },
     );
@@ -979,10 +996,10 @@ export class GatewayRealtimeBackend implements TuiBackend {
     return { ok: true };
   }
 
-  async patchSession(sessionKey: string, patch: Record<string, unknown>): Promise<void> {
+  async patchSession(conversationId: string, patch: Record<string, unknown>): Promise<void> {
     const res = await gatewayFetch(
       this.baseUrl,
-      `/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`,
+      `/api/sessions/${encodeURIComponent(conversationId)}/agent-config`,
       this.credential,
       { method: 'PATCH', body: JSON.stringify(patch) },
     );
@@ -1009,7 +1026,7 @@ export class GatewayRealtimeBackend implements TuiBackend {
       };
       const metaRes = await gatewayFetch(
         this.baseUrl,
-        `/api/sessions/${encodeURIComponent(sessionKey)}`,
+        `/api/sessions/${encodeURIComponent(conversationId)}`,
         this.credential,
         { method: 'PATCH', body: JSON.stringify(metadataPatch) },
       );
@@ -1023,11 +1040,11 @@ export class GatewayRealtimeBackend implements TuiBackend {
     }
   }
 
-  async renameSession(sessionKey: string, name: string): Promise<{ ok: boolean }> {
+  async renameSession(conversationId: string, name: string): Promise<{ ok: boolean }> {
     try {
       const res = await gatewayFetch(
         this.baseUrl,
-        `/api/sessions/${encodeURIComponent(sessionKey)}/rename`,
+        `/api/sessions/${encodeURIComponent(conversationId)}/rename`,
         this.credential,
         { method: 'POST', body: JSON.stringify({ name }) },
       );
@@ -1037,9 +1054,9 @@ export class GatewayRealtimeBackend implements TuiBackend {
     }
   }
 
-  async deleteSession(sessionKey: string): Promise<{ ok: boolean }> {
+  async deleteSession(conversationId: string): Promise<{ ok: boolean }> {
     try {
-      const res = await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(sessionKey)}`, this.credential, {
+      const res = await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(conversationId)}`, this.credential, {
         method: 'DELETE',
       });
       if (!res.ok) return { ok: false };
@@ -1120,15 +1137,15 @@ export class GatewayRealtimeBackend implements TuiBackend {
       return;
     }
     if (event.topic === 'sessions' && event.event === 'run.started') {
-      const data = event.data as { sessionKey?: unknown; runId?: unknown } | null;
+      const data = event.data as { conversationId?: unknown; runId?: unknown } | null;
       if (
-        typeof data?.sessionKey === 'string'
-        && data.sessionKey === this.observedSessionKey
+        typeof data?.conversationId === 'string'
+        && data.conversationId === this.observedConversationId
         && typeof data.runId === 'string'
         && data.runId
         && data.runId !== this.activeRunId
       ) {
-        void this.resumeChat({ sessionKey: data.sessionKey, runId: data.runId });
+        void this.resumeChat({ conversationId: data.conversationId, runId: data.runId });
       }
     }
   }

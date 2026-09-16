@@ -7,7 +7,7 @@ type Transport = Pick<VoiceTransport, 'connect' | 'send' | 'audio' | 'inputQueue
 
 export type CallTarget = {
   gatewayId: string;
-  sessionKey: string;
+  conversationId: string;
   mode?: VoiceMode;
   background: boolean;
   identity?: string;
@@ -175,7 +175,7 @@ export class VoiceCallController {
         route: capabilities => { if (current()) this.applyAudioCapabilities(capabilities); },
       });
       createPromise = this.deps.create(
-        { purpose: 'conversation', sessionKey: target.sessionKey, mode: prepared.mode,
+        { purpose: 'conversation', conversationId: target.conversationId, mode: prepared.mode,
           supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] },
         abort.signal,
       ).then((connection) => {

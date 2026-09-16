@@ -33,13 +33,13 @@ import {
   type WorkflowStatusFilter,
 } from './workflow-page.constants';
 import { workflowChatHref } from './workflow-page.utils';
-import { resolveRunSessionKey } from './workflow-board.utils';
+import { resolveRunConversationId } from './workflow-board.utils';
 
 export function useWorkflowsPage() {
   const language = useLocaleStore((state) => state.language);
   const labels = messages(language).workflows;
   const localeTag = language === 'zh' ? 'zh-CN' : 'en-US';
-  const token = useGatewayStore((state) => state.sessionKey);
+  const token = useGatewayStore((state) => state.conversationId);
   const hasToken = Boolean(token);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -143,8 +143,8 @@ export function useWorkflowsPage() {
   }, [navigate, routeSearch]);
   const openRunDetails = useCallback((run: WorkflowRunSummary) => navigate(`/workflows/runs/${run.id}${routeSearch}`), [navigate, routeSearch]);
   const openRunInChat = useCallback((run: WorkflowRunSummary) => {
-    const sessionKey = resolveRunSessionKey(run);
-    if (sessionKey) navigate(workflowChatHref(sessionKey));
+    const conversationId = resolveRunConversationId(run);
+    if (conversationId) navigate(workflowChatHref(conversationId));
   }, [navigate]);
 
   const cancelRun = useCallback(async (runId: string) => {

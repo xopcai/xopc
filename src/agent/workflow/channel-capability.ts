@@ -22,7 +22,7 @@ export type WorkflowProgressMode =
 
 export interface WorkflowProgressPostInput {
   /** Routing key for the run — channel uses it to resolve the destination chat. */
-  sessionKey: string;
+  conversationId: string;
   /** Pre-rendered progress text (already includes header / phases / logs). */
   text: string;
   /**
@@ -69,7 +69,7 @@ export interface ChannelProgressCapability {
    * Deliver one progress update.
    *
    * Capability is responsible for:
-   * - Resolving `sessionKey` → platform chat/thread id (channel-specific).
+   * - Resolving `conversationId` → platform chat/thread id (channel-specific).
    * - Encoding the text payload (markdown / plain / HTML, line breaks).
    * - Calling editMessageText vs sendMessage based on `previousMessageId`.
    * - Honouring platform rate limits (429 retry-after, etc.).

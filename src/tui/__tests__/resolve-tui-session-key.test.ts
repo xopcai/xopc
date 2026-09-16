@@ -4,83 +4,24 @@ import type { Config } from '../../config/schema.js';
 import {
   resolveDefaultTuiAgentId,
   resolveInitialTuiAgentId,
-  resolveTuiSessionKey,
-  resolveTuiStartupSessionKey,
+  resolveTuiConversationId,
+  resolveTuiStartupConversationId,
 } from '../../routing/resolve-tui-session-key.js';
 
-describe('resolveTuiSessionKey', () => {
-  it('uses global only as the default when scope is global', () => {
-    expect(
-      resolveTuiSessionKey({
-        raw: '',
-        sessionScope: 'global',
-        currentAgentId: 'main',
-        sessionMainKey: 'main',
-      }),
-    ).toBe('global');
-    expect(
-      resolveTuiSessionKey({
-        raw: 'test123',
-        sessionScope: 'global',
-        currentAgentId: 'main',
-        sessionMainKey: 'main',
-      }),
-    ).toBe('agent:main:test123');
+describe('resolveTuiConversationId', () => {
+  const base = {};
+  it('creates independent UUIDs and normalizes explicit UUIDs', () => {
+    const first = resolveTuiConversationId(base);
+    expect(first).toMatch(/^[0-9a-f-]{36}$/);
+    expect(resolveTuiConversationId(base)).not.toBe(first);
+    expect(resolveTuiConversationId({ ...base, raw: first.toUpperCase() })).toBe(first);
   });
-
-  it('keeps explicit agent-prefixed keys unchanged', () => {
-    expect(
-      resolveTuiSessionKey({
-        raw: 'agent:ops:incident',
-        sessionScope: 'global',
-        currentAgentId: 'main',
-        sessionMainKey: 'main',
-      }),
-    ).toBe('agent:ops:incident');
-  });
-
-  it('lowercases session keys with uppercase characters', () => {
-    expect(
-      resolveTuiSessionKey({
-        raw: 'agent:main:Test1',
-        sessionScope: 'global',
-        currentAgentId: 'main',
-        sessionMainKey: 'main',
-      }),
-    ).toBe('agent:main:test1');
-    expect(
-      resolveTuiSessionKey({
-        raw: 'Test1',
-        sessionScope: 'global',
-        currentAgentId: 'main',
-        sessionMainKey: 'main',
-      }),
-    ).toBe('agent:main:test1');
-  });
-
-  it('defaults to agent main bucket when scope is per-sender', () => {
-    expect(
-      resolveTuiSessionKey({
-        raw: '',
-        sessionScope: 'per-sender',
-        currentAgentId: 'ops',
-        sessionMainKey: 'main',
-      }),
-    ).toBe('agent:ops:main');
-  });
-
-  it('passes through global and unknown literals', () => {
-    const base = {
-      sessionScope: 'per-sender' as const,
-      currentAgentId: 'main',
-      sessionMainKey: 'main',
-    };
-    expect(resolveTuiSessionKey({ ...base, raw: 'global' })).toBe('global');
-    expect(resolveTuiSessionKey({ ...base, raw: 'unknown' })).toBe('unknown');
+  it.each(['global', 'unknown', 'main', 'agent:main:main'])('rejects old aliases: %s', (raw) => {
+    expect(() => resolveTuiConversationId({ ...base, raw })).toThrow();
   });
 });
 
-describe('resolveTuiStartupSessionKey', () => {
+describe('resolveTuiStartupConversationId', () => {
   const cfg = {
     agents: {
       default: 'main',
@@ -95,84 +36,82 @@ describe('resolveTuiStartupSessionKey', () => {
 
   it('defaults to a fresh TUI session when session option is omitted', () => {
     expect(
-      resolveTuiStartupSessionKey({
+      resolveTuiStartupConversationId({
         cfg,
         cwd: '/tmp/xopc',
-        createSessionKeySuffix: () => 'tui-test-id',
+        createId: () => 'eb04e730-5bda-41a4-8d12-acdeb5a7a4da',
       }),
     ).toEqual({
-      sessionKey: 'agent:main:tui-test-id',
-      agentId: 'main',
-      sessionScope: 'per-sender',
-      sessionMainKey: 'main',
-    });
-  });
-
-  it('can still resume the agent main session explicitly', () => {
-    expect(
-      resolveTuiStartupSessionKey({
-        cfg,
-        sessionOption: 'main',
-        cwd: '/tmp/xopc',
-      }),
-    ).toMatchObject({
-      sessionKey: 'agent:main:main',
+      conversationId: "eb04e730-5bda-41a4-8d12-acdeb5a7a4da",
       agentId: 'main',
     });
   });
 
-  it('resolves explicit tui sub-key under inferred agent', () => {
+  it('resumes an explicit conversation UUID', () => {
     expect(
-      resolveTuiStartupSessionKey({
+      resolveTuiStartupConversationId({
         cfg,
-        sessionOption: 'tui-abc',
+        sessionOption: '6d9217fe-77c7-411d-8cc9-92aabe81a2d0',
         cwd: '/tmp/xopc',
       }),
     ).toMatchObject({
-      sessionKey: 'agent:main:tui-abc',
+      conversationId: "6d9217fe-77c7-411d-8cc9-92aabe81a2d0",
+      agentId: 'main',
+    });
+  });
+
+  it('keeps an explicit UUID under the initially selected agent', () => {
+    expect(
+      resolveTuiStartupConversationId({
+        cfg,
+        sessionOption: '7d4675b4-115e-4da9-8d96-62dfbf8d7494',
+        cwd: '/tmp/xopc',
+      }),
+    ).toMatchObject({
+      conversationId: "7d4675b4-115e-4da9-8d96-62dfbf8d7494",
       agentId: 'main',
     });
   });
 
   it('uses tui.defaultAgent when cwd does not match an agent workspace', () => {
     expect(
-      resolveTuiStartupSessionKey({
+      resolveTuiStartupConversationId({
         cfg,
         cwd: '/var/tmp/unrelated',
-        createSessionKeySuffix: () => 'tui-test-id',
+        createId: () => 'eb04e730-5bda-41a4-8d12-acdeb5a7a4da',
       }),
     ).toMatchObject({
-      sessionKey: 'agent:coder:tui-test-id',
+      conversationId: "eb04e730-5bda-41a4-8d12-acdeb5a7a4da",
       agentId: 'coder',
     });
   });
 
   it('uses agents.default when tui.defaultAgent is not configured', () => {
     expect(
-      resolveTuiStartupSessionKey({
+      resolveTuiStartupConversationId({
         cfg: {
           ...cfg,
           tui: {},
         },
         cwd: '/var/tmp/unrelated',
-        createSessionKeySuffix: () => 'tui-test-id',
+        createId: () => 'eb04e730-5bda-41a4-8d12-acdeb5a7a4da',
       }),
     ).toMatchObject({
-      sessionKey: 'agent:main:tui-test-id',
+      conversationId: "eb04e730-5bda-41a4-8d12-acdeb5a7a4da",
       agentId: 'main',
     });
   });
 
   it('lets --agent override cwd inference for fresh sessions', () => {
     expect(
-      resolveTuiStartupSessionKey({
+      resolveTuiStartupConversationId({
         cfg,
         agentOption: 'coder',
         cwd: '/tmp/xopc',
-        createSessionKeySuffix: () => 'tui-test-id',
+        createId: () => 'eb04e730-5bda-41a4-8d12-acdeb5a7a4da',
       }),
     ).toMatchObject({
-      sessionKey: 'agent:coder:tui-test-id',
+      conversationId: "eb04e730-5bda-41a4-8d12-acdeb5a7a4da",
       agentId: 'coder',
     });
   });
@@ -207,22 +146,20 @@ describe('resolveInitialTuiAgentId', () => {
       resolveInitialTuiAgentId({
         cfg,
         fallbackAgentId: 'main',
-        initialSessionInput: '',
         cwd: '/tmp/xopc/projects/ops/src',
       }),
     ).toBe('ops');
   });
 
-  it('keeps explicit agent prefix from --session', () => {
+  it('uses explicit agent selection independently of the UUID', () => {
     expect(
       resolveInitialTuiAgentId({
         cfg,
         fallbackAgentId: 'main',
         explicitAgentId: 'ops',
-        initialSessionInput: 'agent:main:incident',
         cwd: '/tmp/xopc/projects/ops/src',
       }),
-    ).toBe('main');
+    ).toBe('ops');
   });
 
   it('falls back when cwd has no matching workspace', () => {
@@ -230,7 +167,6 @@ describe('resolveInitialTuiAgentId', () => {
       resolveInitialTuiAgentId({
         cfg,
         fallbackAgentId: 'main',
-        initialSessionInput: '',
         cwd: '/var/tmp/unrelated',
       }),
     ).toBe('main');

@@ -1,5 +1,5 @@
 export function desktopPetWindowTarget(
-  activity?: { sessionKey: string },
+  activity?: { conversationId: string },
 ): string | undefined {
-  return activity ? `/chat/${activity.sessionKey}` : undefined;
+  return activity ? `/chat/${activity.conversationId}` : undefined;
 }

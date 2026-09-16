@@ -38,10 +38,10 @@ export async function startSupportInvestigationSession(
     method: 'POST',
     body: JSON.stringify({ channel: 'webchat', agentId: 'main' }),
   });
-  const sessionKey = created.session.key.trim();
-  if (!sessionKey) throw new Error('Session create did not return a session key');
+  const conversationId = created.session.key.trim();
+  if (!conversationId) throw new Error('Session create did not return a session key');
 
-  await request(apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}`), {
+  await request(apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}`), {
     method: 'PATCH',
     body: JSON.stringify({
       name: report.title,
@@ -56,7 +56,7 @@ export async function startSupportInvestigationSession(
   }).catch(() => undefined);
 
   const origin = await getTurnClaim();
-  await request(apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/inputs`), {
+  await request(apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}/inputs`), {
     method: 'POST',
     body: JSON.stringify({
       clientMessageId: randomUUID(),
@@ -66,5 +66,5 @@ export async function startSupportInvestigationSession(
       origin,
     }),
   });
-  return sessionKey;
+  return conversationId;
 }

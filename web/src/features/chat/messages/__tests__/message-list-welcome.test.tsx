@@ -38,8 +38,8 @@ describe('MessageList welcome state', () => {
   });
 
   it('hides project selection when a project is selected before welcome context loads', async () => {
-    const previousToken = useGatewayStore.getState().sessionKey;
-    useGatewayStore.setState({ sessionKey: 'test' });
+    const previousToken = useGatewayStore.getState().conversationId;
+    useGatewayStore.setState({ conversationId: 'test' });
     const welcomeSpotlight = buildWelcomeSpotlight({ kind: 'empty' }, messages('zh').chat.welcomeSpotlight, { id: 'main' });
     const render = async (projectId?: string) => act(async () => {
       root.render(
@@ -67,7 +67,7 @@ describe('MessageList welcome state', () => {
       await render();
       expect(container.textContent).toContain(messages('en').onboarding.workDiscovery.selectProject);
     } finally {
-      await act(async () => useGatewayStore.setState({ sessionKey: previousToken }));
+      await act(async () => useGatewayStore.setState({ conversationId: previousToken }));
     }
   });
 

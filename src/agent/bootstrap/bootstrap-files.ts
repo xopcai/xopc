@@ -28,35 +28,35 @@ function filterHeartbeatBootstrapFile(
 
 export function resolveBootstrapFilesSync(params: {
   profileDir: string;
-  sessionKey?: string;
+  conversationId?: string;
   excludeHeartbeat?: boolean;
 }): WorkspaceBootstrapFile[] {
   const rawFiles = loadProfileBootstrapFiles(params.profileDir);
-  const filtered = filterBootstrapFilesForSession(rawFiles, params.sessionKey);
+  const filtered = filterBootstrapFilesForSession(rawFiles, params.conversationId);
   return filterHeartbeatBootstrapFile(filtered, params.excludeHeartbeat ?? false);
 }
 
 export async function resolveBootstrapFilesForRun(params: {
   profileDir: string;
-  sessionKey?: string;
+  conversationId?: string;
   excludeHeartbeat?: boolean;
   warn?: (message: string) => void;
 }): Promise<WorkspaceBootstrapFile[]> {
-  const sessionKey = params.sessionKey;
-  const rawFiles = sessionKey
+  const conversationId = params.conversationId;
+  const rawFiles = conversationId
     ? await getOrLoadBootstrapFiles({
         profileDir: params.profileDir,
-        sessionKey,
+        conversationId,
       })
     : loadProfileBootstrapFiles(params.profileDir);
-  const filtered = filterBootstrapFilesForSession(rawFiles, sessionKey);
+  const filtered = filterBootstrapFilesForSession(rawFiles, conversationId);
   return filterHeartbeatBootstrapFile(filtered, params.excludeHeartbeat ?? false);
 }
 
 export function resolveBootstrapContextSync(params: {
   profileDir: string;
   config?: Config;
-  sessionKey?: string;
+  conversationId?: string;
   excludeHeartbeat?: boolean;
   contextInjection?: 'always' | 'continuation-skip' | 'never';
 }): {
@@ -69,8 +69,8 @@ export function resolveBootstrapContextSync(params: {
   }
   if (
     mode === 'continuation-skip' &&
-    params.sessionKey &&
-    wasBootstrapContextInjected(params.sessionKey)
+    params.conversationId &&
+    wasBootstrapContextInjected(params.conversationId)
   ) {
     return { bootstrapFiles: [], contextFiles: [] };
   }
@@ -79,8 +79,8 @@ export function resolveBootstrapContextSync(params: {
     maxChars: resolveBootstrapMaxChars(params.config),
     totalMaxChars: resolveBootstrapTotalMaxChars(params.config),
   });
-  if (mode === 'continuation-skip' && params.sessionKey && contextFiles.length > 0) {
-    markBootstrapContextInjected(params.sessionKey);
+  if (mode === 'continuation-skip' && params.conversationId && contextFiles.length > 0) {
+    markBootstrapContextInjected(params.conversationId);
   }
   return { bootstrapFiles, contextFiles };
 }
@@ -88,7 +88,7 @@ export function resolveBootstrapContextSync(params: {
 export async function resolveBootstrapContextForRun(params: {
   profileDir: string;
   config?: Config;
-  sessionKey?: string;
+  conversationId?: string;
   excludeHeartbeat?: boolean;
   contextInjection?: 'always' | 'continuation-skip' | 'never';
   warn?: (message: string) => void;
@@ -102,8 +102,8 @@ export async function resolveBootstrapContextForRun(params: {
   }
   if (
     mode === 'continuation-skip' &&
-    params.sessionKey &&
-    wasBootstrapContextInjected(params.sessionKey)
+    params.conversationId &&
+    wasBootstrapContextInjected(params.conversationId)
   ) {
     return { bootstrapFiles: [], contextFiles: [] };
   }
@@ -113,8 +113,8 @@ export async function resolveBootstrapContextForRun(params: {
     totalMaxChars: resolveBootstrapTotalMaxChars(params.config),
     warn: params.warn,
   });
-  if (mode === 'continuation-skip' && params.sessionKey && contextFiles.length > 0) {
-    markBootstrapContextInjected(params.sessionKey);
+  if (mode === 'continuation-skip' && params.conversationId && contextFiles.length > 0) {
+    markBootstrapContextInjected(params.conversationId);
   }
   return { bootstrapFiles, contextFiles };
 }

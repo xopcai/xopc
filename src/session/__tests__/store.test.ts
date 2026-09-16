@@ -63,6 +63,7 @@ describe('SessionStore', () => {
           default: 'main',
           defaults: { models: { chat: { primary: 'test/test-model', fallbacks: [] }, intents: {} } },
           list: [
+            { id: 'coder', workspace: join(tempDir, 'coder') },
             {
               id: 'main',
               profile: { name: 'Main' },
@@ -87,10 +88,10 @@ describe('SessionStore', () => {
   });
 
   it('rejects late native voice writes after a session reset or deletion', async () => {
-    const key = 'agent:main:webchat:default:direct:voice';
-    await store.saveMessages(key, []);
-    const expectedSessionId = (await store.getMetadata(key))!.sessionId;
-    const entry = { customType: 'voice_omni_transcript', content: 'Hello', expectedSessionId };
+    const key = "bf90ce93-d857-48d5-8993-ac0938772d32";
+    await store.saveMessages(key, [], { metadata: { agentId: "main" } });
+    const expectedTranscriptId = (await store.getMetadata(key))!.transcriptId;
+    const entry = { customType: 'voice_omni_transcript', content: 'Hello', expectedTranscriptId };
     await store.appendTranscriptCustomMessageEntry(key, entry);
     await store.reset(key);
     await expect(store.appendTranscriptCustomMessageEntry(key, entry)).rejects.toThrow('session changed');
@@ -106,10 +107,10 @@ describe('SessionStore', () => {
         { role: 'assistant', content: 'Hi there' },
       ];
 
-      await store.saveMessages('agent:main:telegram:default:direct:123456', messages, {
+      await store.saveMessages("54d65c33-c4f8-4326-855d-00c3540fcc3d", messages, {
         metadata: directMetadata('main', 'telegram', '123456'),
       });
-      const metadata = await store.getMetadata('agent:main:telegram:default:direct:123456');
+      const metadata = await store.getMetadata("54d65c33-c4f8-4326-855d-00c3540fcc3d");
 
       expect(metadata?.routing).toEqual({
         agentId: 'main',
@@ -123,33 +124,26 @@ describe('SessionStore', () => {
     it('does not infer routing from session key', async () => {
       const messages: any[] = [{ role: 'user', content: 'Thread message' }];
 
-      await store.saveMessages('agent:main:discord:channel:987654:thread:789', messages);
-      const metadata = await store.getMetadata('agent:main:discord:channel:987654:thread:789');
+      await store.saveMessages("6b4d87b5-4b3c-410f-847a-b168d3ed6774", messages, { metadata: { agentId: "main" } });
+      const metadata = await store.getMetadata("6b4d87b5-4b3c-410f-847a-b168d3ed6774");
 
       expect(metadata?.routing).toBeUndefined();
       expect(metadata?.sourceChannel).toBe('');
       expect(metadata?.sourceChatId).toBe('');
     });
 
-    it('keeps empty metadata for arbitrary keys without fallback parsing', async () => {
-      const messages: any[] = [{ role: 'user', content: 'Test' }];
-
-      await store.saveMessages('invalid-key', messages);
-      const metadata = await store.getMetadata('invalid-key');
-
-      expect(metadata?.routing).toBeUndefined();
-      expect(metadata?.sourceChannel).toBe('');
-      expect(metadata?.sourceChatId).toBe('');
+    it('rejects non-UUID conversation identifiers', async () => {
+      await expect(store.saveMessages('invalid-key', [{ role: 'user', content: 'Test' }], { metadata: { agentId: 'main' } })).rejects.toThrow();
     });
   });
 
   describe('message persistence (SQLite)', () => {
     it('removes a failed assistant row and resumes the persisted user row for model fallback', async () => {
-      const key = 'agent:main:webchat:default:direct:model-fallback';
+      const key = "d6ac9492-a795-4128-899a-9dc8224e0143";
       await store.saveMessages(key, [
         { role: 'user', content: 'previous question', timestamp: 1 },
         { role: 'assistant', content: 'previous answer', timestamp: 2 },
-      ] as any[]);
+      ] as any[], { metadata: { agentId: "main" } });
       const rowsBeforeAttempt = await store.loadTranscriptRows(key);
       await store.appendTranscriptMessage(key, { role: 'user', content: 'ppp', timestamp: 3 });
       await store.appendTranscriptMessage(key, {
@@ -173,35 +167,35 @@ describe('SessionStore', () => {
     });
 
     it('includes active transcript cwd in listed metadata', async () => {
-      const key = 'agent:main:webchat:default:direct:cwd-list';
-      await store.saveMessages(key, [{ role: 'user', content: 'hello', timestamp: Date.now() }]);
+      const key = "fd9623c6-35c5-4ae6-8441-ebb7cbf0d091";
+      await store.saveMessages(key, [{ role: 'user', content: 'hello', timestamp: Date.now() }], { metadata: { agentId: "main" } });
 
-      const result = await store.list({ search: 'cwd-list' });
+      const result = await store.list();
 
       expect(result.items[0]?.cwd).toBe(join(tempDir, 'main'));
     });
 
     it('should reset in place with archived transcript and new session id', async () => {
-      const key = 'agent:main:webchat:default:direct:reset-test';
-      await store.saveMessages(key, [{ role: 'user', content: 'hello', timestamp: Date.now() }]);
+      const key = "90e3009c-8012-49ad-8383-451eba94fab1";
+      await store.saveMessages(key, [{ role: 'user', content: 'hello', timestamp: Date.now() }], { metadata: { agentId: "main" } });
       const before = await store.getMetadata(key);
       const task = await store.reset(key);
-      expect(task?.previousSessionId).toBe(before?.sessionId);
-      expect(task?.sessionId).not.toBe(before?.sessionId);
+      expect(task?.previousTranscriptId).toBe(before?.transcriptId);
+      expect(task?.transcriptId).not.toBe(before?.transcriptId);
       const after = await store.getMetadata(key);
       expect(after?.key).toBe(key);
-      expect(after?.sessionId).toBe(task?.sessionId);
+      expect(after?.transcriptId).toBe(task?.transcriptId);
       expect(await store.loadMessages(key)).toHaveLength(0);
     });
 
     it('should save and load messages', async () => {
-      const key = 'agent:main:telegram:default:direct:123456';
+      const key = "54d65c33-c4f8-4326-855d-00c3540fcc3d";
       const messages: any[] = [
         { role: 'user', content: 'Hello', timestamp: Date.now() },
         { role: 'assistant', content: 'Hi there!', timestamp: Date.now() },
       ];
 
-      await store.saveMessages(key, messages);
+      await store.saveMessages(key, messages, { metadata: { agentId: "main" } });
       const loaded = await store.loadMessages(key);
 
       expect(loaded).toHaveLength(2);
@@ -210,7 +204,7 @@ describe('SessionStore', () => {
     });
 
     it('should preserve cache token usage on assistant transcript rows', async () => {
-      const key = 'agent:main:webchat:default:direct:usage-cache';
+      const key = "c81adf4c-bacc-4308-8a8f-1ee23364f738";
       await store.saveMessages(key, [
         {
           role: 'assistant',
@@ -223,7 +217,7 @@ describe('SessionStore', () => {
             total: 20,
           },
         },
-      ] as any[]);
+      ] as any[], { metadata: { agentId: "main" } });
 
       const rows = await store.loadTranscriptRows(key);
 
@@ -237,7 +231,7 @@ describe('SessionStore', () => {
     });
 
     it('does not derive or persist synthetic coding context', async () => {
-      const key = 'agent:main:webchat:default:direct:coding-context-display';
+      const key = "f3a98a16-132a-445f-839f-7269a1a6bd96";
       const messages: any[] = [
         { role: 'user', content: 'inspect repo', timestamp: Date.now() },
         {
@@ -261,7 +255,7 @@ describe('SessionStore', () => {
         },
       ];
 
-      await store.saveMessages(key, messages);
+      await store.saveMessages(key, messages, { metadata: { agentId: "main" } });
 
       const llmMessages = await store.loadMessages(key);
       const detail = await store.get(key);
@@ -279,14 +273,14 @@ describe('SessionStore', () => {
     });
 
     it('should page messages from the newest tail while preserving chronological order', async () => {
-      const key = 'agent:main:webchat:default:direct:history-page';
+      const key = "db8c8719-31b2-49aa-82c1-a218c9b2abd1";
       const messages: any[] = Array.from({ length: 5 }, (_, index) => ({
         role: index % 2 === 0 ? 'user' : 'assistant',
         content: `message-${index}`,
         timestamp: Date.now() + index,
       }));
 
-      await store.saveMessages(key, messages);
+      await store.saveMessages(key, messages, { metadata: { agentId: "main" } });
       const firstPage = await store.getMessagePage(key, { offset: 0, limit: 2 });
       const secondPage = await store.getMessagePage(key, { offset: 2, limit: 2 });
       const finalPage = await store.getMessagePage(key, { offset: 4, limit: 2 });
@@ -340,10 +334,10 @@ describe('SessionStore', () => {
     });
 
     it('should list sessions with channel filter', async () => {
-      await store.saveMessages('agent:main:telegram:default:direct:1', [{ role: 'user', content: '1' }], {
+      await store.saveMessages("59f80d11-e306-490c-87ab-85331abb7a03", [{ role: 'user', content: '1' }], {
         metadata: directMetadata('main', 'telegram', '1'),
       });
-      await store.saveMessages('agent:main:discord:default:direct:2', [{ role: 'user', content: '2' }], {
+      await store.saveMessages("af34adee-cf8a-4e10-86c0-454ff411e61e", [{ role: 'user', content: '2' }], {
         metadata: directMetadata('main', 'discord', '2'),
       });
 
@@ -353,15 +347,15 @@ describe('SessionStore', () => {
     });
 
     it('does not list by channel when explicit sourceChannel is absent', async () => {
-      const key = 'agent:main:webchat:default:direct:meta-gap';
-      await store.saveMessages(key, [{ role: 'user', content: 'x', timestamp: Date.now() }]);
+      const key = "08ff09ee-fb33-4ff2-87c1-e48af00f0b22";
+      await store.saveMessages(key, [{ role: 'user', content: 'x', timestamp: Date.now() }], { metadata: { agentId: "main" } });
 
       const listed = await store.list({ channel: 'webchat,gateway' });
       expect(listed.items.some((s) => s.key === key)).toBe(false);
     });
 
     it('lists webchat sessions from other agents in the shared database', async () => {
-      const key = 'agent:coder:webchat:default:direct:standalone';
+      const key = "771292a2-3f40-4588-8bbe-2e9887cd9d11";
       await store.saveMessages(key, [{ role: 'user', content: 'x', timestamp: Date.now() }], {
         metadata: directMetadata('coder', 'webchat', 'standalone'),
       });
@@ -374,7 +368,7 @@ describe('SessionStore', () => {
       const before = await store.list({ channel: 'webchat' });
       expect(before.items).toHaveLength(0);
 
-      const key = 'agent:main:webchat:default:direct:cache-write';
+      const key = "b115d534-07be-41ed-8c1d-8ba8ccdacd28";
       await store.saveMessages(key, [{ role: 'user', content: 'x', timestamp: Date.now() }], {
         metadata: directMetadata('main', 'webchat', 'cache-write'),
       });
@@ -384,34 +378,34 @@ describe('SessionStore', () => {
     });
 
     it('should list sessions with status filter', async () => {
-      await store.saveMessages('agent:main:telegram:default:direct:1', [{ role: 'user', content: '1' }]);
-      await store.saveMessages('agent:main:telegram:default:direct:2', [{ role: 'user', content: '2' }]);
+      await store.saveMessages("59f80d11-e306-490c-87ab-85331abb7a03", [{ role: 'user', content: '1' }], { metadata: { agentId: "main" } });
+      await store.saveMessages("c5e4d2ab-ee5b-4cdf-8f80-5491b9c42080", [{ role: 'user', content: '2' }], { metadata: { agentId: "main" } });
 
-      await store.archive('agent:main:telegram:default:direct:1');
+      await store.archive("59f80d11-e306-490c-87ab-85331abb7a03");
 
       const activeSessions = await store.list({ status: 'active' });
       expect(activeSessions.items).toHaveLength(1);
-      expect(activeSessions.items[0].key).toBe('agent:main:telegram:default:direct:2');
+      expect(activeSessions.items[0].key).toBe("c5e4d2ab-ee5b-4cdf-8f80-5491b9c42080");
     });
 
     it('should list sessions by message content search', async () => {
-      const targetKey = 'agent:main:webchat:default:direct:content-search';
+      const targetKey = "bdcfec8d-3082-44bb-822f-32af29ee17b1";
       await store.saveMessages(targetKey, [
         { role: 'user', content: 'please remember alpha-session-keyword', timestamp: Date.now() },
-      ]);
-      await store.saveMessages('agent:main:webchat:default:direct:content-miss', [
+      ], { metadata: { agentId: "main" } });
+      await store.saveMessages("68e9b273-18e6-4779-861f-ccc6f67ab5a3", [
         { role: 'user', content: 'unrelated message', timestamp: Date.now() + 1 },
-      ]);
+      ], { metadata: { agentId: "main" } });
 
       const result = await store.list({ search: 'alpha-session-keyword' });
       expect(result.items.map((session) => session.key)).toEqual([targetKey]);
     });
 
     it('matches any meaningful term in a multi-keyword session search', async () => {
-      const targetKey = 'agent:main:webchat:default:direct:multi-keyword-search';
+      const targetKey = "79730afb-3268-4494-80ce-857cd7a5aaf8";
       await store.saveMessages(targetKey, [
         { role: 'user', content: '继续处理 xopc-platform 的部署工作', timestamp: Date.now() },
-      ]);
+      ], { metadata: { agentId: "main" } });
 
       const result = await store.list({ search: 'xopc-platform 工作 用户' });
 
@@ -421,8 +415,8 @@ describe('SessionStore', () => {
 
   describe('transcript document (synthetic)', () => {
     it('persists stable session id across saves', async () => {
-      const key = 'agent:main:telegram:default:direct:envtest';
-      await store.saveMessages(key, [{ role: 'user', content: 'a' }]);
+      const key = "e23c0c53-db93-4c5b-8567-651443f4b6c6";
+      await store.saveMessages(key, [{ role: 'user', content: 'a' }], { metadata: { agentId: "main" } });
       const doc1 = await store.loadTranscriptDocument(key);
       expect(doc1).not.toBeNull();
       expect(doc1?.type).toBe('xopc_session_transcript');
@@ -432,7 +426,7 @@ describe('SessionStore', () => {
       await store.saveMessages(key, [
         { role: 'user', content: 'a' },
         { role: 'assistant', content: 'b' },
-      ]);
+      ], { metadata: { agentId: "main" } });
       const doc2 = await store.loadTranscriptDocument(key);
       expect(doc2?.id).toBe(id1);
       const loaded = await store.loadMessages(key);
@@ -440,8 +434,8 @@ describe('SessionStore', () => {
     });
 
     it('includes transcriptSummary on get when requested', async () => {
-      const key = 'agent:main:telegram:default:direct:sumtest';
-      await store.saveMessages(key, [{ role: 'user', content: 'z' }]);
+      const key = "8b656f05-7479-43e8-88d7-4b90cd5ca92b";
+      await store.saveMessages(key, [{ role: 'user', content: 'z' }], { metadata: { agentId: "main" } });
       const detail = await store.get(key, { includeTranscriptSummary: true });
       expect(detail?.transcriptSummary?.id).toBeDefined();
       expect(detail?.transcriptSummary?.compactionCount).toBe(0);
@@ -449,14 +443,35 @@ describe('SessionStore', () => {
       expect(bare?.transcriptSummary).toBeUndefined();
     });
 
+    it('persists model-visible refresh once with a full-history boundary and retains raw records', async () => {
+      const key = '287932da-0911-4cac-b186-c1a784a4e6e1';
+      const raw = [{ role: 'user' as const, content: 'Original request', timestamp: 1 }];
+      await store.saveMessages(key, raw, { metadata: { agentId: 'main' } });
+      const refreshModule = await import('../../agent/reply/post-compaction-context.js');
+      const refresh = vi.spyOn(refreshModule, 'readPostCompactionContext').mockReturnValue('[Post-compaction context refresh] Follow the rules.');
+      try {
+        const result = compactionResult(raw, 'Summary', 1, 100, 10);
+        await store.applyCompaction(key, result);
+        const loaded = await store.loadMessages(key);
+        expect(loaded).toHaveLength(2);
+        expect(loaded[1]?.content).toContain('Follow the rules.');
+        expect(await store.loadMessages(key)).toEqual(loaded);
+        const rows = await store.loadTranscriptRows(key);
+        expect(rows).toContainEqual(expect.objectContaining({ role: 'user', content: 'Original request' }));
+        expect(rows.filter((row) => (row as any).type === 'compaction')).toHaveLength(1);
+      } finally {
+        refresh.mockRestore();
+      }
+    });
+
     it('appends compaction record when applyCompaction runs', async () => {
-      const key = 'agent:main:telegram:default:direct:comptest';
+      const key = "0970cb0f-77c9-4e7f-8dd9-25aa0ad6506c";
       const msgs = Array.from({ length: 12 }, (_, i) => ({
         role: 'user' as const,
         content: `line-${i}`,
         timestamp: Date.now() + i,
       }));
-      await store.saveMessages(key, msgs);
+      await store.saveMessages(key, msgs, { metadata: { agentId: "main" } });
       const result = compactionResult(msgs, 'condensed topic', 8, 9000, 1200);
       await store.applyCompaction(key, result);
       const doc = await store.loadTranscriptDocument(key);
@@ -478,12 +493,12 @@ describe('SessionStore', () => {
     });
 
     it('emits unified before and after hooks around a successful compaction', async () => {
-      const key = 'agent:main:telegram:default:direct:hooktest';
+      const key = "a6ad999c-cf3b-4ed3-81da-4c9d390d0462";
       const messages = Array.from({ length: 12 }, (_, index) => ({
         role: 'user' as const,
         content: `line-${index}`,
       }));
-      await store.saveMessages(key, messages);
+      await store.saveMessages(key, messages, { metadata: { agentId: "main" } });
       const before = vi.fn();
       const after = vi.fn();
       store.setCompactionHooks({ before, after });
@@ -494,11 +509,11 @@ describe('SessionStore', () => {
       await store.compact(key, messages, { provider: 'test', id: 'model' } as any);
 
       expect(before).toHaveBeenCalledWith(expect.objectContaining({
-        sessionKey: key,
+        conversationId: key,
         messageCount: 12,
       }));
       expect(after).toHaveBeenCalledWith({
-        sessionKey: key,
+        conversationId: key,
         messageCount: 5,
         tokenCount: 1_200,
         compactedCount: 8,
@@ -508,9 +523,9 @@ describe('SessionStore', () => {
     it('loads the configured cap and refreshes it for subsequent compactions', async () => {
       const config = ConfigSchema.parse({ userContext: { contextPlanning: { compaction: { summaryMaxTokens: 2_000 } } } });
       const configuredStore = new SessionStore({ config });
-      const key = 'agent:main:webchat:default:direct:configured-compaction';
+      const key = "7f161174-997c-4091-8a2c-43e23391c09f";
       const messages = Array.from({ length: 12 }, (_, index) => ({ role: 'user' as const, content: `item-${index}` }));
-      await configuredStore.saveMessages(key, messages);
+      await configuredStore.saveMessages(key, messages, { metadata: { agentId: "main" } });
       const completion = vi.spyOn(modelCalls, 'completeWithResolvedCredentials').mockResolvedValue({
         content: [], stopReason: 'length',
       } as never);
@@ -529,12 +544,12 @@ describe('SessionStore', () => {
     });
 
     it('preserves SQLite history and boundaries when every summary is truncated', async () => {
-      const key = 'agent:main:webchat:default:direct:truncated-summary';
+      const key = "62dc9c71-fb74-460e-853e-01d5ba8d75d8";
       const messages = Array.from({ length: 12 }, (_, index) => ({
         role: index % 2 === 0 ? 'user' as const : 'assistant' as const,
         content: `line-${index}`,
       }));
-      await store.saveMessages(key, messages);
+      await store.saveMessages(key, messages, { metadata: { agentId: "main" } });
       const before = await store.loadTranscriptRows(key);
       const afterHook = vi.fn();
       store.setCompactionHooks({ after: afterHook });
@@ -555,13 +570,13 @@ describe('SessionStore', () => {
     });
 
     it('preserves the authoritative transcript while loading compacted LLM context', async () => {
-      const key = 'agent:main:telegram:default:direct:cpapi';
+      const key = "6a9005f4-dd13-4ac1-8483-92cc0e452bf9";
       const msgs = Array.from({ length: 12 }, (_, i) => ({
         role: 'user' as const,
         content: `m-${i}`,
         timestamp: Date.now() + i,
       }));
-      await store.saveMessages(key, msgs);
+      await store.saveMessages(key, msgs, { metadata: { agentId: "main" } });
       const result = compactionResult(msgs, 's', 8, 8000, 500);
       await store.applyCompaction(key, result);
 
@@ -580,7 +595,7 @@ describe('SessionStore', () => {
     });
 
     it('deletes a raw user turn and invalidates later compaction boundaries', async () => {
-      const key = 'agent:main:webchat:default:direct:delete-compacted-round';
+      const key = "77338d46-062d-4ce7-83b2-adbaa9c42e7f";
       const messages: any[] = [
         { role: 'user', content: 'u0' },
         { role: 'assistant', content: 'a0' },
@@ -594,7 +609,7 @@ describe('SessionStore', () => {
         { role: 'user', content: 'u2' },
         { role: 'assistant', content: 'a2' },
       ];
-      await store.saveMessages(key, messages);
+      await store.saveMessages(key, messages, { metadata: { agentId: "main" } });
       await store.applyCompaction(
         key,
         compactionResult(messages, 'includes deleted turn', 6, 8000, 500),
@@ -612,17 +627,17 @@ describe('SessionStore', () => {
     });
 
     it('rejects runtime-only messages at the persistence boundary', async () => {
-      const key = 'agent:main:webchat:default:direct:reject-runtime-only';
+      const key = "5469260f-3b2e-41a0-81a1-9ad26877a9a1";
       await expect(store.saveMessages(key, [
         { role: 'user', content: '<coding_context>derived</coding_context>', droppable: true },
-      ] as any[])).rejects.toThrow('Runtime-only messages cannot be persisted');
+      ] as any[], { metadata: { agentId: "main" } })).rejects.toThrow('Runtime-only messages cannot be persisted');
     });
   });
 
   describe('transcript context rows', () => {
     it('appendTranscriptContextEntry keeps row on disk but loadMessages returns LLM only', async () => {
-      const key = 'agent:main:webchat:default:direct:ctxrow1';
-      await store.saveMessages(key, [{ role: 'user', content: 'hi' }]);
+      const key = "c2ffb633-6249-4b3b-86e9-a5e4047b068d";
+      await store.saveMessages(key, [{ role: 'user', content: 'hi' }], { metadata: { agentId: "main" } });
       await store.appendTranscriptContextEntry(key, { text: 'audit', id: 'e1' });
       const llm = await store.loadMessages(key);
       expect(llm).toHaveLength(1);
@@ -633,8 +648,8 @@ describe('SessionStore', () => {
     });
 
     it('appendTranscriptLabelEntry keeps row on disk but loadMessages returns LLM only', async () => {
-      const key = 'agent:main:webchat:default:direct:labelrow1';
-      await store.saveMessages(key, [{ id: 'u1', role: 'user', content: 'hi' }]);
+      const key = "b2b0ef92-a0c3-4c54-8089-3b8e6290fdb7";
+      await store.saveMessages(key, [{ id: 'u1', role: 'user', content: 'hi' }], { metadata: { agentId: "main" } });
       await store.appendTranscriptLabelEntry(key, { targetId: 'u1', label: 'important' });
       const llm = await store.loadMessages(key);
       expect(llm).toHaveLength(1);
@@ -644,8 +659,8 @@ describe('SessionStore', () => {
     });
 
     it('appendTranscriptCustomEntry keeps extension state on disk but loadMessages returns LLM only', async () => {
-      const key = 'agent:main:webchat:default:direct:customrow1';
-      await store.saveMessages(key, [{ role: 'user', content: 'hi' }]);
+      const key = "f54879a6-a703-42ce-8ecd-9ae14ca49d4d";
+      await store.saveMessages(key, [{ role: 'user', content: 'hi' }], { metadata: { agentId: "main" } });
       await store.appendTranscriptCustomEntry(key, { customType: 'preset-state', data: { name: 'fast' } });
       const llm = await store.loadMessages(key);
       expect(llm).toHaveLength(1);
@@ -659,8 +674,8 @@ describe('SessionStore', () => {
     });
 
     it('appendTranscriptCustomMessageEntry keeps visible custom message on disk and injects LLM context', async () => {
-      const key = 'agent:main:webchat:default:direct:custommsg1';
-      await store.saveMessages(key, [{ role: 'user', content: 'hi' }]);
+      const key = "77e17f84-d2d9-4efd-8e50-3d6cca82f024";
+      await store.saveMessages(key, [{ role: 'user', content: 'hi' }], { metadata: { agentId: "main" } });
       await store.appendTranscriptCustomMessageEntry(key, {
         customType: 'status-update',
         content: 'ready',
@@ -683,8 +698,8 @@ describe('SessionStore', () => {
     });
 
     it('json exportSession includes transcriptRows', async () => {
-      const key = 'agent:main:webchat:default:direct:exportctx';
-      await store.saveMessages(key, [{ role: 'user', content: 'hi' }]);
+      const key = "ef6b5993-cdb5-4397-8985-c5c873f1490f";
+      await store.saveMessages(key, [{ role: 'user', content: 'hi' }], { metadata: { agentId: "main" } });
       await store.appendTranscriptContextEntry(key, { text: 'export_note', id: 'n1' });
       const json = await store.exportSession(key, 'json');
       const parsed = JSON.parse(json) as { transcriptRows?: unknown[]; messages?: unknown[] };
@@ -693,16 +708,16 @@ describe('SessionStore', () => {
     });
 
     it('importSessionExport restores transcript rows into a new session', async () => {
-      const source = 'agent:main:webchat:default:direct:import-source';
-      const target = 'agent:main:webchat:default:direct:import-target';
-      await store.saveMessages(source, [{ role: 'user', content: 'hi' }]);
+      const source = "a8b281c3-29fb-44bf-8fdf-7aa94e02380e";
+      const target = "8796506e-37be-458e-8a44-303f0c414f15";
+      await store.saveMessages(source, [{ role: 'user', content: 'hi' }], { metadata: { agentId: "main" } });
       await store.appendTranscriptContextEntry(source, { text: 'import_note', id: 'i1' });
       patchSessionMetadata(source, { name: 'Import Source', tags: ['demo'] });
 
       const json = await store.exportSession(source, 'json');
       const result = await store.importSessionExport(target, json);
 
-      expect(result).toEqual({ sessionKey: target, rowCount: 2 });
+      expect(result).toEqual({ conversationId: target, rowCount: 2 });
       expect(await store.loadMessages(target)).toHaveLength(1);
       const rows = await store.loadTranscriptRows(target);
       expect(rows).toHaveLength(2);
@@ -710,20 +725,20 @@ describe('SessionStore', () => {
       expect(targetMeta?.name).toBe('Import of Import Source');
       expect(targetMeta?.tags).toContain('demo');
       expect(targetMeta?.tags).toContain('import');
-      expect(targetMeta?.customData?.importedFromSessionKey).toBe(source);
+      expect(targetMeta?.customData?.importedFromConversationId).toBe(source);
       expect(targetMeta?.customData?.importedAt).toEqual(expect.any(String));
     });
 
     it('forkSession clones transcript rows into a new session', async () => {
-      const source = 'agent:main:webchat:default:direct:fork-source';
-      const target = 'agent:main:webchat:default:direct:fork-target';
-      await store.saveMessages(source, [{ role: 'user', content: 'hi' }]);
+      const source = "66a6c7ce-15a4-4fd7-85c1-37ab14bcbf21";
+      const target = "19a4c09e-fac1-4f18-8ac4-67bfaaa896d9";
+      await store.saveMessages(source, [{ role: 'user', content: 'hi' }], { metadata: { agentId: "main" } });
       await store.appendTranscriptContextEntry(source, { text: 'fork_note', id: 'f1' });
       patchSessionMetadata(source, { name: 'Source Session', tags: ['demo'] });
 
       const result = await store.forkSession(source, target);
 
-      expect(result).toEqual({ sessionKey: target, rowCount: 2 });
+      expect(result).toEqual({ conversationId: target, rowCount: 2 });
       expect(await store.loadMessages(target)).toHaveLength(1);
       const targetDoc = await store.loadTranscriptDocument(target);
       expect(targetDoc?.messages).toHaveLength(2);
@@ -731,34 +746,34 @@ describe('SessionStore', () => {
       expect(targetMeta?.name).toBe('Fork of Source Session');
       expect(targetMeta?.tags).toContain('demo');
       expect(targetMeta?.tags).toContain('fork');
-      expect(targetMeta?.customData?.forkedFromSessionKey).toBe(source);
-      expect(targetMeta?.customData?.forkedFromSessionId).toBeTruthy();
+      expect(targetMeta?.customData?.forkedFromConversationId).toBe(source);
+      expect(targetMeta?.customData?.forkedFromTranscriptId).toBeTruthy();
       expect(targetMeta?.customData?.forkedAt).toEqual(expect.any(String));
     });
 
     it('forkSessionRows clones transcript rows through the selected row', async () => {
-      const source = 'agent:main:webchat:default:direct:fork-row-source';
-      const target = 'agent:main:webchat:default:direct:fork-row-target';
+      const source = "ebb80a63-9bcd-494c-83dc-df198a0c48c2";
+      const target = "856a74d8-261e-4005-865d-0d3c718c8da6";
       await store.saveMessages(source, [
         { role: 'user', content: 'first' },
         { role: 'assistant', content: 'answer' },
         { role: 'user', content: 'second' },
-      ]);
+      ], { metadata: { agentId: "main" } });
 
       const result = await store.forkSessionRows(source, target, { throughRow: 2 });
 
-      expect(result).toEqual({ sessionKey: target, rowCount: 2 });
+      expect(result).toEqual({ conversationId: target, rowCount: 2 });
       const rows = await store.loadTranscriptRows(target);
       expect(rows).toHaveLength(2);
       expect(await store.loadMessages(target)).toHaveLength(2);
       const targetMeta = await store.getMetadata(target);
-      expect(targetMeta?.customData?.forkedFromSessionKey).toBe(source);
+      expect(targetMeta?.customData?.forkedFromConversationId).toBe(source);
       expect(targetMeta?.customData?.forkedFromRow).toBe(2);
     });
 
     it('forkSessionAtTurn atomically copies a completed turn and inherited provenance', async () => {
-      const source = 'agent:main:webchat:default:direct:fork-turn-source';
-      const target = 'agent:main:webchat:default:direct:fork-turn-target';
+      const source = "050a46a5-7661-40af-8e6a-ecf2b03e74fb";
+      const target = "e86ad038-f894-4032-88d2-5e3e7ac4b0fe";
       await store.saveMessages(source, [
         { role: 'user', content: 'first', turnId: 'turn-1' },
         { role: 'assistant', content: 'answer one', turnId: 'turn-1' },
@@ -784,12 +799,12 @@ describe('SessionStore', () => {
         targetMetadata: directMetadata('main', 'webchat', 'fork-turn-target'),
       });
 
-      expect(result).toEqual({ sessionKey: target, rowCount: 2, lastTurnId: 'turn-1' });
+      expect(result).toEqual({ conversationId: target, rowCount: 2, lastTurnId: 'turn-1' });
       expect((await store.loadTranscriptRows(target)).map((row) => (row as { turnId?: string }).turnId))
         .toEqual(['turn-1', 'turn-1']);
       const targetMeta = await store.getMetadata(target);
       expect(targetMeta).toMatchObject({
-        parentSessionKey: source,
+        parentConversationId: source,
         projectId: 'project-1',
         hiddenFromSessionList: false,
       });
@@ -797,7 +812,7 @@ describe('SessionStore', () => {
       expect(targetMeta?.customData).toMatchObject({
         retained: true,
         genericNewChatShell: false,
-        forkedFromSessionKey: source,
+        forkedFromConversationId: source,
         forkedFromTurnId: 'turn-1',
       });
       expect(getSessionConfig(target)).toMatchObject({
@@ -809,11 +824,11 @@ describe('SessionStore', () => {
     });
 
     it('forkSessionAtTurn rolls back when the selected turn is not complete', async () => {
-      const source = 'agent:main:webchat:default:direct:fork-incomplete-source';
-      const target = 'agent:main:webchat:default:direct:fork-incomplete-target';
+      const source = "d56dcc3e-2e0e-4397-8a7b-c3c2ade8e628";
+      const target = "8ecce82a-b6ee-4730-8cff-7335208a25c8";
       await store.saveMessages(source, [
         { role: 'user', content: 'still running', turnId: 'turn-running' },
-      ]);
+      ], { metadata: { agentId: "main" } });
 
       await expect(store.forkSessionAtTurn(source, {
         targetKey: target,
@@ -824,17 +839,17 @@ describe('SessionStore', () => {
     });
 
     it('forkSessionAtTurn can select a turn retained before an in-place reset', async () => {
-      const source = 'agent:main:webchat:default:direct:fork-reset-source';
-      const target = 'agent:main:webchat:default:direct:fork-reset-target';
+      const source = "b6358794-b412-4d8f-8794-d53130f35f1e";
+      const target = "5707b0ea-54d3-489d-86a4-47fd3ab3e056";
       await store.saveMessages(source, [
         { role: 'user', content: 'before reset', turnId: 'turn-before-reset' },
         { role: 'assistant', content: 'old answer', turnId: 'turn-before-reset' },
-      ]);
+      ], { metadata: { agentId: "main" } });
       await store.reset(source);
       await store.saveMessages(source, [
         { role: 'user', content: 'after reset', turnId: 'turn-after-reset' },
         { role: 'assistant', content: 'new answer', turnId: 'turn-after-reset' },
-      ]);
+      ], { metadata: { agentId: "main" } });
 
       const result = await store.forkSessionAtTurn(source, {
         targetKey: target,
@@ -849,8 +864,8 @@ describe('SessionStore', () => {
     });
 
     it('keeps shared media live until every fork is deleted', async () => {
-      const source = 'agent:main:webchat:default:direct:fork-media-source';
-      const target = 'agent:main:webchat:default:direct:fork-media-target';
+      const source = "0d5347fa-a445-4d88-8787-c412f6fe88cf";
+      const target = "575edf7f-430a-4bc6-857d-6d933c1b70c7";
       const uri = 'media://outbound/shared-fork-image.png';
       await store.saveMessages(source, [
         { role: 'user', content: 'make an image', turnId: 'turn-media' },
@@ -860,7 +875,7 @@ describe('SessionStore', () => {
           attachments: [{ uri }],
           turnId: 'turn-media',
         },
-      ]);
+      ], { metadata: { agentId: "main" } });
       await store.forkSessionAtTurn(source, {
         targetKey: target,
         lastTurnId: 'turn-media',

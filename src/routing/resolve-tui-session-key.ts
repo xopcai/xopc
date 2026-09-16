@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { validateConversationId } from '@xopcai/gateway-contract';
 
 import type { Config } from '../config/schema.js';
 import {
@@ -7,14 +8,8 @@ import {
   resolveDefaultAgentId,
 } from '../agent/agent-scope.js';
 import {
-  buildAgentMainSessionKey,
   normalizeAgentId,
-  normalizeMainKey,
-  parseAgentSessionKey,
 } from './agent-session-key.js';
-import { normalizeLowercaseStringOrEmpty } from '../utils/string-coerce.js';
-
-export type SessionScope = 'per-sender' | 'global';
 
 function agentExists(cfg: Config, agentId: string): boolean {
   const id = normalizeAgentId(agentId);
@@ -31,43 +26,18 @@ export function resolveDefaultTuiAgentId(cfg: Config): string {
   return resolveDefaultAgentId(cfg);
 }
 
-export function resolveTuiSessionKey(params: {
+export function resolveTuiConversationId(params: {
   raw?: string;
-  sessionScope: SessionScope;
-  currentAgentId: string;
-  sessionMainKey: string;
 }): string {
-  const trimmed = (params.raw ?? '').trim();
-  if (!trimmed) {
-    if (params.sessionScope === 'global') {
-      return 'global';
-    }
-    return buildAgentMainSessionKey({
-      agentId: params.currentAgentId,
-      mainKey: params.sessionMainKey,
-    });
-  }
-  if (trimmed === 'global' || trimmed === 'unknown') {
-    return trimmed;
-  }
-  if (trimmed.startsWith('agent:')) {
-    return normalizeLowercaseStringOrEmpty(trimmed);
-  }
-  return `agent:${params.currentAgentId}:${normalizeLowercaseStringOrEmpty(trimmed)}`;
+  return validateConversationId(params.raw?.trim() || randomUUID());
 }
 
 export function resolveInitialTuiAgentId(params: {
   cfg: Config;
   fallbackAgentId: string;
   explicitAgentId?: string;
-  initialSessionInput?: string;
   cwd?: string;
 }): string {
-  const parsed = parseAgentSessionKey((params.initialSessionInput ?? '').trim());
-  if (parsed?.agentId) {
-    return normalizeAgentId(parsed.agentId);
-  }
-
   if (params.explicitAgentId?.trim()) {
     return normalizeAgentId(params.explicitAgentId);
   }
@@ -83,33 +53,23 @@ export function resolveInitialTuiAgentId(params: {
   return normalizeAgentId(params.fallbackAgentId);
 }
 
-export function createDefaultTuiSessionKeySuffix(): string {
-  return `tui-${randomUUID()}`;
-}
-
-/** Resolve TUI startup session key from CLI options and config. */
-export function resolveTuiStartupSessionKey(params: {
+/** Resolve TUI startup conversation identity and initial agent from CLI options and config. */
+export function resolveTuiStartupConversationId(params: {
   cfg: Config;
   sessionOption?: string;
   agentOption?: string;
   cwd?: string;
-  createSessionKeySuffix?: () => string;
-}): { sessionKey: string; agentId: string; sessionScope: SessionScope; sessionMainKey: string } {
-  const sessionScope = (params.cfg.session?.scope ?? 'per-sender') as SessionScope;
-  const sessionMainKey = normalizeMainKey(params.cfg.session?.mainKey);
+  createId?: () => string;
+}): { conversationId: string; agentId: string } {
   const sessionOption = (params.sessionOption ?? '').trim();
   const agentId = resolveInitialTuiAgentId({
     cfg: params.cfg,
     fallbackAgentId: resolveDefaultTuiAgentId(params.cfg),
     explicitAgentId: params.agentOption,
-    initialSessionInput: sessionOption,
     cwd: params.cwd ?? process.cwd(),
   });
-  const sessionKey = resolveTuiSessionKey({
-    raw: sessionOption || (params.createSessionKeySuffix ?? createDefaultTuiSessionKeySuffix)(),
-    sessionScope,
-    currentAgentId: agentId,
-    sessionMainKey,
+  const conversationId = resolveTuiConversationId({
+    raw: sessionOption || (params.createId ?? randomUUID)(),
   });
-  return { sessionKey, agentId, sessionScope, sessionMainKey };
+  return { conversationId, agentId };
 }

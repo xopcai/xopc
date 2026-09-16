@@ -10,7 +10,7 @@ const MAX_TEXT_CHUNK_BYTES = 1024 * 1024;
 const MAX_JSONL_LINE_BYTES = 16 * 1024 * 1024;
 
 export interface XopcHistorySession {
-  sessionId: string;
+  transcriptId: string;
   status: string;
   createdAt: number;
   archivedAt: number | null;
@@ -212,9 +212,9 @@ function splitTextByUtf8Bytes(text: string): string[] {
   return chunks;
 }
 
-function stableEventId(sessionId: string, entryId: string, eventOffset: number): string {
+function stableEventId(transcriptId: string, entryId: string, eventOffset: number): string {
   const digest = createHash('sha256')
-    .update(sessionId)
+    .update(transcriptId)
     .update('\0')
     .update(entryId)
     .update('\0')
@@ -237,13 +237,13 @@ function sessionRecord(session: XopcHistorySession): JsonRecord {
   return {
     record_type: 'session',
     source_id: CTX_SOURCE_ID,
-    provider_session_id: session.sessionId,
-    started_at: timestamp(session.createdAt, `session timestamp for ${session.sessionId}`),
+    provider_transcript_id: session.transcriptId,
+    started_at: timestamp(session.createdAt, `session timestamp for ${session.transcriptId}`),
     external_agent_id: session.agentId,
     cwd: session.cwd,
     ...(session.archivedAt === null
       ? {}
-      : { ended_at: timestamp(session.archivedAt, `session end timestamp for ${session.sessionId}`) }),
+      : { ended_at: timestamp(session.archivedAt, `session end timestamp for ${session.transcriptId}`) }),
     status: active ? 'active' : 'completed',
     agent_scope: session.sessionType === 'workflow-subagent' ? 'subagent' : 'primary',
   };
@@ -276,9 +276,9 @@ function entryRecords(session: XopcHistorySession, entry: XopcHistoryEntry): Jso
       records.push({
         record_type: 'event',
         source_id: CTX_SOURCE_ID,
-        provider_session_id: session.sessionId,
+        provider_transcript_id: session.transcriptId,
         event_index: eventIndex,
-        event_id: stableEventId(session.sessionId, entry.entryId, offset),
+        event_id: stableEventId(session.transcriptId, entry.entryId, offset),
         occurred_at: occurredAt,
         event_type: event.eventType,
         ...(event.role ? { role: event.role } : {}),

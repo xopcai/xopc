@@ -23,7 +23,7 @@ const log = createLogger('AgentBus');
 export interface TaskOptions {
   context?: string;
   priority?: IPCPriority;
-  sessionKey?: string;
+  conversationId?: string;
   callbackAgentId?: string;
   timeoutMs?: number;
 }

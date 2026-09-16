@@ -14,7 +14,7 @@ describe('Agent voice interruption cleanup', () => {
   const cleanups: Array<() => void> = [];
   afterEach(async () => { for (const cleanup of cleanups.splice(0)) cleanup(); await engine?.close(); vi.clearAllMocks(); });
 
-  type RunAgent = (text: string, sessionKey: string, signal: AbortSignal) => AsyncIterable<VoiceAgentEvent>;
+  type RunAgent = (text: string, conversationId: string, signal: AbortSignal) => AsyncIterable<VoiceAgentEvent>;
 
   async function setup(runAgent: RunAgent, bargeIn = true) {
     let emit!: (event: StreamingSttEvent) => void;
@@ -28,7 +28,7 @@ describe('Agent voice interruption cleanup', () => {
     engine = createAgentVoiceEngine({
       claim: {
         sessionId: 'call', conversationSessionId: 'stored-session',
-        request: { purpose: 'conversation', mode: 'assistant', sessionKey: 'chat' },
+        request: { purpose: 'conversation', mode: 'assistant', conversationId: 'chat' },
         config: { voice: { realtime: { bargeIn } } }, silenceDurationMs: 1200, tts: { config: {} },
         stt: { model: 'test', route: { provider: 'test' }, plugin: { openAudioStream: async (request: { onEvent: typeof emit }) => {
           emit = request.onEvent;
@@ -37,10 +37,10 @@ describe('Agent voice interruption cleanup', () => {
       } as never,
       runtime: {
         agentBroker: {
-          delegate: async ({ text, sessionKey, signal }) => ({
+          delegate: async ({ text, conversationId, signal }) => ({
             taskId: `task:${text}`,
             runId: `run:${text}`,
-            events: runAgent(text, sessionKey, signal),
+            events: runAgent(text, conversationId, signal),
           }),
           cancel: async () => true,
         },

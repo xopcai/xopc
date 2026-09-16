@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 
@@ -73,7 +74,7 @@ export class MockAdapter implements AgentAdapter {
     return {
       status: 'completed',
       finalText,
-      sessionKey: `agent:${request.variant.agentId ?? 'coder'}:eval:${request.runId}`,
+      conversationId: randomUUID(),
       agentRunId: request.runId,
       usage: { input: 1, output: 1, total: 2 },
     };

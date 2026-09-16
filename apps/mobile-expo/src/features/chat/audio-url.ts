@@ -1,10 +1,10 @@
 import { useGatewayStore } from '../../stores/gateway-store';
 import type { AudioContent } from './messages.types';
 import { buildGatewayMediaReadPath, isMediaUri } from './media-uri';
-export function resolveAudioPlaybackUrl(audio: AudioContent, sessionKey?: string | null): string {
+export function resolveAudioPlaybackUrl(audio: AudioContent, conversationId?: string | null): string {
   const uri = audio.uri?.trim();
   if (uri) {
-    if (isMediaUri(uri)) return useGatewayStore.getState().apiUrl(buildGatewayMediaReadPath(uri, sessionKey));
+    if (isMediaUri(uri)) return useGatewayStore.getState().apiUrl(buildGatewayMediaReadPath(uri, conversationId));
     return uri;
   }
   return '';

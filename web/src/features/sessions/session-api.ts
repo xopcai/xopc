@@ -67,7 +67,7 @@ export async function fetchSidebarChatList(query?: {
   inboxLimit?: number;
   inboxOffset?: number;
   staleDays?: number;
-  includeSessionKey?: string;
+  includeConversationId?: string;
 }): Promise<SidebarChatListResponse> {
   return parseSidebarChatListResponse(
     await fetchJson<unknown>(apiUrl(buildSidebarChatListPath(query))),
@@ -90,11 +90,11 @@ export async function getSessionDetail(
 }
 
 export async function resolveSession(
-  input: { sessionId?: string; sessionKey?: string; key?: string },
-): Promise<{ sessionKey: string; sessionId: string; session: SessionDetail }> {
+  input: { transcriptId?: string; conversationId?: string; key?: string },
+): Promise<{ conversationId: string; transcriptId: string; session: SessionDetail }> {
   const data = await fetchJson<{
     ok: boolean;
-    payload?: { sessionKey: string; sessionId: string; session: SessionDetail };
+    payload?: { conversationId: string; transcriptId: string; session: SessionDetail };
     error?: string;
   }>(apiUrl('/api/sessions/resolve'), {
     method: 'POST',

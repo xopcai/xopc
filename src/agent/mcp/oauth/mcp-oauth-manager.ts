@@ -103,17 +103,17 @@ export class McpOAuthManager {
     }
 
     const serverUrl = new URL(resolvedConfig.url);
-    const sessionKey = canonicalMcpServerUrl(serverUrl);
-    const previous = this.sessionsByServerUrl.get(sessionKey);
+    const conversationId = canonicalMcpServerUrl(serverUrl);
+    const previous = this.sessionsByServerUrl.get(conversationId);
     if (previous && isAuthorizing(previous.snapshot())) return this.status(params.serverId, params.rawServer);
     if (previous) await previous.close();
 
     const session = new McpOAuthSession(params.serverId, serverUrl);
-    this.sessionsByServerUrl.set(sessionKey, session);
+    this.sessionsByServerUrl.set(conversationId, session);
     try {
       await session.start();
     } catch (error) {
-      this.sessionsByServerUrl.delete(sessionKey);
+      this.sessionsByServerUrl.delete(conversationId);
       throw error;
     }
     try {
@@ -179,9 +179,9 @@ export class McpOAuthManager {
     if (!resolved || resolved.kind !== 'http' || !resolved.auth) {
       throw new Error(`MCP server "${serverId}" is not configured for OAuth`);
     }
-    const sessionKey = canonicalMcpServerUrl(resolved.url);
-    const session = this.sessionsByServerUrl.get(sessionKey);
-    this.sessionsByServerUrl.delete(sessionKey);
+    const conversationId = canonicalMcpServerUrl(resolved.url);
+    const session = this.sessionsByServerUrl.get(conversationId);
+    this.sessionsByServerUrl.delete(conversationId);
     if (session) await session.close();
     await this.store.delete(resolved.url);
     await disposeAllSessionMcpRuntimes();

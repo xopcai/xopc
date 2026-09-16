@@ -20,7 +20,7 @@ describe('workspace file links', () => {
       pathname: '/workspace/file',
       params: {
         path: 'output.html',
-        sessionKey: 'agent:main:webchat:default',
+        conversationId: 'agent:main:webchat:default',
       },
     });
   });

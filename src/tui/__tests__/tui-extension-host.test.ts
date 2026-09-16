@@ -50,7 +50,7 @@ describe('createTuiExtensionHost', () => {
     const host = createTuiExtensionHost({
       extensionId: 'test-ext',
       surface,
-      getSessionKey: () => 'agent:main:main',
+      getConversationId: () => 'agent:main:main',
       notify: () => {},
       onTerminalInputAdded: () => () => {},
       showOverlay: () => {},

@@ -13,7 +13,7 @@ import {
   isRunActive,
   isRunRetriable,
   resolveRunCardTitle,
-  resolveRunSessionKey,
+  resolveRunConversationId,
   resolveRunWorkflowLabel,
 } from './workflow-board.utils';
 import { formatDuration, interpolate, statusTone } from './workflow-page.utils';
@@ -41,8 +41,8 @@ export const WorkflowTaskCard = memo(function WorkflowTaskCard({
 }) {
   const labels = messages(language).workflows;
   const [menuOpen, setMenuOpen] = useState(false);
-  const sessionKey = resolveRunSessionKey(run);
-  const chatDisabled = !sessionKey;
+  const conversationId = resolveRunConversationId(run);
+  const chatDisabled = !conversationId;
   const active = isRunActive(run);
   const showProgress = run.status === 'running' || run.status === 'queued';
   const progress =

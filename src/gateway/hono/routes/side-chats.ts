@@ -19,7 +19,7 @@ const log = createGatewayRouteLogger('SideChats');
 export function registerSideChatRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
 
-  authenticated.post('/api/sessions/:parentSessionKey/side-chats', deps.chatRateLimitMiddleware, async (c) => {
+  authenticated.post('/api/sessions/:parentConversationId/side-chats', deps.chatRateLimitMiddleware, async (c) => {
     try {
       const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
       const clientInstanceId = readClientInstanceId(c, body.clientInstanceId);
@@ -34,7 +34,7 @@ export function registerSideChatRoutes(authenticated: Hono, deps: AuthenticatedR
         throw new SideChatError(error instanceof Error ? error.message : 'Invalid selections', 'INVALID_REQUEST');
       }
       const sideChat = await service.sideChats.create({
-        parentSessionKey: c.req.param('parentSessionKey'),
+        parentConversationId: c.req.param('parentConversationId'),
         clientInstanceId,
         selections,
         config: {

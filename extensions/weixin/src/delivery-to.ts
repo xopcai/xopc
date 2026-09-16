@@ -1,4 +1,5 @@
-import { parseSessionKey } from '@xopcai/xopc/routing/session-key.js';
+import { conversationIdSchema } from '@xopcai/gateway-contract';
+import { getConversationRouting } from '@xopcai/xopc/routing/session-key.js';
 import type { SessionListReader } from '@xopcai/xopc/session/store-reader.js';
 
 export type NormalizedWeixinCronDelivery = {
@@ -16,7 +17,7 @@ export function normalizeWeixinCronDeliveryTo(to: string): NormalizedWeixinCronD
     return { chatId: trimmed };
   }
 
-  const parsed = parseSessionKey(trimmed);
+  const parsed = conversationIdSchema.safeParse(trimmed).success ? getConversationRouting(trimmed) : null;
   if (parsed?.source === 'weixin' && (parsed.peerKind === 'direct' || parsed.peerKind === 'dm') && parsed.peerId) {
     const accountId = parsed.accountId && parsed.accountId !== '_' ? parsed.accountId : undefined;
     return { chatId: parsed.peerId, accountId };

@@ -26,7 +26,7 @@ describe('voice settings navigation', () => {
 
   beforeEach(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
-    useGatewayStore.setState({ sessionKey: 'test-session' });
+    useGatewayStore.setState({ conversationId: 'test-session' });
     useLocaleStore.setState({ language: 'zh' });
     useSettingsModeStore.setState({ mode: 'simple' });
     mocks.responses.set('/api/config', { payload: { config: {
@@ -49,7 +49,7 @@ describe('voice settings navigation', () => {
     await act(async () => root.unmount());
     container.remove();
     mocks.responses.clear();
-    useGatewayStore.setState({ sessionKey: undefined });
+    useGatewayStore.setState({ conversationId: undefined });
     useSettingsModeStore.setState({ mode: 'simple' });
   });
 

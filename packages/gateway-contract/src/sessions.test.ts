@@ -10,7 +10,7 @@ import {
   buildSessionResolvePath,
   buildSessionStatsPath,
   buildSidebarChatListPath,
-  extractCreatedSessionKey,
+  extractCreatedConversationId,
   normalizeSessionActiveRunResponse,
   parseSessionActionResponse,
   parseSessionRenameResponse,
@@ -71,38 +71,38 @@ describe('sessions contract', () => {
   });
 
   it('builds detail, history, run, and create paths', () => {
-    const key = 'agent:main:webchat:default:direct:chat_a';
+    const key = "c0f12290-5df2-4203-8bfd-5d5f34467d20";
     expect(buildSessionDetailPath(key, { includeTranscript: true, includeTranscriptRows: true })).toBe(
-      '/api/sessions/agent%3Amain%3Awebchat%3Adefault%3Adirect%3Achat_a?include=transcript,transcriptRows',
+      '/api/sessions/c0f12290-5df2-4203-8bfd-5d5f34467d20?include=transcript,transcriptRows',
     );
     expect(buildSessionHistoryPath(key, { limit: 50, before: 'cursor_1' })).toBe(
-      '/api/sessions/agent%3Amain%3Awebchat%3Adefault%3Adirect%3Achat_a/history?limit=50&before=cursor_1',
+      '/api/sessions/c0f12290-5df2-4203-8bfd-5d5f34467d20/history?limit=50&before=cursor_1',
     );
     expect(buildSessionRunPath(key)).toBe(
-      '/api/sessions/agent%3Amain%3Awebchat%3Adefault%3Adirect%3Achat_a/run',
+      '/api/sessions/c0f12290-5df2-4203-8bfd-5d5f34467d20/run',
     );
     expect(buildCreateSessionPath()).toBe('/api/sessions');
   });
 
   it('builds stats, resolve, sidebar, and action paths', () => {
-    const key = 'agent:main:webchat:default:direct:chat_a';
+    const key = "c0f12290-5df2-4203-8bfd-5d5f34467d20";
     expect(buildSessionStatsPath()).toBe('/api/sessions/stats');
-    expect(buildSessionResolvePath({ sessionId: 'sess_a' })).toBe('/api/sessions/resolve?sessionId=sess_a');
-    expect(buildSidebarChatListPath({ projectLimit: 10, inboxOffset: 20, includeSessionKey: key })).toBe(
-      '/api/sidebar/chat-list?projectLimit=10&inboxOffset=20&includeSessionKey=agent%3Amain%3Awebchat%3Adefault%3Adirect%3Achat_a',
+    expect(buildSessionResolvePath({ transcriptId: '117d8aa7-f120-54ad-a0dd-48a11ded92b1' })).toBe('/api/sessions/resolve?transcriptId=117d8aa7-f120-54ad-a0dd-48a11ded92b1');
+    expect(buildSidebarChatListPath({ projectLimit: 10, inboxOffset: 20, includeConversationId: key })).toBe(
+      '/api/sidebar/chat-list?projectLimit=10&inboxOffset=20&includeConversationId=c0f12290-5df2-4203-8bfd-5d5f34467d20',
     );
     expect(buildSessionActionPath(key, 'delete')).toBe(
-      '/api/sessions/agent%3Amain%3Awebchat%3Adefault%3Adirect%3Achat_a',
+      '/api/sessions/c0f12290-5df2-4203-8bfd-5d5f34467d20',
     );
     expect(buildSessionActionPath(key, 'archive')).toBe(
-      '/api/sessions/agent%3Amain%3Awebchat%3Adefault%3Adirect%3Achat_a/archive',
+      '/api/sessions/c0f12290-5df2-4203-8bfd-5d5f34467d20/archive',
     );
   });
 
   it('parses session detail and history pages with passthrough fields', () => {
     const detail = parseSessionResponse({
       session: {
-        key: 'session-a',
+        key: '055849b2-da79-51fd-b4e6-17f7f4f3670d',
         messages: [{ role: 'user', content: 'hello', custom: true }],
         status: 'active',
         tags: [],
@@ -116,11 +116,11 @@ describe('sessions contract', () => {
         sourceChatId: 'chat_a',
       },
     });
-    expect(detail.session.key).toBe('session-a');
+    expect(detail.session.key).toBe('055849b2-da79-51fd-b4e6-17f7f4f3670d');
 
     const page = parseSessionMessagePage({
       session: {
-        key: 'session-a',
+        key: '055849b2-da79-51fd-b4e6-17f7f4f3670d',
         projectId: 'project-a',
         customData: { taskId: 'task-a' },
         messages: [{ role: 'assistant', content: [{ type: 'text', text: 'hi' }] }],
@@ -138,13 +138,13 @@ describe('sessions contract', () => {
       runId: 'run-1',
     });
     expect(normalizeSessionActiveRunResponse({ payload: { active: false } })).toEqual({ active: false });
-    expect(extractCreatedSessionKey({ session: { key: ' session-a ' } })).toBe('session-a');
+    expect(extractCreatedConversationId({ session: { key: ' 055849b2-da79-51fd-b4e6-17f7f4f3670d ' } })).toBe('055849b2-da79-51fd-b4e6-17f7f4f3670d');
   });
 
   it('parses action, stats, resolve, and sidebar responses', () => {
     expect(parseSessionActionResponse({ ok: true }).ok).toBe(true);
     expect(parseSessionRenameResponse({ renamed: true }).renamed).toBe(true);
-    expect(parseSessionResetResponse({ ok: true, reset: true, sessionId: 'sess_b' }).sessionId).toBe('sess_b');
+    expect(parseSessionResetResponse({ ok: true, reset: true, transcriptId: '98936ed0-fbe7-5ca2-8add-03aa88dfbc35' }).transcriptId).toBe('98936ed0-fbe7-5ca2-8add-03aa88dfbc35');
     expect(parseSessionStatsResponse({
       totalSessions: 2,
       activeSessions: 1,
@@ -156,8 +156,8 @@ describe('sessions contract', () => {
     }).byChannel.webchat).toBe(2);
     expect(parseSessionResolveResponse({
       ok: true,
-      payload: { sessionKey: 'session-a', sessionId: 'sess_a', session: { key: 'session-a' } },
-    }).payload?.sessionId).toBe('sess_a');
+      payload: { conversationId: '055849b2-da79-51fd-b4e6-17f7f4f3670d', transcriptId: '117d8aa7-f120-54ad-a0dd-48a11ded92b1', session: { key: '055849b2-da79-51fd-b4e6-17f7f4f3670d' } },
+    }).payload?.transcriptId).toBe('117d8aa7-f120-54ad-a0dd-48a11ded92b1');
     expect(parseSidebarChatListResponse({
       ok: true,
       projects: {

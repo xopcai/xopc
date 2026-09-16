@@ -126,10 +126,10 @@ export function ProjectOperatingScreen() {
   });
   const createChat = useMutation({
     mutationFn: () => createSession({ projectId }),
-    onSuccess: (sessionKey) => {
+    onSuccess: (conversationId) => {
       setCreateMenuVisible(false);
       void queryClient.invalidateQueries({ queryKey: queryKeys.projectSessions(projectId) });
-      openChat(router, sessionKey);
+      openChat(router, conversationId);
     },
   });
   const createNote = useMutation({
@@ -250,7 +250,7 @@ export function ProjectOperatingScreen() {
               sessionsLoading={sessions.isLoading}
               sessionsError={sessions.isError}
               onTaskPress={(taskId) => router.push(`/tasks/${taskId}`)}
-              onSessionPress={(sessionKey) => openChat(router, sessionKey)}
+              onSessionPress={(conversationId) => openChat(router, conversationId)}
               onCreateTask={() => router.push(`/tasks/create?projectId=${projectId}`)}
               onCreateChat={() => createChat.mutate()}
             />
@@ -460,7 +460,7 @@ function ProjectWork({ tasks, sessions, sessionsLoading, sessionsError, onTaskPr
   sessionsLoading: boolean;
   sessionsError: boolean;
   onTaskPress: (taskId: string) => void;
-  onSessionPress: (sessionKey: string) => void;
+  onSessionPress: (conversationId: string) => void;
   onCreateTask: () => void;
   onCreateChat: () => void;
 }) {

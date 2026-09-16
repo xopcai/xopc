@@ -31,7 +31,7 @@ export function createDefaultExternalToolGatewayTools(deps: DefaultExternalToolG
     new McpToolProvider({
       workspace: deps.workspace,
       getConfig: deps.getConfig,
-      getSessionKey: () => deps.getCurrentContext()?.sessionKey,
+      getConversationId: () => deps.getCurrentContext()?.conversationId,
       agentId: deps.agentId,
       hookRunner: deps.hookRunner,
     }),
@@ -44,14 +44,14 @@ export function createDefaultExternalToolGatewayTools(deps: DefaultExternalToolG
     new ExtensionToolProvider({
       registry: deps.extensionRegistry,
       disabledTools: deps.disabledTools,
-      getSessionKey: () => deps.getCurrentContext()?.sessionKey,
+      getConversationId: () => deps.getCurrentContext()?.conversationId,
       hookRunner: deps.hookRunner,
       toolExecutorConfig: deps.toolExecutorConfig,
     }),
     new MemoryToolProvider({
       getMemoryManager: deps.getMemoryManager,
       disabledTools: deps.disabledTools,
-      getSessionKey: () => deps.getCurrentContext()?.sessionKey,
+      getConversationId: () => deps.getCurrentContext()?.conversationId,
       canAccess: deps.canAccessMemory,
       hookRunner: deps.hookRunner,
       toolExecutorConfig: deps.toolExecutorConfig,

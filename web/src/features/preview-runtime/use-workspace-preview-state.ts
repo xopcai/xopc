@@ -26,21 +26,21 @@ import { isElectron } from '@/lib/electron-env';
 
 function useWorkspacePreviewReadOpts({
   projectId,
-  sessionKey,
+  conversationId,
   agentId,
 }: {
   projectId?: string;
-  sessionKey?: string;
+  conversationId?: string;
   agentId?: string;
 }): WorkspaceEditorRequestOptions | undefined {
   return useMemo(() => {
     const pid = projectId?.trim();
     if (pid) return { projectId: pid };
-    const sk = sessionKey?.trim();
-    if (sk) return { sessionKey: sk };
+    const sk = conversationId?.trim();
+    if (sk) return { conversationId: sk };
     const aid = agentId?.trim();
     return aid ? { agentId: aid } : undefined;
-  }, [agentId, projectId, sessionKey]);
+  }, [agentId, projectId, conversationId]);
 }
 
 type WorkspacePreviewLoadState = PreviewLoadedSource & {
@@ -135,15 +135,15 @@ function editorReducer(state: EditorUiState, action: { type: 'reset' } | { type:
 export function useWorkspacePreviewState({
   filePath,
   projectId,
-  sessionKey,
+  conversationId,
   agentId,
 }: {
   filePath: string | null;
   projectId?: string;
-  sessionKey?: string;
+  conversationId?: string;
   agentId?: string;
 }) {
-  const readOpts = useWorkspacePreviewReadOpts({ projectId, sessionKey, agentId });
+  const readOpts = useWorkspacePreviewReadOpts({ projectId, conversationId, agentId });
   const descriptor = useMemo((): PreviewFileDescriptor => {
     const fileName = filePath ? getPreviewFileName(filePath) : '';
     const mimeType = inferPreviewMimeType(fileName, inferMimeTypeFromFileName(fileName));
@@ -154,9 +154,9 @@ export function useWorkspacePreviewState({
       fileName,
       mimeType,
       type,
-      source: { kind: 'workspace', path: filePath || '', sessionKey, agentId },
+      source: { kind: 'workspace', path: filePath || '', conversationId, agentId },
     };
-  }, [agentId, filePath, sessionKey]);
+  }, [agentId, filePath, conversationId]);
 
   const [preview, dispatchPreview] = useReducer(previewReducer, descriptor, emptyLoaded);
   const [editorUi, dispatchEditorUi] = useReducer(editorReducer, {

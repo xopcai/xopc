@@ -97,10 +97,10 @@ export function createAgentVoiceEngine(options: {
     activeResponse = undefined;
     response.abortController.abort(reason);
     send('response.cancelled', { responseId: response.id, reason });
-    const sessionKey = claim.request.sessionKey;
-    if (sessionKey && reason !== 'session_closed') {
+    const conversationId = claim.request.conversationId;
+    if (conversationId && reason !== 'session_closed') {
       interruptionWrites = interruptionWrites.then(() => options.runtime.recordInterruption({
-        sessionKey,
+        conversationId,
         responseId: response.id,
         reason,
         generatedCharacters: response.text.length,
@@ -242,7 +242,7 @@ export function createAgentVoiceEngine(options: {
   }
 
   async function runAssistantTurn(text: string, turnId: string): Promise<void> {
-    if (!claim.tts || !claim.request.sessionKey || !text.trim() || closed) return;
+    if (!claim.tts || !claim.request.conversationId || !text.trim() || closed) return;
     cancelActiveResponse('barge_in');
     const response: ActiveVoiceResponse = {
       id: `resp_${crypto.randomUUID()}`,
@@ -269,8 +269,8 @@ export function createAgentVoiceEngine(options: {
       await interruptionWrites;
       if (response.abortController.signal.aborted || closed) return;
       if (!claim.conversationSessionId) throw new Error('Conversation identity is unavailable');
-      const task = await options.runtime.agentBroker.delegate({ text, turnId, sessionKey: claim.request.sessionKey,
-        expectedSessionId: claim.conversationSessionId, signal: response.abortController.signal });
+      const task = await options.runtime.agentBroker.delegate({ text, turnId, conversationId: claim.request.conversationId,
+        expectedTranscriptId: claim.conversationSessionId, signal: response.abortController.signal });
       response.taskId = task.taskId;
       send('task.created', { responseId: response.id, taskId: task.taskId });
       for await (const event of task.events) {

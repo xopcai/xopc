@@ -36,7 +36,7 @@ describe('ComposerContextBar', () => {
   const onWorkspaceChange = vi.fn();
   const render = async (props: Partial<ComposerContextBarProps> = {}) => act(async () => root.render(
     <SWRConfig value={{ provider: () => cache }}>
-      <ComposerContextBar sessionKey="s1" canChangeWorkspace disabled={false} onProjectChange={onProjectChange} onWorkspaceChange={onWorkspaceChange} {...props} />
+      <ComposerContextBar conversationId="s1" canChangeWorkspace disabled={false} onProjectChange={onProjectChange} onWorkspaceChange={onWorkspaceChange} {...props} />
     </SWRConfig>,
   ));
 
@@ -109,7 +109,7 @@ describe('ComposerContextBar', () => {
 
   it('places environment selection beside the project selector in the same context bar', async () => {
     await render({
-      sessionKey: null, project: { id: 'code', name: 'xopc' }, canChangeWorkspace: false,
+      conversationId: null, project: { id: 'code', name: 'xopc' }, canChangeWorkspace: false,
       environmentPicker: <ProjectEnvironmentPicker selection={{ mode: 'managed_worktree', options: { localAvailable: true }, allowed: true, busy: false, checkFailed: false, checking: false, failure: null, changeMode: vi.fn(), retry: vi.fn(), prepareSession: vi.fn(), send: vi.fn() }} />,
     });
     const projectSelector = container.querySelector<HTMLButtonElement>('[aria-label="Change the project for this chat"]')!;

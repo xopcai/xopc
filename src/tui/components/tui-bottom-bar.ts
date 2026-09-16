@@ -125,7 +125,7 @@ export class TuiBottomBar implements Component {
           return branch ? `${cwd} (${branch})` : cwd;
         })()
       : 'workspace loading';
-    const sessionLine = state.sessionInfo.displayName ?? `session ${state.currentSessionKey}`;
+    const sessionLine = state.sessionInfo.displayName ?? `session ${state.currentConversationId}`;
     const pwdLine = truncateToWidth(
       theme.dim(`${cwdWithBranch} · ${sessionLine}`),
       width,

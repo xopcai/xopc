@@ -8,7 +8,7 @@ import type { DesktopPetActivity } from '../desktop-pet-session-state';
 
 function activity(overrides: Partial<DesktopPetActivity>): DesktopPetActivity {
   return {
-    sessionKey: 'agent:main:webchat:test',
+    conversationId: 'agent:main:webchat:test',
     runId: 'run-1',
     sessionLabel: 'Test',
     sequence: 1,

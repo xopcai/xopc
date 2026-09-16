@@ -17,7 +17,7 @@ export interface Delegation {
 }
 export interface MailFollowUp {
   id: string; subscriptionId: string; instructions: string; dueAt: string; status: 'watching' | 'paused' | 'completed';
-  revision: number; lastCheckedAt: string | null; sessionKey: string | null; sourceAvailable: boolean; enabled: boolean;
+  revision: number; lastCheckedAt: string | null; conversationId: string | null; sourceAvailable: boolean; enabled: boolean;
   subject: string | null; latestMessageAt: string | null; latestDirection: 'sent' | 'received' | 'unknown' | null;
   lastSyncedAt: string | null; syncFailed: boolean; sourceFresh: boolean;
 }

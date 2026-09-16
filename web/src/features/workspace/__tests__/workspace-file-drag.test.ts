@@ -28,7 +28,7 @@ describe('workspace file drag payload', () => {
     writeWorkspaceFileDrag(transfer, {
       path: 'reports/status.pdf',
       name: 'status.pdf',
-      sessionKey: 'agent:task:123',
+      conversationId: 'agent:task:123',
     });
 
     expect(transfer.effectAllowed).toBe('copy');
@@ -36,7 +36,7 @@ describe('workspace file drag payload', () => {
     expect(readWorkspaceFileDrag(transfer)).toEqual({
       path: 'reports/status.pdf',
       name: 'status.pdf',
-      sessionKey: 'agent:task:123',
+      conversationId: 'agent:task:123',
     });
   });
 

@@ -13,13 +13,13 @@ vi.mock('expo-router', () => ({
 vi.mock('../../../lib/navigation', () => ({ openChat: vi.fn() }));
 vi.mock('../../../stores/gateway-store', () => ({ useGatewayStore: { getState: () => ({ activeGatewayId: environment.gatewayId }) } }));
 vi.mock('../../../query/sessions', () => ({ fetchSessionResumeStatus: vi.fn(), fetchSessionsList: vi.fn() }));
-vi.mock('../session-prefetch', () => ({ takeNewChatSessionKey: vi.fn() }));
+vi.mock('../session-prefetch', () => ({ takeNewChatConversationId: vi.fn() }));
 
 import { fetchSessionResumeStatus, fetchSessionsList, type SessionsPage } from '../../../query/sessions';
 import { KEYS, storage } from '../../../storage/mmkv';
 import { useChatSelectionStore } from '../chat-selection-store';
 import { useChatPageBootstrap, type ChatBootstrapDeps } from '../use-chat-page-bootstrap';
-import { takeNewChatSessionKey } from '../session-prefetch';
+import { takeNewChatConversationId } from '../session-prefetch';
 import { openChat } from '../../../lib/navigation';
 
 const { createRoot } = createRequire(import.meta.url)('react-dom/client') as {
@@ -64,14 +64,14 @@ beforeEach(() => {
   renderedKeys.length = 0;
   vi.mocked(fetchSessionResumeStatus).mockResolvedValue('available');
   vi.mocked(fetchSessionsList).mockResolvedValue(page('server-latest'));
-  vi.mocked(takeNewChatSessionKey).mockResolvedValue('created');
+  vi.mocked(takeNewChatConversationId).mockResolvedValue('created');
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   root = createRoot(document.createElement('div'));
   props = {
-    scopeKey: 'a', urlSessionKey: '', gatewayReady: true, gatewayOnline: true,
+    scopeKey: 'a', urlConversationId: '', gatewayReady: true, gatewayOnline: true,
     newSessionSpec: { agentId: 'main', projectId: null },
     messages: { sessions: { bootstrapFailed: 'Retry startup' } } as ChatBootstrapDeps['messages'],
-    activeSessionKeyRef: { current: '' }, shouldNavigateToRoute: false,
+    activeConversationIdRef: { current: '' }, shouldNavigateToRoute: false,
   };
 });
 afterEach(async () => { await act(async () => root.unmount()); client.clear(); });
@@ -96,7 +96,7 @@ describe('chat startup lifecycle', () => {
     await render(); await tick();
     expect(result.pendingBootstrapKey).toBe('saved');
     expect(fetchSessionsList).not.toHaveBeenCalled();
-    expect(takeNewChatSessionKey).not.toHaveBeenCalled();
+    expect(takeNewChatConversationId).not.toHaveBeenCalled();
   });
 
   it('waits for a real first lookup instead of using old cached recent sessions', async () => {
@@ -156,12 +156,12 @@ describe('chat startup lifecycle', () => {
   it('does not create a session on lookup error, and supports retry', async () => {
     vi.mocked(fetchSessionsList).mockRejectedValue(new Error('offline'));
     await render(); await tick();
-    expect(takeNewChatSessionKey).not.toHaveBeenCalled();
+    expect(takeNewChatConversationId).not.toHaveBeenCalled();
     expect(result.bootstrapError).toBe('Retry startup');
     vi.mocked(fetchSessionsList).mockResolvedValue(page());
     await act(async () => result.retryBootstrapSession());
     await selected('created');
-    expect(takeNewChatSessionKey).toHaveBeenCalledTimes(1);
+    expect(takeNewChatConversationId).toHaveBeenCalledTimes(1);
   });
 
   it('keeps gateway selections isolated and ignores an old gateway response', async () => {
@@ -182,12 +182,12 @@ describe('chat startup lifecycle', () => {
 
   it('gives explicit routes priority and does not let the covered root navigate', async () => {
     useChatSelectionStore.getState().select('a', 'saved');
-    await render({ urlSessionKey: 'deep-link', shouldNavigateToRoute: true });
+    await render({ urlConversationId: 'deep-link', shouldNavigateToRoute: true });
     expect(useChatSelectionStore.getState().selections.a.key).toBe('deep-link');
     expect(fetchSessionsList).not.toHaveBeenCalled();
     expect(fetchSessionResumeStatus).not.toHaveBeenCalled();
     environment.focused = false;
-    await render({ urlSessionKey: '' });
+    await render({ urlConversationId: '' });
     expect(openChat).not.toHaveBeenCalled();
   });
 

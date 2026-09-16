@@ -24,8 +24,8 @@ export interface WorkflowEngineOptions {
   runner: WorkflowRuntimeSubagentRunner;
   runtime?: WorkflowRuntime;
   hooks?: WorkflowEngineHook[];
-  subagentSessionKeyFactory?: (ctx: { runId: string; agentId: string }) => string;
-  parentSessionKey?: string;
+  subagentConversationIdFactory?: (ctx: { runId: string; agentId: string }) => string;
+  parentConversationId?: string;
   onEventAppended?: (event: WorkflowEventEnvelope) => void;
   onRunViewUpdated?: (view: WorkflowRunView) => void;
   resolveModelId?: (modelId: string) => Model<Api>;
@@ -102,7 +102,7 @@ export class WorkflowEngine {
     let eventQueue = Promise.resolve();
     const progressRecorders = new Map<number, AgentProgressRecorder>();
     const runtimeAgentStatuses = new Map<number, WorkflowAgentStatus | 'queued'>();
-    const subagentSessionKeys = new Map<number, string>();
+    const subagentConversationIds = new Map<number, string>();
 
     const run: WorkflowRun = {
       id: runId,
@@ -191,8 +191,8 @@ export class WorkflowEngine {
             },
             onAgentQueued: (event) => {
               const agentId = formatRuntimeAgentId(event.id);
-              const subagentSessionKey = this.options.subagentSessionKeyFactory?.({ runId, agentId }) ?? defaultSubagentSessionKey(runId, agentId);
-              subagentSessionKeys.set(event.id, subagentSessionKey);
+              const subagentConversationId = this.options.subagentConversationIdFactory?.({ runId, agentId }) ?? randomUUID();
+              subagentConversationIds.set(event.id, subagentConversationId);
               runtimeAgentStatuses.set(event.id, 'queued');
               const phaseId = event.phase ? (phaseTitleToId.get(event.phase) ?? normalizePhaseId(event.phase)) : currentPhaseId;
               void this.callHooks((hook) => hook.beforeAgent?.({
@@ -208,7 +208,7 @@ export class WorkflowEngine {
                 label: event.label,
                 phaseId,
                 prompt: event.prompt,
-                sessionKey: subagentSessionKey,
+                conversationId: subagentConversationId,
                 invocation: event.invocation,
               });
             },
@@ -251,15 +251,15 @@ export class WorkflowEngine {
               });
               progressRecorders.set(ctx.id, recorder);
               const agentId = formatRuntimeAgentId(ctx.id);
-              const sessionKey = subagentSessionKeys.get(ctx.id)
-                ?? this.options.subagentSessionKeyFactory?.({ runId, agentId })
-                ?? defaultSubagentSessionKey(runId, agentId);
-              subagentSessionKeys.set(ctx.id, sessionKey);
+              const conversationId = subagentConversationIds.get(ctx.id)
+                ?? this.options.subagentConversationIdFactory?.({ runId, agentId })
+                ?? randomUUID();
+              subagentConversationIds.set(ctx.id, conversationId);
               return {
-                sessionKey,
+                conversationId,
                 instructions: this.options.contextInstructions,
                 sessionMetadata: {
-                  parentSessionKey: this.options.parentSessionKey,
+                  parentConversationId: this.options.parentConversationId,
                   projectId: this.options.projectId,
                   workflowRunId: runId,
                   workflowDefinitionId: definition.id,
@@ -450,8 +450,8 @@ export class WorkflowEngine {
   }): Promise<WorkflowReplayTargetResult> {
     const { target } = params;
     const invocation = normalizeReplayInvocation(target);
-    const sessionKey = this.options.subagentSessionKeyFactory?.({ runId: params.runId, agentId: target.agentId })
-      ?? defaultSubagentSessionKey(params.runId, target.agentId);
+    const conversationId = this.options.subagentConversationIdFactory?.({ runId: params.runId, agentId: target.agentId })
+      ?? randomUUID();
     await this.callHooks((hook) => hook.beforeAgent?.({
       runId: params.runId,
       agentId: target.agentId,
@@ -464,7 +464,7 @@ export class WorkflowEngine {
       label: invocation.label,
       phaseId: target.phaseId,
       prompt: invocation.prompt,
-      sessionKey,
+      conversationId,
       invocation,
     });
     await params.appendEvent('agent_started', { agentId: target.agentId });
@@ -486,9 +486,9 @@ export class WorkflowEngine {
         phase: invocation.phase ?? target.phaseTitle,
         signal: params.signal,
         model,
-        sessionKey,
+        conversationId,
         sessionMetadata: {
-          parentSessionKey: this.options.parentSessionKey,
+          parentConversationId: this.options.parentConversationId,
           projectId: this.options.projectId,
           workflowRunId: params.runId,
           workflowDefinitionId: params.definition.id,
@@ -861,10 +861,6 @@ function resolveReplayModel(
 
 function formatRuntimeAgentId(id: number): string {
   return `agent-${id}`;
-}
-
-function defaultSubagentSessionKey(runId: string, agentId: string): string {
-  return `workflow:${runId}:subagent:${agentId}`;
 }
 
 function normalizeCompletedAgentStatus(status: string): 'done' | 'error' | 'skipped' {

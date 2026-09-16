@@ -78,13 +78,13 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
   });
 
   authenticated.get('/api/review/context', async (c) => {
-    const sessionKey = c.req.query('sessionKey')?.trim() || 'agent:main:main';
+    const conversationId = c.req.query('conversationId')?.trim();
     try {
       const workspace = effectiveWorkspacePathForSession(
         service.getConfig(),
-        sessionKey,
+        conversationId,
         null,
-        getProjectForSession(sessionKey),
+        getProjectForSession(conversationId),
       );
       const cwd = await resolveGitRoot(workspace);
       const payload = await buildReviewContext(cwd);
@@ -106,40 +106,40 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
   // ========== Skills (managed global skills under ~/.xopc/skills) ==========
 
   authenticated.get('/api/chat/skills', async (c) => {
-    const sessionKey = c.req.query('sessionKey')?.trim();
+    const conversationId = c.req.query('conversationId')?.trim();
     const agentId = c.req.query('agentId')?.trim() || service.getConfig().agents?.default || 'main';
-    const payload = sessionKey
-      ? await service.marketplace.getSessionSkillsApi(sessionKey)
+    const payload = conversationId
+      ? await service.marketplace.getSessionSkillsApi(conversationId)
       : service.marketplace.getAgentSkillsApi(agentId);
     return c.json({ ok: true, payload });
   });
 
   authenticated.get('/api/chat/workspace-trust', async (c) => {
-    const sessionKey = c.req.query('sessionKey')?.trim();
-    if (!sessionKey) {
-      return c.json({ ok: false, error: 'Missing sessionKey' }, 400);
+    const conversationId = c.req.query('conversationId')?.trim();
+    if (!conversationId) {
+      return c.json({ ok: false, error: 'Missing conversationId' }, 400);
     }
-    const payload = await service.marketplace.getSessionWorkspaceTrustApi(sessionKey);
+    const payload = await service.marketplace.getSessionWorkspaceTrustApi(conversationId);
     return c.json({ ok: true, payload });
   });
 
   authenticated.patch('/api/chat/workspace-trust', async (c) => {
-    let body: { sessionKey?: unknown; trusted?: unknown };
+    let body: { conversationId?: unknown; trusted?: unknown };
     try {
-      body = (await c.req.json()) as { sessionKey?: unknown; trusted?: unknown };
+      body = (await c.req.json()) as { conversationId?: unknown; trusted?: unknown };
     } catch {
       return c.json({ ok: false, error: 'Invalid JSON' }, 400);
     }
-    const sessionKey = typeof body.sessionKey === 'string' ? body.sessionKey.trim() : '';
-    if (!sessionKey || typeof body.trusted !== 'boolean') {
-      return c.json({ ok: false, error: 'Expected { sessionKey: string, trusted: boolean }' }, 400);
+    const conversationId = typeof body.conversationId === 'string' ? body.conversationId.trim() : '';
+    if (!conversationId || typeof body.trusted !== 'boolean') {
+      return c.json({ ok: false, error: 'Expected { conversationId: string, trusted: boolean }' }, 400);
     }
-    const payload = await service.marketplace.setSessionWorkspaceTrustApi(sessionKey, body.trusted);
+    const payload = await service.marketplace.setSessionWorkspaceTrustApi(conversationId, body.trusted);
     return c.json({ ok: true, payload });
   });
 
   authenticated.get('/api/chat/capabilities', (c) => {
-    const payload = service.agentService.getCapabilityCatalog(c.req.query('sessionKey')?.trim());
+    const payload = service.agentService.getCapabilityCatalog(c.req.query('conversationId')?.trim());
     return c.json({ ok: true, payload });
   });
 

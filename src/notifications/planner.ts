@@ -27,7 +27,7 @@ function chatPlan(payload: unknown): NotificationPlan | null {
   if (event.status !== 'success' && event.status !== 'error') return null;
   if (typeof event.runId !== 'string' || !event.runId) return null;
   const target = NotificationTargetSchema.safeParse(event.target);
-  if (!target.success || target.data.kind !== 'chat' || target.data.sessionKey !== event.sessionKey) return null;
+  if (!target.success || target.data.kind !== 'chat' || target.data.conversationId !== event.conversationId) return null;
   const completed = event.status === 'success';
   const type: ProductNotificationType = completed ? 'chat.completed' : 'chat.failed';
   const fallback = {
@@ -162,13 +162,13 @@ function workDiscoveryPlan(
   payload: unknown,
 ): NotificationPlan | null {
   if (!payload || typeof payload !== 'object') return null;
-  const event = payload as { runId?: unknown; sessionKey?: unknown; status?: unknown };
+  const event = payload as { runId?: unknown; conversationId?: unknown; status?: unknown };
   const completed = eventType === 'work-discovery.completed';
   if (
     typeof event.runId !== 'string'
     || !event.runId
-    || typeof event.sessionKey !== 'string'
-    || !event.sessionKey
+    || typeof event.conversationId !== 'string'
+    || !event.conversationId
     || event.status !== (completed ? 'completed' : 'failed')
   ) return null;
   const type: ProductNotificationType = completed
@@ -178,7 +178,7 @@ function workDiscoveryPlan(
     dedupeKey: `${type}:${event.runId}`,
     notification: {
       type,
-      target: { kind: 'work_discovery', runId: event.runId, sessionKey: event.sessionKey },
+      target: { kind: 'work_discovery', runId: event.runId, conversationId: event.conversationId },
       priority: completed ? 'normal' : 'high',
       title: completed
         ? { en: 'Understanding ready for review', zh: '用户理解已可确认' }

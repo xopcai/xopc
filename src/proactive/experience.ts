@@ -170,7 +170,7 @@ function projectSceneMoments(
       help: card?.workDone || card?.recommendation || 'I will watch the thread and prepare the next step when it matters.',
       arrangementId: follow.subscriptionId,
       manageRoute: `/assistant-work?follow-up=${encodeURIComponent(follow.id)}`,
-      object: follow.sessionKey ? { label: follow.subject ?? 'Open conversation', route: `/chat/${encodeURIComponent(follow.sessionKey)}` } : null,
+      object: follow.conversationId ? { label: follow.subject ?? 'Open conversation', route: `/chat/${encodeURIComponent(follow.conversationId)}` } : null,
       card,
       updatedAt: card?.updatedAt ?? follow.lastCheckedAt ?? follow.dueAt,
     });

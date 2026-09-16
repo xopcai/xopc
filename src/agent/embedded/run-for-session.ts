@@ -15,7 +15,7 @@ import type { EmbeddedStreamEvent, RunXopcEmbeddedTurnParams, RunXopcEmbeddedTur
 import { applyStartupContextToUserMessage } from '../reply/apply-turn-user-enrichment.js';
 import { createLogger } from '../../utils/logger.js';
 import { resolveModel } from '../../providers/index.js';
-import { evaluateContextBudget } from '../memory/context-budget.js';
+import { recoverContext } from '../memory/context-recovery.js';
 import { resolveCompactionPolicy } from '../memory/compaction-policy.js';
 import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
 import { resolvePromptCachePolicy } from '../../providers/prompt-cache-plan.js';
@@ -25,7 +25,7 @@ import { projectTurnOutcome } from '../../session/turn-outcome-projector.js';
 const log = createLogger('EmbeddedTurnForSession');
 
 export type RunEmbeddedForSessionParams = {
-  sessionKey: string;
+  conversationId: string;
   runId?: string;
   userMessage: AgentMessage;
   llmImages?: import('@earendil-works/pi-ai').ImageContent[];
@@ -49,18 +49,18 @@ export type RunEmbeddedForSessionParams = {
 export async function runEmbeddedTurnForSession(
   params: RunEmbeddedForSessionParams,
 ): Promise<RunXopcEmbeddedTurnResult> {
-  const { sessionKey, agentManager, modelManager, sessionStore, userMessage } = params;
+  const { conversationId, agentManager, modelManager, sessionStore, userMessage } = params;
   const runId = params.runId ?? crypto.randomUUID();
   const config = params.getConfig?.();
   const supervisor = new AgentRunSupervisor({
-    timeoutMs: resolveAgentTurnTimeoutMs(config, sessionKey),
+    timeoutMs: resolveAgentTurnTimeoutMs(config, conversationId),
     deadlineAtMs: params.deadlineAtMs,
     parentSignal: params.abortSignal,
   });
   const finish = async (result: RunXopcEmbeddedTurnResult): Promise<RunXopcEmbeddedTurnResult> => {
     if (result.stopReason === 'connection_required' || result.stopReason === 'clarification_required') return result;
     try {
-      const rows = await sessionStore.loadTranscriptRows(sessionKey);
+      const rows = await sessionStore.loadTranscriptRows(conversationId);
       const hasTurn = rows.some((source) => {
         const row = source as TranscriptStoredRow & Record<string, unknown>;
         return row.turnId === runId;
@@ -84,13 +84,13 @@ export async function runEmbeddedTurnForSession(
         runStatus,
         summary: result.errorMessage,
       });
-      await sessionStore.appendTranscriptCustomEntry(sessionKey, {
+      await sessionStore.appendTranscriptCustomEntry(conversationId, {
         customType: 'turn_outcome',
         data: outcome,
       });
       params.onEvent?.({ type: 'turn_outcome', runId, outcome });
     } catch (err) {
-      log.warn({ err, sessionKey, runId }, 'Turn outcome persistence failed');
+      log.warn({ err, conversationId, runId }, 'Turn outcome persistence failed');
     }
     return result;
   };
@@ -99,7 +99,7 @@ export async function runEmbeddedTurnForSession(
     await params.beforeTurn?.();
     if (supervisor.signal.aborted) return { ok: false, errorMessage: 'aborted' };
 
-    const agent = (agentManager as any).getOrCreateAgent(sessionKey) as {
+    const agent = (agentManager as any).getOrCreateAgent(conversationId) as {
       state: {
         tools: RunXopcEmbeddedTurnParams['tools'];
         systemPrompt?: string;
@@ -107,9 +107,9 @@ export async function runEmbeddedTurnForSession(
       };
     };
     const mm = modelManager as any;
-    const configuredModelRef = String(mm.getModelForSession(sessionKey));
+    const configuredModelRef = String(mm.getModelForSession(conversationId));
     const candidates = typeof mm.getFallbackCandidatesForSession === 'function'
-      ? mm.getFallbackCandidatesForSession(sessionKey)
+      ? mm.getFallbackCandidatesForSession(conversationId)
       : [];
     const candidateModelRefs = candidates.length > 0
       ? candidates.map((candidate: { provider: string; model: string }) => `${candidate.provider}/${candidate.model}`)
@@ -121,14 +121,14 @@ export async function runEmbeddedTurnForSession(
     for (const [index, ref] of candidateModelRefs.entries()) {
       try {
         const resolved = index === 0 && typeof mm.getResolvedModelForSession === 'function'
-          ? mm.getResolvedModelForSession(sessionKey)
+          ? mm.getResolvedModelForSession(conversationId)
           : resolveModel(ref);
         resolvedCandidates.push({
           ref,
           model: resolved as RunXopcEmbeddedTurnParams['model'],
         });
       } catch (err) {
-        log.warn({ err, sessionKey, runId, modelRef: ref }, 'Skipping unavailable model candidate');
+        log.warn({ err, conversationId, runId, modelRef: ref }, 'Skipping unavailable model candidate');
       }
     }
     const primary = resolvedCandidates[0];
@@ -139,24 +139,24 @@ export async function runEmbeddedTurnForSession(
     if (typeof mm.applyResolvedModel === 'function') {
       mm.applyResolvedModel(agent, model, modelRef);
     } else {
-      await mm.applyModelForSession(agent, sessionKey);
+      await mm.applyModelForSession(agent, conversationId);
     }
-    agentManager.setModelForSession(sessionKey, modelRef);
+    agentManager.setModelForSession(conversationId, modelRef);
     const tools = agent.state.tools;
-    const turnPolicy = agentManager.createAgentTurnPolicy(sessionKey);
+    const turnPolicy = agentManager.createAgentTurnPolicy(conversationId);
     const systemPrompt = [agent.state.systemPrompt ?? '', params.presentation === 'voice' ? voicePresentationPrompt : ''].filter(Boolean).join('\n\n');
     const thinkingLevel = (params.thinkingOverride as ThinkingLevel | undefined) ?? agent.state.thinkingLevel;
-    const workspaceDir = agentManager.getResolvedWorkspaceForSession(sessionKey);
+    const workspaceDir = agentManager.getResolvedWorkspaceForSession(conversationId);
     const promptCachePolicy = resolvePromptCachePolicy(
       config
-        ? resolveEffectiveAgentProfileForSession(config, sessionKey).config.runtime.promptCache
+        ? resolveEffectiveAgentProfileForSession(config, conversationId).config.runtime.promptCache
         : undefined,
     );
     let userMessageForTurn = userMessage;
     if (params.applyStartupContext !== false) {
       userMessageForTurn = await applyStartupContextToUserMessage({
         userMessage,
-        sessionKey,
+        conversationId,
         workspaceDir,
         cfg: config,
         sessionStore,
@@ -168,7 +168,7 @@ export async function runEmbeddedTurnForSession(
 
     try {
       await maybeAutoCompactBeforeTurn({
-        sessionKey,
+        conversationId,
         sessionStore,
         agentManager,
         model,
@@ -189,7 +189,7 @@ export async function runEmbeddedTurnForSession(
 
     log.info(
       {
-        sessionKey,
+        conversationId,
         runId,
         configuredModelRef,
         primaryModelRef: modelRef,
@@ -215,18 +215,18 @@ export async function runEmbeddedTurnForSession(
         break;
       }
       const rowsBeforeAttempt = hasNextCandidate
-        ? await sessionStore.loadTranscriptRows(sessionKey)
+        ? await sessionStore.loadTranscriptRows(conversationId)
         : undefined;
 
       if (typeof mm.applyResolvedModel === 'function') {
         mm.applyResolvedModel(agent, candidateModel, candidateModelRef);
       }
-      agentManager.setModelForSession(sessionKey, candidateModelRef);
+      agentManager.setModelForSession(conversationId, candidateModelRef);
 
       if (isFallbackAttempt) {
         log.info(
           {
-            sessionKey,
+            conversationId,
             runId,
             primaryModelRef,
             fallbackModelRef: candidateModelRef,
@@ -239,9 +239,10 @@ export async function runEmbeddedTurnForSession(
 
       try {
         const turnResult = await runWithEmbeddedExecutionSession(
-          sessionKey,
+          conversationId,
           () => runXopcEmbeddedTurn({
-            sessionKey,
+            conversationId,
+            verifyChanges: config ? resolveEffectiveAgentProfileForSession(config, conversationId).agentId === 'coder' : false,
             runId,
             userMessage: userMessageForTurn,
             images: params.llmImages,
@@ -251,13 +252,14 @@ export async function runEmbeddedTurnForSession(
             systemPrompt,
             thinkingLevel,
             promptCachePolicy,
+            compactionPolicy: resolveCompactionPolicy(config),
             workspaceDir,
             sessionStore,
             timeoutMs: attemptPlan.timeoutMs,
             turnPolicy,
             abortSignal: supervisor.signal,
             onEvent: params.onEvent,
-            onAgentEvent: (event) => agentManager.emitRuntimeEvent(sessionKey, event),
+            onAgentEvent: (event) => agentManager.emitRuntimeEvent(conversationId, event),
             resumeLastUserMessage,
           }),
           runId,
@@ -267,7 +269,7 @@ export async function runEmbeddedTurnForSession(
           if (isFallbackAttempt) {
             log.info(
               {
-                sessionKey,
+                conversationId,
                 runId,
                 primaryModelRef,
                 fallbackModelRef: candidateModelRef,
@@ -284,7 +286,7 @@ export async function runEmbeddedTurnForSession(
         if (supervisor.signal.aborted || turnResult.retryable === false) break;
         log.warn(
           {
-            sessionKey,
+            conversationId,
             runId,
             modelRef: candidateModelRef,
             attempt: i + 1,
@@ -303,7 +305,7 @@ export async function runEmbeddedTurnForSession(
           throw err;
         }
         log.warn(
-          { err, sessionKey, runId, modelRef: candidateModelRef, attempt: i + 1, total: resolvedCandidates.length, hasNextCandidate },
+          { err, conversationId, runId, modelRef: candidateModelRef, attempt: i + 1, total: resolvedCandidates.length, hasNextCandidate },
           hasNextCandidate
             ? 'Agent model call threw, trying fallback'
             : 'Agent model call threw, no fallback remains',
@@ -311,10 +313,10 @@ export async function runEmbeddedTurnForSession(
       }
 
       if (hasNextCandidate && rowsBeforeAttempt) {
-        const preparation = await sessionStore.prepareModelFallback(sessionKey, rowsBeforeAttempt);
+        const preparation = await sessionStore.prepareModelFallback(conversationId, rowsBeforeAttempt);
         if (preparation === 'unsafe') {
           log.warn(
-            { sessionKey, runId, modelRef: candidateModelRef, attempt: i + 1 },
+            { conversationId, runId, modelRef: candidateModelRef, attempt: i + 1 },
             'Agent model fallback skipped because the failed attempt changed the transcript',
           );
           break;
@@ -342,12 +344,8 @@ export async function runEmbeddedTurnForSession(
 // Pre-turn automatic compaction
 // ---------------------------------------------------------------------------
 
-function serializedTranscriptBytes(messages: readonly AgentMessage[]): number {
-  return Buffer.byteLength(JSON.stringify(messages), 'utf8');
-}
-
 async function maybeAutoCompactBeforeTurn(opts: {
-  sessionKey: string;
+  conversationId: string;
   sessionStore: SessionStore;
   agentManager: AgentInstanceGateway;
   model: RunXopcEmbeddedTurnParams['model'];
@@ -361,7 +359,7 @@ async function maybeAutoCompactBeforeTurn(opts: {
   onEvent?: (event: EmbeddedStreamEvent) => void;
 }): Promise<void> {
   const {
-    sessionKey,
+    conversationId,
     sessionStore,
     agentManager,
     model,
@@ -376,141 +374,40 @@ async function maybeAutoCompactBeforeTurn(opts: {
   } = opts;
   const policy = resolveCompactionPolicy(config);
 
-  const contextWindow = (model as { contextWindow?: number }).contextWindow ?? 128_000;
-  const messages = await sessionStore.load(sessionKey);
-  const activeTranscriptBytes = serializedTranscriptBytes(messages);
-  const byteLimitExceeded =
-    policy.enabled && activeTranscriptBytes > policy.maxActiveTranscriptBytes;
-  const evaluateBudget = (history: AgentMessage[]) => evaluateContextBudget({
-    messages: history,
-    contextWindow,
-    systemPrompt,
-    currentUserMessage: userMessage,
-    tools,
-    imageCount,
-    triggerThreshold: policy.triggerThreshold,
-    reserveTokens: policy.reserveTokens,
-    minToolResultKeepChars: policy.minToolResultKeepChars,
-    canCompact: history.length >= policy.minMessagesBeforeCompact,
-  });
-  const budget = evaluateBudget(messages);
-  let mustRecover = byteLimitExceeded || budget.estimatedTokens > budget.hardLimitTokens;
-
-  if (
-    !byteLimitExceeded &&
-    (budget.route === 'fits' || budget.route === 'truncate_tool_results_only')
-  ) {
-    return;
-  }
-
-  if (!policy.enabled) {
-    if (budget.estimatedTokens <= budget.hardLimitTokens) return;
-    const fitsAfterToolPruning = budget.estimatedTokens - budget.reducibleToolResultTokens
-      <= budget.hardLimitTokens;
-    if (fitsAfterToolPruning) return;
-    throw new Error(
-      `Context budget exceeded (${budget.estimatedTokens}/${budget.hardLimitTokens} tokens) and compaction is disabled`,
-    );
-  }
-
-  log.info(
-    {
-      sessionKey,
-      route: budget.route,
-      estimatedTokens: budget.estimatedTokens,
-      usagePercent: budget.usagePercent,
-      contextWindow,
-      activeTranscriptBytes,
-      maxActiveTranscriptBytes: policy.maxActiveTranscriptBytes,
-      byteLimitExceeded,
-    },
-    'Pre-turn auto-compaction triggered',
-  );
-
-  onEvent?.({
-    type: 'compaction',
-    status: 'started',
-    tokensBefore: budget.estimatedTokens,
-  });
-
+  let started = false;
   try {
-    let summaryModel = model;
-    let summaryFallbackModels = fallbackModels;
-    if (policy.model) {
-      summaryModel = resolveModel(policy.model) as RunXopcEmbeddedTurnParams['model'];
-      const summaryRef = `${summaryModel.provider}/${summaryModel.id}`;
-      summaryFallbackModels = [model, ...fallbackModels].filter(
-        (candidate) => `${candidate.provider}/${candidate.id}` !== summaryRef,
-      );
-    }
-    let result = await sessionStore.compact(
-      sessionKey,
-      messages,
-      summaryModel,
-      undefined,
-      byteLimitExceeded || budget.estimatedTokens > budget.hardLimitTokens,
-      { fallbackModels: summaryFallbackModels, signal: abortSignal },
-    );
-
-    let currentMessages = messages;
-    if (result.compacted) {
-      agentManager.removeAgent(sessionKey);
-      currentMessages = await sessionStore.load(sessionKey);
-    }
-    const remainingBudget = evaluateBudget(currentMessages);
-    mustRecover = serializedTranscriptBytes(currentMessages) > policy.maxActiveTranscriptBytes
-      || remainingBudget.estimatedTokens > remainingBudget.hardLimitTokens;
-    if (mustRecover) {
-      abortSignal?.throwIfAborted();
-      log.warn(
-        { sessionKey, estimatedTokens: remainingBudget.estimatedTokens, phase: 'pre_turn_recovery' },
-        'Compacting entire transcript because retained history exceeds the context budget',
-      );
-      result = await sessionStore.compact(
-        sessionKey,
-        currentMessages,
-        summaryModel,
-        undefined,
-        true,
-        { fallbackModels: summaryFallbackModels, signal: abortSignal, summarizeAll: true },
-      );
-      if (result.compacted) agentManager.removeAgent(sessionKey);
-      const recoveredMessages = await sessionStore.load(sessionKey);
-      const recoveredBudget = evaluateBudget(recoveredMessages);
-      if (!result.compacted
-        || serializedTranscriptBytes(recoveredMessages) > policy.maxActiveTranscriptBytes
-        || recoveredBudget.estimatedTokens > recoveredBudget.hardLimitTokens) {
-        throw new Error(
-          `Context budget still exceeded after full-history compaction (${recoveredBudget.estimatedTokens}/${recoveredBudget.hardLimitTokens} tokens); reduce the current input or system/tool context`,
-        );
-      }
-    }
-
-    if (result.compacted) {
-      log.info(
-        { sessionKey, tokensBefore: result.tokensBefore, tokensAfter: result.tokensAfter },
-        'Pre-turn auto-compaction completed',
-      );
-
-      onEvent?.({
-        type: 'compaction',
-        status: 'completed',
-        tokensBefore: result.tokensBefore,
-        tokensAfter: result.tokensAfter,
-        summary: result.summary.length > 200 ? `${result.summary.slice(0, 200)}…` : result.summary,
-      });
-    } else {
-      onEvent?.({ type: 'compaction', status: 'skipped' });
-    }
+    const recovered = await recoverContext({
+      conversationId,
+      policy,
+      budget: {
+        contextWindow: model.contextWindow ?? 128_000, systemPrompt,
+        currentUserMessage: userMessage, tools, imageCount,
+        triggerThreshold: policy.triggerThreshold, reserveTokens: policy.reserveTokens,
+        minToolResultKeepChars: policy.minToolResultKeepChars,
+      },
+      summaryModel: () => policy.model ? resolveModel(policy.model) as typeof model : model,
+      fallbackModels: policy.model ? [model, ...fallbackModels] : fallbackModels,
+      signal: abortSignal,
+      transcript: {
+        loadMessages: () => sessionStore.load(conversationId),
+        compact: (...args) => {
+          if (!started) {
+            started = true;
+            onEvent?.({ type: 'compaction', status: 'started' });
+          }
+          return sessionStore.compact(conversationId, ...args);
+        },
+      },
+      onCompacted: () => agentManager.removeAgent(conversationId),
+    });
+    if (recovered.status === 'compacted' && recovered.result) {
+      const result = recovered.result;
+      onEvent?.({ type: 'compaction', status: 'completed', tokensBefore: result.tokensBefore,
+        tokensAfter: result.tokensAfter, summary: result.summary.slice(0, 200) });
+    } else if (started) onEvent?.({ type: 'compaction', status: 'skipped' });
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    log.warn(
-      { err, sessionKey, estimatedTokens: budget.estimatedTokens, activeTranscriptBytes },
-      `Pre-turn auto-compaction failed: ${errorMessage}`,
-    );
-    onEvent?.({ type: 'compaction', status: 'skipped' });
-    if (mustRecover || byteLimitExceeded || budget.estimatedTokens > budget.hardLimitTokens) {
-      throw err;
-    }
+    log.warn({ err, conversationId }, 'Pre-turn context recovery failed');
+    if (started) onEvent?.({ type: 'compaction', status: 'skipped' });
+    throw err;
   }
 }

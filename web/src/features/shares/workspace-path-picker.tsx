@@ -33,8 +33,8 @@ export function WorkspacePathPickerDialog({
   initialPath,
   /** Filter what kinds of entries the user can confirm on. */
   selectKind = 'any',
-  /** Optional workspace scope. Mirrors the gateway's sessionKey→agentId resolution. */
-  sessionKey,
+  /** Optional workspace scope. Mirrors the gateway's conversationId→agentId resolution. */
+  conversationId,
   agentId,
 }: {
   open: boolean;
@@ -42,7 +42,7 @@ export function WorkspacePathPickerDialog({
   onConfirm: (picked: { path: string; isDirectory: boolean; agentId: string }) => void;
   initialPath?: string;
   selectKind?: 'file' | 'directory' | 'any';
-  sessionKey?: string | null;
+  conversationId?: string | null;
   agentId?: string | null;
 }) {
   const language = useLocaleStore((s) => s.language);
@@ -52,7 +52,7 @@ export function WorkspacePathPickerDialog({
 
   // Active "chat editor" agent — match the chat sidebar by default.
   const chatEditorAgentId = useWorkspaceEditorAgentStore((s) => s.agentId);
-  const token = useGatewayStore((s) => s.sessionKey);
+  const token = useGatewayStore((s) => s.conversationId);
   const hasToken = Boolean(token);
 
   const { data: agentsPayload } = useSWR(
@@ -83,7 +83,7 @@ export function WorkspacePathPickerDialog({
 
   const { tree, loading, error, loadRoot, loadChildren, reset } = useWorkspaceTree(
     pickedAgentId,
-    sessionKey ?? null,
+    conversationId ?? null,
   );
 
   const [selected, setSelected] = useState<{ path: string; isDirectory: boolean } | null>(
@@ -98,7 +98,7 @@ export function WorkspacePathPickerDialog({
       return;
     }
     void loadRoot();
-  }, [open, pickedAgentId, sessionKey, loadRoot, reset, initialPath]);
+  }, [open, pickedAgentId, conversationId, loadRoot, reset, initialPath]);
 
   const handleExpand = useCallback(
     (dirPath: string) => {

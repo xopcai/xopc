@@ -21,7 +21,7 @@ describe('skill_install', () => {
     }));
     const tool = createSkillInstallTool({
       installSkillFromMarketplace,
-      getSessionKey: () => 'agent:main:webchat:test',
+      getConversationId: () => 'agent:main:webchat:test',
     });
 
     const result = await tool.execute('call-1', {
@@ -32,7 +32,7 @@ describe('skill_install', () => {
     expect(installSkillFromMarketplace).toHaveBeenCalledWith(expect.objectContaining({
       provider: 'clawhub',
       name: 'heygen-com/hyperframes',
-      sessionKey: 'agent:main:webchat:test',
+      conversationId: 'agent:main:webchat:test',
       target: 'global',
     }));
     expect(textPayload(result)).toContain('Installed skill "hyperframes" from clawhub.');

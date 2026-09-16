@@ -19,8 +19,8 @@ export type ClarificationCheckpoint = {
 export type ClarificationWait = {
   id: string;
   principalId: string;
-  sessionKey: string;
-  sessionId: string;
+  conversationId: string;
+  transcriptId: string;
   objectiveId: string;
   objectiveRevision: number;
   originRunId: string;
@@ -46,7 +46,7 @@ export type ClarificationWait = {
 };
 
 export type ClarificationWaitSnapshot = {
-  sessionId: string;
+  transcriptId: string;
   revision: number;
   serverTime: number;
   clarification: ClarificationWait | null;

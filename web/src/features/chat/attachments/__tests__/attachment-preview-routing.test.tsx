@@ -50,26 +50,26 @@ describe('file preview entry points', () => {
         uri: file.uri, workspaceRelativePath: file.workspaceRelativePath,
       }],
     };
-    act(() => root.render(<TurnOutcomeResult outcome={outcome} sessionKey="session-a" projectId="project-a" />));
+    act(() => root.render(<TurnOutcomeResult outcome={outcome} conversationId="session-a" projectId="project-a" />));
     act(() => container.querySelector<HTMLButtonElement>('button')?.click());
-    expect(useWorkspacePreviewStore.getState()).toMatchObject({ path: 'output/report.md', sessionKey: 'session-a', projectId: 'project-a' });
+    expect(useWorkspacePreviewStore.getState()).toMatchObject({ path: 'output/report.md', conversationId: 'session-a', projectId: 'project-a' });
     expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 
   it('uses the same workspace preview for generated message attachments', () => {
-    act(() => root.render(<AttachmentRenderer attachments={[file]} sessionKey="session-b" />));
+    act(() => root.render(<AttachmentRenderer attachments={[file]} conversationId="session-b" />));
     act(() => container.querySelector<HTMLButtonElement>('button')?.click());
-    expect(useWorkspacePreviewStore.getState()).toMatchObject({ path: 'output/report.md', sessionKey: 'session-b' });
+    expect(useWorkspacePreviewStore.getState()).toMatchObject({ path: 'output/report.md', conversationId: 'session-b' });
     act(() => useWorkspacePreviewStore.getState().setPath('another.md'));
-    expect(useWorkspacePreviewStore.getState().sessionKey).toBeNull();
+    expect(useWorkspacePreviewStore.getState().conversationId).toBeNull();
   });
 
   it.each([
-    { layout: 'user' as const, attachment: file, sessionKey: 'session-a' },
-    { layout: 'assistant' as const, attachment: { ...file, workspaceRelativePath: undefined }, sessionKey: 'session-a' },
-    { layout: 'assistant' as const, attachment: file, sessionKey: undefined },
-  ])('keeps media attachments in the attachment preview when workspace scope is unavailable', ({ layout, attachment, sessionKey }) => {
-    act(() => root.render(<AttachmentRenderer attachments={[attachment]} layout={layout} sessionKey={sessionKey} />));
+    { layout: 'user' as const, attachment: file, conversationId: 'session-a' },
+    { layout: 'assistant' as const, attachment: { ...file, workspaceRelativePath: undefined }, conversationId: 'session-a' },
+    { layout: 'assistant' as const, attachment: file, conversationId: undefined },
+  ])('keeps media attachments in the attachment preview when workspace scope is unavailable', ({ layout, attachment, conversationId }) => {
+    act(() => root.render(<AttachmentRenderer attachments={[attachment]} layout={layout} conversationId={conversationId} />));
     act(() => container.querySelector<HTMLButtonElement>('button')?.click());
     expect(useWorkspacePreviewStore.getState().path).toBeNull();
     expect(container.querySelector('[role="dialog"]')).not.toBeNull();

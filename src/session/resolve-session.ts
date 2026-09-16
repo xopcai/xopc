@@ -9,7 +9,7 @@ import {
 } from '../agent/transcript/thinking-types.js';
 import { createLogger } from '../utils/logger.js';
 import {
-  findSessionKeyBySessionId,
+  findConversationIdByTranscriptId,
   getSessionMetadata,
   getSessionPersistedLevels,
   requireXopcDatabase,
@@ -26,46 +26,46 @@ import type { SessionMetadata } from './types.js';
 const log = createLogger('ResolveSession');
 
 export type SessionResolution = {
-  sessionId: string;
-  sessionKey?: string;
+  transcriptId: string;
+  conversationId?: string;
   sessionMetadata?: SessionMetadata | null;
   isNewSession: boolean;
   persistedThinking?: ThinkLevel;
   persistedVerbose?: VerboseLevel;
 };
 
-export type SessionKeyResolution = {
-  sessionKey?: string;
+export type ConversationIdResolution = {
+  conversationId?: string;
   sessionMetadata?: SessionMetadata | null;
 };
 
-export async function resolveSessionKeyForRequest(opts: {
+export async function resolveConversationIdForRequest(opts: {
   cfg: Config;
-  sessionKey?: string;
-  sessionId?: string;
+  conversationId?: string;
+  transcriptId?: string;
   agentId?: string;
-}): Promise<SessionKeyResolution> {
+}): Promise<ConversationIdResolution> {
   requireXopcDatabase();
-  const explicitKey = opts.sessionKey?.trim();
-  const requestedSessionId = opts.sessionId?.trim();
+  const explicitKey = opts.conversationId?.trim();
+  const requestedTranscriptId = opts.transcriptId?.trim();
 
-  let sessionKey = explicitKey;
-  if (requestedSessionId && !sessionKey) {
-    sessionKey = findSessionKeyBySessionId(requestedSessionId) ?? undefined;
+  let conversationId = explicitKey;
+  if (requestedTranscriptId && !conversationId) {
+    conversationId = findConversationIdByTranscriptId(requestedTranscriptId) ?? undefined;
   }
 
-  const sessionMetadata = sessionKey ? getSessionMetadata(sessionKey) : null;
-  return { sessionKey, sessionMetadata };
+  const sessionMetadata = conversationId ? getSessionMetadata(conversationId) : null;
+  return { conversationId, sessionMetadata };
 }
 
 export async function resolveSession(opts: {
   cfg: Config;
-  sessionKey?: string;
-  sessionId?: string;
+  conversationId?: string;
+  transcriptId?: string;
   agentId?: string;
 }): Promise<SessionResolution> {
   const sessionCfg = opts.cfg.session ?? SessionConfigSchema.parse({});
-  const { sessionKey, sessionMetadata } = await resolveSessionKeyForRequest(opts);
+  const { conversationId, sessionMetadata } = await resolveConversationIdForRequest(opts);
   const now = Date.now();
 
   const routing = sessionMetadata?.routing;
@@ -105,29 +105,29 @@ export async function resolveSession(opts: {
       })
     : { fresh: false };
   const fresh = freshness.fresh;
-  const sessionId =
-    opts.sessionId?.trim() || (fresh ? sessionMetadata?.sessionId : undefined) || randomUUID();
-  const isNewSession = !fresh && !opts.sessionId?.trim();
+  const transcriptId =
+    opts.transcriptId?.trim() || (fresh ? sessionMetadata?.transcriptId : undefined) || randomUUID();
+  const isNewSession = !fresh && !opts.transcriptId?.trim();
 
-  if (isNewSession && sessionKey) {
+  if (isNewSession && conversationId) {
     log.debug(
-      { sessionKey, previousSessionId: sessionMetadata?.sessionId, sessionId, resetType },
+      { conversationId, previousTranscriptId: sessionMetadata?.transcriptId, transcriptId, resetType },
       'Session reset boundary: new session id for turn',
     );
   }
 
   const persistedThinking =
-    fresh && sessionKey
-      ? normalizeThinkLevel(getSessionPersistedLevels(sessionKey)?.thinkingLevel ?? undefined)
+    fresh && conversationId
+      ? normalizeThinkLevel(getSessionPersistedLevels(conversationId)?.thinkingLevel ?? undefined)
       : undefined;
   const persistedVerbose =
-    fresh && sessionKey
-      ? normalizeVerboseLevel(getSessionPersistedLevels(sessionKey)?.verboseLevel ?? undefined)
+    fresh && conversationId
+      ? normalizeVerboseLevel(getSessionPersistedLevels(conversationId)?.verboseLevel ?? undefined)
       : undefined;
 
   return {
-    sessionId,
-    sessionKey,
+    transcriptId,
+    conversationId,
     sessionMetadata,
     isNewSession,
     persistedThinking,

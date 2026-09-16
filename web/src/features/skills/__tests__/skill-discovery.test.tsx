@@ -39,7 +39,7 @@ describe('skill discovery', () => {
   beforeEach(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     vi.clearAllMocks();
-    useGatewayStore.setState({ sessionKey: 'test-token' });
+    useGatewayStore.setState({ conversationId: 'test-token' });
     vi.mocked(fetchChatAgents).mockResolvedValue({ defaultId: 'assistant', items: [{ id: 'assistant' }] });
     vi.mocked(getChatSkillsCached).mockResolvedValue(available);
     container = document.createElement('div');
@@ -49,7 +49,7 @@ describe('skill discovery', () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
-    useGatewayStore.setState({ sessionKey: '' });
+    useGatewayStore.setState({ conversationId: '' });
   });
   async function renderPage() {
     await act(async () => root.render(

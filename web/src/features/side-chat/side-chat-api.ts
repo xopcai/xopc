@@ -17,9 +17,9 @@ function headers(): HeadersInit {
   return { 'x-xopc-client-instance-id': getSideChatClientInstanceId() };
 }
 
-export async function createSideChat(parentSessionKey: string, selections: SideChatSelection[]): Promise<SideChatView> {
+export async function createSideChat(parentConversationId: string, selections: SideChatSelection[]): Promise<SideChatView> {
   const response = await fetchJson<{ sideChat: SideChatView }>(
-    apiUrl(`/api/sessions/${encodeURIComponent(parentSessionKey)}/side-chats`),
+    apiUrl(`/api/sessions/${encodeURIComponent(parentConversationId)}/side-chats`),
     {
       method: 'POST',
       headers: headers(),

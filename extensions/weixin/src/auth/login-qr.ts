@@ -5,7 +5,7 @@ import { logger } from "../util/logger.js";
 import { redactToken } from "../util/redact.js";
 
 type ActiveLogin = {
-  sessionKey: string;
+  conversationId: string;
   id: string;
   qrcode: string;
   qrcodeUrl: string;
@@ -98,7 +98,7 @@ async function pollQRStatus(
 export type WeixinQrStartResult = {
   qrcodeUrl?: string;
   message: string;
-  sessionKey: string;
+  conversationId: string;
 };
 
 export type WeixinQrWaitResult = {
@@ -119,16 +119,16 @@ export async function startWeixinLoginWithQr(opts: {
   botType?: string;
   routeTag?: string;
 }): Promise<WeixinQrStartResult> {
-  const sessionKey = opts.accountId || randomUUID();
+  const conversationId = opts.accountId || randomUUID();
 
   purgeExpiredLogins();
 
-  const existing = activeLogins.get(sessionKey);
+  const existing = activeLogins.get(conversationId);
   if (!opts.force && existing && isLoginFresh(existing) && existing.qrcodeUrl) {
     return {
       qrcodeUrl: existing.qrcodeUrl,
       message: "二维码已就绪，请使用微信扫描。",
-      sessionKey,
+      conversationId,
     };
   }
 
@@ -143,36 +143,36 @@ export async function startWeixinLoginWithQr(opts: {
     logger.info(`二维码链接: ${qrResponse.qrcode_img_content}`);
 
     const login: ActiveLogin = {
-      sessionKey,
+      conversationId,
       id: randomUUID(),
       qrcode: qrResponse.qrcode,
       qrcodeUrl: qrResponse.qrcode_img_content,
       startedAt: Date.now(),
     };
 
-    activeLogins.set(sessionKey, login);
+    activeLogins.set(conversationId, login);
 
     return {
       qrcodeUrl: qrResponse.qrcode_img_content,
       message: "使用微信扫描以下二维码，以完成连接。",
-      sessionKey,
+      conversationId,
     };
   } catch (err) {
     logger.error(`Failed to start Weixin login: ${String(err)}`);
     return {
       message: `Failed to start login: ${String(err)}`,
-      sessionKey,
+      conversationId,
     };
   }
 }
 
 const MAX_QR_REFRESH_COUNT = 3;
 
-export function getWeixinActiveLoginSnapshot(sessionKey: string): {
+export function getWeixinActiveLoginSnapshot(conversationId: string): {
   qrcodeUrl: string;
   status?: ActiveLogin["status"];
 } | null {
-  const login = activeLogins.get(sessionKey);
+  const login = activeLogins.get(conversationId);
   if (!login || !isLoginFresh(login)) {
     return null;
   }
@@ -184,14 +184,14 @@ export async function waitForWeixinLogin(opts: {
   verbose?: boolean;
   /** When true, do not write to stdout (browser / gateway QR flow). */
   silent?: boolean;
-  sessionKey: string;
+  conversationId: string;
   botType?: string;
   routeTag?: string;
 }): Promise<WeixinQrWaitResult> {
-  let activeLogin = activeLogins.get(opts.sessionKey);
+  let activeLogin = activeLogins.get(opts.conversationId);
 
   if (!activeLogin) {
-    logger.warn(`waitForWeixinLogin: no active login sessionKey=${opts.sessionKey}`);
+    logger.warn(`waitForWeixinLogin: no active login conversationId=${opts.conversationId}`);
     return {
       connected: false,
       message: "当前没有进行中的登录，请先发起登录。",
@@ -199,8 +199,8 @@ export async function waitForWeixinLogin(opts: {
   }
 
   if (!isLoginFresh(activeLogin)) {
-    logger.warn(`waitForWeixinLogin: login QR expired sessionKey=${opts.sessionKey}`);
-    activeLogins.delete(opts.sessionKey);
+    logger.warn(`waitForWeixinLogin: login QR expired conversationId=${opts.conversationId}`);
+    activeLogins.delete(opts.conversationId);
     return {
       connected: false,
       message: "二维码已过期，请重新生成。",
@@ -244,9 +244,9 @@ export async function waitForWeixinLogin(opts: {
           qrRefreshCount++;
           if (qrRefreshCount > MAX_QR_REFRESH_COUNT) {
             logger.warn(
-              `waitForWeixinLogin: QR expired ${MAX_QR_REFRESH_COUNT} times, giving up sessionKey=${opts.sessionKey}`,
+              `waitForWeixinLogin: QR expired ${MAX_QR_REFRESH_COUNT} times, giving up conversationId=${opts.conversationId}`,
             );
-            activeLogins.delete(opts.sessionKey);
+            activeLogins.delete(opts.conversationId);
             return {
               connected: false,
               message: "登录超时：二维码多次过期，请重新开始登录流程。",
@@ -282,7 +282,7 @@ export async function waitForWeixinLogin(opts: {
             }
           } catch (refreshErr) {
             logger.error(`waitForWeixinLogin: failed to refresh QR code: ${String(refreshErr)}`);
-            activeLogins.delete(opts.sessionKey);
+            activeLogins.delete(opts.conversationId);
             return {
               connected: false,
               message: `刷新二维码失败: ${String(refreshErr)}`,
@@ -305,7 +305,7 @@ export async function waitForWeixinLogin(opts: {
         }
         case "confirmed": {
           if (!statusResponse.ilink_bot_id) {
-            activeLogins.delete(opts.sessionKey);
+            activeLogins.delete(opts.conversationId);
             logger.error("Login confirmed but ilink_bot_id missing from response");
             return {
               connected: false,
@@ -314,7 +314,7 @@ export async function waitForWeixinLogin(opts: {
           }
 
           activeLogin.botToken = statusResponse.bot_token;
-          activeLogins.delete(opts.sessionKey);
+          activeLogins.delete(opts.conversationId);
 
           logger.info(
             `✅ Login confirmed! ilink_bot_id=${statusResponse.ilink_bot_id} ilink_user_id=${redactToken(statusResponse.ilink_user_id)}`,
@@ -332,7 +332,7 @@ export async function waitForWeixinLogin(opts: {
       }
     } catch (err) {
       logger.error(`Error polling QR status: ${String(err)}`);
-      activeLogins.delete(opts.sessionKey);
+      activeLogins.delete(opts.conversationId);
       return {
         connected: false,
         message: `Login failed: ${String(err)}`,
@@ -343,9 +343,9 @@ export async function waitForWeixinLogin(opts: {
   }
 
   logger.warn(
-    `waitForWeixinLogin: timed out waiting for QR scan sessionKey=${opts.sessionKey} timeoutMs=${timeoutMs}`,
+    `waitForWeixinLogin: timed out waiting for QR scan conversationId=${opts.conversationId} timeoutMs=${timeoutMs}`,
   );
-  activeLogins.delete(opts.sessionKey);
+  activeLogins.delete(opts.conversationId);
   return {
     connected: false,
     message: "登录超时，请重试。",

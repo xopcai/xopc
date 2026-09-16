@@ -13,7 +13,7 @@ const log = createLogger('HookHandler');
 
 export interface HookHandlerDeps {
   hookRunner?: ExtensionHookRunner;
-  sessionKey?: string;
+  conversationId?: string;
   agentId: string;
 }
 
@@ -23,7 +23,7 @@ export class HookHandler {
   private getContext(overrides?: Partial<HookContext>): HookContext {
     return createHookContext({
       extensionId: undefined,
-      sessionKey: this.deps.sessionKey,
+      conversationId: this.deps.conversationId,
       agentId: this.deps.agentId,
       timestamp: new Date(),
       ...overrides,
@@ -39,26 +39,26 @@ export class HookHandler {
     } catch (error) {
       const em = error instanceof Error ? error.message : String(error);
       log.warn(
-        { event, err: error, errorMessage: em, sessionKey: this.deps.sessionKey, agentId: this.deps.agentId },
+        { event, err: error, errorMessage: em, conversationId: this.deps.conversationId, agentId: this.deps.agentId },
         `Extension hook "${event}" failed: ${em}`,
       );
     }
   }
 
   /** Run a hook with an explicit session key (e.g. webchat turn lifecycle). */
-  async triggerWithSessionKey(
-    sessionKey: string,
+  async triggerWithConversationId(
+    conversationId: string,
     event: string,
     eventData: Record<string, unknown>,
   ): Promise<void> {
     if (!this.deps.hookRunner) return;
-    const ctx = this.getContext({ extensionId: undefined, sessionKey, timestamp: new Date() });
+    const ctx = this.getContext({ extensionId: undefined, conversationId, timestamp: new Date() });
     try {
-      await this.deps.hookRunner.runHooks(event as any, { ...eventData, sessionKey }, ctx);
+      await this.deps.hookRunner.runHooks(event as any, { ...eventData, conversationId }, ctx);
     } catch (error) {
       const em = error instanceof Error ? error.message : String(error);
       log.warn(
-        { event, err: error, errorMessage: em, sessionKey, agentId: this.deps.agentId },
+        { event, err: error, errorMessage: em, conversationId, agentId: this.deps.agentId },
         `Extension hook "${event}" failed: ${em}`,
       );
     }

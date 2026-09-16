@@ -27,13 +27,13 @@ describe('startSupportInvestigationSession', () => {
       token: 'a'.repeat(32),
     }));
 
-    const sessionKey = await startSupportInvestigationSession(report, 'investigate this', {
+    const conversationId = await startSupportInvestigationSession(report, 'investigate this', {
       fetch: request as never,
       getTurnClaim,
       randomUUID: () => 'message-1',
     });
 
-    expect(sessionKey).toBe('agent:main:webchat:default:direct:support-1');
+    expect(conversationId).toBe('agent:main:webchat:default:direct:support-1');
     expect(JSON.parse(String(request.mock.calls[0]?.[1]?.body))).toEqual({
       channel: 'webchat',
       agentId: 'main',

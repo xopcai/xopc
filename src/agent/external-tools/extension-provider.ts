@@ -14,7 +14,7 @@ import type {
 export interface ExtensionToolProviderDeps {
   registry?: ExtensionRegistry;
   disabledTools?: Set<string>;
-  getSessionKey: () => string | undefined;
+  getConversationId: () => string | undefined;
   hookRunner?: ExtensionHookRunner;
   toolExecutorConfig?: Partial<ToolExecutorConfig>;
 }
@@ -73,7 +73,7 @@ export class ExtensionToolProvider implements ExternalToolProvider {
     if (this.deps.hookRunner) {
       const hook = await this.deps.hookRunner.runBeforeToolCall(resolved.tool.name, args, {
         extensionId: resolved.extensionId,
-        sessionKey: this.deps.getSessionKey(),
+        conversationId: this.deps.getConversationId(),
       });
       if (!hook.allowed) throw new Error(hook.reason ?? 'Extension tool call blocked by policy hook.');
       executionArgs = hook.params ?? args;

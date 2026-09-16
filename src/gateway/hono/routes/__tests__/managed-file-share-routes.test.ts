@@ -134,7 +134,7 @@ describe('managed file sharing', () => {
       bucket: 'outbound', contentType: 'text/html', originalFilename: 'index.html',
     });
     referencedUri = media.uri;
-    const response = await createFileShare({ uri: media.uri, sessionKey: 'session-1', fileName: 'index.html' });
+    const response = await createFileShare({ uri: media.uri, conversationId: 'session-1', fileName: 'index.html' });
     expect(response.status).toBe(201);
     const { payload } = await response.json() as { payload: { id: string; fileName: string } };
     expect(payload.fileName).toBe('index.html');
@@ -148,8 +148,8 @@ describe('managed file sharing', () => {
     const media = await saveMediaBuffer(Buffer.from('private'), { bucket: 'outbound', contentType: 'text/plain' });
     referencedUri = media.uri;
     expect((await createFileShare({ uri: media.uri })).status).toBe(400);
-    expect((await createFileShare({ uri: media.uri, sessionKey: 'another-session' })).status).toBe(404);
-    expect((await createFileShare({ uri: media.uri, path: 'brief.txt', sessionKey: 'session-1' })).status).toBe(400);
+    expect((await createFileShare({ uri: media.uri, conversationId: 'another-session' })).status).toBe(404);
+    expect((await createFileShare({ uri: media.uri, path: 'brief.txt', conversationId: 'session-1' })).status).toBe(400);
     expect(getShareStore().getAllShares()).toHaveLength(0);
   });
 

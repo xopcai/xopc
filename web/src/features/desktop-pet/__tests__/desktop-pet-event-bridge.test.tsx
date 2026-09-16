@@ -38,7 +38,7 @@ describe('DesktopPetEventBridge', () => {
   function stream(type: string, payload: Record<string, unknown> = {}): void {
     window.dispatchEvent(new CustomEvent('agent-stream-event', {
       detail: {
-        sessionKey: 'agent:main:webchat:test',
+        conversationId: 'agent:main:webchat:test',
         activityDetailLevel: 'stream',
         event: { type, runId: 'run-1', payload },
       },

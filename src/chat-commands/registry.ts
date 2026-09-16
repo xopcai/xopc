@@ -164,7 +164,7 @@ export class CommandRegistry {
       };
     }
 
-    log.info({ command: name, sessionKey: context.sessionKey }, 'Executing command');
+    log.info({ command: name, conversationId: context.conversationId }, 'Executing command');
 
     try {
       const result = await command.handler(context, args);

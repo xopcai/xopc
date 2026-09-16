@@ -54,7 +54,7 @@ export function NotesHomeComposer({ projects, projectId, onProjectChange, onCrea
     try {
       const result = await prepareAgentNote(pending.current);
       onCreated();
-      navigate(noteCreationChatHref(result.sessionKey, result.noteId, h.agentPrompt));
+      navigate(noteCreationChatHref(result.conversationId, result.noteId, h.agentPrompt));
     } catch (err) {
       if (pending.current.note) onCreated();
       setError(err instanceof Error ? err.message : labels.quickCaptureFailedHint);

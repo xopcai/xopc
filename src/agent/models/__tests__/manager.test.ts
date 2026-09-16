@@ -22,15 +22,15 @@ import { ModelManager } from '../manager.js';
 describe('ModelManager session initialization', () => {
   it('uses a session override when the profile default differs', async () => {
     const manager = new ModelManager({ defaultModel: 'xopc-cloud/deepseek-v4-flash' });
-    const sessionKey = 'agent:coder:tui-test';
+    const conversationId = 'agent:coder:tui-test';
 
     await expect(
-      manager.switchModelForSession(sessionKey, 'minimax-cn/MiniMax-M2.7'),
+      manager.switchModelForSession(conversationId, 'minimax-cn/MiniMax-M2.7'),
     ).resolves.toBe(true);
 
     expect(
       manager.resolveInitialModelForSession(
-        sessionKey,
+        conversationId,
         'xopc-cloud/deepseek-v4-flash',
       ),
     ).toBe('minimax-cn/MiniMax-M2.7');

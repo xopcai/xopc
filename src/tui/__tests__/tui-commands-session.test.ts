@@ -12,7 +12,8 @@ import { XopcKeybindingsManager } from '../tui-keybindings-file.js';
 import { createInitialState } from '../tui-types.js';
 
 function makeHandler(overrides: Partial<Parameters<typeof createTuiCommandHandler>[0]> = {}) {
-  const state = createInitialState('agent:main:main');
+  const state = createInitialState("6d9217fe-77c7-411d-8cc9-92aabe81a2d0");
+  state.sessionInfo.agentId = "main";
   const chatLog = new ChatLog();
   const tui = { requestRender: vi.fn() } as unknown as Parameters<
     typeof createTuiCommandHandler
@@ -48,7 +49,7 @@ describe('TUI session slash commands', () => {
     await vi.waitFor(() => expect(setSession).toHaveBeenCalledOnce());
 
     const rawKey = setSession.mock.calls[0]![0] as string;
-    expect(rawKey).toMatch(/^tui-[0-9a-f-]{36}$/i);
+    expect(rawKey).toMatch(/^[0-9a-f-]{36}$/i);
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
@@ -123,7 +124,7 @@ describe('TUI session slash commands', () => {
     expect(chatLog.getTimelineViewportState()).toEqual({ mode: 'history', displayIndex: 8 });
   });
 
-  it('/agent switches to the same suffix under the target agent', async () => {
+  it('/agent creates a fresh UUID under the target agent', async () => {
     const systems: string[] = [];
     const switchAgentSession = vi.fn(async () => {});
     const { handler, sendMessage } = makeHandler({
@@ -131,7 +132,7 @@ describe('TUI session slash commands', () => {
         addSystem: (text: string) => systems.push(text),
         setToolsExpanded: () => {},
       } as never,
-      state: createInitialState('agent:coder:tui-123'),
+      state: { ...createInitialState("733570fc-6885-4145-8f88-273292c81696"), sessionInfo: { agentId: "coder" } },
       listAgents: vi.fn(async () => [
         { id: 'coder', enabled: true },
         { id: 'main', enabled: true },
@@ -141,7 +142,7 @@ describe('TUI session slash commands', () => {
 
     handler('/agent main');
 
-    await vi.waitFor(() => expect(switchAgentSession).toHaveBeenCalledWith('agent:main:tui-123', 'main'));
+    await vi.waitFor(() => expect(switchAgentSession).toHaveBeenCalledWith(expect.stringMatching(/^[0-9a-f-]{36}$/), 'main'));
     expect(systems.at(-1)).toContain('Switched to agent: main');
     expect(sendMessage).not.toHaveBeenCalled();
   });
@@ -185,7 +186,8 @@ describe('TUI session slash commands', () => {
 
   it('/agent refuses switching while a run is active', async () => {
     const systems: string[] = [];
-    const state = createInitialState('agent:main:main');
+    const state = createInitialState("6d9217fe-77c7-411d-8cc9-92aabe81a2d0");
+  state.sessionInfo.agentId = "main";
     state.activeRunId = 'run-1';
     const switchAgentSession = vi.fn(async () => {});
     const { handler } = makeHandler({
@@ -407,7 +409,7 @@ describe('TUI session slash commands', () => {
     const systems: string[] = [];
     const startWorkflowRun = vi.fn(async () => ({
       runId: 'run-1',
-      sessionKey: 'agent:main:webchat:default:direct:wf_run-1',
+      conversationId: "be278b62-65c6-4b8d-8876-363c0a155a5a",
       definitionId: 'audit_repo',
     }));
     const { handler, sendMessage } = makeHandler({
@@ -492,7 +494,7 @@ describe('TUI session slash commands', () => {
         contextWindow: 1000,
       },
       cwd: '/tmp/work',
-      sessionKey: 'agent:main:main',
+      conversationId: "6d9217fe-77c7-411d-8cc9-92aabe81a2d0",
       isProjectTrusted: () => false,
       isIdle: () => false,
       hasPendingMessages: () => true,
@@ -532,7 +534,7 @@ describe('TUI session slash commands', () => {
               ctx?.mode,
               ctx?.hasUI,
               ctx?.cwd,
-              ctx?.sessionKey,
+              ctx?.conversationId,
               ctx?.isIdle(),
               ctx?.hasPendingMessages(),
               ctx?.getModel(),
@@ -558,7 +560,7 @@ describe('TUI session slash commands', () => {
       'tui',
       true,
       '/tmp/work',
-      'agent:main:main',
+      "6d9217fe-77c7-411d-8cc9-92aabe81a2d0",
       false,
       true,
       { provider: 'openai', id: 'gpt-5', ref: 'openai/gpt-5', contextWindow: 1000 },

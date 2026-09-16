@@ -52,7 +52,7 @@ import {
 } from './capabilities/index.js';
 import {
   disposeAllSessionMcpRuntimes,
-  retireSessionMcpRuntimeForSessionKey,
+  retireSessionMcpRuntimeForConversationId,
 } from './mcp/bundle-mcp-tools.js';
 import { getEmbeddedExecutionRunId } from './embedded/execution-context.js';
 import { evictAllEmbeddedSessionRunners, evictEmbeddedSessionRunner } from './embedded/session-runner.js';
@@ -93,7 +93,7 @@ import { evaluateToolGate } from './context/execution-context.js';
 import { WorkspaceRuntimeRegistry, type WorkspaceRuntime } from './workspace-runtime/registry.js';
 import { BackgroundReviewCoordinator } from './background-review/coordinator.js';
 import { runTurnUserModelCapture } from './background-review/run-background-review.js';
-import { parseSessionKey } from '../routing/session-key.js';
+import { getConversationRouting } from '../routing/session-key.js';
 import { maybeRequestChannelExecApproval } from '../channels/exec-approval-runtime.js';
 import { mcpToolPolicyId } from './mcp/bundle-mcp-policy.js';
 import { parseExternalToolRef } from './external-tools/refs.js';
@@ -214,7 +214,7 @@ export interface AgentManagerConfig {
 
 export interface AgentInstance {
   agent: Agent;
-  sessionKey: string;
+  conversationId: string;
   createdAt: number;
   lastUsedAt: number;
   effectiveProfile: EffectiveAgentProfile;
@@ -325,7 +325,7 @@ export class AgentManager implements AgentInstanceGateway {
     });
     this.executionContext = new ExecutionContextCoordinator({
       getConfig: () => this.config.config,
-      getAccessForSession: (sessionKey) => resolveUserContextSessionAccess(this.config.config, sessionKey),
+      getAccessForSession: (conversationId) => resolveUserContextSessionAccess(this.config.config, conversationId),
       getWorkspaceIdForSession: (sk) => this.getResolvedWorkspaceForSession(sk),
       getProjectIdForSession: (sk) => getSessionMetadata(sk)?.projectId,
     });
@@ -343,8 +343,8 @@ export class AgentManager implements AgentInstanceGateway {
     });
   }
 
-  private isUserContextEnabledForSession(sessionKey: string): boolean {
-    return resolveUserContextSessionAccess(this.config.config, sessionKey).userModel;
+  private isUserContextEnabledForSession(conversationId: string): boolean {
+    return resolveUserContextSessionAccess(this.config.config, conversationId).userModel;
   }
 
   private computeBaseWorkspacePath(): string {
@@ -359,36 +359,36 @@ export class AgentManager implements AgentInstanceGateway {
    * Workspace root for inbound attachments / side effects for this session's agent id.
    * Uses in-memory session workspace overrides when the session has a persisted `workingDirectoryOverride`.
    */
-  getResolvedWorkspaceForSession(sessionKey: string): string {
+  getResolvedWorkspaceForSession(conversationId: string): string {
     const cfg = this.config.config!;
-    const fromMap = this.sessionWorkspaceOverrides.get(sessionKey);
+    const fromMap = this.sessionWorkspaceOverrides.get(conversationId);
     if (fromMap !== undefined) {
       return fromMap;
     }
-    return resolveEffectiveAgentProfileForSession(cfg, sessionKey).resolvedWorkspacePath;
+    return resolveEffectiveAgentProfileForSession(cfg, conversationId).resolvedWorkspacePath;
   }
 
-  private getWorkspaceRuntimeForSession(sessionKey: string | undefined): WorkspaceRuntime {
-    const profile = resolveEffectiveAgentProfileForSession(this.config.config!, sessionKey);
-    const resolvedPath = sessionKey
-      ? this.getResolvedWorkspaceForSession(sessionKey)
+  private getWorkspaceRuntimeForSession(conversationId: string | undefined): WorkspaceRuntime {
+    const profile = resolveEffectiveAgentProfileForSession(this.config.config!, conversationId);
+    const resolvedPath = conversationId
+      ? this.getResolvedWorkspaceForSession(conversationId)
       : this.baseWorkspacePath;
     return this.workspaceRuntimes.getOrCreate(resolvedPath, profile.agentId);
   }
 
   private getCurrentWorkspaceRuntime(): WorkspaceRuntime {
-    return this.getWorkspaceRuntimeForSession(this.config.getCurrentContext?.()?.sessionKey);
+    return this.getWorkspaceRuntimeForSession(this.config.getCurrentContext?.()?.conversationId);
   }
 
   /**
    * Sync in-memory workspace override from session config (after load or PATCH).
    * Pass `null` to clear when the session has no `workingDirectoryOverride` on disk.
    */
-  setSessionWorkspaceOverride(sessionKey: string, absolutePath: string | null): void {
+  setSessionWorkspaceOverride(conversationId: string, absolutePath: string | null): void {
     if (absolutePath === null || absolutePath === '') {
-      this.sessionWorkspaceOverrides.delete(sessionKey);
+      this.sessionWorkspaceOverrides.delete(conversationId);
     } else {
-      this.sessionWorkspaceOverrides.set(sessionKey, absolutePath);
+      this.sessionWorkspaceOverrides.set(conversationId, absolutePath);
     }
   }
 
@@ -444,8 +444,8 @@ export class AgentManager implements AgentInstanceGateway {
       toolExecutorConfig: {
         resolveTimeoutMs: (toolName) => {
           const config = this.mergedConfig();
-          const sessionKey = this.config.getCurrentContext?.()?.sessionKey;
-          return resolveEffectiveAgentProfileForSession(config, sessionKey)
+          const conversationId = this.config.getCurrentContext?.()?.conversationId;
+          return resolveEffectiveAgentProfileForSession(config, conversationId)
             .config.tools[toolName]?.timeoutMs;
         },
       },
@@ -466,8 +466,8 @@ export class AgentManager implements AgentInstanceGateway {
       getWorkflowRunService: this.config.getWorkflowRunService,
       getSkillIndexingContext: () => {
         const ctx = this.config.getCurrentContext?.();
-        if (!ctx?.sessionKey) return undefined;
-        const inst = this.agents.get(ctx.sessionKey);
+        if (!ctx?.conversationId) return undefined;
+        const inst = this.agents.get(ctx.conversationId);
         if (!inst) return undefined;
         return {
           registeredToolNames: inst.registeredToolNames,
@@ -479,13 +479,13 @@ export class AgentManager implements AgentInstanceGateway {
       },
       getSkillPassthroughEnvVarNames: () => {
         const ctx = this.config.getCurrentContext?.();
-        if (!ctx?.sessionKey) return [];
-        return [...(this.agents.get(ctx.sessionKey)?.skillEnvPassthroughKeys ?? [])];
+        if (!ctx?.conversationId) return [];
+        return [...(this.agents.get(ctx.conversationId)?.skillEnvPassthroughKeys ?? [])];
       },
       registerSkillEnvPassthrough: (names: string[]) => {
         const ctx = this.config.getCurrentContext?.();
-        if (!ctx?.sessionKey) return;
-        const inst = this.agents.get(ctx.sessionKey);
+        if (!ctx?.conversationId) return;
+        const inst = this.agents.get(ctx.conversationId);
         if (!inst) return;
         for (const n of names) {
           if (isValidSkillEnvVarName(n)) {
@@ -502,32 +502,32 @@ export class AgentManager implements AgentInstanceGateway {
     return this.getCurrentWorkspaceRuntime().memoryManager;
   }
 
-  getMemoryManagerForSession(sessionKey: string): MemoryManager {
-    return this.getWorkspaceRuntimeForSession(sessionKey).memoryManager;
+  getMemoryManagerForSession(conversationId: string): MemoryManager {
+    return this.getWorkspaceRuntimeForSession(conversationId).memoryManager;
   }
 
   /** Build the bounded, policy-filtered context used for this model turn. */
   prepareUserTurnContext(
     userMessage: AgentMessage,
-    sessionKey: string,
+    conversationId: string,
     turnId: string,
   ): Promise<ExecutionContextPlan> {
-    return this.executionContext.prepare(userMessage, sessionKey, turnId);
+    return this.executionContext.prepare(userMessage, conversationId, turnId);
   }
 
   /** Capture durable structured user context after a completed turn. */
-  async afterAgentTurn(sessionKey: string, userPlainText: string, turnId: string): Promise<import('../user-model/capture/index.js').UserModelCaptureResult | undefined> {
-    if (!this.isUserContextEnabledForSession(sessionKey)) return undefined;
-    const parsed = parseSessionKey(sessionKey);
+  async afterAgentTurn(conversationId: string, userPlainText: string, turnId: string): Promise<import('../user-model/capture/index.js').UserModelCaptureResult | undefined> {
+    if (!this.isUserContextEnabledForSession(conversationId)) return undefined;
+    const parsed = getConversationRouting(conversationId);
     if (parsed && parsed.peerKind !== 'direct') return undefined;
-    const instance = this.agents.get(sessionKey);
+    const instance = this.agents.get(conversationId);
     if (!instance) return undefined;
     return runTurnUserModelCapture({
-      sessionKey,
+      conversationId,
       turnId,
       userText: userPlainText,
       mainAgent: instance.agent,
-      workspaceId: this.getResolvedWorkspaceForSession(sessionKey),
+      workspaceId: this.getResolvedWorkspaceForSession(conversationId),
       getConfig: () => this.mergedConfig(),
     });
   }
@@ -536,21 +536,21 @@ export class AgentManager implements AgentInstanceGateway {
    * Call once per user turn before the main embedded agent turn.
    * Delegates to {@link BackgroundReviewCoordinator}.
    */
-  beginBackgroundReviewUserTurn(sessionKey: string): void {
-    const inst = this.agents.get(sessionKey);
-    if (!inst || !this.isUserContextEnabledForSession(sessionKey)) return;
-    this.backgroundReview.beginUserTurn(sessionKey);
+  beginBackgroundReviewUserTurn(conversationId: string): void {
+    const inst = this.agents.get(conversationId);
+    if (!inst || !this.isUserContextEnabledForSession(conversationId)) return;
+    this.backgroundReview.beginUserTurn(conversationId);
   }
 
   /** After a successful main turn, may run a quiet follow-up for context review and skills. */
-  scheduleBackgroundReviewAfterUserTurn(sessionKey: string): void {
-    const inst = this.agents.get(sessionKey);
-    if (!inst || !this.isUserContextEnabledForSession(sessionKey)) return;
+  scheduleBackgroundReviewAfterUserTurn(conversationId: string): void {
+    const inst = this.agents.get(conversationId);
+    if (!inst || !this.isUserContextEnabledForSession(conversationId)) return;
     this.backgroundReview.scheduleAfterUserTurn({
-      sessionKey,
+      conversationId,
       agent: inst.agent,
-      lastAssistantText: this.getLastAssistantContent(sessionKey),
-      workspaceId: this.getResolvedWorkspaceForSession(sessionKey),
+      lastAssistantText: this.getLastAssistantContent(conversationId),
+      workspaceId: this.getResolvedWorkspaceForSession(conversationId),
     });
   }
 
@@ -559,24 +559,24 @@ export class AgentManager implements AgentInstanceGateway {
    */
   expandSkillUserText(text: string): string {
     const ctx = this.config.getCurrentContext?.();
-    const sessionKey = ctx?.sessionKey;
-    const inst = sessionKey ? this.agents.get(sessionKey) : undefined;
-    return this.getWorkspaceRuntimeForSession(sessionKey).skillManager.expandCommand(text, {
+    const conversationId = ctx?.conversationId;
+    const inst = conversationId ? this.agents.get(conversationId) : undefined;
+    return this.getWorkspaceRuntimeForSession(conversationId).skillManager.expandCommand(text, {
       skillAllowlist: inst?.effectiveProfile.skillsAllowlist,
       registeredToolNames: inst?.registeredToolNames,
     });
   }
 
-  prepareSkillTurn(sessionKey: string, text: string): PreparedSkillTurn {
-    this.getOrCreateAgent(sessionKey);
-    const inst = this.agents.get(sessionKey);
+  prepareSkillTurn(conversationId: string, text: string): PreparedSkillTurn {
+    this.getOrCreateAgent(conversationId);
+    const inst = this.agents.get(conversationId);
     if (!text.includes('/skill:')) {
       return {
         text,
         activatedCapabilityNames: this.activeCapabilityNames(inst),
       };
     }
-    const rt = this.getWorkspaceRuntimeForSession(sessionKey);
+    const rt = this.getWorkspaceRuntimeForSession(conversationId);
     const options = {
       skillAllowlist: inst?.effectiveProfile.skillsAllowlist,
       registeredToolNames: inst?.registeredToolNames,
@@ -608,15 +608,15 @@ export class AgentManager implements AgentInstanceGateway {
   }
 
   async withSkillCapabilities<T>(
-    sessionKey: string,
+    conversationId: string,
     capabilityNames: readonly string[],
     run: () => Promise<T>,
   ): Promise<T> {
     const requested = [...new Set(capabilityNames.map((name) => name.trim()).filter(Boolean))];
     if (requested.length === 0) return run();
 
-    this.getOrCreateAgent(sessionKey);
-    const inst = this.agents.get(sessionKey);
+    this.getOrCreateAgent(conversationId);
+    const inst = this.agents.get(conversationId);
     if (!inst) return run();
 
     const activatedTools = this.toolsFactory.createCapabilityTools(requested, {
@@ -654,25 +654,25 @@ export class AgentManager implements AgentInstanceGateway {
     activeCapabilityNames: readonly string[] = this.activeCapabilityNames(instance),
   ): string {
     const cfg = this.config.config!;
-    const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(instance.sessionKey);
+    const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(instance.conversationId);
     const rt = this.workspaceRuntimes.getOrCreate(
       resolvedWorkspacePath,
       instance.effectiveProfile.agentId,
     );
-    const contextFiles = this.resolveContextFilesForSession(instance.sessionKey, instance.effectiveProfile);
+    const contextFiles = this.resolveContextFilesForSession(instance.conversationId, instance.effectiveProfile);
     const modelRef = instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel;
     const thinkingLevel =
       (instance.agent.state.thinkingLevel as ThinkingLevel | undefined) ??
       this.config.thinkingLevel ??
       'medium';
     return rt.systemPromptBuilder.build(contextFiles, {
-      externalMemoryInstructions: this.buildExternalMemoryInstructions(instance.sessionKey, rt),
+      externalMemoryInstructions: this.buildExternalMemoryInstructions(instance.conversationId, rt),
       workspaceOverride: resolvedWorkspacePath,
       profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
       customInstructions: instance.effectiveProfile.customInstructions,
       skillAllowlist: instance.effectiveProfile.skillsAllowlist,
       registeredToolNames,
-      sessionKey: instance.sessionKey,
+      conversationId: instance.conversationId,
       modelRef,
       agentId: instance.effectiveProfile.agentId,
       thinkingLevel,
@@ -722,7 +722,7 @@ export class AgentManager implements AgentInstanceGateway {
   }
 
   private resolveContextFilesForSession(
-    sessionKey: string,
+    conversationId: string,
     profile: EffectiveAgentProfile,
     excludeHeartbeat?: boolean,
   ): EmbeddedContextFile[] {
@@ -733,14 +733,14 @@ export class AgentManager implements AgentInstanceGateway {
     const { contextFiles } = resolveBootstrapContextSync({
       profileDir,
       config: cfg,
-      sessionKey,
+      conversationId,
       excludeHeartbeat: excludeHeartbeat ?? !heartbeatEnabled,
       contextInjection,
     });
     const shouldAppendProjectContext =
       contextInjection === 'always' ||
       (contextInjection === 'continuation-skip' && contextFiles.length > 0);
-    const workspaceDir = this.getResolvedWorkspaceForSession(sessionKey);
+    const workspaceDir = this.getResolvedWorkspaceForSession(conversationId);
     if (
       shouldAppendProjectContext &&
       this.isProjectWorkspaceTrusted(workspaceDir)
@@ -795,8 +795,8 @@ export class AgentManager implements AgentInstanceGateway {
   getSkillCatalogSnapshot(): SkillCatalogSnapshot {
     const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
     const lock = loadSkillsLock();
-    const sessionKey = this.config.getCurrentContext?.()?.sessionKey;
-    const workspaceDir = sessionKey ? this.getResolvedWorkspaceForSession(sessionKey) : this.baseWorkspacePath;
+    const conversationId = this.config.getCurrentContext?.()?.conversationId;
+    const workspaceDir = conversationId ? this.getResolvedWorkspaceForSession(conversationId) : this.baseWorkspacePath;
     const workspaceLock = loadSkillsLock(resolveWorkspaceSkillsLockPath(workspaceDir));
     const rt = this.getCurrentWorkspaceRuntime();
     return {
@@ -899,17 +899,17 @@ export class AgentManager implements AgentInstanceGateway {
     return this.buildAgentSkillAvailability(profile, profile.resolvedWorkspacePath);
   }
 
-  getSessionSkillAvailability(sessionKey: string): AgentSkillAvailabilityPayload {
-    const profile = resolveEffectiveAgentProfileForSession(this.config.config!, sessionKey);
+  getSessionSkillAvailability(conversationId: string): AgentSkillAvailabilityPayload {
+    const profile = resolveEffectiveAgentProfileForSession(this.config.config!, conversationId);
     return this.buildAgentSkillAvailability(
       profile,
-      this.getResolvedWorkspaceForSession(sessionKey),
-      this.agents.get(sessionKey)?.registeredToolNames,
+      this.getResolvedWorkspaceForSession(conversationId),
+      this.agents.get(conversationId)?.registeredToolNames,
     );
   }
 
-  getSessionWorkspaceTrust(sessionKey: string): WorkspaceTrustState {
-    return this.getWorkspaceTrust(this.getResolvedWorkspaceForSession(sessionKey));
+  getSessionWorkspaceTrust(conversationId: string): WorkspaceTrustState {
+    return this.getWorkspaceTrust(this.getResolvedWorkspaceForSession(conversationId));
   }
 
   getWorkspaceTrust(workspacePath: string): WorkspaceTrustState {
@@ -923,8 +923,8 @@ export class AgentManager implements AgentInstanceGateway {
     };
   }
 
-  setSessionWorkspaceTrust(sessionKey: string, trusted: boolean): WorkspaceTrustState {
-    return this.setWorkspaceTrust(this.getResolvedWorkspaceForSession(sessionKey), trusted);
+  setSessionWorkspaceTrust(conversationId: string, trusted: boolean): WorkspaceTrustState {
+    return this.setWorkspaceTrust(this.getResolvedWorkspaceForSession(conversationId), trusted);
   }
 
   setWorkspaceTrust(workspacePath: string, trusted: boolean): WorkspaceTrustState {
@@ -945,25 +945,25 @@ export class AgentManager implements AgentInstanceGateway {
       rt.skillManager.refreshPromptFromConfig();
     }
     for (const instance of this.agents.values()) {
-      const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(instance.sessionKey);
+      const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(instance.conversationId);
       const rt = this.workspaceRuntimes.getOrCreate(
         resolvedWorkspacePath,
         instance.effectiveProfile.agentId,
       );
       const contextFiles = this.resolveContextFilesForSession(
-        instance.sessionKey,
+        instance.conversationId,
         instance.effectiveProfile,
       );
-      instance.activeProjectContext = this.buildExecutionScopeContext(instance.sessionKey);
+      instance.activeProjectContext = this.buildExecutionScopeContext(instance.conversationId);
 
       const newPrompt = rt.systemPromptBuilder.build(contextFiles, {
-        externalMemoryInstructions: this.buildExternalMemoryInstructions(instance.sessionKey, rt),
+        externalMemoryInstructions: this.buildExternalMemoryInstructions(instance.conversationId, rt),
         workspaceOverride: resolvedWorkspacePath,
         profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
         customInstructions: instance.effectiveProfile.customInstructions,
         skillAllowlist: instance.effectiveProfile.skillsAllowlist,
         registeredToolNames: instance.registeredToolNames,
-        sessionKey: instance.sessionKey,
+        conversationId: instance.conversationId,
         modelRef: instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel,
         agentId: instance.effectiveProfile.agentId,
         thinkingLevel: this.config.thinkingLevel ?? 'medium',
@@ -1052,25 +1052,25 @@ export class AgentManager implements AgentInstanceGateway {
     }
 
     for (const instance of this.agents.values()) {
-      const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(instance.sessionKey);
+      const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(instance.conversationId);
       const rt = this.workspaceRuntimes.getOrCreate(
         resolvedWorkspacePath,
         instance.effectiveProfile.agentId,
       );
       const contextFiles = this.resolveContextFilesForSession(
-        instance.sessionKey,
+        instance.conversationId,
         instance.effectiveProfile,
       );
-      instance.activeProjectContext = this.buildExecutionScopeContext(instance.sessionKey);
+      instance.activeProjectContext = this.buildExecutionScopeContext(instance.conversationId);
 
       const newPrompt = rt.systemPromptBuilder.rebuild(contextFiles, {
-        externalMemoryInstructions: this.buildExternalMemoryInstructions(instance.sessionKey, rt),
+        externalMemoryInstructions: this.buildExternalMemoryInstructions(instance.conversationId, rt),
         workspaceOverride: resolvedWorkspacePath,
         profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
         customInstructions: instance.effectiveProfile.customInstructions,
         skillAllowlist: instance.effectiveProfile.skillsAllowlist,
         registeredToolNames: instance.registeredToolNames,
-        sessionKey: instance.sessionKey,
+        conversationId: instance.conversationId,
         modelRef: instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel,
         agentId: instance.effectiveProfile.agentId,
         thinkingLevel: this.config.thinkingLevel ?? 'medium',
@@ -1084,45 +1084,45 @@ export class AgentManager implements AgentInstanceGateway {
   /**
    * Get or create an Agent instance for a session
    */
-  getOrCreateAgent(sessionKey: string): Agent {
+  getOrCreateAgent(conversationId: string): Agent {
     const cfg = this.config.config!;
-    const targetPath = this.getResolvedWorkspaceForSession(sessionKey);
-    const existing = this.agents.get(sessionKey);
+    const targetPath = this.getResolvedWorkspaceForSession(conversationId);
+    const existing = this.agents.get(conversationId);
     if (existing) {
       if (existing.resolvedWorkspacePath !== targetPath) {
-        this.removeAgent(sessionKey);
+        this.removeAgent(conversationId);
       } else {
         this.refreshDynamicContextIfChanged(existing);
         existing.lastUsedAt = Date.now();
-        log.debug({ sessionKey }, 'Reusing existing agent instance');
+        log.debug({ conversationId }, 'Reusing existing agent instance');
         return existing.agent;
       }
     }
 
-    let profile = resolveEffectiveAgentProfileForSession(cfg, sessionKey);
+    let profile = resolveEffectiveAgentProfileForSession(cfg, conversationId);
     const resolvedPath = targetPath;
     const rt = this.workspaceRuntimes.getOrCreate(resolvedPath, profile.agentId);
     profile = this.materializeSkillAllowlist(profile, rt);
 
     if (isMemorySubsystemEnabled(cfg)) {
       void rt.memoryManager
-        .initializeAll(sessionKey, { workspace: resolvedPath, agentId: profile.agentId })
-        .catch((err) => log.warn({ err, sessionKey }, 'memory initializeAll failed'));
+        .initializeAll(conversationId, { workspace: resolvedPath, agentId: profile.agentId })
+        .catch((err) => log.warn({ err, conversationId }, 'memory initializeAll failed'));
     }
 
-    const activeProjectContext = this.buildExecutionScopeContext(sessionKey);
+    const activeProjectContext = this.buildExecutionScopeContext(conversationId);
 
     const profileModelRef = profile.primaryModelRef?.trim() || this.defaultModel;
     const modelManager = this.config.getModelManager?.();
     const initialModelRef = modelManager?.resolveInitialModelForSession(
-      sessionKey,
+      conversationId,
       profileModelRef,
       profile.fallbacks,
     ) ?? profileModelRef;
     let created: { agent: Agent; registeredToolNames: string[] };
     try {
       created = this.createAgentForProfile(
-        sessionKey,
+        conversationId,
         profile,
         initialModelRef,
         resolvedPath,
@@ -1130,14 +1130,14 @@ export class AgentManager implements AgentInstanceGateway {
         activeProjectContext,
       );
     } catch (err) {
-      modelManager?.clearSessionProfileDefault(sessionKey);
+      modelManager?.clearSessionProfileDefault(conversationId);
       throw err;
     }
     const { agent, registeredToolNames } = created;
 
-    this.agents.set(sessionKey, {
+    this.agents.set(conversationId, {
       agent,
-      sessionKey,
+      conversationId,
       createdAt: Date.now(),
       lastUsedAt: Date.now(),
       effectiveProfile: profile,
@@ -1145,51 +1145,51 @@ export class AgentManager implements AgentInstanceGateway {
       registeredToolNames,
       activeCapabilities: new Map<string, AgentCapabilitySessionState>(),
       activeProjectContext,
-      interactionStateVersion: this.getInteractionStateVersion(sessionKey),
-      userContextAccessVersion: this.getUserContextAccessVersion(sessionKey),
+      interactionStateVersion: this.getInteractionStateVersion(conversationId),
+      userContextAccessVersion: this.getUserContextAccessVersion(conversationId),
       skillEnvPassthroughKeys: new Set<string>(),
     });
 
-    log.debug({ sessionKey, totalAgents: this.agents.size, agentId: profile.agentId }, 'Created new agent instance');
+    log.debug({ conversationId, totalAgents: this.agents.size, agentId: profile.agentId }, 'Created new agent instance');
     return agent;
   }
 
-  createAgentTurnPolicy(sessionKey: string): AgentTurnPolicy {
-    const profile = this.agents.get(sessionKey)?.effectiveProfile
-      ?? resolveEffectiveAgentProfileForSession(this.config.config!, sessionKey);
-    return this.buildAgentTurnPolicy(sessionKey, profile);
+  createAgentTurnPolicy(conversationId: string): AgentTurnPolicy {
+    const profile = this.agents.get(conversationId)?.effectiveProfile
+      ?? resolveEffectiveAgentProfileForSession(this.config.config!, conversationId);
+    return this.buildAgentTurnPolicy(conversationId, profile);
   }
 
   /**
    * Get existing agent for a session (if any)
    */
-  getAgent(sessionKey: string): Agent | undefined {
-    return this.agents.get(sessionKey)?.agent;
+  getAgent(conversationId: string): Agent | undefined {
+    return this.agents.get(conversationId)?.agent;
   }
 
   /**
    * Check if an agent exists for a session
    */
-  hasAgent(sessionKey: string): boolean {
-    return this.agents.has(sessionKey);
+  hasAgent(conversationId: string): boolean {
+    return this.agents.has(conversationId);
   }
 
   /**
    * Remove an agent instance
    */
-  removeAgent(sessionKey: string): boolean {
-    const instance = this.agents.get(sessionKey);
+  removeAgent(conversationId: string): boolean {
+    const instance = this.agents.get(conversationId);
     if (instance) {
-      this.backgroundReview.forgetSession(sessionKey);
-      void this.toolsFactory.closeBrowserPageForSession(sessionKey);
-      void retireSessionMcpRuntimeForSessionKey({ sessionKey, reason: 'agent-evict' });
+      this.backgroundReview.forgetSession(conversationId);
+      void this.toolsFactory.closeBrowserPageForSession(conversationId);
+      void retireSessionMcpRuntimeForConversationId({ conversationId, reason: 'agent-evict' });
       instance.agent.abort();
-      evictEmbeddedSessionRunner(sessionKey, 'agent_removed');
-      this.agents.delete(sessionKey);
-      this.executionContext.forgetSession(sessionKey);
-      clearBootstrapSnapshot(sessionKey);
-      this.config.getModelManager?.().clearSessionProfileDefault(sessionKey);
-      log.info({ sessionKey, totalAgents: this.agents.size }, 'Removed agent instance');
+      evictEmbeddedSessionRunner(conversationId, 'agent_removed');
+      this.agents.delete(conversationId);
+      this.executionContext.forgetSession(conversationId);
+      clearBootstrapSnapshot(conversationId);
+      this.config.getModelManager?.().clearSessionProfileDefault(conversationId);
+      log.info({ conversationId, totalAgents: this.agents.size }, 'Removed agent instance');
       return true;
     }
     return false;
@@ -1212,34 +1212,34 @@ export class AgentManager implements AgentInstanceGateway {
   /**
    * Merge per-turn channel system prompt (e.g. Telegram group/topic override) into the agent.
    */
-  applyTurnChannelSystemPrompt(sessionKey: string, channelSystemPrompt: string): void {
+  applyTurnChannelSystemPrompt(conversationId: string, channelSystemPrompt: string): void {
     const trimmed = channelSystemPrompt.trim();
     if (!trimmed) return;
 
-    const instance = this.agents.get(sessionKey);
+    const instance = this.agents.get(conversationId);
     if (!instance) return;
 
     const cfg = this.config.config!;
-    const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(sessionKey);
+    const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(conversationId);
     const rt = this.workspaceRuntimes.getOrCreate(
       resolvedWorkspacePath,
       instance.effectiveProfile.agentId,
     );
-    const contextFiles = this.resolveContextFilesForSession(sessionKey, instance.effectiveProfile);
+    const contextFiles = this.resolveContextFilesForSession(conversationId, instance.effectiveProfile);
     const modelRef = instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel;
     const thinkingLevel =
       this.config.thinkingLevel ?? 'medium';
 
-    const activeProjectContext = this.buildExecutionScopeContext(sessionKey);
+    const activeProjectContext = this.buildExecutionScopeContext(conversationId);
 
     instance.agent.state.systemPrompt = rt.systemPromptBuilder.build(contextFiles, {
-      externalMemoryInstructions: this.buildExternalMemoryInstructions(sessionKey, rt),
+      externalMemoryInstructions: this.buildExternalMemoryInstructions(conversationId, rt),
       workspaceOverride: resolvedWorkspacePath,
       profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
       customInstructions: instance.effectiveProfile.customInstructions,
       skillAllowlist: instance.effectiveProfile.skillsAllowlist,
       registeredToolNames: instance.registeredToolNames,
-      sessionKey,
+      conversationId,
       modelRef,
       agentId: instance.effectiveProfile.agentId,
       thinkingLevel,
@@ -1252,11 +1252,11 @@ export class AgentManager implements AgentInstanceGateway {
   /**
    * Set thinking level for a session's agent
    */
-  setThinkingLevel(sessionKey: string, level: ThinkingLevel): void {
-    const instance = this.agents.get(sessionKey);
+  setThinkingLevel(conversationId: string, level: ThinkingLevel): void {
+    const instance = this.agents.get(conversationId);
     if (instance) {
       instance.agent.state.thinkingLevel = level;
-      log.debug({ sessionKey, thinkingLevel: level }, 'Set thinking level for agent');
+      log.debug({ conversationId, thinkingLevel: level }, 'Set thinking level for agent');
     }
   }
 
@@ -1326,35 +1326,35 @@ export class AgentManager implements AgentInstanceGateway {
       .join('\n\n') || undefined;
   }
 
-  private buildExecutionScopeContext(sessionKey: string): string | undefined {
-    const access = resolveUserContextSessionAccess(this.config.config, sessionKey);
-    return buildExecutionScopeContextForPrompt(sessionKey, {
+  private buildExecutionScopeContext(conversationId: string): string | undefined {
+    const access = resolveUserContextSessionAccess(this.config.config, conversationId);
+    return buildExecutionScopeContextForPrompt(conversationId, {
       includeKnowledge: access.knowledge,
       knowledgeSources: access.knowledgeSources,
     });
   }
 
-  private getInteractionStateVersion(sessionKey: string): number | undefined {
-    return isXopcDatabaseOpen() ? getInteractionState(sessionKey)?.updatedAt : undefined;
+  private getInteractionStateVersion(conversationId: string): number | undefined {
+    return isXopcDatabaseOpen() ? getInteractionState(conversationId)?.updatedAt : undefined;
   }
 
-  private getUserContextAccessVersion(sessionKey: string): string {
-    return JSON.stringify(resolveUserContextSessionAccess(this.config.config, sessionKey));
+  private getUserContextAccessVersion(conversationId: string): string {
+    return JSON.stringify(resolveUserContextSessionAccess(this.config.config, conversationId));
   }
 
-  private buildExternalMemoryInstructions(sessionKey: string, rt: WorkspaceRuntime): string {
-    return resolveUserContextSessionAccess(this.config.config, sessionKey).knowledge
+  private buildExternalMemoryInstructions(conversationId: string, rt: WorkspaceRuntime): string {
+    return resolveUserContextSessionAccess(this.config.config, conversationId).knowledge
       ? rt.memoryManager.buildExternalSystemPrompt()
       : '';
   }
 
-  getCapabilityCatalogForSession(sessionKey?: string): AgentCapabilityCatalogEntry[] {
-    const inst = sessionKey?.trim() ? this.agents.get(sessionKey.trim()) : undefined;
+  getCapabilityCatalogForSession(conversationId?: string): AgentCapabilityCatalogEntry[] {
+    const inst = conversationId?.trim() ? this.agents.get(conversationId.trim()) : undefined;
     return this.resolveCapabilityCatalogForInstance(inst);
   }
 
   private createAgentForProfile(
-    sessionKey: string,
+    conversationId: string,
     profile: EffectiveAgentProfile,
     modelRef: string,
     resolvedWorkspacePath: string,
@@ -1364,12 +1364,12 @@ export class AgentManager implements AgentInstanceGateway {
     const model = this.resolveModelStringToModel(modelRef);
     let agent: Agent | undefined;
 
-    const contextFiles = this.resolveContextFilesForSession(sessionKey, profile);
+    const contextFiles = this.resolveContextFilesForSession(conversationId, profile);
     const tools = this.toolsFactory.createAllTools({
       workspace: resolvedWorkspacePath,
       profileMarkdownRoot: resolveAgentProfileDir(this.config.config!, profile.agentId),
       agentId: profile.agentId,
-      sessionKey,
+      conversationId,
       disabledTools: profile.tools.denied,
       getPrimaryModel: () => (agent?.state.model as Model<Api> | undefined) ?? model,
       getMemoryManager: () => rt.memoryManager,
@@ -1378,18 +1378,18 @@ export class AgentManager implements AgentInstanceGateway {
     const registeredToolNames = tools.map((t) => t.name);
 
     const thinkingLevel = this.config.thinkingLevel ?? 'medium';
-    const turnPolicy = this.buildAgentTurnPolicy(sessionKey, profile);
+    const turnPolicy = this.buildAgentTurnPolicy(conversationId, profile);
 
     agent = new Agent({
       initialState: {
         systemPrompt: rt.systemPromptBuilder.build(contextFiles, {
-          externalMemoryInstructions: this.buildExternalMemoryInstructions(sessionKey, rt),
+          externalMemoryInstructions: this.buildExternalMemoryInstructions(conversationId, rt),
           workspaceOverride: resolvedWorkspacePath,
           profileMarkdownPathRoot: resolveAgentProfileDir(this.config.config!, profile.agentId),
           customInstructions: profile.customInstructions,
           skillAllowlist: profile.skillsAllowlist,
           registeredToolNames,
-          sessionKey,
+          conversationId,
           modelRef,
           agentId: profile.agentId,
           thinkingLevel,
@@ -1414,7 +1414,7 @@ export class AgentManager implements AgentInstanceGateway {
   }
 
   private buildAgentTurnPolicy(
-    sessionKey: string,
+    conversationId: string,
     profile: EffectiveAgentProfile,
   ): AgentTurnPolicy {
     return buildAgentTurnPolicy({
@@ -1435,7 +1435,7 @@ export class AgentManager implements AgentInstanceGateway {
           apply_patch: 'filesystem_write',
           xopc_tool_execute: 'external_tool',
         } as Record<string, string>)[toolName] ?? toolName;
-        const executionGate = this.executionContext.getCurrent(sessionKey);
+        const executionGate = this.executionContext.getCurrent(conversationId);
         if (executionGate) {
           const decision = evaluateToolGate(executionGate, operation);
           if (!decision.allowed) {
@@ -1446,7 +1446,7 @@ export class AgentManager implements AgentInstanceGateway {
         const detail = JSON.stringify(args ?? {});
         if (policy?.mode === 'ask') {
           const approved = await this.requestToolConfirmation(
-            sessionKey,
+            conversationId,
             policy?.id ?? toolName,
             detail,
           );
@@ -1468,7 +1468,7 @@ export class AgentManager implements AgentInstanceGateway {
             const approval = await maybeRequestChannelExecApproval({
               cfg,
               payload: {
-                sessionKey: ctx.sessionKey,
+                conversationId: ctx.conversationId,
                 channel: ctx.channel,
                 chatId: ctx.chatId,
                 accountId,
@@ -1493,7 +1493,7 @@ export class AgentManager implements AgentInstanceGateway {
           toolName,
           (args ?? {}) as Record<string, unknown>,
           {
-            sessionKey,
+            conversationId,
           },
         );
         if (!hookResult.allowed) {
@@ -1523,15 +1523,15 @@ export class AgentManager implements AgentInstanceGateway {
     return policy ? { id, ...policy } : undefined;
   }
 
-  private async requestToolConfirmation(sessionKey: string, toolName: string, detail: string): Promise<boolean> {
+  private async requestToolConfirmation(conversationId: string, toolName: string, detail: string): Promise<boolean> {
     const request = this.config.gatewayClarify?.requestClarification;
     if (!request) return false;
     const approvalKey = createHash('sha256').update(`${toolName}\0${detail}`).digest('hex');
-    const existing = consumeClarificationApproval(sessionKey, approvalKey);
+    const existing = consumeClarificationApproval(conversationId, approvalKey);
     if (existing) return existing === 'approved';
     const runId = getEmbeddedExecutionRunId();
     if (!runId) return false;
-    const result = await request({ sessionKey, runId, toolCallId: `approval:${approvalKey}` }, {
+    const result = await request({ conversationId, runId, toolCallId: `approval:${approvalKey}` }, {
       kind: 'approval',
       question: `Allow ${toolName} to run once?\n${detail.slice(0, 500)}`,
       choices: ['Allow once', 'Deny'],
@@ -1542,9 +1542,9 @@ export class AgentManager implements AgentInstanceGateway {
   }
 
   private refreshDynamicContextIfChanged(instance: AgentInstance): void {
-    const nextProjectContext = this.buildExecutionScopeContext(instance.sessionKey);
-    const interactionStateVersion = this.getInteractionStateVersion(instance.sessionKey);
-    const userContextAccessVersion = this.getUserContextAccessVersion(instance.sessionKey);
+    const nextProjectContext = this.buildExecutionScopeContext(instance.conversationId);
+    const interactionStateVersion = this.getInteractionStateVersion(instance.conversationId);
+    const userContextAccessVersion = this.getUserContextAccessVersion(instance.conversationId);
 
     if (nextProjectContext === instance.activeProjectContext
       && interactionStateVersion === instance.interactionStateVersion
@@ -1552,25 +1552,25 @@ export class AgentManager implements AgentInstanceGateway {
       return;
     }
     const cfg = this.config.config!;
-    const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(instance.sessionKey);
+    const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(instance.conversationId);
     const rt = this.workspaceRuntimes.getOrCreate(
       resolvedWorkspacePath,
       instance.effectiveProfile.agentId,
     );
-    const contextFiles = this.resolveContextFilesForSession(instance.sessionKey, instance.effectiveProfile);
+    const contextFiles = this.resolveContextFilesForSession(instance.conversationId, instance.effectiveProfile);
     const modelRef = instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel;
     const thinkingLevel =
       (instance.agent.state.thinkingLevel as ThinkingLevel | undefined) ??
       this.config.thinkingLevel ??
       'medium';
     instance.agent.state.systemPrompt = rt.systemPromptBuilder.build(contextFiles, {
-      externalMemoryInstructions: this.buildExternalMemoryInstructions(instance.sessionKey, rt),
+      externalMemoryInstructions: this.buildExternalMemoryInstructions(instance.conversationId, rt),
       workspaceOverride: resolvedWorkspacePath,
       profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
       customInstructions: instance.effectiveProfile.customInstructions,
       skillAllowlist: instance.effectiveProfile.skillsAllowlist,
       registeredToolNames: instance.registeredToolNames,
-      sessionKey: instance.sessionKey,
+      conversationId: instance.conversationId,
       modelRef,
       agentId: instance.effectiveProfile.agentId,
       thinkingLevel,
@@ -1579,17 +1579,17 @@ export class AgentManager implements AgentInstanceGateway {
     instance.activeProjectContext = nextProjectContext;
     instance.interactionStateVersion = interactionStateVersion;
     instance.userContextAccessVersion = userContextAccessVersion;
-    log.debug({ sessionKey: instance.sessionKey }, 'Dynamic agent context changed; system prompt refreshed');
+    log.debug({ conversationId: instance.conversationId }, 'Dynamic agent context changed; system prompt refreshed');
   }
 
   /**
    * Set model for a specific session
    */
-  setModelForSession(sessionKey: string, modelId: string): boolean {
-    const instance = this.agents.get(sessionKey);
+  setModelForSession(conversationId: string, modelId: string): boolean {
+    const instance = this.agents.get(conversationId);
     if (!instance) {
       log.warn(
-        { sessionKey, modelId, activeSessionCount: this.agents.size },
+        { conversationId, modelId, activeSessionCount: this.agents.size },
         `setModelForSession: no agent instance for session (create session / run turn first); modelId=${modelId}`,
       );
       return false;
@@ -1600,13 +1600,13 @@ export class AgentManager implements AgentInstanceGateway {
       instance.agent.state.model = model;
 
       const cfg = this.config.config!;
-      const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(sessionKey);
+      const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(conversationId);
       const rt = this.workspaceRuntimes.getOrCreate(
         resolvedWorkspacePath,
         instance.effectiveProfile.agentId,
       );
       const contextFiles = this.resolveContextFilesForSession(
-        sessionKey,
+        conversationId,
         instance.effectiveProfile,
       );
       const thinkingLevel =
@@ -1614,16 +1614,16 @@ export class AgentManager implements AgentInstanceGateway {
         this.config.thinkingLevel ??
         'medium';
 
-      const activeProjectContext = this.buildExecutionScopeContext(sessionKey);
+      const activeProjectContext = this.buildExecutionScopeContext(conversationId);
 
       instance.agent.state.systemPrompt = rt.systemPromptBuilder.build(contextFiles, {
-        externalMemoryInstructions: this.buildExternalMemoryInstructions(sessionKey, rt),
+        externalMemoryInstructions: this.buildExternalMemoryInstructions(conversationId, rt),
         workspaceOverride: resolvedWorkspacePath,
         profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
         customInstructions: instance.effectiveProfile.customInstructions,
         skillAllowlist: instance.effectiveProfile.skillsAllowlist,
         registeredToolNames: instance.registeredToolNames,
-        sessionKey,
+        conversationId,
         modelRef: modelId,
         agentId: instance.effectiveProfile.agentId,
         thinkingLevel,
@@ -1631,10 +1631,10 @@ export class AgentManager implements AgentInstanceGateway {
       });
       instance.activeProjectContext = activeProjectContext;
 
-      log.info({ sessionKey, modelId }, 'Model set for session');
+      log.info({ conversationId, modelId }, 'Model set for session');
       return true;
     } catch (err) {
-      log.error({ err, sessionKey, modelId }, 'Failed to set model for session');
+      log.error({ err, conversationId, modelId }, 'Failed to set model for session');
       return false;
     }
   }
@@ -1642,8 +1642,8 @@ export class AgentManager implements AgentInstanceGateway {
   /**
    * Get last assistant content from a session's agent
    */
-  getLastAssistantContent(sessionKey: string): string | null {
-    const instance = this.agents.get(sessionKey);
+  getLastAssistantContent(conversationId: string): string | null {
+    const instance = this.agents.get(conversationId);
     if (!instance) {
       return null;
     }
@@ -1665,8 +1665,8 @@ export class AgentManager implements AgentInstanceGateway {
   /**
    * Replace messages for a session's agent
    */
-  replaceMessages(sessionKey: string, messages: AgentMessage[]): boolean {
-    const instance = this.agents.get(sessionKey);
+  replaceMessages(conversationId: string, messages: AgentMessage[]): boolean {
+    const instance = this.agents.get(conversationId);
     if (!instance) {
       return false;
     }
@@ -1678,8 +1678,8 @@ export class AgentManager implements AgentInstanceGateway {
   /**
    * Get messages for a session's agent
    */
-  getMessages(sessionKey: string): AgentMessage[] | null {
-    const instance = this.agents.get(sessionKey);
+  getMessages(conversationId: string): AgentMessage[] | null {
+    const instance = this.agents.get(conversationId);
     if (!instance) {
       return null;
     }
@@ -1690,19 +1690,19 @@ export class AgentManager implements AgentInstanceGateway {
   /**
    * Subscribe to agent events for a session
    */
-  subscribeToSession(sessionKey: string, callback: (event: AgentEvent) => void): (() => void) | null {
-    const listeners = this.runtimeListeners.get(sessionKey) ?? new Set();
+  subscribeToSession(conversationId: string, callback: (event: AgentEvent) => void): (() => void) | null {
+    const listeners = this.runtimeListeners.get(conversationId) ?? new Set();
     listeners.add(callback);
-    this.runtimeListeners.set(sessionKey, listeners);
+    this.runtimeListeners.set(conversationId, listeners);
     return () => {
       listeners.delete(callback);
-      if (listeners.size === 0) this.runtimeListeners.delete(sessionKey);
+      if (listeners.size === 0) this.runtimeListeners.delete(conversationId);
     };
   }
 
   private readonly runtimeListeners = new Map<string, Set<(event: AgentEvent) => void>>();
 
-  emitRuntimeEvent(sessionKey: string, event: AgentEvent): void {
-    for (const listener of this.runtimeListeners.get(sessionKey) ?? []) listener(event);
+  emitRuntimeEvent(conversationId: string, event: AgentEvent): void {
+    for (const listener of this.runtimeListeners.get(conversationId) ?? []) listener(event);
   }
 }

@@ -43,8 +43,8 @@ describe('inbound-processor', () => {
     }),
   };
 
-  const mockSessionKeyService = {
-    generateSessionKey: vi.fn(() => 'telegram:12345:67890'),
+  const mockConversationIdService = {
+    generateConversationId: vi.fn(() => 'telegram:12345:67890'),
   };
 
   const mockSttService = {
@@ -89,7 +89,7 @@ describe('inbound-processor', () => {
       config: mockConfig,
       accountManager,
       accessControl: mockAccessControl,
-      sessionKeyService: mockSessionKeyService,
+      conversationIdService: mockConversationIdService,
       sttService: mockSttService,
       mediaUtils: mockMediaUtils,
     };
@@ -154,12 +154,12 @@ describe('inbound-processor', () => {
       expect(mockAccessControl.normalizeAllowFromWithStore).toHaveBeenCalled();
     });
 
-    it('should use injected sessionKeyService', async () => {
+    it('should use injected conversationIdService', async () => {
       const mockCtx = createMockContext({ text: 'Hello' });
 
       await processor(mockCtx as Context, 'default');
 
-      expect(mockSessionKeyService.generateSessionKey).toHaveBeenCalledWith({
+      expect(mockConversationIdService.generateConversationId).toHaveBeenCalledWith({
         source: 'telegram',
         chatId: '12345',
         senderId: '67890',

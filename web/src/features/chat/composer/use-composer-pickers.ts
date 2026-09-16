@@ -21,7 +21,7 @@ import {
 import { commandRowDisabled, useCommandPalette } from '@/features/chat/palette/use-command-palette';
 
 export interface UseComposerPickersOptions {
-  sessionKey: string | null;
+  conversationId: string | null;
   editorValue: string;
   editorCursor: number;
   isComposing: boolean;
@@ -86,7 +86,7 @@ export function noteContextRefFromAtMentionItem(item: AtMentionItem): ComposerCo
  */
 export function useComposerPickers(opts: UseComposerPickersOptions): UseComposerPickersReturn {
   const {
-    sessionKey,
+    conversationId,
     editorValue,
     editorCursor,
     isComposing,
@@ -120,10 +120,10 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
     suppress: atRangeRaw != null,
     isComposing,
     currentAgentId,
-    sessionKey,
+    conversationId,
   });
   const atPicker = useAtMentionPicker(editorValue, editorCursor, {
-    sessionKey,
+    conversationId,
     slashPaletteOpen: palette.open,
     isComposing,
     precomputedAtRange: atRangeRaw,
@@ -217,8 +217,8 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
 
       const wire = `@file:${formatFilePathForWire(path)}`;
 
-      if (sessionKey && !item.isDirectory) {
-        recordRecentAtPath(sessionKey, path.replace(/\/$/, ''));
+      if (conversationId && !item.isDirectory) {
+        recordRecentAtPath(conversationId, path.replace(/\/$/, ''));
       }
 
       const suffix = applyOpts?.stayOpen ? ' @' : ' ';
@@ -227,7 +227,7 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
       const pos = range.start + insert.length;
       resetEditor({ nextText: next, caretOffset: pos, focus: true });
     },
-    [atPicker.atRange, onAddContextRef, sessionKey, valueRef, resetEditor],
+    [atPicker.atRange, onAddContextRef, conversationId, valueRef, resetEditor],
   );
 
   // ── Outside-click dismiss for the slash palette ─────────────────

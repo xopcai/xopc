@@ -5,7 +5,7 @@ export const SupportReportInputSchema = z.object({
   expected: z.string().trim().max(5_000).optional(),
   reproduction: z.string().trim().max(10_000).optional(),
   occurredAt: z.string().datetime().optional(),
-  sessionKey: z.string().trim().max(1_000).optional(),
+  conversationId: z.string().trim().max(1_000).optional(),
   requestId: z.string().trim().max(1_000).optional(),
   clientContext: z.object({
     currentPage: z.string().trim().max(2_000).optional(),
@@ -32,7 +32,7 @@ export type SupportLogEntry = {
   module?: string;
   phase?: string;
   requestId?: string;
-  sessionId?: string;
+  transcriptId?: string;
   error?: {
     name?: string;
     message?: string;

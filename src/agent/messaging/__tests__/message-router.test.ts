@@ -2,13 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { MessageRouter } from '../message-router.js';
 import type { InboundMessage } from '../../../infra/bus/index.js';
 
-function makeInbound(content: string, sessionKey = 'agent:main:telegram:acc:direct:1:u:2'): InboundMessage {
+function makeInbound(content: string, conversationId = 'agent:main:telegram:acc:direct:1:u:2'): InboundMessage {
   return {
     channel: 'telegram',
     sender_id: '2',
     chat_id: '1',
     content,
-    metadata: { sessionKey, isGroup: false },
+    metadata: { conversationId, isGroup: false },
   };
 }
 

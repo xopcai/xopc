@@ -42,7 +42,7 @@ describe('notes routes', () => {
     } } as never);
     const res = await app.request('/api/notes/n1/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId: 'p1' }) });
     expect(res.status).toBe(201);
-    expect(saveMessages).toHaveBeenCalledWith(expect.stringContaining('writer'), [], expect.objectContaining({ metadata: expect.objectContaining({ projectId: 'p1' }) }));
+    expect(saveMessages).toHaveBeenCalledWith(expect.stringMatching(/^[0-9a-f-]{36}$/), [], expect.objectContaining({ metadata: expect.objectContaining({ projectId: 'p1' }) }));
     expect(updateSessionMetadata).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ projectId: 'p1', customData: expect.objectContaining({ sourceBinding: expect.objectContaining({ sourceId: 'n1' }) }) }));
     const missing = await app.request('/api/notes/n1/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId: 'missing' }) });
     expect(missing.status).toBe(400);
@@ -172,7 +172,7 @@ describe('notes routes', () => {
 
     expect(res.status).toBe(201);
     expect(saveMessages).toHaveBeenCalledWith(
-      expect.stringContaining(':direct:note_note-1_'),
+      expect.stringMatching(/^[0-9a-f-]{36}$/),
       [],
       expect.objectContaining({
         metadata: expect.objectContaining({
@@ -181,7 +181,7 @@ describe('notes routes', () => {
       }),
     );
     expect(updateSessionMetadata).toHaveBeenCalledWith(
-      expect.stringContaining(':direct:note_note-1_'),
+      expect.stringMatching(/^[0-9a-f-]{36}$/),
       expect.objectContaining({
         customData: expect.objectContaining({
           existing: true,
@@ -190,6 +190,6 @@ describe('notes routes', () => {
         }),
       }),
     );
-    expect(linkNoteThread).toHaveBeenCalledWith('note-1', expect.stringContaining(':direct:note_note-1_'));
+    expect(linkNoteThread).toHaveBeenCalledWith('note-1', expect.stringMatching(/^[0-9a-f-]{36}$/));
   });
 });

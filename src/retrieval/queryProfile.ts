@@ -8,7 +8,7 @@ import {
 export type RetrievalTimeHint = 'current' | 'recent' | 'historical' | 'future';
 
 export interface RetrievalScope {
-  sessionKey?: string;
+  conversationId?: string;
   workspaceId?: string;
   projectId?: string;
 }

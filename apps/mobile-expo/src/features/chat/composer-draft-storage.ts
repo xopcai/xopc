@@ -2,7 +2,7 @@ import type { ComposerAttachment } from './composer.types';
 import { MAX_CHAT_ATTACHMENTS } from './chat-limits';
 import { storage } from '../../storage/mmkv';
 
-const STORAGE_PREFIX = 'xopc.chat.composerDraft:v2:';
+const STORAGE_PREFIX = 'xopc.chat.composerDraft:v3:';
 const MAX_DRAFT_LENGTH = 20_000;
 
 export type ComposerDraftSnapshot = {
@@ -12,8 +12,8 @@ export type ComposerDraftSnapshot = {
   contextRefs: Array<{ kind: 'note' | 'task'; sourceId: string; expectedVersion: string; title: string }>;
 };
 
-function storageKey(sessionKey: string): string {
-  return `${STORAGE_PREFIX}${encodeURIComponent(sessionKey.trim())}`;
+function storageKey(conversationId: string): string {
+  return `${STORAGE_PREFIX}${encodeURIComponent(conversationId.trim())}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -27,12 +27,12 @@ function normalizeCursorPos(cursorPos: unknown, textLength: number): number {
   return Math.min(Math.max(Math.trunc(cursorPos), 0), textLength);
 }
 
-export function readComposerDraftSnapshot(sessionKey: string): ComposerDraftSnapshot | null {
-  const normalizedSessionKey = sessionKey.trim();
-  if (!normalizedSessionKey) return null;
+export function readComposerDraftSnapshot(conversationId: string): ComposerDraftSnapshot | null {
+  const normalizedConversationId = conversationId.trim();
+  if (!normalizedConversationId) return null;
 
   try {
-    const raw = storage.getString(storageKey(normalizedSessionKey));
+    const raw = storage.getString(storageKey(normalizedConversationId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as unknown;
     if (!isRecord(parsed) || typeof parsed.text !== 'string') return null;
@@ -66,15 +66,15 @@ export function readComposerDraftSnapshot(sessionKey: string): ComposerDraftSnap
 }
 
 export function writeComposerDraftSnapshot(
-  sessionKey: string,
+  conversationId: string,
   snapshot: Omit<ComposerDraftSnapshot, 'contextRefs'> & { contextRefs?: ComposerDraftSnapshot['contextRefs'] },
 ): void {
-  const normalizedSessionKey = sessionKey.trim();
-  if (!normalizedSessionKey) return;
+  const normalizedConversationId = conversationId.trim();
+  if (!normalizedConversationId) return;
 
   const text = snapshot.text.slice(0, MAX_DRAFT_LENGTH);
   if (!text.trim() && !snapshot.contextRefs?.length && !snapshot.workspaceFiles?.length) {
-    clearComposerDraftSnapshot(normalizedSessionKey);
+    clearComposerDraftSnapshot(normalizedConversationId);
     return;
   }
 
@@ -86,18 +86,18 @@ export function writeComposerDraftSnapshot(
   };
 
   try {
-    storage.set(storageKey(normalizedSessionKey), JSON.stringify({ v: 2, ...payload }));
+    storage.set(storageKey(normalizedConversationId), JSON.stringify({ v: 2, ...payload }));
   } catch {
     /* ignore quota */
   }
 }
 
-export function clearComposerDraftSnapshot(sessionKey: string): void {
-  const normalizedSessionKey = sessionKey.trim();
-  if (!normalizedSessionKey) return;
+export function clearComposerDraftSnapshot(conversationId: string): void {
+  const normalizedConversationId = conversationId.trim();
+  if (!normalizedConversationId) return;
 
   try {
-    storage.delete(storageKey(normalizedSessionKey));
+    storage.delete(storageKey(normalizedConversationId));
   } catch {
     /* ignore */
   }

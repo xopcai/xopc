@@ -31,8 +31,8 @@ import { createAgentTurnPolicy } from '../../orchestration/agent-turn-policy.js'
 
 it('runs a real AgentSession through edit, early completion, bounded repair and final evidence', async () => {
   const root = await mkdtemp(join(tmpdir(), 'coding-harness-'));
-  const sessionKey = `agent:coder:internal:${Date.now()}`;
-  const runtime = new InMemoryTranscriptRuntime({ runtimeId: sessionKey, cwd: root });
+  const conversationId = crypto.randomUUID();
+  const runtime = new InMemoryTranscriptRuntime({ runtimeId: conversationId, cwd: root });
   try {
     await writeFile(join(root, 'answer.mjs'), 'export const answer = 0;\n');
     await writeFile(join(root, 'test.mjs'), 'import { answer } from "./answer.mjs"; import assert from "node:assert/strict"; assert.equal(answer, 42);');
@@ -57,8 +57,8 @@ it('runs a real AgentSession through edit, early completion, bounded repair and 
       return stream;
     });
     const events: string[] = [];
-    const result = await runXopcEmbeddedTurn({
-      sessionKey, runId: 'test-run', userMessage: { role: 'user', content: 'Fix answer.', timestamp: Date.now() },
+    const result = await runXopcEmbeddedTurn({ verifyChanges: true,
+      conversationId, runId: 'test-run', userMessage: { role: 'user', content: 'Fix answer.', timestamp: Date.now() },
       model: { id: 'gpt-4.1', name: 'Test', provider: 'openai', api: 'openai-completions', baseUrl: 'https://example.invalid', reasoning: false, input: ['text'], contextWindow: 128000, maxTokens: 4096, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }, modelRef: 'openai/gpt-4.1', systemPrompt: 'Fix and verify the code.',
       tools: [createApplyPatchTool(root), createExecCommandTool(root), createReviewWorkspaceTool(root)],
       workspaceDir: root, transcriptRuntime: runtime, timeoutMs: 10_000,
@@ -72,7 +72,7 @@ it('runs a real AgentSession through edit, early completion, bounded repair and 
       expect.objectContaining({ kind: 'check', command: 'node --test test.mjs', status: 'passed' }),
       expect.objectContaining({ kind: 'diff-review', status: 'passed' }),
     ]) } });
-  } finally { evictEmbeddedSessionRunner(sessionKey); await rm(root, { recursive: true, force: true }); }
+  } finally { evictEmbeddedSessionRunner(conversationId); await rm(root, { recursive: true, force: true }); }
 }, 20_000);
 
 it('enforces a child tool budget inside one parallel batch without a second runtime loop', async () => {

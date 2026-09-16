@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('./chat-client', () => ({ BrowserChatClient: class {
   subscribe(listener: (value: unknown) => void) { mocks.listener = listener; listener(mocks.snapshot); return () => {}; }
-  get currentSessionKey() { return mocks.snapshot.sessionKey; }
+  get currentConversationId() { return mocks.snapshot.conversationId; }
   async start() {} stop() {} async refreshInputs() {} send = mocks.send;
 } }));
 vi.mock('./page-context', async importOriginal => ({ ...await importOriginal<object>(), captureTabWithPermission: mocks.capture, activeTabId: mocks.activeTab }));
@@ -44,7 +44,7 @@ beforeEach(async () => {
   mocks.screenshot.mockReset();
   mocks.capture.mockReset(); mocks.activeTab.mockReset();
   mocks.store = new ComposerDrafts(vi.fn(), vi.fn().mockResolvedValue(undefined));
-  mocks.snapshot = { connection: 'connected', endpointReady: true, sessionLoading: false, submitting: false, stopping: false, pendingDelivery: false, sessionKey: 'a', sessions: [], messages: [], streamingText: '', models: [] };
+  mocks.snapshot = { connection: 'connected', endpointReady: true, sessionLoading: false, submitting: false, stopping: false, pendingDelivery: false, conversationId: 'a', sessions: [], messages: [], streamingText: '', models: [] };
   const event = { addListener: vi.fn(), removeListener: vi.fn() };
   vi.stubGlobal('chrome', { i18n: { getMessage: (key: string) => key }, storage: { session: { get: vi.fn().mockResolvedValue({}), remove: vi.fn().mockResolvedValue(undefined) } }, tabs: { onUpdated: event, onRemoved: event, onActivated: event } });
   HTMLElement.prototype.scrollTo = vi.fn();
@@ -75,12 +75,12 @@ describe('browser composer interactions', () => {
     await act(async () => text('A draft'));
     await act(async () => button('addContext').click());
     await act(async () => Array.from(container.querySelectorAll('button')).find(button => button.textContent?.includes('screenshot'))!.click());
-    await act(async () => emit({ sessionKey: 'b' }));
+    await act(async () => emit({ conversationId: 'b' }));
     expect(container.querySelector('textarea')!.value).toBe('');
     await act(async () => { resolve({ type: 'image', mimeType: 'image/png', name: 'a.png', size: 3, data: 'AAAA' }); });
     expect(container.querySelector('.attachment-chip')).toBeNull();
     await act(async () => text('B draft'));
-    await act(async () => emit({ sessionKey: 'a' }));
+    await act(async () => emit({ conversationId: 'a' }));
     expect(container.querySelector('textarea')!.value).toBe('A draft');
     expect(container.querySelector('.attachment-chip')?.textContent).toContain('a.png');
   });

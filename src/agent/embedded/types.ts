@@ -52,7 +52,7 @@ export type EmbeddedStreamEvent =
     };
 
 export type RunXopcEmbeddedTurnParams = {
-  sessionKey: string;
+  conversationId: string;
   runId: string;
   userMessage: AgentMessage;
   model: Model<Api>;
@@ -60,6 +60,7 @@ export type RunXopcEmbeddedTurnParams = {
   tools: import('@earendil-works/pi-agent-core').AgentTool[];
   systemPrompt: string;
   thinkingLevel?: ThinkingLevel;
+  compactionPolicy?: import('../memory/compaction-policy.js').ResolvedCompactionPolicy;
   promptCachePolicy?: import('../../providers/prompt-cache-plan.js').PromptCachePolicy;
   workspaceDir: string;
   sessionStore?: SessionStore;

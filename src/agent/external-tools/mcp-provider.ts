@@ -18,12 +18,12 @@ import type {
 export interface McpToolProviderDeps {
   workspace: string;
   getConfig: () => Config | undefined;
-  getSessionKey: () => string | undefined;
+  getConversationId: () => string | undefined;
   agentId?: string;
   hookRunner?: ExtensionHookRunner;
   getRuntime?: (params: {
     sessionId: string;
-    sessionKey?: string;
+    conversationId?: string;
     workspaceDir: string;
     cfg?: Config;
   }) => Promise<SessionMcpRuntime>;
@@ -118,7 +118,7 @@ export class McpToolProvider implements ExternalToolProvider {
           policyToolId(tool),
           args,
           {
-            sessionKey: this.deps.getSessionKey(),
+            conversationId: this.deps.getConversationId(),
             isMcpTool: true,
             mcpServerId: tool.serverName,
           },
@@ -148,9 +148,9 @@ export class McpToolProvider implements ExternalToolProvider {
 
   private isAllowed(tool: McpCatalogTool): boolean {
     const cfg = this.deps.getConfig();
-    const sessionKey = this.deps.getSessionKey();
-    const profile = cfg && sessionKey
-      ? resolveEffectiveAgentProfileForSession(cfg, sessionKey)
+    const conversationId = this.deps.getConversationId();
+    const profile = cfg && conversationId
+      ? resolveEffectiveAgentProfileForSession(cfg, conversationId)
       : undefined;
     const policyName = policyToolId(tool);
     return !profile?.tools.denied.has(policyName);
@@ -158,9 +158,9 @@ export class McpToolProvider implements ExternalToolProvider {
 
   private executionSignal(tool: McpCatalogTool, signal: AbortSignal | undefined): AbortSignal | undefined {
     const cfg = this.deps.getConfig();
-    const sessionKey = this.deps.getSessionKey();
-    const profile = cfg && sessionKey
-      ? resolveEffectiveAgentProfileForSession(cfg, sessionKey)
+    const conversationId = this.deps.getConversationId();
+    const profile = cfg && conversationId
+      ? resolveEffectiveAgentProfileForSession(cfg, conversationId)
       : undefined;
     const timeoutMs = profile?.config.tools[policyToolId(tool)]?.timeoutMs;
     if (!timeoutMs) return signal;
@@ -170,11 +170,11 @@ export class McpToolProvider implements ExternalToolProvider {
 
   private async withRuntime<T>(run: (runtime: SessionMcpRuntime) => Promise<T>): Promise<T> {
     const cfg = this.deps.getConfig();
-    const sessionKey = this.deps.getSessionKey();
-    const sessionId = sessionKey ?? `agent:${this.deps.agentId ?? 'main'}`;
+    const conversationId = this.deps.getConversationId();
+    const sessionId = conversationId ?? `agent:${this.deps.agentId ?? 'main'}`;
     const runtime = await (this.deps.getRuntime ?? getOrCreateSessionMcpRuntime)({
       sessionId,
-      sessionKey,
+      conversationId,
       workspaceDir: this.deps.workspace,
       cfg,
     });

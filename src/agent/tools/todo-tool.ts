@@ -100,11 +100,11 @@ export class TodoStore {
 
 export interface CreateTodoToolOptions {
   /** Resolve session key for isolated lists; defaults to a single in-memory list. */
-  getSessionKey?: () => string | null | undefined;
+  getConversationId?: () => string | null | undefined;
   repository?: {
     isAvailable?: () => boolean;
-    read: (sessionKey: string) => TodoItem[];
-    write: (sessionKey: string, items: TodoItem[]) => void;
+    read: (conversationId: string) => TodoItem[];
+    write: (conversationId: string, items: TodoItem[]) => void;
   };
 }
 
@@ -132,8 +132,8 @@ function formatTodoList(items: TodoItem[]): string {
   ].join('\n');
 }
 
-function resolveSessionKey(getSessionKey: () => string | null | undefined): string {
-  const raw = getSessionKey();
+function resolveConversationId(getConversationId: () => string | null | undefined): string {
+  const raw = getConversationId();
   const s = raw != null ? String(raw).trim() : '';
   return s.length > 0 ? s : 'default';
 }
@@ -142,7 +142,7 @@ function resolveSessionKey(getSessionKey: () => string | null | undefined): stri
  * In-session task list for multi-step work. One {@link TodoStore} per session key.
  */
 export function createTodoTool(options?: CreateTodoToolOptions): AgentTool {
-  const getSessionKey = options?.getSessionKey ?? (() => 'default');
+  const getConversationId = options?.getConversationId ?? (() => 'default');
   const stores = new Map<string, TodoStore>();
 
   const activeRepository = () => {
@@ -193,7 +193,7 @@ export function createTodoTool(options?: CreateTodoToolOptions): AgentTool {
     ): Promise<AgentToolResult<{ items: TodoItem[] }>> {
       let store: TodoStore | undefined;
       try {
-        const key = resolveSessionKey(getSessionKey);
+        const key = resolveConversationId(getConversationId);
         store = getStore(key);
         if ((params as { todos?: unknown }).todos === undefined) {
           const items = store.read();

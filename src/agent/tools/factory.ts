@@ -1,3 +1,4 @@
+import { resolveEffectiveAgentConfigForAgent } from '../../config/agent-profile.js';
 /**
  * Agent Tools Factory - Creates and configures agent tools
  *
@@ -118,7 +119,7 @@ const CLARIFY_SUPPORTED_CHANNELS = new Set(['webchat', 'telegram', 'cli']);
 export interface ToolFactoryDeps {
   workspace: string;
   extensionRegistry?: ExtensionRegistry;
-  getCurrentContext: () => { channel: string; chatId: string; sessionKey: string; origin: TurnOrigin } | null;
+  getCurrentContext: () => { channel: string; chatId: string; conversationId: string; origin: TurnOrigin } | null;
   endpointTools?: EndpointToolRuntime;
   hookRunner?: import('../../extensions/index.js').ExtensionHookRunner;
   bus: MessageBus;
@@ -178,7 +179,7 @@ export interface CreateCoreToolsOptions {
   getPrimaryModel?: () => Model<Api>;
   getMemoryManager?: () => MemoryManager;
   agentId?: string;
-  sessionKey?: string;
+  conversationId?: string;
   /** When set, registers local skill tools plus marketplace discovery for this workspace. */
   getSkillManager?: () => SkillManager;
 }
@@ -271,10 +272,10 @@ export class AgentToolsFactory {
         },
         allowedUploadRoots: [this.deps.workspace],
         emit: this.deps.emitBrowserEvent,
-        resolveTarget: (sessionKey) => {
-          const binding = getBrowserTabBinding(sessionKey);
+        resolveTarget: (conversationId) => {
+          const binding = getBrowserTabBinding(conversationId);
           if (binding) return { kind: 'attached_tab', bindingId: binding.id };
-          const endpointBinding = this.deps.endpointTools?.bindings.get(sessionKey);
+          const endpointBinding = this.deps.endpointTools?.bindings.get(conversationId);
           return endpointBinding
             ? { kind: 'endpoint', endpointId: endpointBinding.endpointId }
             : undefined;
@@ -295,8 +296,8 @@ export class AgentToolsFactory {
   }
 
   /** Drop the tab for a session when its agent instance is removed. */
-  async closeBrowserPageForSession(sessionKey: string): Promise<void> {
-    await this.browserRuntime?.closeTaskSession(sessionKey);
+  async closeBrowserPageForSession(conversationId: string): Promise<void> {
+    await this.browserRuntime?.closeTaskSession(conversationId);
   }
 
   createCoreTools(options?: CreateCoreToolsOptions): AgentTool<any, any>[] {
@@ -324,22 +325,22 @@ export class AgentToolsFactory {
     });
     const agentId = options?.agentId;
     const resolvedAgentId = agentId ?? (cfg ? resolveDefaultAgentId(cfg) : 'main');
-    const currentSessionKey = () => options?.sessionKey ?? this.deps.getCurrentContext?.()?.sessionKey;
+    const currentConversationId = () => options?.conversationId ?? this.deps.getCurrentContext?.()?.conversationId;
     const deliveryContext = () => {
-      if (currentSessionKey()?.startsWith('heartbeat:')) {
+      if ((currentConversationId() && getSessionMetadata(currentConversationId()!)?.sessionType === 'heartbeat')) {
         throw new Error('Heartbeat notifications must be returned in the final response for policy-controlled delivery.');
       }
       return this.deps.getCurrentContext();
     };
-    const currentAccess = () => resolveUserContextSessionAccess(this.deps.getConfig?.(), currentSessionKey());
+    const currentAccess = () => resolveUserContextSessionAccess(this.deps.getConfig?.(), currentConversationId());
     const knowledgeWritePolicy = () => this.deps.getConfig?.()?.userContext.knowledgeMemory.writePolicy ?? 'deny';
     const currentProjectId = () => {
-      const key = currentSessionKey();
+      const key = currentConversationId();
       return key ? getSessionMetadata(key)?.projectId : undefined;
     };
     const getCommandIsolation = () => {
       const config = this.deps.getConfig?.();
-      return config ? resolveEffectiveAgentConfigForSession(config, this.deps.getCurrentContext()?.sessionKey ?? `agent:${agentId ?? 'main'}:internal`).config.runtime.commandIsolation : undefined;
+      return config ? (currentConversationId() ? resolveEffectiveAgentConfigForSession(config, currentConversationId()) : resolveEffectiveAgentConfigForAgent(config, resolvedAgentId)).config.runtime.commandIsolation : undefined;
     };
 
     const externalTools = createDefaultExternalToolGatewayTools({
@@ -381,22 +382,22 @@ export class AgentToolsFactory {
           const executionSession = getEmbeddedExecutionSession();
           const runId = getEmbeddedExecutionRunId();
           if (executionSession && runId) {
-            return (request) => req({ sessionKey: executionSession, runId, toolCallId }, request);
+            return (request) => req({ conversationId: executionSession, runId, toolCallId }, request);
           }
           const ctx = this.deps.getCurrentContext();
-          if (!ctx?.sessionKey) return null;
+          if (!ctx?.conversationId) return null;
           if (!CLARIFY_SUPPORTED_CHANNELS.has(ctx.channel)) return null;
           if (!runId) return null;
-          return (request) => req({ sessionKey: ctx.sessionKey, runId, toolCallId }, request);
+          return (request) => req({ conversationId: ctx.conversationId, runId, toolCallId }, request);
         },
       }),
       createTodoTool({
-        getSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
+        getConversationId: () => this.deps.getCurrentContext()?.conversationId,
         repository: {
           isAvailable: isXopcDatabaseOpen,
-          read: (sessionKey) => getSessionTaskPlan(sessionKey)?.items ?? [],
-          write: (sessionKey, items) => {
-            setSessionTaskPlan({ sessionKey, items });
+          read: (conversationId) => getSessionTaskPlan(conversationId)?.items ?? [],
+          write: (conversationId, items) => {
+            setSessionTaskPlan({ conversationId, items });
           },
         },
       }),
@@ -428,7 +429,7 @@ export class AgentToolsFactory {
         ? [createSkillInstallTool({
             installSkillFromSource: this.deps.installSkillFromSource,
             installSkillFromMarketplace: this.deps.installSkillFromMarketplace,
-            getSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
+            getConversationId: () => this.deps.getCurrentContext()?.conversationId,
           })]
         : []),
       readTool,
@@ -439,15 +440,15 @@ export class AgentToolsFactory {
       find,
       createExecCommandTool(workspace, {
         getCommandIsolation,
-        getSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
+        getConversationId: () => this.deps.getCurrentContext()?.conversationId,
         getSkillPassthroughEnvVarNames: this.deps.getSkillPassthroughEnvVarNames,
         prepareEnv: this.prepareRuntimeEnv,
       }),
       createReviewWorkspaceTool(workspace),
-      createLanguageDiagnosticsTool(workspace, { getCommandIsolation, getSessionKey: () => this.deps.getCurrentContext()?.sessionKey, prepareEnv: this.prepareRuntimeEnv }),
+      createLanguageDiagnosticsTool(workspace, { getCommandIsolation, getConversationId: () => this.deps.getCurrentContext()?.conversationId, prepareEnv: this.prepareRuntimeEnv }),
       createManagedJobTool(
         workspace,
-        () => this.deps.getCurrentContext()?.sessionKey,
+        () => this.deps.getCurrentContext()?.conversationId,
         this.deps.getSkillPassthroughEnvVarNames,
         this.prepareRuntimeEnv,
         getCommandIsolation,
@@ -481,33 +482,33 @@ export class AgentToolsFactory {
       createUserContextSearchTool({
         agentId: resolvedAgentId,
         workspaceId: workspace,
-        getSessionId: currentSessionKey,
+        getSessionId: currentConversationId,
         getProjectId: currentProjectId,
         canRead: () => currentAccess().userModel,
       }),
       createUserContextGetTool({
         agentId: resolvedAgentId,
         workspaceId: workspace,
-        getSessionId: currentSessionKey,
+        getSessionId: currentConversationId,
         getProjectId: currentProjectId,
         canRead: () => currentAccess().userModel,
       }),
       createUserContextUpdateTool({
         agentId: resolvedAgentId,
         workspaceId: workspace,
-        getSessionId: currentSessionKey,
+        getSessionId: currentConversationId,
         getProjectId: currentProjectId,
         canRead: () => currentAccess().userModel,
         canWrite: () => currentAccess().userModel,
         getCurrentUserText: () => {
-          const sessionKey = currentSessionKey();
-          return sessionKey ? getPendingTranscriptUserText(sessionKey) : undefined;
+          const conversationId = currentConversationId();
+          return conversationId ? getPendingTranscriptUserText(conversationId) : undefined;
         },
       }),
       createKnowledgeSearchTool({
         agentId: resolvedAgentId,
         workspaceId: workspace,
-        getSessionId: currentSessionKey,
+        getSessionId: currentConversationId,
         getProjectId: currentProjectId,
         canRead: () => currentAccess().knowledge,
         canWrite: () => currentAccess().knowledge,
@@ -517,7 +518,7 @@ export class AgentToolsFactory {
       createKnowledgeGetTool({
         agentId: resolvedAgentId,
         workspaceId: workspace,
-        getSessionId: currentSessionKey,
+        getSessionId: currentConversationId,
         getProjectId: currentProjectId,
         canRead: () => currentAccess().knowledge,
         canWrite: () => currentAccess().knowledge,
@@ -527,7 +528,7 @@ export class AgentToolsFactory {
       createKnowledgeWriteTool({
         agentId: resolvedAgentId,
         workspaceId: workspace,
-        getSessionId: currentSessionKey,
+        getSessionId: currentConversationId,
         getProjectId: currentProjectId,
         canRead: () => currentAccess().knowledge,
         canWrite: () => currentAccess().knowledge,
@@ -538,7 +539,7 @@ export class AgentToolsFactory {
         ? [
             createSessionRecallTool({
               getSessionStore: this.deps.getSessionStore,
-              getCurrentSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
+              getCurrentConversationId: () => this.deps.getCurrentContext()?.conversationId,
             }),
           ]
         : []),
@@ -547,7 +548,7 @@ export class AgentToolsFactory {
             createSessionSearchTool({
               getSessionStore: this.deps.getSessionStore,
               getPrimaryModel: getPrimary,
-              getCurrentSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
+              getCurrentConversationId: () => this.deps.getCurrentContext()?.conversationId,
               canAccess: () => currentAccess().crossSessionHistory,
             }),
           ]
@@ -573,7 +574,7 @@ export class AgentToolsFactory {
               getWorkspace: () => this.deps.workspace,
               getConfig: () => this.deps.getConfig?.(),
               getCurrentAgentId: () => options.agentId,
-              getCurrentSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
+              getCurrentConversationId: () => this.deps.getCurrentContext()?.conversationId,
               getAutomationService: this.deps.getAutomationService,
               getNotesService: this.deps.getNotesService,
               getProjectService: this.deps.getProjectService,
@@ -587,7 +588,7 @@ export class AgentToolsFactory {
         ? [
             createBrowserUseTool({
               getRuntime: () => this.ensureBrowserRuntime(),
-              getTaskId: () => options?.sessionKey ?? this.deps.getCurrentContext()?.sessionKey ?? 'default',
+              getTaskId: () => options?.conversationId ?? this.deps.getCurrentContext()?.conversationId ?? 'default',
               getReadiness: () => this.checkBrowserReadinessCached(),
             }),
           ]
@@ -596,7 +597,7 @@ export class AgentToolsFactory {
         ? [
             createWorkflowTool({
               catalog: createWorkflowCatalog(),
-              getCurrentSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
+              getCurrentConversationId: () => this.deps.getCurrentContext()?.conversationId,
               getConfig: () => this.deps.getConfig?.(),
               startWorkflowRun: this.deps.getWorkflowRunService
                 ? (params) => this.deps.getWorkflowRunService!().startWorkflowRun(params)
@@ -636,7 +637,7 @@ export class AgentToolsFactory {
                   workspace: childOpts.workspace,
                   getPrimaryModel: () => childOpts.model,
                   agentId: options?.agentId ?? childOpts.agentId,
-                  sessionKey: childOpts.browserSessionKey,
+                  conversationId: childOpts.browserConversationId,
                   disabledTools: new Set([
                     EXTERNAL_TOOL_NAMES.search,
                     EXTERNAL_TOOL_NAMES.describe,

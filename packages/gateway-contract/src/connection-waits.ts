@@ -21,8 +21,8 @@ export type ConnectionCheckpoint = {
 export type ConnectionWait = {
   id: string;
   principalId: string;
-  sessionKey: string;
-  sessionId: string;
+  conversationId: string;
+  transcriptId: string;
   agentId: string;
   objectiveId: string;
   objectiveRevision: number;
@@ -58,4 +58,4 @@ export type ConnectionWaitView = Omit<ConnectionWait, 'needs' | 'intent' | 'chec
   phase: 'needs_connection' | 'ready' | 'review_scope' | 'queued';
 };
 
-export type ConnectionWaitSnapshot = { sessionId: string; revision: number; wait: ConnectionWaitView | null };
+export type ConnectionWaitSnapshot = { transcriptId: string; revision: number; wait: ConnectionWaitView | null };

@@ -37,7 +37,7 @@ describe('ActivityService', () => {
     const event = activity.record({
       type: 'task.created',
       primaryObject: { kind: 'task', id: 'task-1', title: 'Validate feasibility' },
-      actor: { kind: 'agent', agentId: 'main', sessionKey: 'session-1' },
+      actor: { kind: 'agent', agentId: 'main', conversationId: 'session-1' },
       initiator: { kind: 'user', id: 'user-1' },
       source: { kind: 'xopc_use', toolCallId: 'tool-1' },
       payload: { title: 'Validate feasibility', status: 'todo' },
@@ -129,8 +129,8 @@ describe('ActivityService', () => {
   it('applies async activity context when emitting activity', () => {
     runWithActivityContext(
       {
-        actor: { kind: 'agent', agentId: 'main', sessionKey: 'session-1' },
-        initiator: { kind: 'user', sessionKey: 'session-1' },
+        actor: { kind: 'agent', agentId: 'main', conversationId: 'session-1' },
+        initiator: { kind: 'user', conversationId: 'session-1' },
         source: { kind: 'xopc_use', toolCallId: 'tool-1' },
       },
       () => {
@@ -147,8 +147,8 @@ describe('ActivityService', () => {
 
     const page = activity.list();
     expect(page.items[0]).toMatchObject({
-      actor: { kind: 'agent', agentId: 'main', sessionKey: 'session-1' },
-      initiator: { kind: 'user', sessionKey: 'session-1' },
+      actor: { kind: 'agent', agentId: 'main', conversationId: 'session-1' },
+      initiator: { kind: 'user', conversationId: 'session-1' },
       source: { kind: 'xopc_use', toolCallId: 'tool-1' },
     });
   });

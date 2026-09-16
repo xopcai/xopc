@@ -31,6 +31,10 @@ vi.mock('../../../providers/index.js', () => ({
   },
 }));
 
+vi.mock('../../../config/agent-profile.js', () => ({
+  resolveEffectiveAgentProfileForSession: () => ({ config: { runtime: {} } }),
+}));
+
 // ---- Helpers ----
 
 function createMockSessionStore(opts: {
@@ -162,7 +166,7 @@ describe('pre-turn auto-compaction', () => {
     const events: EmbeddedStreamEvent[] = [];
 
     await runEmbeddedTurnForSession({
-      sessionKey: 'agent:main:test-session',
+      conversationId: 'agent:main:test-session',
       userMessage: { role: 'user', content: 'test' } as AgentMessage,
       sessionStore: sessionStore as any,
       agentManager: agentManager as any,
@@ -203,7 +207,7 @@ describe('pre-turn auto-compaction', () => {
   it('applies voice presentation to this turn without mutating the Agent prompt', async () => {
     const agentManager = createMockAgentManager();
     const input = {
-      sessionKey: 'agent:main:test-session',
+      conversationId: 'agent:main:test-session',
       userMessage: { role: 'user', content: 'test' } as AgentMessage,
       sessionStore: createMockSessionStore({ needsCompaction: false }) as any,
       agentManager: agentManager as any,
@@ -222,7 +226,7 @@ describe('pre-turn auto-compaction', () => {
     const events: EmbeddedStreamEvent[] = [];
 
     await runEmbeddedTurnForSession({
-      sessionKey: 'agent:main:test-session',
+      conversationId: 'agent:main:test-session',
       userMessage: { role: 'user', content: 'test' } as AgentMessage,
       sessionStore: sessionStore as any,
       agentManager: agentManager as any,
@@ -264,7 +268,7 @@ describe('pre-turn auto-compaction', () => {
     const events: EmbeddedStreamEvent[] = [];
 
     await runEmbeddedTurnForSession({
-      sessionKey: 'agent:main:test-session',
+      conversationId: 'agent:main:test-session',
       runId: 'run-outcome',
       userMessage: { role: 'user', content: 'test' } as AgentMessage,
       sessionStore: sessionStore as any,
@@ -308,7 +312,7 @@ describe('pre-turn auto-compaction', () => {
     config.userContext.contextPlanning.compaction.maxActiveTranscriptBytes = 64_000;
 
     await runEmbeddedTurnForSession({
-      sessionKey: 'agent:main:test-session',
+      conversationId: 'agent:main:test-session',
       userMessage: { role: 'user', content: 'test' } as AgentMessage,
       sessionStore: sessionStore as any,
       agentManager: createMockAgentManager() as any,
@@ -334,7 +338,7 @@ describe('pre-turn auto-compaction', () => {
       compacted, tokensBefore: 225_000, tokensAfter: 200_000, summary: '', firstKeptIndex: 0,
     });
     const result = await runEmbeddedTurnForSession({
-      sessionKey: 'agent:main:test-session',
+      conversationId: 'agent:main:test-session',
       userMessage: { role: 'user', content: 'hello' } as AgentMessage,
       sessionStore: sessionStore as any,
       agentManager: createMockAgentManager() as any,
@@ -350,7 +354,7 @@ describe('pre-turn auto-compaction', () => {
   it('blocks the turn if full-history recovery still cannot fit the current input', async () => {
     const sessionStore = createMockSessionStore({ needsCompaction: true });
     await expect(runEmbeddedTurnForSession({
-      sessionKey: 'agent:main:test-session',
+      conversationId: 'agent:main:test-session',
       userMessage: { role: 'user', content: 'x'.repeat(900_000) } as AgentMessage,
       sessionStore: sessionStore as any,
       agentManager: createMockAgentManager() as any,
@@ -383,7 +387,7 @@ describe('pre-turn auto-compaction', () => {
     };
 
     const result = await runEmbeddedTurnForSession({
-      sessionKey: 'agent:main:test-session',
+      conversationId: 'agent:main:test-session',
       userMessage: { role: 'user', content: 'test' } as AgentMessage,
       sessionStore: sessionStore as any,
       agentManager: agentManager as any,
@@ -424,7 +428,7 @@ describe('pre-turn auto-compaction', () => {
     };
 
     const result = await runEmbeddedTurnForSession({
-      sessionKey: 'agent:main:test-session',
+      conversationId: 'agent:main:test-session',
       userMessage: { role: 'user', content: 'test' } as AgentMessage,
       sessionStore: sessionStore as any,
       agentManager: createMockAgentManager() as any,
@@ -467,7 +471,7 @@ describe('pre-turn auto-compaction', () => {
 
     try {
       await runEmbeddedTurnForSession({
-        sessionKey: 'agent:main:test-session',
+        conversationId: 'agent:main:test-session',
         userMessage: { role: 'user', content: 'test' } as AgentMessage,
         sessionStore: sessionStore as any,
         agentManager: createMockAgentManager() as any,
@@ -507,7 +511,7 @@ describe('pre-turn auto-compaction', () => {
 
     try {
       const result = await runEmbeddedTurnForSession({
-        sessionKey: 'agent:main:test-session',
+        conversationId: 'agent:main:test-session',
         userMessage: { role: 'user', content: 'test' } as AgentMessage,
         sessionStore: sessionStore as any,
         agentManager: createMockAgentManager() as any,
@@ -541,7 +545,7 @@ describe('pre-turn auto-compaction', () => {
     };
 
     const result = await runEmbeddedTurnForSession({
-      sessionKey: 'agent:main:test-session',
+      conversationId: 'agent:main:test-session',
       userMessage: { role: 'user', content: 'test' } as AgentMessage,
       sessionStore: sessionStore as any,
       agentManager: createMockAgentManager() as any,
@@ -564,7 +568,7 @@ describe('pre-turn auto-compaction', () => {
     }]);
 
     await expect(runEmbeddedTurnForSession({
-      sessionKey: 'agent:main:test-session',
+      conversationId: 'agent:main:test-session',
       runId: 'run-aborted',
       userMessage: { role: 'user', content: 'test' } as AgentMessage,
       sessionStore: sessionStore as any,
@@ -587,7 +591,7 @@ describe('pre-turn auto-compaction', () => {
     const modelManager = createMockModelManager();
 
     await runEmbeddedTurnForSession({
-      sessionKey: 'agent:main:test-session',
+      conversationId: 'agent:main:test-session',
       userMessage: { role: 'user', content: 'test' } as AgentMessage,
       sessionStore: sessionStore as any,
       agentManager: agentManager as any,
@@ -606,7 +610,7 @@ describe('pre-turn auto-compaction', () => {
     const events: EmbeddedStreamEvent[] = [];
 
     const result = await runEmbeddedTurnForSession({
-      sessionKey: 'agent:main:test-session',
+      conversationId: 'agent:main:test-session',
       userMessage: { role: 'user', content: 'test' } as AgentMessage,
       sessionStore: sessionStore as any,
       agentManager: agentManager as any,
@@ -638,7 +642,7 @@ describe('pre-turn auto-compaction', () => {
     sessionStore.compact.mockRejectedValue(new Error('summary unavailable'));
 
     await expect(runEmbeddedTurnForSession({
-      sessionKey: 'agent:main:test-session',
+      conversationId: 'agent:main:test-session',
       userMessage: { role: 'user', content: 'test' } as AgentMessage,
       sessionStore: sessionStore as any,
       agentManager: createMockAgentManager() as any,
@@ -664,7 +668,7 @@ describe('pre-turn auto-compaction', () => {
     const events: EmbeddedStreamEvent[] = [];
 
     await runEmbeddedTurnForSession({
-      sessionKey: 'agent:main:test-session',
+      conversationId: 'agent:main:test-session',
       userMessage: { role: 'user', content: 'test' } as AgentMessage,
       sessionStore: sessionStore as any,
       agentManager: agentManager as any,
@@ -689,7 +693,7 @@ describe('pre-turn auto-compaction', () => {
     });
 
     await runEmbeddedTurnForSession({
-      sessionKey: 'agent:main:test-session',
+      conversationId: 'agent:main:test-session',
       userMessage: { role: 'user', content: 'test' } as AgentMessage,
       sessionStore: sessionStore as any,
       agentManager: agentManager as any,

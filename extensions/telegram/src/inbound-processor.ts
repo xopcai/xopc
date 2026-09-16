@@ -21,7 +21,7 @@ import { normalizeTelegramCommandName, parseSlashCommand } from '@xopcai/xopc/ch
 import { answerClarificationTextFromChannel } from '@xopcai/xopc/gateway/clarify-runtime.js';
 import { resolveRoute } from '@xopcai/xopc/routing/index.js';
 import { resolveTelegramGroupContext } from './group-config-resolver.js';
-import { resolveTelegramFocusedSessionKey } from './focus-handler.js';
+import { resolveTelegramFocusedConversationId } from './focus-handler.js';
 import { buildTelegramConversationId } from './conversation-id.js';
 import { checkMentionInTranscription } from '@xopcai/xopc/voice/stt/mention.js';
 
@@ -62,8 +62,8 @@ export interface AccessControlService {
   removeBotMention(text: string, botUsername: string): string;
 }
 
-export interface SessionKeyService {
-  generateSessionKey(options: {
+export interface ConversationIdService {
+  generateConversationId(options: {
     source: string;
     chatId: string;
     senderId: string;
@@ -93,7 +93,7 @@ export interface InboundProcessorDeps {
   accountManager: TelegramAccountManager;
   // External services (injected for testability)
   accessControl: AccessControlService;
-  sessionKeyService: SessionKeyService;
+  conversationIdService: ConversationIdService;
   sttService: STTService;
   mediaUtils: MediaUtils;
 }
@@ -356,7 +356,7 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
     config,
     accountManager,
     accessControl,
-    sessionKeyService,
+    conversationIdService,
     sttService,
     mediaUtils,
   } = deps;
@@ -527,7 +527,7 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
     });
     const routedAgentId = groupCtx.agentId ?? route.agentId;
 
-    const defaultSessionKey = sessionKeyService.generateSessionKey({
+    const defaultConversationId = conversationIdService.generateConversationId({
       source: 'telegram',
       chatId,
       senderId,
@@ -537,13 +537,13 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
       agentId: routedAgentId,
     });
 
-    const sessionKey = resolveTelegramFocusedSessionKey({
+    const conversationId = resolveTelegramFocusedConversationId({
       chatId,
       threadId: threadId ? String(threadId) : undefined,
-      defaultSessionKey,
+      defaultConversationId,
     });
 
-    const conversationId = buildTelegramConversationId(chatId, threadId);
+    const externalConversationId = buildTelegramConversationId(chatId, threadId);
 
     // Collect and process media
     const media = extractMediaItems(message);
@@ -593,7 +593,7 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
       chatId,
       senderId,
       isGroup,
-      sessionKey,
+      conversationId,
       contentLength: finalContent.length,
       attachmentCount: attachments.length,
       isCommand,
@@ -603,12 +603,12 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
       finalContent.trim().length > 0 &&
       !isCommand &&
       answerClarificationTextFromChannel(
-        sessionKey,
+        conversationId,
         finalContent.trim(),
         `telegram:${accountId}:${chatId}:message:${message.message_id}`,
       )
     ) {
-      log.debug({ sessionKey }, 'Telegram: consumed message as clarify reply');
+      log.debug({ conversationId }, 'Telegram: consumed message as clarify reply');
       return;
     }
 
@@ -619,13 +619,13 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
       content: finalContent,
       metadata: {
         accountId,
-        sessionKey,
+        conversationId,
         senderUsername,
         messageId: String(message.message_id),
         isGroup,
         isCommand,
         threadId: threadId ? String(threadId) : undefined,
-        conversationId,
+        externalConversationId,
         channelSystemPrompt: groupCtx.systemPrompt,
         channelAgentId: routedAgentId,
         media: media.length > 0 ? media : undefined,

@@ -32,9 +32,9 @@ function attachmentPayload(att: MessageAttachment): string | undefined {
   return att.preview || att.content || att.data;
 }
 
-function attachmentRemoteUri(att: MessageAttachment, sessionKey?: string | null): string | undefined {
+function attachmentRemoteUri(att: MessageAttachment, conversationId?: string | null): string | undefined {
   if (isMediaUri(att.uri)) {
-    return useGatewayStore.getState().apiUrl(buildGatewayMediaReadPath(att.uri, sessionKey));
+    return useGatewayStore.getState().apiUrl(buildGatewayMediaReadPath(att.uri, conversationId));
   }
   return /^https?:\/\//i.test(att.uri ?? '') ? att.uri : undefined;
 }
@@ -43,7 +43,7 @@ function attachmentToPreviewable(
   att: MessageAttachment,
   index: number,
   resource: FileResource | null,
-  sessionKey?: string | null,
+  conversationId?: string | null,
 ): PreviewableFile {
   const name = attachmentName(att, index);
   const fileId = artifactFileId(att.uri);
@@ -53,7 +53,7 @@ function attachmentToPreviewable(
     mimeType: resource?.mimeType || att.mimeType || mimeTypeFromFileName(name),
     contentBase64: attachmentPayload(att),
     workspaceRelativePath: att.workspaceRelativePath,
-    remoteUri: attachmentRemoteUri(att, sessionKey),
+    remoteUri: attachmentRemoteUri(att, conversationId),
     remoteRequiresAuth: isMediaUri(att.uri),
     extractedText: att.extractedText,
   };
@@ -62,7 +62,7 @@ function attachmentToPreviewable(
 function imageSource(
   att: MessageAttachment,
   resource: FileResource | null,
-  sessionKey: string | null | undefined,
+  conversationId: string | null | undefined,
   apiUrl: (path: string) => string,
 ): { uri: string } | null {
   const payload = attachmentPayload(att)?.trim();
@@ -73,7 +73,7 @@ function imageSource(
     return { uri: `data:${mime};base64,${payload.replace(/\s/g, '')}` };
   }
   if (isMediaUri(att.uri)) {
-    return { uri: apiUrl(buildGatewayMediaReadPath(att.uri, sessionKey)) };
+    return { uri: apiUrl(buildGatewayMediaReadPath(att.uri, conversationId)) };
   }
   if (fileId) {
     return { uri: apiUrl(fileContentPath(fileId)) };
@@ -113,11 +113,11 @@ function attachmentToAudioContent(
 
 export function AttachmentRenderer({
   attachments,
-  sessionKey,
+  conversationId,
   compact = false,
 }: {
   attachments?: MessageAttachment[];
-  sessionKey?: string | null;
+  conversationId?: string | null;
   compact?: boolean;
 }) {
   const { colors } = useTheme();
@@ -130,9 +130,9 @@ export function AttachmentRenderer({
     [items],
   );
   const resourcesQuery = useQuery({
-    queryKey: ['files', 'message-attachments', sessionKey ?? '', workspacePaths],
-    queryFn: () => resolveContextFileResources('session', sessionKey!, workspacePaths),
-    enabled: Boolean(sessionKey && workspacePaths.some(Boolean)),
+    queryKey: ['files', 'message-attachments', conversationId ?? '', workspacePaths],
+    queryFn: () => resolveContextFileResources('session', conversationId!, workspacePaths),
+    enabled: Boolean(conversationId && workspacePaths.some(Boolean)),
     staleTime: 30_000,
   });
   const resourceByItem = resourcesQuery.data ?? [];
@@ -169,8 +169,8 @@ export function AttachmentRenderer({
           const name = attachmentName(att, index);
           const itemIndex = items.indexOf(att);
           const resource = resourceByItem[itemIndex] ?? null;
-          const preview = attachmentToPreviewable(att, index, resource, sessionKey);
-          const source = isImageAttachment(att) ? imageSource(att, resource, sessionKey, apiUrl) : null;
+          const preview = attachmentToPreviewable(att, index, resource, conversationId);
+          const source = isImageAttachment(att) ? imageSource(att, resource, conversationId, apiUrl) : null;
           if (source) {
             return (
               <Pressable

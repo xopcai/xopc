@@ -64,8 +64,8 @@ export interface NoteCatalysisMeta {
   confidence?: number;
   report?: NoteCatalysisReport;
   reportNoteId?: string;
-  sourceSessionKey?: string;
-  linkedSessionKeys?: string[];
+  sourceConversationId?: string;
+  linkedConversationIds?: string[];
   linkedWorkflowRunIds?: string[];
   linkedShareIds?: string[];
 }
@@ -87,7 +87,7 @@ export interface NoteTaskMeta {
   done: boolean;
   dueAt?: number;
   priority?: 'high' | 'medium' | 'low';
-  sourceSessionKey?: string;
+  sourceConversationId?: string;
   sourceNoteId?: string;
 }
 

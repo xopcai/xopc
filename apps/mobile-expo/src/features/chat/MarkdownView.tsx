@@ -318,7 +318,7 @@ const EnrichedMarkdownBody = memo(function EnrichedMarkdownBody({
 export const MarkdownView = memo(function MarkdownView({
   content,
   allowTrailingMargin = false,
-  sessionKey,
+  conversationId,
   onLinkPress,
 }: {
   content: string;
@@ -328,7 +328,7 @@ export const MarkdownView = memo(function MarkdownView({
    */
   allowTrailingMargin?: boolean;
   /** Session scope used to resolve assistant-authored workspace file links. */
-  sessionKey?: string | null;
+  conversationId?: string | null;
   onLinkPress?: (url: string) => void;
 }) {
   const { colors, isDark } = useTheme();
@@ -346,13 +346,13 @@ export const MarkdownView = memo(function MarkdownView({
       router.push(productRoute as Href);
       return;
     }
-    const workspaceRoute = workspaceFileLinkRoute(url, sessionKey);
+    const workspaceRoute = workspaceFileLinkRoute(url, conversationId);
     if (workspaceRoute) {
       router.push(workspaceRoute as Href);
       return;
     }
     void Linking.openURL(url);
-  }, [onLinkPress, router, sessionKey]);
+  }, [onLinkPress, router, conversationId]);
 
   if (!content?.trim()) return null;
 

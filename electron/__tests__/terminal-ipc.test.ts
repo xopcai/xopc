@@ -60,8 +60,8 @@ describe('TerminalManager', () => {
     });
 
     const input = {
-      sessionKey: 'agent:main:webchat:default:direct:one',
-      sessionId: 'session-1',
+      conversationId: 'agent:main:webchat:default:direct:one',
+      transcriptId: 'session-1',
       terminalKey: 'terminal-1',
       cols: 100,
       rows: 30,
@@ -97,8 +97,8 @@ describe('TerminalManager', () => {
       spawnPty: spawnPty as never,
     });
     const baseInput = {
-      sessionKey: 'agent:main:webchat:default:direct:multiple',
-      sessionId: 'session-multiple',
+      conversationId: 'agent:main:webchat:default:direct:multiple',
+      transcriptId: 'session-multiple',
       cols: 80,
       rows: 24,
     };
@@ -125,8 +125,8 @@ describe('TerminalManager', () => {
     const spawnPty = vi.fn(() => child);
     const manager = new TerminalManager({ resolveWorkspace, spawnPty: spawnPty as never });
     const input = {
-      sessionKey: 'agent:main:webchat:default:direct:concurrent',
-      sessionId: 'session-concurrent',
+      conversationId: 'agent:main:webchat:default:direct:concurrent',
+      transcriptId: 'session-concurrent',
       terminalKey: 'terminal-concurrent',
       cols: 80,
       rows: 24,
@@ -149,8 +149,8 @@ describe('TerminalManager', () => {
       spawnPty: (() => child) as never,
     });
     const terminal = await manager.create(owner as never, {
-      sessionKey: 'agent:main:webchat:default:direct:two',
-      sessionId: 'session-2',
+      conversationId: 'agent:main:webchat:default:direct:two',
+      transcriptId: 'session-2',
       terminalKey: 'terminal-2',
       cols: 80,
       rows: 24,
@@ -168,8 +168,8 @@ describe('TerminalManager', () => {
       signal: 15,
     });
     expect((await manager.create(owner as never, {
-      sessionKey: terminal.sessionKey,
-      sessionId: terminal.sessionId,
+      conversationId: terminal.conversationId,
+      transcriptId: terminal.transcriptId,
       terminalKey: terminal.terminalKey,
       cols: 80,
       rows: 24,
@@ -187,8 +187,8 @@ describe('TerminalManager', () => {
       spawnPty: (() => child) as never,
     });
     await manager.create(owner as never, {
-      sessionKey: 'agent:main:webchat:default:direct:three',
-      sessionId: 'session-3',
+      conversationId: 'agent:main:webchat:default:direct:three',
+      transcriptId: 'session-3',
       terminalKey: 'terminal-3',
       cols: 80,
       rows: 24,
@@ -209,8 +209,8 @@ describe('TerminalManager', () => {
       spawnPty: (() => child) as never,
     });
     const creation = manager.create(owner as never, {
-      sessionKey: 'agent:main:webchat:default:direct:destroyed',
-      sessionId: 'session-destroyed',
+      conversationId: 'agent:main:webchat:default:direct:destroyed',
+      transcriptId: 'session-destroyed',
       terminalKey: 'terminal-destroyed',
       cols: 80,
       rows: 24,
@@ -230,8 +230,8 @@ describe('TerminalManager', () => {
     });
 
     await expect(manager.create(fakeOwner() as never, {
-      sessionKey: 'session-key',
-      sessionId: 'session-id',
+      conversationId: 'session-key',
+      transcriptId: 'session-id',
       terminalKey: 'terminal-invalid',
       cols: 1,
       rows: 24,
@@ -249,8 +249,8 @@ describe('TerminalManager', () => {
       spawnPty: spawnPty as never,
     });
     const creation = manager.create(fakeOwner() as never, {
-      sessionKey: 'agent:main:webchat:default:direct:cancelled',
-      sessionId: 'session-cancelled',
+      conversationId: 'agent:main:webchat:default:direct:cancelled',
+      transcriptId: 'session-cancelled',
       terminalKey: 'terminal-cancelled',
       cols: 80,
       rows: 24,
@@ -270,7 +270,7 @@ describe('resolveTerminalWorkspace', () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({
         ok: true,
-        payload: { sessionId: 'session-dev' },
+        payload: { transcriptId: 'session-dev' },
       }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         ok: true,
@@ -281,7 +281,7 @@ describe('resolveTerminalWorkspace', () => {
     await expect(resolveTerminalWorkspace('session-key', 'session-dev')).resolves.toBe(process.cwd());
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'http://127.0.0.1:18790/api/sessions/resolve?sessionKey=session-key',
+      'http://127.0.0.1:18790/api/sessions/resolve?conversationId=session-key',
       expect.objectContaining({ headers: { Authorization: 'Bearer dev-token' } }),
     );
   });

@@ -37,21 +37,21 @@ describe('connector routes', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('lets a normally paired phone list confirmations for its conversation', async () => {
-    const response = await app(DEFAULT_MOBILE_SCOPES).request('/api/connectors/approvals?status=pending&sessionKey=agent%3Amain%3Awebchat%3Achat');
+    const response = await app(DEFAULT_MOBILE_SCOPES).request('/api/connectors/approvals?status=pending&conversationId=agent%3Amain%3Awebchat%3Achat');
     expect(response.status).toBe(200);
-    expect(listConnectorApprovals).toHaveBeenCalledWith(expect.objectContaining({ principalId: 'local-owner', sessionKey: 'agent:main:webchat:chat' }));
+    expect(listConnectorApprovals).toHaveBeenCalledWith(expect.objectContaining({ principalId: 'local-owner', conversationId: 'agent:main:webchat:chat' }));
   });
 
-  it.each(['?status=pending', '?sessionKey=chat&principalId=someone-else'])('rejects unscoped mobile reads %s', async query => {
+  it.each(['?status=pending', '?conversationId=chat&principalId=someone-else'])('rejects unscoped mobile reads %s', async query => {
     expect((await app(DEFAULT_MOBILE_SCOPES).request(`/api/connectors/approvals${query}`)).status).toBe(403);
     expect(listConnectorApprovals).not.toHaveBeenCalled();
   });
 
   it.each(['approved', 'denied'])('lets a paired phone submit %s for the matching session', async decision => {
-    getConnectorApproval.mockReturnValue({ id: 'confirmation', principalId: 'local-owner', sessionKey: 'chat' });
+    getConnectorApproval.mockReturnValue({ id: 'confirmation', principalId: 'local-owner', conversationId: 'chat' });
     decideConnectorApproval.mockReturnValue({ id: 'confirmation', status: decision });
     const response = await app(DEFAULT_MOBILE_SCOPES).request('/api/connectors/approvals/respond', {
-      method: 'POST', body: JSON.stringify({ id: 'confirmation', sessionKey: 'chat', decision }),
+      method: 'POST', body: JSON.stringify({ id: 'confirmation', conversationId: 'chat', decision }),
     });
     expect(response.status).toBe(200);
     expect(decideConnectorApproval).toHaveBeenCalledWith('confirmation', decision);
@@ -62,10 +62,10 @@ describe('connector routes', () => {
     ['other-chat', 'chat', 'local-owner'],
     ['chat', 'chat', 'someone-else'],
     [undefined, 'chat', 'local-owner'],
-  ])('rejects mismatched confirmation context', async (storedSessionKey, sessionKey, principalId) => {
-    getConnectorApproval.mockReturnValue({ id: 'confirmation', principalId, sessionKey: storedSessionKey });
+  ])('rejects mismatched confirmation context', async (storedConversationId, conversationId, principalId) => {
+    getConnectorApproval.mockReturnValue({ id: 'confirmation', principalId, conversationId: storedConversationId });
     const response = await app(DEFAULT_MOBILE_SCOPES).request('/api/connectors/approvals/respond', {
-      method: 'POST', body: JSON.stringify({ id: 'confirmation', sessionKey, decision: 'approved' }),
+      method: 'POST', body: JSON.stringify({ id: 'confirmation', conversationId, decision: 'approved' }),
     });
     expect(response.status).toBe(403);
     expect(decideConnectorApproval).not.toHaveBeenCalled();
@@ -73,7 +73,7 @@ describe('connector routes', () => {
 
   it('rejects confirmation writes from a read-only device', async () => {
     const response = await app(['sessions.read']).request('/api/connectors/approvals/respond', {
-      method: 'POST', body: JSON.stringify({ id: 'confirmation', sessionKey: 'chat', decision: 'approved' }),
+      method: 'POST', body: JSON.stringify({ id: 'confirmation', conversationId: 'chat', decision: 'approved' }),
     });
     expect(response.status).toBe(403);
     expect(getConnectorApproval).not.toHaveBeenCalled();
@@ -85,7 +85,7 @@ describe('connector routes', () => {
     expect(await response.json()).toEqual({ ok: true, payload: { approvals: [] } });
     expect(listConnectorApprovals).toHaveBeenCalledWith({
       principalId: 'local-owner',
-      sessionKey: undefined,
+      conversationId: undefined,
       status: 'pending',
       limit: 100,
     });

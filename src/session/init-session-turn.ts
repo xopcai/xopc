@@ -14,18 +14,18 @@ import {
   resolveResetTriggers,
 } from './reset-triggers.js';
 import { resolveChannelResetConfig, resolveSessionResetType } from './reset-type.js';
-import { resolveSessionKeyForRequest } from './resolve-session.js';
+import { resolveConversationIdForRequest } from './resolve-session.js';
 
 const log = createLogger('InitSessionTurn');
 
 export type SessionResetFn = (
-  sessionKey: string,
-) => Promise<{ sessionId: string; previousSessionId: string } | null>;
+  conversationId: string,
+) => Promise<{ transcriptId: string; previousTranscriptId: string } | null>;
 
 export type InitSessionTurnResult = {
-  sessionKey: string;
-  sessionId?: string;
-  previousSessionId?: string;
+  conversationId: string;
+  transcriptId?: string;
+  previousTranscriptId?: string;
   isNewSession: boolean;
   resetTriggered: boolean;
   staleRollover: boolean;
@@ -36,7 +36,7 @@ export type InitSessionTurnResult = {
 
 export type InitSessionTurnOptions = {
   cfg: Config;
-  sessionKey: string;
+  conversationId: string;
   body?: string;
   resetSession: SessionResetFn;
 };
@@ -51,11 +51,11 @@ export async function initSessionTurn(
   const rawBody = opts.body ?? '';
   const triggerMatch = matchResetTriggers(rawBody, triggers);
 
-  const { sessionKey, sessionMetadata } = await resolveSessionKeyForRequest({
+  const { conversationId, sessionMetadata } = await resolveConversationIdForRequest({
     cfg: opts.cfg,
-    sessionKey: opts.sessionKey,
+    conversationId: opts.conversationId,
   });
-  const key = sessionKey?.trim() ?? opts.sessionKey.trim();
+  const key = conversationId?.trim() ?? opts.conversationId.trim();
 
   const routing = sessionMetadata?.routing;
   const peerKind = routing?.peerKind;
@@ -100,21 +100,21 @@ export async function initSessionTurn(
   );
   const needsRollover = triggerMatch.resetTriggered || staleRollover;
 
-  let sessionId = sessionMetadata?.sessionId;
-  let previousSessionId: string | undefined;
+  let transcriptId = sessionMetadata?.transcriptId;
+  let previousTranscriptId: string | undefined;
   let isNewSession = false;
 
-  if (needsRollover && sessionMetadata?.sessionId) {
+  if (needsRollover && sessionMetadata?.transcriptId) {
     const task = await opts.resetSession(key);
     if (task) {
-      previousSessionId = task.previousSessionId;
-      sessionId = task.sessionId;
+      previousTranscriptId = task.previousTranscriptId;
+      transcriptId = task.transcriptId;
       isNewSession = true;
       log.info(
         {
-          sessionKey: key,
-          sessionId: task.sessionId,
-          previousSessionId: task.previousSessionId,
+          conversationId: key,
+          transcriptId: task.transcriptId,
+          previousTranscriptId: task.previousTranscriptId,
           resetTriggered: triggerMatch.resetTriggered,
           staleRollover,
           resetType,
@@ -124,22 +124,22 @@ export async function initSessionTurn(
           : 'Session rolled over (stale freshness)',
       );
     } else {
-      log.warn({ sessionKey: key }, 'Session rollover requested but resetSession returned null');
-      sessionId = randomUUID();
+      log.warn({ conversationId: key }, 'Session rollover requested but resetSession returned null');
+      transcriptId = randomUUID();
       isNewSession = true;
     }
   } else if (!sessionMetadata) {
     isNewSession = true;
-    sessionId = randomUUID();
+    transcriptId = randomUUID();
   }
 
   const bareReset = triggerMatch.resetTriggered && triggerMatch.bareReset;
   const ackMessage = bareReset ? bareResetAckMessage(triggerMatch.matchedTrigger) : undefined;
 
   return {
-    sessionKey: key,
-    sessionId,
-    previousSessionId,
+    conversationId: key,
+    transcriptId,
+    previousTranscriptId,
     isNewSession,
     resetTriggered: triggerMatch.resetTriggered,
     staleRollover,

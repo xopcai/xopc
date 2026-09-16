@@ -7,7 +7,7 @@ import type { SessionInfo, TuiEventSource } from './tui-types.js';
 
 /** Options for sending a chat message. */
 export interface ChatSendOptions {
-  sessionKey: string;
+  conversationId: string;
   message: string;
   attachments?: TuiInboundAttachment[];
   thinking?: string;
@@ -38,13 +38,16 @@ export interface TuiComposerHistoryItem {
 
 /** Minimal session list item. */
 export interface TuiSessionItem {
+  agentId?: string;
+  sourceChannel?: string;
+  generatedShell?: boolean;
   key: string;
   updatedAt?: number | null;
   model?: string | null;
   totalTokens?: number | null;
   displayName?: string;
   messageCount?: number;
-  forkedFromSessionKey?: string;
+  forkedFromConversationId?: string;
   cwd?: string;
 }
 
@@ -96,8 +99,8 @@ export interface TuiCompactionResult {
 }
 
 export interface TuiBranchSummary {
-  sourceSessionKey: string;
-  targetSessionKey: string;
+  sourceConversationId: string;
+  targetConversationId: string;
   rowCount: number;
   entryId?: string;
   restoredText?: string;
@@ -136,7 +139,7 @@ export interface TuiStartupResources {
 }
 
 export interface TuiChatInputState {
-  sessionKey: string;
+  conversationId: string;
   revision: number;
   inputs: Array<{ id: string; status: string }>;
 }
@@ -156,7 +159,7 @@ export interface TuiWorkspaceFileSearchEntry {
 }
 
 export interface TuiWorkflowRunStartRequest {
-  sessionKey: string;
+  conversationId: string;
   definitionId: string;
   agentId?: string;
   goal?: string;
@@ -165,7 +168,7 @@ export interface TuiWorkflowRunStartRequest {
 
 export interface TuiWorkflowRunStartResult {
   runId: string;
-  sessionKey: string;
+  conversationId: string;
   definitionId: string;
 }
 
@@ -234,14 +237,14 @@ export interface TuiBackend {
   sendChat(opts: ChatSendOptions): Promise<{ runId: string }>;
 
   /** Reattach to a live gateway/webchat run when the original response stream stalled. */
-  resumeChat?(opts: { sessionKey: string; runId: string }): Promise<{ ok: boolean; reason?: string }>;
+  resumeChat?(opts: { conversationId: string; runId: string }): Promise<{ ok: boolean; reason?: string }>;
 
   /** Abort an active run. */
-  abortChat(opts: { sessionKey: string; runId: string }): Promise<{ ok: boolean }>;
+  abortChat(opts: { conversationId: string; runId: string }): Promise<{ ok: boolean }>;
 
   /** Inject steering text into an active run (tool-boundary delivery). */
-  submitChatInput(opts: { sessionKey: string; message: string; delivery: 'next' | 'steer' }): Promise<{ ok: boolean; effectiveDelivery?: 'next' | 'steer' }>;
-  getChatInputState(sessionKey: string): Promise<TuiChatInputState>;
+  submitChatInput(opts: { conversationId: string; message: string; delivery: 'next' | 'steer' }): Promise<{ ok: boolean; effectiveDelivery?: 'next' | 'steer' }>;
+  getChatInputState(conversationId: string): Promise<TuiChatInputState>;
 
   /** Start a workflow run directly, without routing through the LLM. */
   startWorkflowRun?(opts: TuiWorkflowRunStartRequest): Promise<TuiWorkflowRunStartResult>;
@@ -249,49 +252,49 @@ export interface TuiBackend {
   /** Resolve or create the project implied by the TUI launch workspace. */
   resolveStartupProject?(opts: {
     workspacePath: string;
-    sessionKey: string;
+    conversationId: string;
     agentId: string;
     autoCreate?: boolean;
   }): Promise<TuiStartupProjectResult>;
 
   /** Load startup resources shown in `/start` and initial help. */
-  getStartupResources?(sessionKey: string): Promise<TuiStartupResources>;
+  getStartupResources?(conversationId: string): Promise<TuiStartupResources>;
 
   /** Re-evaluate project-scoped resources after a local trust decision changes. */
   refreshWorkspaceTrust?(): void | Promise<void>;
 
   /** Fuzzy search files in this session's effective workspace. */
   searchWorkspaceFiles?(
-    sessionKey: string,
+    conversationId: string,
     query: string,
     options?: { limit?: number },
   ): Promise<TuiWorkspaceFileSearchEntry[]>;
 
   /** Load git branches/commits/status for the interactive review launcher. */
-  getReviewContext?(sessionKey: string): Promise<ReviewContext>;
+  getReviewContext?(conversationId: string): Promise<ReviewContext>;
 
   /** Load chat history for a session. */
   loadHistory(opts: {
-    sessionKey: string;
+    conversationId: string;
     limit?: number;
   }): Promise<{ messages: HistoryMessage[] }>;
 
   /** Load a bounded transcript window around a persisted row number. */
   loadHistoryWindow?(opts: {
-    sessionKey: string;
+    conversationId: string;
     rowNumber: number;
     before?: number;
     after?: number;
   }): Promise<TuiHistoryWindow>;
 
   /** Load current transcript rows as a tree-shaped list. */
-  loadTranscriptTree(sessionKey: string): Promise<TuiTranscriptTreeEntry[]>;
+  loadTranscriptTree(conversationId: string): Promise<TuiTranscriptTreeEntry[]>;
 
   /** Load current transcript rows as timeline items for turn navigation. */
-  loadTimeline(sessionKey: string): Promise<SessionTimelineItem[]>;
+  loadTimeline(conversationId: string): Promise<SessionTimelineItem[]>;
 
   /** Compute transcript message/token statistics. */
-  getSessionStats(sessionKey: string): Promise<TuiSessionStats>;
+  getSessionStats(conversationId: string): Promise<TuiSessionStats>;
 
   /** List sessions. */
   listSessions(): Promise<TuiSessionItem[]>;
@@ -303,7 +306,8 @@ export interface TuiBackend {
   setTuiDefaultAgent?(agentId: string): Promise<{ agentId: string }>;
 
   /** Fetch session info (model, tokens, thinking). */
-  getSessionInfo(sessionKey: string): Promise<SessionInfo>;
+  getSessionInfo(conversationId: string): Promise<SessionInfo>;
+  createConversation(agentId: string, conversationId?: string): Promise<string>;
 
   /** List available models. */
   listModels(): Promise<TuiModelChoice[]>;
@@ -312,75 +316,75 @@ export interface TuiBackend {
   refreshModels?(): Promise<void>;
 
   /** Reset / create new session. */
-  resetSession(sessionKey: string): Promise<void>;
+  resetSession(conversationId: string): Promise<void>;
 
   /** Rename session display name. */
-  renameSession(sessionKey: string, name: string): Promise<{ ok: boolean }>;
+  renameSession(conversationId: string, name: string): Promise<{ ok: boolean }>;
 
   /** Delete session and transcript. */
-  deleteSession(sessionKey: string): Promise<{ ok: boolean }>;
+  deleteSession(conversationId: string): Promise<{ ok: boolean }>;
 
   /** Patch session settings (e.g. model). */
   patchSession(
-    sessionKey: string,
+    conversationId: string,
     patch: Record<string, unknown>,
   ): Promise<void>;
 
   /** Compact session transcript (returns whether compaction ran). */
   compactSession(
-    sessionKey: string,
+    conversationId: string,
     options?: { force?: boolean; instructions?: string },
   ): Promise<TuiCompactionResult>;
 
   /** Export a session transcript. */
-  exportSession(sessionKey: string, format: ExportFormat): Promise<string>;
+  exportSession(conversationId: string, format: ExportFormat): Promise<string>;
 
   /** Import an xopc JSON session export into a new session key. */
   importSession(
-    targetSessionKey: string,
+    targetConversationId: string,
     jsonContent: string,
-  ): Promise<{ sessionKey: string; rowCount: number }>;
+  ): Promise<{ conversationId: string; rowCount: number }>;
 
   /** Create a share link for a workspace file/folder/site artifact. */
   createShare(
-    sessionKey: string,
+    conversationId: string,
     request: TuiShareRequest,
     options?: { agentId?: string },
   ): Promise<TuiShareResult>;
 
   /** Ask an ephemeral side question using this session as read-only background. */
-  btwQuery(sessionKey: string, question: string): Promise<{ text: string; error?: string }>;
+  btwQuery(conversationId: string, question: string): Promise<{ text: string; error?: string }>;
 
   /** Fork one session transcript into a new session key. */
   forkSession(
-    sourceSessionKey: string,
-    targetSessionKey: string,
-  ): Promise<{ sessionKey: string; rowCount: number }>;
+    sourceConversationId: string,
+    targetConversationId: string,
+  ): Promise<{ conversationId: string; rowCount: number }>;
 
   /** Fork one session transcript through a selected transcript-tree entry. */
   forkSessionAt(
-    sourceSessionKey: string,
-    targetSessionKey: string,
+    sourceConversationId: string,
+    targetConversationId: string,
     entryId: string,
-  ): Promise<{ sessionKey: string; rowCount: number }>;
+  ): Promise<{ conversationId: string; rowCount: number }>;
 
   /** Append or clear a label for a transcript entry. */
   setTranscriptLabel(
-    sessionKey: string,
+    conversationId: string,
     entryId: string,
     label: string | undefined,
   ): Promise<{ ok: boolean }>;
 
   /** Append extension state for replay by TUI extension sessionManager APIs. */
   appendCustomEntry(
-    sessionKey: string,
+    conversationId: string,
     customType: string,
     data?: unknown,
   ): Promise<{ ok: boolean }>;
 
   /** Append a visible extension custom message. */
   appendCustomMessage(
-    sessionKey: string,
+    conversationId: string,
     message: {
       customType: string;
       content?: string | unknown[];
@@ -391,7 +395,7 @@ export interface TuiBackend {
 
   /** Persist a local TUI shell execution for replay and optional LLM context. */
   appendBashExecution(
-    sessionKey: string,
+    conversationId: string,
     entry: {
       command: string;
       output?: string;

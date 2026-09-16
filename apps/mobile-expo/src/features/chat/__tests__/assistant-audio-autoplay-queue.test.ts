@@ -5,7 +5,7 @@ import {
   type AssistantAudioAutoplayResult,
 } from '../assistant-audio-autoplay-queue';
 
-const item = (key: string) => ({ key, uri: `media://${key}`, sessionKey: 'main' });
+const item = (key: string) => ({ key, uri: `media://${key}`, conversationId: 'main' });
 
 describe('assistant audio autoplay queue', () => {
   it('plays consecutive replies in order and ignores duplicate delivery', async () => {

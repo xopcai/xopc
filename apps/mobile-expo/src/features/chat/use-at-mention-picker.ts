@@ -8,7 +8,7 @@ export type MobileAtMentionItem =
   | { kind: 'file'; id: string; name: string; relativePath: string; isDirectory: boolean }
   | { kind: 'note'; id: string; name: string; description: string; expectedVersion: string };
 
-export function useAtMentionPicker(text: string, cursor: number, sessionKey: string, slashOpen: boolean) {
+export function useAtMentionPicker(text: string, cursor: number, conversationId: string, slashOpen: boolean) {
   const range = useMemo(
     () => slashOpen ? null : detectAtMentionRange(text, cursor),
     [cursor, slashOpen, text],
@@ -17,7 +17,7 @@ export function useAtMentionPicker(text: string, cursor: number, sessionKey: str
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!range || !sessionKey) {
+    if (!range || !conversationId) {
       setItems([]);
       setLoading(false);
       return;
@@ -26,7 +26,7 @@ export function useAtMentionPicker(text: string, cursor: number, sessionKey: str
     const timer = setTimeout(() => {
       setLoading(true);
       const query = range.query.trim();
-      void fetchFileSpaceForContext('session', sessionKey).then(async (space) => {
+      void fetchFileSpaceForContext('session', conversationId).then(async (space) => {
         const filePromise = query.endsWith('/')
           ? fetchFileChildren(space.id, query.replace(/\/+$/, ''))
           : query ? searchFiles(query, space.id) : fetchFileChildren(space.id, '');
@@ -61,7 +61,7 @@ export function useAtMentionPicker(text: string, cursor: number, sessionKey: str
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [range?.query, range?.start, sessionKey]);
+  }, [range?.query, range?.start, conversationId]);
 
   return { open: Boolean(range), range, items, loading, query: range?.query ?? '' };
 }

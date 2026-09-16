@@ -339,7 +339,7 @@ export type ConnectorApproval = {
   connectorId: string;
   connectionId?: string;
   agentId?: string;
-  sessionKey?: string;
+  conversationId?: string;
   actionId: string;
   scope: ComposioScope;
   argumentsPreview: Record<string, unknown>;

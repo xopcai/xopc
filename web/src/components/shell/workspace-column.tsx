@@ -47,18 +47,18 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const { pathname, search } = useLocation();
-  const { sessionKey: sessionKeyParam } = useParams();
-  const routeChatSessionKey =
-    pathname.startsWith('/chat') && sessionKeyParam && sessionKeyParam !== 'new'
-      ? decodeURIComponent(sessionKeyParam)
+  const { conversationId: conversationIdParam } = useParams();
+  const routeChatConversationId =
+    pathname.startsWith('/chat') && conversationIdParam && conversationIdParam !== 'new'
+      ? decodeURIComponent(conversationIdParam)
       : null;
   const open = useWorkspacePanelStore((s) => s.open);
   const setOpen = useWorkspacePanelStore((s) => s.setOpen);
-  const sessionKeyOverride = useWorkspacePanelStore((s) => s.sessionKeyOverride);
+  const conversationIdOverride = useWorkspacePanelStore((s) => s.conversationIdOverride);
   const widthPx = useWorkspacePanelStore((s) => s.widthPx);
   const setWidthPx = useWorkspacePanelStore((s) => s.setWidthPx);
-  const chatSessionKey = sessionKeyOverride ?? routeChatSessionKey;
-  const projectId = !chatSessionKey && pathname.startsWith('/chat')
+  const chatConversationId = conversationIdOverride ?? routeChatConversationId;
+  const projectId = !chatConversationId && pathname.startsWith('/chat')
     ? new URLSearchParams(search).get('projectId') : null;
   const [widthResizing, setWidthResizing] = useState(false);
   const [fileSearchOpen, setFileSearchOpen] = useState(false);
@@ -74,20 +74,20 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
 
   const { tree, rootResource, loading, error, loadRoot, loadChildren, refreshDirectory, reset } = useWorkspaceTree(
     workspaceAgentId,
-    chatSessionKey,
+    chatConversationId,
     projectId,
   );
   /** When the tree is session-scoped, agent id from the store is irrelevant — avoid re-fetching on agent sync. */
-  const treeScopeKey = chatSessionKey ? `session:${chatSessionKey}` : projectId ? `project:${projectId}` : `agent:${workspaceAgentId}`;
+  const treeScopeKey = chatConversationId ? `session:${chatConversationId}` : projectId ? `project:${projectId}` : `agent:${workspaceAgentId}`;
 
   const workspaceReadOpts = useMemo(
     () =>
-      projectId ? { projectId } : chatSessionKey != null
-        ? { sessionKey: chatSessionKey }
+      projectId ? { projectId } : chatConversationId != null
+        ? { conversationId: chatConversationId }
         : workspaceAgentId.trim()
           ? { agentId: workspaceAgentId.trim() }
           : undefined,
-    [chatSessionKey, projectId, workspaceAgentId],
+    [chatConversationId, projectId, workspaceAgentId],
   );
   const normalizedFileSearchQuery = fileSearchQuery.trim();
   const electron = isElectron();

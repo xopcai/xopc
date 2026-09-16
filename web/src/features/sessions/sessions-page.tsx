@@ -178,7 +178,7 @@ export function SessionsPage() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const s = m.sessions;
-  const token = useGatewayStore((st) => st.sessionKey);
+  const token = useGatewayStore((st) => st.conversationId);
   const hasToken = Boolean(token);
   const { data: chatAgents, mutate: mutateChatAgents } = useSWR(
     hasToken ? (['gateway-chat-agents', token] as const) : null,
@@ -413,7 +413,7 @@ export function SessionsPage() {
   const handleCardAction = async (key: string, action: SessionCardAction) => {
     if (action === 'continue') {
       window.dispatchEvent(
-        new CustomEvent('navigate-to-chat', { detail: { sessionKey: key }, bubbles: true }),
+        new CustomEvent('navigate-to-chat', { detail: { conversationId: key }, bubbles: true }),
       );
       return;
     }
@@ -711,7 +711,7 @@ export function SessionsPage() {
               variant="primary"
               className="mt-6"
               onClick={() => {
-                window.dispatchEvent(new CustomEvent('navigate-to-chat', { detail: { sessionKey: '' }, bubbles: true }));
+                window.dispatchEvent(new CustomEvent('navigate-to-chat', { detail: { conversationId: '' }, bubbles: true }));
               }}
             >
               {s.startNewChat}

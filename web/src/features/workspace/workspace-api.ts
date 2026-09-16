@@ -24,7 +24,7 @@ export type WorkspaceFileSearchEntry = WorkspaceEntry;
 
 export type WorkspaceEditorRequestOptions = {
   projectId?: string;
-  sessionKey?: string;
+  conversationId?: string;
   agentId?: string;
 };
 
@@ -61,8 +61,8 @@ async function requestJson(path: string, init?: RequestInit): Promise<unknown> {
 async function resolveSpace(options?: WorkspaceEditorRequestOptions): Promise<FileSpace> {
   const context = options?.projectId
     ? { kind: 'project', id: options.projectId }
-    : options?.sessionKey
-      ? { kind: 'session', id: options.sessionKey }
+    : options?.conversationId
+      ? { kind: 'session', id: options.conversationId }
       : options?.agentId
         ? { kind: 'agent', id: options.agentId }
         : null;
@@ -190,7 +190,7 @@ export async function resolveWorkspaceFileReference(
   } catch {
     try {
       const body = await requestJson('/api/files/resolve-reference', {
-        method: 'POST', body: JSON.stringify({ spaceId: space.id, path, sessionKey: options?.sessionKey }),
+        method: 'POST', body: JSON.stringify({ spaceId: space.id, path, conversationId: options?.conversationId }),
       }) as { reference: WorkspaceFileReference };
       return body.reference;
     } catch { return null; }
@@ -203,7 +203,7 @@ export async function resolveFileReferenceAction(
   options?: WorkspaceEditorRequestOptions,
 ): Promise<{ absolutePath: string; isDirectory: boolean }> {
   return await requestJson(`/api/files/references/${encodeURIComponent(fileRefId)}/action`, {
-    method: 'POST', body: JSON.stringify({ action, sessionKey: options?.sessionKey }),
+    method: 'POST', body: JSON.stringify({ action, conversationId: options?.conversationId }),
   }) as { absolutePath: string; isDirectory: boolean };
 }
 

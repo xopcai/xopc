@@ -6,7 +6,7 @@ import { RealtimeClient, type RealtimeWebSocket } from '@xopcai/realtime-client'
 export async function runRealtimeInput(input: {
   baseUrl: string;
   headers: Record<string, string>;
-  sessionKey: string;
+  conversationId: string;
   message: string;
   thinking?: string;
   signal: AbortSignal;
@@ -89,7 +89,7 @@ export async function runRealtimeInput(input: {
     client.connect();
     const origin = await ready;
     const clientMessageId = randomUUID();
-    const response = await json(`/api/sessions/${encodeURIComponent(input.sessionKey)}/inputs`, {
+    const response = await json(`/api/sessions/${encodeURIComponent(input.conversationId)}/inputs`, {
       clientMessageId, content: input.message, delivery: 'next', origin,
       ...(input.thinking ? { thinking: input.thinking } : {}),
     });

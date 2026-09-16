@@ -23,15 +23,15 @@ import { useGatewayStore } from '@/stores/gateway-store';
 
 export function useChatSessionAgents(opts: {
   navigate: NavigateFunction;
-  sessionKeyRef: RefObject<string | null>;
-  sessionKey: string | null;
+  conversationIdRef: RefObject<string | null>;
+  conversationId: string | null;
   isNewRoute: boolean;
   locationState: unknown;
   locationSearch: string;
 }) {
-  const { navigate, sessionKeyRef, sessionKey, isNewRoute, locationState, locationSearch } = opts;
-  const token = useGatewayStore((s) => s.sessionKey);
-  const sessionAgentKey = sessionKey?.trim() ?? '';
+  const { navigate, conversationIdRef, conversationId, isNewRoute, locationState, locationSearch } = opts;
+  const token = useGatewayStore((s) => s.conversationId);
+  const sessionAgentKey = conversationId?.trim() ?? '';
 
   const { data: chatAgentsData, mutate: mutateChatAgents } = useSWR(
     token ? ['gateway-chat-agents', token] : null,
@@ -82,7 +82,7 @@ export function useChatSessionAgents(opts: {
   }, [chatAgentsData]);
 
   const resolveAgentIdForPost = useCallback((): string | undefined => {
-    if (sessionKeyRef.current && currentSessionAgentId) return currentSessionAgentId;
+    if (conversationIdRef.current && currentSessionAgentId) return currentSessionAgentId;
 
     const agents = chatAgentsRef.current;
     const pref = (preferredAgentIdRef.current ?? '').trim().toLowerCase();
@@ -90,14 +90,14 @@ export function useChatSessionAgents(opts: {
     const valid = new Set(agents.items.map((i) => i.id));
     if (pref && valid.has(pref)) return pref;
     return agents.defaultId;
-  }, [currentSessionAgentId, sessionKeyRef]);
+  }, [currentSessionAgentId, conversationIdRef]);
 
   const onChatAgentChange = useCallback(
     (id: string) => {
       const next = id.trim().toLowerCase();
       setPreferredAgentId(next);
       rememberSelectedAgent(next);
-      const curKey = sessionKeyRef.current;
+      const curKey = conversationIdRef.current;
       const curAgent = curKey ? currentSessionAgentId || preferredAgentIdRef.current : null;
       if (curAgent !== next) {
         navigate(isNewRoute ? `/chat/new${locationSearch}` : newChatHrefForProject(currentSession?.projectId), {
@@ -109,7 +109,7 @@ export function useChatSessionAgents(opts: {
         });
       }
     },
-    [currentSession?.projectId, currentSessionAgentId, isNewRoute, locationSearch, locationState, navigate, sessionKeyRef],
+    [currentSession?.projectId, currentSessionAgentId, isNewRoute, locationSearch, locationState, navigate, conversationIdRef],
   );
 
   useEffect(() => {
@@ -123,18 +123,18 @@ export function useChatSessionAgents(opts: {
   }, [onChatAgentChange]);
 
   useLayoutEffect(() => {
-    if (!sessionKey) return;
+    if (!conversationId) return;
     const agentFromSession = currentSessionAgentId;
     if (!agentFromSession || preferredAgentIdRef.current === agentFromSession) return;
     preferredAgentIdRef.current = agentFromSession;
     setPreferredAgentId(agentFromSession);
     rememberSelectedAgent(agentFromSession);
-  }, [currentSessionAgentId, sessionKey]);
+  }, [currentSessionAgentId, conversationId]);
 
   useLayoutEffect(() => {
-    if (!sessionKey || !currentSession) return;
+    if (!conversationId || !currentSession) return;
     rememberLastChatScope(currentSession.projectId);
-  }, [currentSession, sessionKey]);
+  }, [currentSession, conversationId]);
 
   useLayoutEffect(() => {
     if (!isNewRoute) return;

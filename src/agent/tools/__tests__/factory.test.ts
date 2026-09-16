@@ -1,3 +1,4 @@
+import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
@@ -15,10 +16,11 @@ import { AgentToolsFactory } from '../factory.js';
 
 describe('AgentToolsFactory', () => {
   it('routes heartbeat notifications through final-result delivery even with explicit destinations', async () => {
+    const conversationId = createConversation({ agentId: 'main', sourceChannel: 'heartbeat', sessionType: 'heartbeat' }).key;
     const publishOutbound = vi.fn();
     const factory = new AgentToolsFactory({
       workspace: '/tmp/xopc-tools-factory-test', bus: { publishOutbound } as unknown as MessageBus,
-      getCurrentContext: () => ({ channel: 'heartbeat', chatId: 'main', sessionKey: 'heartbeat:main', origin: { type: 'system', source: 'heartbeat' } }),
+      getCurrentContext: () => ({ channel: 'heartbeat', chatId: 'main', conversationId, origin: { type: 'system', source: 'heartbeat' } }),
       getConfig: () => ConfigSchema.parse({ messages: { tts: { enabled: true } } }),
     });
     for (const [name, params] of [
@@ -207,7 +209,7 @@ describe('AgentToolsFactory', () => {
     );
     expect(result.details).toMatchObject({ answer: 'yes' });
     expect(requestClarification).toHaveBeenCalledWith(
-      { sessionKey: 'parent:side-chat:isolated', runId: 'run-1', toolCallId: 'q1' },
+      { conversationId: 'parent:side-chat:isolated', runId: 'run-1', toolCallId: 'q1' },
       expect.objectContaining({ question: 'Continue?' }),
     );
   });

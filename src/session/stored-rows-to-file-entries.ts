@@ -128,7 +128,7 @@ function agentMessageToEntry(
 
 /** Convert SQLite transcript rows into pi-coding-agent JSONL file entries (header + tree). */
 export function storedRowsToFileEntries(params: {
-  sessionId: string;
+  transcriptId: string;
   cwd: string;
   rows: TranscriptStoredRow[];
   appendCompaction?: TranscriptCompactionRecord;
@@ -138,7 +138,7 @@ export function storedRowsToFileEntries(params: {
     {
       type: 'session',
       version: CURRENT_SESSION_VERSION,
-      id: params.sessionId,
+      id: params.transcriptId,
       timestamp: new Date().toISOString(),
       cwd: params.cwd,
     },

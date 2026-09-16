@@ -56,7 +56,7 @@ export async function fetchTask(id: string): Promise<TaskDetail> {
 
 export type EnsuredTaskConversation = {
   ok: true;
-  sessionKey: string;
+  conversationId: string;
   agentId: string;
   created: boolean;
 };
@@ -69,12 +69,12 @@ export async function ensureTaskConversation(id: string): Promise<EnsuredTaskCon
     throw await taskError(response, `Failed to create task conversation: ${response.status}`);
   }
   const body = await response.json() as Partial<EnsuredTaskConversation>;
-  if (body.ok !== true || typeof body.sessionKey !== 'string' || typeof body.agentId !== 'string') {
+  if (body.ok !== true || typeof body.conversationId !== 'string' || typeof body.agentId !== 'string') {
     throw new Error('Task conversation response was invalid');
   }
   return {
     ok: true,
-    sessionKey: body.sessionKey,
+    conversationId: body.conversationId,
     agentId: body.agentId,
     created: body.created === true,
   };
@@ -84,7 +84,7 @@ export async function handoffTaskConversation(
   id: string,
   toAgentId: string,
   expectedVersion: number,
-): Promise<{ activeSessionKey: string; toAgentId: string }> {
+): Promise<{ activeConversationId: string; toAgentId: string }> {
   const response = await apiFetch(`/api/tasks/${encodeURIComponent(id)}/handoff`, {
     method: 'POST',
     body: JSON.stringify({
@@ -94,11 +94,11 @@ export async function handoffTaskConversation(
     }),
   });
   if (!response.ok) throw await taskError(response, `Failed to hand off task: ${response.status}`);
-  const body = await response.json() as { activeSessionKey?: unknown; toAgentId?: unknown };
-  if (typeof body.activeSessionKey !== 'string' || typeof body.toAgentId !== 'string') {
+  const body = await response.json() as { activeConversationId?: unknown; toAgentId?: unknown };
+  if (typeof body.activeConversationId !== 'string' || typeof body.toAgentId !== 'string') {
     throw new Error('Task handoff response was invalid');
   }
-  return { activeSessionKey: body.activeSessionKey, toAgentId: body.toAgentId };
+  return { activeConversationId: body.activeConversationId, toAgentId: body.toAgentId };
 }
 
 export async function commandTask(

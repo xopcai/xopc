@@ -8,19 +8,22 @@ import {
 import { resetWebchatEmptyShellCacheForTests } from '@/features/chat/session/webchat-empty-shell-cache';
 
 const emptyMain: SessionInfo = {
-  key: 'agent:main:webchat:default:direct:chat_a',
+  agentId: 'main', sourceChannel: 'webchat', customData: { genericNewChatShell: true },
+  key: '4f38f9b5-6c58-5886-8d28-c9bde2ce4632',
   updatedAt: '2026-06-14T10:00:00.000Z',
   messageCount: 0,
 };
 
 const emptyOther: SessionInfo = {
-  key: 'agent:other:webchat:default:direct:chat_b',
+  agentId: 'other', sourceChannel: 'webchat', customData: { genericNewChatShell: true },
+  key: '95c1e544-60ad-5536-8341-4e79c26acece',
   updatedAt: '2026-06-14T09:00:00.000Z',
   messageCount: 0,
 };
 
 const withMessages: SessionInfo = {
-  key: 'agent:main:webchat:default:direct:chat_c',
+  agentId: 'main', sourceChannel: 'webchat', customData: { genericNewChatShell: true },
+  key: '26cbbfdf-7e03-5daa-a43f-0bba3d7ad351',
   updatedAt: '2026-06-14T11:00:00.000Z',
   messageCount: 3,
 };
@@ -36,7 +39,8 @@ describe('isReusableEmptyShell', () => {
 
   it('rejects non-webchat keys', () => {
     const telegram: SessionInfo = {
-      key: 'agent:main:telegram:default:direct:123',
+      agentId: 'main', sourceChannel: 'telegram',
+      key: 'fccb9a2f-32d6-5f68-98dc-38eee1d3f8ac',
       updatedAt: emptyMain.updatedAt,
       messageCount: 0,
     };
@@ -66,7 +70,7 @@ describe('pickReusableEmptyShell', () => {
   it('returns most recently updated empty shell', () => {
     const older: SessionInfo = {
       ...emptyMain,
-      key: 'agent:main:webchat:default:direct:chat_old',
+      key: 'e5b7fb9a-5ffc-5ea0-87f3-1c6c8d0c7352',
       updatedAt: '2026-06-13T10:00:00.000Z',
     };
     const picked = pickReusableEmptyShell([older, emptyMain, withMessages], { agentId: 'main' });
@@ -76,13 +80,13 @@ describe('pickReusableEmptyShell', () => {
   it('keeps generic and project scopes separate', () => {
     const projectShell: SessionInfo = {
       ...emptyMain,
-      key: 'agent:main:webchat:default:direct:chat_project',
+      key: '46e90173-8175-5371-93e4-0ce9d504d523',
       updatedAt: '2026-06-14T12:00:00.000Z',
       projectId: 'project-a',
     };
     const genericShell: SessionInfo = {
       ...emptyMain,
-      key: 'agent:main:webchat:default:direct:chat_generic',
+      key: '6a7839bb-eb38-5b17-ad07-b0c73e4bcad2',
       updatedAt: '2026-06-14T11:00:00.000Z',
     };
 

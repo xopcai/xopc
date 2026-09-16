@@ -6,20 +6,20 @@ import type { Message } from '@/features/chat/messages/messages.types';
 import { mergeConsecutiveAssistantMessages } from '@/features/chat/messages/agent-messages';
 import {
   isViewingSession,
-  resolveViewSessionKey,
+  resolveViewConversationId,
   shouldApplyStreamUpdateToView,
   shouldRestoreLiveCacheToView,
 } from '@/features/chat/session/should-apply-stream-update';
 
 export {
   isViewingSession,
-  resolveViewSessionKey,
+  resolveViewConversationId,
   shouldApplyStreamUpdateToView,
   shouldRestoreLiveCacheToView,
 };
 
 /** Route param for session isolation (`new` when on `/chat/new`). */
-export function parseRoutedSessionKey(
+export function parseRoutedConversationId(
   isNewRoute: boolean,
   decodedKey: string | undefined,
 ): string | null {
@@ -27,22 +27,22 @@ export function parseRoutedSessionKey(
 }
 
 /** A route placeholder is never a persisted session key. */
-export function decodeConcreteSessionKey(
+export function decodeConcreteConversationId(
   isNewRoute: boolean,
-  sessionKeyParam: string | undefined,
+  conversationIdParam: string | undefined,
 ): string | undefined {
-  if (isNewRoute || !sessionKeyParam) return undefined;
-  return decodeURIComponent(sessionKeyParam);
+  if (isNewRoute || !conversationIdParam) return undefined;
+  return decodeURIComponent(conversationIdParam);
 }
 
 /** Messages rendered in the message list (committed + optional streaming bubble). */
 export function selectDisplayMessages(params: {
-  viewSessionKey: string | null;
-  sessionKey: string | null;
+  viewConversationId: string | null;
+  conversationId: string | null;
   messages: Message[];
   streamingMsg: Message | null;
 }): Message[] {
-  if (!params.viewSessionKey || params.sessionKey !== params.viewSessionKey) {
+  if (!params.viewConversationId || params.conversationId !== params.viewConversationId) {
     return [];
   }
   if (!params.streamingMsg) return params.messages;

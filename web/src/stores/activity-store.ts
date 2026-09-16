@@ -39,7 +39,7 @@ type ActivityState = {
 };
 
 // Keep the existing key so moving activity into the workbench does not discard history.
-const STORAGE_KEY = 'xopc.activity-center.v1';
+const STORAGE_KEY = 'xopc.activity-center.v2';
 const MAX_ITEMS = 80;
 const MAX_ITEM_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 

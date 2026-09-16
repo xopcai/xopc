@@ -12,18 +12,18 @@ function formatFilePathForWire(path: string): string {
 
 export function createTuiFileAutocompleteProvider(
   searchWorkspaceFiles: (
-    sessionKey: string,
+    conversationId: string,
     query: string,
     options?: { limit?: number },
   ) => Promise<TuiWorkspaceFileSearchEntry[]>,
 ): TuiAutocompleteProvider {
-  return async (query, { sessionKey }) => {
+  return async (query, { conversationId }) => {
     const trimmed = query.trim();
     if (/^(skill|doc|url|symbol):/i.test(trimmed)) {
       return [];
     }
     const fileQuery = trimmed.replace(/^file:/i, '');
-    const entries = await searchWorkspaceFiles(sessionKey, fileQuery, { limit: 15 });
+    const entries = await searchWorkspaceFiles(conversationId, fileQuery, { limit: 15 });
     return entries.map((entry) => {
       const path = entry.isDirectory && !entry.path.endsWith('/') ? `${entry.path}/` : entry.path;
       const wire = `@file:${formatFilePathForWire(path)}`;

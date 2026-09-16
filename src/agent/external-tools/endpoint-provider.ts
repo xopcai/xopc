@@ -95,8 +95,8 @@ export class EndpointToolProvider implements ExternalToolProvider {
   private currentEndpoint() {
     const context = this.deps.getCurrentContext();
     if (!context) return undefined;
-    const binding = this.deps.runtime.bindings.get(context.sessionKey);
-    if (binding) return this.deps.runtime.bindings.resolve(context.sessionKey);
+    const binding = this.deps.runtime.bindings.get(context.conversationId);
+    if (binding) return this.deps.runtime.bindings.resolve(context.conversationId);
     const origin = context.origin;
     if (origin?.type !== 'endpoint') return undefined;
     return this.deps.runtime.registry.get(origin.endpointId);

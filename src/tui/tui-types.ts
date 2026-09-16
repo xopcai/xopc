@@ -71,6 +71,8 @@ export interface TuiRunStatus {
 
 /** Session metadata shown in the TUI footer. */
 export interface SessionInfo {
+  agentId?: string;
+  generatedShell?: boolean;
   model?: string;
   modelProvider?: string;
   thinkingLevel?: string;
@@ -88,7 +90,7 @@ export interface SessionInfo {
 
 /** Mutable state bag for the TUI runtime. */
 export interface TuiState {
-  currentSessionKey: string;
+  currentConversationId: string;
   activeRunId: string | null;
   isConnected: boolean;
   activityStatus: ActivityStatus;
@@ -115,9 +117,9 @@ export interface TuiState {
   compactionQueue: string[];
 }
 
-export function createInitialState(sessionKey: string): TuiState {
+export function createInitialState(conversationId: string): TuiState {
   return {
-    currentSessionKey: sessionKey,
+    currentConversationId: conversationId,
     activeRunId: null,
     isConnected: false,
     activityStatus: 'idle',

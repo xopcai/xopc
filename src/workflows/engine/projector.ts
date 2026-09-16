@@ -172,7 +172,7 @@ export function projectWorkflowRunView(events: WorkflowEventEnvelope[]): Workflo
           label: string;
           phaseId?: string;
           prompt?: string;
-          sessionKey: string;
+          conversationId: string;
           invocation?: WorkflowAgentView['invocation'];
         };
         agentIdToAgent.set(payload.agentId, {
@@ -183,7 +183,7 @@ export function projectWorkflowRunView(events: WorkflowEventEnvelope[]): Workflo
           status: 'queued',
           prompt: payload.prompt,
           invocation: payload.invocation,
-          sessionKey: payload.sessionKey,
+          conversationId: payload.conversationId,
           transcriptMessageCount: 0,
           steps: [],
         });

@@ -15,8 +15,8 @@ import {
 import { resolveVoiceRecordingDestination, type VoiceRecordingDestination } from './voiceRecordingGesture';
 
 /** Capture owns the microphone; the message owns the file once handed off. */
-export function useChatVoiceRecording({ sessionKey, disabled, onRecorded, onTranscribed, onRecordingDraft, onError }: {
-  sessionKey: string;
+export function useChatVoiceRecording({ conversationId, disabled, onRecorded, onTranscribed, onRecordingDraft, onError }: {
+  conversationId: string;
   disabled: boolean;
   onRecorded: (attachment: WireAttachment) => Promise<void>;
   onTranscribed: (text: string) => void;
@@ -59,7 +59,7 @@ export function useChatVoiceRecording({ sessionKey, disabled, onRecorded, onTran
       subscription.remove();
       cancel();
     };
-  }, [cancel, gatewayId, sessionKey]);
+  }, [cancel, gatewayId, conversationId]);
 
   const finish = useCallback(async () => {
     heldRef.current = false;

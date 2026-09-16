@@ -121,7 +121,7 @@ export function LocalAppWorkbenchPage() {
   const [acceptanceSourceHash, setAcceptanceSourceHash] = useState<string | null>(null);
   const [acceptanceHistory, setAcceptanceHistory] = useState<LocalAppAcceptanceRun[]>([]);
   const [savingAcceptance, setSavingAcceptance] = useState(false);
-  const coderSessionKeysRef = useRef(new Set<string>());
+  const coderConversationIdsRef = useRef(new Set<string>());
   const validationTimerRef = useRef<number | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const criteriaIframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -164,7 +164,7 @@ export function LocalAppWorkbenchPage() {
     const sessions = await fetchProjectSessions(targetApp.projectId);
     const session = selectLocalAppCoderSession(sessions)
       ?? await createProjectSession(targetApp.projectId, 'coder');
-    coderSessionKeysRef.current.add(session.key);
+    coderConversationIdsRef.current.add(session.key);
     navigate(localAppConversationUrl(session.key, draft));
   }, [navigate]);
 
@@ -194,7 +194,7 @@ export function LocalAppWorkbenchPage() {
     let cancelled = false;
     void fetchProjectSessions(app.projectId).then((sessions) => {
       if (cancelled) return;
-      coderSessionKeysRef.current = new Set(
+      coderConversationIdsRef.current = new Set(
         sessions
           .filter((session) => (session.routing?.agentId ?? session.agentId)?.toLowerCase() === 'coder')
           .map((session) => session.key),
@@ -202,7 +202,7 @@ export function LocalAppWorkbenchPage() {
     }).catch(() => {});
     const onTranscriptUpdate = (event: Event) => {
       const key = (event as CustomEvent<{ key?: string }>).detail?.key;
-      if (!key || !coderSessionKeysRef.current.has(key)) return;
+      if (!key || !coderConversationIdsRef.current.has(key)) return;
       if (validationTimerRef.current !== null) window.clearTimeout(validationTimerRef.current);
       validationTimerRef.current = window.setTimeout(() => {
         validationTimerRef.current = null;

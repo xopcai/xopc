@@ -34,7 +34,7 @@ import {
   searchSessionTranscript,
 } from '../index.js';
 
-const SESSION_KEY = 'agent:main:webchat:default:dm:test-user';
+const CONVERSATION_ID = "f3745a3a-cedd-4f7f-8e27-09b81615fea4";
 const CWD = '/tmp/workspace';
 const METADATA = {
   sourceChannel: 'webchat',
@@ -72,28 +72,28 @@ describe('sqlite repositories', () => {
   });
 
   it('creates and reads session metadata', () => {
-    const created = ensureSessionRecord(SESSION_KEY, CWD, METADATA);
-    expect(created.key).toBe(SESSION_KEY);
-    expect(created.sessionId).toBeTruthy();
+    const created = ensureSessionRecord(CONVERSATION_ID, CWD, METADATA);
+    expect(created.key).toBe(CONVERSATION_ID);
+    expect(created.transcriptId).toBeTruthy();
     expect(created.messageCount).toBe(0);
 
-    const loaded = getSessionMetadata(SESSION_KEY);
-    expect(loaded?.sessionId).toBe(created.sessionId);
+    const loaded = getSessionMetadata(CONVERSATION_ID);
+    expect(loaded?.transcriptId).toBe(created.transcriptId);
     expect(loaded?.routing?.agentId).toBe('main');
     expect(loaded?.sourceChannel).toBe('webchat');
   });
 
   it('does not infer metadata from session key', () => {
-    ensureSessionRecord(SESSION_KEY, CWD);
-    const loaded = getSessionMetadata(SESSION_KEY);
+    ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: "main" });
+    const loaded = getSessionMetadata(CONVERSATION_ID);
     expect(loaded?.routing).toBeUndefined();
     expect(loaded?.sourceChannel).toBe('');
     expect(loaded?.sourceChatId).toBe('');
   });
 
   it('lists and patches session metadata', () => {
-    ensureSessionRecord(SESSION_KEY, CWD);
-    patchSessionMetadata(SESSION_KEY, {
+    ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: "main" });
+    patchSessionMetadata(CONVERSATION_ID, {
       name: 'Test chat',
       tags: ['alpha'],
       status: SessionStatus.PINNED,
@@ -107,8 +107,8 @@ describe('sqlite repositories', () => {
   });
 
   it('filters unassigned sessions separately from project sessions', () => {
-    const unassignedKey = 'agent:main:webchat:default:direct:chat_unassigned';
-    const projectKey = 'agent:main:webchat:default:direct:chat_project';
+    const unassignedKey = "6d16b7d4-c87c-45b2-8ff3-1c035daae3a4";
+    const projectKey = "0edfc629-b4dc-4949-8beb-0e744f97b9a0";
 
     ensureSessionRecord(unassignedKey, CWD, {
       ...METADATA,
@@ -138,10 +138,10 @@ describe('sqlite repositories', () => {
     const cutoff = Date.now() - 60 * 24 * 60 * 60 * 1000;
     const oldIso = new Date(cutoff - 24 * 60 * 60 * 1000).toISOString();
 
-    const oldKey = 'agent:main:webchat:default:direct:old_project';
-    const recentKey = 'agent:main:webchat:default:direct:recent_project';
-    const pinnedKey = 'agent:main:webchat:default:direct:pinned_project';
-    const currentKey = 'agent:main:webchat:default:direct:current_project';
+    const oldKey = "0de1651e-babb-48fe-8ce1-7b680b7797dd";
+    const recentKey = "7fffbe3b-03a4-420e-87fc-732fe386b11e";
+    const pinnedKey = "0c38d52f-073d-483d-894b-1ac98ed37ed0";
+    const currentKey = "5ecc36e0-fc25-4023-8d99-ffb6f2aaaaeb";
 
     ensureSessionRecord(oldKey, CWD, { ...METADATA, projectId: oldProject.id });
     ensureSessionRecord(recentKey, CWD, { ...METADATA, projectId: recentProject.id });
@@ -171,7 +171,7 @@ describe('sqlite repositories', () => {
       status: 'active',
       updatedAfter: cutoff,
       includePinned: true,
-      includeSessionKey: currentKey,
+      includeConversationId: currentKey,
       limit: 10,
     });
     expect(withCurrent.items.map((project) => project.id)).toContain(currentProject.id);
@@ -182,7 +182,7 @@ describe('sqlite repositories', () => {
     const project = projects.create({ name: 'Deleted Project' });
     const cutoff = Date.now() - 60 * 24 * 60 * 60 * 1000;
     const oldIso = new Date(cutoff - 24 * 60 * 60 * 1000).toISOString();
-    const key = 'agent:main:webchat:default:direct:deleted_project_session';
+    const key = "63c8a52d-af81-4afa-8c45-8b9796efcc21";
 
     ensureSessionRecord(key, CWD, { ...METADATA, projectId: project.id });
     patchSessionMetadata(key, { updatedAt: oldIso, lastAccessedAt: oldIso });
@@ -199,65 +199,65 @@ describe('sqlite repositories', () => {
       unassigned: true,
       updatedAfter: cutoff,
       includePinned: true,
-      includeSessionKey: key,
+      includeConversationId: key,
       limit: 10,
     }).items.map((item) => item.key)).toContain(key);
   });
 
   it('hides empty shells from default session lists until a user message is written', () => {
-    ensureSessionRecord(SESSION_KEY, CWD, {
+    ensureSessionRecord(CONVERSATION_ID, CWD, {
       ...METADATA,
       hiddenFromSessionList: true,
       customData: { genericNewChatShell: true },
     });
 
-    expect(listSessionMetadata({ limit: 10 }).items.map((item) => item.key)).not.toContain(SESSION_KEY);
-    expect(listSessionMetadata({ includeHidden: true, limit: 10 }).items.map((item) => item.key)).toContain(SESSION_KEY);
+    expect(listSessionMetadata({ limit: 10 }).items.map((item) => item.key)).not.toContain(CONVERSATION_ID);
+    expect(listSessionMetadata({ includeHidden: true, limit: 10 }).items.map((item) => item.key)).toContain(CONVERSATION_ID);
 
-    appendTranscriptEntry(SESSION_KEY, userMessage('hello'));
+    appendTranscriptEntry(CONVERSATION_ID, userMessage('hello'));
 
-    const meta = getSessionMetadata(SESSION_KEY);
+    const meta = getSessionMetadata(CONVERSATION_ID);
     expect(meta?.hiddenFromSessionList).toBe(false);
-    expect(listSessionMetadata({ limit: 10 }).items.map((item) => item.key)).toContain(SESSION_KEY);
+    expect(listSessionMetadata({ limit: 10 }).items.map((item) => item.key)).toContain(CONVERSATION_ID);
   });
 
   it('unhides shells when transcript rows are replaced with user messages', () => {
-    ensureSessionRecord(SESSION_KEY, CWD, {
+    ensureSessionRecord(CONVERSATION_ID, CWD, {
       ...METADATA,
       hiddenFromSessionList: true,
       customData: { genericNewChatShell: true },
     });
 
-    replaceTranscriptRows(SESSION_KEY, [userMessage('restored user turn')]);
+    replaceTranscriptRows(CONVERSATION_ID, [userMessage('restored user turn')]);
 
-    expect(getSessionMetadata(SESSION_KEY)?.hiddenFromSessionList).toBe(false);
-    expect(listSessionMetadata({ limit: 10 }).items.map((item) => item.key)).toContain(SESSION_KEY);
+    expect(getSessionMetadata(CONVERSATION_ID)?.hiddenFromSessionList).toBe(false);
+    expect(listSessionMetadata({ limit: 10 }).items.map((item) => item.key)).toContain(CONVERSATION_ID);
   });
 
   it('appends transcript rows and paginates messages', () => {
-    ensureSessionRecord(SESSION_KEY, CWD);
-    appendTranscriptEntry(SESSION_KEY, userMessage('hello'));
-    appendTranscriptEntry(SESSION_KEY, assistantMessage('hi there'));
+    ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: "main" });
+    appendTranscriptEntry(CONVERSATION_ID, userMessage('hello'));
+    appendTranscriptEntry(CONVERSATION_ID, assistantMessage('hi there'));
 
-    const rows = loadTranscriptRowsForSession(SESSION_KEY);
+    const rows = loadTranscriptRowsForSession(CONVERSATION_ID);
     expect(rows).toHaveLength(2);
 
-    const llm = loadLlmMessagesForSession(SESSION_KEY);
+    const llm = loadLlmMessagesForSession(CONVERSATION_ID);
     expect(llm.map((m) => m.role)).toEqual(['user', 'assistant']);
 
-    const page = paginateTranscriptMessages(SESSION_KEY, { limit: 1, offset: 0 });
+    const page = paginateTranscriptMessages(CONVERSATION_ID, { limit: 1, offset: 0 });
     expect(page.total).toBe(2);
     expect(page.messages).toHaveLength(1);
 
-    const meta = getSessionMetadata(SESSION_KEY);
+    const meta = getSessionMetadata(CONVERSATION_ID);
     expect(meta?.messageCount).toBe(2);
   });
 
   it('excludes hidden empty project sessions from project counts and recent sessions', () => {
     const projects = new ProjectStore();
     const project = projects.create({ name: 'Session Visibility' });
-    const hiddenKey = 'agent:main:webchat:default:direct:chat_hidden';
-    const visibleKey = 'agent:main:webchat:default:direct:chat_visible';
+    const hiddenKey = "9d6e49b8-74c9-49ab-8700-96c622499382";
+    const visibleKey = "2c37343b-a6f9-48e1-8e13-8a54112fecb6";
 
     ensureSessionRecord(hiddenKey, CWD, {
       sourceChannel: 'webchat',
@@ -291,38 +291,38 @@ describe('sqlite repositories', () => {
   });
 
   it('replaces transcript rows exactly', () => {
-    ensureSessionRecord(SESSION_KEY, CWD);
-    replaceTranscriptRows(SESSION_KEY, [userMessage('one'), assistantMessage('two')]);
-    replaceTranscriptRows(SESSION_KEY, [userMessage('replacement')]);
+    ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: "main" });
+    replaceTranscriptRows(CONVERSATION_ID, [userMessage('one'), assistantMessage('two')]);
+    replaceTranscriptRows(CONVERSATION_ID, [userMessage('replacement')]);
 
-    const rows = loadTranscriptRowsForSession(SESSION_KEY);
+    const rows = loadTranscriptRowsForSession(CONVERSATION_ID);
     expect(rows).toEqual([userMessage('replacement')]);
   });
 
   it('resets session with new session id while keeping session key', () => {
-    const created = ensureSessionRecord(SESSION_KEY, CWD);
-    appendTranscriptEntry(SESSION_KEY, userMessage('before reset'));
+    const created = ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: "main" });
+    appendTranscriptEntry(CONVERSATION_ID, userMessage('before reset'));
 
-    const reset = resetSessionRecord(SESSION_KEY, CWD);
-    expect(reset?.previousSessionId).toBe(created.sessionId);
-    expect(reset?.sessionId).not.toBe(created.sessionId);
+    const reset = resetSessionRecord(CONVERSATION_ID, CWD);
+    expect(reset?.previousTranscriptId).toBe(created.transcriptId);
+    expect(reset?.transcriptId).not.toBe(created.transcriptId);
 
-    const meta = getSessionMetadata(SESSION_KEY);
-    expect(meta?.sessionId).toBe(reset?.sessionId);
+    const meta = getSessionMetadata(CONVERSATION_ID);
+    expect(meta?.transcriptId).toBe(reset?.transcriptId);
     expect(meta?.messageCount).toBe(0);
-    expect(loadTranscriptRowsForSession(SESSION_KEY)).toHaveLength(0);
+    expect(loadTranscriptRowsForSession(CONVERSATION_ID)).toHaveLength(0);
   });
 
   it('paginates archived reset transcripts for read-only conversation history', () => {
-    ensureSessionRecord(SESSION_KEY, CWD);
-    appendTranscriptEntry(SESSION_KEY, userMessage('before reset'));
-    resetSessionRecord(SESSION_KEY, CWD);
-    appendTranscriptEntry(SESSION_KEY, userMessage('after reset'));
+    ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: "main" });
+    appendTranscriptEntry(CONVERSATION_ID, userMessage('before reset'));
+    resetSessionRecord(CONVERSATION_ID, CWD);
+    appendTranscriptEntry(CONVERSATION_ID, userMessage('after reset'));
 
-    const activeOnly = paginateTranscriptMessages(SESSION_KEY, { limit: 10 });
+    const activeOnly = paginateTranscriptMessages(CONVERSATION_ID, { limit: 10 });
     expect(activeOnly.rows.map((row) => (row as AgentMessage).content)).toEqual(['after reset']);
 
-    const fullHistory = paginateTranscriptMessages(SESSION_KEY, {
+    const fullHistory = paginateTranscriptMessages(CONVERSATION_ID, {
       limit: 10,
       includeArchived: true,
     });
@@ -332,13 +332,13 @@ describe('sqlite repositories', () => {
       'after reset',
     ]);
 
-    const tail = paginateTranscriptMessages(SESSION_KEY, {
+    const tail = paginateTranscriptMessages(CONVERSATION_ID, {
       limit: 1,
       includeArchived: true,
     });
     expect(tail.rows.map((row) => (row as AgentMessage).content)).toEqual(['after reset']);
 
-    const older = paginateTranscriptMessages(SESSION_KEY, {
+    const older = paginateTranscriptMessages(CONVERSATION_ID, {
       limit: 1,
       beforeIndex: 1,
       includeArchived: true,
@@ -346,36 +346,37 @@ describe('sqlite repositories', () => {
     expect(older.rows.map((row) => (row as AgentMessage).content)).toEqual(['before reset']);
 
     expect(
-      loadTranscriptHistoryRowsForSession(SESSION_KEY).map(
+      loadTranscriptHistoryRowsForSession(CONVERSATION_ID).map(
         (row) => (row as AgentMessage).content,
       ),
     ).toEqual(['before reset', 'after reset']);
   });
 
   it('deletes session and cascades config', () => {
-    ensureSessionRecord(SESSION_KEY, CWD);
-    setSessionConfig(SESSION_KEY, { thinkingLevel: 'high' }, CWD);
-    expect(getSessionConfig(SESSION_KEY)?.thinkingLevel).toBe('high');
+    ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: "main" });
+    setSessionConfig(CONVERSATION_ID, { thinkingLevel: 'high' }, CWD);
+    expect(getSessionConfig(CONVERSATION_ID)?.thinkingLevel).toBe('high');
 
-    expect(deleteSessionRecord(SESSION_KEY)).toBe(true);
-    expect(getSessionMetadata(SESSION_KEY)).toBeNull();
-    deleteSessionConfig(SESSION_KEY);
-    expect(getSessionConfig(SESSION_KEY)).toBeNull();
+    expect(deleteSessionRecord(CONVERSATION_ID)).toBe(true);
+    expect(getSessionMetadata(CONVERSATION_ID)).toBeNull();
+    deleteSessionConfig(CONVERSATION_ID);
+    expect(getSessionConfig(CONVERSATION_ID)).toBeNull();
   });
 
   it('persists the per-session user understanding mode', () => {
-    setSessionConfig(SESSION_KEY, { userContextMode: 'off' }, CWD);
-    expect(getSessionConfig(SESSION_KEY)?.userContextMode).toBe('off');
+    ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: 'main' });
+    setSessionConfig(CONVERSATION_ID, { userContextMode: 'off' }, CWD);
+    expect(getSessionConfig(CONVERSATION_ID)?.userContextMode).toBe('off');
 
-    setSessionConfig(SESSION_KEY, { userContextMode: 'enabled' }, CWD);
-    expect(getSessionConfig(SESSION_KEY)?.userContextMode).toBe('enabled');
+    setSessionConfig(CONVERSATION_ID, { userContextMode: 'enabled' }, CWD);
+    expect(getSessionConfig(CONVERSATION_ID)?.userContextMode).toBe('enabled');
   });
 
   it('restores context by truncating the selected compaction boundary and later rows', () => {
-    ensureSessionRecord(SESSION_KEY, CWD);
-    replaceTranscriptRows(SESSION_KEY, [userMessage('keep'), assistantMessage('me')]);
-    const snapshot = loadCompactionSourceSnapshot(SESSION_KEY)!;
-    const boundary = appendCompactionBoundaryIfUnchanged(SESSION_KEY, snapshot, {
+    ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: "main" });
+    replaceTranscriptRows(CONVERSATION_ID, [userMessage('keep'), assistantMessage('me')]);
+    const snapshot = loadCompactionSourceSnapshot(CONVERSATION_ID)!;
+    const boundary = appendCompactionBoundaryIfUnchanged(CONVERSATION_ID, snapshot, {
       type: 'compaction',
       at: new Date().toISOString(),
       plannerVersion: 3,
@@ -390,27 +391,27 @@ describe('sqlite repositories', () => {
       tokensAfter: 10,
     });
     expect(boundary).not.toBeNull();
-    expect(loadLlmMessagesForSession(SESSION_KEY).map((row) => (row as AgentMessage).content))
+    expect(loadLlmMessagesForSession(CONVERSATION_ID).map((row) => (row as AgentMessage).content))
       .toEqual(['summary']);
-    expect(loadCompactionSourceSnapshot(SESSION_KEY)!.entries.slice(0, 2).map((entry) =>
+    expect(loadCompactionSourceSnapshot(CONVERSATION_ID)!.entries.slice(0, 2).map((entry) =>
       (entry.row as AgentMessage).content)).toEqual(['keep', 'me']);
-    appendTranscriptEntry(SESSION_KEY, userMessage('later'));
-    expect(loadLlmMessagesForSession(SESSION_KEY).map((row) => (row as AgentMessage).content))
+    appendTranscriptEntry(CONVERSATION_ID, userMessage('later'));
+    expect(loadLlmMessagesForSession(CONVERSATION_ID).map((row) => (row as AgentMessage).content))
       .toEqual(['summary', 'later']);
 
-    restoreBeforeCompactionBoundary(SESSION_KEY, boundary!.entry_id);
+    restoreBeforeCompactionBoundary(CONVERSATION_ID, boundary!.entry_id);
 
-    const llm = loadLlmMessagesForSession(SESSION_KEY);
+    const llm = loadLlmMessagesForSession(CONVERSATION_ID);
     expect(llm).toHaveLength(2);
     expect((llm[0] as AgentMessage).content).toBe('keep');
-    const boundaries = listCompactionBoundaries(SESSION_KEY);
+    const boundaries = listCompactionBoundaries(CONVERSATION_ID);
     expect(boundaries).toHaveLength(0);
   });
 
   it('captures transcript source metadata and rejects a stale compaction boundary', () => {
-    ensureSessionRecord(SESSION_KEY, CWD);
-    const first = appendTranscriptEntry(SESSION_KEY, userMessage('first'));
-    const snapshot = loadCompactionSourceSnapshot(SESSION_KEY);
+    ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: "main" });
+    const first = appendTranscriptEntry(CONVERSATION_ID, userMessage('first'));
+    const snapshot = loadCompactionSourceSnapshot(CONVERSATION_ID);
 
     expect(snapshot).toMatchObject({ lastSeq: 1 });
     expect(snapshot?.entries[0]).toMatchObject({
@@ -419,8 +420,8 @@ describe('sqlite repositories', () => {
       row: { role: 'user', content: 'first' },
     });
 
-    appendTranscriptEntry(SESSION_KEY, assistantMessage('concurrent'));
-    const stale = appendCompactionBoundaryIfUnchanged(SESSION_KEY, snapshot!, {
+    appendTranscriptEntry(CONVERSATION_ID, assistantMessage('concurrent'));
+    const stale = appendCompactionBoundaryIfUnchanged(CONVERSATION_ID, snapshot!, {
       type: 'compaction',
       at: new Date().toISOString(),
       plannerVersion: 3,
@@ -436,14 +437,14 @@ describe('sqlite repositories', () => {
     });
 
     expect(stale).toBeNull();
-    expect(listCompactionBoundaries(SESSION_KEY)).toHaveLength(0);
+    expect(listCompactionBoundaries(CONVERSATION_ID)).toHaveLength(0);
   });
 
   it('recalls authoritative raw turns older than a compaction boundary', () => {
-    ensureSessionRecord(SESSION_KEY, CWD);
-    appendTranscriptEntry(SESSION_KEY, userMessage('The exact launch code is ORBIT-7429.'));
-    appendTranscriptEntry(SESSION_KEY, assistantMessage('Acknowledged.'));
-    appendTranscriptEntry(SESSION_KEY, {
+    ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: "main" });
+    appendTranscriptEntry(CONVERSATION_ID, userMessage('The exact launch code is ORBIT-7429.'));
+    appendTranscriptEntry(CONVERSATION_ID, assistantMessage('Acknowledged.'));
+    appendTranscriptEntry(CONVERSATION_ID, {
       role: 'assistant',
       content: [{
         type: 'toolCall',
@@ -452,8 +453,8 @@ describe('sqlite repositories', () => {
         arguments: { artifact: 'release-candidate-17' },
       }],
     } as unknown as AgentMessage);
-    const snapshot = loadCompactionSourceSnapshot(SESSION_KEY)!;
-    appendCompactionBoundaryIfUnchanged(SESSION_KEY, snapshot, {
+    const snapshot = loadCompactionSourceSnapshot(CONVERSATION_ID)!;
+    appendCompactionBoundaryIfUnchanged(CONVERSATION_ID, snapshot, {
       type: 'compaction',
       at: new Date().toISOString(),
       plannerVersion: 3,
@@ -467,9 +468,9 @@ describe('sqlite repositories', () => {
       tokensBefore: 20,
       tokensAfter: 5,
     });
-    appendTranscriptEntry(SESSION_KEY, userMessage('Continue.'));
+    appendTranscriptEntry(CONVERSATION_ID, userMessage('Continue.'));
 
-    const matches = searchSessionTranscript(SESSION_KEY, 'ORBIT-7429');
+    const matches = searchSessionTranscript(CONVERSATION_ID, 'ORBIT-7429');
 
     expect(matches).toHaveLength(1);
     expect(matches[0]).toMatchObject({
@@ -477,15 +478,15 @@ describe('sqlite repositories', () => {
       role: 'user',
       content: 'The exact launch code is ORBIT-7429.',
     });
-    const toolArgument = searchSessionTranscript(SESSION_KEY, 'release-candidate-17');
+    const toolArgument = searchSessionTranscript(CONVERSATION_ID, 'release-candidate-17');
     expect(toolArgument).toHaveLength(1);
     expect(toolArgument[0]?.content).toContain('deployctl');
   });
 
   it('computes global session stats', () => {
-    ensureSessionRecord(SESSION_KEY, CWD);
-    ensureSessionRecord('agent:main:telegram:default:dm:2', CWD);
-    appendTranscriptEntry(SESSION_KEY, userMessage('msg'));
+    ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: "main" });
+    ensureSessionRecord("192c8bfa-679c-4ae0-80c7-e8f3a125cdb1", CWD, { agentId: "main" });
+    appendTranscriptEntry(CONVERSATION_ID, userMessage('msg'));
 
     const stats = getGlobalSessionStats();
     expect(stats.totalSessions).toBe(2);
@@ -493,16 +494,16 @@ describe('sqlite repositories', () => {
   });
 
   it('handles concurrent transcript appends', async () => {
-    ensureSessionRecord(SESSION_KEY, CWD);
+    ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: "main" });
     await Promise.all(
       Array.from({ length: 20 }, (_, i) =>
-        Promise.resolve(appendTranscriptEntry(SESSION_KEY, userMessage(`msg-${i}`))),
+        Promise.resolve(appendTranscriptEntry(CONVERSATION_ID, userMessage(`msg-${i}`))),
       ),
     );
 
-    const meta = getSessionMetadata(SESSION_KEY);
+    const meta = getSessionMetadata(CONVERSATION_ID);
     expect(meta?.messageCount).toBe(20);
-    expect(loadTranscriptRowsForSession(SESSION_KEY)).toHaveLength(20);
+    expect(loadTranscriptRowsForSession(CONVERSATION_ID)).toHaveLength(20);
   });
 
 });

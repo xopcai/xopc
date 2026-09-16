@@ -37,7 +37,7 @@ export function extractExplicitRelationshipFollowUp(
 }
 
 export function recordExplicitRelationshipFollowUp(input: {
-  sessionKey: string;
+  conversationId: string;
   message: string;
   nowMs?: number;
 }): UserAssertion | null {
@@ -47,7 +47,7 @@ export function recordExplicitRelationshipFollowUp(input: {
   const key = hash(request.subject.toLocaleLowerCase());
   const evidence = createContextEvidence({
     sourceType: 'conversation',
-    sourceRef: `session:${input.sessionKey}:follow-up:${hash(input.message)}`,
+    sourceRef: `session:${input.conversationId}:follow-up:${hash(input.message)}`,
     redactedExcerpt: input.message.slice(0, 600),
     trustLevel: 'owner',
     observedAt: now,

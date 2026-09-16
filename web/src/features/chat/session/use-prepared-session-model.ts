@@ -14,7 +14,7 @@ type Selection = { model: string; thinkingLevel: string };
 
 /** Resolve a concrete selection before a project chat allocates its session or environment. */
 export function usePreparedSessionModel(preparation: ProjectSessionPreparation | null) {
-  const token = useGatewayStore((state) => state.sessionKey);
+  const token = useGatewayStore((state) => state.conversationId);
   const baseUrl = useGatewayStore((state) => state.baseUrl);
   const [edited, setEdited] = useState<{ preparation: ProjectSessionPreparation; selection: Selection } | null>(null);
   const { data, error } = useSWR(

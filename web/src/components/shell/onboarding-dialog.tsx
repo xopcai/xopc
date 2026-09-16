@@ -24,7 +24,7 @@ import { useLocaleStore } from '@/stores/locale-store';
  * layer is the reliable entry point.
  */
 export function OnboardingDialog() {
-  const token = useGatewayStore((s) => s.sessionKey);
+  const token = useGatewayStore((s) => s.conversationId);
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const { pathname } = useLocation();

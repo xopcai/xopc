@@ -98,7 +98,7 @@ export interface ProactiveCard {
   artifact?: ProactiveArtifact;
   taskDraft?: z.infer<typeof ProactiveTaskDraftSchema>;
   followUp?: { taskId: string; title: string; phase: string; resolution: string | null };
-  communication?: { id: string; sessionKey: string | null };
+  communication?: { id: string; conversationId: string | null };
   relatedCardIds?: string[];
   title: string;
   summary: string;

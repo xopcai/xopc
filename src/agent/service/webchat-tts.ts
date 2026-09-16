@@ -19,7 +19,7 @@ export type WebchatTtsResult = {
 export type WebchatTtsDeps = {
   config: Config | undefined;
   sessionStore: SessionStore;
-  getLastAssistantPlainText: (sessionKey: string) => string;
+  getLastAssistantPlainText: (conversationId: string) => string;
   log: { warn: (obj: Record<string, unknown>, msg: string) => void };
 };
 
@@ -52,7 +52,7 @@ export function isSuccessfulWebchatTtsToolEvent(event: unknown): boolean {
  */
 export async function maybeEmitWebchatTts(
   deps: WebchatTtsDeps,
-  sessionKey: string,
+  conversationId: string,
   hadInboundVoice: boolean,
 ): Promise<WebchatTtsResult | null> {
   const ttsConfig = mergeTtsConfigFromAppConfig(deps.config?.messages?.tts);
@@ -63,7 +63,7 @@ export async function maybeEmitWebchatTts(
   if (!decision.useTTS) {
     return null;
   }
-  const text = deps.getLastAssistantPlainText(sessionKey).trim();
+  const text = deps.getLastAssistantPlainText(conversationId).trim();
   if (!text) {
     return null;
   }
@@ -88,7 +88,7 @@ export async function maybeEmitWebchatTts(
             ? 'audio/wav'
             : `audio/${format}`;
     const persisted = await persistOutboundTtsAudio(buffer, format);
-    await appendMediaToLastAssistant(deps.sessionStore, sessionKey, persisted);
+    await appendMediaToLastAssistant(deps.sessionStore, conversationId, persisted);
     return {
       type: 'tts_audio',
       uri: persisted.uri,
@@ -96,17 +96,17 @@ export async function maybeEmitWebchatTts(
       name: persisted.name,
     };
   } catch (err) {
-    deps.log.warn({ err, sessionKey }, 'Webchat TTS failed');
+    deps.log.warn({ err, conversationId }, 'Webchat TTS failed');
     return null;
   }
 }
 
 export async function appendMediaToLastAssistant(
   sessionStore: SessionStore,
-  sessionKey: string,
+  conversationId: string,
   ref: MediaRef,
 ): Promise<void> {
-  const loaded = await sessionStore.load(sessionKey);
+  const loaded = await sessionStore.load(conversationId);
   for (let i = loaded.length - 1; i >= 0; i--) {
     const m = loaded[i] as { role?: string; media?: MediaRef[] };
     if (m.role === 'assistant') {
@@ -115,7 +115,7 @@ export async function appendMediaToLastAssistant(
         return;
       }
       loaded[i] = { ...m, media: [...prev, ref] } as unknown as AgentMessage;
-      await sessionStore.saveMessages(sessionKey, loaded);
+      await sessionStore.saveMessages(conversationId, loaded);
       return;
     }
   }

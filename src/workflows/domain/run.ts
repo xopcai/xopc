@@ -50,7 +50,7 @@ export interface WorkflowRun {
 
 export interface WorkflowRunMetadata {
   preparationOnly?: boolean;
-  sessionKey: string;
+  conversationId: string;
   triggerSource: WorkflowRunSource['kind'];
   agentId?: string;
   projectId?: string;
@@ -120,7 +120,7 @@ export interface WorkflowRunCorrelation {
 
 export interface WorkflowRunOrigin {
   channel: string;
-  sessionKey?: string;
+  conversationId?: string;
   chatId?: string;
   messageId?: string;
   automationId?: string;
@@ -159,8 +159,8 @@ export interface WorkflowRunDefinitionSnapshot {
 }
 
 export type WorkflowRunSource =
-  | { kind: 'chat'; sessionKey: string; messageId?: string }
-  | { kind: 'webui'; sessionKey?: string; requestId?: string }
+  | { kind: 'chat'; conversationId: string; messageId?: string }
+  | { kind: 'webui'; conversationId?: string; requestId?: string }
   | { kind: 'automation'; automationId: string; runId?: string; scheduledAtMs?: number }
   | { kind: 'api'; requestId?: string; idempotencyKey?: string }
   | { kind: 'im'; channel: string; chatId: string; messageId?: string; userId?: string };
@@ -252,7 +252,7 @@ export interface WorkflowAgentView {
   status: WorkflowAgentStatus;
   prompt?: string;
   invocation?: WorkflowAgentInvocationSnapshot;
-  sessionKey: string;
+  conversationId: string;
   transcriptMessageCount: number;
   currentStep?: string;
   resultPreview?: string;

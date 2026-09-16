@@ -155,11 +155,11 @@ function ReviewBlock({ review }: { review: ReviewContent }) {
 
 function ChatMarkdownFileActionCard({
   resolution,
-  sessionKey,
+  conversationId,
   onClose,
 }: {
   resolution: MarkdownFileResolution;
-  sessionKey?: string | null;
+  conversationId?: string | null;
   onClose: () => void;
 }) {
   const language = useLocaleStore((s) => s.language);
@@ -187,7 +187,7 @@ function ChatMarkdownFileActionCard({
     setActionError('');
     setActionPending(true);
     try {
-      const target = await resolveFileReferenceAction(ref.fileRefId, action, { sessionKey: sessionKey?.trim() || undefined });
+      const target = await resolveFileReferenceAction(ref.fileRefId, action, { conversationId: conversationId?.trim() || undefined });
       if (action === 'openExternal') {
         const result = await shell.openPath(target.absolutePath);
         if (!result.ok) setActionError(result.error);
@@ -270,7 +270,7 @@ const fileActionButtonClass = cn(
 function ChatMarkdownView({
   content,
   compact,
-  sessionKey,
+  conversationId,
   projectId,
   streaming = false,
   animateInitialContent = false,
@@ -278,7 +278,7 @@ function ChatMarkdownView({
 }: {
   content: string;
   compact?: boolean;
-  sessionKey?: string | null;
+  conversationId?: string | null;
   projectId?: string | null;
   streaming?: boolean;
   animateInitialContent?: boolean;
@@ -328,7 +328,7 @@ function ChatMarkdownView({
   const openFile = useCallback(
     (target: WorkspaceFileLinkTarget) => {
       if (target.kind === 'workspace-relative') {
-        setPreview(target.path, target.line, projectId, sessionKey);
+        setPreview(target.path, target.line, projectId, conversationId);
         setResolution(null);
         return;
       }
@@ -336,7 +336,7 @@ function ChatMarkdownView({
       setResolution({ status: 'loading', target });
       void resolveWorkspaceFileReference(target.path, {
         projectId: projectId?.trim() || undefined,
-        sessionKey: sessionKey?.trim() || undefined,
+        conversationId: conversationId?.trim() || undefined,
       })
         .then((ref) => {
           if (!ref) {
@@ -348,7 +348,7 @@ function ChatMarkdownView({
             return;
           }
           if (ref.scope === 'workspace' && ref.workspaceRelativePath) {
-            setPreview(ref.workspaceRelativePath, target.line, projectId, sessionKey);
+            setPreview(ref.workspaceRelativePath, target.line, projectId, conversationId);
             setResolution(null);
             return;
           }
@@ -362,7 +362,7 @@ function ChatMarkdownView({
           });
         });
     },
-    [fileReferenceMessages.resolveFailedDescription, projectId, sessionKey, setPreview],
+    [fileReferenceMessages.resolveFailedDescription, projectId, conversationId, setPreview],
   );
 
   return (
@@ -400,7 +400,7 @@ function ChatMarkdownView({
       {resolution ? (
         <ChatMarkdownFileActionCard
           resolution={resolution}
-          sessionKey={sessionKey}
+          conversationId={conversationId}
           onClose={() => setResolution(null)}
         />
       ) : null}
@@ -416,7 +416,7 @@ function renderTextOrImageBlock(
   imagePreviewLabel: string,
   onImagePreview?: (block: ImageContent, index: number) => void,
   contentIndex?: number,
-  sessionKey?: string | null,
+  conversationId?: string | null,
   projectId?: string | null,
   animateInitialContent?: boolean,
   onProgressiveRenderComplete?: () => void,
@@ -448,7 +448,7 @@ function renderTextOrImageBlock(
         <ChatMarkdownView
           content={visibleText}
           compact
-          sessionKey={sessionKey}
+          conversationId={conversationId}
           projectId={projectId}
           streaming={isAssistantMessageStreaming}
           animateInitialContent={animateInitialContent}
@@ -530,7 +530,7 @@ export function ChunkedContent({
   cardLabels,
   imagePreviewLabel,
   onImagePreview,
-  sessionKey,
+  conversationId,
   projectId,
   workflowOptions,
   assistantActivity,
@@ -576,7 +576,7 @@ export function ChunkedContent({
   cardLabels: ToolCardLabels;
   imagePreviewLabel: string;
   onImagePreview: ((block: ImageContent, index: number) => void) | undefined;
-  sessionKey: string | null | undefined;
+  conversationId: string | null | undefined;
   projectId?: string | null;
   workflowOptions: AssistantActivityWorkflowOptions;
   assistantActivity?: AssistantTurnActivityPresentation;
@@ -640,7 +640,7 @@ export function ChunkedContent({
             stepLabels={stepLabels}
             clusterLabels={clusterLabels}
             cardLabels={cardLabels}
-            sessionKey={sessionKey}
+            conversationId={conversationId}
             workflowOptions={workflowOptions}
           />,
         );
@@ -656,7 +656,7 @@ export function ChunkedContent({
         imagePreviewLabel,
         onImagePreview,
         b.type === 'image' ? imgIdx : i,
-        sessionKey,
+        conversationId,
         projectId,
         progressiveRender,
         onProgressiveRenderComplete,

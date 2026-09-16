@@ -31,7 +31,6 @@ import {
   providerSupportsApiKey,
   providerSupportsOAuth,
 } from '../providers/index.js';
-import { parseAgentSessionKey } from '../routing/agent-session-key.js';
 import { getLogDir, getRuntimeLogStats } from '../utils/logger.js';
 
 export interface TuiExportRequest {
@@ -371,7 +370,7 @@ export function formatTuiModelsInfo(models: TuiModelChoice[]): string {
 
 export function formatTuiSessionListInfo(
   sessions: TuiSessionItem[],
-  options: { currentSessionKey?: string; limit?: number } = {},
+  options: { currentConversationId?: string; limit?: number } = {},
 ): string {
   if (sessions.length === 0) {
     return 'Sessions\n\nNo sessions found.';
@@ -380,7 +379,7 @@ export function formatTuiSessionListInfo(
   const visible = sessions.slice(0, limit);
   const lines = ['Sessions', ''];
   for (const session of visible) {
-    const current = session.key === options.currentSessionKey ? '* ' : '  ';
+    const current = session.key === options.currentConversationId ? '* ' : '  ';
     const label = session.displayName?.trim() || session.key;
     const description = formatSessionPickerDescription(session, { showKey: Boolean(session.displayName) });
     lines.push(`${current}${label}${description ? ` — ${description}` : ''}`);
@@ -392,18 +391,12 @@ export function formatTuiSessionListInfo(
 }
 
 function sessionTreeGroup(session: TuiSessionItem): { agentId: string; root: string; leaf: string } {
-  const parsed = parseAgentSessionKey(session.key);
-  const agentId = parsed?.agentId ?? 'unknown';
-  const rest = parsed?.rest ?? session.key;
-  const parts = rest.split(':').filter(Boolean);
-  const root = parts[0] ?? rest;
-  const leaf = parts.length > 1 ? parts.slice(1).join(':') : rest;
-  return { agentId, root, leaf };
+  return { agentId: session.agentId ?? 'unknown', root: session.sourceChannel ?? 'chat', leaf: session.displayName ?? session.key };
 }
 
 export function formatTuiSessionTreeInfo(
   sessions: TuiSessionItem[],
-  options: { currentSessionKey?: string; limitPerGroup?: number } = {},
+  options: { currentConversationId?: string; limitPerGroup?: number } = {},
 ): string {
   if (sessions.length === 0) {
     return 'Session Tree\n\nNo sessions found.';
@@ -427,16 +420,16 @@ export function formatTuiSessionTreeInfo(
     const sorted = [...groupSessions].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
     const visible = sorted.slice(0, limitPerGroup);
     for (const session of visible) {
-      const current = session.key === options.currentSessionKey ? '*' : ' ';
+      const current = session.key === options.currentConversationId ? '*' : ' ';
       const group = sessionTreeGroup(session);
       const label = session.displayName?.trim() || group.leaf;
       const description = formatSessionPickerDescription(session, {
         showKey: Boolean(session.displayName),
       });
       lines.push(`  ${current} ${label}${description ? ` — ${description}` : ''}`);
-      if (session.forkedFromSessionKey) {
-        const source = byKey.get(session.forkedFromSessionKey);
-        const sourceLabel = source?.displayName?.trim() || session.forkedFromSessionKey;
+      if (session.forkedFromConversationId) {
+        const source = byKey.get(session.forkedFromConversationId);
+        const sourceLabel = source?.displayName?.trim() || session.forkedFromConversationId;
         lines.push(`      forked from ${sourceLabel}`);
       }
     }
@@ -608,7 +601,6 @@ function formatTuiSessionStatsBlock(stats?: TuiSessionStats): string[] {
 }
 
 export function formatTuiSessionInfo(state: TuiState, stats?: TuiSessionStats): string {
-  const parsedKey = parseAgentSessionKey(state.currentSessionKey);
   const tokenEstimate = state.sessionInfo.totalTokens ?? state.sessionInfo.contextTokens;
   const contextPercent =
     state.sessionInfo.contextUsagePercent ??
@@ -621,8 +613,8 @@ export function formatTuiSessionInfo(state: TuiState, stats?: TuiSessionStats): 
     'Session Info',
     '',
     `Name: ${formatMaybe(state.sessionInfo.displayName)}`,
-    `Key: ${state.currentSessionKey}`,
-    `Agent: ${formatMaybe(parsedKey?.agentId)}`,
+    `Key: ${state.currentConversationId}`,
+    `Agent: ${formatMaybe(state.sessionInfo.agentId)}`,
     `Connection: ${connectionLabel} (${formatMaybe(state.connectionStatus)})`,
     `Activity: ${formatMaybe(state.activityStatus)}`,
     `Model: ${formatModelLabel(state)}`,
@@ -727,7 +719,7 @@ export function formatTuiConfigInfo(state: TuiState): string {
   return [
     'Config',
     '',
-    `Session: ${state.currentSessionKey}`,
+    `Session: ${state.currentConversationId}`,
     `Model: ${formatModelLabel(state)}`,
     `Thinking: ${formatMaybe(state.sessionInfo.thinkingLevel)}`,
     `Reasoning: ${formatMaybe(state.sessionInfo.reasoningLevel)}`,

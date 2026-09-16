@@ -1,5 +1,5 @@
 import { DEFAULT_AGENT_ID, normalizeAgentId } from '../../agent/agent-scope.js';
-import { buildSessionKey } from '../../routing/session-key.js';
+import { resolveConversationId } from '../../routing/session-key.js';
 import { createLogger } from '../../utils/logger.js';
 import type {
   Automation,
@@ -234,7 +234,7 @@ export class AutomationActionExecutor {
     const peerId = automation.conversationMode === 'continuous'
       ? automation.id
       : `${automation.id}-${run.id}`;
-    const sessionKey = buildSessionKey({
+    const conversationId = resolveConversationId({
       agentId,
       source: 'automation',
       accountId: 'default',
@@ -242,10 +242,10 @@ export class AutomationActionExecutor {
       peerId,
     });
 
-    await hooks.onRunPatch?.({ sessionKey, currentPhase: 'action' });
+    await hooks.onRunPatch?.({ conversationId, currentPhase: 'action' });
     await this.deps.prepareAgentSession?.({
       automationName: automation.name,
-      sessionKey,
+      conversationId,
       projectId: automation.projectId,
       agentId,
       peerId,
@@ -254,14 +254,14 @@ export class AutomationActionExecutor {
     });
 
     await agentService.sessionConfig?.applyAutomationWorkingDirectory?.(
-      sessionKey,
+      conversationId,
       automation.projectId ? undefined : action.workingDirectory,
     );
     if (agentService.sessionConfig?.applyAutomationModelOverride) {
-      const ok = await agentService.sessionConfig.applyAutomationModelOverride(sessionKey, action.model);
+      const ok = await agentService.sessionConfig.applyAutomationModelOverride(conversationId, action.model);
       if (!ok && action.model) {
         log.warn(
-          { automationId: automation.id, sessionKey, model: action.model },
+          { automationId: automation.id, conversationId, model: action.model },
           'Automation model override invalid; using agent default',
         );
       }
@@ -269,17 +269,17 @@ export class AutomationActionExecutor {
 
     const response = await agentService.turnDispatcher.processDirect(
       buildSafetyInstruction(automation, action.instruction),
-      sessionKey,
+      conversationId,
       { type: 'system', source: 'automation' },
       undefined,
       undefined,
       { signal, runId: run.id, deadlineAtMs },
     );
-    const model = agentService.getModelForSession?.(sessionKey);
+    const model = agentService.getModelForSession?.(conversationId);
     return {
       status: 'succeeded',
       summary: response.slice(0, 4_000),
-      sessionKey,
+      conversationId,
       model,
     };
   }
@@ -328,7 +328,7 @@ export class AutomationActionExecutor {
       return { status: 'failed', error: result.message };
     }
     await hooks.onRunPatch?.({
-      sessionKey: result.sessionKey,
+      conversationId: result.conversationId,
       workflowRunId: result.runId,
       currentPhase: 'action',
     });
@@ -336,7 +336,7 @@ export class AutomationActionExecutor {
       return {
         status: 'succeeded',
         summary: `Started workflow run ${result.runId}`,
-        sessionKey: result.sessionKey,
+        conversationId: result.conversationId,
         workflowRunId: result.runId,
       };
     }
@@ -351,7 +351,7 @@ export class AutomationActionExecutor {
         return {
           status: 'succeeded',
           summary: `Workflow run ${result.runId} completed`,
-          sessionKey: result.sessionKey,
+          conversationId: result.conversationId,
           workflowRunId: result.runId,
         };
       }
@@ -359,7 +359,7 @@ export class AutomationActionExecutor {
         return {
           status: workflowStatus,
           error: view.run.error?.message ?? `Workflow run ${result.runId} ${workflowStatus}`,
-          sessionKey: result.sessionKey,
+          conversationId: result.conversationId,
           workflowRunId: result.runId,
         };
       }
@@ -373,7 +373,7 @@ export class AutomationActionExecutor {
     return {
       status: 'cancelled',
       error: 'Parent automation stopped while the workflow was running',
-      sessionKey: result.sessionKey,
+      conversationId: result.conversationId,
       workflowRunId: result.runId,
     };
   }

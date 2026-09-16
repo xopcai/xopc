@@ -37,7 +37,7 @@ describe('work understanding investigator', () => {
     ).run();
     db.prepare(
       `INSERT INTO sessions (
-        session_key, agent_id, session_id, created_at, updated_at, last_accessed_at
+        conversation_id, agent_id, active_transcript_id, created_at, updated_at, last_accessed_at
        ) VALUES ('session-1', 'main', 'session-id-1', 1, 1, 1)`,
     ).run();
     createWorkDiscoveryRun({
@@ -47,7 +47,7 @@ describe('work understanding investigator', () => {
       status: 'analyzing',
       rootPath: workspace,
       projectId: 'project-1',
-      sessionKey: 'session-1',
+      conversationId: 'session-1',
       agentId: 'main',
       modelRef: 'provider/model',
       scanPolicyVersion: 1,

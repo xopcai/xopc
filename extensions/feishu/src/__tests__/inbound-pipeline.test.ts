@@ -32,7 +32,7 @@ describe('createFeishuInboundPipeline', () => {
         sender_id: 'u',
         chat_id: 'chat1',
         content,
-        metadata: { messageId, sessionKey: 'sk' },
+        metadata: { messageId, conversationId: 'sk' },
       },
     });
 

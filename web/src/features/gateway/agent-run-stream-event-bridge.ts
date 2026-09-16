@@ -7,20 +7,20 @@ export const AGENT_STREAM_EVENT = 'agent-stream-event';
 export type AgentActivityDetailLevel = 'off' | 'on' | 'stream';
 
 export type AgentStreamWindowDetail = {
-  sessionKey: string;
+  conversationId: string;
   event: unknown;
   activityDetailLevel: AgentActivityDetailLevel;
 };
 
 type RunStartedDetail = {
-  sessionKey: string;
+  conversationId: string;
   runId: string;
 };
 
 type BridgeDependencies = {
   subscribe: typeof subscribeRealtimeTopic;
   loadActivityDetailLevel: (
-    sessionKey: string,
+    conversationId: string,
   ) => Promise<AgentActivityDetailLevel>;
   dispatch: (detail: AgentStreamWindowDetail) => void;
 };
@@ -32,9 +32,9 @@ function isActivityDetailLevel(value: unknown): value is AgentActivityDetailLeve
 function parseRunStartedDetail(value: unknown): RunStartedDetail | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
-  const sessionKey = typeof record.sessionKey === 'string' ? record.sessionKey.trim() : '';
+  const conversationId = typeof record.conversationId === 'string' ? record.conversationId.trim() : '';
   const runId = typeof record.runId === 'string' ? record.runId.trim() : '';
-  return sessionKey && runId ? { sessionKey, runId } : null;
+  return conversationId && runId ? { conversationId, runId } : null;
 }
 
 function normalizeRunEvent(
@@ -48,11 +48,11 @@ function normalizeRunEvent(
 }
 
 export async function loadAgentActivityDetailLevel(
-  sessionKey: string,
+  conversationId: string,
 ): Promise<AgentActivityDetailLevel> {
   try {
     const response = await apiFetch(
-      apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`),
+      apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}/agent-config`),
     );
     if (!response.ok) return 'on';
     const body = await response.json() as {
@@ -110,12 +110,12 @@ export function startAgentRunStreamEventBridge(
     const deliver = (event: Record<string, unknown>) => {
       if (disposed || stopped) return;
       dispatch({
-        sessionKey: started.sessionKey,
+        conversationId: started.conversationId,
         event,
         activityDetailLevel,
       });
     };
-    void loadActivityDetailLevel(started.sessionKey).then((resolved) => {
+    void loadActivityDetailLevel(started.conversationId).then((resolved) => {
       activityDetailLevel = resolved;
       levelResolved = true;
       if (resolved === 'stream' && pendingThinkingEvent && !terminalQueued) {

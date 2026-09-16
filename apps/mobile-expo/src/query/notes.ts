@@ -26,7 +26,7 @@ export interface NoteTaskMeta {
   done: boolean;
   dueAt?: number;
   priority?: 'high' | 'medium' | 'low';
-  sourceSessionKey?: string;
+  sourceConversationId?: string;
   sourceNoteId?: string;
 }
 
@@ -332,14 +332,14 @@ export async function fetchNote(id: string): Promise<Note> {
 }
 
 export async function openNoteConversation(id: string): Promise<{
-  sessionKey: string;
+  conversationId: string;
   reused: boolean;
   sourceBinding: { kind: 'note'; sourceId: string; version: string; attachedAt: number };
 }> {
   const res = await apiFetch(`/api/notes/${encodeURIComponent(id)}/chat`, { method: 'POST' });
   if (!res.ok) throw await readError(res);
   return res.json() as Promise<{
-    sessionKey: string;
+    conversationId: string;
     reused: boolean;
     sourceBinding: { kind: 'note'; sourceId: string; version: string; attachedAt: number };
   }>;
@@ -358,7 +358,7 @@ export async function requestNoteAiEdit(id: string, request: NoteAiEditRequest):
 
 export async function createTask(
   title: string,
-  options?: { dueAt?: number; priority?: 'high' | 'medium' | 'low'; sourceSessionKey?: string; sourceNoteId?: string; groupId?: string },
+  options?: { dueAt?: number; priority?: 'high' | 'medium' | 'low'; sourceConversationId?: string; sourceNoteId?: string; groupId?: string },
 ): Promise<{ note: Note }> {
   const platform = Platform.OS === 'ios' ? 'ios' : 'android';
   const res = await apiFetch('/api/notes/task', { method: 'POST', body: JSON.stringify({ title, channel: 'app', platform, ...options }) });

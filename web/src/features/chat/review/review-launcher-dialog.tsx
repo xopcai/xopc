@@ -20,7 +20,7 @@ type ReviewStep = 'presets' | 'base' | 'commit' | 'custom';
 
 export interface ReviewLauncherDialogProps {
   open: boolean;
-  sessionKey: string | null;
+  conversationId: string | null;
   disabled?: boolean;
   chat: ChatMessages;
   onClose: () => void;
@@ -95,7 +95,7 @@ function PresetButton({
 
 export function ReviewLauncherDialog({
   open,
-  sessionKey,
+  conversationId,
   disabled,
   chat,
   onClose,
@@ -110,21 +110,21 @@ export function ReviewLauncherDialog({
   const [instructions, setInstructions] = useState('');
 
   const load = useCallback(() => {
-    if (!sessionKey) {
+    if (!conversationId) {
       setContext(null);
       setError(m.noSession);
       return;
     }
     setLoading(true);
     setError(null);
-    void fetchReviewContext(sessionKey)
+    void fetchReviewContext(conversationId)
       .then((next) => setContext(next))
       .catch((err: unknown) => {
         setContext(null);
         setError(err instanceof Error ? err.message : String(err));
       })
       .finally(() => setLoading(false));
-  }, [m.noSession, sessionKey]);
+  }, [m.noSession, conversationId]);
 
   useEffect(() => {
     if (!open) return;

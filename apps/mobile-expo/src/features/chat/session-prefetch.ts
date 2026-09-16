@@ -12,7 +12,7 @@ import { useGatewayStore } from '../../stores/gateway-store';
 const TTL_MS = 5 * 60_000;
 
 type PrefetchedEntry = {
-  sessionKey: string;
+  conversationId: string;
   expiresAt: number;
 };
 
@@ -53,10 +53,10 @@ function startCreate(
   const existing = pendingCreates.get(key);
   if (existing) return existing;
 
-  const promise = createServerSession(spec, initialAgentConfig).then((sessionKey) => {
-    cache.set(key, { sessionKey, expiresAt: Date.now() + TTL_MS });
+  const promise = createServerSession(spec, initialAgentConfig).then((conversationId) => {
+    cache.set(key, { conversationId, expiresAt: Date.now() + TTL_MS });
     pendingCreates.delete(key);
-    return sessionKey;
+    return conversationId;
   });
   promise.catch(() => {
     pendingCreates.delete(key);
@@ -75,7 +75,7 @@ export function prefetchNewChatSession(
   void startCreate(spec).catch(() => {});
 }
 
-export async function takeNewChatSessionKey(
+export async function takeNewChatConversationId(
   spec: NewChatScope,
   initialAgentConfig?: SessionInitialAgentConfig,
 ): Promise<string> {
@@ -85,12 +85,12 @@ export async function takeNewChatSessionKey(
   const cached = cache.get(key);
   if (cached) {
     cache.delete(key);
-    if (initialAgentConfig) await setSessionInitialAgentConfig(cached.sessionKey, initialAgentConfig);
-    return cached.sessionKey;
+    if (initialAgentConfig) await setSessionInitialAgentConfig(cached.conversationId, initialAgentConfig);
+    return cached.conversationId;
   }
-  const sessionKey = await startCreate(spec, initialAgentConfig);
+  const conversationId = await startCreate(spec, initialAgentConfig);
   cache.delete(key);
-  return sessionKey;
+  return conversationId;
 }
 
 export function resetSessionPrefetchCacheForTests(): void {

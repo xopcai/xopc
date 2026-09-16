@@ -66,17 +66,17 @@ export const voiceCall = new VoiceCallController({
         if (recovering || !identity) {
           const session = await voiceSessionIdentity(
             target.gatewayId,
-            target.sessionKey,
+            target.conversationId,
             signal,
             recovering ? RECOVERY_REQUEST_TIMEOUT_MS : undefined,
           );
           assertGateway();
-          if (!session?.sessionId) throw new Error('SESSION_CHANGED');
-          identity = session.sessionId;
+          if (!session?.transcriptId) throw new Error('SESSION_CHANGED');
+          identity = session.transcriptId;
           name = session.name ?? name;
         }
         if (!identity) throw new Error('SESSION_CHANGED');
-        if (recovering) await preflightVoice({ purpose: 'conversation', mode, sessionKey: target.sessionKey,
+        if (recovering) await preflightVoice({ purpose: 'conversation', mode, conversationId: target.conversationId,
           supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] }, signal, RECOVERY_REQUEST_TIMEOUT_MS);
         assertGateway();
         return { mode, engine, identity, name: name ?? messages(usePreferencesStore.getState().language).voice.title };
@@ -92,7 +92,7 @@ export const voiceCall = new VoiceCallController({
   transport: callbacks => new VoiceTransport(callbacks),
   invalidate: target => {
     if (target.gatewayId !== useGatewayStore.getState().activeGatewayId) return;
-    void queryClient.invalidateQueries({ queryKey: queryKeys.session(target.sessionKey) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.session(target.conversationId) });
     void queryClient.invalidateQueries({ queryKey: queryKeys.sessionsAll });
   },
 });

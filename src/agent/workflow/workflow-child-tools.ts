@@ -19,7 +19,7 @@ export function buildWorkflowChildTools(childOptions: BuildChildToolsOptions): A
     workspace: childOptions.workspace,
     getPrimaryModel: () => childOptions.model,
     agentId: childOptions.agentId,
-    sessionKey: childOptions.browserSessionKey,
+    conversationId: childOptions.browserConversationId,
     disabledTools: new Set([
       EXTERNAL_TOOL_NAMES.search,
       EXTERNAL_TOOL_NAMES.describe,

@@ -17,8 +17,8 @@ it('browses the project before first send and the session workspace after creati
   const container = document.createElement('div');
   const root = createRoot(container);
   let tree!: ReturnType<typeof useWorkspaceTree>;
-  function Harness({ sessionKey }: { sessionKey?: string }) {
-    tree = useWorkspaceTree('main', sessionKey, sessionKey ? null : 'project-1');
+  function Harness({ conversationId }: { conversationId?: string }) {
+    tree = useWorkspaceTree('main', conversationId, conversationId ? null : 'project-1');
     return null;
   }
   try {
@@ -27,10 +27,10 @@ it('browses the project before first send and the session workspace after creati
     expect(fetchWorkspaceDirectoryListing).toHaveBeenLastCalledWith('', { projectId: 'project-1' });
     expect(fetchWorkspaceRootResource).toHaveBeenLastCalledWith({ projectId: 'project-1' });
     expect(listWorkspaceDir).toHaveBeenLastCalledWith('src', { projectId: 'project-1' });
-    await act(async () => root.render(<Harness sessionKey="session-1" />));
+    await act(async () => root.render(<Harness conversationId="session-1" />));
     await act(async () => { await tree.loadRoot(); await tree.loadChildren('src'); });
-    expect(fetchWorkspaceDirectoryListing).toHaveBeenLastCalledWith('', { sessionKey: 'session-1' });
-    expect(listWorkspaceDir).toHaveBeenLastCalledWith('src', { sessionKey: 'session-1' });
+    expect(fetchWorkspaceDirectoryListing).toHaveBeenLastCalledWith('', { conversationId: 'session-1' });
+    expect(listWorkspaceDir).toHaveBeenLastCalledWith('src', { conversationId: 'session-1' });
   } finally {
     await act(async () => root.unmount());
   }

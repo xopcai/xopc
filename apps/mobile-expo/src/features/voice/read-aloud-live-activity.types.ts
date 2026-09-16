@@ -1,7 +1,7 @@
 export type ReadAloudLiveActivityStatus = 'preparing' | 'playing' | 'paused';
 
 export type ReadAloudLiveActivitySnapshot = {
-  sessionKey?: string;
+  conversationId?: string;
   title: string;
   status: ReadAloudLiveActivityStatus;
   currentChunkIndex: number;

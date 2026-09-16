@@ -15,34 +15,34 @@ import {
 
 export function readCachedSessionDetail(
   profileId: string | null | undefined,
-  sessionKey: string,
+  conversationId: string,
 ): SessionDetail | null {
-  if (!sessionKey) return null;
+  if (!conversationId) return null;
   return readQueryCache<SessionDetail>(
     QUERY_CACHE_NAMESPACES.sessionDetail,
     profileId,
-    sessionKey,
+    conversationId,
   );
 }
 
 export function writeCachedSessionDetail(
   profileId: string | null | undefined,
-  sessionKey: string,
+  conversationId: string,
   detail: SessionDetail,
 ): void {
-  if (!sessionKey) return;
+  if (!conversationId) return;
   writeQueryCache(
     QUERY_CACHE_NAMESPACES.sessionDetail,
     profileId,
-    sessionKey,
+    conversationId,
     detail,
   );
 }
 
 export function clearCachedSessionDetail(
   profileId: string | null | undefined,
-  sessionKey?: string,
+  conversationId?: string,
 ): void {
-  if (!sessionKey) return;
-  clearQueryCache(QUERY_CACHE_NAMESPACES.sessionDetail, profileId, sessionKey);
+  if (!conversationId) return;
+  clearQueryCache(QUERY_CACHE_NAMESPACES.sessionDetail, profileId, conversationId);
 }

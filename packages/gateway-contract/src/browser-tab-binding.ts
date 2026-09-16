@@ -21,7 +21,7 @@ export const browserTabBindingRequestSchema = z.strictObject({
 
 export const browserTabBindingSchema = browserTabBindingRequestSchema.omit({ turnToken: true }).extend({
   id: z.uuid(),
-  sessionKey: z.string().min(1).max(500),
+  conversationId: z.string().min(1).max(500),
   principalId: identifier,
   createdAt: z.number().int().nonnegative(),
   expiresAt: z.number().int().nonnegative(),

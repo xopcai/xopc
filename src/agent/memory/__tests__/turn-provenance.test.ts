@@ -1,3 +1,12 @@
+import { requireXopcDatabase as openFixtureDatabase } from '../../../storage/sqlite/connection.js';
+import { ensureSessionRecord as ensureFixtureConversation } from '../../../storage/sqlite/session-repository.js';
+function seedConversationFixtures(): void {
+  openFixtureDatabase();
+  ensureFixtureConversation("6d9217fe-77c7-411d-8cc9-92aabe81a2d0", '', {"agentId":"main","sourceChannel":"main","sourceChatId":"","sessionType":"chat","routing":{"agentId":"main","source":"main","accountId":"default","peerKind":"direct","peerId":""}});
+  ensureFixtureConversation("78198daf-8200-4ee5-891a-cc6c3c7c078c", '', {"agentId":"main","sourceChannel":"cron","sourceChatId":"daily-review","sessionType":"cron","routing":{"agentId":"main","source":"cron","accountId":"default","peerKind":"direct","peerId":"daily-review"}});
+  ensureFixtureConversation("b46b6ae8-d3ae-47f1-818b-93034675181d", '', {"agentId":"main","sourceChannel":"subagent","sourceChatId":"main","sessionType":"workflow-subagent","routing":{"agentId":"main","source":"subagent","accountId":"default","peerKind":"direct","peerId":"main"}});
+  ensureFixtureConversation("bb151cc5-73d2-441c-8f60-ef3984388677", '', {"agentId":"main","sourceChannel":"telegram","sourceChatId":"team","sessionType":"chat","routing":{"agentId":"main","source":"telegram","accountId":"default","peerKind":"group","peerId":"team"}});
+}
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -8,7 +17,8 @@ import {
 
 describe('turn memory provenance', () => {
   it('keeps a tool-free interactive turn agent-trusted', () => {
-    expect(consumeTurnMemoryProvenance('agent:main:main', 'turn-clean')).toMatchObject({
+    seedConversationFixtures();
+    expect(consumeTurnMemoryProvenance("6d9217fe-77c7-411d-8cc9-92aabe81a2d0", 'turn-clean')).toMatchObject({
       originClass: 'agent',
       sessionKind: 'interactive',
       derivedFromRecalledContext: false,
@@ -17,10 +27,11 @@ describe('turn memory provenance', () => {
   });
 
   it('taints tool-assisted turns and identifies recalled context', () => {
-    markTurnToolResult('agent:main:main', 'turn-tool', 'exec_command');
-    markTurnToolResult('agent:main:main', 'turn-tool', 'memory_search');
+    seedConversationFixtures();
+    markTurnToolResult("6d9217fe-77c7-411d-8cc9-92aabe81a2d0", 'turn-tool', 'exec_command');
+    markTurnToolResult("6d9217fe-77c7-411d-8cc9-92aabe81a2d0", 'turn-tool', 'memory_search');
 
-    expect(consumeTurnMemoryProvenance('agent:main:main', 'turn-tool')).toMatchObject({
+    expect(consumeTurnMemoryProvenance("6d9217fe-77c7-411d-8cc9-92aabe81a2d0", 'turn-tool')).toMatchObject({
       originClass: 'untrusted',
       derivedFromRecalledContext: true,
       taintReasons: ['tool:exec_command', 'tool:memory_search'],
@@ -28,8 +39,9 @@ describe('turn memory provenance', () => {
   });
 
   it('classifies non-interactive session kinds structurally', () => {
-    expect(resolveMemorySessionKind('agent:main:cron:daily-review')).toBe('automation');
-    expect(resolveMemorySessionKind('agent:main:subagent:main')).toBe('subagent');
-    expect(resolveMemorySessionKind('agent:main:telegram:group:team')).toBe('group');
+    seedConversationFixtures();
+    expect(resolveMemorySessionKind("78198daf-8200-4ee5-891a-cc6c3c7c078c")).toBe('automation');
+    expect(resolveMemorySessionKind("b46b6ae8-d3ae-47f1-818b-93034675181d")).toBe('subagent');
+    expect(resolveMemorySessionKind("bb151cc5-73d2-441c-8f60-ef3984388677")).toBe('group');
   });
 });

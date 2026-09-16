@@ -71,7 +71,7 @@ export function SessionsScreen() {
   const searchDraftRef = useRef('');
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const historyPrefetchesRef = useRef(new Map<string, Promise<void>>());
-  const openingSessionKeyRef = useRef('');
+  const openingConversationIdRef = useRef('');
   const openingResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => {
@@ -146,8 +146,8 @@ export function SessionsScreen() {
 
   const createSessionMutation = useMutation({
     mutationFn: () => createSession(),
-    onSuccess: (sessionKey) => {
-      router.push(`/chat/${sessionKey}`);
+    onSuccess: (conversationId) => {
+      router.push(`/chat/${conversationId}`);
     },
     onError: (error) => {
       setSnackMsg(error instanceof Error ? error.message : m.notesPage.actionFailed);
@@ -220,23 +220,23 @@ export function SessionsScreen() {
     onError: (error) => setSnackMsg(error instanceof Error ? error.message : sa.failedToDelete),
   });
 
-  const primeSessionHistory = useCallback((sessionKey: string): Promise<void> => {
-    const existing = historyPrefetchesRef.current.get(sessionKey);
+  const primeSessionHistory = useCallback((conversationId: string): Promise<void> => {
+    const existing = historyPrefetchesRef.current.get(conversationId);
     if (existing) return existing;
-    const pending = prefetchSessionChatEntry(queryClient, sessionKey, activeGatewayId)
-      .finally(() => historyPrefetchesRef.current.delete(sessionKey));
-    historyPrefetchesRef.current.set(sessionKey, pending);
+    const pending = prefetchSessionChatEntry(queryClient, conversationId, activeGatewayId)
+      .finally(() => historyPrefetchesRef.current.delete(conversationId));
+    historyPrefetchesRef.current.set(conversationId, pending);
     return pending;
   }, [activeGatewayId, queryClient]);
 
   const handleOpenSession = useCallback((session: SessionListItem) => {
-    if (openingSessionKeyRef.current) return;
-    openingSessionKeyRef.current = session.key;
+    if (openingConversationIdRef.current) return;
+    openingConversationIdRef.current = session.key;
     void primeSessionHistory(session.key).catch(() => undefined);
     openChat(router, session.key);
     if (openingResetTimerRef.current) clearTimeout(openingResetTimerRef.current);
     openingResetTimerRef.current = setTimeout(() => {
-      openingSessionKeyRef.current = '';
+      openingConversationIdRef.current = '';
       openingResetTimerRef.current = null;
     }, 600);
   }, [primeSessionHistory, router]);

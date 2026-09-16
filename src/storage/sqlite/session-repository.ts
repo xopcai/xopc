@@ -1,12 +1,12 @@
 import { cancelConnectionObjective } from './connection-wait-repository.js';
 import { randomUUID } from 'node:crypto';
+import { validateConversationId, validateTranscriptId } from '@xopcai/gateway-contract';
 import type { DatabaseSync } from 'node:sqlite';
 
 import { notifyUserContextChange } from '../../user-context/changes.js';
-import { validateSessionId } from '../../session/session-id.js';
 import type { SessionListQuery, SessionMetadata, PaginatedResult } from '../../session/types.js';
 import { buildDefaultSessionMetadata, type SessionMetadataSeed } from './session-metadata.js';
-import { readCurrentSessionId } from './session-instance-repository.js';
+import { readCurrentTranscriptId } from './session-instance-repository.js';
 import {
   buildGlobalSessionStats,
   metadataToSessionInsert,
@@ -17,10 +17,10 @@ import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 import { SESSION_PURPOSE_SQL, SESSION_SOURCE_SQL } from './session-identity-sql.js';
 
 const SESSION_COLUMNS = `
-  s.session_key, s.agent_id, s.session_id, s.status, s.name, s.tags_json,
+  s.conversation_id, s.agent_id, s.active_transcript_id, s.status, s.name, s.tags_json,
   s.created_at, s.updated_at, s.last_accessed_at, s.session_started_at, s.last_interaction_at,
   s.source_channel, s.source_chat_id, s.session_type, s.hidden_from_session_list,
-  s.parent_session_key, s.workflow_run_id, s.workflow_definition_id, s.workflow_agent_id, s.workflow_agent_label,
+  s.parent_conversation_id, s.workflow_run_id, s.workflow_definition_id, s.workflow_agent_id, s.workflow_agent_label,
   s.project_id, s.routing_json, s.custom_data_json,
   s.message_count, s.estimated_tokens, s.compacted_count,
   s.last_flushed_at, s.flush_count,
@@ -32,29 +32,29 @@ import { buildFts5SearchQuery } from './fts.js';
 
 const SESSION_FROM_JOIN = `
   FROM sessions s
-  LEFT JOIN transcripts t ON t.session_id = s.session_id
+  LEFT JOIN transcripts t ON t.transcript_id = s.active_transcript_id
 `;
 
-const SELECT_SESSION = `SELECT ${SESSION_COLUMNS} ${SESSION_FROM_JOIN} WHERE s.session_key = ?`;
+const SELECT_SESSION = `SELECT ${SESSION_COLUMNS} ${SESSION_FROM_JOIN} WHERE s.conversation_id = ?`;
 
-function readSessionRow(db: DatabaseSync, sessionKey: string): SessionRow | undefined {
-  return db.prepare(SELECT_SESSION).get(sessionKey) as SessionRow | undefined;
+function readSessionRow(db: DatabaseSync, conversationId: string): SessionRow | undefined {
+  return db.prepare(SELECT_SESSION).get(conversationId) as SessionRow | undefined;
 }
 
 function insertSessionAndTranscript(
   db: DatabaseSync,
-  sessionKey: string,
-  sessionId: string,
+  conversationId: string,
+  transcriptId: string,
   cwd: string,
   metadata: SessionMetadata,
 ): void {
-  const row = metadataToSessionInsert(sessionKey, sessionId, metadata);
+  const row = metadataToSessionInsert(conversationId, transcriptId, metadata);
   db.prepare(
     `INSERT INTO sessions (
-      session_key, agent_id, session_id, status, name, tags_json,
+      conversation_id, agent_id, active_transcript_id, status, name, tags_json,
       created_at, updated_at, last_accessed_at, session_started_at, last_interaction_at,
       source_channel, source_chat_id, session_type, hidden_from_session_list,
-      parent_session_key, workflow_run_id, workflow_definition_id, workflow_agent_id, workflow_agent_label,
+      parent_conversation_id, workflow_run_id, workflow_definition_id, workflow_agent_id, workflow_agent_label,
       project_id, routing_json, custom_data_json,
       message_count, estimated_tokens, compacted_count,
       last_flushed_at, flush_count,
@@ -69,9 +69,9 @@ function insertSessionAndTranscript(
       ?, ?
     )`,
   ).run(
-    row.sessionKey,
+    row.conversationId,
     row.agentId,
-    row.sessionId,
+    row.transcriptId,
     row.status,
     row.name,
     row.tagsJson,
@@ -84,7 +84,7 @@ function insertSessionAndTranscript(
     row.sourceChatId,
     row.sessionType,
     row.hiddenFromSessionList,
-    row.parentSessionKey,
+    row.parentConversationId,
     row.workflowRunId,
     row.workflowDefinitionId,
     row.workflowAgentId,
@@ -103,54 +103,59 @@ function insertSessionAndTranscript(
 
   const now = Date.now();
   db.prepare(
-    `INSERT INTO transcripts (session_id, session_key, status, created_at, cwd)
+    `INSERT INTO transcripts (transcript_id, conversation_id, status, created_at, cwd)
      VALUES (?, ?, 'active', ?, ?)`,
-  ).run(sessionId, sessionKey, now, cwd);
+  ).run(transcriptId, conversationId, now, cwd);
 }
 
 export function ensureSessionInTransaction(
   db: DatabaseSync,
-  sessionKey: string,
+  conversationId: string,
   cwd: string,
   seed?: SessionMetadataSeed,
 ): SessionMetadata {
-  const existing = readSessionRow(db, sessionKey);
+  validateConversationId(conversationId);
+  const existing = readSessionRow(db, conversationId);
   if (existing) {
-    return sessionRowToMetadata(sessionKey, existing);
+    if (!existing.cwd && cwd) {
+      db.prepare('UPDATE transcripts SET cwd=? WHERE transcript_id=?').run(cwd, existing.active_transcript_id);
+      existing.cwd = cwd;
+    }
+    return sessionRowToMetadata(conversationId, existing);
   }
 
-  const sessionId = validateSessionId(randomUUID());
-  const metadata = buildDefaultSessionMetadata(sessionKey, seed);
-  metadata.sessionId = sessionId;
-  insertSessionAndTranscript(db, sessionKey, sessionId, cwd, metadata);
-  const row = readSessionRow(db, sessionKey);
+  const transcriptId = validateTranscriptId(randomUUID());
+  const metadata = buildDefaultSessionMetadata(conversationId, seed);
+  metadata.transcriptId = transcriptId;
+  insertSessionAndTranscript(db, conversationId, transcriptId, cwd, metadata);
+  const row = readSessionRow(db, conversationId);
   if (!row) {
-    throw new Error(`Failed to create session: ${sessionKey}`);
+    throw new Error(`Failed to create session: ${conversationId}`);
   }
-  return sessionRowToMetadata(sessionKey, row);
+  return sessionRowToMetadata(conversationId, row);
 }
 
 export function ensureSessionRecord(
-  sessionKey: string,
+  conversationId: string,
   cwd: string,
   seed?: SessionMetadataSeed,
 ): SessionMetadata {
-  return runSqliteWriteTransaction((db) => ensureSessionInTransaction(db, sessionKey, cwd, seed));
+  return runSqliteWriteTransaction((db) => ensureSessionInTransaction(db, conversationId, cwd, seed));
 }
 
-export { readCurrentSessionId } from './session-instance-repository.js';
+export { readCurrentTranscriptId } from './session-instance-repository.js';
 
-export function getSessionMetadata(sessionKey: string): SessionMetadata | null {
+export function getSessionMetadata(conversationId: string): SessionMetadata | null {
   const db = getSqliteDatabase();
-  const row = readSessionRow(db, sessionKey);
+  const row = readSessionRow(db, conversationId);
   if (!row) {
     return null;
   }
-  return sessionRowToMetadata(sessionKey, row);
+  return sessionRowToMetadata(conversationId, row);
 }
 
-export function getCurrentSessionId(sessionKey: string): string | null {
-  return readCurrentSessionId(getSqliteDatabase(), sessionKey);
+export function getCurrentTranscriptId(conversationId: string): string | null {
+  return readCurrentTranscriptId(getSqliteDatabase(), conversationId);
 }
 
 export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResult<SessionMetadata> {
@@ -207,10 +212,10 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
     if (query.includePinned) {
       clauses.push(`s.status = 'pinned'`);
     }
-    const includeSessionKey = query.includeSessionKey?.trim();
-    if (includeSessionKey) {
-      clauses.push(`s.session_key = ?`);
-      params.push(includeSessionKey);
+    const includeConversationId = query.includeConversationId?.trim();
+    if (includeConversationId) {
+      clauses.push(`s.conversation_id = ?`);
+      params.push(includeConversationId);
     }
     conditions.push(`(${clauses.join(' OR ')})`);
   }
@@ -248,9 +253,9 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
     const like = `%${rawSearch.toLowerCase()}%`;
     // Keep FTS selection inside SQLite so filtering/counting covers all matches,
     // without a pre-pagination cap or SQLite's bound-parameter limit.
-    conditions.push(`(s.session_key IN (
-      SELECT session_key FROM transcript_fts WHERE transcript_fts MATCH ?
-    ) OR LOWER(s.session_key) LIKE ?
+    conditions.push(`(s.conversation_id IN (
+      SELECT conversation_id FROM transcript_fts WHERE transcript_fts MATCH ?
+    ) OR LOWER(s.conversation_id) LIKE ?
       OR LOWER(COALESCE(s.name, '')) LIKE ?
       OR LOWER(s.source_channel) LIKE ?
       OR LOWER(s.source_chat_id) LIKE ?
@@ -272,12 +277,12 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
   const rows = db
     .prepare(
       `SELECT ${SESSION_COLUMNS} ${SESSION_FROM_JOIN} ${where}
-       ORDER BY ${sortColumn} ${sortOrder}, s.session_key ASC
+       ORDER BY ${sortColumn} ${sortOrder}, s.conversation_id ASC
        LIMIT ? OFFSET ?`,
     )
     .all(...params, limit, offset) as SessionRow[];
 
-  const items = rows.map((row) => sessionRowToMetadata(row.session_key, row));
+  const items = rows.map((row) => sessionRowToMetadata(row.conversation_id, row));
   return { items, total, limit, offset, hasMore: offset + limit < total };
 }
 
@@ -296,18 +301,22 @@ function sessionSortColumn(sortBy: SessionListQuery['sortBy']): string {
 }
 
 export function patchSessionMetadata(
-  sessionKey: string,
+  conversationId: string,
   updates: Partial<SessionMetadata>,
 ): SessionMetadata {
-  if ('projectId' in updates) notifyUserContextChange({ kind: 'session-reset', id: sessionKey });
+  if ('projectId' in updates) notifyUserContextChange({ kind: 'session-reset', id: conversationId });
   return runSqliteWriteTransaction((db) => {
-    const existing = readSessionRow(db, sessionKey);
+    const existing = readSessionRow(db, conversationId);
     if (!existing) {
-      throw new Error(`Session not found: ${sessionKey}`);
+      throw new Error(`Session not found: ${conversationId}`);
     }
 
-    const current = sessionRowToMetadata(sessionKey, existing);
-    const merged = { ...current, ...updates, key: sessionKey };
+    const requestedAgentId = updates.agentId ?? updates.routing?.agentId;
+    if (requestedAgentId && requestedAgentId.trim().toLowerCase() !== existing.agent_id) {
+      throw new Error('Changing a conversation agent requires a new conversation');
+    }
+    const current = sessionRowToMetadata(conversationId, existing);
+    const merged = { ...current, ...updates, key: conversationId };
     const now = Date.now();
 
     db.prepare(
@@ -323,7 +332,7 @@ export function patchSessionMetadata(
         source_chat_id = ?,
         session_type = ?,
         hidden_from_session_list = ?,
-        parent_session_key = ?,
+        parent_conversation_id = ?,
         workflow_run_id = ?,
         workflow_definition_id = ?,
         workflow_agent_id = ?,
@@ -338,7 +347,7 @@ export function patchSessionMetadata(
         flush_count = ?,
         thinking_level = ?,
         verbose_level = ?
-      WHERE session_key = ?`,
+      WHERE conversation_id = ?`,
     ).run(
       merged.status,
       merged.name ?? null,
@@ -351,7 +360,7 @@ export function patchSessionMetadata(
       merged.sourceChatId,
       merged.sessionType,
       merged.hiddenFromSessionList ? 1 : 0,
-      merged.parentSessionKey ?? null,
+      merged.parentConversationId ?? null,
       merged.workflowRunId ?? null,
       merged.workflowDefinitionId ?? null,
       merged.workflowAgentId ?? null,
@@ -366,19 +375,19 @@ export function patchSessionMetadata(
       merged.flushCount ?? 0,
       existing.thinking_level,
       existing.verbose_level,
-      sessionKey,
+      conversationId,
     );
 
-    const row = readSessionRow(db, sessionKey);
+    const row = readSessionRow(db, conversationId);
     if (!row) {
-      throw new Error(`Session not found after patch: ${sessionKey}`);
+      throw new Error(`Session not found after patch: ${conversationId}`);
     }
-    return sessionRowToMetadata(sessionKey, row);
+    return sessionRowToMetadata(conversationId, row);
   });
 }
 
 export function updateSessionStats(
-  sessionKey: string,
+  conversationId: string,
   stats: { messageCount: number; estimatedTokens: number; lastInteractionAt?: number },
 ): void {
   runSqliteWriteTransaction((db) => {
@@ -390,12 +399,12 @@ export function updateSessionStats(
         updated_at = ?,
         last_accessed_at = ?,
         last_interaction_at = ?
-      WHERE session_key = ?`,
-    ).run(stats.messageCount, stats.estimatedTokens, now, now, now, sessionKey);
+      WHERE conversation_id = ?`,
+    ).run(stats.messageCount, stats.estimatedTokens, now, now, now, conversationId);
   });
 }
 
-export function incrementSessionStatsOnAppend(sessionKey: string, tokenDelta = 0): void {
+export function incrementSessionStatsOnAppend(conversationId: string, tokenDelta = 0): void {
   runSqliteWriteTransaction((db) => {
     const now = Date.now();
     db.prepare(
@@ -405,55 +414,55 @@ export function incrementSessionStatsOnAppend(sessionKey: string, tokenDelta = 0
         updated_at = ?,
         last_accessed_at = ?,
         last_interaction_at = ?
-      WHERE session_key = ?`,
-    ).run(tokenDelta, now, now, now, sessionKey);
+      WHERE conversation_id = ?`,
+    ).run(tokenDelta, now, now, now, conversationId);
   });
 }
 
 export function resetSessionRecord(
-  sessionKey: string,
+  conversationId: string,
   cwd: string,
-): { sessionId: string; previousSessionId: string } | null {
-  notifyUserContextChange({ kind: 'session-reset', id: sessionKey });
+): { transcriptId: string; previousTranscriptId: string } | null {
+  notifyUserContextChange({ kind: 'session-reset', id: conversationId });
   return runSqliteWriteTransaction((db) => {
-    const existing = readSessionRow(db, sessionKey);
+    const existing = readSessionRow(db, conversationId);
     if (!existing) {
       return null;
     }
 
-    cancelConnectionObjective(sessionKey);
-    const previousSessionId = existing.session_id;
+    cancelConnectionObjective(conversationId);
+    const previousTranscriptId = existing.active_transcript_id;
     const now = Date.now();
     db.prepare(
       `UPDATE transcripts SET status = 'archived', archive_reason = 'reset', archived_at = ?
-       WHERE session_id = ?`,
-    ).run(now, previousSessionId);
+       WHERE transcript_id = ?`,
+    ).run(now, previousTranscriptId);
 
-    const newSessionId = validateSessionId(randomUUID());
+    const newTranscriptId = validateTranscriptId(randomUUID());
     db.prepare(
-      `INSERT INTO transcripts (session_id, session_key, status, created_at, cwd)
+      `INSERT INTO transcripts (transcript_id, conversation_id, status, created_at, cwd)
        VALUES (?, ?, 'active', ?, ?)`,
-    ).run(newSessionId, sessionKey, now, cwd);
+    ).run(newTranscriptId, conversationId, now, cwd);
 
     db.prepare(
       `UPDATE sessions SET
-        session_id = ?,
+        active_transcript_id = ?,
         updated_at = ?,
         session_started_at = ?,
         last_interaction_at = NULL,
         message_count = 0,
         estimated_tokens = 0
-      WHERE session_key = ?`,
-    ).run(newSessionId, now, now, sessionKey);
+      WHERE conversation_id = ?`,
+    ).run(newTranscriptId, now, now, conversationId);
 
-    return { sessionId: newSessionId, previousSessionId };
+    return { transcriptId: newTranscriptId, previousTranscriptId };
   });
 }
 
-export function deleteSessionRecord(sessionKey: string): boolean {
-  notifyUserContextChange({ kind: 'session-reset', id: sessionKey });
+export function deleteSessionRecord(conversationId: string): boolean {
+  notifyUserContextChange({ kind: 'session-reset', id: conversationId });
   return runSqliteWriteTransaction((db) => {
-    const existing = readSessionRow(db, sessionKey);
+    const existing = readSessionRow(db, conversationId);
     if (!existing) {
       return false;
     }
@@ -461,11 +470,11 @@ export function deleteSessionRecord(sessionKey: string): boolean {
     const now = Date.now();
     db.prepare(
       `UPDATE transcripts SET status = 'archived', archive_reason = 'delete', archived_at = ?
-       WHERE session_id = ?`,
-    ).run(now, existing.session_id);
+       WHERE transcript_id = ?`,
+    ).run(now, existing.active_transcript_id);
 
-    cancelConnectionObjective(sessionKey);
-    db.prepare(`DELETE FROM sessions WHERE session_key = ?`).run(sessionKey);
+    cancelConnectionObjective(conversationId);
+    db.prepare(`DELETE FROM sessions WHERE conversation_id = ?`).run(conversationId);
     return true;
   });
 }
@@ -479,29 +488,29 @@ export function listSessionsByAgent(agentId: string): SessionMetadata[] {
        ORDER BY s.updated_at DESC`,
     )
     .all(agentId.toLowerCase()) as SessionRow[];
-  return rows.map((row) => sessionRowToMetadata(row.session_key, row));
+  return rows.map((row) => sessionRowToMetadata(row.conversation_id, row));
 }
 
-export function getSessionPersistedLevels(sessionKey: string): {
+export function getSessionPersistedLevels(conversationId: string): {
   thinkingLevel: string | null;
   verboseLevel: string | null;
 } | null {
   const db = getSqliteDatabase();
   const row = db
-    .prepare(`SELECT thinking_level, verbose_level FROM sessions WHERE session_key = ?`)
-    .get(sessionKey) as { thinking_level: string | null; verbose_level: string | null } | undefined;
+    .prepare(`SELECT thinking_level, verbose_level FROM sessions WHERE conversation_id = ?`)
+    .get(conversationId) as { thinking_level: string | null; verbose_level: string | null } | undefined;
   if (!row) {
     return null;
   }
   return { thinkingLevel: row.thinking_level, verboseLevel: row.verbose_level };
 }
 
-export function findSessionKeyBySessionId(sessionId: string): string | null {
+export function findConversationIdByTranscriptId(transcriptId: string): string | null {
   const db = getSqliteDatabase();
   const row = db
-    .prepare(`SELECT session_key FROM sessions WHERE session_id = ?`)
-    .get(sessionId) as { session_key?: string } | undefined;
-  return row?.session_key ?? null;
+    .prepare(`SELECT conversation_id FROM sessions WHERE active_transcript_id = ?`)
+    .get(transcriptId) as { conversation_id?: string } | undefined;
+  return row?.conversation_id ?? null;
 }
 
 export function getGlobalSessionStats(): ReturnType<typeof buildGlobalSessionStats> {
@@ -509,6 +518,6 @@ export function getGlobalSessionStats(): ReturnType<typeof buildGlobalSessionSta
   return buildGlobalSessionStats(all.items);
 }
 
-export function resolveSessionAgentId(sessionKey: string): string {
-  return getSessionMetadata(sessionKey)?.routing?.agentId ?? 'main';
+export function resolveSessionAgentId(conversationId: string): string {
+  return getSessionMetadata(conversationId)?.routing?.agentId ?? 'main';
 }

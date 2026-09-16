@@ -4,7 +4,7 @@
  * The previous implementation kept the "current" session context in a single
  * mutable field on the class. That meant bus-inbound and direct-stream paths
  * concurrently handling different sessions could overwrite each other's view
- * of "current session", with tools reading the wrong sessionKey at execution
+ * of "current session", with tools reading the wrong conversationId at execution
  * time (the only thing masking it was the inbound consumer being serial).
  *
  * The new manager uses `AsyncLocalStorage`, so each async chain sees its own
@@ -22,7 +22,7 @@ import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 import type { InboundMessage } from '../../infra/bus/index.js';
 
 export interface SessionContext {
-  sessionKey: string;
+  conversationId: string;
   channel: string;
   chatId: string;
   senderId: string;
@@ -68,7 +68,7 @@ export class SessionContextManager {
   static extractFromMessage(msg: InboundMessage): SessionContext {
     const metadata = msg.metadata || {};
     return {
-      sessionKey: (metadata.sessionKey as string) || `${msg.channel}:${msg.chat_id}`,
+      conversationId: (metadata.conversationId as string) || `${msg.channel}:${msg.chat_id}`,
       channel: msg.channel,
       chatId: msg.chat_id,
       senderId: (metadata.senderId as string) || '',

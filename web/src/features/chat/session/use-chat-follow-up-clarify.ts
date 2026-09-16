@@ -57,14 +57,14 @@ export type ChatFollowUpClarifyApi = {
   makeOnClarifyRequest: (chatId: string) => (payload: ClarifyPromptState) => void;
 };
 
-function parseClarification(raw: unknown, expectedSessionKey?: string): ClarifyPromptState | null {
+function parseClarification(raw: unknown, expectedConversationId?: string): ClarifyPromptState | null {
   if (!raw || typeof raw !== 'object') return null;
   const record = raw as Record<string, unknown>;
   const value = record.clarification && typeof record.clarification === 'object'
     ? record.clarification as Record<string, unknown>
     : record;
   if (value.status !== undefined && value.status !== 'open') return null;
-  if (expectedSessionKey && typeof value.sessionKey === 'string' && value.sessionKey !== expectedSessionKey) return null;
+  if (expectedConversationId && typeof value.conversationId === 'string' && value.conversationId !== expectedConversationId) return null;
   const requestId = typeof value.id === 'string' ? value.id : value.requestId;
   const question = value.question;
   const kind = value.kind === 'approval' ? 'approval' : 'input';
@@ -87,19 +87,19 @@ function parseClarification(raw: unknown, expectedSessionKey?: string): ClarifyP
 }
 
 export function useChatFollowUpClarify(options: {
-  sessionKey: string | null;
+  conversationId: string | null;
   decodedKey: string | undefined;
-  sessionKeyRef: MutableRefObject<string | null>;
+  conversationIdRef: MutableRefObject<string | null>;
   sendingRef: MutableRefObject<boolean>;
   streamingRef: MutableRefObject<boolean>;
   modelSupportsThinking: boolean;
   thinkingLevel: string;
-  shouldApplyStreamUpdate: (streamSessionKey: string) => boolean;
+  shouldApplyStreamUpdate: (streamConversationId: string) => boolean;
 }): ChatFollowUpClarifyApi {
   const {
-    sessionKey,
+    conversationId,
     decodedKey,
-    sessionKeyRef,
+    conversationIdRef,
     sendingRef,
     streamingRef,
     modelSupportsThinking,
@@ -126,31 +126,31 @@ export function useChatFollowUpClarify(options: {
 
   const applyState = useCallback((raw: unknown) => {
     if (!raw || typeof raw !== 'object') return;
-    const state = raw as { sessionKey?: unknown; revision?: unknown; inputs?: unknown };
-    if (state.sessionKey !== sessionKeyRef.current || typeof state.revision !== 'number' || !Array.isArray(state.inputs)) return;
+    const state = raw as { conversationId?: unknown; revision?: unknown; inputs?: unknown };
+    if (state.conversationId !== conversationIdRef.current || typeof state.revision !== 'number' || !Array.isArray(state.inputs)) return;
     if (state.revision < revisionRef.current) return;
     const rows = projectPendingFollowUps(state.inputs);
     revisionRef.current = state.revision;
     pendingFollowUpsRef.current = rows;
     setPendingFollowUps(rows);
     if (editingFollowUpIdRef.current && !rows.some((row) => row.id === editingFollowUpIdRef.current)) setEditingFollowUpId(null);
-  }, [sessionKeyRef]);
+  }, [conversationIdRef]);
 
   const refreshState = useCallback(async (key: string) => {
     const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/input-state`)).catch(() => null);
-    if (!res?.ok || sessionKeyRef.current !== key) return;
+    if (!res?.ok || conversationIdRef.current !== key) return;
     const json = await res.json().catch(() => null) as { payload?: unknown } | null;
     applyState(json?.payload);
-  }, [applyState, sessionKeyRef]);
+  }, [applyState, conversationIdRef]);
 
   const refreshClarification = useCallback(async (key: string) => {
     const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/clarification`)).catch(() => null);
-    if (!res?.ok || sessionKeyRef.current !== key) return;
+    if (!res?.ok || conversationIdRef.current !== key) return;
     const json = await res.json().catch(() => null) as { payload?: unknown } | null;
     setClarifySubmitError(null);
     setClarifyPrompt(parseClarification(json?.payload, key));
     clarificationAttemptRef.current = null;
-  }, [sessionKeyRef]);
+  }, [conversationIdRef]);
 
   useEffect(() => {
     revisionRef.current = -1;
@@ -158,34 +158,34 @@ export function useChatFollowUpClarify(options: {
     setPendingFollowUps([]);
     setEditingFollowUpId(null);
     setClarifyPrompt(null);
-    if (!sessionKey || sessionKey !== decodedKey) return;
-    void refreshState(sessionKey);
-    void refreshClarification(sessionKey);
-  }, [decodedKey, refreshClarification, refreshState, sessionKey]);
+    if (!conversationId || conversationId !== decodedKey) return;
+    void refreshState(conversationId);
+    void refreshClarification(conversationId);
+  }, [decodedKey, refreshClarification, refreshState, conversationId]);
 
   useEffect(() => {
     const onState = (event: Event) => {
       const detail = (event as CustomEvent<unknown>).detail;
       applyState(detail);
-      const key = sessionKeyRef.current;
-      if (key && detail && typeof detail === 'object' && (detail as { sessionKey?: unknown }).sessionKey === key) {
+      const key = conversationIdRef.current;
+      if (key && detail && typeof detail === 'object' && (detail as { conversationId?: unknown }).conversationId === key) {
         void refreshClarification(key);
       }
     };
     const onClarification = (event: Event) => {
-      const key = sessionKeyRef.current;
+      const key = conversationIdRef.current;
       if (!key) return;
       const detail = (event as CustomEvent<unknown>).detail;
       if (detail && typeof detail === 'object') {
-        const eventSessionKey = (detail as Record<string, unknown>).sessionKey;
-        if (typeof eventSessionKey === 'string' && eventSessionKey !== key) return;
+        const eventConversationId = (detail as Record<string, unknown>).conversationId;
+        if (typeof eventConversationId === 'string' && eventConversationId !== key) return;
       }
       setClarifySubmitError(null);
       setClarifyPrompt(parseClarification(detail, key));
       clarificationAttemptRef.current = null;
     };
     const onReconnect = () => {
-      const key = sessionKeyRef.current;
+      const key = conversationIdRef.current;
       if (key) {
         void refreshState(key);
         void refreshClarification(key);
@@ -199,17 +199,17 @@ export function useChatFollowUpClarify(options: {
       window.removeEventListener('clarification-updated', onClarification);
       window.removeEventListener('gateway-realtime-connected', onReconnect);
     };
-  }, [applyState, refreshClarification, refreshState, sessionKeyRef]);
+  }, [applyState, refreshClarification, refreshState, conversationIdRef]);
 
   useEffect(() => {
     if (!clarifyPrompt?.expiresAt) return;
     const delay = Math.max(0, clarifyPrompt.expiresAt - Date.now()) + 250;
     const timer = window.setTimeout(() => {
-      const key = sessionKeyRef.current;
+      const key = conversationIdRef.current;
       if (key) void refreshClarification(key);
     }, delay);
     return () => window.clearTimeout(timer);
-  }, [clarifyPrompt?.expiresAt, refreshClarification, sessionKeyRef]);
+  }, [clarifyPrompt?.expiresAt, refreshClarification, conversationIdRef]);
 
   const clearVisibleClarify = useCallback(() => {
     setClarifySubmitError(null);
@@ -220,12 +220,12 @@ export function useChatFollowUpClarify(options: {
     (chatId: string) => {
       const key = String(chatId ?? '').trim();
       if (!key) return;
-      if (sessionKeyRef.current === key) {
+      if (conversationIdRef.current === key) {
         setClarifySubmitError(null);
         setClarifyPrompt(null);
       }
     },
-    [sessionKeyRef],
+    [conversationIdRef],
   );
 
   const dismissClarify = useCallback(() => {
@@ -269,7 +269,7 @@ export function useChatFollowUpClarify(options: {
         throw new Error(`At most ${MAX_PENDING_FOLLOW_UPS} pending messages are allowed`);
       }
       const effectiveThinking = modelSupportsThinking ? thinkingLevel : 'off';
-      const key = sessionKeyRef.current;
+      const key = conversationIdRef.current;
       if (!key) throw new Error('No active session');
       const origin = await waitForEndpointTurnClaim();
       const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs`), {
@@ -294,7 +294,7 @@ export function useChatFollowUpClarify(options: {
       if (!json?.payload?.state) throw new Error('Gateway returned an invalid input state');
       applyState(json.payload.state);
     },
-    [applyState, modelSupportsThinking, sessionKeyRef, thinkingLevel],
+    [applyState, modelSupportsThinking, conversationIdRef, thinkingLevel],
   );
 
   const beginEditFollowUp = useCallback((id: string) => {
@@ -321,7 +321,7 @@ export function useChatFollowUpClarify(options: {
         return;
       }
       if (!trimmed && !attachments?.length) {
-        const key = sessionKeyRef.current;
+        const key = conversationIdRef.current;
         if (key) void apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(id)}?version=${prev[i].version}`), { method: 'DELETE' })
           .then(async (res) => applyState((await res.json().catch(() => null) as { payload?: unknown } | null)?.payload))
           .catch(() => { void refreshState(key); });
@@ -330,7 +330,7 @@ export function useChatFollowUpClarify(options: {
       }
       const effThinking = modelSupportsThinking ? (levelOverride ?? thinkingLevel) : 'off';
       setEditingFollowUpId(null);
-      const key = sessionKeyRef.current;
+      const key = conversationIdRef.current;
       if (!key) return;
       void apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(id)}`), {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -343,14 +343,14 @@ export function useChatFollowUpClarify(options: {
         applyState(json?.payload);
       }).catch(() => { void refreshState(key); });
     },
-    [applyState, modelSupportsThinking, refreshState, sessionKeyRef, thinkingLevel],
+    [applyState, modelSupportsThinking, refreshState, conversationIdRef, thinkingLevel],
   );
 
   const removePendingFollowUp = useCallback((id: string) => {
     if (editingFollowUpIdRef.current === id) {
       setEditingFollowUpId(null);
     }
-    const key = sessionKeyRef.current;
+    const key = conversationIdRef.current;
     const row = pendingFollowUpsRef.current.find((item) => item.id === id);
     if (!key || !row) return;
     void apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(id)}?version=${row.version}`), {
@@ -359,14 +359,14 @@ export function useChatFollowUpClarify(options: {
       const json = await res.json().catch(() => null) as { payload?: unknown } | null;
       applyState(json?.payload);
     }).catch(() => { void refreshState(key); });
-  }, [applyState, refreshState, sessionKeyRef]);
+  }, [applyState, refreshState, conversationIdRef]);
 
   const movePendingFollowUp = useCallback((id: string, dir: 'up' | 'down') => {
     const queued = pendingFollowUpsRef.current.filter((row) => row.status === 'queued');
     const i = queued.findIndex((row) => row.id === id);
     if (i < 0) return;
     const target = dir === 'up' ? i - 1 : i + 1;
-    const key = sessionKeyRef.current;
+    const key = conversationIdRef.current;
     const row = queued[i];
     if (!key || !row || target < 0 || target >= queued.length) return;
     void apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/inputs/${encodeURIComponent(row.id)}`), {
@@ -374,10 +374,10 @@ export function useChatFollowUpClarify(options: {
       body: JSON.stringify({ version: row.version, position: target }),
     }).then(async (res) => applyState((await res.json().catch(() => null) as { payload?: unknown } | null)?.payload))
       .catch(() => { void refreshState(key); });
-  }, [applyState, refreshState, sessionKeyRef]);
+  }, [applyState, refreshState, conversationIdRef]);
 
   const reorderPendingFollowUp = useCallback((fromIndex: number, toIndex: number) => {
-    const key = sessionKeyRef.current;
+    const key = conversationIdRef.current;
     const row = pendingFollowUpsRef.current[fromIndex];
     const targetRow = pendingFollowUpsRef.current[toIndex];
     const queued = pendingFollowUpsRef.current.filter((item) => item.status === 'queued');
@@ -390,10 +390,10 @@ export function useChatFollowUpClarify(options: {
       const json = await res.json().catch(() => null) as { payload?: unknown } | null;
       applyState(json?.payload);
     }).catch(() => { void refreshState(key); });
-  }, [applyState, refreshState, sessionKeyRef]);
+  }, [applyState, refreshState, conversationIdRef]);
 
   const steerPendingFollowUp = useCallback(async (id: string) => {
-    const key = sessionKeyRef.current;
+    const key = conversationIdRef.current;
     if (!key) return;
     const row = pendingFollowUpsRef.current.find((r) => r.id === id);
     if (!row?.text.trim() || row.attachments?.length || row.contextRefs?.length) return;
@@ -414,7 +414,7 @@ export function useChatFollowUpClarify(options: {
     } finally {
       setSteeringFollowUpId(null);
     }
-  }, [applyState, removePendingFollowUp, sessionKeyRef]);
+  }, [applyState, removePendingFollowUp, conversationIdRef]);
 
   const respondToClarification = useCallback(async (action: 'answer' | 'agent_decide' | 'cancel', answer?: string) => {
     const p = clarifyPromptRef.current;
@@ -435,7 +435,7 @@ export function useChatFollowUpClarify(options: {
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
         setClarifySubmitError(j.error?.message ?? res.statusText ?? 'Clarify failed');
-        const key = sessionKeyRef.current;
+        const key = conversationIdRef.current;
         if (key && (res.status === 409 || res.status === 410)) void refreshClarification(key);
         return;
       }
@@ -445,7 +445,7 @@ export function useChatFollowUpClarify(options: {
     } finally {
       setClarifySubmitting(false);
     }
-  }, [refreshClarification, sessionKeyRef]);
+  }, [refreshClarification, conversationIdRef]);
 
   const submitClarifyAnswer = useCallback(
     (answer: string) => respondToClarification('answer', answer),

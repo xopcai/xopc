@@ -26,11 +26,11 @@ function formatDuration(ms: number): string {
 
 export const AudioMessageBlock = memo(function AudioMessageBlock({
   audio,
-  sessionKey,
+  conversationId,
   align = 'start',
 }: {
   audio: AudioContent;
-  sessionKey?: string | null;
+  conversationId?: string | null;
   /** User bubbles pass `end` so the bar hugs the right edge like web chat. */
   align?: 'start' | 'end';
 }) {
@@ -49,9 +49,9 @@ export const AudioMessageBlock = memo(function AudioMessageBlock({
   const [error, setError] = useState<string | null>(null);
 
   const managedFile = useQuery({
-    queryKey: ['files', 'audio', sessionKey ?? '', audio.workspaceRelativePath ?? ''],
-    queryFn: async () => (await resolveContextFileResources('session', sessionKey!, [audio.workspaceRelativePath]))[0],
-    enabled: Boolean(sessionKey && audio.workspaceRelativePath && !audio.uri),
+    queryKey: ['files', 'audio', conversationId ?? '', audio.workspaceRelativePath ?? ''],
+    queryFn: async () => (await resolveContextFileResources('session', conversationId!, [audio.workspaceRelativePath]))[0],
+    enabled: Boolean(conversationId && audio.workspaceRelativePath && !audio.uri),
     staleTime: 30_000,
   });
   const directFileId = artifactFileId(audio.uri);
@@ -60,15 +60,15 @@ export const AudioMessageBlock = memo(function AudioMessageBlock({
       ? apiUrl(fileContentPath(directFileId))
       : managedFile.data
         ? apiUrl(fileContentPath(managedFile.data.id))
-        : resolveAudioPlaybackUrl(audio, sessionKey),
-    [apiUrl, audio, directFileId, managedFile.data, sessionKey],
+        : resolveAudioPlaybackUrl(audio, conversationId),
+    [apiUrl, audio, directFileId, managedFile.data, conversationId],
   );
   const gatewayPath = useMemo(() => {
     if (directFileId) return fileContentPath(directFileId);
     if (managedFile.data) return fileContentPath(managedFile.data.id);
     const audioUri = audio.uri?.trim();
-    return audioUri && isMediaUri(audioUri) ? buildGatewayMediaReadPath(audioUri, sessionKey) : null;
-  }, [audio.uri, directFileId, managedFile.data, sessionKey]);
+    return audioUri && isMediaUri(audioUri) ? buildGatewayMediaReadPath(audioUri, conversationId) : null;
+  }, [audio.uri, directFileId, managedFile.data, conversationId]);
 
   const title = audio.name?.trim() || audioNameFromPath(audio.workspaceRelativePath ?? audio.uri, 'voice.mp3');
 

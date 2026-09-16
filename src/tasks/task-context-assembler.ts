@@ -41,8 +41,8 @@ const STANDARD: TaskContextAllocation = {
   reason: 'No active task requires expanded context.',
 };
 
-function taskIdForSession(sessionKey: string): string | undefined {
-  return new TaskConversationRepository().resolveActiveExecutionSession(sessionKey)?.taskId;
+function taskIdForSession(conversationId: string): string | undefined {
+  return new TaskConversationRepository().resolveActiveExecutionSession(conversationId)?.taskId;
 }
 
 export function getTaskExecutionBrief(taskId: string): TaskExecutionBrief | undefined {
@@ -79,16 +79,16 @@ export function getTaskContextManifest(taskId: string): TaskContextManifest | un
   return getTaskExecutionBrief(taskId)?.manifest;
 }
 
-export function assembleTaskContext(sessionKey: string, userQuery: string): AssembledTaskContext {
+export function assembleTaskContext(conversationId: string, userQuery: string): AssembledTaskContext {
   const query = userQuery.trim();
   if (!isXopcDatabaseOpen()) return { retrievalQuery: query, allocation: STANDARD };
-  const taskId = taskIdForSession(sessionKey);
+  const taskId = taskIdForSession(conversationId);
   if (!taskId) return { retrievalQuery: query, allocation: STANDARD };
   const brief = getTaskExecutionBrief(taskId);
   if (!brief) return { taskId, retrievalQuery: query, allocation: STANDARD };
   const { task, latestReceipt, remainingCriteria, allocation, manifest } = brief;
   const handoff = new TaskConversationRepository().getLatestHandoff(taskId);
-  const handoffPayload = handoff?.toSessionKey === sessionKey
+  const handoffPayload = handoff?.toConversationId === conversationId
     ? JSON.stringify(handoff.payload).slice(0, 12_000)
     : '';
   const contract = task.contract!;
@@ -102,13 +102,13 @@ export function assembleTaskContext(sessionKey: string, userQuery: string): Asse
   return { taskId, retrievalQuery: sections.join('\n'), allocation, manifest };
 }
 
-export function buildTaskExecutionDirective(sessionKey: string): string {
-  const taskId = isXopcDatabaseOpen() ? taskIdForSession(sessionKey) : undefined;
+export function buildTaskExecutionDirective(conversationId: string): string {
+  const taskId = isXopcDatabaseOpen() ? taskIdForSession(conversationId) : undefined;
   const brief = taskId ? getTaskExecutionBrief(taskId) : undefined;
   if (!brief) return '';
   const { task, remainingCriteria } = brief;
   const handoff = new TaskConversationRepository().getLatestHandoff(task.id);
-  const handoffPayload = handoff?.toSessionKey === sessionKey
+  const handoffPayload = handoff?.toConversationId === conversationId
     ? JSON.stringify(handoff.payload).slice(0, 12_000)
     : '';
   const contract = task.contract!;

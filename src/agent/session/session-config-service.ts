@@ -79,11 +79,11 @@ export class SessionConfigService {
    * invalid field. Model and thinking are validated together and committed in one write.
    */
   async patch(
-    sessionKey: string,
+    conversationId: string,
     partial: PatchSessionAgentConfigInput,
   ): Promise<PatchSessionAgentConfigResult> {
     if (partial.model !== undefined || partial.thinkingLevel !== undefined || partial.fixedModel) {
-      const existing = await this.opts.sessionConfigStore.get(sessionKey);
+      const existing = await this.opts.sessionConfigStore.get(conversationId);
       if (partial.configVersion !== undefined && partial.configVersion !== (existing?.updatedAt ?? 0)) {
         return { ok: false, code: 'CONFIG_CHANGED', error: 'Model configuration changed. Refresh and try again.' };
       }
@@ -91,9 +91,9 @@ export class SessionConfigService {
         if (partial.fixedModel || existing?.fixedModel) {
           return { ok: false, code: 'INVALID_MODEL', error: 'Select a specific model' };
         }
-        await this.clearModelOverride(sessionKey);
+        await this.clearModelOverride(conversationId);
       } else {
-        const ref = partial.model ?? existing?.modelOverride ?? this.opts.modelManager.getModelForSession(sessionKey);
+        const ref = partial.model ?? existing?.modelOverride ?? this.opts.modelManager.getModelForSession(conversationId);
         const model = this.opts.modelManager.findByRef(ref);
         if (!model) return { ok: false, code: 'INVALID_MODEL', error: `Model unavailable: ${ref}` };
         const capabilities = getModelThinking(model);
@@ -103,20 +103,20 @@ export class SessionConfigService {
         }
         const thinkingLevel = requested ?? chooseModelThinking(capabilities, existing?.thinkingLevel);
         const modelRef = `${model.provider}/${model.id}`;
-        const updated = await this.opts.sessionConfigStore.update(sessionKey, {
+        const updated = await this.opts.sessionConfigStore.update(conversationId, {
           modelOverride: modelRef,
           thinkingLevel,
           fixedModel: partial.fixedModel ?? existing?.fixedModel ?? false,
         });
-        this.opts.modelManager.restoreSessionModel(sessionKey, modelRef, updated.fixedModel === true);
+        this.opts.modelManager.restoreSessionModel(conversationId, modelRef, updated.fixedModel === true);
         try {
-          if (this.opts.agentManager.getAgent(sessionKey)) {
-            this.opts.agentManager.setModelForSession(sessionKey, modelRef);
-            this.opts.agentManager.setThinkingLevel(sessionKey, thinkingLevel as ThinkingLevel);
+          if (this.opts.agentManager.getAgent(conversationId)) {
+            this.opts.agentManager.setModelForSession(conversationId, modelRef);
+            this.opts.agentManager.setThinkingLevel(conversationId, thinkingLevel as ThinkingLevel);
           }
         } catch (err) {
-          this.opts.agentManager.removeAgent(sessionKey);
-          log.warn({ err, sessionKey, modelRef }, 'Saved model configuration; runtime will reload before the next turn');
+          this.opts.agentManager.removeAgent(conversationId);
+          log.warn({ err, conversationId, modelRef }, 'Saved model configuration; runtime will reload before the next turn');
         }
       }
     }
@@ -126,13 +126,13 @@ export class SessionConfigService {
       : partial.reasoningLevel;
     if (activityDetailLevel !== undefined) {
       if (activityDetailLevel === null) {
-        await this.opts.sessionConfigStore.update(sessionKey, { reasoningLevel: undefined });
+        await this.opts.sessionConfigStore.update(conversationId, { reasoningLevel: undefined });
       } else {
         const normalized = normalizeReasoningLevel(activityDetailLevel);
         if (!normalized) {
           return { ok: false, error: 'Invalid activity detail level' };
         }
-        await this.opts.sessionConfigStore.update(sessionKey, { reasoningLevel: normalized });
+        await this.opts.sessionConfigStore.update(conversationId, { reasoningLevel: normalized });
       }
     }
 
@@ -141,27 +141,27 @@ export class SessionConfigService {
       if (!normalized) {
         return { ok: false, error: 'Invalid verbose level' };
       }
-      await this.opts.sessionConfigStore.update(sessionKey, { verboseLevel: normalized });
+      await this.opts.sessionConfigStore.update(conversationId, { verboseLevel: normalized });
     }
 
     if (partial.responseLanguage !== undefined) {
       if (partial.responseLanguage === null) {
-        await this.opts.sessionConfigStore.update(sessionKey, { responseLanguage: undefined });
+        await this.opts.sessionConfigStore.update(conversationId, { responseLanguage: undefined });
       } else {
         const parsed = ResponseLanguageSchema.safeParse(partial.responseLanguage);
         if (!parsed.success) {
           return { ok: false, error: 'Invalid response language' };
         }
-        await this.opts.sessionConfigStore.update(sessionKey, { responseLanguage: parsed.data });
+        await this.opts.sessionConfigStore.update(conversationId, { responseLanguage: parsed.data });
       }
-      this.opts.agentManager.removeAgent(sessionKey);
+      this.opts.agentManager.removeAgent(conversationId);
     }
 
     if (partial.userContextMode !== undefined) {
       if (!['enabled', 'off', 'temporary'].includes(partial.userContextMode)) {
         return { ok: false, error: 'Invalid user context mode' };
       }
-      await this.opts.sessionConfigStore.update(sessionKey, { userContextMode: partial.userContextMode });
+      await this.opts.sessionConfigStore.update(conversationId, { userContextMode: partial.userContextMode });
     }
 
     if (partial.workingDirectory !== undefined) {
@@ -169,13 +169,13 @@ export class SessionConfigService {
       if (!cfg) {
         return { ok: false, error: 'Config not loaded' };
       }
-      if (getProjectWorkspacePathForSession(sessionKey)) {
+      if (getProjectWorkspacePathForSession(conversationId)) {
         return {
           ok: false,
           error: 'Project sessions use the project workspace and cannot change working directory',
         };
       }
-      const result = await this.patchWorkingDirectory(sessionKey, partial.workingDirectory);
+      const result = await this.patchWorkingDirectory(conversationId, partial.workingDirectory);
       if (!result.ok) return result;
     }
 
@@ -183,14 +183,14 @@ export class SessionConfigService {
   }
 
   /** Materialize a restored/new chat choice; unavailable identities stay visible for repair. */
-  async initializeModelSelection(sessionKey: string, modelRef: string, thinkingLevel?: string, configVersion?: number): Promise<PatchSessionAgentConfigResult> {
-    const existing = await this.opts.sessionConfigStore.get(sessionKey);
+  async initializeModelSelection(conversationId: string, modelRef: string, thinkingLevel?: string, configVersion?: number): Promise<PatchSessionAgentConfigResult> {
+    const existing = await this.opts.sessionConfigStore.get(conversationId);
     if (configVersion !== undefined && configVersion !== (existing?.updatedAt ?? 0)) {
       return { ok: false, code: 'CONFIG_CHANGED', error: 'Model configuration changed. Refresh and try again.' };
     }
     const model = this.opts.modelManager.findByRef(modelRef);
     if (model) {
-      return this.patch(sessionKey, {
+      return this.patch(conversationId, {
         model: `${model.provider}/${model.id}`,
         thinkingLevel: chooseModelThinking(getModelThinking(model), thinkingLevel ?? existing?.thinkingLevel),
         fixedModel: true,
@@ -198,10 +198,10 @@ export class SessionConfigService {
       });
     }
     if (!modelRef.trim() || !modelRef.includes('/')) return { ok: false, code: 'INVALID_MODEL', error: 'Select a specific model' };
-    await this.opts.sessionConfigStore.update(sessionKey, {
+    await this.opts.sessionConfigStore.update(conversationId, {
       modelOverride: modelRef, fixedModel: true, thinkingLevel: normalizeThinkLevel(thinkingLevel) ?? existing?.thinkingLevel ?? 'off',
     });
-    this.opts.modelManager.restoreSessionModel(sessionKey, modelRef, true);
+    this.opts.modelManager.restoreSessionModel(conversationId, modelRef, true);
     return { ok: true };
   }
 
@@ -211,7 +211,7 @@ export class SessionConfigService {
    * override so the session uses the effective agent default.
    */
   async applyAutomationWorkingDirectory(
-    sessionKey: string,
+    conversationId: string,
     workingDirectory: string | undefined,
   ): Promise<void> {
     const raw = workingDirectory?.trim();
@@ -219,18 +219,18 @@ export class SessionConfigService {
       const wdNorm = normalizeWorkingDirectoryInput(raw);
       if (wdNorm.ok === false) {
         log.warn(
-          { sessionKey, error: wdNorm.error },
+          { conversationId, error: wdNorm.error },
           'Automation working directory invalid; using agent default',
         );
-        await this.clearAutomationWorkingDirectoryOverride(sessionKey);
+        await this.clearAutomationWorkingDirectoryOverride(conversationId);
         return;
       }
       await mkdir(wdNorm.path, { recursive: true });
-      await this.opts.sessionConfigStore.update(sessionKey, { workingDirectoryOverride: wdNorm.path });
-      this.opts.agentManager.setSessionWorkspaceOverride(sessionKey, wdNorm.path);
+      await this.opts.sessionConfigStore.update(conversationId, { workingDirectoryOverride: wdNorm.path });
+      this.opts.agentManager.setSessionWorkspaceOverride(conversationId, wdNorm.path);
       return;
     }
-    await this.clearAutomationWorkingDirectoryOverride(sessionKey);
+    await this.clearAutomationWorkingDirectoryOverride(conversationId);
   }
 
   /**
@@ -240,20 +240,20 @@ export class SessionConfigService {
    * does not exist yet.
    */
   async applyAutomationModelOverride(
-    sessionKey: string,
+    conversationId: string,
     model: string | undefined,
   ): Promise<boolean> {
     const raw = model?.trim();
     if (!raw) {
-      await this.clearModelOverride(sessionKey);
+      await this.clearModelOverride(conversationId);
       return true;
     }
-    const ok = await this.opts.modelManager.switchModelForSession(sessionKey, raw);
+    const ok = await this.opts.modelManager.switchModelForSession(conversationId, raw);
     if (!ok) {
-      await this.clearModelOverride(sessionKey);
+      await this.clearModelOverride(conversationId);
       return false;
     }
-    await this.opts.sessionConfigStore.update(sessionKey, { modelOverride: raw });
+    await this.opts.sessionConfigStore.update(conversationId, { modelOverride: raw });
     return true;
   }
 
@@ -261,24 +261,24 @@ export class SessionConfigService {
    * Clear the session's model override (back to agent default). Used both by
    * {@link patch} and by `AgentService.resetSessionModelToAgentDefault`.
    */
-  async clearModelOverride(sessionKey: string): Promise<void> {
-    this.opts.modelManager.clearSessionModelOverride(sessionKey);
-    await this.opts.sessionConfigStore.update(sessionKey, { modelOverride: undefined });
-    const agent = this.opts.agentManager.getAgent(sessionKey);
+  async clearModelOverride(conversationId: string): Promise<void> {
+    this.opts.modelManager.clearSessionModelOverride(conversationId);
+    await this.opts.sessionConfigStore.update(conversationId, { modelOverride: undefined });
+    const agent = this.opts.agentManager.getAgent(conversationId);
     if (agent) {
-      await this.opts.modelManager.applyModelForSession(agent, sessionKey);
+      await this.opts.modelManager.applyModelForSession(agent, conversationId);
     }
   }
 
   // ── Internal helpers ───────────────────────────────────────────────────
 
-  private async clearAutomationWorkingDirectoryOverride(sessionKey: string): Promise<void> {
-    const existing = await this.opts.sessionConfigStore.get(sessionKey);
+  private async clearAutomationWorkingDirectoryOverride(conversationId: string): Promise<void> {
+    const existing = await this.opts.sessionConfigStore.get(conversationId);
     if (existing?.workingDirectoryOverride) {
       const { workingDirectoryOverride: _removed, ...rest } = existing;
-      await this.opts.sessionConfigStore.set(sessionKey, rest);
+      await this.opts.sessionConfigStore.set(conversationId, rest);
     }
-    this.opts.agentManager.setSessionWorkspaceOverride(sessionKey, null);
+    this.opts.agentManager.setSessionWorkspaceOverride(conversationId, null);
   }
 
   /**
@@ -290,14 +290,14 @@ export class SessionConfigService {
    * same path is idempotent.
    */
   private async patchWorkingDirectory(
-    sessionKey: string,
+    conversationId: string,
     workingDirectory: string,
   ): Promise<PatchSessionAgentConfigResult> {
-    const existing = await this.opts.sessionConfigStore.get(sessionKey);
+    const existing = await this.opts.sessionConfigStore.get(conversationId);
     const existingRaw = existing?.workingDirectoryOverride?.trim();
     const incoming = workingDirectory.trim();
 
-    const priorMessages = await this.opts.sessionStore.load(sessionKey);
+    const priorMessages = await this.opts.sessionStore.load(conversationId);
 
     if (priorMessages.length > 0) {
       if (!incoming) {
@@ -331,11 +331,11 @@ export class SessionConfigService {
           }
         }
         await mkdir(wdNorm.path, { recursive: true });
-        await this.opts.sessionConfigStore.update(sessionKey, {
+        await this.opts.sessionConfigStore.update(conversationId, {
           workingDirectoryOverride: wdNorm.path,
         });
-        this.opts.agentManager.setSessionWorkspaceOverride(sessionKey, wdNorm.path);
-        this.opts.agentManager.removeAgent(sessionKey);
+        this.opts.agentManager.setSessionWorkspaceOverride(conversationId, wdNorm.path);
+        this.opts.agentManager.removeAgent(conversationId);
         return { ok: true };
       }
       case false:

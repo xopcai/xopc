@@ -9,7 +9,7 @@ function run(result: WorkDiscoveryRun['result']): WorkDiscoveryRun {
     status: 'completed',
     rootPath: '/work/xopc',
     projectId: 'project-1',
-    sessionKey: 'session-1',
+    conversationId: 'session-1',
     result,
   };
 }

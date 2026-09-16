@@ -19,19 +19,19 @@ import {
 } from './session-message-parser';
 import { loadSessionHistoryHead } from './session-history-prefetch';
 
-export function useSessionHistory(sessionKey: string) {
+export function useSessionHistory(conversationId: string) {
   const queryClient = useQueryClient();
   const configured = useGatewayConfigured();
   const activeGatewayId = useGatewayStore((state) => state.activeGatewayId);
   const prefetchedOlderHistoryCursorRef = useRef('');
 
   const cachedSessionHistoryHead = useMemo(() => (
-    sessionKey ? readCachedSessionHistoryHead(activeGatewayId, sessionKey) : null
-  ), [activeGatewayId, sessionKey]);
+    conversationId ? readCachedSessionHistoryHead(activeGatewayId, conversationId) : null
+  ), [activeGatewayId, conversationId]);
 
   const sessionHistoryQuery = useInfiniteQuery({
-    queryKey: queryKeys.sessionHistory(sessionKey, activeGatewayId),
-    queryFn: ({ pageParam }) => loadSessionHistoryHead(sessionKey, pageParam),
+    queryKey: queryKeys.sessionHistory(conversationId, activeGatewayId),
+    queryFn: ({ pageParam }) => loadSessionHistoryHead(conversationId, pageParam),
     // Seed stale data rather than a placeholder: a failed refresh must not erase offline history.
     initialData: cachedSessionHistoryHead
       ? { pages: [cachedSessionHistoryHead], pageParams: [undefined] }
@@ -41,7 +41,7 @@ export function useSessionHistory(sessionKey: string) {
     getNextPageParam: (lastPage) => (
       lastPage?.pagination.hasMore ? lastPage.pagination.nextBeforeCursor : undefined
     ),
-    enabled: Boolean(sessionKey && configured),
+    enabled: Boolean(conversationId && configured),
     staleTime: 0,
     refetchOnMount: 'always',
   });
@@ -49,35 +49,35 @@ export function useSessionHistory(sessionKey: string) {
   // Write head page to cache when data arrives
   useEffect(() => {
     const headPage = sessionHistoryQuery.data?.pages[0];
-    if (!activeGatewayId || !sessionKey || !headPage || !sessionHistoryQuery.dataUpdatedAt || sessionHistoryQuery.isPlaceholderData) return;
-    writeCachedSessionHistoryHead(activeGatewayId, sessionKey, headPage);
-  }, [activeGatewayId, sessionHistoryQuery.data?.pages, sessionHistoryQuery.dataUpdatedAt, sessionHistoryQuery.isPlaceholderData, sessionKey]);
+    if (!activeGatewayId || !conversationId || !headPage || !sessionHistoryQuery.dataUpdatedAt || sessionHistoryQuery.isPlaceholderData) return;
+    writeCachedSessionHistoryHead(activeGatewayId, conversationId, headPage);
+  }, [activeGatewayId, sessionHistoryQuery.data?.pages, sessionHistoryQuery.dataUpdatedAt, sessionHistoryQuery.isPlaceholderData, conversationId]);
 
   // Reset prefetch cursor on session change
   useEffect(() => {
     prefetchedOlderHistoryCursorRef.current = '';
-  }, [sessionKey]);
+  }, [conversationId]);
 
   // Prefetch older pages
   useEffect(() => {
     const loadedPages = sessionHistoryQuery.data?.pages ?? [];
     const lastLoadedPage = loadedPages[loadedPages.length - 1];
     const olderCursor = lastLoadedPage?.pagination.nextBeforeCursor;
-    if (!sessionKey || !lastLoadedPage?.pagination.hasMore || !olderCursor) return;
+    if (!conversationId || !lastLoadedPage?.pagination.hasMore || !olderCursor) return;
     if (sessionHistoryQuery.isFetching || sessionHistoryQuery.isFetchingNextPage) return;
 
-    const prefetchKey = `${sessionKey}:${olderCursor}`;
+    const prefetchKey = `${conversationId}:${olderCursor}`;
     if (prefetchedOlderHistoryCursorRef.current === prefetchKey) return;
     prefetchedOlderHistoryCursorRef.current = prefetchKey;
 
     void queryClient.prefetchQuery({
-      queryKey: queryKeys.sessionHistoryOlderPreview(sessionKey, olderCursor, activeGatewayId),
-      queryFn: () => fetchSessionMessagePage(sessionKey, { limit: 50, before: olderCursor }),
+      queryKey: queryKeys.sessionHistoryOlderPreview(conversationId, olderCursor, activeGatewayId),
+      queryFn: () => fetchSessionMessagePage(conversationId, { limit: 50, before: olderCursor }),
       staleTime: 60_000,
     }).catch(() => {
       prefetchedOlderHistoryCursorRef.current = '';
     });
-  }, [activeGatewayId, queryClient, sessionHistoryQuery.data?.pages, sessionHistoryQuery.isFetching, sessionHistoryQuery.isFetchingNextPage, sessionKey]);
+  }, [activeGatewayId, queryClient, sessionHistoryQuery.data?.pages, sessionHistoryQuery.isFetching, sessionHistoryQuery.isFetchingNextPage, conversationId]);
 
   return {
     sessionHistoryQuery,

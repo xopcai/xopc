@@ -15,7 +15,7 @@ describe('notification targets', () => {
     mobile: string;
   }> = [
     {
-      target: { kind: 'chat', sessionKey: 'agent:main' },
+      target: { kind: 'chat', conversationId: 'agent:main' },
       web: '/chat/agent%3Amain',
       mobile: '/chat/agent%3Amain',
     },
@@ -35,7 +35,7 @@ describe('notification targets', () => {
       mobile: '/inbox?item=item%3Fone',
     },
     {
-      target: { kind: 'work_discovery', runId: 'run/one', sessionKey: 'agent:main' },
+      target: { kind: 'work_discovery', runId: 'run/one', conversationId: 'agent:main' },
       web: '/user-model?workDiscovery=review&run=run%2Fone',
       mobile: '/chat/agent%3Amain',
     },
@@ -47,7 +47,7 @@ describe('notification targets', () => {
   });
 
   it('rejects malformed or unknown targets', () => {
-    expect(parseNotificationTarget({ kind: 'chat', sessionKey: '' })).toBeNull();
+    expect(parseNotificationTarget({ kind: 'chat', conversationId: '' })).toBeNull();
     expect(parseNotificationTarget({ kind: 'unknown', id: 'one' })).toBeNull();
     expect(parseNotificationTarget('/chat/unsafe')).toBeNull();
   });
@@ -57,7 +57,7 @@ describe('notification targets', () => {
       schemaVersion: 1,
       id: 'notification-1',
       type: 'chat.completed',
-      target: { kind: 'chat', sessionKey: 'session-1' },
+      target: { kind: 'chat', conversationId: 'session-1' },
       priority: 'normal',
       title: { en: 'Response ready', zh: '回答已就绪' },
       body: { en: 'Open the conversation', zh: '打开对话查看' },

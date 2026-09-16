@@ -1,3 +1,4 @@
+import { backupBeforeConversationCutover } from './conversation-backup.js';
 import { chmodSync, existsSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,6 +7,7 @@ import type { DatabaseSync } from 'node:sqlite';
 
 import { createLogger } from '../../../utils/logger.js';
 import { readSchemaVersion, setSchemaVersion } from '../schema-version.js';
+import { migrateConversationUuids, type ConversationMigrationSummary } from './conversation-uuid.js';
 import { discoverSqlMigrations } from './discover.js';
 import {
   DatabaseSchemaMigrationGapError,
@@ -19,7 +21,7 @@ const log = createLogger('Sqlite:Migrations');
 export const XOPC_DB_BASELINE_SCHEMA_VERSION = 11;
 
 /** Latest schema version this release supports (increment when adding migrations). */
-export const XOPC_DB_SCHEMA_VERSION = 177;
+export const XOPC_DB_SCHEMA_VERSION = 178;
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 
@@ -57,13 +59,15 @@ function migrationByTarget(
   return migrations.find((migration) => migration.targetVersion === targetVersion);
 }
 
-function applySingleMigration(db: DatabaseSync, migration: SqlMigration): void {
+function applySingleMigration(db: DatabaseSync, migration: SqlMigration): ConversationMigrationSummary | undefined {
   log.info({ targetVersion: migration.targetVersion, file: migration.filename }, 'Applying SQLite migration');
   db.exec('BEGIN IMMEDIATE');
   try {
     db.exec(migration.sql);
+    const summary = migration.targetVersion === 178 ? migrateConversationUuids(db) : undefined;
     setSchemaVersion(db, migration.targetVersion);
     db.exec('COMMIT');
+    return summary;
   } catch (error) {
     try {
       db.exec('ROLLBACK');
@@ -99,6 +103,10 @@ export function applyPendingMigrations(
 
   const migrations = discoverSqlMigrations(resolveMigrationsDir(options.migrationsDir));
   let cutoverBackupPath: string | undefined;
+  let conversationSummary: ConversationMigrationSummary | undefined;
+  const fromVersion = currentVersion;
+  const conversationBackup = currentVersion < 178 && targetVersion >= 178 && options.databasePath && options.databasePath !== ':memory:'
+    ? backupBeforeConversationCutover(db, options.databasePath) : undefined;
 
   while (currentVersion < targetVersion) {
     const nextVersion = currentVersion + 1;
@@ -110,7 +118,7 @@ export function applyPendingMigrations(
       cutoverBackupPath = backupBeforeTaskCutover(db, options.databasePath);
     }
     try {
-      applySingleMigration(db, migration);
+      conversationSummary = applySingleMigration(db, migration) ?? conversationSummary;
     } catch (error) {
       if (cutoverBackupPath && nextVersion === 100) {
         writeMigrationReport(cutoverBackupPath, {
@@ -122,6 +130,7 @@ export function applyPendingMigrations(
           occurredAt: new Date().toISOString(),
         });
       }
+      if (conversationBackup) writeMigrationReport(conversationBackup, { fromVersion, targetVersion, failedVersion: nextVersion, status: 'failed', error: error instanceof Error ? error.message : String(error) });
       throw error;
     }
     currentVersion = nextVersion;
@@ -136,6 +145,7 @@ export function applyPendingMigrations(
     }
   }
 
+  if (conversationBackup) writeMigrationReport(conversationBackup, { fromVersion, targetVersion, status: 'succeeded', backupPath: conversationBackup, summary: conversationSummary });
   return currentVersion;
 }
 

@@ -13,7 +13,7 @@ import {
 } from '../../../storage/sqlite/index.js';
 import { openSqliteHydratingSessionManager } from '../sqlite-hydrating-session-manager.js';
 
-const SESSION_KEY = 'agent:main:webchat:default:direct:sqlite-sm';
+const CONVERSATION_ID = "ebd6e242-f112-4ee7-885e-4874af77789e";
 const CWD = '/tmp/workspace';
 
 describe('openSqliteHydratingSessionManager', () => {
@@ -34,9 +34,9 @@ describe('openSqliteHydratingSessionManager', () => {
   });
 
   it('hydrates in-memory SessionManager from SQLite transcript rows', () => {
-    const created = ensureSessionRecord(SESSION_KEY, CWD);
-    appendTranscriptEntry(SESSION_KEY, { role: 'user', content: 'hello', timestamp: Date.now() });
-    appendTranscriptEntry(SESSION_KEY, {
+    const created = ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: "main" });
+    appendTranscriptEntry(CONVERSATION_ID, { role: 'user', content: 'hello', timestamp: Date.now() });
+    appendTranscriptEntry(CONVERSATION_ID, {
       role: 'assistant',
       content: [{ type: 'text', text: 'hi there' }],
       timestamp: Date.now(),
@@ -54,27 +54,27 @@ describe('openSqliteHydratingSessionManager', () => {
     } as never);
 
     const sm = openSqliteHydratingSessionManager({
-      sessionKey: SESSION_KEY,
-      sessionId: created.sessionId!,
+      conversationId: CONVERSATION_ID,
+      transcriptId: created.transcriptId!,
       cwd: CWD,
     });
 
-    expect(sm.getSessionId()).toBe(created.sessionId);
+    expect(sm.getSessionId()).toBe(created.transcriptId);
     expect(sm.getSessionFile()).toBeUndefined();
     expect(sm.isPersisted()).toBe(false);
 
     const ctx = sm.buildSessionContext();
     expect(ctx.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
-    expect(loadLlmMessagesForSession(SESSION_KEY)).toHaveLength(2);
+    expect(loadLlmMessagesForSession(CONVERSATION_ID)).toHaveLength(2);
   });
   it('restores voice speaker roles in the actual embedded Agent context', () => {
-    const created = ensureSessionRecord(SESSION_KEY, CWD);
+    const created = ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: "main" });
     for (const [role, content] of [['user', 'Remember my meeting'], ['assistant', 'We can prepare tomorrow']]) {
-      appendTranscriptEntry(SESSION_KEY, { role: 'custom', customType: 'voice_omni_transcript', content, details: { role }, timestamp: 1 });
+      appendTranscriptEntry(CONVERSATION_ID, { role: 'custom', customType: 'voice_omni_transcript', content, details: { role }, timestamp: 1 });
     }
-    const sm = openSqliteHydratingSessionManager({ sessionKey: SESSION_KEY, sessionId: created.sessionId!, cwd: CWD });
+    const sm = openSqliteHydratingSessionManager({ conversationId: CONVERSATION_ID, transcriptId: created.transcriptId!, cwd: CWD });
     expect(sm.buildSessionContext().messages.map((message) => message.role)).toEqual(['user', 'assistant']);
-    expect(sm.buildSessionContext().messages).toEqual(loadLlmMessagesForSession(SESSION_KEY));
+    expect(sm.buildSessionContext().messages).toEqual(loadLlmMessagesForSession(CONVERSATION_ID));
   });
 
 });

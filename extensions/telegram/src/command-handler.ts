@@ -11,7 +11,7 @@ import type { TelegramAccountManager } from './account-manager.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 import type { Config } from '@xopcai/xopc/config/index.js';
 import { TelegramInlineKeyboards, type ProviderInfo } from './inline-keyboards.js';
-import { generateSessionKey } from '@xopcai/xopc/chat-commands/session-key.js';
+import { generateConversationId } from '@xopcai/xopc/chat-commands/session-key.js';
 
 const log = createLogger('TelegramCommandHandler');
 
@@ -19,8 +19,8 @@ export interface TelegramCommandHandlerDeps {
   bus: any;
   config: Config;
   accountManager: TelegramAccountManager;
-  getSessionModel: (sessionKey: string) => string | undefined;
-  setSessionModel: (sessionKey: string, modelId: string) => void | Promise<void>;
+  getSessionModel: (conversationId: string) => string | undefined;
+  setSessionModel: (conversationId: string, modelId: string) => void | Promise<void>;
   // Optional callbacks for inline keyboard handling
   showProviderModels?: (ctx: Context, providerId: string) => Promise<void>;
   showProvidersAgain?: (ctx: Context) => Promise<void>;
@@ -67,8 +67,8 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
 
   // ========== Helper Functions ==========
 
-  // Helper to get sessionKey from Telegram context
-  const getSessionKeyFromCtx = (ctx: Context): string => {
+  // Helper to get conversationId from Telegram context
+  const getConversationIdFromCtx = (ctx: Context): string => {
     const chatId = String(ctx.chat?.id);
     const senderId = String(ctx.from?.id);
     const isGroup = ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup';
@@ -78,7 +78,7 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
 
     const accountId = accountManager.resolveAccountIdFromContext(ctx);
 
-    return generateSessionKey({
+    return generateConversationId({
       source: 'telegram',
       chatId,
       senderId,
@@ -169,10 +169,10 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
 
   const handleProviderSelect = async (ctx: Context, providerId: string): Promise<void> => {
     try {
-      const sessionKey = getSessionKeyFromCtx(ctx);
+      const conversationId = getConversationIdFromCtx(ctx);
       const { getDefaultModelSync, getProviderDisplayName } = await import('@xopcai/xopc/providers/index.js');
       const defaultModel = getDefaultModelSync(config);
-      const currentModel = getSessionModel(sessionKey) || defaultModel;
+      const currentModel = getSessionModel(conversationId) || defaultModel;
 
       const models = await getModelsForProvider(providerId);
       
@@ -198,8 +198,8 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
 
   const handleModelSelect = async (ctx: Context, modelId: string): Promise<void> => {
     try {
-      const sessionKey = getSessionKeyFromCtx(ctx);
-      await Promise.resolve(setSessionModel(sessionKey, modelId));
+      const conversationId = getConversationIdFromCtx(ctx);
+      await Promise.resolve(setSessionModel(conversationId, modelId));
 
       const modelName = modelId.split('/').pop() || modelId;
       await ctx.editMessageText(
@@ -208,7 +208,7 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
       );
       await ctx.answerCallbackQuery(`Switched to ${modelName}`);
 
-      log.info({ sessionKey, modelId }, 'Model switched via Telegram');
+      log.info({ conversationId, modelId }, 'Model switched via Telegram');
     } catch (err) {
       log.error({ err }, 'Failed to handle model selection');
       await ctx.answerCallbackQuery('Failed to switch model');

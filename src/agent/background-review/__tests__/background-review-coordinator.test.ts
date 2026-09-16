@@ -37,7 +37,7 @@ describe('BackgroundReviewCoordinator', () => {
 
     coordinator.beginUserTurn('main:test');
     coordinator.scheduleAfterUserTurn({
-      sessionKey: 'main:test',
+      conversationId: 'main:test',
       agent,
       lastAssistantText: 'Done.',
       workspaceId,
@@ -47,7 +47,7 @@ describe('BackgroundReviewCoordinator', () => {
 
     coordinator.beginUserTurn('main:test');
     coordinator.scheduleAfterUserTurn({
-      sessionKey: 'main:test',
+      conversationId: 'main:test',
       agent,
       lastAssistantText: 'Done.',
       workspaceId,

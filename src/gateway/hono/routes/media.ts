@@ -72,13 +72,13 @@ export function registerMediaRoutes(authenticated: Hono, deps: AuthenticatedRout
     if (!uriRaw || typeof uriRaw !== 'string') {
       return c.json({ ok: false, error: { message: 'Missing uri' } }, 400);
     }
-    const sessionKey = c.req.query('sessionKey');
+    const conversationId = c.req.query('conversationId');
     const taskId = c.req.query('taskId');
-    if (!sessionKey && !taskId) {
+    if (!conversationId && !taskId) {
       return c.json({ ok: false, error: { message: 'Missing media scope' } }, 400);
     }
     try {
-      const parsed = await resolveScopedMediaReference(deps.service, uriRaw.trim(), { sessionKey, taskId });
+      const parsed = await resolveScopedMediaReference(deps.service, uriRaw.trim(), { conversationId, taskId });
       const { buffer, path } = await readMediaReference(
         parsed.uri,
         MAX_WEBCHAT_ATTACHMENT_FILE_BYTES,

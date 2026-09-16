@@ -48,7 +48,7 @@ export function shouldDismissClarificationForTerminal(status: AgentStreamRunStat
  */
 export function createAgentStreamMessagingCallbacks(opts: {
   chatId: string;
-  shouldApplyStreamUpdate: (streamSessionKey: string) => boolean;
+  shouldApplyStreamUpdate: (streamConversationId: string) => boolean;
   beforeAssistantDelta: () => void;
   setStreamingOnStreamStart: boolean;
   clearResumeRunIdOnBackgroundTerminal: boolean;
@@ -61,7 +61,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
     chatId: string,
     data: { messages: Message[]; hasMore: boolean; name?: string },
   ) => void;
-  finalizeMessage: (sessionKey?: string, terminalStatus?: AgentStreamRunStatus) => void;
+  finalizeMessage: (conversationId?: string, terminalStatus?: AgentStreamRunStatus) => void;
   fq: AgentStreamFqCallbacks;
 }): MessagingCallbacks {
   const {
@@ -130,7 +130,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
       store().appendUserMessageIfMissing(chatId, message);
     },
     onWorkflowRunStarted: () => {
-      window.dispatchEvent(new CustomEvent('workflow-run-started-from-chat', { detail: { sessionKey: chatId } }));
+      window.dispatchEvent(new CustomEvent('workflow-run-started-from-chat', { detail: { conversationId: chatId } }));
     },
     onStreamStart: (turnId) => {
       markChatRunRunning(chatId);

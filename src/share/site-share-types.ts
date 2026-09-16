@@ -77,7 +77,7 @@ export interface CreateSiteShareParams {
   rewriteMode?: 'none' | 'html-only' | 'html-css';
   /** Proxy: forward WS (default true if enabled in config). */
   forwardWebSocket?: boolean;
-  sessionKey?: string;
+  conversationId?: string;
   agentId?: string;
 }
 

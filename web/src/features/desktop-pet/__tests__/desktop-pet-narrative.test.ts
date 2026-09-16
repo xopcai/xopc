@@ -62,7 +62,7 @@ describe('desktop pet narrative', () => {
   it('turns stream events into prioritized pet updates', () => {
     const update = mapAgentStreamEvent(
       {
-        sessionKey: 'agent:main:webchat:test',
+        conversationId: 'agent:main:webchat:test',
         event: { type: 'command_output_delta', payload: { delta: 'pnpm test passed' } },
       },
       1,
@@ -71,7 +71,7 @@ describe('desktop pet narrative', () => {
     );
 
     expect(update).toMatchObject({
-      sessionKey: 'agent:main:webchat:test',
+      conversationId: 'agent:main:webchat:test',
       sessionLabel: 'Fix tests',
       state: 'running',
       phase: 'running',
@@ -83,7 +83,7 @@ describe('desktop pet narrative', () => {
   });
 
   it('maps pending, narration, and answer text segments to distinct behavior', () => {
-    const base = { sessionKey: 'agent:main:webchat:test' };
+    const base = { conversationId: 'agent:main:webchat:test' };
     const pending = mapAgentStreamEvent(
       { ...base, event: { type: 'assistant_message_start', payload: { messageId: 'm1' } } },
       1,
@@ -119,7 +119,7 @@ describe('desktop pet narrative', () => {
   it('only mirrors live thinking in realtime activity-detail mode', () => {
     const event = { type: 'thinking_delta', payload: { delta: 'private reasoning' } };
     const mapAt = (activityDetailLevel: 'off' | 'on' | 'stream') => mapAgentStreamEvent(
-      { sessionKey: 'agent:main:webchat:test', event, activityDetailLevel },
+      { conversationId: 'agent:main:webchat:test', event, activityDetailLevel },
       1,
       'Fix tests',
       labels,
@@ -138,7 +138,7 @@ describe('desktop pet narrative', () => {
     expect(
       activityDetailText(
         {
-          sessionKey: 'agent:main:webchat:test',
+          conversationId: 'agent:main:webchat:test',
           runId: 'active',
           sessionLabel: 'Fix tests',
           sequence: 1,
@@ -156,7 +156,7 @@ describe('desktop pet narrative', () => {
 
   it('surfaces long-running and stale task health', () => {
     const base = {
-      sessionKey: 'agent:main:webchat:test',
+      conversationId: 'agent:main:webchat:test',
       runId: 'active',
       sessionLabel: 'Fix tests',
       sequence: 1,
@@ -186,7 +186,7 @@ describe('desktop pet narrative', () => {
     expect(
       activityCompletionText(
         {
-          sessionKey: 'agent:main:webchat:test',
+          conversationId: 'agent:main:webchat:test',
           runId: 'active',
           sessionLabel: 'Fix tests',
           sequence: 1,
@@ -223,7 +223,7 @@ describe('desktop pet narrative', () => {
   it('only exposes summaries explicitly marked for the ambient pet surface', () => {
     const update = mapAgentStreamEvent(
       {
-        sessionKey: 'agent:main:webchat:test',
+        conversationId: 'agent:main:webchat:test',
         event: {
           type: 'run_end',
           payload: {
@@ -243,7 +243,7 @@ describe('desktop pet narrative', () => {
   it('honors v2 privacy and keeps private feedback generic', () => {
     const update = mapAgentStreamEvent(
       {
-        sessionKey: 'agent:main:webchat:test',
+        conversationId: 'agent:main:webchat:test',
         event: {
           type: 'error',
           payload: {

@@ -127,7 +127,7 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
           ok: true,
           payload: {
             type: 'qr',
-            sessionKey: start.sessionKey,
+            conversationId: start.conversationId,
             qrcodeUrl: start.qrcodeUrl,
             statusAction: 'login.status',
             pollIntervalMs: 2500,
@@ -141,10 +141,10 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
           input && typeof input === 'object' && !Array.isArray(input)
             ? (input as Record<string, unknown>)
             : {};
-        const sessionKey = typeof inputRecord.sessionKey === 'string' ? inputRecord.sessionKey : '';
-        if (!sessionKey) return { ok: false, message: zh ? '缺少登录 sessionKey' : 'Missing login sessionKey' };
+        const conversationId = typeof inputRecord.conversationId === 'string' ? inputRecord.conversationId : '';
+        if (!conversationId) return { ok: false, message: zh ? '缺少登录 conversationId' : 'Missing login conversationId' };
         const { getWeixinGatewayQrLoginStatus } = await import('./cli/gateway-qr-login.js');
-        const status = getWeixinGatewayQrLoginStatus(sessionKey);
+        const status = getWeixinGatewayQrLoginStatus(conversationId);
         if (status.phase === 'polling') {
           return {
             ok: true,

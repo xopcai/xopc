@@ -22,20 +22,20 @@ export function AttachmentPreviewDialog({
   open,
   attachment,
   authToken,
-  sessionKey,
+  conversationId,
   layerClassName = 'z-[81]',
   onClose,
 }: {
   open: boolean;
   attachment: MessageAttachment | null;
   authToken?: string;
-  sessionKey?: string | null;
+  conversationId?: string | null;
   layerClassName?: string;
   onClose: () => void;
 }) {
   const language = useLocaleStore((s) => s.language);
   const labels = messages(language).chat;
-  const resolved = useAttachmentPreviewResolved({ open, attachment, authToken, sessionKey, language });
+  const resolved = useAttachmentPreviewResolved({ open, attachment, authToken, conversationId, language });
   const share = useShareLink();
   const { expanded, setExpanded } = useFilePreviewExpanded(open, share.dialogOpen);
   const [openingLocalApp, setOpeningLocalApp] = useState(false);
@@ -45,12 +45,12 @@ export function AttachmentPreviewDialog({
     fileType !== 'image' && fileType !== 'text' && fileType !== 'pptx' && hasExtractedText;
 
   const fileId = preview?.uri ? parseFileResourceArtifactUri(preview.uri) : null;
-  const canShare = Boolean(fileId || (preview?.uri?.startsWith('media://') && (sessionKey || preview.taskId)));
+  const canShare = Boolean(fileId || (preview?.uri?.startsWith('media://') && (conversationId || preview.taskId)));
   const handleShare = () => {
     if (!preview?.uri || !canShare) return;
     share.createShareLink(fileId
       ? { fileId, fileName: preview.name }
-      : { uri: preview.uri, sessionKey: sessionKey ?? undefined, taskId: preview.taskId, fileName: preview.name });
+      : { uri: preview.uri, conversationId: conversationId ?? undefined, taskId: preview.taskId, fileName: preview.name });
   };
 
   const canExpandPreview = Boolean(preview && !resolved.loading && !resolved.loadError);
@@ -161,7 +161,7 @@ export function AttachmentPreviewDialog({
                 } : undefined,
               }}
               chat={resolved.downloadBuffer ? {
-                sessionKey,
+                conversationId,
                 createFile: async () => new File([resolved.downloadBuffer!], resolved.fileName, { type: resolved.descriptor.mimeType }),
               } : undefined}
               language={language}

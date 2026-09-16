@@ -74,7 +74,7 @@ export interface ExecCommandUpdateDetails {
 export interface CreateExecCommandToolOptions {
   /** Env var names allowed through prepareSafeToolEnv even if they match secret heuristics. */
   getCommandIsolation?: () => CommandIsolation | undefined;
-  getSessionKey?: () => string | undefined;
+  getConversationId?: () => string | undefined;
   getSkillPassthroughEnvVarNames?: () => string[];
   prepareEnv?: (baseEnv: Record<string, string>, cwd: string) => Promise<Record<string, string>>;
 }
@@ -229,7 +229,7 @@ export function createExecCommandTool(
       const runtimeEnv = options?.prepareEnv
         ? await options.prepareEnv(policy.sanitizedEnv, policy.effectiveCwd)
         : policy.sanitizedEnv;
-      const owner = options?.getSessionKey?.() ?? workspaceCwd;
+      const owner = options?.getConversationId?.() ?? workspaceCwd;
       const registry = commandRegistry();
       let commandResult = await registry.start({
         workspace: workspaceCwd, isolation: options?.getCommandIsolation?.(),

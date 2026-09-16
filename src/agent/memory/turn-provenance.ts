@@ -1,4 +1,5 @@
-import { parseSessionKey } from '../../routing/session-key.js';
+import { getSessionMetadata } from '../../storage/sqlite/session-repository.js';
+import { getConversationRouting } from '../../routing/session-key.js';
 import type { MemoryOriginClass, MemorySessionKind } from './types.js';
 
 export interface TurnMemoryProvenance {
@@ -20,22 +21,23 @@ const turnStates = new Map<string, MutableTurnState>();
 const RECALL_TOOL_RE = /^(?:memory_(?:search|get)|session_(?:search|recall))$/;
 const MAX_TRACKED_TURNS = 1_000;
 
-function stateKey(sessionKey: string, turnId: string): string {
-  return `${sessionKey}\u0000${turnId}`;
+function stateKey(conversationId: string, turnId: string): string {
+  return `${conversationId}\u0000${turnId}`;
 }
 
-export function resolveMemorySessionKind(sessionKey: string): MemorySessionKind {
-  const parsed = parseSessionKey(sessionKey);
+export function resolveMemorySessionKind(conversationId: string): MemorySessionKind {
+  const parsed = getConversationRouting(conversationId);
   if (!parsed) return 'unknown';
-  if (parsed.agentId === 'subagent' || sessionKey.includes(':subagent:')) return 'subagent';
+  const kind = getSessionMetadata(conversationId)?.sessionType;
+  if (kind === 'workflow-subagent') return 'subagent';
   if (parsed.source === 'cron') return 'automation';
-  if (sessionKey.includes(':workflow:') || parsed.scopeId?.startsWith('workflow')) return 'workflow';
+  if (kind === 'workflow-run') return 'workflow';
   if (parsed.peerKind === 'group' || parsed.peerKind === 'channel') return 'group';
   return 'interactive';
 }
 
-export function markTurnToolResult(sessionKey: string, turnId: string, toolName: string): void {
-  const key = stateKey(sessionKey, turnId);
+export function markTurnToolResult(conversationId: string, turnId: string, toolName: string): void {
+  const key = stateKey(conversationId, turnId);
   const state = turnStates.get(key) ?? { toolNames: new Set<string>(), recalled: false, automaticRecall: false };
   state.toolNames.add(toolName);
   state.recalled ||= RECALL_TOOL_RE.test(toolName);
@@ -45,8 +47,8 @@ export function markTurnToolResult(sessionKey: string, turnId: string, toolName:
   }
 }
 
-export function markTurnRecalledContext(sessionKey: string, turnId: string): void {
-  const key = stateKey(sessionKey, turnId);
+export function markTurnRecalledContext(conversationId: string, turnId: string): void {
+  const key = stateKey(conversationId, turnId);
   const state = turnStates.get(key) ?? { toolNames: new Set<string>(), recalled: false, automaticRecall: false };
   state.recalled = true;
   state.automaticRecall = true;
@@ -54,17 +56,17 @@ export function markTurnRecalledContext(sessionKey: string, turnId: string): voi
 }
 
 export function consumeTurnMemoryProvenance(
-  sessionKey: string,
+  conversationId: string,
   turnId: string,
 ): TurnMemoryProvenance {
-  const key = stateKey(sessionKey, turnId);
+  const key = stateKey(conversationId, turnId);
   const state = turnStates.get(key);
   turnStates.delete(key);
   const toolNames = [...(state?.toolNames ?? [])].sort();
   return {
     originClass: toolNames.length > 0 ? 'untrusted' : 'agent',
-    sessionKind: resolveMemorySessionKind(sessionKey),
-    sourceSessionId: sessionKey,
+    sessionKind: resolveMemorySessionKind(conversationId),
+    sourceSessionId: conversationId,
     sourceTurnId: turnId,
     derivedFromRecalledContext: state?.recalled ?? false,
     taintReasons: [
@@ -74,6 +76,6 @@ export function consumeTurnMemoryProvenance(
   };
 }
 
-export function clearTurnMemoryProvenance(sessionKey: string, turnId: string): void {
-  turnStates.delete(stateKey(sessionKey, turnId));
+export function clearTurnMemoryProvenance(conversationId: string, turnId: string): void {
+  turnStates.delete(stateKey(conversationId, turnId));
 }

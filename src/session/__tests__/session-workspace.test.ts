@@ -1,4 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { requireXopcDatabase } from '../../storage/sqlite/connection.js';
+import { ensureSessionRecord } from '../../storage/sqlite/session-repository.js';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -29,6 +31,7 @@ describe('normalizeWorkingDirectoryInput', () => {
 });
 
 describe('effectiveWorkspacePathForSession', () => {
+  beforeEach(() => { requireXopcDatabase(); ensureSessionRecord('92a88e8a-bb9a-4473-84b7-73e9f649763e', '', { agentId: 'main' }); });
   const minimalCfg = ConfigSchema.parse({
     agents: {
       default: 'main',
@@ -43,13 +46,13 @@ describe('effectiveWorkspacePathForSession', () => {
   });
 
   it('uses profile default when no override', () => {
-    const p = effectiveWorkspacePathForSession(minimalCfg, 'agent:main:webchat:default:direct:x', null);
+    const p = effectiveWorkspacePathForSession(minimalCfg, "92a88e8a-bb9a-4473-84b7-73e9f649763e", null);
     expect(p).toContain('default-ws');
   });
 
   it('uses override when set in session config', () => {
     const tmp = resolve('/tmp/session-override-test');
-    const p = effectiveWorkspacePathForSession(minimalCfg, 'agent:main:webchat:default:direct:x', {
+    const p = effectiveWorkspacePathForSession(minimalCfg, "92a88e8a-bb9a-4473-84b7-73e9f649763e", {
       workingDirectoryOverride: tmp,
     });
     expect(p).toBe(tmp);
@@ -60,7 +63,7 @@ describe('effectiveWorkspacePathForSession', () => {
     const projectRoot = resolve('/tmp/project-workspace-test');
     const p = effectiveWorkspacePathForSession(
       minimalCfg,
-      'agent:main:webchat:default:direct:x',
+      "92a88e8a-bb9a-4473-84b7-73e9f649763e",
       { workingDirectoryOverride: override },
       { workspaceRoot: projectRoot },
     );

@@ -1,3 +1,5 @@
+import { applyPendingMigrations } from '../migrations/runner.js';
+import { ensureSchemaMetaTable, setSchemaVersion } from '../schema-version.js';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -121,13 +123,19 @@ describe('openXopcDatabase', () => {
     }
   });
 
-  it('creates a pre-cutover backup and migration report for schema 100', () => {
+  it('creates a verified backup and report before the UUID cutover', () => {
+    const old = new DatabaseSync(dbPath);
+    ensureSchemaMetaTable(old);
+    old.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
+    setSchemaVersion(old, 11);
+    applyPendingMigrations(old, { targetVersion: 177 });
+    old.close();
     openXopcDatabase({ path: dbPath });
     const files = readdirSync(stateDir);
-    const backup = files.find((name) => name.startsWith('xopc.db.pre-v100-') && name.endsWith('.bak'));
+    const backup = files.find((name) => name.startsWith('xopc.db.pre-v178-') && name.endsWith('.bak'));
     expect(backup).toBeTypeOf('string');
     const report = JSON.parse(readFileSync(join(stateDir, `${backup}.report.json`), 'utf8')) as Record<string, unknown>;
-    expect(report).toMatchObject({ fromVersion: 99, targetVersion: 100, status: 'succeeded' });
+    expect(report).toMatchObject({ fromVersion: 177, targetVersion: 178, status: 'succeeded' });
     if (process.platform !== 'win32') {
       expect(statSync(join(stateDir, backup!)).mode & 0o777).toBe(0o600);
     }

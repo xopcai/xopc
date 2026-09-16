@@ -4,7 +4,7 @@ import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 
 describe('workspace panel session scope', () => {
   beforeEach(() => {
-    useWorkspacePanelStore.setState({ open: false, sessionKeyOverride: null });
+    useWorkspacePanelStore.setState({ open: false, conversationIdOverride: null });
   });
 
   it('opens for the requested embedded chat session', () => {
@@ -12,7 +12,7 @@ describe('workspace panel session scope', () => {
 
     expect(useWorkspacePanelStore.getState()).toMatchObject({
       open: true,
-      sessionKeyOverride: 'agent:main:webchat:task-1',
+      conversationIdOverride: 'agent:main:webchat:task-1',
     });
   });
 
@@ -22,7 +22,7 @@ describe('workspace panel session scope', () => {
 
     expect(useWorkspacePanelStore.getState()).toMatchObject({
       open: false,
-      sessionKeyOverride: null,
+      conversationIdOverride: null,
     });
   });
 });

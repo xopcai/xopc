@@ -4,10 +4,10 @@ import { readUnmigratedGatewayCredential, removeUnmigratedGatewayCredential } fr
 export type GatewayState = {
   baseUrl: string;
   /** Public cache namespace; never an authentication credential. */
-  sessionKey: string | undefined;
+  conversationId: string | undefined;
   tokenDialogOpen: boolean;
   tokenExpired: boolean;
-  setBrowserSession: (sessionKey: string) => void;
+  setBrowserSession: (conversationId: string) => void;
   clearBrowserSession: () => void;
   openTokenDialog: () => void;
   closeTokenDialog: () => void;
@@ -15,20 +15,20 @@ export type GatewayState = {
 };
 export const useGatewayStore = create<GatewayState>((set) => ({
   baseUrl: typeof window !== 'undefined' ? window.location.origin : '',
-  sessionKey: undefined, tokenDialogOpen: false, tokenExpired: false,
-  setBrowserSession: (sessionKey) => {
+  conversationId: undefined, tokenDialogOpen: false, tokenExpired: false,
+  setBrowserSession: (conversationId) => {
     removeUnmigratedGatewayCredential();
-    set({ sessionKey, tokenDialogOpen: false, tokenExpired: false });
+    set({ conversationId, tokenDialogOpen: false, tokenExpired: false });
     window.dispatchEvent(new CustomEvent('gateway-authenticated'));
   },
   clearBrowserSession: () => {
     void fetch('/api/browser-session', { method: 'DELETE', credentials: 'same-origin', redirect: 'error', signal: AbortSignal.timeout(8_000) }).catch(() => {});
-    set({ sessionKey: undefined });
+    set({ conversationId: undefined });
   },
   openTokenDialog: () => set({ tokenDialogOpen: true }),
   closeTokenDialog: () => set({ tokenDialogOpen: false }),
   onUnauthorized: () => {
-    set({ sessionKey: undefined, tokenDialogOpen: false, tokenExpired: true });
+    set({ conversationId: undefined, tokenDialogOpen: false, tokenExpired: true });
     window.dispatchEvent(new CustomEvent('gateway-auth-expired'));
   },
 }));
@@ -41,8 +41,8 @@ export async function initGatewayFromWindow(): Promise<void> {
   try {
     const response = await fetch('/api/browser-session', { credentials: 'same-origin', redirect: 'error', signal: AbortSignal.timeout(8_000) });
     if (response.ok) {
-      const body = await response.json() as { sessionKey?: string };
-      if (body.sessionKey) { useGatewayStore.getState().setBrowserSession(body.sessionKey); return; }
+      const body = await response.json() as { conversationId?: string };
+      if (body.conversationId) { useGatewayStore.getState().setBrowserSession(body.conversationId); return; }
     }
     if (response.status !== 401) return;
     const getCredential = window.electronAPI?.gateway?.getCredential;
@@ -50,7 +50,7 @@ export async function initGatewayFromWindow(): Promise<void> {
     if (!credential) return;
     const exchanged = await establishBrowserSession(credential);
     if (!exchanged.ok) return;
-    const body = await exchanged.json() as { sessionKey?: string };
-    if (body.sessionKey) useGatewayStore.getState().setBrowserSession(body.sessionKey);
+    const body = await exchanged.json() as { conversationId?: string };
+    if (body.conversationId) useGatewayStore.getState().setBrowserSession(body.conversationId);
   } catch { /* Keep bootstrap retryable when the local Gateway is still starting. */ }
 }

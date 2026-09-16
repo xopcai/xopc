@@ -214,7 +214,7 @@ export class VoiceRealtimeRuntime {
       catch { throw new VoiceSessionCreationError('PROVIDER_UNAVAILABLE', 'Natural conversation is unavailable. Check its model, endpoint and credentials.', 503); }
     }
     if (omni && (!this.options.recordOmniTranscript || !this.options.getConversationContext)) throw new VoiceSessionCreationError('PROVIDER_UNAVAILABLE', 'Natural conversation storage is unavailable', 503);
-    const conversationSessionId = request.purpose === 'conversation' && request.sessionKey ? await this.options.getSessionIdentity?.(request.sessionKey) : undefined;
+    const conversationSessionId = request.purpose === 'conversation' && request.conversationId ? await this.options.getSessionIdentity?.(request.conversationId) : undefined;
     if (request.purpose === 'conversation' && !conversationSessionId) throw new VoiceSessionCreationError('SESSION_NOT_FOUND', 'Conversation session was not found', 404);
     const stt = omni ? undefined : resolveStreamingStt(config, request.language);
     if (!omni && !stt) {
@@ -234,13 +234,13 @@ export class VoiceRealtimeRuntime {
     }
     const tts = request.mode === 'assistant' ? resolveStreamingTts(config) : undefined;
     if (request.purpose === 'conversation') {
-      if (!request.sessionKey || !await this.options.sessionExists(request.sessionKey)) {
+      if (!request.conversationId || !await this.options.sessionExists(request.conversationId)) {
         throw new VoiceSessionCreationError('SESSION_NOT_FOUND', 'Conversation session was not found', 404);
       }
-      if (request.mode === 'natural' && this.options.sessionBusy(request.sessionKey)) {
+      if (request.mode === 'natural' && this.options.sessionBusy(request.conversationId)) {
         throw new VoiceSessionCreationError('SESSION_CONFLICT', 'Conversation session already has an active response', 409);
       }
-      if (this.conversationReservations.has(request.sessionKey)) {
+      if (this.conversationReservations.has(request.conversationId)) {
         throw new VoiceSessionCreationError('SESSION_CONFLICT', 'Conversation session already has a voice connection', 409);
       }
       if (!omni && !tts) {
@@ -294,8 +294,8 @@ export class VoiceRealtimeRuntime {
       expiresAt: now + TICKET_TTL_MS,
     };
     this.tickets.set(ticketKey(ticket), claim);
-    if (request.purpose === 'conversation' && request.sessionKey) {
-      this.conversationReservations.set(request.sessionKey, sessionId);
+    if (request.purpose === 'conversation' && request.conversationId) {
+      this.conversationReservations.set(request.conversationId, sessionId);
     }
     return {
       sessionId,
@@ -341,9 +341,9 @@ export class VoiceRealtimeRuntime {
     return true;
   }
 
-  hasConversation(sessionKey: string): boolean {
+  hasConversation(conversationId: string): boolean {
     this.pruneTickets(Date.now());
-    return this.conversationReservations.has(sessionKey);
+    return this.conversationReservations.has(conversationId);
   }
 
   async cancelSession(sessionId: string, ticket: string, principalId: string): Promise<boolean> {
@@ -377,9 +377,9 @@ export class VoiceRealtimeRuntime {
   }
 
   private releaseConversationReservation(claim: VoiceTicketClaim): void {
-    const sessionKey = claim.request.sessionKey;
-    if (sessionKey && this.conversationReservations.get(sessionKey) === claim.sessionId) {
-      this.conversationReservations.delete(sessionKey);
+    const conversationId = claim.request.conversationId;
+    if (conversationId && this.conversationReservations.get(conversationId) === claim.sessionId) {
+      this.conversationReservations.delete(conversationId);
     }
   }
 
@@ -506,9 +506,9 @@ export class VoiceRealtimeRuntime {
       try {
         if (consumed.omni) {
           unsubscribeSession = onUserContextChange((change) => {
-            if (change.kind === 'session-reset' && change.id === consumed.request.sessionKey) invalidateContext();
+            if (change.kind === 'session-reset' && change.id === consumed.request.conversationId) invalidateContext();
           });
-          context = await this.options.getConversationContext!(consumed.request.sessionKey!, consumed.conversationSessionId!);
+          context = await this.options.getConversationContext!(consumed.request.conversationId!, consumed.conversationSessionId!);
           if (closed) return;
           if (context.isCurrent && !context.isCurrent()) { invalidateContext(); return; }
           if (context.memory) {
@@ -534,7 +534,7 @@ export class VoiceRealtimeRuntime {
           callId: consumed.sessionId,
           route: consumed.omni, silenceDurationMs: consumed.silenceDurationMs,
           bargeIn: consumed.config.voice?.realtime?.bargeIn ?? true, send, sendAudio,
-          record: (entry) => this.options.recordOmniTranscript!(consumed.request.sessionKey!, consumed.sessionId, entry, consumed.conversationSessionId!),
+          record: (entry) => this.options.recordOmniTranscript!(consumed.request.conversationId!, consumed.sessionId, entry, consumed.conversationSessionId!),
           onClose: shutdown,
         }) : createAgentVoiceEngine({
           claim: consumed, runtime: this.options, signal: abortController.signal, send, sendAudio, onClose: shutdown,

@@ -23,9 +23,15 @@ vi.mock('../../../storage/sqlite/connection-wait-repository.js', () => ({
   getConnectionResumeInput: (...args: unknown[]) => mocks.connectionResume(...args),
 }));
 
+vi.mock('../../../storage/sqlite/session-repository.js', () => ({ getSessionMetadata: () => ({ agentId: 'main' }) }));
+vi.mock('../../../storage/sqlite/clarification-wait-repository.js', () => ({
+  isClarificationSuspended: () => false, getClarificationResumeInput: () => undefined,
+}));
+
 vi.mock('../../../utils/logger.js', () => ({
   createLogger: () => ({
     debug: mocks.debug,
+    info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
   }),
@@ -60,8 +66,8 @@ vi.mock('../session-runner.js', () => ({
 
 vi.mock('../transcript-runtime.js', () => ({
   createSqliteTranscriptRuntime: vi.fn().mockResolvedValue({
-    runtimeId: 'agent:main:test',
-    sessionId: 'session-1',
+    runtimeId: "259a62b5-df35-4b40-88ae-275ddf5f1ba0",
+    transcriptId: 'session-1',
     persistent: true,
     openSessionManager: vi.fn(),
     loadMessages: mocks.loadMessages,
@@ -135,7 +141,7 @@ describe('runXopcEmbeddedTurn image input', () => {
   it('resumes with hidden model context without appending a user prompt', async () => {
     mocks.connectionResume.mockReturnValue({ content: 'Resume the original Gmail request.' });
     const result = await runXopcEmbeddedTurn({
-      sessionKey: 'agent:main:test', runId: 'run-resume',
+      conversationId: "259a62b5-df35-4b40-88ae-275ddf5f1ba0", runId: 'run-resume',
       userMessage: { role: 'user', content: 'Resume the original Gmail request.', timestamp: 1 } as AgentMessage,
       model: { id: 'gpt-4o', provider: 'openai' } as any,
       modelRef: 'openai/gpt-4o', tools: [], systemPrompt: 'system',
@@ -156,7 +162,7 @@ describe('runXopcEmbeddedTurn image input', () => {
     } as AgentMessage;
 
     await runXopcEmbeddedTurn({
-      sessionKey: 'agent:main:test',
+      conversationId: "259a62b5-df35-4b40-88ae-275ddf5f1ba0",
       runId: 'run-1',
       userMessage,
       model: { id: 'gpt-4o', provider: 'openai' } as any,
@@ -183,7 +189,7 @@ describe('runXopcEmbeddedTurn image input', () => {
     };
 
     await runXopcEmbeddedTurn({
-      sessionKey: 'agent:main:test',
+      conversationId: "259a62b5-df35-4b40-88ae-275ddf5f1ba0",
       runId: 'run-policy',
       userMessage: { role: 'user', content: 'hello', timestamp: 1 } as AgentMessage,
       model: { id: 'gpt-4o', provider: 'openai' } as any,
@@ -218,7 +224,7 @@ describe('runXopcEmbeddedTurn image input', () => {
     });
 
     const result = await runXopcEmbeddedTurn({
-      sessionKey: 'agent:main:test',
+      conversationId: "259a62b5-df35-4b40-88ae-275ddf5f1ba0",
       runId: 'run-aborted',
       userMessage: { role: 'user', content: 'hello', timestamp: 1 } as AgentMessage,
       model: { id: 'gpt-4o', provider: 'openai' } as any,
@@ -240,7 +246,7 @@ describe('runXopcEmbeddedTurn image input', () => {
     });
 
     const result = await runXopcEmbeddedTurn({
-      sessionKey: 'agent:main:test',
+      conversationId: "259a62b5-df35-4b40-88ae-275ddf5f1ba0",
       runId: 'run-lease-aborted',
       userMessage: { role: 'user', content: 'hello', timestamp: 1 } as AgentMessage,
       model: { id: 'gpt-4o', provider: 'openai' } as any,
@@ -267,10 +273,10 @@ describe('runXopcEmbeddedTurn image input', () => {
     const compactedMessages: AgentMessage[] = [
       { role: 'user', content: 'Preserved pending request', timestamp: 1 },
     ];
-    mocks.loadMessages.mockResolvedValueOnce(compactedMessages);
+    mocks.loadMessages.mockResolvedValue(compactedMessages);
 
     const result = await runXopcEmbeddedTurn({
-      sessionKey: 'agent:main:test',
+      conversationId: "259a62b5-df35-4b40-88ae-275ddf5f1ba0",
       runId: 'run-overflow',
       userMessage: { role: 'user', content: 'hello', timestamp: 1 } as AgentMessage,
       model: { id: 'gpt-4o', provider: 'openai' } as any,
@@ -283,27 +289,62 @@ describe('runXopcEmbeddedTurn image input', () => {
     });
 
     expect(mocks.compact).toHaveBeenCalledWith(
-      [],
+      compactedMessages,
       { id: 'gpt-4o', provider: 'openai' },
       expect.any(String),
       true,
-      { signal: mocks.leaseController?.signal },
+      { signal: mocks.leaseController?.signal, fallbackModels: [] },
     );
     expect(mocks.compact).toHaveBeenCalledOnce();
-    expect(mocks.loadMessages).toHaveBeenCalledOnce();
+    expect(mocks.loadMessages).toHaveBeenCalledTimes(3);
     expect(mocks.session.agent.state.messages).toEqual(compactedMessages);
     expect(mocks.session.agent.continue).toHaveBeenCalledOnce();
     expect(mocks.waitForIdle).toHaveBeenCalledTimes(2);
     expect(result.ok).toBe(true);
   });
 
+  it('recovers a provider overflow with no normal range without resubmitting the prompt', async () => {
+    mocks.assistantError.mockReturnValueOnce('413 Request body is too large');
+    mocks.loadMessages.mockResolvedValue([{ role: 'user', content: 'Pending review', timestamp: 1 }]);
+    mocks.compact.mockResolvedValueOnce({ compacted: false });
+    const result = await runXopcEmbeddedTurn({
+      conversationId: '259a62b5-df35-4b40-88ae-275ddf5f1ba0', runId: 'run-full-recovery',
+      userMessage: { role: 'user', content: 'Pending review', timestamp: 1 },
+      model: { id: 'test', provider: 'test', contextWindow: 128_000 } as any,
+      modelRef: 'test/test', tools: [], systemPrompt: 'system',
+      workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000,
+    });
+    expect(result.ok).toBe(true);
+    expect(mocks.compact).toHaveBeenCalledTimes(2);
+    expect(mocks.compact.mock.calls[1]?.[4]).toMatchObject({ summarizeAll: true, preserveLastUser: true });
+    expect(mocks.prompt).toHaveBeenCalledOnce();
+    expect(mocks.session.agent.continue).toHaveBeenCalledOnce();
+  });
+
+  it('checks the actual model budget before calling the provider stream', async () => {
+    await runXopcEmbeddedTurn({
+      conversationId: "259a62b5-df35-4b40-88ae-275ddf5f1ba0", runId: 'run-budget',
+      userMessage: { role: 'user', content: 'hello', timestamp: 1 },
+      model: { id: 'test', provider: 'test', contextWindow: 128_000 } as any,
+      modelRef: 'test/test', tools: [], systemPrompt: 'system',
+      workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000,
+    });
+    mocks.baseStreamFn.mockClear();
+    expect(() => mocks.session.agent.streamFunction(
+      { id: 'smaller-fallback', provider: 'test', contextWindow: 8_000 },
+      { systemPrompt: 'system', messages: [{ role: 'user', content: 'x'.repeat(100_000) }], tools: [] },
+      {},
+    )).toThrow('Context budget exceeded before provider request');
+    expect(mocks.baseStreamFn).not.toHaveBeenCalled();
+  });
+
   it('marks run ownership conflicts as non-retryable harness failures', async () => {
     mocks.acquireRunLease.mockImplementationOnce(() => {
-      throw new EmbeddedRunConflictError('agent:main:test', 'run-active');
+      throw new EmbeddedRunConflictError("259a62b5-df35-4b40-88ae-275ddf5f1ba0", 'run-active');
     });
 
     const result = await runXopcEmbeddedTurn({
-      sessionKey: 'agent:main:test',
+      conversationId: "259a62b5-df35-4b40-88ae-275ddf5f1ba0",
       runId: 'run-conflict',
       userMessage: { role: 'user', content: 'hello', timestamp: 1 } as AgentMessage,
       model: { id: 'gpt-4o', provider: 'openai' } as any,
@@ -318,7 +359,7 @@ describe('runXopcEmbeddedTurn image input', () => {
     expect(result).toEqual({
       ok: false,
       retryable: false,
-      errorMessage: "Session 'agent:main:test' already has active embedded run 'run-active'",
+      errorMessage: expect.stringContaining("already has active embedded run 'run-active'"),
     });
   });
 
@@ -330,7 +371,7 @@ describe('runXopcEmbeddedTurn image input', () => {
     } as AgentMessage;
 
     await runXopcEmbeddedTurn({
-      sessionKey: 'agent:main:test',
+      conversationId: "259a62b5-df35-4b40-88ae-275ddf5f1ba0",
       runId: 'run-2',
       userMessage,
       model: { id: 'gpt-4o', provider: 'openai' } as any,
@@ -350,7 +391,7 @@ describe('runXopcEmbeddedTurn image input', () => {
 
   it('logs the complete effective context only when payload logging is enabled', async () => {
     await runXopcEmbeddedTurn({
-      sessionKey: 'agent:main:test',
+      conversationId: "259a62b5-df35-4b40-88ae-275ddf5f1ba0",
       runId: 'run-3',
       userMessage: { role: 'user', content: 'hello', timestamp: 1 } as AgentMessage,
       model: { id: 'gpt-4o', provider: 'openai' } as any,
@@ -398,7 +439,7 @@ describe('runXopcEmbeddedTurn image input', () => {
       expect(mocks.session.agent.shouldStopAfterTurn({})).toBe(true);
     });
     const result = await runXopcEmbeddedTurn({
-      sessionKey: 'agent:main:test', runId: 'connection-run',
+      conversationId: "259a62b5-df35-4b40-88ae-275ddf5f1ba0", runId: 'connection-run',
       userMessage: { role: 'user', content: 'Summarize Gmail', timestamp: 1 } as AgentMessage,
       model: { id: 'gpt-4o', provider: 'openai' } as any, modelRef: 'openai/gpt-4o', tools: [], systemPrompt: 'system',
       workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000,

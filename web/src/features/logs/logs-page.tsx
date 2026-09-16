@@ -51,7 +51,7 @@ export function LogsPage() {
     levelSegment,
     handleLevelSegment,
     filterByRequestId,
-    filterBySessionId,
+    filterByTranscriptId,
     filterByErrorSummary,
     openChatForSession,
     errorSummary,
@@ -140,7 +140,7 @@ export function LogsPage() {
         onCopiedMessage={() => setCopiedDetail('message')}
         onCopiedJson={() => setCopiedDetail('json')}
         onFilterByRequestId={filterByRequestId}
-        onFilterBySessionId={filterBySessionId}
+        onFilterByTranscriptId={filterByTranscriptId}
         onOpenChat={openChatForSession}
       />
 

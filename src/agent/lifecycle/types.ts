@@ -12,7 +12,7 @@ export type LifecycleEventType =
 
 export interface LifecycleEventData<T = unknown> {
   type: LifecycleEventType;
-  sessionKey: string;
+  conversationId: string;
   payload: T;
   timestamp: number;
 }

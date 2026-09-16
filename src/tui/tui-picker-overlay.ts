@@ -28,7 +28,7 @@ import {
   normalizeThinkLevel,
   type ThinkLevel,
 } from '../agent/transcript/thinking-types.js';
-import { parseAgentSessionKey } from '../routing/agent-session-key.js';
+import { randomUUID } from 'node:crypto';
 import {
   getProjectTrustOptions,
   hasTrustRequiringProjectResources,
@@ -131,7 +131,7 @@ export async function openTimelineOverlay(
   svc: PickerServices,
   initialQuery?: string,
 ): Promise<void> {
-  const items = await svc.client.loadTimeline(svc.state.currentSessionKey);
+  const items = await svc.client.loadTimeline(svc.state.currentConversationId);
   const turns = buildTuiTimelineTurns(items);
   if (turns.length === 0) {
     svc.chatLog.addSystem('No timeline turns found.');
@@ -176,10 +176,10 @@ export async function openTimelineOverlay(
   svc.tui.requestRender();
 }
 
-function resumeSession(svc: PickerServices, sessionKey: string): void {
-  svc.setSessionKey(sessionKey);
+function resumeSession(svc: PickerServices, conversationId: string): void {
+  svc.setConversationId(conversationId);
   svc.clearChatForSessionSwitch();
-  svc.chatLog.addSystem(`Session: ${sessionKey}`);
+  svc.chatLog.addSystem(`Session: ${conversationId}`);
   void svc
     .refreshSessionInfo()
     .then(() => svc.loadSessionHistory())
@@ -191,22 +191,12 @@ function resumeSession(svc: PickerServices, sessionKey: string): void {
 }
 
 function sessionTreeGroup(session: TuiSessionItem): { agentId: string; root: string; leaf: string } {
-  const raw = session.key.trim();
-  const parts = raw.split(':').filter(Boolean);
-  if (parts.length >= 3 && parts[0] === 'agent') {
-    const rest = parts.slice(2);
-    return {
-      agentId: parts[1] ?? 'main',
-      root: rest[0] ?? raw,
-      leaf: rest.length > 1 ? rest.slice(1).join(':') : rest.join(':') || raw,
-    };
-  }
-  return { agentId: 'legacy', root: raw || 'session', leaf: raw || 'session' };
+  return { agentId: session.agentId ?? 'unknown', root: session.sourceChannel ?? 'chat', leaf: session.displayName ?? session.key };
 }
 
 export function sessionTreeSelectItems(
   sessions: TuiSessionItem[],
-  currentSessionKey?: string,
+  currentConversationId?: string,
 ): SelectItem[] {
   const byKey = new Map(sessions.map((session) => [session.key, session]));
   return [...sessions]
@@ -219,10 +209,10 @@ export function sessionTreeSelectItems(
     })
     .map((session) => {
       const group = sessionTreeGroup(session);
-      const current = session.key === currentSessionKey ? '* ' : '  ';
+      const current = session.key === currentConversationId ? '* ' : '  ';
       const label = session.displayName?.trim() || group.leaf;
-      const parent = session.forkedFromSessionKey
-        ? (byKey.get(session.forkedFromSessionKey)?.displayName?.trim() ?? session.forkedFromSessionKey)
+      const parent = session.forkedFromConversationId
+        ? (byKey.get(session.forkedFromConversationId)?.displayName?.trim() ?? session.forkedFromConversationId)
         : null;
       const description = [
         `${group.agentId}/${group.root}`,
@@ -245,8 +235,8 @@ export function sessionTreeSelectItems(
 
 
 export async function openAgentPickerOverlay(svc: PickerServices): Promise<void> {
-  const parsed = parseAgentSessionKey(svc.state.currentSessionKey);
-  if (!parsed) {
+  const parsed = svc.state.sessionInfo;
+  if (!parsed.agentId) {
     svc.chatLog.addSystem('Cannot switch agent: current session is not an agent session.');
     svc.tui.requestRender();
     return;
@@ -281,10 +271,10 @@ export async function openAgentPickerOverlay(svc: PickerServices): Promise<void>
       svc.tui.requestRender();
       return;
     }
-    const targetSessionKey = `agent:${targetAgentId}:${parsed.rest}`;
-    void Promise.resolve(svc.switchAgentSession?.(targetSessionKey, targetAgentId))
+    const targetConversationId = randomUUID();
+    void Promise.resolve(svc.switchAgentSession?.(targetConversationId, targetAgentId))
       .then(() => {
-        svc.chatLog.addSystem(`Switched to agent: ${targetAgentId}\nSession: ${targetSessionKey}`);
+        svc.chatLog.addSystem(`Switched to agent: ${targetAgentId}\nSession: ${targetConversationId}`);
       })
       .catch((err: unknown) => {
         const errorMessage = err instanceof Error ? err.message : String(err);
@@ -461,7 +451,7 @@ export async function openReviewLauncherOverlay(svc: PickerServices): Promise<vo
   }
   let context: ReviewContext;
   try {
-    context = await svc.client.getReviewContext(svc.state.currentSessionKey);
+    context = await svc.client.getReviewContext(svc.state.currentConversationId);
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     svc.chatLog.addSystem(`Review picker failed: ${errorMessage}`);
@@ -493,21 +483,21 @@ export async function openSessionPickerOverlay(
   const selector = new SessionSelector(
     sessions,
     {
-      onResume: (sessionKey) => {
+      onResume: (conversationId) => {
         svc.closeOverlay();
         svc.tui.setFocus(svc.editor);
-        resumeSession(svc, sessionKey);
+        resumeSession(svc, conversationId);
         options.onResume?.();
       },
-      onRename: async (sessionKey, name) => {
-        const result = await svc.client.renameSession(sessionKey, name);
+      onRename: async (conversationId, name) => {
+        const result = await svc.client.renameSession(conversationId, name);
         return result.ok ? { ok: true } : { ok: false, error: 'Rename failed' };
       },
-      onDelete: async (sessionKey) => {
-        if (sessionKey === svc.state.currentSessionKey) {
+      onDelete: async (conversationId) => {
+        if (conversationId === svc.state.currentConversationId) {
           return { ok: false, error: 'Switch away before deleting the active session' };
         }
-        const result = await svc.client.deleteSession(sessionKey);
+        const result = await svc.client.deleteSession(conversationId);
         return result.ok ? { ok: true } : { ok: false, error: 'Delete failed' };
       },
       onCancel: () => {
@@ -519,8 +509,8 @@ export async function openSessionPickerOverlay(
       requestRender: () => svc.tui.requestRender(),
     },
     svc.keybindings,
-    sessions.find((s) => s.key === svc.state.currentSessionKey)?.cwd ?? process.cwd(),
-    svc.state.currentSessionKey,
+    sessions.find((s) => s.key === svc.state.currentConversationId)?.cwd ?? process.cwd(),
+    svc.state.currentConversationId,
   );
 
   svc.openOverlay(selector);
@@ -537,7 +527,7 @@ export async function openSessionTreeOverlay(svc: PickerServices): Promise<void>
     return;
   }
 
-  const items = sessionTreeSelectItems(sessions, svc.state.currentSessionKey);
+  const items = sessionTreeSelectItems(sessions, svc.state.currentConversationId);
   const list = new SearchableSelectList(items, Math.min(14, items.length), searchableSelectListTheme);
   list.onSelect = (item) => {
     svc.closeOverlay();
@@ -557,7 +547,7 @@ export async function openSessionTreeOverlay(svc: PickerServices): Promise<void>
 
 /** Searchable current-transcript tree overlay. */
 export async function openTranscriptTreeOverlay(svc: PickerServices): Promise<void> {
-  const entries = await svc.client.loadTranscriptTree(svc.state.currentSessionKey);
+  const entries = await svc.client.loadTranscriptTree(svc.state.currentConversationId);
   const filterMode = svc.getTuiSettings().treeFilterMode;
   const visibleEntries = filterTuiTranscriptTreeEntries(entries, filterMode);
   if (visibleEntries.length === 0) {
@@ -576,16 +566,16 @@ export async function openTranscriptTreeOverlay(svc: PickerServices): Promise<vo
       svc.tui.requestRender();
       return;
     }
-    const targetKey = defaultTranscriptForkKey(svc.state.currentSessionKey, entry.id);
-    const sourceSessionKey = svc.state.currentSessionKey;
+    const targetKey = defaultTranscriptForkKey(svc.state.currentConversationId, entry.id);
+    const sourceConversationId = svc.state.currentConversationId;
     svc.chatLog.addSystem(theme.dim(`Forking transcript at ${entry.id}...`));
     void svc.client
-      .forkSessionAt(sourceSessionKey, targetKey, entry.id)
+      .forkSessionAt(sourceConversationId, targetKey, entry.id)
       .then((result) => {
-        resumeSession(svc, result.sessionKey);
+        resumeSession(svc, result.conversationId);
         svc.chatLog.addBranchSummary({
-          sourceSessionKey,
-          targetSessionKey: result.sessionKey,
+          sourceConversationId,
+          targetConversationId: result.conversationId,
           rowCount: result.rowCount,
           entryId: entry.id,
         });
@@ -608,7 +598,7 @@ export async function openTranscriptTreeOverlay(svc: PickerServices): Promise<vo
   };
   list.onLabelSubmit = (entry, label) => {
     void svc.client
-      .setTranscriptLabel(svc.state.currentSessionKey, entry.id, label)
+      .setTranscriptLabel(svc.state.currentConversationId, entry.id, label)
       .then(() => {
         list.updateEntryLabel(entry.id, label);
         svc.chatLog.addSystem(
@@ -630,7 +620,7 @@ export async function openTranscriptTreeOverlay(svc: PickerServices): Promise<vo
 
 /** Pi-style `/fork` overlay: select a previous user message and branch there. */
 export async function openUserMessageForkOverlay(svc: PickerServices): Promise<void> {
-  const entries = await svc.client.loadTranscriptTree(svc.state.currentSessionKey);
+  const entries = await svc.client.loadTranscriptTree(svc.state.currentConversationId);
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
   const items = userMessageForkSelectItems(entries);
   if (items.length === 0) {
@@ -647,19 +637,19 @@ export async function openUserMessageForkOverlay(svc: PickerServices): Promise<v
     svc.closeOverlay();
     svc.tui.setFocus(svc.editor);
     const entry = byId.get(item.value);
-    const targetKey = defaultTranscriptForkKey(svc.state.currentSessionKey, item.value);
-    const sourceSessionKey = svc.state.currentSessionKey;
+    const targetKey = defaultTranscriptForkKey(svc.state.currentConversationId, item.value);
+    const sourceConversationId = svc.state.currentConversationId;
     svc.chatLog.addSystem(theme.dim(`Forking from ${item.value}...`));
     void svc.client
-      .forkSessionAt(sourceSessionKey, targetKey, item.value)
+      .forkSessionAt(sourceConversationId, targetKey, item.value)
       .then((result) => {
-        resumeSession(svc, result.sessionKey);
+        resumeSession(svc, result.conversationId);
         if (entry?.contentText) {
           svc.setEditorText(entry.contentText);
         }
         svc.chatLog.addBranchSummary({
-          sourceSessionKey,
-          targetSessionKey: result.sessionKey,
+          sourceConversationId,
+          targetConversationId: result.conversationId,
           rowCount: result.rowCount,
           entryId: item.value,
           restoredText: entry?.contentText,

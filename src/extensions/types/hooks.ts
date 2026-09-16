@@ -129,7 +129,7 @@ export interface HookOptions {
 export interface HookAgentContext {
   timestamp?: Date;
   extensionId?: string;
-  sessionKey?: string;
+  conversationId?: string;
   agentId?: string;
   isMcpTool?: boolean;
   mcpServerId?: string;
@@ -196,7 +196,7 @@ export interface HookInboundClaimResult {
 
 // Before Reset Hook Types
 export interface HookBeforeResetEvent {
-  sessionKey: string;
+  conversationId: string;
   reason?: 'user_request' | 'timeout' | 'error' | 'manual';
 }
 
@@ -223,7 +223,7 @@ export interface HookTurnStartEvent {
   turnId: string;
   prompt?: string;
   agentId?: string;
-  sessionKey?: string;
+  conversationId?: string;
 }
 
 export interface HookTurnEndEvent {
@@ -260,7 +260,7 @@ export interface HookToolExecutionEndEvent {
 // ============================================================================
 
 export interface HookSubagentSpawningEvent {
-  childSessionKey: string;
+  childConversationId: string;
   requester?: {
     channel?: string;
     accountId?: string;
@@ -278,8 +278,8 @@ export type HookSubagentSpawningResult =
   | void;
 
 export interface HookSubagentDeliveryTargetEvent {
-  childSessionKey: string;
-  requesterSessionKey?: string;
+  childConversationId: string;
+  requesterConversationId?: string;
   requesterOrigin?: {
     channel?: string;
     accountId?: string;
@@ -301,7 +301,7 @@ export type HookSubagentDeliveryTargetResult =
   | void;
 
 export interface HookSubagentEndedEvent {
-  targetSessionKey: string;
+  targetConversationId: string;
   accountId?: string;
 }
 
@@ -485,7 +485,7 @@ export type HookHandlerMap = {
 export interface HookContext {
   timestamp?: Date;
   extensionId?: string;
-  sessionKey?: string;
+  conversationId?: string;
   agentId?: string;
   isMcpTool?: boolean;
   mcpServerId?: string;
@@ -508,9 +508,9 @@ export interface AgentEndContext extends HookContext {
   durationMs?: number;
 }
 
-/** Payload for {@link ExtensionHookEvent} `webchat_turn_complete` (also passed as `event` fields + ctx.sessionKey). */
+/** Payload for {@link ExtensionHookEvent} `webchat_turn_complete` (also passed as `event` fields + ctx.conversationId). */
 export interface WebchatTurnCompleteEvent extends HookContext {
-  sessionKey: string;
+  conversationId: string;
   /** Channel id (e.g. `telegram:default`, `webchat`) when the turn is not webchat-only. */
   channel?: string;
   chatId?: string;
@@ -611,7 +611,7 @@ export interface GatewayStopContext extends HookContext {
 export interface ContextEvent {
   messages: Array<{ role: string; content: string }>;
   agentId?: string;
-  sessionKey?: string;
+  conversationId?: string;
 }
 
 export interface ContextResult {
@@ -637,7 +637,7 @@ export interface TurnEvent {
   turnId: string;
   prompt?: string;
   agentId?: string;
-  sessionKey?: string;
+  conversationId?: string;
 }
 
 export interface TurnResult {

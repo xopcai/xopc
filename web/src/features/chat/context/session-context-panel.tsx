@@ -15,7 +15,7 @@ import { sessionContextCopy } from './session-context-copy';
 import { useSessionContext } from './use-session-context';
 
 export interface SessionContextPanelProps {
-  sessionKey: string | null;
+  conversationId: string | null;
   draftRefs?: ComposerContextRef[];
   project?: { id: string; name: string; workspaceRoot?: string } | null;
   agentId?: string;
@@ -30,15 +30,15 @@ const rowClass = 'flex min-w-0 items-center gap-3 rounded-lg px-2 py-2.5 text-sm
 const actionClass = 'rounded-lg p-2 text-xs text-fg-muted transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
 /** Mounted with the session key by the header, so another session never inherits an open panel. */
-export function SessionContextPanel({ sessionKey, draftRefs = [], project, ...props }: SessionContextPanelProps) {
+export function SessionContextPanel({ conversationId, draftRefs = [], project, ...props }: SessionContextPanelProps) {
   const [open, setOpen] = useState(false);
   const language = useLocaleStore((state) => state.language);
   const copy = sessionContextCopy(language);
   const location = useLocation();
   const returnTo = `${location.pathname}${location.search}`;
-  const { data: cachedData, error, isLoading, isValidating, mutate } = useSessionContext(sessionKey, open);
+  const { data: cachedData, error, isLoading, isValidating, mutate } = useSessionContext(conversationId, open);
   const data = error ? undefined : cachedData;
-  const currentProject = data?.work.project ?? (!sessionKey && project ? { id: project.id, title: project.name } : undefined);
+  const currentProject = data?.work.project ?? (!conversationId && project ? { id: project.id, title: project.name } : undefined);
   const task = data?.work.task;
   const sources = mergeContextSources(data?.sources ?? [], draftRefs);
   const environment = data?.environment;
@@ -66,7 +66,7 @@ export function SessionContextPanel({ sessionKey, draftRefs = [], project, ...pr
                 <section>
                   <div className="mb-1 flex items-center justify-between px-2">
                     <h3 className="text-sm text-fg-subtle">{copy.environment}</h3>
-                    {sessionKey ? <button type="button" className={actionClass} aria-label={copy.refresh} disabled={isValidating} onClick={() => void mutate()}>
+                    {conversationId ? <button type="button" className={actionClass} aria-label={copy.refresh} disabled={isValidating} onClick={() => void mutate()}>
                       <RefreshCw className={`size-3.5 ${isValidating ? 'animate-spin motion-reduce:animate-none' : ''}`} aria-hidden />
                     </button> : null}
                   </div>
@@ -83,8 +83,8 @@ export function SessionContextPanel({ sessionKey, draftRefs = [], project, ...pr
                       <GitBranch className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
                       <span className="break-all">{environment.branch || (environment.detached ? copy.detached : '')} {environment.headSha?.slice(0, 8)}</span>
                     </div> : null}
-                  </> : <p className="px-2 py-2 text-xs text-fg-muted">{sessionKey ? copy.unavailable : copy.emptyEnvironment}</p>}
-                  {sessionKey && currentProject && project?.workspaceRoot && !error ? <Link
+                  </> : <p className="px-2 py-2 text-xs text-fg-muted">{conversationId ? copy.unavailable : copy.emptyEnvironment}</p>}
+                  {conversationId && currentProject && project?.workspaceRoot && !error ? <Link
                     className={rowClass} to={newChatHrefForProject(currentProject.id)} state={{ forceNewChat: true, agentId: props.agentId, temporary: props.temporary }} onClick={close}
                   >{language === 'zh' ? '在另一环境新建会话' : 'New session in another environment'}</Link> : null}
                 </section>

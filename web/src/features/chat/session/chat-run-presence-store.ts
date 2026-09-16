@@ -11,21 +11,21 @@ export type ChatRunPresence = {
 
 type ChatRunPresenceState = {
   runs: Record<string, ChatRunPresence>;
-  markRunning: (sessionKey: string) => void;
-  markCompleted: (sessionKey: string, unread: boolean) => void;
-  markFailed: (sessionKey: string, unread: boolean) => void;
-  markViewed: (sessionKey: string) => void;
-  clear: (sessionKey: string) => void;
+  markRunning: (conversationId: string) => void;
+  markCompleted: (conversationId: string, unread: boolean) => void;
+  markFailed: (conversationId: string, unread: boolean) => void;
+  markViewed: (conversationId: string) => void;
+  clear: (conversationId: string) => void;
 };
 
-function normalizedSessionKey(sessionKey: string): string {
-  return sessionKey.trim();
+function normalizedConversationId(conversationId: string): string {
+  return conversationId.trim();
 }
 
 export const useChatRunPresenceStore = create<ChatRunPresenceState>((set) => ({
   runs: {},
-  markRunning: (sessionKey) => {
-    const key = normalizedSessionKey(sessionKey);
+  markRunning: (conversationId) => {
+    const key = normalizedConversationId(conversationId);
     if (!key) return;
     const now = Date.now();
     set((state) => {
@@ -43,8 +43,8 @@ export const useChatRunPresenceStore = create<ChatRunPresenceState>((set) => ({
       };
     });
   },
-  markCompleted: (sessionKey, unread) => {
-    const key = normalizedSessionKey(sessionKey);
+  markCompleted: (conversationId, unread) => {
+    const key = normalizedConversationId(conversationId);
     if (!key) return;
     const now = Date.now();
     set((state) => {
@@ -62,8 +62,8 @@ export const useChatRunPresenceStore = create<ChatRunPresenceState>((set) => ({
       };
     });
   },
-  markFailed: (sessionKey, unread) => {
-    const key = normalizedSessionKey(sessionKey);
+  markFailed: (conversationId, unread) => {
+    const key = normalizedConversationId(conversationId);
     if (!key) return;
     const now = Date.now();
     set((state) => {
@@ -81,8 +81,8 @@ export const useChatRunPresenceStore = create<ChatRunPresenceState>((set) => ({
       };
     });
   },
-  markViewed: (sessionKey) => {
-    const key = normalizedSessionKey(sessionKey);
+  markViewed: (conversationId) => {
+    const key = normalizedConversationId(conversationId);
     if (!key) return;
     set((state) => {
       const current = state.runs[key];
@@ -95,8 +95,8 @@ export const useChatRunPresenceStore = create<ChatRunPresenceState>((set) => ({
       };
     });
   },
-  clear: (sessionKey) => {
-    const key = normalizedSessionKey(sessionKey);
+  clear: (conversationId) => {
+    const key = normalizedConversationId(conversationId);
     if (!key) return;
     set((state) => {
       if (!(key in state.runs)) return state;
@@ -106,24 +106,24 @@ export const useChatRunPresenceStore = create<ChatRunPresenceState>((set) => ({
   },
 }));
 
-export function markChatRunRunning(sessionKey: string): void {
-  useChatRunPresenceStore.getState().markRunning(sessionKey);
+export function markChatRunRunning(conversationId: string): void {
+  useChatRunPresenceStore.getState().markRunning(conversationId);
 }
 
-export function markChatRunCompleted(sessionKey: string, unread: boolean): void {
-  useChatRunPresenceStore.getState().markCompleted(sessionKey, unread);
+export function markChatRunCompleted(conversationId: string, unread: boolean): void {
+  useChatRunPresenceStore.getState().markCompleted(conversationId, unread);
 }
 
-export function markChatRunFailed(sessionKey: string, unread: boolean): void {
-  useChatRunPresenceStore.getState().markFailed(sessionKey, unread);
+export function markChatRunFailed(conversationId: string, unread: boolean): void {
+  useChatRunPresenceStore.getState().markFailed(conversationId, unread);
 }
 
-export function clearChatRunPresence(sessionKey: string): void {
-  useChatRunPresenceStore.getState().clear(sessionKey);
+export function clearChatRunPresence(conversationId: string): void {
+  useChatRunPresenceStore.getState().clear(conversationId);
 }
 
-export function markChatRunWaiting(sessionKey: string): void {
+export function markChatRunWaiting(conversationId: string): void {
   useChatRunPresenceStore.setState(state => ({ runs: { ...state.runs,
-    [sessionKey]: { status: 'waiting', startedAt: state.runs[sessionKey]?.startedAt ?? Date.now(), updatedAt: Date.now(), unread: false },
+    [conversationId]: { status: 'waiting', startedAt: state.runs[conversationId]?.startedAt ?? Date.now(), updatedAt: Date.now(), unread: false },
   } }));
 }

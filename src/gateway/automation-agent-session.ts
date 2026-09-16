@@ -7,7 +7,7 @@ export async function prepareAutomationAgentSession(
   projects: ProjectService,
   input: PrepareAutomationAgentSessionInput,
 ): Promise<void> {
-  await store.resolveTranscriptPath(input.sessionKey, {
+  await store.resolveTranscriptPath(input.conversationId, {
     metadata: {
       // Only seed new sessions; the first persisted user message makes them visible.
       hiddenFromSessionList: true,
@@ -27,8 +27,8 @@ export async function prepareAutomationAgentSession(
     },
   });
 
-  const current = await store.getMetadata(input.sessionKey);
-  await store.updateMetadata(input.sessionKey, {
+  const current = await store.getMetadata(input.conversationId);
+  await store.updateMetadata(input.conversationId, {
     sourceChannel: 'automation',
     sourceChatId: `default:dm:${input.peerId}`,
     sessionType: 'chat',
@@ -49,8 +49,8 @@ export async function prepareAutomationAgentSession(
   });
 
   if (input.projectId) {
-    projects.attachSession(input.sessionKey, input.projectId);
+    projects.attachSession(input.conversationId, input.projectId);
   } else if (current?.projectId) {
-    projects.detachSession(input.sessionKey);
+    projects.detachSession(input.conversationId);
   }
 }

@@ -56,7 +56,7 @@ describe('media routes', () => {
 
   it('returns full media with byte range metadata', async () => {
     const response = await createApp().request(
-      '/api/media/read?uri=media%3A%2F%2Ftts%2Freply.mp3&sessionKey=chat-1',
+      '/api/media/read?uri=media%3A%2F%2Ftts%2Freply.mp3&conversationId=chat-1',
     );
 
     expect(response.status).toBe(200);
@@ -76,7 +76,7 @@ describe('media routes', () => {
     ['bytes=8-20', 'bytes 8-9/10', '89'],
   ])('serves a valid %s request with 206', async (range, contentRange, body) => {
     const response = await createApp().request(
-      '/api/media/read?uri=media%3A%2F%2Ftts%2Freply.mp3&sessionKey=chat-1',
+      '/api/media/read?uri=media%3A%2F%2Ftts%2Freply.mp3&conversationId=chat-1',
       { headers: { Range: range } },
     );
 
@@ -91,7 +91,7 @@ describe('media routes', () => {
     'rejects an invalid %s request with 416',
     async (range) => {
       const response = await createApp().request(
-        '/api/media/read?uri=media%3A%2F%2Ftts%2Freply.mp3&sessionKey=chat-1',
+        '/api/media/read?uri=media%3A%2F%2Ftts%2Freply.mp3&conversationId=chat-1',
         { headers: { Range: range } },
       );
 

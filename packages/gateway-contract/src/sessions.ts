@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { transcriptIdSchema } from './conversation-identity.js';
 import type { SessionDiscoveryQuery } from './session-identity.js';
 
 export type SessionStatus = 'active' | 'idle' | 'archived' | 'pinned';
@@ -13,7 +14,7 @@ export interface SessionContextSource {
 }
 
 export interface SessionContextSummary {
-  sessionKey: string;
+  conversationId: string;
   observedAt: string;
   work: {
     project?: { id: string; title: string };
@@ -43,8 +44,9 @@ export interface SessionRoutingMeta {
 }
 
 export interface SessionListItem {
+  agentId?: string;
   key: string;
-  sessionId?: string;
+  transcriptId?: string;
   name?: string;
   title?: string;
   displayName?: string;
@@ -56,6 +58,7 @@ export interface SessionListItem {
 }
 
 export interface SessionMetadata {
+  agentId: string;
   key: string;
   name?: string;
   status: SessionStatus;
@@ -74,8 +77,8 @@ export interface SessionMetadata {
   };
   sessionType?: string;
   customData?: Record<string, unknown>;
-  parentSessionKey?: string;
-  sessionId?: string;
+  parentConversationId?: string;
+  transcriptId?: string;
   sessionStartedAt?: string;
   lastInteractionAt?: string;
 }
@@ -108,7 +111,7 @@ export interface SessionListQuery extends SessionDiscoveryQuery {
   unassigned?: boolean;
   updatedAfter?: number;
   includePinned?: boolean;
-  includeSessionKey?: string;
+  includeConversationId?: string;
   sessionTypes?: string[];
   sortBy?: string;
   sortOrder?: 'asc' | 'desc' | string;
@@ -150,7 +153,7 @@ export interface SessionResponse {
 export interface SessionCreateResponse {
   session: {
     key: string;
-    sessionId?: string;
+    transcriptId?: string;
     projectId?: string;
     routing?: SessionRoutingMeta;
   };
@@ -183,7 +186,7 @@ export interface SessionForkAtTurnRequest {
 
 export interface SessionForkAtTurnResponse {
   ok: true;
-  sessionKey: string;
+  conversationId: string;
   rowCount: number;
   lastTurnId: string;
   session: SessionDetail;
@@ -214,16 +217,16 @@ export interface SessionRenameResponse extends SessionActionResponse {
 
 export interface SessionResetResponse extends SessionActionResponse {
   reset?: boolean;
-  sessionId?: string;
-  previousSessionId?: string;
+  transcriptId?: string;
+  previousTranscriptId?: string;
   session?: unknown;
 }
 
 export interface SessionResolveResponse {
   ok: boolean;
   payload?: {
-    sessionKey: string;
-    sessionId: string;
+    conversationId: string;
+    transcriptId: string;
     session: unknown;
   };
   error?: string;
@@ -245,7 +248,7 @@ export interface SidebarChatListResponse<TProject = unknown> {
 export interface SessionMessagePage {
   session: {
     key: string;
-    sessionId?: string;
+    transcriptId?: string;
     messages: SessionMessage[];
     name?: string;
     status?: SessionStatus;
@@ -289,8 +292,9 @@ export const sessionRoutingMetaSchema = z
 
 export const sessionListItemSchema = z
   .object({
+    agentId: z.string().optional(),
     key: z.string(),
-    sessionId: z.string().optional(),
+    transcriptId: transcriptIdSchema.optional(),
     name: z.string().optional(),
     title: z.string().optional(),
     displayName: z.string().optional(),
@@ -334,7 +338,7 @@ export const sessionMessagePageSchema = z
     session: z
       .object({
         key: z.string(),
-        sessionId: z.string().optional(),
+        transcriptId: transcriptIdSchema.optional(),
         messages: z.array(sessionMessageSchema),
         name: z.string().optional(),
         status: sessionStatusSchema.optional(),
@@ -363,7 +367,7 @@ export const sessionCreateResponseSchema = z
     session: z
       .object({
         key: z.string(),
-        sessionId: z.string().optional(),
+        transcriptId: transcriptIdSchema.optional(),
         projectId: z.string().optional(),
         routing: sessionRoutingMetaSchema.optional(),
       })
@@ -374,7 +378,7 @@ export const sessionCreateResponseSchema = z
 export const sessionForkAtTurnResponseSchema = z
   .object({
     ok: z.literal(true),
-    sessionKey: z.string().min(1),
+    conversationId: z.uuid(),
     rowCount: z.number().int().nonnegative(),
     lastTurnId: z.string().min(1),
     session: sessionDetailSchema,
@@ -407,8 +411,8 @@ export const sessionRenameResponseSchema = sessionActionResponseSchema.extend({
 
 export const sessionResetResponseSchema = sessionActionResponseSchema.extend({
   reset: z.boolean().optional(),
-  sessionId: z.string().optional(),
-  previousSessionId: z.string().optional(),
+  transcriptId: transcriptIdSchema.optional(),
+  previousTranscriptId: z.string().optional(),
   session: z.unknown().optional(),
 });
 
@@ -431,8 +435,8 @@ export const sessionResolveResponseSchema = z
     ok: z.boolean(),
     payload: z
       .object({
-        sessionKey: z.string(),
-        sessionId: z.string(),
+        conversationId: z.uuid(),
+        transcriptId: transcriptIdSchema,
         session: z.unknown(),
       })
       .passthrough()
@@ -525,7 +529,7 @@ export function normalizeSessionActiveRunResponse(raw: unknown): SessionActiveRu
   return { active: true, runId };
 }
 
-export function extractCreatedSessionKey(raw: unknown): string {
+export function extractCreatedConversationId(raw: unknown): string {
   const data = parseSessionCreateResponse(raw);
   const key = data.session.key;
   if (typeof key !== 'string' || !key.trim()) {
@@ -549,7 +553,7 @@ export function buildSessionListQueryString(query?: SessionListQuery): string {
   if (query.unassigned) params.set('unassigned', 'true');
   if (query.updatedAfter != null) params.set('updatedAfter', String(query.updatedAfter));
   if (query.includePinned) params.set('includePinned', 'true');
-  if (query.includeSessionKey) params.set('includeSessionKey', query.includeSessionKey);
+  if (query.includeConversationId) params.set('includeConversationId', query.includeConversationId);
   if (query.sessionTypes?.length) params.set('types', query.sessionTypes.join(','));
   if (query.sortBy) params.set('sortBy', query.sortBy);
   if (query.sortOrder) params.set('sortOrder', query.sortOrder);
@@ -601,11 +605,10 @@ export function buildSessionStatsPath(): string {
   return '/api/sessions/stats';
 }
 
-export function buildSessionResolvePath(query?: { sessionId?: string; sessionKey?: string; key?: string }): string {
+export function buildSessionResolvePath(query?: { transcriptId?: string; conversationId?: string }): string {
   const params = new URLSearchParams();
-  if (query?.sessionId) params.set('sessionId', query.sessionId);
-  if (query?.sessionKey) params.set('sessionKey', query.sessionKey);
-  if (query?.key) params.set('key', query.key);
+  if (query?.transcriptId) params.set('transcriptId', query.transcriptId);
+  if (query?.conversationId) params.set('conversationId', query.conversationId);
   const qs = params.toString();
   return `/api/sessions/resolve${qs ? `?${qs}` : ''}`;
 }
@@ -617,7 +620,7 @@ export function buildSidebarChatListPath(query?: {
   inboxLimit?: number;
   inboxOffset?: number;
   staleDays?: number;
-  includeSessionKey?: string;
+  includeConversationId?: string;
 }): string {
   const params = new URLSearchParams();
   if (query?.projectLimit != null) params.set('projectLimit', String(query.projectLimit));
@@ -626,7 +629,7 @@ export function buildSidebarChatListPath(query?: {
   if (query?.inboxLimit != null) params.set('inboxLimit', String(query.inboxLimit));
   if (query?.inboxOffset != null) params.set('inboxOffset', String(query.inboxOffset));
   if (query?.staleDays != null) params.set('staleDays', String(query.staleDays));
-  if (query?.includeSessionKey) params.set('includeSessionKey', query.includeSessionKey);
+  if (query?.includeConversationId) params.set('includeConversationId', query.includeConversationId);
   const qs = params.toString();
   return `/api/sidebar/chat-list${qs ? `?${qs}` : ''}`;
 }
@@ -663,7 +666,7 @@ export function sessionListDedupeKey(query?: SessionListQuery): string {
     unassigned: query.unassigned,
     updatedAfter: query.updatedAfter,
     includePinned: query.includePinned,
-    includeSessionKey: query.includeSessionKey,
+    includeConversationId: query.includeConversationId,
     sessionTypes: query.sessionTypes,
     sortBy: query.sortBy,
     sortOrder: query.sortOrder,

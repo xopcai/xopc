@@ -9,7 +9,7 @@ import { assertTrustedRenderer } from './trusted-renderer.js';
  * localhost gateway from here in a follow-up.
  */
 export function registerAgentIpc(ipcMain: IpcMain): void {
-  ipcMain.handle('agent:send', async (event, message: string, _sessionKey: string) => {
+  ipcMain.handle('agent:send', async (event, message: string, _conversationId: string) => {
     assertTrustedRenderer(event);
     const preview = message.length > 400 ? `${message.slice(0, 400)}…` : message;
     event.sender.send(

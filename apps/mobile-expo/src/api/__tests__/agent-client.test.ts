@@ -70,7 +70,7 @@ vi.mock('../../storage/mmkv', () => ({
       testState.memory.delete(key);
     },
   },
-  pendingRunStorageKey: (sessionKey: string) => `pending:${sessionKey}`,
+  pendingRunStorageKey: (conversationId: string) => `pending:${conversationId}`,
 }));
 
 import {
@@ -89,8 +89,8 @@ import type { MessageSubmission } from '../../features/chat/message-submission';
 
 function submission(overrides: Partial<MessageSubmission> = {}): MessageSubmission {
   return {
-    clientMessageId: 'message-a', gatewayId: 'computer-a', sessionKey: 'session-a',
-    expectedSessionId: 'instance-a', content: 'hello', attachments: [], contextRefs: [], ...overrides,
+    clientMessageId: 'message-a', gatewayId: 'computer-a', conversationId: 'session-a',
+    expectedTranscriptId: 'instance-a', content: 'hello', attachments: [], contextRefs: [], ...overrides,
   };
 }
 
@@ -327,7 +327,7 @@ describe('AgentMessageSender local detach', () => {
       data: {
         type: 'run_end',
         runId: 'run-old',
-        sessionKey: 'session-a',
+        conversationId: 'session-a',
         payload: { status: 'success' },
       },
     });
@@ -436,12 +436,12 @@ describe('AgentMessageSender local detach', () => {
 
   it('resolves missing session identity before sending and keeps it on the message', async () => {
     testState.apiFetch.mockResolvedValueOnce(new Response(JSON.stringify({
-      session: { key: 'session-a', sessionId: 'resolved-instance', messages: [] },
+      session: { key: 'session-a', transcriptId: 'resolved-instance', messages: [] },
     }), { status: 200 })).mockResolvedValueOnce(accepted());
-    const input = submission({ expectedSessionId: undefined });
+    const input = submission({ expectedTranscriptId: undefined });
     await new AgentMessageSender().sendMessage(input);
-    expect(input.expectedSessionId).toBe('resolved-instance');
-    expect(JSON.parse(String(testState.apiFetch.mock.calls[1][1].body)).expectedSessionId).toBe('resolved-instance');
+    expect(input.expectedTranscriptId).toBe('resolved-instance');
+    expect(JSON.parse(String(testState.apiFetch.mock.calls[1][1].body)).expectedTranscriptId).toBe('resolved-instance');
   });
 
   it('does not submit to another connection after uploading media', async () => {
@@ -470,7 +470,7 @@ describe('AgentMessageSender local detach', () => {
     await expect(new AgentMessageSender().sendMessage(input)).rejects.toThrow('Session changed');
     await expect(new AgentMessageSender().sendMessage(input)).rejects.toThrow('Session changed');
     for (const [, init] of testState.apiFetch.mock.calls) {
-      expect(JSON.parse(String(init.body)).expectedSessionId).toBe('instance-a');
+      expect(JSON.parse(String(init.body)).expectedTranscriptId).toBe('instance-a');
     }
   });
 

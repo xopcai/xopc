@@ -16,7 +16,7 @@ function parseJsonl(contents: string): Array<Record<string, unknown>> {
 
 function sessionWithEntries(payloads: unknown[]): XopcHistorySession {
   return {
-    sessionId: 'session-1',
+    transcriptId: 'session-1',
     status: 'active',
     createdAt: Date.parse('2026-08-01T10:00:00Z'),
     archivedAt: null,

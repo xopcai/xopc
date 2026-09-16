@@ -3,12 +3,12 @@ import type { Api, Model } from '@earendil-works/pi-ai/compat';
 
 import type { Config } from '../config/schema.js';
 import { resolveStateDir } from '../config/paths-state.js';
-import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
+import { resolveEffectiveAgentProfile } from '../config/agent-profile.js';
 import { readPostCompactionContext } from '../agent/reply/post-compaction-context.js';
 import { resolveCompactionPolicy } from '../agent/memory/compaction-policy.js';
 import { promoteCompactionLedger } from '../agent/memory/compaction-promotion.js';
 import { resolveUserContextSessionAccess } from '../user-context/access-policy.js';
-import { resolveAgentIdFromSessionKey } from '../routing/agent-session-key.js';
+import { resolveAgentIdFromConversationId } from '../routing/agent-session-key.js';
 import { createLogger } from '../utils/logger.js';
 import {
   SessionCompactor,
@@ -27,7 +27,7 @@ import {
   getSessionConfig,
   getGlobalSessionStats,
   getSessionMetadata,
-  findSessionKeyBySessionId,
+  findConversationIdByTranscriptId,
   listCompactionBoundaries,
   listSessionMetadata,
   listSessionsByAgent,
@@ -87,12 +87,12 @@ export interface SessionStoreOptions {
 
 export interface SessionCompactionHooks {
   before?: (event: {
-    sessionKey: string;
+    conversationId: string;
     messageCount: number;
     tokenCount: number;
   }) => Promise<void> | void;
   after?: (event: {
-    sessionKey: string;
+    conversationId: string;
     messageCount: number;
     tokenCount: number;
     compactedCount: number;
@@ -100,7 +100,7 @@ export interface SessionCompactionHooks {
 }
 
 type SessionCompactionHookEvent = {
-  sessionKey: string;
+  conversationId: string;
   messageCount: number;
   tokenCount: number;
   compactedCount?: number;
@@ -115,7 +115,7 @@ export interface ForkSessionAtTurnOptions {
 }
 
 export interface ForkSessionResult {
-  sessionKey: string;
+  conversationId: string;
   rowCount: number;
   lastTurnId?: string;
 }
@@ -177,34 +177,37 @@ export class SessionStore {
       }
     } catch (err) {
       log.warn(
-        { err, phase, sessionKey: event.sessionKey },
+        { err, phase, conversationId: event.conversationId },
         `Session compaction ${phase} hook failed`,
       );
     }
   }
 
-  private resolveWorkspaceCwd(sessionKey: string): string {
-    return resolveEffectiveAgentProfileForSession(this.options.config, sessionKey).resolvedWorkspacePath;
+  private resolveWorkspaceCwd(conversationId: string, seed?: SessionMetadataSeed): string {
+    const existing = getSessionMetadata(conversationId);
+    const agentId = existing?.agentId ?? seed?.agentId ?? seed?.routing?.agentId;
+    if (!agentId) throw new Error(`Conversation not found: ${conversationId}`);
+    return resolveEffectiveAgentProfile(this.options.config, agentId).resolvedWorkspacePath;
   }
 
   private async runStoreMutation<T>(fn: () => Promise<T>): Promise<T> {
     return fn();
   }
 
-  private async runCompactionExclusive<T>(sessionKey: string, fn: () => Promise<T>): Promise<T> {
-    const previous = this.compactionTails.get(sessionKey) ?? Promise.resolve();
+  private async runCompactionExclusive<T>(conversationId: string, fn: () => Promise<T>): Promise<T> {
+    const previous = this.compactionTails.get(conversationId) ?? Promise.resolve();
     let release!: () => void;
     const current = new Promise<void>((resolve) => {
       release = resolve;
     });
-    this.compactionTails.set(sessionKey, current);
+    this.compactionTails.set(conversationId, current);
     await previous;
     try {
       return await fn();
     } finally {
       release();
-      if (this.compactionTails.get(sessionKey) === current) {
-        this.compactionTails.delete(sessionKey);
+      if (this.compactionTails.get(conversationId) === current) {
+        this.compactionTails.delete(conversationId);
       }
     }
   }
@@ -219,25 +222,25 @@ export class SessionStore {
   }
 
   async resolveTranscriptPath(
-    sessionKey: string,
+    conversationId: string,
     options?: { metadata?: SessionMetadataSeed },
-  ): Promise<{ sessionId: string; sessionKey: string }> {
+  ): Promise<{ transcriptId: string; conversationId: string }> {
     requireXopcDatabase();
-    const cwd = this.resolveWorkspaceCwd(sessionKey);
-    const meta = ensureSessionRecord(sessionKey, cwd, options?.metadata);
-    return { sessionId: meta.sessionId!, sessionKey };
+    const cwd = this.resolveWorkspaceCwd(conversationId, options?.metadata);
+    const meta = ensureSessionRecord(conversationId, cwd, options?.metadata);
+    return { transcriptId: meta.transcriptId!, conversationId };
   }
 
   async appendTranscriptMessage(
-    sessionKey: string,
+    conversationId: string,
     message: AgentMessage,
     options?: { metadata?: SessionMetadataSeed },
   ): Promise<void> {
     return this.runStoreMutation(async () => {
       requireXopcDatabase();
-      const cwd = this.resolveWorkspaceCwd(sessionKey);
-      ensureSessionRecord(sessionKey, cwd, options?.metadata);
-      appendTranscriptEntry(sessionKey, message);
+      const cwd = this.resolveWorkspaceCwd(conversationId, options?.metadata);
+      ensureSessionRecord(conversationId, cwd, options?.metadata);
+      appendTranscriptEntry(conversationId, message);
     });
   }
 
@@ -461,9 +464,9 @@ export class SessionStore {
     return getSessionMetadata(key);
   }
 
-  async resolveKeyBySessionId(sessionId: string): Promise<string | null> {
+  async resolveKeyByTranscriptId(transcriptId: string): Promise<string | null> {
     requireXopcDatabase();
-    return findSessionKeyBySessionId(sessionId);
+    return findConversationIdByTranscriptId(transcriptId);
   }
 
   async updateMetadata(key: string, updates: Partial<SessionMetadata>): Promise<void> {
@@ -474,7 +477,7 @@ export class SessionStore {
     });
   }
 
-  async reset(key: string): Promise<{ sessionId: string; previousSessionId: string } | null> {
+  async reset(key: string): Promise<{ transcriptId: string; previousTranscriptId: string } | null> {
     return this.runStoreMutation(async () => {
       requireXopcDatabase();
       const cwd = this.resolveWorkspaceCwd(key);
@@ -541,7 +544,7 @@ export class SessionStore {
 
   async loadTranscriptDocument(key: string): Promise<XopcSessionTranscriptV1 | null> {
     const metadata = await this.getMetadata(key);
-    if (!metadata?.sessionId) {
+    if (!metadata?.transcriptId) {
       return null;
     }
     const rows = await this.loadTranscriptRows(key);
@@ -567,7 +570,7 @@ export class SessionStore {
     return {
       type: 'xopc_session_transcript',
       version: 1,
-      id: metadata.sessionId,
+      id: metadata.transcriptId,
       createdAt: metadata.createdAt,
       updatedAt: metadata.updatedAt,
       messages: rows,
@@ -576,17 +579,17 @@ export class SessionStore {
   }
 
   async syncEmbeddedTranscriptUpdate(update: SessionTranscriptUpdate): Promise<void> {
-    const sessionKey = update.sessionKey?.trim();
-    if (!sessionKey) {
+    const conversationId = update.conversationId?.trim();
+    if (!conversationId) {
       return;
     }
     return this.runStoreMutation(async () => {
       requireXopcDatabase();
-      const cwd = this.resolveWorkspaceCwd(sessionKey);
-      ensureSessionRecord(sessionKey, cwd);
+      const cwd = this.resolveWorkspaceCwd(conversationId);
+      ensureSessionRecord(conversationId, cwd);
 
       if (update.message && isAppendOnlyLlmTranscriptMessage(update.message)) {
-        appendTranscriptEntry(sessionKey, update.message as AgentMessage);
+        appendTranscriptEntry(conversationId, update.message as AgentMessage);
       }
     });
   }
@@ -648,7 +651,7 @@ export class SessionStore {
   async appendTranscriptCustomMessageEntry(
     key: string,
     entry: {
-      expectedSessionId?: string;
+      expectedTranscriptId?: string;
       customType: string;
       content?: string | unknown[];
       display?: boolean;
@@ -657,7 +660,7 @@ export class SessionStore {
   ): Promise<void> {
     return this.runStoreMutation(async () => {
       requireXopcDatabase();
-      if (entry.expectedSessionId && getSessionMetadata(key)?.sessionId !== entry.expectedSessionId) {
+      if (entry.expectedTranscriptId && getSessionMetadata(key)?.transcriptId !== entry.expectedTranscriptId) {
         throw new Error('Voice conversation session changed');
       }
       const cwd = this.resolveWorkspaceCwd(key);
@@ -711,8 +714,9 @@ export class SessionStore {
   ): Promise<void> {
     return this.runStoreMutation(async () => {
       requireXopcDatabase();
-      const cwd = this.resolveWorkspaceCwd(key);
+      const cwd = this.resolveWorkspaceCwd(key, options?.metadata);
       ensureSessionRecord(key, cwd, options?.metadata);
+      if (options?.metadata) patchSessionMetadata(key, options.metadata);
       const prev = await this.loadTranscriptRows(key);
       const merged = mergeLlmMessagesPreservingContextRows(prev, messages);
       replaceTranscriptRows(key, merged);
@@ -764,7 +768,17 @@ export class SessionStore {
     if (!result.compacted || !result.handover || !result.audit) {
       throw new Error('Cannot persist an incomplete compaction result');
     }
-    const compacted = result.messages;
+    const refresh = readPostCompactionContext({
+      cfg: this.options.config,
+      conversationId: key,
+      sectionNames: resolveCompactionPolicy(this.options.config).postCompactionSections,
+    });
+    // Store the model-visible refresh atomically with the exact compacted context.
+    const compacted = refresh?.trim()
+      ? [...result.messages, { role: 'user', content: refresh, timestamp: Date.now(), droppable: true } as AgentMessage]
+      : result.messages;
+    result.messages = compacted;
+    if (refresh?.trim()) result.tokensAfter = this.estimateTokens(compacted);
     return this.runStoreMutation(async () => {
       const appended = appendCompactionBoundaryIfUnchanged(key, expectedSnapshot, {
         type: 'compaction',
@@ -787,9 +801,9 @@ export class SessionStore {
         const metadata = getSessionMetadata(key);
         const access = resolveUserContextSessionAccess(this.options.config, key);
         const promoted = promoteCompactionLedger({
-          sessionKey: key,
-          sessionId: expectedSnapshot.sessionId,
-          sourceAgentId: resolveAgentIdFromSessionKey(key),
+          conversationId: key,
+          transcriptId: expectedSnapshot.transcriptId,
+          sourceAgentId: resolveAgentIdFromConversationId(key),
           workspaceId: this.resolveWorkspaceCwd(key),
           projectId: metadata?.projectId,
           handover: result.handover,
@@ -802,7 +816,7 @@ export class SessionStore {
         });
         log.info(
           {
-            sessionKey: key,
+            conversationId: key,
             episodicCount: promoted.episodicRecordIds.length,
             durableCount: promoted.durableRecordIds.length,
             rejectedCount: promoted.rejectedRecordIds.length,
@@ -810,7 +824,7 @@ export class SessionStore {
           'Compaction ledger memory promotion completed',
         );
       } catch (err) {
-        log.warn({ err, sessionKey: key }, 'Compaction ledger memory promotion failed');
+        log.warn({ err, conversationId: key }, 'Compaction ledger memory promotion failed');
       }
       log.info(
         { key, tokensBefore: result.tokensBefore, tokensAfter: result.tokensAfter, keptMessages: compacted.length },
@@ -830,20 +844,21 @@ export class SessionStore {
     executionOptions?: CompactionExecutionOptions,
   ): Promise<CompactionResult> {
     return this.runCompactionExclusive(key, async () => {
+      executionOptions?.signal?.throwIfAborted();
       const snapshot = loadCompactionSourceSnapshot(key);
       if (!snapshot) throw new Error(`Session not found: ${key}`);
       const tokenCount = this.estimateTokens(messages);
       await this.runCompactionHook('before', {
-        sessionKey: key,
+        conversationId: key,
         messageCount: messages.length,
         tokenCount,
       });
-      const result = await this.compactor.compact(snapshot.entries, model, instructions, force, { ...executionOptions, sessionKey: key });
+      const result = await this.compactor.compact(snapshot.entries, model, instructions, force, { ...executionOptions, conversationId: key });
       executionOptions?.signal?.throwIfAborted();
       if (result.compacted) {
         const compacted = await this.applyCompaction(key, result, snapshot);
         await this.runCompactionHook('after', {
-          sessionKey: key,
+          conversationId: key,
           messageCount: compacted.length,
           tokenCount: result.tokensAfter,
           compactedCount: Math.max(0, Math.min(messages.length, result.firstKeptIndex)),
@@ -935,7 +950,7 @@ export class SessionStore {
   async importSessionExport(
     targetKey: string,
     jsonContent: string,
-  ): Promise<{ sessionKey: string; rowCount: number }> {
+  ): Promise<{ conversationId: string; rowCount: number }> {
     return this.runStoreMutation(async () => {
       requireXopcDatabase();
       const existing = await this.getMetadata(targetKey);
@@ -961,8 +976,9 @@ export class SessionStore {
       const metadata = record.metadata && typeof record.metadata === 'object'
         ? record.metadata as Partial<SessionMetadata>
         : {};
-      const cwd = this.resolveWorkspaceCwd(targetKey);
+      const cwd = this.resolveWorkspaceCwd(targetKey, metadata);
       ensureSessionRecord(targetKey, cwd, {
+        agentId: metadata.agentId,
         sourceChannel: metadata.sourceChannel,
         sourceChatId: metadata.sourceChatId,
         sessionType: metadata.sessionType,
@@ -981,18 +997,18 @@ export class SessionStore {
           ...(metadata.customData && typeof metadata.customData === 'object'
             ? metadata.customData as Record<string, unknown>
             : {}),
-          ...(sourceKey ? { importedFromSessionKey: sourceKey } : {}),
+          ...(sourceKey ? { importedFromConversationId: sourceKey } : {}),
           importedAt: new Date().toISOString(),
         },
       });
-      return { sessionKey: targetKey, rowCount: normalizedRows.length };
+      return { conversationId: targetKey, rowCount: normalizedRows.length };
     });
   }
 
   async forkSession(
     sourceKey: string,
     targetKey: string,
-  ): Promise<{ sessionKey: string; rowCount: number }> {
+  ): Promise<{ conversationId: string; rowCount: number }> {
     return this.forkSessionRows(sourceKey, targetKey);
   }
 
@@ -1000,7 +1016,7 @@ export class SessionStore {
     sourceKey: string,
     targetKey: string,
     options: { throughRow?: number } = {},
-  ): Promise<{ sessionKey: string; rowCount: number }> {
+  ): Promise<{ conversationId: string; rowCount: number }> {
     return this.runStoreMutation(async () => {
       requireXopcDatabase();
       const sourceMetadata = await this.getMetadata(sourceKey);
@@ -1020,8 +1036,9 @@ export class SessionStore {
       }
       const selectedRows =
         options.throughRow === undefined ? rows : rows.slice(0, Math.max(0, Math.trunc(options.throughRow)));
-      const cwd = this.resolveWorkspaceCwd(targetKey);
+      const cwd = this.resolveWorkspaceCwd(sourceKey);
       ensureSessionRecord(targetKey, cwd, {
+        agentId: sourceMetadata.agentId,
         sourceChannel: sourceMetadata.sourceChannel,
         sourceChatId: sourceMetadata.sourceChatId,
         sessionType: sourceMetadata.sessionType,
@@ -1035,13 +1052,13 @@ export class SessionStore {
         tags: [...new Set([...(sourceMetadata.tags ?? []), 'fork'])],
         customData: {
           ...(sourceMetadata.customData ?? {}),
-          forkedFromSessionKey: sourceKey,
-          forkedFromSessionId: sourceMetadata.sessionId,
+          forkedFromConversationId: sourceKey,
+          forkedFromTranscriptId: sourceMetadata.transcriptId,
           ...(options.throughRow !== undefined ? { forkedFromRow: selectedRows.length } : {}),
           forkedAt: new Date().toISOString(),
         },
       });
-      return { sessionKey: targetKey, rowCount: selectedRows.length };
+      return { conversationId: targetKey, rowCount: selectedRows.length };
     });
   }
 
@@ -1084,20 +1101,21 @@ export class SessionStore {
       const selectedRows = rows.slice(0, lastTurnRow + 1);
       const sourceLabel = sourceMetadata.name?.trim() || sourceKey;
       const forkedAt = new Date().toISOString();
-      const cwd = sourceMetadata.cwd?.trim() || this.resolveWorkspaceCwd(targetKey);
+      const cwd = sourceMetadata.cwd?.trim() || this.resolveWorkspaceCwd(sourceKey);
       ensureSessionRecord(targetKey, cwd, {
+        agentId: sourceMetadata.agentId,
         ...options.targetMetadata,
         name: `Fork of ${sourceLabel}`,
         tags: [...new Set([...(sourceMetadata.tags ?? []), 'fork'])],
         projectId: sourceMetadata.projectId,
-        parentSessionKey: sourceKey,
+        parentConversationId: sourceKey,
         hiddenFromSessionList: false,
         customData: {
           ...(sourceMetadata.customData ?? {}),
           ...(options.targetMetadata.customData ?? {}),
           genericNewChatShell: false,
-          forkedFromSessionKey: sourceKey,
-          forkedFromSessionId: sourceMetadata.sessionId,
+          forkedFromConversationId: sourceKey,
+          forkedFromTranscriptId: sourceMetadata.transcriptId,
           forkedFromSessionName: sourceMetadata.name,
           forkedFromTurnId: lastTurnId,
           forkedAt,
@@ -1108,7 +1126,7 @@ export class SessionStore {
       const sourceConfig = getSessionConfig(sourceKey);
       if (sourceConfig) setSessionConfig(targetKey, sourceConfig, cwd);
 
-      return { sessionKey: targetKey, rowCount: selectedRows.length, lastTurnId };
+      return { conversationId: targetKey, rowCount: selectedRows.length, lastTurnId };
     });
   }
 
@@ -1203,7 +1221,7 @@ export class SessionStore {
     const policy = resolveCompactionPolicy(this.options.config);
     const contextText = readPostCompactionContext({
       cfg: this.options.config,
-      sessionKey: key,
+      conversationId: key,
       sectionNames: policy.postCompactionSections,
     });
     if (!contextText?.trim()) {

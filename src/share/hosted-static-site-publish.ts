@@ -16,7 +16,7 @@ export interface PublishHostedStaticSiteInput {
   spaFallback?: boolean;
   ttlMs: number;
   maxViews: number | null;
-  sessionKey?: string;
+  conversationId?: string;
   agentId?: string;
 }
 
@@ -57,7 +57,7 @@ export async function publishHostedStaticSite(
     },
     workspaceContext: {
       workspaceRoot: input.workspaceRoot,
-      ...(input.sessionKey ? { sessionKey: input.sessionKey } : {}),
+      ...(input.conversationId ? { conversationId: input.conversationId } : {}),
       ...(input.agentId ? { agentId: input.agentId } : {}),
     },
     title: snapshot.title,

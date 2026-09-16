@@ -38,15 +38,15 @@ describe('task context assembler', () => {
       expectedOutputs: ['Task banner and execution context'],
       acceptanceCriteria: ['The full-screen chat remains task-bound'],
     });
-    const sessionKey = 'agent:main:webchat:default:direct:legacy-task-chat';
-    ensureSessionRecord(sessionKey, stateDir);
+    const conversationId = "64fbc4ed-bd4b-49ee-80d6-189f7ffd779a";
+    ensureSessionRecord(conversationId, stateDir, { agentId: "main" });
     new TaskConversationRepository().activateExecutionSession({
       taskId: task.id,
-      sessionKey,
+      conversationId,
       agentId: 'main',
     });
 
-    expect(buildTaskExecutionDirective(sessionKey)).toContain(
+    expect(buildTaskExecutionDirective(conversationId)).toContain(
       'Task: Keep the correct task context after opening chat full screen',
     );
   });
@@ -57,16 +57,16 @@ describe('task context assembler', () => {
       title: 'Continue a linked discussion',
       objective: 'Continue the task in its linked discussion session',
     });
-    const sessionKey = 'agent:main:webchat:default:direct:linked-discussion';
-    ensureSessionRecord(sessionKey, stateDir);
+    const conversationId = "bf73ecf5-6a82-4aaa-89e6-2a317e776611";
+    ensureSessionRecord(conversationId, stateDir, { agentId: "main" });
     new TaskContextRepository().add({
       taskId: task.id,
       targetKind: 'session',
-      targetId: sessionKey,
+      targetId: conversationId,
       role: 'reference',
       createdBy: { kind: 'user' },
     });
 
-    expect(buildTaskExecutionDirective(sessionKey)).toBe('');
+    expect(buildTaskExecutionDirective(conversationId)).toBe('');
   });
 });

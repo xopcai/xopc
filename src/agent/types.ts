@@ -85,7 +85,7 @@ export interface AgentConfig {
 // ============================================
 
 export interface AgentRuntimeState {
-  sessionKey: string;
+  conversationId: string;
   currentModel?: string;
   messageCount: number;
   lastActivity: number;

@@ -66,18 +66,18 @@ export interface InboundLoopConfig {
   modelManager: ModelManager;
 
   /** Register a per-session agent-event subscription (idempotent). */
-  setupSessionEventHandling: (sessionKey: string) => void;
+  setupSessionEventHandling: (conversationId: string) => void;
   /** Per-session config hydration (workspace + model override) before a turn runs. */
   sessionHydrator: SessionHydrator;
   /** Returns the visible last assistant text used for outbound delivery. */
-  getLastAssistantPlainText: (sessionKey: string) => string;
+  getLastAssistantPlainText: (conversationId: string) => string;
   /** Pre-turn auto-compaction (only used by system messages). */
   /** Fire-and-forget auto-title (no-ops for cron/heartbeat keys). */
-  enqueueMaybeAutoTitleAfterPersist: (sessionKey: string) => void;
+  enqueueMaybeAutoTitleAfterPersist: (conversationId: string) => void;
   /** Effective merged config snapshot. */
   getConfig: () => Config | undefined;
   /** Archive transcript + new session id (freshness / reset trigger rollover). */
-  resetSession: (sessionKey: string) => Promise<{ sessionId: string; previousSessionId: string } | null>;
+  resetSession: (conversationId: string) => Promise<{ transcriptId: string; previousTranscriptId: string } | null>;
   /** Connect a channel stream handle for partial assistant text rendering. */
   setStreamHandle: (handle: StreamHandle) => void;
 }
@@ -104,7 +104,7 @@ export class InboundLoop {
   /** Begin consuming inbound messages from the bus until {@link stop} or shutdown. */
   async start(): Promise<void> {
     this.running = true;
-    await this.cfg.hookHandler.trigger('session_start', { sessionId: this.cfg.agentId });
+    await this.cfg.hookHandler.trigger('session_start', { transcriptId: this.cfg.agentId });
 
     // Errors fall into two buckets:
     //   1. `bus.consumeInbound()` itself threw → infrastructure problem; back off
@@ -163,7 +163,7 @@ export class InboundLoop {
     }
 
     await this.cfg.hookHandler.trigger('session_end', {
-      sessionId: this.cfg.agentId,
+      transcriptId: this.cfg.agentId,
       messageCount: 0,
     });
   }
@@ -181,7 +181,7 @@ export class InboundLoop {
       const { context, isCommand, command, commandArgs } = routing;
 
       const sessionContext: SessionContext = {
-        sessionKey: context.sessionKey,
+        conversationId: context.conversationId,
         channel: context.channel,
         chatId: context.chatId,
         senderId: context.senderId || '',
@@ -192,17 +192,17 @@ export class InboundLoop {
         },
       };
 
-      const sessionMetadata = await this.cfg.sessionStore.getMetadata(sessionContext.sessionKey).catch(() => null);
+      const sessionMetadata = await this.cfg.sessionStore.getMetadata(sessionContext.conversationId).catch(() => null);
       updateAsyncLogContext({
-        sessionKey: sessionContext.sessionKey,
-        ...(sessionMetadata?.sessionId ? { sessionId: sessionMetadata.sessionId } : {}),
+        conversationId: sessionContext.conversationId,
+        ...(sessionMetadata?.transcriptId ? { transcriptId: sessionMetadata.transcriptId } : {}),
       });
 
       await this.cfg.sessionContextManager.runWith(sessionContext, async () => {
         // `subscribeToSession` requires an Agent instance; without this the first inbound never
         // registers `message_update` streaming (second turn behaved differently).
-        this.cfg.agentManager.getOrCreateAgent(sessionContext.sessionKey);
-        this.cfg.setupSessionEventHandling(sessionContext.sessionKey);
+        this.cfg.agentManager.getOrCreateAgent(sessionContext.conversationId);
+        this.cfg.setupSessionEventHandling(sessionContext.conversationId);
 
         await this.cfg.sessionLifecycleManager.startSession(sessionContext);
 
@@ -228,7 +228,7 @@ export class InboundLoop {
           if (cfg && typeof msg.content === 'string') {
             const turn = await initSessionTurn({
               cfg,
-              sessionKey: sessionContext.sessionKey,
+              conversationId: sessionContext.conversationId,
               body: msg.content,
               resetSession: (sk) => this.cfg.resetSession(sk),
             });
@@ -250,7 +250,7 @@ export class InboundLoop {
           if (isCommand && command) {
             if (!shouldSkipResetOverlapCommand(command, resetTriggeredAtInit)) {
               const handled = await this.cfg.commandHandler.executeCommand(command, commandArgs || '', {
-                sessionKey: sessionContext.sessionKey,
+                conversationId: sessionContext.conversationId,
                 channel: sessionContext.channel,
                 chatId: sessionContext.chatId,
                 senderId: sessionContext.senderId,
@@ -286,7 +286,7 @@ export class InboundLoop {
             }
           }
 
-          this.cfg.sessionState.beginInboundTurn(sessionContext.sessionKey);
+          this.cfg.sessionState.beginInboundTurn(sessionContext.conversationId);
           inboundTurnArmed = true;
           try {
             await this.cfg.agentOrchestrator.process(inboundMsg, sessionContext);
@@ -305,10 +305,10 @@ export class InboundLoop {
           }
           if (inboundTurnArmed) {
             const meta = msg.metadata as Record<string, unknown> | undefined;
-            const assistantPlainText = this.cfg.getLastAssistantPlainText(sessionContext.sessionKey) ?? '';
+            const assistantPlainText = this.cfg.getLastAssistantPlainText(sessionContext.conversationId) ?? '';
             try {
               await this.cfg.outboundCoordinator.emitSessionTurnComplete({
-                sessionKey: sessionContext.sessionKey,
+                conversationId: sessionContext.conversationId,
                 channel: sessionContext.channel,
                 chatId: sessionContext.chatId,
                 inboundUserText: inboundMsg.content,
@@ -324,11 +324,11 @@ export class InboundLoop {
             } catch (turnErr) {
               const em = turnErr instanceof Error ? turnErr.message : String(turnErr);
               this.log.warn(
-                { err: turnErr, sessionKey: sessionContext.sessionKey },
+                { err: turnErr, conversationId: sessionContext.conversationId },
                 `Session turn complete failed: ${em}`,
               );
             }
-            this.cfg.sessionState.endInboundTurn(sessionContext.sessionKey);
+            this.cfg.sessionState.endInboundTurn(sessionContext.conversationId);
           }
         }
       });
@@ -336,10 +336,10 @@ export class InboundLoop {
   }
 
   private async handleSystemMessage(msg: InboundMessage, context: SessionContext): Promise<void> {
-    this.log.debug({ sessionKey: context.sessionKey }, 'Processing system message');
+    this.log.debug({ conversationId: context.conversationId }, 'Processing system message');
 
-    await this.cfg.sessionHydrator.workspace(context.sessionKey);
-    await this.cfg.sessionHydrator.model(context.sessionKey);
+    await this.cfg.sessionHydrator.workspace(context.conversationId);
+    await this.cfg.sessionHydrator.model(context.conversationId);
 
     const systemMessage: AgentMessage = {
       role: 'user',
@@ -349,7 +349,7 @@ export class InboundLoop {
 
     try {
       const result = await runEmbeddedTurnForSession({
-        sessionKey: context.sessionKey,
+        conversationId: context.conversationId,
         userMessage: systemMessage,
         sessionStore: this.cfg.sessionStore,
         agentManager: this.cfg.agentManager,
@@ -357,9 +357,9 @@ export class InboundLoop {
         getConfig: this.cfg.getConfig,
       });
 
-      const finalContent = result.lastAssistantText ?? this.cfg.getLastAssistantPlainText(context.sessionKey);
+      const finalContent = result.lastAssistantText ?? this.cfg.getLastAssistantPlainText(context.conversationId);
       if (finalContent) {
-        this.cfg.sessionState.setLastAssistantText(context.sessionKey, finalContent);
+        this.cfg.sessionState.setLastAssistantText(context.conversationId, finalContent);
         const hookResult = await this.cfg.hookHandler.runMessageSending(
           context.chatId,
           finalContent,
@@ -374,14 +374,14 @@ export class InboundLoop {
           });
         }
       }
-      this.cfg.enqueueMaybeAutoTitleAfterPersist(context.sessionKey);
+      this.cfg.enqueueMaybeAutoTitleAfterPersist(context.conversationId);
     } catch (error) {
       const em = error instanceof Error ? error.message : String(error);
       this.log.error(
         {
           err: error,
           errorMessage: em,
-          sessionKey: context.sessionKey,
+          conversationId: context.conversationId,
           channel: context.channel,
           chatId: context.chatId,
           senderId: msg.sender_id,

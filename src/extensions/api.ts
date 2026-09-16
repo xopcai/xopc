@@ -225,7 +225,7 @@ export class ExtensionApiImpl implements ExtensionApi {
       examples: command.examples,
       handler: async (ctx, args) => {
         const extensionCtx: ExtensionCommandContext = {
-          sessionKey: ctx.sessionKey,
+          conversationId: ctx.conversationId,
           source: ctx.source,
           isGroup: ctx.isGroup,
           config: ctx.config as SchemaConfig as ExtensionCommandContext['config'],

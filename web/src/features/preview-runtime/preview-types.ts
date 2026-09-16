@@ -37,8 +37,8 @@ export type PreviewCapability =
   | 'edit';
 
 export type PreviewSourceRef =
-  | { kind: 'workspace'; path: string; sessionKey?: string; agentId?: string }
-  | { kind: 'media-uri'; uri: string; sessionKey?: string | null }
+  | { kind: 'workspace'; path: string; conversationId?: string; agentId?: string }
+  | { kind: 'media-uri'; uri: string; conversationId?: string | null }
   | { kind: 'share'; token: string }
   | { kind: 'inline' };
 

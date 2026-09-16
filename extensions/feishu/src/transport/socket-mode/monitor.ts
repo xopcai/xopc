@@ -1,7 +1,7 @@
 import type { InboundMessage } from '@xopcai/xopc/channels/transport-types.js';
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import type { ChannelSecurityContext } from '@xopcai/xopc/channels/plugin-types.js';
-import { generateSessionKey } from '@xopcai/xopc/chat-commands/session-key.js';
+import { generateConversationId } from '@xopcai/xopc/chat-commands/session-key.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 
 import type { ResolvedFeishuAccount } from '../../state/accounts.js';
@@ -90,7 +90,7 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
           ? `撤回了一个表情（${emojiType}）${preview ? `，对应消息：「${preview}」` : ''}`
           : `对一条消息添加了表情（${emojiType}）${preview ? `：「${preview}」` : ''}`,
       metadata: {
-        sessionKey: binding.sessionKey,
+        conversationId: binding.conversationId,
         accountId: binding.accountId,
         isGroup: binding.isGroup,
         threadId: binding.threadId,
@@ -113,9 +113,9 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
     const binding = openMessageId ? getFeishuBindingByMessageId(openMessageId) : null;
 
     const isGroup = chatId.startsWith('oc_');
-    const sessionKey =
-      binding?.sessionKey ??
-      generateSessionKey({
+    const conversationId =
+      binding?.conversationId ??
+      generateConversationId({
         source: 'feishu',
         chatId: chatId || senderId,
         senderId: senderId || 'unknown',
@@ -134,7 +134,7 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
       chat_id: chatId || senderId || 'unknown',
       content,
       metadata: {
-        sessionKey,
+        conversationId,
         accountId: account.accountId,
         isGroup: Boolean(chatId) && isGroup,
         feishuEventType: 'card.action.trigger',
@@ -156,9 +156,9 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
     if (!binding && !chatId) return;
 
     const isGroup = (binding?.isGroup ?? chatId.startsWith('oc_')) === true;
-    const sessionKey =
-      binding?.sessionKey ??
-      generateSessionKey({
+    const conversationId =
+      binding?.conversationId ??
+      generateConversationId({
         source: 'feishu',
         chatId: chatId || 'unknown',
         senderId: binding?.senderId ?? 'unknown',
@@ -172,7 +172,7 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
       chat_id: chatId || binding?.chatId || 'unknown',
       content: `撤回了一条消息（${recalledMessageId}）`,
       metadata: {
-        sessionKey,
+        conversationId,
         accountId: account.accountId,
         isGroup,
         threadId: binding?.threadId,
@@ -223,7 +223,7 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
 
     const threadId = msg?.thread_id ?? msg?.threadId ?? undefined;
 
-    const sessionKey = generateSessionKey({
+    const conversationId = generateConversationId({
       source: 'feishu',
       chatId,
       senderId,
@@ -234,7 +234,7 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
 
     recordFeishuMessageBinding({
       messageId,
-      sessionKey,
+      conversationId,
       accountId: account.accountId,
       chatId,
       senderId,
@@ -285,7 +285,7 @@ export function createFeishuSocketModeMonitor(deps: FeishuSocketModeMonitorDeps)
       chat_id: chatId,
       content: normalizedText,
       metadata: {
-        sessionKey,
+        conversationId,
         accountId: account.accountId,
         messageId,
         threadId,

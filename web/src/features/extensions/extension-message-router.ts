@@ -52,7 +52,7 @@ export class ExtensionMessageRouter {
   private handlers = new Map<string, MethodHandler>();
   private extensionPermissions = new Map<string, Set<string>>();
   private eventSubscribers = new Map<string, Set<(e: { event: string; data?: unknown }) => void>>();
-  /** extensionId → sessionKeys subscribed for agent stream forwarding */
+  /** extensionId → conversationIds subscribed for agent stream forwarding */
   private agentStreamSubscriptions = new Map<string, Set<string>>();
   private boundListener = (ev: MessageEvent) => {
     void this.onWindowMessage(ev);
@@ -98,23 +98,23 @@ export class ExtensionMessageRouter {
     }
   }
 
-  subscribeAgentStream(extensionId: string, sessionKey: string): void {
+  subscribeAgentStream(extensionId: string, conversationId: string): void {
     let sessions = this.agentStreamSubscriptions.get(extensionId);
     if (!sessions) {
       sessions = new Set();
       this.agentStreamSubscriptions.set(extensionId, sessions);
     }
-    sessions.add(sessionKey);
+    sessions.add(conversationId);
   }
 
-  unsubscribeAgentStream(extensionId: string, sessionKey: string): void {
-    this.agentStreamSubscriptions.get(extensionId)?.delete(sessionKey);
+  unsubscribeAgentStream(extensionId: string, conversationId: string): void {
+    this.agentStreamSubscriptions.get(extensionId)?.delete(conversationId);
   }
 
-  forwardAgentStreamEvent(sessionKey: string, event: unknown): void {
+  forwardAgentStreamEvent(conversationId: string, event: unknown): void {
     for (const [extensionId, sessions] of this.agentStreamSubscriptions) {
-      if (sessions.has(sessionKey)) {
-        this.sendEvent(extensionId, `agent.stream.${sessionKey}`, event);
+      if (sessions.has(conversationId)) {
+        this.sendEvent(extensionId, `agent.stream.${conversationId}`, event);
       }
     }
   }
@@ -140,9 +140,9 @@ export class ExtensionMessageRouter {
     if (event === 'agent.subscribe' || event === 'agent.unsubscribe') {
       const perms = this.extensionPermissions.get(extensionId) ?? new Set<string>();
       if (!perms.has('agent.subscribe')) return;
-      const { sessionKey } = (data ?? {}) as { sessionKey?: string };
-      if (typeof sessionKey !== 'string' || !sessionKey.trim()) return;
-      const sk = sessionKey.trim();
+      const { conversationId } = (data ?? {}) as { conversationId?: string };
+      if (typeof conversationId !== 'string' || !conversationId.trim()) return;
+      const sk = conversationId.trim();
       if (event === 'agent.subscribe') this.subscribeAgentStream(extensionId, sk);
       else this.unsubscribeAgentStream(extensionId, sk);
     }
@@ -378,13 +378,13 @@ export function registerBuiltinMethods(router: ExtensionMessageRouter): void {
   });
 
   router.registerMethod('session.navigate', async (_extensionId, params) => {
-    const sessionKey =
-      params && typeof params === 'object' && params !== null && 'sessionKey' in params
-        ? String((params as { sessionKey?: string }).sessionKey ?? '')
+    const conversationId =
+      params && typeof params === 'object' && params !== null && 'conversationId' in params
+        ? String((params as { conversationId?: string }).conversationId ?? '')
         : '';
-    if (sessionKey) {
+    if (conversationId) {
       window.dispatchEvent(
-        new CustomEvent('navigate-to-chat', { detail: { sessionKey }, bubbles: true }),
+        new CustomEvent('navigate-to-chat', { detail: { conversationId }, bubbles: true }),
       );
     }
   });
@@ -402,7 +402,7 @@ export function registerBuiltinMethods(router: ExtensionMessageRouter): void {
       }>;
     };
     return (data.items ?? []).map((s) => ({
-      sessionKey: s.key,
+      conversationId: s.key,
       title: s.name,
       lastMessageAt: s.updatedAt ?? s.lastAccessedAt,
       messageCount: s.messageCount,
@@ -410,13 +410,13 @@ export function registerBuiltinMethods(router: ExtensionMessageRouter): void {
   });
 
   router.registerMethod('agent.sendMessage', async (_extensionId, params) => {
-    const { message, sessionKey, newSession } = params as {
+    const { message, conversationId, newSession } = params as {
       message: string;
-      sessionKey?: string;
+      conversationId?: string;
       newSession?: boolean;
     };
-    let targetSessionKey = sessionKey?.trim() || '';
-    if (newSession || !targetSessionKey) {
+    let targetConversationId = conversationId?.trim() || '';
+    if (newSession || !targetConversationId) {
       const createResponse = await apiFetch(apiUrl('/api/sessions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -424,11 +424,11 @@ export function registerBuiltinMethods(router: ExtensionMessageRouter): void {
       });
       if (!createResponse.ok) throw new Error(`Session create failed: ${createResponse.status}`);
       const created = (await createResponse.json()) as { session?: { key?: string } };
-      targetSessionKey = created.session?.key ?? '';
-      if (!targetSessionKey) throw new Error('Session create did not return a session key');
+      targetConversationId = created.session?.key ?? '';
+      if (!targetConversationId) throw new Error('Session create did not return a session key');
     }
     const origin = await waitForEndpointTurnClaim();
-    const response = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(targetSessionKey)}/inputs`), {
+    const response = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(targetConversationId)}/inputs`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -439,7 +439,7 @@ export function registerBuiltinMethods(router: ExtensionMessageRouter): void {
       }),
     });
     if (!response.ok) throw new Error(`Agent request failed: ${response.status}`);
-    return { sessionKey: targetSessionKey };
+    return { conversationId: targetConversationId };
   });
 
   router.registerMethod('config.get', async (extensionId) => {

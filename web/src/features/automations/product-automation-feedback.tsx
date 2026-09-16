@@ -464,9 +464,9 @@ export function ProductAutomationFeedback({
                     {saveInsightBusy ? labels.feedback.savingInsight : labels.feedback.saveInsight}
                   </Button>
                 ) : null}
-                {run.sessionKey ? (
+                {run.conversationId ? (
                   <Button asChild variant="ghost" className="h-7 rounded-md px-2 text-xs">
-                    <Link to={`/chat/${encodeURIComponent(run.sessionKey)}`}>
+                    <Link to={`/chat/${encodeURIComponent(run.conversationId)}`}>
                       <MessageSquare className="size-3.5" aria-hidden />
                       {labels.feedback.chat}
                     </Link>

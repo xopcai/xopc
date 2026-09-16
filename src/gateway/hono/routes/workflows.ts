@@ -38,7 +38,7 @@ interface StartWorkflowRunRequestBody {
   projectId?: string;
   contextRefs?: unknown;
   agentId?: string;
-  parentSessionKey?: string;
+  parentConversationId?: string;
   source?: WorkflowRunSource;
   concurrency?: number;
   maxSubagents?: number;
@@ -400,7 +400,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
       return c.json({ error: 'definitionId is required' }, 400);
     }
 
-    const parentSessionKey = body.parentSessionKey?.trim() || undefined;
+    const parentConversationId = body.parentConversationId?.trim() || undefined;
     const taskRunId = body.taskRunId?.trim();
     const projectId = body.projectId?.trim();
     if (projectId && !service.projects.get(projectId)) {
@@ -430,7 +430,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
       input: body.inputEnvelope ? undefined : body.input,
       inputEnvelope: body.inputEnvelope,
       goal: body.goal,
-      parentSessionKey,
+      parentConversationId,
       source: normalizeWorkflowRunSource(body.source),
       concurrency: normalizePositiveInteger(body.concurrency),
       maxSubagents: normalizePositiveInteger(body.maxSubagents),
@@ -442,7 +442,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
       return c.json({ error: result.message, code: result.code }, result.httpStatus);
     }
 
-    return c.json({ runId: result.runId, sessionKey: result.sessionKey }, 202);
+    return c.json({ runId: result.runId, conversationId: result.conversationId }, 202);
   });
 
   authenticated.get('/api/workflows/runs', async (c) => {
@@ -504,12 +504,12 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
     if (!agent) {
       return c.json({ error: 'Workflow agent not found' }, 404);
     }
-    const session = await service.sessions.getSession(agent.sessionKey);
+    const session = await service.sessions.getSession(agent.conversationId);
     if (!session || session.sessionType !== 'workflow-subagent') {
       return c.json({ error: 'Workflow agent session not found' }, 404);
     }
     return c.json({
-      sessionKey: agent.sessionKey,
+      conversationId: agent.conversationId,
       metadata: {
         sessionType: session.sessionType,
         workflowRunId: session.workflowRunId,
@@ -611,7 +611,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
       return c.json({ error: result.message, code: result.code }, result.httpStatus);
     }
 
-    return c.json({ runId: result.runId, sessionKey: result.sessionKey }, 202);
+    return c.json({ runId: result.runId, conversationId: result.conversationId }, 202);
   });
 
   authenticated.post('/api/workflows/runs/:runId/replay', async (c) => {
@@ -624,7 +624,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
       return c.json({ error: result.message, code: result.code }, result.httpStatus);
     }
 
-    return c.json({ runId: result.runId, sessionKey: result.sessionKey }, 202);
+    return c.json({ runId: result.runId, conversationId: result.conversationId }, 202);
   });
 }
 

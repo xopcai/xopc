@@ -84,7 +84,7 @@ export interface AgentQueuedPayload {
   label: string;
   phaseId?: string;
   prompt?: string;
-  sessionKey: string;
+  conversationId: string;
   invocation?: WorkflowAgentInvocationSnapshot;
 }
 

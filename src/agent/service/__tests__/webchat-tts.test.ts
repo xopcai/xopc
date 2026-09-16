@@ -48,7 +48,7 @@ describe('maybeEmitWebchatTts', () => {
         { role: 'user', content: [{ type: 'text', text: 'hi' }] },
         { role: 'assistant', content: [{ type: 'text', text: 'hello from cache' }] },
       ]),
-      saveMessages: vi.fn(async (_sessionKey: string, messages: unknown[]) => {
+      saveMessages: vi.fn(async (_conversationId: string, messages: unknown[]) => {
         savedMessages.push(...messages);
       }),
     };

@@ -49,7 +49,7 @@ export type McpToolCatalog = {
 
 export type SessionMcpRuntime = {
   sessionId: string;
-  sessionKey?: string;
+  conversationId?: string;
   workspaceDir: string;
   configFingerprint: string;
   createdAt: number;
@@ -70,12 +70,12 @@ export type SessionMcpRuntime = {
 export type SessionMcpRuntimeManager = {
   getOrCreate: (params: {
     sessionId: string;
-    sessionKey?: string;
+    conversationId?: string;
     workspaceDir: string;
     cfg?: Config;
   }) => Promise<SessionMcpRuntime>;
-  bindSessionKey: (sessionKey: string, sessionId: string) => void;
-  resolveSessionId: (sessionKey: string) => string | undefined;
+  bindConversationId: (conversationId: string, sessionId: string) => void;
+  resolveSessionId: (conversationId: string) => string | undefined;
   disposeSession: (sessionId: string) => Promise<void>;
   disposeAll: () => Promise<void>;
   sweepIdleRuntimes: () => Promise<number>;
