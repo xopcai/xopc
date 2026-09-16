@@ -1,3 +1,6 @@
+import { Link } from 'react-router-dom';
+import { messages } from '@/i18n/messages';
+import { useLocaleStore } from '@/stores/locale-store';
 import { Plus, Search } from 'lucide-react';
 import { memo } from 'react';
 
@@ -30,8 +33,10 @@ export const SkillsPageHeaderEnd = memo(function SkillsPageHeaderEnd({
   setPendingFile: (f: File | null) => void;
   setInstallOpen: (v: boolean) => void;
 }) {
+  const importTitle = messages(useLocaleStore(s => s.language)).imports.title;
   return (
     <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+      <Link to="/settings/imports" className="text-sm text-accent hover:underline">{importTitle}</Link>
       <RefreshButton
         className="size-9 shrink-0 p-0"
         loading={loading}

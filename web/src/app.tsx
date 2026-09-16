@@ -59,6 +59,7 @@ const WorkflowsPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.W
 const WorkflowDetailPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowDetailPage })));
 const WorkflowEditorPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowEditorPage })));
 const WorkflowRunPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowRunPage })));
+const ImportsPage = lazy(() => import('@/features/imports/imports-page').then(m => ({ default: m.ImportsPage })));
 const SkillsPage = lazy(() => loadSkillsPage().then((m) => ({ default: m.SkillsPage })));
 const UserModelPage = lazy(() => loadUserModelPage().then((m) => ({ default: m.UserModelPage })));
 const ConnectorsPage = lazy(() => loadConnectorsPage().then((m) => ({ default: m.ConnectorsPage })));
@@ -452,6 +453,7 @@ const router = createHashRouter([
         ),
         children: [
           { index: true, element: <Navigate to="overview" replace /> },
+          { path: 'imports', element: <Suspense fallback={<SettingsRouteFallback />}><ImportsPage /></Suspense> },
           {
             path: 'sessions',
             element: (

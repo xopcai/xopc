@@ -11,6 +11,7 @@ export type Tab =
   | 'channels'
   | 'agents'
   | 'logs'
+  | 'settingsImports'
   | 'settingsOverview'
   | 'settingsAppearance'
   | 'settingsModels'
@@ -31,6 +32,7 @@ export type Tab =
   | 'settingsDesktopApp';
 
 export type SettingsSectionId =
+  | 'imports'
   | 'overview'
   | 'appearance'
   | 'agent'

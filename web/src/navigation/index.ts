@@ -5,6 +5,7 @@ import type { SettingsSectionId, Tab } from '@/i18n/messages';
 export type { SettingsSectionId, Tab } from '@/i18n/messages';
 
 const TAB_TO_SETTINGS_SECTION: Record<
+  | 'settingsImports'
   | 'settingsOverview'
   | 'settingsAppearance'
   | 'settingsSystem'
@@ -23,6 +24,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'channels',
   SettingsSectionId
 > = {
+  settingsImports: 'imports',
   settingsOverview: 'overview',
   settingsAppearance: 'appearance',
   settingsKeyboardShortcuts: 'keyboard-shortcuts',
@@ -103,7 +105,7 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   },
   {
     id: 'system',
-    tabs: ['settingsGateway', 'settingsRuntimes', 'sessions', 'logs'],
+    tabs: ['settingsGateway', 'settingsRuntimes', 'settingsImports', 'sessions', 'logs'],
   },
 ] as const;
 

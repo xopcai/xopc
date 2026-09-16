@@ -46,7 +46,8 @@
     "settingsKeyboardShortcuts": "快捷键",
     "settingsSystem": "系统授权",
     "settingsDesktopPet": "宠物",
-    "settingsDesktopApp": "应用数据"
+    "settingsDesktopApp": "应用数据",
+    "settingsImports": "导入能力"
   },
   "token": {
     "title": "需要身份验证",

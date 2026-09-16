@@ -46,7 +46,8 @@
     "settingsKeyboardShortcuts": "Keyboard shortcuts",
     "settingsSystem": "System permissions",
     "settingsDesktopPet": "Pet",
-    "settingsDesktopApp": "Application data"
+    "settingsDesktopApp": "Application data",
+    "settingsImports": "Import capabilities"
   },
   "token": {
     "title": "Authentication required",
