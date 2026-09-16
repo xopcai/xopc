@@ -31,12 +31,18 @@ describe('HarmonyOS device migration', () => {
         INSERT INTO notification_deliveries(event_id, device_id, status, next_attempt_at, updated_at)
           VALUES ('event', 'phone', 'pending', 1, 1);
       `);
-      applyPendingMigrations(db);
+      expect(applyPendingMigrations(db, { targetVersion: 179 })).toBe(179);
+      expect(db.prepare(`
+        SELECT name FROM sqlite_master
+        WHERE type = 'table' AND (name GLOB 'devices*' OR name GLOB 'device_push_endpoints*')
+        ORDER BY name
+      `).all().map((row) => row.name)).toEqual(['device_push_endpoints', 'devices']);
       for (const table of ['devices', 'device_refresh_credentials', 'device_access_sessions', 'device_push_endpoints', 'notification_deliveries']) {
         expect(db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get()?.count).toBe(1);
       }
       expect(db.prepare('PRAGMA foreign_keys').get()?.foreign_keys).toBe(1);
       expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+      expect(applyPendingMigrations(db, { targetVersion: 179 })).toBe(179);
       const insert = db.prepare(`INSERT INTO devices(device_id, display_name, platform, public_key_jwk, scopes_json, created_at)
         VALUES (?, 'Phone', ?, '{}', '[]', 1)`);
       insert.run('harmony', 'harmonyos');
