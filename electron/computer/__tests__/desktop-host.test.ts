@@ -4,6 +4,7 @@ import type { RealtimeEndpointBinding } from '@xopcai/realtime-client';
 const state = vi.hoisted(() => ({
   saved: undefined as string | undefined,
   visible: true,
+  language: 'zh' as 'en' | 'zh',
   dialog: vi.fn(),
   write: vi.fn(),
   atomicWrite: vi.fn(),
@@ -23,7 +24,7 @@ vi.mock('node:fs/promises', () => ({
 }));
 vi.mock('../../../src/infra/write-file-atomic.js', () => ({ writeTextAtomic: state.atomicWrite }));
 vi.mock('../control-preferences.js', () => ({ readFullControl: state.readControl, writeFullControl: state.writeControl }));
-vi.mock('../../ipc/system-settings-ipc.js', () => ({ showEndpointNotification: vi.fn() }));
+vi.mock('../../ipc/system-settings-ipc.js', () => ({ showEndpointNotification: vi.fn(), getElectronShellLanguage: () => state.language }));
 vi.mock('../../ipc/file-ipc.js', () => ({ MIME_TYPE_BY_EXTENSION: {} }));
 vi.mock('../cua-driver.js', () => ({ CuaComputerDriver: class { async stop() {} } }));
 vi.mock('@xopcai/realtime-client', () => ({ RealtimeClient: class {
@@ -58,6 +59,7 @@ function host() {
 }
 const revoked = () => Response.json({ error: { code: 'PRINCIPAL_REVOKED' } }, { status: 403 });
 beforeEach(() => {
+  state.language = 'zh';
   state.readControl.mockReturnValue(false);
   state.saved = undefined; state.visible = true; state.clients = [];
   state.write.mockImplementation(async (_path, data) => { state.saved = data; });
@@ -70,6 +72,17 @@ afterEach(async () => {
 });
 
 describe('local full control', () => {
+  it('uses the current app language for each dialog without changing confirmation defaults', async () => {
+    const desktop = host();
+    await desktop.setFullControl(true);
+    expect(state.dialog.mock.lastCall?.[1]).toMatchObject({ message: '允许 xopc 完全控制应用？', buttons: ['取消', '开启完全控制'], defaultId: 0, cancelId: 0 });
+    expect(state.dialog.mock.lastCall?.[1].detail).not.toContain('Screenshots');
+    state.language = 'en';
+    await desktop.setFullControl(true);
+    expect(state.dialog.mock.lastCall?.[1]).toMatchObject({ message: 'Allow xopc full control of apps?', buttons: ['Cancel', 'Enable full control'], defaultId: 0, cancelId: 0 });
+    expect(state.dialog.mock.lastCall?.[1].detail).not.toMatch(/[\u4e00-\u9fff]/);
+    expect(state.writeControl).not.toHaveBeenCalled();
+  });
   it('requires a local opt-in, persists it and disables without another dialog', async () => {
     const desktop = host();
     expect(desktop.snapshot().fullControl).toBe(false);
