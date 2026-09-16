@@ -6,6 +6,9 @@ import type { MessageBundle } from './en';
 
 export const zh: MessageBundle = {
   recordings: {
+    transcript: '录音文字',
+    transcriptEmpty: '暂时还没有转写文字。',
+    processingFailed: '录音处理失败，请返回录音页重试。',
     decisions: "会议决策",
     actions: "行动项",
     permission: "请在系统设置中允许麦克风访问后再录音。",

@@ -14,6 +14,7 @@ import { useListSelection } from '../../hooks/use-list-selection';
 import { useMessages } from '../../i18n/messages';
 import { noteDetailRoute } from '../../lib/navigation';
 import { recordingDetailOptions, retryRecording, uploadRecording } from '../../query/recordings';
+import { invalidateNoteLists } from '../../query/workspace-sync';
 import { useGatewayStore } from '../../stores/gateway-store';
 import { radii, spacing, useTheme } from '../../theme';
 import { finishRecording, recordingAvailable, startRecording, useRecordings, type LocalRecording } from './recordings';
@@ -37,6 +38,8 @@ export function RecordingsScreen() {
   const action = useMutation({ mutationFn: async (run: () => Promise<unknown>) => run(), onSettled: () => {
     setProgress('');
     void client.invalidateQueries({ queryKey: ['recording-detail'] });
+    void client.invalidateQueries({ queryKey: ['recording-note'] });
+    invalidateNoteLists(client);
   } });
   const run = (fn: () => Promise<unknown>) => action.mutate(fn);
   const sync = async (item: LocalRecording) => uploadRecording(item, (done, total) => setProgress(`${m.uploading} ${done}/${total}`));
@@ -75,6 +78,7 @@ export function RecordingsScreen() {
           {detail.data?.recordingJob?.state === 'failed' && button(m.upload, () => run(() => sync(selected)), !matchesWorkspace)}
           {status === 'needs_attention' && detail.data?.recordingJob?.state !== 'failed' && button(m.retry, () => run(() => retryRecording(selected)), !matchesWorkspace)}
           {status && !['completed', 'needs_attention', 'cancelled'].includes(status) && <Text>{m.processing}</Text>}
+          {detail.data?.transcript.text && <View style={styles.panel}><Text variant="titleMedium">{m.transcript}</Text><Text selectable>{detail.data.transcript.text}</Text></View>}
           {organization && <View style={styles.panel}><Text variant="titleMedium">{m.summary}</Text><Text selectable>{organization.summary}</Text>
             {organization.keyPoints.map((point, index) => <Text selectable key={index}>• {point}</Text>)}
             {!!organization.decisions.length && <Text variant="titleSmall">{m.decisions}</Text>}
