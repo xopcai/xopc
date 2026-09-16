@@ -358,7 +358,7 @@ describe('SideChatConversation composer', () => {
     expect(container.querySelector('aside')?.getAttribute('aria-label')).toBe('侧边对话');
     expect(container.querySelector('button')?.textContent).toBe('侧边对话');
     expect(container.querySelector('button[aria-label="新建侧边对话"]')).not.toBeNull();
-    expect(container.querySelector('button[aria-label="收起侧栏"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="收起侧边对话"]')).not.toBeNull();
   });
 
   it('confirms before permanently closing a side chat', async () => {
