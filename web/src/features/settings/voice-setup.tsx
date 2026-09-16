@@ -1,3 +1,6 @@
+import { voiceSettingsCatalogSchema } from '@xopcai/realtime-protocol/voice';
+import { fetchJson } from '@/lib/fetch';
+import { apiUrl } from '@/lib/url';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import useSWR from 'swr';
@@ -33,6 +36,7 @@ export function VoiceSetup({ section, v, form, pending, apiKeyLabels, sttProvide
     pending ? null : ['voice-realtime-status', signature], fetchRealtimeVoiceStatus,
     { revalidateOnFocus: true },
   );
+  const { data: catalog } = useSWR(apiUrl('/api/voice/catalog'), async (url: string) => voiceSettingsCatalogSchema.parse((await fetchJson<{payload: unknown}>(url)).payload));
   const realtime = form.voice.realtime;
   const provider = form.stt.provider;
   const selection = realtime.tts;
@@ -49,8 +53,10 @@ export function VoiceSetup({ section, v, form, pending, apiKeyLabels, sttProvide
   const key = typeof form.stt.providers?.alibaba?.apiKey === 'string' ? form.stt.providers.alibaba.apiKey : '';
   const keyConfigured = Boolean(key) || sttProviders.some((entry) => entry.id === 'alibaba' && entry.configured);
   const native = realtime.defaultEngine === 'omni';
-  const currentVoice = native ? realtime.omni?.voice ?? 'Cherry' : selection?.voice ?? status?.tts?.voice ?? '';
-  const voiceOptions = native ? ['Cherry', 'Ethan', 'Serena', 'Chelsie'].map((id) => ({ id, name: id })) : realtimeVoices;
+  const currentVoice = native ? realtime.omni?.voice ?? '' : selection?.voice ?? status?.tts?.voice ?? '';
+  const voiceOptions = native ? realtime.omni?.provider === 'xopc-cloud'
+    ? catalog?.models.find(model => model.id === realtime.omni?.model)?.voice.voices ?? []
+    : ['Cherry', 'Ethan', 'Serena', 'Chelsie'].map((id) => ({ id, name: id })) : realtimeVoices;
   const canListen = Boolean(status?.enabled && status.stt);
   const canSpeak = Boolean(status?.enabled && status.tts);
   const updateRealtime = (patch: Partial<typeof realtime>) => onChange({
@@ -101,7 +107,7 @@ export function VoiceSetup({ section, v, form, pending, apiKeyLabels, sttProvide
         <label htmlFor="realtime-voice" className="text-sm font-medium text-fg">{s.voice}</label>
         <Select id="realtime-voice" className={`${selectTriggerClass} w-full sm:w-56`} value={currentVoice} disabled={native ? !realtime.omni : !selection && !status?.tts} onChange={(e) => {
           if (native && realtime.omni) { updateRealtime({ omni: { ...realtime.omni, voice: e.target.value } }); return; }
-          if (outputProvider === 'alibaba' || outputProvider === 'xopc-cloud') updateRealtime({ tts: { provider: outputProvider, ...(e.target.value ? { voice: e.target.value } : {}) }, ...(realtime.omni && ['Cherry', 'Ethan', 'Serena', 'Chelsie'].includes(e.target.value) ? { omni: { ...realtime.omni, voice: e.target.value } } : {}) });
+          if (outputProvider === 'alibaba' || outputProvider === 'xopc-cloud') updateRealtime({ tts: { ...realtime.tts, provider: outputProvider, ...(e.target.value ? { voice: e.target.value } : {}) }, ...(realtime.omni && ['Cherry', 'Ethan', 'Serena', 'Chelsie'].includes(e.target.value) ? { omni: { ...realtime.omni, voice: e.target.value } } : {}) });
         }}>
           {!native ? <SelectOption value="">{s.defaultVoice}</SelectOption> : null}
           {currentVoice && !voiceOptions.some((voice) => voice.id === currentVoice) ? <SelectOption value={currentVoice}>{currentVoice}</SelectOption> : null}

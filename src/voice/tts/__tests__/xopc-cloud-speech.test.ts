@@ -1,3 +1,4 @@
+import { voiceFixture } from '../../__tests__/voice-fixture.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Config } from '../../../config/schema.js';
@@ -20,6 +21,7 @@ function seedCatalog(): void {
     recommendedModel: null,
     lastSuccessAt: 1,
     models: [{
+      voice: voiceFixture(['speech']),
       id: 'cloud-tts', name: 'Cloud TTS', availability: 'available', kind: 'tts',
       input: ['text'], output: ['audio'], operations: ['audio.speech'],
       reasoning: false, contextWindow: 0, maxOutputTokens: null,
@@ -44,7 +46,7 @@ describe('xopcCloudSpeechProvider', () => {
     vi.unstubAllGlobals();
   });
 
-  it('discovers model voices through XOPC Cloud OAuth', async () => {
+  it('discovers voices from the published manifest', async () => {
     const fetchMock = vi.fn().mockResolvedValue(Response.json({
       data: [{ id: 'voice-a', name: 'Voice A' }, { id: 'voice-b' }],
     }));
@@ -57,12 +59,8 @@ describe('xopcCloudSpeechProvider', () => {
 
     await expect(xopcCloudSpeechProvider.listVoices?.({ providerConfig })).resolves.toEqual([
       { id: 'voice-a', name: 'Voice A' },
-      { id: 'voice-b' },
     ]);
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://models.example/v1/audio/voices?model=cloud-tts',
-      expect.objectContaining({ headers: { authorization: 'Bearer oauth-token' } }),
-    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('passes supported voice controls to the unified speech endpoint', async () => {

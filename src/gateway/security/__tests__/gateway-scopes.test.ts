@@ -8,6 +8,12 @@ import {
 } from '../gateway-scopes.js';
 
 describe('gateway scopes', () => {
+  it('requires voice configuration permission without granting general administration', () => {
+    expect(requiredGatewayScope('PUT', '/api/voice/selection')).toBe('voice.configure');
+    expect(hasGatewayScope(DEFAULT_MOBILE_SCOPES, 'voice.configure')).toBe(true);
+    expect(hasGatewayScope(DEFAULT_MOBILE_SCOPES, 'gateway.admin')).toBe(false);
+    expect(hasGatewayScope(DEFAULT_BROWSER_EXTENSION_SCOPES, 'voice.configure')).toBe(false);
+  });
   it('allows paired phones to read and respond to session confirmations', () => {
     expect(requiredGatewayScope('GET', '/api/connectors/approvals')).toBe('sessions.read');
     expect(requiredGatewayScope('POST', '/api/connectors/approvals/respond')).toBe('sessions.write');

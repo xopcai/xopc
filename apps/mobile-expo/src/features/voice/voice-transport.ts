@@ -1,6 +1,6 @@
 import { randomUUID } from 'expo-crypto';
 import {
-  decodeVoiceAudioFrame, encodeVoiceUplinkAudioFrame, parseVoiceServerEvent, VOICE_REALTIME_PROTOCOL_VERSION,
+  VoiceReceiveState, decodeVoiceAudioFrame, encodeVoiceUplinkAudioFrame, parseVoiceServerEvent, VOICE_REALTIME_PROTOCOL_VERSION,
   VOICE_REALTIME_PROXY_WS_PATH,
   type CreateVoiceSessionResponse, type VoiceClientMessage, type VoiceServerEvent,
 } from '@xopcai/realtime-protocol/voice';
@@ -27,6 +27,7 @@ function inputQuality(queueAgeMs: number): VoiceInputQuality {
 }
 
 export class VoiceTransport {
+  private receive?: VoiceReceiveState;
   private socket: WebSocket | null = null;
   private heartbeat?: ReturnType<typeof setInterval>;
   private closed = false;
@@ -49,8 +50,8 @@ export class VoiceTransport {
       socketUrl(session.websocketPath),
       socketUrl(VOICE_REALTIME_PROXY_WS_PATH),
     ]));
-    let jsonSeq = 0;
-    let audioSeq = 0;
+    const receive = new VoiceReceiveState(session);
+    this.receive = receive;
     let lastPong = Date.now();
     let lastPing = 0;
     this.connectionEpoch = session.connectionEpoch;
@@ -102,12 +103,11 @@ export class VoiceTransport {
             if (typeof data !== 'string') {
               if (!ready) throw new Error('PROTOCOL_ERROR');
               const frame = decodeVoiceAudioFrame(new Uint8Array(data));
-              if (frame.connectionEpoch !== this.connectionEpoch || frame.seq !== ++audioSeq) throw new Error('PROTOCOL_ERROR');
-              this.callbacks.audio(frame.responseId, frame.audio);
+              if (receive.audio(frame)) this.callbacks.audio(frame.responseId, frame.audio);
               return;
             }
             const event = parseVoiceServerEvent(JSON.parse(data));
-            if (event.sessionId !== session.sessionId || event.seq !== ++jsonSeq) throw new Error('PROTOCOL_ERROR');
+            receive.event(event);
             if (event.type === 'session.ready') {
               if (ready || event.payload.connectionEpoch !== session.connectionEpoch || event.payload.route.engine !== session.route.engine) throw new Error('PROTOCOL_ERROR');
               ready = true;

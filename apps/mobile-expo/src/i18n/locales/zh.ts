@@ -41,6 +41,19 @@ export const zh: MessageBundle = {
     "local": "本地录音"
 },
   voice: {
+    modelSettings: '托管语音模型',
+    recordedModel: '录音转文字',
+    dictationModel: '实时听写 / 助手输入',
+    readoutModel: '消息朗读',
+    assistantVoiceModel: '语音助手输出',
+    conversationModel: '自然语音对话',
+    chooseModel: '选择模型',
+    chooseVoice: '选择音色',
+    settingsChanged: '设置已在其他设备修改，请刷新后重试',
+    configureForbidden: '此设备没有语音配置权限，请在 Gateway 重新授权 voice.configure 后重试。',
+    selectionFailed: '保存失败，请刷新后重试',
+    sharedSettings: '各设备共用 Gateway 设置，下次调用生效',
+
     realtimeCall: '实时通话',
     assistantCall: '助手通话',
     realtimeCallHint: '自由对话，不执行任务',

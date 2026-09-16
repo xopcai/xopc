@@ -1,3 +1,4 @@
+import { requirePlatformVoiceModel } from '../platform-catalog.js';
 import type { VoiceProviderRoute } from '@xopcai/realtime-protocol/voice';
 
 import type { Config } from '../../config/schema.js';
@@ -10,12 +11,20 @@ export interface OmniRoute {
   apiKey: string;
   voice: string;
   instructions: string;
+  maxSessionSeconds?: number;
 }
 
 export async function resolveOmniRoute(config: Config): Promise<OmniRoute> {
   const slice = config.voice?.realtime?.omni;
   if (!slice) throw new Error('Natural conversation is not configured');
-  if (slice.model !== 'qwen3-omni-flash-realtime') throw new Error('This Omni model has not been certified');
+  let maxSessionSeconds: number | undefined;
+  let serviceVersion: number | undefined;
+  if (slice.provider === 'xopc-cloud') {
+    const model = requirePlatformVoiceModel(slice.model, 'conversation');
+    maxSessionSeconds = model.voice.limits.maxSessionSeconds;
+    serviceVersion = model.voice.serviceVersion;
+    if (!model.voice.voices.some(voice => voice.id === slice.voice)) throw new Error('Selected voice is unavailable');
+  }
   const managed = slice.provider === 'xopc-cloud';
   const url = new URL(managed
     ? `${resolveXopcModelRouterUrl(slice.baseUrl)}/audio/conversations/realtime`
@@ -29,5 +38,6 @@ export async function resolveOmniRoute(config: Config): Promise<OmniRoute> {
     : slice.apiKey ?? config.tools?.media?.audio?.providers?.alibaba?.apiKey ?? await getProviderAuthService().resolveApiKey('dashscope');
   if (!apiKey) throw new Error('Omni credentials are unavailable');
   url.search = new URLSearchParams({ model: slice.model }).toString();
-  return { route: { provider: slice.provider, model: slice.model, managed }, url: url.toString(), apiKey, voice: slice.voice, instructions: slice.instructions };
+  if (serviceVersion) url.searchParams.set('service_version', String(serviceVersion));
+  return { maxSessionSeconds, route: { provider: slice.provider, model: slice.model, managed }, url: url.toString(), apiKey, voice: slice.voice, instructions: slice.instructions };
 }
