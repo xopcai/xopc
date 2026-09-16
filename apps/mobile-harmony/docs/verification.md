@@ -2,6 +2,12 @@
 
 This is a development-preview evidence record, not a parity certification.
 
+## API 23 compatibility update
+
+Minimum SDK changed to `6.1.0(23)` for Mate 60 on HarmonyOS 6.1.0.135 SP8; compile/target SDK remains 26. The full host suite passed (14 client files / 53 tests and 9 backend files / 47 tests), root typecheck passed, Debug/Release HAP and Release APP built, and CodeLinter reported zero diagnostics. The compiler reported no higher-version API usage diagnostics; existing capability/throw warnings remain.
+
+The CI build also reads the packaged HAP manifest and checks `minAPIVersion = 60100023`, `targetAPIVersion = 260000026`, the registered bundle name and the Release SDK marker. These are build-time compatibility checks, not evidence of execution on API 23 hardware. The API 26 emulator results below are historical and do not substitute for Mate 60 acceptance.
+
 ## Passed
 
 | Check | Evidence |
@@ -36,7 +42,7 @@ Native tests use independent credential aliases. The TLS integration test does n
 
 ## Not yet verified / release blockers
 
-1. Real signed installation, cold start/update/data preservation on physical API-26 phones; earlier API support is not configured.
+1. Real signed installation, cold start/update/data preservation on physical API-23 and API-26 phones. Minimum SDK is now HarmonyOS 6.1 / API 23; Mate 60 on 6.1.0.135 SP8 is the first pending physical target.
 2. Full native WSS → Gateway → real model streaming/abort/background-resume journey, weak-network loss, revocation and server restart on device.
 3. Cross-client tasks/projects/automations/notes CRUD, large collections, conflict handling, file picker upload/download and duplicate-submit scenarios on device.
 4. Real microphone permission-denial/regrant, audio interruption/playback, actual speech transcription, camera scanning.

@@ -10,6 +10,10 @@ if (!tools) throw new Error('HARMONY_TOOLS_DIR must point to command-line-tools 
 const output = join(project, '.test/ci');
 mkdirSync(output, { recursive: true });
 const profile = JSON.parse(readFileSync(join(project, 'build-profile.json5'), 'utf8'));
+const product = profile.app.products.find((item) => item.name === 'default');
+if (product?.compatibleSdkVersion !== '6.1.0(23)' || product?.targetSdkVersion !== '26.0.0') {
+  throw new Error('Expected minimum HarmonyOS 6.1 / API 23 with target API 26. Review compatibility before changing this gate.');
+}
 if (profile.app.signingConfigs.length) {
   throw new Error('Unsigned CI must not load local signing material.');
 }
@@ -27,7 +31,18 @@ function collect(root, extension, mode) {
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     const path = join(root, entry.name);
     if (entry.isDirectory()) collect(path, extension, mode);
-    else if (entry.isFile() && entry.name.endsWith(extension)) {
+    else if (entry.isFile() && entry.name.endsWith(`-unsigned${extension}`)) {
+      if (extension === '.hap') {
+        const result = spawnSync('unzip', ['-p', path, 'module.json'], { encoding: 'utf8' });
+        if (result.status !== 0) throw new Error('Cannot inspect built HAP manifest.');
+        const manifest = JSON.parse(result.stdout);
+        if (manifest.app.minAPIVersion !== 60100023 || manifest.app.targetAPIVersion !== 260000026) {
+          throw new Error('Built HAP does not declare the expected API 23 minimum / API 26 target.');
+        }
+        if (manifest.app.bundleName !== 'ai.xopc.mobile' || manifest.app.apiReleaseType !== 'Release') {
+          throw new Error('Unexpected application identity or prerelease SDK requirement.');
+        }
+      }
       const name = `${mode}-${basename(path)}`;
       if (artifacts.some((artifact) => artifact.name === name)) throw new Error(`Duplicate artifact: ${name}`);
       copyFileSync(path, join(output, name));
@@ -56,7 +71,10 @@ const app = JSON.parse(readFileSync(join(project, 'AppScope/app.json5'), 'utf8')
 writeFileSync(join(output, 'build-info.json'), JSON.stringify({
   commit: process.env.GITHUB_SHA ?? 'local',
   toolchain: '26.0.0.821',
-  api: 26,
+  minimumApi: 23,
+  targetApi: 26,
+  compatibleSdkVersion: product.compatibleSdkVersion,
+  targetSdkVersion: product.targetSdkVersion,
   bundleName: app.bundleName,
   versionName: app.versionName,
   versionCode: app.versionCode,

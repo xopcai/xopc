@@ -3,7 +3,7 @@
     "signingConfigs": [],
     "products": [{
       "name": "default",
-      "compatibleSdkVersion": "26.0.0",
+      "compatibleSdkVersion": "6.1.0(23)",
       "targetSdkVersion": "26.0.0",
       "runtimeOS": "HarmonyOS"
     }],
