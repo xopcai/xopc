@@ -25,6 +25,7 @@ import { GatewayRealtimeBridge } from '@/features/gateway/gateway-realtime-bridg
 import { ProductNotificationCoordinator } from '@/features/notifications/product-notification-coordinator';
 import { SupportReportHost } from '@/features/support/support-report-host';
 import { WorkspacePreviewPane } from '@/features/workspace/workspace-preview-pane';
+import { ReadAloudDockProvider } from '@/features/voice/read-aloud-dock';
 import { GlobalReadAloudPlayer } from '@/features/voice/global-read-aloud-player';
 import { GlobalVoiceInputShortcutHost } from '@/features/voice/global-voice-input-shortcut-host';
 import { closeTaskDetailModalHref, TASK_DETAIL_MODAL_PARAM } from '@/features/tasks/task-detail-route';
@@ -86,7 +87,7 @@ function ExtensionNavigateListener() {
 export function AppShell() {
   const token = useGatewayStore((state) => state.sessionKey);
   const baseUrl = useGatewayStore((state) => state.baseUrl);
-  return <VoiceCallProvider key={`${baseUrl}:${token ?? ''}`}><AppShellContent /></VoiceCallProvider>;
+  return <VoiceCallProvider key={`${baseUrl}:${token ?? ''}`}><ReadAloudDockProvider><AppShellContent /></ReadAloudDockProvider></VoiceCallProvider>;
 }
 
 function AppShellContent() {
@@ -201,7 +202,6 @@ function AppShellContent() {
       <GlobalDiscussionCaptureHost />
       <SupportReportHost />
       <GlobalVoiceInputShortcutHost />
-      <GlobalReadAloudPlayer />
       <SideChatSelectionLauncher />
       <TokenDialog />
       <OnboardingDialog />
@@ -253,6 +253,7 @@ function AppShellContent() {
                     </div>
                   )}
                 </main>
+                <GlobalReadAloudPlayer />
                 {!isSettingsRoute && !pathname.startsWith('/chat') && !previewPath ? <MobilePrimaryNav /> : null}
               </div>
               {!isSettingsRoute ? (

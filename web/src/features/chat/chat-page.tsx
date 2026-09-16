@@ -3,6 +3,7 @@ import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRe
 import { FileText } from 'lucide-react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
+import { ReadAloudDock } from '@/features/voice/read-aloud-dock';
 import { fetchCommandsCached } from '@/features/chat/palette/command-palette-api';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SkillDiscoveryWelcome } from '@/features/skills/skill-discovery-welcome';
@@ -1297,6 +1298,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                   </Link>
                 </div>
               ) : null}
+              <ReadAloudDock />
               <ChatComposer
                 placeholder={skillDiscovery ? m.skills.findPlaceholder : undefined}
                 composerContext={!embedded && !taskId && !editingUserTurn && !showConversationLoading && msgSlice.items.length === 0 ? {

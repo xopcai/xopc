@@ -1,8 +1,9 @@
-import { Check, Loader2, RotateCcw, Settings2, X } from 'lucide-react';
+import { Check, CircleAlert, RotateCcw, Settings2, X } from 'lucide-react';
 import { memo } from 'react';
 
 import type { VoiceInputPhase } from '@/features/voice/realtime/use-realtime-voice';
 import type { ChatMessages } from '@/i18n/messages';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 
@@ -22,7 +23,7 @@ export interface ComposerVoiceInputBarProps {
 }
 
 const iconBtnClass = cn(
-  'inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-fg-muted',
+  'inline-flex min-h-11 min-w-11 shrink-0 gap-2 px-3 items-center justify-center rounded-lg text-fg-muted',
   'hover:bg-surface-hover hover:text-fg',
   interaction.transition,
   interaction.press,
@@ -50,76 +51,47 @@ export const ComposerVoiceInputBar = memo(function ComposerVoiceInputBar({
   const failed = phase === 'error';
   const status = failed
     ? error || m.voiceTranscribeFailed
-    : partialTranscript
-        ? partialTranscript
-        : finalTranscript
-          ? finalTranscript
-      : requesting
-        ? m.voiceRequestingMicrophone
-        : starting
-          ? m.voiceStartingMicrophone
-          : transcribing
-            ? m.voiceTranscribing
-            : m.voiceRecordingStatus;
+    : requesting ? m.voiceRequestingMicrophone
+      : starting ? m.voiceStartingMicrophone
+        : transcribing ? m.voiceTranscribing : m.voiceRecordingStatus;
+  const transcript = [finalTranscript, partialTranscript].filter(Boolean).join(' ');
 
   return (
-    <div
-      className="flex min-h-10 w-full items-center gap-2 py-2"
-      role="region"
-      aria-label={m.voiceInput}
-    >
-      {phase === 'recording' ? (
-        <div className="flex h-5 shrink-0 items-center gap-0.5" aria-hidden>
-          {Array.from({ length: 9 }, (_, index) => {
-            const emphasis = 0.35 + ((index % 4) + 1) * 0.16;
-            const height = Math.max(3, Math.round(18 * Math.min(1, audioLevel * emphasis + 0.08)));
-            return <span key={index} className="w-0.5 rounded-full bg-red-500 transition-[height] duration-75" style={{ height }} />;
-          })}
-        </div>
-      ) : (
-        <Loader2 className={cn('size-4 shrink-0', !failed && 'animate-spin', failed && 'text-red-500')} aria-hidden />
-      )}
-
-      <span className="min-w-0 flex-1 truncate text-sm text-fg-muted">
-        {status}
-      </span>
-
-      <span className="shrink-0 tabular-nums text-sm text-fg-subtle" aria-live="polite">
-        {phase === 'recording' ? elapsedLabel : ''}
-      </span>
-
-      <div className="flex shrink-0 items-center gap-0.5">
-        <button
-          type="button"
-          className={iconBtnClass}
-          disabled={disabled}
-          title={m.voiceInputCancel}
-          aria-label={m.voiceInputCancel}
-          onClick={onCancel}
-        >
-          <X className="size-4" />
+    <section className="w-full space-y-3 py-3" aria-label={m.voiceInput} aria-busy={requesting || starting || transcribing}>
+      <div className="flex items-center gap-3 px-1">
+        {phase === 'recording' ? (
+          <div className="flex h-5 shrink-0 items-center gap-0.5" aria-hidden>
+            {Array.from({ length: 9 }, (_, index) => {
+              const emphasis = 0.35 + ((index % 4) + 1) * 0.16;
+              const height = Math.max(3, Math.round(18 * Math.min(1, audioLevel * emphasis + 0.08)));
+              return <span key={index} className="w-0.5 rounded-full bg-fg-muted motion-safe:transition-[height] motion-safe:duration-75" style={{ height }} />;
+            })}
+          </div>
+        ) : failed ? <CircleAlert className="size-4 shrink-0 text-danger" aria-hidden /> : <Skeleton className="h-4 w-8" />}
+        <p className="min-w-0 flex-1 break-words text-sm text-fg-muted" role={failed ? 'alert' : 'status'}>{status}</p>
+        {phase === 'recording' ? <span className="shrink-0 text-sm tabular-nums text-fg-muted">{elapsedLabel}</span> : null}
+      </div>
+      {transcript ? <p className="max-h-28 overflow-y-auto overscroll-contain whitespace-pre-wrap break-words px-1 text-base text-fg">{transcript}</p> : null}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button type="button" className={iconBtnClass} title={m.voiceInputCancel} aria-label={m.voiceInputCancel} onClick={onCancel}>
+          <X className="size-4" aria-hidden />{m.voiceInputCancel}
         </button>
         {failed && settingsRequired ? (
-          <a
-            href="#/settings/capabilities/voice"
-            className={cn(iconBtnClass, 'w-auto gap-1 px-2 text-xs font-medium text-accent')}
-            title={m.voiceOpenSettings}
-          >
-            <Settings2 className="size-3.5" aria-hidden />
-            {m.voiceOpenSettings}
+          <a href="#/settings/capabilities/voice" className={cn(iconBtnClass, 'text-accent-fg')}>
+            <Settings2 className="size-4" aria-hidden />{m.voiceOpenSettings}
           </a>
-        ) : null}
-        {failed && !settingsRequired ? (
-          <button type="button" className={cn(iconBtnClass, 'text-fg')} disabled={disabled} title={m.voiceRetry} aria-label={m.voiceRetry} onClick={onRetry}>
-            <RotateCcw className="size-4" />
+        ) : failed ? (
+          <button type="button" className={iconBtnClass} disabled={disabled} aria-label={m.voiceRetry} onClick={onRetry}>
+            <RotateCcw className="size-4" aria-hidden />{m.voiceRetry}
           </button>
         ) : null}
         {phase === 'recording' || (failed && finalTranscript) ? (
-          <button type="button" className={cn(iconBtnClass, 'text-fg')} disabled={disabled} title={m.voiceInputConfirm} aria-label={m.voiceInputConfirm} onClick={onConfirm}>
-            <Check className="size-4" />
+          <button type="button" className={cn(iconBtnClass, 'rounded-full bg-accent text-white hover:bg-accent-hover hover:text-white')}
+            disabled={disabled} aria-label={m.voiceInputConfirm} onClick={onConfirm}>
+            <Check className="size-4" aria-hidden />{m.voiceInputConfirm}
           </button>
         ) : null}
       </div>
-    </div>
+    </section>
   );
 });

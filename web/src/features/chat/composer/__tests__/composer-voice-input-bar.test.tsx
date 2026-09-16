@@ -61,4 +61,16 @@ describe('ComposerVoiceInputBar', () => {
     expect(container.querySelector('a[href="#/settings/capabilities/voice"]')).toBeNull();
     expect(container.querySelector('button[aria-label="重新转写"]')).not.toBeNull();
   });
+  it('keeps completed speech visible while the next phrase is being transcribed', () => {
+    const onConfirm = vi.fn();
+    act(() => root.render(<ComposerVoiceInputBar
+      phase="recording" elapsedLabel="0:08" audioLevel={0.5}
+      finalTranscript="客户提案放到下午。" partialTranscript="上午先确认方案。"
+      chat={messages('zh').chat} onCancel={vi.fn()} onConfirm={onConfirm} onRetry={vi.fn()}
+    />));
+    expect(container.textContent).toContain('客户提案放到下午。 上午先确认方案。');
+    act(() => container.querySelector<HTMLButtonElement>('button[aria-label="完成"]')!.click());
+    expect(onConfirm).toHaveBeenCalledOnce();
+  });
+
 });

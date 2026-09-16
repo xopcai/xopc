@@ -54,7 +54,7 @@ export function ReadAloudButton({
         'inline-flex shrink-0 items-center justify-center rounded-lg text-fg-muted transition-colors transition-transform duration-150 ease-out',
         'hover:bg-surface-hover hover:text-fg active:scale-95 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
-        showLabel ? 'h-8 gap-1.5 px-2.5 text-xs font-medium' : 'size-9',
+        showLabel ? 'min-h-11 gap-1.5 px-2.5 text-sm font-medium sm:min-h-8 sm:text-xs' : 'size-11 sm:size-9',
         active && 'bg-surface-active text-accent',
         className,
       )}
