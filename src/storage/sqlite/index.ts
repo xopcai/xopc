@@ -16,6 +16,7 @@ export {
 export {
   DatabaseSchemaMigrationGapError,
   DatabaseSchemaTooNewError,
+  DatabaseSchemaTooOldError,
 } from './migrations/errors.js';
 export { discoverSqlMigrations, listRegisteredMigrationTargets } from './migrations/discover.js';
 export {

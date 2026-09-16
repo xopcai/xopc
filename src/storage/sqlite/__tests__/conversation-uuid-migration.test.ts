@@ -4,7 +4,10 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ensureSchemaMetaTable, readSchemaVersion, setSchemaVersion } from '../schema-version.js';
-import { applyPendingMigrations } from '../migrations/runner.js';
+import {
+  applyPendingMigrations,
+  XOPC_DB_BASELINE_SCHEMA_VERSION,
+} from '../migrations/runner.js';
 import { migrateConversationUuids } from '../migrations/conversation-uuid.js';
 import { conversationRouteKey, resolveConversationRoute } from '../../../routing/conversation-route.js';
 
@@ -39,7 +42,7 @@ describe('one-time conversation UUID migration', () => {
     database.exec('PRAGMA foreign_keys=ON');
     ensureSchemaMetaTable(database);
     database.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
-    setSchemaVersion(database, 11);
+    setSchemaVersion(database, XOPC_DB_BASELINE_SCHEMA_VERSION);
     applyPendingMigrations(database, { targetVersion: 177 });
   });
   afterEach(() => database.close());
