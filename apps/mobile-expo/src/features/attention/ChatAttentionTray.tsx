@@ -51,7 +51,7 @@ export function ChatAttentionTray({
 
   const openAll = useCallback(() => {
     setSheetVisible(false);
-    router.push('/attention');
+    router.push('/progress');
   }, [router]);
 
   return (
@@ -99,7 +99,6 @@ export function ChatAttentionTray({
         maxHeight="78%"
         scroll
         testID="chat-attention-sheet"
-        disableAnimation
       >
         <View style={[styles.sheetGroup, { backgroundColor: colors.surface.panel }]}>
           {orderedItems.slice(0, 3).map((item) => (

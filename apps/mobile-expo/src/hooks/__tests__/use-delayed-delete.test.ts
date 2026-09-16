@@ -19,7 +19,7 @@ vi.mock('react', () => ({
 beforeEach(() => { vi.useFakeTimers(); setters.length = 0; });
 afterEach(() => vi.useRealTimers());
 
-describe('single note deletion undo window', () => {
+describe('session deletion undo window', () => {
   it('does not send a delete request when undone during the grace period', async () => {
     const deletion = useDelayedDelete();
     const commit = vi.fn(async () => undefined);

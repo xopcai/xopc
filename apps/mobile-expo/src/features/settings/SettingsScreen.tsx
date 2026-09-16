@@ -5,7 +5,6 @@ import { Switch } from 'react-native-paper';
 
 import { NativeScreenHeader } from '@/components/NativeScreenHeader';
 import { useMessages } from '@/i18n/messages';
-import { dismissOrRoot, useDismissOnHardwareBack } from '@/lib/navigation';
 import { useGatewayConfigured } from '@/query/sessions';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { gatewayProfileHost } from '@/stores/gateway-types';
@@ -50,7 +49,6 @@ export function SettingsScreen() {
     s.gatewayNotConfigured,
   ]);
 
-  useDismissOnHardwareBack(router);
   const toggleNotifications = useCallback(async (next: boolean) => {
     if (notificationsUpdating) return;
     setNotificationsEnabled(next);
@@ -80,7 +78,7 @@ export function SettingsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-      <NativeScreenHeader title={s.title} largeTitle onBack={() => dismissOrRoot(router)} />
+      <NativeScreenHeader title={m.mobileExperience.personal} largeTitle />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scroll}

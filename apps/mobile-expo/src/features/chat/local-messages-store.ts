@@ -51,6 +51,7 @@ export function acknowledgeLocalSessionInputs(
   inputs: unknown,
 ): Message[] {
   if (!Array.isArray(inputs)) return messages;
+  const queuedIds = new Set(inputs.filter(input => input && typeof input === 'object' && ['queued', 'cancelled'].includes(input.status)).map(input => input.clientMessageId));
   const acceptedIds = new Set(inputs.flatMap((input) => {
     if (!input || typeof input !== 'object') return [];
     const clientMessageId = (input as { clientMessageId?: unknown }).clientMessageId;
@@ -59,7 +60,11 @@ export function acknowledgeLocalSessionInputs(
   if (acceptedIds.size === 0) return messages;
 
   let changed = false;
-  const next = messages.map((message) => {
+  const next = messages.filter(message => {
+    if (!queuedIds.has(message.id)) return true;
+    changed = true;
+    return false;
+  }).map((message) => {
     if (!message.id || !acceptedIds.has(message.id) || message.deliveryState === 'sent') return message;
     changed = true;
     return { ...message, deliveryState: 'sent' as const };

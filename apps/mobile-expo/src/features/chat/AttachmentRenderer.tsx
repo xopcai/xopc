@@ -203,6 +203,7 @@ export function AttachmentRenderer({
       <FilePreviewModal
         visible={Boolean(active)}
         file={active}
+        conversationId={conversationId}
         onClose={() => setActive(null)}
       />
     </>

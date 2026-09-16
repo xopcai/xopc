@@ -6,7 +6,6 @@ const ready = {
   gatewayReady: true,
   gatewayOnline: true,
   urlConversationId: '',
-  resumeLookupComplete: true,
   alreadyAttempted: false,
 };
 
@@ -19,7 +18,6 @@ describe('chat bootstrap gate', () => {
   it('does not start while another bootstrap condition is unresolved', () => {
     expect(canStartChatBootstrap({ ...ready, gatewayOnline: false })).toBe(false);
     expect(canStartChatBootstrap({ ...ready, urlConversationId: 'agent:main:webchat:existing' })).toBe(false);
-    expect(canStartChatBootstrap({ ...ready, resumeLookupComplete: false })).toBe(false);
     expect(canStartChatBootstrap({ ...ready, alreadyAttempted: true })).toBe(false);
   });
 });

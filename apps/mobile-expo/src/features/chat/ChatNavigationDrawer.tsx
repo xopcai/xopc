@@ -21,7 +21,6 @@ import { sessionDisplayName } from '../../lib/session-helpers';
 import type { SessionListItem } from '../../query/sessions';
 import { radii, spacing, typography, useTheme } from '../../theme';
 
-type NavigationItem = { icon: string; label: string; route: string; count?: number };
 
 export type ChatNavigationDrawerHandle = { open: () => void };
 
@@ -32,7 +31,6 @@ export const ChatNavigationDrawer = memo(function ChatNavigationDrawer({
   onInteraction,
   currentConversationId,
   recentSessions,
-  attentionCount,
   onSessionSelect,
   onNewChat,
 }: {
@@ -42,7 +40,6 @@ export const ChatNavigationDrawer = memo(function ChatNavigationDrawer({
   onInteraction: () => void;
   currentConversationId: string;
   recentSessions: SessionListItem[];
-  attentionCount: number;
   onSessionSelect: (conversationId: string) => void;
   onNewChat: () => void;
 }) {
@@ -95,17 +92,6 @@ export const ChatNavigationDrawer = memo(function ChatNavigationDrawer({
     onNewChat();
   }, [onDismiss, onNewChat]);
 
-  const workbench: NavigationItem[] = [
-    { icon: 'alert-circle-outline', label: copy.needsAttention, route: '/attention', count: attentionCount },
-    { icon: 'checkbox-marked-circle-outline', label: copy.tasks, route: '/tasks' },
-    { icon: 'folder-multiple-outline', label: copy.projects, route: '/projects' },
-    { icon: 'inbox-arrow-down-outline', label: copy.inbox, route: '/inbox' },
-    { icon: 'note-text-outline', label: copy.notes, route: '/notes' },
-    { icon: 'folder-outline', label: copy.files, route: '/files' },
-    { icon: 'clock-outline', label: copy.automation, route: '/automation' },
-    { icon: 'account-multiple-outline', label: copy.agents, route: '/ai/agents' },
-    { icon: 'cog-outline', label: copy.settings, route: '/settings' },
-  ];
 
   return (
     <ReanimatedDrawerLayout
@@ -199,29 +185,6 @@ export const ChatNavigationDrawer = memo(function ChatNavigationDrawer({
           </>
         ) : null}
 
-        <Text style={[styles.sectionLabel, { color: colors.text.tertiary }]}>{copy.workbench}</Text>
-        <View style={[styles.group, { backgroundColor: colors.surface.panel, borderColor: colors.border.subtle }]}>
-          {workbench.map((item) => (
-            <Pressable
-              key={item.route}
-              style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.surface.pressed }]}
-              onPress={() => navigate(item.route)}
-              accessibilityRole="button"
-            >
-              <Icon
-                source={item.icon}
-                size={19}
-                color={item.count ? colors.semantic.warning : colors.text.secondary}
-              />
-              <Text style={[styles.rowLabel, { color: colors.text.primary }]}>{item.label}</Text>
-              {item.count ? (
-                <View style={[styles.badge, { backgroundColor: colors.semantic.warning }]}>
-                  <Text style={[styles.badgeText, { color: colors.accent.onPrimary }]}>{item.count}</Text>
-                </View>
-              ) : <Icon source="chevron-right" size={18} color={colors.text.tertiary} />}
-            </Pressable>
-          ))}
-        </View>
           </ScrollView>
         </View>
       )}
@@ -244,6 +207,4 @@ const styles = StyleSheet.create({
   row: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.md },
   rowLabel: { ...typography.ui, flex: 1, minWidth: 0 },
   current: { ...typography.caption },
-  badge: { minWidth: 24, height: 24, borderRadius: radii.full, paddingHorizontal: spacing.xs, alignItems: 'center', justifyContent: 'center' },
-  badgeText: { ...typography.micro },
 });

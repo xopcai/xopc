@@ -90,7 +90,7 @@ import type { MessageSubmission } from '../../features/chat/message-submission';
 function submission(overrides: Partial<MessageSubmission> = {}): MessageSubmission {
   return {
     clientMessageId: 'message-a', gatewayId: 'computer-a', conversationId: 'session-a',
-    expectedTranscriptId: 'instance-a', content: 'hello', attachments: [], contextRefs: [], ...overrides,
+    delivery: 'next', expectedTranscriptId: 'instance-a', content: 'hello', attachments: [], contextRefs: [], ...overrides,
   };
 }
 
@@ -160,6 +160,19 @@ describe('AgentMessageSender voice message', () => {
     ]);
     expect(submitted.attachments[0]).not.toHaveProperty('data');
     expect(submitted.attachments[0]).not.toHaveProperty('localUri');
+  });
+
+  it('keeps the chosen delivery and idempotency identity on an explicit steering retry', async () => {
+    publishMobileEndpointTurnClaim('mobile-test', 'test-turn-token');
+    testState.apiFetch.mockRejectedValueOnce(new Error('Network timeout')).mockResolvedValueOnce(accepted('active-run'));
+    const sender = new AgentMessageSender();
+    const input = submission({ delivery: 'steer', content: 'Use the revised outline' });
+    await expect(sender.sendMessage(input)).rejects.toThrow('Network timeout');
+    await expect(sender.sendMessage(input)).resolves.toEqual({ runId: 'active-run' });
+    const bodies = testState.apiFetch.mock.calls.map(([, init]) => JSON.parse(String(init?.body)));
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1]).toEqual(bodies[0]);
+    expect(bodies[0]).toMatchObject({ delivery: 'steer', clientMessageId: input.clientMessageId });
   });
 
   it('submits frozen note context references', async () => {

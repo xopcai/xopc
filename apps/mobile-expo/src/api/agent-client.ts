@@ -387,7 +387,7 @@ export class AgentMessageSender {
       body: JSON.stringify({
         clientMessageId: input.clientMessageId,
         expectedTranscriptId: input.expectedTranscriptId,
-        delivery: 'next',
+        delivery: input.delivery,
         content: input.content,
         origin,
         ...(input.attachments.length ? { attachments: input.attachments } : {}),

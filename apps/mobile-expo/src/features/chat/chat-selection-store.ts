@@ -16,7 +16,7 @@ type ChatSelectionState = {
 export function createChatSelectionStore(kv: KeyValueStorage) {
   let selections: Record<string, ChatSelection> = {};
   try {
-    const saved: unknown = JSON.parse(kv.getString(KEYS.lastChatSessionByGateway) ?? '{}');
+    const saved: unknown = JSON.parse(kv.getString(KEYS.mainChatSessionByGateway) ?? '{}');
     if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
       selections = Object.fromEntries(Object.entries(saved)
         .filter(([gatewayId, key]) => gatewayId && typeof key === 'string' && key.trim())
@@ -31,7 +31,7 @@ export function createChatSelectionStore(kv: KeyValueStorage) {
       if (!gatewayId) return current;
       const selection = { key: key.trim(), revision: current.revision + 1 };
       const next = { ...get().selections, [gatewayId]: selection };
-      kv.set(KEYS.lastChatSessionByGateway, JSON.stringify(Object.fromEntries(
+      kv.set(KEYS.mainChatSessionByGateway, JSON.stringify(Object.fromEntries(
         Object.entries(next).filter(([, value]) => value.key).map(([id, value]) => [id, value.key]),
       )));
       set({ selections: next });

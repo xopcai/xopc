@@ -36,8 +36,17 @@ describe('local message delivery state', () => {
       { clientMessageId: 'message-b', status: 'queued' },
     ])).toEqual([
       { ...sending, deliveryState: 'sent' },
-      { ...failed, deliveryState: 'sent' },
     ]);
+  });
+
+  it('removes queued and cancelled optimistic messages so edits cannot leave ghost content', () => {
+    const queued = localMessage('queued', 'sent');
+    const cancelled = localMessage('cancelled', 'sent');
+    const running = localMessage('running', 'sent');
+    expect(acknowledgeLocalSessionInputs([queued, cancelled, running], [
+      { clientMessageId: 'queued', status: 'queued', content: 'Edited remotely' },
+      { clientMessageId: 'cancelled', status: 'cancelled' },
+    ])).toEqual([running]);
   });
 
   it('preserves identity when an acknowledgement has no matching local message', () => {

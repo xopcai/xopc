@@ -7,10 +7,6 @@ export function resumableRootChatSessions(items: SessionListItem[]): SessionList
   ));
 }
 
-export function rootChatResumeKey(items: SessionListItem[]): string {
-  return resumableRootChatSessions(items)[0]?.key ?? '';
-}
-
 /** Placeholder and failed queries must never decide which chat to open or create. */
 export function rootChatLookupComplete(query: {
   isSuccess: boolean;

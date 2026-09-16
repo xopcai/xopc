@@ -66,7 +66,7 @@ export const AssistantDeliverablesCard = memo(function AssistantDeliverablesCard
     <View
       style={[
         styles.card,
-        { backgroundColor: colors.surface.panel, borderColor: colors.border.default },
+        { backgroundColor: 'transparent', borderColor: colors.border.default },
       ]}
     >
       <Text style={[styles.title, { color: colors.text.secondary }]}>
@@ -133,6 +133,7 @@ export const AssistantDeliverablesCard = memo(function AssistantDeliverablesCard
           <ProductDeliveryCard
             key={`${delivery.operation}:${delivery.primary?.kind ?? 'none'}:${delivery.primary?.id ?? 'none'}`}
             delivery={delivery}
+            conversationId={conversationId}
           />
         ))}
       </View>
@@ -142,15 +143,12 @@ export const AssistantDeliverablesCard = memo(function AssistantDeliverablesCard
 
 const styles = StyleSheet.create({
   card: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     marginTop: 10,
     gap: 8,
   },
   title: {
-    ...typography.micro,
+    ...typography.label,
     fontWeight: '700',
     letterSpacing: 0.4,
   },
@@ -158,7 +156,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   artifactRow: {
-    minHeight: 40,
+    minHeight: 56,
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8,
@@ -173,12 +171,12 @@ const styles = StyleSheet.create({
   artifactTitle: {
     minWidth: 0,
     flexShrink: 1,
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: '500',
   },
   artifactStatus: {
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 13,
+    lineHeight: 19,
   },
   pressed: {
     opacity: 0.72,

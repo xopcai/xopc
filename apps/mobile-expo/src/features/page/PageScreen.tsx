@@ -2,8 +2,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AppState, Keyboard, Pressable, StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Button, Icon, Snackbar, Text } from 'react-native-paper';
+import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
 
+import { AppToast } from '../../components/AppToast';
 import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { TOAST_DURATION_SHORT } from '../../constants/toast';
 import { t, useMessages } from '../../i18n/messages';
@@ -11,8 +12,6 @@ import { dismissOrRoot, useDismissOnHardwareBack } from '../../lib/navigation';
 import { useTheme } from '../../theme';
 
 import { NoteShareSheet } from '../notes/NoteShareSheet';
-import { useDelayedDelete } from '../../hooks/use-delayed-delete';
-import { LIST_DELETE_UNDO_MS } from '../../constants/list-interaction';
 import { queryKeys } from '../../query/keys';
 import { removeNoteFromListCaches } from '../../query/note-list-cache';
 import { invalidateNoteLists } from '../../query/workspace-sync';
@@ -68,8 +67,8 @@ export function PageScreen() {
   const [aiLoadingKey, setAiLoadingKey] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const { hiddenIds, undoId, scheduleDelete, undoDelete } = useDelayedDelete<string>();
-  const deletePending = Boolean(id && hiddenIds.has(id));
+  const deleteAfterDismissRef = useRef(false);
+  const deleteInFlightRef = useRef(false);
 
   const editorCommandIdRef = useRef(0);
   const editorRef = useRef<NoteEditorBridgeHandle | null>(null);
@@ -211,8 +210,7 @@ export function PageScreen() {
       }
       if (!id || !note) return;
       event.preventDefault();
-      if (deleting || (deletePending && !undoId)) return;
-      if (undoId) undoDelete();
+      if (deleting) return;
       if (savingBeforeLeaveRef.current) return;
       savingBeforeLeaveRef.current = true;
       Keyboard.dismiss();
@@ -227,11 +225,10 @@ export function PageScreen() {
       })();
     });
     return unsubscribe;
-  }, [deletePending, deleting, id, navigation, note, saveEditorBeforeLeave, undoDelete, undoId]);
+  }, [deleting, id, navigation, note, saveEditorBeforeLeave]);
 
   const handleBack = useCallback(() => {
-    if (savingBeforeLeaveRef.current || deleting || (deletePending && !undoId)) return;
-    if (undoId) undoDelete();
+    if (savingBeforeLeaveRef.current || deleting) return;
     savingBeforeLeaveRef.current = true;
     Keyboard.dismiss();
     void (async () => {
@@ -243,7 +240,7 @@ export function PageScreen() {
         savingBeforeLeaveRef.current = false;
       }
     })();
-  }, [deletePending, deleting, router, saveEditorBeforeLeave, undoDelete, undoId]);
+  }, [deleting, router, saveEditorBeforeLeave]);
 
   useDismissOnHardwareBack(router, { onBack: handleBack });
 
@@ -278,7 +275,8 @@ export function PageScreen() {
   const { readAloudItem, stopNoteReadAloud } = useNoteReadAloud(id, title, markdown);
 
   const handleDelete = useCallback(async () => {
-    if (!id || deleting || deletePending || actionLoading) return;
+    if (!id || deleteInFlightRef.current || actionLoading) return;
+    deleteInFlightRef.current = true;
     setDeleting(true);
     setMoreVisible(false);
     Keyboard.dismiss();
@@ -286,23 +284,19 @@ export function PageScreen() {
       await prepareSavedNote();
       stopNoteReadAloud();
       setEditing(false);
-      scheduleDelete(id, async () => {
-        await deleteNote(id);
-        removeNoteFromListCaches(queryClient, id);
-        void invalidateNoteLists(queryClient);
-        void queryClient.invalidateQueries({ queryKey: queryKeys.shares });
-        allowNextRemoveRef.current = true;
-        router.replace('/notes');
-      }, (error) => {
-        setSnackMsg(error instanceof Error ? error.message : pm.actionFailed);
-      });
-      setSnackMsg(pm.deletePending);
+      await deleteNote(id);
+      removeNoteFromListCaches(queryClient, id);
+      void invalidateNoteLists(queryClient);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.shares });
+      allowNextRemoveRef.current = true;
+      dismissOrRoot(router);
     } catch (error) {
       setSnackMsg(error instanceof Error ? error.message : pm.actionFailed);
     } finally {
+      deleteInFlightRef.current = false;
       setDeleting(false);
     }
-  }, [actionLoading, deletePending, deleting, id, pm.actionFailed, pm.deletePending, prepareSavedNote, queryClient, router, scheduleDelete, stopNoteReadAloud]);
+  }, [actionLoading, id, pm.actionFailed, prepareSavedNote, queryClient, router, stopNoteReadAloud]);
 
   const handleCreateTag = useCallback((raw: string) => addNoteTag(raw), [addNoteTag]);
 
@@ -448,11 +442,11 @@ export function PageScreen() {
   }, [flushEditorToDraft]);
 
   const startEditing = useCallback((): void => {
-    if (deletePending || deleting || actionLoading) return;
+    if (deleting || actionLoading) return;
     stopNoteReadAloud();
     editorStartedAtRef.current = Date.now();
     setEditing(true);
-  }, [actionLoading, deletePending, deleting, stopNoteReadAloud]);
+  }, [actionLoading, deleting, stopNoteReadAloud]);
 
   const handleEditorRuntimeState = useCallback((state: { ready: boolean }): void => {
     if (!state.ready || editorStartedAtRef.current === null) return;
@@ -520,16 +514,10 @@ export function PageScreen() {
         onBack={handleBack}
         backLabel={m.common.back}
         statusLabel={note ? saveStatusLabel : undefined}
-        rightActions={deletePending || deleting ? [] : headerActions.map((action) => ({ ...action, disabled: Boolean(actionLoading) }))}
+        rightActions={deleting ? [] : headerActions.map((action) => ({ ...action, disabled: Boolean(actionLoading) }))}
       />
 
-      {deletePending ? (
-        <View style={styles.center}>
-          <Icon source="trash-can-outline" size={42} color={colors.text.tertiary} />
-          <Text style={{ color: colors.text.secondary }}>{undoId ? pm.deletePending : pm.deletingNote}</Text>
-          {undoId ? <Button onPress={() => { undoDelete(); setSnackMsg(''); }}>{m.listInteraction.undo}</Button> : <ActivityIndicator />}
-        </View>
-      ) : showLoading ? (
+      {showLoading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.accent.primary} />
           <Text style={{ color: colors.text.tertiary }}>{m.common.loading}</Text>
@@ -596,7 +584,7 @@ export function PageScreen() {
         />
       ) : null}
 
-      {showReadActions && !deletePending ? (
+      {showReadActions ? (
         <View style={styles.wordCountWrap} pointerEvents="none">
           <Text style={[styles.wordCountText, { color: colors.text.tertiary }]}>
             {t(pm.charCount, { count: wordCount })}
@@ -629,16 +617,21 @@ export function PageScreen() {
         </Pressable>
       ) : null}
 
-      {showReadActions && !deletePending ? <Text style={{ color: colors.text.tertiary, textAlign: 'center' }}>{pm.noteChatContextHint}</Text> : null}
-      {showReadActions && !deletePending ? (
+      {showReadActions ? <Text style={{ color: colors.text.tertiary, textAlign: 'center' }}>{pm.noteChatContextHint}</Text> : null}
+      {showReadActions ? (
         <NoteViewActionBar
-          items={viewActionItems.map((item) => ({ ...item, disabled: item.disabled || Boolean(actionLoading) || deleting || deletePending }))}
+          items={viewActionItems.map((item) => ({ ...item, disabled: item.disabled || Boolean(actionLoading) || deleting }))}
         />
       ) : null}
 
       <BottomSheetModal
         visible={moreVisible}
         onDismiss={() => setMoreVisible(false)}
+        onAfterDismiss={() => {
+          if (!deleteAfterDismissRef.current) return;
+          deleteAfterDismissRef.current = false;
+          void handleDelete();
+        }}
         title={pm.viewMore}
         maxHeight="55%"
       >
@@ -675,8 +668,8 @@ export function PageScreen() {
           </Pressable>
           <Pressable
             style={({ pressed }) => [styles.moreAction, pressed && styles.moreActionPressed]}
-            disabled={Boolean(actionLoading) || deleting || deletePending}
-            onPress={() => void handleDelete()}
+            disabled={Boolean(actionLoading) || deleting}
+            onPress={() => { deleteAfterDismissRef.current = true; setMoreVisible(false); }}
             accessibilityRole="button"
             accessibilityLabel={pm.delete}
           >
@@ -698,14 +691,13 @@ export function PageScreen() {
         onDismiss={() => setTagPickerVisible(false)}
       />
 
-      <Snackbar
+      <AppToast
         visible={Boolean(snackMsg)}
-        duration={undoId ? LIST_DELETE_UNDO_MS : TOAST_DURATION_SHORT}
-        action={undoId ? { label: m.listInteraction.undo, onPress: () => { undoDelete(); setSnackMsg(''); } } : undefined}
+        duration={TOAST_DURATION_SHORT}
         onDismiss={() => setSnackMsg('')}
       >
         {snackMsg}
-      </Snackbar>
+      </AppToast>
     </View>
   );
 }

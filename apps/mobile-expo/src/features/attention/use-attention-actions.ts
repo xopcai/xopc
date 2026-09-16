@@ -43,6 +43,7 @@ export function useAttentionActions() {
       );
     },
     onError: (error, action) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.home });
       setFeedback(
         error instanceof Error
           ? error.message
