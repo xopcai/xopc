@@ -25,6 +25,8 @@ export interface PaletteItem {
   /** Skill source (builtin, workspace, …) */
   source?: string;
   aliases?: string[];
+  /** Canonical and alternate-locale descriptions used only for search. */
+  searchTerms?: string[];
   acceptsArgs?: boolean;
 }
 

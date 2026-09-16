@@ -74,6 +74,7 @@ describe('paletteItemMatchRank', () => {
     name: 'search',
     description: 'Web search skill',
     aliases: ['find', 'lookup'],
+    searchTerms: ['网页检索技能'],
   };
 
   const commandItem: PaletteItem = {
@@ -115,6 +116,10 @@ describe('paletteItemMatchRank', () => {
 
   it('returns 100 for description-only match', () => {
     expect(paletteItemMatchRank(skillItem, 'web')).toBe(100);
+  });
+
+  it('matches alternate-locale descriptions', () => {
+    expect(paletteItemMatchRank(skillItem, '网页检索')).toBe(101);
   });
 
   it('returns null for no match', () => {

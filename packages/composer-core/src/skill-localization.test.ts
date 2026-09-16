@@ -17,6 +17,7 @@ describe('resolveSkillPresentation', () => {
       displayName: '会议行动闭环',
       description: '从会议记录中提取行动项。',
       aliases: ['meeting-to-actions', 'Meeting to Actions'],
+      searchTerms: ['Convert meeting notes into actions.'],
     });
   });
 
@@ -25,6 +26,11 @@ describe('resolveSkillPresentation', () => {
       displayName: 'review',
       description: 'Review code.',
       aliases: [],
+      searchTerms: [],
     });
+  });
+
+  it('keeps every non-selected localized description searchable without duplicates', () => {
+    expect(resolveSkillPresentation(skill, 'en').searchTerms).toEqual(['从会议记录中提取行动项。']);
   });
 });
