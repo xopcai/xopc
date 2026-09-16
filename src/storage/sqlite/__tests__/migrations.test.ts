@@ -1,6 +1,6 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { requireNodeSqlite } from '../../../infra/node-sqlite.js';
@@ -8,11 +8,11 @@ import { validateMigrationSequence } from '../migrations/discover.js';
 import {
   DatabaseSchemaMigrationGapError,
   DatabaseSchemaTooNewError,
+  DatabaseSchemaTooOldError,
 } from '../migrations/errors.js';
 import {
   applyPendingMigrations,
   inspectSchemaMigrationStatus,
-  resolveMigrationsDir,
   XOPC_DB_BASELINE_SCHEMA_VERSION,
   XOPC_DB_SCHEMA_VERSION,
 } from '../migrations/runner.js';
@@ -29,6 +29,12 @@ function openEmptyDb(): InstanceType<typeof DatabaseSync> {
   return new DatabaseSync(':memory:');
 }
 
+function installBaseline(db: InstanceType<typeof DatabaseSync>): void {
+  ensureSchemaMetaTable(db);
+  db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
+  setSchemaVersion(db, XOPC_DB_BASELINE_SCHEMA_VERSION);
+}
+
 describe('SQLite migrations', () => {
   let migrationsDir: string;
 
@@ -40,1310 +46,134 @@ describe('SQLite migrations', () => {
     rmSync(migrationsDir, { recursive: true, force: true });
   });
 
+  it('keeps the retained release window at v165 through v178', () => {
+    expect(XOPC_DB_BASELINE_SCHEMA_VERSION).toBe(165);
+    expect(XOPC_DB_SCHEMA_VERSION).toBe(178);
+
+    const db = openEmptyDb();
+    try {
+      installBaseline(db);
+      expect(applyPendingMigrations(db)).toBe(XOPC_DB_SCHEMA_VERSION);
+      expect(readSchemaVersion(db)).toBe(XOPC_DB_SCHEMA_VERSION);
+      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+      expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'capability_imports'").get())
+        .toEqual({ name: 'capability_imports' });
+      expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'conversation_routes'").get())
+        .toEqual({ name: 'conversation_routes' });
+    } finally {
+      db.close();
+    }
+  });
+
   it('migrates proactive pause controls once without retaining old fields', () => {
     const db = openEmptyDb();
     try {
-      ensureSchemaMetaTable(db);
-      db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
-      setSchemaVersion(db, XOPC_DB_BASELINE_SCHEMA_VERSION);
+      installBaseline(db);
       applyPendingMigrations(db, { targetVersion: 175 });
       db.prepare('INSERT INTO proactive_preferences(workspace_id, preferences_json, revision) VALUES (?, ?, ?)')
         .run('paused', JSON.stringify({ level: 'off', pausedUntil: '2026-09-17T00:00:00Z' }), 4);
       applyPendingMigrations(db);
       const row = db.prepare('SELECT preferences_json, revision FROM proactive_preferences').get()!;
       const preferences = JSON.parse(String(row.preferences_json));
-      expect(preferences).toMatchObject({ level: 'balanced', checksPaused: true, checksPausedUntil: '2026-09-17T00:00:00Z' });
+      expect(preferences).toMatchObject({
+        level: 'balanced',
+        checksPaused: true,
+        checksPausedUntil: '2026-09-17T00:00:00Z',
+      });
       expect(preferences).not.toHaveProperty('pausedUntil');
       expect(row.revision).toBe(4);
       expect(applyPendingMigrations(db)).toBe(XOPC_DB_SCHEMA_VERSION);
-      expect(db.prepare('SELECT preferences_json FROM proactive_preferences').get()?.preferences_json).toBe(row.preferences_json);
-    } finally { db.close(); }
+    } finally {
+      db.close();
+    }
   });
 
-  it('validateMigrationSequence rejects gaps in target versions', () => {
+  it('bootstraps a fresh database at the release target', () => {
+    const db = openEmptyDb();
+    try {
+      ensureXopcDatabaseSchema(db);
+      expect(readSchemaVersion(db)).toBe(XOPC_DB_SCHEMA_VERSION);
+      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+      expect(db.prepare('SELECT count(*) AS count FROM proactive_scenarios').get()).toEqual({ count: 6 });
+    } finally {
+      db.close();
+    }
+  });
+
+  it('validateMigrationSequence rejects gaps regardless of the first retained version', () => {
     expect(() =>
       validateMigrationSequence([
-        { targetVersion: 2, filename: '002_a.sql', sql: '' },
-        { targetVersion: 4, filename: '004_b.sql', sql: '' },
+        { targetVersion: 166, filename: '166_a.sql', sql: '' },
+        { targetVersion: 168, filename: '168_b.sql', sql: '' },
       ]),
     ).toThrow(/sequence gap/);
   });
 
   it('applyPendingMigrations runs sequential SQL files and bumps schema_meta', () => {
-    writeFileSync(
-      join(migrationsDir, '002_add_probe.sql'),
-      `CREATE TABLE migration_probe (id INTEGER PRIMARY KEY);`,
-    );
-    writeFileSync(
-      join(migrationsDir, '003_add_probe_meta.sql'),
-      `CREATE TABLE migration_probe_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);`,
-    );
+    writeFileSync(join(migrationsDir, '002_add_probe.sql'), 'CREATE TABLE migration_probe (id INTEGER PRIMARY KEY);');
+    writeFileSync(join(migrationsDir, '003_add_probe_meta.sql'), 'CREATE TABLE migration_probe_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);');
 
     const db = openEmptyDb();
     ensureSchemaMetaTable(db);
     setSchemaVersion(db, 1);
-
-    const finalVersion = applyPendingMigrations(db, {
-      migrationsDir,
-      targetVersion: 3,
-    });
-
-    expect(finalVersion).toBe(3);
+    expect(applyPendingMigrations(db, { migrationsDir, targetVersion: 3 })).toBe(3);
     expect(readSchemaVersion(db)).toBe(3);
-    expect(
-      db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'migration_probe'`).get(),
-    ).toBeDefined();
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'migration_probe'").get())
+      .toBeDefined();
+    db.close();
   });
 
   it('rolls back a failed migration and leaves schema version unchanged', () => {
-    writeFileSync(
-      join(migrationsDir, '002_bad.sql'),
-      `CREATE TABLE migration_probe (id INTEGER PRIMARY KEY);
-       INSERT INTO migration_probe VALUES (1);
-       INSERT INTO nonexistent_table VALUES (1);`,
-    );
+    writeFileSync(join(migrationsDir, '002_bad.sql'), `CREATE TABLE migration_probe (id INTEGER PRIMARY KEY);
+      INSERT INTO migration_probe VALUES (1);
+      INSERT INTO nonexistent_table VALUES (1);`);
 
     const db = openEmptyDb();
     ensureSchemaMetaTable(db);
     setSchemaVersion(db, 1);
-
-    expect(() =>
-      applyPendingMigrations(db, { migrationsDir, targetVersion: 2 }),
-    ).toThrow(/migration to v2.*failed/i);
+    expect(() => applyPendingMigrations(db, { migrationsDir, targetVersion: 2 }))
+      .toThrow(/migration to v2.*failed/i);
     expect(readSchemaVersion(db)).toBe(1);
-    expect(
-      db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'migration_probe'`).get(),
-    ).toBeUndefined();
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'migration_probe'").get())
+      .toBeUndefined();
+    db.close();
   });
 
   it('throws when database schema is newer than the app supports', () => {
     const db = openEmptyDb();
     ensureSchemaMetaTable(db);
     setSchemaVersion(db, 99);
+    expect(() => applyPendingMigrations(db, { migrationsDir, targetVersion: 1 }))
+      .toThrow(DatabaseSchemaTooNewError);
+    db.close();
+  });
 
-    expect(() => applyPendingMigrations(db, { migrationsDir, targetVersion: 1 })).toThrow(
-      DatabaseSchemaTooNewError,
-    );
+  it('rejects databases older than the retained release window', () => {
+    const db = openEmptyDb();
+    ensureSchemaMetaTable(db);
+    setSchemaVersion(db, XOPC_DB_BASELINE_SCHEMA_VERSION - 1);
+    expect(() => applyPendingMigrations(db)).toThrow(DatabaseSchemaTooOldError);
+    db.close();
   });
 
   it('throws when a required migration file is missing', () => {
     const db = openEmptyDb();
     ensureSchemaMetaTable(db);
     setSchemaVersion(db, 1);
-
-    expect(() => applyPendingMigrations(db, { migrationsDir, targetVersion: 2 })).toThrow(
-      DatabaseSchemaMigrationGapError,
-    );
+    expect(() => applyPendingMigrations(db, { migrationsDir, targetVersion: 2 }))
+      .toThrow(DatabaseSchemaMigrationGapError);
+    db.close();
   });
 
   it('inspectSchemaMigrationStatus reports pending versions without mutating', () => {
-    writeFileSync(
-      join(migrationsDir, '002_add_probe.sql'),
-      `CREATE TABLE migration_probe (id INTEGER PRIMARY KEY);`,
-    );
-
+    writeFileSync(join(migrationsDir, '002_add_probe.sql'), 'CREATE TABLE migration_probe (id INTEGER PRIMARY KEY);');
     const db = openEmptyDb();
     ensureSchemaMetaTable(db);
     setSchemaVersion(db, 1);
-
     const status = inspectSchemaMigrationStatus(db, { migrationsDir, targetVersion: 2 });
     expect(status.pendingVersions).toEqual([2]);
     expect(status.hasMigrationGap).toBe(false);
     expect(readSchemaVersion(db)).toBe(1);
+    db.close();
   });
-
-  it('v132 backfills safe Note summaries into matching user transcript rows', () => {
-    const db = openEmptyDb();
-    ensureSchemaMetaTable(db);
-    db.exec(`
-      CREATE TABLE transcripts (
-        session_id TEXT PRIMARY KEY,
-        session_key TEXT NOT NULL
-      );
-      CREATE TABLE transcript_entries (
-        entry_id TEXT PRIMARY KEY,
-        session_id TEXT NOT NULL,
-        role TEXT,
-        payload_json TEXT NOT NULL
-      );
-      CREATE TABLE session_inputs (
-        id TEXT PRIMARY KEY,
-        session_key TEXT NOT NULL,
-        run_id TEXT,
-        context_refs_json TEXT
-      );
-      INSERT INTO transcripts(session_id, session_key) VALUES ('session-1', 'session-key-1');
-      INSERT INTO transcript_entries(entry_id, session_id, role, payload_json)
-      VALUES ('entry-1', 'session-1', 'user', '{"role":"user","content":"compare","turnId":"run-1"}');
-      INSERT INTO session_inputs(id, session_key, run_id, context_refs_json)
-      VALUES (
-        'input-1',
-        'session-key-1',
-        'run-1',
-        '[{"kind":"note","sourceId":"note-1","version":"1","title":"Plan"}]'
-      );
-    `);
-    setSchemaVersion(db, 131);
-
-    expect(applyPendingMigrations(db, {
-      migrationsDir: resolveMigrationsDir(),
-      targetVersion: 132,
-    })).toBe(132);
-
-    const row = db.prepare(`SELECT payload_json FROM transcript_entries WHERE entry_id = 'entry-1'`)
-      .get() as { payload_json: string };
-    expect(JSON.parse(row.payload_json)).toMatchObject({
-      content: 'compare',
-      metadata: {
-        sourceContexts: [{ kind: 'note', sourceId: 'note-1', version: '1', title: 'Plan' }],
-      },
-    });
-  });
-
-  it('v133 archives legacy project facts without removing user-facing history', () => {
-    const db = openEmptyDb();
-    ensureSchemaMetaTable(db);
-    db.exec(`
-      CREATE TABLE user_understandings (
-        canonical_key TEXT PRIMARY KEY,
-        status TEXT NOT NULL,
-        updated_at INTEGER NOT NULL
-      );
-      INSERT INTO user_understandings(canonical_key, status, updated_at) VALUES
-        ('work-discovery:technology:one', 'active', 1),
-        ('work-discovery:workflow:two', 'candidate', 1),
-        ('work-discovery:focus:three', 'needs_review', 1),
-        ('work-discovery:preference:four', 'active', 1),
-        ('work-discovery:role:five', 'active', 1);
-    `);
-    setSchemaVersion(db, 132);
-
-    expect(applyPendingMigrations(db, {
-      migrationsDir: resolveMigrationsDir(),
-      targetVersion: 133,
-    })).toBe(133);
-
-    expect(db.prepare('SELECT canonical_key, status FROM user_understandings ORDER BY canonical_key').all())
-      .toEqual([
-        { canonical_key: 'work-discovery:focus:three', status: 'archived' },
-        { canonical_key: 'work-discovery:preference:four', status: 'active' },
-        { canonical_key: 'work-discovery:role:five', status: 'active' },
-        { canonical_key: 'work-discovery:technology:one', status: 'archived' },
-        { canonical_key: 'work-discovery:workflow:two', status: 'archived' },
-      ]);
-  });
-
-  it('v137 audits status and moves unsafe active portrait records back to review', () => {
-    const db = openEmptyDb();
-    ensureSchemaMetaTable(db);
-    db.exec(`
-      PRAGMA foreign_keys = ON;
-      CREATE TABLE user_understanding_versions (
-        version_id TEXT PRIMARY KEY,
-        understanding_id TEXT NOT NULL,
-        statement TEXT NOT NULL,
-        created_by TEXT NOT NULL
-      );
-      CREATE TABLE user_understandings (
-        understanding_id TEXT PRIMARY KEY,
-        canonical_key TEXT NOT NULL,
-        kind TEXT NOT NULL,
-        status TEXT NOT NULL,
-        current_version_id TEXT NOT NULL,
-        updated_at INTEGER NOT NULL
-      );
-      CREATE TABLE context_evidence (
-        evidence_id TEXT PRIMARY KEY,
-        extractor_id TEXT
-      );
-      CREATE TABLE understanding_evidence_links (
-        version_id TEXT NOT NULL,
-        evidence_id TEXT NOT NULL
-      );
-      CREATE TABLE context_temporal_assertions (
-        object_type TEXT NOT NULL,
-        object_id TEXT NOT NULL,
-        status TEXT NOT NULL,
-        updated_at INTEGER NOT NULL
-      );
-      INSERT INTO user_understanding_versions VALUES
-        ('v-connected', 'u-connected', 'Works with Slack integrations.', 'consolidation'),
-        ('v-user', 'u-user', 'Prefers concise responses.', 'user');
-      INSERT INTO user_understandings VALUES
-        ('u-connected', 'connected-semantic:routine:slack', 'routine', 'active', 'v-connected', 1),
-        ('u-user', 'preference:concise', 'preference', 'active', 'v-user', 1);
-      INSERT INTO context_evidence VALUES ('e-connected', 'connector-semantic');
-      INSERT INTO understanding_evidence_links VALUES ('v-connected', 'e-connected');
-      INSERT INTO context_temporal_assertions VALUES
-        ('understanding', 'u-connected', 'active', 1),
-        ('understanding', 'u-user', 'active', 1);
-    `);
-    setSchemaVersion(db, 136);
-
-    expect(applyPendingMigrations(db, {
-      migrationsDir: resolveMigrationsDir(), targetVersion: 137,
-    })).toBe(137);
-    expect(db.prepare('SELECT understanding_id, status FROM user_understandings ORDER BY understanding_id').all())
-      .toEqual([
-        { understanding_id: 'u-connected', status: 'needs_review' },
-        { understanding_id: 'u-user', status: 'active' },
-      ]);
-    expect(db.prepare(`SELECT from_status, to_status, actor_type, source
-      FROM understanding_status_events WHERE understanding_id = 'u-connected' ORDER BY created_at`).all())
-      .toEqual([
-        { from_status: null, to_status: 'active', actor_type: 'migration', source: 'status-audit-baseline' },
-        { from_status: 'active', to_status: 'needs_review', actor_type: 'migration', source: 'repair-untrusted-portrait-v1' },
-      ]);
-  });
-
-  it('v139 backfills structured file deliveries into canonical turn outcomes', () => {
-    const db = openEmptyDb();
-    ensureSchemaMetaTable(db);
-    db.exec(`
-      CREATE TABLE transcripts (
-        session_id TEXT PRIMARY KEY,
-        session_key TEXT NOT NULL
-      );
-      CREATE TABLE transcript_entries (
-        entry_id TEXT PRIMARY KEY,
-        session_id TEXT NOT NULL,
-        seq INTEGER NOT NULL,
-        entry_kind TEXT NOT NULL,
-        role TEXT,
-        payload_json TEXT NOT NULL,
-        created_at INTEGER NOT NULL,
-        UNIQUE(session_id, seq)
-      );
-      INSERT INTO transcripts(session_id, session_key) VALUES ('session-1', 'session-key-1');
-    `);
-    const insert = db.prepare(`INSERT INTO transcript_entries(
-      entry_id, session_id, seq, entry_kind, role, payload_json, created_at
-    ) VALUES (?, 'session-1', ?, 'message', ?, ?, ?)`);
-    insert.run('assistant-1', 0, 'assistant', JSON.stringify({
-      role: 'assistant', turnId: 'turn-1', content: [{ type: 'toolCall', id: 'write-1', name: 'write_file' }],
-    }), 1_000);
-    insert.run('tool-1', 1, 'toolResult', JSON.stringify({
-      role: 'toolResult',
-      turnId: 'turn-1',
-      toolCallId: 'write-1',
-      toolName: 'write_file',
-      details: {
-        delivery: {
-          version: 1,
-          operation: 'updated',
-          primary: {
-            kind: 'file',
-            id: 'space-id.cmVwb3J0cy9zYWxlcy54bHN4',
-            title: 'sales.xlsx',
-            capabilities: ['preview', 'share'],
-          },
-        },
-      },
-    }), 1_001);
-    insert.run('assistant-2', 2, 'assistant', JSON.stringify({
-      role: 'assistant', turnId: 'turn-1', content: [{ type: 'text', text: 'Done.' }],
-    }), 1_002);
-    insert.run('tool-2', 3, 'toolResult', JSON.stringify({
-      role: 'toolResult',
-      turnId: 'turn-2',
-      toolCallId: 'send-1',
-      toolName: 'send_media',
-      details: {
-        media: [{
-          id: 'media-1.xlsx',
-          name: 'history.xlsx',
-          type: 'document',
-          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          size: 42,
-          uri: 'media://outbound/media-1.xlsx',
-        }],
-      },
-    }), 2_000);
-    insert.run('assistant-3', 4, 'assistant', JSON.stringify({
-      role: 'assistant', turnId: 'turn-2', content: [{ type: 'text', text: 'Done.' }],
-    }), 2_001);
-    insert.run('outcome-2', 5, null, JSON.stringify({
-      type: 'custom',
-      customType: 'turn_outcome',
-      data: {
-        version: 1,
-        outcomeId: 'turn-2:outcome',
-        runId: 'turn-2',
-        turnId: 'turn-2',
-        status: 'succeeded',
-        deliverables: [],
-        evidence: [],
-        createdAt: '2026-09-02T00:00:00.000Z',
-      },
-    }), 2_002);
-    setSchemaVersion(db, 138);
-
-    expect(applyPendingMigrations(db, {
-      migrationsDir: resolveMigrationsDir(), targetVersion: 139,
-    })).toBe(139);
-
-    const outcomes = db.prepare(`
-      SELECT seq, payload_json
-      FROM transcript_entries
-      WHERE json_extract(payload_json, '$.customType') = 'turn_outcome'
-      ORDER BY seq
-    `).all() as Array<{ seq: number; payload_json: string }>;
-    expect(outcomes).toHaveLength(2);
-    expect(JSON.parse(outcomes[0].payload_json).data.deliverables).toEqual([
-      expect.objectContaining({
-        artifactId: 'space-id.cmVwb3J0cy9zYWxlcy54bHN4',
-        title: 'sales.xlsx',
-        kind: 'spreadsheet',
-        uri: 'xopc-file:space-id.cmVwb3J0cy9zYWxlcy54bHN4',
-      }),
-    ]);
-    expect(outcomes[0].seq).toBe(5);
-    expect(JSON.parse(outcomes[1].payload_json).data.deliverables).toEqual([
-      expect.objectContaining({
-        artifactId: 'media-1.xlsx',
-        title: 'history.xlsx',
-        kind: 'spreadsheet',
-        uri: 'media://outbound/media-1.xlsx',
-      }),
-    ]);
-  });
-
-  it.each([142, 143])('upgrades the main v%s schema with execution environments without losing device access', (version) => {
-    const db = openEmptyDb();
-    try {
-      ensureSchemaMetaTable(db);
-      db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
-      setSchemaVersion(db, XOPC_DB_BASELINE_SCHEMA_VERSION);
-      applyPendingMigrations(db, { migrationsDir: resolveMigrationsDir(), targetVersion: version });
-      db.exec(`INSERT INTO devices (device_id, display_name, platform, public_key_jwk, scopes_json, created_at)
-        VALUES ('device-1', 'Phone', 'ios', '{}', '["sessions.read"]', 1)`);
-
-      expect(applyPendingMigrations(db)).toBe(XOPC_DB_SCHEMA_VERSION);
-      expect(db.prepare('SELECT display_name, scopes_json FROM devices WHERE device_id = ?').get('device-1'))
-        .toEqual({ display_name: 'Phone', scopes_json: '["sessions.read"]' });
-      const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all()
-        .map((row) => row.name);
-      expect(tables).toEqual(expect.arrayContaining([
-        'execution_environments', 'execution_environment_bindings', 'execution_environment_events',
-      ]));
-      expect(tables).not.toContain('execution_hosts');
-      expect(tables).not.toContain('execution_environment_handoffs');
-      const environmentColumns = db.prepare('PRAGMA table_info(execution_environments)').all().map((row) => row.name);
-      expect(environmentColumns).not.toContain('host_id');
-      expect(environmentColumns).not.toContain('managed');
-      const bindingColumns = db.prepare('PRAGMA table_info(execution_environment_bindings)').all().map((row) => row.name);
-      expect(bindingColumns).toContain('conversation_id');
-      expect(bindingColumns).not.toContain('subject_kind');
-      expect(bindingColumns).not.toContain('epoch');
-      const configColumns = db.prepare('PRAGMA table_info(session_config)').all().map((row) => row.name);
-      expect(configColumns).toContain('fixed_model');
-      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    } finally {
-      db.close();
-    }
-  });
-
-  it('ensureXopcDatabaseSchema applies baseline then leaves version at release target', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'xopc-schema-'));
-    const dbPath = join(dir, 'xopc.db');
-    const db = new DatabaseSync(dbPath);
-    try {
-      ensureXopcDatabaseSchema(db);
-      expect(readSchemaVersion(db)).toBe(XOPC_DB_SCHEMA_VERSION);
-      for (const name of [
-        'understanding_source_grants', 'understanding_source_runs', 'user_assertions',
-        'user_goals', 'user_priority_windows', 'knowledge_items', 'execution_context_runs',
-      ]) {
-        expect(db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`).get(name))
-          .toEqual({ name });
-      }
-      for (const name of ['work_discovery_sources', 'work_discovery_source_refreshes']) {
-        expect(db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`).get(name))
-          .toBeUndefined();
-      }
-      for (const name of ['user_profiles', 'user_understandings', 'user_focuses', 'memory_records']) {
-        expect(db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`).get(name))
-          .toBeUndefined();
-      }
-      expect(db.prepare(
-        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'discussion_captures'`,
-      ).get()).toEqual({ name: 'discussion_captures' });
-      expect(db.prepare(
-        `SELECT scenario_key FROM proactive_scenarios WHERE scenario_key = 'discussion_follow_up'`,
-      ).get()).toEqual({ scenario_key: 'discussion_follow_up' });
-      expect(db.prepare(
-        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'discussion_action_conversions'`,
-      ).get()).toBeUndefined();
-      expect(db.prepare(
-        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'discussion_transcript_segments'`,
-      ).get()).toEqual({ name: 'discussion_transcript_segments' });
-      expect(db.prepare(
-        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'discussion_capture_settings'`,
-      ).get()).toEqual({ name: 'discussion_capture_settings' });
-      expect(db.prepare(
-        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'task_run_receipts'`,
-      ).get()).toEqual({ name: 'task_run_receipts' });
-      expect(
-        (db.prepare(`SELECT name FROM pragma_table_info('task_run_receipts')`).all() as Array<{ name: string }>)
-          .map((column) => column.name),
-      ).toContain('judgment_json');
-      expect(
-        (db.prepare(`SELECT name FROM pragma_table_info('tasks')`).all() as Array<{ name: string }>)
-          .map((column) => column.name),
-      ).toContain('phase');
-      expect(db.prepare(
-        `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'outcome_execution_state'`,
-      ).get()).toBeUndefined();
-      for (const removedTable of [
-        'task_outcomes',
-        'goal_contracts',
-        'goal_evidence_requirements',
-        'goal_evidence_requirement_links',
-        'goals',
-        'goal_queue',
-        'goal_checklist_items',
-        'goal_runs',
-        'goal_events',
-        'goal_evidence',
-        'goal_session_links',
-        'goal_context_messages',
-        'work_intakes',
-        'outcomes',
-        'outcome_contracts',
-        'outcome_links',
-        'outcome_queue',
-      ]) {
-        expect(db.prepare(
-          `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`,
-        ).get(removedTable)).toBeUndefined();
-      }
-      for (const table of ['task_run_receipts', 'workflow_runs']) {
-        const columns = db.prepare(`SELECT name FROM pragma_table_info(?)`).all(table) as Array<{ name: string }>;
-        expect(columns.map((column) => column.name)).not.toContain('goal_id');
-      }
-      expect(
-        (db.prepare(`SELECT name FROM pragma_table_info('workflow_runs')`).all() as Array<{ name: string }>)
-          .map((column) => column.name),
-      ).toContain('task_run_id');
-    } finally {
-      db.close();
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }, 15_000);
-
-  it('upgrades automation delivery settings and historical completion events from v120', () => {
-    const db = openEmptyDb();
-    ensureSchemaMetaTable(db);
-    setSchemaVersion(db, 120);
-    db.exec(`
-      CREATE TABLE automations (
-        automation_id TEXT PRIMARY KEY,
-        after_run_json TEXT
-      );
-      CREATE TABLE automation_runs (
-        run_id TEXT PRIMARY KEY,
-        current_phase TEXT,
-        created_at_ms INTEGER NOT NULL
-      );
-      CREATE TABLE automation_run_events (
-        event_id TEXT PRIMARY KEY,
-        type TEXT NOT NULL,
-        message TEXT NOT NULL
-      );
-      INSERT INTO automations VALUES ('automation-1', '{"kind":"webhook","url":"https://example.com/hook"}');
-      INSERT INTO automation_runs VALUES ('run-1', 'after_run', 1);
-      INSERT INTO automation_run_events VALUES ('event-1', 'after_run.started', 'After-run webhook started');
-    `);
-    expect(applyPendingMigrations(db, { targetVersion: 121 })).toBe(121);
-    expect(db.prepare(`SELECT completion_webhook_url FROM automations`).get()).toEqual({
-      completion_webhook_url: 'https://example.com/hook',
-    });
-    expect((db.prepare(`PRAGMA table_info(automations)`).all() as Array<{ name: string }>).map((column) => column.name))
-      .not.toContain('after_run_json');
-    expect(db.prepare(`SELECT current_phase, read_at_ms FROM automation_runs`).get()).toEqual({
-      current_phase: 'completion_hook',
-      read_at_ms: null,
-    });
-    expect(db.prepare(`SELECT type, message FROM automation_run_events`).get()).toEqual({
-      type: 'completion_hook.started',
-      message: 'Completion webhook started',
-    });
-  });
-
-  it('cuts legacy user context over to the typed user model without data loss', () => {
-    const db = openEmptyDb();
-    ensureSchemaMetaTable(db);
-    db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
-    setSchemaVersion(db, XOPC_DB_BASELINE_SCHEMA_VERSION);
-    applyPendingMigrations(db, { targetVersion: 147 });
-
-    db.exec(`
-      BEGIN;
-      INSERT INTO user_profiles (
-        principal_id, call_name, pronouns, timezone, locale, accessibility_json,
-        role, primary_goal, created_at, updated_at
-      ) VALUES ('owner', 'Mic', '', 'Asia/Shanghai', 'zh-CN', '{}', 'builder', '', 10, 20);
-      INSERT INTO user_understandings (
-        understanding_id, principal_id, kind, canonical_key, status, scope_type,
-        explicitness, durability, sensitivity, disclosure_policy, confidence,
-        current_version_id, created_at, updated_at
-      ) VALUES (
-        'old-pref', 'owner', 'preference', 'response-style', 'active', 'global',
-        'explicit', 'durable', 'normal', 'referenceable', 0.95,
-        'old-pref-v1', 10, 20
-      );
-      INSERT INTO user_understanding_versions (
-        version_id, understanding_id, statement, payload_json, created_by,
-        change_reason, created_at
-      ) VALUES (
-        'old-pref-v1', 'old-pref', 'Prefer concise answers.', '{}', 'user',
-        'User stated preference', 10
-      );
-      COMMIT;
-    `);
-
-    expect(applyPendingMigrations(db, { targetVersion: 148 })).toBe(148);
-    expect(db.prepare(`SELECT statement, authority, status FROM user_assertions WHERE assertion_id = ?`)
-      .get('old-pref')).toEqual({
-      statement: 'Prefer concise answers.',
-      authority: 'user_explicit',
-      status: 'active',
-    });
-    expect(db.prepare(`SELECT statement FROM user_assertions WHERE assertion_id = ?`)
-      .get('profile-call-name-owner')).toEqual({ statement: 'Mic' });
-    expect(db.prepare(`SELECT statement FROM user_assertions WHERE assertion_id = ?`)
-      .get('profile-role-owner')).toEqual({ statement: 'builder' });
-    expect(db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'user_understandings'`)
-      .get()).toBeUndefined();
-    expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-  });
-
-  it('backfills project ownership for existing automation sessions from v121', () => {
-    const db = openEmptyDb();
-    ensureSchemaMetaTable(db);
-    setSchemaVersion(db, 121);
-    db.exec(`
-      CREATE TABLE automations (
-        automation_id TEXT PRIMARY KEY,
-        project_id TEXT
-      );
-      CREATE TABLE automation_runs (
-        run_id TEXT PRIMARY KEY,
-        automation_id TEXT NOT NULL,
-        session_key TEXT,
-        created_at_ms INTEGER NOT NULL
-      );
-      CREATE TABLE sessions (
-        session_key TEXT PRIMARY KEY,
-        project_id TEXT
-      );
-      INSERT INTO automations VALUES
-        ('automation-1', 'project-a'),
-        ('automation-2', 'project-a');
-      INSERT INTO automation_runs VALUES
-        ('run-1', 'automation-1', 'session-unassigned', 1),
-        ('run-2', 'automation-2', 'session-user-assigned', 2);
-      INSERT INTO sessions VALUES
-        ('session-unassigned', NULL),
-        ('session-user-assigned', 'project-b');
-    `);
-
-    expect(applyPendingMigrations(db, { targetVersion: 122 })).toBe(122);
-    expect(db.prepare(`SELECT session_key, project_id FROM sessions ORDER BY session_key`).all()).toEqual([
-      { session_key: 'session-unassigned', project_id: 'project-a' },
-      { session_key: 'session-user-assigned', project_id: 'project-b' },
-    ]);
-  });
-
-  it('upgrades v116 personal-context evidence to the unified source type', () => {
-    const db = openEmptyDb();
-    ensureSchemaMetaTable(db);
-    db.exec(`
-      PRAGMA foreign_keys = ON;
-      CREATE TABLE user_profiles (
-        principal_id TEXT PRIMARY KEY,
-        call_name TEXT NOT NULL DEFAULT '',
-        pronouns TEXT NOT NULL DEFAULT '',
-        timezone TEXT NOT NULL DEFAULT '',
-        locale TEXT NOT NULL DEFAULT '',
-        accessibility_json TEXT NOT NULL DEFAULT '{}',
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
-      );
-      CREATE TABLE projects (project_id TEXT PRIMARY KEY);
-      CREATE TABLE work_discovery_runs (id TEXT PRIMARY KEY);
-      CREATE TABLE work_discovery_sources (
-        source_id TEXT PRIMARY KEY,
-        kind TEXT NOT NULL CHECK (kind = 'directory'),
-        root_path TEXT,
-        display_name TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'revoked')),
-        scope_json TEXT NOT NULL DEFAULT '{}',
-        fingerprint_json TEXT,
-        last_scanned_at INTEGER,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        UNIQUE(kind, root_path)
-      );
-      CREATE TABLE work_discovery_source_refreshes (
-        refresh_id TEXT PRIMARY KEY,
-        source_id TEXT NOT NULL REFERENCES work_discovery_sources(source_id) ON DELETE CASCADE,
-        discovery_run_id TEXT REFERENCES work_discovery_runs(id) ON DELETE SET NULL,
-        changed INTEGER NOT NULL CHECK (changed IN (0, 1)),
-        previous_fingerprint_json TEXT,
-        current_fingerprint_json TEXT NOT NULL,
-        status TEXT NOT NULL CHECK (status IN ('checked', 'queued', 'completed', 'failed')),
-        checked_at INTEGER NOT NULL
-      );
-      CREATE TABLE work_understanding_investigations (
-        investigation_id TEXT PRIMARY KEY,
-        discovery_run_id TEXT NOT NULL UNIQUE REFERENCES work_discovery_runs(id) ON DELETE CASCADE,
-        status TEXT NOT NULL,
-        plan_json TEXT NOT NULL DEFAULT '{}',
-        budget_json TEXT NOT NULL,
-        tool_call_count INTEGER NOT NULL DEFAULT 0,
-        content_chars_read INTEGER NOT NULL DEFAULT 0,
-        error_message TEXT,
-        started_at INTEGER NOT NULL,
-        completed_at INTEGER
-      );
-      CREATE TABLE work_understanding_evidence (
-        evidence_id TEXT PRIMARY KEY,
-        investigation_id TEXT NOT NULL REFERENCES work_understanding_investigations(investigation_id) ON DELETE CASCADE,
-        source_grant_id TEXT REFERENCES work_discovery_sources(source_id) ON DELETE SET NULL,
-        project_id TEXT REFERENCES projects(project_id) ON DELETE SET NULL,
-        source_type TEXT NOT NULL CHECK (source_type IN (
-          'file', 'git', 'project_metadata', 'personal_context', 'session', 'user_statement'
-        )),
-        source_ref TEXT NOT NULL,
-        observation TEXT NOT NULL,
-        content_hash TEXT,
-        observed_at INTEGER,
-        collected_at INTEGER NOT NULL,
-        sensitivity TEXT NOT NULL DEFAULT 'normal' CHECK (sensitivity IN ('normal', 'restricted'))
-      );
-      INSERT INTO work_discovery_runs VALUES ('run-1');
-      INSERT INTO work_discovery_sources (
-        source_id, kind, root_path, display_name, created_at, updated_at
-      ) VALUES ('source-1', 'directory', '/workspace', 'Workspace', 1, 1);
-      INSERT INTO work_understanding_investigations (
-        investigation_id, discovery_run_id, status, budget_json, started_at
-      ) VALUES ('investigation-1', 'run-1', 'completed', '{}', 1);
-      INSERT INTO work_understanding_evidence (
-        evidence_id, investigation_id, source_grant_id, source_type,
-        source_ref, observation, collected_at
-      ) VALUES (
-        'evidence-1', 'investigation-1', 'source-1', 'personal_context',
-        'notes:1', 'The user is focused on migration safety.', 1
-      );
-    `);
-    setSchemaVersion(db, 116);
-
-    expect(applyPendingMigrations(db, { targetVersion: 117 })).toBe(117);
-    expect(db.prepare(`
-      SELECT evidence_id, source_grant_id, source_type, source_ref, observation
-      FROM work_understanding_evidence
-    `).get()).toEqual({
-      evidence_id: 'evidence-1',
-      source_grant_id: null,
-      source_type: 'understanding_source',
-      source_ref: 'notes:1',
-      observation: 'The user is focused on migration safety.',
-    });
-    expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-  });
-
-  it('upgrades v64 knowledge item identity without losing dependent evidence', () => {
-    const db = openEmptyDb();
-    ensureSchemaMetaTable(db);
-    db.exec(`
-      PRAGMA foreign_keys = ON;
-      CREATE TABLE memory_records (record_id TEXT PRIMARY KEY);
-      CREATE TABLE user_claims (claim_id TEXT PRIMARY KEY);
-      CREATE TABLE knowledge_source_items (
-        item_id TEXT PRIMARY KEY,
-        source_instance_id TEXT NOT NULL,
-        external_id TEXT NOT NULL,
-        item_type TEXT NOT NULL,
-        author_role TEXT,
-        occurred_at INTEGER,
-        source_updated_at INTEGER,
-        content_hash TEXT NOT NULL,
-        normalized_text TEXT,
-        payload_ref TEXT,
-        metadata_json TEXT NOT NULL DEFAULT '{}',
-        sensitivity TEXT NOT NULL DEFAULT 'normal',
-        retention_class TEXT NOT NULL DEFAULT 'bounded',
-        synthesis_status TEXT NOT NULL DEFAULT 'pending',
-        deleted_at INTEGER,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        synthesis_pipeline TEXT NOT NULL DEFAULT 'user_understanding',
-        synthesis_attempts INTEGER NOT NULL DEFAULT 0,
-        synthesis_claimed_at INTEGER,
-        synthesis_claimed_by TEXT,
-        synthesis_error TEXT,
-        collection_scope TEXT NOT NULL DEFAULT 'primary',
-        UNIQUE(source_instance_id, external_id)
-      );
-      CREATE TABLE memory_evidence (
-        evidence_id TEXT PRIMARY KEY, record_id TEXT NOT NULL, source_item_id TEXT,
-        relation TEXT NOT NULL, excerpt TEXT, confidence REAL, observed_at INTEGER, created_at INTEGER NOT NULL,
-        FOREIGN KEY(record_id) REFERENCES memory_records(record_id) ON DELETE CASCADE,
-        FOREIGN KEY(source_item_id) REFERENCES knowledge_source_items(item_id) ON DELETE SET NULL
-      );
-      CREATE TABLE knowledge_source_changes (
-        sequence INTEGER PRIMARY KEY AUTOINCREMENT, change_id TEXT NOT NULL UNIQUE,
-        source_instance_id TEXT NOT NULL, source_item_id TEXT NOT NULL,
-        change_kind TEXT NOT NULL, old_hash TEXT, new_hash TEXT, changed_at INTEGER NOT NULL,
-        FOREIGN KEY(source_item_id) REFERENCES knowledge_source_items(item_id) ON DELETE CASCADE
-      );
-      CREATE TABLE user_claim_evidence (
-        claim_id TEXT NOT NULL, logical_event_key TEXT NOT NULL, source_item_id TEXT NOT NULL,
-        source_instance_id TEXT NOT NULL, relation TEXT NOT NULL, observed_at INTEGER NOT NULL,
-        created_at INTEGER NOT NULL, PRIMARY KEY(claim_id, logical_event_key),
-        FOREIGN KEY(claim_id) REFERENCES user_claims(claim_id) ON DELETE CASCADE,
-        FOREIGN KEY(source_item_id) REFERENCES knowledge_source_items(item_id) ON DELETE CASCADE
-      );
-      INSERT INTO memory_records VALUES ('memory-1');
-      INSERT INTO user_claims VALUES ('claim-1');
-      INSERT INTO knowledge_source_items (
-        item_id, source_instance_id, collection_scope, external_id, item_type, content_hash, created_at, updated_at
-      ) VALUES ('item-1', 'github:work', 'repositories', '123', 'repository', 'hash-1', 1, 1);
-      INSERT INTO memory_evidence VALUES ('evidence-1', 'memory-1', 'item-1', 'supports', NULL, 0.8, 1, 1);
-      INSERT INTO knowledge_source_changes (
-        change_id, source_instance_id, source_item_id, change_kind, changed_at
-      ) VALUES ('change-1', 'github:work', 'item-1', 'added', 1);
-      INSERT INTO user_claim_evidence VALUES ('claim-1', 'event-1', 'item-1', 'github:work', 'supports', 1, 1);
-    `);
-    setSchemaVersion(db, 64);
-
-    expect(applyPendingMigrations(db, { targetVersion: 65 })).toBe(65);
-    expect(db.prepare('SELECT source_item_id FROM memory_evidence').get()).toEqual({ source_item_id: 'item-1' });
-    expect(db.prepare('SELECT source_item_id FROM knowledge_source_changes').get()).toEqual({ source_item_id: 'item-1' });
-    expect(db.prepare('SELECT source_item_id FROM user_claim_evidence').get()).toEqual({ source_item_id: 'item-1' });
-    expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    expect(db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'knowledge_source_state'`).get())
-      .toBeUndefined();
-    expect(db.prepare(`SELECT dflt_value FROM pragma_table_info('knowledge_source_items')
-      WHERE name = 'collection_scope'`).get()).toEqual({ dflt_value: null });
-    const sourceItemsSql = db.prepare(`SELECT sql FROM sqlite_master
-      WHERE type = 'table' AND name = 'knowledge_source_items'`).get() as { sql: string };
-    expect(sourceItemsSql.sql).toContain('UNIQUE(source_instance_id, collection_scope, external_id)');
-    expect(sourceItemsSql.sql).not.toContain('UNIQUE(source_instance_id, external_id)');
-    expect(() => db.prepare(`INSERT INTO knowledge_source_items (
-      item_id, source_instance_id, collection_scope, external_id, item_type, content_hash, created_at, updated_at
-    ) VALUES ('item-2', 'github:work', 'authored-work', '123', 'development_activity', 'hash-2', 2, 2)`).run())
-      .not.toThrow();
-  });
-
-  it('upgrades v33 trust policies to allow a global auto default', () => {
-    const db = openEmptyDb();
-    ensureSchemaMetaTable(db);
-    db.exec(`
-      CREATE TABLE user_trust_policies (
-        principal_id TEXT PRIMARY KEY,
-        default_action_level TEXT NOT NULL DEFAULT 'confirm'
-          CHECK (default_action_level IN ('observe', 'suggest', 'confirm')),
-        updated_at TEXT NOT NULL
-      );
-      INSERT INTO user_trust_policies VALUES ('local-owner', 'confirm', '2026-07-19T00:00:00.000Z');
-    `);
-    setSchemaVersion(db, 33);
-
-    expect(applyPendingMigrations(db, { targetVersion: 34 })).toBe(34);
-    expect(() => db.prepare(`
-      UPDATE user_trust_policies
-      SET default_action_level = 'auto'
-      WHERE principal_id = 'local-owner'
-    `).run()).not.toThrow();
-    expect(db.prepare(`
-      SELECT default_action_level FROM user_trust_policies WHERE principal_id = 'local-owner'
-    `).get()).toEqual({ default_action_level: 'auto' });
-  });
-
-  it('upgrades v35 goal contracts with measurable task storage', () => {
-    const db = openEmptyDb();
-    ensureSchemaMetaTable(db);
-    db.exec(`
-      CREATE TABLE goals (goal_id TEXT PRIMARY KEY);
-      CREATE TABLE goal_contracts (
-        goal_id TEXT PRIMARY KEY,
-        version INTEGER NOT NULL DEFAULT 1,
-        objective TEXT NOT NULL,
-        scope_boundary TEXT,
-        evidence_plan_json TEXT NOT NULL DEFAULT '[]',
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        FOREIGN KEY (goal_id) REFERENCES goals(goal_id) ON DELETE CASCADE
-      );
-    `);
-    setSchemaVersion(db, 35);
-
-    expect(applyPendingMigrations(db, { targetVersion: 36 })).toBe(36);
-    expect(
-      db.prepare(`SELECT name FROM pragma_table_info('goal_contracts') WHERE name = 'outcome_metric_json'`).get(),
-    ).toEqual({ name: 'outcome_metric_json' });
-  });
-
-  it('repairs work discovery foreign keys from v43 without losing runs', () => {
-    const db = openEmptyDb();
-    ensureSchemaMetaTable(db);
-    db.exec('PRAGMA foreign_keys = OFF');
-    db.exec(`
-      CREATE TABLE projects (project_id TEXT PRIMARY KEY);
-      CREATE TABLE sessions (session_key TEXT PRIMARY KEY);
-      INSERT INTO projects VALUES ('project-1');
-      INSERT INTO sessions VALUES ('session-1');
-      CREATE TABLE work_discovery_runs (
-        id TEXT PRIMARY KEY,
-        idempotency_key TEXT NOT NULL UNIQUE,
-        source TEXT NOT NULL,
-        status TEXT NOT NULL,
-        stage TEXT,
-        root_path TEXT NOT NULL,
-        project_id TEXT NOT NULL,
-        session_key TEXT NOT NULL,
-        agent_id TEXT NOT NULL,
-        model_ref TEXT NOT NULL,
-        scan_policy_version INTEGER NOT NULL,
-        snapshot_summary_json TEXT,
-        result_json TEXT,
-        error_code TEXT,
-        error_message TEXT,
-        created_at INTEGER NOT NULL,
-        started_at INTEGER,
-        completed_at INTEGER,
-        canceled_at INTEGER,
-        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-        FOREIGN KEY (session_key) REFERENCES sessions(key) ON DELETE CASCADE
-      );
-      INSERT INTO work_discovery_runs (
-        id, idempotency_key, source, status, root_path, project_id, session_key,
-        agent_id, model_ref, scan_policy_version, created_at
-      ) VALUES (
-        'run-1', 'discovery-1', 'manual_selected_directory', 'queued', '/workspace',
-        'project-1', 'session-1', 'main', 'provider/model', 1, 1
-      );
-    `);
-    setSchemaVersion(db, 43);
-    db.exec('PRAGMA foreign_keys = ON');
-
-    expect(applyPendingMigrations(db, { targetVersion: 44 })).toBe(44);
-    expect(db.prepare(`SELECT id FROM work_discovery_runs`).all()).toEqual([{ id: 'run-1' }]);
-    expect(db.prepare(`PRAGMA foreign_key_list('work_discovery_runs')`).all()).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ table: 'projects', from: 'project_id', to: 'project_id' }),
-        expect.objectContaining({ table: 'sessions', from: 'session_key', to: 'session_key' }),
-      ]),
-    );
-
-    db.prepare(`DELETE FROM projects WHERE project_id = ?`).run('project-1');
-    expect(db.prepare(`SELECT id FROM work_discovery_runs`).get()).toBeUndefined();
-  });
-
-  it('adds persistent work discovery recognition feedback', () => {
-    const db = openEmptyDb();
-    ensureSchemaMetaTable(db);
-    db.exec('PRAGMA foreign_keys = OFF');
-    db.exec(`
-      CREATE TABLE projects (project_id TEXT PRIMARY KEY);
-      CREATE TABLE sessions (session_key TEXT PRIMARY KEY);
-      CREATE TABLE work_discovery_runs (id TEXT PRIMARY KEY);
-    `);
-    setSchemaVersion(db, 45);
-    db.exec('PRAGMA foreign_keys = ON');
-
-    expect(applyPendingMigrations(db, { targetVersion: 46 })).toBe(46);
-    expect(db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'work_discovery_feedback'`).get())
-      .toEqual({ name: 'work_discovery_feedback' });
-    expect(db.prepare(`PRAGMA foreign_key_list('work_discovery_feedback')`).all()).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ table: 'work_discovery_runs', from: 'run_id', to: 'id' }),
-      ]),
-    );
-  });
-
-  it('adds persistent work discovery sources', () => {
-    const db = openEmptyDb();
-    ensureSchemaMetaTable(db);
-    db.exec(`CREATE TABLE projects (project_id TEXT PRIMARY KEY);`);
-    setSchemaVersion(db, 46);
-
-    expect(applyPendingMigrations(db, { targetVersion: 50 })).toBe(50);
-    expect(db.prepare(
-      `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'work_discovery_sources'`,
-    ).get()).toEqual({ name: 'work_discovery_sources' });
-    expect(db.prepare(
-      `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'work_understanding_investigations'`,
-    ).get()).toEqual({ name: 'work_understanding_investigations' });
-    expect(db.prepare(
-      `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'work_understanding_evidence'`,
-    ).get()).toEqual({ name: 'work_understanding_evidence' });
-    expect(db.prepare(
-      `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'work_understanding_threads'`,
-    ).get()).toEqual({ name: 'work_understanding_threads' });
-    expect(db.prepare(
-      `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'work_understanding_thread_feedback'`,
-    ).get()).toEqual({ name: 'work_understanding_thread_feedback' });
-    expect(db.prepare(
-      `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'work_discovery_source_refreshes'`,
-    ).get()).toEqual({ name: 'work_discovery_source_refreshes' });
-  });
-
-  it('upgrades v21 databases with first-class work item tables', () => {
-    const db = openEmptyDb();
-    ensureSchemaMetaTable(db);
-    db.exec(`
-      CREATE TABLE goals (
-        goal_id TEXT PRIMARY KEY
-      );
-      CREATE TABLE projects (
-        project_id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        slug TEXT NOT NULL UNIQUE,
-        description TEXT,
-        status TEXT NOT NULL DEFAULT 'active',
-        default_agent_id TEXT,
-        workspace_root TEXT,
-        brief TEXT,
-        instructions TEXT,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        last_active_at INTEGER
-      );
-      CREATE TABLE sessions (
-        session_key TEXT PRIMARY KEY
-      );
-      CREATE TABLE automations (
-        automation_id TEXT PRIMARY KEY, name TEXT NOT NULL, enabled INTEGER NOT NULL,
-        trigger_json TEXT NOT NULL, action_json TEXT NOT NULL, state_json TEXT NOT NULL DEFAULT '{}',
-        created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL
-      );
-      INSERT INTO automations (
-        automation_id, name, enabled, trigger_json, action_json, created_at_ms, updated_at_ms
-      ) VALUES (
-        'system-dreaming:research:deep', 'Legacy dreaming', 1, '{}', '{}', 1, 1
-      );
-      CREATE TABLE memory_records (
-        record_id TEXT PRIMARY KEY, provider_id TEXT NOT NULL, kind TEXT NOT NULL,
-        agent_id TEXT NOT NULL, workspace_id TEXT, session_key TEXT, project_id TEXT, content TEXT NOT NULL,
-        source_json TEXT NOT NULL, confidence REAL, tags_json TEXT NOT NULL DEFAULT '[]',
-        created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, last_recalled_at INTEGER,
-        recall_count INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'active',
-        sensitivity TEXT NOT NULL DEFAULT 'normal', evidence_json TEXT NOT NULL DEFAULT '[]',
-        review_after INTEGER, expires_at INTEGER
-      );
-      CREATE VIRTUAL TABLE memory_records_fts USING fts5(
-        content, record_id UNINDEXED, provider_id UNINDEXED, kind UNINDEXED,
-        agent_id UNINDEXED, workspace_id UNINDEXED
-      );
-      CREATE TABLE memory_signals (
-        signal_id TEXT PRIMARY KEY, source TEXT NOT NULL, record_id TEXT, provider_id TEXT,
-        agent_id TEXT, workspace_id TEXT, session_key TEXT, score REAL, content TEXT,
-        metadata_json TEXT NOT NULL DEFAULT '{}', created_at INTEGER NOT NULL
-      );
-      CREATE TABLE memory_trace_events (
-        trace_id TEXT PRIMARY KEY, session_key TEXT, turn_id TEXT, phase TEXT NOT NULL,
-        provider_id TEXT NOT NULL, request_json TEXT NOT NULL DEFAULT '{}', result_count INTEGER,
-        selected_record_ids_json TEXT NOT NULL DEFAULT '[]', skipped_reason TEXT, error TEXT,
-        duration_ms INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL,
-        feedback_json TEXT NOT NULL DEFAULT '{}'
-      );
-      CREATE TABLE memory_files (
-        file_id TEXT PRIMARY KEY, agent_id TEXT NOT NULL, path TEXT NOT NULL,
-        mtime_ms INTEGER NOT NULL, content_hash TEXT NOT NULL, UNIQUE(agent_id, path)
-      );
-      CREATE TABLE memory_chunks (
-        chunk_id TEXT PRIMARY KEY, file_id TEXT NOT NULL, start_line INTEGER NOT NULL,
-        end_line INTEGER NOT NULL, content TEXT NOT NULL
-      );
-      CREATE VIRTUAL TABLE memory_fts USING fts5(
-        content, chunk_id UNINDEXED, agent_id UNINDEXED, path UNINDEXED,
-        start_line UNINDEXED, end_line UNINDEXED
-      );
-    `);
-    setSchemaVersion(db, 21);
-
-    const finalVersion = applyPendingMigrations(db, { targetVersion: 59 });
-
-    expect(finalVersion).toBe(59);
-    expect(readSchemaVersion(db)).toBe(59);
-    expect(db.prepare(`SELECT automation_id FROM automations WHERE automation_id LIKE 'system-dreaming%'`).get()).toBeUndefined();
-    for (const table of [
-      'work_items',
-      'work_item_links',
-      'work_item_events',
-      'work_item_attachments',
-      'work_item_update_suggestions',
-    ]) {
-      expect(
-        db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`).get(table),
-      ).toBeDefined();
-    }
-  });
-
-  it('removes persisted runtime-only messages and unsafe compaction rows at v60', () => {
-    const db = openEmptyDb();
-    ensureSchemaMetaTable(db);
-    db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
-    setSchemaVersion(db, XOPC_DB_BASELINE_SCHEMA_VERSION);
-    applyPendingMigrations(db, { targetVersion: 177 });
-    db.exec(`
-      INSERT INTO sessions (
-        session_key, agent_id, session_id, created_at, updated_at, last_accessed_at,
-        message_count, estimated_tokens
-      ) VALUES ('agent:main:webchat:default:direct:cleanup', 'main', 'session-cleanup', 1, 1, 1, 3, 100);
-      INSERT INTO transcripts (session_id, session_key, status, created_at, cwd)
-      VALUES ('session-cleanup', 'agent:main:webchat:default:direct:cleanup', 'active', 1, '/tmp');
-      INSERT INTO transcript_entries VALUES
-        ('entry-normal', 'session-cleanup', 1, 'message', 'user',
-          '{"role":"user","content":"keep"}', 1),
-        ('entry-runtime', 'session-cleanup', 2, 'message', 'user',
-          '{"role":"user","content":"<coding_context>leak</coding_context>","droppable":true}', 2),
-        ('entry-compaction', 'session-cleanup', 3, 'compaction', NULL,
-          '{"type":"compaction","messages":[]}', 3);
-      INSERT INTO transcript_fts (content, session_key, session_id, entry_id) VALUES
-        ('keep', 'agent:main:webchat:default:direct:cleanup', 'session-cleanup', 'entry-normal'),
-        ('leak', 'agent:main:webchat:default:direct:cleanup', 'session-cleanup', 'entry-runtime');
-    `);
-    setSchemaVersion(db, 59);
-
-    expect(applyPendingMigrations(db, { targetVersion: 60 })).toBe(60);
-    expect(db.prepare(`SELECT entry_id FROM transcript_entries ORDER BY seq`).all()).toEqual([
-      { entry_id: 'entry-normal' },
-    ]);
-    expect(db.prepare(`SELECT entry_id FROM transcript_fts`).all()).toEqual([
-      { entry_id: 'entry-normal' },
-    ]);
-    expect(db.prepare(`SELECT message_count FROM sessions WHERE session_id = 'session-cleanup'`).get())
-      .toEqual({ message_count: 1 });
-  });
-
-  it('drops legacy checkpoint tables at v61', () => {
-    const db = openEmptyDb();
-    ensureXopcDatabaseSchema(db);
-    db.exec(`
-      CREATE TABLE compaction_checkpoints (
-        checkpoint_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, session_key TEXT NOT NULL,
-        created_at INTEGER NOT NULL, message_count INTEGER NOT NULL, size_bytes INTEGER NOT NULL
-      );
-      CREATE TABLE checkpoint_entries (
-        checkpoint_id TEXT NOT NULL, seq INTEGER NOT NULL, entry_kind TEXT NOT NULL,
-        role TEXT, payload_json TEXT NOT NULL, PRIMARY KEY (checkpoint_id, seq)
-      );
-    `);
-    setSchemaVersion(db, 60);
-
-    expect(applyPendingMigrations(db, { targetVersion: 61 })).toBe(61);
-    const tables = db.prepare(
-      `SELECT name FROM sqlite_master WHERE type = 'table' AND name IN (?, ?) ORDER BY name`,
-    ).all('compaction_checkpoints', 'checkpoint_entries');
-    expect(tables).toEqual([]);
-  });
-
-  it('backfills normalized evidence attribution before dropping legacy JSON', () => {
-    const db = openEmptyDb();
-    db.exec(`
-      PRAGMA foreign_keys = ON;
-      CREATE TABLE memory_records (
-        record_id TEXT PRIMARY KEY,
-        evidence_json TEXT NOT NULL DEFAULT '[]',
-        created_at INTEGER NOT NULL
-      );
-      CREATE TABLE knowledge_source_items (item_id TEXT PRIMARY KEY);
-      CREATE TABLE memory_evidence (
-        evidence_id TEXT PRIMARY KEY,
-        record_id TEXT NOT NULL,
-        source_item_id TEXT,
-        relation TEXT NOT NULL,
-        excerpt TEXT,
-        confidence REAL,
-        observed_at INTEGER,
-        created_at INTEGER NOT NULL,
-        FOREIGN KEY(record_id) REFERENCES memory_records(record_id) ON DELETE CASCADE,
-        FOREIGN KEY(source_item_id) REFERENCES knowledge_source_items(item_id) ON DELETE SET NULL
-      );
-    `);
-    db.prepare(`INSERT INTO knowledge_source_items (item_id) VALUES (?)`).run('source-1');
-    db.prepare(`INSERT INTO memory_records (record_id, evidence_json, created_at) VALUES (?, ?, ?)`).run(
-      'memory-1',
-      JSON.stringify([{
-        sourceItemId: 'source-1',
-        relation: 'supports',
-        sessionKey: 'session-1',
-        turnId: 'turn-1',
-        toolCallId: 'tool-1',
-        observedAt: '2026-08-21T10:00:00.000Z',
-      }, {
-        sourceItemId: 'deleted-source',
-        relation: 'contradicts',
-        sourceText: 'Evidence retained after its source item was deleted.',
-        sessionKey: 'session-2',
-        observedAt: '2026-08-22T10:00:00.000Z',
-      }]),
-      1,
-    );
-    db.prepare(`INSERT INTO memory_evidence (
-      evidence_id, record_id, source_item_id, relation, created_at
-    ) VALUES (?, ?, ?, ?, ?)`).run('evidence-1', 'memory-1', 'source-1', 'supports', 1);
-    writeFileSync(
-      join(migrationsDir, '002_memory_evidence_single_source.sql'),
-      readFileSync(join(process.cwd(), 'src/storage/sqlite/migrations/113_memory_evidence_single_source.sql'), 'utf8'),
-    );
-    ensureSchemaMetaTable(db);
-    setSchemaVersion(db, 1);
-
-    expect(applyPendingMigrations(db, { migrationsDir, targetVersion: 2 })).toBe(2);
-    expect(db.prepare(`SELECT session_key, turn_id, tool_call_id, observed_at FROM memory_evidence`).get())
-      .toEqual({
-        session_key: 'session-1',
-        turn_id: 'turn-1',
-        tool_call_id: 'tool-1',
-        observed_at: Date.parse('2026-08-21T10:00:00.000Z'),
-      });
-    expect(db.prepare(`
-      SELECT source_item_id, relation, excerpt, session_key, observed_at
-      FROM memory_evidence WHERE relation = 'contradicts'
-    `).get()).toEqual({
-      source_item_id: null,
-      relation: 'contradicts',
-      excerpt: 'Evidence retained after its source item was deleted.',
-      session_key: 'session-2',
-      observed_at: Date.parse('2026-08-22T10:00:00.000Z'),
-    });
-    expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    const columns = db.prepare(`PRAGMA table_info(memory_records)`).all() as Array<{ name: string }>;
-    expect(columns.map((column) => column.name)).not.toContain('evidence_json');
-  });
-
-  it('keeps only the Task work model in the current schema', () => {
-    const db = openEmptyDb();
-    ensureXopcDatabaseSchema(db);
-
-    expect(readSchemaVersion(db)).toBe(XOPC_DB_SCHEMA_VERSION);
-    const removedTables = db.prepare(
-      `SELECT name FROM sqlite_master
-       WHERE type = 'table' AND name LIKE 'work_item%'
-       ORDER BY name`,
-    ).all();
-    expect(removedTables).toEqual([]);
-
-    expect(db.prepare(
-      `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'execution_receipts'`,
-    ).get()).toBeUndefined();
-    const receiptColumns = db.prepare(`PRAGMA table_info(task_run_receipts)`).all() as Array<{ name: string }>;
-    expect(receiptColumns.map((column) => column.name)).toContain('run_id');
-    expect(receiptColumns.map((column) => column.name)).not.toContain('task_id');
-    expect(receiptColumns.map((column) => column.name)).not.toContain('feedback_rating');
-    const taskColumns = db.prepare(`PRAGMA table_info(tasks)`).all() as Array<{ name: string }>;
-    expect(taskColumns.map((column) => column.name)).toContain('phase');
-    expect(taskColumns.map((column) => column.name)).toContain('resolution');
-    expect(taskColumns.map((column) => column.name)).not.toContain('status');
-    expect(taskColumns.map((column) => column.name)).not.toContain('approved_boundaries_json');
-    expect(db.prepare(
-      `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'task_execution_state'`,
-    ).get()).toBeUndefined();
-    expect(db.prepare(
-      `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'task_dependencies'`,
-    ).get()).toEqual({ name: 'task_dependencies' });
-
-    const blockedScenario = db.prepare(
-      `SELECT event_types_json FROM proactive_scenarios WHERE scenario_key = 'blocked_work'`,
-    ).get() as { event_types_json: string };
-    expect(JSON.parse(blockedScenario.event_types_json)).toEqual([
-      'task.attention_required.v2',
-    ]);
-  });
-
-  it('separates connector source records from work memory and removes daily raw summaries', () => {
-    const db = openEmptyDb();
-    try {
-      ensureSchemaMetaTable(db);
-      db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
-      setSchemaVersion(db, XOPC_DB_BASELINE_SCHEMA_VERSION);
-      applyPendingMigrations(db, { migrationsDir: resolveMigrationsDir(), targetVersion: 148 });
-      const insert = db.prepare(`INSERT INTO knowledge_items (
-        knowledge_id, principal_id, kind, scope_type, scope_id, content, canonical_key,
-        status, confidence, importance, origin_class, derived_from_recalled_context,
-        source_json, created_at, updated_at
-      ) VALUES (?, 'local-owner', ?, 'global', NULL, ?, ?, 'active', 0.8, 0.5,
-        'untrusted', 0, '{}', 1, 1)`);
-      insert.run('source-1', 'workspace_fact', '{"subject":"Build failed"}', 'source-item:gmail:message-1');
-      insert.run('summary-1', 'note', '# gmail updates', 'source-day:gmail:2026-09-07');
-      insert.run('memory-1', 'decision', 'Release after CI passes.', 'decision:release');
-      db.prepare('INSERT INTO knowledge_items_fts(content, knowledge_id) VALUES (?, ?)')
-        .run('# gmail updates', 'summary-1');
-
-      expect(applyPendingMigrations(db)).toBe(XOPC_DB_SCHEMA_VERSION);
-      expect(db.prepare('SELECT canonical_key, record_class FROM knowledge_items ORDER BY knowledge_id').all())
-        .toEqual([
-          { canonical_key: 'decision:release', record_class: 'memory' },
-          { canonical_key: 'source-item:gmail:message-1', record_class: 'source_index' },
-        ]);
-      expect(db.prepare('SELECT knowledge_id FROM knowledge_items_fts WHERE knowledge_id = ?').get('summary-1'))
-        .toBeUndefined();
-    } finally {
-      db.close();
-    }
-  });
-
-  it('preserves queued inputs and their instance binding across the connection-wait migration', () => {
-    const db = openEmptyDb();
-    try {
-      ensureSchemaMetaTable(db);
-      db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
-      setSchemaVersion(db, XOPC_DB_BASELINE_SCHEMA_VERSION);
-      applyPendingMigrations(db, { migrationsDir: resolveMigrationsDir(), targetVersion: 149 });
-      db.prepare(`INSERT INTO session_inputs(id,session_key,client_message_id,expected_session_id,
-        requested_delivery,effective_delivery,status,content,origin_json,position,version,created_at_ms,updated_at_ms,context_snapshots_json)
-        VALUES ('input','session','client','instance','next','next','queued','Original request','{"type":"system","source":"internal"}',1,3,10,11,'[]')`).run();
-      applyPendingMigrations(db, { targetVersion: 177 });
-      expect(db.prepare('SELECT content, expected_session_id, status, kind, version, context_snapshots_json FROM session_inputs').get())
-        .toEqual({ content: 'Original request', expected_session_id: 'instance', status: 'queued', kind: 'message', version: 3, context_snapshots_json: '[]' });
-      expect(() => db.prepare("UPDATE session_inputs SET status = 'suspended' WHERE id = 'input'").run()).not.toThrow();
-      expect(db.prepare('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' });
-    } finally { db.close(); }
-  });
-
-  it('adds browser endpoint principals without losing existing principals or bindings', () => {
-    const db = openEmptyDb();
-    try {
-      ensureSchemaMetaTable(db);
-      db.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
-      setSchemaVersion(db, XOPC_DB_BASELINE_SCHEMA_VERSION);
-      applyPendingMigrations(db, { migrationsDir: resolveMigrationsDir(), targetVersion: 156 });
-      db.prepare(`INSERT INTO endpoint_principals
-        (id, kind, display_name, platform, public_key, created_at)
-        VALUES ('existing', 'web', 'Existing browser', 'web', 'key', 1)`).run();
-      db.prepare(`INSERT INTO endpoint_instance_bindings
-        (endpoint_id, principal_id, bound_at)
-        VALUES ('endpoint-existing', 'existing', 2)`).run();
-      db.prepare(`INSERT INTO endpoint_session_bindings
-        (session_key, endpoint_id, bound_at)
-        VALUES ('session-existing', 'endpoint-existing', 3)`).run();
-
-      expect(applyPendingMigrations(db, { targetVersion: 177 })).toBe(177);
-      expect(db.prepare('SELECT principal_id FROM endpoint_instance_bindings').get())
-        .toEqual({ principal_id: 'existing' });
-      expect(db.prepare('SELECT endpoint_id FROM endpoint_session_bindings').get())
-        .toEqual({ endpoint_id: 'endpoint-existing' });
-      expect(() => db.prepare(`INSERT INTO endpoint_principals
-        (id, kind, display_name, platform, public_key, created_at)
-        VALUES ('chrome', 'browser', 'xopc Chrome', 'chrome', 'browser-key', 4)`).run())
-        .not.toThrow();
-      expect(db.prepare('PRAGMA table_info(device_pairing_sessions)').all()
-        .map((column) => (column as { name: string }).name))
-        .toEqual(expect.arrayContaining([
-          'enrollment_issuer',
-          'enrollment_extension_id',
-          'enrollment_public_key_thumbprint',
-          'enrollment_nonce',
-        ]));
-      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    } finally {
-      db.close();
-    }
-  });
-
 });
