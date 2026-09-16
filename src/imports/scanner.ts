@@ -1,3 +1,4 @@
+import { setImmediate as yieldIO } from 'node:timers/promises';
 import { randomUUID } from 'node:crypto';
 import { existsSync, readdirSync, realpathSync } from 'node:fs';
 import { basename, join } from 'node:path';
@@ -22,7 +23,7 @@ function appendMcp(scan: ImportScan, raw: unknown, scope: ImportScope, location:
     scan.candidates.push(inspectMcp(base(scan.source, scope, location), name, config));
   }
 }
-export function scanLocal(input: ScanInput): ImportScan {
+export async function scanLocal(input: ScanInput): Promise<ImportScan> {
   const scan = scanResult(input.source);
   const { home, root, layout } = sourceLayout(input.source, input.home, input.root);
   const scopes: Array<{ path: string; scope: ImportScope; shared: boolean }> = (input.projectOnly ? [] : layout.skills).map(s => ({
@@ -41,6 +42,7 @@ export function scanLocal(input: ScanInput): ImportScan {
     try { entries = readdirSync(scope.path, { withFileTypes: true }); }
     catch { scan.diagnostics.push('Unable to read skills directory'); continue; }
     for (const entry of entries) {
+      await yieldIO();
       if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
       const location = join(scope.path, entry.name);
       if (!existsSync(join(location, 'SKILL.md'))) continue;
@@ -68,8 +70,7 @@ export function scanLocal(input: ScanInput): ImportScan {
       const projects = parsed.projects;
       if (config.scope === 'user' && projects && typeof projects === 'object' && !Array.isArray(projects)) {
         const paths = Object.keys(projects);
-        scan.projectRoots = paths.slice(0, 100);
-        if (paths.length > 100) scan.diagnostics.push('Only the first 100 projects were imported.');
+        scan.projectRoots = paths;
         if (input.projectRoot) {
           const project = (projects as Record<string, Record<string, unknown>>)[input.projectRoot];
           appendMcp(scan, project?.[layout.config.mcpKey], 'project', config.path);
