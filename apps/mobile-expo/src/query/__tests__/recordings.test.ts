@@ -33,3 +33,40 @@ it('does not resend a chunk with a conflicting server receipt', async () => {
   await expect(uploadRecording(state.items[0], vi.fn())).rejects.toThrow('RECORDING_CHUNK_CONFLICT');
   expect(state.upload).not.toHaveBeenCalled();
 });
+
+it('loads recording text by note ID independently of editable markdown', async () => {
+  const { QueryClient } = await import('@tanstack/react-query');
+  const { recordingNoteOptions } = await import('../recordings');
+  const client = new QueryClient();
+  const result = { ...detail, transcript: { text: 'Confirmed recording text' }, note: { markdown: 'My notes' } };
+  state.fetch.mockResolvedValue(new Response(JSON.stringify(result)));
+  try {
+    await expect(client.fetchQuery(recordingNoteOptions('note/1', state.items[0].binding))).resolves.toEqual(result);
+    expect(state.fetch).toHaveBeenCalledWith('/api/discussions/by-note/note%2F1');
+  } finally { client.clear(); }
+});
+
+it('treats an ordinary note with no recording as absent, but surfaces server failures', async () => {
+  const { QueryClient } = await import('@tanstack/react-query');
+  const { recordingNoteOptions } = await import('../recordings');
+  const client = new QueryClient();
+  try {
+    state.fetch.mockResolvedValue(new Response('', { status: 404 }));
+    await expect(client.fetchQuery(recordingNoteOptions('ordinary', state.items[0].binding))).resolves.toBeNull();
+    state.fetch.mockResolvedValue(new Response('', { status: 500 }));
+    await expect(client.fetchQuery(recordingNoteOptions('failed', state.items[0].binding))).rejects.toThrow('HTTP 500');
+  } finally { client.clear(); }
+});
+
+it('rejects note results if the workspace changes while the response is in flight', async () => {
+  const { QueryClient } = await import('@tanstack/react-query');
+  const { recordingNoteOptions } = await import('../recordings');
+  const client = new QueryClient();
+  state.fetch.mockImplementation(async () => {
+    state.profile.gatewayId = 'other';
+    return new Response(JSON.stringify(detail));
+  });
+  try {
+    await expect(client.fetchQuery(recordingNoteOptions('note', state.items[0].binding))).rejects.toThrow('RECORDING_WORKSPACE_CHANGED');
+  } finally { client.clear(); }
+});

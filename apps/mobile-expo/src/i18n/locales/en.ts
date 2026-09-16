@@ -4,6 +4,9 @@
  */
 export const en = {
   recordings: {
+    transcript: 'Transcript',
+    transcriptEmpty: 'Transcript is not available yet.',
+    processingFailed: 'Recording processing failed. Open recordings to retry.',
     decisions: "Decisions",
     actions: "Action items",
     permission: "Allow microphone access in system settings to record.",
