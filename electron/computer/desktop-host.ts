@@ -11,7 +11,8 @@ import { COMPUTER_DESCRIPTOR, ComputerCommandSchema } from '@xopcai/computer-con
 import { ComputerBroker, type ComputerApproval } from '../../src/computer/broker.js';
 import { CuaComputerDriver } from './cua-driver.js';
 import { readFullControl, writeFullControl } from './control-preferences.js';
-import { showEndpointNotification } from '../ipc/system-settings-ipc.js';
+import { getElectronShellLanguage, showEndpointNotification } from '../ipc/system-settings-ipc.js';
+import { computerApprovalCopy, getComputerMessages } from './messages.js';
 import { MIME_TYPE_BY_EXTENSION } from '../ipc/file-ipc.js';
 import { normalizeExternalHttpUrl } from '../external-url.js';
 import { writeTextAtomic } from '../../src/infra/write-file-atomic.js';
@@ -70,10 +71,10 @@ export class DesktopEndpointHost {
         return;
       }
       if (enabled) {
+        const t = getComputerMessages(getElectronShellLanguage());
         const answer = await dialog.showMessageBox(this.options.window()!, {
-          type: 'warning', title: 'xopc Computer Use', message: '开启完全控制？ / Enable full control?',
-          detail: '之后的桌面任务不再逐次确认，可自动点击、输入及执行可能产生发送、删除等后果的操作。所有配置的 GUI 模型（包括 Agent 覆盖）均适用；窗口截图和文字会经 Gateway 发送给该模型服务。仅在本机记住，可随时关闭。系统权限、单窗口与敏感应用限制仍生效。\n\nFuture desktop tasks can observe and act without prompts, including actions that may send or delete data. Screenshots and text go through the Gateway to the configured GUI model, including agent overrides. Remembered on this device only. OS permissions and window/app restrictions still apply.',
-          buttons: ['取消 / Cancel', '开启完全控制 / Enable full control'], defaultId: 0, cancelId: 0, noLink: true,
+          type: 'warning', title: t.title, message: t.fullControl.message, detail: t.fullControl.detail,
+          buttons: [t.cancel, t.fullControl.confirm], defaultId: 0, cancelId: 0, noLink: true,
           signal: AbortSignal.any([change.signal, this.lifetime.signal]),
         });
         if (answer.response !== 1 || change.signal.aborted || this.stopped || !this.visible()) return;
@@ -97,12 +98,11 @@ export class DesktopEndpointHost {
   }
   private async approve(request: ComputerApproval, signal: AbortSignal): Promise<boolean> {
     if (!this.visible() || signal.aborted) return false;
-    const detail = request.kind === 'session'
-      ? `应用：${request.appId}\n模型：${request.model.modelRef}\n截图接收方：${request.model.origin}\n${request.model.upstreamOrigin ? `平台上游：${request.model.upstreamOrigin}\n` : ''}截图还会经过当前 Gateway。窗口内容可能包含敏感数据。\n有效期最多 15 分钟；关闭窗口即停止。\n随时使用托盘菜单或设置页停止。快捷停止键若注册成功为 Ctrl+Alt+Esc。`
-      : `应用：${request.target.appId}\n操作：${JSON.stringify(request.action)}\n只批准本次操作。涉及支付、密码、验证码或安全设置时请取消并手动处理。`;
-    const response = await dialog.showMessageBox(this.options.window()!, { type: 'warning', title: 'xopc Computer Use',
-      message: request.kind === 'session' ? '允许此任务观察和操作这个应用？' : '确认下一步电脑操作',
-      detail, buttons: ['取消', '允许这一次'], defaultId: 0, cancelId: 0, noLink: true, signal });
+    const language = getElectronShellLanguage();
+    const t = getComputerMessages(language);
+    const response = await dialog.showMessageBox(this.options.window()!, { type: 'warning', title: t.title,
+      ...computerApprovalCopy(language, request),
+      buttons: [t.cancel, t.allow], defaultId: 0, cancelId: 0, noLink: true, signal });
     return !signal.aborted && this.visible() && response.response === 1;
   }
   async start(): Promise<void> {
@@ -127,10 +127,10 @@ export class DesktopEndpointHost {
     if (!this.reenrollmentRequired || this.reenrolling || this.connecting || this.stopped || !this.visible()) return;
     this.reenrolling = true;
     try {
+      const t = getComputerMessages(getElectronShellLanguage());
       const answer = await dialog.showMessageBox(this.options.window()!, {
-        type: 'warning', title: 'xopc Desktop', message: '重新注册此桌面设备？',
-        detail: '此设备身份已被撤销。确认后将替换本机设备密钥并重新连接 Gateway，恢复聊天和桌面工具。此操作不会授予应用观察或操作权限；Computer Use 仍需单独授权。',
-        buttons: ['取消', '重新注册'], defaultId: 0, cancelId: 0, noLink: true, signal: this.lifetime.signal,
+        type: 'warning', title: t.title, message: t.reenroll.message, detail: t.reenroll.detail,
+        buttons: [t.cancel, t.reenroll.confirm], defaultId: 0, cancelId: 0, noLink: true, signal: this.lifetime.signal,
       });
       if (answer.response !== 1 || this.stopped || !this.visible()) return;
       const identity = this.createIdentity();
@@ -226,8 +226,9 @@ export class DesktopEndpointHost {
       getAvailability: () => this.options.window()?.isFocused() ? 'foreground' : 'background', createMessageId: randomUUID,
       confirm: async (request) => {
         if (!this.visible() || request.signal.aborted) return false;
+        const t = getComputerMessages(getElectronShellLanguage());
         const answer = await dialog.showMessageBox(this.options.window()!, { type: 'question', message: request.descriptor.title,
-          detail: JSON.stringify(request.arguments).slice(0, 4000), buttons: ['Cancel', 'Allow once'], defaultId: 0, cancelId: 0, signal: request.signal });
+          detail: JSON.stringify(request.arguments).slice(0, 4000), buttons: [t.cancel, t.allow], defaultId: 0, cancelId: 0, signal: request.signal });
         return !request.signal.aborted && answer.response === 1;
       },
       uploadFile: async (grant, file) => {
