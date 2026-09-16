@@ -1,7 +1,7 @@
 {
   "automations": {
     "title": "Automations",
-    "subtitle": "When something happens, run an agent or workflow.",
+    "subtitle": "Schedule reminders, summaries and follow-ups, and review their results here.",
     "refresh": "Refresh",
     "new": "New",
     "createTitle": "Create automation",
@@ -396,6 +396,49 @@
       "friday": "Friday",
       "saturday": "Saturday",
       "sunday": "Sunday"
+    },
+    "experience": {
+      "scenes": "Start with a scenario",
+      "scenesDescription": "Choose an outcome, then confirm the content and schedule.",
+      "discover": "Explore scenarios",
+      "custom": "Describe what you need",
+      "settings": "Task settings",
+      "executionIssues": "Execution issues",
+      "issuesDescription": "These tasks recently failed or timed out. Review the cause.",
+      "noRuns": "No runs yet. The first result will appear here.",
+      "viewResult": "View full result",
+      "scheduleNote": "Schedules use the gateway time zone; one-time reminders use your local time.",
+      "source": "Data used",
+      "createEnabled": "Create and enable",
+      "deleteConfirm": "Delete this automation and stop future runs?",
+      "projectRequired": "Choose the project you want to follow up on.",
+      "futureTime": "Choose a reminder time in the future."
+    },
+    "scenarios": {
+      "reminder": {
+        "name": "Reminder",
+        "description": "Remind you about something at a chosen time.",
+        "instruction": "Remind me: describe what you want to remember.",
+        "source": "Your reminder text"
+      },
+      "brief": {
+        "name": "Daily brief",
+        "description": "Summarize due tasks and project blockers.",
+        "instruction": "Summarize tasks due today, overdue tasks and project blockers. Prioritize what needs attention today. Use only accessible task and project data and explicitly report missing data.",
+        "source": "Tasks and projects in this workspace"
+      },
+      "review": {
+        "name": "Weekly review",
+        "description": "Review the week and plan upcoming priorities.",
+        "instruction": "Review completed tasks, project progress and unresolved issues from the past week. Suggest three priorities for next week. Use only accessible task and project data and explicitly report missing data.",
+        "source": "Tasks and projects in this workspace"
+      },
+      "followUp": {
+        "name": "Project follow-up",
+        "description": "Check a project for overdue tasks and blockers.",
+        "instruction": "Review tasks in the selected project. Identify overdue tasks, blockers and decisions I need to make, with suggested next steps. Use only accessible data for that project and explicitly report missing data.",
+        "source": "Tasks and projects in this workspace"
+      }
     }
   }
 }
