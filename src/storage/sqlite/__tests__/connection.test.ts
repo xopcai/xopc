@@ -1,4 +1,7 @@
-import { applyPendingMigrations } from '../migrations/runner.js';
+import {
+  applyPendingMigrations,
+  XOPC_DB_BASELINE_SCHEMA_VERSION,
+} from '../migrations/runner.js';
 import { ensureSchemaMetaTable, setSchemaVersion } from '../schema-version.js';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -138,7 +141,7 @@ describe('openXopcDatabase', () => {
     const old = new DatabaseSync(dbPath);
     ensureSchemaMetaTable(old);
     old.exec(readFileSync(new URL('../schema.sql', import.meta.url), 'utf8'));
-    setSchemaVersion(old, 11);
+    setSchemaVersion(old, XOPC_DB_BASELINE_SCHEMA_VERSION);
     applyPendingMigrations(old, { targetVersion: 177 });
     old.close();
     openXopcDatabase({ path: dbPath });

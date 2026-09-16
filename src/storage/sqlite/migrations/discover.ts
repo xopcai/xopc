@@ -35,8 +35,8 @@ export function discoverSqlMigrations(migrationsDir: string): SqlMigration[] {
 }
 
 export function validateMigrationSequence(migrations: SqlMigration[]): void {
-  for (let index = 0; index < migrations.length; index++) {
-    const expected = index + 2;
+  for (let index = 1; index < migrations.length; index++) {
+    const expected = migrations[index - 1]!.targetVersion + 1;
     const actual = migrations[index]!.targetVersion;
     if (actual !== expected) {
       throw new Error(
