@@ -1,7 +1,9 @@
-import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
-import { effectiveProactivePolicy } from '../policy/service.js';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
+
+import { evidenceSourcesFresh } from '../source-freshness.js';
+import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
+import { effectiveProactivePolicy } from '../policy/service.js';
 
 import { createLogger } from '../../utils/logger.js';
 import { markReadyBatches } from '../routing/batch-repository.js';
@@ -10,7 +12,7 @@ import { getPromptRevision, getScenario } from '../scenarios/repository.js';
 
 import { ContextProviderRegistry } from './context.js';
 import { isValuableInsight, parseAnalysisResult, scoreInsight } from './insight.js';
-import { attachSnapshot, claimNextRun, eventIdsForBatch, failRun, finishRun, saveSnapshot } from './repository.js';
+import { attachSnapshot, claimNextRun, deferRunForSource, eventIdsForBatch, failRun, finishRun, saveSnapshot } from './repository.js';
 import type { ProactiveAgentExecutor } from './types.js';
 import { authorizedConnectedSource } from './authorization.js';
 
@@ -63,6 +65,7 @@ export class ProactiveWorker {
           finishRun({ run, rawOutput: '', outcomeReason: 'source_unavailable' });
           return;
         }
+        if (!evidenceSourcesFresh(context.evidenceIds, context.content)) { deferRunForSource(run); return; }
         const snapshot = saveSnapshot(
           run.batchId,
           context.snapshotContent ?? context.content,
@@ -75,9 +78,11 @@ export class ProactiveWorker {
         const latestContext = await this.contexts.collect(scenario, { batchId: run.batchId, eventIds, subscriptionId: run.subscriptionId });
         const revoked = context.evidenceIds.some((id) => !latestContext.evidenceIds.includes(id));
         const changed = !isDeepStrictEqual(context.snapshotContent ?? context.content, latestContext.snapshotContent ?? latestContext.content);
+        const stale = !evidenceSourcesFresh(latestContext.evidenceIds, latestContext.content);
+        if (stale && !revoked) { deferRunForSource(run); return; }
         const unavailable = context.evidenceIds.some(id => id.startsWith('source-item:')
           && !authorizedConnectedSource(id.slice('source-item:'.length), effectiveProactivePolicy(run.subscriptionId).workspaceId, run.scenarioKey));
-        const result = revoked || changed ? { result: 'no_insight' as const, reason: unavailable ? 'source_unavailable' : 'source_changed' } : parseAnalysisResult(output.text, new Set(latestContext.evidenceIds));
+        const result = revoked || changed || stale ? { result: 'no_insight' as const, reason: unavailable ? 'source_unavailable' : stale ? 'source_stale' : 'source_changed' } : parseAnalysisResult(output.text, new Set(latestContext.evidenceIds));
         const candidate = result.result === 'insight' ? result.candidate : undefined;
         if (run.scenarioKey === 'communication_follow_up' && (candidate?.decision || candidate?.proposedAction)) {
           throw new Error('Communication preparation must return a draft or update; actions require the conversation confirmation flow');

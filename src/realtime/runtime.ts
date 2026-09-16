@@ -149,13 +149,28 @@ export class RealtimeRuntime {
       budgetHeld = false;
       this.preauthBudget.release(clientIp);
     };
+    const guardConnection = (phase: string, action: () => void) => {
+      try {
+        action();
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        log.error({ err, errorMessage, phase, connectionId, endpointId, principalId },
+          `Realtime connection failed: ${errorMessage}`);
+        socket.terminate();
+      }
+    };
+    socket.on('error', (err) => {
+      log.warn({ err, connectionId, endpointId }, `Realtime socket failed: ${err.message}`);
+      socket.terminate();
+    });
+
     const helloTimer = setTimeout(() => socket.close(4401, 'Realtime hello timeout'), REALTIME_HELLO_TIMEOUT_MS);
-    const heartbeatTimer = setInterval(() => {
+    const heartbeatTimer = setInterval(() => guardConnection('heartbeat', () => {
       if (principalId && !this.isPrincipalActive(principalId)) { socket.terminate(); return; }
       if (Date.now() - lastSeenAt > REALTIME_HEARTBEAT_TIMEOUT_MS) {
         socket.close(4408, 'Realtime heartbeat timeout');
       }
-    }, REALTIME_HEARTBEAT_INTERVAL_MS);
+    }), REALTIME_HEARTBEAT_INTERVAL_MS);
 
     const sendError = (code: string, message: string) => {
       writer.enqueue(serverMessage('realtime.error', { code, message }), 'critical');
@@ -198,7 +213,7 @@ export class RealtimeRuntime {
       return true;
     };
 
-    socket.on('message', (data, isBinary) => {
+    socket.on('message', (data, isBinary) => guardConnection('message', () => {
       if (isBinary) {
         socket.close(4400, 'Binary realtime frames are not supported');
         return;
@@ -304,7 +319,7 @@ export class RealtimeRuntime {
           socket.close(4400, 'Invalid endpoint message');
         }
       }
-    });
+    }));
 
     socket.on('close', (code, reasonBuffer) => {
       clearTimeout(helloTimer);
@@ -313,7 +328,9 @@ export class RealtimeRuntime {
       writer.close();
       for (const handle of subscriptions.values()) handle.unsubscribe();
       subscriptions.clear();
-      if (endpointId && connectionId) this.endpointTools?.remove(endpointId, connectionId);
+      guardConnection('endpoint_remove', () => {
+        if (endpointId && connectionId) this.endpointTools?.remove(endpointId, connectionId);
+      });
       if (principalId) {
         const principalSockets = this.socketsByPrincipal.get(principalId);
         principalSockets?.delete(socket);

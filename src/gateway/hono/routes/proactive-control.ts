@@ -19,7 +19,7 @@ export function registerProactiveControlRoutes(app: Hono, deps: AuthenticatedRou
   app.get('/api/proactive/follow-ups', c => c.json({ ok: true, followUps: listMailFollowUps(workspace()) }));
   app.post('/api/proactive/follow-ups', deps.strictRateLimitMiddleware, async c => c.json({ ok: true, followUp: startMailFollowUp(workspace(), await c.req.json()) }, 201));
   app.patch('/api/proactive/follow-ups/:id', deps.strictRateLimitMiddleware, async c => c.json({ ok: true, followUp: updateMailFollowUp(workspace(), c.req.param('id'), await c.req.json()) }));
-  app.get('/api/proactive/overview', c => c.json({ ok: true, ...delegationOverview(workspace()) }));
+  app.get('/api/proactive/overview', c => c.json({ ok: true, ...delegationOverview(workspace()), heartbeat: deps.service.heartbeatStatus() }));
   app.post('/api/proactive/delegations', deps.strictRateLimitMiddleware, async c => c.json({ ok: true, subscription: startDelegation(workspace(), await c.req.json()) }, 201));
   app.post('/api/proactive/subscriptions/:id/check', deps.strictRateLimitMiddleware, c => c.json({ ok: true, ...checkDelegation(workspace(), c.req.param('id')) }, 202));
   for (const path of ['/api/proactive/*', '/api/inbox/judgments/*']) {

@@ -47,6 +47,7 @@ function authorizedConnectedSourceItem(event: EventRow, scenarioKey: string) {
   const item = authorizedConnectedSource(event.subject_id, event.workspace_id, scenarioKey, event.agent_id);
   if (item && event.type === 'connected_source.calendar_window.v1') {
     const payload = JSON.parse(event.payload_json) as { meetingStartsAt?: string; contentHash?: string };
+    if (!item.occurredAt || Date.parse(item.occurredAt) <= Date.now()) return null;
     if (payload.meetingStartsAt !== item.occurredAt || (payload.contentHash && payload.contentHash !== item.contentHash)) return null;
   }
   return item;

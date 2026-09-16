@@ -73,15 +73,22 @@ export class RealtimeSocketWriter {
     const item = this.critical.shift() ?? this.normal.shift();
     if (!item) return;
     this.sending = true;
-    this.socket.send(item.data, (error) => {
+    try {
+      this.socket.send(item.data, (error) => {
+        if (this.closed) return;
+        this.sending = false;
+        this.queuedBytes -= item.bytes;
+        if (error) {
+          this.socket.close(1011, 'Realtime delivery failed');
+          this.close();
+          return;
+        }
+        this.flush();
+      });
+    } catch {
       this.sending = false;
-      this.queuedBytes -= item.bytes;
-      if (error) {
-        this.socket.close(1011, 'Realtime delivery failed');
-        this.close();
-        return;
-      }
-      this.flush();
-    });
+      this.close();
+      this.socket.close(1011, 'Realtime delivery failed');
+    }
   }
 }
