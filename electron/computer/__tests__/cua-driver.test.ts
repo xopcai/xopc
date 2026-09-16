@@ -8,6 +8,11 @@ import { CuaComputerDriver, scopeWindowAccessibility } from '../cua-driver.js';
 const priorType = Object.getOwnPropertyDescriptor(process, 'type');
 afterEach(() => { vi.resetAllMocks(); if (priorType) Object.defineProperty(process, 'type', priorType); else delete (process as any).type; });
 describe('private native driver admission', () => {
+  it.each(['ai.xopc.xopc', 'com.github.Electron', 'custom.host'])('refuses self-control of %s before starting the driver', async appId => {
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'custom.host');
+    await expect(driver.resolveTarget(appId, new AbortController().signal)).rejects.toThrow('SELF_CONTROL_DENIED');
+    expect(io.access).not.toHaveBeenCalled();
+  });
   it('excludes application menus and recent-item metadata from a window observation', () => {
     const scoped = scopeWindowAccessibility({ tree_markdown: '- [0] AXWindow "Fixture"\n  - AXStaticText = "PASS"\n  - [1] AXButton "Continue"\n- [2] AXMenuBar\n  - [3] AXMenuItem "private recent item"',
       elements: [{ role: 'AXWindow', depth: 0, element_index: 0 }, { role: 'AXButton', depth: 1, parent_index: 0, element_index: 1 },
@@ -18,7 +23,7 @@ describe('private native driver admission', () => {
     expect(scopeWindowAccessibility({ elements: [{ role: 'AXMenuBar', depth: 0, element_index: 0 }], tree_markdown: 'private menu' })).toEqual({ elements: [], text: '' });
   });
   it('includes static outcome text without exposing native element tokens', async () => {
-    const driver = new CuaComputerDriver('/fixture/cua-driver', 'fixture');
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
     vi.spyOn(driver as any, 'processIdentity').mockResolvedValue('42:fixture-start');
     vi.spyOn(driver as any, 'call').mockResolvedValue({
       data: { pid: 42, window_id: 9, screenshot_frame_valid: true, window_bounds: { x: 0, y: 0, width: 800, height: 600 }, screenshot_width: 800, screenshot_height: 600,
@@ -33,7 +38,7 @@ describe('private native driver admission', () => {
     expect(frame.summary).not.toContain('private-native-token');
   });
   it('accepts native app catalogs containing processes without a bundle identifier', async () => {
-    const driver = new CuaComputerDriver('/fixture/cua-driver', 'fixture');
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
     vi.spyOn(driver as any, 'start').mockResolvedValue(undefined);
     vi.spyOn(driver as any, 'processIdentity').mockResolvedValue('42:fixture-start');
     vi.spyOn(driver as any, 'call')
@@ -45,7 +50,7 @@ describe('private native driver admission', () => {
     Object.defineProperty(process, 'type', { value: 'browser', configurable: true });
     let release!: () => void;
     io.access.mockImplementation(() => new Promise<void>(resolve => { release = resolve; }));
-    const driver = new CuaComputerDriver('/fixture/cua-driver', 'fixture');
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
     const starting = driver.resolveTarget('fixture', new AbortController().signal);
     const rejected = expect(starting).rejects.toThrow('STOPPED');
     const stopped = driver.stop(); release(); await stopped; await rejected;
@@ -56,7 +61,7 @@ describe('private native driver admission', () => {
     io.access.mockResolvedValue(undefined); io.rm.mockResolvedValue(undefined); io.rmdir.mockResolvedValue(undefined);
     let release!: (path: string) => void;
     io.mkdtemp.mockImplementation(() => new Promise<string>(resolve => { release = resolve; }));
-    const driver = new CuaComputerDriver('/fixture/cua-driver', 'fixture');
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
     const starting = driver.resolveTarget('fixture', new AbortController().signal);
     const rejected = expect(starting).rejects.toThrow('STOPPED');
     await vi.waitFor(() => expect(io.mkdtemp).toHaveBeenCalled());
@@ -64,7 +69,7 @@ describe('private native driver admission', () => {
     expect(io.spawn).not.toHaveBeenCalled(); expect(io.rmdir).toHaveBeenCalledWith('/private/tmp/xc-owned');
   });
   it('rejects ungrounded text and unsafe/global shortcuts', () => {
-    const driver = new CuaComputerDriver('/fixture/cua-driver', 'fixture');
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
     expect(() => driver.validateAction({ kind: 'typeText', text: 'secret' })).toThrow('EDITABLE');
     expect(() => driver.validateAction({ kind: 'pressKeys', keys: ['cmd', 'q'] })).toThrow('UNSAFE');
     expect(() => driver.validateAction({ kind: 'pressKeys', keys: ['cmd', 'shift', 'a'] })).not.toThrow();

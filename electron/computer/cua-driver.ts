@@ -133,6 +133,7 @@ export class CuaComputerDriver implements ComputerDriver {
     return `${pid}:${stdout.trim()}`;
   }
   async resolveTarget(appId: string, signal: AbortSignal): Promise<ComputerTarget> {
+    if (appId === this.bundleId || appId === 'ai.xopc.xopc' || appId === 'com.github.Electron') throw new Error('COMPUTER_SELF_CONTROL_DENIED');
     if (DENIED_APPS.test(appId)) throw new Error('COMPUTER_SENSITIVE_APP_MANUAL_ONLY');
     await this.start(); signal.throwIfAborted();
     const apps = await this.call('list_apps', {}, signal);

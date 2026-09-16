@@ -57,16 +57,31 @@ Equivalent configuration fields (merge these into existing configuration):
 
 ## Approval and stopping
 
-The first native dialog identifies the application, model and screenshot
+By default, the first native dialog identifies the application, model and screenshot
 recipient. A separate native dialog approves each exact input action. Clicking
 Continue in chat only resumes the task; it never grants native permission.
 After action approval, the agent resumes the held action with `step`; `observe`
 is read-only and will not dispatch it.
 
+To avoid repeated prompts, enable **Full control** in the local macOS Computer
+use settings and accept its one-time native confirmation. This encrypted,
+device-local consent survives restarts; it is not a Gateway config field and
+cannot be enabled through tool arguments. It applies to all configured GUI
+models, including agent overrides. Subsequent sessions and input actions run
+without confirmation, including actions that may send or delete data. The app
+does not reliably classify the business risk of arbitrary GUI actions.
+Turning Full control off stops the active session and restores per-action
+confirmation. OS permissions, single-window targeting, freshness/budget limits
+and sensitive-app restrictions remain enforced. xopc cannot control its own
+window to modify this permission. Browser permissions remain separate.
+
 Use **Stop computer control** in settings or the tray. Hiding/minimizing the
 xopc window, disconnecting, locking or suspending also revokes control. The
 Ctrl+Alt+Esc shortcut is an additional path when successfully registered; the
 settings button is the verified stop path in the current native smoke test.
+Explicit Stop, screen lock and suspend pause new desktop control as well as
+revoking the current session. Select **Resume desktop control** in settings
+before starting a new task. Resuming does not revive an old grant or action.
 
 Screenshots stay in bounded temporary memory and are not appended to chat
 transcripts. Window accessibility text can appear in the transcript. Application

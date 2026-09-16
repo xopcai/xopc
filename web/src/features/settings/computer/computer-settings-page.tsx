@@ -38,6 +38,7 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
   const config = data?.payload?.config as { computer?: { enabled?: boolean }; browser?: { enabled?: boolean } } | undefined;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [desktop, setDesktop] = useState<DesktopStatus | null>(null);
   const [nativeError, setNativeError] = useState(false);
   const native = window.electronAPI?.platform === 'darwin' ? window.electronAPI.computer : undefined;
@@ -76,7 +77,8 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
   });
   // The emergency stop must remain available while another settings action is pending.
   const stop = async () => {
-    try { await native?.stop(); }
+    setError(''); setNotice('');
+    try { await native?.stop(); setNotice(t.stoppedNotice); if (native) setDesktop(await native.status()); }
     catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
   };
   const sessionStatus = desktop?.session?.status ?? 'idle';
@@ -88,6 +90,11 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
       actions={native && <Button onClick={() => { void stop(); }}><Square className="size-3.5" />{t.stop}</Button>} />
 
     {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+    {notice && <p role="status" className="text-sm text-fg-muted">{notice}</p>}
+    {desktop?.controlPaused && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-edge p-4">
+      <p className="text-sm text-fg-muted">{t.pausedNotice}</p>
+      <Button disabled={busy} onClick={() => { void perform(async () => { if (native) setDesktop(await native.resume()); setNotice(''); }); }}>{t.resume}</Button>
+    </div>}
 
     <section aria-labelledby="computer-control-title" className="space-y-3">
       <h2 id="computer-control-title" className="text-sm font-semibold text-fg">{t.control}</h2>
@@ -100,6 +107,19 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
               className="touch-target flex items-center rounded-lg px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
               <span className={`flex h-6 w-11 items-center rounded-full p-0.5 transition-colors ${config?.computer?.enabled ? 'bg-accent' : 'bg-fg-muted/30'}`}>
                 <span className={`size-5 rounded-full bg-white transition-transform ${config?.computer?.enabled ? 'translate-x-5' : 'translate-x-0'}`} />
+              </span>
+            </button>
+          </SettingRow>
+          <SettingRow icon={<ShieldCheck className="size-5" />} title={t.fullControl} description={<>
+            {t.fullControlDescription}
+            <span className="mt-1 block text-xs">{native ? (desktop?.fullControl ? t.fullControlEnabled : t.fullControlDisabled) : t.fullControlLocalOnly}</span>
+          </>}>
+            <button type="button" role="switch" aria-label={t.fullControl} aria-checked={desktop?.fullControl === true}
+              disabled={busy || !native || !desktop || nativeError}
+              onClick={() => { void perform(async () => { if (native) setDesktop(await native.setFullControl(desktop?.fullControl !== true)); }); }}
+              className="touch-target flex items-center rounded-lg px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
+              <span className={`flex h-6 w-11 items-center rounded-full p-0.5 transition-colors ${desktop?.fullControl ? 'bg-accent' : 'bg-fg-muted/30'}`}>
+                <span className={`size-5 rounded-full bg-white transition-transform ${desktop?.fullControl ? 'translate-x-5' : 'translate-x-0'}`} />
               </span>
             </button>
           </SettingRow>

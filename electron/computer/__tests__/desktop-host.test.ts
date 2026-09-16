@@ -7,6 +7,8 @@ const state = vi.hoisted(() => ({
   dialog: vi.fn(),
   write: vi.fn(),
   atomicWrite: vi.fn(),
+  readControl: vi.fn(() => false),
+  writeControl: vi.fn(),
   clients: [] as Array<{ binding: RealtimeEndpointBinding; connect: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }>,
 }));
 vi.mock('electron', () => ({
@@ -20,6 +22,7 @@ vi.mock('node:fs/promises', () => ({
   writeFile: state.write, stat: vi.fn(),
 }));
 vi.mock('../../../src/infra/write-file-atomic.js', () => ({ writeTextAtomic: state.atomicWrite }));
+vi.mock('../control-preferences.js', () => ({ readFullControl: state.readControl, writeFullControl: state.writeControl }));
 vi.mock('../../ipc/system-settings-ipc.js', () => ({ showEndpointNotification: vi.fn() }));
 vi.mock('../../ipc/file-ipc.js', () => ({ MIME_TYPE_BY_EXTENSION: {} }));
 vi.mock('../cua-driver.js', () => ({ CuaComputerDriver: class { async stop() {} } }));
@@ -31,7 +34,20 @@ vi.mock('@xopcai/realtime-client', () => ({ RealtimeClient: class {
   setEndpoint(binding: RealtimeEndpointBinding) { this.binding = binding; }
 } }));
 
-import { DesktopEndpointHost } from '../desktop-host.js';
+import { DesktopEndpointHost, resolveComputerDriverPath } from '../desktop-host.js';
+
+describe('computer driver paths', () => {
+  it('resolves development cache relative to the bundled main entry, not app.getAppPath or cwd', () => {
+    expect(resolveComputerDriverPath({ packaged: false, resourcesPath: '/electron/Resources', mainDir: '/workspace/out/main' }))
+      .toBe('/workspace/.cache/computer-driver/0.28.2/cua-driver');
+  });
+
+  it('resolves packaged resources outside app.asar, independent of the development cache', () => {
+    expect(resolveComputerDriverPath({ packaged: true, resourcesPath: '/Applications/xopc.app/Contents/Resources',
+      mainDir: '/Applications/xopc.app/Contents/Resources/app.asar/out/main' }))
+      .toBe('/Applications/xopc.app/Contents/Resources/bin/cua-driver');
+  });
+});
 
 const hosts: DesktopEndpointHost[] = [];
 function host() {
@@ -42,6 +58,7 @@ function host() {
 }
 const revoked = () => Response.json({ error: { code: 'PRINCIPAL_REVOKED' } }, { status: 403 });
 beforeEach(() => {
+  state.readControl.mockReturnValue(false);
   state.saved = undefined; state.visible = true; state.clients = [];
   state.write.mockImplementation(async (_path, data) => { state.saved = data; });
   state.atomicWrite.mockImplementation(async (_path, data) => { state.saved = data; });
@@ -50,6 +67,71 @@ beforeEach(() => {
 afterEach(async () => {
   await Promise.all(hosts.splice(0).map(h => h.close()));
   vi.unstubAllGlobals(); vi.resetAllMocks();
+});
+
+describe('local full control', () => {
+  it('requires a local opt-in, persists it and disables without another dialog', async () => {
+    const desktop = host();
+    expect(desktop.snapshot().fullControl).toBe(false);
+    await desktop.setFullControl(true);
+    expect(desktop.snapshot().fullControl).toBe(false);
+    expect(state.writeControl).not.toHaveBeenCalled();
+    state.dialog.mockResolvedValue({ response: 1 });
+    await desktop.setFullControl(true);
+    expect(desktop.snapshot().fullControl).toBe(true);
+    expect(state.writeControl).toHaveBeenLastCalledWith('/fixture/computer-control-consent', true);
+    const dialogs = state.dialog.mock.calls.length;
+    await desktop.setFullControl(false);
+    expect(desktop.snapshot().fullControl).toBe(false);
+    expect(state.writeControl).toHaveBeenLastCalledWith('/fixture/computer-control-consent', false);
+    expect(state.dialog).toHaveBeenCalledTimes(dialogs);
+  });
+  it('restores local consent and latches emergency stop until manual resume', async () => {
+    state.readControl.mockReturnValue(true);
+    const desktop = host();
+    expect(desktop.snapshot().fullControl).toBe(true);
+    await desktop.stopControl();
+    expect(desktop.snapshot().controlPaused).toBe(true);
+    await expect(desktop.broker.command({ op: 'open', sessionId: 's', owner: 'o', appId: 'fixture', model: {
+      modelRef: 'ali/gui', profile: 'gui-plus-2026-02-26', origin: 'https://example.com', runtimeLocation: 'local',
+    } })).rejects.toThrow('LOCAL_UI_REQUIRED');
+    desktop.resumeControl();
+    expect(desktop.snapshot()).toMatchObject({ controlPaused: false, fullControl: true });
+    expect(state.dialog).not.toHaveBeenCalled();
+  });
+  it('rejects invalid or hidden-window mode changes', async () => {
+    const desktop = host();
+    await expect(desktop.setFullControl('true')).rejects.toThrow('Invalid');
+    state.visible = false;
+    await expect(desktop.setFullControl(true)).rejects.toThrow('local window');
+    expect(state.writeControl).not.toHaveBeenCalled();
+  });
+  it('does not enable from a late confirmation after emergency stop', async () => {
+    const desktop = host();
+    let confirm!: (value: { response: number }) => void;
+    state.dialog.mockImplementation(() => new Promise(resolve => { confirm = resolve; }));
+    const pending = desktop.setFullControl(true);
+    await desktop.stopControl(); confirm({ response: 1 }); await pending;
+    expect(desktop.snapshot()).toMatchObject({ fullControl: false, controlPaused: true });
+    expect(state.writeControl).not.toHaveBeenCalled();
+  });
+  it('fails closed when saving consent fails', async () => {
+    const desktop = host(); state.dialog.mockResolvedValue({ response: 1 });
+    state.writeControl.mockImplementationOnce(() => { throw new Error('disk full'); });
+    await expect(desktop.setFullControl(true)).rejects.toThrow('disk full');
+    expect(desktop.snapshot().fullControl).toBe(false);
+  });
+  it('persists disabling before an emergency stop can interrupt driver cleanup', async () => {
+    state.readControl.mockReturnValue(true);
+    const desktop = host();
+    let finish!: () => void;
+    vi.spyOn(desktop.broker, 'stop').mockResolvedValue(undefined)
+      .mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const disabling = desktop.setFullControl(false);
+    expect(state.writeControl).toHaveBeenCalledWith('/fixture/computer-control-consent', false);
+    await desktop.stopControl(); finish(); await disabling;
+    expect(desktop.snapshot()).toMatchObject({ fullControl: false, controlPaused: true });
+  });
 });
 
 describe('desktop principal reenrollment', () => {

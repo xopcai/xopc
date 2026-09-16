@@ -30,8 +30,14 @@ const root = join(__dirname, '..');
 const schemaSrc = join(root, 'src/storage/sqlite');
 const schemaDist = join(root, 'dist/src/storage/sqlite');
 cpSync(join(schemaSrc, 'schema.sql'), join(schemaDist, 'schema.sql'));
-if (existsSync(join(schemaSrc, 'migrations'))) {
-  cpSync(join(schemaSrc, 'migrations'), join(schemaDist, 'migrations'), { recursive: true });
+const migrationsSrc = join(schemaSrc, 'migrations');
+const migrationsDist = join(schemaDist, 'migrations');
+if (existsSync(migrationsSrc)) {
+  mkdirSync(migrationsDist, { recursive: true });
+  for (const dirent of readdirSync(migrationsSrc, { withFileTypes: true })) {
+    if (!dirent.isFile() || !dirent.name.endsWith('.sql')) continue;
+    cpSync(join(migrationsSrc, dirent.name), join(migrationsDist, dirent.name));
+  }
 }
 
 const srcTpl = join(root, 'src/agent/context/workspace-templates');

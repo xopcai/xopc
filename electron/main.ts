@@ -767,7 +767,7 @@ function createWindow(): void {
       quit: () => {
         app.quit();
       },
-      stopComputer: () => { void desktopEndpointHost?.broker.stop(); },
+      stopComputer: () => { void desktopEndpointHost?.stopControl(); },
     },
     menuMessages,
   );
@@ -1011,11 +1011,11 @@ app.whenReady().then(async () => {
   registerGatewayConnection({ port: gatewayConfig.port, token: gatewayConfig.token });
   desktopEndpointHost = new DesktopEndpointHost({ connection: getGatewayConnection, window: () => mainWindow });
   void desktopEndpointHost.start();
-  if (!globalShortcut.register('Control+Alt+Escape', () => { void desktopEndpointHost?.broker.stop(); })) {
+  if (!globalShortcut.register('Control+Alt+Escape', () => { void desktopEndpointHost?.stopControl(); })) {
     console.warn('[Computer] Emergency shortcut unavailable; use the tray or settings Stop control.');
   }
-  powerMonitor.on('lock-screen', () => { void desktopEndpointHost?.broker.stop(); });
-  powerMonitor.on('suspend', () => { void desktopEndpointHost?.broker.stop(); });
+  powerMonitor.on('lock-screen', () => { void desktopEndpointHost?.stopControl(); });
+  powerMonitor.on('suspend', () => { void desktopEndpointHost?.stopControl(); });
   const assertMainComputerRenderer = (event: IpcMainInvokeEvent) => {
     assertTrustedRenderer(event);
     if (event.sender !== mainWindow?.webContents || event.senderFrame !== mainWindow?.webContents.mainFrame) {
@@ -1023,7 +1023,9 @@ app.whenReady().then(async () => {
     }
   };
   ipcMain.handle('computer:status', (event) => { assertMainComputerRenderer(event); return desktopEndpointHost?.snapshot(); });
-  ipcMain.handle('computer:stop', async (event) => { assertMainComputerRenderer(event); await desktopEndpointHost?.broker.stop(); return { ok: true }; });
+  ipcMain.handle('computer:stop', async (event) => { assertMainComputerRenderer(event); await desktopEndpointHost?.stopControl(); return { ok: true }; });
+  ipcMain.handle('computer:set-full-control', async (event, enabled: unknown) => { assertMainComputerRenderer(event); await desktopEndpointHost?.setFullControl(enabled); return desktopEndpointHost?.snapshot(); });
+  ipcMain.handle('computer:resume', (event) => { assertMainComputerRenderer(event); desktopEndpointHost?.resumeControl(); return desktopEndpointHost?.snapshot(); });
   ipcMain.handle('computer:reenroll', async (event) => { assertMainComputerRenderer(event); await desktopEndpointHost?.reenroll(); return desktopEndpointHost?.snapshot(); });
   const { fileIpcRoots } = gatewayConfig;
   registerFileIpc(ipcMain, { allowedRoots: fileIpcRoots });
