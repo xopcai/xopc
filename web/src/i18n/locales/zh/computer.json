@@ -5,7 +5,15 @@
     "preview": "macOS 预览版",
     "control": "控制能力",
     "desktop": "桌面应用",
-    "desktopDescription": "观察和操作一个应用窗口，每次操作均需你在本机确认。",
+    "desktopDescription": "观察和操作一个应用窗口，按本机授权模式执行。",
+    "fullControl": "完全控制",
+    "fullControlDescription": "开启后不再弹出任务和逐步操作确认，包括可能发送或删除数据的操作。适用于所有已配置的 GUI 模型及 Agent 覆盖；截图与文字会经 Gateway 发送给对应模型服务。浏览器权限独立管理。",
+    "fullControlEnabled": "已开启 · 仅本机记住，重启后保留。关闭将停止当前桌面会话。",
+    "fullControlDisabled": "当前逐次确认 · 开启时需本机确认一次，之后不再重复弹窗。",
+    "fullControlLocalOnly": "只能在本机 macOS 桌面应用中修改。",
+    "stoppedNotice": "桌面操作已停止，浏览器控制不受影响。",
+    "pausedNotice": "桌面控制已暂停，自动重试不会恢复。恢复后请重新发起任务。",
+    "resume": "恢复桌面控制",
     "browser": "浏览器",
     "browserDescription": "管理浏览器连接、扩展安装和浏览器操作权限。",
     "browserEnabled": "已启用浏览器控制",
@@ -44,7 +52,7 @@
     "manageModels": "接入模型服务",
     "retry": "重试",
     "nativeError": "无法读取桌面状态，请检查桌面应用后重试。",
-    "safety": "开启此设置不代表允许所有操作。每个会话和每次输入仍需本机确认，可随时在此处或托盘中停止。",
+    "safety": "完全控制仅免除 xopc 的任务与动作确认，不绕过系统权限、单窗口限制及敏感应用限制。可随时在此处或托盘中停止；停止后需手动恢复。",
     "states": { "idle": "无活动会话", "pending_authorization": "等待本机授权", "ready": "就绪", "running": "操作中", "pending_action": "等待操作确认", "paused": "已暂停", "stopped": "已停止" }
   }
 }

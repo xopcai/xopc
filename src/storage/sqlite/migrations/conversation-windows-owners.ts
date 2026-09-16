@@ -11,10 +11,13 @@ using System;
 using System.ComponentModel;
 using System.Text;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.ComTypes;
 public static class XopcDatabaseOwners {
+  // Keep the native FILETIME layout local. Windows PowerShell exposes two
+  // framework FILETIME types, so using that name can make Add-Type ambiguous.
   [StructLayout(LayoutKind.Sequential)]
-  public struct ProcessIdentity { public uint Id; public FILETIME StartedAt; }
+  public struct NativeFileTime { public uint Low; public uint High; }
+  [StructLayout(LayoutKind.Sequential)]
+  public struct ProcessIdentity { public uint Id; public NativeFileTime StartedAt; }
   [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
   public struct ProcessInfo {
     public ProcessIdentity Process;

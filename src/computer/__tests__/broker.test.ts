@@ -4,7 +4,7 @@ import { ComputerBroker, type ComputerApproval, type ComputerDriver } from '../b
 const target = { appId: 'fixture', pid: 1, processIdentity: '1:100', windowId: '10', width: 800, height: 600, geometryRevision: '1' };
 const opening = { op: 'open' as const, sessionId: 's', owner: 'o', appId: 'fixture', model: { modelRef: 'ali/gui', profile: 'gui-plus-2026-02-26' as const, origin: 'https://example.com', runtimeLocation: 'local' as const } };
 const brokers: ComputerBroker[] = [];
-function fixture() {
+function fixture(fullControl = false) {
   let settle: (approved: boolean) => void;
   let clock = 1000;
   let digest = 'a';
@@ -15,7 +15,7 @@ function fixture() {
     observe: vi.fn(async () => ({ target, summary: 'fixture', stateDigest: digest, focusedEditableRef: 'field', image: new Uint8Array([1]), mimeType: 'image/png', imageWidth: 800, imageHeight: 600 })),
     perform: vi.fn(async () => {}), stop: vi.fn(async () => {}),
   };
-  const broker = new ComputerBroker(driver, { isVisible: () => visible, requestApproval: async (request) => {
+  const broker = new ComputerBroker(driver, { isVisible: () => visible, hasFullControl: () => fullControl, requestApproval: async (request) => {
     approvals.push(request); return new Promise<boolean>((resolve) => { settle = resolve; });
   } }, { enabled: true }, () => clock);
   brokers.push(broker);
@@ -33,6 +33,27 @@ function envelope(observed: Awaited<ReturnType<typeof ready>>) {
 }
 afterEach(async () => { await Promise.all(brokers.splice(0).map((b) => b.dispose())); });
 describe('desktop computer authority', () => {
+  it('runs full-control sessions and actions without prompts or pending results', async () => {
+    const f = fixture(true);
+    expect((await f.broker.command(opening)).status).toBe('ready');
+    const obs = await f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' });
+    const result = await f.broker.command({ op: 'act', sessionId: 's', owner: 'o', envelope: envelope(obs) });
+    expect(result.status).toBe('ready');
+    expect(f.driver.perform).toHaveBeenCalledOnce();
+    expect(f.approvals).toHaveLength(0);
+    await f.broker.stop();
+    await expect(f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' })).rejects.toThrow('REVOKED');
+  });
+  it('retains visibility, ownership and stale-frame guards in full control', async () => {
+    const f = fixture(true); await f.broker.command(opening);
+    await expect(f.broker.command({ op: 'observe', sessionId: 's', owner: 'other' })).rejects.toThrow('NOT_FOUND');
+    const obs = await f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' });
+    f.move();
+    await expect(f.broker.command({ op: 'act', sessionId: 's', owner: 'o', envelope: envelope(obs) })).rejects.toThrow('TARGET_CHANGED');
+    expect(f.driver.perform).not.toHaveBeenCalled();
+    f.hide();
+    await expect(f.broker.command({ ...opening, sessionId: 'new' })).rejects.toThrow('LOCAL_UI_REQUIRED');
+  });
   it('does not discover or capture a window before local consent', async () => {
     const f = fixture(); expect((await f.broker.command(opening)).status).toBe('pending_authorization');
     expect(f.driver.resolveTarget).not.toHaveBeenCalled(); expect(f.driver.observe).not.toHaveBeenCalled();
