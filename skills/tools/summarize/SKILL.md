@@ -1,6 +1,14 @@
 ---
 name: summarize
 description: Summarize URLs, files, and YouTube videos.
+metadata:
+  i18n:
+    en:
+      name: "Summarize"
+      description: "Summarize URLs, files, and YouTube videos."
+    zh-CN:
+      name: "内容摘要"
+      description: "总结网页链接、文件和 YouTube 视频内容。"
 license: MIT
 ---
 

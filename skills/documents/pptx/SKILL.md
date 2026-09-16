@@ -2,6 +2,13 @@
 name: pptx
 description: Create, inspect, edit, render, and validate PowerPoint PPTX presentations with deliberate visual hierarchy.
 metadata:
+  i18n:
+    en:
+      name: "PowerPoint Presentations"
+      description: "Create, inspect, edit, render, and validate PowerPoint PPTX presentations with deliberate visual hierarchy."
+    zh-CN:
+      name: "PowerPoint 演示文稿"
+      description: "创建、检查、编辑、渲染并验证具有清晰视觉层级的 PowerPoint PPTX 演示文稿。"
   xopc:
     emoji: "📊"
     requires_tools:

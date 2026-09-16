@@ -6,7 +6,7 @@ import { createLogger } from '../../utils/logger.js';
 import { createSkillConfigManager, isSkillEnabled } from './config.js';
 import { formatSkillsForPrompt } from './format-skills-prompt.js';
 import { parseRequiredEnvVarNames } from './required-env-vars.js';
-import { parseSkillMetadata } from './parse-skill-metadata.js';
+import { parseSkillLocalizations, parseSkillMetadata } from './parse-skill-metadata.js';
 import { parseSkillToolConditions } from './skill-tool-gating.js';
 import { resolveWorkspaceSkillsDir } from './workspace-skills-dir.js';
 import {
@@ -20,7 +20,6 @@ import type {
   SkillDiagnostic,
   LoadSkillsResult,
   SkillSourceDescriptor,
-  SkillLocalizations,
   SkillsConfig,
 } from './types.js';
 
@@ -28,7 +27,6 @@ const log = createLogger('SkillLoader');
 
 const IGNORE_FILES = ['.gitignore', '.ignore', '.fdignore'];
 const DEFAULT_MAX_SKILL_FILE_BYTES = 1024 * 1024;
-const MAX_SKILL_LOCALIZATION_FILE_BYTES = 64 * 1024;
 
 function resolveMaxSkillFileBytes(skillsConfig: SkillsConfig): number {
   const configured = skillsConfig.limits?.maxSkillFileBytes;
@@ -257,45 +255,6 @@ function deriveDescriptionFromMarkdown(content: string): string | undefined {
   return fallbackHeading || undefined;
 }
 
-function loadSkillLocalizations(
-  skillDir: string,
-  skillName: string,
-): { localizations?: SkillLocalizations; warning?: string } {
-  const metadataPath = join(skillDir, 'xopc-skill.json');
-  if (!existsSync(metadataPath)) return {};
-  try {
-    if (statSync(metadataPath).size > MAX_SKILL_LOCALIZATION_FILE_BYTES) {
-      return { warning: `xopc-skill.json exceeds 64 KiB for "${skillName}"` };
-    }
-    const metadata = JSON.parse(readFileSync(metadataPath, 'utf8')) as {
-      schemaVersion?: unknown;
-      name?: unknown;
-      localizations?: Record<string, { displayName?: unknown; description?: unknown }>;
-    };
-    if (metadata.schemaVersion !== 1 || metadata.name !== skillName) {
-      return { warning: `Invalid xopc-skill.json identity for "${skillName}"` };
-    }
-    const localizations: SkillLocalizations = {};
-    for (const locale of ['en', 'zh-CN'] as const) {
-      const entry = metadata.localizations?.[locale];
-      if (typeof entry?.displayName !== 'string' || typeof entry.description !== 'string') {
-        return { warning: `Missing ${locale} localization in xopc-skill.json for "${skillName}"` };
-      }
-      localizations[locale] = {
-        displayName: entry.displayName.trim(),
-        description: entry.description.trim(),
-      };
-      if (!localizations[locale]?.displayName || !localizations[locale]?.description) {
-        return { warning: `Empty ${locale} localization in xopc-skill.json for "${skillName}"` };
-      }
-    }
-    return { localizations };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { warning: `Failed to read xopc-skill.json for "${skillName}": ${message}` };
-  }
-}
-
 function loadSkillFromFile(
   filePath: string,
   source: SkillSourceDescriptor,
@@ -348,7 +307,7 @@ function loadSkillFromFile(
     const metadata = parseSkillMetadata(frontmatter);
     metadata.name ||= name;
     metadata.description ||= description.trim();
-    const localized = loadSkillLocalizations(skillDir, name);
+    const localized = parseSkillLocalizations(frontmatter);
     const toolConditions = parseSkillToolConditions(frontmatter);
     const requiredEnvVarNames = parseRequiredEnvVarNames(frontmatter);
 
@@ -373,7 +332,7 @@ function loadSkillFromFile(
           type: 'warning' as const,
           skillName: name,
           message: localized.warning,
-          path: join(skillDir, 'xopc-skill.json'),
+          path: filePath,
         },
       } : {}),
     };

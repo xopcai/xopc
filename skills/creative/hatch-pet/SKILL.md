@@ -2,6 +2,13 @@
 name: hatch-pet
 description: Create and install a custom animated xopc desktop pet from a user description.
 metadata:
+  i18n:
+    en:
+      name: "Hatch Pet"
+      description: "Create and install a custom animated XOPC desktop pet from a user description."
+    zh-CN:
+      name: "孵化桌面宠物"
+      description: "根据用户描述创建并安装自定义的 XOPC 动画桌面宠物。"
   xopc:
     activates_capabilities:
       - desktop-pet-authoring

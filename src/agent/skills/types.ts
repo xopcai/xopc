@@ -177,7 +177,7 @@ export interface Skill {
   name: string;
   /** Skill description */
   description: string;
-  /** Optional user-facing translations from xopc-skill.json. */
+  /** Optional user-facing translations from SKILL.md metadata.i18n. */
   localizations?: SkillLocalizations;
   /** Category derived from parent directory (e.g. skills/creative/algorithmic-art → 'creative') */
   category?: string;

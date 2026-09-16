@@ -73,16 +73,22 @@ describe('loadSkills', () => {
     mkdirSync(skillDir, { recursive: true });
     writeFileSync(
       join(skillDir, 'SKILL.md'),
-      '---\nname: meeting-to-actions\ndescription: Convert meeting notes into actions.\n---\n\nUse it.\n',
+      `---
+name: meeting-to-actions
+description: Convert meeting notes into actions.
+metadata:
+  i18n:
+    en:
+      name: Meeting to Actions
+      description: Convert meeting notes into actions.
+    zh-CN:
+      name: 会议行动闭环
+      description: 从会议记录中提取行动项。
+---
+
+Use it.
+`,
     );
-    writeFileSync(join(skillDir, 'xopc-skill.json'), JSON.stringify({
-      schemaVersion: 1,
-      name: 'meeting-to-actions',
-      localizations: {
-        en: { displayName: 'Meeting to Actions', description: 'Convert meeting notes into actions.' },
-        'zh-CN': { displayName: '会议行动闭环', description: '从会议记录中提取行动项。' },
-      },
-    }));
 
     const result = loadTestSkills({ globalDir: root });
 

@@ -3,6 +3,13 @@ name: github
 description: "Interact with GitHub using the `gh` CLI for issues, PRs, CI runs, and advanced API queries."
 license: MIT
 metadata:
+  i18n:
+    en:
+      name: "GitHub"
+      description: "Interact with GitHub using the gh CLI for issues, pull requests, CI runs, and advanced API queries."
+    zh-CN:
+      name: "GitHub"
+      description: "使用 gh CLI 操作 GitHub 的 Issue、拉取请求、CI 任务和高级 API 查询。"
   xopc:
     requires_toolsets: [terminal]
     requires:
