@@ -8,8 +8,9 @@ import { Button, Icon, Text } from 'react-native-paper';
 
 import { AppToast } from '../../components/AppToast';
 import { ListSelectionCheckbox } from '../../components/ListSelectionCheckbox';
-import { SwipeableRow } from '../../components/SwipeableRow';
+import { ListItemMenu } from '../../components/ListItemMenu';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
+import { LIST_DELAY_LONG_PRESS } from '../../constants/list-interaction';
 import { useMessages } from '../../i18n/messages';
 import {
   fetchFileChildren,
@@ -43,14 +44,15 @@ function FileRow({ file, source, onPress, actions }: { file: FileResource; sourc
   const { colors } = useTheme();
   const labels = useMessages().filesPage;
   return (
-    <SwipeableRow enabled={!actions.selectionMode} actions={[
-      { key: 'copy', icon: 'content-copy', color: 'blue', label: labels.copyPath },
-      { key: 'share', icon: 'share-variant-outline', color: 'green', label: labels.share },
+    <ListItemMenu title={file.name} onSelect={() => { actions.startSelection(); actions.toggleSelected(file.id); }} enabled={!actions.selectionMode} actions={[
+      { key: 'copy', icon: 'content-copy', label: labels.copyPath },
+      { key: 'share', icon: 'share-variant-outline', label: labels.share },
     ]} onActionPress={(action) => action.key === 'copy' ? actions.copyPath(file) : actions.share(file)}>
-      <Pressable
+      {(openMenu) => <Pressable
         style={({ pressed }) => [styles.row, { borderBottomColor: colors.border.subtle }, pressed && { backgroundColor: colors.surface.pressed }]}
         onPress={() => actions.selectionMode ? actions.toggleSelected(file.id) : onPress()}
-        onLongPress={() => { if (!actions.selectionMode) { actions.startSelection(); actions.toggleSelected(file.id); } }}
+        onLongPress={openMenu}
+        delayLongPress={LIST_DELAY_LONG_PRESS}
         accessibilityState={{ selected: actions.selectedIds.has(file.id) }}
         accessibilityRole="button"
       >
@@ -65,8 +67,8 @@ function FileRow({ file, source, onPress, actions }: { file: FileResource; sourc
           </Text>
         </View>
         <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
-      </Pressable>
-    </SwipeableRow>
+      </Pressable>}
+    </ListItemMenu>
   );
 }
 

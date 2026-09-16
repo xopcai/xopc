@@ -1,7 +1,10 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import Animated, { LinearTransition } from 'react-native-reanimated';
+import { motion, useReducedMotion } from '../../motion';
 import { Icon, Text } from 'react-native-paper';
 
+import { useMessages } from '../../i18n/messages';
 import type { HomeAction, HomeFocusItem } from '../../query/home';
 import { radii, spacing, typography, useTheme } from '../../theme';
 
@@ -17,6 +20,10 @@ export const AttentionItemRow = memo(function AttentionItemRow({
   onAction: (action: HomeAction) => void;
 }) {
   const { colors } = useTheme();
+  const m = useMessages().mobileExperience;
+  const reducedMotion = useReducedMotion();
+  const [expanded, setExpanded] = useState(false);
+  const reviewRequired = [item.primaryAction, ...item.secondaryActions].some(action => action?.type === 'connector_decision');
   const actions = [item.primaryAction, ...item.secondaryActions]
     .filter((action): action is RemoteAttentionAction => Boolean(
       action && action.type !== 'open' && action.type !== 'review_judgment',
@@ -25,28 +32,31 @@ export const AttentionItemRow = memo(function AttentionItemRow({
   const signal = item.kind === 'failure' ? colors.semantic.error : colors.semantic.warning;
 
   return (
-    <View style={[styles.row, { borderBottomColor: colors.border.subtle }]}>
+    <Animated.View layout={reducedMotion ? undefined : LinearTransition.duration(motion.duration.quick)} style={[styles.row, { borderBottomColor: colors.border.subtle }]}>
       <Pressable
         style={({ pressed }) => [styles.main, pressed && { backgroundColor: colors.surface.pressed }]}
-        onPress={() => item.openAction && onAction(item.openAction)}
-        disabled={!item.openAction}
-        accessibilityRole={item.openAction ? 'button' : undefined}
+        onPress={() => reviewRequired ? setExpanded(value => !value) : item.openAction && onAction(item.openAction)}
+        disabled={!reviewRequired && !item.openAction}
+        accessibilityRole={reviewRequired || item.openAction ? 'button' : undefined}
+        accessibilityState={reviewRequired ? { expanded } : undefined}
       >
         <View style={[styles.icon, { backgroundColor: colors.surface.grouped }]}>
           <Icon source={icon} size={19} color={signal} />
         </View>
         <View style={styles.copy}>
-          <Text style={[styles.title, { color: colors.text.primary }]} numberOfLines={1}>{item.title}</Text>
-          <Text style={[styles.summary, { color: colors.text.secondary }]} numberOfLines={2}>{item.summary}</Text>
+          <Text style={[styles.title, { color: colors.text.primary }]} numberOfLines={expanded ? undefined : 2}>{item.title}</Text>
+          <Text style={[styles.summary, { color: colors.text.secondary }]} numberOfLines={expanded ? undefined : 2}>{item.summary}</Text>
+          {expanded && item.reviewDetail && item.reviewDetail !== item.summary ? <Text style={[styles.summary, { color: colors.text.primary }]}>{item.reviewDetail}</Text> : null}
           {item.recommendation && item.recommendation !== item.summary ? (
-            <Text style={[styles.recommendation, { color: colors.text.tertiary }]} numberOfLines={2}>
+            <Text style={[styles.recommendation, { color: colors.text.tertiary }]} numberOfLines={expanded ? undefined : 2}>
               {item.recommendation}
             </Text>
           ) : null}
         </View>
         {item.openAction ? <Icon source="chevron-right" size={18} color={colors.text.tertiary} /> : null}
       </Pressable>
-      {actions.length ? (
+      {reviewRequired && !expanded ? <Pressable accessibilityRole="button" onPress={() => setExpanded(true)} style={styles.action}><Text style={{ color: colors.accent.primary }}>{m.review}</Text></Pressable> : null}
+      {actions.length && (!reviewRequired || expanded) ? (
         <View style={styles.actions}>
           {actions.map((action, index) => (
             <Pressable
@@ -72,7 +82,7 @@ export const AttentionItemRow = memo(function AttentionItemRow({
           ))}
         </View>
       ) : null}
-    </View>
+    </Animated.View>
   );
 });
 

@@ -19,10 +19,9 @@ import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { BatchActionBar } from '../../components/BatchActionBar';
 import { BatchDeleteConfirmDialog } from '../../components/BatchDeleteConfirmDialog';
 import { ListSkeleton } from '../../components/ListSkeleton';
-import type { SwipeAction } from '../../components/SwipeableRow';
-import { LIST_DELETE_UNDO_MS } from '../../constants/list-interaction';
+import type { ListItemAction } from '../../components/ListItemMenu';
 import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_DEFAULT } from '../../constants/toast';
-import { useDelayedDelete } from '../../hooks/use-delayed-delete';
+import { useImmediateDelete } from '../../hooks/use-immediate-delete';
 import { useListSelection } from '../../hooks/use-list-selection';
 
 import { useMessages, t } from '../../i18n/messages';
@@ -78,10 +77,8 @@ export function NotesScreen() {
   } = useListSelection<string>();
   const {
     hiddenIds: pendingDeleteIds,
-    undoId: pendingUndoId,
-    scheduleDelete,
-    undoDelete,
-  } = useDelayedDelete<string>();
+    deleteImmediately,
+  } = useImmediateDelete<string>();
   const [showBatchDelete, setShowBatchDelete] = useState(false);
   const [batchTagPicker, setBatchTagPicker] = useState(false);
 
@@ -161,13 +158,13 @@ export function NotesScreen() {
     createNoteMutation.mutate();
   }, [createNoteMutation]);
 
-  const handleNoteLongPress = useCallback((note: NoteIndexEntry) => {
+  const handleNoteSelect = useCallback((note: NoteIndexEntry) => {
     if (selectionMode) return;
     startSelection();
     toggleSelected(note.id);
   }, [selectionMode, startSelection, toggleSelected]);
 
-  const handleSwipeAction = useCallback((note: NoteIndexEntry, action: SwipeAction) => {
+  const handleMenuAction = useCallback((note: NoteIndexEntry, action: ListItemAction) => {
     if (action.key === 'pin' || action.key === 'unpin') {
       void updateNote(note.id, { pinned: action.key === 'pin' })
         .then((updated) => upsertNoteInListCaches(queryClient, noteToIndexEntry(updated)))
@@ -185,7 +182,7 @@ export function NotesScreen() {
     }
 
     if (action.key === 'delete') {
-      scheduleDelete(
+      deleteImmediately(
         note.id,
         async () => {
           await deleteNote(note.id);
@@ -196,7 +193,7 @@ export function NotesScreen() {
       );
       setSnackMsg(pm.deleted);
     }
-  }, [pm.actionFailed, pm.deleted, pm.updated, queryClient, scheduleDelete]);
+  }, [pm.actionFailed, pm.deleted, pm.updated, queryClient, deleteImmediately]);
 
   const handleSearchToggle = useCallback(() => {
     if (searchOpen) {
@@ -389,15 +386,15 @@ export function NotesScreen() {
       <NoteCard
         note={item}
         onPress={handleNotePress}
-        onLongPress={handleNoteLongPress}
-        onSwipeAction={handleSwipeAction}
+        onSelect={handleNoteSelect}
+        onMenuAction={handleMenuAction}
         selectionMode={selectionMode}
         selected={selectedIds.has(item.id)}
         isFirst={index === 0}
         isLast={index === filteredNotes.length - 1}
       />
     ),
-    [filteredNotes.length, handleNoteLongPress, handleNotePress, handleSwipeAction, selectedIds, selectionMode],
+    [filteredNotes.length, handleNoteSelect, handleNotePress, handleMenuAction, selectedIds, selectionMode],
   );
 
   const listBottomPadding = selectionMode
@@ -547,8 +544,7 @@ export function NotesScreen() {
       <AppToast
         visible={Boolean(snackMsg)}
         onDismiss={() => setSnackMsg('')}
-        duration={pendingUndoId && snackMsg === pm.deleted ? LIST_DELETE_UNDO_MS : TOAST_DURATION_DEFAULT}
-        action={pendingUndoId && snackMsg === pm.deleted ? { label: li.undo, onPress: () => undoDelete() } : undefined}
+        duration={TOAST_DURATION_DEFAULT}
         bottomLift={TOAST_BOTTOM_LIFT_ABOVE_BAR}
       >
         {snackMsg}

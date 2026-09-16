@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
 import { useMessages } from '../../i18n/messages';
-import { useTheme } from '../../theme';
+import { radii, spacing, typography, useTheme } from '../../theme';
 import { getTagColors, type NoteTagFilter } from './note-tag-utils';
 
 export const NoteTagTabs = memo(function NoteTagTabs({
@@ -52,6 +52,7 @@ export const NoteTagTabs = memo(function NoteTagTabs({
     <View style={styles.wrap}>
       <ScrollView
         horizontal
+        keyboardShouldPersistTaps="handled"
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
       >
@@ -92,20 +93,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   tab: {
-    borderRadius: 999,
+    borderRadius: radii.full,
     borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    maxWidth: 140,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    maxWidth: 180,
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: 'center',
   },
   tabText: {
-    fontSize: 13,
+    ...typography.label,
     fontWeight: '600',
   },
   addTab: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 44,
+    height: 44,
+    borderRadius: radii.full,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',

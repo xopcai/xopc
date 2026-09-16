@@ -38,7 +38,7 @@ Server data must go through React Query and `src/query/`; do not fetch gateway d
 
 Follow `DESIGN.md`: calm, content-first, restrained, token-driven UI. Minimum touch targets are 44x44.
 
-All scrollable lists share this contract: tap opens, swipe left uses `SwipeableRow`, long press enters multi-select with `LIST_DELAY_LONG_PRESS` (300 ms), and multi-select disables swiping. Reuse `useListSelection`, `ListSelectionCheckbox`, and `BatchActionBar`. Single delete needs undo; batch delete needs `BatchDeleteConfirmDialog`. Notes open at `/items/:id`; chat uses `/chat/[k]`.
+All scrollable lists share this contract: tap opens; long press with `LIST_DELAY_LONG_PRESS` (300 ms) opens `ListItemMenu`. Row actions and an explicit multi-select entry live in that menu. Do not add swipe action drawers or enter multi-select directly on long press. Reuse `useListSelection`, `ListSelectionCheckbox`, and `BatchActionBar`. Note deletion commits immediately, removes the item, and may show a non-blocking toast; never show a deletion undo countdown or intermediate page. Batch delete uses `BatchDeleteConfirmDialog`. Notes open at `/items/:id`; chat uses `/chat/[k]`.
 
 ## Testing Guidelines
 

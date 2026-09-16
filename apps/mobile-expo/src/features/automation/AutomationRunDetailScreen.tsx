@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Icon, Text } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
@@ -28,6 +29,7 @@ import {
 
 export function AutomationRunDetailScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { runId = '' } = useLocalSearchParams<{ runId: string }>();
   const { colors } = useTheme();
@@ -63,6 +65,10 @@ export function AutomationRunDetailScreen() {
     },
   });
 
+  const refreshMutation = useMutation({
+    mutationFn: () => Promise.all([runQuery.refetch(), eventsQuery.refetch()]),
+  });
+
   if (runQuery.isLoading) {
     return <View style={[styles.screen, { backgroundColor: colors.surface.base }]}><NativeScreenHeader title={labels.title} onBack={() => router.back()} /><View style={styles.content}><ListSkeleton count={4} /></View></View>;
   }
@@ -82,12 +88,11 @@ export function AutomationRunDetailScreen() {
   };
   const active = isAutomationRunActive(run);
   const canRerun = isAutomationRunProblem(run) || run.status === 'cancelled';
-  const refresh = () => void Promise.all([runQuery.refetch(), eventsQuery.refetch()]);
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
       <NativeScreenHeader title={run.automationName} onBack={() => router.back()} />
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={runQuery.isFetching} onRefresh={refresh} />}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xxl }]} refreshControl={<RefreshControl refreshing={refreshMutation.isPending} onRefresh={() => { if (!refreshMutation.isPending) refreshMutation.mutate(); }} />}>
         <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
           <View style={styles.titleLine}>
             <Icon
@@ -117,7 +122,7 @@ export function AutomationRunDetailScreen() {
             <View style={styles.eventDotColumn}><View style={[styles.eventDot, { backgroundColor: colors.accent.primary }]} /></View>
             <View style={styles.eventBody}><Text style={[styles.body, { color: colors.text.primary }]}>{event.message}</Text><Text style={[styles.meta, { color: colors.text.tertiary }]}>{formatAutomationDate(event.createdAtMs, locale)}</Text></View>
           </View>
-        )) : <Text style={[styles.body, { color: colors.text.tertiary }]}>{labels.noEvents}</Text>}
+        )) : eventsQuery.isError ? <View style={styles.retry}><Text style={{ color: colors.semantic.error }}>{labels.loadFailed}</Text><Button onPress={() => void eventsQuery.refetch()}>{m.common.retry}</Button></View> : <Text style={[styles.body, { color: colors.text.tertiary }]}>{labels.noEvents}</Text>}
       </ScrollView>
     </View>
   );
@@ -132,6 +137,7 @@ async function invalidateRuns(queryClient: ReturnType<typeof useQueryClient>): P
 }
 
 const styles = StyleSheet.create({
+  retry: { alignItems: 'flex-start', gap: spacing.xs },
   screen: { flex: 1 }, content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl }, center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: spacing.sm },
   card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.lg, padding: spacing.lg, gap: spacing.sm }, titleLine: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md }, titleBody: { flex: 1, gap: spacing.xxs },
   title: { ...typography.title }, sectionTitle: { ...typography.heading }, body: { ...typography.body }, meta: { ...typography.label },

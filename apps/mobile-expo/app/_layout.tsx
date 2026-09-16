@@ -147,9 +147,8 @@ export default function RootLayout() {
           <PaperProvider theme={paperTheme}>
             <GatewayConnectLandingContext.Provider value={gatewayConnectCtx}>
               <Stack screenOptions={stackScreenOptions}>
-                <Stack.Screen name="index" options={{ headerShown: false }} />
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="chat" options={{ headerShown: false }} />
-                <Stack.Screen name="attention" options={{ headerShown: false }} />
                 <Stack.Screen name="inbox" options={{ headerShown: false }} />
                 <Stack.Screen name="tasks" options={{ headerShown: false }} />
                 <Stack.Screen name="projects" options={{ headerShown: false }} />
@@ -163,13 +162,6 @@ export default function RootLayout() {
                   options={{
                     headerShown: false,
                     presentation: 'transparentModal',
-                  }}
-                />
-                <Stack.Screen
-                  name="settings"
-                  options={{
-                    headerShown: false,
-                    presentation: 'modal',
                   }}
                 />
                 <Stack.Screen

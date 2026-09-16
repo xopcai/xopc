@@ -4,6 +4,8 @@ import { useCallback, useMemo } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { Button, Icon, Text } from 'react-native-paper';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
 import { t, useMessages } from '../../i18n/messages';
@@ -22,6 +24,7 @@ import {
 
 export function ProjectPortfolioScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const configured = useGatewayConfigured();
   const { colors } = useTheme();
   const labels = useMessages().tasksPage;
@@ -89,7 +92,7 @@ export function ProjectPortfolioScreen() {
               </Text>
             </View>
           ) : null}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + spacing.xxl }]}
           refreshControl={<RefreshControl refreshing={query.isFetching} onRefresh={() => void query.refetch()} />}
           ListEmptyComponent={<View style={styles.empty}><Text style={[styles.emptyText, { color: colors.text.primary }]}>{labels.projectsEmpty}</Text></View>}
         />

@@ -61,6 +61,7 @@ export function WorkspaceFileLinkScreen({
       <FilePreviewModal
         visible={Boolean(preview)}
         file={preview}
+        conversationId={conversationId}
         onClose={() => router.back()}
       />
     </View>

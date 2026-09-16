@@ -6,13 +6,14 @@ import {
   type HomeWorkbenchItem,
 } from '@xopcai/gateway-contract';
 
-export type { HomeAction, HomeAttention, HomeDecision, HomeWorkbenchItem as HomeFocusItem } from '@xopcai/gateway-contract';
+export type { HomeAction, HomeAttention, HomeDecision, HomeWorkbenchItem } from '@xopcai/gateway-contract';
 
 import { apiFetch } from '../api/client';
 import type { Language } from '../stores/preferences-store';
+export type HomeFocusItem = HomeWorkbenchItem & { reviewDetail?: string };
 export interface HomeData {
   runningConversations: HomeRunningConversation[];
-  needsUser: HomeWorkbenchItem[];
+  needsUser: HomeFocusItem[];
   background: HomeWorkbenchItem[];
   backgroundCount: number;
 }
@@ -24,7 +25,12 @@ export async function fetchHome(language: Language): Promise<HomeData> {
   const core = parseHomeResponse(raw);
   return {
     runningConversations: core.runningConversations,
-    needsUser: core.needsUser,
+    needsUser: core.needsUser.map(item => {
+      const action = [item.primaryAction, ...item.secondaryActions].find(action => action?.type === 'connector_decision');
+      const decision = action?.type === 'connector_decision'
+        ? core.decisions.find(decision => decision.response?.approvalId === action.approvalId) : undefined;
+      return decision?.detail ? { ...item, reviewDetail: decision.detail } : item;
+    }),
     background: core.background,
     backgroundCount: core.backgroundCount,
   };

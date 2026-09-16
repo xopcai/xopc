@@ -45,7 +45,7 @@ async function mount(swipeEnabled = true) {
   const ref = createRef<ChatNavigationDrawerHandle>();
   const onInteraction = vi.fn();
   await act(async () => root.render(createElement(ChatNavigationDrawer, {
-    ref, swipeEnabled, onInteraction, currentConversationId: '', recentSessions: [], attentionCount: 0,
+    ref, swipeEnabled, onInteraction, currentConversationId: '', recentSessions: [],
     onSessionSelect: vi.fn(), onNewChat: vi.fn(), children: createElement('span', null, 'Chat'),
   })));
   return { ref, onInteraction };

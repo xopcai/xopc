@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Icon, Text } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
@@ -24,6 +25,7 @@ import { formatScheduleLabel } from './cron-schedule';
 
 export function AutomationDetailScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { id = '' } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
@@ -49,6 +51,10 @@ export function AutomationDetailScreen() {
   const toggleMutation = useMutation({
     mutationFn: (enabled: boolean) => setAutomationEnabled(id, enabled),
     onSuccess: () => invalidateAutomation(queryClient, id),
+  });
+
+  const refreshMutation = useMutation({
+    mutationFn: () => Promise.all([automationQuery.refetch(), runsQuery.refetch()]),
   });
 
   if (automationQuery.isLoading) {
@@ -79,7 +85,7 @@ export function AutomationDetailScreen() {
         onBack={() => router.back()}
         rightActions={editable ? [{ icon: 'pencil-outline', accessibilityLabel: labels.edit, onPress: () => router.push({ pathname: '/automation/form', params: { id } }) }] : undefined}
       />
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={automationQuery.isFetching} onRefresh={() => void Promise.all([automationQuery.refetch(), runsQuery.refetch()])} />}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xxl }]} refreshControl={<RefreshControl refreshing={refreshMutation.isPending} onRefresh={() => { if (!refreshMutation.isPending) refreshMutation.mutate(); }} />}>
         <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
           <View style={styles.titleLine}>
             <Text style={[styles.title, { color: colors.text.primary }]}>{automation.name}</Text>
@@ -110,7 +116,7 @@ export function AutomationDetailScreen() {
             <View style={styles.runBody}><Text style={[styles.body, { color: colors.text.primary }]}>{statusLabels[run.status]}</Text><Text style={[styles.meta, { color: colors.text.tertiary }]}>{formatAutomationDate(run.startedAtMs ?? run.createdAtMs, locale)}</Text></View>
             <Icon source="chevron-right" size={20} color={colors.text.tertiary} />
           </Pressable>
-        )) : <Text style={[styles.hint, { color: colors.text.tertiary }]}>{labels.noRuns}</Text>}
+        )) : runsQuery.isError ? <View style={styles.retry}><Text style={{ color: colors.semantic.error }}>{labels.loadFailed}</Text><Button onPress={() => void runsQuery.refetch()}>{m.common.retry}</Button></View> : <Text style={[styles.hint, { color: colors.text.tertiary }]}>{labels.noRuns}</Text>}
       </ScrollView>
     </View>
   );
@@ -139,6 +145,7 @@ async function invalidateAutomation(queryClient: ReturnType<typeof useQueryClien
 }
 
 const styles = StyleSheet.create({
+  retry: { alignItems: 'flex-start', gap: spacing.xs },
   screen: { flex: 1 }, content: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl }, center: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: spacing.sm },
   card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.lg, padding: spacing.lg, gap: spacing.sm },
   titleLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm }, title: { ...typography.title, flex: 1 }, status: { ...typography.label, fontWeight: '600' },

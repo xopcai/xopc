@@ -346,7 +346,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   }, [chatSession, modelMutation.isPending, conversationId]);
 
   const handleComposerSend = useCallback(
-    async (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => {
+    async (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[], delivery: 'next' | 'steer' = 'next') => {
       if (modelMutation.isPending) return false;
       if (bootstrap.bootstrapError && !conversationId) return false;
       const trimmed = text.trim();
@@ -354,7 +354,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
       if (!hasContent) return false;
 
       if (!conversationId || bootstrap.creatingInitialSession) return false;
-      return chatSession.send(text, attachments, contextRefs);
+      return chatSession.send(text, attachments, contextRefs, delivery);
     },
     [bootstrap.bootstrapError, bootstrap.creatingInitialSession, chatSession, conversationId, modelMutation.isPending],
   );
@@ -440,9 +440,11 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   const handleNewChat = useCallback(() => {
     const completeSelection = bootstrap.beginSessionSelection();
-    chatSession.activeConversationIdRef.current = '';
-    chatSession.cancelRecovery();
-    chatSession.clearAllState();
+    if (!root) {
+      chatSession.activeConversationIdRef.current = '';
+      chatSession.cancelRecovery();
+      chatSession.clearAllState();
+    }
 
     const agentId = currentSessionAgentId || defaultAgentId;
     void (async () => {
@@ -469,9 +471,11 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   const handleContextChange = useCallback((projectId: string | null, executionMode?: 'local_checkout' | 'managed_worktree') => {
     const completeSelection = bootstrap.beginSessionSelection();
-    chatSession.activeConversationIdRef.current = '';
-    chatSession.cancelRecovery();
-    chatSession.clearAllState();
+    if (!root) {
+      chatSession.activeConversationIdRef.current = '';
+      chatSession.cancelRecovery();
+      chatSession.clearAllState();
+    }
 
     const agentId = currentSessionAgentId || defaultAgentId;
     void (async () => {
@@ -497,6 +501,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   const handleSessionSelect = useCallback((key: string) => {
     if (!key || key === conversationId) return;
+    if (root) { openChat(router, key); return; }
     chatSession.cancelRecovery();
     chatSession.clearAllState();
     chatSession.activeConversationIdRef.current = key;
@@ -628,6 +633,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
     // Gateway
     activeGatewayId,
+    gatewayOnline,
 
     // Picker sheets
     agentSheetVisible,

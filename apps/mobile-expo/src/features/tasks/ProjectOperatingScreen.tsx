@@ -6,6 +6,8 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-n
 import PagerView from 'react-native-pager-view';
 import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
@@ -67,6 +69,7 @@ function fileIcon(entry: FileResource): string {
 
 export function ProjectOperatingScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const projectId = firstParam(id);
@@ -172,12 +175,16 @@ export function ProjectOperatingScreen() {
     const nextSection = PROJECT_SECTIONS[position];
     if (nextSection) setSection(nextSection);
   }, []);
+  const refreshMutation = useMutation({
+    mutationFn: (nextSection: ProjectSection) => Promise.all([
+      view.refetch(), details.refetch(),
+      ...(nextSection === 'work' ? [sessions.refetch()] : []),
+      ...(nextSection === 'context' ? [notes.refetch(), fileSpace.refetch(), files.refetch(), skills.refetch()] : []),
+      ...(nextSection === 'progress' ? [activity.refetch(), automations.refetch()] : []),
+    ]),
+  });
   const refresh = (nextSection: ProjectSection) => {
-    void view.refetch();
-    void details.refetch();
-    if (nextSection === 'work') void sessions.refetch();
-    if (nextSection === 'context') { void notes.refetch(); void fileSpace.refetch(); void files.refetch(); void skills.refetch(); }
-    if (nextSection === 'progress') { void activity.refetch(); void automations.refetch(); }
+    if (!refreshMutation.isPending) refreshMutation.mutate(nextSection);
   };
 
   if (view.isLoading) return (
@@ -221,8 +228,8 @@ export function ProjectOperatingScreen() {
       >
         <View key="overview" style={styles.page} collapsable={false}>
           <ScrollView
-            refreshControl={<RefreshControl refreshing={view.isFetching || details.isFetching} onRefresh={() => refresh('overview')} />}
-            contentContainerStyle={styles.content}
+            refreshControl={<RefreshControl refreshing={refreshMutation.isPending} onRefresh={() => refresh('overview')} />}
+            contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xxl }]}
             showsVerticalScrollIndicator={false}
           >
             <ProjectOverview
@@ -240,8 +247,8 @@ export function ProjectOperatingScreen() {
         </View>
         <View key="work" style={styles.page} collapsable={false}>
           <ScrollView
-            refreshControl={<RefreshControl refreshing={view.isFetching || sessions.isFetching} onRefresh={() => refresh('work')} />}
-            contentContainerStyle={styles.content}
+            refreshControl={<RefreshControl refreshing={refreshMutation.isPending} onRefresh={() => refresh('work')} />}
+            contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xxl }]}
             showsVerticalScrollIndicator={false}
           >
             <ProjectWork
@@ -258,8 +265,8 @@ export function ProjectOperatingScreen() {
         </View>
         <View key="context" style={styles.page} collapsable={false}>
           <ScrollView
-            refreshControl={<RefreshControl refreshing={view.isFetching || notes.isFetching || fileSpace.isFetching || files.isFetching || skills.isFetching} onRefresh={() => refresh('context')} />}
-            contentContainerStyle={styles.content}
+            refreshControl={<RefreshControl refreshing={refreshMutation.isPending} onRefresh={() => refresh('context')} />}
+            contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xxl }]}
             showsVerticalScrollIndicator={false}
           >
             <ProjectContext
@@ -280,8 +287,8 @@ export function ProjectOperatingScreen() {
         </View>
         <View key="progress" style={styles.page} collapsable={false}>
           <ScrollView
-            refreshControl={<RefreshControl refreshing={view.isFetching || details.isFetching || activity.isFetching || automations.isFetching} onRefresh={() => refresh('progress')} />}
-            contentContainerStyle={styles.content}
+            refreshControl={<RefreshControl refreshing={refreshMutation.isPending} onRefresh={() => refresh('progress')} />}
+            contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xxl }]}
             showsVerticalScrollIndicator={false}
           >
             <ProjectProgress
