@@ -14,7 +14,7 @@ async function json<T>(path: string, init?: Parameters<typeof apiFetch>[1]): Pro
   return response.json() as Promise<T>;
 }
 
-export function assertRecordingBinding(item: LocalRecording): void {
+export function assertRecordingBinding(item: Pick<LocalRecording, 'binding'>): void {
   const profile = useGatewayStore.getState().getActiveProfile();
   if (!profile || !item.binding || profile.gatewayId !== item.binding.gatewayId || profile.deviceId !== item.binding.deviceId
     || profile.gatewayPublicKey !== item.binding.publicKey) throw new Error('RECORDING_WORKSPACE_CHANGED');
@@ -97,4 +97,28 @@ export function recordingDetailOptions(item?: LocalRecording) {
 export async function retryRecording(item: LocalRecording): Promise<void> {
   assertRecordingBinding(item);
   await json(`/api/discussions/${encodeURIComponent(item.discussionId!)}/retry`, { method: 'POST' });
+}
+
+/** Meeting content is stored separately from the user's editable note markdown. */
+export function recordingNoteOptions(noteId: string, binding: LocalRecording['binding']) {
+  return queryOptions({
+    queryKey: ['recording-note', binding?.gatewayId, binding?.deviceId, binding?.publicKey, noteId],
+    enabled: !!noteId && !!binding,
+    queryFn: async (): Promise<RecordingDetail | null> => {
+      const owner = { binding };
+      assertRecordingBinding(owner);
+      const response = await apiFetch(`/api/discussions/by-note/${encodeURIComponent(noteId)}`);
+      assertRecordingBinding(owner);
+      if (response.status === 404) return null;
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const detail = await response.json() as RecordingDetail;
+      assertRecordingBinding(owner);
+      return detail;
+    },
+    refetchInterval: query => {
+      const detail = query.state.data;
+      return detail && !['completed', 'cancelled', 'needs_attention'].includes(detail.discussion.status) ? 3000 : false;
+    },
+    retry: false as const,
+  });
 }

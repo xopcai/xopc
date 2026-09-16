@@ -19,6 +19,7 @@ import { invalidateNoteLists } from '../../query/workspace-sync';
 import { useNoteReadAloud } from '../notes/useNoteReadAloud';
 import { NoteDetailHeader } from '../notes/NoteDetailHeader';
 import { NoteViewActionBar, type NoteViewActionBarItem } from '../notes/NoteViewActionBar';
+import { RecordingNoteSections } from '../recordings/RecordingNoteSections';
 import { NoteReadSurface } from '../notes/NoteReadSurface';
 import { NoteTagPickerSheet } from '../notes/NoteTagPickerSheet';
 import {
@@ -591,6 +592,7 @@ export function PageScreen() {
           tags={tags}
           attachmentSrcMap={attachmentSrcMap}
           untitledLabel={pm.untitledNote}
+          leadingContent={<RecordingNoteSections noteId={id} />}
         />
       ) : null}
 

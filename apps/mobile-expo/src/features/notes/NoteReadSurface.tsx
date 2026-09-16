@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, type ReactNode } from 'react';
 import { Image, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from 'react-native-paper';
 
@@ -13,12 +13,14 @@ export const NoteReadSurface = memo(function NoteReadSurface({
   tags,
   attachmentSrcMap,
   untitledLabel,
+  leadingContent,
 }: {
   title: string;
   markdown: string;
   tags?: string[];
   attachmentSrcMap: Record<string, string>;
   untitledLabel: string;
+  leadingContent?: ReactNode;
 }) {
   const { colors } = useTheme();
   const blocks = useMemo(() => buildNoteReadBlocks(markdown, attachmentSrcMap), [attachmentSrcMap, markdown]);
@@ -30,6 +32,7 @@ export const NoteReadSurface = memo(function NoteReadSurface({
   >
     <Text style={[styles.title, { color: colors.text.primary }]}>{title.trim() || untitledLabel}</Text>
     {tags?.length ? <View style={styles.tags}>{tags.map((tag) => <View key={tag} style={[styles.tag, { backgroundColor: colors.accent.selectionBg }]}><Text style={[styles.tagText, { color: colors.accent.primary }]}>{tag}</Text></View>)}</View> : null}
+    {leadingContent}
     <View style={styles.body}>
       {blocks.map((block) => block.kind === 'markdown'
         ? <MarkdownView key={block.key} content={block.content} allowTrailingMargin />
