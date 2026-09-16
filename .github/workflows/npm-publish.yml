@@ -51,6 +51,9 @@ jobs:
       - name: Run tests
         run: pnpm test
 
+      - name: Run skills regression tests
+        run: pnpm run test:skills:regression
+
       - name: Validate publish manifest
         run: pnpm run release:check-package
 
@@ -91,7 +94,9 @@ jobs:
 
       - name: Publish to npm
         if: steps.npm-version.outputs.exists != 'true'
-        run: pnpm publish --no-git-checks --tag ${{ steps.npm-tag.outputs.tag }}
+        # Build, unit tests (including skills), skills regression, and manifest checks
+        # above cover prepublishOnly; do not run the full suite and build twice.
+        run: pnpm publish --ignore-scripts --no-git-checks --tag ${{ steps.npm-tag.outputs.tag }}
 
       - name: Confirm existing npm version
         if: steps.npm-version.outputs.exists == 'true'
