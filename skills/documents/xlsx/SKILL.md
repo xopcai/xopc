@@ -1,6 +1,14 @@
 ---
 name: xlsx
 description: "Create, read, edit, clean, format, chart, or convert spreadsheet files such as .xlsx, .xlsm, .csv, and .tsv."
+metadata:
+  i18n:
+    en:
+      name: "Spreadsheets"
+      description: "Create, read, edit, clean, format, chart, or convert spreadsheet files such as .xlsx, .xlsm, .csv, and .tsv."
+    zh-CN:
+      name: "电子表格"
+      description: "创建、读取、编辑、清理、格式化、绘图或转换 .xlsx、.xlsm、.csv 和 .tsv 等电子表格文件。"
 license: Proprietary. LICENSE.txt has complete terms
 ---
 

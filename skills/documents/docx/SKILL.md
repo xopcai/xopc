@@ -2,6 +2,13 @@
 name: docx
 description: Create, inspect, edit, render, and validate Word DOCX artifacts while preserving templates and tracked content.
 metadata:
+  i18n:
+    en:
+      name: "Word Documents"
+      description: "Create, inspect, edit, render, and validate Word DOCX artifacts while preserving templates and tracked content."
+    zh-CN:
+      name: "Word 文档"
+      description: "在保留模板和修订内容的同时，创建、检查、编辑、渲染并验证 Word DOCX 文档。"
   xopc:
     emoji: "📝"
     requires_tools:

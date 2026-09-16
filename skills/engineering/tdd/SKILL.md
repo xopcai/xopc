@@ -1,6 +1,14 @@
 ---
 name: tdd
 description: Test-driven development using a red-green-refactor loop for features, bug fixes, and integration tests.
+metadata:
+  i18n:
+    en:
+      name: "Test-Driven Development"
+      description: "Test-driven development using a red-green-refactor loop for features, bug fixes, and integration tests."
+    zh-CN:
+      name: "测试驱动开发"
+      description: "使用红灯、绿灯、重构循环完成新功能、缺陷修复和集成测试。"
 ---
 
 # Test-Driven Development
