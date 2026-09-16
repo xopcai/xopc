@@ -67,6 +67,35 @@ describe('loadSkills', () => {
     rmSync(root, { recursive: true, force: true });
   });
 
+  it('loads localized presentation metadata without changing the canonical skill identity', () => {
+    const root = mkdtempSync(join(tmpdir(), 'xopc-skills-localized-'));
+    const skillDir = join(root, 'meeting-to-actions');
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      '---\nname: meeting-to-actions\ndescription: Convert meeting notes into actions.\n---\n\nUse it.\n',
+    );
+    writeFileSync(join(skillDir, 'xopc-skill.json'), JSON.stringify({
+      schemaVersion: 1,
+      name: 'meeting-to-actions',
+      localizations: {
+        en: { displayName: 'Meeting to Actions', description: 'Convert meeting notes into actions.' },
+        'zh-CN': { displayName: '会议行动闭环', description: '从会议记录中提取行动项。' },
+      },
+    }));
+
+    const result = loadTestSkills({ globalDir: root });
+
+    expect(result.skills.find((skill) => skill.name === 'meeting-to-actions')).toMatchObject({
+      name: 'meeting-to-actions',
+      description: 'Convert meeting notes into actions.',
+      localizations: {
+        'zh-CN': { displayName: '会议行动闭环', description: '从会议记录中提取行动项。' },
+      },
+    });
+    rmSync(root, { recursive: true, force: true });
+  });
+
   it('reports invalid skill files as diagnostics', () => {
     const root = mkdtempSync(join(tmpdir(), 'xopc-skills-'));
     const skillDir = join(root, 'empty-skill');

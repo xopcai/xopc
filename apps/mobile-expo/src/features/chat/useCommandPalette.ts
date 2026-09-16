@@ -3,6 +3,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { usePreferencesStore } from '../../stores/preferences-store';
+
 import { fetchAllPaletteItems } from './command-palette-api';
 import type { PaletteItem, SlashRange } from './command-palette.types';
 import { detectSlashRange, paletteItemMatchRank } from './command-palette-utils';
@@ -39,7 +41,8 @@ export function useCommandPalette(
 ): CommandPaletteState {
   const [allItems, setAllItems] = useState<PaletteItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const fetchedRef = useRef(false);
+  const fetchedLanguageRef = useRef<string | null>(null);
+  const language = usePreferencesStore((state) => state.language);
 
   // Detect slash range
   const slashRange = useMemo(() => suppress ? null : detectSlashRange(draft, cursor), [draft, cursor, suppress]);
@@ -48,18 +51,18 @@ export function useCommandPalette(
   // Fetch items when palette becomes active
   useEffect(() => {
     if (!paletteActive) {
-      fetchedRef.current = false;
+      fetchedLanguageRef.current = null;
       return;
     }
-    if (fetchedRef.current && allItems.length > 0) return;
+    if (fetchedLanguageRef.current === language && allItems.length > 0) return;
 
     let cancelled = false;
     setLoading(true);
-    fetchAllPaletteItems()
+    fetchAllPaletteItems(language)
       .then((items) => {
         if (!cancelled) {
           setAllItems(items);
-          fetchedRef.current = true;
+          fetchedLanguageRef.current = language;
         }
       })
       .catch(() => {
@@ -72,7 +75,7 @@ export function useCommandPalette(
     return () => {
       cancelled = true;
     };
-  }, [paletteActive, allItems.length]);
+  }, [paletteActive, allItems.length, language]);
 
   // Filter and rank items
   const query = slashRange?.query ?? '';
@@ -105,7 +108,7 @@ export function useCommandPalette(
 
       let insert: string;
       if (item.kind === 'skill') {
-        insert = `/skill:${item.name} `;
+        insert = `/skill:${item.canonicalName ?? item.name} `;
       } else {
         // Command: replace with `/commandName` (with optional trailing space for args)
         insert = `/${item.name}${item.acceptsArgs ? ' ' : '\n'}`;

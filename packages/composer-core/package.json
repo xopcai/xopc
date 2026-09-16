@@ -6,6 +6,7 @@
   "sideEffects": false,
   "exports": {
     "./pasted-text": "./src/pasted-text.ts",
-    "./pcm-wav-recorder": "./src/pcm-wav-recorder.ts"
+    "./pcm-wav-recorder": "./src/pcm-wav-recorder.ts",
+    "./skill-localization": "./src/skill-localization.ts"
   }
 }

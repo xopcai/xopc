@@ -48,6 +48,13 @@ export interface SkillToolConditions {
   fallbackForToolsets: string[];
 }
 
+export interface SkillLocalization {
+  displayName: string;
+  description: string;
+}
+
+export type SkillLocalizations = Partial<Record<'en' | 'zh-CN', SkillLocalization>>;
+
 export interface SkillMetadata {
   /** Skill name (from frontmatter) */
   name: string;
@@ -170,6 +177,8 @@ export interface Skill {
   name: string;
   /** Skill description */
   description: string;
+  /** Optional user-facing translations from xopc-skill.json. */
+  localizations?: SkillLocalizations;
   /** Category derived from parent directory (e.g. skills/creative/algorithmic-art → 'creative') */
   category?: string;
   /** Path to SKILL.md file */

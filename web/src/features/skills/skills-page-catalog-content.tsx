@@ -21,6 +21,7 @@ type Props = Pick<
   | 'builtinCategoryFilter'
   | 'setBuiltinCategoryFilter'
   | 'catalogDisplayRows'
+  | 'skillPresentation'
   | 'catalogStatusFilter'
   | 'resolveSkillEnabled'
   | 'categoryLabel'
@@ -42,6 +43,7 @@ export function SkillsPageCatalogContent(p: Props) {
     builtinCategoryFilter,
     setBuiltinCategoryFilter,
     catalogDisplayRows,
+    skillPresentation,
     catalogStatusFilter,
     resolveSkillEnabled,
     categoryLabel,
@@ -109,6 +111,7 @@ export function SkillsPageCatalogContent(p: Props) {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {catalogDisplayRows.map((row) => {
             const enabled = resolveSkillEnabled(row);
+            const presentation = skillPresentation(row);
             return (
             <article
               key={`${row.directoryId}-${row.path}`}
@@ -133,7 +136,7 @@ export function SkillsPageCatalogContent(p: Props) {
                     id={`catalog-skill-title-${row.directoryId}`}
                     className="truncate text-[15px] font-semibold leading-8 tracking-tight text-fg"
                   >
-                    {row.name}
+                    {presentation.displayName}
                   </h3>
                 </button>
                 {!enabled ? (
@@ -171,9 +174,9 @@ export function SkillsPageCatalogContent(p: Props) {
                   <div className="flex min-w-0 flex-1 flex-col gap-2">
                     <p
                       className="line-clamp-2 text-sm leading-relaxed text-fg-muted"
-                      title={row.description ? row.description : undefined}
+                      title={presentation.description || undefined}
                     >
-                      {row.description || '—'}
+                      {presentation.description || '—'}
                     </p>
                     <div className="flex flex-wrap gap-1.5 text-[11px] text-fg-subtle">
                       <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
