@@ -3,10 +3,38 @@ import { once } from 'node:events';
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 
 import { requireNodeSqlite } from '../../../infra/node-sqlite.js';
-import { backupBeforeConversationCutover } from '../migrations/conversation-backup.js';
+import {
+  backupBeforeConversationCutover,
+  flushBackupFile,
+} from '../migrations/conversation-backup.js';
+
+it('flushes the backup through a writable, non-truncating handle', () => {
+  const operations = {
+    open: vi.fn(() => 42),
+    fsync: vi.fn(),
+    close: vi.fn(),
+  };
+
+  flushBackupFile('xopc.db.pre-v178.bak', operations);
+
+  expect(operations.open).toHaveBeenCalledWith('xopc.db.pre-v178.bak', 'r+');
+  expect(operations.fsync).toHaveBeenCalledWith(42);
+  expect(operations.close).toHaveBeenCalledWith(42);
+});
+
+it('closes the backup handle when flushing fails', () => {
+  const operations = {
+    open: vi.fn(() => 42),
+    fsync: vi.fn(() => { throw new Error('flush failed'); }),
+    close: vi.fn(),
+  };
+
+  expect(() => flushBackupFile('xopc.db.pre-v178.bak', operations)).toThrow('flush failed');
+  expect(operations.close).toHaveBeenCalledWith(42);
+});
 
 it('refuses the cutover while another process holds the database and succeeds after it exits', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'xopc-cutover-owner-'));

@@ -17,8 +17,38 @@ Codex-level task success.
      model connection (`DASHSCOPE_API_KEY` is also supported by the provider).
    - Managed: sign in to xopc Cloud, then use
      `xopc-cloud/computer-gui-plus-preview`.
-4. Open the target application with one visible window. Start the task from the
-   desktop app and explicitly identify the application's bundle ID.
+4. Start the task from the desktop app using the application's name, for example
+   “Read the current page in Feishu; do not click.” No bundle ID is required.
+   To permit launching/restoring it, say “Open Feishu and read the current page.”
+
+## App discovery and task scope
+
+The public tool has five operations: `discover`, `open`, `observe`, `step`, `close`.
+The built-in `tool_manual(computer_use)` describes the exact inputs. Discovery
+returns names and running state, not screenshots or window contents. Its opaque
+app references expire after five minutes and belong to one task and desktop host.
+If a localized name is not found, the agent can list available apps rather than
+guessing a bundle ID. Only genuinely ambiguous targets require a user choice.
+
+`open` requires a discovered `appRef`, `mode` (`observe` or `control`) and an explicit
+`prepare` boolean. Preparation can launch the app or restore a selected window;
+it must be permitted by the user's task. It never accepts launch arguments or URLs.
+Multiple windows are supported: native stacking order selects the front visible
+window when unambiguous; otherwise the tool returns titled window references.
+A window reference is tied to the process instance and cannot survive its restart.
+Menu/proxy surfaces are distinguished using a bounded, screenshot-free AX root
+check. Missing or incomplete selection metadata returns candidates instead of
+guessing. Multiple independent processes with the same bundle ID currently
+require the user to leave only the intended instance running.
+
+Read-only sessions reject input in both the runtime and native broker, even with
+Full control enabled. `observe` returns accessibility text; adding `question`
+requests a visual answer from the same configured GUI model connection. The
+answer is evidence, not verified business success. Screenshots remain ephemeral.
+`step` is the only public input path, with raw actions confined to the broker.
+If macOS provides no accessibility tree, the tool explicitly reports that
+limitation; use a visual question to inspect valid pixels. It must not claim the
+page is empty, invent controls or bypass the grounded-text-input checks.
 
 The selector uses the connected model catalog, not a manually entered model ID.
 If a Cloud model is missing, sign in and refresh the model catalog in Models.
@@ -96,7 +126,7 @@ the current Gateway.
   in the native dialog replaces the device key and reconnects it. Cancelling
   preserves the revoked identity; you can retry from the same button. This does
   not grant Computer Use permissions.
-- The configured action budget applies to both `step` and direct `act` calls.
+- The configured action budget applies to each input dispatched by `step`.
   A held action reserves one slot; waiting for approval and resuming that exact
   action do not consume additional slots.
 - Routes and credentials are frozen per control session. Managed calls pin the
@@ -106,6 +136,9 @@ the current Gateway.
   the model budget. No malformed JSON is repaired into an executable action.
 - No automatic provider fallback, HTTP retry or replay of an uncertain native
   input. A changed target, expired observation or revoked grant fails closed.
+- Failed opens release their sessions and provide an error code, recovery hint,
+  and window candidates where appropriate. Tool failures are reported as errors,
+  not successful empty observations. Do not repeat a failure without a state change.
 - `model_finished` is not proof of success. Inspect the actual output; an input
   receipt can be completed while its business outcome remains unknown.
 - Passwords, verification codes, payments and security changes require manual
@@ -121,7 +154,15 @@ pnpm run electron:build
 ```
 
 Live model tests generate synthetic pixels, never capture your desktop. The
-native fixture source is `scripts/computer-fixture.swift`.
+native fixture source is `scripts/computer-fixture.swift`; use
+`scripts/computer-fixture.Info.plist` for its distinct test identity. The native
+harness `scripts/verify-computer-native.mts` must be bundled with esbuild
+(`--platform=node --format=esm --external:electron` and a Node `createRequire`
+banner), then run as the Electron main entry with the verified driver path as
+its first argument. Start the disposable fixture before running the harness.
+It reads and writes only that fixture, never a personal app. Close the disposable
+fixture afterwards. `XOPC_COMPUTER_NATIVE_DIAGNOSTICS=1` prints bounded structural
+metadata for diagnosing native test failures, not screenshots or input values.
 
 `build:node` cleans `dist`: always rebuild Node **before** the Electron server,
 web resources and native helpers. Do not run it while relying on a package in

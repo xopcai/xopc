@@ -1,5 +1,5 @@
 import { spawn, execFile, type ChildProcess } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdtemp, access, rm, rmdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,11 +10,16 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { z } from 'zod';
 import type { ComputerAction, ComputerTarget } from '@xopcai/computer-control-contract';
 import type { ComputerDriver, DriverObservation } from '../../src/computer/broker.js';
+import { ComputerTargetError } from '../../src/computer/errors.js';
 
 const exec = promisify(execFile);
 const Bounds = z.object({ x: z.number(), y: z.number(), width: z.number().positive(), height: z.number().positive() });
 const hash = (data: string | Uint8Array) => createHash('sha256').update(data).digest('hex');
 const DENIED_APPS = /(^com\.apple\.(Terminal|systempreferences|KeychainAccess)$|password|1password|bitwarden|iterm)/i;
+const Apps = z.array(z.object({ bundle_id: z.string().nullish(), name: z.string().optional(), pid: z.number().int(),
+  running: z.boolean().optional(), launch_path: z.string().nullish() }));
+const Windows = z.array(z.object({ window_id: z.number().int().safe(), pid: z.number().int(), bounds: Bounds,
+  title: z.string().nullish(), is_on_screen: z.boolean(), z_index: z.number().int().nullish() }));
 
 /** Cua also returns application menus; never disclose or act on those sibling roots. */
 export function scopeWindowAccessibility(data: Record<string, unknown>) {
@@ -52,8 +57,8 @@ export class CuaComputerDriver implements ComputerDriver {
   private generation = 0;
   private elements: Array<Record<string, unknown>> = [];
   private frame?: { bounds: z.infer<typeof Bounds>; width: number; height: number };
-  private startedAt?: string;
   private setupStage = 'START';
+  private readonly referenceSalt = randomUUID();
   constructor(private readonly binary: string, private readonly bundleId: string) {}
 
   private async start(): Promise<void> {
@@ -132,21 +137,83 @@ export class CuaComputerDriver implements ComputerDriver {
     if (!stdout.trim()) throw new Error('COMPUTER_PROCESS_EXITED');
     return `${pid}:${stdout.trim()}`;
   }
-  async resolveTarget(appId: string, signal: AbortSignal): Promise<ComputerTarget> {
+  private assertAppAllowed(appId: string): void {
     if (appId === this.bundleId || appId === 'ai.xopc.xopc' || appId === 'com.github.Electron') throw new Error('COMPUTER_SELF_CONTROL_DENIED');
     if (DENIED_APPS.test(appId)) throw new Error('COMPUTER_SENSITIVE_APP_MANUAL_ONLY');
+  }
+  async discover(query: string, signal: AbortSignal) {
     await this.start(); signal.throwIfAborted();
-    const apps = await this.call('list_apps', {}, signal);
-    const rows = z.array(z.object({ bundle_id: z.string().nullish(), pid: z.number().int(), running: z.boolean().optional() })).parse(apps.data.apps);
+    const rows = Apps.parse((await this.call('list_apps', {}, signal)).data.apps);
+    const normalized = query.normalize('NFKC').trim().toLocaleLowerCase();
+    const result = new Map<string, { appId: string; name: string; running: boolean }>();
+    for (const row of rows) {
+      if (!row.bundle_id) continue;
+      try { this.assertAppAllowed(row.bundle_id); } catch { continue; }
+      const name = row.name || row.launch_path?.split('/').at(-1)?.replace(/\.app$/, '') || row.bundle_id;
+      if (![name, row.bundle_id, row.launch_path?.split('/').at(-1) ?? ''].some(text => text.normalize('NFKC').toLocaleLowerCase().includes(normalized))) continue;
+      const previous = result.get(row.bundle_id);
+      result.set(row.bundle_id, { appId: row.bundle_id, name: name.slice(0, 300), running: row.pid > 0 || !!previous?.running });
+    }
+    return [...result.values()].sort((a, b) => Number(b.running) - Number(a.running) || a.name.localeCompare(b.name));
+  }
+  async resolveTarget(appId: string, signal: AbortSignal, options: { prepare: boolean; windowRef?: string }): Promise<ComputerTarget> {
+    this.assertAppAllowed(appId);
+    await this.start(); signal.throwIfAborted();
+    let rows = Apps.parse((await this.call('list_apps', {}, signal)).data.apps);
+    if (!rows.some(app => app.bundle_id === appId)) throw new Error('COMPUTER_APP_NOT_FOUND');
+    if (options.prepare && !rows.some(app => app.bundle_id === appId && app.pid > 0)) {
+      // Never accept URLs, argv, debug ports or a model-supplied launch path.
+      await this.call('launch_app', { bundle_id: appId }, signal);
+      rows = Apps.parse((await this.call('list_apps', {}, signal)).data.apps);
+    }
     const matches = rows.filter(app => app.bundle_id === appId && app.pid > 0);
-    if (matches.length !== 1) throw new Error('COMPUTER_OPEN_ONE_TARGET_APP_FIRST');
+    if (!matches.length) throw new Error('COMPUTER_APP_NOT_RUNNING');
+    if (matches.length !== 1) throw new Error('COMPUTER_APP_INSTANCE_AMBIGUOUS');
     const pid = matches[0].pid;
-    const windows = await this.call('list_windows', { pid }, signal);
-    const visible = z.array(z.object({ window_id: z.number().int().safe(), pid: z.number().int(), bounds: Bounds, is_on_screen: z.boolean() })).parse(windows.data.windows)
-      .filter(window => window.pid === pid && window.is_on_screen);
-    if (visible.length !== 1) throw new Error('COMPUTER_SELECT_SINGLE_VISIBLE_WINDOW');
-    const window = visible[0]; this.startedAt = await this.processIdentity(pid);
-    return { appId, pid, processIdentity: this.startedAt, windowId: String(window.window_id), width: Math.round(window.bounds.width), height: Math.round(window.bounds.height), geometryRevision: hash(JSON.stringify(window.bounds)) };
+    const processIdentity = await this.processIdentity(pid);
+    const windows = Windows.parse((await this.call('list_windows', { pid }, signal)).data.windows).filter(window => window.pid === pid);
+    const ref = (window: typeof windows[number]) => hash(`${this.referenceSalt}:${appId}:${processIdentity}:${window.window_id}`);
+    const candidates = windows.slice(0, 100).map(window => ({ windowRef: ref(window), title: (window.title || 'Untitled window').slice(0, 300), visible: window.is_on_screen }));
+    // WindowServer also lists menu/proxy surfaces. Prefer actual AXWindow roots,
+    // without capturing pixels or reading child content during target selection.
+    let selectable = windows;
+    if (!options.windowRef && windows.length > 1) {
+      if (windows.length > 12) throw new ComputerTargetError('COMPUTER_WINDOW_AMBIGUOUS', candidates);
+      const checks = await Promise.all(windows.map(async window => {
+        try {
+          const state = await this.call('get_window_state', { pid, window_id: window.window_id, include_screenshot: false, max_elements: 1, max_depth: 1 },
+            AbortSignal.any([signal, AbortSignal.timeout(2000)]));
+          if (state.data.pid !== pid || state.data.window_id !== window.window_id || !Array.isArray(state.data.elements)) return undefined;
+          return state.data.elements.some((element: any) => element.role === 'AXWindow' && element.depth === 0);
+        } catch { signal.throwIfAborted(); return undefined; }
+      }));
+      const semantic = windows.filter((_window, index) => checks[index]);
+      if (!semantic.length || checks.some(check => check === undefined)) throw new ComputerTargetError('COMPUTER_WINDOW_AMBIGUOUS', candidates);
+      selectable = semantic;
+    }
+    const visible = selectable.filter(window => window.is_on_screen);
+    let window = options.windowRef ? windows.find(item => ref(item) === options.windowRef) : undefined;
+    if (options.windowRef && !window) throw new ComputerTargetError('COMPUTER_WINDOW_CHANGED', candidates);
+    if (!options.windowRef) {
+      if (visible.length === 1) window = visible[0];
+      else if (!visible.length && selectable.length === 1) window = selectable[0];
+      else {
+        // Native stacking metadata is authoritative; never infer focus from size or array order.
+        const ranked = visible.filter(item => item.z_index != null).sort((a, b) => b.z_index! - a.z_index!);
+        if (ranked.length === visible.length && ranked.length > 1 && ranked[0].z_index !== ranked[1].z_index) window = ranked[0];
+      }
+    }
+    if (!window && windows.length > 1) throw new ComputerTargetError('COMPUTER_WINDOW_AMBIGUOUS', candidates);
+    if (window && !window.is_on_screen && options.prepare) {
+      signal.throwIfAborted();
+      if (await this.processIdentity(pid) !== processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
+      await this.call('bring_to_front', { pid, window_id: window.window_id }, signal);
+      const restored = Windows.parse((await this.call('list_windows', { pid }, signal)).data.windows);
+      window = restored.find(item => item.pid === pid && item.window_id === window!.window_id);
+    }
+    if (!window?.is_on_screen) throw new ComputerTargetError('COMPUTER_WINDOW_REQUIRED', candidates);
+    if (await this.processIdentity(pid) !== processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
+    return { appId, pid, processIdentity, windowId: String(window.window_id), width: Math.round(window.bounds.width), height: Math.round(window.bounds.height), geometryRevision: hash(JSON.stringify(window.bounds)) };
   }
   async observe(target: ComputerTarget, signal: AbortSignal): Promise<DriverObservation> {
     if (await this.processIdentity(target.pid) !== target.processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
@@ -165,6 +232,7 @@ export class CuaComputerDriver implements ComputerDriver {
     return { target: { ...target, width: Math.round(bounds.width), height: Math.round(bounds.height), geometryRevision: hash(JSON.stringify(bounds)) },
       summary: JSON.stringify({
         text,
+        ...(!elements.length ? { notice: 'Accessibility content is unavailable, not an empty page. Use observe with a visual question. Do not guess controls or claim text was read.' } : {}),
         elements: elements.map(({ element_token: _token, ...item }) => ({ ...item, ref: `e${item.element_index}` })),
       }).slice(0, 12_000),
       // Do not include per-snapshot tokens in the digest; compare visible content + geometry.

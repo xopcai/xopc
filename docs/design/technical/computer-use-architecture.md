@@ -366,19 +366,19 @@ driver 返回成功只证明调用完成。无法验证控件变化时 `outcome=
 
 | 操作 | 用途 | 限制 |
 |---|---|---|
-| `open` | 请求目标设备和应用授权 | 目标只是请求，由本地用户批准；无授权不截图 |
-| `observe` | 获取当前授权窗口的有限语义摘要 | 默认不把截图返回主 Agent |
-| `act` | 对当前 AX/UIA ref 做明确语义操作 | 不允许任意 native handle、命令或脚本 |
+| `discover` | 按显示名称发现运行中或已安装应用 | 仅返回应用元数据及任务绑定的短期 appRef，不截图 |
+| `open` | 使用 appRef 绑定窗口及 observe/control 模式 | prepare 显式控制是否允许启动或恢复；窗口有歧义时返回 windowRef |
+| `observe` | 获取辅助功能摘要；带 question 时调用同一 GUI 模型只读理解 | 不执行输入，截图不写入主 Agent transcript |
 | `step` | 对当前子目标进行一次 GUI 模型预测并最多执行一个动作 | Actor 预测像素动作也走相同校验 |
 | `close` | 清理当前桌面会话 | 不能借此把业务任务标记成功 |
 
-设备选择和可发现应用列表来自 UI/已授权清单，不对未授权模型公开整机运行应用和窗口标题。sessionId、owner、grantId 的可信绑定由工具封装注入，公开 schema 不允许模型传 `approved=true`、替换 owner 或指定驱动启动参数。
+设备选择来自可信任务绑定；已开启 Computer Use 时允许按名称查询应用元数据，窗口标题仅在目标应用授权后返回。appRef 由宿主生成，绑定 owner 并在五分钟后失效。sessionId、owner、grantId 由工具封装注入，不允许模型传 approved、bundle ID 或驱动启动参数。公开接口不再提供 act；原生执行仅由 step 预测产生，并经 broker 校验。只读会话在 broker 中拒绝 act，完全控制不会扩大任务范围。
 
 `open` 遇到需要用户授权时返回结构化 pending 并暂停当前 Agent run，不让 endpoint RPC 持续等待几分钟，也不让模型重复请求授权。
 
 ### 8.2 内部 endpoint 契约
 
-注册一个内部工具 `desktop.computer.control`，命令为 open/status/observe/act/release 等有界操作。Descriptor：
+注册一个内部工具 `desktop.computer.control`，命令为 discover/open/status/observe/act/release 等有界操作。Descriptor：
 
 - kind=desktop，sensitivity=personal，effect=write；这是整组能力的保守上界。
 - policyId=`computer.session-scoped`，maxConcurrency=1，idempotent=false，supportsCancellation=true。
@@ -405,7 +405,7 @@ driver 返回成功只证明调用完成。无法验证控件变化时 `outcome=
 2. 检查 task mode、预算、数据去向授权、模型/驱动 readiness。
 3. Broker 检查 grant 和设备独占；读取当前授权窗口状态。
 4. 上传观察图像至当前运行端临时内存存储，附带坐标与窗口身份；WS 返回小型元数据。
-5. 若是 `act`，校验语义动作；若是 `step`，一次调用 GUI ModelAdapter 得到 proposal。
+5. `step` 调用 GUI ModelAdapter 预测一个动作；`observe(question)` 只允许 answer 输出，不可转为输入操作。
 6. Runtime 校验输出、风险、观察引用与范围；Broker 在实际执行前再次校验。需要审批则暂停，不能先执行再补审批。
 7. Broker 记录 actionId 的执行状态，最多执行一个动作，等待可中止的 UI settle。
 8. 重新观察，优先检查实际控件值、页面状态或独立文件结果；无法确认就返回 unknown。
