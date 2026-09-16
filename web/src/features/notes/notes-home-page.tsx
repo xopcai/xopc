@@ -21,7 +21,7 @@ import { NotesHomeComposer } from './notes-home-composer';
 import { noteHomePreview, notesHomeQuery, NOTES_HOME_PAGE_SIZE } from './notes-home-model';
 import { formatRelativeTime, type NoteTimeLabels } from './note-time';
 
-const quietButton = 'inline-flex min-h-9 items-center justify-center gap-2 rounded-lg px-3 text-sm text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50';
+const quietButton = 'touch-target inline-flex min-h-9 items-center justify-center gap-2 rounded-lg px-3 text-sm text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50';
 
 export function NotesHomePage() {
   const language = useLocaleStore((s) => s.language);
@@ -258,7 +258,7 @@ export function NotesHomePage() {
               {[{ id: 'all', label: n.filterAll }, { id: 'agent', label: h.agentEdited }, { id: 'favorites', label: h.favorites }, { id: 'archived', label: n.filterArchived }].map(({ id, label }) => (
                 <button type="button" key={id} aria-pressed={view === id || (id === 'all' && view === 'unassigned')}
                   onClick={() => chooseView(id)}
-                  className={cn('border-b-2 border-transparent py-3 text-xs text-fg-muted hover:text-fg', (view === id || (id === 'all' && view === 'unassigned')) && 'border-fg font-medium text-fg')}>
+                  className={cn('touch-target border-b-2 border-transparent py-3 text-xs text-fg-muted hover:text-fg', (view === id || (id === 'all' && view === 'unassigned')) && 'border-fg font-medium text-fg')}>
                   {label}
                 </button>
               ))}
@@ -278,19 +278,20 @@ export function NotesHomePage() {
                   const Icon = note.voiceAttachmentId || note.kind === 'voice' ? AudioLines : note.kind === 'bookmark' ? Bookmark : FileText;
                   const preview = noteHomePreview(note) || (note.coverAttachmentId ? n.imageNote : n.noText);
                   return <li key={note.id} className="group flex min-w-0 items-center gap-3 py-4">
-                    <button type="button" onClick={() => openNote(note.id)} className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:ring-2 focus-visible:ring-accent">
+                    <button type="button" onClick={() => openNote(note.id)} className="touch-target flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:ring-2 focus-visible:ring-accent">
                       <span className="flex h-10 w-8 shrink-0 items-center justify-center rounded-md border border-edge text-fg-muted"><Icon className="size-4" aria-hidden /></span>
-                      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-fg group-hover:text-accent-fg">{note.title || preview.slice(0, 48) || n.titlePlaceholder}</span>
+                      <span className="min-w-0 flex-1"><span className="block truncate text-base font-medium text-fg sm:text-sm group-hover:text-accent-fg">{note.title || preview.slice(0, 48) || n.titlePlaceholder}</span>
                         <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-fg-muted">
                           {note.lastEditTrigger === 'ai_edit' ? <span className="inline-flex shrink-0 items-center gap-1 text-accent-fg"><Sparkles className="size-3" aria-hidden />{h.agentEditLabel}<span aria-hidden>·</span></span> : null}
                           <span className="truncate">{preview}</span>
                         </span>
+                        <time dateTime={new Date(note.updatedAt).toISOString()} className="mt-1.5 block text-xs text-fg-muted sm:hidden">{formatRelativeTime(note.updatedAt, now, timeLabels)}</time>
                       </span>
                     </button>
                     <span className="hidden max-w-32 truncate text-xs text-fg-muted md:block" title={note.projects?.map((p) => p.name).join(' · ')}>{note.projects?.map((p) => p.name).join(' · ') || h.unassigned}</span>
                     <time dateTime={new Date(note.updatedAt).toISOString()} className="hidden w-24 shrink-0 text-right text-xs text-fg-muted sm:block">{formatRelativeTime(note.updatedAt, now, timeLabels)}</time>
                     <button type="button" onClick={() => void toggleFavorite(note.id, !note.pinned)} disabled={pinning.has(note.id)} aria-label={`${note.pinned ? h.unfavorite : h.favorite}: ${note.title || n.titlePlaceholder}`} aria-pressed={Boolean(note.pinned)}
-                      className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-accent">
+                      className="touch-target inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-accent">
                       <Star className={cn('size-4', note.pinned && 'fill-current text-fg')} aria-hidden />
                     </button>
                     <DropdownMenu.Root>
@@ -299,7 +300,7 @@ export function NotesHomePage() {
                           type="button"
                           disabled={deletingNoteId === note.id}
                           aria-label={`${n.noteActions}: ${note.title || n.titlePlaceholder}`}
-                          className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-accent"
+                          className="touch-target inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-accent"
                         >
                           {deletingNoteId === note.id
                             ? <Loader2 className="size-4 animate-spin" aria-hidden />
@@ -309,7 +310,7 @@ export function NotesHomePage() {
                       <DropdownMenu.Portal>
                         <DropdownMenu.Content align="end" sideOffset={4} className="z-50 min-w-36 rounded-lg border border-edge bg-surface-panel p-1 shadow-popover">
                           <DropdownMenu.Item
-                            className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-danger outline-none hover:bg-danger-soft focus:bg-danger-soft"
+                            className="touch-target flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-danger outline-none hover:bg-danger-soft focus:bg-danger-soft"
                             onSelect={() => setDeleteTarget(note)}
                           >
                             <Trash2 className="size-4" aria-hidden />

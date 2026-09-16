@@ -87,24 +87,24 @@ function ProjectCard({
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-hover text-fg-muted">
               <FolderKanban className="size-4" aria-hidden />
             </span>
             <div className="min-w-0">
-              <h2 className="truncate text-sm font-semibold text-fg">{project.name}</h2>
+              <h2 className="truncate text-base font-semibold sm:text-sm text-fg">{project.name}</h2>
               <p className="mt-0.5 text-xs text-fg-subtle">{t.statuses[project.status]}</p>
             </div>
           </div>
           <ArrowRight className="mt-2 size-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5" aria-hidden />
         </div>
-        <p className="mt-3 line-clamp-2 min-h-10 text-xs leading-5 text-fg-muted">
+        <p className="mt-3 line-clamp-2 min-h-10 text-sm leading-6 sm:text-xs sm:leading-5 text-fg-muted">
           {project.description || project.brief || t.noDescription}
         </p>
       </Link>
 
       <div className="mt-3 flex shrink-0 items-end justify-between gap-3 border-t border-edge-subtle pt-3">
-        <div className="min-w-0 text-[11px] text-fg-subtle">
-          <p className="truncate">{project.workspaceRoot || t.agentDefault}</p>
+        <div className="min-w-0 text-xs text-fg-muted">
+          <p className="hidden truncate sm:block">{project.workspaceRoot || t.agentDefault}</p>
           <p className="mt-1">{projectTime(project.lastActiveAt ?? project.updatedAt, t.never)}</p>
         </div>
         <div className="flex shrink-0 gap-1">
@@ -359,7 +359,7 @@ export function ProjectsPage() {
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
               <input
                 autoFocus
-                className="h-9 w-full rounded-lg border border-edge bg-surface-panel pl-9 pr-9 text-sm text-fg outline-none placeholder:text-fg-muted focus:border-accent"
+                className="h-11 w-full rounded-lg border border-edge bg-surface-panel pl-9 pr-12 text-base sm:h-9 sm:text-sm text-fg outline-none placeholder:text-fg-muted focus:border-accent"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder={t.searchPlaceholder}
@@ -367,7 +367,7 @@ export function ProjectsPage() {
               />
               <button
                 type="button"
-                className="absolute right-1.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-fg-subtle transition-colors hover:bg-surface-hover hover:text-fg"
+                className="touch-target absolute right-0 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-fg-subtle transition-colors hover:bg-surface-hover hover:text-fg"
                 onClick={() => {
                   setSearch('');
                   setSearchOpen(false);

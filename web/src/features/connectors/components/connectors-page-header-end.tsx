@@ -19,7 +19,7 @@ export const ConnectorSearchField = memo(function ConnectorSearchField({
 }) {
   return (
     <label className={cn(
-      'relative flex min-h-9 min-w-0 flex-1 cursor-text items-center rounded-pill border border-edge bg-surface-panel py-1.5 pl-9 pr-3 shadow-surface',
+      'relative flex min-h-11 sm:min-h-9 min-w-0 flex-1 cursor-text items-center rounded-pill border border-edge bg-surface-panel py-1.5 pl-9 pr-3 focus-within:ring-2 focus-within:ring-accent',
       className,
     )}>
       <Search
@@ -36,7 +36,7 @@ export const ConnectorSearchField = memo(function ConnectorSearchField({
         placeholder={placeholder}
         autoComplete="off"
         spellCheck={false}
-        className="min-w-0 flex-1 appearance-none border-0 bg-transparent py-0.5 text-sm leading-normal text-fg caret-current placeholder:text-fg-disabled focus:border-0 focus:shadow-none focus:outline-none focus:ring-0 focus-visible:outline-none"
+        className="min-w-0 flex-1 appearance-none border-0 bg-transparent py-0.5 text-base sm:text-sm leading-normal text-fg caret-current placeholder:text-fg-disabled focus:border-0 focus:shadow-none focus:outline-none focus:ring-0 focus-visible:outline-none"
       />
     </label>
   );
@@ -73,7 +73,7 @@ export const ConnectorsPageHeaderEnd = memo(function ConnectorsPageHeaderEnd({
           >
             <DropdownMenu.Item
               className={cn(
-                'flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none data-[highlighted]:bg-surface-hover',
+                'touch-target flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none data-[highlighted]:bg-surface-hover',
                 interaction.transition,
               )}
               onSelect={onBrowseCatalog}
@@ -83,7 +83,7 @@ export const ConnectorsPageHeaderEnd = memo(function ConnectorsPageHeaderEnd({
             </DropdownMenu.Item>
             <DropdownMenu.Item
               className={cn(
-                'flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none data-[highlighted]:bg-surface-hover',
+                'touch-target flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none data-[highlighted]:bg-surface-hover',
                 interaction.transition,
               )}
               onSelect={onAddCustomServer}

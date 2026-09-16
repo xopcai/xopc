@@ -9,7 +9,7 @@ import { motion, useReducedMotion } from '../../motion';
 import { radii, spacing, typography, useTheme } from '../../theme';
 import type { ComposerSheetAction } from './composer-action-sheet';
 
-const PAGE_SIZE = 8;
+const TILE_SIZE = spacing.xxxl + spacing.lg;
 
 /** A keyboard-sized, paged accessory surface that keeps the conversation visible. */
 export const ComposerActionPanel = memo(function ComposerActionPanel({ visible, items, onClose }: {
@@ -28,7 +28,9 @@ export const ComposerActionPanel = memo(function ComposerActionPanel({ visible, 
   const pendingAction = useRef<(() => void) | null>(null);
   const rowHeight = spacing.xxxl + spacing.lg + spacing.sm + typography.label.lineHeight * fontScale * 2;
   const panelHeight = Math.min(screenHeight * 0.45, rowHeight * 2 + spacing.xl * 2 + spacing.lg);
-  const pageCount = Math.ceil(items.length / PAGE_SIZE);
+  const columns = width > 0 && width < (TILE_SIZE + spacing.sm) * 4 + spacing.md * 2 ? 3 : 4;
+  const pageSize = columns * 2;
+  const pageCount = Math.ceil(items.length / pageSize);
 
   const finishClose = useCallback(() => {
     const action = pendingAction.current;
@@ -39,6 +41,8 @@ export const ComposerActionPanel = memo(function ComposerActionPanel({ visible, 
   useEffect(() => {
     if (visible) {
       pendingAction.current = null;
+      // Start at the keyboard's current lift rather than collapsing toward zero first.
+      expansion.value = Math.max(expansion.value, Math.abs(keyboard.height.value));
       setPage(0);
       pagerRef.current?.scrollTo({ x: 0, animated: false });
     }
@@ -49,12 +53,12 @@ export const ComposerActionPanel = memo(function ComposerActionPanel({ visible, 
       if (finished && !visible) scheduleOnRN(finishClose);
     });
     return () => cancelAnimation(expansion);
-  }, [expansion, finishClose, panelHeight, reducedMotion, visible]);
+  }, [expansion, finishClose, keyboard.height, panelHeight, reducedMotion, visible]);
 
   useEffect(() => {
     setPage(0);
     pagerRef.current?.scrollTo({ x: 0, animated: false });
-  }, [width]);
+  }, [width, pageSize]);
 
   useEffect(() => {
     if (!visible) return;
@@ -72,7 +76,7 @@ export const ComposerActionPanel = memo(function ComposerActionPanel({ visible, 
 
   return (
     <Animated.View
-      style={[styles.panel, { backgroundColor: colors.surface.input, borderTopColor: colors.border.subtle }, animatedStyle]}
+      style={[styles.panel, animatedStyle]}
       onLayout={event => setWidth(event.nativeEvent.layout.width)}
       pointerEvents={visible ? 'auto' : 'none'}
       accessibilityElementsHidden={!visible}
@@ -88,8 +92,8 @@ export const ComposerActionPanel = memo(function ComposerActionPanel({ visible, 
           {Array.from({ length: pageCount }, (_, pageIndex) => (
             <ScrollView key={`${pageIndex}:${width}`} style={{ width }} contentContainerStyle={styles.grid}
               showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="always">
-              {items.slice(pageIndex * PAGE_SIZE, (pageIndex + 1) * PAGE_SIZE).map(item => (
-                <Pressable key={item.key} style={[styles.cell, { minHeight: rowHeight, opacity: item.disabled ? 0.4 : 1 }]}
+              {items.slice(pageIndex * pageSize, (pageIndex + 1) * pageSize).map(item => (
+                <Pressable key={item.key} style={[styles.cell, { width: `${100 / columns}%`, minHeight: rowHeight, opacity: item.disabled ? 0.4 : 1 }]}
                   disabled={item.disabled} accessibilityRole="button" accessibilityLabel={item.label}
                   accessibilityHint={item.description} accessibilityState={{ disabled: !!item.disabled }}
                   onPress={() => {
@@ -98,7 +102,7 @@ export const ComposerActionPanel = memo(function ComposerActionPanel({ visible, 
                     onClose();
                   }}>
                   {({ pressed }) => <>
-                    <View style={[styles.tile, { backgroundColor: pressed ? colors.surface.hover : colors.surface.panel }]}>
+                    <View style={[styles.tile, { backgroundColor: pressed ? colors.surface.hover : colors.surface.input }]}>
                       <Icon source={item.icon} size={spacing.xxl} color={colors.text.primary} />
                     </View>
                     <Text style={[styles.label, { color: colors.text.secondary }]}>{item.label}</Text>
@@ -119,11 +123,11 @@ export const ComposerActionPanel = memo(function ComposerActionPanel({ visible, 
 });
 
 const styles = StyleSheet.create({
-  panel: { overflow: 'hidden', marginHorizontal: -spacing.content, borderTopWidth: StyleSheet.hairlineWidth },
+  panel: { overflow: 'hidden' },
   pager: { flex: 1 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: spacing.md, paddingTop: spacing.xl },
-  cell: { width: '25%', alignItems: 'center', paddingHorizontal: spacing.xs, paddingBottom: spacing.md, gap: spacing.sm },
-  tile: { width: spacing.xxxl + spacing.lg, height: spacing.xxxl + spacing.lg, borderRadius: radii.xl, alignItems: 'center', justifyContent: 'center' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: spacing.md, paddingTop: spacing.lg },
+  cell: { alignItems: 'center', paddingHorizontal: spacing.xs, paddingBottom: spacing.md, gap: spacing.sm },
+  tile: { width: TILE_SIZE, height: TILE_SIZE, borderRadius: radii.xl, alignItems: 'center', justifyContent: 'center' },
   label: { ...typography.label, textAlign: 'center' },
   dots: { height: spacing.xl + spacing.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm },
   dot: { width: spacing.sm, height: spacing.sm, borderRadius: radii.full },

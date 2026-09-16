@@ -48,7 +48,7 @@ const thumbFloatClassName =
  * with segment classes, which was skewing vertical alignment inside the pill.
  */
 const segmentButtonClassName =
-  'relative z-[2] box-border flex h-6 min-h-0 min-w-0 flex-1 cursor-pointer items-center justify-center gap-1 rounded-pill border-0 bg-transparent px-2 py-0 text-center text-xs font-medium leading-none outline-none transition-[color,background-color,box-shadow] duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50';
+  'touch-target relative z-[2] box-border flex h-6 flex-1 cursor-pointer items-center justify-center gap-1 rounded-pill border-0 bg-transparent px-2 py-0 text-center text-xs font-medium leading-none outline-none transition-[color,background-color,box-shadow] duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel active:scale-100 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50';
 
 /**
  * Pill segmented control with a single sliding surface (thumb) behind the selected segment.

@@ -25,7 +25,7 @@ export function PageTabs<T extends string>({
   panelIdPrefix,
   className,
   buttonClassName,
-  selectedClassName = 'bg-accent-soft text-accent-fg',
+  selectedClassName = 'bg-surface-active text-fg',
   unselectedClassName = 'text-fg-muted hover:bg-surface-hover hover:text-fg',
   countClassName,
   onReorder,
@@ -54,7 +54,7 @@ export function PageTabs<T extends string>({
   return (
     <nav
       aria-label={ariaLabel}
-      className={cn('-mx-1 flex gap-1 overflow-x-auto px-1 pb-1', className)}
+      className={cn('-mx-1 flex gap-1 overflow-x-auto overscroll-x-contain px-1 pb-1', className)}
       role="tablist"
       onDragLeave={(event) => {
         if (!onReorder) return;
@@ -63,13 +63,16 @@ export function PageTabs<T extends string>({
         setDropTarget(null);
       }}
       onKeyDown={(event) => {
-        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        if (!items.length) return;
         event.preventDefault();
         const currentIndex = items.findIndex((item) => item.id === activeTab);
-        if (currentIndex < 0) return;
-        const delta = event.key === 'ArrowRight' ? 1 : -1;
-        const nextIndex = (currentIndex + delta + items.length) % items.length;
+        const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1
+          : (Math.max(0, currentIndex) + (event.key === 'ArrowRight' ? 1 : -1) + items.length) % items.length;
         onChange(items[nextIndex].id);
+        const next = event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')[nextIndex];
+        next?.focus();
+        next?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       }}
     >
       {items.map(({ id, icon: Icon, label, count, suffix, title }) => {
@@ -83,13 +86,14 @@ export function PageTabs<T extends string>({
             type="button"
             role="tab"
             aria-selected={selected}
+            tabIndex={selected ? 0 : -1}
             id={tabIdPrefix ? `${tabIdPrefix}-${id}` : undefined}
             aria-controls={panelIdPrefix ? `${panelIdPrefix}-${id}` : undefined}
             aria-grabbed={onReorder ? dragging : undefined}
             draggable={Boolean(onReorder)}
             title={title}
             className={cn(
-              'relative inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+              'touch-target relative inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
               interaction.press,
               selected ? selectedClassName : unselectedClassName,
@@ -136,7 +140,7 @@ export function PageTabs<T extends string>({
             {Icon ? <Icon className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden /> : null}
             <span>{label}</span>
             {count !== undefined && count !== null ? (
-              <span className={cn('rounded-full bg-surface-hover px-1.5 py-0.5 text-[10px] tabular-nums text-fg-subtle', countClassName)}>
+              <span className={cn('rounded-full bg-surface-hover px-1.5 py-0.5 text-xs tabular-nums text-fg-muted', countClassName)}>
                 {count}
               </span>
             ) : null}

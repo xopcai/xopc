@@ -30,14 +30,14 @@ export const PrimaryAppHeader = memo(function PrimaryAppHeader() {
   return (
     <header
       className={cn(
-        'grid min-w-0 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 bg-surface-panel',
+        'grid min-w-0 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1 bg-surface-panel',
         APP_CHROME_BAR_CLASS,
         chromeLayout.mainHeaderDraggable && APP_CHROME_DRAG_CLASS,
         'px-3 sm:gap-4 sm:px-5 xl:px-6',
         headerClassName,
       )}
     >
-      <div className={cn('flex min-w-0 shrink-0 items-center gap-2.5', APP_CHROME_NO_DRAG_CLASS)}>
+      <div className={cn('flex min-w-0 shrink-0 items-center gap-1 sm:gap-2.5', APP_CHROME_NO_DRAG_CLASS)}>
         {chromeLayout.mainHeaderLeadingInsetClass ? (
           <ShellQuickActions
             sidebarToggleVariant="main"

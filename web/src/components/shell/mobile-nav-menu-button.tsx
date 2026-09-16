@@ -20,7 +20,7 @@ export const MobileNavMenuButton = memo(function MobileNavMenuButton() {
       type="button"
       variant="ghost"
       className={cn(
-        'size-8 shrink-0 rounded-xl p-0 md:hidden',
+        'size-11 shrink-0 rounded-xl p-0 md:hidden',
         APP_CHROME_NO_DRAG_CLASS,
         mobileNavOpen && 'hidden',
       )}
@@ -30,7 +30,7 @@ export const MobileNavMenuButton = memo(function MobileNavMenuButton() {
       title={m.openMenu}
       onClick={() => setMobileNavOpen(true)}
     >
-      <Menu className="size-4" strokeWidth={1.5} aria-hidden />
+      <Menu className="size-5" strokeWidth={1.5} aria-hidden />
     </Button>
   );
 });

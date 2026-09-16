@@ -97,6 +97,7 @@
 
 /* Dark — lifted workstation gray, restrained rim light, Loop Blue signals */
 html.dark {
+  color-scheme: dark;
   --color-surface-base: #14171c;
   --color-surface-rail: #111318;
   --color-surface-panel: #1b1f26;
@@ -155,7 +156,7 @@ html.dark {
     font-family: var(--font-sans);
     background-color: var(--color-surface-base);
     color: var(--color-fg);
-    color-scheme: light dark;
+    color-scheme: light;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
@@ -2078,5 +2079,13 @@ html[data-desktop-pet="true"] body {
   }
   to {
     background-position: var(--pet-frame-end-x) var(--pet-frame-start-y);
+  }
+}
+
+/* Touch controls grow in layout, so their hit areas never overlap adjacent actions. */
+@media (pointer: coarse) {
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
   }
 }

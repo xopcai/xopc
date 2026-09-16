@@ -24,4 +24,4 @@ export const interaction = {
 
 /** Ghost-style icon hit target (toolbar on cards, etc.). */
 export const ghostIconButton =
-  'rounded-lg p-2 text-fg-muted transition-colors transition-transform duration-150 ease-out hover:bg-surface-hover hover:text-fg active:scale-95 motion-reduce:transition-none motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel';
+  'touch-target rounded-lg p-2 text-fg-muted transition-colors transition-transform duration-150 ease-out hover:bg-surface-hover hover:text-fg active:scale-95 motion-reduce:transition-none motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel';
