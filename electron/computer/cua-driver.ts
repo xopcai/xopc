@@ -44,7 +44,25 @@ export function scopeWindowAccessibility(data: Record<string, unknown>) {
       selected.push(line);
     }
   }
-  return { elements, text: selected.join('\n').slice(0, 4000) };
+  const text = selected.join('\n');
+  return { elements, text: text.slice(0, 4000), truncated: text.length > 4000 };
+}
+
+/** Truncate whole records, not serialized JSON or field values used as evidence. */
+export function summarizeWindowAccessibility(elements: Array<Record<string, unknown>>, text: string, truncated = false): string {
+  const summary = { text, ...(!elements.length ? { notice: 'Accessibility content is unavailable, not an empty page. Use observe with a visual question. Do not guess controls or claim text was read.' } : {}),
+    truncated, elements: [] as Array<Record<string, unknown>> };
+  while (JSON.stringify(summary.text).length > 6000) { summary.text = summary.text.slice(0, Math.floor(summary.text.length / 2)); summary.truncated = true; }
+  for (const { element_token: _token, ...item } of elements) {
+    summary.elements.push({ ...item, ref: `e${item.element_index}` });
+    if (JSON.stringify(summary).length > 12_000) { summary.elements.pop(); summary.truncated = true; }
+  }
+  return JSON.stringify(summary);
+}
+
+function nativeKeys(keys: string[]): string[] {
+  const aliases: Record<string, string> = { enter: 'return', esc: 'escape', backspace: 'delete', arrowup: 'up', arrowdown: 'down', arrowleft: 'left', arrowright: 'right' };
+  return keys.map(key => aliases[key.toLowerCase()] ?? key.toLowerCase());
 }
 
 /** Private app-owned daemon. No shell, raw tool exposure, global daemon or foreground fallback. */
@@ -171,25 +189,34 @@ export class CuaComputerDriver implements ComputerDriver {
     if (matches.length !== 1) throw new Error('COMPUTER_APP_INSTANCE_AMBIGUOUS');
     const pid = matches[0].pid;
     const processIdentity = await this.processIdentity(pid);
-    const windows = Windows.parse((await this.call('list_windows', { pid }, signal)).data.windows).filter(window => window.pid === pid);
+    const listWindows = async () => Windows.parse((await this.call('list_windows', { pid }, signal)).data.windows).filter(window => window.pid === pid);
+    let windows = await listWindows();
+    // A hidden app can publish many proxy surfaces before its main window is restored.
+    // Preparation authorizes app activation, but not a guessed window or screenshot.
+    if (options.prepare && !options.windowRef && windows.length > 1 && windows.every(window => !window.is_on_screen)) {
+      if (await this.processIdentity(pid) !== processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
+      await this.call('bring_to_front', { pid }, signal);
+      windows = await listWindows();
+    }
     const ref = (window: typeof windows[number]) => hash(`${this.referenceSalt}:${appId}:${processIdentity}:${window.window_id}`);
     const candidates = windows.slice(0, 100).map(window => ({ windowRef: ref(window), title: (window.title || 'Untitled window').slice(0, 300), visible: window.is_on_screen }));
     // WindowServer also lists menu/proxy surfaces. Prefer actual AXWindow roots,
     // without capturing pixels or reading child content during target selection.
     let selectable = windows;
-    if (!options.windowRef && windows.length > 1) {
-      if (windows.length > 12) throw new ComputerTargetError('COMPUTER_WINDOW_AMBIGUOUS', candidates);
-      const checks = await Promise.all(windows.map(async window => {
+    if (!options.windowRef && selectable.length > 1) {
+      if (selectable.length > 12 && selectable.some(window => window.is_on_screen)) selectable = selectable.filter(window => window.is_on_screen);
+      if (selectable.length > 12) throw new ComputerTargetError('COMPUTER_WINDOW_AMBIGUOUS', candidates);
+      const checks = await Promise.all(selectable.map(async window => {
         try {
           const state = await this.call('get_window_state', { pid, window_id: window.window_id, include_screenshot: false, max_elements: 1, max_depth: 1 },
             AbortSignal.any([signal, AbortSignal.timeout(2000)]));
           if (state.data.pid !== pid || state.data.window_id !== window.window_id || !Array.isArray(state.data.elements)) return undefined;
-          return state.data.elements.some((element: any) => element.role === 'AXWindow' && element.depth === 0);
+          if (state.data.elements.some((element: any) => element.role === 'AXWindow' && element.depth === 0)) return true;
+          return state.data.degraded === true ? undefined : false;
         } catch { signal.throwIfAborted(); return undefined; }
       }));
-      const semantic = windows.filter((_window, index) => checks[index]);
-      if (!semantic.length || checks.some(check => check === undefined)) throw new ComputerTargetError('COMPUTER_WINDOW_AMBIGUOUS', candidates);
-      selectable = semantic;
+      // Unknown is not a proxy: retain it for native stacking/ambiguity resolution.
+      selectable = selectable.filter((_window, index) => checks[index] !== false);
     }
     const visible = selectable.filter(window => window.is_on_screen);
     let window = options.windowRef ? windows.find(item => ref(item) === options.windowRef) : undefined;
@@ -225,16 +252,13 @@ export class CuaComputerDriver implements ComputerDriver {
     const image = Buffer.from(screenshot.data, 'base64');
     const width = z.number().int().positive().parse(state.data.screenshot_width);
     const height = z.number().int().positive().parse(state.data.screenshot_height);
-    const { elements, text } = scopeWindowAccessibility(state.data);
+    const scoped = scopeWindowAccessibility(state.data);
+    const { elements, text } = scoped;
     this.elements = elements;
     this.frame = { bounds, width, height };
     const stableElements = elements.map(({ element_token: _token, ...item }) => item);
     return { target: { ...target, width: Math.round(bounds.width), height: Math.round(bounds.height), geometryRevision: hash(JSON.stringify(bounds)) },
-      summary: JSON.stringify({
-        text,
-        ...(!elements.length ? { notice: 'Accessibility content is unavailable, not an empty page. Use observe with a visual question. Do not guess controls or claim text was read.' } : {}),
-        elements: elements.map(({ element_token: _token, ...item }) => ({ ...item, ref: `e${item.element_index}` })),
-      }).slice(0, 12_000),
+      summary: summarizeWindowAccessibility(stableElements, text, scoped.truncated === true || state.data.truncated === true || state.data.elements_complete === false),
       // Do not include per-snapshot tokens in the digest; compare visible content + geometry.
       stateDigest: hash(JSON.stringify({ elements: stableElements, bounds, width, height }) + hash(image)),
       image, mimeType: screenshot.mimeType as 'image/png' | 'image/jpeg', imageWidth: width, imageHeight: height };
@@ -252,17 +276,17 @@ export class CuaComputerDriver implements ComputerDriver {
       return box && x >= box.x && y >= box.y && x < box.x + box.w && y < box.y + box.h;
     });
     if (candidates.length !== 1 || typeof candidates[0].element_token !== 'string') throw new Error('COMPUTER_EDITABLE_TARGET_REQUIRED');
-    return candidates[0].element_token as string;
+    return candidates[0];
   }
   validateAction(action: ComputerAction): void {
     if (action.kind === 'typeText' || action.kind === 'setValue') this.editable(action);
     if (action.kind === 'pressKeys') {
-      const keys = action.keys.map(key => key.toLowerCase());
+      const keys = nativeKeys(action.keys);
       const modifiers = new Set(['cmd', 'command', 'ctrl', 'control', 'alt', 'option', 'shift', 'fn']);
       const main = keys.at(-1)!;
       if (!keys.slice(0, -1).every(key => modifiers.has(key)) || !/^(return|tab|escape|up|down|left|right|space|delete|home|end|pageup|pagedown|f[1-9]|f1[0-2]|[a-z0-9])$/.test(main)) throw new Error('COMPUTER_KEY_NOT_SUPPORTED');
       // Global/app escape shortcuts are not scoped to the authorized window.
-      if (keys.some(key => modifiers.has(key)) && ['q', 'w', 'h', 'm', 'space', 'tab', 'escape'].includes(main)) throw new Error('COMPUTER_KEY_SCOPE_UNSAFE');
+      if (keys.slice(0, -1).some(key => key !== 'shift') && ['q', 'w', 'h', 'm', 'space', 'tab', 'escape'].includes(main)) throw new Error('COMPUTER_KEY_SCOPE_UNSAFE');
     }
     if (action.kind === 'scroll' && (!!action.deltaX === !!action.deltaY)) throw new Error('COMPUTER_SCROLL_REQUIRES_ONE_AXIS');
   }
@@ -275,12 +299,16 @@ export class CuaComputerDriver implements ComputerDriver {
     switch (action.kind) {
       case 'wait': await delay(action.durationMs, undefined, { signal }); return;
       case 'click': await this.call('click', { ...base, ...action.point, count: action.count, button: action.button }, signal); return;
-      case 'typeText':
-        await this.call('type_text', { ...base, element_token: this.editable(action), text: action.text }, signal); return;
+      case 'typeText': {
+        const field = this.editable(action);
+        // Web renderers require real field focus. Never fall back after an unknown write.
+        const target = field.in_web_content === true ? action.point! : { element_token: field.element_token };
+        await this.call('type_text', { ...base, ...target, text: action.text }, signal); return;
+      }
       case 'setValue':
-        await this.call('set_value', { pid: target.pid, window_id: Number(target.windowId), element_token: this.editable(action), value: action.text }, signal); return;
+        await this.call('set_value', { pid: target.pid, window_id: Number(target.windowId), element_token: this.editable(action).element_token, value: action.text }, signal); return;
       case 'pressKeys': {
-        const keys = action.keys.map(key => key.toLowerCase());
+        const keys = nativeKeys(action.keys);
         await this.call(keys.length === 1 ? 'press_key' : 'hotkey', { ...base, ...(keys.length === 1 ? { key: keys[0] } : { keys }) }, signal); return;
       }
       case 'scroll': {

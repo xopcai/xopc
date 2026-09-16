@@ -105,7 +105,7 @@ describe('agent to broker desktop lifecycle', () => {
     await expect(f.runtime.execute('owner', { op: 'step', goal: 'Inspect again' })).rejects.toThrow('NO_PROGRESS');
     expect(f.driver.perform).toHaveBeenCalledTimes(2);
   });
-  it('verifies post-action native evidence and skips input when the condition already holds', async () => {
+  it('does not skip a requested action or verify a change from already-present text', async () => {
     const f = fixture(); let saved = false;
     f.driver.perform.mockImplementation(async () => { saved = true; });
     const observe = f.driver.observe.getMockImplementation()!;
@@ -113,8 +113,27 @@ describe('agent to broker desktop lifecycle', () => {
     await f.open(await f.discover());
     const input = { op: 'step', goal: 'Save draft', expect: { kind: 'text', text: 'Saved' } } as const;
     expect(await f.runtime.execute('owner', input)).toMatchObject({ verified: true, verification: { status: 'satisfied', scope: 'expectation' } });
-    expect(await f.runtime.execute('owner', input)).toMatchObject({ status: 'condition_satisfied', verified: true });
-    expect(f.fetch).toHaveBeenCalledTimes(1); expect(f.driver.perform).toHaveBeenCalledTimes(1);
+    expect(await f.runtime.execute('owner', input)).toMatchObject({ verified: false, verification: { status: 'satisfied', preexisting: true } });
+    expect(f.fetch).toHaveBeenCalledTimes(2); expect(f.driver.perform).toHaveBeenCalledTimes(2);
+  });
+  it('does not click an already-selected native tab again', async () => {
+    const f = fixture(); const observe = f.driver.observe.getMockImplementation()!;
+    f.driver.observe.mockImplementation(async () => ({ ...await observe(), summary: JSON.stringify({ text: 'Memories', elements: [
+      { role: 'AXWindow' }, { role: 'AXRadioButton', label: 'Memories', selected: true }] }) }));
+    await f.open(await f.discover());
+    expect(await f.runtime.execute('owner', { op: 'step', goal: 'Select Memories', expect: { kind: 'selected', label: 'Memories' } }))
+      .toMatchObject({ status: 'condition_satisfied', verified: true });
+    expect(f.fetch).not.toHaveBeenCalled(); expect(f.driver.perform).not.toHaveBeenCalled();
+  });
+  it('reports invalid model output without dispatch, clears pixels and releases the session', async () => {
+    const f = fixture(); await f.open(await f.discover());
+    f.fetch.mockImplementation(async () => Response.json({ choices: [{ message: { content: '<tool_call>private malformed output</tool_call>' } }] }));
+    const error = await f.runtime.execute('owner', { op: 'step', goal: 'Select Memories' }).catch(error => error);
+    expect(computerDiagnostic(error)).toMatchObject({ phase: 'model', errorCode: 'COMPUTER_INVALID_MODEL_OUTPUT', validationReason: 'invalid_json' });
+    expect(error.message).not.toContain('private');
+    expect(f.fetch).toHaveBeenCalledTimes(2); expect(f.driver.perform).not.toHaveBeenCalled();
+    expect(f.images.every(image => image.every(b => b === 0))).toBe(true);
+    expect(isComputerControlActive('owner')).toBe(false);
   });
   it('re-observes and re-plans once after confirmed pre-dispatch change, without replaying', async () => {
     const f = fixture(); const observe = f.driver.observe.getMockImplementation()!; let calls = 0;

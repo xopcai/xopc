@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const io = vi.hoisted(() => ({ access: vi.fn(), mkdtemp: vi.fn(), rm: vi.fn(), rmdir: vi.fn(), spawn: vi.fn() }));
 vi.mock('node:fs/promises', () => io);
 vi.mock('node:child_process', async (original) => ({ ...await original<typeof import('node:child_process')>(), spawn: io.spawn }));
-import { CuaComputerDriver, scopeWindowAccessibility } from '../cua-driver.js';
+import { CuaComputerDriver, scopeWindowAccessibility, summarizeWindowAccessibility } from '../cua-driver.js';
 
 const priorType = Object.getOwnPropertyDescriptor(process, 'type');
 afterEach(() => { vi.resetAllMocks(); if (priorType) Object.defineProperty(process, 'type', priorType); else delete (process as any).type; });
@@ -45,6 +45,35 @@ describe('private native driver admission', () => {
     });
     expect(await f.driver.resolveTarget('fixture', new AbortController().signal, { prepare: true })).toMatchObject({ windowId: '9' });
     expect(f.call).toHaveBeenCalledWith('launch_app', { bundle_id: 'fixture' }, expect.any(AbortSignal));
+  });
+  it('restores a hidden multi-surface app before selecting its now-visible main window', async () => {
+    const rows = Array.from({ length: 10 }, (_, i) => window(i + 1, i === 4 ? 'Today' : '', false));
+    const f = native(rows);
+    f.call.mockImplementation(async (name: unknown, args: any) => {
+      if (name === 'bring_to_front' && args.window_id === undefined) rows[4].is_on_screen = true;
+      if (name === 'get_window_state') {
+        if (args.window_id !== 5) throw new Error('proxy unavailable');
+        return { data: { pid: 42, window_id: 5, elements: [{ role: 'AXWindow', depth: 0 }] } };
+      }
+      return { data: name === 'list_apps' ? { apps: [{ bundle_id: 'fixture', pid: 42 }] } : { windows: rows } };
+    });
+    expect(await f.driver.resolveTarget('fixture', new AbortController().signal, { prepare: true })).toMatchObject({ windowId: '5' });
+    expect(f.call).toHaveBeenCalledWith('bring_to_front', { pid: 42 }, expect.any(AbortSignal));
+    expect(f.call).toHaveBeenCalledWith('bring_to_front', { pid: 42, window_id: 5 }, expect.any(AbortSignal));
+  });
+  it('does not restore an unprepared app or infer the target from its only nonempty title', async () => {
+    const f = native([window(9, 'Today', false), window(10, '', false)]);
+    await expect(f.driver.resolveTarget('fixture', new AbortController().signal, { prepare: false })).rejects.toThrow('WINDOW_AMBIGUOUS');
+    expect(f.call).not.toHaveBeenCalledWith('bring_to_front', expect.anything(), expect.anything());
+  });
+  it('retains an unknown visible window instead of discarding it as a proxy', async () => {
+    const rows = [window(9, 'First'), window(10, '')]; const f = native(rows);
+    f.call.mockImplementation(async (name: unknown, args: any) => {
+      if (name === 'get_window_state' && args.window_id === 10) throw new Error('timeout');
+      return { data: name === 'list_apps' ? { apps: [{ bundle_id: 'fixture', pid: 42 }] }
+        : name === 'get_window_state' ? { pid: 42, window_id: 9, elements: [{ role: 'AXWindow', depth: 0 }] } : { windows: rows } };
+    });
+    await expect(f.driver.resolveTarget('fixture', new AbortController().signal, { prepare: false })).rejects.toThrow('WINDOW_AMBIGUOUS');
   });
   it('returns window references on ambiguity and can bind the selected window', async () => {
     const f = native([window(9, 'First'), window(10, 'Second')]);
@@ -153,6 +182,44 @@ describe('private native driver admission', () => {
     expect(() => driver.validateAction({ kind: 'typeText', text: 'secret' })).toThrow('EDITABLE');
     expect(() => driver.validateAction({ kind: 'pressKeys', keys: ['cmd', 'q'] })).toThrow('UNSAFE');
     expect(() => driver.validateAction({ kind: 'pressKeys', keys: ['cmd', 'shift', 'a'] })).not.toThrow();
+    expect(() => driver.validateAction({ kind: 'pressKeys', keys: ['shift', 'tab'] })).not.toThrow();
+    expect(() => driver.validateAction({ kind: 'pressKeys', keys: ['Enter'] })).not.toThrow();
     expect(() => driver.validateAction({ kind: 'scroll', point: { x: 0, y: 0 }, deltaX: 1, deltaY: 1 })).toThrow('ONE_AXIS');
+  });
+  it('keeps large and escaped accessibility summaries valid without clipping field values', () => {
+    const elements = [{ role: 'AXWindow', element_index: 0 }, ...Array.from({ length: 180 }, (_, i) => ({
+      element_index: i + 1, role: 'AXTextField', value: 'x'.repeat(500), element_token: 'private-token' }))];
+    for (const text of ['page text', '\u0000'.repeat(4000)]) {
+      const summary = summarizeWindowAccessibility(elements, text);
+      expect(summary.length).toBeLessThanOrEqual(12_000);
+      expect(summary).not.toContain('private-token');
+      const parsed = JSON.parse(summary);
+      expect(parsed.truncated).toBe(true);
+      expect(parsed.elements[0].role).toBe('AXWindow');
+      expect(parsed.elements.slice(1).every((e: any) => e.value.length === 500)).toBe(true);
+    }
+  });
+  it.each([false, true])('grounds typing with Retina coordinates and uses the appropriate native/web route (web=%s)', async web => {
+    const f = native([]);
+    (f.driver as any).frame = { bounds: { x: 100, y: 50, width: 800, height: 600 }, width: 1600, height: 1200 };
+    (f.driver as any).elements = [{ role: 'AXTextField', label: 'Message', element_index: 1, element_token: 'field-token',
+      in_web_content: web, frame: { x: 200, y: 150, w: 200, h: 50 } }];
+    const target = { appId: 'fixture', pid: 42, processIdentity: '42:fixture-start', windowId: '9', width: 800, height: 600, geometryRevision: '1' };
+    await f.driver.perform(target, { kind: 'typeText', point: { x: 300, y: 250 }, text: '测试' }, new AbortController().signal);
+    expect(f.call).toHaveBeenCalledWith('type_text', { pid: 42, window_id: 9, delivery_mode: 'background', text: '测试',
+      ...(web ? { x: 300, y: 250 } : { element_token: 'field-token' }) }, expect.any(AbortSignal));
+    expect(f.call).toHaveBeenCalledTimes(1);
+  });
+  it.each([
+    [{ kind: 'click', point: { x: 5, y: 7 }, button: 'right', count: 1 }, 'click', { x: 5, y: 7, button: 'right', count: 1 }],
+    [{ kind: 'click', point: { x: 5, y: 7 }, button: 'left', count: 2 }, 'click', { x: 5, y: 7, button: 'left', count: 2 }],
+    [{ kind: 'pressKeys', keys: ['Enter'] }, 'press_key', { key: 'return' }],
+    [{ kind: 'pressKeys', keys: ['Shift', 'Tab'] }, 'hotkey', { keys: ['shift', 'tab'] }],
+    [{ kind: 'scroll', point: { x: 5, y: 7 }, deltaX: -200, deltaY: 0 }, 'scroll', { x: 5, y: 7, by: 'line', amount: 2, direction: 'left' }],
+    [{ kind: 'scroll', point: { x: 5, y: 7 }, deltaX: 0, deltaY: 2000 }, 'scroll', { x: 5, y: 7, by: 'line', amount: 5, direction: 'down' }],
+  ])('dispatches %j once to the bound window', async (action, tool, args) => {
+    const f = native([]);
+    await f.driver.perform({ appId: 'fixture', pid: 42, processIdentity: '42:fixture-start', windowId: '9', width: 800, height: 600, geometryRevision: '1' }, action as any, new AbortController().signal);
+    expect(f.call).toHaveBeenCalledExactlyOnceWith(tool, { pid: 42, window_id: 9, delivery_mode: 'background', ...args }, expect.any(AbortSignal));
   });
 });
