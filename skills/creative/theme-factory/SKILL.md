@@ -1,6 +1,14 @@
 ---
 name: theme-factory
 description: Apply or generate cohesive color and font themes for artifacts, slides, documents, reports, and landing pages.
+metadata:
+  i18n:
+    en:
+      name: "Theme Factory"
+      description: "Apply or generate cohesive color and font themes for artifacts, slides, documents, reports, and landing pages."
+    zh-CN:
+      name: "主题工厂"
+      description: "为作品、幻灯片、文档、报告和落地页应用或生成协调统一的配色与字体主题。"
 license: Complete terms in LICENSE.txt
 ---
 

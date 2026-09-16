@@ -2,6 +2,13 @@
 name: build-xopc-local-app
 description: Build and iteratively improve a user-owned local XOPC app while preserving its stable extension identity, UI sandbox, and Phase 1 capability boundary.
 metadata:
+  i18n:
+    en:
+      name: "Build XOPC Local App"
+      description: "Build and iteratively improve a user-owned local XOPC app while preserving its stable extension identity, UI sandbox, and Phase 1 capability boundary."
+    zh-CN:
+      name: "构建 XOPC 本地应用"
+      description: "构建并迭代改进用户拥有的 XOPC 本地应用，同时保持稳定的扩展身份、UI 沙箱和第一阶段能力边界。"
   xopc:
     emoji: "🧩"
     requires_tools:

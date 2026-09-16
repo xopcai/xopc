@@ -1,6 +1,14 @@
 ---
 name: frontend-design
 description: Create distinctive, production-grade frontend interfaces, pages, components, dashboards, and HTML/CSS layouts.
+metadata:
+  i18n:
+    en:
+      name: "Frontend Design"
+      description: "Create distinctive, production-grade frontend interfaces, pages, components, dashboards, and HTML/CSS layouts."
+    zh-CN:
+      name: "前端设计"
+      description: "创建风格鲜明、可用于生产的前端界面、页面、组件、仪表盘及 HTML/CSS 布局。"
 license: Complete terms in LICENSE.txt
 ---
 

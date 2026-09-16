@@ -1,6 +1,14 @@
 ---
 name: diagnose
 description: Disciplined reproduce → minimise → hypothesise → instrument → fix loop for hard bugs and performance regressions.
+metadata:
+  i18n:
+    en:
+      name: "Diagnose"
+      description: "A disciplined reproduce, minimize, hypothesize, instrument, and fix loop for difficult bugs and performance regressions."
+    zh-CN:
+      name: "问题诊断"
+      description: "以复现、最小化、提出假设、插桩验证和修复为闭环，诊断疑难缺陷与性能回退。"
 ---
 
 # Diagnose

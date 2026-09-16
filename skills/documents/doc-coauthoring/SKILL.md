@@ -2,6 +2,13 @@
 name: doc-coauthoring
 description: Co-author substantial proposals, specifications, RFCs, and decision documents through context, structure, and reader-focused review.
 metadata:
+  i18n:
+    en:
+      name: "Document Co-authoring"
+      description: "Co-author substantial proposals, specifications, RFCs, and decision documents through context, structure, and reader-focused review."
+    zh-CN:
+      name: "文档协作撰写"
+      description: "通过梳理背景、搭建结构和面向读者的审阅，共同撰写提案、规范、RFC 与决策文档。"
   xopc:
     emoji: "🤝"
     requires_tools:

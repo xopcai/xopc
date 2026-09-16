@@ -2,6 +2,13 @@
 name: pdf
 description: Read, create, inspect, combine, split, rotate, and validate PDF artifacts in the current workspace.
 metadata:
+  i18n:
+    en:
+      name: "PDF Documents"
+      description: "Read, create, inspect, combine, split, rotate, and validate PDF artifacts in the current workspace."
+    zh-CN:
+      name: "PDF 文档"
+      description: "在当前工作区中读取、创建、检查、合并、拆分、旋转并验证 PDF 文档。"
   xopc:
     emoji: "📄"
     requires_tools:
