@@ -107,4 +107,15 @@ describe('paletteItemMatchRank', () => {
       true,
     );
   });
+
+  it('matches canonical and alternate-locale descriptions', () => {
+    const localizedSkill: PaletteItem = {
+      kind: 'skill',
+      id: 'skill:meeting-to-actions',
+      name: '会议行动闭环',
+      description: '从会议记录中提取行动项。',
+      searchTerms: ['Convert meeting notes into actions.'],
+    };
+    expect(paletteItemMatchRank(localizedSkill, 'meeting notes')).toBe(103);
+  });
 });

@@ -5,7 +5,7 @@ import { classifyPastedText } from '@xopcai/composer-core/pasted-text';
 import { ModelControls } from './model-controls';
 import { VoiceInput } from './voice-input';
 import { QueuedInput } from './queued-input';
-import { findCommand, loadComposerCommands, type ComposerCommand } from './composer-commands';
+import { findCommand, loadComposerCommands, matchesCommandQuery, type ComposerCommand } from './composer-commands';
 import { ComposerPreviewDialog, type ComposerPreview } from './composer-preview';
 
 import { extensionLocale, t } from '../i18n';
@@ -127,7 +127,7 @@ export function ChatPanel({ gatewayId }: { gatewayId: string }) {
   const [commandsLoading, setCommandsLoading] = useState(false);
   const [commandIndex, setCommandIndex] = useState(0);
   const commandRange = commandsOpen ? findCommand(draft, cursor) : undefined;
-  const commandItems = commandRange ? commands.filter(item => `${item.name} ${item.description}`.toLowerCase().includes(commandRange.query.toLowerCase())).slice(0, 12) : [];
+  const commandItems = commandRange ? commands.filter(item => matchesCommandQuery(item, commandRange.query)).slice(0, 12) : [];
 
   const canSend = draftReady && !sending && !processing && !voiceBusy && !snapshot.submitting && !snapshot.pendingDelivery && !snapshot.sessionLoading && !snapshot.stopping && snapshot.endpointReady;
 
