@@ -7,7 +7,7 @@ import { requireNodeSqlite } from '../../infra/node-sqlite.js';
 import { installSqliteTransientRejectionHandler } from '../../infra/unhandled-rejections.js';
 import { createLogger } from '../../utils/logger.js';
 import { resolveXopcDatabasePath } from './paths.js';
-import { ensureXopcDatabaseSchema, XOPC_DB_SCHEMA_VERSION } from './schema.js';
+import { ensureXopcDatabaseSchema } from './schema.js';
 
 const log = createLogger('Sqlite:Connection');
 
@@ -18,16 +18,9 @@ const DB_SIDECAR_SUFFIXES = ['', '-shm', '-wal'] as const;
 const LINUX_NFS_SUPER_MAGIC = 0x6969;
 const PROC_MOUNTINFO_PATH = '/proc/self/mountinfo';
 const MAX_TIMER_TIMEOUT_MS = 2 ** 31 - 1;
-const FRESH_DATABASE_TEMPLATE_KEY = Symbol.for(
-  `xopc.sqlite.fresh-database-template.v${XOPC_DB_SCHEMA_VERSION}`,
-);
 
 type IntervalHandle = ReturnType<typeof setInterval> & { unref?: () => void };
 type SqliteWalCheckpointMode = 'PASSIVE' | 'FULL' | 'RESTART' | 'TRUNCATE';
-type SnapshotDatabaseSync = DatabaseSync & {
-  deserialize: (data: Uint8Array) => void;
-  serialize: () => Uint8Array;
-};
 
 export type SqliteWalMaintenance = {
   checkpoint: () => boolean;
@@ -236,16 +229,6 @@ export type OpenXopcDatabaseOptions = {
 
 let cachedDatabase: XopcDatabase | null = null;
 
-function getFreshDatabaseTemplate(): Uint8Array | undefined {
-  return (process as unknown as Record<symbol, Uint8Array | undefined>)[FRESH_DATABASE_TEMPLATE_KEY];
-}
-
-function setFreshDatabaseTemplate(template: Uint8Array): void {
-  // Vitest isolates module state between files while reusing worker processes. Keeping the
-  // immutable empty schema on `process` lets every test file in a worker reuse the same image.
-  (process as unknown as Record<symbol, Uint8Array>)[FRESH_DATABASE_TEMPLATE_KEY] = template;
-}
-
 function ensureDatabasePermissions(pathname: string): void {
   const dir = pathname.slice(0, Math.max(pathname.lastIndexOf('/'), pathname.lastIndexOf('\\')));
   if (dir) {
@@ -264,19 +247,10 @@ function openDatabaseAtPath(pathname: string): XopcDatabase {
   if (pathname !== ':memory:' && isNetworkBackedPath(pathname)) {
     throw new Error('SQLite requires a local filesystem; run the Gateway on the NAS instead of opening a network-mounted database.');
   }
-  const isFreshDatabase = pathname === ':memory:' || !fs.existsSync(pathname);
   ensureDatabasePermissions(pathname);
 
   const { DatabaseSync } = requireNodeSqlite();
-  const template = isFreshDatabase ? getFreshDatabaseTemplate() : undefined;
-  if (template && pathname !== ':memory:') {
-    fs.writeFileSync(pathname, template, { mode: DB_FILE_MODE });
-  }
-  // Node 24 exposes these methods at runtime; the pinned Node type declarations lag behind.
-  const db = new DatabaseSync(pathname) as SnapshotDatabaseSync;
-  if (template && pathname === ':memory:') {
-    db.deserialize(template);
-  }
+  const db = new DatabaseSync(pathname);
 
   // Single call: Configure durability before exposing the connection.
   let walMaintenance: SqliteWalMaintenance | undefined;
@@ -291,11 +265,6 @@ function openDatabaseAtPath(pathname: string): XopcDatabase {
     });
 
     ensureXopcDatabaseSchema(db, { databasePath: pathname });
-    if (isFreshDatabase && !template) {
-      // A fresh database is empty apart from deterministic schema and seed data at this point.
-      // Cloning this image avoids replaying the full migration history for every test database.
-      setFreshDatabaseTemplate(db.serialize());
-    }
     ensureDatabasePermissions(pathname);
 
     log.info({ path: pathname }, 'Opened xopc SQLite database');
