@@ -2,6 +2,13 @@
 name: define-task
 description: Define, create, or refine an explicitly requested persistent xopc Task with a verifiable Task Contract; do not use for ordinary one-off work.
 metadata:
+  i18n:
+    en:
+      name: "Define Task"
+      description: "Define, create, or refine an explicitly requested persistent XOPC Task with a verifiable Task Contract; do not use for ordinary one-off work."
+    zh-CN:
+      name: "定义任务"
+      description: "为用户明确要求的持久 XOPC 任务定义、创建或完善可验证的任务契约；不用于普通的一次性工作。"
   xopc:
     emoji: "🎯"
     requires_tools:

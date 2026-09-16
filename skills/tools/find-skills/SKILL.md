@@ -1,6 +1,14 @@
 ---
 name: find-skills
 description: Find and evaluate installable agent skills across the XOPC Store, ClawHub, and skills.sh. Use when a user asks whether a skill exists, wants capability recommendations, or wants help choosing a high-value skill.
+metadata:
+  i18n:
+    en:
+      name: "Find Skills"
+      description: "Find and evaluate installable agent skills across the XOPC Store, ClawHub, and skills.sh."
+    zh-CN:
+      name: "查找技能"
+      description: "在 XOPC Store、ClawHub 和 skills.sh 中查找并评估可安装的智能体技能。"
 ---
 
 # Find Skills

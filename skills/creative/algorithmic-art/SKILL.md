@@ -2,6 +2,13 @@
 name: algorithmic-art
 description: Design reproducible, interactive generative-art studies as self-contained browser artifacts or workspace assets.
 metadata:
+  i18n:
+    en:
+      name: "Algorithmic Art"
+      description: "Design reproducible, interactive generative-art studies as self-contained browser artifacts or workspace assets."
+    zh-CN:
+      name: "算法艺术"
+      description: "设计可复现、可交互的生成艺术作品，并输出为独立浏览器作品或工作区资产。"
   xopc:
     emoji: "✨"
     requires_tools:

@@ -1,4 +1,4 @@
-import type { SkillInstallSpec, SkillMetadata, SkillRequires } from './types.js';
+import type { SkillInstallSpec, SkillLocalizations, SkillMetadata, SkillRequires } from './types.js';
 
 function stringList(value: unknown): string[] | undefined {
   if (Array.isArray(value)) {
@@ -9,6 +9,37 @@ function stringList(value: unknown): string[] | undefined {
     return [value.trim()];
   }
   return undefined;
+}
+
+export function parseSkillLocalizations(
+  frontmatter: Record<string, unknown>,
+): { localizations?: SkillLocalizations; warning?: string } {
+  const metadata = frontmatter.metadata as Record<string, unknown> | undefined;
+  const i18n = metadata?.i18n;
+  if (i18n === undefined) return {};
+  if (!i18n || typeof i18n !== 'object' || Array.isArray(i18n)) {
+    return { warning: 'metadata.i18n must be a locale map' };
+  }
+
+  const localizations: SkillLocalizations = {};
+  for (const locale of ['en', 'zh-CN'] as const) {
+    const entry = (i18n as Record<string, unknown>)[locale];
+    if (entry === undefined) continue;
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      return { warning: `metadata.i18n.${locale} must contain name and description` };
+    }
+    const localized = entry as Record<string, unknown>;
+    const name = typeof localized.name === 'string' ? localized.name.trim() : '';
+    const description = typeof localized.description === 'string' ? localized.description.trim() : '';
+    if (!name || !description) {
+      return { warning: `metadata.i18n.${locale} must contain non-empty name and description` };
+    }
+    localizations[locale] = { displayName: name, description };
+  }
+
+  return Object.keys(localizations).length > 0
+    ? { localizations }
+    : { warning: 'metadata.i18n has no supported locales' };
 }
 
 /**

@@ -3,6 +3,13 @@ name: webapp-testing
 description: Test local web applications with Playwright scripts, screenshots, browser logs, and UI behavior checks.
 license: Complete terms in LICENSE.txt
 metadata:
+  i18n:
+    en:
+      name: "Web App Testing"
+      description: "Test local web applications with Playwright scripts, screenshots, browser logs, and UI behavior checks."
+    zh-CN:
+      name: "Web 应用测试"
+      description: "使用 Playwright 脚本、截图、浏览器日志和界面行为检查来测试本地 Web 应用。"
   xopc:
     requires_toolsets: [terminal]
 ---
