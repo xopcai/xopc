@@ -29,6 +29,7 @@ export async function updateGlobalDefaults(defaults: AgentDefaults): Promise<Glo
   const { mutate } = await import('swr');
   await Promise.all([
     mutate('settings-gateway-agents'),
+    mutate('capability-readiness'),
     revalidateGatewayConfig(),
   ]);
   return response.payload;

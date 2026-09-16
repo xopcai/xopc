@@ -43,6 +43,11 @@ extraMetadata:
   main: out/main/index.js
 
 extraResources:
+  - from: _pack-resources/computer-driver
+    to: bin
+    filter:
+      - cua-driver
+      - computer-driver-LICENSE.txt
   - from: _pack-resources/rg
     to: bin
     filter:

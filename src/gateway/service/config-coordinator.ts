@@ -34,6 +34,7 @@ import { ConfigHotReloader } from '../../config/reload.js';
 import { loadConfig, saveConfig as writeConfigToDisk } from '../../config/index.js';
 import { sanitizeTunnelConfig } from '../../tunnel/tunnel-config.js';
 import { getModelRegistry } from '../../providers/index.js';
+import { validateComputerModelChanges } from '../../computer/model-config.js';
 import { disposeAllSessionMcpRuntimes } from '../../agent/mcp/bundle-mcp-tools.js';
 import { reloadImageGenerationProviders } from '../../agent/image/generation/provider-registry.js';
 import { computeBundledExtensionExtensionsPatch } from '../../extensions/bundled-extension-activation.js';
@@ -128,6 +129,7 @@ export class GatewayConfigCoordinator {
 
   async saveConfig(config: Config): Promise<{ saved: boolean; error?: string }> {
     try {
+      validateComputerModelChanges(config, this.opts.getConfig());
       await this.writeConfigAndReloadFromDisk(config);
       this.scheduleChannelPluginsAfterPersist();
       return { saved: true };
@@ -143,6 +145,7 @@ export class GatewayConfigCoordinator {
     try {
       log.debug('Updating configuration...');
       const merged = { ...this.opts.getConfig(), ...updates };
+      validateComputerModelChanges(merged, this.opts.getConfig());
       this.opts.setConfig(merged);
       await this.writeConfigAndReloadFromDisk(merged);
       this.scheduleChannelPluginsAfterPersist();

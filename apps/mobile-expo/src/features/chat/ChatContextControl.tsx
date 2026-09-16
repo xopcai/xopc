@@ -1,13 +1,13 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SessionContextSummary } from '@xopcai/gateway-contract';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { Icon, Text } from 'react-native-paper';
+import { Icon, Menu, Text } from 'react-native-paper';
 
 import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { useMessages } from '../../i18n/messages';
 import { queryKeys } from '../../query/keys';
-import { fetchProjectEnvironmentOptions, fetchProjects, type Project } from '../../query/projects';
+import { fetchProjectEnvironmentOptions, fetchProjects } from '../../query/projects';
 import { fetchHostDirectories } from '../../query/host-fs';
 import { fetchSessionAgentConfig, setSessionWorkingDirectory } from '../../query/models';
 import { fetchSessionContextSummary } from '../../query/sessions';
@@ -56,9 +56,7 @@ export const ChatContextControl = memo(function ChatContextControl({
   const copy = m.chat.contextCenter;
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [selecting, setSelecting] = useState(false);
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [selectedMode, setSelectedMode] = useState<ExecutionMode>('local_checkout');
+  const [menu, setMenu] = useState<'project' | 'environment' | null>(null);
   const [directoryPath, setDirectoryPath] = useState<string | undefined>(undefined);
   const [savingDirectory, setSavingDirectory] = useState(false);
   const [directoryError, setDirectoryError] = useState<string | null>(null);
@@ -70,12 +68,12 @@ export const ChatContextControl = memo(function ChatContextControl({
   const projects = useQuery({
     queryKey: queryKeys.projects,
     queryFn: fetchProjects,
-    enabled: open && selecting,
+    enabled: menu === 'project',
   });
   const environmentOptions = useQuery({
-    queryKey: ['projects', selectedProject?.id ?? '', 'environment-options'],
-    queryFn: () => fetchProjectEnvironmentOptions(selectedProject!.id),
-    enabled: Boolean(open && selecting && selectedProject),
+    queryKey: ['projects', context.data?.work.project?.id ?? '', 'environment-options'],
+    queryFn: () => fetchProjectEnvironmentOptions(context.data!.work.project!.id),
+    enabled: menu === 'environment' && Boolean(context.data?.work.project),
   });
   const agentConfig = useQuery({
     queryKey: queryKeys.sessionAgentConfig(conversationId),
@@ -87,67 +85,83 @@ export const ChatContextControl = memo(function ChatContextControl({
     queryFn: () => fetchHostDirectories(directoryPath),
     enabled: open && directoryPath !== undefined,
   });
-  useEffect(() => {
-    if (!selectedProject) return;
-    setSelectedMode(selectedProject.executionMode ?? 'local_checkout');
-  }, [selectedProject]);
-  useEffect(() => {
-    if (selectedMode === 'managed_worktree' && environmentOptions.data?.worktreeUnavailableReason
-      && environmentOptions.data.localAvailable) {
-      setSelectedMode('local_checkout');
-    }
-  }, [environmentOptions.data, selectedMode]);
-  const selectedModeAllowed = Boolean(environmentOptions.data && (
-    selectedMode === 'local_checkout'
-      ? environmentOptions.data.localAvailable
-      : !environmentOptions.data.worktreeUnavailableReason
-  ));
   const changeScope = useCallback((projectId: string | null, mode?: ExecutionMode) => {
     setOpen(false);
-    setSelecting(false);
-    setSelectedProject(null);
+    setMenu(null);
     onChangeScope(projectId, mode);
   }, [onChangeScope]);
   const summary = context.data;
   const chips = useMemo(() => {
     const items: Array<{ key: string; icon: string; label: string; primary?: boolean }> = [];
-    if (summary?.work.project) items.push({ key: 'project', icon: 'folder-outline', label: summary.work.project.title, primary: true });
+    items.push({ key: 'project', icon: 'folder-outline', label: summary?.work.project?.title ?? copy.chooseProject, primary: Boolean(summary?.work.project) });
     if (summary?.work.task) items.push({ key: 'task', icon: 'target', label: summary.work.task.title, primary: !summary.work.project });
     const environment = environmentLabel(summary?.environment);
     if (environment) items.push({ key: 'environment', icon: summary?.environment?.kind === 'managed_worktree' ? 'source-branch' : 'laptop', label: environment });
-    const sourceCount = (summary?.sources.length ?? 0) + draftRefs.length;
+    const sourceCount = summary?.sources.length ?? 0;
     if (sourceCount) items.push({ key: 'sources', icon: 'notebook-outline', label: sourceCount === 1 && summary?.sources[0]?.title ? summary.sources[0].title : `${copy.sources} ${sourceCount}${summary?.sourcesHasMore ? '+' : ''}` });
     return items;
-  }, [copy.sources, draftRefs.length, summary]);
+  }, [copy.sources, copy.chooseProject, summary]);
 
   return <>
     <View style={styles.strip}>
       {context.isLoading ? <StaticLoadingIndicator size={16} /> : null}
-      {chips.map((chip) => <Pressable
-        key={chip.key}
-        accessibilityRole="button"
-        accessibilityLabel={`${copy.open}: ${chip.label}`}
-        onPress={() => setOpen(true)}
-        style={({ pressed }) => [
-          styles.chip,
-          {
+      {chips.map((chip) => {
+        const picker = chip.key === 'project' || (chip.key === 'environment' && summary?.work.project)
+          ? chip.key as 'project' | 'environment' : null;
+        const trigger = <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${chip.key === 'project' ? copy.chooseProject : chip.key === 'environment' ? copy.chooseEnvironment : copy.open}: ${chip.label}`}
+          onPress={() => {
+            if (picker) { setMenu(picker); return; }
+            setDirectoryError(null);
+            setDirectoryPath(chip.key === 'environment' && !summary?.work.task ? summary?.environment?.rootPath ?? '' : undefined);
+            setOpen(true);
+          }}
+          style={({ pressed }) => [styles.chip, {
             backgroundColor: chip.primary ? colors.accent.soft : colors.surface.panel,
             borderColor: chip.primary ? colors.accent.soft : colors.border.subtle,
             opacity: pressed ? 0.7 : 1,
-          },
-        ]}
-      >
-        <Icon source={chip.icon} size={15} color={chip.primary ? colors.accent.primary : colors.text.secondary} />
-        <Text numberOfLines={1} style={[styles.chipText, { color: chip.primary ? colors.accent.primary : colors.text.secondary }]}>{chip.label}</Text>
-      </Pressable>)}
+          }]}
+        >
+          <Icon source={chip.icon} size={15} color={chip.primary ? colors.accent.primary : colors.text.secondary} />
+          <Text numberOfLines={1} style={[styles.chipText, { color: chip.primary ? colors.accent.primary : colors.text.secondary }]}>{chip.label}</Text>
+        </Pressable>;
+        if (!picker) return <View key={chip.key}>{trigger}</View>;
+        return <Menu key={chip.key} visible={menu === picker} onDismiss={() => setMenu(null)} anchor={trigger}
+          contentStyle={{ backgroundColor: colors.surface.panel, borderRadius: radii.lg }}>
+          {picker === 'project' ? <>
+            <Menu.Item title={copy.noProject} leadingIcon={!summary?.work.project ? 'check' : 'account-outline'}
+              onPress={() => summary?.work.project || summary?.work.task ? changeScope(null) : setMenu(null)} />
+            {projects.isLoading ? <StaticLoadingIndicator size={20} style={styles.loading} /> : null}
+            {projects.isError ? <Menu.Item title={copy.projectsFailed} leadingIcon="refresh" onPress={() => void projects.refetch()} /> : null}
+            {projects.data?.filter(project => project.status !== 'archived').map(project => (
+              <Menu.Item key={project.id} title={project.name}
+                leadingIcon={summary?.work.project?.id === project.id ? 'check' : 'folder-outline'}
+                onPress={() => project.id === summary?.work.project?.id ? setMenu(null) : changeScope(project.id)} />
+            ))}
+          </> : <>
+            {environmentOptions.isLoading ? <StaticLoadingIndicator size={20} style={styles.loading} /> : null}
+            {environmentOptions.isError ? <Menu.Item title={copy.environmentCheckFailed} leadingIcon="refresh" onPress={() => void environmentOptions.refetch()} /> : null}
+            {(['local_checkout', 'managed_worktree'] as const).map(mode => (
+              <Menu.Item key={mode} title={mode === 'local_checkout' ? 'Local' : 'Worktree'}
+                leadingIcon={summary?.environment?.kind === mode ? 'check' : mode === 'local_checkout' ? 'laptop' : 'source-branch'}
+                disabled={environmentOptions.isError || !environmentOptions.data || (mode === 'local_checkout' ? !environmentOptions.data.localAvailable : Boolean(environmentOptions.data.worktreeUnavailableReason))}
+                onPress={() => mode === summary?.environment?.kind ? setMenu(null) : changeScope(summary!.work.project!.id, mode)} />
+            ))}
+            {environmentOptions.data?.worktreeUnavailableReason ? <Text style={[styles.menuHint, { color: colors.text.secondary }]}>
+              {copy.environmentReason[environmentOptions.data.worktreeUnavailableReason]}
+            </Text> : null}
+          </>}
+        </Menu>;
+      })}
     </View>
 
     <BottomSheetModal
       visible={open}
       onDismiss={() => setOpen(false)}
-      title={copy.title}
-      subtitle={copy.subtitle}
-      headerAction={selecting || directoryPath !== undefined ? <Pressable accessibilityRole="button" onPress={() => { setSelecting(false); setSelectedProject(null); setDirectoryPath(undefined); }}><Text style={{ color: colors.accent.primary }}>{m.common.cancel}</Text></Pressable> : undefined}
+      title={directoryPath !== undefined ? copy.changeFolder : copy.title}
+      subtitle={directoryPath !== undefined ? undefined : copy.subtitle}
+
       maxHeight="82%"
       scroll
       disableAnimation
@@ -159,7 +173,7 @@ export const ChatContextControl = memo(function ChatContextControl({
         </Pressable>
       </View> : null}
       {context.isLoading ? <StaticLoadingIndicator size={20} style={styles.loading} /> : null}
-      {directoryPath !== undefined ? <>
+      {directoryPath !== undefined ? agentConfig.isLoading ? <StaticLoadingIndicator size={20} style={styles.loading} /> : agentConfig.isError ? <Pressable onPress={() => void agentConfig.refetch()}><Text>{m.common.retry}</Text></Pressable> : agentConfig.data?.workingDirectoryLocked ? <Text style={styles.empty}>{copy.folderLocked}</Text> : <>
         <Text numberOfLines={1} style={[styles.directoryPath, { color: colors.text.secondary }]}>{directories.data?.currentPath || directoryPath || copy.hostRoot}</Text>
         {directories.data?.parentPath != null ? <Pressable
           accessibilityRole="button"
@@ -192,61 +206,6 @@ export const ChatContextControl = memo(function ChatContextControl({
           style={({ pressed }) => [styles.primaryAction, { backgroundColor: colors.accent.primary, opacity: savingDirectory || pressed ? 0.65 : 1 }]}
         ><Text style={[styles.primaryActionText, { color: colors.accent.onPrimary }]}>{copy.useFolder}</Text></Pressable> : null}
         {directoryError ? <Text style={[styles.warning, { color: colors.semantic.error }]}>{directoryError}</Text> : null}
-      </> : selecting ? <>
-        <Text style={[styles.sectionTitle, { color: colors.text.tertiary }]}>{copy.chooseProject}</Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => changeScope(null)}
-          style={({ pressed }) => [styles.choice, { backgroundColor: pressed ? colors.surface.pressed : colors.surface.input }]}
-        >
-          <Icon source="account-outline" size={20} color={colors.text.secondary} />
-          <Text style={[styles.rowTitle, { color: colors.text.primary }]}>{copy.noProject}</Text>
-        </Pressable>
-        {projects.isLoading ? <StaticLoadingIndicator size={20} style={styles.loading} /> : null}
-        {projects.isError ? <Text style={[styles.warning, { color: colors.semantic.error }]}>{copy.projectsFailed}</Text> : null}
-        {projects.data?.filter((project) => project.status !== 'archived').map((project) => <Pressable
-          key={project.id}
-          accessibilityRole="button"
-          accessibilityState={{ selected: selectedProject?.id === project.id }}
-          onPress={() => setSelectedProject(project)}
-          style={({ pressed }) => [styles.choice, {
-            backgroundColor: selectedProject?.id === project.id ? colors.accent.soft : pressed ? colors.surface.pressed : colors.surface.input,
-          }]}
-        >
-          <Icon source="folder-outline" size={20} color={selectedProject?.id === project.id ? colors.accent.primary : colors.text.secondary} />
-          <View style={styles.rowCopy}>
-            <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{project.name}</Text>
-            {project.description ? <Text numberOfLines={1} style={[styles.rowSubtitle, { color: colors.text.tertiary }]}>{project.description}</Text> : null}
-          </View>
-        </Pressable>)}
-        {selectedProject ? <View style={[styles.modePanel, { borderColor: colors.border.subtle }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text.tertiary }]}>{copy.chooseEnvironment}</Text>
-          {environmentOptions.isLoading ? <StaticLoadingIndicator size={20} style={styles.loading} /> : null}
-          {environmentOptions.isError ? <Text style={[styles.warning, { color: colors.semantic.error }]}>{copy.environmentCheckFailed}</Text> : null}
-          {environmentOptions.data ? <>
-            <ModeChoice
-              label="Local"
-              icon="laptop"
-              selected={selectedMode === 'local_checkout'}
-              disabled={!environmentOptions.data.localAvailable}
-              onPress={() => setSelectedMode('local_checkout')}
-            />
-            <ModeChoice
-              label="Worktree"
-              icon="source-branch"
-              selected={selectedMode === 'managed_worktree'}
-              disabled={Boolean(environmentOptions.data.worktreeUnavailableReason)}
-              onPress={() => setSelectedMode('managed_worktree')}
-            />
-            {environmentOptions.data.worktreeUnavailableReason ? <Text style={[styles.warning, { color: colors.semantic.warning }]}>{copy.environmentReason[environmentOptions.data.worktreeUnavailableReason]}</Text> : null}
-            <Pressable
-              accessibilityRole="button"
-              disabled={!selectedModeAllowed}
-              onPress={() => changeScope(selectedProject.id, selectedMode)}
-              style={({ pressed }) => [styles.primaryAction, { backgroundColor: colors.accent.primary, opacity: !selectedModeAllowed || pressed ? 0.55 : 1 }]}
-            ><Text style={[styles.primaryActionText, { color: colors.accent.onPrimary }]}>{copy.startNewChat}</Text></Pressable>
-          </> : null}
-        </View> : null}
       </> : summary ? <>
         <Text style={[styles.sectionTitle, { color: colors.text.tertiary }]}>{copy.work}</Text>
         {summary.work.project ? <ContextRow icon="folder-outline" title={summary.work.project.title} subtitle={copy.project} /> : null}
@@ -300,39 +259,11 @@ export const ChatContextControl = memo(function ChatContextControl({
           onPress={() => { setOpen(false); onAddSource(); }}
           style={({ pressed }) => [styles.secondaryAction, { borderColor: colors.border.default, opacity: pressed ? 0.7 : 1 }]}
         ><Text style={{ color: colors.accent.primary }}>{copy.addSource}</Text></Pressable>
-        {!summary.work.task ? <Pressable
-          accessibilityRole="button"
-          onPress={() => setSelecting(true)}
-          style={({ pressed }) => [styles.secondaryAction, { borderColor: colors.border.default, opacity: pressed ? 0.7 : 1 }]}
-        ><Text style={{ color: colors.accent.primary }}>{copy.changeScope}</Text></Pressable> : null}
+
       </> : null}
     </BottomSheetModal>
   </>;
 });
-
-function ModeChoice({ label, icon, selected, disabled, onPress }: {
-  label: string;
-  icon: string;
-  selected: boolean;
-  disabled: boolean;
-  onPress: () => void;
-}) {
-  const { colors } = useTheme();
-  return <Pressable
-    accessibilityRole="radio"
-    accessibilityState={{ selected, disabled }}
-    disabled={disabled}
-    onPress={onPress}
-    style={({ pressed }) => [styles.choice, {
-      backgroundColor: selected ? colors.accent.soft : pressed ? colors.surface.pressed : colors.surface.input,
-      opacity: disabled ? 0.45 : 1,
-    }]}
-  >
-    <Icon source={icon} size={20} color={selected ? colors.accent.primary : colors.text.secondary} />
-    <Text style={[styles.rowTitle, { color: colors.text.primary }]}>{label}</Text>
-    {selected ? <Icon source="check" size={18} color={colors.accent.primary} /> : null}
-  </Pressable>;
-}
 
 const styles = StyleSheet.create({
   strip: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
@@ -349,7 +280,7 @@ const styles = StyleSheet.create({
   error: { flexDirection: 'row', justifyContent: 'space-between', padding: spacing.md },
   loading: { padding: spacing.xl },
   choice: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.md, borderRadius: radii.md, paddingHorizontal: spacing.md, marginBottom: spacing.xs },
-  modePanel: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: spacing.md, paddingTop: spacing.sm },
+  menuHint: { ...typography.caption, maxWidth: 280, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   primaryAction: { minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: radii.lg, marginTop: spacing.md },
   primaryActionText: { ...typography.body, fontWeight: '600' },
   secondaryAction: { minHeight: 44, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.lg, marginTop: spacing.lg },

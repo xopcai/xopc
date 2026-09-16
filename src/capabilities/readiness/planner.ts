@@ -5,7 +5,7 @@ import type {
   CapabilityPlannerInput,
 } from './types.js';
 
-const CAPABILITIES: CapabilityId[] = ['vision', 'image-generation', 'stt', 'tts'];
+const CAPABILITIES: CapabilityId[] = ['vision', 'image-generation', 'stt', 'tts', 'computer-use'];
 
 export function planCapabilities(input: CapabilityPlannerInput): Record<CapabilityId, CapabilityPlan> {
   return Object.fromEntries(CAPABILITIES.map((capability) => [
@@ -43,7 +43,7 @@ export function planCapability(
     .sort((left, right) => left.priority - right.priority
       || left.provider.localeCompare(right.provider)
       || left.model.localeCompare(right.model));
-  const candidates = dedupeCandidates([...explicit, ...automatic]);
+  const candidates = capability === 'computer-use' ? explicit.slice(0, 1) : dedupeCandidates([...explicit, ...automatic]);
   const ready = candidates.filter((candidate) => candidate.ready);
   const rejected = candidates.filter((candidate) => !candidate.ready);
   const primary = ready[0];

@@ -41,15 +41,14 @@ function modelsMatchingQuery(models: ConfiguredModel[], query: string): Configur
   });
 }
 
-function buildPickerModels(
+export function buildPickerModels(
   models: ConfiguredModel[],
-  capabilitiesFilter: 'vision' | undefined,
+  capabilitiesFilter: 'vision' | 'computer-use' | undefined,
   valueTrimmed: string,
 ): ConfiguredModel[] {
-  if (capabilitiesFilter !== 'vision') {
-    return models;
-  }
-  const visionOk = models.filter((m) => m.vision === true);
+  if (capabilitiesFilter === 'computer-use') return models.filter(m => Boolean(m.computerUse));
+  if (capabilitiesFilter !== 'vision') return models.filter(m => !m.computerUse || m.id === valueTrimmed);
+  const visionOk = models.filter((m) => m.vision === true && !m.computerUse);
   if (!valueTrimmed) {
     return visionOk;
   }
@@ -110,7 +109,7 @@ export function ModelSelector({
   models?: ConfiguredModel[];
   modelsLoading?: boolean;
   modelsError?: unknown;
-  capabilitiesFilter?: 'vision';
+  capabilitiesFilter?: 'vision' | 'computer-use';
   outOfFilterNote?: string;
   registryEmptyHint?: string;
   /** Adds a first option that clears the current model selection. */
@@ -157,7 +156,7 @@ export function ModelSelector({
     [models, capabilitiesFilter, valueTrimmed],
   );
 
-  const showSearch = pickerModels.length > 10;
+  const showSearch = capabilitiesFilter === 'computer-use' || pickerModels.length > 10;
   const filtered = useMemo(
     () => modelsMatchingQuery(pickerModels, showSearch ? query : ''),
     [pickerModels, query, showSearch],
@@ -172,7 +171,7 @@ export function ModelSelector({
       : modelDisplayName(selected, language)
     : value || placeholder;
 
-  const showRegistryEmpty = !error && capabilitiesFilter === 'vision' && pickerModels.length === 0;
+  const showRegistryEmpty = !error && Boolean(capabilitiesFilter) && pickerModels.length === 0;
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -322,6 +321,7 @@ export function ModelPickerList({ models, value, onChange, searchPlaceholder, no
             <span className="min-w-0 flex-1">
               <span className="block truncate font-medium">{modelDisplayName(model, language)}</span>
               <span className="block truncate text-xs text-fg-muted">{model.provider}</span>
+              {model.computerUse && <span className="block text-xs text-fg-muted">Computer Use</span>}
               {outOfFilterNote && !model.vision && model.id === value && <span className="block text-xs text-fg-muted">{outOfFilterNote}</span>}
             </span>
             <Check className={cn('size-4 shrink-0 text-accent-fg', model.id !== value && 'invisible')} aria-hidden />

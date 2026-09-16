@@ -16,7 +16,7 @@ import {
 
 const SUPPORTED_EXTENSIONS = new Set(['.md', '.txt', '.json', '.ts', '.js']);
 const ENDPOINT_SAVE_TEXT_MAX_BYTES = 200 * 1024;
-const MIME_TYPE_BY_EXTENSION: Record<string, string> = {
+export const MIME_TYPE_BY_EXTENSION: Record<string, string> = {
   '.csv': 'text/csv',
   '.gif': 'image/gif',
   '.html': 'text/html',

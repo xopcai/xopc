@@ -10,7 +10,7 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock('react-native', () => ({
   View: ({ children }: { children: ReactNode }) => createElement('div', null, children),
-  ScrollView: ({ children }: { children: ReactNode }) => createElement('div', null, children),
+  ScrollView: ({ children }: { children: ReactNode }) => createElement('div', { 'data-scroll': true }, children),
   Pressable: ({ children, onPress, disabled, accessibilityLabel }: {
     children: (state: { pressed: boolean }) => ReactNode; onPress: () => void; disabled: boolean; accessibilityLabel: string;
   }) => createElement('button', { onClick: onPress, disabled, 'aria-label': accessibilityLabel }, children({ pressed: false })),
@@ -98,4 +98,8 @@ it('cancels a queued action when reopening interrupts dismissal', () => {
   act(() => toggle(true));
   act(() => interruptedClose(false));
   expect(action).not.toHaveBeenCalled();
+});
+
+it('uses a single scroll container so page tiles cannot capture a competing vertical scroll', () => {
+  expect(container.querySelectorAll('[data-scroll]')).toHaveLength(1);
 });

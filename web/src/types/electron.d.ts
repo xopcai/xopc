@@ -581,6 +581,11 @@ export interface ElectronUnderstandingSourcesAPI {
 }
 
 export interface ElectronAPI {
+  computer?: {
+    status(): Promise<{ connected: boolean; claim?: { type: 'endpoint'; endpointId: string; token: string }; error?: string; reenrollmentRequired?: boolean; session?: { status: string; errorCode?: string; appId?: string }; permissions: { accessibility: boolean; screenRecording: string } }>;
+    stop(): Promise<{ ok: boolean }>;
+    reenroll(): Promise<Awaited<ReturnType<NonNullable<ElectronAPI['computer']>['status']>>>;
+  };
   clipboard?: ElectronClipboardAPI;
   shell?: ElectronShellAPI;
   file: ElectronFileAPI;

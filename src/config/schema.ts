@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import semver from 'semver';
+import { ComputerConfigSchema } from '../computer/config.js';
 
 import {
   AgentModelsOverrideSchema,
@@ -1223,6 +1224,7 @@ export const ConfigSchema = z.object({
   channels: ChannelsConfigSchema,
   gateway: GatewayConfigSchema,
   browser: BrowserConfigSchema,
+  computer: ComputerConfigSchema,
   tunnel: TunnelConfigSchema.optional(),
   workspace: WorkspaceConfigSchema,
   tools: ToolsConfigSchema,
@@ -1345,6 +1347,7 @@ export const ConfigSchema = z.object({
     skillsMarketplaceProvider: 'store',
     skillsStoreBaseUrl: 'https://store.xopc.ai',
   },
+  computer: ComputerConfigSchema.parse({}),
   browser: {
     enabled: true,
     driver: { kind: 'extension' as const },

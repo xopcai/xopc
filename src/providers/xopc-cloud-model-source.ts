@@ -54,6 +54,7 @@ export class XopcCloudModelSource {
           maxOutputTokens?: unknown;
           operations?: unknown;
           capabilities?: {
+            computerUse?: { profile?: unknown };
             input?: unknown;
             output?: unknown;
             operations?: unknown;
@@ -135,6 +136,8 @@ export class XopcCloudModelSource {
         const voice = voiceManifestSchema.safeParse(model.xopc?.voice);
         const catalogModel: AvailableCatalogModel = {
           ...(voice.success ? { voice: voice.data } : {}),
+          ...(['gui-plus-2026-02-26', 'structured-tools-v1'].includes(String(model.xopc?.capabilities?.computerUse?.profile))
+            ? { computerUse: { profile: model.xopc!.capabilities!.computerUse!.profile as 'gui-plus-2026-02-26' | 'structured-tools-v1' } } : {}),
           id: model.id,
           name: typeof model.xopc?.displayName === 'string' && model.xopc.displayName.trim() ? model.xopc.displayName.trim() : model.id,
           ...parseDisplayNames(model.xopc?.displayNames),
@@ -173,7 +176,7 @@ export class XopcCloudModelSource {
         baseUrl: this.routerUrl,
         api: 'openai-completions',
         etag: response.headers.get('x-xopc-model-catalog-version'),
-        recommendedModel: models[0]?.id ?? null,
+        recommendedModel: models.find(model => !model.computerUse)?.id ?? null,
         ...(Object.keys(recommended).length > 0 ? { recommended } : {}),
         lastSuccessAt: Date.now(),
       },
@@ -204,7 +207,7 @@ function modelMatchesRecommendation(
   capability: 'vision' | 'image-generation' | 'stt' | 'tts',
 ): boolean {
   switch (capability) {
-    case 'vision': return model.kind === 'language' && model.input.includes('image');
+    case 'vision': return model.kind === 'language' && model.input.includes('image') && !model.computerUse;
     case 'image-generation': return model.kind === 'image' && model.operations.includes('images.generate');
     case 'stt': return model.kind === 'stt' && model.operations.includes('audio.transcription');
     case 'tts': return model.kind === 'tts' && model.operations.includes('audio.speech');

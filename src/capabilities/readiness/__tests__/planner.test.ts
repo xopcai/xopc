@@ -18,7 +18,7 @@ function candidate(
 function input(overrides: Partial<CapabilityPlannerInput> = {}): CapabilityPlannerInput {
   return {
     policies: {
-      vision: {}, 'image-generation': {}, stt: {}, tts: {},
+      vision: {}, 'image-generation': {}, stt: {}, tts: {}, 'computer-use': {},
     },
     automatic: {},
     ...overrides,
@@ -41,7 +41,7 @@ describe('capability planner', () => {
     const plans = planCapabilities(input({
       policies: {
         vision: { explicit: [{ provider: 'custom', model: 'gone', ready: false }] },
-        'image-generation': {}, stt: {}, tts: {},
+        'image-generation': {}, stt: {}, tts: {}, 'computer-use': {},
       },
       automatic: { vision: [candidate('vision', 'managed', 0)] },
     }));
@@ -56,7 +56,7 @@ describe('capability planner', () => {
   it('lets an explicit disabled policy win over every candidate', () => {
     const plans = planCapabilities(input({
       policies: {
-        vision: {}, 'image-generation': {}, stt: { disabled: true }, tts: {},
+        vision: {}, 'image-generation': {}, stt: { disabled: true }, tts: {}, 'computer-use': {},
       },
       automatic: { stt: [candidate('stt', 'cloud-stt', 0)] },
     }));

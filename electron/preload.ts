@@ -25,6 +25,11 @@ function notifyPreload(
 }
 
 contextBridge.exposeInMainWorld("electronAPI", {
+  computer: {
+    status: () => ipcRenderer.invoke('computer:status'),
+    stop: () => ipcRenderer.invoke('computer:stop'),
+    reenroll: () => ipcRenderer.invoke('computer:reenroll'),
+  },
   clipboard: {
     writeText: (text: string) =>
       ipcRenderer.invoke("clipboard:write-text", text) as Promise<boolean>,

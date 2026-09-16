@@ -57,6 +57,7 @@ export default defineConfig({
           { text: 'Get started', link: '/getting-started' },
           { text: 'Product', link: '/product' },
           { text: 'Guides', link: '/session' },
+          { text: 'Community', link: '/community' },
           { text: 'Configuration', link: '/configuration' }
         ],
         sidebar: [
@@ -135,6 +136,14 @@ export default defineConfig({
               { text: 'Templates', link: '/reference/templates' },
               { text: 'Release channels', link: '/releases' }
             ]
+          },
+          {
+            text: 'Community',
+            items: [
+              { text: 'Join the community', link: '/community' },
+              { text: 'Code of Conduct', link: 'https://github.com/xopcai/xopc/blob/main/CODE_OF_CONDUCT.md' },
+              { text: 'Contributing', link: 'https://github.com/xopcai/xopc/blob/main/CONTRIBUTING.md' }
+            ]
           }
         ],
         footer: {
@@ -159,6 +168,7 @@ export default defineConfig({
           { text: '快速开始', link: '/zh/getting-started' },
           { text: '产品理念', link: '/zh/product' },
           { text: '使用指南', link: '/zh/session' },
+          { text: '社区', link: '/zh/community' },
           { text: '配置', link: '/zh/configuration' }
         ],
         sidebar: [
@@ -236,6 +246,14 @@ export default defineConfig({
               { text: '工具运行环境', link: '/zh/runtime-tools' },
               { text: '模板文件', link: '/zh/reference/templates' },
               { text: '发布通道', link: '/zh/releases' }
+            ]
+          },
+          {
+            text: '社区',
+            items: [
+              { text: '加入社区', link: '/zh/community' },
+              { text: '行为准则', link: 'https://github.com/xopcai/xopc/blob/main/CODE_OF_CONDUCT.md' },
+              { text: '参与贡献', link: 'https://github.com/xopcai/xopc/blob/main/CONTRIBUTING.md' }
             ]
           }
         ],

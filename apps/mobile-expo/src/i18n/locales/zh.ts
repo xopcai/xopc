@@ -413,6 +413,7 @@ export const zh: MessageBundle = {
       thisTurn: '本轮资料 · 当前版本',
       remove: '移除',
       addSource: '添加文件、目录或笔记',
+      folderLocked: '此会话的工作目录已固定。',
       changeFolder: '更换工作目录',
       useFolder: '使用此目录',
       parentFolder: '上级目录',

@@ -57,6 +57,25 @@ export function npmUpdateRestartIsAutomatic(result: Record<string, unknown> | nu
   return value.ok === true && ['in-process', 'daemon', 'unmanaged'].includes(String(value.mode));
 }
 
+export function notifyNpmUpdateInstalled(version: string, automaticRestart: boolean): void {
+  try {
+    sessionStorage.setItem(
+      NPM_PENDING_RESTART_KEY,
+      JSON.stringify({ installedVersion: version, automaticRestart }),
+    );
+  } catch {
+    /* ignore */
+  }
+  window.dispatchEvent(
+    new CustomEvent('xopc:npm-update-installed', {
+      detail: { version, automaticRestart },
+    }),
+  );
+  if (automaticRestart) {
+    window.dispatchEvent(new Event('gateway-restart-initiated'));
+  }
+}
+
 const isElectronEnv =
   typeof window !== 'undefined' && (window as unknown as { electronAPI?: { updater?: unknown } }).electronAPI?.updater !== undefined;
 const DEV_MOCK_STORAGE_KEY = 'xopc.dev.mockElectron';
@@ -245,19 +264,7 @@ export function useUpdateStatus(): UpdateStatus & {
         const r = final.result;
         if (r && typeof r === 'object' && r.status === 'ok' && typeof r.installedVersion === 'string') {
           const automaticRestart = npmUpdateRestartIsAutomatic(r);
-          try {
-            sessionStorage.setItem(
-              NPM_PENDING_RESTART_KEY,
-              JSON.stringify({ installedVersion: r.installedVersion, automaticRestart }),
-            );
-          } catch {
-            /* ignore */
-          }
-          window.dispatchEvent(
-            new CustomEvent('xopc:npm-update-installed', {
-              detail: { version: r.installedVersion, automaticRestart },
-            }),
-          );
+          notifyNpmUpdateInstalled(r.installedVersion, automaticRestart);
         } else if (
           r &&
           typeof r === 'object' &&

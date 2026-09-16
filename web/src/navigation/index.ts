@@ -52,6 +52,7 @@ export type SettingsNavGroupId =
   | 'general'
   | 'system'
   | 'capabilities'
+  | 'integrations'
   | 'connection'
   | 'automation';
 
@@ -91,10 +92,10 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
       'settingsModels',
       'settingsVoice',
       'settingsSearch',
-      'settingsAgentBrowser',
       'settingsAgentDefaults',
     ],
   },
+  { id: 'integrations', tabs: ['settingsComputerUse', 'settingsAgentBrowser'] },
   {
     id: 'connection',
     tabs: ['settingsDevices', 'settingsTunnel', 'settingsShares'],
@@ -161,6 +162,7 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'connectors') return '/connectors';
   if (tab === 'channels' || tab === 'settingsChannels') return '/channels';
   if (tab === 'settingsAgentBrowser') return '/settings/agent-browser';
+  if (tab === 'settingsComputerUse') return '/settings/computer-use';
   if (tab === 'settingsModels') return capabilitySettingsPath('models');
   if (tab === 'settingsVoice') return capabilitySettingsPath('voice');
   if (tab === 'settingsSearch') return capabilitySettingsPath('search');

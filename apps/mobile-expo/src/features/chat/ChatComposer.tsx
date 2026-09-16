@@ -9,6 +9,7 @@ import {
   Keyboard,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -593,6 +594,10 @@ export const ChatComposer = memo(function ChatComposer({
 
   return (
     <View style={styles.wrap}>
+      <View onStartShouldSetResponderCapture={() => {
+        onCloseActions();
+        return false;
+      }}>
       {callInChat && <Text style={{ color: colors.text.secondary }}>{m.voice.finishCallToSend}</Text>}
       <VoiceRecordingCard
         visible={voiceInteractionActive}
@@ -625,21 +630,6 @@ export const ChatComposer = memo(function ChatComposer({
         />
       ) : null}
 
-      {att.attachments.length > 0 ? (
-        <ComposerAttachmentStrip
-          attachments={att.attachments}
-          onRemove={att.removeAttachment}
-          onReplace={att.replaceAttachment}
-          removeLabel={cm.removeAttachment}
-          editLabel={cm.editImage}
-        />
-      ) : null}
-
-      <ComposerContextChips
-        refs={contextRefs}
-        onRemove={(sourceId, kind) => onContextRefsChange(contextRefs.filter((ref) => ref.sourceId !== sourceId || ref.kind !== kind))}
-      />
-
       {contextNotice ? (
         <View
           style={[
@@ -666,10 +656,21 @@ export const ChatComposer = memo(function ChatComposer({
         </View>
       ) : null}
 
-      {contextControl ? <View style={styles.contextControl}>{contextControl}</View> : null}
+      {contextControl || contextRefs.length || att.attachments.length ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          directionalLockEnabled keyboardShouldPersistTaps="handled"
+          style={styles.contextControl} contentContainerStyle={styles.contextRow}>
+          {contextControl}
+          <ComposerContextChips refs={contextRefs}
+            onRemove={(sourceId, kind) => onContextRefsChange(contextRefs.filter(ref => ref.sourceId !== sourceId || ref.kind !== kind))} />
+          <ComposerAttachmentStrip attachments={att.attachments}
+            onRemove={att.removeAttachment} onReplace={att.replaceAttachment}
+            removeLabel={cm.removeAttachment} editLabel={cm.editImage} />
+        </ScrollView>
+      ) : null}
+      </View>
 
       <View
-        onTouchStart={event => event.stopPropagation()}
         style={[
           styles.shell,
           elevation.raised,
@@ -806,7 +807,8 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 18,
   },
-  contextControl: { paddingBottom: spacing.sm },
+  contextControl: { flexGrow: 0, marginBottom: spacing.sm },
+  contextRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   compactRow: {
     flexDirection: 'row',
     alignItems: 'center',

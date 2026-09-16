@@ -4,6 +4,18 @@ import { describe, expect, it, vi } from 'vitest';
 import { XopcCloudModelError, XopcCloudModelSource } from '../xopc-cloud-model-source.js';
 
 describe('XopcCloudModelSource', () => {
+  it('preserves GUI capabilities without recommending a GUI actor for vision', async () => {
+    const source = new XopcCloudModelSource({ routerUrl: 'https://router.test/v1', credentials: { resolveApiKey: async () => 'fixture' },
+      fetchImpl: async () => Response.json({ xopc: { defaults: { vision: 'gui' } }, data: [{ id: 'gui', xopc: {
+        capabilities: { input: ['text', 'image'], computerUse: { profile: 'gui-plus-2026-02-26' } },
+      } }] }),
+    });
+    const result = await source.fetch();
+    expect(result.status).toBe('fetched');
+    if (result.status !== 'fetched') throw new Error('Expected catalog');
+    expect(result.models[0].computerUse).toEqual({ profile: 'gui-plus-2026-02-26' });
+    expect(result.source.recommended?.vision).toBeUndefined();
+  });
   it('discovers a new conversation service without a vendor allowlist', async () => {
     const voice = voiceFixture(['conversation']);
     const source = new XopcCloudModelSource({credentials:{resolveApiKey:async () => 'token'},fetchImpl:async () => Response.json({data:[{id:'future-vendor',xopc:{kind:'omni',voice,capabilities:{input:['audio'],output:['audio','text']}}}]})});

@@ -1,4 +1,6 @@
 import enImports from './en/imports.json' with { type: 'json' };
+import enComputer from './en/computer.json' with { type: 'json' };
+import zhComputer from './zh/computer.json' with { type: 'json' };
 import zhImports from './zh/imports.json' with { type: 'json' };
 import enAgents from './en/agents.json' with { type: 'json' };
 import enAutomations from './en/automations.json' with { type: 'json' };
@@ -46,6 +48,7 @@ import zhWorkspace from './zh/workspace.json' with { type: 'json' };
 
 /** Full English message tree; assembled from `locales/en/*.json` fragments. */
 export const en = {
+  ...enComputer,
   ...enImports,
   ...enAgents,
   ...enAutomations,
@@ -72,6 +75,7 @@ export const en = {
 
 /** Full Chinese message tree; assembled from `locales/zh/*.json` fragments. */
 export const zh = {
+  ...zhComputer,
   ...zhImports,
   ...zhAgents,
   ...zhAutomations,

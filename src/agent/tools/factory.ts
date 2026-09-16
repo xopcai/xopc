@@ -81,6 +81,8 @@ import { createBrowserDriver } from '../../browser/drivers/create-driver.js';
 import { BrowserRuntime } from '../../browser/runtime/browser-runtime.js';
 import { getBrowserTabBinding } from '../../storage/sqlite/browser-tab-binding-repository.js';
 import { createBrowserUseTool } from './browser/tool/browser-use-tool.js';
+import { ComputerRuntime } from '../../computer/runtime.js';
+import { createComputerUseTool } from './computer-use-tool.js';
 import { createReviewWorkspaceTool } from './review-workspace.js';
 import { createLanguageDiagnosticsTool } from './language-diagnostics.js';
 import { createDelegateTool } from './delegate-tool.js';
@@ -285,8 +287,23 @@ export class AgentToolsFactory {
     return this.browserRuntime;
   }
 
+  private computerRuntime?: ComputerRuntime;
+  private ensureComputerRuntime(): ComputerRuntime {
+    if (!this.deps.endpointTools) throw new Error('Computer endpoint runtime is unavailable');
+    return this.computerRuntime ??= new ComputerRuntime(this.deps.endpointTools, () => {
+      const config = this.deps.getConfig?.();
+      if (!config) throw new Error('Computer configuration is unavailable');
+      return config;
+    }, owner => {
+      const context = this.deps.getCurrentContext();
+      return context?.conversationId === owner && context.origin.type === 'endpoint' ? context.origin.endpointId : undefined;
+    });
+  }
+
   /** Close Playwright and all pages (gateway stop, agent manager dispose, or config hot-reload). */
   async shutdownBrowser(): Promise<void> {
+    await this.computerRuntime?.shutdown();
+    this.computerRuntime = undefined;
     this.browserReadinessCache = null;
     if (!this.browserRuntime) {
       return;
@@ -297,6 +314,7 @@ export class AgentToolsFactory {
 
   /** Drop the tab for a session when its agent instance is removed. */
   async closeBrowserPageForSession(conversationId: string): Promise<void> {
+    await this.computerRuntime?.close(conversationId);
     await this.browserRuntime?.closeTaskSession(conversationId);
   }
 
@@ -583,6 +601,18 @@ export class AgentToolsFactory {
               dispatchTaskRuns: this.deps.dispatchTaskRuns,
             }),
           ]
+        : []),
+      ...(cfg?.computer.enabled && this.deps.endpointTools && this.deps.gatewayClarify
+        ? [createComputerUseTool({
+            runtime: this.ensureComputerRuntime(),
+            context: () => {
+              const conversationId = getEmbeddedExecutionSession() ?? currentConversationId();
+              const runId = getEmbeddedExecutionRunId();
+              if (!conversationId || !runId) throw new Error('Computer Use requires an active interactive run');
+              return { conversationId, runId };
+            },
+            requestClarification: this.deps.gatewayClarify.requestClarification,
+          })]
         : []),
       ...(browserEnabled
         ? [

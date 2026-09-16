@@ -18,6 +18,7 @@ import {
   selectClassName,
 } from './models-settings-lib';
 import { Select, SelectOption } from '@/components/ui/popover-select';
+import { useLocaleStore } from '@/stores/locale-store';
 
 type ModelDialogProps = {
   open: boolean;
@@ -44,6 +45,7 @@ function ModelEditForm({
   onClose: () => void;
   m: ModelsSettingsMessages;
 }) {
+  const zh = useLocaleStore(state => state.language) === 'zh';
   const [form, setForm] = useState<Partial<CustomModel>>(() =>
     model ? { ...model } : createCustomModel(''),
   );
@@ -67,6 +69,9 @@ function ModelEditForm({
     }
     if (form.maxTokens !== undefined && form.maxTokens <= 0) {
       next.set('maxTokens', m.mustBePositive);
+    }
+    if (form.computerUse && !form.input?.includes('image')) {
+      next.set('computerUse', zh ? '电脑操作模型必须支持图片输入' : 'Computer Use requires image input');
     }
     setErrors(next);
     return next.size === 0;
@@ -98,7 +103,7 @@ function ModelEditForm({
 
   return (
     <>
-      <div className="mb-3 flex items-start justify-between gap-2">
+      <div className="mb-3 flex shrink-0 items-start justify-between gap-2">
         <div>
           <Dialog.Title className="text-base font-semibold text-fg">
             {isNew ? m.addModelTitle : m.editModelTitle}
@@ -120,6 +125,7 @@ function ModelEditForm({
         </Dialog.Close>
       </div>
 
+      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
       <div className="flex flex-col gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-fg">
@@ -243,7 +249,21 @@ function ModelEditForm({
             </div>
           </div>
 
-      <div className="mt-4 flex justify-end gap-2 border-t border-edge-subtle pt-3 dark:border-edge">
+      <details className="mt-4 rounded-lg border border-edge p-3 text-sm text-fg">
+        <summary className="cursor-pointer">{zh ? '高级：电脑操作协议' : 'Advanced: Computer Use protocol'}</summary>
+        <div className="mt-3 space-y-2">
+          <Select aria-label={zh ? '电脑操作协议' : 'Computer Use protocol'} value={form.computerUse?.profile ?? ''}
+            onChange={event => update('computerUse', event.target.value ? { profile: event.target.value as NonNullable<CustomModel['computerUse']>['profile'] } : undefined)}>
+            <SelectOption value="">{zh ? '未声明' : 'Not declared'}</SelectOption>
+            <SelectOption value="gui-plus-2026-02-26">GUI-Plus (2026-02-26)</SelectOption>
+            <SelectOption value="structured-tools-v1">structured-tools-v1</SelectOption>
+          </Select>
+          <p className="text-xs leading-relaxed text-fg-muted">{zh ? '仅适用于已适配的 OpenAI Chat Completions 视觉模型。声明协议不代表模型已通过效果验证。' : 'For adapted OpenAI Chat Completions vision models only. Declaring a protocol does not certify model quality.'}</p>
+          {errors.has('computerUse') && <p role="alert" className="text-xs text-danger">{errors.get('computerUse')}</p>}
+        </div>
+      </details>
+      </div>
+      <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-edge-subtle pt-3 dark:border-edge">
         <Dialog.Close asChild>
           <Button type="button" variant="secondary">
             {m.cancel}
@@ -274,9 +294,9 @@ export function ModelEditDialogContent({
         />
         <Dialog.Content
           className={cn(
-            'xopc-dialog-content fixed left-1/2 top-1/2 max-h-[min(90vh,720px)] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2',
+            'xopc-dialog-content fixed left-1/2 top-1/2 flex h-[min(90vh,720px)] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col',
             SETTINGS_SHELL_CONTENT_Z,
-            'overflow-y-auto rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge',
+            'overflow-hidden rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge',
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >

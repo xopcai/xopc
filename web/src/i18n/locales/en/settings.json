@@ -4,6 +4,7 @@
     "appearance": "Preferences",
     "agent": "Agent",
     "agent-browser": "Browser",
+    "computer-use": "Computer use",
     "agent-defaults": "Agent settings",
     "connectors": "Connectors",
     "channels": "Channels",
@@ -229,7 +230,7 @@
       "discardAll": "Discard all"
     },
     "tabs": {
-      "models": "Chat models",
+      "models": "My models",
       "image": "Image models",
       "voice": "Voice",
       "search": "Web search"
@@ -976,6 +977,7 @@
     "general": "General",
     "system": "System",
     "capabilities": "Intelligence",
+    "integrations": "Integrations",
     "agent": "Agent capabilities",
     "connection": "Devices & connections",
     "automation": "Automation",

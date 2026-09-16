@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="720" viewBox="0 0 720 720" role="img" aria-labelledby="title desc">
+  <title id="title">xopc WeChat community QR code placeholder</title>
+  <desc id="desc">A visual placeholder that will be replaced by the current WeChat community QR code.</desc>
+  <rect width="720" height="720" rx="48" fill="#f8fafc"/>
+  <rect x="40" y="40" width="640" height="640" rx="36" fill="#ffffff" stroke="#cbd5e1" stroke-width="4"/>
+  <g fill="#0f172a">
+    <path d="M104 104h168v168H104zm32 32v104h104V136z"/>
+    <path d="M448 104h168v168H448zm32 32v104h104V136z"/>
+    <path d="M104 448h168v168H104zm32 32v104h104V480z"/>
+    <rect x="320" y="104" width="40" height="40"/><rect x="376" y="104" width="40" height="40"/>
+    <rect x="320" y="160" width="40" height="96"/><rect x="376" y="216" width="40" height="40"/>
+    <rect x="304" y="304" width="40" height="40"/><rect x="360" y="304" width="96" height="40"/>
+    <rect x="472" y="304" width="40" height="40"/><rect x="528" y="304" width="88" height="40"/>
+    <rect x="304" y="360" width="40" height="96"/><rect x="360" y="376" width="40" height="40"/>
+    <rect x="416" y="360" width="96" height="40"/><rect x="528" y="376" width="40" height="96"/>
+    <rect x="584" y="360" width="32" height="96"/><rect x="360" y="432" width="40" height="40"/>
+    <rect x="416" y="432" width="96" height="40"/><rect x="304" y="488" width="96" height="40"/>
+    <rect x="416" y="488" width="40" height="128"/><rect x="472" y="488" width="96" height="40"/>
+    <rect x="584" y="488" width="32" height="40"/><rect x="304" y="544" width="40" height="72"/>
+    <rect x="360" y="560" width="40" height="56"/><rect x="472" y="544" width="40" height="72"/>
+    <rect x="528" y="544" width="88" height="40"/><rect x="528" y="600" width="88" height="16"/>
+  </g>
+  <rect x="170" y="315" width="380" height="90" rx="18" fill="#2563eb"/>
+  <text x="360" y="353" text-anchor="middle" font-family="system-ui, sans-serif" font-size="24" font-weight="700" fill="#ffffff">WECHAT COMMUNITY</text>
+  <text x="360" y="382" text-anchor="middle" font-family="system-ui, sans-serif" font-size="18" fill="#dbeafe">QR CODE PLACEHOLDER</text>
+  <text x="360" y="665" text-anchor="middle" font-family="system-ui, sans-serif" font-size="19" fill="#475569">Replace this file with the current community QR code</text>
+</svg>

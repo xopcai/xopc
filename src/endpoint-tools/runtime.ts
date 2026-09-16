@@ -122,6 +122,7 @@ export class EndpointToolRuntime {
     if (this.closed) return;
     this.closed = true;
     this.invocations.close();
+    this.uploads.close();
     this.registry.closeAll();
   }
 }

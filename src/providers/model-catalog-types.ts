@@ -1,6 +1,7 @@
 import type { VoiceManifest } from '@xopcai/realtime-protocol/voice';
 export interface CatalogModel {
   voice?: VoiceManifest;
+  computerUse?: { profile: 'gui-plus-2026-02-26' | 'structured-tools-v1' };
   id: string;
   name: string;
   displayNames?: Partial<Record<'zh-CN' | 'en', string>>;

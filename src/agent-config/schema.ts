@@ -19,6 +19,10 @@ export const ImageGenerationRouteSchema = ModelRouteSchema.extend({
   autoProviderFallback: z.boolean().default(false),
 }).strict();
 
+export const ComputerModelRouteSchema = ModelRouteSchema.extend({
+  fallbacks: z.array(ModelRefSchema).max(0, 'Computer Use does not support fallback models').default([]),
+}).strict();
+
 export const ModelIntentSchema = z.enum([
   'fast',
   'reasoning',
@@ -35,6 +39,7 @@ export const AgentModelsDefaultsSchema = z.object({
   chat: ModelRouteSchema,
   intents: ModelIntentRoutesSchema.default({}),
   imageUnderstanding: ModelRouteSchema.optional(),
+  computerUse: ComputerModelRouteSchema.optional(),
   imageGeneration: ImageGenerationRouteSchema.optional(),
 }).strict();
 
@@ -42,6 +47,7 @@ export const AgentModelsOverrideSchema = z.object({
   chat: ModelRouteSchema.optional(),
   intents: ModelIntentOverridesSchema.optional(),
   imageUnderstanding: ModelRouteSchema.nullable().optional(),
+  computerUse: ComputerModelRouteSchema.nullable().optional(),
   imageGeneration: ImageGenerationRouteSchema.nullable().optional(),
 }).strict();
 

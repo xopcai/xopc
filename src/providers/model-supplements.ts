@@ -35,13 +35,18 @@ export function applyOfficialModelMetadataCorrections(model: Model<Api>): Model<
  */
 export function getSupplementalModels(): Model<Api>[] {
   const gpt56Sol = getPiAiModel('openai' as never, 'gpt-5.6-sol' as never) as Model<Api> | undefined;
-  if (!gpt56Sol) return [];
-
   return [
-    {
+    ...(gpt56Sol ? [{
       ...gpt56Sol,
       id: 'gpt-5.6',
       name: 'GPT-5.6',
-    },
+    }] : []),
+    {
+      id: 'gui-plus-2026-02-26', name: 'GUI-Plus (2026-02-26)', provider: 'dashscope-cn',
+      api: 'openai-completions', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+      reasoning: true, input: ['text', 'image'], contextWindow: 262_144, maxTokens: 32_768,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      computerUse: { profile: 'gui-plus-2026-02-26' },
+    } as Model<Api>,
   ];
 }

@@ -4,6 +4,8 @@ Thank you for helping improve **xopc**. This document covers how we manage GitHu
 
 Issues and comments may be written in **English or Chinese**. Labels and templates use English for automation and search.
 
+All contributors must follow the [Community Code of Conduct](./CODE_OF_CONDUCT.md). For informal help and contributor coordination, see the [community guide](https://xopcai.github.io/xopc/community).
+
 ---
 
 ## Table of contents
