@@ -5,7 +5,15 @@
     "preview": "macOS preview",
     "control": "Control",
     "desktop": "Desktop applications",
-    "desktopDescription": "Observe and operate one application window with your local approval for each action.",
+    "desktopDescription": "Observe and operate one application window using this device’s approval mode.",
+    "fullControl": "Full control",
+    "fullControlDescription": "Skip task and action prompts, including actions that may send or delete data. Applies to all configured GUI models and agent overrides. Screenshots and text go through the Gateway to the corresponding model service. Browser permissions are separate.",
+    "fullControlEnabled": "Enabled · Remembered on this device across restarts. Turning off stops the current desktop session.",
+    "fullControlDisabled": "Confirm each action · Enabling requires one local confirmation, with no repeated task prompts afterward.",
+    "fullControlLocalOnly": "Change this only in the local macOS desktop app.",
+    "stoppedNotice": "Desktop operations stopped. Browser control is unaffected.",
+    "pausedNotice": "Desktop control is paused. Automatic retries cannot resume it. Resume here, then start a new task.",
+    "resume": "Resume desktop control",
     "browser": "Browser",
     "browserDescription": "Manage browser connections, extension setup and browser control permissions.",
     "browserEnabled": "Browser control enabled",
@@ -44,7 +52,7 @@
     "manageModels": "Connect model service",
     "retry": "Retry",
     "nativeError": "Cannot read desktop status. Check the desktop application and try again.",
-    "safety": "Enabling this setting is not blanket permission. Each session and input action still requires local approval. Stop from here or the tray at any time.",
+    "safety": "Full control skips xopc task and action prompts, not OS permissions, single-window limits or sensitive-app restrictions. Stop here or from the tray at any time; resuming requires a manual action.",
     "states": { "idle": "No active session", "pending_authorization": "Waiting for local authorization", "ready": "Ready", "running": "Running", "pending_action": "Waiting for action approval", "paused": "Paused", "stopped": "Stopped" }
   }
 }

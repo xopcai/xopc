@@ -46,7 +46,7 @@ Use computer-use-architecture.md as the design baseline. Record evidence and del
 ## Deliberate preview boundaries
 
 - macOS, one explicitly selected running application/window; Windows/Linux execution is not certified. The driver interface remains extensible.
-- Native session approval and exact per-action approvals; no unattended desktop automation. Main-window hide/minimize, lock, suspend, endpoint disconnect and explicit Stop revoke control.
+- Native session and exact per-action approvals by default; optional device-local Full control skips these prompts after a one-time native opt-in. Main-window hide/minimize, lock, suspend, endpoint disconnect and explicit Stop revoke control. Stop, lock and suspend additionally pause new sessions until manual resume. This is not certified for unattended use.
 - In-memory leases/receipts/frames deliberately replace the RFC's proposed persistent computer tables for this preview. Restart fails closed; no input replay. Existing endpoint audit records retain metadata, not screenshots.
 - Screenshot frame blobs are bounded, fully decoded/validated, invocation-bound, single-consumer and expire after 120 seconds. They are not downloadable through generic attachment routes and are not appended to chat transcripts.
 - A model's `terminate(success)` remains `verified:false`. There is no general business-semantic verifier yet. Screenshots changing and input acknowledgements are not treated as task success.
@@ -79,7 +79,7 @@ The existing platform login successfully read the live 34-model catalog and foun
 
 - Setup now lives at Settings → Integrations → Computer use (`#/settings/computer-use`), with sidebar navigation and command-palette discovery. Browser control retains its existing settings page.
 - The page exposes only implemented controls: desktop enablement, macOS permission requests, device/session status, conditional native re-enrollment, emergency Stop, and the dedicated GUI model using existing BYOK/Cloud connections. It does not introduce Excel integration, per-app allowlists or unattended/locked-use controls.
-- Existing native approvals remain mandatory. Stop stays available while configuration loads or another settings action is pending. Browser and unsupported desktop platforms cannot grant local control.
+- Native approvals remain the default; Full control can be enabled only through the local desktop settings with a one-time native confirmation. Stop stays available while configuration loads or another settings action is pending. Browser and unsupported desktop platforms cannot grant local control.
 - Six focused test files / 31 tests passed, including model-only updates preserving fresh global defaults, invalid model input, native status failure, permission actions and Stop during a pending request. Web typecheck, focused ESLint and production build passed. Isolated browser rendering checked light/dark layouts and a 390-pixel viewport with mocked configuration/native status; no horizontal overflow or page errors. This was not a live native-control or hosted-model retest.
 
 ### Commands

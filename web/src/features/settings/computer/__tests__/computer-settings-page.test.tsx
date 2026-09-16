@@ -57,7 +57,7 @@ it('changes only computer enablement and links to existing browser and model set
   expect(container.querySelector('a[href="/settings/agent-browser"]')).not.toBeNull();
   expect(container.querySelector('a[href="/settings/capabilities/models?add=1"]')).not.toBeNull();
   expect(container.textContent).toContain('网页控制台不能批准本机操作');
-  expect(container.querySelectorAll('[role="switch"]')).toHaveLength(1);
+  expect(container.querySelector<HTMLButtonElement>('[aria-label="完全控制"]')!.disabled).toBe(true);
   expect(container.textContent).not.toContain('Excel');
 });
 
@@ -95,6 +95,50 @@ it('reports native status failures instead of showing an unverified connection',
   const container = await renderPanel();
   expect(container.textContent).toContain('无法读取桌面状态');
   expect(container.textContent).not.toContain('桌面已连接');
+});
+
+it('changes full control only through native settings and reflects cancellation and saved state', async () => {
+  const status = { connected: true, fullControl: false, controlPaused: false, permissions: { accessibility: true, screenRecording: 'granted' } };
+  const setFullControl = vi.fn().mockResolvedValueOnce(status).mockResolvedValueOnce({ ...status, fullControl: true }).mockResolvedValueOnce(status);
+  window.electronAPI = { platform: 'darwin', computer: { status: async () => status, setFullControl } } as any;
+  const container = await renderPanel();
+  const toggle = container.querySelector<HTMLButtonElement>('[aria-label="完全控制"]')!;
+  expect(toggle.disabled).toBe(false);
+  await act(async () => toggle.click());
+  expect(toggle.getAttribute('aria-checked')).toBe('false');
+  await act(async () => toggle.click());
+  expect(toggle.getAttribute('aria-checked')).toBe('true');
+  expect(container.textContent).toContain('仅本机记住');
+  await act(async () => toggle.click());
+  expect(setFullControl.mock.calls.map(args => args[0])).toEqual([true, true, false]);
+  expect(toggle.getAttribute('aria-checked')).toBe('false');
+  expect(fetchJson).not.toHaveBeenCalled();
+});
+
+it('shows native save errors without optimistically enabling full control', async () => {
+  window.electronAPI = { platform: 'darwin', computer: {
+    status: async () => ({ connected: true, fullControl: false, controlPaused: false, permissions: { accessibility: true, screenRecording: 'granted' } }),
+    setFullControl: vi.fn().mockRejectedValue(new Error('disk full')),
+  } } as any;
+  const container = await renderPanel();
+  const toggle = container.querySelector<HTMLButtonElement>('[aria-label="完全控制"]')!;
+  await act(async () => toggle.click());
+  expect(toggle.getAttribute('aria-checked')).toBe('false');
+  expect(container.textContent).toContain('disk full');
+});
+
+it('refreshes stop state immediately and requires explicit resume', async () => {
+  let paused = false;
+  const status = () => ({ connected: true, fullControl: true, controlPaused: paused, permissions: { accessibility: true, screenRecording: 'granted' } });
+  const resume = vi.fn(async () => { paused = false; return status(); });
+  window.electronAPI = { platform: 'darwin', computer: { status: async () => status(), stop: async () => { paused = true; return { ok: true }; }, resume } } as any;
+  const container = await renderPanel();
+  await act(async () => [...container.querySelectorAll('button')].find(item => item.textContent === '停止电脑操作')!.click());
+  expect(container.textContent).toContain('桌面操作已停止');
+  expect(container.textContent).toContain('自动重试不会恢复');
+  await act(async () => [...container.querySelectorAll('button')].find(item => item.textContent === '恢复桌面控制')!.click());
+  expect(resume).toHaveBeenCalledOnce();
+  expect(container.textContent).not.toContain('自动重试不会恢复');
 });
 
 async function changeModel(container: HTMLElement, value: string) {

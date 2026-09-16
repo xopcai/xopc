@@ -10,12 +10,20 @@ import { RealtimeClient, type RealtimeWebSocket } from '@xopcai/realtime-client'
 import { COMPUTER_DESCRIPTOR, ComputerCommandSchema } from '@xopcai/computer-control-contract';
 import { ComputerBroker, type ComputerApproval } from '../../src/computer/broker.js';
 import { CuaComputerDriver } from './cua-driver.js';
+import { readFullControl, writeFullControl } from './control-preferences.js';
 import { showEndpointNotification } from '../ipc/system-settings-ipc.js';
 import { MIME_TYPE_BY_EXTENSION } from '../ipc/file-ipc.js';
 import { normalizeExternalHttpUrl } from '../external-url.js';
 import { writeTextAtomic } from '../../src/infra/write-file-atomic.js';
 
 type Identity = { principalId: string; publicKey: string; encryptedPrivateKey: string };
+
+export function resolveComputerDriverPath(options: { packaged: boolean; resourcesPath: string; mainDir: string }): string {
+  return options.packaged
+    ? join(options.resourcesPath, 'bin', 'cua-driver')
+    : join(options.mainDir, '..', '..', '.cache', 'computer-driver', '0.28.2', 'cua-driver');
+}
+
 export class DesktopEndpointHost {
   readonly broker: ComputerBroker;
   private client?: RealtimeClient;
@@ -27,17 +35,66 @@ export class DesktopEndpointHost {
   private error?: string;
   private reenrollmentRequired = false;
   private reenrolling = false;
+  private readonly controlPreferencesPath = join(app.getPath('userData'), 'computer-control-consent');
+  private fullControl = readFullControl(this.controlPreferencesPath);
+  private controlPaused = false;
+  private modeChange?: AbortController;
   private readonly lifetime = new AbortController();
   constructor(private readonly options: { connection(): { port: number; token: string } | undefined; window(): BrowserWindow | null }) {
-    const binary = app.isPackaged ? join(process.resourcesPath, 'bin', 'cua-driver') : join(app.getAppPath(), '.cache', 'computer-driver', '0.28.2', 'cua-driver');
+    // Dev launches out/main/index.js directly, so app.getAppPath() is not the repository root.
+    const binary = resolveComputerDriverPath({ packaged: app.isPackaged, resourcesPath: process.resourcesPath, mainDir: import.meta.dirname });
     this.broker = new ComputerBroker(new CuaComputerDriver(binary, app.isPackaged ? 'ai.xopc.xopc' : 'com.github.Electron'), {
-      isVisible: () => this.visible(), requestApproval: (request, signal) => this.approve(request, signal),
+      isVisible: () => this.visible() && !this.controlPaused && !this.modeChange,
+      hasFullControl: () => this.fullControl,
+      requestApproval: (request, signal) => this.approve(request, signal),
     }, { enabled: true });
   }
   private visible(): boolean { const w = this.options.window(); return !!w && !w.isDestroyed() && w.isVisible() && !w.isMinimized(); }
-  snapshot() { return { connected: !!this.claim, claim: this.claim, error: this.error, reenrollmentRequired: this.reenrollmentRequired, session: this.broker.snapshot(),
+  snapshot() { return { connected: !!this.claim, claim: this.claim, error: this.error, reenrollmentRequired: this.reenrollmentRequired,
+    fullControl: this.fullControl, controlPaused: this.controlPaused, session: this.broker.snapshot(),
     permissions: { accessibility: process.platform === 'darwin' && systemPreferences.isTrustedAccessibilityClient(false),
       screenRecording: process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'unknown' } }; }
+  async setFullControl(enabled: unknown): Promise<void> {
+    if (typeof enabled !== 'boolean') throw new Error('Invalid computer control mode');
+    if (this.modeChange) throw new Error('Computer control settings are busy');
+    if (this.stopped || !this.visible()) throw new Error('Computer control settings require the local window');
+    if (enabled === this.fullControl) return;
+    const change = new AbortController();
+    this.modeChange = change;
+    try {
+      if (!enabled) {
+        this.fullControl = false;
+        // Persist revocation before yielding, so Stop cannot leave old consent on disk.
+        try { writeFullControl(this.controlPreferencesPath, false); }
+        finally { await this.broker.stop(); }
+        return;
+      }
+      if (enabled) {
+        const answer = await dialog.showMessageBox(this.options.window()!, {
+          type: 'warning', title: 'xopc Computer Use', message: '开启完全控制？ / Enable full control?',
+          detail: '之后的桌面任务不再逐次确认，可自动点击、输入及执行可能产生发送、删除等后果的操作。所有配置的 GUI 模型（包括 Agent 覆盖）均适用；窗口截图和文字会经 Gateway 发送给该模型服务。仅在本机记住，可随时关闭。系统权限、单窗口与敏感应用限制仍生效。\n\nFuture desktop tasks can observe and act without prompts, including actions that may send or delete data. Screenshots and text go through the Gateway to the configured GUI model, including agent overrides. Remembered on this device only. OS permissions and window/app restrictions still apply.',
+          buttons: ['取消 / Cancel', '开启完全控制 / Enable full control'], defaultId: 0, cancelId: 0, noLink: true,
+          signal: AbortSignal.any([change.signal, this.lifetime.signal]),
+        });
+        if (answer.response !== 1 || change.signal.aborted || this.stopped || !this.visible()) return;
+      }
+      // Revoke existing grants before changing the policy, even if persistence fails.
+      this.fullControl = false;
+      await this.broker.stop();
+      if (change.signal.aborted || this.stopped) return;
+      writeFullControl(this.controlPreferencesPath, enabled);
+      this.fullControl = enabled;
+    } finally { this.modeChange = undefined; }
+  }
+  async stopControl(): Promise<void> {
+    this.controlPaused = true;
+    this.modeChange?.abort();
+    await this.broker.stop();
+  }
+  resumeControl(): void {
+    if (this.stopped || this.modeChange || !this.visible()) throw new Error('Computer control cannot resume now');
+    this.controlPaused = false;
+  }
   private async approve(request: ComputerApproval, signal: AbortSignal): Promise<boolean> {
     if (!this.visible() || signal.aborted) return false;
     const detail = request.kind === 'session'
@@ -149,10 +206,12 @@ export class DesktopEndpointHost {
         system: { showEndpointNotification: async (input) => showEndpointNotification(input) },
       })),
       { descriptor: structuredClone(COMPUTER_DESCRIPTOR) as any, execute: async (args, context) => {
+        const command = ComputerCommandSchema.parse(args);
+        if (this.controlPaused && command.op !== 'status' && command.op !== 'release') throw new Error('COMPUTER_CONTROL_PAUSED');
         const abort = () => { void this.broker.stop(); };
         context.signal.addEventListener('abort', abort, { once: true });
         try {
-          const result = await this.broker.command(ComputerCommandSchema.parse(args));
+          const result = await this.broker.command(command);
           const { frame, ...metadata } = result;
           const content: import('@xopcai/endpoint-tools-protocol').EndpointToolContent[] = [{ type: 'json', value: metadata }];
           if (frame) {
