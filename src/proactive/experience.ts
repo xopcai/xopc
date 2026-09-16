@@ -1,6 +1,7 @@
 import { listMailFollowUps } from './follow-ups.js';
 import { z } from 'zod';
 
+import { followUpCheckStatus } from './status.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { getCard } from './inbox/cards.js';
 import { effectiveProactivePolicy, ProactiveConflict } from './policy/service.js';
@@ -88,6 +89,8 @@ export function delegationOverview(workspace: string) {
     enabled: sub.enabled,
     revision: sub.revision,
     delivery: sub.delivery,
+    scanIntervalMinutes: sub.scanIntervalMinutes ?? 120,
+    checkStatus: followUpCheckStatus(sub.id, sub.scopeKind === 'project'),
     completedAt: sub.completedAt,
     userInstructions: sub.userInstructions,
     updatedAt: sub.updatedAt,

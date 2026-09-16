@@ -1,3 +1,4 @@
+import { sourceFreshness } from '../source-freshness.js';
 import { readMailThread } from '../mail-thread.js';
 import { getConnectorSyncPolicyForConnection } from '../../storage/sqlite/connector-sync-policy-repository.js';
 import { getKnowledgeSourceItem } from '../../storage/sqlite/knowledge-repository.js';
@@ -67,4 +68,15 @@ export function authorizedConnectedSource(itemId: string, workspaceId: string, s
   if (!getSqliteDatabase().prepare("SELECT 1 FROM connector_connections WHERE id = ? AND status = 'active'").get(connectionId)) return null;
   const policy = getConnectorSyncPolicyForConnection(connectionId);
   return policy?.scanEnabled && policy.proactiveEnabled && (!policy.allowedScenarioKeys.length || policy.allowedScenarioKeys.includes(scenarioKey)) ? item : null;
+}
+
+/** Delivery eligibility is stricter than reading historical artifacts. */
+export function insightSourcesFresh(insightId: string): boolean {
+  const db = getSqliteDatabase();
+  const row = db.prepare(`SELECT c.evidence_ids_json, c.content_json FROM proactive_insights x JOIN proactive_runs r USING(run_id)
+    JOIN proactive_context_snapshots c ON c.snapshot_id = r.context_snapshot_id WHERE x.insight_id = ?`).get(insightId) as { evidence_ids_json: string; content_json: string } | undefined;
+  if (!row) return true;
+  const follow = (JSON.parse(row.content_json) as { follow_up?: { dueAt?: string; deadlinePassed?: boolean } }).follow_up;
+  return (JSON.parse(row.evidence_ids_json) as string[]).every(id => !id.startsWith('source-item:')
+    || sourceFreshness(id.slice(12), follow?.deadlinePassed ? follow.dueAt : undefined).fresh);
 }

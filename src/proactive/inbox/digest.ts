@@ -4,9 +4,8 @@ import type { ProductNotification } from '@xopcai/gateway-contract';
 
 import type { NotificationPlan } from '../../notifications/planner.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
-import { insightSourcesAuthorized } from '../execution/authorization.js';
-import { effectiveProactivePolicy, localProactiveDay, proactivePreferences, quietHoursEnd, nextDigestTime } from '../policy/service.js';
-import { viewingProactiveCards } from '../policy/presence.js';
+import { insightSourcesAuthorized, insightSourcesChanged, insightSourcesFresh } from '../execution/authorization.js';
+import { effectiveProactivePolicy, localProactiveDay, proactivePreferences, proactiveChecksAllowed, quietHoursEnd, nextDigestTime } from '../policy/service.js';
 import { getCard } from './cards.js';
 import { getInboxItem } from './repository.js';
 import type { InboxItem } from './types.js';
@@ -22,30 +21,32 @@ export function queueDigest(item: InboxItem, mode: 'daily' | 'quiet', dueAt: Dat
     .run(item.id, policy.workspaceId, item.notificationRevision!, mode, dueAt.toISOString());
 }
 
-export function digestCards(id: string, workspaceId: string) {
+export function digestCards(id: string, workspaceId: string, forDelivery = false) {
   const digest = getSqliteDatabase().prepare('SELECT * FROM proactive_digests WHERE digest_id = ? AND workspace_id = ?').get(id, workspaceId) as { occurrence_key: string } | undefined;
   if (!digest) throw new Error('Digest not found');
   const members = getSqliteDatabase().prepare('SELECT inbox_item_id, notification_revision FROM proactive_digest_members WHERE digest_id = ?').all(id) as Array<{ inbox_item_id: string; notification_revision: number }>;
   return members.flatMap((member) => {
     const item = getInboxItem(member.inbox_item_id);
-    if (!item || !eligibleDigestItem(item, digest.occurrence_key.startsWith('daily:') ? 'daily' : 'quiet') || item.notificationRevision !== member.notification_revision) return [];
+    if (!item || item.withdrawnAt || (item.expiresAt && Date.parse(item.expiresAt) <= Date.now()) || (item.actionableUntil && Date.parse(item.actionableUntil) <= Date.now()) || item.notificationRevision !== member.notification_revision) return [];
+    if (forDelivery && !eligibleDigestItem(item, digest.occurrence_key.startsWith('daily:') ? 'daily' : 'quiet', false)) return [];
     const card = getCard(item.id, workspaceId);
-    return card.status === 'withdrawn' ? [] : [card];
+    return ['withdrawn', 'expired'].includes(card.status) ? [] : [card];
   });
 }
-function eligibleDigestItem(item: InboxItem, mode: 'daily' | 'quiet'): boolean {
+function eligibleDigestItem(item: InboxItem, mode: 'daily' | 'quiet', requireFresh = true): boolean {
   const policy = effectiveProactivePolicy(item.subscriptionId!);
   const daily = policy.preferences.digestEnabled || policy.settings.delivery === 'digest';
   if (mode === 'daily' ? !daily : policy.level === 'quiet' && !daily) return false;
   return Boolean(policy.enabled && policy.settings.delivery !== 'inbox' && !item.withdrawnAt
     && !['resolved', 'snoozed'].includes(item.status) && (!item.expiresAt || Date.parse(item.expiresAt) > Date.now())
-    && insightSourcesAuthorized(item.insightId));
+    && (!item.actionableUntil || Date.parse(item.actionableUntil) > Date.now())
+    && insightSourcesAuthorized(item.insightId) && !insightSourcesChanged(item.insightId) && (!requireFresh || insightSourcesFresh(item.insightId)));
 }
 
 export function reserveWorkspaceAttention(workspaceId: string, key: string, now = new Date()): boolean {
   const db = getSqliteDatabase();
   const preferences = proactivePreferences(workspaceId);
-  if (preferences.level === 'off' || (preferences.pausedUntil && Date.parse(preferences.pausedUntil) > now.getTime())) return false;
+  if (!proactiveChecksAllowed(preferences, now) || preferences.notificationsMuted) return false;
   if (db.prepare('SELECT 1 FROM proactive_notification_budget WHERE dedupe_key = ?').get(key)) return true;
   const day = localProactiveDay(now, preferences.timezone);
   const { count } = db.prepare('SELECT COUNT(*) AS count FROM proactive_notification_budget WHERE workspace_id = ? AND local_day = ?').get(workspaceId, day) as { count: number };
@@ -60,12 +61,27 @@ export function flushDueDigests(persist: (plan: NotificationPlan) => ProductNoti
     const notifications: ProductNotification[] = [];
     for (const group of groups) {
       const preferences = proactivePreferences(group.workspace_id);
+      if (!proactiveChecksAllowed(preferences, now)) {
+        db.prepare('UPDATE proactive_digest_queue SET due_at = ? WHERE workspace_id = ? AND mode = ? AND consumed_at IS NULL')
+          .run(new Date(now.getTime() + 60000).toISOString(), group.workspace_id, group.mode);
+        continue;
+      }
       const until = quietHoursEnd(preferences, now);
       if (until) { db.prepare('UPDATE proactive_digest_queue SET due_at = ? WHERE workspace_id = ? AND mode = ? AND consumed_at IS NULL').run(until.toISOString(), group.workspace_id, group.mode); continue; }
       const queued = db.prepare('SELECT inbox_item_id FROM proactive_digest_queue WHERE workspace_id = ? AND mode = ? AND consumed_at IS NULL AND due_at <= ? ORDER BY due_at LIMIT 500').all(group.workspace_id, group.mode, now.toISOString()) as Array<{ inbox_item_id: string }>;
+      const deferred = new Set<string>();
       const seen = new Set<string>();
       const items = queued.flatMap((row) => {
         const item = getInboxItem(row.inbox_item_id);
+        if (item && !item.withdrawnAt && !['read', 'resolved'].includes(item.status)
+          && (!item.actionableUntil || Date.parse(item.actionableUntil) > now.getTime())
+          && (!item.expiresAt || Date.parse(item.expiresAt) > now.getTime())
+          && insightSourcesAuthorized(item.insightId) && !insightSourcesChanged(item.insightId)
+          && !insightSourcesFresh(item.insightId)) {
+          deferred.add(item.id);
+          db.prepare('UPDATE proactive_digest_queue SET due_at = ? WHERE inbox_item_id = ?').run(new Date(now.getTime() + 60000).toISOString(), item.id);
+          return [];
+        }
         if (!item || !eligibleDigestItem(item, group.mode)) return [];
         const key = item.correlationKey ?? item.id;
         if (seen.has(key)) return [];
@@ -78,12 +94,12 @@ export function flushDueDigests(persist: (plan: NotificationPlan) => ProductNoti
         db.prepare('UPDATE proactive_digest_queue SET due_at = ? WHERE workspace_id = ? AND mode = ? AND consumed_at IS NULL').run(tomorrow.toISOString(), group.workspace_id, group.mode);
         continue;
       }
-      if (!items.length || (preferences.suppressWhileViewing && viewingProactiveCards(group.workspace_id, now.getTime()))) {
-        for (const row of queued) db.prepare('UPDATE proactive_digest_queue SET consumed_at = ? WHERE inbox_item_id = ?').run(now.toISOString(), row.inbox_item_id);
+      if (!items.length) {
+        for (const row of queued.filter(row => !deferred.has(row.inbox_item_id))) db.prepare('UPDATE proactive_digest_queue SET consumed_at = ? WHERE inbox_item_id = ?').run(now.toISOString(), row.inbox_item_id);
         continue;
       }
       const key = `proactive.digest:${group.workspace_id}:${occurrence}`;
-      if (!reserveWorkspaceAttention(group.workspace_id, key, now)) {
+      if (!preferences.notificationsMuted && !reserveWorkspaceAttention(group.workspace_id, key, now)) {
         db.prepare('UPDATE proactive_digest_queue SET due_at = ? WHERE workspace_id = ? AND mode = ? AND consumed_at IS NULL').run(nextDigestTime(preferences, new Date(now.getTime() + 60000)).toISOString(), group.workspace_id, group.mode);
         continue;
       }
@@ -99,7 +115,7 @@ export function flushDueDigests(persist: (plan: NotificationPlan) => ProductNoti
         db.prepare('UPDATE proactive_digests SET notification_id = ? WHERE digest_id = ?').run(notification.id, id);
         notifications.push(notification);
       }
-      for (const row of queued) db.prepare('UPDATE proactive_digest_queue SET consumed_at = ? WHERE inbox_item_id = ?').run(now.toISOString(), row.inbox_item_id);
+      for (const row of queued.filter(row => !deferred.has(row.inbox_item_id))) db.prepare('UPDATE proactive_digest_queue SET consumed_at = ? WHERE inbox_item_id = ?').run(now.toISOString(), row.inbox_item_id);
     }
     return notifications;
   });

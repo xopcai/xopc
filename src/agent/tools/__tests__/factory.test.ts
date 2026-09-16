@@ -14,6 +14,25 @@ import { runWithEmbeddedExecutionSession } from '../../embedded/execution-contex
 import { AgentToolsFactory } from '../factory.js';
 
 describe('AgentToolsFactory', () => {
+  it('routes heartbeat notifications through final-result delivery even with explicit destinations', async () => {
+    const publishOutbound = vi.fn();
+    const factory = new AgentToolsFactory({
+      workspace: '/tmp/xopc-tools-factory-test', bus: { publishOutbound } as unknown as MessageBus,
+      getCurrentContext: () => ({ channel: 'heartbeat', chatId: 'main', sessionKey: 'heartbeat:main', origin: { type: 'system', source: 'heartbeat' } }),
+      getConfig: () => ConfigSchema.parse({ messages: { tts: { enabled: true } } }),
+    });
+    for (const [name, params] of [
+      ['send_message', { content: 'Result', channel: 'weixin', chat_id: 'explicit' }],
+      ['send_media', { path: '/tmp/missing.png' }],
+      ['text_to_speech', { text: 'Result' }],
+    ] as const) {
+      const tool = factory.createCoreTools().find(tool => tool.name === name)!;
+      expect(tool).toBeDefined();
+      await expect(tool.execute('heartbeat-guard', params)).rejects.toThrow('policy-controlled delivery');
+    }
+    expect(publishOutbound).not.toHaveBeenCalled();
+  });
+
   it('does not register browser_use when browser runtime is disabled', () => {
     const factory = new AgentToolsFactory({
       workspace: '/tmp/xopc-tools-factory-test',
