@@ -3,6 +3,28 @@ import { ComputerModelAdapter, parseGuiPlusProposal, predictComputerStep, readCo
 
 const call = (arguments_: unknown) => `<tool_call>${JSON.stringify({ name: 'computer_use', arguments: arguments_ })}</tool_call>`;
 describe('GUI-Plus adapter', () => {
+  it('distinguishes a visual answer from a request for human intervention', () => {
+    expect(parseGuiPlusProposal(call({ action: 'answer', text: 'A blue button' }), 800, 600)).toEqual({ kind: 'answer', text: 'A blue button' });
+    expect(parseGuiPlusProposal(call({ action: 'interact', text: 'Please sign in' }), 800, 600)).toEqual({ kind: 'takeover', reason: 'Please sign in' });
+  });
+  it.each(['gui-plus-2026-02-26', 'structured-tools-v1'] as const)('reads without offering input tools using %s', async profile => {
+    const message = profile === 'structured-tools-v1'
+      ? { tool_calls: [{ function: { name: 'computer_observation', arguments: JSON.stringify({ text: 'A blue button' }) } }] }
+      : { content: call({ action: 'answer', text: 'A blue button' }) };
+    const fetch = vi.fn().mockResolvedValue(Response.json({ choices: [{ message }] }));
+    const adapter = new ComputerModelAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile }, fetch);
+    expect(await adapter.predict({ readOnly: true, goal: 'Describe the page', image: new Uint8Array([1]), mimeType: 'image/png', width: 800, height: 600, summary: '' }))
+      .toEqual({ kind: 'answer', text: 'A blue button' });
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.messages[0].content).toContain('Do not propose or perform actions');
+    expect(JSON.stringify(body.tools ?? [])).not.toMatch(/computer_action|typeText|pressKeys/);
+  });
+  it('rejects an action returned to a visual question', async () => {
+    const fetch = vi.fn().mockResolvedValue(Response.json({ choices: [{ message: { content: call({ action: 'left_click', coordinate: [500, 500] }) } }] }));
+    const adapter = new ComputerModelAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26' }, fetch);
+    await expect(adapter.predict({ readOnly: true, goal: 'Describe', image: new Uint8Array([1]), mimeType: 'image/png', width: 800, height: 600, summary: '' })).rejects.toThrow('READ_ONLY_MODEL_OUTPUT');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
   it.each([undefined, 'Authorization', 'authorization', 'AUTHORIZATION'])('sends exactly one bearer credential with header %s', async name => {
     const fetch = vi.fn().mockResolvedValue(Response.json({ choices: [{ message: { content: call({ action: 'wait', time: 0 }) } }] }));
     const adapter = new ComputerModelAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26',

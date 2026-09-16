@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ComputerBroker, type ComputerApproval, type ComputerDriver } from '../broker.js';
 
 const target = { appId: 'fixture', pid: 1, processIdentity: '1:100', windowId: '10', width: 800, height: 600, geometryRevision: '1' };
-const opening = { op: 'open' as const, sessionId: 's', owner: 'o', appId: 'fixture', model: { modelRef: 'ali/gui', profile: 'gui-plus-2026-02-26' as const, origin: 'https://example.com', runtimeLocation: 'local' as const } };
+const opening = { op: 'open' as const, sessionId: 's', owner: 'o', appRef: 'fixture', mode: 'control' as const, prepare: false, model: { modelRef: 'ali/gui', profile: 'gui-plus-2026-02-26' as const, origin: 'https://example.com', runtimeLocation: 'local' as const } };
 const brokers: ComputerBroker[] = [];
 function fixture(fullControl = false) {
   let settle: (approved: boolean) => void;
@@ -11,6 +11,7 @@ function fixture(fullControl = false) {
   let visible = true;
   const approvals: ComputerApproval[] = [];
   const driver: ComputerDriver = {
+    discover: vi.fn(async () => [{ appId: 'fixture', name: 'Fixture', running: true }]),
     resolveTarget: vi.fn(async () => target),
     observe: vi.fn(async () => ({ target, summary: 'fixture', stateDigest: digest, focusedEditableRef: 'field', image: new Uint8Array([1]), mimeType: 'image/png', imageWidth: 800, imageHeight: 600 })),
     perform: vi.fn(async () => {}), stop: vi.fn(async () => {}),
@@ -19,11 +20,15 @@ function fixture(fullControl = false) {
     approvals.push(request); return new Promise<boolean>((resolve) => { settle = resolve; });
   } }, { enabled: true }, () => clock);
   brokers.push(broker);
-  return { broker, driver, approvals, approve: async () => { settle!(true); await vi.waitFor(() => expect(driver.resolveTarget).toHaveBeenCalled()); },
+  let appRef: string;
+  return { broker, driver, approvals, open: async (mode: 'observe' | 'control' = 'control') => {
+    appRef ??= (await broker.command({ op: 'discover', sessionId: 'discovery', owner: 'o', query: 'Fixture' })).apps![0].appRef;
+    return broker.command({ ...opening, appRef, mode });
+  }, approve: async () => { settle!(true); await vi.waitFor(() => expect(driver.resolveTarget).toHaveBeenCalled()); },
     settle: (value: boolean) => settle!(value), move: () => { digest = 'b'; }, hide: () => { visible = false; }, advance: (ms: number) => { clock += ms; } };
 }
 async function ready(f: ReturnType<typeof fixture>) {
-  await f.broker.command(opening); await f.approve();
+  await f.open(); await f.approve();
   return f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' });
 }
 function envelope(observed: Awaited<ReturnType<typeof ready>>) {
@@ -33,9 +38,35 @@ function envelope(observed: Awaited<ReturnType<typeof ready>>) {
 }
 afterEach(async () => { await Promise.all(brokers.splice(0).map((b) => b.dispose())); });
 describe('desktop computer authority', () => {
+  it('binds discovery references to the requesting task and expires them', async () => {
+    const f = fixture(true);
+    const appRef = (await f.broker.command({ op: 'discover', owner: 'o', sessionId: 'd', query: 'Fixture' })).apps![0].appRef;
+    await expect(f.broker.command({ ...opening, appRef, owner: 'other' })).rejects.toThrow('APP_REF_EXPIRED');
+    f.advance(300_001);
+    await expect(f.broker.command({ ...opening, appRef })).rejects.toThrow('APP_REF_EXPIRED');
+    expect(f.driver.resolveTarget).not.toHaveBeenCalled();
+  });
+  it('enforces read-only in the host even with full control and a forged action', async () => {
+    const f = fixture(true); await f.open('observe');
+    const obs = await f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' });
+    await expect(f.broker.command({ op: 'act', sessionId: 's', owner: 'o', envelope: envelope(obs) })).rejects.toThrow('READ_ONLY');
+    expect(f.driver.perform).not.toHaveBeenCalled();
+  });
+  it('does not cancel another task when an unrelated invocation aborts', async () => {
+    const f = fixture(true); await f.open();
+    await f.broker.cancel({ op: 'discover', owner: 'other', sessionId: 'other', query: '' });
+    expect(f.broker.snapshot().status).toBe('ready');
+    await expect(f.broker.command({ op: 'discover', owner: 'other', sessionId: 'other', query: '' })).rejects.toThrow('BUSY');
+    expect(f.broker.snapshot().status).toBe('ready');
+  });
+  it('stops idle discovery resources without granting a session', async () => {
+    const f = fixture(); await f.broker.command({ op: 'discover', owner: 'o', sessionId: 'd', query: '' });
+    expect(f.driver.stop).toHaveBeenCalledOnce();
+    expect(f.approvals).toHaveLength(0); expect(f.broker.snapshot().status).toBe('idle');
+  });
   it('runs full-control sessions and actions without prompts or pending results', async () => {
     const f = fixture(true);
-    expect((await f.broker.command(opening)).status).toBe('ready');
+    expect((await f.open()).status).toBe('ready');
     const obs = await f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' });
     const result = await f.broker.command({ op: 'act', sessionId: 's', owner: 'o', envelope: envelope(obs) });
     expect(result.status).toBe('ready');
@@ -45,7 +76,7 @@ describe('desktop computer authority', () => {
     await expect(f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' })).rejects.toThrow('REVOKED');
   });
   it('retains visibility, ownership and stale-frame guards in full control', async () => {
-    const f = fixture(true); await f.broker.command(opening);
+    const f = fixture(true); await f.open();
     await expect(f.broker.command({ op: 'observe', sessionId: 's', owner: 'other' })).rejects.toThrow('NOT_FOUND');
     const obs = await f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' });
     f.move();
@@ -55,7 +86,7 @@ describe('desktop computer authority', () => {
     await expect(f.broker.command({ ...opening, sessionId: 'new' })).rejects.toThrow('LOCAL_UI_REQUIRED');
   });
   it('does not discover or capture a window before local consent', async () => {
-    const f = fixture(); expect((await f.broker.command(opening)).status).toBe('pending_authorization');
+    const f = fixture(); expect((await f.open()).status).toBe('pending_authorization');
     expect(f.driver.resolveTarget).not.toHaveBeenCalled(); expect(f.driver.observe).not.toHaveBeenCalled();
     await expect(f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' })).rejects.toThrow('NOT_READY');
   });

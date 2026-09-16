@@ -6,6 +6,31 @@ import type { DatabaseSync } from 'node:sqlite';
 import { requireNodeSqlite } from '../../../infra/node-sqlite.js';
 import { windowsDatabaseOwners } from './conversation-windows-owners.js';
 
+type BackupFileSyncOperations = {
+  open(path: string, flags: string): number;
+  fsync(fd: number): void;
+  close(fd: number): void;
+};
+
+const backupFileSyncOperations: BackupFileSyncOperations = {
+  open: openSync,
+  fsync: fsyncSync,
+  close: closeSync,
+};
+
+/** Windows requires write access on a file handle before FlushFileBuffers/fsync. */
+export function flushBackupFile(
+  backupPath: string,
+  operations: BackupFileSyncOperations = backupFileSyncOperations,
+): void {
+  const fd = operations.open(backupPath, 'r+');
+  try {
+    operations.fsync(fd);
+  } finally {
+    operations.close(fd);
+  }
+}
+
 function isSkippableProcError(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException).code;
   return code === 'ENOENT' || code === 'EACCES' || code === 'EPERM';
@@ -60,7 +85,6 @@ export function backupBeforeConversationCutover(db: DatabaseSync, databasePath: 
   } finally {
     snapshot.close();
   }
-  const fd = openSync(backupPath, 'r');
-  try { fsyncSync(fd); } finally { closeSync(fd); }
+  flushBackupFile(backupPath);
   return backupPath;
 }

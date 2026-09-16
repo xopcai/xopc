@@ -105,7 +105,7 @@ describe('local full control', () => {
     expect(desktop.snapshot().fullControl).toBe(true);
     await desktop.stopControl();
     expect(desktop.snapshot().controlPaused).toBe(true);
-    await expect(desktop.broker.command({ op: 'open', sessionId: 's', owner: 'o', appId: 'fixture', model: {
+    await expect(desktop.broker.command({ op: 'open', sessionId: 's', owner: 'o', appRef: 'fixture', mode: 'control', prepare: false, model: {
       modelRef: 'ali/gui', profile: 'gui-plus-2026-02-26', origin: 'https://example.com', runtimeLocation: 'local',
     } })).rejects.toThrow('LOCAL_UI_REQUIRED');
     desktop.resumeControl();

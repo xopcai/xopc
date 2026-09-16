@@ -3,7 +3,15 @@ import {
   XOPC_DB_BASELINE_SCHEMA_VERSION,
 } from '../migrations/runner.js';
 import { ensureSchemaMetaTable, setSchemaVersion } from '../schema-version.js';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -127,6 +135,20 @@ describe('openXopcDatabase', () => {
     expect(readSchemaVersionForTest(second.db)).toBe(XOPC_DB_SCHEMA_VERSION);
   });
 
+  it('reopens an already upgraded database without another cutover backup', () => {
+    const first = openXopcDatabase({ path: dbPath });
+    first.db.exec("CREATE TABLE upgrade_sentinel(value TEXT); INSERT INTO upgrade_sentinel VALUES ('preserved')");
+    closeXopcDatabase();
+
+    const beforeBackups = readdirSync(stateDir).filter((name) => name.includes('.pre-v178-')).toSorted();
+    const reopened = openXopcDatabase({ path: dbPath });
+
+    expect(readSchemaVersionForTest(reopened.db)).toBe(XOPC_DB_SCHEMA_VERSION);
+    expect(reopened.db.prepare('SELECT value FROM upgrade_sentinel').get()?.value).toBe('preserved');
+    expect(readdirSync(stateDir).filter((name) => name.includes('.pre-v178-')).toSorted()).toEqual(beforeBackups);
+    expect(beforeBackups).toEqual([]);
+  });
+
   it('sets restrictive permissions on database files', () => {
     openXopcDatabase({ path: dbPath });
     closeXopcDatabase();
@@ -144,10 +166,22 @@ describe('openXopcDatabase', () => {
     setSchemaVersion(old, XOPC_DB_BASELINE_SCHEMA_VERSION);
     applyPendingMigrations(old, { targetVersion: 177 });
     old.close();
+    const previousBackup = 'xopc.db.pre-v178-previous.bak';
+    const previousBackupPath = join(stateDir, previousBackup);
+    copyFileSync(dbPath, previousBackupPath);
+    const previousBackupContents = readFileSync(previousBackupPath);
     openXopcDatabase({ path: dbPath });
     const files = readdirSync(stateDir);
-    const backup = files.find((name) => name.startsWith('xopc.db.pre-v178-') && name.endsWith('.bak'));
+    const backup = files.find((name) => /^xopc\.db\.pre-v178-\d+\.bak$/.test(name));
     expect(backup).toBeTypeOf('string');
+    expect(readFileSync(previousBackupPath)).toEqual(previousBackupContents);
+    const previousSnapshot = new DatabaseSync(previousBackupPath, { readOnly: true });
+    try {
+      expect(previousSnapshot.prepare('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' });
+      expect(readSchemaVersionForTest(previousSnapshot)).toBe(177);
+    } finally {
+      previousSnapshot.close();
+    }
     const report = JSON.parse(readFileSync(join(stateDir, `${backup}.report.json`), 'utf8')) as Record<string, unknown>;
     expect(report).toMatchObject({ fromVersion: 177, targetVersion: 178, status: 'succeeded' });
     if (process.platform !== 'win32') {

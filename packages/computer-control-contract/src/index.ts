@@ -47,8 +47,14 @@ export interface ComputerReceipt {
   verification: 'semantic' | 'artifact' | 'visual' | 'none';
   errorCode?: string;
 }
+export const ComputerAppSchema = z.object({ appRef: Id, name: z.string().max(300), running: z.boolean() }).strict();
+export const ComputerWindowSchema = z.object({ windowRef: Id, title: z.string().max(300), visible: z.boolean() }).strict();
+export type ComputerApp = z.infer<typeof ComputerAppSchema>;
+export type ComputerWindow = z.infer<typeof ComputerWindowSchema>;
 export const ComputerCommandSchema = z.discriminatedUnion('op', [
-  z.object({ op: z.literal('open'), sessionId: Id, owner: Id, appId: Id, model: ComputerModelBindingSchema }).strict(),
+  z.object({ op: z.literal('discover'), sessionId: Id, owner: Id, query: z.string().max(200) }).strict(),
+  z.object({ op: z.literal('open'), sessionId: Id, owner: Id, appRef: Id, windowRef: Id.optional(),
+    mode: z.enum(['observe', 'control']), prepare: z.boolean(), model: ComputerModelBindingSchema }).strict(),
   z.object({ op: z.literal('status'), sessionId: Id, owner: Id }).strict(),
   z.object({ op: z.literal('observe'), sessionId: Id, owner: Id }).strict(),
   z.object({ op: z.literal('act'), sessionId: Id, owner: Id, envelope: ActionEnvelopeSchema }).strict(),
