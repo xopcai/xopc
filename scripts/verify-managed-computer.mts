@@ -47,5 +47,9 @@ try {
   if (proposal.kind !== 'action' || proposal.action.kind !== 'click'
     || proposal.action.point.x < 300 || proposal.action.point.x >= 500
     || proposal.action.point.y < 250 || proposal.action.point.y >= 330) throw new Error('Managed grounding assertion failed');
-  console.log(JSON.stringify({ status: 'passed', route: `xopc-cloud/${modelId}`, hostedModel: 'gui-plus-2026-02-26', fixture: 'synthetic-button', modelRequests, unpinnedRequest: 'rejected-409', screenshotOfPersonalDesktop: false }));
+  const observation = await predictComputerStep(adapter, { image, mimeType: 'image/png', width: 800, height: 600,
+    goal: 'Read the label on the blue button. Do not click or suggest an action.', summary: 'Synthetic test only.', readOnly: true }, () => { modelRequests++; });
+  if (observation.kind !== 'answer' || !/continue/i.test(observation.text)) throw new Error('Managed visual observation assertion failed');
+  console.log(JSON.stringify({ status: 'passed', route: `xopc-cloud/${modelId}`, hostedModel: 'gui-plus-2026-02-26', fixture: 'synthetic-button', modelRequests,
+    visualObservation: 'passed', unpinnedRequest: 'rejected-409', screenshotOfPersonalDesktop: false }));
 } finally { image.fill(0); }

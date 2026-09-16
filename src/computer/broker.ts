@@ -2,9 +2,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   ActionEnvelopeSchema, ComputerCommandSchema,
   type ComputerAction, type ComputerCommand, type ComputerModelBinding,
-  type ComputerObservation, type ComputerReceipt, type ComputerTarget,
+  type ComputerObservation, type ComputerReceipt, type ComputerTarget, type ComputerApp, type ComputerWindow,
 } from '@xopcai/computer-control-contract';
 import { ComputerConfigSchema, type ComputerConfig } from './config.js';
+import { ComputerTargetError } from './errors.js';
 
 export interface DriverObservation {
   target: ComputerTarget;
@@ -17,15 +18,16 @@ export interface DriverObservation {
   imageHeight: number;
 }
 export interface ComputerDriver {
+  discover(query: string, signal: AbortSignal): Promise<Array<{ appId: string; name: string; running: boolean }>>;
   validateAction?(action: ComputerAction): void;
-  resolveTarget(appId: string, signal: AbortSignal): Promise<ComputerTarget>;
+  resolveTarget(appId: string, signal: AbortSignal, options: { prepare: boolean; windowRef?: string }): Promise<ComputerTarget>;
   observe(target: ComputerTarget, signal: AbortSignal): Promise<DriverObservation>;
   perform(target: ComputerTarget, action: ComputerAction, signal: AbortSignal): Promise<void>;
   /** Must finish only after no further input can be dispatched. */
   stop(): Promise<void>;
 }
 export type ComputerApproval =
-  | { kind: 'session'; id: string; appId: string; model: ComputerModelBinding }
+  | { kind: 'session'; id: string; appId: string; appName: string; mode: 'observe' | 'control'; prepare: boolean; model: ComputerModelBinding }
   | { kind: 'action'; id: string; target: ComputerTarget; action: ComputerAction };
 export interface ComputerBrokerHost {
   requestApproval(request: ComputerApproval, signal: AbortSignal): Promise<boolean>;
@@ -36,12 +38,14 @@ export interface ComputerBrokerHost {
 type Status = 'pending_authorization' | 'ready' | 'running' | 'pending_action' | 'paused' | 'stopped';
 interface Session {
   id: string; owner: string; appId: string; model: ComputerModelBinding;
+  appRef: string; mode: 'observe' | 'control'; prepare: boolean; windowRef?: string;
   grantId: string; generation: number; status: Status; createdAt: number; touchedAt: number;
   controller: AbortController; target?: ComputerTarget; observation?: ComputerObservation;
   receipts: Map<string, { digest: string; receipt: ComputerReceipt }>;
   pending?: { envelope: import('@xopcai/computer-control-contract').ActionEnvelope; digest: string; approved?: boolean };
   actions: number;
   errorCode?: string;
+  windows?: ComputerWindow[];
 }
 export interface BrokerResult {
   status: Status;
@@ -52,6 +56,8 @@ export interface BrokerResult {
   observation?: ComputerObservation;
   receipt?: ComputerReceipt;
   errorCode?: string;
+  apps?: ComputerApp[];
+  windows?: ComputerWindow[];
   frame?: { bytes: Uint8Array; mimeType: 'image/png' | 'image/jpeg' };
 }
 
@@ -61,6 +67,8 @@ export class ComputerBroker {
   private session?: Session;
   private busy = false;
   private stopping?: Promise<void>;
+  private discovery?: { controller: AbortController; owner: string; id: string };
+  private readonly apps = new Map<string, { owner: string; appId: string; name: string; expires: number }>();
   private readonly config: ComputerConfig;
   private readonly timer: ReturnType<typeof setInterval>;
   constructor(private readonly driver: ComputerDriver, private readonly host: ComputerBrokerHost, config: Partial<ComputerConfig> = {}, private readonly now = Date.now) {
@@ -77,6 +85,7 @@ export class ComputerBroker {
   private result(s: Session): BrokerResult {
     return { sessionId: s.id, brokerEpoch: this.epoch, generation: s.generation, status: s.status,
       ...(s.errorCode ? { errorCode: s.errorCode } : {}),
+      ...(s.windows ? { windows: s.windows } : {}),
       ...(s.status === 'ready' ? { grantId: s.grantId } : {}) };
   }
   private active(s: Session): void {
@@ -84,6 +93,7 @@ export class ComputerBroker {
   }
   async command(raw: ComputerCommand): Promise<BrokerResult> {
     const command = ComputerCommandSchema.parse(raw);
+    if (command.op === 'discover') return this.discover(command);
     if (command.op === 'open') return this.open(command);
     const s = this.session;
     if (!s || s.id !== command.sessionId || s.owner !== command.owner) throw new Error('COMPUTER_SESSION_NOT_FOUND');
@@ -100,31 +110,58 @@ export class ComputerBroker {
       return await this.act(s, command.envelope);
     } finally { this.busy = false; this.host.onStateChange?.(); }
   }
+  private async discover(command: Extract<ComputerCommand, { op: 'discover' }>): Promise<BrokerResult> {
+    if (!this.config.enabled) throw new Error('COMPUTER_DISABLED');
+    if (!this.host.isVisible()) throw new Error('COMPUTER_LOCAL_UI_REQUIRED');
+    if (this.busy || this.discovery || this.stopping || (this.session && this.session.status !== 'stopped' && (this.session.owner !== command.owner || this.session.status !== 'ready'))) throw new Error('COMPUTER_BUSY');
+    const controller = new AbortController(); this.discovery = { controller, owner: command.owner, id: command.sessionId }; this.busy = true;
+    try {
+      const found = await this.driver.discover(command.query, controller.signal);
+      controller.signal.throwIfAborted();
+      if (!this.host.isVisible()) throw new Error('COMPUTER_LOCAL_UI_REQUIRED');
+      for (const [ref, app] of this.apps) if (app.owner === command.owner || app.expires <= this.now()) this.apps.delete(ref);
+      const apps = found.slice(0, 100).map(app => {
+        const appRef = randomUUID();
+        this.apps.set(appRef, { owner: command.owner, appId: app.appId, name: app.name, expires: this.now() + 300_000 });
+        return { appRef, name: app.name, running: app.running };
+      });
+      while (this.apps.size > 500) this.apps.delete(this.apps.keys().next().value!);
+      return { status: 'ready', sessionId: command.sessionId, brokerEpoch: this.epoch, generation: 0, apps };
+    } finally {
+      try { if (!this.session || this.session.status === 'stopped') await this.driver.stop(); }
+      finally { this.discovery = undefined; this.busy = false; }
+    }
+  }
   private async open(command: Extract<ComputerCommand, { op: 'open' }>): Promise<BrokerResult> {
     if (!this.config.enabled) throw new Error('COMPUTER_DISABLED');
     if (!this.host.isVisible()) throw new Error('COMPUTER_LOCAL_UI_REQUIRED');
     if (this.stopping) throw new Error('COMPUTER_STOPPING');
+    if (this.discovery || this.busy) throw new Error('COMPUTER_BUSY');
     if (this.session && this.session.status !== 'stopped') {
       const s = this.session;
-      if (s.id !== command.sessionId || s.owner !== command.owner || s.appId !== command.appId || JSON.stringify(s.model) !== JSON.stringify(command.model)) throw new Error('COMPUTER_DEVICE_BUSY');
+      if (s.id !== command.sessionId || s.owner !== command.owner || s.appRef !== command.appRef || s.mode !== command.mode || s.prepare !== command.prepare || s.windowRef !== command.windowRef || JSON.stringify(s.model) !== JSON.stringify(command.model)) throw new Error('COMPUTER_DEVICE_BUSY');
       return this.result(s);
     }
-    const s: Session = { id: command.sessionId, owner: command.owner, appId: command.appId, model: command.model,
+    const app = this.apps.get(command.appRef);
+    if (!app || app.owner !== command.owner || app.expires <= this.now()) throw new Error('COMPUTER_APP_REF_EXPIRED');
+    const s: Session = { id: command.sessionId, owner: command.owner, appId: app.appId, model: command.model,
+      appRef: command.appRef, mode: command.mode, prepare: command.prepare, windowRef: command.windowRef,
       grantId: randomUUID(), generation: 0, status: 'pending_authorization', createdAt: this.now(), touchedAt: this.now(),
       controller: new AbortController(), receipts: new Map(), actions: 0 };
     this.session = s;
-    // Consent precedes target discovery and screenshot capture; RPC itself stays short.
+    // Catalog metadata is discoverable, but window contents and preparation require consent.
     const fullControl = this.host.hasFullControl?.() === true;
-    const authorization = (fullControl ? Promise.resolve(true) : this.host.requestApproval({ kind: 'session', id: s.id, appId: s.appId, model: s.model }, s.controller.signal)).then(async (approved) => {
+    const authorization = (fullControl ? Promise.resolve(true) : this.host.requestApproval({ kind: 'session', id: s.id, appId: s.appId, appName: app.name, mode: s.mode, prepare: s.prepare, model: s.model }, s.controller.signal)).then(async (approved) => {
       this.active(s);
       if (!approved) { await this.stop(); return; }
-      s.target = await this.driver.resolveTarget(s.appId, s.controller.signal);
+      s.target = await this.driver.resolveTarget(s.appId, s.controller.signal, { prepare: s.prepare, windowRef: s.windowRef });
       this.active(s);
       if (s.target.appId !== s.appId) throw new Error('COMPUTER_TARGET_MISMATCH');
       s.status = 'ready'; s.touchedAt = this.now();
     }).catch((error) => {
       if (this.session !== s) return;
       s.errorCode = error instanceof Error && /^COMPUTER_[A-Z_]+$/.test(error.message) ? error.message : 'COMPUTER_NATIVE_SETUP_FAILED';
+      if (error instanceof ComputerTargetError) s.windows = error.windows;
       return this.stop().catch(() => {});
     }).finally(() => this.host.onStateChange?.());
     // Full control must return ready, not suspend the agent for a nonexistent dialog.
@@ -149,6 +186,7 @@ export class ComputerBroker {
     }
   }
   private async act(s: Session, raw: import('@xopcai/computer-control-contract').ActionEnvelope): Promise<BrokerResult> {
+    if (s.mode === 'observe') throw new Error('COMPUTER_READ_ONLY');
     const e = ActionEnvelopeSchema.parse(raw);
     if (e.sessionId !== s.id || e.brokerEpoch !== this.epoch || e.generation !== s.generation || e.grantId !== s.grantId || e.deadlineAt <= this.now()) throw new Error('COMPUTER_STALE_ACTION');
     const digest = createHash('sha256').update(JSON.stringify(e)).digest('hex');
@@ -204,6 +242,7 @@ export class ComputerBroker {
     }
   }
   stop(): Promise<void> {
+    this.discovery?.controller.abort();
     const s = this.session;
     if (s && s.status !== 'stopped') {
       s.generation++; s.status = 'stopped'; s.pending = undefined; s.observation = undefined;
@@ -211,6 +250,10 @@ export class ComputerBroker {
     }
     if (!this.stopping) this.stopping = this.driver.stop().finally(() => { this.stopping = undefined; this.host.onStateChange?.(); });
     return this.stopping;
+  }
+  async cancel(command: ComputerCommand): Promise<void> {
+    if ((this.session?.id === command.sessionId && this.session.owner === command.owner)
+      || (this.discovery?.id === command.sessionId && this.discovery.owner === command.owner)) await this.stop();
   }
   snapshot(): { status: Status | 'idle'; errorCode?: string; appId?: string } {
     return this.session ? { status: this.session.status, errorCode: this.session.errorCode, appId: this.session.appId } : { status: 'idle' };

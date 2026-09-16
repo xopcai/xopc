@@ -208,7 +208,8 @@ export class DesktopEndpointHost {
       { descriptor: structuredClone(COMPUTER_DESCRIPTOR) as any, execute: async (args, context) => {
         const command = ComputerCommandSchema.parse(args);
         if (this.controlPaused && command.op !== 'status' && command.op !== 'release') throw new Error('COMPUTER_CONTROL_PAUSED');
-        const abort = () => { void this.broker.stop(); };
+        const abort = () => { void this.broker.cancel(command); };
+        context.signal.throwIfAborted();
         context.signal.addEventListener('abort', abort, { once: true });
         try {
           const result = await this.broker.command(command);

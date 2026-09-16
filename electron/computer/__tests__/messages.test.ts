@@ -18,11 +18,11 @@ describe('computer dialog copy', () => {
     }
   });
   it.each(['zh', 'en'] as const)('preserves recipients and scope in %s session approval', language => {
-    const result = computerApprovalCopy(language, { kind: 'session', id: 's', appId: 'com.example.app', model: {
+    const result = computerApprovalCopy(language, { kind: 'session', id: 's', appId: 'com.example.app', appName: 'Example', mode: 'control', prepare: false, model: {
       modelRef: 'provider/gui', origin: 'https://router.example.com', upstreamOrigin: 'https://model.example.com',
       profile: 'structured-tools-v1', runtimeLocation: 'local',
     } });
-    expect(result.detail).toContain('com.example.app');
+    expect(result.detail).toContain('Example');
     expect(result.detail).toContain('provider/gui');
     expect(result.detail).toContain('https://router.example.com');
     expect(result.detail).toContain('https://model.example.com');
@@ -30,11 +30,13 @@ describe('computer dialog copy', () => {
     expect(result.detail).toContain(getComputerMessages(language).sessionPrivacy);
   });
   it('omits an absent upstream recipient', () => {
-    const result = computerApprovalCopy('en', { kind: 'session', id: 's', appId: 'app', model: {
+    const result = computerApprovalCopy('en', { kind: 'session', id: 's', appId: 'app', appName: 'Example', mode: 'observe', prepare: true, model: {
       modelRef: 'provider/gui', origin: 'https://model.example.com', profile: 'structured-tools-v1', runtimeLocation: 'local',
     } });
     expect(result.detail).not.toContain('Upstream');
     expect(result.detail).not.toContain('undefined');
+    expect(result.message).toBe(getComputerMessages('en').observeTitle);
+    expect(result.detail).toContain(getComputerMessages('en').prepare);
   });
   it.each(['zh', 'en'] as const)('keeps exact action parameters in %s readable descriptions', language => {
     const actions: ComputerAction[] = [
