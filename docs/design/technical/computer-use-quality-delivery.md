@@ -97,3 +97,38 @@ The measurements do not establish that this prompt/layout fixes format reliabili
 Do not mark the hosted gate green or silently replace the configured model. A
 larger fixed benchmark and an explicitly approved alternative hosted candidate
 are needed before selecting a production-quality default.
+
+## Managed screenshot admission fix, 2026-09-17
+
+The managed `observe(question)` failure was reproduced against
+`xopc-cloud/computer-gui-plus-preview` using a valid, generated 800x600 PNG.
+The service returned HTTP 400 / `max_input_tokens_exceeded` (request ID
+`ffcbf333-f4f5-47b8-ae21-bc1af5f68358`). Base64 request bytes were incorrectly
+included in the text-token estimate. A 5,385-byte encoding of the same fixture
+passed, confirming the encoding-size-dependent admission failure.
+
+The platform now budgets GUI-Plus image patches from validated dimensions,
+with the documented per-image ceiling, and retains text/schema estimates and
+the existing byte/pixel limits. Actual upstream usage still settles billing.
+The client retains HTTP status, allowlisted service codes and validated request
+IDs without exposing raw provider messages. Runtime tests verify that model
+rejections clear frames, close the session, never dispatch and never auto-retry.
+
+A local real-HTTP gateway with an in-memory database sent a 1.4 MB synthetic PNG
+through the actual Alibaba adapter. The initial read-only prompt produced bare
+JSON without protocol tags; adding the explicit answer-only function signature
+passed, both locally and on the staged deployment baseline. The production
+parser remains strict; malformed coordinates or answers are not repaired.
+
+With explicit deployment authorization, only the model-gateway service was
+updated. Backup: `/var/www/xopc-computer-deployments/computer-20260917052912590`.
+No database, nginx, other service, npm or mobile publication was changed.
+The staged baseline passed 209 tests and its typecheck/build. The local platform
+branch passed 219 tests; xopc passed 94 related tests and its typecheck.
+
+Post-deployment managed verification used a 1,923,767-byte PNG and passed visual
+observation plus grounded button prediction in three model requests (including
+the permitted format correction). Missing deployment pins still returned 409.
+No personal desktop was captured and no native input was executed. This validates
+the repaired model-service path, not overall task reliability; the earlier 8/9
+grounding benchmark and its remaining format failure are not superseded.
