@@ -17,8 +17,13 @@ try {
   if (createHash('sha256').update(cached).digest('hex') !== binarySha256) throw new Error('Cached driver checksum mismatch');
   console.log(`Verified cached Cua Driver ${version}`); process.exit(0);
 } catch (error) { if (error.code !== 'ENOENT') throw error; }
+// Shared CI runners can exhaust GitHub's anonymous API rate limit.
+const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
 const response = await fetch('https://api.github.com/repos/trycua/cua/releases/assets/566587560', {
-  headers: { Accept: 'application/octet-stream' }, signal: AbortSignal.timeout(120_000),
+  headers: {
+    Accept: 'application/octet-stream',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  }, signal: AbortSignal.timeout(120_000),
 });
 if (!response.ok) throw new Error(`Driver download failed: ${response.status}`);
 const bytes = Buffer.from(await response.arrayBuffer());
