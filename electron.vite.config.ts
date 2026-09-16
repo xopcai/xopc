@@ -43,6 +43,7 @@ export default defineConfig({
         external: ['electron', '@vscode/ripgrep', 'node-pty'],
         input: {
           index: resolve(__dirname, 'electron/main.ts'),
+          compatibility: resolve(__dirname, 'electron/gateway-compatibility.ts'),
         },
       },
     },

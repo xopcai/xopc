@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
   atomicWrite: vi.fn(),
   readControl: vi.fn(() => false),
   writeControl: vi.fn(),
+  compatibility: vi.fn(),
   clients: [] as Array<{ binding: RealtimeEndpointBinding; connect: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }>,
 }));
 vi.mock('electron', () => ({
@@ -27,7 +28,12 @@ vi.mock('../control-preferences.js', () => ({ readFullControl: state.readControl
 vi.mock('../../ipc/system-settings-ipc.js', () => ({ showEndpointNotification: vi.fn(), getElectronShellLanguage: () => state.language }));
 vi.mock('../../ipc/file-ipc.js', () => ({ MIME_TYPE_BY_EXTENSION: {} }));
 vi.mock('../cua-driver.js', () => ({ CuaComputerDriver: class { async stop() {} } }));
-vi.mock('@xopcai/realtime-client', () => ({ RealtimeClient: class {
+vi.mock('../../gateway-compatibility.js', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../gateway-compatibility.js')>(),
+  assertGatewayCompatibility: state.compatibility,
+}));
+vi.mock('@xopcai/realtime-client', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@xopcai/realtime-client')>(), RealtimeClient: class {
   binding!: RealtimeEndpointBinding;
   connect = vi.fn();
   disconnect = vi.fn(() => this.binding.onDisconnected?.());
@@ -36,6 +42,7 @@ vi.mock('@xopcai/realtime-client', () => ({ RealtimeClient: class {
 } }));
 
 import { DesktopEndpointHost, resolveComputerDriverPath } from '../desktop-host.js';
+import { RealtimeConnectionError } from '@xopcai/realtime-client';
 
 describe('computer driver paths', () => {
   it('resolves development cache relative to the bundled main entry, not app.getAppPath or cwd', () => {
@@ -59,6 +66,7 @@ function host() {
 }
 const revoked = () => Response.json({ error: { code: 'PRINCIPAL_REVOKED' } }, { status: 403 });
 beforeEach(() => {
+  state.compatibility.mockResolvedValue(undefined);
   state.language = 'zh';
   state.readControl.mockReturnValue(false);
   state.saved = undefined; state.visible = true; state.clients = [];
@@ -72,6 +80,21 @@ afterEach(async () => {
 });
 
 describe('local full control', () => {
+  it('reports incompatible gateways without registering or endlessly retrying', async () => {
+    vi.useFakeTimers();
+    state.compatibility.mockRejectedValue(new RealtimeConnectionError('GATEWAY_PROTOCOL_INCOMPATIBLE', false));
+    const request = vi.fn();
+    vi.stubGlobal('fetch', request);
+    try {
+      const desktop = host();
+      await desktop.start();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(desktop.snapshot().error).toContain('版本不兼容');
+      expect(state.compatibility).toHaveBeenCalledTimes(1);
+      expect(request).not.toHaveBeenCalled();
+      expect(state.clients).toHaveLength(0);
+    } finally { vi.useRealTimers(); }
+  });
   it('uses the current app language for each dialog without changing confirmation defaults', async () => {
     const desktop = host();
     await desktop.setFullControl(true);
