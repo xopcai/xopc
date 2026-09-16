@@ -1,7 +1,7 @@
 {
   "automations": {
     "title": "自动化",
-    "subtitle": "当事件发生时，运行智能体或工作流。",
+    "subtitle": "让助手按计划提醒、汇总和跟进，在这里查看结果。",
     "refresh": "刷新",
     "new": "新建",
     "createTitle": "创建自动化",
@@ -396,6 +396,49 @@
       "friday": "周五",
       "saturday": "周六",
       "sunday": "周日"
+    },
+    "experience": {
+      "scenes": "从一个场景开始",
+      "scenesDescription": "选择你希望助手完成的事，确认内容和时间即可开始。",
+      "discover": "探索场景",
+      "custom": "用一句话描述",
+      "settings": "任务设置",
+      "executionIssues": "执行异常",
+      "issuesDescription": "这些任务最近执行失败或超时，请查看原因。",
+      "noRuns": "尚未执行，首次结果会显示在这里。",
+      "viewResult": "查看完整结果",
+      "scheduleNote": "时间按网关时区执行；单次提醒使用你当前的本地时间。",
+      "source": "使用的数据",
+      "createEnabled": "创建并启用",
+      "deleteConfirm": "删除后将停止后续执行，确定删除这条自动化？",
+      "projectRequired": "请选择要跟进的项目。",
+      "futureTime": "请选择未来的提醒时间。"
+    },
+    "scenarios": {
+      "reminder": {
+        "name": "定时提醒",
+        "description": "在指定时间提醒你一件事。",
+        "instruction": "提醒我：填写你希望被提醒的事项。",
+        "source": "你填写的提醒内容"
+      },
+      "brief": {
+        "name": "每日简报",
+        "description": "汇总到期任务和项目阻塞事项。",
+        "instruction": "汇总今天到期和逾期的任务、项目阻塞事项，按优先级列出今天需要关注的事情。只使用可访问的任务和项目数据，缺失数据请明确说明。",
+        "source": "站内任务和项目"
+      },
+      "review": {
+        "name": "每周复盘",
+        "description": "整理本周成果和下周优先事项。",
+        "instruction": "整理最近一周完成的任务、项目进展、未解决的问题，建议下周最重要的三件事。只使用可访问的任务和项目数据，缺失数据请明确说明。",
+        "source": "站内任务和项目"
+      },
+      "followUp": {
+        "name": "项目跟进",
+        "description": "检查指定项目的延期和阻塞。",
+        "instruction": "检查所选项目的任务进度，列出延期、阻塞和需要我决策的事项，并给出下一步建议。只使用该项目可访问的数据，缺失数据请明确说明。",
+        "source": "站内任务和项目"
+      }
     }
   }
 }
