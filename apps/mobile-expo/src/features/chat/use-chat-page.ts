@@ -29,7 +29,6 @@ import { chatModelDisplayName, fetchChatModels, resolveEffectiveModelId, session
 import { queryKeys } from '../../query/keys';
 import { fetchTask, handoffTaskConversation } from '../../query/tasks';
 import { fetchProject, fetchProjectOperatingView } from '../../query/projects';
-import { fetchSessionsList, readPlaceholderSessions, type SessionsPage } from '../../query/sessions';
 import { getColors } from '../../theme';
 
 import { consumeContentChatIntake } from '../content-intake/content-chat-handoff';
@@ -51,7 +50,6 @@ import { reconcileMessageRows } from './reconcile-message-rows';
 import { sessionContainsFinalAssistant } from './session-refresh-confirmation';
 import { takeNewChatConversationId } from './session-prefetch';
 import { buildMobileWelcomeModel } from './mobile-welcome-starters';
-import { resumableRootChatSessions } from './chat-root-session';
 import { useChatPageBootstrap } from './use-chat-page-bootstrap';
 import { useChatSession } from './use-chat-session';
 import { useSessionHistory } from './use-session-history';
@@ -127,18 +125,6 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   // ── Bootstrap ────────────────────────────────────────────
   // Shared ref for session key — bootstrap writes here, chatSession reads it.
   const activeConversationIdRef = useRef('');
-  const recentSessionsQuery = useQuery({
-    queryKey: [...queryKeys.sessionsRecent, activeGatewayId ?? ''],
-    queryFn: () => fetchSessionsList({ limit: 6, offset: 0, channel: 'webchat' }),
-    enabled: root && Boolean(activeGatewayId),
-    placeholderData: () => {
-      const items = resumableRootChatSessions(readPlaceholderSessions() ?? []).slice(0, 6);
-      if (!items?.length) return undefined;
-      return { items, total: items.length, limit: 6, offset: 0, hasMore: false } satisfies SessionsPage;
-    },
-    staleTime: 30_000,
-  });
-
   const bootstrap = useChatPageBootstrap({
     scopeKey: activeGatewayId ?? '',
     urlConversationId,
@@ -599,7 +585,6 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     agentsQuery,
     modelsQuery,
     sessionHistoryQuery,
-    recentSessionsQuery,
     currentSessionAgentId,
     sessionContext,
     effectiveModelId,

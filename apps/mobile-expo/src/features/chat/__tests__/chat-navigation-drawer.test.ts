@@ -10,6 +10,14 @@ const state = vi.hoisted(() => ({
   open: vi.fn(), close: vi.fn(), dismissKeyboard: vi.fn(), remove: vi.fn(),
 }));
 vi.mock('expo-router', () => ({ useRouter: () => ({ push: vi.fn() }), useFocusEffect: (fn: () => () => void) => useEffect(fn, [fn]) }));
+vi.mock('@shopify/flash-list', () => ({ FlashList: () => null }));
+vi.mock('@tanstack/react-query', () => ({
+  useQuery: () => ({ data: undefined }),
+  useInfiniteQuery: () => ({
+    data: undefined, hasNextPage: false, isFetchingNextPage: false, isLoading: false,
+    fetchNextPage: vi.fn(),
+  }),
+}));
 vi.mock('react-native', () => ({
   BackHandler: { addEventListener: (_: string, fn: () => boolean) => { state.back = fn; return { remove: state.remove }; } },
   Keyboard: { dismiss: state.dismissKeyboard },
@@ -22,9 +30,13 @@ vi.mock('react-native-paper', () => ({ Icon: () => null, Text: () => null }));
 vi.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) }));
 vi.mock('../../../theme', async () => {
   const tokens = await import('../../../theme/tokens');
-  return { ...tokens, useTheme: () => ({ colors: tokens.colors.light }) };
+  return { ...tokens, useTheme: () => ({ colors: tokens.colors.light, elevation: tokens.elevations.light }) };
 });
-vi.mock('../../../i18n/messages', () => ({ useMessages: () => ({ drawer: {}, common: {} }) }));
+vi.mock('../../../i18n/messages', () => ({ useMessages: () => ({ drawer: {}, common: {}, sessions: { untitled: 'Untitled' } }) }));
+vi.mock('../../../stores/gateway-store', () => ({ useGatewayStore: (selector: (state: { activeGatewayId: string }) => unknown) => selector({ activeGatewayId: 'gateway' }) }));
+vi.mock('../../../query/projects', () => ({ fetchProjects: vi.fn() }));
+vi.mock('../../../query/sessions', () => ({ fetchSessionsList: vi.fn() }));
+vi.mock('../../../query/user-profile', () => ({ fetchUserProfileSummary: vi.fn() }));
 vi.mock('react-native-gesture-handler/ReanimatedDrawerLayout', () => ({
   DrawerPosition: { LEFT: 0 }, DrawerType: { FRONT: 0 }, DrawerState: { DRAGGING: 1 },
   DrawerLockMode: { UNLOCKED: 0, LOCKED_CLOSED: 1 }, DrawerKeyboardDismissMode: { ON_DRAG: 1 },
@@ -45,7 +57,7 @@ async function mount(swipeEnabled = true) {
   const ref = createRef<ChatNavigationDrawerHandle>();
   const onInteraction = vi.fn();
   await act(async () => root.render(createElement(ChatNavigationDrawer, {
-    ref, swipeEnabled, onInteraction, currentConversationId: '', recentSessions: [],
+    ref, swipeEnabled, onInteraction, currentConversationId: '',
     onSessionSelect: vi.fn(), onNewChat: vi.fn(), children: createElement('span', null, 'Chat'),
   })));
   return { ref, onInteraction };
