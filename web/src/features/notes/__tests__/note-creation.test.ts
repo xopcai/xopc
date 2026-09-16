@@ -12,7 +12,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(createNote).mockResolvedValue({ id: 'note-1' } as never);
   vi.mocked(updateNote).mockResolvedValue({ id: 'note-1' } as never);
-  vi.mocked(openNoteChat).mockResolvedValue({ sessionKey: 'agent:main:note', reused: false });
+  vi.mocked(openNoteChat).mockResolvedValue({ conversationId: 'agent:main:note', reused: false });
 });
 
 function draft(): NoteCreationDraft {
@@ -39,7 +39,7 @@ describe('agent note creation', () => {
 
   it('reuses the saved note if opening its agent conversation fails', async () => {
     const pending = { ...draft(), files: [] };
-    vi.mocked(openNoteChat).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ sessionKey: 'chat', reused: true });
+    vi.mocked(openNoteChat).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ conversationId: 'chat', reused: true });
     await expect(prepareAgentNote(pending)).rejects.toThrow('offline');
     await prepareAgentNote(pending);
     expect(createNote).toHaveBeenCalledTimes(1);

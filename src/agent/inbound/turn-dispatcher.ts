@@ -61,10 +61,10 @@ export interface TurnDispatcherConfig {
   getConfig: () => Config | undefined;
   /** Strict accessor — required for direct-turn paths that must have a config. */
   requireConfig: () => Config;
-  resolveSessionEndpoint: (sessionKey: string) => Promise<{ channel: string; chatId: string }>;
+  resolveSessionEndpoint: (conversationId: string) => Promise<{ channel: string; chatId: string }>;
   /** Establish per-session context (also creates the Agent + subscribes to events). */
   initSessionContext: (
-    sessionKey: string,
+    conversationId: string,
     channel: string,
     chatId: string,
     origin: TurnOrigin,
@@ -72,15 +72,15 @@ export interface TurnDispatcherConfig {
   /** Per-session config hydration: workspace, model, thinking. */
   sessionHydrator: SessionHydrator;
   prepareInboundAttachments: (
-    sessionKey: string,
+    conversationId: string,
     attachments?: InboundAttachmentInput[],
   ) => Promise<MediaRef[] | undefined>;
-  enqueueMaybeAutoTitleAfterPersist: (sessionKey: string) => void;
-  enqueueProvisionalSessionTitle?: (sessionKey: string, userText: string) => void;
+  enqueueMaybeAutoTitleAfterPersist: (conversationId: string) => void;
+  enqueueProvisionalSessionTitle?: (conversationId: string, userText: string) => void;
   endDirectRequestContext: () => void;
   /** Gateway hook fired after assistant text lands on disk (UI refetch). */
-  onSessionTranscriptUpdated?: (sessionKey: string) => void;
-  resetSession: (sessionKey: string) => Promise<{ sessionId: string; previousSessionId: string } | null>;
+  onSessionTranscriptUpdated?: (conversationId: string) => void;
+  resetSession: (conversationId: string) => Promise<{ transcriptId: string; previousTranscriptId: string } | null>;
   sourceContextResolver?: AgentSourceContextResolver;
 }
 
@@ -105,7 +105,7 @@ export class TurnDispatcher {
   /** One-shot direct turn (CLI / embedded TUI). */
   processDirect(
     content: string,
-    sessionKey: string,
+    conversationId: string,
     origin: TurnOrigin,
     attachments?: DirectAttachment[],
     thinking?: string,
@@ -113,7 +113,7 @@ export class TurnDispatcher {
   ): Promise<string> {
     return runProcessDirect(this.buildOneShotDeps(), {
       content,
-      sessionKey,
+      conversationId,
       origin,
       attachments,
       thinking,
@@ -126,7 +126,7 @@ export class TurnDispatcher {
   /** Streaming direct turn (webchat realtime / CLI streaming). */
   async *processDirectStreaming(
     content: string,
-    sessionKey: string,
+    conversationId: string,
     origin: TurnOrigin,
     attachments?: DirectAttachment[],
     thinking?: string,
@@ -134,7 +134,7 @@ export class TurnDispatcher {
   ): AsyncGenerator<ProcessDirectStreamEvent, void, unknown> {
     yield* runProcessDirectStreaming(this.buildStreamingDeps(), {
       content,
-      sessionKey,
+      conversationId,
       origin,
       attachments,
       thinking,
@@ -147,17 +147,17 @@ export class TurnDispatcher {
 
   /** Push an out-of-band event into the live webchat stream for a session. */
   enqueueWebchatStreamEvent(
-    sessionKey: string,
+    conversationId: string,
     event: { type: string; [key: string]: unknown },
   ): void {
-    const pub = this.cfg.sessionState.getWebchatPublisher(sessionKey);
+    const pub = this.cfg.sessionState.getWebchatPublisher(conversationId);
     if (pub) {
       pub(event);
     }
   }
 
   /** Stream assistant text to live webchat session + notify transcript listeners. */
-  notifyWebchatTranscriptAppend(sessionKey: string, assistantText: string): void {
+  notifyWebchatTranscriptAppend(conversationId: string, assistantText: string): void {
     const trimmed = assistantText.trim();
     if (trimmed) {
       const message = {
@@ -165,11 +165,11 @@ export class TurnDispatcher {
         content: [{ type: 'text', text: trimmed }],
         timestamp: Date.now(),
       };
-      this.enqueueWebchatStreamEvent(sessionKey, { type: 'message_start', message });
-      this.enqueueWebchatStreamEvent(sessionKey, { type: 'message_update', message });
-      this.enqueueWebchatStreamEvent(sessionKey, { type: 'message_end', message });
+      this.enqueueWebchatStreamEvent(conversationId, { type: 'message_start', message });
+      this.enqueueWebchatStreamEvent(conversationId, { type: 'message_update', message });
+      this.enqueueWebchatStreamEvent(conversationId, { type: 'message_end', message });
     }
-    this.cfg.onSessionTranscriptUpdated?.(sessionKey);
+    this.cfg.onSessionTranscriptUpdated?.(conversationId);
   }
 
   /**
@@ -177,13 +177,13 @@ export class TurnDispatcher {
    * after current tool work, before the next LLM call). See `Agent.steer`
    * in `@earendil-works/pi-agent-core`.
    */
-  async steerWebchatSession(sessionKey: string, text: string): Promise<boolean> {
+  async steerWebchatSession(conversationId: string, text: string): Promise<boolean> {
     const trimmed = text.trim();
     if (!trimmed) return false;
     try {
-      return await queueEmbeddedSteer(sessionKey, trimmed);
+      return await queueEmbeddedSteer(conversationId, trimmed);
     } catch (err) {
-      this.log.warn({ err, sessionKey }, 'steerWebchatSession failed');
+      this.log.warn({ err, conversationId }, 'steerWebchatSession failed');
       return false;
     }
   }
@@ -211,7 +211,7 @@ export class TurnDispatcher {
         buildDirectUserMessageContent({
           content: text,
           attachments: prepared,
-          sessionKey: sk,
+          conversationId: sk,
           config: c.requireConfig(),
           agentManager: c.agentManager,
           modelManager: c.modelManager,
@@ -236,9 +236,9 @@ export class TurnDispatcher {
           {
             config: c.getConfig(),
             sessionStore: c.sessionStore,
-            getLastAssistantPlainText: (sessionKey) =>
-              c.sessionState.getLastAssistantText(sessionKey) ??
-              c.agentManager.getLastAssistantContent(sessionKey) ??
+            getLastAssistantPlainText: (conversationId) =>
+              c.sessionState.getLastAssistantText(conversationId) ??
+              c.agentManager.getLastAssistantContent(conversationId) ??
               '',
             log: this.log,
           },

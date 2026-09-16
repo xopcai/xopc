@@ -33,7 +33,7 @@ export function getCard(id: string, workspaceId: string): ProactiveCard {
     ...(insight.artifact ? { artifact: insight.artifact } : {}),
     ...(insight.proposedAction && insight.actionStatus === 'approval_required' ? { taskDraft: insight.proposedAction.input } : {}),
     ...(typeof insight.actionResult?.taskId === 'string' ? { followUp: getSqliteDatabase().prepare('SELECT task_id AS taskId, title, phase, resolution FROM tasks WHERE task_id = ?').get(insight.actionResult.taskId) as ProactiveCard['followUp'] } : {}),
-    ...(insight.scenarioKey === 'communication_follow_up' ? { communication: getSqliteDatabase().prepare(`SELECT f.id, f.session_key AS sessionKey
+    ...(insight.scenarioKey === 'communication_follow_up' ? { communication: getSqliteDatabase().prepare(`SELECT f.id, f.conversation_id AS conversationId
       FROM proactive_runs r JOIN proactive_context_snapshots c ON c.snapshot_id = r.context_snapshot_id
       JOIN proactive_follow_ups f ON f.id = json_extract(c.content_json, '$.follow_up.followUpId') WHERE r.run_id = (SELECT run_id FROM proactive_insights WHERE insight_id = ?)`).get(item.insightId) as ProactiveCard['communication'] } : {}),
     relatedCardIds: item.correlationKey ? (getSqliteDatabase().prepare('SELECT inbox_item_id AS id FROM proactive_inbox_items WHERE correlation_key = ? AND inbox_item_id <> ? AND withdrawn_at IS NULL').all(item.correlationKey, id) as Array<{ id: string }>).map((row) => row.id) : [],

@@ -13,7 +13,7 @@ import {
   setSessionTaskPlan,
 } from '../index.js';
 
-const SESSION_KEY = 'agent:main:webchat:default:dm:todo-test';
+const CONVERSATION_ID = "aabf5ef6-72f6-4d10-8127-43ae78e9449e";
 const CWD = '/tmp/workspace';
 
 describe('session task plan repository', () => {
@@ -25,7 +25,7 @@ describe('session task plan repository', () => {
     databasePath = join(stateDir, 'xopc.db');
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: databasePath });
-    ensureSessionRecord(SESSION_KEY, CWD);
+    ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: "main" });
   });
 
   afterEach(() => {
@@ -36,7 +36,7 @@ describe('session task plan repository', () => {
 
   it('persists the current todo snapshot across database reopen', () => {
     const first = setSessionTaskPlan({
-      sessionKey: SESSION_KEY,
+      conversationId: CONVERSATION_ID,
       items: [
         { id: 'inspect', content: 'Inspect', status: 'completed' },
         { id: 'ship', content: 'Ship', status: 'in_progress' },
@@ -49,7 +49,7 @@ describe('session task plan repository', () => {
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: databasePath });
 
-    expect(getSessionTaskPlan(SESSION_KEY)).toMatchObject({
+    expect(getSessionTaskPlan(CONVERSATION_ID)).toMatchObject({
       revision: 1,
       items: [
         { id: 'inspect', content: 'Inspect', status: 'completed' },
@@ -60,28 +60,28 @@ describe('session task plan repository', () => {
 
   it('increments revisions and starts empty after session reset', () => {
     setSessionTaskPlan({
-      sessionKey: SESSION_KEY,
+      conversationId: CONVERSATION_ID,
       items: [{ id: 'one', content: 'One', status: 'pending' }],
     });
     expect(setSessionTaskPlan({
-      sessionKey: SESSION_KEY,
+      conversationId: CONVERSATION_ID,
       items: [{ id: 'one', content: 'One', status: 'in_progress' }],
     })?.revision).toBe(2);
 
-    resetSessionRecord(SESSION_KEY, CWD);
-    expect(getSessionTaskPlan(SESSION_KEY)).toBeUndefined();
+    resetSessionRecord(CONVERSATION_ID, CWD);
+    expect(getSessionTaskPlan(CONVERSATION_ID)).toBeUndefined();
   });
 
   it('removes the active projection when every item is terminal', () => {
     setSessionTaskPlan({
-      sessionKey: SESSION_KEY,
+      conversationId: CONVERSATION_ID,
       items: [{ id: 'one', content: 'One', status: 'in_progress' }],
     });
 
     expect(setSessionTaskPlan({
-      sessionKey: SESSION_KEY,
+      conversationId: CONVERSATION_ID,
       items: [{ id: 'one', content: 'One', status: 'completed' }],
     })).toBeUndefined();
-    expect(getSessionTaskPlan(SESSION_KEY)).toBeUndefined();
+    expect(getSessionTaskPlan(CONVERSATION_ID)).toBeUndefined();
   });
 });

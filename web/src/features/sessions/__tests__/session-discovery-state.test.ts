@@ -9,7 +9,7 @@ describe('session discovery query', () => {
     expect(query.search).toBe('older conversation');
     expect(query.updatedAfter).toBeUndefined();
     expect(query.includePinned).toBeUndefined();
-    expect(query.includeSessionKey).toBeUndefined();
+    expect(query.includeConversationId).toBeUndefined();
     expect(query.excludeArchived).toBe(true);
     expect(query.purposes).toContain('system');
   });

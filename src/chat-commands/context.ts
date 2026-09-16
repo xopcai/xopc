@@ -38,7 +38,7 @@ import { getProjectForSession } from '../projects/workspace.js';
 const log = createLogger('CommandContext');
 
 export interface CommandContextDeps {
-  sessionKey: string;
+  conversationId: string;
   source: MessageSource;
   channelId: string;
   chatId: string;
@@ -51,16 +51,16 @@ export interface CommandContextDeps {
   sessionStore: SessionStore;
   sessionConfigStore?: SessionConfigStore;
   /** After persisting session thinking, sync pi-agent in-memory state */
-  applySessionThinkingLevel?: (sessionKey: string, level: ThinkLevel) => void;
+  applySessionThinkingLevel?: (conversationId: string, level: ThinkLevel) => void;
   // Callbacks for platform-specific operations
   replyHandler: (text: string, options?: ReplyOptions) => Promise<void>;
   componentHandler?: (component: UIComponent) => Promise<void>;
   typingHandler?: (typing: boolean) => Promise<void>;
   supportedFeatures: PlatformFeature[];
   /** Called after session files are removed so in-memory agents match disk */
-  invalidateAgentSession?: (sessionKey: string) => void;
+  invalidateAgentSession?: (conversationId: string) => void;
   /** Reset session in place (archive + new session id); optional — falls back to clearSession */
-  resetSession?: (sessionKey: string) => Promise<void>;
+  resetSession?: (conversationId: string) => Promise<void>;
   // Model management (optional, will be injected)
   getCurrentModel?: () => string;
   switchModel?: (modelId: string) => Promise<boolean>;
@@ -74,12 +74,12 @@ export interface CommandContextDeps {
   installSkillFromSource?: CommandContext['installSkillFromSource'];
 
   compactSession?: (
-    sessionKey: string,
+    conversationId: string,
     options?: { instructions?: string; force?: boolean },
   ) => Promise<CompactionResult>;
 
   btwQuery?: (
-    sessionKey: string,
+    conversationId: string,
     question: string,
     options?: BtwQueryOptions,
   ) => Promise<{ text: string; error?: string }>;
@@ -87,7 +87,7 @@ export interface CommandContextDeps {
   emitEvent?: (event: CommandStreamEvent) => void | Promise<void>;
 
   getSessionContextReport?: (
-    sessionKey: string,
+    conversationId: string,
     mode: 'list' | 'detail' | 'json',
   ) => Promise<string>;
 
@@ -95,7 +95,7 @@ export interface CommandContextDeps {
 }
 
 export class CommandContextImpl implements CommandContext {
-  readonly sessionKey: string;
+  readonly conversationId: string;
   readonly source: MessageSource;
   readonly channelId: string;
   readonly chatId: string;
@@ -112,7 +112,7 @@ export class CommandContextImpl implements CommandContext {
   private deps: CommandContextDeps;
 
   constructor(deps: CommandContextDeps) {
-    this.sessionKey = deps.sessionKey;
+    this.conversationId = deps.conversationId;
     this.source = deps.source;
     this.channelId = deps.channelId;
     this.chatId = deps.chatId;
@@ -181,18 +181,18 @@ export class CommandContextImpl implements CommandContext {
   // === Session Management ===
 
   async getSession(): Promise<AgentMessage[]> {
-    return this.deps.sessionStore.load(this.sessionKey);
+    return this.deps.sessionStore.load(this.conversationId);
   }
 
   async resetSession(): Promise<void> {
     if (this.deps.resetSession) {
-      await this.deps.resetSession(this.sessionKey);
+      await this.deps.resetSession(this.conversationId);
     } else if (typeof this.deps.sessionStore.reset === 'function') {
-      const task = await this.deps.sessionStore.reset(this.sessionKey);
+      const task = await this.deps.sessionStore.reset(this.conversationId);
       if (!task) {
         throw new Error('Session not found');
       }
-      this.deps.invalidateAgentSession?.(this.sessionKey);
+      this.deps.invalidateAgentSession?.(this.conversationId);
     } else {
       await this.clearSession();
       return;
@@ -206,20 +206,20 @@ export class CommandContextImpl implements CommandContext {
       metadata: this.outboundMetadata(),
     });
 
-    log.info({ sessionKey: this.sessionKey }, 'Session reset');
+    log.info({ conversationId: this.conversationId }, 'Session reset');
   }
 
   async clearSession(): Promise<void> {
     // Archive first if has messages
     const messages = await this.getSession();
     if (messages.length > 0) {
-      await this.deps.sessionStore.archive(this.sessionKey);
-      log.info({ sessionKey: this.sessionKey, messageCount: messages.length }, 'Session archived');
+      await this.deps.sessionStore.archive(this.conversationId);
+      log.info({ conversationId: this.conversationId, messageCount: messages.length }, 'Session archived');
     }
 
     // Delete session
-    await this.deps.sessionStore.deleteSession(this.sessionKey);
-    this.deps.invalidateAgentSession?.(this.sessionKey);
+    await this.deps.sessionStore.deleteSession(this.conversationId);
+    this.deps.invalidateAgentSession?.(this.conversationId);
 
     // Publish outbound message to confirm
     await this.deps.bus.publishOutbound({
@@ -230,12 +230,12 @@ export class CommandContextImpl implements CommandContext {
       metadata: this.outboundMetadata(),
     });
 
-    log.info({ sessionKey: this.sessionKey }, 'Session cleared');
+    log.info({ conversationId: this.conversationId }, 'Session cleared');
   }
 
   async archiveSession(): Promise<void> {
-    await this.deps.sessionStore.archive(this.sessionKey);
-    log.info({ sessionKey: this.sessionKey }, 'Session archived');
+    await this.deps.sessionStore.archive(this.conversationId);
+    log.info({ conversationId: this.conversationId }, 'Session archived');
   }
 
   async listSessions(): Promise<SessionInfo[]> {
@@ -243,8 +243,8 @@ export class CommandContextImpl implements CommandContext {
     // For now, return current session only
     const messages = await this.getSession();
     return [{
-      key: this.sessionKey,
-      name: getSessionDisplayName(this.sessionKey),
+      key: this.conversationId,
+      name: getSessionDisplayName(this.conversationId),
       messageCount: messages.length,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -252,13 +252,13 @@ export class CommandContextImpl implements CommandContext {
     }];
   }
 
-  async switchSession(sessionKey: string): Promise<void> {
+  async switchSession(conversationId: string): Promise<void> {
     // This is mainly for CLI/Web UI where you can switch between sessions
     // For Telegram, each chat has its own session
-    log.info({ from: this.sessionKey, to: sessionKey }, 'Session switch requested');
+    log.info({ from: this.conversationId, to: conversationId }, 'Session switch requested');
     
     // Note: In the current architecture, switching session means
-    // the next message will use a different sessionKey
+    // the next message will use a different conversationId
     // The actual switch happens at the adapter level
   }
 
@@ -372,7 +372,7 @@ export class CommandContextImpl implements CommandContext {
   async getThinkingLevel(): Promise<ThinkLevel | undefined> {
     const configStore = this.deps.sessionConfigStore;
     if (configStore) {
-      const sessionConfig = await configStore.get(this.sessionKey);
+      const sessionConfig = await configStore.get(this.conversationId);
       if (sessionConfig?.thinkingLevel) {
         return sessionConfig.thinkingLevel;
       }
@@ -386,20 +386,20 @@ export class CommandContextImpl implements CommandContext {
   async setThinkingLevel(level: ThinkLevel): Promise<void> {
     const configStore = this.deps.sessionConfigStore;
     if (configStore) {
-      await configStore.update(this.sessionKey, { thinkingLevel: level });
+      await configStore.update(this.conversationId, { thinkingLevel: level });
     }
-    this.deps.applySessionThinkingLevel?.(this.sessionKey, level);
+    this.deps.applySessionThinkingLevel?.(this.conversationId, level);
   }
 
   syncAgentThinkingLevel(level: ThinkLevel): void {
-    this.deps.applySessionThinkingLevel?.(this.sessionKey, level);
+    this.deps.applySessionThinkingLevel?.(this.conversationId, level);
   }
 
   async compactSession(options?: { instructions?: string; force?: boolean }): Promise<CompactSessionResult | null> {
     if (!this.deps.compactSession) {
       return null;
     }
-    const r = await this.deps.compactSession(this.sessionKey, options);
+    const r = await this.deps.compactSession(this.conversationId, options);
     return {
       compacted: r.compacted,
       tokensBefore: r.tokensBefore,
@@ -412,7 +412,7 @@ export class CommandContextImpl implements CommandContext {
     if (!this.deps.btwQuery) {
       return { text: '', error: 'Side questions are not available in this environment.' };
     }
-    return this.deps.btwQuery(this.sessionKey, question, options);
+    return this.deps.btwQuery(this.conversationId, question, options);
   }
 
   emitEvent(event: CommandStreamEvent): void | Promise<void> {
@@ -421,22 +421,22 @@ export class CommandContextImpl implements CommandContext {
 
   async exportSessionToWorkspace(format: 'markdown' | 'html' | 'json'): Promise<{ path: string }> {
     const exportFmt = format === 'json' ? 'json' : 'markdown';
-    let body = await this.deps.sessionStore.exportSession(this.sessionKey, exportFmt);
+    let body = await this.deps.sessionStore.exportSession(this.conversationId, exportFmt);
     if (format === 'html') {
-      body = wrapMarkdownExportAsHtml(`Session ${this.sessionKey}`, body);
+      body = wrapMarkdownExportAsHtml(`Session ${this.conversationId}`, body);
     }
     const sc = this.deps.sessionConfigStore
-      ? await this.deps.sessionConfigStore.get(this.sessionKey)
+      ? await this.deps.sessionConfigStore.get(this.conversationId)
       : null;
     const root = effectiveWorkspacePathForSession(
       this.config,
-      this.sessionKey,
+      this.conversationId,
       sc,
-      getProjectForSession(this.sessionKey),
+      getProjectForSession(this.conversationId),
     );
     const dir = join(root, 'exports');
     await mkdir(dir, { recursive: true });
-    const safe = this.sessionKey.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 96);
+    const safe = this.conversationId.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 96);
     const ext = format === 'json' ? 'json' : format === 'html' ? 'html' : 'md';
     const name = `session-${safe}-${Date.now()}.${ext}`;
     const outPath = join(dir, name);
@@ -448,7 +448,7 @@ export class CommandContextImpl implements CommandContext {
     if (!this.deps.getSessionContextReport) {
       return 'Context report is not available in this environment.';
     }
-    return this.deps.getSessionContextReport(this.sessionKey, mode);
+    return this.deps.getSessionContextReport(this.conversationId, mode);
   }
 
   /**
@@ -457,7 +457,7 @@ export class CommandContextImpl implements CommandContext {
   async getReasoningLevel(): Promise<ReasoningLevel | undefined> {
     const configStore = this.deps.sessionConfigStore;
     if (configStore) {
-      const sessionConfig = await configStore.get(this.sessionKey);
+      const sessionConfig = await configStore.get(this.conversationId);
       if (sessionConfig?.reasoningLevel) {
         return sessionConfig.reasoningLevel;
       }
@@ -471,7 +471,7 @@ export class CommandContextImpl implements CommandContext {
   async setReasoningLevel(level: ReasoningLevel): Promise<void> {
     const configStore = this.deps.sessionConfigStore;
     if (configStore) {
-      await configStore.update(this.sessionKey, { reasoningLevel: level });
+      await configStore.update(this.conversationId, { reasoningLevel: level });
     }
   }
 
@@ -481,7 +481,7 @@ export class CommandContextImpl implements CommandContext {
   async getVerboseLevel(): Promise<VerboseLevel | undefined> {
     const configStore = this.deps.sessionConfigStore;
     if (configStore) {
-      const sessionConfig = await configStore.get(this.sessionKey);
+      const sessionConfig = await configStore.get(this.conversationId);
       if (sessionConfig?.verboseLevel) {
         return sessionConfig.verboseLevel;
       }
@@ -495,7 +495,7 @@ export class CommandContextImpl implements CommandContext {
   async setVerboseLevel(level: VerboseLevel): Promise<void> {
     const configStore = this.deps.sessionConfigStore;
     if (configStore) {
-      await configStore.update(this.sessionKey, { verboseLevel: level });
+      await configStore.update(this.conversationId, { verboseLevel: level });
     }
   }
 

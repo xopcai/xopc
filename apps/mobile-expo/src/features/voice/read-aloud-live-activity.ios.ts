@@ -26,8 +26,8 @@ function propsFromSnapshot(snapshot: ReadAloudLiveActivitySnapshot): ReadAloudLi
 }
 
 function destinationFromSnapshot(snapshot: ReadAloudLiveActivitySnapshot): string {
-  return snapshot.sessionKey
-    ? `xopc://chat/${encodeURIComponent(snapshot.sessionKey)}`
+  return snapshot.conversationId
+    ? `xopc://chat/${encodeURIComponent(snapshot.conversationId)}`
     : 'xopc:///';
 }
 

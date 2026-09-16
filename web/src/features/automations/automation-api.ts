@@ -100,7 +100,7 @@ export interface AutomationRun {
   durationMs?: number;
   summary?: string;
   error?: string;
-  sessionKey?: string;
+  conversationId?: string;
   workflowRunId?: string;
   model?: string;
   deadlineAtMs?: number;

@@ -86,7 +86,7 @@ export interface XopcUseToolDeps {
   getWorkspace?: () => string;
   getConfig?: () => Config | undefined;
   getCurrentAgentId?: () => string | undefined;
-  getCurrentSessionKey?: () => string | undefined;
+  getCurrentConversationId?: () => string | undefined;
   getAutomationService?: () => AutomationService | undefined;
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;
@@ -345,8 +345,8 @@ function deliveryForXopcResult(
 function currentProjectId(args: Record<string, unknown>, deps: XopcUseToolDeps): string | undefined {
   const explicit = trimString(args.projectId);
   if (explicit) return explicit;
-  const sessionKey = trimString(args.sessionKey) ?? deps.getCurrentSessionKey?.();
-  return sessionKey ? getSessionMetadata(sessionKey)?.projectId : undefined;
+  const conversationId = trimString(args.conversationId) ?? deps.getCurrentConversationId?.();
+  return conversationId ? getSessionMetadata(conversationId)?.projectId : undefined;
 }
 
 function automationPayload(args: Record<string, unknown>, key: 'automation' | 'patch'): Record<string, unknown> {
@@ -567,7 +567,7 @@ async function handleProject(
       progress,
       risks,
       nextSteps,
-      actor: { kind: 'agent', agentId: deps.getCurrentAgentId?.(), sessionKey: deps.getCurrentSessionKey?.() },
+      actor: { kind: 'agent', agentId: deps.getCurrentAgentId?.(), conversationId: deps.getCurrentConversationId?.() },
     };
     if (dryRun) return { ok: true, dryRun: true, action: 'create_project_update', projectId, input };
     return {
@@ -931,7 +931,7 @@ async function handleTask(
       if (!value) return { ok: false, error: `Invalid ${field}` };
       contract[field] = value;
     }
-    const sessionKey = trimString(args.sessionKey) ?? deps.getCurrentSessionKey?.();
+    const conversationId = trimString(args.conversationId) ?? deps.getCurrentConversationId?.();
     const config = deps.getConfig?.();
     const projectService = deps.getProjectService?.();
     const explicitAgentId = trimString(args.agentId);
@@ -952,9 +952,9 @@ async function handleTask(
         outputDestinations: [],
       },
       dependencies: dependsOnTaskIds,
-      context: sessionKey ? [{
+      context: conversationId ? [{
         targetKind: 'session' as const,
-        targetId: sessionKey,
+        targetId: conversationId,
         role: 'input' as const,
         pinned: false,
         retrievalPolicy: {},
@@ -1301,12 +1301,12 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
       if (!command) return errorText('command is required', details);
 
       try {
-        const sessionKey = deps.getCurrentSessionKey?.();
+        const conversationId = deps.getCurrentConversationId?.();
         const agentId = deps.getCurrentAgentId?.();
         const result = await runWithActivityContext(
           {
-            actor: { kind: 'agent', agentId, sessionKey },
-            initiator: { kind: 'user', sessionKey },
+            actor: { kind: 'agent', agentId, conversationId },
+            initiator: { kind: 'user', conversationId },
             source: { kind: 'xopc_use', toolCallId },
           },
           async () =>
@@ -1353,9 +1353,9 @@ function handleProactive(command: string, args: Record<string, unknown>, deps: X
   if (command === 'continue_card') {
     const card = getCard(String(args.id ?? ''), workspace);
     if (!card.communication || ['withdrawn', 'expired', 'resolved'].includes(card.status)) throw new Error('Open a current communication card');
-    const sessionKey = deps.getCurrentSessionKey?.();
-    if (!sessionKey) throw new Error('A conversation is required');
-    return { card, ...continueMailFollowUp(workspace, card.communication.id, sessionKey) };
+    const conversationId = deps.getCurrentConversationId?.();
+    if (!conversationId) throw new Error('A conversation is required');
+    return { card, ...continueMailFollowUp(workspace, card.communication.id, conversationId) };
   }
   if (command === 'start') return startDelegation(workspace, args);
   if (command === 'update') {

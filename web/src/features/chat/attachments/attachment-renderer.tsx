@@ -68,14 +68,14 @@ function imageGridLayout(
 export function AttachmentRenderer({
   attachments,
   authToken,
-  sessionKey,
+  conversationId,
   projectId,
   layout = 'assistant',
   centerUserVoiceRow = false,
 }: {
   attachments: MessageAttachment[];
   authToken?: string;
-  sessionKey?: string | null;
+  conversationId?: string | null;
   projectId?: string | null;
   /** User bubbles align voice messages to the right (WeChat-style). */
   layout?: 'user' | 'assistant';
@@ -87,8 +87,8 @@ export function AttachmentRenderer({
 
   const setPreviewPath = useWorkspacePreviewStore((state) => state.setPath);
   const openAttachment = (attachment: MessageAttachment) => {
-    if (layout === 'assistant' && attachment.workspaceRelativePath?.trim() && (projectId?.trim() || sessionKey?.trim())) {
-      setPreviewPath(attachment.workspaceRelativePath.trim(), null, projectId, sessionKey);
+    if (layout === 'assistant' && attachment.workspaceRelativePath?.trim() && (projectId?.trim() || conversationId?.trim())) {
+      setPreviewPath(attachment.workspaceRelativePath.trim(), null, projectId, conversationId);
       return;
     }
     setActive(attachment);
@@ -126,7 +126,7 @@ export function AttachmentRenderer({
                     key={img.id ?? `${img.name}-${i}`}
                     attachment={img}
                     authToken={authToken}
-                    sessionKey={sessionKey}
+                    conversationId={conversationId}
                     imageSize={grid.tileSize}
                     compact={layout === 'user'}
                     onOpen={openAttachment}
@@ -140,7 +140,7 @@ export function AttachmentRenderer({
                     }
                     attachment={images[IMAGE_GRID_MAX_VISIBLE - 1]}
                     authToken={authToken}
-                    sessionKey={sessionKey}
+                    conversationId={conversationId}
                     imageSize="grid-cell"
                     compact={layout === 'user'}
                     overflowLabel={`+${grid.overflowCount}`}
@@ -163,7 +163,7 @@ export function AttachmentRenderer({
               <VoiceMessageBar
                 key={a.id ?? `${a.name}-${i}`}
                 att={a}
-                sessionKey={sessionKey}
+                conversationId={conversationId}
                 align={
                   layout === 'user'
                     ? centerUserVoiceRow
@@ -183,7 +183,7 @@ export function AttachmentRenderer({
                 key={doc.id ?? `${doc.name}-${i}`}
                 attachment={doc}
                 authToken={authToken}
-                sessionKey={sessionKey}
+                conversationId={conversationId}
                 onOpen={openAttachment}
               />
             ))}
@@ -195,7 +195,7 @@ export function AttachmentRenderer({
         open={open}
         attachment={active}
         authToken={authToken}
-        sessionKey={sessionKey}
+        conversationId={conversationId}
         onClose={() => {
           setOpen(false);
           setActive(null);

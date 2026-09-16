@@ -260,7 +260,7 @@ describe('useRealtimeVoice', () => {
 
     expect(mocks.connect).toHaveBeenCalledWith(expect.objectContaining({
       purpose: 'conversation',
-      sessionKey: 'agent:main:webchat:default:direct:voice',
+      conversationId: 'agent:main:webchat:default:direct:voice',
     }));
     expect(mocks.playerStart).toHaveBeenCalledOnce();
     act(() => onEvent({ type: 'response.created', payload: { responseId: 'r1' } }));
@@ -402,7 +402,7 @@ describe('useRealtimeVoice', () => {
     await act(async () => voice.startVoiceConversation('same-session', 'natural'));
     act(() => voice.cancelVoiceInput());
     await act(async () => voice.startVoiceConversation('same-session', 'natural'));
-    expect(mocks.connect.mock.calls.map(([options]) => options.sessionKey)).toEqual(['same-session', 'same-session']);
+    expect(mocks.connect.mock.calls.map(([options]) => options.conversationId)).toEqual(['same-session', 'same-session']);
   });
 
   it('ignores permission completion after the user ends a pending call', async () => {
@@ -456,7 +456,7 @@ describe('useRealtimeVoice', () => {
       await act(async () => button!.click());
     };
     act(() => root.render(<App showPage />));
-    await act(async () => call.open({ sessionKey: 'same-session', name: 'Ada' }));
+    await act(async () => call.open({ conversationId: 'same-session', name: 'Ada' }));
     expect(call.active).toBe(true);
     act(() => {
       onEvent({ type: 'response.created', payload: { responseId: 'reply' } });
@@ -478,8 +478,8 @@ describe('useRealtimeVoice', () => {
     await click(labels.callEnd);
     expect(stop).toHaveBeenCalledWith('user_finished');
     act(() => root.render(<App showPage />));
-    await act(async () => call.open({ sessionKey: 'same-session', name: 'Ada' }));
-    expect(mocks.connect.mock.calls.map(([options]) => options.sessionKey)).toEqual(['same-session', 'same-session']);
+    await act(async () => call.open({ conversationId: 'same-session', name: 'Ada' }));
+    expect(mocks.connect.mock.calls.map(([options]) => options.conversationId)).toEqual(['same-session', 'same-session']);
   });
 
   it('keeps muted native calls connected after a recoverable reply failure', async () => {

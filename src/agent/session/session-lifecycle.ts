@@ -45,18 +45,18 @@ export class SessionLifecycleManager {
    * Start a session and emit lifecycle events
    */
   async startSession(context: SessionContext): Promise<void> {
-    const { sessionKey } = context;
+    const { conversationId } = context;
     
-    log.debug({ sessionKey }, 'Starting session');
+    log.debug({ conversationId }, 'Starting session');
     
     // Touch session in tracker
-    this.sessionTracker.touchSession(sessionKey);
+    this.sessionTracker.touchSession(conversationId);
     
     // Record start time
-    this.sessionStartTimes.set(sessionKey, Date.now());
+    this.sessionStartTimes.set(conversationId, Date.now());
     
     // Emit session start event
-    await this.lifecycleManager.emit('session_start', sessionKey, {
+    await this.lifecycleManager.emit('session_start', conversationId, {
       channel: context.channel,
       chatId: context.chatId,
       senderId: context.senderId,
@@ -73,13 +73,13 @@ export class SessionLifecycleManager {
    * End a session and emit lifecycle events
    */
   async endSession(context: SessionContext): Promise<void> {
-    const { sessionKey } = context;
+    const { conversationId } = context;
     
-    log.debug({ sessionKey }, 'Ending session');
+    log.debug({ conversationId }, 'Ending session');
     
     // Calculate stats
-    const messageCount = await this.getMessageCount(sessionKey);
-    const startTime = this.sessionStartTimes.get(sessionKey);
+    const messageCount = await this.getMessageCount(conversationId);
+    const startTime = this.sessionStartTimes.get(conversationId);
     const durationMs = startTime ? Date.now() - startTime : undefined;
     
     const stats: SessionStats = {
@@ -88,13 +88,13 @@ export class SessionLifecycleManager {
     };
     
     // Emit session end event
-    await this.lifecycleManager.emit('session_end', sessionKey, {
+    await this.lifecycleManager.emit('session_end', conversationId, {
       messageCount,
       durationMs,
     }, context);
     
     // Clean up start time tracking
-    this.sessionStartTimes.delete(sessionKey);
+    this.sessionStartTimes.delete(conversationId);
     
     // Call custom handler if provided
     if (this.events.onSessionEnd) {
@@ -105,9 +105,9 @@ export class SessionLifecycleManager {
   /**
    * Get the number of messages in a session
    */
-  private async getMessageCount(sessionKey: string): Promise<number> {
+  private async getMessageCount(conversationId: string): Promise<number> {
     try {
-      const messages = await this.sessionStore.load(sessionKey);
+      const messages = await this.sessionStore.load(conversationId);
       return messages.length;
     } catch {
       return 0;
@@ -117,14 +117,14 @@ export class SessionLifecycleManager {
   /**
    * Get the start time for a session
    */
-  getSessionStartTime(sessionKey: string): number | undefined {
-    return this.sessionStartTimes.get(sessionKey);
+  getSessionStartTime(conversationId: string): number | undefined {
+    return this.sessionStartTimes.get(conversationId);
   }
 
   /**
    * Check if a session is currently active
    */
-  isSessionActive(sessionKey: string): boolean {
-    return this.sessionStartTimes.has(sessionKey);
+  isSessionActive(conversationId: string): boolean {
+    return this.sessionStartTimes.has(conversationId);
   }
 }

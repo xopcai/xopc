@@ -36,7 +36,7 @@ export interface SystemPromptBuildOptions {
   skillAllowlist?: string[];
   registeredToolNames?: string[];
   toolSummaries?: Record<string, string>;
-  sessionKey?: string;
+  conversationId?: string;
   promptMode?: PromptMode;
   modelRef?: string;
   agentId?: string;
@@ -69,8 +69,8 @@ export class SystemPromptBuilder {
     const actionTrustLevel = isXopcDatabaseOpen()
       ? getUserTrustPolicy().defaultActionLevel
       : DEFAULT_USER_TRUST_LEVEL;
-    const interactionState = isXopcDatabaseOpen() && options.sessionKey
-      ? getInteractionState(options.sessionKey)
+    const interactionState = isXopcDatabaseOpen() && options.conversationId
+      ? getInteractionState(options.conversationId)
       : undefined;
     const interactionPrompt = interactionState ? buildInteractionStatePrompt(interactionState) : '';
     const heartbeatEnabled = this.config.gateway?.heartbeat?.includeSystemPromptSection ?? false;
@@ -85,11 +85,11 @@ export class SystemPromptBuilder {
       modelOverrides: ttsMerged.modelOverrides,
       textToSpeechTool: ttsMerged.enabled && reg.includes('text_to_speech'),
     });
-    const responseLanguage = resolveResponseLanguageForSession(this.config, options.sessionKey);
+    const responseLanguage = resolveResponseLanguageForSession(this.config, options.conversationId);
 
     const resolved = resolveSystemPromptBuildParams(this.config, {
       workspaceDir: ws,
-      sessionKey: options.sessionKey,
+      conversationId: options.conversationId,
       toolNames: options.registeredToolNames,
       toolSummaries: options.toolSummaries,
       userTimezone,
@@ -178,13 +178,13 @@ export class SystemPromptBuilder {
       workspaceOverride?: string;
       profileMarkdownPathRoot?: string;
       registeredToolNames?: string[];
-      sessionKey?: string;
+      conversationId?: string;
     },
   ): string {
     const ws = options?.workspaceOverride ?? this.workspace;
     const resolved = resolveSystemPromptBuildParams(this.config, {
       workspaceDir: ws,
-      sessionKey: options?.sessionKey,
+      conversationId: options?.conversationId,
       toolNames: options?.registeredToolNames,
       userTimezone: isXopcDatabaseOpen() ? getUserTimezone() : undefined,
       externalMemoryInstructions: options?.externalMemoryInstructions,

@@ -19,7 +19,7 @@ describe('TuiHeader', () => {
       () => ({
         version: 'test',
         connectionLabel: 'local',
-        sessionKey: 'agent:main:main',
+        conversationId: 'agent:main:main',
         showHints: true,
       }),
       keybindings,

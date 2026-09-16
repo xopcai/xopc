@@ -150,7 +150,7 @@ export function AssistantStepsBlock({
   stepLabels,
   clusterLabels,
   cardLabels,
-  sessionKey,
+  conversationId,
   workflowOptions,
 }: {
   activity: AssistantTurnActivityPresentation;
@@ -188,7 +188,7 @@ export function AssistantStepsBlock({
     join: StepsClusterJoinLabels;
   };
   cardLabels: ToolCardLabels;
-  sessionKey?: string | null;
+  conversationId?: string | null;
   workflowOptions: AssistantActivityWorkflowOptions;
 }) {
   const language = useLocaleStore((s) => s.language);
@@ -328,7 +328,7 @@ export function AssistantStepsBlock({
             toolLabels={toolLabels}
             stepLabels={timelineLabels}
             cardLabels={cardLabels}
-            sessionKey={sessionKey}
+            conversationId={conversationId}
             workflowOptions={workflowOptions}
             className="assistant-steps-scroll max-h-[min(60vh,28rem)] overflow-y-auto pr-1 [scrollbar-gutter:stable]"
           />
@@ -344,7 +344,7 @@ export function AssistantStepsTimeline({
   stepLabels,
   cardLabels,
   className,
-  sessionKey,
+  conversationId,
   workflowOptions,
 }: {
   blocks: Array<ThinkingContent | ToolUseContent>;
@@ -373,7 +373,7 @@ export function AssistantStepsTimeline({
   };
   cardLabels: ToolCardLabels;
   className?: string;
-  sessionKey?: string | null;
+  conversationId?: string | null;
   workflowOptions: AssistantActivityWorkflowOptions;
 }) {
   const scrollRegionRef = useRef<HTMLDivElement>(null);
@@ -407,7 +407,7 @@ export function AssistantStepsTimeline({
             toolLabels={toolLabels}
             stepLabels={stepLabels}
             cardLabels={cardLabels}
-            sessionKey={sessionKey}
+            conversationId={conversationId}
             workflowOptions={workflowOptions}
           />
         ))}
@@ -458,7 +458,7 @@ function StepRow({
   toolLabels,
   stepLabels,
   cardLabels,
-  sessionKey,
+  conversationId,
   workflowOptions,
 }: {
   block: ThinkingContent | ToolUseContent;
@@ -486,7 +486,7 @@ function StepRow({
     memoryActivity: MemoryActivityLabels;
   };
   cardLabels: ToolCardLabels;
-  sessionKey?: string | null;
+  conversationId?: string | null;
   workflowOptions: AssistantActivityWorkflowOptions;
 }) {
   const showRawToolData = useDevViewStore((s) => s.showRawToolData);
@@ -561,7 +561,7 @@ function StepRow({
       <WorkflowCard
         block={block}
         startedAt={block.startedAt}
-        sessionKey={sessionKey}
+        conversationId={conversationId}
         labels={workflowOptions.labels}
       />
     );

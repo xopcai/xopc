@@ -12,12 +12,12 @@ export type { MediaRef as DirectInboundAttachment } from '../../channels/attachm
 export async function buildDirectUserMessageContent(opts: {
   content: string;
   attachments?: MediaRef[];
-  sessionKey?: string;
+  conversationId?: string;
   config: Config;
   agentManager: AgentInstanceGateway;
   modelManager: ModelManager;
 }) {
-  const sk = opts.sessionKey ?? '';
+  const sk = opts.conversationId ?? '';
   const modelRef =
     sk !== ''
       ? opts.modelManager.getModelForSession(sk)
@@ -26,7 +26,7 @@ export async function buildDirectUserMessageContent(opts: {
   return buildTranscriptUserMessage({
     text: opts.content,
     prepared: opts.attachments,
-    sessionKey: sk,
+    conversationId: sk,
     modelRef: modelRef || getDefaultModelSync(opts.config),
     config: opts.config,
     agentManager: opts.agentManager,

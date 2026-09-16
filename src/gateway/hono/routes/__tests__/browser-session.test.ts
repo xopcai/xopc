@@ -32,7 +32,7 @@ describe('browser session real Hono and lazy route integration', () => {
     expect(cookie).toContain('HttpOnly'); expect(cookie).toContain('Secure'); expect(cookie).toContain('SameSite=Strict');
     expect(cookie).not.toContain('Domain=');
     const body = await response.json();
-    expect(body.sessionKey).toMatch(/^browser:/);
+    expect(body.conversationId).toMatch(/^browser:/);
     expect(JSON.stringify(body)).not.toContain(credential);
     const authenticated = await app.request(`${origin}/api/browser-session`, { headers: { ...baseHeaders, Cookie: cookie.split(';')[0] } });
     expect(authenticated.status).toBe(200);

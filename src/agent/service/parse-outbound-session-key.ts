@@ -5,24 +5,23 @@ import { getSessionMetadata } from '../../storage/sqlite/index.js';
 /**
  * Map a session key to outbound channel routing (heartbeat/cron/virtual keys included).
  */
-export function parseOutboundSessionKey(
-  sessionKey: string,
+export function parseOutboundConversationId(
+  conversationId: string,
   config: Config | undefined,
 ): { channel: string; chatId: string } {
-  const parts = sessionKey.split(':').filter(Boolean);
-  const first = parts[0] || 'cli';
+  const metadata = getSessionMetadata(conversationId);
+  if (!metadata) throw new Error(`Conversation not found: ${conversationId}`);
 
-  if (first === 'heartbeat') {
+  if (metadata.sessionType === 'heartbeat') {
     const hb = config?.gateway?.heartbeat;
     const target = hb?.target?.trim();
     const targetChatId = hb?.targetChatId?.trim();
     if (target && targetChatId) {
       return { channel: target, chatId: targetChatId };
     }
-    return { channel: INTERNAL_OUTBOUND_DROP_CHANNEL, chatId: parts.slice(1).join(':') || 'heartbeat' };
+    return { channel: INTERNAL_OUTBOUND_DROP_CHANNEL, chatId: conversationId };
   }
 
-  const metadata = getSessionMetadata(sessionKey);
   const routing = metadata?.routing;
   if (routing?.source && routing.peerId) {
     return { channel: routing.source, chatId: routing.peerId };
@@ -31,8 +30,8 @@ export function parseOutboundSessionKey(
     return { channel: metadata.sourceChannel, chatId: metadata.sourceChatId };
   }
 
-  if (first === 'cron') {
-    return { channel: INTERNAL_OUTBOUND_DROP_CHANNEL, chatId: parts.slice(1).join(':') || 'cron' };
+  if (metadata.sessionType === 'cron') {
+    return { channel: INTERNAL_OUTBOUND_DROP_CHANNEL, chatId: conversationId };
   }
 
   return { channel: 'cli', chatId: 'main' };

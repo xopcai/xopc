@@ -62,7 +62,7 @@ async function executeCommand(
   
   if (!commandName) return false;
 
-  log.info({ command: commandName, sessionKey: message.sessionKey }, 'Executing command');
+  log.info({ command: commandName, conversationId: message.conversationId }, 'Executing command');
 
   // Create command context
   const ctx = await createCommandContextFromMessage(message, deps);
@@ -92,7 +92,7 @@ async function createCommandContextFromMessage(
   deps: CommandProcessorDeps
 ): Promise<CommandContext> {
   return createCommandContext({
-    sessionKey: message.sessionKey,
+    conversationId: message.conversationId,
     source: message.source,
     channelId: message.channelId,
     chatId: message.chatId,

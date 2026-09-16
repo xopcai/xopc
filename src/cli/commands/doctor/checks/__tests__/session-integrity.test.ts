@@ -8,7 +8,7 @@ import { SessionStore } from '../../../../../session/store.js';
 import { closeXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../../../storage/sqlite/connection.js';
 import { checkSessionIntegrity } from '../session-integrity.js';
 
-const testConfig = ConfigSchema.parse({});
+const testConfig = ConfigSchema.parse({ agents: { default: 'coder', list: [{ id: 'coder' }] } });
 
 describe('checkSessionIntegrity', () => {
   it('scans standalone agent session directories outside agents.list', async () => {
@@ -22,9 +22,9 @@ describe('checkSessionIntegrity', () => {
       await writeFile(configPath, '{}\n');
       const standaloneStore = new SessionStore({ config: testConfig, agentId: 'coder' });
       await standaloneStore.initialize();
-      await standaloneStore.saveMessages('agent:coder:webchat:default:direct:doctor', [
+      await standaloneStore.saveMessages("210952aa-293a-4cd6-85b0-8c68d7087964", [
         { role: 'user', content: 'hello', timestamp: Date.now() },
-      ]);
+      ], { metadata: { agentId: "coder" } });
 
       const result = await checkSessionIntegrity({
         configPath,

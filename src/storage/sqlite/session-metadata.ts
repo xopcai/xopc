@@ -1,15 +1,16 @@
 import { SessionStatus, type SessionMetadata } from '../../session/types.js';
 
-export type SessionMetadataSeed = Partial<Omit<SessionMetadata, 'key' | 'sessionId'>>;
+export type SessionMetadataSeed = Partial<Omit<SessionMetadata, 'key' | 'transcriptId'>>;
 
 export function buildDefaultSessionMetadata(
-  sessionKey: string,
+  conversationId: string,
   seed: SessionMetadataSeed = {},
 ): SessionMetadata {
   const now = new Date().toISOString();
   return {
     ...seed,
-    key: sessionKey,
+    key: conversationId,
+    agentId: seed.agentId ?? seed.routing?.agentId ?? '',
     status: seed.status ?? SessionStatus.ACTIVE,
     tags: seed.tags ?? [],
     createdAt: seed.createdAt ?? now,

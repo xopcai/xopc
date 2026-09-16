@@ -49,7 +49,7 @@ import {
 } from './session-message-parser';
 import { reconcileMessageRows } from './reconcile-message-rows';
 import { sessionContainsFinalAssistant } from './session-refresh-confirmation';
-import { takeNewChatSessionKey } from './session-prefetch';
+import { takeNewChatConversationId } from './session-prefetch';
 import { buildMobileWelcomeModel } from './mobile-welcome-starters';
 import { resumableRootChatSessions } from './chat-root-session';
 import { useChatPageBootstrap } from './use-chat-page-bootstrap';
@@ -67,7 +67,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     taskId?: string;
   }>();
   const savingAssistantNoteRef = useRef(false);
-  const urlSessionKey = typeof rawKey === 'string' ? rawKey : Array.isArray(rawKey) ? rawKey[0] : '';
+  const urlConversationId = typeof rawKey === 'string' ? rawKey : Array.isArray(rawKey) ? rawKey[0] : '';
   const routeTaskId = typeof rawTaskId === 'string' ? rawTaskId.trim() : '';
   const router = useRouter();
   useDismissOnHardwareBack(router, { enabled: !root });
@@ -126,7 +126,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   // ── Bootstrap ────────────────────────────────────────────
   // Shared ref for session key — bootstrap writes here, chatSession reads it.
-  const activeSessionKeyRef = useRef('');
+  const activeConversationIdRef = useRef('');
   const recentSessionsQuery = useQuery({
     queryKey: [...queryKeys.sessionsRecent, activeGatewayId ?? ''],
     queryFn: () => fetchSessionsList({ limit: 6, offset: 0, channel: 'webchat' }),
@@ -141,21 +141,21 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   const bootstrap = useChatPageBootstrap({
     scopeKey: activeGatewayId ?? '',
-    urlSessionKey,
+    urlConversationId,
     gatewayReady: Boolean(activeGatewayId),
     gatewayOnline,
     newSessionSpec: bootstrapSpec,
     initialAgentConfig: bootstrapInitialAgentConfig,
     messages: m,
-    activeSessionKeyRef,
+    activeConversationIdRef,
     shouldNavigateToRoute: !root,
     shouldAutoBootstrap: true,
   });
 
-  const sessionKey = urlSessionKey || bootstrap.pendingBootstrapKey;
+  const conversationId = urlConversationId || bootstrap.pendingBootstrapKey;
 
   // ── Session history ──────────────────────────────────────
-  const { sessionHistoryQuery } = useSessionHistory(sessionKey);
+  const { sessionHistoryQuery } = useSessionHistory(conversationId);
 
   const currentSessionAgentId = useMemo(
     () => sessionHistoryQuery.data?.pages[0]?.session.routing?.agentId?.trim().toLowerCase() ?? '',
@@ -192,14 +192,14 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     enabled: true,
   });
 
-  const chatSession = useChatSession({ sessionKey, taskId: routeTaskId || undefined });
+  const chatSession = useChatSession({ conversationId, taskId: routeTaskId || undefined });
   const sessionAgentConfigQuery = useQuery({
-    queryKey: queryKeys.sessionAgentConfig(sessionKey),
-    queryFn: () => fetchSessionAgentConfig(sessionKey),
-    enabled: Boolean(sessionKey),
+    queryKey: queryKeys.sessionAgentConfig(conversationId),
+    queryFn: () => fetchSessionAgentConfig(conversationId),
+    enabled: Boolean(conversationId),
   });
   const modelMutation = useMutation(
-    sessionModelMutationOptions(queryClient, sessionKey, sessionContext.taskId),
+    sessionModelMutationOptions(queryClient, conversationId, sessionContext.taskId),
   );
 
   const preferredModel = modelPreferenceForAgent(
@@ -227,8 +227,8 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   // Keep the shared ref in sync with chatSession's internal ref
   useEffect(() => {
-    activeSessionKeyRef.current = chatSession.activeSessionKeyRef.current;
-  }, [chatSession.activeSessionKeyRef]);
+    activeConversationIdRef.current = chatSession.activeConversationIdRef.current;
+  }, [chatSession.activeConversationIdRef]);
 
   const agentName = useMemo(() => {
     const agents = agentsQuery.data?.items ?? [];
@@ -273,7 +273,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
       : chatSession.awaitingSessionRefresh);
 
   const committedRowsRef = useRef({ scope: '', messages: [] as Message[] });
-  const rowScope = JSON.stringify([activeGatewayId, sessionKey]);
+  const rowScope = JSON.stringify([activeGatewayId, conversationId]);
   const displayMessages = useMemo<Message[]>(() => {
     const base = mergeOptimisticUserMessages(sessionMessages, chatSession.optimisticMessages);
     const next = chatSession.streamingMsg
@@ -330,11 +330,11 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   const composerDisabled =
     modelMutation.isPending ||
     chatSession.sending ||
-    !sessionKey || bootstrap.creatingInitialSession;
+    !conversationId || bootstrap.creatingInitialSession;
 
   useEffect(() => {
-    if (!sessionKey) return;
-    const intake = consumeContentChatIntake(sessionKey);
+    if (!conversationId) return;
+    const intake = consumeContentChatIntake(conversationId);
     if (!intake) return;
     if (modelMutation.isPending || chatSession.runningRef.current || chatSession.clarifyPrompt) {
       setComposerSuggestion(intake.prompt);
@@ -343,20 +343,20 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     void chatSession.send(intake.prompt).then(consumed => {
       if (!consumed) setComposerSuggestion(intake.prompt);
     });
-  }, [chatSession, modelMutation.isPending, sessionKey]);
+  }, [chatSession, modelMutation.isPending, conversationId]);
 
   const handleComposerSend = useCallback(
     async (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => {
       if (modelMutation.isPending) return false;
-      if (bootstrap.bootstrapError && !sessionKey) return false;
+      if (bootstrap.bootstrapError && !conversationId) return false;
       const trimmed = text.trim();
       const hasContent = Boolean(trimmed) || Boolean(attachments?.length) || Boolean(contextRefs?.length);
       if (!hasContent) return false;
 
-      if (!sessionKey || bootstrap.creatingInitialSession) return false;
+      if (!conversationId || bootstrap.creatingInitialSession) return false;
       return chatSession.send(text, attachments, contextRefs);
     },
-    [bootstrap.bootstrapError, bootstrap.creatingInitialSession, chatSession, sessionKey, modelMutation.isPending],
+    [bootstrap.bootstrapError, bootstrap.creatingInitialSession, chatSession, conversationId, modelMutation.isPending],
   );
 
   // ── Handlers ─────────────────────────────────────────────
@@ -368,9 +368,9 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     (modelId: string) => {
       const agentId = currentSessionAgentId || defaultAgentId;
       void (async () => {
-        if (sessionKey) await modelMutation.mutateAsync(modelId);
+        if (conversationId) await modelMutation.mutateAsync(modelId);
         const config = queryClient.getQueryData<Awaited<ReturnType<typeof fetchSessionAgentConfig>>>(
-          queryKeys.sessionAgentConfig(sessionKey),
+          queryKeys.sessionAgentConfig(conversationId),
         );
         if (activeGatewayId && agentId) {
           rememberAgentModel(activeGatewayId, agentId, {
@@ -390,7 +390,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
       chatSession,
       modelMutation,
       queryClient,
-      sessionKey,
+      conversationId,
     ],
   );
 
@@ -406,8 +406,8 @@ export function useChatPage(options: UseChatPageOptions = {}) {
                 queryKey: queryKeys.task(routeTaskId),
                 queryFn: () => fetchTask(routeTaskId),
               })).task.version,
-            )).activeSessionKey
-          : await takeNewChatSessionKey(
+            )).activeConversationId
+          : await takeNewChatConversationId(
               { agentId, projectId: sessionContext.projectId ?? null },
               (() => {
                 const preference = modelPreferenceForAgent(newSessionPreferences, agentId);
@@ -423,7 +423,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
             );
         if (!completeSelection(key)) return;
         if (activeGatewayId) rememberSelectedAgent(activeGatewayId, agentId);
-        chatSession.activeSessionKeyRef.current = key;
+        chatSession.activeConversationIdRef.current = key;
         void queryClient.invalidateQueries({ queryKey: queryKeys.sessionsAll });
         if (routeTaskId) {
           void queryClient.invalidateQueries({ queryKey: queryKeys.task(routeTaskId) });
@@ -440,14 +440,14 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   const handleNewChat = useCallback(() => {
     const completeSelection = bootstrap.beginSessionSelection();
-    chatSession.activeSessionKeyRef.current = '';
+    chatSession.activeConversationIdRef.current = '';
     chatSession.cancelRecovery();
     chatSession.clearAllState();
 
     const agentId = currentSessionAgentId || defaultAgentId;
     void (async () => {
       const preference = modelPreferenceForAgent(newSessionPreferences, agentId);
-      const key = await takeNewChatSessionKey(
+      const key = await takeNewChatConversationId(
         { agentId, projectId: sessionContext.projectId ?? null },
         preference
           ? {
@@ -457,7 +457,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
           : undefined,
       );
       if (!completeSelection(key)) return;
-      chatSession.activeSessionKeyRef.current = key;
+      chatSession.activeConversationIdRef.current = key;
       void queryClient.invalidateQueries({ queryKey: queryKeys.sessionsAll });
       if (!root) {
         openChat(router, key, { replace: true });
@@ -469,14 +469,14 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   const handleContextChange = useCallback((projectId: string | null, executionMode?: 'local_checkout' | 'managed_worktree') => {
     const completeSelection = bootstrap.beginSessionSelection();
-    chatSession.activeSessionKeyRef.current = '';
+    chatSession.activeConversationIdRef.current = '';
     chatSession.cancelRecovery();
     chatSession.clearAllState();
 
     const agentId = currentSessionAgentId || defaultAgentId;
     void (async () => {
       const preference = modelPreferenceForAgent(newSessionPreferences, agentId);
-      const key = await takeNewChatSessionKey(
+      const key = await takeNewChatConversationId(
         { agentId, projectId, executionMode },
         preference
           ? {
@@ -486,7 +486,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
           : undefined,
       );
       if (!completeSelection(key)) return;
-      chatSession.activeSessionKeyRef.current = key;
+      chatSession.activeConversationIdRef.current = key;
       void queryClient.invalidateQueries({ queryKey: queryKeys.sessionsAll });
       if (activeGatewayId) rememberLastChatScope(activeGatewayId, projectId);
       if (!root) openChat(router, key, { replace: true });
@@ -496,21 +496,21 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   }, [activeGatewayId, bootstrap, chatSession, currentSessionAgentId, defaultAgentId, root, newSessionPreferences, queryClient, rememberLastChatScope, router]);
 
   const handleSessionSelect = useCallback((key: string) => {
-    if (!key || key === sessionKey) return;
+    if (!key || key === conversationId) return;
     chatSession.cancelRecovery();
     chatSession.clearAllState();
-    chatSession.activeSessionKeyRef.current = key;
+    chatSession.activeConversationIdRef.current = key;
     bootstrap.setPendingBootstrapKey(key);
     if (!root) openChat(router, key, { replace: true });
-  }, [bootstrap, chatSession, root, router, sessionKey]);
+  }, [bootstrap, chatSession, root, router, conversationId]);
 
   const handleStarterSend = useCallback((text: string) => {
-    if (!sessionKey || chatSession.runningRef.current) {
+    if (!conversationId || chatSession.runningRef.current) {
       setComposerSuggestion(text);
       return;
     }
     void handleComposerSend(text);
-  }, [chatSession.runningRef, handleComposerSend, sessionKey]);
+  }, [chatSession.runningRef, handleComposerSend, conversationId]);
   const handleStarterPrefill = useCallback((text: string) => {
     const trimmed = text.trim();
     if (trimmed) setComposerSuggestion(trimmed);
@@ -566,14 +566,14 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   const handleAssistantRegenerate = useCallback(
     (assistantIndex: number) => {
-      if (!sessionKey || chatSession.streaming || chatSession.awaitingSessionRefresh || Boolean(chatSession.clarifyPrompt)) return;
+      if (!conversationId || chatSession.streaming || chatSession.awaitingSessionRefresh || Boolean(chatSession.clarifyPrompt)) return;
       const userMessage = findPrecedingUserMessage(displayMessages, assistantIndex);
       if (!userMessage) return;
       const payload = buildUserResendPayload(userMessage);
       if (!payload) return;
       void chatSession.send(payload.text, payload.attachments, payload.contextRefs);
     },
-    [chatSession, displayMessages, sessionKey],
+    [chatSession, displayMessages, conversationId],
   );
 
   // ── Picker sheets state ──────────────────────────────────
@@ -591,8 +591,8 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   return {
     // Identity
-    sessionKey,
-    urlSessionKey,
+    conversationId,
+    urlConversationId,
     isDark,
     colors,
     keyboardVisible,
@@ -613,7 +613,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     displayMessages,
     reasoningLevel: coerceReasoningLevel(sessionAgentConfigQuery.data?.reasoningLevel),
     sessionPresentationReady:
-      !bootstrap.waitingForResume && (!sessionKey || !sessionAgentConfigQuery.isLoading),
+      !bootstrap.waitingForResume && (!conversationId || !sessionAgentConfigQuery.isLoading),
     welcomeModel,
     isEmptyChat,
     composerDisabled,

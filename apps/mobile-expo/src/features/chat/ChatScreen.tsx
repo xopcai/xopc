@@ -49,8 +49,8 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
   const [composerActionsOpen, setComposerActionsOpen] = useState(false);
   const closeComposerActions = useCallback(() => setComposerActionsOpen(false), []);
   const {
-    sessionKey,
-    urlSessionKey,
+    conversationId,
+    urlConversationId,
     colors,
     m,
     agentsQuery,
@@ -97,7 +97,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
   const preferredVoiceMode = useVoicePreferences((state) => activeGatewayId ? state.modes[activeGatewayId] : undefined);
   const voiceStatusQuery = useQuery({
     ...voiceStatusOptions(activeGatewayId),
-    enabled: Boolean(activeGatewayId && sessionKey),
+    enabled: Boolean(activeGatewayId && conversationId),
   });
   const attentionQuery = useAttentionFeed();
   const attentionItems = attentionQuery.data?.needsUser ?? [];
@@ -107,7 +107,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
   useAutoReadAloud({
     language,
     messages: displayMessages,
-    sessionKey,
+    conversationId,
     streaming: chat.streaming,
     title: m.chat.messageReadAloudTitle,
   });
@@ -117,21 +117,21 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
       voiceCall.expand();
       return;
     }
-    if (!activeGatewayId || !sessionKey || composerDisabled || chat.streaming) return;
+    if (!activeGatewayId || !conversationId || composerDisabled || chat.streaming) return;
     const readAloud = useReadAloudStore.getState();
     readAloud.disableContinuous();
     readAloud.stop();
     void voiceCall.start({
       gatewayId: activeGatewayId,
-      sessionKey,
+      conversationId,
       mode,
       background: voiceCallBackground,
-      identity: sessionHistoryQuery.data?.pages[0]?.session.sessionId,
+      identity: sessionHistoryQuery.data?.pages[0]?.session.transcriptId,
       name: sessionHistoryQuery.data?.pages[0]?.session.name ?? agentName,
       agentId: callAgent?.id ?? currentSessionAgentId,
       avatar: callAgent?.avatar,
     });
-  }, [activeGatewayId, agentName, call.phase, callAgent?.avatar, callAgent?.id, chat.streaming, composerDisabled, currentSessionAgentId, sessionHistoryQuery.data?.pages, sessionKey, voiceCallBackground]);
+  }, [activeGatewayId, agentName, call.phase, callAgent?.avatar, callAgent?.id, chat.streaming, composerDisabled, currentSessionAgentId, sessionHistoryQuery.data?.pages, conversationId, voiceCallBackground]);
 
   const headerPaddingTop = insets.top + CHAT_HEADER_TOP_PADDING_AFTER_SAFE_AREA;
   const canvasBg = colors.surface.base;
@@ -149,7 +149,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
           onNavigationPress={root ? () => setNavigationVisible(true) : undefined}
           onAgentPress={openAgentsPicker}
           onModelSelect={handleModelSelect}
-          onFilesPress={sessionKey ? () => router.push(`/files/context/session/${encodeURIComponent(sessionKey)}` as never) : undefined}
+          onFilesPress={conversationId ? () => router.push(`/files/context/session/${encodeURIComponent(conversationId)}` as never) : undefined}
           onNewChat={handleNewChat}
       />
 
@@ -162,7 +162,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
 
       <View style={[styles.chatBody, { backgroundColor: canvasBg }]}>
         <View style={styles.chatBodyInner}>
-        {!urlSessionKey && bootstrap.bootstrapError ? (
+        {!urlConversationId && bootstrap.bootstrapError ? (
           <View style={[styles.bootstrapError, { borderColor: colors.semantic.error }]}>
             <Icon source="alert" size={18} color={colors.semantic.errorBold} />
             <Text style={[styles.bootstrapErrorText, { color: colors.semantic.errorBold }]}>
@@ -200,12 +200,12 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
               if (!olderCursor) { void sessionHistoryQuery.fetchNextPage(); return; }
 
               const prefetchedOlderPage = queryClient.getQueryData(
-                queryKeys.sessionHistoryOlderPreview(sessionKey, olderCursor, activeGatewayId),
+                queryKeys.sessionHistoryOlderPreview(conversationId, olderCursor, activeGatewayId),
               );
 
               if (prefetchedOlderPage) {
                 queryClient.setQueryData(
-                  queryKeys.sessionHistory(sessionKey, activeGatewayId),
+                  queryKeys.sessionHistory(conversationId, activeGatewayId),
                   (oldData) => appendOlderSessionHistoryPage(
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     oldData as any,
@@ -219,7 +219,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
               void sessionHistoryQuery.fetchNextPage();
             }}
             onAtBottomChange={(isAtBottom) => { chat.messageListAtBottomRef.current = isAtBottom; }}
-            sessionKey={sessionKey}
+            conversationId={conversationId}
             welcomeTitle={welcomeModel.headline}
             welcomeSubtitle={welcomeModel.tagline}
             welcomeStarters={welcomeModel.starters}
@@ -242,7 +242,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
             paddingBottom: floatingBottomPadding(insets.bottom),
           }}
         >
-          <ContinuousReadAloudBar sessionKey={sessionKey} />
+          <ContinuousReadAloudBar conversationId={conversationId} />
           <ClarifyPrompt
             prompt={chat.clarifyPrompt}
             submitting={chat.clarifySubmitting}
@@ -257,14 +257,14 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
           <ChatComposer
             actionsOpen={composerActionsOpen}
             onActionsOpenChange={setComposerActionsOpen}
-            contextControl={sessionKey ? <ChatContextControl
-              sessionKey={sessionKey}
+            contextControl={conversationId ? <ChatContextControl
+              conversationId={conversationId}
               draftRefs={composerContextRefs}
               onRemoveDraftRef={(sourceId, kind) => setComposerContextRefs((refs) => refs.filter((ref) => ref.sourceId !== sourceId || ref.kind !== kind))}
               onAddSource={() => dispatchMobileComposerAppend('@')}
               onChangeScope={handleContextChange}
             /> : null}
-            sessionKey={sessionKey}
+            conversationId={conversationId}
             disabled={composerDisabled}
             streaming={chat.streaming}
             onSend={handleComposerSend}
@@ -305,7 +305,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
       <ChatNavigationSheet
         visible={navigationVisible}
         onDismiss={() => setNavigationVisible(false)}
-        currentSessionKey={sessionKey}
+        currentConversationId={conversationId}
         recentSessions={recentSessionsQuery.data?.items ?? []}
         attentionCount={attentionItems.length}
         onSessionSelect={handleSessionSelect}

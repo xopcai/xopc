@@ -87,7 +87,7 @@ function createLogsCommand(_ctx: CLIContext): Command {
     .option('-m, --module <module>', 'Filter by module')
     .option('-e, --extension <ext>', 'Filter by extension')
     .option('-q, --search <text>', 'Text search')
-    .option('--session-id <id>', 'Filter by session ID')
+    .option('--transcript-id <id>', 'Filter by transcript ID')
     .option('--request-id <id>', 'Filter by request ID')
     .option('--from <date>', 'Start date (ISO 8601)')
     .option('--to <date>', 'End date (ISO 8601)')
@@ -100,7 +100,7 @@ function createLogsCommand(_ctx: CLIContext): Command {
           module: options.module,
           extension: options.extension,
           q: options.search,
-          sessionId: options.sessionId,
+          transcriptId: options.transcriptId,
           requestId: options.requestId,
           from: options.from,
           to: options.to,
@@ -126,7 +126,7 @@ function createLogsCommand(_ctx: CLIContext): Command {
           const timestamp = new Date(entry.timestamp).toLocaleTimeString();
           const levelColor = getLevelColor(entry.level);
           const module = entry.module ? `[${entry.module}]` : '';
-          const session = (entry as any).sessionId ? `{session:${(entry as any).sessionId.slice(0,8)}}` : '';
+          const session = (entry as any).transcriptId ? `{session:${(entry as any).transcriptId.slice(0,8)}}` : '';
           
           console.log(`${timestamp} ${levelColor(entry.level)} ${module} ${session} ${entry.message}`);
           

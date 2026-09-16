@@ -103,8 +103,8 @@ function formatFileSize(size?: number): string {
 export function ChatPanel({ gatewayId }: { gatewayId: string }) {
   const client = useMemo(() => new BrowserChatClient(), []);
   const [snapshot, setSnapshot] = useState(EMPTY);
-  const keyForSession = (sessionKey?: string) => JSON.stringify([gatewayId, sessionKey ?? 'new']);
-  const draftKey = keyForSession(snapshot.sessionKey);
+  const keyForSession = (conversationId?: string) => JSON.stringify([gatewayId, conversationId ?? 'new']);
+  const draftKey = keyForSession(snapshot.conversationId);
   const { store: drafts, draft: composerDraft, ready: draftReady, update: updateDraft } = useComposerDrafts(draftKey, cause => setError(String(cause)));
   const draft = composerDraft.text;
   const attachments = composerDraft.attachments;
@@ -181,7 +181,7 @@ export function ChatPanel({ gatewayId }: { gatewayId: string }) {
       const stored = await chrome.storage.session.get(PENDING_CONTEXT_KEY);
       const pending = stored[PENDING_CONTEXT_KEY] as AttachedPageContext | undefined;
       if (!pending || !active) return;
-      const key = keyForSession(client.currentSessionKey);
+      const key = keyForSession(client.currentConversationId);
       await drafts.load(key);
       if (!active) return;
       drafts.update(key, current => ({ ...current, pages: appendPageContext(current.pages, pending) }));
@@ -243,7 +243,7 @@ export function ChatPanel({ gatewayId }: { gatewayId: string }) {
     setAtBottom(true);
     const frame = requestAnimationFrame(() => scrollToBottom());
     return () => cancelAnimationFrame(frame);
-  }, [scrollToBottom, snapshot.sessionKey]);
+  }, [scrollToBottom, snapshot.conversationId]);
 
   useEffect(() => {
     const target = textarea.current;
@@ -280,23 +280,23 @@ export function ChatPanel({ gatewayId }: { gatewayId: string }) {
     setCommandsOpen(false);
     setPreview(undefined);
     setError('');
-    if (!snapshot.sessionKey) return;
+    if (!snapshot.conversationId) return;
     let active = true;
     const refresh = () => { if (active) void client.refreshInputs().catch(cause => { if (active) setError(String(cause)); }); };
     refresh();
     const timer = setInterval(refresh, 2000);
     return () => { active = false; clearInterval(timer); };
-  }, [client, snapshot.sessionKey]);
+  }, [client, snapshot.conversationId]);
 
   useEffect(() => {
     if (!commandsOpen) return;
     let active = true;
     setCommandsLoading(true);
-    void loadComposerCommands(snapshot.sessionKey).then(items => { if (active) setCommands(items); })
+    void loadComposerCommands(snapshot.conversationId).then(items => { if (active) setCommands(items); })
       .catch(cause => { if (active) { setCommands([]); setError(String(cause)); } })
       .finally(() => { if (active) setCommandsLoading(false); });
     return () => { active = false; };
-  }, [commandsOpen, snapshot.sessionKey]);
+  }, [commandsOpen, snapshot.conversationId]);
 
   function chooseCommand(item: ComposerCommand) {
     if (!commandRange || item.disabled) return;
@@ -319,9 +319,9 @@ export function ChatPanel({ gatewayId }: { gatewayId: string }) {
     setAtBottom(true);
     let targetKey = draftKey;
     try {
-      if (!snapshot.sessionKey) {
+      if (!snapshot.conversationId) {
         await client.createSession();
-        targetKey = keyForSession(client.currentSessionKey!);
+        targetKey = keyForSession(client.currentConversationId!);
         drafts.update(targetKey, () => payload);
         drafts.update(draftKey, () => EMPTY_DRAFT);
       }
@@ -514,7 +514,7 @@ export function ChatPanel({ gatewayId }: { gatewayId: string }) {
     }
   }
 
-  const activeSession = snapshot.sessions.find((session) => session.key === snapshot.sessionKey);
+  const activeSession = snapshot.sessions.find((session) => session.key === snapshot.conversationId);
   const connectionText = snapshot.endpointReady
     ? t('ready')
     : snapshot.connection === 'connected'
@@ -550,12 +550,12 @@ export function ChatPanel({ gatewayId }: { gatewayId: string }) {
           </label>
           <div className="session-list">
             {snapshot.sessions.map((session) => (
-              <button key={session.key} disabled={sending || snapshot.submitting || snapshot.sessionLoading} className={session.key === snapshot.sessionKey ? 'active' : ''} onClick={() => {
+              <button key={session.key} disabled={sending || snapshot.submitting || snapshot.sessionLoading} className={session.key === snapshot.conversationId ? 'active' : ''} onClick={() => {
                 setMenuOpen(false);
                 void runControlAction(() => client.openSession(session.key));
               }}>
                 <span className="session-list-copy"><span>{session.title}</span><small>{formatSessionDate(session.updatedAt)}</small></span>
-                {session.key === snapshot.sessionKey ? <CheckIcon /> : null}
+                {session.key === snapshot.conversationId ? <CheckIcon /> : null}
               </button>
             ))}
             {!snapshot.sessions.length ? <div className="session-list-empty">{t('noChatsFound')}</div> : null}
@@ -689,7 +689,7 @@ export function ChatPanel({ gatewayId }: { gatewayId: string }) {
           </section>
         ) : null}
         {processing ? <div className="composer-notice" role="status">{t('processingAttachments')}</div> : null}
-        {snapshot.queuedInputs?.map(input => <QueuedInput key={`${snapshot.sessionKey}:${input.id}`} input={input} onSave={(content, version) => client.editInput(input.id, version, content)} onCancel={() => client.cancelInput(input.id, input.version)} />)}
+        {snapshot.queuedInputs?.map(input => <QueuedInput key={`${snapshot.conversationId}:${input.id}`} input={input} onSave={(content, version) => client.editInput(input.id, version, content)} onCancel={() => client.cancelInput(input.id, input.version)} />)}
         {snapshot.pendingDelivery ? <div className="composer-notice" role="status">{t('queuedMessageNotice')}</div> : null}
         {error || (!connectionProblem && snapshot.error) ? <div className="composer-error" role="alert"><AlertIcon />{error || snapshot.error}</div> : null}
         {pageContexts.length || attachments.length ? <div className="composer-contexts">
@@ -872,10 +872,10 @@ export function ChatPanel({ gatewayId }: { gatewayId: string }) {
           </div>
           <div className="composer-toolbar-end">
             <ModelControls key={draftKey} models={snapshot.models} config={snapshot.modelConfig} disabled={sending || processing || voiceBusy || snapshot.submitting || snapshot.sessionLoading || Boolean(snapshot.runId)} onModel={model => updateModelConfig(async () => {
-              if (!client.currentSessionKey) {
+              if (!client.currentConversationId) {
                 const payload = drafts.get(draftKey);
                 await client.createSession();
-                drafts.update(keyForSession(client.currentSessionKey!), () => payload);
+                drafts.update(keyForSession(client.currentConversationId!), () => payload);
                 drafts.update(draftKey, () => EMPTY_DRAFT);
               }
               await client.updateModel(model);

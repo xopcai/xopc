@@ -46,7 +46,7 @@ async function postSessionInput(
   url: string,
   body: string,
   signal: AbortSignal,
-  expectedSessionKey?: string,
+  expectedConversationId?: string,
 ): Promise<Response> {
   let lastError: unknown;
   for (const delayMs of SESSION_INPUT_RETRY_DELAYS_MS) {
@@ -60,7 +60,7 @@ async function postSessionInput(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(expectedSessionKey ? { 'X-Xopc-Expected-Session-Key': expectedSessionKey } : {}),
+          ...(expectedConversationId ? { 'X-Xopc-Expected-Session-Key': expectedConversationId } : {}),
         },
         body,
         signal: controller.signal,
@@ -184,19 +184,19 @@ export function clearPendingAgentRunIfMatches(chatId: string, runId: string): bo
 }
 
 /** Enumerate durable UI run cursors for reconnect reconciliation. */
-export function listPendingAgentRuns(): Array<{ sessionKey: string; runId: string }> {
+export function listPendingAgentRuns(): Array<{ conversationId: string; runId: string }> {
   const prefix = 'xopc:pendingRun:';
-  const result: Array<{ sessionKey: string; runId: string }> = [];
+  const result: Array<{ conversationId: string; runId: string }> = [];
   try {
     for (let index = 0; index < sessionStorage.length; index += 1) {
       const storageKey = sessionStorage.key(index);
       if (!storageKey?.startsWith(prefix)) continue;
-      const sessionKey = storageKey.slice(prefix.length).trim();
+      const conversationId = storageKey.slice(prefix.length).trim();
       const raw = sessionStorage.getItem(storageKey);
-      if (!sessionKey || !raw) continue;
+      if (!conversationId || !raw) continue;
       const pending = JSON.parse(raw) as PendingAgentRun;
       const runId = typeof pending.runId === 'string' ? pending.runId.trim() : '';
-      if (runId) result.push({ sessionKey, runId });
+      if (runId) result.push({ conversationId, runId });
     }
   } catch {
     return result;
@@ -300,9 +300,9 @@ export type MessagingCallbacks = {
   /** Slash command or tool path started a persisted workflow run. */
   onWorkflowRunStarted?: (payload: {
     runId: string;
-    sessionKey: string;
+    conversationId: string;
     definitionId: string;
-    parentSessionKey?: string;
+    parentConversationId?: string;
   }) => void;
   onResult: (payload: AgentStreamRunEndPayload) => void;
   onError: (msg: string) => void;
@@ -340,7 +340,7 @@ export class MessageSender {
   /** Settle a run from the low-volume sessions topic when its run topic terminal was lost. */
   reconcileTerminal(chatId: string, runId: string, status: AgentStreamRunEndPayload['status']): boolean {
     if (!this.isTrackingRun(chatId, runId) || !this._streamFinish) return false;
-    this._terminalCallbacks?.onResult({ runId, sessionKey: chatId, status });
+    this._terminalCallbacks?.onResult({ runId, conversationId: chatId, status });
     this._streamFinish(true);
     return true;
   }
@@ -399,19 +399,19 @@ export class MessageSender {
 
     if (!res.ok) {
       const body = (await res.json().catch(() => ({}))) as { error?: { message?: string; code?: string } };
-      if (body.error?.code === 'CONFIG_CHANGED') window.dispatchEvent(new CustomEvent('session-model-config-stale', { detail: { sessionKey: chatId } }));
+      if (body.error?.code === 'CONFIG_CHANGED') window.dispatchEvent(new CustomEvent('session-model-config-stale', { detail: { conversationId: chatId } }));
       throw new Error(formatApiHttpError(res.status, res.statusText, body.error?.message));
     }
 
     const json = await res.json() as {
       payload?: {
-        sessionKey?: string;
+        conversationId?: string;
         state?: { activeRunId?: string; activeInputId?: string; inputs?: Array<{ id: string; clientMessageId: string }> };
       };
     };
     completeSubmission(chatId, clientMessageId);
     const state = json.payload?.state;
-    const resolvedChatId = json.payload?.sessionKey?.trim() || chatId;
+    const resolvedChatId = json.payload?.conversationId?.trim() || chatId;
     const ownInput = state?.inputs?.find((input) => input.clientMessageId === clientMessageId);
     if (state?.activeRunId && ownInput?.id === state.activeInputId) {
       await this.resume(state.activeRunId, resolvedChatId, callbacks);
@@ -767,11 +767,11 @@ export class MessageSender {
         const workflowRun = payload.workflowRun as Record<string, unknown> | undefined;
         if (workflowRun?.ok === true) {
           const runId = typeof workflowRun.runId === 'string' ? workflowRun.runId : '';
-          const sessionKey = typeof workflowRun.sessionKey === 'string' ? workflowRun.sessionKey : '';
+          const conversationId = typeof workflowRun.conversationId === 'string' ? workflowRun.conversationId : '';
           const definitionId = typeof workflowRun.definitionId === 'string' ? workflowRun.definitionId : '';
-          const parentSessionKey = typeof workflowRun.parentSessionKey === 'string' ? workflowRun.parentSessionKey : undefined;
-          if (runId && sessionKey && definitionId) {
-            cb?.onWorkflowRunStarted?.({ runId, sessionKey, definitionId, parentSessionKey });
+          const parentConversationId = typeof workflowRun.parentConversationId === 'string' ? workflowRun.parentConversationId : undefined;
+          if (runId && conversationId && definitionId) {
+            cb?.onWorkflowRunStarted?.({ runId, conversationId, definitionId, parentConversationId });
           }
         }
         break;
@@ -779,12 +779,12 @@ export class MessageSender {
       case 'run_end':
         if (
           typeof parsed.runId === 'string'
-          && typeof parsed.sessionKey === 'string'
+          && typeof parsed.conversationId === 'string'
           && (payload.status === 'success' || payload.status === 'error' || payload.status === 'cancelled' || payload.status === 'suspended')
         ) {
           cb?.onResult({
             runId: parsed.runId,
-            sessionKey: parsed.sessionKey,
+            conversationId: parsed.conversationId,
             status: payload.status,
             ...(typeof payload.summary === 'string' && payload.summary ? { summary: payload.summary } : {}),
           });

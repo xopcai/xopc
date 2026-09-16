@@ -14,39 +14,41 @@ it('builds grouped session tree picker rows with fork lineage', () => {
     const items = sessionTreeSelectItems(
       [
         {
-          key: 'agent:main:main',
+          key: '9961cfc0-54a5-49b4-908a-9c3a913c6962',
+          agentId: 'main', sourceChannel: 'cli',
           displayName: 'Main chat',
           updatedAt: 30,
           messageCount: 4,
         },
         {
-          key: 'agent:main:telegram:direct:alice',
+          key: '9961cfc0-54a5-49b4-908a-9c3a913c6961',
+          agentId: 'main', sourceChannel: 'telegram',
           displayName: 'Alice fork',
           updatedAt: 20,
           messageCount: 2,
-          forkedFromSessionKey: 'agent:main:main',
+          forkedFromConversationId: '9961cfc0-54a5-49b4-908a-9c3a913c6962',
         },
         {
-          key: 'legacy-session',
+          key: '9961cfc0-54a5-49b4-908a-9c3a913c6963',
           updatedAt: 10,
         },
       ],
-      'agent:main:main',
+      '9961cfc0-54a5-49b4-908a-9c3a913c6962',
     );
 
-    const current = items.find((item) => item.value === 'agent:main:main');
+    const current = items.find((item) => item.value === '9961cfc0-54a5-49b4-908a-9c3a913c6962');
     expect(current?.label).toBe('* Main chat');
-    expect(current?.description).toContain('main/main');
+    expect(current?.description).toContain('main/cli');
     expect(current?.description).toContain('4 msgs');
 
-    const fork = items.find((item) => item.value === 'agent:main:telegram:direct:alice');
+    const fork = items.find((item) => item.value === '9961cfc0-54a5-49b4-908a-9c3a913c6961');
     expect(fork?.label).toBe('  Alice fork');
     expect(fork?.description).toContain('main/telegram');
     expect(fork?.description).toContain('forked from Main chat');
     expect(fork?.searchText).toContain('Main chat');
 
-    const legacy = items.find((item) => item.value === 'legacy-session');
-    expect(legacy?.description).toContain('legacy/legacy-session');
+    const unknown = items.find((item) => item.value === '9961cfc0-54a5-49b4-908a-9c3a913c6963');
+    expect(unknown?.description).toContain('unknown/chat');
   });
 
   it('builds transcript tree picker rows with indentation and searchable metadata', () => {

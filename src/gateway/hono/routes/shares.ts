@@ -274,7 +274,7 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
         if (consumed.valid === false) return c.json({ ok: false, error: { message: consumed.reason } }, 410);
         logShareAudit(
           'share.access',
-          { shareId: record.id, sourceSessionId: record.sourceSessionId, tokenPrefix: token.slice(0, 8), clientIp, snapshotRevision: record.snapshotRevision },
+          { shareId: record.id, sourceTranscriptId: record.sourceTranscriptId, tokenPrefix: token.slice(0, 8), clientIp, snapshotRevision: record.snapshotRevision },
           `Session share viewed: ${record.fileName}`,
         );
         const ticket = manifest.attachments.length ? sessionShares.issueAssetTicket(record) : null;
@@ -324,7 +324,7 @@ export function registerSharePublicRoutes(app: Hono, service: GatewayService): v
         'share.access_denied',
         {
           shareId: record.id,
-          ...(record.kind === 'note' ? { noteId: record.sourceNoteId } : { sourceSessionId: record.sourceSessionId }),
+          ...(record.kind === 'note' ? { noteId: record.sourceNoteId } : { sourceTranscriptId: record.sourceTranscriptId }),
           tokenPrefix: token.slice(0, 8),
           clientIp,
           reason: 'artifact_missing',
@@ -644,10 +644,10 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
 
   authenticated.get('/api/sessions/:key/shares', async (c) => {
     const metadata = await service.sessionIndexInstance.getSessionMetadata(c.req.param('key'));
-    if (!metadata?.sessionId) return c.json({ ok: false, error: { message: 'Session not found' } }, 404);
+    if (!metadata?.transcriptId) return c.json({ ok: false, error: { message: 'Session not found' } }, 404);
     const urlCtx = getShareUrlContext(service);
     const now = Date.now();
-    const items = sessionShares.list(metadata.sessionId).map((record) => {
+    const items = sessionShares.list(metadata.transcriptId).map((record) => {
       const resolved = resolveShareUrl(record.token, urlCtx);
       return {
         id: record.id,
@@ -678,12 +678,12 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
   authenticated.post('/api/sessions/:key/shares', async (c) => {
     const principalId = getGatewayPrincipal(c).principalId;
     const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
-    if (typeof body.expectedSessionId !== 'string' || typeof body.expectedCutoffSeq !== 'number' || typeof body.expectedMetadataUpdatedAt !== 'string') {
+    if (typeof body.expectedTranscriptId !== 'string' || typeof body.expectedCutoffSeq !== 'number' || typeof body.expectedMetadataUpdatedAt !== 'string') {
       return c.json({ ok: false, error: { message: 'Share preview fingerprint is required' } }, 400);
     }
     try {
       const record = await sessionShares.create(c.req.param('key'), {
-        expectedSessionId: body.expectedSessionId,
+        expectedTranscriptId: body.expectedTranscriptId,
         expectedCutoffSeq: body.expectedCutoffSeq,
         expectedMetadataUpdatedAt: body.expectedMetadataUpdatedAt,
         ttlMs: typeof body.ttlMs === 'number' ? body.ttlMs : undefined,
@@ -726,12 +726,12 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
 
   authenticated.post('/api/sessions/:key/shares/:shareId/refresh', async (c) => {
     const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
-    if (typeof body.expectedSessionId !== 'string' || typeof body.expectedCutoffSeq !== 'number' || typeof body.expectedMetadataUpdatedAt !== 'string') {
+    if (typeof body.expectedTranscriptId !== 'string' || typeof body.expectedCutoffSeq !== 'number' || typeof body.expectedMetadataUpdatedAt !== 'string') {
       return c.json({ ok: false, error: { message: 'Share preview fingerprint is required' } }, 400);
     }
     try {
       const record = await sessionShares.refresh(c.req.param('key'), c.req.param('shareId'), {
-        expectedSessionId: body.expectedSessionId,
+        expectedTranscriptId: body.expectedTranscriptId,
         expectedCutoffSeq: body.expectedCutoffSeq,
         expectedMetadataUpdatedAt: body.expectedMetadataUpdatedAt,
         includeToolActivities: typeof body.includeToolActivities === 'boolean' ? body.includeToolActivities : undefined,
@@ -767,12 +767,12 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
 
   authenticated.get('/api/sessions/:key/hosted-shares', async (c) => {
     const metadata = await service.sessionIndexInstance.getSessionMetadata(c.req.param('key'));
-    if (!metadata?.sessionId) return c.json({ ok: false, error: { message: 'Session not found' } }, 404);
+    if (!metadata?.transcriptId) return c.json({ ok: false, error: { message: 'Session not found' } }, 404);
     try {
       await hostedBindings.reconcile(await hostedPublisher.listPublications());
       return c.json({
         ok: true,
-        payload: { shares: (await hostedBindings.list(metadata.sessionId)).map(hostedBindingResponse) },
+        payload: { shares: (await hostedBindings.list(metadata.transcriptId)).map(hostedBindingResponse) },
       });
     } catch (err) {
       return hostedShareErrorResponse(c, err);
@@ -781,7 +781,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
 
   authenticated.post('/api/sessions/:key/hosted-shares', async (c) => {
     const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
-    if (typeof body.expectedSessionId !== 'string' || typeof body.expectedCutoffSeq !== 'number' || typeof body.expectedMetadataUpdatedAt !== 'string') {
+    if (typeof body.expectedTranscriptId !== 'string' || typeof body.expectedCutoffSeq !== 'number' || typeof body.expectedMetadataUpdatedAt !== 'string') {
       return c.json({ ok: false, error: { message: 'Share preview fingerprint is required' } }, 400);
     }
     try {
@@ -794,11 +794,11 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
       const binding: HostedShareBinding = {
         ...result,
         kind: 'session_document',
-        source: { kind: 'session', id: snapshot.sessionId, version: String(snapshot.cutoffSeq) },
+        source: { kind: 'session', id: snapshot.transcriptId, version: String(snapshot.cutoffSeq) },
         revisionSources: {
-          [String(result.snapshotRevision)]: { kind: 'session', id: snapshot.sessionId, version: String(snapshot.cutoffSeq) },
+          [String(result.snapshotRevision)]: { kind: 'session', id: snapshot.transcriptId, version: String(snapshot.cutoffSeq) },
         },
-        sessionId: snapshot.sessionId,
+        transcriptId: snapshot.transcriptId,
         cutoffSeq: snapshot.cutoffSeq,
         title: snapshot.manifest.title,
         description: snapshot.manifest.description ?? null,
@@ -819,10 +819,10 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
 
   authenticated.post('/api/sessions/:key/hosted-shares/:shareId/refresh', async (c) => {
     const body = await c.req.json().catch(() => ({})) as Record<string, unknown>;
-    if (typeof body.expectedSessionId !== 'string' || typeof body.expectedCutoffSeq !== 'number' || typeof body.expectedMetadataUpdatedAt !== 'string') {
+    if (typeof body.expectedTranscriptId !== 'string' || typeof body.expectedCutoffSeq !== 'number' || typeof body.expectedMetadataUpdatedAt !== 'string') {
       return c.json({ ok: false, error: { message: 'Share preview fingerprint is required' } }, 400);
     }
-    const previous = (await hostedBindings.list(body.expectedSessionId))
+    const previous = (await hostedBindings.list(body.expectedTranscriptId))
       .find((binding) => binding.id === c.req.param('shareId') && !binding.revoked);
     if (!previous) return c.json({ ok: false, error: { message: 'Hosted share not found' } }, 404);
     try {
@@ -841,10 +841,10 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
         ...previous,
         ...result,
         kind: 'session_document',
-        source: { kind: 'session', id: snapshot.sessionId, version: String(snapshot.cutoffSeq) },
+        source: { kind: 'session', id: snapshot.transcriptId, version: String(snapshot.cutoffSeq) },
         revisionSources: {
           ...previous.revisionSources,
-          [String(result.snapshotRevision)]: { kind: 'session', id: snapshot.sessionId, version: String(snapshot.cutoffSeq) },
+          [String(result.snapshotRevision)]: { kind: 'session', id: snapshot.transcriptId, version: String(snapshot.cutoffSeq) },
         },
         cutoffSeq: snapshot.cutoffSeq,
         title: snapshot.manifest.title,
@@ -865,8 +865,8 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
 
   authenticated.delete('/api/sessions/:key/hosted-shares/:shareId', async (c) => {
     const metadata = await service.sessionIndexInstance.getSessionMetadata(c.req.param('key'));
-    if (!metadata?.sessionId) return c.json({ ok: false, error: { message: 'Session not found' } }, 404);
-    const binding = (await hostedBindings.list(metadata.sessionId)).find((item) => item.id === c.req.param('shareId'));
+    if (!metadata?.transcriptId) return c.json({ ok: false, error: { message: 'Session not found' } }, 404);
+    const binding = (await hostedBindings.list(metadata.transcriptId)).find((item) => item.id === c.req.param('shareId'));
     if (!binding) return c.json({ ok: false, error: { message: 'Hosted share not found' } }, 404);
     try {
       await hostedPublisher.revoke(binding.id);
@@ -973,7 +973,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
     try {
       const workspaceRoot = await resolveWorkspaceRootForShare(
         service,
-        typeof body.sessionKey === 'string' ? body.sessionKey : undefined,
+        typeof body.conversationId === 'string' ? body.conversationId : undefined,
         typeof body.agentId === 'string' ? body.agentId : undefined,
       );
       if (!workspaceRoot) return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
@@ -985,7 +985,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
         spaFallback: typeof body.spaFallback === 'boolean' ? body.spaFallback : undefined,
         ttlMs: typeof body.ttlMs === 'number' ? body.ttlMs : 86_400_000,
         maxViews: body.maxViews === null ? null : typeof body.maxViews === 'number' ? body.maxViews : null,
-        sessionKey: typeof body.sessionKey === 'string' ? body.sessionKey : undefined,
+        conversationId: typeof body.conversationId === 'string' ? body.conversationId : undefined,
         agentId: typeof body.agentId === 'string' ? body.agentId : undefined,
       }, { builder: hostedSiteBuilder, publisher: hostedPublisher, bindings: hostedBindings });
       return c.json({ ok: true, payload: { ...hostedPublicationBindingResponse(binding), fileCount: snapshot.fileCount, totalBytes: snapshot.totalBytes } }, 201);
@@ -1003,7 +1003,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
     try {
       const workspaceRoot = previous.workspaceContext?.workspaceRoot ?? await resolveWorkspaceRootForShare(
         service,
-        previous.workspaceContext?.sessionKey,
+        previous.workspaceContext?.conversationId,
         previous.workspaceContext?.agentId,
       );
       if (!workspaceRoot) return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
@@ -1149,7 +1149,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
     if ([path, fileId, uri].filter(Boolean).length !== 1) {
       return c.json({ ok: false, error: { message: 'Provide exactly one of path, fileId or uri' } }, 400);
     }
-    const sessionKey = typeof body.sessionKey === 'string' ? body.sessionKey.trim() : undefined;
+    const conversationId = typeof body.conversationId === 'string' ? body.conversationId.trim() : undefined;
     const agentId = typeof body.agentId === 'string' ? body.agentId.trim() : undefined;
     const taskId = typeof body.taskId === 'string' ? body.taskId.trim() : undefined;
     const fileName = typeof body.fileName === 'string' ? basename(body.fileName.trim().replace(/\\/g, '/')) : undefined;
@@ -1161,11 +1161,11 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
         workspaceRoot = target.space.root;
         path = target.resource.relativePath || '.';
       } else if (uri) {
-        const media = await resolveScopedMediaReference(service, uri, { sessionKey, taskId });
+        const media = await resolveScopedMediaReference(service, uri, { conversationId, taskId });
         workspaceRoot = dirname(media.path);
         path = basename(media.path);
       } else {
-        workspaceRoot = await resolveWorkspaceRootForShare(service, sessionKey, agentId);
+        workspaceRoot = await resolveWorkspaceRootForShare(service, conversationId, agentId);
       }
       if (!workspaceRoot) throw new Error('Workspace not configured');
     } catch (err) {
@@ -1191,7 +1191,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
         ttlMs,
         maxViews,
         description,
-        sessionKey,
+        conversationId,
         agentId,
         workspaceRoot,
         gatewayTokenHash: hashPrincipal(principalId),
@@ -1250,7 +1250,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
     const fileId = typeof body.fileId === 'string' ? body.fileId.trim() : '';
     let path = typeof body.path === 'string' ? body.path.trim() : '';
     if (!fileId && !path) return c.json({ ok: false, error: { message: 'Missing path or fileId' } }, 400);
-    const sessionKey = typeof body.sessionKey === 'string' ? body.sessionKey.trim() : undefined;
+    const conversationId = typeof body.conversationId === 'string' ? body.conversationId.trim() : undefined;
     const agentId = typeof body.agentId === 'string' ? body.agentId.trim() : undefined;
     const mode = (typeof body.mode === 'string' && ['auto', 'force-file', 'force-site', 'force-zip'].includes(body.mode))
       ? (body.mode as ShareAutoMode)
@@ -1274,7 +1274,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
         workspaceRoot = target.space.root;
         path = target.resource.relativePath || '.';
       } else {
-        workspaceRoot = await resolveWorkspaceRootForShare(service, sessionKey, agentId);
+        workspaceRoot = await resolveWorkspaceRootForShare(service, conversationId, agentId);
       }
       if (!workspaceRoot) {
         return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
@@ -1320,7 +1320,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
             spaFallback: true,
             ttlMs,
             maxViews: maxViews ?? null,
-            sessionKey,
+            conversationId,
             agentId,
           }, { builder: hostedSiteBuilder, publisher: hostedPublisher, bindings: hostedBindings });
           return c.json({
@@ -1364,7 +1364,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
           subdomain: typeof body.subdomain === 'string' ? body.subdomain : undefined,
           spaFallback: true,
           rewriteMode: 'html-css',
-          sessionKey,
+          conversationId,
           agentId,
           workspaceRoot,
           gatewayTokenHash: tokenHash,
@@ -1452,7 +1452,7 @@ export function registerShareRoutes(authenticated: Hono, deps: AuthenticatedRout
           snapshotRevision: r.snapshotRevision,
           attachmentCount: r.attachmentCount,
         } : r.kind === 'session' ? {
-          sourceSessionId: r.sourceSessionId,
+          sourceTranscriptId: r.sourceTranscriptId,
           cutoffSeq: r.cutoffSeq,
           snapshotRevision: r.snapshotRevision,
           messageCount: r.messageCount,
@@ -1582,14 +1582,14 @@ function createSessionShareService(
 
 function createSessionShareSource(service: GatewayService) {
   return {
-    getMetadata: (sessionKey) => service.sessionIndexInstance.getSessionMetadata(sessionKey),
-    getSnapshot: async (sessionKey) => loadCompactionSourceSnapshot(sessionKey),
+    getMetadata: (conversationId) => service.sessionIndexInstance.getSessionMetadata(conversationId),
+    getSnapshot: async (conversationId) => loadCompactionSourceSnapshot(conversationId),
   };
 }
 
 function hostedBuildInput(body: Record<string, unknown>) {
   return {
-    expectedSessionId: String(body.expectedSessionId),
+    expectedTranscriptId: String(body.expectedTranscriptId),
     expectedCutoffSeq: Number(body.expectedCutoffSeq),
     expectedMetadataUpdatedAt: String(body.expectedMetadataUpdatedAt),
     description: typeof body.description === 'string' ? body.description.trim() || undefined : undefined,
@@ -1946,14 +1946,14 @@ function relPathFromAbs(workspaceRoot: string, abs: string): string {
 
 async function resolveWorkspaceRootForShare(
   service: GatewayService,
-  sessionKey: string | undefined,
+  conversationId: string | undefined,
   agentId: string | undefined,
 ): Promise<string | null> {
   const cfg = service.currentConfig;
 
-  if (sessionKey) {
+  if (conversationId) {
     try {
-      return await service.sessions.getEffectiveWorkspacePath(sessionKey);
+      return await service.sessions.getEffectiveWorkspacePath(conversationId);
     } catch {
       /* fall through to agentId */
     }

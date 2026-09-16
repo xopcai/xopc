@@ -36,7 +36,7 @@ describe('notification routes', () => {
       dedupeKey: 'chat.completed:run-1',
       notification: {
         type: 'chat.completed',
-        target: { kind: 'chat', sessionKey: 'session-1' },
+        target: { kind: 'chat', conversationId: 'session-1' },
         priority: 'normal',
         title: { en: 'Response ready', zh: '回答已就绪' },
         payload: { runId: 'run-1' },
@@ -47,7 +47,7 @@ describe('notification routes', () => {
     const list = await app.request('/api/notifications?since=0');
     expect(await list.json()).toMatchObject({
       ok: true,
-      items: [{ id: notification.id, target: { kind: 'chat', sessionKey: 'session-1' } }],
+      items: [{ id: notification.id, target: { kind: 'chat', conversationId: 'session-1' } }],
       nextCursor: notification.id,
     });
     const ack = await app.request(`/api/notifications/${notification.id}/ack`, {

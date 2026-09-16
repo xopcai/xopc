@@ -1,3 +1,5 @@
+import { createConversation, resolveRoutedConversation } from '../../storage/sqlite/conversation-repository.js';
+import { resolveDefaultAgentId } from '../../agent/agent-scope.js';
 import { readFile } from 'fs/promises';
 
 import { beginHeartbeatCheck, completeHeartbeatCheck, deliverHeartbeatChecks, recentHeartbeatChecks, recoverHeartbeatChecks } from './check-store.js';
@@ -185,9 +187,10 @@ export class HeartbeatService {
       return;
     }
 
-    const sessionKey = cfg.isolatedSession
-      ? `heartbeat:isolated:${Date.now()}`
-      : 'heartbeat:main';
+    const agentId = resolveDefaultAgentId(this.deps.getConfig());
+    const conversationId = cfg.isolatedSession
+      ? createConversation({ agentId, sourceChannel: 'heartbeat', sessionType: 'heartbeat' }).key
+      : resolveRoutedConversation({ agentId, source: 'heartbeat', peerKind: 'direct', peerId: 'main' }, { sessionType: 'heartbeat' });
 
     let basePrompt = (cfg.prompt?.trim() || DEFAULT_PROMPT).trim();
     if (heartbeatContent) {
@@ -199,21 +202,21 @@ export class HeartbeatService {
 
     const ackMax = cfg.ackMaxChars ?? DEFAULT_ACK_MAX_CHARS;
 
-    log.debug({ sessionKey, reasons: reasonSummary }, 'Heartbeat: invoking agent');
+    log.debug({ conversationId, reasons: reasonSummary }, 'Heartbeat: invoking agent');
 
-    // `heartbeat:main` reuses one session key; each run would otherwise append to the transcript
+    // The shared heartbeat conversation is reused; each run would otherwise append to the transcript
     // until the model rejects the request (context window exceeded). Heartbeat prompts are
     // self-contained (HEARTBEAT.md + this turn's text), so we start from an empty history.
-    if (sessionKey === 'heartbeat:main') {
+    if (!cfg.isolatedSession) {
       try {
-        await this.deps.sessionStore.saveMessages(sessionKey, [], {
+        await this.deps.sessionStore.saveMessages(conversationId, [], {
           metadata: {
             sourceChannel: 'heartbeat',
             sourceChatId: 'main',
             sessionType: 'heartbeat',
             customData: { heartbeatTarget: 'main' },
             routing: {
-              agentId: 'main',
+              agentId,
               source: 'heartbeat',
               accountId: 'default',
               peerKind: 'direct',
@@ -222,7 +225,7 @@ export class HeartbeatService {
           },
         });
       } catch (err) {
-        log.warn({ err, sessionKey }, 'Heartbeat: failed to reset main session transcript');
+        log.warn({ err, conversationId }, 'Heartbeat: failed to reset main session transcript');
       }
     }
 
@@ -230,7 +233,7 @@ export class HeartbeatService {
     try {
       reply = await this.deps.agentService.turnDispatcher.processDirect(
         prompt,
-        sessionKey,
+        conversationId,
         { type: 'system', source: 'heartbeat' },
       );
     } catch (error) {

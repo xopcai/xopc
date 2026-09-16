@@ -34,10 +34,10 @@ export class SideChatError extends Error {
 }
 
 export interface EphemeralSideChatManagerOptions {
-  getParentMetadata: (sessionKey: string) => Promise<SessionMetadata | null>;
-  loadParentMessages: (sessionKey: string) => Promise<AgentMessage[]>;
-  getDefaultModelRef: (sessionKey: string) => string;
-  getDefaultThinkingLevel?: (sessionKey: string) => ThinkingLevel;
+  getParentMetadata: (conversationId: string) => Promise<SessionMetadata | null>;
+  loadParentMessages: (conversationId: string) => Promise<AgentMessage[]>;
+  getDefaultModelRef: (conversationId: string) => string;
+  getDefaultThinkingLevel?: (conversationId: string) => ThinkingLevel;
   getWorkspacePath: (metadata: SessionMetadata) => string;
   idleTtlMs?: number;
   maxPerClient?: number;
@@ -76,10 +76,10 @@ export class EphemeralSideChatManager {
   }
 
   async create(input: CreateSideChatInput): Promise<SideChatView> {
-    const parentSessionKey = input.parentSessionKey.trim();
+    const parentConversationId = input.parentConversationId.trim();
     const clientInstanceId = input.clientInstanceId.trim();
-    if (!parentSessionKey || !clientInstanceId) {
-      throw new SideChatError('parentSessionKey and clientInstanceId are required', 'INVALID_REQUEST');
+    if (!parentConversationId || !clientInstanceId) {
+      throw new SideChatError('parentConversationId and clientInstanceId are required', 'INVALID_REQUEST');
     }
     await this.sweepExpired();
     if (this.stopped || this.entries.size + [...this.reservations.values()].reduce((a, b) => a + b, 0) >= this.maxTotal) {
@@ -92,7 +92,7 @@ export class EphemeralSideChatManager {
 
     this.reservations.set(clientInstanceId, (this.reservations.get(clientInstanceId) ?? 0) + 1);
     try {
-      return await this.createEntry({ ...input, parentSessionKey, clientInstanceId });
+      return await this.createEntry({ ...input, parentConversationId, clientInstanceId });
     } finally {
       const remaining = (this.reservations.get(clientInstanceId) ?? 1) - 1;
       if (remaining) this.reservations.set(clientInstanceId, remaining);
@@ -101,10 +101,10 @@ export class EphemeralSideChatManager {
   }
 
   private async createEntry(input: CreateSideChatInput): Promise<SideChatView> {
-    const { parentSessionKey, clientInstanceId } = input;
-    const metadata = await this.options.getParentMetadata(parentSessionKey);
-    if (!metadata || !metadata.sessionId) throw new SideChatError('Parent session not found', 'PARENT_NOT_FOUND');
-    const parentMessages = await this.options.loadParentMessages(parentSessionKey);
+    const { parentConversationId, clientInstanceId } = input;
+    const metadata = await this.options.getParentMetadata(parentConversationId);
+    if (!metadata || !metadata.transcriptId) throw new SideChatError('Parent session not found', 'PARENT_NOT_FOUND');
+    const parentMessages = await this.options.loadParentMessages(parentConversationId);
     if (this.stopped) throw new SideChatError('Gateway is stopping', 'CAPACITY_REACHED');
     let selections;
     try {
@@ -116,7 +116,7 @@ export class EphemeralSideChatManager {
     const createdAt = new Date(now).toISOString();
     const id = randomUUID();
     const runtime = new InMemoryTranscriptRuntime({
-      runtimeId: `${parentSessionKey}:side-chat:${id}`,
+      runtimeId: `${parentConversationId}:side-chat:${id}`,
       cwd: this.options.getWorkspacePath(metadata),
       initialMessages: structuredClone(parentMessages),
     });
@@ -130,14 +130,14 @@ export class EphemeralSideChatManager {
     }
     runtime.captureBaseline();
     const config: SideChatConfig = {
-      modelRef: normalizeOptionalString(input.config?.modelRef) || this.options.getDefaultModelRef(parentSessionKey),
+      modelRef: normalizeOptionalString(input.config?.modelRef) || this.options.getDefaultModelRef(parentConversationId),
       thinkingLevel: input.config?.thinkingLevel
-        ?? this.options.getDefaultThinkingLevel?.(parentSessionKey)
+        ?? this.options.getDefaultThinkingLevel?.(parentConversationId)
         ?? 'medium',
     };
     const entry: SideChatEntry = {
       id,
-      parentSessionKey,
+      parentConversationId,
       clientInstanceId,
       status: 'idle',
       createdAt,
@@ -146,8 +146,8 @@ export class EphemeralSideChatManager {
       expiresAt: new Date(now + this.idleTtlMs).toISOString(),
       messageCount: 0,
       context: createSideChatContextSnapshot({
-        parentSessionKey,
-        parentSessionId: metadata.sessionId,
+        parentConversationId,
+        parentTranscriptId: metadata.transcriptId,
         parentMessages,
         selections,
         createdAt,

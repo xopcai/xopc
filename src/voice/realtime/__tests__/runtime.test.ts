@@ -62,7 +62,7 @@ describe('VoiceRealtimeRuntime session creation', () => {
     const nativeConfig = ConfigSchema.parse({ voice: { realtime: { enabled: true, defaultEngine: 'omni', omni: { provider: 'alibaba', model: 'qwen3-omni-flash-realtime', voice: 'Cherry', apiKey: 'native-secret' } } } });
     runtime = new VoiceRealtimeRuntime({ getConfig: () => nativeConfig, sessionExists: async () => true, sessionBusy: () => false,
       getConversationContext: async () => ({ identity: '', history: [] }), getSessionIdentity: async () => 'stored-session', recordOmniTranscript: async () => {}, recordInterruption: async () => {}, agentBroker: { delegate: vi.fn(), cancel: vi.fn(async () => true) } });
-    const request = { purpose: 'conversation' as const, sessionKey: 'chat', ...negotiation };
+    const request = { purpose: 'conversation' as const, conversationId: 'chat', ...negotiation };
     const result = await runtime.createSession(request, 'user');
     expect(result.route).toEqual({ engine: 'omni', omni: { provider: 'alibaba', model: 'qwen3-omni-flash-realtime', managed: false } });
     expect(JSON.stringify(result)).not.toContain('native-secret');
@@ -72,7 +72,7 @@ describe('VoiceRealtimeRuntime session creation', () => {
 
   it('freezes both Qwen routes for conversation', async () => {
     const result = await createRuntime().createSession(
-      { purpose: 'conversation', mode: 'assistant', sessionKey: 'agent:main:webchat:default:direct:voice', ...negotiation },
+      { purpose: 'conversation', mode: 'assistant', conversationId: 'agent:main:webchat:default:direct:voice', ...negotiation },
       'user-1',
     );
 
@@ -88,14 +88,14 @@ describe('VoiceRealtimeRuntime session creation', () => {
 
   it('allows assistant mode to steer an already running chat', async () => {
     await expect(createRuntime({ busy: true }).createSession(
-      { purpose: 'conversation', mode: 'assistant', sessionKey: 'agent:main:webchat:default:direct:voice', ...negotiation },
+      { purpose: 'conversation', mode: 'assistant', conversationId: 'agent:main:webchat:default:direct:voice', ...negotiation },
       'user-1',
     )).resolves.toHaveProperty('mode', 'assistant');
   });
 
   it('preflights without reserving a chat or issuing a ticket', async () => {
     const service = createRuntime();
-    const request = { purpose: 'conversation' as const, mode: 'assistant' as const, sessionKey: 'chat', ...negotiation };
+    const request = { purpose: 'conversation' as const, mode: 'assistant' as const, conversationId: 'chat', ...negotiation };
     await service.preflight(request);
     await service.preflight(request);
     expect(service.hasConversation('chat')).toBe(false);
@@ -106,7 +106,7 @@ describe('VoiceRealtimeRuntime session creation', () => {
     const service = createRuntime();
     const request = {
       purpose: 'conversation' as const, mode: 'assistant' as const, ...negotiation,
-      sessionKey: 'agent:main:webchat:default:direct:voice',
+      conversationId: 'agent:main:webchat:default:direct:voice',
     };
     await service.createSession(request, 'user-1');
 
@@ -120,15 +120,15 @@ describe('VoiceRealtimeRuntime session creation', () => {
     const service = createRuntime();
     const request = {
       purpose: 'conversation' as const, mode: 'assistant' as const, ...negotiation,
-      sessionKey: 'agent:main:webchat:default:direct:voice',
+      conversationId: 'agent:main:webchat:default:direct:voice',
     };
     const issued = await service.createSession(request, 'user-1');
 
     await expect(service.cancelSession(issued.sessionId, issued.ticket, 'user-2')).resolves.toBe(false);
-    expect(service.hasConversation(request.sessionKey)).toBe(true);
+    expect(service.hasConversation(request.conversationId)).toBe(true);
     await expect(service.cancelSession(issued.sessionId, issued.ticket, 'user-1')).resolves.toBe(true);
     await expect(service.cancelSession(issued.sessionId, issued.ticket, 'user-1')).resolves.toBe(false);
-    expect(service.hasConversation(request.sessionKey)).toBe(false);
+    expect(service.hasConversation(request.conversationId)).toBe(false);
     await expect(service.createSession(request, 'user-1')).resolves.toHaveProperty('ticket');
   });
 
@@ -136,7 +136,7 @@ describe('VoiceRealtimeRuntime session creation', () => {
     const service = createRuntime();
     const request = {
       purpose: 'conversation' as const, mode: 'assistant' as const, ...negotiation,
-      sessionKey: 'agent:main:webchat:default:direct:voice',
+      conversationId: 'agent:main:webchat:default:direct:voice',
     };
     await service.createSession(request, 'user-1', 1_000);
 

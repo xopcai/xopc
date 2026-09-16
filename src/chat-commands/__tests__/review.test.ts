@@ -1,3 +1,9 @@
+import { requireXopcDatabase as openFixtureDatabase } from '../../storage/sqlite/connection.js';
+import { ensureSessionRecord as ensureFixtureConversation } from '../../storage/sqlite/session-repository.js';
+function seedConversationFixtures(): void {
+  openFixtureDatabase();
+  ensureFixtureConversation("dd1b1777-d20d-4b57-8115-3e9d1def4dfa", '', {"agentId":"main","sourceChannel":"webchat","sourceChatId":"review-test","sessionType":"chat","routing":{"agentId":"main","source":"webchat","accountId":"default","peerKind":"direct","peerId":"review-test"}});
+}
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -21,7 +27,7 @@ function createContext(
   emitEvent?: CommandContext['emitEvent'],
 ): CommandContext {
   return {
-    sessionKey: 'agent:main:webchat:review-test',
+    conversationId: "dd1b1777-d20d-4b57-8115-3e9d1def4dfa",
     source: 'webui',
     channelId: 'webchat',
     chatId: 'review-test',
@@ -73,6 +79,7 @@ describe('/review command', () => {
   });
 
   it('returns structured review metadata from reviewer JSON', async () => {
+    seedConversationFixtures();
     writeFileSync(join(repo, 'app.ts'), 'export const value = 2;\n');
     const btwQuery = vi.fn(async () => ({
       text: JSON.stringify({
@@ -114,6 +121,7 @@ describe('/review command', () => {
   }, 15_000);
 
   it('uses a session-selected model before the agent review role', async () => {
+    seedConversationFixtures();
     writeFileSync(join(repo, 'app.ts'), 'export const value = 2;\n');
     const btwQuery = vi.fn(async () => ({
       text: JSON.stringify({
@@ -140,6 +148,7 @@ describe('/review command', () => {
   }, 15_000);
 
   it('includes frozen Note context as untrusted review reference material', async () => {
+    seedConversationFixtures();
     writeFileSync(join(repo, 'app.ts'), 'export const value = 2;\n');
     const btwQuery = vi.fn(async () => ({
       text: JSON.stringify({
@@ -165,6 +174,7 @@ describe('/review command', () => {
   }, 15_000);
 
   it('uses an agent review role when the session has no model override', async () => {
+    seedConversationFixtures();
     writeFileSync(join(repo, 'app.ts'), 'export const value = 2;\n');
     const btwQuery = vi.fn(async () => ({
       text: JSON.stringify({
@@ -187,6 +197,7 @@ describe('/review command', () => {
   });
 
   it('emits isolated review lifecycle events for streaming clients', async () => {
+    seedConversationFixtures();
     writeFileSync(join(repo, 'app.ts'), 'export const value = 2;\n');
     const btwQuery = vi.fn(async () => ({
       text: JSON.stringify({
@@ -218,6 +229,7 @@ describe('/review command', () => {
   });
 
   it('forwards only user-facing reviewer draft deltas', async () => {
+    seedConversationFixtures();
     writeFileSync(join(repo, 'app.ts'), 'export const value = 2;\n');
     const emitEvent = vi.fn();
     const btwQuery = vi.fn(async (_prompt: string, options?: { onTextDelta?: (delta: string) => Promise<void> }) => {
@@ -241,6 +253,7 @@ describe('/review command', () => {
   });
 
   it('marks reviewer fallback as a failed review instead of no findings', async () => {
+    seedConversationFixtures();
     writeFileSync(join(repo, 'app.ts'), 'export const value = 2;\n');
     const btwQuery = vi.fn(async () => ({ text: 'not json' }));
     const emitEvent = vi.fn();
@@ -259,6 +272,7 @@ describe('/review command', () => {
   });
 
   it('includes untracked file contents in the reviewer prompt', async () => {
+    seedConversationFixtures();
     writeFileSync(join(repo, 'new-file.ts'), 'export const created = true;\n');
     const btwQuery = vi.fn(async () => ({
       text: JSON.stringify({
@@ -281,6 +295,7 @@ describe('/review command', () => {
   });
 
   it('reviews changes against a base branch', async () => {
+    seedConversationFixtures();
     git(repo, ['checkout', '-b', 'feature']);
     writeFileSync(join(repo, 'app.ts'), 'export const value = 3;\n');
     git(repo, ['add', 'app.ts']);
@@ -304,6 +319,7 @@ describe('/review command', () => {
   });
 
   it('reviews a selected commit', async () => {
+    seedConversationFixtures();
     writeFileSync(join(repo, 'app.ts'), 'export const value = 4;\n');
     git(repo, ['add', 'app.ts']);
     git(repo, ['-c', 'user.email=test@example.com', '-c', 'user.name=Test', 'commit', '-m', 'change value']);
@@ -326,6 +342,7 @@ describe('/review command', () => {
   });
 
   it('fails clearly for an invalid commit target', async () => {
+    seedConversationFixtures();
     const btwQuery = vi.fn(async () => ({ text: '{}' }));
 
     const result = await commandRegistry.execute('review', createContext(repo, btwQuery), '--commit not-a-sha');
@@ -336,6 +353,7 @@ describe('/review command', () => {
   });
 
   it('builds review context for UI launchers', async () => {
+    seedConversationFixtures();
     writeFileSync(join(repo, 'new-file.ts'), 'export const created = true;\n');
     const context = await buildReviewContext(repo);
 

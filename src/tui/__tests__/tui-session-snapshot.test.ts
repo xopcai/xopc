@@ -4,12 +4,12 @@ import { TuiSessionSnapshot } from '../tui-session-snapshot.js';
 
 describe('TuiSessionSnapshot', () => {
   it('exposes a pi-style read-only session manager snapshot', () => {
-    let sessionKey = 'agent:main:main';
+    let conversationId = 'agent:main:main';
     const snapshot = new TuiSessionSnapshot(
-      () => sessionKey,
+      () => conversationId,
       () => '/tmp/work',
       () => 'Main session',
-      () => `/tmp/xopc.db#session=${encodeURIComponent(sessionKey)}`,
+      () => `/tmp/xopc.db#session=${encodeURIComponent(conversationId)}`,
       () => '/tmp/.xopc',
     );
 
@@ -126,7 +126,7 @@ describe('TuiSessionSnapshot', () => {
       message: { role: 'user', content: 'next' },
     });
 
-    sessionKey = 'agent:other:main';
+    conversationId = 'agent:other:main';
     expect(manager.getSessionId()).toBe('agent:other:main');
     expect(manager.getSessionFile()).toBe('/tmp/xopc.db#session=agent%3Aother%3Amain');
   });

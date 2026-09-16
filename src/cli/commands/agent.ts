@@ -1,3 +1,5 @@
+import { resolveAgentMainConversationId } from '../../routing/agent-session-key.js';
+import { resolveDefaultAgentId } from '../../agent/agent-scope.js';
 import { Command } from 'commander';
 import { AgentService } from '../../agent/index.js';
 import { loadConfig, getWorkspacePath } from '../../config/index.js';
@@ -71,7 +73,7 @@ function createAgentCommand(_ctx: CLIContext): Command {
       }
 
       // Validate session key if provided
-      let sessionKey = options.session || 'agent:main:main';
+      let conversationId = options.session || resolveAgentMainConversationId({ agentId: resolveDefaultAgentId(config) });
       if (options.session) {
         const { getSessionIndex } = await import('../utils/session.js');
         const manager = await getSessionIndex();
@@ -151,21 +153,21 @@ function createAgentCommand(_ctx: CLIContext): Command {
       if (options.message) {
         const oneShotModel = options.model?.trim();
         if (oneShotModel) {
-          await agent.switchModelForSession(sessionKey, oneShotModel);
+          await agent.switchModelForSession(conversationId, oneShotModel);
         }
-        await renderStreamToTerminal(agent, options.message, sessionKey);
+        await renderStreamToTerminal(agent, options.message, conversationId);
         if (oneShotModel) {
-          await agent.resetSessionModelToAgentDefault(sessionKey);
+          await agent.resetSessionModelToAgentDefault(conversationId);
         }
         await shutdown();
       } else if (options.interactive) {
         const interactiveModel = options.model?.trim();
         if (interactiveModel) {
-          await agent.switchModelForSession(sessionKey, interactiveModel);
+          await agent.switchModelForSession(conversationId, interactiveModel);
         }
         await startInteractiveChat(agent, {
           workspace,
-          sessionKey,
+          conversationId,
           continuingSession: !!options.session,
         });
       } else {

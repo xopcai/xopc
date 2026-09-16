@@ -12,9 +12,9 @@ function createRun(): WorkflowRun {
     goal: 'Understand the repo',
     input: { query: 'workflow' },
     status: 'queued',
-    source: { kind: 'chat', sessionKey: 'chat-1' },
+    source: { kind: 'chat', conversationId: 'chat-1' },
     metadata: {
-      sessionKey: 'chat-1',
+      conversationId: 'chat-1',
       triggerSource: 'chat',
       agentId: 'main',
       retryOfRunId: 'previous-run',
@@ -106,7 +106,7 @@ describe('projectWorkflowRunView', () => {
     expect(view?.run.metrics.agentCount).toBe(1);
     expect(view?.run.metrics.doneAgentCount).toBe(1);
     expect(view?.run.metrics.artifactCount).toBe(1);
-    expect(view?.run.metadata?.sessionKey).toBe('chat-1');
+    expect(view?.run.metadata?.conversationId).toBe('chat-1');
     expect(view?.run.metadata?.retryOfRunId).toBe('previous-run');
     expect(view?.run.metadata?.definition.version).toBe('1.0.0');
     expect(view?.phases[0]).toMatchObject({ id: 'discover', status: 'completed', agentIds: ['agent-1'] });

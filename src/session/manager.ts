@@ -136,8 +136,8 @@ export class SessionIndex extends EventEmitter {
     return this.store.getMetadata(key);
   }
 
-  async resolveSessionKeyBySessionId(sessionId: string): Promise<string | null> {
-    return this.store.resolveKeyBySessionId(sessionId);
+  async resolveConversationIdByTranscriptId(transcriptId: string): Promise<string | null> {
+    return this.store.resolveKeyByTranscriptId(transcriptId);
   }
 
   async deleteSession(key: string): Promise<boolean> {
@@ -248,9 +248,9 @@ export class SessionIndex extends EventEmitter {
   async importSessionExport(
     targetKey: string,
     jsonContent: string,
-  ): Promise<{ sessionKey: string; rowCount: number }> {
+  ): Promise<{ conversationId: string; rowCount: number }> {
     const result = await this.store.importSessionExport(targetKey, jsonContent);
-    const metadata = await this.store.getMetadata(result.sessionKey);
+    const metadata = await this.store.getMetadata(result.conversationId);
     if (metadata) {
       this.emit('sessionCreated', metadata);
     }
@@ -260,9 +260,9 @@ export class SessionIndex extends EventEmitter {
   async forkSession(
     sourceKey: string,
     targetKey: string,
-  ): Promise<{ sessionKey: string; rowCount: number }> {
+  ): Promise<{ conversationId: string; rowCount: number }> {
     const result = await this.store.forkSession(sourceKey, targetKey);
-    const metadata = await this.store.getMetadata(result.sessionKey);
+    const metadata = await this.store.getMetadata(result.conversationId);
     if (metadata) {
       this.emit('sessionCreated', metadata);
     }
@@ -273,9 +273,9 @@ export class SessionIndex extends EventEmitter {
     sourceKey: string,
     targetKey: string,
     options: { throughRow?: number } = {},
-  ): Promise<{ sessionKey: string; rowCount: number }> {
+  ): Promise<{ conversationId: string; rowCount: number }> {
     const result = await this.store.forkSessionRows(sourceKey, targetKey, options);
-    const metadata = await this.store.getMetadata(result.sessionKey);
+    const metadata = await this.store.getMetadata(result.conversationId);
     if (metadata) {
       this.emit('sessionCreated', metadata);
     }
@@ -287,7 +287,7 @@ export class SessionIndex extends EventEmitter {
     options: import('./store.js').ForkSessionAtTurnOptions,
   ): Promise<import('./store.js').ForkSessionResult> {
     const result = await this.store.forkSessionAtTurn(sourceKey, options);
-    const metadata = await this.store.getMetadata(result.sessionKey);
+    const metadata = await this.store.getMetadata(result.conversationId);
     if (metadata) this.emit('sessionCreated', metadata);
     return result;
   }
@@ -406,7 +406,7 @@ export class SessionIndex extends EventEmitter {
   async appendTranscriptCustomMessageEntry(
     key: string,
     entry: {
-      expectedSessionId?: string;
+      expectedTranscriptId?: string;
       customType: string;
       content?: string | unknown[];
       display?: boolean;
@@ -441,7 +441,7 @@ export class SessionIndex extends EventEmitter {
   /** Archive transcript and start a new session id for the same key. */
   async resetSession(
     key: string,
-  ): Promise<{ sessionId: string; previousSessionId: string } | null> {
+  ): Promise<{ transcriptId: string; previousTranscriptId: string } | null> {
     const result = await this.store.reset(key);
     if (result) {
       this.emit('sessionUpdated', { key });

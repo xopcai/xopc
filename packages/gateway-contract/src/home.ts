@@ -65,7 +65,7 @@ export const HomeAttentionSchema = z.object({
   reason: z.enum(['run_failed', 'run_timeout']),
   href: z.string(),
   updatedAt: z.number(),
-  sessionKey: z.string().optional(),
+  conversationId: z.string().optional(),
 });
 
 export const HomeActionSchema = z.discriminatedUnion('type', [
@@ -114,7 +114,7 @@ export const HomeWorkbenchItemSchema = z.object({
 });
 
 export const HomeRunningConversationSchema = z.object({
-  sessionKey: z.string(),
+  conversationId: z.string(),
   runId: z.string(),
   title: z.string().optional(),
   agentId: z.string().optional(),

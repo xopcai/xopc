@@ -416,13 +416,13 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
       return c.json({ ok: false, error: 'Invalid approval status.' }, 400);
     }
     const principalId = c.req.query('principalId')?.trim() || 'local-owner';
-    const sessionKey = c.req.query('sessionKey')?.trim() || undefined;
-    if (!hasGatewayScope(getGatewayPrincipal(c).scopes, 'gateway.admin') && (!sessionKey || principalId !== 'local-owner')) {
+    const conversationId = c.req.query('conversationId')?.trim() || undefined;
+    if (!hasGatewayScope(getGatewayPrincipal(c).scopes, 'gateway.admin') && (!conversationId || principalId !== 'local-owner')) {
       return c.json({ ok: false, error: 'A local-owner session is required to read confirmations.' }, 403);
     }
     const approvals = listConnectorApprovals({
       principalId,
-      sessionKey,
+      conversationId,
       status: status as 'pending' | 'approved' | 'denied' | 'expired' | 'consumed' | undefined,
       limit: Number(c.req.query('limit') ?? '100'),
     });
@@ -514,9 +514,9 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     }
     const current = getConnectorApproval(id);
     if (!current) return c.json({ ok: false, error: 'Connector approval not found.' }, 404);
-    const sessionKey = typeof record.sessionKey === 'string' ? record.sessionKey.trim() : '';
+    const conversationId = typeof record.conversationId === 'string' ? record.conversationId.trim() : '';
     if (!hasGatewayScope(getGatewayPrincipal(c).scopes, 'gateway.admin')
-      && (!sessionKey || current.sessionKey !== sessionKey || current.principalId !== 'local-owner')) {
+      && (!conversationId || current.conversationId !== conversationId || current.principalId !== 'local-owner')) {
       return c.json({ ok: false, error: 'Confirmation does not belong to the requested local-owner session.' }, 403);
     }
     const approval = decideConnectorApproval(id, decision);

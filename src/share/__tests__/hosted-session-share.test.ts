@@ -44,7 +44,7 @@ function metadata(): SessionMetadata {
     sourceChannel: 'webchat',
     sourceChatId: 'private-chat',
     sessionType: 'chat',
-    sessionId: 'session-hosted-1',
+    transcriptId: 'session-hosted-1',
     cwd: '/private/workspace',
   };
 }
@@ -59,7 +59,7 @@ describe('hosted session sharing', () => {
     mkdirSync(TEST_ROOT, { recursive: true });
     writeFileSync(TEST_MEDIA, 'image-bytes');
     snapshot = {
-      sessionId: 'session-hosted-1',
+      transcriptId: 'session-hosted-1',
       lastSeq: 4,
       entries: [
         entry(1, { role: 'system', content: 'private system prompt' }),
@@ -95,7 +95,7 @@ describe('hosted session sharing', () => {
       getSnapshot: async () => snapshot,
     });
     const built = await builder.build('session-key', {
-      expectedSessionId: 'session-hosted-1',
+      expectedTranscriptId: 'session-hosted-1',
       expectedCutoffSeq: 4,
       expectedMetadataUpdatedAt: '2024-01-01T00:00:00.000Z',
       includeToolActivities: true,
@@ -117,8 +117,8 @@ describe('hosted session sharing', () => {
       if (method === 'POST' && url.pathname === '/api/v1/publications') {
         const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
         expect(body.kind).toBe('session_document');
-        expect(body).not.toHaveProperty('sessionId');
-        expect(body).not.toHaveProperty('sessionKey');
+        expect(body).not.toHaveProperty('transcriptId');
+        expect(body).not.toHaveProperty('conversationId');
         return Response.json({
           shareId: 'share-1', uploadId: 'upload-1', targetRevision: 1,
           publicUrl: 'https://share.test/s/public-token',
@@ -201,7 +201,7 @@ describe('hosted session sharing', () => {
     const store = new HostedShareBindingStore();
     const binding: HostedShareBinding = {
       id: 'share-1', shareUrl: 'https://share.test/s/token', expiresAt: '2024-01-02T00:00:00.000Z',
-      maxViews: null, viewCount: 0, snapshotRevision: 1, sessionId: 'session-hosted-1', cutoffSeq: 4,
+      maxViews: null, viewCount: 0, snapshotRevision: 1, transcriptId: 'session-hosted-1', cutoffSeq: 4,
       kind: 'session_document', source: { kind: 'session', id: 'session-hosted-1', version: '4' },
       revisionSources: { '1': { kind: 'session', id: 'session-hosted-1', version: '4' } },
       title: 'Hosted conversation', description: null, messageCount: 2, attachmentCount: 0,

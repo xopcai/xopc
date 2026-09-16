@@ -5,7 +5,7 @@ import { isBrowserWireResult } from '../extension.js';
 
 describe('browser extension protocol', () => {
   it('uses an explicit protocol version', () => {
-    expect(BROWSER_EXTENSION_PROTOCOL_VERSION).toBe(4);
+    expect(BROWSER_EXTENSION_PROTOCOL_VERSION).toBe(5);
   });
 
   it('rejects responses that do not contain a result envelope', () => {

@@ -1,10 +1,11 @@
+import { requireConversation } from '@xopcai/xopc/storage/sqlite/conversation-repository.js';
 /**
  * Telegram Routing Integration Tests
  */
 
 import { describe, it, expect } from 'vitest';
 import type { Config } from '@xopcai/xopc/config/schema.js';
-import { generateSessionKeyWithRouting, extractMemberRoleIds } from '../routing-integration.js';
+import { generateConversationIdWithRouting, extractMemberRoleIds } from '../routing-integration.js';
 
 describe('TelegramRouting', () => {
   const baseConfig: Config = {
@@ -18,9 +19,9 @@ describe('TelegramRouting', () => {
     },
   };
 
-  describe('generateSessionKeyWithRouting', () => {
+  describe('generateConversationIdWithRouting', () => {
     it('should generate basic DM session key', () => {
-      const sessionKey = generateSessionKeyWithRouting(
+      const conversationId = generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: '123456',
@@ -30,11 +31,11 @@ describe('TelegramRouting', () => {
         baseConfig
       );
 
-      expect(sessionKey).toMatch(/^agent:main:telegram:acc_default:direct:789012$/);
+      expect(requireConversation(conversationId)).toMatchObject({ agentId: 'main', routing: { peerKind: 'direct', peerId: '789012', accountId: 'acc_default' } });
     });
 
     it('should generate group session key', () => {
-      const sessionKey = generateSessionKeyWithRouting(
+      const conversationId = generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: '-1001234567',
@@ -44,7 +45,7 @@ describe('TelegramRouting', () => {
         baseConfig
       );
 
-      expect(sessionKey).toMatch(/^agent:main:telegram:group:-1001234567$/);
+      expect(requireConversation(conversationId)).toMatchObject({ agentId: 'main', routing: { peerKind: 'group', peerId: '-1001234567' } });
     });
 
     it('should use configured default agent', () => {
@@ -55,7 +56,7 @@ describe('TelegramRouting', () => {
         },
       };
 
-      const sessionKey = generateSessionKeyWithRouting(
+      const conversationId = generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: '123456',
@@ -65,7 +66,7 @@ describe('TelegramRouting', () => {
         config
       );
 
-      expect(sessionKey).toMatch(/^agent:custom-agent:telegram:acc_default:direct:789012$/);
+      expect(requireConversation(conversationId)).toMatchObject({ agentId: 'custom-agent' });
     });
 
     it('should route to specific agent based on binding', () => {
@@ -83,7 +84,7 @@ describe('TelegramRouting', () => {
         ],
       };
 
-      const sessionKey = generateSessionKeyWithRouting(
+      const conversationId = generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: '-1001234567',
@@ -93,7 +94,7 @@ describe('TelegramRouting', () => {
         config
       );
 
-      expect(sessionKey).toMatch(/^agent:coder:telegram:group:-1001234567$/);
+      expect(requireConversation(conversationId)).toMatchObject({ agentId: 'coder' });
     });
 
     it('should apply identity links', () => {
@@ -107,7 +108,7 @@ describe('TelegramRouting', () => {
         },
       };
 
-      const sessionKey = generateSessionKeyWithRouting(
+      const conversationId = generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: '123456',
@@ -118,11 +119,11 @@ describe('TelegramRouting', () => {
       );
 
       // Should use canonical name 'alice' instead of senderId
-      expect(sessionKey).toMatch(/^agent:main:telegram:acc_default:direct:alice$/);
+      expect(generateConversationIdWithRouting({ accountId: 'acc_default', chatId: 'other', senderId: 'alice', isGroup: false }, config)).toBe(conversationId);
     });
 
     it('should handle thread ID', () => {
-      const sessionKey = generateSessionKeyWithRouting(
+      const conversationId = generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: '-1001234567',
@@ -133,7 +134,7 @@ describe('TelegramRouting', () => {
         baseConfig
       );
 
-      expect(sessionKey).toContain(':thread:999');
+      expect(requireConversation(conversationId).routing?.threadId).toBe('999');
     });
 
     it('should handle multiple bindings with priority', () => {
@@ -159,7 +160,7 @@ describe('TelegramRouting', () => {
       };
 
       // Should match coder (higher priority)
-      const sessionKey1 = generateSessionKeyWithRouting(
+      const conversationId1 = generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: '-1001234567',
@@ -168,10 +169,10 @@ describe('TelegramRouting', () => {
         },
         config
       );
-      expect(sessionKey1).toMatch(/^agent:coder:/);
+      expect(requireConversation(conversationId1).agentId).toBe('coder');
 
       // Should match researcher (only match)
-      const sessionKey2 = generateSessionKeyWithRouting(
+      const conversationId2 = generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: '-1009999999',
@@ -180,7 +181,7 @@ describe('TelegramRouting', () => {
         },
         config
       );
-      expect(sessionKey2).toMatch(/^agent:researcher:/);
+      expect(requireConversation(conversationId2).agentId).toBe('researcher');
     });
   });
 

@@ -8,7 +8,7 @@ describe('desktop pet main-window target', () => {
   });
 
   it('navigates to the session only when opening a session activity', () => {
-    expect(desktopPetWindowTarget({ sessionKey: 'agent:main:webchat:task-1' })).toBe(
+    expect(desktopPetWindowTarget({ conversationId: 'agent:main:webchat:task-1' })).toBe(
       '/chat/agent:main:webchat:task-1',
     );
   });

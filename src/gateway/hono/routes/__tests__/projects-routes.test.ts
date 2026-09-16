@@ -14,6 +14,7 @@ import { listKnowledgeItems } from '../../../../knowledge-memory/index.js';
 import {
   closeXopcDatabase,
   ensureSessionRecord,
+  getSessionMetadata,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../../storage/sqlite/index.js';
@@ -84,7 +85,7 @@ describe('project association routes', () => {
     const app = registerSessionRouteApp({
       currentConfig: ConfigSchema.parse({ agents: { list: [{ id: 'main', enabled: true }] } }), projects,
       sessions: { getSession: vi.fn(async (key: string) => ({ key, projectId: project.id })) } as unknown as GatewayService['sessions'],
-      sessionIndexInstance: { saveMessages: vi.fn(async (key: string) => { ensureSessionRecord(key, stateDir); }) } as unknown as GatewayService['sessionIndexInstance'],
+      sessionIndexInstance: { saveMessages: vi.fn(async (key: string) => { ensureSessionRecord(key, stateDir, { agentId: "main" }); }) } as unknown as GatewayService['sessionIndexInstance'],
     });
     const response = await app.request('/api/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projectId: project.id, executionMode }) });
     expect(response.status).toBe(201);
@@ -107,7 +108,7 @@ describe('project association routes', () => {
   it.each([true, false])('creates a workspace session with fixed-model initialization success=%s', async (success) => {
     const projects = new ProjectService();
     const project = projects.create({ name: 'Model workspace', workspaceRoot: stateDir });
-    const saveMessages = vi.fn(async (key: string) => { ensureSessionRecord(key, stateDir); });
+    const saveMessages = vi.fn(async (key: string) => { ensureSessionRecord(key, stateDir, { agentId: "main" }); });
     const deleteSession = vi.fn(async () => ({ ok: true }));
     const app = registerSessionRouteApp({
       currentConfig: ConfigSchema.parse({ agents: { list: [{ id: 'main', enabled: true }] } }),
@@ -383,7 +384,7 @@ describe('project association routes', () => {
     const app = registerSessionRouteApp({
       sessions: {
         patch,
-        getSession: vi.fn(async () => ({ key: 'agent:main:webchat:default:direct:s1', name: 'Old name' })),
+        getSession: vi.fn(async () => ({ key: "958be7fd-89d5-48d0-8a78-4d900096a8fb", name: 'Old name' })),
       } as unknown as GatewayService['sessions'],
       projects: {
         get: vi.fn(() => null),
@@ -392,7 +393,7 @@ describe('project association routes', () => {
       } as unknown as GatewayService['projects'],
     });
 
-    const res = await app.request('/api/sessions/agent:main:webchat:default:direct:s1', {
+    const res = await app.request('/api/sessions/958be7fd-89d5-48d0-8a78-4d900096a8fb', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: 'New name', projectId: 'missing-project' }),
@@ -409,7 +410,7 @@ describe('project association routes', () => {
     const patch = vi.fn(async () => ({ ok: true as const }));
     const detachSession = vi.fn();
     const getSession = vi.fn(async () => ({
-      key: 'agent:main:webchat:default:direct:s1',
+      key: "958be7fd-89d5-48d0-8a78-4d900096a8fb",
       projectId: undefined,
     }));
     const app = registerSessionRouteApp({
@@ -421,20 +422,20 @@ describe('project association routes', () => {
       } as unknown as GatewayService['projects'],
     });
 
-    const res = await app.request('/api/sessions/agent:main:webchat:default:direct:s1', {
+    const res = await app.request('/api/sessions/958be7fd-89d5-48d0-8a78-4d900096a8fb', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ projectId: null }),
     });
 
     expect(res.status).toBe(200);
-    expect(patch).toHaveBeenCalledWith('agent:main:webchat:default:direct:s1', {});
-    expect(detachSession).toHaveBeenCalledWith('agent:main:webchat:default:direct:s1');
-    expect(getSession).toHaveBeenCalledWith('agent:main:webchat:default:direct:s1');
+    expect(patch).toHaveBeenCalledWith("958be7fd-89d5-48d0-8a78-4d900096a8fb", {});
+    expect(detachSession).toHaveBeenCalledWith("958be7fd-89d5-48d0-8a78-4d900096a8fb");
+    expect(getSession).toHaveBeenCalledWith("958be7fd-89d5-48d0-8a78-4d900096a8fb");
   });
 
   it('requires releasing the execution environment before moving a session', async () => {
-    const sessionKey = 'agent:main:webchat:default:direct:bound-session';
+    const conversationId = "95343719-66e8-4181-85cd-1b3984c2f916";
     const projects = new ProjectService();
     const oldRoot = join(stateDir, 'old-project');
     const newRoot = join(stateDir, 'new-project');
@@ -460,17 +461,17 @@ describe('project association routes', () => {
       toStatus: 'ready',
       reason: 'test ready',
     });
-    store.bind({ sessionKey: sessionKey, environmentId: ready.id });
+    store.bind({ conversationId: conversationId, environmentId: ready.id });
     const patch = vi.fn(async () => ({ ok: true as const }));
     const app = registerSessionRouteApp({
       sessions: {
         patch,
-        getSession: vi.fn(async () => ({ key: sessionKey, projectId: oldProject.id })),
+        getSession: vi.fn(async () => ({ key: conversationId, projectId: oldProject.id })),
       } as unknown as GatewayService['sessions'],
       projects,
     });
 
-    const res = await app.request(`/api/sessions/${sessionKey}`, {
+    const res = await app.request(`/api/sessions/${conversationId}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ projectId: newProject.id }),
@@ -495,11 +496,11 @@ describe('project association routes', () => {
       projects,
       sessions: {
         listSessions,
-        getSession: vi.fn(async (key: string) => ({ key, routing: { agentId: key.split(':')[1] }, projectId: project.id })),
+        getSession: vi.fn(async (key: string) => getSessionMetadata(key)),
       } as unknown as GatewayService['sessions'],
       sessionIndexInstance: {
-        saveMessages: vi.fn(async (sessionKey: string) => {
-          ensureSessionRecord(sessionKey, process.cwd());
+        saveMessages: vi.fn(async (conversationId: string) => {
+          ensureSessionRecord(conversationId, process.cwd(), { agentId: "main" });
         }),
       } as unknown as GatewayService['sessionIndexInstance'],
     });
@@ -512,9 +513,9 @@ describe('project association routes', () => {
 
     expect(res.status).toBe(201);
     const body = (await res.json()) as { session: { key: string; routing?: { agentId?: string } } };
-    expect(body.session.key.startsWith('agent:coder:')).toBe(true);
+    expect(body.session.key).toMatch(/^[0-9a-f-]{36}$/);
     expect(body.session.routing?.agentId).toBe('coder');
-    expect(projects.listSessionKeys(project.id)).toEqual([body.session.key]);
+    expect(projects.listConversationIds(project.id)).toEqual([body.session.key]);
     expect(listSessions).not.toHaveBeenCalled();
   });
 
@@ -535,8 +536,8 @@ describe('project association routes', () => {
         getSession,
       } as unknown as GatewayService['sessions'],
       sessionIndexInstance: {
-        saveMessages: vi.fn(async (sessionKey: string) => {
-          ensureSessionRecord(sessionKey, process.cwd());
+        saveMessages: vi.fn(async (conversationId: string) => {
+          ensureSessionRecord(conversationId, process.cwd(), { agentId: "main" });
         }),
       } as unknown as GatewayService['sessionIndexInstance'],
     });
@@ -561,9 +562,9 @@ describe('project association routes', () => {
   it('creates a fresh project chat even when an empty shell already exists', async () => {
     const projects = new ProjectService();
     const project = projects.create({ name: 'Reusable Project', defaultAgentId: 'coder' });
-    const existingKey = 'agent:coder:webchat:default:direct:chat_1783525363859';
-    const saveMessages = vi.fn(async (sessionKey: string) => {
-      ensureSessionRecord(sessionKey, process.cwd());
+    const existingKey = "8b467115-80ec-46d7-8a43-60b366edeb57";
+    const saveMessages = vi.fn(async (conversationId: string) => {
+      ensureSessionRecord(conversationId, process.cwd(), { agentId: "main" });
     });
     const existingSession = {
       key: existingKey,
@@ -610,15 +611,15 @@ describe('project association routes', () => {
     const body = (await res.json()) as { session: { key: string } };
     expect(body.session.key).not.toBe(existingKey);
     expect(saveMessages).toHaveBeenCalledOnce();
-    expect(projects.listSessionKeys(project.id)).toEqual([body.session.key]);
+    expect(projects.listConversationIds(project.id)).toEqual([body.session.key]);
   });
 
   it.each(['webchat', 'automation', 'understanding'])('omits hidden %s sessions from project session lists', async (source) => {
-    const hiddenKey = `agent:coder:${source}:default:direct:hidden`;
-    const visibleKey = 'agent:coder:webchat:default:direct:chat_1783526000000';
+    const hiddenKey = crypto.randomUUID();
+    const visibleKey = "f6220a1c-2b77-40ac-8386-fd31474221a9";
     const app = registerProjectRouteApp({
       projects: {
-        listSessionKeys: vi.fn(() => [hiddenKey, visibleKey]),
+        listConversationIds: vi.fn(() => [hiddenKey, visibleKey]),
       } as unknown as GatewayService['projects'],
       sessions: {
         getSession: vi.fn(async (key: string) => key === hiddenKey
@@ -649,9 +650,9 @@ describe('project association routes', () => {
   });
 
   it('does not reuse note-scoped empty sessions when creating a generic webchat session', async () => {
-    const noteKey = 'agent:main:webchat:default:direct:note_abc_1783324340003';
-    const saveMessages = vi.fn(async (sessionKey: string) => {
-      ensureSessionRecord(sessionKey, process.cwd());
+    const noteKey = "96fa321e-e6e3-433e-81b4-aed6fe353d71";
+    const saveMessages = vi.fn(async (conversationId: string) => {
+      ensureSessionRecord(conversationId, process.cwd(), { agentId: "main" });
     });
     const app = registerSessionRouteApp({
       currentConfig: {
@@ -698,9 +699,9 @@ describe('project association routes', () => {
     expect(res.status).toBe(201);
     const body = (await res.json()) as { session: { key: string } };
     expect(body.session.key).not.toBe(noteKey);
-    expect(body.session.key).toContain(':direct:chat_');
+    expect(body.session.key).toMatch(/^[0-9a-f-]{36}$/);
     expect(saveMessages).toHaveBeenCalledWith(
-      expect.stringContaining(':direct:chat_'),
+      expect.stringMatching(/^[0-9a-f-]{36}$/),
       [],
       expect.any(Object),
     );
@@ -711,7 +712,7 @@ describe('project association routes', () => {
     const app = registerProjectRouteApp({
       sessions: {
         getSession: vi.fn(async () => ({
-          key: 'agent:main:webchat:default:direct:s1',
+          key: "958be7fd-89d5-48d0-8a78-4d900096a8fb",
           projectId: 'project-b',
         })),
       } as unknown as GatewayService['sessions'],
@@ -721,7 +722,7 @@ describe('project association routes', () => {
       } as unknown as GatewayService['projects'],
     });
 
-    const res = await app.request('/api/projects/project-a/sessions/agent:main:webchat:default:direct:s1', {
+    const res = await app.request('/api/projects/project-a/sessions/958be7fd-89d5-48d0-8a78-4d900096a8fb', {
       method: 'DELETE',
     });
 

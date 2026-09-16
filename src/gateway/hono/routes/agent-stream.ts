@@ -25,25 +25,25 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
     return c.json({ ok: true, payload: result });
   });
 
-  authenticated.get('/api/sessions/:sessionKey/input-state', (c) => {
-    const sessionKey = (c.req.param('sessionKey') ?? '').trim();
-    if (!sessionKey) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing sessionKey' } }, 400);
-    return c.json({ ok: true, payload: service.getSessionInputState(sessionKey) });
+  authenticated.get('/api/sessions/:conversationId/input-state', (c) => {
+    const conversationId = (c.req.param('conversationId') ?? '').trim();
+    if (!conversationId) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing conversationId' } }, 400);
+    return c.json({ ok: true, payload: service.getSessionInputState(conversationId) });
   });
 
-  authenticated.post('/api/sessions/:sessionKey/inputs', chatRateLimitMiddleware, async (c) => {
-    const sessionKey = (c.req.param('sessionKey') ?? '').trim();
-    return submitSessionInput(c, deps, sessionKey);
+  authenticated.post('/api/sessions/:conversationId/inputs', chatRateLimitMiddleware, async (c) => {
+    const conversationId = (c.req.param('conversationId') ?? '').trim();
+    return submitSessionInput(c, deps, conversationId);
   });
 
-  authenticated.post('/api/sessions/:sessionKey/turns/:turnId/replace', chatRateLimitMiddleware, async (c) => {
-    const sessionKey = (c.req.param('sessionKey') ?? '').trim();
+  authenticated.post('/api/sessions/:conversationId/turns/:turnId/replace', chatRateLimitMiddleware, async (c) => {
+    const conversationId = (c.req.param('conversationId') ?? '').trim();
     const turnId = (c.req.param('turnId') ?? '').trim();
-    return replaceLatestSessionTurn(c, deps, sessionKey, turnId);
+    return replaceLatestSessionTurn(c, deps, conversationId, turnId);
   });
 
-  authenticated.patch('/api/sessions/:sessionKey/inputs/:inputId', chatRateLimitMiddleware, async (c) => {
-    const sessionKey = (c.req.param('sessionKey') ?? '').trim();
+  authenticated.patch('/api/sessions/:conversationId/inputs/:inputId', chatRateLimitMiddleware, async (c) => {
+    const conversationId = (c.req.param('conversationId') ?? '').trim();
     const inputId = c.req.param('inputId')?.trim() ?? '';
     const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
     if (!body || typeof body.version !== 'number') return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing version' } }, 400);
@@ -58,7 +58,7 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
     }
     const attachmentError = validateWebchatAttachments(attachments);
     if (attachmentError) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: attachmentError } }, 400);
-    const result = await service.updateSessionInput(sessionKey, inputId, {
+    const result = await service.updateSessionInput(conversationId, inputId, {
       version: body.version,
       content: typeof body.content === 'string' ? body.content : undefined,
       attachments: attachments as UserTurnAttachment[] | undefined,
@@ -80,19 +80,19 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
         }, 409);
   });
 
-  authenticated.delete('/api/sessions/:sessionKey/inputs/:inputId', chatRateLimitMiddleware, (c) => {
-    const sessionKey = (c.req.param('sessionKey') ?? '').trim();
+  authenticated.delete('/api/sessions/:conversationId/inputs/:inputId', chatRateLimitMiddleware, (c) => {
+    const conversationId = (c.req.param('conversationId') ?? '').trim();
     const inputId = c.req.param('inputId')?.trim() ?? '';
     const version = Number(c.req.query('version'));
     if (!Number.isFinite(version)) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing version' } }, 400);
-    const result = service.removeSessionInput(sessionKey, inputId, version);
+    const result = service.removeSessionInput(conversationId, inputId, version);
     return result.ok ? c.json({ ok: true, payload: result.state }) : c.json({ ok: false, error: { code: 'CONFLICT', message: 'Input changed' }, payload: result.state }, 409);
   });
 
-  authenticated.get('/api/sessions/:sessionKey/clarification', (c) => {
-    const sessionKey = (c.req.param('sessionKey') ?? '').trim();
-    if (!sessionKey) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing sessionKey' } }, 400);
-    const snapshot = service.getClarificationState(sessionKey);
+  authenticated.get('/api/sessions/:conversationId/clarification', (c) => {
+    const conversationId = (c.req.param('conversationId') ?? '').trim();
+    if (!conversationId) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing conversationId' } }, 400);
+    const snapshot = service.getClarificationState(conversationId);
     if (!snapshot) return c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Session not found' } }, 404);
     return c.json({ ok: true, payload: snapshot });
   });

@@ -14,7 +14,7 @@ function makeResponse(status: number, body: unknown = {}): Response {
 describe('apiFetch authBarrier', () => {
   beforeEach(() => {
     __resetAuthBarrierForTests();
-    useGatewayStore.setState({ sessionKey: 'good-token', tokenExpired: false, tokenDialogOpen: false });
+    useGatewayStore.setState({ conversationId: 'good-token', tokenExpired: false, tokenDialogOpen: false });
   });
 
   afterEach(() => {
@@ -40,7 +40,7 @@ describe('apiFetch authBarrier', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     // Releasing the barrier — same path the store uses on setBrowserSession.
-    useGatewayStore.setState({ sessionKey: 'fresh-token' });
+    useGatewayStore.setState({ conversationId: 'fresh-token' });
     window.dispatchEvent(new CustomEvent('gateway-authenticated', { detail: { token: 'fresh-token' } }));
 
     const second = await secondPromise;
@@ -82,7 +82,7 @@ describe('apiFetch authBarrier', () => {
     onUnauthSpy.mockRestore();
 
     // Cleanup so the parked request doesn't leak into the next test.
-    useGatewayStore.setState({ sessionKey: 'fresh-token' });
+    useGatewayStore.setState({ conversationId: 'fresh-token' });
     window.dispatchEvent(new CustomEvent('gateway-authenticated', { detail: { token: 'fresh-token' } }));
     fetchMock.mockResolvedValueOnce(makeResponse(200, { ok: true }));
     await blocked;

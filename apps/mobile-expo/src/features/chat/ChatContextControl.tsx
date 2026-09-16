@@ -39,13 +39,13 @@ function ContextRow({ icon, title, subtitle, warning }: {
 type ExecutionMode = 'local_checkout' | 'managed_worktree';
 
 export const ChatContextControl = memo(function ChatContextControl({
-  sessionKey,
+  conversationId,
   draftRefs,
   onRemoveDraftRef,
   onAddSource,
   onChangeScope,
 }: {
-  sessionKey: string;
+  conversationId: string;
   draftRefs: ComposerContextRef[];
   onRemoveDraftRef: (sourceId: string, kind: ComposerContextRef['kind']) => void;
   onAddSource: () => void;
@@ -63,9 +63,9 @@ export const ChatContextControl = memo(function ChatContextControl({
   const [savingDirectory, setSavingDirectory] = useState(false);
   const [directoryError, setDirectoryError] = useState<string | null>(null);
   const context = useQuery({
-    queryKey: queryKeys.sessionContext(sessionKey),
-    queryFn: () => fetchSessionContextSummary(sessionKey),
-    enabled: Boolean(sessionKey),
+    queryKey: queryKeys.sessionContext(conversationId),
+    queryFn: () => fetchSessionContextSummary(conversationId),
+    enabled: Boolean(conversationId),
   });
   const projects = useQuery({
     queryKey: queryKeys.projects,
@@ -78,8 +78,8 @@ export const ChatContextControl = memo(function ChatContextControl({
     enabled: Boolean(open && selecting && selectedProject),
   });
   const agentConfig = useQuery({
-    queryKey: queryKeys.sessionAgentConfig(sessionKey),
-    queryFn: () => fetchSessionAgentConfig(sessionKey),
+    queryKey: queryKeys.sessionAgentConfig(conversationId),
+    queryFn: () => fetchSessionAgentConfig(conversationId),
     enabled: open,
   });
   const directories = useQuery({
@@ -180,10 +180,10 @@ export const ChatContextControl = memo(function ChatContextControl({
           onPress={() => {
             setSavingDirectory(true);
             setDirectoryError(null);
-            void setSessionWorkingDirectory(sessionKey, directories.data!.currentPath).then(async () => {
+            void setSessionWorkingDirectory(conversationId, directories.data!.currentPath).then(async () => {
               await Promise.all([
-                queryClient.invalidateQueries({ queryKey: queryKeys.sessionAgentConfig(sessionKey) }),
-                queryClient.invalidateQueries({ queryKey: queryKeys.sessionContext(sessionKey) }),
+                queryClient.invalidateQueries({ queryKey: queryKeys.sessionAgentConfig(conversationId) }),
+                queryClient.invalidateQueries({ queryKey: queryKeys.sessionContext(conversationId) }),
               ]);
               setDirectoryPath(undefined);
             }).catch((error) => setDirectoryError(error instanceof Error ? error.message : String(error)))

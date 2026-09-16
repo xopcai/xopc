@@ -25,7 +25,7 @@ const request = {
   agentId: 'main',
   workspaceId: '/workspace',
   projectId: 'project-1',
-  sessionId: 'session-1',
+  conversationId: 'session-1',
   asOf: 1_000,
 };
 
@@ -219,14 +219,14 @@ describe('execution context', () => {
     const context = buildExecutionContext(request);
     recordExecutionContext(context, {
       turnId: 'turn-1',
-      sessionId: request.sessionId,
+      conversationId: request.conversationId,
       budget: { maxAssertions: 20, maxKnowledge: 12, maxChars: 8_000 },
       renderedChars: renderExecutionContext(context).length,
     });
 
     expect(getExecutionContextAudit('turn-1')).toMatchObject({
       turnId: 'turn-1',
-      sessionId: request.sessionId,
+      conversationId: request.conversationId,
       items: [expect.objectContaining({ objectType: 'assertion', objectId: reconciled.assertion.id })],
     });
     expect(recordExecutionContextFeedback({
@@ -242,7 +242,7 @@ describe('execution context', () => {
       const context = buildExecutionContext(request);
       recordExecutionContext(context, {
         turnId,
-        sessionId: request.sessionId,
+        conversationId: request.conversationId,
         budget: { maxAssertions: 20, maxKnowledge: 12, maxChars: 8_000 },
         renderedChars: renderExecutionContext(context).length,
       });
@@ -260,7 +260,7 @@ describe('execution context', () => {
     const fitted = fitExecutionContextToChars(context, 1);
     recordExecutionContext(context, {
       turnId: 'budgeted-turn',
-      sessionId: request.sessionId,
+      conversationId: request.conversationId,
       budget: { maxAssertions: 20, maxKnowledge: 12, maxChars: 1 },
       renderedChars: fitted.rendered.length,
       includedContext: fitted.context,

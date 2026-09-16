@@ -5,7 +5,7 @@ import type { SessionMessagePage } from '../../../query/sessions';
 import { mergeLatestSessionHistoryPage } from '../session-message-parser';
 
 function page(options: {
-  sessionId: string;
+  transcriptId: string;
   messages: Array<Record<string, unknown>>;
   hasMore: boolean;
   total?: number;
@@ -13,7 +13,7 @@ function page(options: {
   return {
     session: {
       key: 'agent:main:webchat:default:direct:chat-a',
-      sessionId: options.sessionId,
+      transcriptId: options.transcriptId,
       messages: options.messages as SessionMessagePage['session']['messages'],
     },
     pagination: {
@@ -36,10 +36,10 @@ function infinite(pages: SessionMessagePage[]): InfiniteData<SessionMessagePage 
 describe('latest session history reconciliation', () => {
   it('replaces all local pages when the server returns a complete snapshot', () => {
     const old = infinite([
-      page({ sessionId: 's1', messages: [{ id: 'old', role: 'user', content: 'old' }], hasMore: true }),
-      page({ sessionId: 's1', messages: [{ id: 'older', role: 'assistant', content: 'older' }], hasMore: false }),
+      page({ transcriptId: 's1', messages: [{ id: 'old', role: 'user', content: 'old' }], hasMore: true }),
+      page({ transcriptId: 's1', messages: [{ id: 'older', role: 'assistant', content: 'older' }], hasMore: false }),
     ]);
-    const latest = page({ sessionId: 's1', messages: [], hasMore: false, total: 0 });
+    const latest = page({ transcriptId: 's1', messages: [], hasMore: false, total: 0 });
 
     expect(mergeLatestSessionHistoryPage(old, latest)).toEqual({
       pages: [latest],
@@ -49,10 +49,10 @@ describe('latest session history reconciliation', () => {
 
   it('drops pages from a transcript that was reset under the same key', () => {
     const old = infinite([
-      page({ sessionId: 'before-reset', messages: [{ id: 'old', role: 'user', content: 'old' }], hasMore: true }),
+      page({ transcriptId: 'before-reset', messages: [{ id: 'old', role: 'user', content: 'old' }], hasMore: true }),
     ]);
     const latest = page({
-      sessionId: 'after-reset',
+      transcriptId: 'after-reset',
       messages: [{ id: 'new', role: 'user', content: 'new' }],
       hasMore: true,
       total: 100,
@@ -66,17 +66,17 @@ describe('latest session history reconciliation', () => {
 
   it('preserves only genuinely older pages after an overlapping head refresh', () => {
     const oldHead = page({
-      sessionId: 's1',
+      transcriptId: 's1',
       messages: [{ id: 'm2', role: 'assistant', content: 'two' }],
       hasMore: true,
     });
     const oldTail = page({
-      sessionId: 's1',
+      transcriptId: 's1',
       messages: [{ id: 'm1', role: 'user', content: 'one' }],
       hasMore: false,
     });
     const latest = page({
-      sessionId: 's1',
+      transcriptId: 's1',
       messages: [
         { id: 'm2', role: 'assistant', content: 'two' },
         { id: 'm3', role: 'user', content: 'three' },

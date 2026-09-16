@@ -12,29 +12,29 @@ vi.mock('../../agent/embedded/runs.js', () => ({
 }));
 
 vi.mock('../../agent/mcp/bundle-mcp-tools.js', () => ({
-  retireSessionMcpRuntimeForSessionKey: vi.fn().mockResolvedValue(undefined),
+  retireSessionMcpRuntimeForConversationId: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe('performSessionReset', () => {
   it('archives transcript, assigns new session id, and evicts agent runtime', async () => {
-    const sessionKey = 'agent:main:webchat:default:direct:abc';
+    const conversationId = "17305fb5-e9c2-4028-8aa3-1b2b6b86fedc";
     const resetSession = vi.fn().mockResolvedValue({
-      sessionId: 'new-id',
-      previousSessionId: 'old-id',
+      transcriptId: 'new-id',
+      previousTranscriptId: 'old-id',
     });
     const evictSessionAgent = vi.fn();
     const sessionIndex = { resetSession } as unknown as SessionIndex;
     const getAgentService = () => ({ evictSessionAgent }) as unknown as AgentService;
 
-    const result = await performSessionReset(sessionKey, { sessionIndex, getAgentService });
+    const result = await performSessionReset(conversationId, { sessionIndex, getAgentService });
 
     expect(result).toEqual({
       ok: true,
-      sessionId: 'new-id',
-      previousSessionId: 'old-id',
+      transcriptId: 'new-id',
+      previousTranscriptId: 'old-id',
     });
-    expect(resetSession).toHaveBeenCalledWith(sessionKey);
-    expect(evictSessionAgent).toHaveBeenCalledWith(sessionKey);
+    expect(resetSession).toHaveBeenCalledWith(conversationId);
+    expect(evictSessionAgent).toHaveBeenCalledWith(conversationId);
   });
 
   it('returns not found when session index has no entry', async () => {
@@ -43,7 +43,7 @@ describe('performSessionReset', () => {
     } as unknown as SessionIndex;
     const getAgentService = () => ({ evictSessionAgent: vi.fn() }) as unknown as AgentService;
 
-    const result = await performSessionReset('agent:main:webchat:default:direct:missing', {
+    const result = await performSessionReset("76f7326a-cdd0-41c3-8250-3baf9107be28", {
       sessionIndex,
       getAgentService,
     });
@@ -62,40 +62,40 @@ describe('performSessionReset', () => {
 
 describe('POST /api/sessions/:key/reset', () => {
   it('returns new session id and session payload', async () => {
-    const sessionKey = 'agent:main:webchat:default:direct:abc';
+    const conversationId = "17305fb5-e9c2-4028-8aa3-1b2b6b86fedc";
     const reset = vi.fn().mockResolvedValue({
       ok: true,
-      sessionId: 'new-id',
-      previousSessionId: 'old-id',
+      transcriptId: 'new-id',
+      previousTranscriptId: 'old-id',
     });
     const service = {
       isGatewayReady: () => true,
       sessions: {
         reset,
         getSession: async (key: string) =>
-          key === sessionKey ? { key, sessionId: 'new-id' } : null,
+          key === conversationId ? { key, transcriptId: 'new-id' } : null,
       },
     } as unknown as GatewayService;
 
     const app = new Hono();
     registerSessionsRoutes(app, { service });
 
-    const res = await app.request(`/api/sessions/${encodeURIComponent(sessionKey)}/reset`, {
+    const res = await app.request(`/api/sessions/${encodeURIComponent(conversationId)}/reset`, {
       method: 'POST',
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       ok: boolean;
       reset: boolean;
-      sessionId: string;
-      previousSessionId: string;
+      transcriptId: string;
+      previousTranscriptId: string;
       session: { key: string };
     };
     expect(body.ok).toBe(true);
     expect(body.reset).toBe(true);
-    expect(body.sessionId).toBe('new-id');
-    expect(body.previousSessionId).toBe('old-id');
-    expect(body.session.key).toBe(sessionKey);
-    expect(reset).toHaveBeenCalledWith(sessionKey);
+    expect(body.transcriptId).toBe('new-id');
+    expect(body.previousTranscriptId).toBe('old-id');
+    expect(body.session.key).toBe(conversationId);
+    expect(reset).toHaveBeenCalledWith(conversationId);
   });
 });

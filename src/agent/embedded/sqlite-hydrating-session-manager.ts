@@ -23,24 +23,24 @@ type SessionManagerHydrationTarget = {
  * File persistence is disabled; writes flow through the tool-result guard into SQLite.
  */
 export function openSqliteHydratingSessionManager(params: {
-  sessionKey: string;
-  sessionId: string;
+  conversationId: string;
+  transcriptId: string;
   cwd: string;
 }): SessionManager {
   requireXopcDatabase();
 
-  ensureSessionRecord(params.sessionKey, params.cwd);
-  const rows = loadTranscriptRowsForSession(params.sessionKey);
+  ensureSessionRecord(params.conversationId, params.cwd);
+  const rows = loadTranscriptRowsForSession(params.conversationId);
   const sm = SessionManager.inMemory(params.cwd);
   const entries = storedRowsToFileEntries({
-    sessionId: params.sessionId,
+    transcriptId: params.transcriptId,
     cwd: params.cwd,
     rows,
   });
 
   const internal = sm as unknown as SessionManagerHydrationTarget;
   internal.fileEntries = entries;
-  internal.sessionId = params.sessionId;
+  internal.sessionId = params.transcriptId;
   internal.flushed = true;
   internal._buildIndex();
   repairAssistantUsageInSessionManager(sm);

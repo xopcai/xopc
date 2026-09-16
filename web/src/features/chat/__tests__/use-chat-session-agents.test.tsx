@@ -8,8 +8,8 @@ import { useGatewayStore } from '@/stores/gateway-store';
 
 it('preserves the new conversation project and temporary mode when selecting another agent', async () => {
   (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-  const previousToken = useGatewayStore.getState().sessionKey;
-  useGatewayStore.setState({ sessionKey: undefined });
+  const previousToken = useGatewayStore.getState().conversationId;
+  useGatewayStore.setState({ conversationId: undefined });
   const container = document.createElement('div');
   const root = createRoot(container);
   const navigate = vi.fn();
@@ -17,8 +17,8 @@ it('preserves the new conversation project and temporary mode when selecting ano
   function Harness() {
     agents = useChatSessionAgents({
       navigate,
-      sessionKeyRef: { current: null },
-      sessionKey: null,
+      conversationIdRef: { current: null },
+      conversationId: null,
       isNewRoute: true,
       locationSearch: '?projectId=project-a&draft=hello',
       locationState: { agentId: 'main', temporary: true, forceNewChat: true },
@@ -34,7 +34,7 @@ it('preserves the new conversation project and temporary mode when selecting ano
     });
   } finally {
     await act(async () => root.unmount());
-    useGatewayStore.setState({ sessionKey: previousToken });
+    useGatewayStore.setState({ conversationId: previousToken });
     localStorage.clear();
   }
 });

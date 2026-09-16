@@ -306,7 +306,7 @@ export interface WorkDiscoveryRun {
   stage?: WorkDiscoveryStage;
   rootPath: string;
   projectId: string;
-  sessionKey: string;
+  conversationId: string;
   agentId: string;
   modelRef: string;
   scanPolicyVersion: number;

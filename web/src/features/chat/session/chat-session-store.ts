@@ -51,7 +51,7 @@ export type ChatSessionSlice = {
 };
 
 type ChatSessionStoreState = {
-  focusedSessionKey: string | null;
+  focusedConversationId: string | null;
   initLoading: boolean;
   loadingMore: boolean;
   shellError: string | null;
@@ -59,13 +59,13 @@ type ChatSessionStoreState = {
 };
 
 type ChatSessionStoreActions = {
-  setFocusedSessionKey: (key: string | null) => void;
+  setFocusedConversationId: (key: string | null) => void;
   setInitLoading: (loading: boolean) => void;
   setLoadingMore: (loading: boolean) => void;
   setShellError: (error: string | null) => void;
-  setSessionHistoryStatus: (sessionKey: string, status: SessionHistoryStatus) => void;
+  setSessionHistoryStatus: (conversationId: string, status: SessionHistoryStatus) => void;
   patchSessionMeta: (
-    sessionKey: string,
+    conversationId: string,
     partial: Partial<
       Pick<
         ChatSessionSlice,
@@ -82,52 +82,52 @@ type ChatSessionStoreActions = {
       >
     >,
   ) => void;
-  initSessionSnapshot: (sessionKey: string, snapshot: ChatSessionSlice) => void;
+  initSessionSnapshot: (conversationId: string, snapshot: ChatSessionSlice) => void;
   setCommittedSnapshot: (
-    sessionKey: string,
+    conversationId: string,
     data: { messages: Message[]; hasMore: boolean; name?: string | null },
   ) => void;
   updateSessionMessages: (
-    sessionKey: string,
+    conversationId: string,
     updater: (prev: Message[]) => Message[],
   ) => void;
-  finalizeStreamingTurn: (sessionKey: string, message: Message) => void;
-  completeProgressiveRender: (sessionKey: string, renderKey: string) => void;
-  clearStreamingState: (sessionKey: string) => void;
-  clearSession: (sessionKey: string) => void;
-  getSessionSnapshot: (sessionKey: string) => ChatSessionSlice | undefined;
+  finalizeStreamingTurn: (conversationId: string, message: Message) => void;
+  completeProgressiveRender: (conversationId: string, renderKey: string) => void;
+  clearStreamingState: (conversationId: string) => void;
+  clearSession: (conversationId: string) => void;
+  getSessionSnapshot: (conversationId: string) => ChatSessionSlice | undefined;
   seedSessionIfEmpty: (
-    sessionKey: string,
+    conversationId: string,
     messages: Message[],
     sending: boolean,
     streaming: boolean,
     hasMore?: boolean,
   ) => void;
   setSessionFlags: (
-    sessionKey: string,
+    conversationId: string,
     partial: Partial<Pick<ChatSessionSlice, 'sending' | 'streaming'>>,
   ) => void;
-  setSessionProgress: (sessionKey: string, progress: ProgressState | null) => void;
-  setSessionTaskPlan: (sessionKey: string, taskPlan: TaskPlanState) => void;
+  setSessionProgress: (conversationId: string, progress: ProgressState | null) => void;
+  setSessionTaskPlan: (conversationId: string, taskPlan: TaskPlanState) => void;
   mutateSessionStreaming: (
-    sessionKey: string,
+    conversationId: string,
     mutator: (msg: Message) => void,
     timestamp?: number,
   ) => void;
   appendAttachmentToCurrentAssistant: (
-    sessionKey: string,
+    conversationId: string,
     attachment: MessageAttachment,
     target?: { messageId?: string; attachTo?: 'last_assistant' },
   ) => void;
   applyHydratedTail: (
-    sessionKey: string,
+    conversationId: string,
     messagesWithoutTail: Message[],
     tail: Message | null,
   ) => void;
-  prependHistoryMessages: (sessionKey: string, older: Message[], hasMore: boolean) => void;
-  appendUserMessageIfMissing: (sessionKey: string, message: Message) => void;
+  prependHistoryMessages: (conversationId: string, older: Message[], hasMore: boolean) => void;
+  appendUserMessageIfMissing: (conversationId: string, message: Message) => void;
   mergeCommittedFromServer: (
-    sessionKey: string,
+    conversationId: string,
     serverMessages: Message[],
     hasMore?: boolean,
   ) => void;
@@ -241,8 +241,8 @@ function cloneSlice(slice: ChatSessionSlice): ChatSessionSlice {
   };
 }
 
-function normalizeKey(sessionKey: string): string {
-  return String(sessionKey ?? '').trim();
+function normalizeKey(conversationId: string): string {
+  return String(conversationId ?? '').trim();
 }
 
 function metaFrom(current: ChatSessionSlice | undefined): Pick<
@@ -275,19 +275,19 @@ function metaFrom(current: ChatSessionSlice | undefined): Pick<
 
 export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionStoreActions>(
   (set, get) => ({
-    focusedSessionKey: null,
+    focusedConversationId: null,
     initLoading: true,
     loadingMore: false,
     shellError: null,
     sessions: {},
 
-    setFocusedSessionKey: (key) => set({ focusedSessionKey: key }),
+    setFocusedConversationId: (key) => set({ focusedConversationId: key }),
     setInitLoading: (loading) => set({ initLoading: loading }),
     setLoadingMore: (loading) => set({ loadingMore: loading }),
     setShellError: (error) => set({ shellError: error }),
 
-    setSessionHistoryStatus: (sessionKey, historyStatus) => {
-      const key = normalizeKey(sessionKey);
+    setSessionHistoryStatus: (conversationId, historyStatus) => {
+      const key = normalizeKey(conversationId);
       if (!key) return;
       set((state) => {
         const current = state.sessions[key];
@@ -302,8 +302,8 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
-    patchSessionMeta: (sessionKey, partial) => {
-      const key = normalizeKey(sessionKey);
+    patchSessionMeta: (conversationId, partial) => {
+      const key = normalizeKey(conversationId);
       if (!key) return;
       set((state) => {
         const current = state.sessions[key];
@@ -317,16 +317,16 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
-    initSessionSnapshot: (sessionKey, snapshot) => {
-      const key = normalizeKey(sessionKey);
+    initSessionSnapshot: (conversationId, snapshot) => {
+      const key = normalizeKey(conversationId);
       if (!key) return;
       set((state) => ({
         sessions: { ...state.sessions, [key]: cloneSlice(snapshot) },
       }));
     },
 
-    setCommittedSnapshot: (sessionKey, data) => {
-      const key = normalizeKey(sessionKey);
+    setCommittedSnapshot: (conversationId, data) => {
+      const key = normalizeKey(conversationId);
       if (!key) return;
       set((state) => {
         const current = state.sessions[key];
@@ -362,8 +362,8 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
-    updateSessionMessages: (sessionKey, updater) => {
-      const key = normalizeKey(sessionKey);
+    updateSessionMessages: (conversationId, updater) => {
+      const key = normalizeKey(conversationId);
       if (!key) return;
       set((state) => {
         const current = state.sessions[key];
@@ -377,8 +377,8 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
-    finalizeStreamingTurn: (sessionKey, message) => {
-      const key = normalizeKey(sessionKey);
+    finalizeStreamingTurn: (conversationId, message) => {
+      const key = normalizeKey(conversationId);
       if (!key) return;
       set((state) => {
         const current = state.sessions[key];
@@ -399,8 +399,8 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
-    completeProgressiveRender: (sessionKey, renderKey) => {
-      const key = normalizeKey(sessionKey);
+    completeProgressiveRender: (conversationId, renderKey) => {
+      const key = normalizeKey(conversationId);
       if (!key || !renderKey) return;
       set((state) => {
         const current = state.sessions[key];
@@ -425,8 +425,8 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
-    clearStreamingState: (sessionKey) => {
-      const key = normalizeKey(sessionKey);
+    clearStreamingState: (conversationId) => {
+      const key = normalizeKey(conversationId);
       if (!key) return;
       set((state) => {
         const current = state.sessions[key];
@@ -440,8 +440,8 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
-    clearSession: (sessionKey) => {
-      const key = normalizeKey(sessionKey);
+    clearSession: (conversationId) => {
+      const key = normalizeKey(conversationId);
       if (!key) return;
       set((state) => {
         if (!(key in state.sessions)) return state;
@@ -450,15 +450,15 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
-    getSessionSnapshot: (sessionKey) => {
-      const key = normalizeKey(sessionKey);
+    getSessionSnapshot: (conversationId) => {
+      const key = normalizeKey(conversationId);
       if (!key) return undefined;
       const slice = get().sessions[key];
       return slice ? cloneSlice(slice) : undefined;
     },
 
-    seedSessionIfEmpty: (sessionKey, messages, sending, streaming, hasMore = false) => {
-      const key = normalizeKey(sessionKey);
+    seedSessionIfEmpty: (conversationId, messages, sending, streaming, hasMore = false) => {
+      const key = normalizeKey(conversationId);
       if (!key || get().sessions[key]) return;
       get().initSessionSnapshot(key, {
         ...defaultSessionMeta(),
@@ -473,8 +473,8 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
-    setSessionFlags: (sessionKey, partial) => {
-      const key = normalizeKey(sessionKey);
+    setSessionFlags: (conversationId, partial) => {
+      const key = normalizeKey(conversationId);
       if (!key) return;
       set((state) => {
         const current = state.sessions[key];
@@ -492,8 +492,8 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
-    setSessionProgress: (sessionKey, progress) => {
-      const key = normalizeKey(sessionKey);
+    setSessionProgress: (conversationId, progress) => {
+      const key = normalizeKey(conversationId);
       if (!key) return;
       set((state) => {
         const current = state.sessions[key];
@@ -507,8 +507,8 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
-    setSessionTaskPlan: (sessionKey, taskPlan) => {
-      const key = normalizeKey(sessionKey);
+    setSessionTaskPlan: (conversationId, taskPlan) => {
+      const key = normalizeKey(conversationId);
       if (!key) return;
       set((state) => {
         const current = state.sessions[key];
@@ -528,8 +528,8 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
-    mutateSessionStreaming: (sessionKey, mutator, timestamp = Date.now()) => {
-      const key = normalizeKey(sessionKey);
+    mutateSessionStreaming: (conversationId, mutator, timestamp = Date.now()) => {
+      const key = normalizeKey(conversationId);
       if (!key) return;
       set((state) => {
         const current = state.sessions[key];
@@ -551,8 +551,8 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
-    appendAttachmentToCurrentAssistant: (sessionKey, attachment, _target) => {
-      const key = normalizeKey(sessionKey);
+    appendAttachmentToCurrentAssistant: (conversationId, attachment, _target) => {
+      const key = normalizeKey(conversationId);
       if (!key) return;
       set((state) => {
         const current = state.sessions[key];
@@ -589,8 +589,8 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
-    applyHydratedTail: (sessionKey, messagesWithoutTail, tail) => {
-      const key = normalizeKey(sessionKey);
+    applyHydratedTail: (conversationId, messagesWithoutTail, tail) => {
+      const key = normalizeKey(conversationId);
       if (!key) return;
       set((state) => {
         const current = state.sessions[key];
@@ -610,8 +610,8 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
-    appendUserMessageIfMissing: (sessionKey, message) => {
-      const key = normalizeKey(sessionKey);
+    appendUserMessageIfMissing: (conversationId, message) => {
+      const key = normalizeKey(conversationId);
       if (!key || !isUiUserMessage(message.role)) return;
       set((state) => {
         const current = state.sessions[key];
@@ -663,8 +663,8 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
-    mergeCommittedFromServer: (sessionKey, serverMessages, hasMore) => {
-      const key = normalizeKey(sessionKey);
+    mergeCommittedFromServer: (conversationId, serverMessages, hasMore) => {
+      const key = normalizeKey(conversationId);
       if (!key) return;
       set((state) => {
         const current = state.sessions[key];
@@ -718,8 +718,8 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
-    prependHistoryMessages: (sessionKey, older, hasMore) => {
-      const key = normalizeKey(sessionKey);
+    prependHistoryMessages: (conversationId, older, hasMore) => {
+      const key = normalizeKey(conversationId);
       if (!key) return;
       set((state) => {
         const current = state.sessions[key];
@@ -757,18 +757,18 @@ export function isSessionSliceLive(slice: ChatSessionSlice | undefined): boolean
 }
 
 /** Imperative snapshot read for run callbacks and resume paths. */
-export function getChatSessionSnapshot(sessionKey: string): ChatSessionSlice | undefined {
-  return useChatSessionStore.getState().getSessionSnapshot(sessionKey);
+export function getChatSessionSnapshot(conversationId: string): ChatSessionSlice | undefined {
+  return useChatSessionStore.getState().getSessionSnapshot(conversationId);
 }
 
 /** Committed messages for a session (empty when not loaded). */
-export function getSessionMessages(sessionKey: string): Message[] {
-  return useChatSessionStore.getState().sessions[normalizeKey(sessionKey)]?.messages ?? [];
+export function getSessionMessages(conversationId: string): Message[] {
+  return useChatSessionStore.getState().sessions[normalizeKey(conversationId)]?.messages ?? [];
 }
 
 /** Sidebar / background run indicator (store slice, realtime run, or pending run id). */
-export function isSessionAgentRunActive(sessionKey: string): boolean {
-  const key = normalizeKey(sessionKey);
+export function isSessionAgentRunActive(conversationId: string): boolean {
+  const key = normalizeKey(conversationId);
   if (!key) return false;
   const slice = useChatSessionStore.getState().sessions[key];
   if (isSessionSliceLive(slice)) return true;

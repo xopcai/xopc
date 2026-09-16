@@ -22,19 +22,19 @@ type PendingCreation = {
   preparation: ProjectSessionPreparation;
   baseUrl: string;
   token: string | undefined;
-  sessionKey: string | null;
+  conversationId: string | null;
   completion: Promise<string | null>;
-  resolve: (sessionKey: string | null) => void;
+  resolve: (conversationId: string | null) => void;
 };
 
 /** Keeps the first draft in the composer until its chosen environment is ready. */
-export function useProjectSessionComposer({ preparation, sessionKey, ready, onSend }: {
+export function useProjectSessionComposer({ preparation, conversationId, ready, onSend }: {
   preparation: ProjectSessionPreparation | null;
-  sessionKey: string | null;
+  conversationId: string | null;
   ready: boolean;
   onSend: ComposerSendHandler;
 }) {
-  const token = useGatewayStore((state) => state.sessionKey);
+  const token = useGatewayStore((state) => state.conversationId);
   const baseUrl = useGatewayStore((state) => state.baseUrl);
   const [selection, setSelection] = useState<{ preparation: ProjectSessionPreparation; mode: ExecutionMode } | null>(null);
   const [failure, setFailure] = useState<{ preparation: ProjectSessionPreparation; message: string } | null>(null);
@@ -61,7 +61,7 @@ export function useProjectSessionComposer({ preparation, sessionKey, ready, onSe
     const current = pendingRef.current;
     pendingRef.current = null;
     setPending(null);
-    current?.resolve(accepted ? current.sessionKey : null);
+    current?.resolve(accepted ? current.conversationId : null);
   }, []);
 
   useEffect(() => {
@@ -70,13 +70,13 @@ export function useProjectSessionComposer({ preparation, sessionKey, ready, onSe
       finish(false);
       return;
     }
-    if (!pending.sessionKey) return;
-    if (sessionKey === pending.sessionKey) {
+    if (!pending.conversationId) return;
+    if (conversationId === pending.conversationId) {
       if (ready) finish(true);
     } else if (preparation !== pending.preparation) {
       finish(false);
     }
-  }, [pending, sessionKey, ready, preparation, finish, baseUrl, token]);
+  }, [pending, conversationId, ready, preparation, finish, baseUrl, token]);
 
   useEffect(() => () => {
     pendingRef.current?.resolve(null);
@@ -84,14 +84,14 @@ export function useProjectSessionComposer({ preparation, sessionKey, ready, onSe
   }, []);
 
   const prepareSession = useCallback(async (): Promise<string | null> => {
-    if (!preparation) return sessionKey;
+    if (!preparation) return conversationId;
     const currentPending = pendingRef.current;
     if (currentPending) {
       return currentPending.preparation === preparation ? currentPending.completion : null;
     }
     if (!allowed || isValidating) return null;
     setFailure(null);
-    let resolveCompletion!: (sessionKey: string | null) => void;
+    let resolveCompletion!: (conversationId: string | null) => void;
     const completion = new Promise<string | null>((resolve) => {
       resolveCompletion = resolve;
     });
@@ -99,7 +99,7 @@ export function useProjectSessionComposer({ preparation, sessionKey, ready, onSe
       preparation,
       baseUrl,
       token,
-      sessionKey: null,
+      conversationId: null,
       completion,
       resolve: resolveCompletion,
     };
@@ -108,7 +108,7 @@ export function useProjectSessionComposer({ preparation, sessionKey, ready, onSe
     void Promise.resolve().then(() => preparation.create(mode)).then((key) => {
       if (pendingRef.current !== current) return;
       rememberProjectExecutionMode(preparation.project.id, mode);
-      const created = { ...current, sessionKey: key };
+      const created = { ...current, conversationId: key };
       pendingRef.current = created;
       setPending(created);
     }).catch((cause) => {
@@ -118,15 +118,15 @@ export function useProjectSessionComposer({ preparation, sessionKey, ready, onSe
       finish(false);
     });
     return completion;
-  }, [allowed, baseUrl, finish, isValidating, mode, mutate, preparation, sessionKey, token]);
+  }, [allowed, baseUrl, finish, isValidating, mode, mutate, preparation, conversationId, token]);
 
   const send: ComposerSendHandler = async (...args) => {
     if (preparation) {
       if (projectSendPendingRef.current) return false;
       projectSendPendingRef.current = true;
       try {
-        const preparedSessionKey = await prepareSession();
-        if (!preparedSessionKey) return false;
+        const preparedConversationId = await prepareSession();
+        if (!preparedConversationId) return false;
         // Use the newly hydrated session's effort instead of the unbound composer's placeholder.
         args[2] = undefined;
       } finally {
@@ -140,7 +140,7 @@ export function useProjectSessionComposer({ preparation, sessionKey, ready, onSe
 
   return {
     mode, options, checking: isValidating, checkFailed: Boolean(error), allowed,
-    busy: Boolean(pending && (pending.preparation === preparation || (pending.sessionKey && pending.sessionKey === sessionKey))),
+    busy: Boolean(pending && (pending.preparation === preparation || (pending.conversationId && pending.conversationId === conversationId))),
     failure: failure?.preparation === preparation ? failure.message : null,
     changeMode: (next: ExecutionMode) => {
       if (!preparation || pendingRef.current) return;

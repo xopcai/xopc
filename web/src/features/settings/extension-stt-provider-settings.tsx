@@ -242,7 +242,7 @@ function ExtensionSttProviderSettingsBody({
 
 export function ExtensionSttProviderSettings({ extensionId }: { extensionId: string }) {
   const language = useLocaleStore((s) => s.language);
-  const hasToken = useGatewayStore((s) => Boolean(s.sessionKey));
+  const hasToken = useGatewayStore((s) => Boolean(s.conversationId));
 
   const { data: detail, isLoading: detailLoading } = useSWR(
     hasToken && extensionId ? `ext-stt-detail-${extensionId}` : null,

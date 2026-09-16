@@ -42,10 +42,10 @@ function unavailableLabel(
 
 export const AssistantDeliverablesCard = memo(function AssistantDeliverablesCard({
   deliverables,
-  sessionKey,
+  conversationId,
 }: {
   deliverables: AssistantDeliverables;
-  sessionKey?: string | null;
+  conversationId?: string | null;
 }) {
   const { colors } = useTheme();
   const m = useMessages();
@@ -83,7 +83,7 @@ export const AssistantDeliverablesCard = memo(function AssistantDeliverablesCard
           </View>
         ) : null}
         {attachments.length > 0 ? (
-          <AttachmentRenderer attachments={attachments} sessionKey={sessionKey} compact />
+          <AttachmentRenderer attachments={attachments} conversationId={conversationId} compact />
         ) : null}
         {links.map((artifact) => (
           <Pressable

@@ -73,9 +73,9 @@ describe('workflow writeback', () => {
       goal: 'Review',
       input: {},
       status: 'queued',
-      source: { kind: 'webui', sessionKey: 'workflow-session' },
+      source: { kind: 'webui', conversationId: 'workflow-session' },
       metadata: {
-        sessionKey: 'workflow-session',
+        conversationId: 'workflow-session',
         triggerSource: 'webui',
         agentId: 'main',
         projectId: project.id,

@@ -27,7 +27,7 @@ describe('EndpointBindingService', () => {
   it('binds and resolves one explicit endpoint per session', () => {
     const { bindings } = service();
     expect(bindings.bind(' session-1 ', endpoint.endpointId, 42)).toEqual({
-      sessionKey: 'session-1',
+      conversationId: 'session-1',
       endpointId: endpoint.endpointId,
       boundAt: 42,
     });

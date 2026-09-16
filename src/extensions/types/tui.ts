@@ -14,7 +14,7 @@ export interface TuiAutocompleteSuggestion {
 
 export type TuiAutocompleteProvider = (
   query: string,
-  context: { cwd: string; sessionKey: string },
+  context: { cwd: string; conversationId: string },
 ) => TuiAutocompleteSuggestion[] | Promise<TuiAutocompleteSuggestion[]>;
 
 export interface TuiAutocompleteItem {
@@ -331,7 +331,7 @@ export interface TuiCompactResult {
 
 export interface TuiSystemPromptOptions {
   cwd: string;
-  sessionKey?: string;
+  conversationId?: string;
   model?: TuiModelInfo;
 }
 
@@ -466,7 +466,7 @@ export interface TuiActionContext {
   readonly modelRegistry: TuiModelRegistry;
   readonly model: TuiModelInfo | undefined;
   cwd: string;
-  sessionKey: string;
+  conversationId: string;
   isProjectTrusted(): boolean;
   isIdle(): boolean;
   hasPendingMessages(): boolean;

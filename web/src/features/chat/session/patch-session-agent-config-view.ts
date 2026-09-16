@@ -19,8 +19,8 @@ export type SessionAgentConfigView = {
 };
 
 /** Apply resolved session agent settings to the chat session store slice. */
-export function patchSessionAgentConfigView(sessionKey: string, cfg: SessionAgentConfigView): void {
-  const key = String(sessionKey ?? '').trim();
+export function patchSessionAgentConfigView(conversationId: string, cfg: SessionAgentConfigView): void {
+  const key = String(conversationId ?? '').trim();
   if (!key) return;
   const store = useChatSessionStore.getState();
   const currentVersion = store.sessions[key]?.configVersion;

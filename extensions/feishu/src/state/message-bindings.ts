@@ -1,6 +1,6 @@
 export type FeishuMessageBinding = {
   messageId: string;
-  sessionKey: string;
+  conversationId: string;
   accountId: string;
   chatId: string;
   senderId: string;

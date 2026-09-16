@@ -25,10 +25,10 @@ type FeishuGatewaySetupActive = {
 const activeSessions = new Map<string, FeishuGatewaySetupActive>();
 const completedSessions = new Map<string, FeishuGatewaySetupDone>();
 
-function rememberCompleted(sessionKey: string, state: FeishuGatewaySetupDone): void {
-  activeSessions.delete(sessionKey);
-  completedSessions.set(sessionKey, state);
-  setTimeout(() => completedSessions.delete(sessionKey), 10 * 60_000);
+function rememberCompleted(conversationId: string, state: FeishuGatewaySetupDone): void {
+  activeSessions.delete(conversationId);
+  completedSessions.set(conversationId, state);
+  setTimeout(() => completedSessions.delete(conversationId), 10 * 60_000);
 }
 
 function readInput(input: unknown): Record<string, unknown> {
@@ -168,8 +168,8 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
       }
 
       const begin = await beginAppRegistration(domain);
-      const sessionKey = begin.deviceCode;
-      activeSessions.set(sessionKey, {
+      const conversationId = begin.deviceCode;
+      activeSessions.set(conversationId, {
         startedAt: Date.now(),
         qrPayload: begin.qrUrl,
       });
@@ -191,11 +191,11 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
                 : outcome.status === 'timeout'
                   ? (zh ? '配置超时。' : 'Setup timed out.')
                   : outcome.message ?? (zh ? '飞书配置失败。' : 'Feishu setup failed.');
-          rememberCompleted(sessionKey, { phase: 'done', ok: false, message });
+          rememberCompleted(conversationId, { phase: 'done', ok: false, message });
           return;
         }
 
-        rememberCompleted(sessionKey, {
+        rememberCompleted(conversationId, {
           phase: 'done',
           ok: true,
           accountId: 'default',
@@ -209,7 +209,7 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
         ok: true,
         payload: {
           type: 'qr',
-          sessionKey,
+          conversationId,
           qrPayload: begin.qrUrl,
           statusAction: 'setup.status',
           pollIntervalMs: Math.max(1000, begin.intervalSec * 1000),
@@ -221,12 +221,12 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
 
     if (actionId === 'setup.status') {
       const raw = readInput(input);
-      const sessionKey = typeof raw.sessionKey === 'string' ? raw.sessionKey : '';
-      if (!sessionKey) return { ok: false, message: zh ? '缺少配置 sessionKey' : 'Missing setup sessionKey' };
-      const completed = completedSessions.get(sessionKey);
+      const conversationId = typeof raw.conversationId === 'string' ? raw.conversationId : '';
+      if (!conversationId) return { ok: false, message: zh ? '缺少配置 conversationId' : 'Missing setup conversationId' };
+      const completed = completedSessions.get(conversationId);
       return {
         ok: true,
-        payload: statusPayload(completed, activeSessions.get(sessionKey), locale),
+        payload: statusPayload(completed, activeSessions.get(conversationId), locale),
         nextConfig: completedNextConfig(cfg, completed),
       };
     }

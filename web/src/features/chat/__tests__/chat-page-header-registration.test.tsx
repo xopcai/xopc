@@ -11,8 +11,8 @@ import { useTerminalPanelStore } from '@/stores/terminal-panel-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 
 vi.mock('@/features/chat/context/use-session-context', () => ({
-  useSessionContext: (sessionKey: string) => ({
-    data: { sessionKey, work: {}, sources: [], unavailableSections: [], environment: { kind: 'local_checkout', rootPath: '/Users/example/projects/xopc', available: true } },
+  useSessionContext: (conversationId: string) => ({
+    data: { conversationId, work: {}, sources: [], unavailableSections: [], environment: { kind: 'local_checkout', rootPath: '/Users/example/projects/xopc', available: true } },
     mutate: vi.fn(),
   }),
 }));
@@ -46,12 +46,12 @@ describe('ChatPageHeaderRegistration', () => {
     });
     usePageHeaderStore.setState(emptyHeader);
     useTerminalPanelStore.setState({
-      openBySessionKey: {},
-      tabsBySessionKey: {},
-      activeTabKeyBySessionKey: {},
+      openByConversationId: {},
+      tabsByConversationId: {},
+      activeTabKeyByConversationId: {},
       height: 300,
     });
-    useWorkspacePanelStore.setState({ open: false, sessionKeyOverride: null });
+    useWorkspacePanelStore.setState({ open: false, conversationIdOverride: null });
     Object.defineProperty(window, 'electronAPI', { configurable: true, value: undefined });
     container = document.createElement('div');
     document.body.append(container);
@@ -108,18 +108,18 @@ describe('ChatPageHeaderRegistration', () => {
   });
 
   it('keeps one context and files control through repeated session switches', () => {
-    for (const sessionKey of ['session-1', 'session-2', 'session-3', 'session-1']) {
+    for (const conversationId of ['session-1', 'session-2', 'session-3', 'session-1']) {
       act(() => {
         root.render(
           <MemoryRouter>
             <ChatPageHeaderRegistration
-              chatHeadline={sessionKey}
+              chatHeadline={conversationId}
               chatAgents={[]}
               showChatAgentSelector={false}
               chatAgentId="main"
               onChatAgentChange={() => {}}
               chatAgentDisabled={false}
-              sessionKey={sessionKey}
+              conversationId={conversationId}
               workspacePath="/Users/example/projects/xopc"
               onWorkspaceChange={async () => {}}
             />
@@ -132,7 +132,7 @@ describe('ChatPageHeaderRegistration', () => {
       expect(container.querySelectorAll('[aria-label="Project Files: xopc"]')).toHaveLength(1);
       expect(document.querySelector('[role="dialog"]')).toBeNull();
       act(() => container.querySelector<HTMLButtonElement>('[aria-label="Project Files: xopc"]')!.click());
-      expect(useWorkspacePanelStore.getState().sessionKeyOverride).toBe(sessionKey);
+      expect(useWorkspacePanelStore.getState().conversationIdOverride).toBe(conversationId);
       act(() => container.querySelector<HTMLButtonElement>('[aria-label="Session context"]')!.click());
       expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
     }
@@ -144,7 +144,7 @@ describe('ChatPageHeaderRegistration', () => {
         <MemoryRouter initialEntries={['/chat/session-1']}>
           <Routes>
             <Route
-              path="/chat/:sessionKey"
+              path="/chat/:conversationId"
               element={(
                 <>
                   <ChatPageHeaderRegistration
@@ -154,7 +154,7 @@ describe('ChatPageHeaderRegistration', () => {
                     chatAgentId="main"
                     onChatAgentChange={() => {}}
                     chatAgentDisabled={false}
-                    sessionKey="session-1"
+                    conversationId="session-1"
                     workspacePath="/Users/example/projects/xopc"
                     canChangeWorkspace
                     onWorkspaceChange={async () => {}}
@@ -183,17 +183,17 @@ describe('ChatPageHeaderRegistration', () => {
     act(() => projectFilesButton?.click());
     expect(useWorkspacePanelStore.getState()).toMatchObject({
       open: true,
-      sessionKeyOverride: 'session-1',
+      conversationIdOverride: 'session-1',
     });
   });
 
   it('opens project files before a session is created', () => {
-    useWorkspacePanelStore.setState({ sessionKeyOverride: 'previous-session' });
+    useWorkspacePanelStore.setState({ conversationIdOverride: 'previous-session' });
     act(() => {
       root.render(
         <MemoryRouter initialEntries={['/chat/new?projectId=project-1']}>
           <Routes>
-            <Route path="/chat/:sessionKey" element={(
+            <Route path="/chat/:conversationId" element={(
               <>
                 <ChatPageHeaderRegistration
                   chatHeadline="New chat"
@@ -218,7 +218,7 @@ describe('ChatPageHeaderRegistration', () => {
     expect(button?.disabled).toBe(false);
     expect(button?.title).toContain('/repo/project');
     act(() => button!.click());
-    expect(useWorkspacePanelStore.getState()).toMatchObject({ open: true, sessionKeyOverride: null });
+    expect(useWorkspacePanelStore.getState()).toMatchObject({ open: true, conversationIdOverride: null });
   });
 
   it('prepares and opens a terminal before the first project message', async () => {
@@ -231,7 +231,7 @@ describe('ChatPageHeaderRegistration', () => {
       root.render(
         <MemoryRouter initialEntries={['/chat/new?projectId=project-1']}>
           <Routes>
-            <Route path="/chat/:sessionKey" element={(
+            <Route path="/chat/:conversationId" element={(
               <>
                 <ChatPageHeaderRegistration
                   chatHeadline="New code chat"
@@ -256,8 +256,8 @@ describe('ChatPageHeaderRegistration', () => {
     await act(async () => terminalButton!.click());
 
     expect(prepareTerminalSession).toHaveBeenCalledOnce();
-    expect(useTerminalPanelStore.getState().openBySessionKey['created-session']).toBe(true);
-    expect(useTerminalPanelStore.getState().tabsBySessionKey['created-session']).toHaveLength(1);
+    expect(useTerminalPanelStore.getState().openByConversationId['created-session']).toBe(true);
+    expect(useTerminalPanelStore.getState().tabsByConversationId['created-session']).toHaveLength(1);
   });
 
   it('keeps project files available while directory selection is locked', () => {
@@ -266,7 +266,7 @@ describe('ChatPageHeaderRegistration', () => {
         <MemoryRouter initialEntries={['/chat/session-1']}>
           <Routes>
             <Route
-              path="/chat/:sessionKey"
+              path="/chat/:conversationId"
               element={(
                 <>
                   <ChatPageHeaderRegistration
@@ -276,7 +276,7 @@ describe('ChatPageHeaderRegistration', () => {
                     chatAgentId="main"
                     onChatAgentChange={() => {}}
                     chatAgentDisabled={false}
-                    sessionKey="session-1"
+                    conversationId="session-1"
                     workspacePath="/Users/example/projects/xopc"
                     canChangeWorkspace={false}
                     workspaceDisabled
@@ -301,7 +301,7 @@ describe('ChatPageHeaderRegistration', () => {
     act(() => projectFilesButton?.click());
     expect(useWorkspacePanelStore.getState()).toMatchObject({
       open: true,
-      sessionKeyOverride: 'session-1',
+      conversationIdOverride: 'session-1',
     });
   });
 });

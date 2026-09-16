@@ -28,7 +28,7 @@ export function TaskDetailScreen() {
   const conversation = useQuery({
     queryKey: queryKeys.taskConversation(id),
     queryFn: () => ensureTaskConversation(id),
-    enabled: Boolean(id && query.data && !query.data.conversation.activeSessionKey),
+    enabled: Boolean(id && query.data && !query.data.conversation.activeConversationId),
     retry: 1,
   });
 
@@ -48,7 +48,7 @@ export function TaskDetailScreen() {
   });
 
   const detail = query.data;
-  const sessionKey = detail?.conversation.activeSessionKey ?? conversation.data?.sessionKey;
+  const conversationId = detail?.conversation.activeConversationId ?? conversation.data?.conversationId;
   const executorAgentId = detail?.conversation.currentExecutorAgentId ?? conversation.data?.agentId ?? detail?.task.delegateAgentId;
   const executor = agents.data?.items.find((agent) => agent.id === executorAgentId);
   const project = projects.data?.find((item) => item.id === detail?.task.projectId);
@@ -67,7 +67,7 @@ export function TaskDetailScreen() {
     unverified: hm.verificationPending,
   } as const;
   const openTaskChat = () => {
-    if (sessionKey) openChat(router, sessionKey, { taskId: id });
+    if (conversationId) openChat(router, conversationId, { taskId: id });
   };
 
   return (
@@ -112,27 +112,27 @@ export function TaskDetailScreen() {
                 <View style={styles.flex}>
                   <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.agentConversation}</Text>
                   <Text style={[styles.meta, { color: colors.text.secondary }]}>
-                    {conversation.isFetching && !sessionKey ? labels.conversationCreating : executor?.name ?? executorAgentId ?? labels.automaticAgent}
+                    {conversation.isFetching && !conversationId ? labels.conversationCreating : executor?.name ?? executorAgentId ?? labels.automaticAgent}
                   </Text>
                 </View>
               </View>
-              {conversation.isError && !sessionKey ? (
+              {conversation.isError && !conversationId ? (
                 <View style={styles.inlineError}>
                   <Text style={[styles.meta, styles.flex, { color: colors.semantic.error }]}>{labels.conversationFailed}</Text>
                   <Button compact onPress={() => void conversation.refetch()}>{labels.retry}</Button>
                 </View>
               ) : null}
               <View style={styles.actions}>
-                {waitingForUser && sessionKey ? (
+                {waitingForUser && conversationId ? (
                   <Button mode="contained" icon="message-reply-outline" onPress={openTaskChat}>{hm.taskContinueInChat}</Button>
                 ) : !activeWait && detail.allowedCommands.includes('start') && executorAgentId ? (
                   <Button mode="contained" icon="play" disabled={command.isPending} loading={command.isPending && command.variables?.type === 'start'} onPress={() => command.mutate({ type: 'start', executor: { kind: 'agent', agentId: executorAgentId } })}>{hm.taskRun}</Button>
-                ) : sessionKey ? (
+                ) : conversationId ? (
                   <Button mode="contained" icon="message-outline" onPress={openTaskChat}>{labels.openConversation}</Button>
                 ) : conversation.isError ? null : (
                   <Button mode="contained" disabled loading={conversation.isFetching}>{labels.conversationCreating}</Button>
                 )}
-                {sessionKey && !waitingForUser && detail.allowedCommands.includes('start') ? <Button mode="outlined" icon="message-outline" onPress={openTaskChat}>{labels.openConversation}</Button> : null}
+                {conversationId && !waitingForUser && detail.allowedCommands.includes('start') ? <Button mode="outlined" icon="message-outline" onPress={openTaskChat}>{labels.openConversation}</Button> : null}
                 {activeWait && !waitingForUser && detail.allowedCommands.includes('resolve_wait') ? (
                   <Button mode="outlined" disabled={command.isPending} onPress={() => command.mutate({ type: 'resolve_wait', waitId: activeWait.id })}>{hm.taskResume}</Button>
                 ) : detail.allowedCommands.includes('add_wait') ? (
@@ -140,7 +140,7 @@ export function TaskDetailScreen() {
                 ) : null}
               </View>
               {command.isError ? <Text style={[styles.meta, { color: colors.semantic.error }]}>{command.error instanceof TaskApiError && command.error.status === 409 ? hm.taskChangedRetry : hm.taskActionFailed}</Text> : null}
-              {waitingForUser && !sessionKey ? <Text style={[styles.meta, { color: colors.semantic.warning }]}>{activeWait?.reason}</Text> : null}
+              {waitingForUser && !conversationId ? <Text style={[styles.meta, { color: colors.semantic.warning }]}>{activeWait?.reason}</Text> : null}
             </View>
 
             <Section title={hm.taskDefinition}>

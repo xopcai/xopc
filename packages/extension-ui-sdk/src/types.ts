@@ -70,13 +70,13 @@ export interface ExtensionClient {
   agent: {
     sendMessage(
       message: string,
-      options?: { sessionKey?: string; newSession?: boolean },
-    ): Promise<{ sessionKey: string }>;
-    onStreamEvent(sessionKey: string, handler: StreamHandler): () => void;
+      options?: { conversationId?: string; newSession?: boolean },
+    ): Promise<{ conversationId: string }>;
+    onStreamEvent(conversationId: string, handler: StreamHandler): () => void;
   };
   session: {
     listSessions(): Promise<unknown[]>;
-    navigateToSession(sessionKey: string): Promise<void>;
+    navigateToSession(conversationId: string): Promise<void>;
   };
   config: {
     getExtensionConfig<T = Record<string, unknown>>(): Promise<T>;

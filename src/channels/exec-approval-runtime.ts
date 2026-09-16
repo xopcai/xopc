@@ -5,7 +5,7 @@
 import type { Config } from '../config/schema.js';
 
 export interface ExecApprovalRequestPayload {
-  sessionKey: string;
+  conversationId: string;
   channel: string;
   chatId: string;
   accountId?: string;

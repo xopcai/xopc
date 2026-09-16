@@ -121,18 +121,18 @@ Use **`createLogger('Prefix')`** from `src/utils/logger.ts` (Pino under the hood
 ```typescript
 const log = createLogger('MyModule');
 
-log.info({ sessionKey, durationMs }, 'Session saved');
+log.info({ conversationId, durationMs }, 'Session saved');
 log.warn({ path, errorMessage: em }, `Config read failed: ${em}`);
 log.error({ err, requestId, phase: 'outbound_consume' }, `Outbound pipeline failed: ${em}`);
 ```
 
-- **First argument:** structured fields (`err`, `sessionKey`, `path`, `tool`, `phase`, counts, ids). Pass **`Error` instances as `err`** so the formatter keeps **name / message / stack**.
+- **First argument:** structured fields (`err`, `conversationId`, `path`, `tool`, `phase`, counts, ids). Pass **`Error` instances as `err`** so the formatter keeps **name / message / stack**.
 - **Second argument (`msg`):** a **short, scannable sentence** for humans and UIs that mostly show the message column. Repeat the **one-line outcome** there (e.g. failure reason), not only in fields.
 - For non-`Error` throws, add **`errorMessage: String(x)`** (and/or embed the text in `msg`) so logs stay grep-friendly.
 
 ### What to include for debugging
 
-- **Identity:** `sessionKey`, `channel`, `chatId`, `requestId` (often injected via async context—see below), file **`path`**, **`tool` / `toolName`**, **`modelRef`** or `provider` + `modelId`.
+- **Identity:** `conversationId`, `channel`, `chatId`, `requestId` (often injected via async context—see below), file **`path`**, **`tool` / `toolName`**, **`modelRef`** or `provider` + `modelId`.
 - **Operation:** a **`phase`** or verb in `msg` (`inbound_consume`, `publishOutbound`, `lifecycle emit llm_request`, …).
 - **Bounded previews:** long strings as **`contentPreview` / `linePreview` / `goalPreview`** (truncated), not full payloads.
 
@@ -228,7 +228,7 @@ import { DraftStreamManager } from '@xopcai/xopc/channels/telegram/draft-stream.
 
 ### Multiple agents (`agents.list`)
 
-Runtime configuration has exactly two layers: **`agents.defaults`**, then the matching entry in **`agents.list`**. The selected session-key agent id resolves to one enabled entry; its explicitly configured fields override or merge with the global defaults according to that field's schema. There is no preset graph, generic recursive merge, lock, or compatibility layer. Default agent id: **`agents.default`**, else the first enabled entry, else **`main`**. On-disk paths (`~/.xopc/agents/<id>/` including profile Markdown and Markdown workspace roots) resolve via **`src/agent/agent-scope.ts`**.
+Runtime configuration has exactly two layers: **`agents.defaults`**, then the matching entry in **`agents.list`**. The selected conversation metadata agent id resolves to one enabled entry; its explicitly configured fields override or merge with the global defaults according to that field's schema. There is no preset graph, generic recursive merge, lock, or compatibility layer. Default agent id: **`agents.default`**, else the first enabled entry, else **`main`**. On-disk paths (`~/.xopc/agents/<id>/` including profile Markdown and Markdown workspace roots) resolve via **`src/agent/agent-scope.ts`**.
 
 Model selection uses fixed intents under `models.intents`: `fast`, `reasoning`, `coding`, `review`, `vision`, and `understanding`. Workflows may reference one of these intents or a direct `provider/model` ref. Resolution: `src/config/agent-model-intents.ts`.
 
@@ -328,14 +328,14 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 | i18n | `web/src/i18n/messages.ts` (`en` / `zh`) |
 | Global styles + tokens | `web/src/styles/globals.css` (`@theme { … }` for semantic colors) |
 
-**Routing (hash):** `/` → `/chat`; chat `/chat`, `/chat/new`, `/chat/:sessionKey`. Global inherited Agent capabilities are managed at `/settings/agent-defaults`; Agent profiles and explicit overrides are managed at `/agents` and `/agents/:agentId`; browser setup lives at `/settings/agent-browser`. Other full-screen settings include `/settings/gateway`, `/settings/appearance`, `/settings/capabilities/{models|image|voice|search}`, `/settings/heartbeat`, `/settings/sessions`, and `/settings/logs`, plus top-level `/tasks`, `/projects`, `/automations`, `/skills`, `/channels`, `/connectors`, `/extensions`, and `/workflows`.
+**Routing (hash):** `/` → `/chat`; chat `/chat`, `/chat/new`, `/chat/:conversationId`. Global inherited Agent capabilities are managed at `/settings/agent-defaults`; Agent profiles and explicit overrides are managed at `/agents` and `/agents/:agentId`; browser setup lives at `/settings/agent-browser`. Other full-screen settings include `/settings/gateway`, `/settings/appearance`, `/settings/capabilities/{models|image|voice|search}`, `/settings/heartbeat`, `/settings/sessions`, and `/settings/logs`, plus top-level `/tasks`, `/projects`, `/automations`, `/skills`, `/channels`, `/connectors`, `/extensions`, and `/workflows`.
 
 **Gateway integration:**
 
 - **REST:** same origin `fetch` via `apiUrl('/api/...')`; 401 → `gateway-store` `onUnauthorized`.
-- **Agent streaming:** submit input with `POST /api/sessions/:sessionKey/inputs`, then subscribe to `run:<runId>` on the shared realtime connection. See `web/src/features/chat/`.
+- **Agent streaming:** submit input with `POST /api/sessions/:conversationId/inputs`, then subscribe to `run:<runId>` on the shared realtime connection. See `web/src/features/chat/`.
 - **Realtime events:** issue a one-time ticket with `POST /api/realtime/tickets`, then connect to `WS /api/realtime/v1/ws`; the bridge lives in `web/src/features/gateway/gateway-realtime-bridge.tsx`. Dots in event names become hyphenated `window` events (e.g. `config.reload` → `config-reload`).
-- **Navigate to chat from other pages:** `window.dispatchEvent(new CustomEvent('navigate-to-chat', { detail: { sessionKey } }))` — handled in `AppShell`.
+- **Navigate to chat from other pages:** `window.dispatchEvent(new CustomEvent('navigate-to-chat', { detail: { conversationId } }))` — handled in `AppShell`.
 
 **Design system:** Follow **[docs/design/ui-design-system.md](./docs/design/ui-design-system.md)** — calm slate neutrals, **blue** only for primary actions / links / AI hints; prefer borders over heavy shadows in dark mode; short copy. Implement with **`web/src/styles/globals.css`** semantic tokens (`bg-surface-*`, `text-fg*`, `border-edge`, `accent`, etc.) and Tailwind utilities—do not add a second token system under `web/` unless extending `@theme` there.
 
@@ -388,6 +388,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 
 ### Session transcript (LLM vs on-disk rows)
 
+- **Conversation identity:** Stable UUID `conversationId`; Agent and channel routing come from stored metadata, never ID parsing. `sessions.active_transcript_id` points to the current `transcriptId`; reset preserves the conversation UUID. Create through `src/storage/sqlite/conversation-repository.ts`. Schema v178 performs the one-time historical conversion; old-key decoding belongs only in migration modules.
 - **Authoritative storage:** `~/.xopc/xopc.db` (SQLite). Session metadata, transcripts, per-session config, compaction checkpoints, and FTS5 search all live in `src/storage/sqlite/`. Gateway opens the DB on start via `openXopcDatabase()`.
 - **Runtime write path:** Gateway, channels, and CLI turns use `runXopcEmbeddedTurn` → `openSqliteHydratingSessionManager` (in-memory pi `SessionManager` hydrated from SQLite) → `guardSessionManager` appends → `emitSessionTranscriptUpdate` → `SessionStore.syncEmbeddedTranscriptUpdate` → `appendTranscriptEntry` (SQLite). Do **not** add turn-end `SessionStore.save` / `saveMessages` on agent paths.
 - **Index:** `SessionIndex` (`src/session/manager.ts`) delegates to `SessionStore`; `onSessionTranscriptUpdate` bumps counts after appends.
@@ -395,7 +396,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 - **Webchat abort cutoff:** `POST /api/agent` accepts optional `clientCreatedAtMs`. When it is **omitted**, `abortCutoffTimestamp` does **not** drop stale POSTs (clients must send send-time for skip semantics). Abort uses `abortEmbeddedRun` + context rows via `appendCustomEntry`.
 - **Audit rows:** `kind: 'context'` entries persist for ops/UI via `GET /api/sessions/:key?include=transcriptRows` (comma-separated with `transcript` if you also want `transcriptSummary`).
 - **JSON export:** `SessionStore.exportSession(..., 'json')` includes `transcriptRows` (full stored order) alongside API-shaped `messages` (LLM-only). Session text search uses FTS5 over transcript content.
-- **Reset (`/new`, TUI `/reset`):** `performSessionReset` (`src/gateway/session-reset-service.ts`) archives the active transcript row in SQLite, assigns a new `sessionId` for the same session key, and keeps per-session overrides (`session_config`, thinking/verbose on the session row). Gateway: `POST /api/sessions/:key/reset`. **Delete** (`DELETE /api/sessions/:key`) removes the key from the index — do not use delete for `/new`.
+- **Reset (`/new`, TUI `/reset`):** `performSessionReset` (`src/gateway/session-reset-service.ts`) archives the active transcript row in SQLite, assigns a new `transcriptId` for the same conversation UUID, and keeps per-session overrides (`session_config`, thinking/verbose on the session row). Gateway: `POST /api/sessions/:key/reset`. **Delete** (`DELETE /api/sessions/:key`) removes the key from the index — do not use delete for `/new`.
 - **Integrity:** `xopc doctor --deep` runs SQLite session linkage checks and `PRAGMA integrity_check`.
 
 | Area | Primary locations |

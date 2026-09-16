@@ -76,7 +76,7 @@ export function GatewayTokenForm({
       return;
     }
 
-    onSubmit(verification.sessionKey);
+    onSubmit(verification.conversationId);
     setValue('');
     setError('');
   }

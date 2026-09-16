@@ -58,7 +58,7 @@ describe('direct stream input visibility', () => {
     const { deps, title } = setup();
     const events = [];
     for await (const event of runProcessDirectStreaming(deps, {
-      content: 'Internal recovery instruction', sessionKey: 'agent:main:main', runId: 'resume-run',
+      content: 'Internal recovery instruction', conversationId: 'agent:main:main', runId: 'resume-run',
       origin: { type: 'system', source: 'internal' },
     })) events.push(event);
     expect(events.map(event => event.type)).toEqual(['message_end']);
@@ -72,7 +72,7 @@ describe('direct stream input visibility', () => {
     const { deps, title } = setup();
     const events = [];
     for await (const event of runProcessDirectStreaming(deps, {
-      content: 'Check Gmail', sessionKey: 'agent:main:main', runId: 'user-run',
+      content: 'Check Gmail', conversationId: 'agent:main:main', runId: 'user-run',
       origin: { type: 'system', source: 'internal' },
     })) events.push(event);
     expect(events.map(event => event.type)).toEqual(['user_message', 'message_end']);
@@ -103,7 +103,7 @@ describe('direct stream input visibility', () => {
 
     const events = [];
     for await (const event of runProcessDirectStreaming(deps, {
-      content: 'Update this note', sessionKey: 'agent:main:note', runId: 'note-run',
+      content: 'Update this note', conversationId: 'agent:main:note', runId: 'note-run',
       origin: { type: 'system', source: 'internal' },
     })) events.push(event);
 

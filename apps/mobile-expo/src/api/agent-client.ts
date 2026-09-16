@@ -156,8 +156,8 @@ export async function refineVoiceTranscript(text: string): Promise<string> {
   return json.payload.text;
 }
 
-export async function fetchClarificationSnapshot(sessionKey: string): Promise<ClarificationWaitSnapshot> {
-  const res = await apiFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/clarification`);
+export async function fetchClarificationSnapshot(conversationId: string): Promise<ClarificationWaitSnapshot> {
+  const res = await apiFetch(`/api/sessions/${encodeURIComponent(conversationId)}/clarification`);
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
     throw new Error(formatApiHttpError(res.status, res.statusText, body.error?.message));
@@ -248,12 +248,12 @@ function wrapTerminalCallbacks(cb?: MessagingCallbacks): {
   };
 }
 
-function streamDispatchOptions(sessionKey: string, sender: AgentMessageSender): AgentStreamDispatchOptions {
+function streamDispatchOptions(conversationId: string, sender: AgentMessageSender): AgentStreamDispatchOptions {
   return {
-    sessionKey: sessionKey,
-    savePendingRunId: (sessionKey, runId) => {
+    conversationId: conversationId,
+    savePendingRunId: (conversationId, runId) => {
       sender.trackPendingRunId(runId);
-      setPendingAgentRun(sessionKey, runId);
+      setPendingAgentRun(conversationId, runId);
     },
   };
 }
@@ -264,15 +264,15 @@ function streamDispatchOptions(sessionKey: string, sender: AgentMessageSender): 
 export class AgentMessageSender {
   private _gatewayId: string | null | undefined;
   private _abort?: AbortController;
-  private _sessionKey = '';
+  private _conversationId = '';
   /** `runId` from the `run_start` event for this POST/resume; do not clear a newer pending run. */
   private _trackedRunId?: string;
   /** Abort controllers detached locally without cancelling their server runs. */
   private readonly _localDetaches = new WeakSet<AbortController>();
   private _streamCleanup?: () => void;
 
-  isStreamingFor(sessionKey: string): boolean {
-    return !!this._abort && this._sessionKey === sessionKey;
+  isStreamingFor(conversationId: string): boolean {
+    return !!this._abort && this._conversationId === conversationId;
   }
 
   trackPendingRunId(runId: string): void {
@@ -307,9 +307,9 @@ export class AgentMessageSender {
 
   private _notifyServerAbort(): void {
     if (this._gatewayId !== useGatewayStore.getState().activeGatewayId) return;
-    if (!this._sessionKey) return;
+    if (!this._conversationId) return;
     try {
-      const raw = storage.getString(pendingRunStorageKey(this._sessionKey));
+      const raw = storage.getString(pendingRunStorageKey(this._conversationId));
       if (!raw) return;
       const parsed = JSON.parse(raw) as { runId?: string };
       if (typeof parsed.runId !== 'string' || !parsed.runId) return;
@@ -325,21 +325,21 @@ export class AgentMessageSender {
 
   private _forceClearPendingRun(): void {
     if (this._gatewayId !== useGatewayStore.getState().activeGatewayId) return;
-    const sessionKey = this._sessionKey;
-    if (!sessionKey) return;
+    const conversationId = this._conversationId;
+    if (!conversationId) return;
     try {
-      storage.delete(pendingRunStorageKey(sessionKey));
-      clearPendingAgentRun(sessionKey);
+      storage.delete(pendingRunStorageKey(conversationId));
+      clearPendingAgentRun(conversationId);
     } catch {
       /* ignore */
     }
     this._trackedRunId = undefined;
   }
 
-  private _clearPendingRun(sessionKey: string, expectedRunId: string): void {
-    if (!sessionKey) return;
+  private _clearPendingRun(conversationId: string, expectedRunId: string): void {
+    if (!conversationId) return;
     try {
-      const key = pendingRunStorageKey(sessionKey);
+      const key = pendingRunStorageKey(conversationId);
       const raw = storage.getString(key);
       if (raw) {
         const pr = JSON.parse(raw) as { runId?: string };
@@ -349,7 +349,7 @@ export class AgentMessageSender {
         }
       }
       storage.delete(key);
-      clearPendingAgentRun(sessionKey);
+      clearPendingAgentRun(conversationId);
     } catch {
       /* ignore */
     }
@@ -366,13 +366,13 @@ export class AgentMessageSender {
       }
     };
     assertCurrent();
-    if (!input.expectedSessionId) {
-      const response = await apiFetch(buildSessionDetailPath(input.sessionKey));
+    if (!input.expectedTranscriptId) {
+      const response = await apiFetch(buildSessionDetailPath(input.conversationId));
       assertCurrent();
       if (!response.ok) throw new Error(formatApiHttpError(response.status, response.statusText));
-      const identity = parseSessionResponse(await response.json()).session?.sessionId;
+      const identity = parseSessionResponse(await response.json()).session?.transcriptId;
       if (!identity) throw new Error('Session identity is unavailable');
-      input.expectedSessionId = identity;
+      input.expectedTranscriptId = identity;
     }
     // Keep uploaded references on the same submission so manual retries use identical media.
     input.attachments = await materializeAttachments(input.attachments);
@@ -381,12 +381,12 @@ export class AgentMessageSender {
     assertCurrent();
     const response = await apiFetch(input.taskId
       ? `/api/tasks/${encodeURIComponent(input.taskId)}/inputs`
-      : `/api/sessions/${encodeURIComponent(input.sessionKey)}/inputs`, {
+      : `/api/sessions/${encodeURIComponent(input.conversationId)}/inputs`, {
       method: 'POST',
-      ...(input.taskId ? { headers: { 'X-Xopc-Expected-Session-Key': input.sessionKey } } : {}),
+      ...(input.taskId ? { headers: { 'X-Xopc-Expected-Session-Key': input.conversationId } } : {}),
       body: JSON.stringify({
         clientMessageId: input.clientMessageId,
-        expectedSessionId: input.expectedSessionId,
+        expectedTranscriptId: input.expectedTranscriptId,
         delivery: 'next',
         content: input.content,
         origin,
@@ -413,25 +413,25 @@ export class AgentMessageSender {
 
   async resume(
     runId: string,
-    sessionKey: string,
+    conversationId: string,
     callbacks?: MessagingCallbacks,
     options: AgentStreamResumeOptions = {},
   ): Promise<void> {
-    if (this.isStreamingFor(sessionKey)) {
+    if (this.isStreamingFor(conversationId)) {
       this.detachLocalStream();
     }
     this._trackedRunId = undefined;
     this._abort = new AbortController();
     const abortController = this._abort;
-    this._sessionKey = sessionKey;
+    this._conversationId = conversationId;
     const gatewayId = useGatewayStore.getState().activeGatewayId;
     const generation = useGatewayStore.getState().connectionGeneration;
     this._gatewayId = gatewayId;
     const isCurrentConnection = () => useGatewayStore.getState().activeGatewayId === gatewayId && useGatewayStore.getState().connectionGeneration === generation;
     this.trackPendingRunId(runId);
-    setPendingAgentRun(sessionKey, runId);
+    setPendingAgentRun(conversationId, runId);
     const terminal = wrapTerminalCallbacks(callbacks);
-    const opts = streamDispatchOptions(sessionKey, this);
+    const opts = streamDispatchOptions(conversationId, this);
     let preservePending = false;
     let unsubscribe: (() => void) | undefined;
     const cleanupStream = () => {
@@ -461,7 +461,7 @@ export class AgentMessageSender {
         // retained run from zero and reconstruct the full assistant message.
         const afterSeq = options.replayFromStart
           ? 0
-          : readPendingAgentRunCursor(sessionKey, runId);
+          : readPendingAgentRunCursor(conversationId, runId);
         unsubscribe = subscribeMobileRealtimeTopic(`run:${runId}`, {
           onEvent: (message) => {
             if (!isCurrentConnection()) { finish(); return; }
@@ -470,7 +470,7 @@ export class AgentMessageSender {
               ? { ...(message.data as Record<string, unknown>), seq: message.seq }
               : { type: message.event, seq: message.seq, payload: message.data };
             dispatchAgentStreamEvent(message.event, JSON.stringify(event), terminal.wrapped, opts);
-            advancePendingAgentRunCursor(sessionKey, runId, message.seq);
+            advancePendingAgentRunCursor(conversationId, runId, message.seq);
             if (message.event === 'run_end' || message.event === 'error') finish();
           },
           onGap: (gap) => {
@@ -496,9 +496,9 @@ export class AgentMessageSender {
       if (!isCurrentConnection()) {
         // The previous computer keeps its cursor; never mutate the new connection.
       } else if (localDetach || preservePending) {
-        this._rePersistPendingRunAfterDetach(sessionKey, runId);
+        this._rePersistPendingRunAfterDetach(conversationId, runId);
       } else {
-        this._clearPendingRun(sessionKey, runId);
+        this._clearPendingRun(conversationId, runId);
       }
       if (this._abort === abortController) {
         this._abort = undefined;
@@ -506,10 +506,10 @@ export class AgentMessageSender {
     }
   }
 
-  private _rePersistPendingRunAfterDetach(sessionKey: string, runId: string): void {
-    const storedRunId = readPendingAgentRunId(sessionKey);
+  private _rePersistPendingRunAfterDetach(conversationId: string, runId: string): void {
+    const storedRunId = readPendingAgentRunId(conversationId);
     if (storedRunId && storedRunId !== runId) return;
-    setPendingAgentRun(sessionKey, runId);
+    setPendingAgentRun(conversationId, runId);
   }
 
 }

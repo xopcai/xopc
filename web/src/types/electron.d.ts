@@ -40,15 +40,15 @@ export interface ElectronSearchAPI {
 export interface ElectronAgentAPI {
   sendMessage(
     message: string,
-    sessionKey: string,
+    conversationId: string,
   ): Promise<{ done: boolean; error?: string }>;
   onStream(callback: (chunk: string) => void): void;
 }
 
 export interface ElectronTerminalDescriptor {
   terminalId: string;
-  sessionKey: string;
-  sessionId: string;
+  conversationId: string;
+  transcriptId: string;
   terminalKey: string;
   cwd: string;
   replay: string;
@@ -60,15 +60,15 @@ export interface ElectronTerminalDescriptor {
 
 export interface ElectronTerminalAPI {
   create(input: {
-    sessionKey: string;
-    sessionId: string;
+    conversationId: string;
+    transcriptId: string;
     terminalKey: string;
     cols: number;
     rows: number;
   }): Promise<ElectronTerminalDescriptor>;
   write(terminalId: string, data: string): void;
   resize(terminalId: string, cols: number, rows: number): Promise<{ ok: true }>;
-  dispose(sessionId: string, terminalKey: string): Promise<{ ok: true }>;
+  dispose(transcriptId: string, terminalKey: string): Promise<{ ok: true }>;
   onData(callback: (event: { terminalId: string; data: string; sequence: number }) => void): () => void;
   onExit(callback: (event: { terminalId: string; exitCode: number; signal: number }) => void): () => void;
   onError(callback: (event: { terminalId?: string; message: string }) => void): () => void;
@@ -455,7 +455,7 @@ export type PetFeedback = {
 };
 
 export type PetSessionUpdate = {
-  sessionKey: string;
+  conversationId: string;
   runId: string;
   sessionLabel: string;
   sequence: number;
@@ -504,7 +504,7 @@ export interface ElectronDesktopPetAPI {
   openMainWindow(path?: string): Promise<void>;
   setClickThrough(enabled: boolean): Promise<void>;
   sendEvent(event: PetSessionUpdate): Promise<void>;
-  acknowledgeEvent(sessionKey: string, runId: string): Promise<void>;
+  acknowledgeEvent(conversationId: string, runId: string): Promise<void>;
   openCustomPetsDir(): Promise<{ ok: true } | { ok: false; error: string }>;
   createFromPrompt(
     request: DesktopPetCreateRequest,

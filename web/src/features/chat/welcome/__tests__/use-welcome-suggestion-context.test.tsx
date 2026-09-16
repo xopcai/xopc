@@ -21,13 +21,13 @@ vi.mock('@/features/sessions/session-api', () => ({ getSessionDetail }));
 vi.mock('@/features/projects/api', () => ({ fetchProject, fetchProjectOperatingView, inferProjectDefaults }));
 
 function Probe({
-  sessionKey = 'agent:main:webchat:test',
+  conversationId = 'agent:main:webchat:test',
   effectiveWorkspacePath,
   workingDirectoryLocked = false,
   sessionManager,
   onState,
 }: {
-  sessionKey?: string;
+  conversationId?: string;
   effectiveWorkspacePath?: string | null;
   workingDirectoryLocked?: boolean;
   sessionManager: SessionManager;
@@ -35,7 +35,7 @@ function Probe({
 }) {
   const state = useWelcomeSuggestionContext({
     enabled: true,
-    sessionKey,
+    conversationId,
     effectiveWorkspacePath,
     workingDirectoryLocked,
     sessionManager,
@@ -98,8 +98,8 @@ describe('useWelcomeSuggestionContext', () => {
 
   it('returns loading immediately when the session key changes', async () => {
     let resolveSecondDetail: ((value: unknown) => void) | null = null;
-    getSessionDetail.mockImplementation((sessionKey: string) => {
-      if (sessionKey.endsWith(':one')) return Promise.resolve({ projectId: 'p1' });
+    getSessionDetail.mockImplementation((conversationId: string) => {
+      if (conversationId.endsWith(':one')) return Promise.resolve({ projectId: 'p1' });
       return new Promise((resolve) => {
         resolveSecondDetail = resolve;
       });
@@ -117,7 +117,7 @@ describe('useWelcomeSuggestionContext', () => {
     await act(async () => {
       root.render(
         <Probe
-          sessionKey="agent:main:webchat:one"
+          conversationId="agent:main:webchat:one"
           sessionManager={sessionManager}
           onState={() => {}}
         />,
@@ -130,7 +130,7 @@ describe('useWelcomeSuggestionContext', () => {
     act(() => {
       root.render(
         <Probe
-          sessionKey="agent:main:webchat:two"
+          conversationId="agent:main:webchat:two"
           sessionManager={sessionManager}
           onState={() => {}}
         />,
@@ -218,7 +218,7 @@ describe('useWelcomeSuggestionContext', () => {
     act(() => {
       root.render(
         <Probe
-          sessionKey=""
+          conversationId=""
           effectiveWorkspacePath="/Users/example/.xopc/workspace"
           sessionManager={sessionManager}
           onState={() => {}}

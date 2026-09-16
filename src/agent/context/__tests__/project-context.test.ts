@@ -1,3 +1,10 @@
+import { requireXopcDatabase as openFixtureDatabase } from '../../../storage/sqlite/connection.js';
+import { ensureSessionRecord as ensureFixtureConversation } from '../../../storage/sqlite/session-repository.js';
+function seedConversationFixtures(): void {
+  openFixtureDatabase();
+  ensureFixtureConversation("958be7fd-89d5-48d0-8a78-4d900096a8fb", '', {"agentId":"main","sourceChannel":"webchat","sourceChatId":"s1","sessionType":"chat","routing":{"agentId":"main","source":"webchat","accountId":"default","peerKind":"direct","peerId":"s1"}});
+  ensureFixtureConversation("7f9f0629-ac4b-4546-8f45-0d071b02634b", '', {"agentId":"main","sourceChannel":"webchat","sourceChatId":"project-memory","sessionType":"chat","routing":{"agentId":"main","source":"webchat","accountId":"default","peerKind":"direct","peerId":"project-memory"}});
+}
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -48,13 +55,14 @@ function task(patch: Partial<ProjectTaskContext> = {}): ProjectTaskContext {
 
 describe('formatActiveProjectContextForPrompt', () => {
   it('formats project metadata, active Tasks, and recent sessions', () => {
+    seedConversationFixtures();
     const text = formatActiveProjectContextForPrompt({
       project,
       workspacePath: '/tmp/xopc',
       activeTasks: [task()],
       recentSessions: [
         {
-          key: 'agent:main:webchat:default:direct:s1',
+          key: "958be7fd-89d5-48d0-8a78-4d900096a8fb",
           name: 'Project planning',
           updatedAt: '2026-07-06T00:00:00.000Z',
           agentId: 'main',
@@ -80,6 +88,7 @@ describe('formatActiveProjectContextForPrompt', () => {
   });
 
   it('uses explicit empty markers when there are no active Tasks or sessions', () => {
+    seedConversationFixtures();
     const text = formatActiveProjectContextForPrompt({
       project: { ...project, brief: undefined, instructions: undefined },
       activeTasks: [],
@@ -92,6 +101,7 @@ describe('formatActiveProjectContextForPrompt', () => {
   });
 
   it('tells coder sessions which local-app release is stable', () => {
+    seedConversationFixtures();
     const text = formatActiveProjectContextForPrompt({
       project,
       activeTasks: [],
@@ -138,11 +148,12 @@ describe('buildActiveProjectContextForPrompt', () => {
   });
 
   it('keeps objective-relevant project knowledge alongside recent knowledge', () => {
+    seedConversationFixtures();
     const projects = new ProjectService();
     const scopedProject = projects.create({ name: 'Memory Scope Project' });
-    const sessionKey = 'agent:main:webchat:default:direct:project-memory';
-    ensureSessionRecord(sessionKey, process.cwd());
-    projects.attachSession(sessionKey, scopedProject.id);
+    const conversationId = "7f9f0629-ac4b-4546-8f45-0d071b02634b";
+    ensureSessionRecord(conversationId, process.cwd(), { agentId: "main" });
+    projects.attachSession(conversationId, scopedProject.id);
     writeKnowledgeItem({
       kind: 'task_lesson',
       scope: { type: 'project', id: scopedProject.id },
@@ -160,7 +171,7 @@ describe('buildActiveProjectContextForPrompt', () => {
       });
     }
 
-    const text = buildActiveProjectContextForPrompt(sessionKey, {
+    const text = buildActiveProjectContextForPrompt(conversationId, {
       knowledgeQuery: 'Implement needlearchitecture safely',
     });
 

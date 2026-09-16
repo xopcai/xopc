@@ -33,7 +33,7 @@ function setup({ loadingOlder = false }: { loadingOlder?: boolean } = {}) {
     messages: [{ id: 'answer', role: 'assistant', content: [] }],
     loadingOlder,
     keyboardPadding: 0,
-    sessionKey: 'session',
+    conversationId: 'session',
     onAtBottomChange,
     getMessageKey: messageKey,
   });

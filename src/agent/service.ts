@@ -1,3 +1,4 @@
+import { resolveAgentIdFromConversationId } from '../routing/agent-session-key.js';
 import type { AgentEvent, AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../gateway/chat-limits.js';
 import type { MessageBus } from '../infra/bus/index.js';
@@ -201,8 +202,8 @@ export class AgentService {
   private sessionState = new SessionStateBag();
 
   /** Gateway: notify UI after direct `SessionStore.updateMetadata` (no SessionManager emit). */
-  private onSessionMetadataUpdated?: (sessionKey: string, patch?: { name?: string }) => void;
-  private onSessionTranscriptUpdated?: (sessionKey: string) => void;
+  private onSessionMetadataUpdated?: (conversationId: string, patch?: { name?: string }) => void;
+  private onSessionTranscriptUpdated?: (conversationId: string) => void;
 
   private effectiveAppConfig(): Config | undefined {
     const base = this.config.config;
@@ -229,11 +230,11 @@ export class AgentService {
     onSessionTranscriptUpdate((update) => {
       void this.sessionStore.syncEmbeddedTranscriptUpdate(update).catch((err) => {
         log.warn(
-          { err, sessionKey: update.sessionKey },
+          { err, conversationId: update.conversationId },
           'Transcript index sync failed',
         );
       });
-      const sk = update.sessionKey?.trim();
+      const sk = update.conversationId?.trim();
       if (sk) {
         this.onSessionTranscriptUpdated?.(sk);
       }
@@ -250,16 +251,16 @@ export class AgentService {
     this.hookHandler = new HookHandler({
       hookRunner: this.hookRunner,
       agentId: this.agentId,
-      get sessionKey() { return this.currentContext?.sessionKey; },
+      get conversationId() { return this.currentContext?.conversationId; },
     });
     this.sessionStore.setCompactionHooks({
-      before: ({ sessionKey, messageCount, tokenCount }) =>
-        this.hookHandler.triggerWithSessionKey(sessionKey, 'before_compaction', {
+      before: ({ conversationId, messageCount, tokenCount }) =>
+        this.hookHandler.triggerWithConversationId(conversationId, 'before_compaction', {
           messageCount,
           tokenCount,
         }),
-      after: ({ sessionKey, messageCount, tokenCount, compactedCount }) =>
-        this.hookHandler.triggerWithSessionKey(sessionKey, 'after_compaction', {
+      after: ({ conversationId, messageCount, tokenCount, compactedCount }) =>
+        this.hookHandler.triggerWithConversationId(conversationId, 'after_compaction', {
           messageCount,
           tokenCount,
           compactedCount,
@@ -317,12 +318,12 @@ export class AgentService {
       const text = assistantMessageText(message);
       const expected = resolveResponseLanguageForSession(
         this.effectiveAppConfig(),
-        context.sessionKey,
+        context.conversationId,
       );
       const analysis = analyzeResponseLanguage(text, expected);
       const fields = {
         phase: 'response_language_check',
-        sessionKey: context.sessionKey,
+        conversationId: context.conversationId,
         ...analysis,
       };
       if (analysis.compliant) {
@@ -359,14 +360,14 @@ export class AgentService {
       getConfig: () => this.effectiveAppConfig(),
       getThinkingDefault: () => undefined,
       workspaceRoot: this.workspaceDir,
-      getWorkspaceRootForSession: (sessionKey: string) =>
-        this.agentManager.getResolvedWorkspaceForSession(sessionKey),
-      getAgentInternalStorageRootForSession: (sessionKey: string) =>
-        resolveAgentHomeDir(this.config.config!, extractProfileAgentId(sessionKey, this.config.config!)),
-      enqueueAutoTitle: (sessionKey: string) => this.enqueueMaybeAutoTitleAfterPersist(sessionKey),
-      onEmbeddedStreamEvent: (sessionKey, event) => {
+      getWorkspaceRootForSession: (conversationId: string) =>
+        this.agentManager.getResolvedWorkspaceForSession(conversationId),
+      getAgentInternalStorageRootForSession: (conversationId: string) =>
+        resolveAgentHomeDir(this.config.config!, extractProfileAgentId(conversationId, this.config.config!)),
+      enqueueAutoTitle: (conversationId: string) => this.enqueueMaybeAutoTitleAfterPersist(conversationId),
+      onEmbeddedStreamEvent: (conversationId, event) => {
         const ctx = this.sessionContextManager.getContext();
-        if (!ctx || ctx.sessionKey !== sessionKey) {
+        if (!ctx || ctx.conversationId !== conversationId) {
           return;
         }
         if (event.type === 'message_update' && event.message.role === 'assistant') {
@@ -374,11 +375,11 @@ export class AgentService {
           this.streamManager.update(next);
         }
       },
-      onEmbeddedTurnComplete: (sessionKey, text) => {
+      onEmbeddedTurnComplete: (conversationId, text) => {
         if (text) {
-          this.sessionState.setLastAssistantText(sessionKey, text);
+          this.sessionState.setLastAssistantText(conversationId, text);
         }
-        this.sessionState.clearEmbeddedStreamText(sessionKey);
+        this.sessionState.clearEmbeddedStreamText(conversationId);
       },
     });
 
@@ -389,25 +390,25 @@ export class AgentService {
       sessionStore: this.sessionStore,
       sessionConfigStore: this.sessionConfigStore,
       getWorkflowRunService: config.getWorkflowRunService,
-      applySessionThinkingLevel: (sessionKey: string, level: ThinkLevel) => {
-        this.agentManager.setThinkingLevel(sessionKey, level as ThinkingLevel);
+      applySessionThinkingLevel: (conversationId: string, level: ThinkLevel) => {
+        this.agentManager.setThinkingLevel(conversationId, level as ThinkingLevel);
       },
       getCurrentModel: () => this.agentOrchestrator.getCurrentModel(),
-      switchModelForSession: (sessionKey: string, modelId: string) =>
-        this.switchModelForSession(sessionKey, modelId),
-      invalidateAgentSession: (sessionKey: string) => {
-        this.agentManager.removeAgent(sessionKey);
+      switchModelForSession: (conversationId: string, modelId: string) =>
+        this.switchModelForSession(conversationId, modelId),
+      invalidateAgentSession: (conversationId: string) => {
+        this.agentManager.removeAgent(conversationId);
       },
-      resetSession: (sessionKey: string) => this.resetSession(sessionKey),
-      abortSessionTurn: async (sessionKey: string) => {
+      resetSession: (conversationId: string) => this.resetSession(conversationId),
+      abortSessionTurn: async (conversationId: string) => {
         await this.streamManager.abort();
-        this.agentOrchestrator.abort(sessionKey);
+        this.agentOrchestrator.abort(conversationId);
       },
       reloadSkills: () => this.refreshSkillsAfterDiskChange(),
       installSkillFromSource: (opts) => this.installSkillFromSource(opts),
-      compactSession: (sessionKey, options) => this.sessionInspector.compact(sessionKey, options),
-      btwQuery: (sessionKey, question, options) => this.sessionInspector.btwQuery(sessionKey, question, options),
-      getSessionContextReport: (sessionKey, mode) => this.sessionInspector.report(sessionKey, mode),
+      compactSession: (conversationId, options) => this.sessionInspector.compact(conversationId, options),
+      btwQuery: (conversationId, question, options) => this.sessionInspector.btwQuery(conversationId, question, options),
+      getSessionContextReport: (conversationId, mode) => this.sessionInspector.report(conversationId, mode),
     });
 
     this.sessionLifecycleManager = new SessionLifecycleManager(
@@ -437,7 +438,7 @@ export class AgentService {
       agentManager: this.agentManager,
       sessionHydrator: this.sessionHydrator,
       getConfig: () => this.effectiveAppConfig(),
-      getContextWindow: (sessionKey) => this.getContextWindowForSession(sessionKey),
+      getContextWindow: (conversationId) => this.getContextWindowForSession(conversationId),
     });
 
     this.outboundCoordinator = new OutboundCoordinator({
@@ -620,23 +621,23 @@ export class AgentService {
     return this.agentManager.getAgentSkillAvailability(agentId);
   }
 
-  async getSessionSkillAvailability(sessionKey: string): Promise<AgentSkillAvailabilityPayload> {
-    await this.sessionHydrator.workspace(sessionKey);
-    return this.agentManager.getSessionSkillAvailability(sessionKey);
+  async getSessionSkillAvailability(conversationId: string): Promise<AgentSkillAvailabilityPayload> {
+    await this.sessionHydrator.workspace(conversationId);
+    return this.agentManager.getSessionSkillAvailability(conversationId);
   }
 
-  async getSessionWorkspaceTrust(sessionKey: string): Promise<WorkspaceTrustState> {
-    await this.sessionHydrator.workspace(sessionKey);
-    return this.agentManager.getSessionWorkspaceTrust(sessionKey);
+  async getSessionWorkspaceTrust(conversationId: string): Promise<WorkspaceTrustState> {
+    await this.sessionHydrator.workspace(conversationId);
+    return this.agentManager.getSessionWorkspaceTrust(conversationId);
   }
 
-  getResolvedWorkspaceForSession(sessionKey: string): string {
-    return this.agentManager.getResolvedWorkspaceForSession(sessionKey);
+  getResolvedWorkspaceForSession(conversationId: string): string {
+    return this.agentManager.getResolvedWorkspaceForSession(conversationId);
   }
 
-  async setSessionWorkspaceTrust(sessionKey: string, trusted: boolean): Promise<WorkspaceTrustState> {
-    await this.sessionHydrator.workspace(sessionKey);
-    return this.agentManager.setSessionWorkspaceTrust(sessionKey, trusted);
+  async setSessionWorkspaceTrust(conversationId: string, trusted: boolean): Promise<WorkspaceTrustState> {
+    await this.sessionHydrator.workspace(conversationId);
+    return this.agentManager.setSessionWorkspaceTrust(conversationId, trusted);
   }
 
   getWorkspaceTrust(workspacePath: string): WorkspaceTrustState {
@@ -647,8 +648,8 @@ export class AgentService {
     return this.agentManager.setWorkspaceTrust(workspacePath, trusted);
   }
 
-  getCapabilityCatalog(sessionKey?: string): AgentCapabilityCatalogEntry[] {
-    return this.agentManager.getCapabilityCatalogForSession(sessionKey);
+  getCapabilityCatalog(conversationId?: string): AgentCapabilityCatalogEntry[] {
+    return this.agentManager.getCapabilityCatalogForSession(conversationId);
   }
 
   getSkillMarkdownSource(skillName: string): SkillMarkdownPreviewPayload | null {
@@ -667,7 +668,7 @@ export class AgentService {
     const target = normalizeSkillInstallTarget(opts.target);
     const workspace =
       opts.workspace?.trim() ||
-      (opts.sessionKey ? this.agentManager.getResolvedWorkspaceForSession(opts.sessionKey) : undefined) ||
+      (opts.conversationId ? this.agentManager.getResolvedWorkspaceForSession(opts.conversationId) : undefined) ||
       this.workspaceDir;
     const result = await pullSkillFromSource(opts.source, {
       ref: opts.ref,
@@ -688,7 +689,7 @@ export class AgentService {
     const config = this.effectiveAppConfig();
     const target = normalizeSkillInstallTarget(opts.target);
     const workspace =
-      (opts.sessionKey ? this.agentManager.getResolvedWorkspaceForSession(opts.sessionKey) : undefined)
+      (opts.conversationId ? this.agentManager.getResolvedWorkspaceForSession(opts.conversationId) : undefined)
       || this.workspaceDir;
     const rootDir = target === 'workspace' ? resolveWorkspaceSkillsDir(workspace) : undefined;
     const lockPath = target === 'workspace' ? resolveWorkspaceSkillsLockPath(workspace) : undefined;
@@ -731,19 +732,19 @@ export class AgentService {
     return this.agentManager.getMemoryManager();
   }
 
-  getModelForSession(sessionKey: string): string {
-    return this.modelManager.getModelForSession(sessionKey);
+  getModelForSession(conversationId: string): string {
+    return this.modelManager.getModelForSession(conversationId);
   }
 
-  getThinkingLevelForSession(sessionKey: string): ThinkingLevel {
-    return (this.agentManager.getOrCreateAgent(sessionKey).state.thinkingLevel as ThinkingLevel | undefined)
+  getThinkingLevelForSession(conversationId: string): ThinkingLevel {
+    return (this.agentManager.getOrCreateAgent(conversationId).state.thinkingLevel as ThinkingLevel | undefined)
       ?? 'medium';
   }
 
   /** Run a full tool-capable turn against a caller-owned, non-persistent transcript. */
   async runEphemeralTurn(params: {
-    executionSessionKey: string;
-    parentSessionKey: string;
+    executionConversationId: string;
+    parentConversationId: string;
     runId: string;
     content: string;
     attachments?: InboundAttachmentInput[];
@@ -753,22 +754,23 @@ export class AgentService {
     abortSignal?: AbortSignal;
     onEvent?: (event: EmbeddedStreamEvent) => void;
   }): Promise<RunXopcEmbeddedTurnResult> {
-    const agent = this.agentManager.getOrCreateAgent(params.parentSessionKey);
-    const workspaceDir = this.agentManager.getResolvedWorkspaceForSession(params.parentSessionKey);
+    const agent = this.agentManager.getOrCreateAgent(params.parentConversationId);
+    const workspaceDir = this.agentManager.getResolvedWorkspaceForSession(params.parentConversationId);
     const model = resolveModel(params.modelRef);
-    const prepared = await this.prepareInboundAttachments(params.executionSessionKey, params.attachments);
+    const prepared = await this.prepareInboundAttachments(params.executionConversationId, params.attachments);
     const userMessage = await buildTranscriptUserMessage({
       text: params.content,
       prepared,
-      sessionKey: params.parentSessionKey,
+      conversationId: params.parentConversationId,
       modelRef: params.modelRef,
       config: this.effectiveAppConfig(),
       agentManager: this.agentManager,
     });
     const llmTurn = await hydrateUserTurnForLlm({ message: userMessage, modelRef: params.modelRef });
-    return runWithEmbeddedExecutionSession(params.executionSessionKey, () =>
+    return runWithEmbeddedExecutionSession(params.executionConversationId, () =>
       runXopcEmbeddedTurn({
-        sessionKey: params.executionSessionKey,
+        conversationId: params.executionConversationId,
+        verifyChanges: resolveAgentIdFromConversationId(params.parentConversationId) === 'coder',
         runId: params.runId,
         userMessage,
         model,
@@ -778,8 +780,8 @@ export class AgentService {
         thinkingLevel: params.thinkingLevel ?? agent.state.thinkingLevel,
         workspaceDir,
         transcriptRuntime: params.transcriptRuntime,
-        timeoutMs: resolveAgentTurnTimeoutMs(this.effectiveAppConfig(), params.parentSessionKey),
-        turnPolicy: this.agentManager.createAgentTurnPolicy(params.parentSessionKey),
+        timeoutMs: resolveAgentTurnTimeoutMs(this.effectiveAppConfig(), params.parentConversationId),
+        turnPolicy: this.agentManager.createAgentTurnPolicy(params.parentConversationId),
         abortSignal: params.abortSignal,
         onEvent: params.onEvent,
         images: llmTurn.images,
@@ -787,13 +789,13 @@ export class AgentService {
     );
   }
 
-  async switchModelForSession(sessionKey: string, modelId: string): Promise<boolean> {
-    const ok = await this.modelManager.switchModelForSession(sessionKey, modelId);
+  async switchModelForSession(conversationId: string, modelId: string): Promise<boolean> {
+    const ok = await this.modelManager.switchModelForSession(conversationId, modelId);
     if (!ok) return false;
-    await this.sessionConfigStore.update(sessionKey, { modelOverride: modelId });
-    const result = this.agentManager.setModelForSession(sessionKey, modelId);
+    await this.sessionConfigStore.update(conversationId, { modelOverride: modelId });
+    const result = this.agentManager.setModelForSession(conversationId, modelId);
     if (result) {
-      this.sessionTracker.touchSession(sessionKey);
+      this.sessionTracker.touchSession(conversationId);
     }
     return true;
   }
@@ -802,8 +804,8 @@ export class AgentService {
    * Clears per-session model override so the next turn uses the configured agent default
    * (e.g. cron isolated job with no explicit model).
    */
-  async resetSessionModelToAgentDefault(sessionKey: string): Promise<void> {
-    await this.sessionConfig.clearModelOverride(sessionKey);
+  async resetSessionModelToAgentDefault(conversationId: string): Promise<void> {
+    await this.sessionConfig.clearModelOverride(conversationId);
   }
 
   setStreamHandle(handle: StreamHandle): void {
@@ -815,28 +817,28 @@ export class AgentService {
   }
 
   /** Last assistant visible plain text for a session (e.g. after a webchat stream). */
-  getLastAssistantPlainText(sessionKey: string): string {
+  getLastAssistantPlainText(conversationId: string): string {
     return (
-      this.sessionState.getLastAssistantText(sessionKey) ??
-      this.agentManager.getLastAssistantContent(sessionKey) ??
+      this.sessionState.getLastAssistantText(conversationId) ??
+      this.agentManager.getLastAssistantContent(conversationId) ??
       ''
     );
   }
 
-  beginInboundTurn(sessionKey: string): void {
-    this.sessionState.beginInboundTurn(sessionKey);
+  beginInboundTurn(conversationId: string): void {
+    this.sessionState.beginInboundTurn(conversationId);
   }
 
-  endInboundTurn(sessionKey: string): void {
-    this.sessionState.endInboundTurn(sessionKey);
+  endInboundTurn(conversationId: string): void {
+    this.sessionState.endInboundTurn(conversationId);
   }
 
-  getInboundTurnDepth(sessionKey: string): number {
-    return this.sessionState.getInboundTurnDepth(sessionKey);
+  getInboundTurnDepth(conversationId: string): number {
+    return this.sessionState.getInboundTurnDepth(conversationId);
   }
 
-  takeTaskReviewStreamHint(sessionKey: string) {
-    return this.sessionState.takeTaskReviewStreamHint(sessionKey);
+  takeTaskReviewStreamHint(conversationId: string) {
+    return this.sessionState.takeTaskReviewStreamHint(conversationId);
   }
 
   async start(): Promise<void> {
@@ -863,22 +865,22 @@ export class AgentService {
    * Persist agent messages with the same sanitizer + transcript hygiene as AgentOrchestrator.
    * Uses persistence hygiene so `thinking` blocks remain on disk for the web UI (LLM load path still drops them).
    */
-  private notifySessionTitleUpdated(sessionKey: string, name: string): void {
-    this.onSessionMetadataUpdated?.(sessionKey, { name });
+  private notifySessionTitleUpdated(conversationId: string, name: string): void {
+    this.onSessionMetadataUpdated?.(conversationId, { name });
   }
 
   /** Fire-and-forget provisional title from first user text (webchat sidebar). */
-  enqueueProvisionalSessionTitle(sessionKey: string, userText: string): void {
+  enqueueProvisionalSessionTitle(conversationId: string, userText: string): void {
     void (async () => {
       try {
         await maybeSetProvisionalSessionTitle(
           this.sessionStore,
-          sessionKey,
+          conversationId,
           userText,
           (sk, name) => this.notifySessionTitleUpdated(sk, name),
         );
       } catch (err) {
-        log.warn({ err, sessionKey }, 'Provisional session title failed');
+        log.warn({ err, conversationId }, 'Provisional session title failed');
       }
     })();
   }
@@ -886,46 +888,46 @@ export class AgentService {
   /**
    * Fire-and-forget LLM refine after turn persist; skips user-locked and finalized LLM titles.
    */
-  private enqueueMaybeAutoTitleAfterPersist(sessionKey: string): void {
+  private enqueueMaybeAutoTitleAfterPersist(conversationId: string): void {
     void (async () => {
       try {
         let modelRef =
           getAgentDefaultModelRef(this.config.config ?? ({} as Config)) ?? this.config.model;
         if (!modelRef?.trim()) {
           try {
-            modelRef = this.modelManager.getModelForSession(sessionKey);
+            modelRef = this.modelManager.getModelForSession(conversationId);
           } catch {
             modelRef = undefined;
           }
         }
         await maybeRefineSessionTitleWithLlm(
           this.sessionStore,
-          sessionKey,
+          conversationId,
           modelRef?.trim() || undefined,
           (sk, name) => this.notifySessionTitleUpdated(sk, name),
         );
       } catch (err) {
-        log.warn({ err, sessionKey }, 'Auto session title failed');
+        log.warn({ err, conversationId }, 'Auto session title failed');
       }
     })();
   }
 
-  private async resolveSessionEndpoint(sessionKey: string): Promise<{ channel: string; chatId: string }> {
-    const metadata = await this.sessionStore.getMetadata(sessionKey).catch(() => null);
+  private async resolveSessionEndpoint(conversationId: string): Promise<{ channel: string; chatId: string }> {
+    const metadata = await this.sessionStore.getMetadata(conversationId).catch(() => null);
     const channel = metadata?.routing?.source?.trim() || metadata?.sourceChannel?.trim() || 'cli';
     const chatId = metadata?.routing?.peerId?.trim() || metadata?.sourceChatId?.trim() || 'main';
     return { channel, chatId };
   }
 
   private initSessionContext(
-    sessionKey: string,
+    conversationId: string,
     channel: string,
     chatId: string,
     origin: import('@xopcai/endpoint-tools-protocol').TurnOrigin,
     senderId = '',
   ): SessionContext {
     const context: SessionContext = {
-      sessionKey,
+      conversationId,
       channel,
       chatId,
       senderId,
@@ -934,7 +936,7 @@ export class AgentService {
     };
 
     this.contextMiddleware.onRequest({
-      sessionKey,
+      conversationId,
       userId: context.senderId,
       channel,
       chatId,
@@ -948,8 +950,8 @@ export class AgentService {
     // overwritten or cleared by the next direct turn (each direct turn calls
     // `initSessionContext` first), so there is no cross-session leak in practice.
     this.sessionContextManager.enter(context);
-    this.agentManager.getOrCreateAgent(sessionKey);
-    this.setupSessionEventHandling(sessionKey);
+    this.agentManager.getOrCreateAgent(conversationId);
+    this.setupSessionEventHandling(conversationId);
 
     return context;
   }
@@ -958,7 +960,7 @@ export class AgentService {
    * Persist inbound file attachments to the global media store.
    */
   async prepareInboundAttachments(
-    _sessionKey: string,
+    _conversationId: string,
     attachments?: InboundAttachmentInput[],
   ): Promise<MediaRef[] | undefined> {
     return persistInboundAttachments(attachments, {
@@ -1014,24 +1016,24 @@ export class AgentService {
    */
   async resetSession(
     key: string,
-  ): Promise<{ sessionId: string; previousSessionId: string } | null> {
+  ): Promise<{ transcriptId: string; previousTranscriptId: string } | null> {
     const { abortEmbeddedRun } = await import('./embedded/runs.js');
-    const { retireSessionMcpRuntimeForSessionKey } = await import('./mcp/bundle-mcp-tools.js');
+    const { retireSessionMcpRuntimeForConversationId } = await import('./mcp/bundle-mcp-tools.js');
     await abortEmbeddedRun(key);
     const task = await this.sessionStore.reset(key);
     if (!task) {
       return null;
     }
     this.agentManager.removeAgent(key);
-    await retireSessionMcpRuntimeForSessionKey({ sessionKey: key, reason: 'session-reset' });
+    await retireSessionMcpRuntimeForConversationId({ conversationId: key, reason: 'session-reset' });
     return task;
   }
 
   /**
    * Drop in-memory agent so the next turn reloads transcript from disk (e.g. after checkpoint restore).
    */
-  evictSessionAgent(sessionKey: string): void {
-    this.agentManager.removeAgent(sessionKey);
+  evictSessionAgent(conversationId: string): void {
+    this.agentManager.removeAgent(conversationId);
   }
 
   /**
@@ -1039,19 +1041,19 @@ export class AgentService {
    * Call before AgentManager.getOrCreateAgent for this session.
    */
   /** Workspace root for UI file tree / editor (same as agent tools after hydration). */
-  async getEffectiveWorkspacePathForSession(sessionKey: string): Promise<string> {
-    await this.sessionHydrator.workspace(sessionKey);
+  async getEffectiveWorkspacePathForSession(conversationId: string): Promise<string> {
+    await this.sessionHydrator.workspace(conversationId);
     const cfg = this.config.config!;
-    const sc = await this.sessionConfigStore.get(sessionKey);
-    return effectiveWorkspacePathForSession(cfg, sessionKey, sc, getProjectForSession(sessionKey));
+    const sc = await this.sessionConfigStore.get(conversationId);
+    return effectiveWorkspacePathForSession(cfg, conversationId, sc, getProjectForSession(conversationId));
   }
 
    /**
    * Best-effort timezone resolution for webchat envelope timestamps.
    * Reads the structured global user profile.
    */
-  resolveUserTimezoneForSession(sessionKey: string): string | undefined {
-    void sessionKey;
+  resolveUserTimezoneForSession(conversationId: string): string | undefined {
+    void conversationId;
     try {
       const cfg = this.effectiveAppConfig();
       if (!cfg) return undefined;
@@ -1064,31 +1066,31 @@ export class AgentService {
   /**
    * Setup event handling for a specific session
    */
-  private setupSessionEventHandling(sessionKey: string): void {
-    if (this.sessionState.hasSessionEventUnsubscriber(sessionKey)) {
+  private setupSessionEventHandling(conversationId: string): void {
+    if (this.sessionState.hasSessionEventUnsubscriber(conversationId)) {
       return;
     }
 
-    const unsubscribe = this.agentManager.subscribeToSession(sessionKey, (event) => {
-      this.handleSessionEvent(sessionKey, event);
+    const unsubscribe = this.agentManager.subscribeToSession(conversationId, (event) => {
+      this.handleSessionEvent(conversationId, event);
     });
 
     if (unsubscribe) {
-      this.sessionState.setSessionEventUnsubscriber(sessionKey, unsubscribe);
+      this.sessionState.setSessionEventUnsubscriber(conversationId, unsubscribe);
     }
   }
 
   /**
    * Handle events from a specific session's agent
    */
-  private handleSessionEvent(sessionKey: string, event: AgentEvent): void {
+  private handleSessionEvent(conversationId: string, event: AgentEvent): void {
     const currentContext = this.sessionContextManager.getContext();
     if (!currentContext) {
       // Inbound `finally` clears context before trailing agent `message_update` events finish — ignore (not a bug).
       return;
     }
 
-    if (currentContext.sessionKey !== sessionKey) {
+    if (currentContext.conversationId !== conversationId) {
       // Never attribute another session's runtime events to the active user.
       return;
     }
@@ -1109,11 +1111,11 @@ export class AgentService {
     this.agentEventHandler.handle(event, currentContext);
   }
 
-  private getContextWindowForSession(sessionKey: string): number {
+  private getContextWindowForSession(conversationId: string): number {
     try {
-      return this.modelManager.getResolvedModelForSession(sessionKey).contextWindow ?? 128000;
+      return this.modelManager.getResolvedModelForSession(conversationId).contextWindow ?? 128000;
     } catch (err) {
-      log.warn({ err, sessionKey }, 'Failed to resolve session context window; using default');
+      log.warn({ err, conversationId }, 'Failed to resolve session context window; using default');
       return 128000;
     }
   }

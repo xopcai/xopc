@@ -1,8 +1,8 @@
-import { buildSessionKey } from '../../routing/session-key.js';
+import { resolveConversationId } from '../../routing/session-key.js';
 
 /** Stable webchat session key for one workflow run (`agent:{id}:webchat:…:direct:wf_{runId}`). */
-export function buildWorkflowRunSessionKey(agentId: string, runId: string): string {
-  return buildSessionKey({
+export function buildWorkflowRunConversationId(agentId: string, runId: string): string {
+  return resolveConversationId({
     agentId,
     source: 'webchat',
     accountId: 'default',

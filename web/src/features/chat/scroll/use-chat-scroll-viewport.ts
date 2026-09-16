@@ -25,7 +25,7 @@ function wheelDeltaImpliesTowardOlderMessages(e: WheelEvent): boolean {
 export interface UseChatScrollViewportArgs {
   hasToken: boolean;
   showSessionLoading: boolean;
-  sessionKey: string | null;
+  conversationId: string | null;
   sending: boolean;
   chatMessages: Message[];
   hasMore: boolean;
@@ -54,7 +54,7 @@ export interface UseChatScrollViewportResult {
 export function useChatScrollViewport({
   hasToken,
   showSessionLoading,
-  sessionKey,
+  conversationId,
   sending,
   chatMessages,
   hasMore,
@@ -183,7 +183,7 @@ export function useChatScrollViewport({
     prevMessageCountRef.current = 0;
     setFollowing(true);
     scrollToEnd({ force: true });
-  }, [sessionKey, hasToken, showSessionLoading, setFollowing, scrollToEnd]);
+  }, [conversationId, hasToken, showSessionLoading, setFollowing, scrollToEnd]);
 
   const sendingStarted = hasToken && sending && !prevSendingRef.current && !showSessionLoading;
   useLayoutEffect(() => {

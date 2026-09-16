@@ -1,8 +1,8 @@
 import type { DatabaseSync } from 'node:sqlite';
 
-export function readCurrentSessionId(db: DatabaseSync, sessionKey: string): string | null {
+export function readCurrentTranscriptId(db: DatabaseSync, conversationId: string): string | null {
   const row = db
-    .prepare(`SELECT session_id FROM sessions WHERE session_key = ?`)
-    .get(sessionKey) as { session_id?: string } | undefined;
-  return row?.session_id ?? null;
+    .prepare(`SELECT active_transcript_id FROM sessions WHERE conversation_id = ?`)
+    .get(conversationId) as { active_transcript_id?: string } | undefined;
+  return row?.active_transcript_id ?? null;
 }

@@ -22,27 +22,27 @@ export class SessionEnvironmentService {
     this.worktrees = options.worktrees ?? new LocalWorktreeManager({ store: this.store });
   }
 
-  get(sessionKey: string): ExecutionEnvironment | undefined {
-    const binding = this.store.resolveBinding(sessionKey);
+  get(conversationId: string): ExecutionEnvironment | undefined {
+    const binding = this.store.resolveBinding(conversationId);
     return binding ? this.store.get(binding.environmentId) : undefined;
   }
 
   async attach(input: {
-    sessionKey: string;
+    conversationId: string;
     project: Project;
     mode?: ProjectExecutionMode;
     baseRef?: string;
   }): Promise<ExecutionEnvironment> {
-    const existing = this.get(input.sessionKey);
+    const existing = this.get(input.conversationId);
     if (existing) {
       if (existing.projectId !== input.project.id) {
         throw new ExecutionEnvironmentConflictError(
-          `Session ${input.sessionKey} is already bound to a different project's execution environment`,
+          `Session ${input.conversationId} is already bound to a different project's execution environment`,
         );
       }
       if (input.mode && existing.kind !== input.mode) {
         throw new ExecutionEnvironmentConflictError(
-          `Session ${input.sessionKey} is already using ${existing.kind}; release it before switching to ${input.mode}`,
+          `Session ${input.conversationId} is already using ${existing.kind}; release it before switching to ${input.mode}`,
         );
       }
       const checked = existing.kind === 'managed_worktree' ? await this.worktrees.reconcile(existing.id) : existing;
@@ -65,7 +65,7 @@ export class SessionEnvironmentService {
       : await this.resolveLocalCheckout(input.project.id, workspaceRoot);
     try {
       this.store.bind({
-        sessionKey: input.sessionKey,
+        conversationId: input.conversationId,
         environmentId: environment.id,
       });
       return environment;
@@ -77,14 +77,14 @@ export class SessionEnvironmentService {
     }
   }
 
-  async release(sessionKey: string, removeManaged = true): Promise<ExecutionEnvironment | undefined> {
-    const binding = this.store.resolveBinding(sessionKey);
+  async release(conversationId: string, removeManaged = true): Promise<ExecutionEnvironment | undefined> {
+    const binding = this.store.resolveBinding(conversationId);
     if (!binding) return undefined;
     const environment = this.store.get(binding.environmentId);
     if (removeManaged && environment?.kind === 'managed_worktree') {
-      await this.worktrees.remove(environment.id, { releaseSessionKey: sessionKey });
+      await this.worktrees.remove(environment.id, { releaseConversationId: conversationId });
     } else {
-      this.store.releaseBinding(sessionKey, binding.environmentId);
+      this.store.releaseBinding(conversationId, binding.environmentId);
     }
     return environment;
   }

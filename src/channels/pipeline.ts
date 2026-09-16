@@ -27,7 +27,7 @@ function pipelineLogRequestId(ctx: PipelineMessageContext): string {
 }
 
 function pipelineLogSessionId(ctx: PipelineMessageContext): string {
-  const sk = ctx.metadata?.sessionKey;
+  const sk = ctx.metadata?.conversationId;
   if (typeof sk === 'string' && sk.trim().length > 0) {
     return sk.trim();
   }
@@ -163,7 +163,7 @@ export class MessagePipeline {
           return;
         }
 
-        const resolvedSk = processedCtx.metadata?.sessionKey;
+        const resolvedSk = processedCtx.metadata?.conversationId;
         if (typeof resolvedSk === 'string' && resolvedSk.trim().length > 0) {
           updateAsyncLogContext({ sessionId: resolvedSk.trim() });
         }

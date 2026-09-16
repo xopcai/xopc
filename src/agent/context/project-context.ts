@@ -61,21 +61,21 @@ function selectProjectKnowledge(input: {
 }
 
 export function buildActiveProjectContextForPrompt(
-  sessionKey: string,
+  conversationId: string,
   options: {
     knowledgeQuery?: string;
     includeKnowledge?: boolean;
     knowledgeSources?: readonly KnowledgeSource[];
   } = {},
 ): string | undefined {
-  const project = getProjectForSession(sessionKey);
+  const project = getProjectForSession(conversationId);
   if (!project) return undefined;
   const localAppStore = new LocalAppStore();
   const localApp = localAppStore.findByProjectId(project.id);
   const latestAcceptance = localApp ? localAppStore.listAcceptanceRuns(localApp.id, 1)[0] : undefined;
   return formatActiveProjectContextForPrompt({
     project,
-    workspacePath: getProjectWorkspacePathForSession(sessionKey) ?? project.workspaceRoot,
+    workspacePath: getProjectWorkspacePathForSession(conversationId) ?? project.workspaceRoot,
     activeTasks: new TaskRepository().listByProject(project.id, MAX_TASKS)
       .filter((task) => task.phase !== 'closed')
       .map((task) => ({
@@ -92,7 +92,7 @@ export function buildActiveProjectContextForPrompt(
               agentId: project.defaultAgentId ?? 'main',
               workspaceId: project.workspaceRoot ?? '',
               projectId: project.id,
-              sessionId: sessionKey,
+              conversationId: conversationId,
             },
             trustedOnly: true,
             sources: options.knowledgeSources,

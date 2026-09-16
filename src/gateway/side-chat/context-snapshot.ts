@@ -87,8 +87,8 @@ export function validateSideChatSelections(value: unknown): SideChatSelection[] 
 }
 
 export function createSideChatContextSnapshot(params: {
-  parentSessionKey: string;
-  parentSessionId: string;
+  parentConversationId: string;
+  parentTranscriptId: string;
   parentMessages: readonly AgentMessage[];
   selections: readonly SideChatSelection[];
   createdAt: string;
@@ -98,8 +98,8 @@ export function createSideChatContextSnapshot(params: {
     .update(JSON.stringify({ messages: params.parentMessages, selections }))
     .digest('hex');
   return {
-    parentSessionKey: params.parentSessionKey,
-    parentSessionId: params.parentSessionId,
+    parentConversationId: params.parentConversationId,
+    parentTranscriptId: params.parentTranscriptId,
     parentMessageCount: params.parentMessages.length,
     createdAt: params.createdAt,
     selections,

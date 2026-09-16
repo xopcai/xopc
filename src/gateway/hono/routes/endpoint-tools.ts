@@ -141,9 +141,9 @@ export function registerEndpointToolRoutes(
     });
   });
 
-  authenticated.get('/api/endpoint-tools/bindings/:sessionKey', (c) => {
+  authenticated.get('/api/endpoint-tools/bindings/:conversationId', (c) => {
     try {
-      const binding = deps.service.endpointTools.bindings.get(c.req.param('sessionKey'));
+      const binding = deps.service.endpointTools.bindings.get(c.req.param('conversationId'));
       return binding
         ? c.json({ ok: true, payload: binding })
         : c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Endpoint binding not found' } }, 404);
@@ -152,7 +152,7 @@ export function registerEndpointToolRoutes(
     }
   });
 
-  authenticated.put('/api/endpoint-tools/bindings/:sessionKey', async (c) => {
+  authenticated.put('/api/endpoint-tools/bindings/:conversationId', async (c) => {
     const parsed = endpointSessionBindingRequestSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) {
       return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid endpoint binding' } }, 400);
@@ -165,7 +165,7 @@ export function registerEndpointToolRoutes(
     }
     try {
       const binding = deps.service.endpointTools.bindings.bind(
-        c.req.param('sessionKey'),
+        c.req.param('conversationId'),
         parsed.data.endpointId,
       );
       return c.json({ ok: true, payload: binding });
@@ -176,9 +176,9 @@ export function registerEndpointToolRoutes(
     }
   });
 
-  authenticated.delete('/api/endpoint-tools/bindings/:sessionKey', (c) => {
+  authenticated.delete('/api/endpoint-tools/bindings/:conversationId', (c) => {
     try {
-      const removed = deps.service.endpointTools.bindings.unbind(c.req.param('sessionKey'));
+      const removed = deps.service.endpointTools.bindings.unbind(c.req.param('conversationId'));
       return c.json({ ok: true, payload: { removed } });
     } catch {
       return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid session key' } }, 400);

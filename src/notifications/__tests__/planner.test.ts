@@ -7,11 +7,11 @@ describe('notificationPlanFromGatewayEvent', () => {
     const plan = notificationPlanFromGatewayEvent('agent.run.ended', {
       schemaVersion: 1,
       runId: 'run-chat',
-      sessionKey: 'agent:main:webchat:default:direct:one',
+      conversationId: 'agent:main:webchat:default:direct:one',
       status: 'success',
       completedAtMs: 1,
       source: 'webchat',
-      target: { kind: 'chat', sessionKey: 'agent:main:webchat:default:direct:one' },
+      target: { kind: 'chat', conversationId: 'agent:main:webchat:default:direct:one' },
       sessionTitle: 'Research notifications',
       responsePreview: 'The notification flow is implemented and all tests pass.',
     });
@@ -19,7 +19,7 @@ describe('notificationPlanFromGatewayEvent', () => {
       dedupeKey: 'chat.completed:run-chat',
       notification: {
         type: 'chat.completed',
-        target: { kind: 'chat', sessionKey: 'agent:main:webchat:default:direct:one' },
+        target: { kind: 'chat', conversationId: 'agent:main:webchat:default:direct:one' },
         title: { en: 'Response ready', zh: '回答已就绪' },
         body: {
           en: 'The notification flow is implemented and all tests pass.',
@@ -33,11 +33,11 @@ describe('notificationPlanFromGatewayEvent', () => {
     const plan = notificationPlanFromGatewayEvent('agent.run.ended', {
       schemaVersion: 1,
       runId: 'run-failed',
-      sessionKey: 'agent:main:webchat:default:direct:one',
+      conversationId: 'agent:main:webchat:default:direct:one',
       status: 'error',
       completedAtMs: 1,
       source: 'webchat',
-      target: { kind: 'chat', sessionKey: 'agent:main:webchat:default:direct:one' },
+      target: { kind: 'chat', conversationId: 'agent:main:webchat:default:direct:one' },
       sessionTitle: 'Research notifications',
       responsePreview: 'This content must not be shown.',
     });
@@ -111,7 +111,7 @@ describe('notificationPlanFromGatewayEvent', () => {
   it('maps work discovery completion and failure to review notifications', () => {
     expect(notificationPlanFromGatewayEvent('work-discovery.completed', {
       runId: 'run-understanding',
-      sessionKey: 'agent:main:webchat:one',
+      conversationId: 'agent:main:webchat:one',
       status: 'completed',
     })).toMatchObject({
       dedupeKey: 'work_discovery.review_ready:run-understanding',
@@ -120,14 +120,14 @@ describe('notificationPlanFromGatewayEvent', () => {
         target: {
           kind: 'work_discovery',
           runId: 'run-understanding',
-          sessionKey: 'agent:main:webchat:one',
+          conversationId: 'agent:main:webchat:one',
         },
         priority: 'normal',
       },
     });
     expect(notificationPlanFromGatewayEvent('work-discovery.failed', {
       runId: 'run-understanding',
-      sessionKey: 'agent:main:webchat:one',
+      conversationId: 'agent:main:webchat:one',
       status: 'failed',
     })).toMatchObject({
       dedupeKey: 'work_discovery.failed:run-understanding',

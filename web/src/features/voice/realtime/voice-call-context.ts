@@ -1,14 +1,14 @@
 import { createContext, useContext } from 'react';
 
 export interface VoiceCallTarget {
-  sessionKey: string;
+  conversationId: string;
   name: string;
   taskId?: string;
 }
 
 export interface VoiceCallContextValue {
   active: boolean;
-  sessionKey: string | null;
+  conversationId: string | null;
   open: (target: VoiceCallTarget) => void;
 }
 

@@ -6,11 +6,11 @@
 
 import type { MessageSource } from './types.js';
 import {
-  buildAgentMainSessionKey,
-  buildAgentPeerSessionKey,
+  resolveAgentMainConversationId,
+  resolveAgentPeerConversationId,
 } from '../routing/session-key.js';
 
-export interface SessionKeyContext {
+export interface ConversationIdContext {
   source: MessageSource;
   channelId?: string;
   chatId: string;
@@ -24,16 +24,16 @@ export interface SessionKeyContext {
   identityLinks?: Record<string, string[]>;
 }
 
-export function generateSessionKey(ctx: SessionKeyContext): string {
+export function generateConversationId(ctx: ConversationIdContext): string {
   const effectiveAgentId = ctx.agentId ?? 'main';
   const effectiveAccountId = ctx.accountId ?? 'default';
   const channel = ctx.source === 'webui' ? 'webchat' : ctx.source;
 
   if (ctx.source === 'cli') {
     if (ctx.chatId === 'direct' || ctx.chatId === 'main') {
-      return buildAgentMainSessionKey({ agentId: effectiveAgentId, mainKey: ctx.mainKey });
+      return resolveAgentMainConversationId({ agentId: effectiveAgentId, mainKey: ctx.mainKey });
     }
-    return buildAgentPeerSessionKey({
+    return resolveAgentPeerConversationId({
       agentId: effectiveAgentId,
       mainKey: ctx.mainKey,
       channel: 'cli',
@@ -45,7 +45,7 @@ export function generateSessionKey(ctx: SessionKeyContext): string {
   }
 
   if (!ctx.isGroup) {
-    const key = buildAgentPeerSessionKey({
+    const key = resolveAgentPeerConversationId({
       agentId: effectiveAgentId,
       mainKey: ctx.mainKey,
       channel,
@@ -53,30 +53,26 @@ export function generateSessionKey(ctx: SessionKeyContext): string {
       peerKind: 'direct',
       peerId: ctx.senderId,
       identityLinks: ctx.identityLinks,
+      threadId: ctx.threadId,
       dmScope: ctx.dmScope ?? 'per-account-channel-peer',
     });
-    if (ctx.threadId) {
-      return `${key}:thread:${ctx.threadId.toLowerCase()}`;
-    }
     return key;
   }
 
-  let key = buildAgentPeerSessionKey({
+  let key = resolveAgentPeerConversationId({
     agentId: effectiveAgentId,
     mainKey: ctx.mainKey,
     channel,
     accountId: effectiveAccountId,
     peerKind: 'group',
+    threadId: ctx.threadId,
     peerId: ctx.chatId,
     identityLinks: ctx.identityLinks,
   });
-  if (ctx.threadId) {
-    key = `${key}:thread:${ctx.threadId.toLowerCase()}`;
-  }
   return key;
 }
 
-export function getSessionDisplayName(sessionKey: string): string {
-  const trimmed = sessionKey.trim();
+export function getSessionDisplayName(conversationId: string): string {
+  const trimmed = conversationId.trim();
   return trimmed || 'Session';
 }

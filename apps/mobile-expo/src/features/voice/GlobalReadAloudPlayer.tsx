@@ -33,7 +33,7 @@ export function GlobalReadAloudPlayer() {
   const pause = useReadAloudStore((state) => state.pause);
   const resume = useReadAloudStore((state) => state.resume);
   const stop = useReadAloudStore((state) => state.stop);
-  const continuousSessionKey = useReadAloudStore((state) => state.continuousSessionKey);
+  const continuousConversationId = useReadAloudStore((state) => state.continuousConversationId);
   const disableContinuous = useReadAloudStore((state) => state.disableContinuous);
   const retry = useReadAloudStore((state) => state.retry);
   const cycleRate = useReadAloudStore((state) => state.cycleRate);
@@ -84,12 +84,12 @@ export function GlobalReadAloudPlayer() {
   const openSource = () => {
     setPlayerExpanded(false);
     if (source?.noteId) openNoteDetail(router, source.noteId);
-    else if (source?.sessionKey) router.push(`/chat/${encodeURIComponent(source.sessionKey)}`);
+    else if (source?.conversationId) router.push(`/chat/${encodeURIComponent(source.conversationId)}`);
   };
 
   const endPlayback = () => {
     setPlayerExpanded(false);
-    if (source?.sessionKey && source.sessionKey === continuousSessionKey) disableContinuous();
+    if (source?.conversationId && source.conversationId === continuousConversationId) disableContinuous();
     stop();
   };
 
@@ -220,9 +220,9 @@ export function GlobalReadAloudPlayer() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={source?.noteId ? nm.readAloudBackToNote : m.messageReadAloudBackToChat}
-              disabled={!source?.sessionKey && !source?.noteId}
+              disabled={!source?.conversationId && !source?.noteId}
               onPress={openSource}
-              style={[styles.secondaryControl, !source?.sessionKey && !source?.noteId && styles.controlDisabled]}
+              style={[styles.secondaryControl, !source?.conversationId && !source?.noteId && styles.controlDisabled]}
             >
               <Icon source={source?.noteId ? 'note-text-outline' : 'message-text-outline'} size={21} color={colors.text.secondary} />
               <Text style={[styles.controlLabel, { color: colors.text.secondary }]}>

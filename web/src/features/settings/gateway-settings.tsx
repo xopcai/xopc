@@ -184,7 +184,7 @@ export function GatewaySettingsPanel() {
     [setSearchParams],
   );
   useGatewaySettingsTabGuard(activeTab, setActiveTab);
-  const token = useGatewayStore((st) => st.sessionKey);
+  const token = useGatewayStore((st) => st.conversationId);
   const tokenExpired = useGatewayStore((st) => st.tokenExpired);
   const openTokenDialog = useGatewayStore((st) => st.openTokenDialog);
   const hasToken = Boolean(token);

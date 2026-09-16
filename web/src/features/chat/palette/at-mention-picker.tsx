@@ -97,7 +97,7 @@ export const AtMentionPicker = memo(function AtMentionPicker({
   loading,
   query,
   noResults,
-  sessionKey,
+  conversationId,
   recentLabel,
   filesLabel,
   notesLabel,
@@ -112,7 +112,7 @@ export const AtMentionPicker = memo(function AtMentionPicker({
   loading: boolean;
   query: string;
   noResults: string;
-  sessionKey: string | null;
+  conversationId: string | null;
   recentLabel: string;
   filesLabel: string;
   notesLabel: string;
@@ -147,14 +147,14 @@ export const AtMentionPicker = memo(function AtMentionPicker({
         return;
       }
       const relativePath = item.relativePath;
-      if (!sessionKey?.trim() || item.isDirectory || item.isBrowseUp || !relativePath) {
+      if (!conversationId?.trim() || item.isDirectory || item.isBrowseUp || !relativePath) {
         dispatchLayout({ type: 'set-hover', hoverPreview: null });
         return;
       }
       previewTimerRef.current = setTimeout(() => {
         previewTimerRef.current = null;
         if (rid !== previewAbortRef.current) return;
-        void readWorkspaceFile(relativePath, { sessionKey })
+        void readWorkspaceFile(relativePath, { conversationId })
           .then(({ content }) => {
             const snippet = content.length > PREVIEW_MAX_CHARS ? `${content.slice(0, PREVIEW_MAX_CHARS)}…` : content;
             if (rid !== previewAbortRef.current) return;
@@ -166,7 +166,7 @@ export const AtMentionPicker = memo(function AtMentionPicker({
           });
       }, 420);
     },
-    [sessionKey],
+    [conversationId],
   );
 
   useLayoutEffect(() => {

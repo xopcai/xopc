@@ -16,7 +16,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { AgentService } from '../../agent/service.js';
 import type { CompactionResult } from '../../agent/memory/compaction.js';
-import { retireSessionMcpRuntimeForSessionKey } from '../../agent/mcp/bundle-mcp-tools.js';
+import { retireSessionMcpRuntimeForConversationId } from '../../agent/mcp/bundle-mcp-tools.js';
 import { SessionIndex } from '../../session/index.js';
 import type { ExportFormat, SessionListQuery } from '../../session/types.js';
 import { transcriptRowsToClientHistory } from '../../session/client-history.js';
@@ -25,8 +25,7 @@ import type { SessionPatchBody } from '../../session/patch-metadata.js';
 import { collectMediaUrisFromValues, deleteMediaUris } from '../../media/session-references.js';
 import { getDistinctSessionChatIds } from './session-chat-ids.js';
 import { performSessionReset, type SessionResetResult } from '../session-reset-service.js';
-import { buildSessionKey } from '../../routing/session-key.js';
-import { resolveAgentIdFromSessionKey } from '../../routing/agent-session-key.js';
+import { resolveAgentIdFromConversationId } from '../../routing/agent-session-key.js';
 
 function clampWindowSpan(value: number | undefined, fallback: number): number {
   const parsed = Math.trunc(value ?? fallback);
@@ -39,9 +38,9 @@ export interface GatewaySessionsApiOptions {
   /** Resolves the live agent service (created lazily; throws if gateway is starting). */
   getAgentService: () => AgentService;
   /** Read-only view of in-flight webchat runs (per session key → run id). */
-  getActiveWebchatRunId: (sessionKey: string) => string | undefined;
+  getActiveWebchatRunId: (conversationId: string) => string | undefined;
   /** Snapshot of all in-flight webchat runs for workspace briefing surfaces. */
-  listActiveWebchatRuns: () => Array<{ sessionKey: string; runId: string }>;
+  listActiveWebchatRuns: () => Array<{ conversationId: string; runId: string }>;
 }
 
 export class GatewaySessionsApi {
@@ -57,7 +56,7 @@ export class GatewaySessionsApi {
     return this.opts.sessionIndex.listSessions(query);
   }
 
-  /** Subagent sessions have keys starting with `subagent:`. */
+  /** List conversations whose stored type is workflow-subagent. */
   listSubagents(query?: SessionListQuery) {
     return this.opts.sessionIndex.listSubagents(query);
   }
@@ -70,43 +69,42 @@ export class GatewaySessionsApi {
   }
 
   async resolveSession(input: {
-    key?: string;
-    sessionKey?: string;
-    sessionId?: string;
+    conversationId?: string;
+    transcriptId?: string;
   }): Promise<
     | {
-        sessionKey: string;
-        sessionId: string;
+        conversationId: string;
+        transcriptId: string;
         session: Awaited<ReturnType<GatewaySessionsApi['getSession']>>;
       }
     | null
   > {
-    const explicitKey = input.sessionKey?.trim() || input.key?.trim();
+    const explicitKey = input.conversationId?.trim();
     const resolvedKey =
       explicitKey ||
-      (input.sessionId?.trim()
-        ? await this.opts.sessionIndex.resolveSessionKeyBySessionId(input.sessionId.trim())
+      (input.transcriptId?.trim()
+        ? await this.opts.sessionIndex.resolveConversationIdByTranscriptId(input.transcriptId.trim())
         : null);
     if (!resolvedKey) {
       return null;
     }
     const session = await this.getSession(resolvedKey);
-    if (!session?.sessionId) {
+    if (!session?.transcriptId) {
       return null;
     }
-    return { sessionKey: resolvedKey, sessionId: session.sessionId, session };
+    return { conversationId: resolvedKey, transcriptId: session.transcriptId, session };
   }
 
   /** Read-only: in-flight webchat agent run for this session key, if any. */
-  getActiveRun(sessionKey: string): { active: boolean; runId?: string } {
-    const key = sessionKey.trim();
+  getActiveRun(conversationId: string): { active: boolean; runId?: string } {
+    const key = conversationId.trim();
     if (!key) return { active: false };
     const runId = this.opts.getActiveWebchatRunId(key)?.trim();
     if (!runId) return { active: false };
     return { active: true, runId };
   }
 
-  listActiveRuns(): Array<{ sessionKey: string; runId: string }> {
+  listActiveRuns(): Array<{ conversationId: string; runId: string }> {
     return this.opts.listActiveWebchatRuns();
   }
 
@@ -168,32 +166,32 @@ export class GatewaySessionsApi {
     return this.opts.sessionIndex.patchSession(key, body);
   }
 
-  async getAgentConfig(sessionKey: string) {
-    return this.opts.getAgentService().sessionInspector.agentConfig(sessionKey);
+  async getAgentConfig(conversationId: string) {
+    return this.opts.getAgentService().sessionInspector.agentConfig(conversationId);
   }
 
-  async getFixedAgentConfig(sessionKey: string) {
-    return withModelConfigLock(sessionKey, async () => {
-      const config = await this.getAgentConfig(sessionKey);
-      if (!config.fixedModel && !this.getActiveRun(sessionKey).active) {
-        const result = await this.opts.getAgentService().sessionConfig.initializeModelSelection(sessionKey, config.model, config.thinkingLevel, config.configVersion);
-        if (result.ok) return this.getAgentConfig(sessionKey);
+  async getFixedAgentConfig(conversationId: string) {
+    return withModelConfigLock(conversationId, async () => {
+      const config = await this.getAgentConfig(conversationId);
+      if (!config.fixedModel && !this.getActiveRun(conversationId).active) {
+        const result = await this.opts.getAgentService().sessionConfig.initializeModelSelection(conversationId, config.model, config.thinkingLevel, config.configVersion);
+        if (result.ok) return this.getAgentConfig(conversationId);
       }
       return config;
     });
   }
 
-  initializeChatModel(sessionKey: string, model: string, thinkingLevel?: string) {
-    return this.opts.getAgentService().sessionConfig.initializeModelSelection(sessionKey, model, thinkingLevel);
+  initializeChatModel(conversationId: string, model: string, thinkingLevel?: string) {
+    return this.opts.getAgentService().sessionConfig.initializeModelSelection(conversationId, model, thinkingLevel);
   }
 
   /** Resolved markdown workspace for a session (after hydration / mkdir). */
-  getEffectiveWorkspacePath(sessionKey: string): Promise<string> {
-    return this.opts.getAgentService().getEffectiveWorkspacePathForSession(sessionKey);
+  getEffectiveWorkspacePath(conversationId: string): Promise<string> {
+    return this.opts.getAgentService().getEffectiveWorkspacePathForSession(conversationId);
   }
 
   patchAgentConfig(
-    sessionKey: string,
+    conversationId: string,
     body: {
       thinkingLevel?: string;
       fixedModel?: boolean;
@@ -207,7 +205,7 @@ export class GatewaySessionsApi {
       userContextMode?: 'enabled' | 'off' | 'temporary';
     },
   ) {
-    return this.opts.getAgentService().sessionConfig.patch(sessionKey, body);
+    return this.opts.getAgentService().sessionConfig.patch(conversationId, body);
   }
 
   // ── Append-only compaction boundaries ────────────────────────────────
@@ -252,7 +250,7 @@ export class GatewaySessionsApi {
     if (result) {
       await deleteMediaUris(collectMediaUrisFromValues(transcriptRows));
       this.opts.getAgentService().evictSessionAgent(key);
-      await retireSessionMcpRuntimeForSessionKey({ sessionKey: key, reason: 'session-delete' });
+      await retireSessionMcpRuntimeForConversationId({ conversationId: key, reason: 'session-delete' });
     }
     return { deleted: result };
   }
@@ -322,14 +320,14 @@ export class GatewaySessionsApi {
   importExport(
     targetKey: string,
     jsonContent: string,
-  ): Promise<{ sessionKey: string; rowCount: number }> {
+  ): Promise<{ conversationId: string; rowCount: number }> {
     return this.opts.sessionIndex.importSessionExport(targetKey, jsonContent);
   }
 
   fork(
     key: string,
     targetKey: string,
-  ): Promise<{ sessionKey: string; rowCount: number }> {
+  ): Promise<{ conversationId: string; rowCount: number }> {
     return this.opts.sessionIndex.forkSession(key, targetKey);
   }
 
@@ -337,7 +335,7 @@ export class GatewaySessionsApi {
     key: string,
     targetKey: string,
     options: { throughRow?: number } = {},
-  ): Promise<{ sessionKey: string; rowCount: number }> {
+  ): Promise<{ conversationId: string; rowCount: number }> {
     return this.opts.sessionIndex.forkSessionRows(key, targetKey, options);
   }
 
@@ -345,7 +343,7 @@ export class GatewaySessionsApi {
     sourceKey: string,
     lastTurnId: string,
   ): Promise<{
-    sessionKey: string;
+    conversationId: string;
     rowCount: number;
     lastTurnId: string;
     session: NonNullable<Awaited<ReturnType<GatewaySessionsApi['getSession']>>>;
@@ -361,15 +359,9 @@ export class GatewaySessionsApi {
       throw new Error('Cannot fork a turn that is still running');
     }
 
-    const agentId = source.routing?.agentId?.trim() || resolveAgentIdFromSessionKey(sourceKey);
+    const agentId = source.routing?.agentId?.trim() || resolveAgentIdFromConversationId(sourceKey);
     const chatId = `chat_${randomUUID()}`;
-    const targetKey = buildSessionKey({
-      agentId,
-      source: 'webchat',
-      accountId: 'default',
-      peerKind: 'direct',
-      peerId: chatId,
-    });
+    const targetKey = randomUUID();
     const result = await this.opts.sessionIndex.forkSessionAtTurn(sourceKey, {
       targetKey,
       lastTurnId: normalizedTurnId,
@@ -386,13 +378,13 @@ export class GatewaySessionsApi {
         },
       },
     });
-    const session = await this.getSession(result.sessionKey);
-    if (!session) throw new Error(`Forked session not found: ${result.sessionKey}`);
+    const session = await this.getSession(result.conversationId);
+    if (!session) throw new Error(`Forked session not found: ${result.conversationId}`);
     return { ...result, lastTurnId: normalizedTurnId, session };
   }
 
-  btwQuery(sessionKey: string, question: string): Promise<{ text: string; error?: string }> {
-    return this.opts.getAgentService().sessionInspector.btwQuery(sessionKey, question);
+  btwQuery(conversationId: string, question: string): Promise<{ text: string; error?: string }> {
+    return this.opts.getAgentService().sessionInspector.btwQuery(conversationId, question);
   }
 
   stats() {

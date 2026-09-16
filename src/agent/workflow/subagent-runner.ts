@@ -83,7 +83,7 @@ export class DelegateSubagentRunner implements SubagentRunner {
     const childOptions: DelegateChildHandleOptions = {
       workspace: this.deps.workspace,
       goal: fullPrompt,
-      requesterSessionKey: opts.sessionMetadata?.parentSessionKey,
+      requesterConversationId: opts.sessionMetadata?.parentConversationId,
       allowedToolNames: allowed,
       maxIterations: opts.maxIterations ?? DEFAULT_MAX_ITERATIONS,
       model,
@@ -112,10 +112,10 @@ export class DelegateSubagentRunner implements SubagentRunner {
           : undefined,
     };
 
-    if (opts.sessionKey && opts.sessionMetadata && this.deps.sessionStore) {
-      await this.preparePersistentSubagentSession(opts.sessionKey, opts.sessionMetadata);
-      childOptions.sessionKey = opts.sessionKey;
-      childOptions.transcriptRuntime = await createSqliteTranscriptRuntime({ sessionKey: opts.sessionKey, sessionStore: this.deps.sessionStore });
+    if (opts.conversationId && opts.sessionMetadata && this.deps.sessionStore) {
+      await this.preparePersistentSubagentSession(opts.conversationId, opts.sessionMetadata);
+      childOptions.conversationId = opts.conversationId;
+      childOptions.transcriptRuntime = await createSqliteTranscriptRuntime({ conversationId: opts.conversationId, sessionStore: this.deps.sessionStore });
     }
 
     const handle = createDelegateChildHandle(childOptions);
@@ -146,16 +146,16 @@ export class DelegateSubagentRunner implements SubagentRunner {
   }
 
   private async preparePersistentSubagentSession(
-    sessionKey: string,
+    conversationId: string,
     metadata: NonNullable<SubagentRunOptions['sessionMetadata']>,
   ): Promise<void> {
     const store = this.deps.sessionStore;
     if (!store) return;
-    await store.resolveTranscriptPath(sessionKey, {
+    await store.resolveTranscriptPath(conversationId, {
       metadata: {
         sessionType: 'workflow-subagent',
         hiddenFromSessionList: true,
-        parentSessionKey: metadata.parentSessionKey,
+        parentConversationId: metadata.parentConversationId,
         projectId: metadata.projectId,
         workflowRunId: metadata.workflowRunId,
         workflowDefinitionId: metadata.workflowDefinitionId,
@@ -172,10 +172,10 @@ export class DelegateSubagentRunner implements SubagentRunner {
         },
       },
     });
-    await store.updateMetadata(sessionKey, {
+    await store.updateMetadata(conversationId, {
       sessionType: 'workflow-subagent',
       hiddenFromSessionList: true,
-      parentSessionKey: metadata.parentSessionKey,
+      parentConversationId: metadata.parentConversationId,
       projectId: metadata.projectId,
       workflowRunId: metadata.workflowRunId,
       workflowDefinitionId: metadata.workflowDefinitionId,

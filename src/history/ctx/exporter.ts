@@ -12,7 +12,7 @@ import {
 } from './format.js';
 
 interface TranscriptRow {
-  session_id: string;
+  transcript_id: string;
   status: string;
   created_at: number;
   archived_at: number | null;
@@ -23,7 +23,7 @@ interface TranscriptRow {
 
 interface EntryRow {
   entry_id: string;
-  session_id: string;
+  transcript_id: string;
   seq: number;
   payload_json: string;
   created_at: number;
@@ -43,7 +43,7 @@ function readSnapshot(db: DatabaseSync): XopcHistorySession[] {
   try {
     const transcripts = db.prepare(
       `SELECT
-         t.session_id,
+         t.transcript_id,
          t.status,
          t.created_at,
          t.archived_at,
@@ -51,40 +51,40 @@ function readSnapshot(db: DatabaseSync): XopcHistorySession[] {
          s.agent_id,
          s.session_type
        FROM transcripts t
-       JOIN sessions s ON s.session_key = t.session_key
+       JOIN sessions s ON s.conversation_id = t.conversation_id
        WHERE t.status = 'active' OR t.archive_reason IN ('reset', 'stale')
-       ORDER BY t.created_at ASC, t.session_id ASC`,
+       ORDER BY t.created_at ASC, t.transcript_id ASC`,
     ).all() as unknown as TranscriptRow[];
     const entries = db.prepare(
-      `SELECT e.entry_id, e.session_id, e.seq, e.payload_json, e.created_at
+      `SELECT e.entry_id, e.transcript_id, e.seq, e.payload_json, e.created_at
        FROM transcript_entries e
-       JOIN transcripts t ON t.session_id = e.session_id
-       JOIN sessions s ON s.session_key = t.session_key
+       JOIN transcripts t ON t.transcript_id = e.transcript_id
+       JOIN sessions s ON s.conversation_id = t.conversation_id
        WHERE t.status = 'active' OR t.archive_reason IN ('reset', 'stale')
-       ORDER BY t.created_at ASC, t.session_id ASC, e.seq ASC, e.entry_id ASC`,
+       ORDER BY t.created_at ASC, t.transcript_id ASC, e.seq ASC, e.entry_id ASC`,
     ).all() as unknown as EntryRow[];
     db.exec('COMMIT');
 
     const entriesBySession = new Map<string, XopcHistoryEntry[]>();
     for (const entry of entries) {
-      const bucket = entriesBySession.get(entry.session_id) ?? [];
+      const bucket = entriesBySession.get(entry.transcript_id) ?? [];
       bucket.push({
         entryId: entry.entry_id,
         seq: entry.seq,
         createdAt: entry.created_at,
         payloadJson: entry.payload_json,
       });
-      entriesBySession.set(entry.session_id, bucket);
+      entriesBySession.set(entry.transcript_id, bucket);
     }
     return transcripts.map((transcript) => ({
-      sessionId: transcript.session_id,
+      transcriptId: transcript.transcript_id,
       status: transcript.status,
       createdAt: transcript.created_at,
       archivedAt: transcript.archived_at,
       cwd: transcript.cwd,
       agentId: transcript.agent_id,
       sessionType: transcript.session_type,
-      entries: entriesBySession.get(transcript.session_id) ?? [],
+      entries: entriesBySession.get(transcript.transcript_id) ?? [],
     }));
   } catch (error) {
     try {

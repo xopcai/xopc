@@ -39,7 +39,7 @@ import type {
 const CONNECTION_ARGUMENT = 'xopcConnectionId';
 const log = createLogger('ComposioToolProvider');
 
-type CurrentContext = { channel: string; chatId: string; sessionKey: string } | null;
+type CurrentContext = { channel: string; chatId: string; conversationId: string } | null;
 
 export interface ComposioToolProviderDeps {
   getConfig: () => Config | undefined;
@@ -298,7 +298,7 @@ export class ComposioToolProvider implements ExternalToolProvider {
     let executionArgs = args;
     if (this.deps.hookRunner) {
       const hook = await this.deps.hookRunner.runBeforeToolCall(toolRef, args, {
-        sessionKey: available.context?.sessionKey,
+        conversationId: available.context?.conversationId,
       });
       if (!hook.allowed) throw new Error(hook.reason ?? 'Connected app tool call blocked by policy hook.');
       executionArgs = hook.params ?? args;
@@ -310,7 +310,7 @@ export class ComposioToolProvider implements ExternalToolProvider {
       return textResult('The exact action contract is unavailable. Search and describe the tool again.');
     }
     let fresh = await this.adapter.syncConnections({ principalId: available.principalId });
-    const binding = available.context ? connectionBinding(available.context.sessionKey, resolved.installation.connectorId) : undefined;
+    const binding = available.context ? connectionBinding(available.context.conversationId, resolved.installation.connectorId) : undefined;
     const expired = fresh.find(item => item.connectorId === resolved.installation.connectorId && item.status === 'expired' && item.id === binding);
     if (expired) {
       const refreshed = await this.adapter.refreshConnection(expired);
@@ -323,8 +323,8 @@ export class ComposioToolProvider implements ExternalToolProvider {
       && (!resolved.installation.selectedConnectionIds.length || resolved.installation.selectedConnectionIds.includes(connection.id)));
     const requestedConnection = typeof executionArgs[CONNECTION_ARGUMENT] === 'string'
       ? executionArgs[CONNECTION_ARGUMENT]
-      : available.context ? connectionBinding(available.context.sessionKey, resolved.installation.connectorId) : undefined;
-    const bindings = available.context ? connectionBindings(available.context.sessionKey).filter(need => need.connectorId === resolved.installation.connectorId) : [];
+      : available.context ? connectionBinding(available.context.conversationId, resolved.installation.connectorId) : undefined;
+    const bindings = available.context ? connectionBindings(available.context.conversationId).filter(need => need.connectorId === resolved.installation.connectorId) : [];
     if (bindings.length > 1 && !requestedConnection) return textResult({ status: 'account_selection_required',
       accounts: bindings, instruction: 'Choose the account for this operation using xopcConnectionId.' });
     if (bindings.length && requestedConnection && !bindings.some(need => need.connectionId === requestedConnection)) {
@@ -336,14 +336,14 @@ export class ComposioToolProvider implements ExternalToolProvider {
     const requestConnection = () => {
       if (!available.context) return textResult({ status: 'connection_required' });
       const result = requireSessionConnection({
-        sessionKey: available.context.sessionKey, principalId: available.principalId,
+        conversationId: available.context.conversationId, principalId: available.principalId,
         agentId: available.agentId ?? 'main', summary: `Continue ${action.actionId} using ${toolkit}`,
         needs: [{ key: `${resolved.installation.connectorId}:default`, connectorId: resolved.installation.connectorId,
           connectionId: requestedConnection,
           label: getConnectorDefinition(resolved.installation.connectorId)?.displayName ?? toolkit,
           capabilities: [action.actionId] }],
       });
-      publishConnectionWait(available.context.sessionKey);
+      publishConnectionWait(available.context.conversationId);
       return textResult(result);
     };
     if (!connection) return requestConnection();
@@ -358,7 +358,7 @@ export class ComposioToolProvider implements ExternalToolProvider {
         || pending.principalId !== available.principalId
         || pending.connectorId !== resolved.installation.connectorId
         || pending.actionId !== action.actionId
-        || pending.sessionKey !== available.context?.sessionKey
+        || pending.conversationId !== available.context?.conversationId
       ) return textResult('The connector approval is invalid for this session or action.');
       confirmed = Boolean(consumeConnectorApproval(approvalId, argsHash));
       if (!confirmed) return textResult('The connector approval is not approved, has expired, or was already used.');
@@ -376,7 +376,7 @@ export class ComposioToolProvider implements ExternalToolProvider {
       action,
       args: actionArgs,
       agentId: available.agentId,
-      sessionKey: available.context?.sessionKey,
+      conversationId: available.context?.conversationId,
       confirmed,
     });
     } catch (error) {
@@ -392,7 +392,7 @@ export class ComposioToolProvider implements ExternalToolProvider {
         connectorId: resolved.installation.connectorId,
         connectionId: connection?.id,
         agentId: available.agentId,
-        sessionKey: available.context?.sessionKey,
+        conversationId: available.context?.conversationId,
         actionId: action.actionId,
         scope: action.scope,
         argumentsHash: argsHash,
@@ -419,7 +419,7 @@ export class ComposioToolProvider implements ExternalToolProvider {
     installations: ConnectorInstallationPolicy[];
   } {
     const context = this.deps.getCurrentContext();
-    const principal = connectorPrincipalForSession(context?.sessionKey);
+    const principal = connectorPrincipalForSession(context?.conversationId);
     if (principal.isLocalOwner) syncLocalOwnerInstallations(this.deps.getConfig());
     const agentId = this.deps.agentId ?? principal.agentId;
     const installations = listConnectorInstallations(principal.principalId).filter((installation) => (

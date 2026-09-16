@@ -227,7 +227,7 @@ function resolveSessionMcpRuntimeIdleTtlMs(cfg?: Config): number {
 
 export function createSessionMcpRuntime(params: {
   sessionId: string;
-  sessionKey?: string;
+  conversationId?: string;
   workspaceDir: string;
   cfg?: Config;
 }): SessionMcpRuntime {
@@ -424,7 +424,7 @@ export function createSessionMcpRuntime(params: {
 
   return {
     sessionId: params.sessionId,
-    sessionKey: params.sessionKey,
+    conversationId: params.conversationId,
     workspaceDir: params.workspaceDir,
     configFingerprint,
     createdAt,
@@ -493,7 +493,7 @@ function createSessionMcpRuntimeManager(
   } = {},
 ): SessionMcpRuntimeManager {
   const runtimesBySessionId = new Map<string, SessionMcpRuntime>();
-  const sessionIdBySessionKey = new Map<string, string>();
+  const sessionIdByConversationId = new Map<string, string>();
   const idleTtlMsBySessionId = new Map<string, number>();
   const createRuntime = opts.createRuntime ?? createSessionMcpRuntime;
   const now = opts.now ?? Date.now;
@@ -509,10 +509,10 @@ function createSessionMcpRuntimeManager(
   let idleSweepTimer: ReturnType<typeof setInterval> | undefined;
   let idleSweepInFlight: Promise<void> | undefined;
 
-  const forgetSessionKeysForSessionId = (sessionId: string) => {
-    for (const [sessionKey, mappedSessionId] of sessionIdBySessionKey.entries()) {
+  const forgetConversationIdsForSessionId = (sessionId: string) => {
+    for (const [conversationId, mappedSessionId] of sessionIdByConversationId.entries()) {
       if (mappedSessionId === sessionId) {
-        sessionIdBySessionKey.delete(sessionKey);
+        sessionIdByConversationId.delete(conversationId);
       }
     }
   };
@@ -531,7 +531,7 @@ function createSessionMcpRuntimeManager(
       }
       runtimesBySessionId.delete(sessionId);
       idleTtlMsBySessionId.delete(sessionId);
-      forgetSessionKeysForSessionId(sessionId);
+      forgetConversationIdsForSessionId(sessionId);
       expired.push(runtime);
     }
     await Promise.allSettled(expired.map((runtime) => runtime.dispose()));
@@ -582,8 +582,8 @@ function createSessionMcpRuntimeManager(
       if (idleTtlMs > 0) {
         ensureIdleSweepTimer();
       }
-      if (params.sessionKey) {
-        sessionIdBySessionKey.set(params.sessionKey, params.sessionId);
+      if (params.conversationId) {
+        sessionIdByConversationId.set(params.conversationId, params.sessionId);
       }
       const { fingerprint: nextFingerprint } = loadSessionMcpConfig({
         workspaceDir: params.workspaceDir,
@@ -621,7 +621,7 @@ function createSessionMcpRuntimeManager(
       const created = Promise.resolve(
         createRuntime({
           sessionId: params.sessionId,
-          sessionKey: params.sessionKey,
+          conversationId: params.conversationId,
           workspaceDir: params.workspaceDir,
           cfg: params.cfg,
         }),
@@ -642,11 +642,11 @@ function createSessionMcpRuntimeManager(
         createInFlight.delete(params.sessionId);
       }
     },
-    bindSessionKey(sessionKey, sessionId) {
-      sessionIdBySessionKey.set(sessionKey, sessionId);
+    bindConversationId(conversationId, sessionId) {
+      sessionIdByConversationId.set(conversationId, sessionId);
     },
-    resolveSessionId(sessionKey) {
-      return sessionIdBySessionKey.get(sessionKey);
+    resolveSessionId(conversationId) {
+      return sessionIdByConversationId.get(conversationId);
     },
     async disposeSession(sessionId) {
       const inFlight = createInFlight.get(sessionId);
@@ -658,10 +658,10 @@ function createSessionMcpRuntimeManager(
       runtimesBySessionId.delete(sessionId);
       idleTtlMsBySessionId.delete(sessionId);
       if (!runtime) {
-        forgetSessionKeysForSessionId(sessionId);
+        forgetConversationIdsForSessionId(sessionId);
         return;
       }
-      forgetSessionKeysForSessionId(sessionId);
+      forgetConversationIdsForSessionId(sessionId);
       await runtime.dispose();
     },
     async disposeAll() {
@@ -670,7 +670,7 @@ function createSessionMcpRuntimeManager(
       createInFlight.clear();
       const runtimes = Array.from(runtimesBySessionId.values());
       runtimesBySessionId.clear();
-      sessionIdBySessionKey.clear();
+      sessionIdByConversationId.clear();
       idleTtlMsBySessionId.clear();
       const lateRuntimes = await Promise.all(
         inFlightRuntimes.map(async ({ promise }) => await promise.catch(() => undefined)),
@@ -696,7 +696,7 @@ export function getSessionMcpRuntimeManager(): SessionMcpRuntimeManager {
 
 export async function getOrCreateSessionMcpRuntime(params: {
   sessionId: string;
-  sessionKey?: string;
+  conversationId?: string;
   workspaceDir: string;
   cfg?: Config;
 }): Promise<SessionMcpRuntime> {
@@ -725,16 +725,16 @@ export async function retireSessionMcpRuntime(params: {
   }
 }
 
-export async function retireSessionMcpRuntimeForSessionKey(params: {
-  sessionKey?: string | null;
+export async function retireSessionMcpRuntimeForConversationId(params: {
+  conversationId?: string | null;
   reason: string;
   onError?: (error: unknown, sessionId: string, reason: string) => void;
 }): Promise<boolean> {
-  const sessionKey = normalizeOptionalString(params.sessionKey);
-  if (!sessionKey) {
+  const conversationId = normalizeOptionalString(params.conversationId);
+  if (!conversationId) {
     return false;
   }
-  const sessionId = getSessionMcpRuntimeManager().resolveSessionId(sessionKey);
+  const sessionId = getSessionMcpRuntimeManager().resolveSessionId(conversationId);
   return await retireSessionMcpRuntime({
     sessionId,
     reason: params.reason,

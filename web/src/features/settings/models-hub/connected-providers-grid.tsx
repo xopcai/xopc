@@ -57,7 +57,7 @@ export interface ConnectedProvidersData {
 }
 
 export function useConnectedProviders(): ConnectedProvidersData {
-  const token = useGatewayStore((s) => s.sessionKey);
+  const token = useGatewayStore((s) => s.conversationId);
   const hasToken = Boolean(token);
 
   const { data: cfgData, isLoading: cfgLoading } = useGatewayConfigSwr(hasToken);

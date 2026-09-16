@@ -351,7 +351,7 @@ function NoteDetailPanelInner({
       const result = await openNoteChat(noteId, { forceNew });
       await mutate();
       await mutateNoteThreads();
-      navigate(`/chat/${encodeURIComponent(result.sessionKey)}`);
+      navigate(`/chat/${encodeURIComponent(result.conversationId)}`);
     } catch (err) {
       setActionError(`${n.chatOpenFailedTitle}: ${err instanceof Error ? err.message : n.chatOpenFailedMessage}`);
     } finally {

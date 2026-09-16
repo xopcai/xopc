@@ -89,7 +89,7 @@ describe('LocalWorktreeManager', () => {
       repositoryPath: repositoryRoot,
       environmentId: 'environment-delete',
     });
-    store.bind({ sessionKey: 'session-a', environmentId: environment.id });
+    store.bind({ conversationId: 'session-a', environmentId: environment.id });
 
     await expect(manager.remove(environment.id)).rejects.toThrow(/active bindings/);
     store.releaseBinding('session-a', environment.id);

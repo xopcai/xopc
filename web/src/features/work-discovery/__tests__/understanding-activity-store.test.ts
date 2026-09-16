@@ -87,7 +87,7 @@ describe('understanding activity store', () => {
       rootPath: '/workspace',
       status: 'completed',
       projectId: 'project-1',
-      sessionKey: 'session-1',
+      conversationId: 'session-1',
       result: {
         projectSummary: 'A project summary',
         currentState: 'Ready for review',

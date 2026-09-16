@@ -27,7 +27,7 @@ describe('local execution environment routes', () => {
     store = new ExecutionEnvironmentStore();
     const environment = await new LocalWorktreeManager({ store }).registerLocalCheckout({ workspacePath: stateDir });
     environmentId = environment.id;
-    store.bind({ sessionKey: 'session-a', environmentId });
+    store.bind({ conversationId: 'session-a', environmentId });
     getActiveWebchatRunId.mockReset();
     deleteSession.mockReset();
     const service = {

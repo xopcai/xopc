@@ -242,7 +242,7 @@ export class ChannelManager {
         metadata: {
           feishuEventType: meta.feishuEventType,
           raw: meta.raw,
-          sessionKey: meta.sessionKey,
+          conversationId: meta.conversationId,
           userContent: msg.content,
         },
       });

@@ -34,7 +34,7 @@ function subjectFor(event: AutomationEvent): { kind: string; id: string } | null
     return id ? { kind: 'workflow_run', id } : null;
   }
   if (event.type === 'session.transcript.updated') {
-    const id = stringValue(payload, 'sessionKey');
+    const id = stringValue(payload, 'conversationId');
     return id ? { kind: 'session', id } : null;
   }
   if (event.type === 'discussion.completed') {

@@ -14,7 +14,7 @@ function isThinkingDelta(event: ChatStreamEvent): event is ThinkingDeltaEvent {
 
 function belongsToSameThinkingStream(left: ThinkingDeltaEvent, right: ThinkingDeltaEvent): boolean {
   return left.runId === right.runId
-    && left.sessionKey === right.sessionKey
+    && left.conversationId === right.conversationId
     && left.payload.messageId === right.payload.messageId;
 }
 

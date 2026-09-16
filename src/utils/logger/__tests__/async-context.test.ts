@@ -9,20 +9,20 @@ import {
 
 describe('async log context (AsyncLocalStorage)', () => {
   it('exposes context inside runWithLogContext', () => {
-    runWithLogContext({ requestId: 'req-a', sessionId: 'sess-1' }, () => {
+    runWithLogContext({ requestId: 'req-a', transcriptId: 'sess-1' }, () => {
       expect(getAsyncLogContext()).toEqual(
-        expect.objectContaining({ requestId: 'req-a', sessionId: 'sess-1' }),
+        expect.objectContaining({ requestId: 'req-a', transcriptId: 'sess-1' }),
       );
     });
     expect(getAsyncLogContext()).toBeUndefined();
   });
 
   it('merges nested runWithLogContext over parent', () => {
-    runWithLogContext({ requestId: 'outer', sessionId: 's1' }, () => {
-      runWithLogContext({ sessionId: 's2', userId: 'u1' }, () => {
+    runWithLogContext({ requestId: 'outer', transcriptId: 's1' }, () => {
+      runWithLogContext({ transcriptId: 's2', userId: 'u1' }, () => {
         const ctx = getAsyncLogContext();
         expect(ctx?.requestId).toBe('outer');
-        expect(ctx?.sessionId).toBe('s2');
+        expect(ctx?.transcriptId).toBe('s2');
         expect(ctx?.userId).toBe('u1');
       });
     });
@@ -30,9 +30,9 @@ describe('async log context (AsyncLocalStorage)', () => {
 
   it('updateAsyncLogContext mutates current store', async () => {
     await runWithLogContext({ requestId: 'r1' }, async () => {
-      expect(getAsyncLogContext()?.sessionId).toBeUndefined();
-      updateAsyncLogContext({ sessionId: 'from-body' });
-      expect(getAsyncLogContext()?.sessionId).toBe('from-body');
+      expect(getAsyncLogContext()?.transcriptId).toBeUndefined();
+      updateAsyncLogContext({ transcriptId: 'from-body' });
+      expect(getAsyncLogContext()?.transcriptId).toBe('from-body');
     });
   });
 
@@ -44,7 +44,7 @@ describe('async log context (AsyncLocalStorage)', () => {
   });
 
   it('updateAsyncLogContext is no-op outside runWithLogContext', () => {
-    updateAsyncLogContext({ sessionId: 'orphan' });
+    updateAsyncLogContext({ transcriptId: 'orphan' });
     expect(getAsyncLogContext()).toBeUndefined();
   });
 
@@ -53,7 +53,7 @@ describe('async log context (AsyncLocalStorage)', () => {
     runWithLogContext(
       {
         requestId: 'req-x',
-        sessionId: 'should-not-propagate',
+        transcriptId: 'should-not-propagate',
         correlationId: 'corr-1',
         userId: 'u-9',
       },

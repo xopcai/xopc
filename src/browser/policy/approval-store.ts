@@ -6,7 +6,7 @@ export type BrowserApprovalStatus = 'pending' | 'approved' | 'denied' | 'consume
 
 export interface BrowserApproval {
   id: string;
-  sessionKey: string;
+  conversationId: string;
   risk: BrowserRiskLevel;
   action: BrowserActionInput['action'];
   summary: string;
@@ -20,7 +20,7 @@ const TTL_MS = 10 * 60 * 1000;
 const approvals = new Map<string, BrowserApproval>();
 
 export function createBrowserApproval(
-  sessionKey: string,
+  conversationId: string,
   input: BrowserActionInput,
   risk: BrowserRiskLevel,
   summary: string,
@@ -28,7 +28,7 @@ export function createBrowserApproval(
   expireApprovals();
   const argumentsHash = browserArgumentsHash(input);
   const existing = [...approvals.values()].find((approval) =>
-    approval.sessionKey === sessionKey
+    approval.conversationId === conversationId
     && approval.argumentsHash === argumentsHash
     && approval.status === 'pending',
   );
@@ -36,7 +36,7 @@ export function createBrowserApproval(
   const now = Date.now();
   const approval: BrowserApproval = {
     id: randomUUID(),
-    sessionKey,
+    conversationId,
     risk,
     action: input.action,
     summary,
@@ -49,10 +49,10 @@ export function createBrowserApproval(
   return approval;
 }
 
-export function listBrowserApprovals(sessionKey?: string): BrowserApproval[] {
+export function listBrowserApprovals(conversationId?: string): BrowserApproval[] {
   expireApprovals();
   return [...approvals.values()]
-    .filter((approval) => !sessionKey || approval.sessionKey === sessionKey)
+    .filter((approval) => !conversationId || approval.conversationId === conversationId)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
@@ -66,7 +66,7 @@ export function decideBrowserApproval(id: string, decision: 'approved' | 'denied
 
 export function consumeBrowserApproval(
   id: string | undefined,
-  sessionKey: string,
+  conversationId: string,
   input: BrowserActionInput,
 ): boolean {
   expireApprovals();
@@ -74,12 +74,12 @@ export function consumeBrowserApproval(
   const approval = id
     ? approvals.get(id)
     : [...approvals.values()].find((candidate) =>
-      candidate.sessionKey === sessionKey
+      candidate.conversationId === conversationId
       && candidate.argumentsHash === argumentsHash
       && candidate.status === 'approved',
     );
   if (!approval || approval.status !== 'approved') return false;
-  if (approval.sessionKey !== sessionKey || approval.argumentsHash !== argumentsHash) return false;
+  if (approval.conversationId !== conversationId || approval.argumentsHash !== argumentsHash) return false;
   approval.status = 'consumed';
   return true;
 }

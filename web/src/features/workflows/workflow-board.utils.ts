@@ -10,8 +10,8 @@ export const BOARD_SUCCEEDED_COLLAPSED = 5;
 
 const ATTENTION_STATUSES = new Set<WorkflowRunStatus>(['failed', 'timeout', 'cancelled']);
 
-export function resolveRunSessionKey(run: WorkflowRunSummary): string | null {
-  const key = run.metadata?.sessionKey?.trim();
+export function resolveRunConversationId(run: WorkflowRunSummary): string | null {
+  const key = run.metadata?.conversationId?.trim();
   return key || null;
 }
 

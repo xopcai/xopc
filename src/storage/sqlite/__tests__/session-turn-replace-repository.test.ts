@@ -17,14 +17,14 @@ import {
 
 describe('session turn replacement repository', () => {
   let dir: string;
-  const sessionKey = 'agent:main:webchat:default:direct:replace-test';
+  const conversationId = "3f827b2d-fd3b-4b29-80ae-f69bdf895104";
   const origin = { type: 'endpoint' as const, endpointId: 'endpoint-test' };
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'xopc-session-turn-replace-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(dir, 'xopc.db') });
-    ensureSessionRecord(sessionKey, '/tmp/workspace');
+    ensureSessionRecord(conversationId, '/tmp/workspace', { agentId: "main" });
   });
 
   afterEach(() => {
@@ -34,27 +34,27 @@ describe('session turn replacement repository', () => {
   });
 
   function appendTurn(turnId: string, user: string, assistant: string): void {
-    appendTranscriptEntry(sessionKey, { role: 'user', content: user, turnId } as never);
-    appendTranscriptEntry(sessionKey, { role: 'assistant', content: assistant, turnId } as never);
+    appendTranscriptEntry(conversationId, { role: 'user', content: user, turnId } as never);
+    appendTranscriptEntry(conversationId, { role: 'assistant', content: assistant, turnId } as never);
   }
 
   it('atomically removes the latest turn and queues its replacement', () => {
     appendTurn('turn-1', 'first', 'answer one');
     appendTurn('turn-2', 'old text', 'partial answer');
-    appendTranscriptEntry(sessionKey, {
+    appendTranscriptEntry(conversationId, {
       role: 'custom',
       customType: 'status',
       content: 'tool status',
       display: true,
     });
-    appendTranscriptEntry(sessionKey, {
+    appendTranscriptEntry(conversationId, {
       kind: 'context',
       text: 'Webchat agent run aborted',
       data: { runId: 'turn-2' },
     });
 
     const result = replaceLatestSessionTurnAndQueueInput({
-      sessionKey,
+      conversationId,
       targetTurnId: 'turn-2',
       clientMessageId: 'replacement-client',
       content: 'new text',
@@ -63,11 +63,11 @@ describe('session turn replacement repository', () => {
     });
 
     expect(result).toMatchObject({ ok: true, idempotent: false });
-    expect(loadTranscriptRowsForSession(sessionKey)).toEqual([
+    expect(loadTranscriptRowsForSession(conversationId)).toEqual([
       expect.objectContaining({ role: 'user', content: 'first', turnId: 'turn-1' }),
       expect.objectContaining({ role: 'assistant', content: 'answer one', turnId: 'turn-1' }),
     ]);
-    expect(getSessionInputState(sessionKey).inputs).toEqual([
+    expect(getSessionInputState(conversationId).inputs).toEqual([
       expect.objectContaining({
         clientMessageId: 'replacement-client',
         content: 'new text',
@@ -79,7 +79,7 @@ describe('session turn replacement repository', () => {
   it('is idempotent when the client retries after the transaction committed', () => {
     appendTurn('turn-1', 'old text', 'old answer');
     const request = {
-      sessionKey,
+      conversationId,
       targetTurnId: 'turn-1',
       clientMessageId: 'replacement-client',
       content: 'new text',
@@ -88,29 +88,29 @@ describe('session turn replacement repository', () => {
 
     expect(replaceLatestSessionTurnAndQueueInput(request)).toMatchObject({ ok: true, idempotent: false });
     expect(replaceLatestSessionTurnAndQueueInput(request)).toMatchObject({ ok: true, idempotent: true });
-    expect(getSessionInputState(sessionKey).inputs).toHaveLength(1);
+    expect(getSessionInputState(conversationId).inputs).toHaveLength(1);
   });
 
   it('rejects historical turns and leaves the transcript unchanged', () => {
     appendTurn('turn-1', 'first', 'answer one');
     appendTurn('turn-2', 'second', 'answer two');
-    const before = loadTranscriptRowsForSession(sessionKey);
+    const before = loadTranscriptRowsForSession(conversationId);
 
     expect(replaceLatestSessionTurnAndQueueInput({
-      sessionKey,
+      conversationId,
       targetTurnId: 'turn-1',
       clientMessageId: 'replacement-client',
       content: 'edited first',
       origin,
     })).toEqual({ ok: false, code: 'NOT_LATEST' });
-    expect(loadTranscriptRowsForSession(sessionKey)).toEqual(before);
+    expect(loadTranscriptRowsForSession(conversationId)).toEqual(before);
   });
 
   it('rolls back without deleting when another input is pending', () => {
     appendTurn('turn-1', 'old text', 'old answer');
     insertSessionInput({
       id: 'already-queued',
-      sessionKey,
+      conversationId,
       clientMessageId: 'queued-client',
       requestedDelivery: 'next',
       effectiveDelivery: 'next',
@@ -118,15 +118,15 @@ describe('session turn replacement repository', () => {
       content: 'queued',
       origin,
     });
-    const before = loadTranscriptRowsForSession(sessionKey);
+    const before = loadTranscriptRowsForSession(conversationId);
 
     expect(replaceLatestSessionTurnAndQueueInput({
-      sessionKey,
+      conversationId,
       targetTurnId: 'turn-1',
       clientMessageId: 'replacement-client',
       content: 'new text',
       origin,
     })).toEqual({ ok: false, code: 'SESSION_BUSY' });
-    expect(loadTranscriptRowsForSession(sessionKey)).toEqual(before);
+    expect(loadTranscriptRowsForSession(conversationId)).toEqual(before);
   });
 });

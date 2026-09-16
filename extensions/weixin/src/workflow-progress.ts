@@ -12,7 +12,7 @@
  * the full final snapshot rendered as text. The user sees a single
  * tasteful summary at the end.
  *
- * Routing: sessionKey `agent:main:weixin:<accountId>:direct:<ilinkUserId>`. We need a
+ * Routing: conversationId `agent:main:weixin:<accountId>:direct:<ilinkUserId>`. We need a
  * valid `contextToken` for the recipient — which requires the user to have
  * recently messaged the bot (the token is harvested from inbound). If
  * missing, we throw and the broker logs; the run still completes, just
@@ -25,7 +25,7 @@ import type {
   WorkflowProgressPostInput,
 } from '@xopcai/xopc/agent/workflow/channel-capability.js';
 import type { Config } from '@xopcai/xopc/config/schema.js';
-import { parseSessionKey } from '@xopcai/xopc/routing/session-key.js';
+import { getConversationRouting } from '@xopcai/xopc/routing/session-key.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 
 import { resolveWeixinAccount } from './auth/accounts.js';
@@ -56,9 +56,9 @@ export function createWeixinWorkflowProgressCapability(opts: {
       if (!cfg) {
         throw new Error('weixin workflow progress: no config loaded');
       }
-      const target = resolveTarget(input.sessionKey);
+      const target = resolveTarget(input.conversationId);
       if (!target) {
-        throw new Error(`weixin workflow progress: cannot route sessionKey "${input.sessionKey}"`);
+        throw new Error(`weixin workflow progress: cannot route conversationId "${input.conversationId}"`);
       }
 
       let account;
@@ -84,7 +84,7 @@ export function createWeixinWorkflowProgressCapability(opts: {
         // to drop the progress notice than to spam an error; the parent agent
         // still surfaces the result through its normal reply path.
         log.debug(
-          { sessionKey: input.sessionKey, accountId: account.accountId },
+          { conversationId: input.conversationId, accountId: account.accountId },
           'no context token for recipient; skipping workflow progress send',
         );
         return { messageId: '' };
@@ -111,8 +111,8 @@ interface ResolvedTarget {
   to: string;
 }
 
-function resolveTarget(sessionKey: string): ResolvedTarget | null {
-  const parsed = parseSessionKey(sessionKey);
+function resolveTarget(conversationId: string): ResolvedTarget | null {
+  const parsed = getConversationRouting(conversationId);
   if (!parsed) return null;
   if (parsed.source !== 'weixin') return null;
   if (!parsed.peerId) return null;

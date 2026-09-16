@@ -34,7 +34,7 @@ type ChatPageHeaderRegistrationProps = {
   chatAgentId: string;
   onChatAgentChange: (agentId: string) => void;
   chatAgentDisabled: boolean;
-  sessionKey?: string | null;
+  conversationId?: string | null;
   hasMessages?: boolean;
   workspacePath?: string | null;
   userContextMode?: 'enabled' | 'off' | 'temporary';
@@ -58,7 +58,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   chatAgentId,
   onChatAgentChange,
   chatAgentDisabled,
-  sessionKey,
+  conversationId,
   hasMessages = false,
   workspacePath,
   userContextMode = 'enabled',
@@ -71,16 +71,16 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   context,
 }: ChatPageHeaderRegistrationProps) {
   const language = useLocaleStore((s) => s.language);
-  const { sessionKey: routeSessionKey } = useParams();
-  const routedSessionKey = routeSessionKey && routeSessionKey !== 'new'
-    ? decodeURIComponent(routeSessionKey)
+  const { conversationId: routeConversationId } = useParams();
+  const routedConversationId = routeConversationId && routeConversationId !== 'new'
+    ? decodeURIComponent(routeConversationId)
     : null;
-  const activeSessionKey = sessionKey?.trim() || routedSessionKey;
-  const { data: contextSummary, error: contextError, mutate: refreshContext } = useSessionContext(activeSessionKey ?? null, false);
+  const activeConversationId = conversationId?.trim() || routedConversationId;
+  const { data: contextSummary, error: contextError, mutate: refreshContext } = useSessionContext(activeConversationId ?? null, false);
   const workspaceAvailable = !contextError && (!contextSummary || Boolean(contextSummary.environment?.available));
   const m = messages(language);
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
-  const terminalPanelOpen = useTerminalPanelStore((s) => activeSessionKey ? Boolean(s.openBySessionKey[activeSessionKey]) : false);
+  const terminalPanelOpen = useTerminalPanelStore((s) => activeConversationId ? Boolean(s.openByConversationId[activeConversationId]) : false);
   const toggleTerminalPanel = useTerminalPanelStore((s) => s.toggle);
   const openTerminalPanel = useTerminalPanelStore((s) => s.open);
   const [terminalPreparing, setTerminalPreparing] = useState(false);
@@ -89,22 +89,22 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
   const terminalPlatform = window.electronAPI?.platform;
   const terminalShortcut = terminalShortcutLabel(terminalPlatform);
-  const terminalAvailable = Boolean(window.electronAPI?.terminal && (activeSessionKey || prepareTerminalSession));
+  const terminalAvailable = Boolean(window.electronAPI?.terminal && (activeConversationId || prepareTerminalSession));
 
   const handleTerminalToggle = useCallback(() => {
     if (!terminalAvailable || terminalDisabled || terminalPreparing) return;
-    if (activeSessionKey) {
-      toggleTerminalPanel(activeSessionKey);
+    if (activeConversationId) {
+      toggleTerminalPanel(activeConversationId);
       return;
     }
     if (!prepareTerminalSession) return;
     setTerminalPreparing(true);
     void prepareTerminalSession()
-      .then((createdSessionKey) => {
-        if (createdSessionKey) openTerminalPanel(createdSessionKey);
+      .then((createdConversationId) => {
+        if (createdConversationId) openTerminalPanel(createdConversationId);
       })
       .finally(() => setTerminalPreparing(false));
-  }, [activeSessionKey, openTerminalPanel, prepareTerminalSession, terminalAvailable, terminalDisabled, terminalPreparing, toggleTerminalPanel]);
+  }, [activeConversationId, openTerminalPanel, prepareTerminalSession, terminalAvailable, terminalDisabled, terminalPreparing, toggleTerminalPanel]);
 
   const isMobileLayout = useMediaQuery(MAX_MD);
   const chromeLayout = resolveShellChromeLayout({
@@ -198,7 +198,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
               {m.chat.temporarySession}
             </span>
           ) : null}
-          {activeSessionKey && hasMessages ? <SessionShareButton key={`share:${activeSessionKey}`} sessionKey={activeSessionKey} /> : null}
+          {activeConversationId && hasMessages ? <SessionShareButton key={`share:${activeConversationId}`} conversationId={activeConversationId} /> : null}
           {terminalAvailable ? (
             <button
               type="button"
@@ -216,17 +216,17 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
             </button>
           ) : null}
           <SessionContextPanel
-            key={`context:${activeSessionKey ?? context?.project?.id ?? 'new'}`}
+            key={`context:${activeConversationId ?? context?.project?.id ?? 'new'}`}
             {...context}
             agentId={chatAgentId}
             temporary={userContextMode === 'temporary'}
-            sessionKey={activeSessionKey ?? null}
+            conversationId={activeConversationId ?? null}
           />
-          {(activeSessionKey || projectId) && onWorkspaceChange ? (
+          {(activeConversationId || projectId) && onWorkspaceChange ? (
             <ChatWorkspaceControl
-              key={`workspace:${activeSessionKey ?? projectId}`}
-              sessionKey={activeSessionKey}
-              workspacePath={activeSessionKey ? workspacePath : context?.project?.workspaceRoot}
+              key={`workspace:${activeConversationId ?? projectId}`}
+              conversationId={activeConversationId}
+              workspacePath={activeConversationId ? workspacePath : context?.project?.workspaceRoot}
               available={workspaceAvailable}
               canChangeWorkspace={canChangeWorkspace}
               disabled={workspaceDisabled}
@@ -263,7 +263,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     terminalAvailable,
     terminalDisabled,
     terminalPreparing,
-    activeSessionKey,
+    activeConversationId,
     hasMessages,
     workspacePath,
     workspaceAvailable,

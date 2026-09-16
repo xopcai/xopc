@@ -12,7 +12,7 @@ const mockedApiFetch = vi.mocked(apiFetch);
 function currentGatewayHomeResponse() {
   return {
     runningConversations: [{
-      sessionKey: 'agent:main:webchat:default:direct:chat-1',
+      conversationId: 'agent:main:webchat:default:direct:chat-1',
       runId: 'run-1',
       title: 'Plan the launch',
       agentId: 'main',

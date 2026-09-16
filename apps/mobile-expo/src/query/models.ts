@@ -115,13 +115,13 @@ export async function fetchChatModels(agentId?: string): Promise<ChatModelsPaylo
 }
 
 export async function setSessionModelRef(
-  sessionKey: string,
+  conversationId: string,
   modelRef: string,
   taskId?: string,
 ): Promise<boolean> {
   const path = taskId
     ? `/api/tasks/${encodeURIComponent(taskId)}/conversation/config`
-    : `/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`;
+    : `/api/sessions/${encodeURIComponent(conversationId)}/agent-config`;
   const res = await apiFetch(path, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -135,15 +135,15 @@ export async function setSessionModelRef(
 
 export function sessionModelMutationOptions(
   queryClient: QueryClient,
-  sessionKey: string,
+  conversationId: string,
   taskId?: string,
 ) {
   return mutationOptions({
-    mutationKey: ['session-model', sessionKey, taskId],
-    scope: { id: `session-model:${taskId || sessionKey}` },
-    mutationFn: (modelRef: string) => setSessionModelRef(sessionKey, modelRef, taskId),
+    mutationKey: ['session-model', conversationId, taskId],
+    scope: { id: `session-model:${taskId || conversationId}` },
+    mutationFn: (modelRef: string) => setSessionModelRef(conversationId, modelRef, taskId),
     onSuccess: async (_result, modelRef) => {
-      const queryKey = queryKeys.sessionAgentConfig(sessionKey);
+      const queryKey = queryKeys.sessionAgentConfig(conversationId);
       // Discard reads started before the save so they cannot restore the old model.
       await queryClient.cancelQueries({ queryKey, exact: true });
       queryClient.setQueryData<Awaited<ReturnType<typeof fetchSessionAgentConfig>>>(
@@ -160,10 +160,10 @@ export function sessionModelMutationOptions(
 }
 
 export async function setSessionInitialAgentConfig(
-  sessionKey: string,
+  conversationId: string,
   config: { model?: string; thinkingLevel?: string },
 ): Promise<void> {
-  const res = await apiFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`, {
+  const res = await apiFetch(`/api/sessions/${encodeURIComponent(conversationId)}/agent-config`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(config),
@@ -173,8 +173,8 @@ export async function setSessionInitialAgentConfig(
   throw new Error(errBody.error ?? formatApiHttpError(res.status, res.statusText));
 }
 
-export async function setSessionWorkingDirectory(sessionKey: string, workingDirectory: string): Promise<void> {
-  const res = await apiFetch(`/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`, {
+export async function setSessionWorkingDirectory(conversationId: string, workingDirectory: string): Promise<void> {
+  const res = await apiFetch(`/api/sessions/${encodeURIComponent(conversationId)}/agent-config`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ workingDirectory: workingDirectory.trim() }),
@@ -187,7 +187,7 @@ export async function setSessionWorkingDirectory(sessionKey: string, workingDire
 
 /** Fetch the session's agent-config (model override, thinking level, etc.). */
 export async function fetchSessionAgentConfig(
-  sessionKey: string,
+  conversationId: string,
 ): Promise<{
   model: string;
   thinkingLevel: string;
@@ -195,7 +195,7 @@ export async function fetchSessionAgentConfig(
   effectiveWorkspacePath: string;
   workingDirectoryLocked: boolean;
 }> {
-  const key = encodeURIComponent(sessionKey);
+  const key = encodeURIComponent(conversationId);
   const res = await apiFetch(`/api/sessions/${key}/agent-config`);
   if (!res.ok) {
     return {

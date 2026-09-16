@@ -27,8 +27,8 @@ export function pinoRecordToLogEntry(parsed: Record<string, unknown>): LogEntry 
     'module',
     'extension',
     'requestId',
-    'sessionKey',
-    'sessionId',
+    'conversationId',
+    'transcriptId',
     'userId',
     'correlationId',
   ]);
@@ -48,8 +48,8 @@ export function pinoRecordToLogEntry(parsed: Record<string, unknown>): LogEntry 
     service: typeof parsed.service === 'string' ? parsed.service : undefined,
     extension: typeof parsed.extension === 'string' ? parsed.extension : undefined,
     requestId: typeof parsed.requestId === 'string' ? parsed.requestId : undefined,
-    sessionKey: typeof parsed.sessionKey === 'string' ? parsed.sessionKey : undefined,
-    sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : undefined,
+    conversationId: typeof parsed.conversationId === 'string' ? parsed.conversationId : undefined,
+    transcriptId: typeof parsed.transcriptId === 'string' ? parsed.transcriptId : undefined,
     userId: typeof parsed.userId === 'string' ? parsed.userId : undefined,
     correlationId: typeof parsed.correlationId === 'string' ? parsed.correlationId : undefined,
   };
@@ -69,8 +69,8 @@ export function logEntrySearchText(entry: LogEntry): string {
     entry.service,
     entry.extension,
     entry.requestId,
-    entry.sessionKey,
-    entry.sessionId,
+    entry.conversationId,
+    entry.transcriptId,
     typeof entry.phase === 'string' ? entry.phase : undefined,
     typeof entry.errorMessage === 'string' ? entry.errorMessage : undefined,
   ];

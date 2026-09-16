@@ -131,16 +131,16 @@ function reconcilePendingUserMessages(
   return next;
 }
 
-export function SideChatColumn({ parentSessionKey }: { parentSessionKey: string }) {
+export function SideChatColumn({ parentConversationId }: { parentConversationId: string }) {
   const language = useLocaleStore((state) => state.language);
   const m = getMessages(language).sideChat;
-  const open = useSideChatStore((state) => state.panes[parentSessionKey]?.open === true);
+  const open = useSideChatStore((state) => state.panes[parentConversationId]?.open === true);
   const allTabs = useSideChatStore((state) => state.tabs);
   const tabs = useMemo(
-    () => allTabs.filter((tab) => tab.parentSessionKey === parentSessionKey),
-    [allTabs, parentSessionKey],
+    () => allTabs.filter((tab) => tab.parentConversationId === parentConversationId),
+    [allTabs, parentConversationId],
   );
-  const activeId = useSideChatStore((state) => state.panes[parentSessionKey]?.activeId ?? null);
+  const activeId = useSideChatStore((state) => state.panes[parentConversationId]?.activeId ?? null);
   const pendingCreate = useSideChatStore((state) => state.pendingCreate);
   const requestCreate = useSideChatStore((state) => state.requestCreate);
   const claimPendingCreate = useSideChatStore((state) => state.claimPendingCreate);
@@ -151,7 +151,7 @@ export function SideChatColumn({ parentSessionKey }: { parentSessionKey: string 
   const widthPx = useSideChatStore((state) => state.widthPx);
   const setWidthPx = useSideChatStore((state) => state.setWidthPx);
   const setTabRunId = useSideChatStore((state) => state.setTabRunId);
-  const token = useGatewayStore((state) => state.sessionKey);
+  const token = useGatewayStore((state) => state.conversationId);
   const activeTab = tabs.find((tab) => tab.id === activeId) ?? null;
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -160,16 +160,16 @@ export function SideChatColumn({ parentSessionKey }: { parentSessionKey: string 
   const [dontAskCloseAgain, setDontAskCloseAgain] = useState(false);
 
   useEffect(() => {
-    if (!pendingCreate || pendingCreate.parentSessionKey !== parentSessionKey) return;
-    const request = claimPendingCreate(parentSessionKey, pendingCreate.requestId);
+    if (!pendingCreate || pendingCreate.parentConversationId !== parentConversationId) return;
+    const request = claimPendingCreate(parentConversationId, pendingCreate.requestId);
     if (!request) return;
     setCreating(true);
     setCreateError(null);
     const gateway = useGatewayStore.getState();
-    void createSideChat(request.parentSessionKey, request.selections)
+    void createSideChat(request.parentConversationId, request.selections)
       .then((sideChat) => {
-        if (useGatewayStore.getState().sessionKey !== gateway.sessionKey || useGatewayStore.getState().baseUrl !== gateway.baseUrl) return;
-        addTab({ id: sideChat.id, parentSessionKey: sideChat.parentSessionKey, title: 'Side chat' });
+        if (useGatewayStore.getState().conversationId !== gateway.conversationId || useGatewayStore.getState().baseUrl !== gateway.baseUrl) return;
+        addTab({ id: sideChat.id, parentConversationId: sideChat.parentConversationId, title: 'Side chat' });
       })
       .catch((error) => {
         setCreateError(sideChatErrorMessage(error, m));
@@ -177,7 +177,7 @@ export function SideChatColumn({ parentSessionKey }: { parentSessionKey: string 
       .finally(() => {
         setCreating(false);
       });
-  }, [addTab, claimPendingCreate, m, parentSessionKey, pendingCreate]);
+  }, [addTab, claimPendingCreate, m, parentConversationId, pendingCreate]);
 
   const closeTab = useCallback((id: string) => {
     removeTab(id);
@@ -259,11 +259,11 @@ export function SideChatColumn({ parentSessionKey }: { parentSessionKey: string 
           aria-label={m.newAria}
           title={m.newAria}
           disabled={creating}
-          onClick={() => requestCreate(parentSessionKey)}
+          onClick={() => requestCreate(parentConversationId)}
         >
           <Plus className="size-4" />
         </Button>
-        <Button type="button" variant="ghost" className="ml-auto size-8 shrink-0 p-0" aria-label={m.closePaneAria} onClick={() => setOpen(parentSessionKey, false)}>
+        <Button type="button" variant="ghost" className="ml-auto size-8 shrink-0 p-0" aria-label={m.closePaneAria} onClick={() => setOpen(parentConversationId, false)}>
           <ChevronRight className="size-4" />
         </Button>
       </div>
@@ -271,7 +271,7 @@ export function SideChatColumn({ parentSessionKey }: { parentSessionKey: string 
         <p>{createError}</p>
         {allTabs.filter((tab) => !tab.ended).map((tab) => <button key={tab.id} type="button" className="mr-2 mt-1 rounded border border-edge px-2 py-1" onClick={() => {
           setActive(tab.id);
-          window.dispatchEvent(new CustomEvent('navigate-to-chat', { detail: { sessionKey: tab.parentSessionKey } }));
+          window.dispatchEvent(new CustomEvent('navigate-to-chat', { detail: { conversationId: tab.parentConversationId } }));
         }}>{tab.title === 'Side chat' ? m.title : tab.title}</button>)}
       </div> : null}
       {activeTab ? (
@@ -281,7 +281,7 @@ export function SideChatColumn({ parentSessionKey }: { parentSessionKey: string 
           token={token ?? undefined}
           initialRunId={activeTab.runId}
           onRunIdChange={setTabRunId}
-          parentSessionKey={parentSessionKey}
+          parentConversationId={parentConversationId}
         />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-8 text-center">
@@ -324,13 +324,13 @@ export function SideChatConversation({
   token,
   initialRunId,
   onRunIdChange,
-  parentSessionKey,
+  parentConversationId,
 }: {
   sideChatId: string;
   token?: string;
   initialRunId?: string;
   onRunIdChange: (id: string, runId?: string) => void;
-  parentSessionKey?: string;
+  parentConversationId?: string;
 }) {
   const [view, setView] = useState<SideChatView | null>(null);
   const [messages, setMessages] = useState<Message[]>(() => useSideChatStore.getState().readings[sideChatId]?.messages ?? []);
@@ -354,7 +354,7 @@ export function SideChatConversation({
   const activeRef = useRef(true);
   const endedRef = useRef(ended);
   const gatewayIdentity = useRef(useGatewayStore.getState());
-  const sameGateway = useCallback(() => gatewayIdentity.current.sessionKey === useGatewayStore.getState().sessionKey
+  const sameGateway = useCallback(() => gatewayIdentity.current.conversationId === useGatewayStore.getState().conversationId
     && gatewayIdentity.current.baseUrl === useGatewayStore.getState().baseUrl, []);
   const isCurrent = useCallback(() => activeRef.current && sameGateway(), [sameGateway]);
   useEffect(() => { activeRef.current = true; return () => { activeRef.current = false; }; }, []);
@@ -394,7 +394,7 @@ export function SideChatConversation({
   } = useChatScrollViewport({
     hasToken: true,
     showSessionLoading: false,
-    sessionKey: sideChatId,
+    conversationId: sideChatId,
     sending: running,
     chatMessages: messages,
     hasMore: false,
@@ -524,14 +524,14 @@ export function SideChatConversation({
   };
 
   const recreate = async () => {
-    const parent = parentSessionKey ?? useSideChatStore.getState().tabs.find((tab) => tab.id === sideChatId)?.parentSessionKey;
+    const parent = parentConversationId ?? useSideChatStore.getState().tabs.find((tab) => tab.id === sideChatId)?.parentConversationId;
     if (!parent || recreating) return;
     setRecreating(true);
     setError(null);
     try {
       const next = await createSideChat(parent, []);
       if (!sameGateway()) return;
-      useSideChatStore.getState().replaceTab(sideChatId, { id: next.id, parentSessionKey: parent, title: 'Side chat' });
+      useSideChatStore.getState().replaceTab(sideChatId, { id: next.id, parentConversationId: parent, title: 'Side chat' });
     } catch (cause) {
       if (!isCurrent()) return;
       if ((cause as { body?: { code?: string } }).body?.code === 'PARENT_NOT_FOUND') setParentMissing(true);
@@ -742,7 +742,7 @@ export function SideChatConversation({
             <MessageList
               messages={messages}
               authToken={token}
-              sessionKey={sideChatId}
+              conversationId={sideChatId}
               streaming={running}
               progress={null}
               reasoningLevel="on"
@@ -796,7 +796,7 @@ export function SideChatConversation({
             <p className="mt-2 text-sm text-fg-muted">{parentMissing ? sideChatMessages.parentMissing : ended === 'waiting' ? sideChatMessages.waitExpired : messages.length ? sideChatMessages.expiredDescription : sideChatMessages.unavailableDescription}</p>
             {draftText || draftAttachments.length ? <div className="mt-3"><label htmlFor={`side-chat-draft-${sideChatId}`} className="text-xs text-fg-muted">{sideChatMessages.unsentDraft}</label><ComposerAttachmentChips attachments={draftAttachments} topPadded={false} onRemove={attachments.removeAttachment} className="mt-1 rounded-t-lg" />{draftText ? <textarea id={`side-chat-draft-${sideChatId}`} value={draftText} onChange={(event) => setDraftText(limitSideChatDraft(event.target.value))} rows={3} className="mt-1 w-full resize-y rounded-lg border border-edge bg-surface-base p-2 text-sm" /> : null}</div> : null}
             <Button type="button" variant="primary" className="mt-4" disabled={recreating} onClick={() => {
-              if (parentMissing) { if (parentSessionKey) useSideChatStore.getState().setOpen(parentSessionKey, false); }
+              if (parentMissing) { if (parentConversationId) useSideChatStore.getState().setOpen(parentConversationId, false); }
               else void recreate();
             }}>{parentMissing ? sideChatMessages.closePaneAria : recreating ? sideChatMessages.creating : draftText.trim() || draftAttachments.length ? sideChatMessages.newWithDraft : sideChatMessages.newAria}</Button>
             {messages.length && !parentMissing ? <p className="mt-2 text-xs text-fg-muted">{sideChatMessages.replaceHint}</p> : null}

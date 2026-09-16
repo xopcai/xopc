@@ -130,21 +130,6 @@ export type SessionTimelineItem = {
 
 const _timelineInflight = new Map<string, Promise<SessionTimelineItem[]>>();
 
-export function parseWebchatSessionKeyForCreate(
-  sessionKey: string,
-): { agentId: string; channel: string; chatId: string } | null {
-  const parts = sessionKey.trim().split(':');
-  if (parts.length < 6) return null;
-  const [scope, agentId, channel, accountId, peerKind, ...peerParts] = parts;
-  const chatId = peerParts.join(':').trim();
-  if (scope !== 'agent') return null;
-  if (!agentId?.trim()) return null;
-  if (channel !== 'webchat') return null;
-  if (accountId !== 'default' || peerKind !== 'direct') return null;
-  if (!chatId) return null;
-  return { agentId: agentId.trim().toLowerCase(), channel, chatId };
-}
-
 async function readErrorMessage(res: Response): Promise<string> {
   const body = (await res.json().catch(() => ({}))) as {
     error?: string | { message?: string };
@@ -155,10 +140,10 @@ async function readErrorMessage(res: Response): Promise<string> {
 /** Session list + history via REST; auth from `apiFetch` (gateway token store). */
 export class SessionManager {
   async forkSessionAtTurn(
-    sourceSessionKey: string,
+    sourceConversationId: string,
     lastTurnId: string,
   ): Promise<SessionForkAtTurnResponse> {
-    const res = await apiFetch(apiUrl(buildSessionForkAtTurnPath(sourceSessionKey)), {
+    const res = await apiFetch(apiUrl(buildSessionForkAtTurnPath(sourceConversationId)), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ lastTurnId }),
@@ -181,7 +166,8 @@ export class SessionManager {
       for (const s of data.items) {
         out.push({
           key: s.key,
-          sessionId: s.sessionId,
+          agentId: s.agentId,
+          transcriptId: s.transcriptId,
           name: s.name,
           updatedAt: s.updatedAt,
           messageCount: s.messageCount,
@@ -202,26 +188,26 @@ export class SessionManager {
     return sorted;
   }
 
-  async loadSessionAgentConfig(sessionKey: string): Promise<SessionAgentConfig> {
-    const existing = _agentConfigInflight.get(sessionKey);
+  async loadSessionAgentConfig(conversationId: string): Promise<SessionAgentConfig> {
+    const existing = _agentConfigInflight.get(conversationId);
     if (existing) return existing;
 
     const pending = (async () => {
       const res = await apiFetch(
-        apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`),
+        apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}/agent-config`),
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return parseSessionAgentConfigResponse(await res.json());
     })().finally(() => {
-      _agentConfigInflight.delete(sessionKey);
+      _agentConfigInflight.delete(conversationId);
     });
 
-    _agentConfigInflight.set(sessionKey, pending);
+    _agentConfigInflight.set(conversationId, pending);
     return pending;
   }
 
   async patchSessionAgentConfig(
-    sessionKey: string,
+    conversationId: string,
     patch: {
       thinkingLevel?: string;
       configVersion?: number;
@@ -230,7 +216,7 @@ export class SessionManager {
       userContextMode?: 'enabled' | 'off' | 'temporary';
     },
   ): Promise<SessionAgentConfig> {
-    const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`), {
+    const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}/agent-config`), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
@@ -256,17 +242,17 @@ export class SessionManager {
   }
 
   /** Gateway read-only active webchat run (`GET /api/sessions/:key/run`). */
-  fetchSessionActiveRun(sessionKey: string) {
-    return fetchSessionActiveRun(sessionKey);
+  fetchSessionActiveRun(conversationId: string) {
+    return fetchSessionActiveRun(conversationId);
   }
 
   async loadSession(
-    sessionKey: string,
+    conversationId: string,
     offset = 0,
     beforeCursor?: string | null,
     taskId?: string,
   ): Promise<SessionLoadResult> {
-    const dedupeKey = `${taskId ?? sessionKey}\0${offset}\0${beforeCursor ?? ''}`;
+    const dedupeKey = `${taskId ?? conversationId}\0${offset}\0${beforeCursor ?? ''}`;
     const existing = _sessionLoadInflight.get(dedupeKey);
     if (existing) return existing;
 
@@ -278,7 +264,7 @@ export class SessionManager {
                 limit: String(INITIAL_HISTORY_PAGE_LIMIT),
                 ...(pageBeforeCursor ? { before: pageBeforeCursor } : { offset: String(pageOffset) }),
               }).toString()}`
-            : buildSessionHistoryPath(sessionKey, {
+            : buildSessionHistoryPath(conversationId, {
                 limit: INITIAL_HISTORY_PAGE_LIMIT,
                 before: pageBeforeCursor,
                 offset: pageBeforeCursor ? undefined : pageOffset,
@@ -332,8 +318,8 @@ export class SessionManager {
     return pending;
   }
 
-  async loadTimeline(sessionKey: string, taskId?: string): Promise<SessionTimelineItem[]> {
-    const cacheKey = taskId ?? sessionKey;
+  async loadTimeline(conversationId: string, taskId?: string): Promise<SessionTimelineItem[]> {
+    const cacheKey = taskId ?? conversationId;
     const existing = _timelineInflight.get(cacheKey);
     if (existing) return existing;
 
@@ -341,7 +327,7 @@ export class SessionManager {
       const res = await apiFetchWithStartupRetry(
         apiUrl(taskId
           ? `/api/tasks/${encodeURIComponent(taskId)}/conversation/timeline`
-          : `/api/sessions/${encodeURIComponent(sessionKey)}/timeline`),
+          : `/api/sessions/${encodeURIComponent(conversationId)}/timeline`),
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       const data = (await res.json()) as {
@@ -384,41 +370,21 @@ export class SessionManager {
     return data.session;
   }
 
-  async ensureSessionExists(sessionKey: string): Promise<void> {
-    const trimmed = sessionKey.trim();
+  async ensureSessionExists(conversationId: string): Promise<void> {
+    const trimmed = conversationId.trim();
     if (!trimmed) throw new Error('Session key is required');
 
     const resolved = await apiFetch(apiUrl('/api/sessions/resolve'), {
       method: 'POST',
-      body: JSON.stringify({ sessionKey: trimmed }),
+      body: JSON.stringify({ conversationId: trimmed }),
     });
-    if (resolved.ok) return;
-    if (resolved.status !== 404) {
-      throw new Error(await readErrorMessage(resolved));
-    }
-
-    const parsed = parseWebchatSessionKeyForCreate(trimmed);
-    if (!parsed) {
-      throw new Error('Session not found');
-    }
-
-    const created = await apiFetch(apiUrl('/api/sessions'), {
-      method: 'POST',
-      body: JSON.stringify({
-        channel: parsed.channel,
-        agentId: parsed.agentId,
-        chat_id: parsed.chatId,
-      }),
-    });
-    if (!created.ok) {
-      throw new Error(await readErrorMessage(created));
-    }
+    if (!resolved.ok) throw new Error(await readErrorMessage(resolved));
   }
 
   /** Lightweight name read after auto-title (matches `ui` SessionManager). */
-  async fetchSessionName(sessionKey: string): Promise<string | undefined> {
+  async fetchSessionName(conversationId: string): Promise<string | undefined> {
     const res = await apiFetchWithStartupRetry(
-      apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}?offset=0&limit=1`),
+      apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}?offset=0&limit=1`),
     );
     if (!res.ok) return undefined;
     const data = (await res.json()) as { session?: { name?: string } };
@@ -426,8 +392,8 @@ export class SessionManager {
     return typeof n === 'string' && n.trim() ? n.trim() : undefined;
   }
 
-  updateUrl(sessionKey: string): void {
-    const newHash = `#/chat/${encodeURIComponent(sessionKey)}`;
+  updateUrl(conversationId: string): void {
+    const newHash = `#/chat/${encodeURIComponent(conversationId)}`;
     if (location.hash !== newHash) {
       const s = window.history.state;
       const next =
@@ -445,10 +411,10 @@ export class SessionManager {
 
   /** Delete one user turn (user + assistant/tool rows) or a raw LLM index range. */
   async deleteMessages(
-    sessionKey: string,
+    conversationId: string,
     opts: { userRoundIndex: number },
   ): Promise<void> {
-    const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/messages`), {
+    const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}/messages`), {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(opts),

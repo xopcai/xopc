@@ -466,7 +466,7 @@
       "clearSearch": "清除会话搜索",
       "noMatches": "没有匹配的会话",
       "fallbackTitle": "会话",
-      "sessionKey": "会话 ID",
+      "conversationId": "会话 ID",
       "agent": "Agent",
       "updated": "更新",
       "meta": "{{agent}} · {{messages}}",

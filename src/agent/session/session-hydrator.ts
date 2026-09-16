@@ -51,14 +51,14 @@ export class SessionHydrator {
    * Load the effective workspace into AgentManager. Managed environment roots
    * must already exist; ordinary project and agent workspaces may be created.
    */
-  async workspace(sessionKey: string): Promise<void> {
+  async workspace(conversationId: string): Promise<void> {
     const cfg = this.opts.getConfig();
     if (!cfg) {
       return;
     }
-    const loaded = await this.opts.sessionConfigStore.get(sessionKey);
-    const project = getProjectForSession(sessionKey);
-    const environment = getExecutionEnvironmentForSession(sessionKey);
+    const loaded = await this.opts.sessionConfigStore.get(conversationId);
+    const project = getProjectForSession(conversationId);
+    const environment = getExecutionEnvironmentForSession(conversationId);
     const projectWorkspace = projectWorkspacePath(project);
     if (environment) {
       if (environment.status !== 'ready') {
@@ -68,29 +68,29 @@ export class SessionHydrator {
       if (!rootIsDirectory) {
         throw new Error(`Execution environment root is unavailable: ${environment.rootPath}`);
       }
-      this.opts.agentManager.setSessionWorkspaceOverride(sessionKey, environment.rootPath);
+      this.opts.agentManager.setSessionWorkspaceOverride(conversationId, environment.rootPath);
     } else if (projectWorkspace) {
-      this.opts.agentManager.setSessionWorkspaceOverride(sessionKey, projectWorkspace);
+      this.opts.agentManager.setSessionWorkspaceOverride(conversationId, projectWorkspace);
     } else if (loaded?.workingDirectoryOverride?.trim()) {
       const wdStored = normalizeWorkingDirectoryInput(loaded.workingDirectoryOverride);
       if (wdStored.ok) {
-        this.opts.agentManager.setSessionWorkspaceOverride(sessionKey, wdStored.path);
+        this.opts.agentManager.setSessionWorkspaceOverride(conversationId, wdStored.path);
       } else {
-        log.warn({ sessionKey }, 'Invalid stored workingDirectoryOverride; ignoring');
-        this.opts.agentManager.setSessionWorkspaceOverride(sessionKey, null);
+        log.warn({ conversationId }, 'Invalid stored workingDirectoryOverride; ignoring');
+        this.opts.agentManager.setSessionWorkspaceOverride(conversationId, null);
       }
     } else {
-      this.opts.agentManager.setSessionWorkspaceOverride(sessionKey, null);
+      this.opts.agentManager.setSessionWorkspaceOverride(conversationId, null);
     }
-    const effective = effectiveWorkspacePathForSession(cfg, sessionKey, loaded, project);
+    const effective = effectiveWorkspacePathForSession(cfg, conversationId, loaded, project);
     if (!environment) await mkdir(effective, { recursive: true });
   }
 
   /** Apply persisted `modelOverride` to ModelManager (no-op when none stored). */
-  async model(sessionKey: string): Promise<void> {
-    const cfg = await this.opts.sessionConfigStore.get(sessionKey);
+  async model(conversationId: string): Promise<void> {
+    const cfg = await this.opts.sessionConfigStore.get(conversationId);
     if (cfg?.modelOverride) {
-      this.opts.modelManager.restoreSessionModel(sessionKey, cfg.modelOverride, cfg.fixedModel === true);
+      this.opts.modelManager.restoreSessionModel(conversationId, cfg.modelOverride, cfg.fixedModel === true);
     }
   }
 
@@ -98,20 +98,20 @@ export class SessionHydrator {
    * Resolve the effective thinking level (request override > per-session
    * override > agent default) and apply it to the live agent instance.
    */
-  async thinking(sessionKey: string, requestOverride?: string | null): Promise<void> {
+  async thinking(conversationId: string, requestOverride?: string | null): Promise<void> {
     const level = await resolveEffectiveThinkingLevel(
       this.opts.sessionConfigStore,
-      sessionKey,
+      conversationId,
       requestOverride,
       undefined,
     );
-    const stored = await this.opts.sessionConfigStore.get(sessionKey);
+    const stored = await this.opts.sessionConfigStore.get(conversationId);
     if (stored?.fixedModel) {
-      const model = this.opts.modelManager.getResolvedModelForSession(sessionKey);
+      const model = this.opts.modelManager.getResolvedModelForSession(conversationId);
       if (!getModelThinking(model).options.includes(level)) {
         throw new Error(`Thinking level ${level} is not supported by ${model.provider}/${model.id}`);
       }
     }
-    this.opts.agentManager.setThinkingLevel(sessionKey, level);
+    this.opts.agentManager.setThinkingLevel(conversationId, level);
   }
 }

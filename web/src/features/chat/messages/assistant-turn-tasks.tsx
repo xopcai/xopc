@@ -9,14 +9,14 @@ import { TurnOutcomeResult } from './turn-outcome-result';
 export function AssistantTurnTasks({
   view,
   authToken,
-  sessionKey,
+  conversationId,
   projectId,
   sourcesLabel,
   compactProductDelivery = false,
 }: {
   view: AssistantTurnViewModel;
   authToken?: string;
-  sessionKey?: string | null;
+  conversationId?: string | null;
   projectId?: string | null;
   sourcesLabel: string;
   compactProductDelivery?: boolean;
@@ -31,7 +31,7 @@ export function AssistantTurnTasks({
         <TurnOutcomeResult
           outcome={view.outcome}
           authToken={authToken}
-          sessionKey={sessionKey}
+          conversationId={conversationId}
           projectId={projectId}
         />
       ) : null}
@@ -51,12 +51,12 @@ export function AssistantTurnTasks({
 export function AssistantAttachmentList({
   attachments,
   authToken,
-  sessionKey,
+  conversationId,
   projectId,
 }: {
   attachments?: MessageAttachment[];
   authToken?: string;
-  sessionKey?: string | null;
+  conversationId?: string | null;
   projectId?: string | null;
 }) {
   if (!attachments?.length) return null;
@@ -64,7 +64,7 @@ export function AssistantAttachmentList({
     <AttachmentRenderer
       attachments={attachments}
       authToken={authToken}
-      sessionKey={sessionKey}
+      conversationId={conversationId}
       projectId={projectId}
       layout="assistant"
     />

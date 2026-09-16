@@ -9,7 +9,7 @@ export type ImageSource = {
 export type ImageRenderContext = {
   apiUrl: (path: string) => string;
   token: string;
-  sessionKey?: string;
+  conversationId?: string;
 };
 
 function isHttpUrl(value: string): boolean {
@@ -55,7 +55,7 @@ export function imageContentToSource(
   }
 
   if (isMediaUri(raw)) {
-    return { uri: ctx.apiUrl(buildGatewayMediaReadPath(raw, ctx.sessionKey)), headers };
+    return { uri: ctx.apiUrl(buildGatewayMediaReadPath(raw, ctx.conversationId)), headers };
   }
 
   if (looksLikeBase64(raw)) {

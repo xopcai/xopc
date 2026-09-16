@@ -6,14 +6,14 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 export async function patchChatModelConfig(
   c: Context,
   service: AuthenticatedRouteDeps['service'],
-  sessionKey: string,
+  conversationId: string,
   body: Record<string, unknown>,
 ) {
-  return withModelConfigLock(sessionKey, async () => {
+  return withModelConfigLock(conversationId, async () => {
     const changesModel = body.model !== undefined || body.thinkingLevel !== undefined;
     if (changesModel) {
-      const state = service.getSessionInputState(sessionKey);
-      if (service.sessions.getActiveRun(sessionKey).active || state.activeRunId || state.inputs.length > 0) {
+      const state = service.getSessionInputState(conversationId);
+      if (service.sessions.getActiveRun(conversationId).active || state.activeRunId || state.inputs.length > 0) {
         return c.json({ ok: false, error: 'Wait for the current reply and pending inputs to finish', code: 'SESSION_BUSY' }, 409);
       }
       if (body.thinkingLevel !== undefined && typeof body.thinkingLevel !== 'string') {
@@ -26,8 +26,8 @@ export async function patchChatModelConfig(
         return c.json({ ok: false, error: 'Select a specific model' }, 400);
       }
     }
-    const result = await service.sessions.patchAgentConfig(sessionKey, { ...body, ...(changesModel ? { fixedModel: true } : {}) });
+    const result = await service.sessions.patchAgentConfig(conversationId, { ...body, ...(changesModel ? { fixedModel: true } : {}) });
     if (!result.ok) return c.json({ ok: false, error: result.error, code: result.code }, result.code === 'CONFIG_CHANGED' ? 409 : 400);
-    return c.json({ ok: true, payload: await service.sessions.getAgentConfig(sessionKey) });
+    return c.json({ ok: true, payload: await service.sessions.getAgentConfig(conversationId) });
   });
 }

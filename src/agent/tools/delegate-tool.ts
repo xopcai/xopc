@@ -51,7 +51,7 @@ export interface DelegateToolDeps {
   getSubagentModel: () => import('@earendil-works/pi-ai').Model<import('@earendil-works/pi-ai').Api>;
   bus: import('../../infra/bus/index.js').MessageBus;
   getConfig: () => import('../../config/schema.js').Config | undefined;
-  getCurrentContext?: () => { sessionKey?: string; channel?: string; accountId?: string; to?: string; threadId?: string | number } | null;
+  getCurrentContext?: () => { conversationId?: string; channel?: string; accountId?: string; to?: string; threadId?: string | number } | null;
   toolExecutorConfig?: Partial<import('./executor.js').ToolExecutorConfig>;
   /**
    * Construct the child agent's tool set. Injected by `AgentToolsFactory` so
@@ -84,12 +84,12 @@ export function createDelegateTool(deps: DelegateToolDeps): AgentTool {
       const mode = input.mode ?? 'inspect';
       const tools = delegateToolNames(mode, input.toolset);
       if (!tools.length) throw new Error('No permitted tools in the requested toolset');
-      const parentSessionKey = deps.getCurrentContext?.()?.sessionKey;
+      const parentConversationId = deps.getCurrentContext?.()?.conversationId;
       const model = deps.getSubagentModel();
       let workspace = deps.workspace, environmentId: string | undefined;
       if (mode === 'implement') {
-        if (!parentSessionKey) throw new Error('Implementation delegation requires a project session');
-        const parent = new SessionEnvironmentService().get(parentSessionKey);
+        if (!parentConversationId) throw new Error('Implementation delegation requires a project session');
+        const parent = new SessionEnvironmentService().get(parentConversationId);
         if (!parent?.projectId) throw new Error('Attach this session to a project before implementation delegation');
         const environment = await new LocalWorktreeManager().provisionManagedWorktree({ projectId: parent.projectId, repositoryPath: workspace });
         workspace = environment.rootPath; environmentId = environment.id;
@@ -98,7 +98,7 @@ export function createDelegateTool(deps: DelegateToolDeps): AgentTool {
       const child = createDelegateChildHandle({
         workspace, goal: mode === 'review'
           ? `Independently review the actual changes. Inspect review_workspace and relevant source/tests. Report actionable defects with file and line evidence, severity and a concrete failure example. If there are no findings, state the checks and remaining uncertainty. Do not treat the parent's completion claim as evidence.\n\n${input.goal}` : input.goal,
-        context: input.context, requesterSessionKey: parentSessionKey, allowedToolNames: tools,
+        context: input.context, requesterConversationId: parentConversationId, allowedToolNames: tools,
         maxIterations: input.maxIterations ?? 30, model, bus: deps.bus,
         getConfig: deps.getConfig, toolExecutorConfig: deps.toolExecutorConfig, buildChildTools: deps.buildChildTools,
         verifyChanges: mode === 'implement',

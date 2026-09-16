@@ -57,7 +57,7 @@ export interface SessionInspectorOptions {
    * Nominal context window the session is budgeted against. Derived from the
    * effective session model metadata, defaulting to 128k.
    */
-  getContextWindow: (sessionKey: string) => number;
+  getContextWindow: (conversationId: string) => number;
 }
 
 export interface SessionContextUsage {
@@ -92,21 +92,21 @@ export class SessionInspector {
     this.opts = opts;
   }
 
-  private async ensureEffectiveSessionModel(sessionKey: string): Promise<void> {
-    await this.opts.sessionHydrator.model(sessionKey);
+  private async ensureEffectiveSessionModel(conversationId: string): Promise<void> {
+    await this.opts.sessionHydrator.model(conversationId);
     const cfg = this.opts.getConfig();
     if (!cfg) return;
 
-    const profile = resolveEffectiveAgentProfileForSession(cfg, sessionKey);
+    const profile = resolveEffectiveAgentProfileForSession(cfg, conversationId);
     const profileModelRef = profile.primaryModelRef?.trim();
     if (profileModelRef) {
-      this.opts.modelManager.setSessionProfileDefault(sessionKey, profileModelRef, profile.fallbacks);
+      this.opts.modelManager.setSessionProfileDefault(conversationId, profileModelRef, profile.fallbacks);
     }
   }
 
-  private async contextWindowForSession(sessionKey: string): Promise<number> {
-    await this.ensureEffectiveSessionModel(sessionKey);
-    return this.opts.getContextWindow(sessionKey);
+  private async contextWindowForSession(conversationId: string): Promise<number> {
+    await this.ensureEffectiveSessionModel(conversationId);
+    return this.opts.getContextWindow(conversationId);
   }
 
   /**
@@ -115,21 +115,21 @@ export class SessionInspector {
    * next turn reloads from the compacted transcript.
    */
   async compact(
-    sessionKey: string,
+    conversationId: string,
     options?: { instructions?: string; force?: boolean },
   ): Promise<CompactionResult> {
-    const messages = await this.opts.sessionStore.load(sessionKey);
-    await this.ensureEffectiveSessionModel(sessionKey);
+    const messages = await this.opts.sessionStore.load(conversationId);
+    await this.ensureEffectiveSessionModel(conversationId);
     const policy = resolveCompactionPolicy(this.opts.getConfig());
-    const sessionModel = this.opts.modelManager.getResolvedModelForSession(sessionKey);
+    const sessionModel = this.opts.modelManager.getResolvedModelForSession(conversationId);
     const model = policy.model ? resolveModel(policy.model) : sessionModel;
     const primaryRef = `${model.provider}/${model.id}`;
     const fallbackModels = this.opts.modelManager
-      .getFallbackCandidatesForSession(sessionKey)
+      .getFallbackCandidatesForSession(conversationId)
       .map((candidate) => resolveModel(`${candidate.provider}/${candidate.model}`))
       .filter((candidate) => `${candidate.provider}/${candidate.id}` !== primaryRef);
     const result = await this.opts.sessionStore.compact(
-      sessionKey,
+      conversationId,
       messages,
       model,
       options?.instructions,
@@ -137,25 +137,25 @@ export class SessionInspector {
       { fallbackModels },
     );
     if (result.compacted) {
-      this.opts.agentManager.removeAgent(sessionKey);
+      this.opts.agentManager.removeAgent(conversationId);
     }
-    log.info({ sessionKey, result }, 'Manual compaction complete');
+    log.info({ conversationId, result }, 'Manual compaction complete');
     return result;
   }
 
   /** One-shot LLM answer for `/btw`: transcript as background, not persisted. */
   btwQuery(
-    sessionKey: string,
+    conversationId: string,
     question: string,
     options?: BtwQueryOptions,
   ): Promise<{ text: string; error?: string }> {
     const config = this.opts.getConfig();
-    const profile = config ? resolveEffectiveAgentProfileForSession(config, sessionKey) : undefined;
+    const profile = config ? resolveEffectiveAgentProfileForSession(config, conversationId) : undefined;
     return runBtwQuery({
-      sessionKey,
+      conversationId,
       question,
       sessionStore: this.opts.sessionStore,
-      modelForSession: options?.modelRef?.trim() || this.opts.modelManager.getModelForSession(sessionKey),
+      modelForSession: options?.modelRef?.trim() || this.opts.modelManager.getModelForSession(conversationId),
       log,
       maxTokens: options?.maxTokens,
       temperature: options?.temperature,
@@ -168,48 +168,48 @@ export class SessionInspector {
   }
 
   /** Cheap stats used by both the report and other callers. */
-  stats(sessionKey: string, messages: AgentMessage[]): {
+  stats(conversationId: string, messages: AgentMessage[]): {
     windowStats: ReturnType<SessionStore['getWindowStats']>;
     compactionStats: ReturnType<SessionStore['getCompactionStats']>;
     tokenEstimate: ReturnType<SessionStore['estimateTokenUsage']>;
   } {
     return {
       windowStats: this.opts.sessionStore.getWindowStats(messages),
-      compactionStats: this.opts.sessionStore.getCompactionStats(sessionKey),
-      tokenEstimate: this.opts.sessionStore.estimateTokenUsage(sessionKey, messages),
+      compactionStats: this.opts.sessionStore.getCompactionStats(conversationId),
+      tokenEstimate: this.opts.sessionStore.estimateTokenUsage(conversationId, messages),
     };
   }
 
   /** Rough context usage for TUI footer (estimated tokens vs nominal budget). */
-  async contextUsage(sessionKey: string): Promise<SessionContextUsage> {
-    const messages = await this.opts.sessionStore.load(sessionKey);
-    const contextWindow = await this.contextWindowForSession(sessionKey);
-    const estimatedTokens = await this.opts.sessionStore.estimateTokenUsage(sessionKey, messages);
+  async contextUsage(conversationId: string): Promise<SessionContextUsage> {
+    const messages = await this.opts.sessionStore.load(conversationId);
+    const contextWindow = await this.contextWindowForSession(conversationId);
+    const estimatedTokens = await this.opts.sessionStore.estimateTokenUsage(conversationId, messages);
     const usagePercent =
       contextWindow > 0 ? Math.min(100, Math.round((estimatedTokens / contextWindow) * 100)) : null;
     return { estimatedTokens, contextWindow, usagePercent };
   }
 
   /** Markdown or JSON summary for `/context`. */
-  async report(sessionKey: string, mode: 'list' | 'detail' | 'json'): Promise<string> {
+  async report(conversationId: string, mode: 'list' | 'detail' | 'json'): Promise<string> {
     const cfg = this.opts.getConfig();
     if (!cfg) {
       throw new Error('SessionInspector requires a config snapshot to render report');
     }
-    const messages = await this.opts.sessionStore.load(sessionKey);
-    const cw = await this.contextWindowForSession(sessionKey);
-    const computed = this.stats(sessionKey, messages);
-    const model = this.opts.modelManager.getModelForSession(sessionKey);
-    const sc = await this.opts.sessionConfigStore.get(sessionKey);
-    const project = getProjectForSession(sessionKey);
-    const workspace = effectiveWorkspacePathForSession(cfg, sessionKey, sc, project);
-    const estTokens = await this.opts.sessionStore.estimateTokenUsage(sessionKey, messages);
-    const profile = resolveEffectiveAgentProfileForSession(cfg, sessionKey);
+    const messages = await this.opts.sessionStore.load(conversationId);
+    const cw = await this.contextWindowForSession(conversationId);
+    const computed = this.stats(conversationId, messages);
+    const model = this.opts.modelManager.getModelForSession(conversationId);
+    const sc = await this.opts.sessionConfigStore.get(conversationId);
+    const project = getProjectForSession(conversationId);
+    const workspace = effectiveWorkspacePathForSession(cfg, conversationId, sc, project);
+    const estTokens = await this.opts.sessionStore.estimateTokenUsage(conversationId, messages);
+    const profile = resolveEffectiveAgentProfileForSession(cfg, conversationId);
     const deniedTools = [...profile.tools.denied].sort((a, b) => a.localeCompare(b));
     const toolsSummary = deniedTools.length > 0 ? `denied: ${deniedTools.join(', ')}` : '(no denied tools)';
 
     return formatSessionContextReport({
-      sessionKey,
+      conversationId,
       mode,
       model,
       workspacePath: workspace,
@@ -228,26 +228,26 @@ export class SessionInspector {
   }
 
   /** Resolved thinking / model / workspace for the Web UI. */
-  async agentConfig(sessionKey: string): Promise<SessionAgentConfigView> {
-    await this.ensureEffectiveSessionModel(sessionKey);
+  async agentConfig(conversationId: string): Promise<SessionAgentConfigView> {
+    await this.ensureEffectiveSessionModel(conversationId);
     const cfg = this.opts.getConfig();
     if (!cfg) {
       throw new Error('SessionInspector requires a config snapshot to resolve agent config');
     }
-    const sc = await this.opts.sessionConfigStore.get(sessionKey);
+    const sc = await this.opts.sessionConfigStore.get(conversationId);
 
     const defThink = 'medium';
-    const level = await resolveEffectiveThinkingLevel(this.opts.sessionConfigStore, sessionKey, null, defThink);
+    const level = await resolveEffectiveThinkingLevel(this.opts.sessionConfigStore, conversationId, null, defThink);
     const defReason = resolveConfiguredActivityDetailDefault(cfg);
-    const reasoningLevel = await resolveEffectiveReasoningLevel(this.opts.sessionConfigStore, sessionKey, defReason);
+    const reasoningLevel = await resolveEffectiveReasoningLevel(this.opts.sessionConfigStore, conversationId, defReason);
     const defVerbose = 'full' as VerboseLevel;
-    const verboseLevel = await resolveVerboseLevel(this.opts.sessionConfigStore, sessionKey, defVerbose);
-    const model = this.opts.modelManager.getModelForSession(sessionKey);
-    const project = getProjectForSession(sessionKey);
-    const environment = getExecutionEnvironmentForSession(sessionKey);
+    const verboseLevel = await resolveVerboseLevel(this.opts.sessionConfigStore, conversationId, defVerbose);
+    const model = this.opts.modelManager.getModelForSession(conversationId);
+    const project = getProjectForSession(conversationId);
+    const environment = getExecutionEnvironmentForSession(conversationId);
     const projectWorkspace = projectWorkspacePath(project);
     const hasSessionWorkspaceOverride = Boolean(sc?.workingDirectoryOverride?.trim());
-    const effectiveWorkspacePath = effectiveWorkspacePathForSession(cfg, sessionKey, sc, project);
+    const effectiveWorkspacePath = effectiveWorkspacePathForSession(cfg, conversationId, sc, project);
     const isDefaultWorkspaceRoot = effectiveWorkspacePath === resolveDefaultAgentWorkspaceDir();
     return {
       thinkingLevel: level,

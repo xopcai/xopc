@@ -79,6 +79,7 @@ export function planCompactionSource(params: {
   keepRecentTokens: number;
   force: boolean;
   summarizeAll?: boolean;
+  preserveLastUser?: boolean;
 }): CompactionSourcePlan | null {
   const rawEntries = params.entries.filter(isModelSource);
   const allMessages = buildSessionContextForLlm(rawEntries.map((entry) => entry.row));
@@ -88,7 +89,9 @@ export function planCompactionSource(params: {
     return {
       sourceEntries: rawEntries,
       keptEntries: [],
-      keptMessages: [],
+      keptMessages: params.preserveLastUser
+        ? allMessages.filter((message) => message.role === 'user').slice(-1)
+        : [],
       allMessages,
       sourceThroughSeq: rawEntries.at(-1)!.seq,
     };

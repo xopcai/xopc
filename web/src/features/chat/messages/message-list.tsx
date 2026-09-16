@@ -15,7 +15,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 export const MessageList = memo(function MessageList({
   messages: list,
   authToken,
-  sessionKey,
+  conversationId,
   projectId,
   streaming,
   progress,
@@ -43,7 +43,7 @@ export const MessageList = memo(function MessageList({
 }: {
   messages: Message[];
   authToken?: string;
-  sessionKey?: string | null;
+  conversationId?: string | null;
   projectId?: string | null;
   streaming: boolean;
   progress: ProgressState | null;
@@ -124,7 +124,7 @@ export const MessageList = memo(function MessageList({
             <MessageBubble
               message={msg}
               authToken={authToken}
-              sessionKey={sessionKey}
+              conversationId={conversationId}
               projectId={projectId}
               isStreaming={isStreamRow}
               progress={isStreamRow ? progress : null}

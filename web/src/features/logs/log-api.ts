@@ -12,8 +12,8 @@ function buildQueryString(query?: LogQuery): string {
   if (query.q) params.set('q', query.q);
   if (query.module) params.set('module', query.module);
   if (query.requestId) params.set('requestId', query.requestId);
-  if (query.sessionKey) params.set('sessionKey', query.sessionKey);
-  if (query.sessionId) params.set('sessionId', query.sessionId);
+  if (query.conversationId) params.set('conversationId', query.conversationId);
+  if (query.transcriptId) params.set('transcriptId', query.transcriptId);
   if (query.limit != null) params.set('limit', String(query.limit));
   if (query.offset != null) params.set('offset', String(query.offset));
   const qs = params.toString();

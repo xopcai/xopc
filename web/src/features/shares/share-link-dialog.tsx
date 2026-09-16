@@ -324,7 +324,7 @@ export function ShareLinkDialog({
             </div>
           ) : pendingParams && onConfirm ? (
             <ShareLinkConfirmation
-              key={`${pendingParams.fileId ?? pendingParams.uri ?? pendingParams.path}:${pendingParams.sessionKey ?? pendingParams.agentId ?? ''}`}
+              key={`${pendingParams.fileId ?? pendingParams.uri ?? pendingParams.path}:${pendingParams.conversationId ?? pendingParams.agentId ?? ''}`}
               params={pendingParams}
               loading={Boolean(loading)}
               error={error}

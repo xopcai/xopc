@@ -1,11 +1,11 @@
-import { parseSessionKey } from '../routing/session-key.js';
+import { getConversationRouting } from '../routing/session-key.js';
 
-export function connectorPrincipalForSession(sessionKey: string | undefined): {
+export function connectorPrincipalForSession(conversationId: string | undefined): {
   principalId: string;
   agentId?: string;
   isLocalOwner: boolean;
 } {
-  const parsed = parseSessionKey(sessionKey);
+  const parsed = getConversationRouting(conversationId);
   if (!parsed || parsed.source === 'cli' || parsed.source === 'webchat') {
     return { principalId: 'local-owner', agentId: parsed?.agentId, isLocalOwner: true };
   }

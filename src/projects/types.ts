@@ -64,7 +64,7 @@ export interface SidebarProjectListQuery {
   status?: ProjectStatus | ProjectStatus[];
   updatedAfter?: number;
   includePinned?: boolean;
-  includeSessionKey?: string;
+  includeConversationId?: string;
   limit?: number;
   offset?: number;
 }

@@ -32,7 +32,7 @@ export function createTelegramExecApprovalHandler(deps: {
 
       const approval = createTelegramPendingApproval({
         accountId,
-        sessionKey: payload.sessionKey,
+        conversationId: payload.conversationId,
         chatId: payload.chatId,
         toolName: payload.toolName,
         summary: payload.summary,

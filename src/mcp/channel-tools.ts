@@ -43,17 +43,17 @@ export function registerChannelMcpTools(server: McpServer, bridge: XopcChannelBr
   server.tool(
     "conversation_get",
     "Get one OpenClaw conversation by session key.",
-    { session_key: z.string().min(1) },
-    async ({ session_key }) => {
-      const conversation = await bridge.getConversation(session_key);
+    { conversation_id: z.string().min(1) },
+    async ({ conversation_id }) => {
+      const conversation = await bridge.getConversation(conversation_id);
       if (!conversation) {
         return {
-          content: [{ type: "text", text: `conversation not found: ${session_key}` }],
+          content: [{ type: "text", text: `conversation not found: ${conversation_id}` }],
           isError: true,
         };
       }
       return {
-        content: [{ type: "text", text: `conversation ${conversation.sessionKey}` }],
+        content: [{ type: "text", text: `conversation ${conversation.conversationId}` }],
         structuredContent: { conversation },
       };
     },
@@ -63,11 +63,11 @@ export function registerChannelMcpTools(server: McpServer, bridge: XopcChannelBr
     "messages_read",
     "Read recent messages for one OpenClaw conversation.",
     {
-      session_key: z.string().min(1),
+      conversation_id: z.string().min(1),
       limit: z.number().int().min(1).max(200).optional(),
     },
-    async ({ session_key, limit }) => {
-      const messages = await bridge.readMessages(session_key, limit ?? 20);
+    async ({ conversation_id, limit }) => {
+      const messages = await bridge.readMessages(conversation_id, limit ?? 20);
       return {
         ...summarizeResult("messages", messages.length),
         structuredContent: { messages },
@@ -79,12 +79,12 @@ export function registerChannelMcpTools(server: McpServer, bridge: XopcChannelBr
     "attachments_fetch",
     "List non-text attachments for a message in one OpenClaw conversation.",
     {
-      session_key: z.string().min(1),
+      conversation_id: z.string().min(1),
       message_id: z.string().min(1),
       limit: z.number().int().min(1).max(200).optional(),
     },
-    async ({ session_key, message_id, limit }) => {
-      const messages = await bridge.readMessages(session_key, limit ?? 100);
+    async ({ conversation_id, message_id, limit }) => {
+      const messages = await bridge.readMessages(conversation_id, limit ?? 100);
       const message = messages.find((entry) => resolveMessageId(entry) === message_id);
       if (!message) {
         return {
@@ -105,12 +105,12 @@ export function registerChannelMcpTools(server: McpServer, bridge: XopcChannelBr
     "Poll queued OpenClaw conversation events since a cursor.",
     {
       after_cursor: z.number().int().min(0).optional(),
-      session_key: z.string().optional(),
+      conversation_id: z.string().optional(),
       limit: z.number().int().min(1).max(200).optional(),
     },
-    async ({ after_cursor, session_key, limit }) => {
+    async ({ after_cursor, conversation_id, limit }) => {
       const { events, nextCursor } = bridge.pollEvents(
-        { afterCursor: after_cursor ?? 0, sessionKey: toText(session_key) },
+        { afterCursor: after_cursor ?? 0, conversationId: toText(conversation_id) },
         limit ?? 20,
       );
       return {
@@ -125,12 +125,12 @@ export function registerChannelMcpTools(server: McpServer, bridge: XopcChannelBr
     "Wait for the next queued OpenClaw conversation event.",
     {
       after_cursor: z.number().int().min(0).optional(),
-      session_key: z.string().optional(),
+      conversation_id: z.string().optional(),
       timeout_ms: z.number().int().min(1).max(300_000).optional(),
     },
-    async ({ after_cursor, session_key, timeout_ms }) => {
+    async ({ after_cursor, conversation_id, timeout_ms }) => {
       const event = await bridge.waitForEvent(
-        { afterCursor: after_cursor ?? 0, sessionKey: toText(session_key) },
+        { afterCursor: after_cursor ?? 0, conversationId: toText(conversation_id) },
         timeout_ms ?? 30_000,
       );
       return {
@@ -144,11 +144,11 @@ export function registerChannelMcpTools(server: McpServer, bridge: XopcChannelBr
     "messages_send",
     "Send a message back through the same OpenClaw conversation route.",
     {
-      session_key: z.string().min(1),
+      conversation_id: z.string().min(1),
       text: z.string().min(1),
     },
-    async ({ session_key, text }) => {
-      const result = await bridge.sendMessage({ sessionKey: session_key, text });
+    async ({ conversation_id, text }) => {
+      const result = await bridge.sendMessage({ conversationId: conversation_id, text });
       return {
         content: [{ type: "text", text: "sent" }],
         structuredContent: { result },

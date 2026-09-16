@@ -25,7 +25,7 @@ export type ReadAloudError = 'empty' | 'generation' | null;
 export type ReadAloudInput = {
   source: {
     id: string;
-    sessionKey?: string;
+    conversationId?: string;
     noteId?: string;
     title: string;
     preview?: string;
@@ -36,7 +36,7 @@ export type ReadAloudInput = {
 
 type ReadAloudState = {
   source: ReadAloudInput['source'] | null;
-  continuousSessionKey: string | null;
+  continuousConversationId: string | null;
   status: ReadAloudStatus;
   error: ReadAloudError;
   currentChunkIndex: number;
@@ -44,7 +44,7 @@ type ReadAloudState = {
   currentTime: number;
   duration: number;
   rate: number;
-  enableContinuous: (sessionKey: string) => void;
+  enableContinuous: (conversationId: string) => void;
   disableContinuous: () => void;
   requestStart: (input: ReadAloudInput) => void;
   pause: () => void;
@@ -86,7 +86,7 @@ function liveActivitySnapshot(status: ReadAloudLiveActivityStatus) {
   if (!input) return null;
   const state = useReadAloudStore.getState();
   return {
-    sessionKey: input.source.sessionKey,
+    conversationId: input.source.conversationId,
     title: input.source.title,
     status,
     currentChunkIndex: state.currentChunkIndex,
@@ -350,12 +350,12 @@ function startPlayback(input: ReadAloudInput): void {
 
 export const useReadAloudStore = create<ReadAloudState>()((set, get) => ({
   ...initialPlaybackState,
-  continuousSessionKey: null,
+  continuousConversationId: null,
   rate: 1,
 
-  enableContinuous: (sessionKey) => set({ continuousSessionKey: sessionKey }),
+  enableContinuous: (conversationId) => set({ continuousConversationId: conversationId }),
 
-  disableContinuous: () => set({ continuousSessionKey: null }),
+  disableContinuous: () => set({ continuousConversationId: null }),
 
   requestStart: (input) => {
     const state = get();

@@ -4,7 +4,7 @@ import type { MessageBus } from '../infra/bus/index.js';
 import type { SessionStore } from '../session/store.js';
 
 export interface GatewayWorkflowAgentSurface {
-  getModelForSession(sessionKey: string): string;
+  getModelForSession(conversationId: string): string;
 }
 
 /** Minimal gateway surface for workflow run + session bridge (breaks circular imports). */

@@ -7,13 +7,12 @@ import {
   type XopcTranscriptContextEntry,
 } from '../../session/session-context-for-llm.js';
 import { SessionStatus, type GlobalSessionStats, type SessionMetadata } from '../../session/types.js';
-import { resolveAgentIdFromSessionKey } from '../../routing/agent-session-key.js';
 import { buildDefaultSessionMetadata } from './session-metadata.js';
 
 export type SessionRow = {
-  session_key: string;
+  conversation_id: string;
   agent_id: string;
-  session_id: string;
+  active_transcript_id: string;
   status: string;
   name: string | null;
   tags_json: string;
@@ -26,7 +25,7 @@ export type SessionRow = {
   source_chat_id: string;
   session_type: string | null;
   hidden_from_session_list: number | null;
-  parent_session_key: string | null;
+  parent_conversation_id: string | null;
   workflow_run_id: string | null;
   workflow_definition_id: string | null;
   workflow_agent_id: string | null;
@@ -46,7 +45,7 @@ export type SessionRow = {
 
 export type TranscriptEntryRow = {
   entry_id: string;
-  session_id: string;
+  transcript_id: string;
   seq: number;
   entry_kind: string;
   role: string | null;
@@ -55,7 +54,7 @@ export type TranscriptEntryRow = {
 };
 
 export type SessionConfigRow = {
-  session_key: string;
+  conversation_id: string;
   thinking_level: string | null;
   reasoning_level: string | null;
   verbose_level: string | null;
@@ -87,8 +86,8 @@ function isoFromMs(ms: number | null | undefined): string | undefined {
   return new Date(ms).toISOString();
 }
 
-export function sessionRowToMetadata(sessionKey: string, row: SessionRow): SessionMetadata {
-  const defaults = buildDefaultSessionMetadata(sessionKey);
+export function sessionRowToMetadata(conversationId: string, row: SessionRow): SessionMetadata {
+  const defaults = buildDefaultSessionMetadata(conversationId);
   const routing = parseJson<SessionMetadata['routing']>(row.routing_json);
   const customData = parseJson<Record<string, unknown>>(row.custom_data_json);
   const tags = parseJson<string[]>(row.tags_json) ?? [];
@@ -98,7 +97,8 @@ export function sessionRowToMetadata(sessionKey: string, row: SessionRow): Sessi
 
   return {
     ...defaults,
-    key: sessionKey,
+    key: conversationId,
+    agentId: row.agent_id,
     status: row.status as SessionStatus,
     name: row.name ?? undefined,
     tags,
@@ -111,7 +111,7 @@ export function sessionRowToMetadata(sessionKey: string, row: SessionRow): Sessi
     sourceChatId: row.source_chat_id,
     sessionType: (row.session_type ?? defaults.sessionType) as SessionMetadata['sessionType'],
     hiddenFromSessionList: Boolean(row.hidden_from_session_list),
-    parentSessionKey: row.parent_session_key ?? undefined,
+    parentConversationId: row.parent_conversation_id ?? undefined,
     workflowRunId: row.workflow_run_id ?? undefined,
     workflowDefinitionId: row.workflow_definition_id ?? undefined,
     workflowAgentId: row.workflow_agent_id ?? undefined,
@@ -124,7 +124,7 @@ export function sessionRowToMetadata(sessionKey: string, row: SessionRow): Sessi
     compactedCount: row.compacted_count,
     lastFlushedAt: row.last_flushed_at ?? undefined,
     flushCount: row.flush_count,
-    sessionId: row.session_id,
+    transcriptId: row.active_transcript_id,
     cwd: row.cwd ?? undefined,
     stats: {
       messageCount: row.message_count,
@@ -135,15 +135,15 @@ export function sessionRowToMetadata(sessionKey: string, row: SessionRow): Sessi
 }
 
 export function metadataToSessionInsert(
-  sessionKey: string,
-  sessionId: string,
+  conversationId: string,
+  transcriptId: string,
   metadata: SessionMetadata,
   thinkingLevel?: string | null,
   verboseLevel?: string | null,
 ): {
-  sessionKey: string;
+  conversationId: string;
   agentId: string;
-  sessionId: string;
+  transcriptId: string;
   status: string;
   name: string | null;
   tagsJson: string;
@@ -156,7 +156,7 @@ export function metadataToSessionInsert(
   sourceChatId: string;
   sessionType: string;
   hiddenFromSessionList: number;
-  parentSessionKey: string | null;
+  parentConversationId: string | null;
   workflowRunId: string | null;
   workflowDefinitionId: string | null;
   workflowAgentId: string | null;
@@ -173,12 +173,12 @@ export function metadataToSessionInsert(
   verboseLevel: string | null;
 } {
   const now = Date.now();
-  const agentId = metadata.routing?.agentId?.trim().toLowerCase()
-    || resolveAgentIdFromSessionKey(sessionKey);
+  const agentId = (metadata.agentId || metadata.routing?.agentId)?.trim().toLowerCase();
+  if (!agentId) throw new Error('Creating a conversation requires an explicit agent ID');
   return {
-    sessionKey,
+    conversationId,
     agentId,
-    sessionId,
+    transcriptId,
     status: metadata.status,
     name: metadata.name ?? null,
     tagsJson: JSON.stringify(metadata.tags ?? []),
@@ -191,7 +191,7 @@ export function metadataToSessionInsert(
     sourceChatId: metadata.sourceChatId,
     sessionType: metadata.sessionType,
     hiddenFromSessionList: metadata.hiddenFromSessionList ? 1 : 0,
-    parentSessionKey: metadata.parentSessionKey ?? null,
+    parentConversationId: metadata.parentConversationId ?? null,
     workflowRunId: metadata.workflowRunId ?? null,
     workflowDefinitionId: metadata.workflowDefinitionId ?? null,
     workflowAgentId: metadata.workflowAgentId ?? null,

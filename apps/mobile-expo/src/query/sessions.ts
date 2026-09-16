@@ -5,7 +5,7 @@ import {
   buildSessionHistoryPath,
   buildSessionListPath,
   buildSessionRunPath,
-  extractCreatedSessionKey,
+  extractCreatedConversationId,
   normalizeSessionActiveRunResponse,
   parseSessionMessagePage,
   parseSessionResponse,
@@ -44,7 +44,7 @@ export type SessionMessage = {
 
 export type SessionDetail = {
   key: string;
-  sessionId?: string;
+  transcriptId?: string;
   messages: SessionMessage[];
   name?: string;
   status?: SessionStatus;
@@ -260,7 +260,7 @@ export async function createSession(
   });
   if (!res.ok) throwApiError(res, await parseErrorBody(res));
   const raw = await res.json();
-  const sessionKey = extractCreatedSessionKey(raw);
+  const conversationId = extractCreatedConversationId(raw);
   if (!body.initialAgentConfig) {
     const routedAgentId = (raw as { session?: { routing?: { agentId?: unknown } } })
       .session?.routing?.agentId;
@@ -268,7 +268,7 @@ export async function createSession(
       ? modelPreferenceForAgent(preferences, routedAgentId)
       : undefined;
     if (routedPreference) {
-      await setSessionInitialAgentConfig(sessionKey, {
+      await setSessionInitialAgentConfig(conversationId, {
         model: routedPreference.modelRef,
         ...(routedPreference.thinkingLevel
           ? { thinkingLevel: routedPreference.thinkingLevel }
@@ -276,7 +276,7 @@ export async function createSession(
       });
     }
   }
-  return sessionKey;
+  return conversationId;
 }
 
 // ── Session actions ──────────────────────────────────────────────

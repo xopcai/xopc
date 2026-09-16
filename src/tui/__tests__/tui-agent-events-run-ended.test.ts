@@ -7,7 +7,7 @@ function envelope(type: string, runId: string, payload: Record<string, unknown>,
   return {
     type,
     runId,
-    sessionKey: 'sk',
+    conversationId: 'sk',
     timestamp: 1,
     ...(seq !== undefined ? { seq } : {}),
     payload,

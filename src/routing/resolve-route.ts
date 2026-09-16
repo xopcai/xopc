@@ -13,10 +13,9 @@ import type { BindingRule, RouteInput, RouteResult } from './bindings.js';
  */
 export type RouteContext = RouteInput;
 import { parseBindingRules, resolveRoute as resolveBindingRoute } from './bindings.js';
-import { buildSessionKey, normalizeSessionKey, parseSessionKey } from './session-key.js';
+import { resolveConversationId, getConversationRouting } from './session-key.js';
 import {
-  buildAgentMainSessionKey,
-  buildAgentPeerSessionKey,
+  resolveAgentPeerConversationId,
 } from './agent-session-key.js';
 import { normalizeAccountId } from './account-id.js';
 
@@ -95,9 +94,8 @@ export interface ResolveRouteInput extends RouteInput {
  */
 export interface ResolveRouteResult extends RouteResult {
   /** Active session key for this turn */
-  sessionKey: string;
+  conversationId: string;
   /** Main session key (DM merge target) */
-  mainSessionKey: string;
   /** Whether routing used the main or a per-session key */
   lastRoutePolicy: 'main' | 'session';
 }
@@ -180,9 +178,9 @@ export function pickFirstExistingAgentId(agentId: string, config: RoutingConfig)
 }
 
 /**
- * Thin wrapper around `buildSessionKey` for route inputs.
+ * Thin wrapper around `resolveConversationId` for route inputs.
  */
-export function buildRouteSessionKey(
+export function buildRouteConversationId(
   agentId: string,
   channel: string,
   accountId: string,
@@ -191,7 +189,7 @@ export function buildRouteSessionKey(
   threadId?: string | null,
   scopeId?: string | null,
 ): string {
-  return buildSessionKey({
+  return resolveConversationId({
     agentId,
     source: channel,
     accountId,
@@ -201,16 +199,6 @@ export function buildRouteSessionKey(
     scopeId: scopeId || undefined,
     dmScope: peerKind === 'dm' || peerKind === 'direct' ? 'per-account-channel-peer' : undefined,
   });
-}
-
-/**
- * Map session vs main key to policy label.
- */
-export function deriveLastRoutePolicy(
-  sessionKey: string,
-  mainSessionKey: string
-): 'main' | 'session' {
-  return sessionKey === mainSessionKey ? 'main' : 'session';
 }
 
 /**
@@ -248,71 +236,27 @@ export function resolveRoute(input: ResolveRouteInput): ResolveRouteResult {
   
   const dmScope = config.session?.dmScope ?? 'main';
 
-  let sessionKey: string;
-  let mainSessionKey: string;
+  const conversationId = resolveAgentPeerConversationId({
+    agentId, channel, accountId, peerKind: peerKind as 'direct' | 'dm' | 'group' | 'channel',
+    peerId, dmScope, threadId: threadId ?? undefined,
+  });
 
-  const identityLinks = config.session?.identityLinks;
-  const mainKey = undefined;
-
-  if (peerKind === 'dm' || peerKind === 'direct') {
-    mainSessionKey = buildAgentMainSessionKey({ agentId, mainKey });
-
-    sessionKey = buildAgentPeerSessionKey({
-      agentId,
-      mainKey,
-      channel,
-      accountId,
-      peerKind: 'direct',
-      peerId,
-      identityLinks,
-      dmScope,
-    });
-  } else {
-    const mappedKind = peerKind === 'group' || peerKind === 'channel' ? peerKind : peerKind;
-    sessionKey = buildAgentPeerSessionKey({
-      agentId,
-      mainKey,
-      channel,
-      accountId,
-      peerKind: mappedKind as 'group' | 'channel',
-      peerId,
-      identityLinks,
-    });
-    mainSessionKey = buildAgentPeerSessionKey({
-      agentId,
-      mainKey,
-      channel,
-      accountId,
-      peerKind: mappedKind as 'group' | 'channel',
-      peerId: 'main',
-      identityLinks,
-    });
-  }
-
-  if (threadId && !sessionKey.includes(':thread:')) {
-    sessionKey = `${sessionKey}:thread:${threadId.toLowerCase()}`;
-  }
-  
-  sessionKey = normalizeSessionKey(sessionKey);
-  mainSessionKey = normalizeSessionKey(mainSessionKey);
-  
   return {
     ...bindingResult,
     agentId,
-    sessionKey,
-    mainSessionKey,
-    lastRoutePolicy: deriveLastRoutePolicy(sessionKey, mainSessionKey),
+    conversationId,
+    lastRoutePolicy: dmScope === 'main' && (peerKind === 'dm' || peerKind === 'direct') ? 'main' : 'session',
   };
 }
 
 /**
  * Parse basic routing fields from a session key string.
  */
-export function resolveRouteFromSessionKey(
-  sessionKey: string,
+export function resolveRouteFromConversationId(
+  conversationId: string,
   _config: RoutingConfig
 ): { agentId: string; source: string; accountId: string; peerKind: string; peerId: string } | null {
-  const parsed = parseSessionKey(sessionKey);
+  const parsed = getConversationRouting(conversationId);
   if (!parsed) {
     return null;
   }

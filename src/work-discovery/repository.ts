@@ -29,7 +29,7 @@ type RunRow = {
   stage: string | null;
   root_path: string;
   project_id: string;
-  session_key: string;
+  conversation_id: string;
   agent_id: string;
   model_ref: string;
   scan_policy_version: number;
@@ -81,7 +81,7 @@ function runFromRow(row: RunRow): WorkDiscoveryRun {
     ...(row.stage ? { stage: row.stage as WorkDiscoveryRun['stage'] } : {}),
     rootPath: row.root_path,
     projectId: row.project_id,
-    sessionKey: row.session_key,
+    conversationId: row.conversation_id,
     agentId: row.agent_id,
     modelRef: row.model_ref,
     scanPolicyVersion: row.scan_policy_version,
@@ -152,7 +152,7 @@ export function createWorkDiscoveryRun(run: WorkDiscoveryRun): WorkDiscoveryRun 
   runSqliteWriteTransaction((db) => {
     db.prepare(
       `INSERT INTO work_discovery_runs (
-        id, idempotency_key, source, status, stage, root_path, project_id, session_key,
+        id, idempotency_key, source, status, stage, root_path, project_id, conversation_id,
         agent_id, model_ref, scan_policy_version, snapshot_summary_json, result_json,
         error_code, error_message, created_at, started_at, completed_at, canceled_at, mode, attempts
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -164,7 +164,7 @@ export function createWorkDiscoveryRun(run: WorkDiscoveryRun): WorkDiscoveryRun 
       run.stage ?? null,
       run.rootPath,
       run.projectId,
-      run.sessionKey,
+      run.conversationId,
       run.agentId,
       run.modelRef,
       run.scanPolicyVersion,

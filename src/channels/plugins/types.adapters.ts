@@ -90,7 +90,7 @@ export type ChannelRuntimeActionPayload =
     }
   | {
       type: 'qr';
-      sessionKey: string;
+      conversationId: string;
       qrcodeUrl?: string;
       qrPayload?: string;
       statusAction?: string;

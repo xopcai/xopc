@@ -15,34 +15,34 @@ import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
  */
 export const WorkspacePreviewPane = memo(function WorkspacePreviewPane({
   allowOutsideChat = false,
-  sessionKey: sessionKeyOverride,
+  conversationId: conversationIdOverride,
 }: {
   allowOutsideChat?: boolean;
-  sessionKey?: string;
+  conversationId?: string;
 } = {}) {
   const { pathname, search } = useLocation();
-  const { sessionKey: sessionKeyParam } = useParams();
-  const workspaceSessionKey = useWorkspacePanelStore((s) => s.sessionKeyOverride);
-  const previewSessionKey = useWorkspacePreviewStore((s) => s.sessionKey);
-  const chatSessionKey = previewSessionKey ?? sessionKeyOverride ?? workspaceSessionKey ?? (
-    pathname.startsWith('/chat') && sessionKeyParam && sessionKeyParam !== 'new'
-      ? decodeURIComponent(sessionKeyParam)
+  const { conversationId: conversationIdParam } = useParams();
+  const workspaceConversationId = useWorkspacePanelStore((s) => s.conversationIdOverride);
+  const previewConversationId = useWorkspacePreviewStore((s) => s.conversationId);
+  const chatConversationId = previewConversationId ?? conversationIdOverride ?? workspaceConversationId ?? (
+    pathname.startsWith('/chat') && conversationIdParam && conversationIdParam !== 'new'
+      ? decodeURIComponent(conversationIdParam)
       : undefined
   );
   const path = useWorkspacePreviewStore((s) => s.path);
   const line = useWorkspacePreviewStore((s) => s.line);
   const previewProjectId = useWorkspacePreviewStore((s) => s.projectId);
-  const projectId = previewProjectId ?? (!chatSessionKey && pathname.startsWith('/chat')
+  const projectId = previewProjectId ?? (!chatConversationId && pathname.startsWith('/chat')
     ? new URLSearchParams(search).get('projectId') : null);
   const setPath = useWorkspacePreviewStore((s) => s.setPath);
   const editorAgentId = useWorkspaceEditorAgentStore((s) => s.agentId);
 
   // Keep a task-scoped workspace preview available after its modal closes.
   useEffect(() => {
-    if (!allowOutsideChat && !workspaceSessionKey && !pathname.startsWith('/chat')) {
+    if (!allowOutsideChat && !workspaceConversationId && !pathname.startsWith('/chat')) {
       setPath(null);
     }
-  }, [allowOutsideChat, pathname, setPath, workspaceSessionKey]);
+  }, [allowOutsideChat, pathname, setPath, workspaceConversationId]);
 
   // Escape closes the preview.
   useEffect(() => {
@@ -70,7 +70,7 @@ export const WorkspacePreviewPane = memo(function WorkspacePreviewPane({
         filePath={path}
         targetLine={line}
         projectId={projectId ?? undefined}
-        sessionKey={chatSessionKey}
+        conversationId={chatConversationId}
         agentId={editorAgentId.trim() || undefined}
         onClose={() => setPath(null)}
       />

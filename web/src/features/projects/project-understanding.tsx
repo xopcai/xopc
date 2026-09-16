@@ -24,8 +24,8 @@ export function ProjectUnderstandingCheckbox({ checked, onChange, disabled }: {
 
 function useProjectUnderstanding(projectId: string) {
   const gateway = useGatewayStore((state) => state.baseUrl);
-  const sessionKey = useGatewayStore((state) => state.sessionKey);
-  const result = useSWR(sessionKey ? ['project-understanding', gateway, sessionKey, projectId] : null,
+  const conversationId = useGatewayStore((state) => state.conversationId);
+  const result = useSWR(conversationId ? ['project-understanding', gateway, conversationId, projectId] : null,
     () => fetchProjectUnderstanding(projectId), {
       refreshInterval: (data) => isProjectUnderstandingRunning(data?.status) ? 3000 : 0,
       revalidateOnFocus: false,

@@ -14,7 +14,7 @@ vi.mock('../../../widgets/ReadAloudLiveActivity', () => ({
 }));
 
 const snapshot = {
-  sessionKey: 'agent:main/session one',
+  conversationId: 'agent:main/session one',
   title: 'AI response',
   status: 'preparing' as const,
   currentChunkIndex: 0,

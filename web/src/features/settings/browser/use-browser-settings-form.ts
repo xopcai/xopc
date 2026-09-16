@@ -29,7 +29,7 @@ const browserSettingsFormReducer = createFormDraftReducer<BrowserSettingsState>(
 export function useAgentDefaultsForm(
   a: MessageBundle['agentSettings'],
 ): UseAgentDefaultsFormResult {
-  const token = useGatewayStore((st) => st.sessionKey);
+  const token = useGatewayStore((st) => st.conversationId);
   const hasToken = Boolean(token);
 
   const [formDraft, dispatchForm] = useReducer(browserSettingsFormReducer, { form: null, baseline: null });

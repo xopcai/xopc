@@ -3,8 +3,9 @@ export type GatewayClientConfig = {
 };
 
 export interface SessionInfo {
+  agentId?: string;
   key: string;
-  sessionId?: string;
+  transcriptId?: string;
   name?: string;
   updatedAt: string;
   messageCount?: number;

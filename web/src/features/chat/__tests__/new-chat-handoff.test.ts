@@ -9,7 +9,7 @@ import { useGatewayStore } from '@/stores/gateway-store';
 
 const createdSession: SessionInfo = {
   key: 'agent:main:webchat:default:direct:chat_new',
-  sessionId: 'session_new',
+  transcriptId: 'session_new',
   updatedAt: '2026-07-14T00:00:00.000Z',
   messageCount: 0,
   sourceChannel: 'webchat',
@@ -58,7 +58,7 @@ describe('openNewChatHandoff', () => {
     expect(opts.onOpened).toHaveBeenCalledOnce();
   });
   beforeEach(() => {
-    useGatewayStore.setState({ sessionKey: 'test-token', baseUrl: 'http://gateway-a' });
+    useGatewayStore.setState({ conversationId: 'test-token', baseUrl: 'http://gateway-a' });
     resetNewChatHandoffInflightForTests();
     resetWebchatEmptyShellCacheForTests();
   });
@@ -99,7 +99,7 @@ describe('openNewChatHandoff', () => {
     const sessionMgr = { createSession: vi.fn(() => pending) } as unknown as SessionManager;
     const opts = { sessionMgr, agentId: 'main', projectId: 'project-a', executionMode: 'managed_worktree' as const, navigateToSession: vi.fn(), onOpened: vi.fn() };
     const first = openNewChatHandoff(opts);
-    useGatewayStore.setState({ sessionKey: 'different-token' });
+    useGatewayStore.setState({ conversationId: 'different-token' });
     const second = openNewChatHandoff(opts);
     expect(first).not.toBe(second);
     expect(sessionMgr.createSession).toHaveBeenCalledTimes(2);

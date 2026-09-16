@@ -29,7 +29,7 @@ export interface WorkflowAgentSnapshot {
   phase?: string;
   prompt: string;
   invocation?: WorkflowAgentInvocationSnapshot;
-  sessionKey?: string;
+  conversationId?: string;
   transcriptMessageCount?: number;
   status: WorkflowAgentStatus;
   resultPreview?: string;

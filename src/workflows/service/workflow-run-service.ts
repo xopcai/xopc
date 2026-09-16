@@ -1,3 +1,5 @@
+import { resolveRoutedConversation } from '../../storage/sqlite/conversation-repository.js';
+import { resolveEffectiveAgentProfile } from '../../config/agent-profile.js';
 import { randomUUID } from 'node:crypto';
 
 import type { AgentTool } from '@earendil-works/pi-agent-core';
@@ -119,10 +121,7 @@ export class WorkflowRunService {
   async startWorkflowRun(params: StartWorkflowRunServiceParams): Promise<WorkflowRunServiceResult> {
     const config = this.options.service.currentConfig;
     const workflowPolicy = config.agents?.list
-      ? resolveEffectiveAgentProfileForSession(
-          config,
-          params.parentSessionKey ?? `agent:${params.agentId}`,
-        ).config.workflows
+      ? resolveEffectiveAgentProfile(config, params.agentId).config.workflows
       : undefined;
     if (workflowPolicy?.allowed && !workflowPolicy.allowed.includes(params.definitionId)) {
       return {
@@ -177,7 +176,7 @@ export class WorkflowRunService {
       return {
         ok: true,
         runId: existingRun.run.id,
-        sessionKey: existingRun.run.metadata?.sessionKey ?? '',
+        conversationId: existingRun.run.metadata?.conversationId ?? '',
       };
     }
 
@@ -187,8 +186,8 @@ export class WorkflowRunService {
     const inheritedProjectId =
       params.projectId?.trim() ||
       (linkedTaskRun ? new TaskRepository().get(linkedTaskRun.taskId)?.projectId : undefined) ||
-      (params.parentSessionKey?.trim()
-        ? (await this.options.service.sessionIndexInstance.getStore().getMetadata(params.parentSessionKey.trim()))?.projectId
+      (params.parentConversationId?.trim()
+        ? (await this.options.service.sessionIndexInstance.getStore().getMetadata(params.parentConversationId.trim()))?.projectId
         : undefined);
     const taskId = linkedTaskRun?.taskId;
     const requestedContextRefs = params.contextRefs
@@ -230,14 +229,14 @@ export class WorkflowRunService {
         httpStatus: 400,
       };
     }
-    const { sessionKey } = await this.options.sessionBridge.prepareRunSession({
+    const { conversationId } = await this.options.sessionBridge.prepareRunSession({
       runId,
       agentId: params.agentId,
       definitionId: params.definitionId,
       definitionTitle: definition.title,
       triggerSource: params.source.kind,
       goal,
-      parentSessionKey: params.parentSessionKey,
+      parentConversationId: params.parentConversationId,
       projectId,
     });
     if (linkedTaskRun?.status === 'queued') {
@@ -246,7 +245,7 @@ export class WorkflowRunService {
       const snapshot = context.captureSnapshot({
         ownerKind: 'task_run',
         ownerId: linkedTaskRun.id,
-        sessionKey,
+        conversationId,
         query: task.contract?.objective ?? task.title,
         selectedItems: context.list(task.id),
         authorizationSnapshot: { grants: context.listActiveGrants(task.id) },
@@ -256,24 +255,24 @@ export class WorkflowRunService {
         expectedVersion: linkedTaskRun.version,
         contextSnapshotId: snapshot.id,
         policySnapshot: { executorKind: 'workflow', definitionId: params.definitionId },
-        sessionKey,
+        conversationId,
       });
       if (!started) throw new Error('TaskRun changed before workflow execution started');
       new TaskConversationRepository().activateExecutionSession({
         taskId: task.id,
-        sessionKey,
+        conversationId,
         agentId: params.agentId,
         runId: linkedTaskRun.id,
       });
     }
-    const source = normalizeWorkflowRunSourceForSession(params.source, sessionKey, params.parentSessionKey);
+    const source = normalizeWorkflowRunSourceForSession(params.source, conversationId, params.parentConversationId);
     const abortController = new AbortController();
     const eventStore = new WorkflowEventStore(this.options.service.currentConfig, params.agentId);
     const runStore = new WorkflowRunStore(this.options.service.currentConfig, params.agentId, eventStore);
     const engine = this.createWorkflowEngine({
       eventStore,
       runStore,
-      sessionKey,
+      conversationId,
       projectId,
       contextInstructions: resolvedContext?.instructions,
     });
@@ -303,7 +302,7 @@ export class WorkflowRunService {
         contextRefs,
         contextSnapshot: resolvedContext?.snapshot,
         writebackPolicy,
-        sessionKey,
+        conversationId,
         source,
         input: inputEnvelope,
         retryOfRunId: params.retryOfRunId,
@@ -326,7 +325,7 @@ export class WorkflowRunService {
       this.timeoutHandles.delete(runId);
     });
 
-    return { ok: true, runId, sessionKey };
+    return { ok: true, runId, conversationId };
   }
 
   async retryWorkflowRun(params: RetryWorkflowRunServiceParams): Promise<WorkflowRunServiceResult> {
@@ -341,8 +340,8 @@ export class WorkflowRunService {
       };
     }
 
-    const parentSessionKey =
-      existing.run.source.kind === 'chat' ? existing.run.source.sessionKey : undefined;
+    const parentConversationId =
+      existing.run.source.kind === 'chat' ? existing.run.source.conversationId : undefined;
     const projectId = params.projectId?.trim() || existing.run.metadata?.projectId;
 
     return this.startWorkflowRun({
@@ -358,7 +357,7 @@ export class WorkflowRunService {
       inputEnvelope: existing.run.metadata?.input,
       goal: existing.run.goal,
       source: existing.run.source,
-      parentSessionKey,
+      parentConversationId,
       retryOfRunId: existing.run.id,
     });
   }
@@ -403,8 +402,8 @@ export class WorkflowRunService {
 
     const replayRunId = randomUUID();
     const goal = buildReplayGoal(existing, params.scope, targets.targets.length);
-    const parentSessionKey =
-      existing.run.source.kind === 'chat' ? existing.run.source.sessionKey : undefined;
+    const parentConversationId =
+      existing.run.source.kind === 'chat' ? existing.run.source.conversationId : undefined;
     const projectId = existing.run.metadata?.projectId;
     const taskRunId = existing.run.metadata?.taskRunId;
     const taskId = taskRunId ? new TaskRunRepository().get(taskRunId)?.taskId : undefined;
@@ -436,24 +435,24 @@ export class WorkflowRunService {
         httpStatus: 400,
       };
     }
-    const { sessionKey } = await this.options.sessionBridge.prepareRunSession({
+    const { conversationId } = await this.options.sessionBridge.prepareRunSession({
       runId: replayRunId,
       agentId: params.agentId,
       definitionId: existing.run.definitionId,
       definitionTitle: `${definition.title} replay`,
       triggerSource: existing.run.source.kind,
       goal,
-      parentSessionKey,
+      parentConversationId,
       projectId,
     });
-    const source = normalizeWorkflowRunSourceForSession(existing.run.source, sessionKey, parentSessionKey);
+    const source = normalizeWorkflowRunSourceForSession(existing.run.source, conversationId, parentConversationId);
     const abortController = new AbortController();
     const eventStore = new WorkflowEventStore(this.options.service.currentConfig, params.agentId);
     const replayRunStore = new WorkflowRunStore(this.options.service.currentConfig, params.agentId, eventStore);
     const engine = this.createWorkflowEngine({
       eventStore,
       runStore: replayRunStore,
-      sessionKey,
+      conversationId,
       projectId,
       contextInstructions: resolvedContext?.instructions,
     });
@@ -482,7 +481,7 @@ export class WorkflowRunService {
         contextRefs: existing.run.metadata?.contextRefs,
         contextSnapshot: resolvedContext?.snapshot,
         writebackPolicy,
-        sessionKey,
+        conversationId,
         source,
         input: inputEnvelope,
         retryOfRunId: existing.run.id,
@@ -514,7 +513,7 @@ export class WorkflowRunService {
       this.timeoutHandles.delete(replayRunId);
     });
 
-    return { ok: true, runId: replayRunId, sessionKey };
+    return { ok: true, runId: replayRunId, conversationId };
   }
 
   async cancelWorkflowRun(params: CancelWorkflowRunServiceParams): Promise<CancelWorkflowRunResult> {
@@ -618,25 +617,25 @@ export class WorkflowRunService {
   private createWorkflowEngine(params: {
     eventStore: WorkflowEventStore;
     runStore: WorkflowRunStore;
-    sessionKey: string;
+    conversationId: string;
     projectId?: string;
     contextInstructions?: string;
   }): WorkflowEngine {
     const gatewayService = this.options.service;
-    const profileAgentId = extractProfileAgentId(params.sessionKey, gatewayService.currentConfig);
+    const profileAgentId = extractProfileAgentId(params.conversationId, gatewayService.currentConfig);
     const agentWorkspace = gatewayService.currentConfig.agents?.list
       ? resolveEffectiveAgentProfileForSession(
           gatewayService.currentConfig,
-          params.sessionKey,
+          params.conversationId,
         ).resolvedWorkspacePath
       : gatewayService.currentWorkspacePath;
-    const workspace = getProjectWorkspacePathForSession(params.sessionKey)
+    const workspace = getProjectWorkspacePathForSession(params.conversationId)
       ?? agentWorkspace;
     const runner = new DelegateSubagentRunner({
       workspace,
       bus: gatewayService.messageBusInstance,
       agentId: profileAgentId,
-      getDefaultModel: () => resolveModelById(gatewayService.agentService.getModelForSession(params.sessionKey)),
+      getDefaultModel: () => resolveModelById(gatewayService.agentService.getModelForSession(params.conversationId)),
       getConfig: () => gatewayService.currentConfig,
       sessionStore: gatewayService.sessionIndexInstance.getStore(),
       buildChildTools: (childOptions) => this.options.buildChildTools({
@@ -656,9 +655,9 @@ export class WorkflowRunService {
       resolveModelId: (modelId) => {
         return resolveModelById(resolveModelSelector(gatewayService.currentConfig, profileAgentId, modelId));
       },
-      parentSessionKey: params.sessionKey,
-      subagentSessionKeyFactory: ({ runId, agentId }) => {
-        return `agent:${profileAgentId}:workflow:${runId}:subagent:${agentId}`;
+      parentConversationId: params.conversationId,
+      subagentConversationIdFactory: ({ runId, agentId }) => {
+        return resolveRoutedConversation({ agentId: profileAgentId, source: 'workflow', peerKind: 'direct', peerId: `${runId}/${agentId}` }, { sessionType: 'workflow-subagent', parentConversationId: params.conversationId });
       },
       onEventAppended: (event) => {
         gatewayService.emit('workflow.event.appended', { runId: event.runId, event });
@@ -683,7 +682,7 @@ export class WorkflowRunService {
         status: view.run.status,
         definitionId: view.run.definitionId,
         title: view.run.title,
-        sessionKey: view.run.metadata?.sessionKey,
+        conversationId: view.run.metadata?.conversationId,
         sourceKind: view.run.source.kind,
       },
       occurredAtMs: view.run.completedAtMs ?? Date.now(),
@@ -693,14 +692,14 @@ export class WorkflowRunService {
 
 function normalizeWorkflowRunSourceForSession(
   source: WorkflowRunSource,
-  workflowSessionKey: string,
-  parentSessionKey?: string,
+  workflowConversationId: string,
+  parentConversationId?: string,
 ): WorkflowRunSource {
-  if (parentSessionKey?.trim()) {
-    return { kind: 'chat', sessionKey: parentSessionKey.trim() };
+  if (parentConversationId?.trim()) {
+    return { kind: 'chat', conversationId: parentConversationId.trim() };
   }
   if (source.kind === 'webui') {
-    return { ...source, sessionKey: workflowSessionKey };
+    return { ...source, conversationId: workflowConversationId };
   }
   if (source.kind === 'chat') {
     return source;
@@ -727,7 +726,7 @@ export function buildWorkflowRunMetadata(params: {
   contextRefs?: WorkflowRunMetadata['contextRefs'];
   contextSnapshot?: WorkflowRunMetadata['contextSnapshot'];
   writebackPolicy?: WorkflowRunMetadata['writebackPolicy'];
-  sessionKey: string;
+  conversationId: string;
   source: WorkflowRunSource;
   input: WorkflowRunInputEnvelope;
   retryOfRunId?: string;
@@ -740,7 +739,7 @@ export function buildWorkflowRunMetadata(params: {
   const contextRefs = params.contextRefs ?? buildDefaultWorkflowContextRefs({ projectId, taskId, source: params.source });
   const writebackPolicy = resolveWorkflowWritebackPolicy(params.preparationOnly ? { targets: [] } : params.writebackPolicy, { projectId, taskId });
   return {
-    sessionKey: params.sessionKey,
+    conversationId: params.conversationId,
     ...(params.preparationOnly ? { preparationOnly: true } : {}),
     triggerSource: params.source.kind,
     agentId: params.agentId,
@@ -771,7 +770,7 @@ function buildDefaultWorkflowContextRefs(params: {
   const refs: NonNullable<WorkflowRunMetadata['contextRefs']> = [];
   if (params.projectId) refs.push({ kind: 'project', id: params.projectId, role: 'scope' });
   if (params.taskId) refs.push({ kind: 'task', id: params.taskId, role: 'objective' });
-  if (params.source.kind === 'chat') refs.push({ kind: 'session', id: params.source.sessionKey, role: 'parent_session' });
+  if (params.source.kind === 'chat') refs.push({ kind: 'session', id: params.source.conversationId, role: 'parent_session' });
   return refs;
 }
 
@@ -904,9 +903,9 @@ function buildReplayGoal(view: WorkflowRunView, scope: WorkflowRunReplayScope, t
   return `Replay ${targetCount} ${scopeLabel}${targetCount === 1 ? '' : 's'} from workflow run ${view.run.id}: ${view.run.goal}`;
 }
 
-export function extractWorkflowRunSessionKey(source: WorkflowRunSource): string | null {
-  if ('sessionKey' in source && typeof source.sessionKey === 'string' && source.sessionKey.trim()) {
-    return source.sessionKey.trim();
+export function extractWorkflowRunConversationId(source: WorkflowRunSource): string | null {
+  if ('conversationId' in source && typeof source.conversationId === 'string' && source.conversationId.trim()) {
+    return source.conversationId.trim();
   }
   return null;
 }
@@ -914,9 +913,9 @@ export function extractWorkflowRunSessionKey(source: WorkflowRunSource): string 
 function buildWorkflowRunOrigin(source: WorkflowRunSource): WorkflowRunMetadata['origin'] {
   switch (source.kind) {
     case 'chat':
-      return { channel: 'chat', sessionKey: source.sessionKey, messageId: source.messageId };
+      return { channel: 'chat', conversationId: source.conversationId, messageId: source.messageId };
     case 'webui':
-      return { channel: 'webui', sessionKey: source.sessionKey };
+      return { channel: 'webui', conversationId: source.conversationId };
     case 'automation':
       return { channel: 'automation', automationId: source.automationId, runId: source.runId };
     case 'api':

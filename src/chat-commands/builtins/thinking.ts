@@ -23,13 +23,13 @@ import type { SessionConfigStore } from '../../session/index.js';
 
 async function setSessionAgentField<K extends 'thinkingLevel' | 'reasoningLevel' | 'verboseLevel'>(
   store: SessionConfigStore | undefined,
-  sessionKey: string,
+  conversationId: string,
   field: K,
   value: K extends 'thinkingLevel' ? ThinkLevel : K extends 'reasoningLevel' ? ReasoningLevel : VerboseLevel,
 ): Promise<void> {
   if (!store) return;
-  const existing = (await store.get(sessionKey)) ?? {};
-  await store.set(sessionKey, { ...existing, [field]: value });
+  const existing = (await store.get(conversationId)) ?? {};
+  await store.set(conversationId, { ...existing, [field]: value });
 }
 
 // Think command
@@ -78,7 +78,7 @@ const thinkCommand: CommandDefinition = {
       };
     }
     
-    await setSessionAgentField(ctx.getSessionConfigStore?.(), ctx.sessionKey, 'thinkingLevel', level);
+    await setSessionAgentField(ctx.getSessionConfigStore?.(), ctx.conversationId, 'thinkingLevel', level);
     ctx.syncAgentThinkingLevel?.(level);
 
     const levelDescriptions: Record<ThinkLevel, string> = {
@@ -143,7 +143,7 @@ const reasoningCommand: CommandDefinition = {
       };
     }
     
-    await setSessionAgentField(ctx.getSessionConfigStore?.(), ctx.sessionKey, 'reasoningLevel', level);
+    await setSessionAgentField(ctx.getSessionConfigStore?.(), ctx.conversationId, 'reasoningLevel', level);
 
     const modeDescriptions: Record<ReasoningLevel, string> = {
       off: 'Hide reasoning from user',
@@ -178,7 +178,7 @@ const verboseCommand: CommandDefinition = {
       const currentLevel = await ctx.getVerboseLevel?.();
       const newLevel: VerboseLevel = currentLevel === 'on' ? 'off' : 'on';
 
-      await setSessionAgentField(ctx.getSessionConfigStore?.(), ctx.sessionKey, 'verboseLevel', newLevel);
+      await setSessionAgentField(ctx.getSessionConfigStore?.(), ctx.conversationId, 'verboseLevel', newLevel);
 
       return {
         content: `📝 *Verbose Mode*\n\n` +
@@ -200,7 +200,7 @@ const verboseCommand: CommandDefinition = {
       };
     }
     
-    await setSessionAgentField(ctx.getSessionConfigStore?.(), ctx.sessionKey, 'verboseLevel', level);
+    await setSessionAgentField(ctx.getSessionConfigStore?.(), ctx.conversationId, 'verboseLevel', level);
 
     const modeDescriptions: Record<VerboseLevel, string> = {
       off: 'Minimal output',

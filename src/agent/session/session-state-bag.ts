@@ -1,10 +1,10 @@
 /**
  * SessionStateBag — typed container for the per-session state previously held
- * as private fields on `AgentService` (six `Map<sessionKey, …>` instances with
+ * as private fields on `AgentService` (six `Map<conversationId, …>` instances with
  * no shared cleanup path).
  *
  * Goals:
- * - Single `disposeSession(sessionKey)` entry that clears every slot for a key
+ * - Single `disposeSession(conversationId)` entry that clears every slot for a key
  *   (and runs the event unsubscriber, which was easy to forget previously).
  * - Optional TTL sweep for slots whose lifecycle is not bound to an explicit
  *   register/unregister pair, so long-running Gateways do not accumulate stale
@@ -80,17 +80,17 @@ export class SessionStateBag {
 
   // ── Webchat publishers ──────────────────────────────────────────────────
 
-  registerWebchatPublisher(sessionKey: string, publisher: WebchatStreamPublisher): void {
-    this.webchatPublishers.set(sessionKey, { value: publisher, touchedAt: this.now() });
+  registerWebchatPublisher(conversationId: string, publisher: WebchatStreamPublisher): void {
+    this.webchatPublishers.set(conversationId, { value: publisher, touchedAt: this.now() });
     this.enforceCap(this.webchatPublishers, 'webchatPublishers');
   }
 
-  unregisterWebchatPublisher(sessionKey: string): void {
-    this.webchatPublishers.delete(sessionKey);
+  unregisterWebchatPublisher(conversationId: string): void {
+    this.webchatPublishers.delete(conversationId);
   }
 
-  getWebchatPublisher(sessionKey: string): WebchatStreamPublisher | undefined {
-    const entry = this.webchatPublishers.get(sessionKey);
+  getWebchatPublisher(conversationId: string): WebchatStreamPublisher | undefined {
+    const entry = this.webchatPublishers.get(conversationId);
     if (!entry) return undefined;
     entry.touchedAt = this.now();
     return entry.value;
@@ -98,15 +98,15 @@ export class SessionStateBag {
 
   // ── Last assistant plain text ───────────────────────────────────────────
 
-  setLastAssistantText(sessionKey: string, text: string): void {
+  setLastAssistantText(conversationId: string, text: string): void {
     const trimmed = text.trim();
     if (!trimmed) return;
-    this.lastAssistantText.set(sessionKey, { value: trimmed, touchedAt: this.now() });
+    this.lastAssistantText.set(conversationId, { value: trimmed, touchedAt: this.now() });
     this.enforceCap(this.lastAssistantText, 'lastAssistantText');
   }
 
-  getLastAssistantText(sessionKey: string): string | undefined {
-    const entry = this.lastAssistantText.get(sessionKey);
+  getLastAssistantText(conversationId: string): string | undefined {
+    const entry = this.lastAssistantText.get(conversationId);
     if (!entry) return undefined;
     entry.touchedAt = this.now();
     return entry.value;
@@ -114,94 +114,94 @@ export class SessionStateBag {
 
   // ── Embedded stream text (turn-scoped) ──────────────────────────────────
 
-  appendEmbeddedStreamText(sessionKey: string, chunk: string): string {
-    const prev = this.embeddedStreamText.get(sessionKey) ?? '';
+  appendEmbeddedStreamText(conversationId: string, chunk: string): string {
+    const prev = this.embeddedStreamText.get(conversationId) ?? '';
     const next = prev + chunk;
-    this.embeddedStreamText.set(sessionKey, next);
+    this.embeddedStreamText.set(conversationId, next);
     return next;
   }
 
-  clearEmbeddedStreamText(sessionKey: string): void {
-    this.embeddedStreamText.delete(sessionKey);
+  clearEmbeddedStreamText(conversationId: string): void {
+    this.embeddedStreamText.delete(conversationId);
   }
 
   // ── Task review hint (take-and-delete) ───────────────────────────────
 
-  recordTaskReviewStreamHint(sessionKey: string, task: TaskReviewStreamHint): void {
-    this.taskReviewHintBySession.set(sessionKey, task);
+  recordTaskReviewStreamHint(conversationId: string, task: TaskReviewStreamHint): void {
+    this.taskReviewHintBySession.set(conversationId, task);
   }
 
-  takeTaskReviewStreamHint(sessionKey: string): TaskReviewStreamHint | undefined {
-    const v = this.taskReviewHintBySession.get(sessionKey);
-    this.taskReviewHintBySession.delete(sessionKey);
+  takeTaskReviewStreamHint(conversationId: string): TaskReviewStreamHint | undefined {
+    const v = this.taskReviewHintBySession.get(conversationId);
+    this.taskReviewHintBySession.delete(conversationId);
     return v;
   }
 
   // ── Inbound turn depth (counter) ────────────────────────────────────────
 
-  beginInboundTurn(sessionKey: string): void {
-    this.inboundTurnDepth.set(sessionKey, (this.inboundTurnDepth.get(sessionKey) ?? 0) + 1);
+  beginInboundTurn(conversationId: string): void {
+    this.inboundTurnDepth.set(conversationId, (this.inboundTurnDepth.get(conversationId) ?? 0) + 1);
   }
 
-  endInboundTurn(sessionKey: string): void {
-    const next = (this.inboundTurnDepth.get(sessionKey) ?? 1) - 1;
+  endInboundTurn(conversationId: string): void {
+    const next = (this.inboundTurnDepth.get(conversationId) ?? 1) - 1;
     if (next <= 0) {
-      this.inboundTurnDepth.delete(sessionKey);
+      this.inboundTurnDepth.delete(conversationId);
     } else {
-      this.inboundTurnDepth.set(sessionKey, next);
+      this.inboundTurnDepth.set(conversationId, next);
     }
   }
 
-  getInboundTurnDepth(sessionKey: string): number {
-    return this.inboundTurnDepth.get(sessionKey) ?? 0;
+  getInboundTurnDepth(conversationId: string): number {
+    return this.inboundTurnDepth.get(conversationId) ?? 0;
   }
 
   // ── Session event unsubscribers ─────────────────────────────────────────
 
-  setSessionEventUnsubscriber(sessionKey: string, unsubscribe: () => void): void {
-    const previous = this.sessionEventUnsubscribers.get(sessionKey);
+  setSessionEventUnsubscriber(conversationId: string, unsubscribe: () => void): void {
+    const previous = this.sessionEventUnsubscribers.get(conversationId);
     if (previous) {
       try {
         previous();
       } catch (err) {
-        log.warn({ err, sessionKey }, 'Previous session-event unsubscribe threw');
+        log.warn({ err, conversationId }, 'Previous session-event unsubscribe threw');
       }
     }
-    this.sessionEventUnsubscribers.set(sessionKey, unsubscribe);
+    this.sessionEventUnsubscribers.set(conversationId, unsubscribe);
   }
 
-  hasSessionEventUnsubscriber(sessionKey: string): boolean {
-    return this.sessionEventUnsubscribers.has(sessionKey);
+  hasSessionEventUnsubscriber(conversationId: string): boolean {
+    return this.sessionEventUnsubscribers.has(conversationId);
   }
 
   // ── Lifecycle / cleanup ─────────────────────────────────────────────────
 
-  /** Clear every slot for `sessionKey`, invoking the unsubscriber if registered. */
-  disposeSession(sessionKey: string): void {
-    const unsub = this.sessionEventUnsubscribers.get(sessionKey);
+  /** Clear every slot for `conversationId`, invoking the unsubscriber if registered. */
+  disposeSession(conversationId: string): void {
+    const unsub = this.sessionEventUnsubscribers.get(conversationId);
     if (unsub) {
       try {
         unsub();
       } catch (err) {
-        log.warn({ err, sessionKey }, 'Session event unsubscribe threw during dispose');
+        log.warn({ err, conversationId }, 'Session event unsubscribe threw during dispose');
       }
-      this.sessionEventUnsubscribers.delete(sessionKey);
+      this.sessionEventUnsubscribers.delete(conversationId);
     }
 
-    this.webchatPublishers.delete(sessionKey);
-    this.lastAssistantText.delete(sessionKey);
-    this.embeddedStreamText.delete(sessionKey);
-    this.taskReviewHintBySession.delete(sessionKey);
-    this.inboundTurnDepth.delete(sessionKey);
+    this.webchatPublishers.delete(conversationId);
+    this.lastAssistantText.delete(conversationId);
+    this.embeddedStreamText.delete(conversationId);
+    this.taskReviewHintBySession.delete(conversationId);
+    this.inboundTurnDepth.delete(conversationId);
   }
 
   /** Tear down every session (process stop / hot reload). */
   disposeAll(): void {
-    for (const [sessionKey, unsub] of this.sessionEventUnsubscribers) {
+    for (const [conversationId, unsub] of this.sessionEventUnsubscribers) {
       try {
         unsub();
       } catch (err) {
-        log.warn({ err, sessionKey }, 'Session event unsubscribe threw during disposeAll');
+        log.warn({ err, conversationId }, 'Session event unsubscribe threw during disposeAll');
       }
     }
     this.sessionEventUnsubscribers.clear();

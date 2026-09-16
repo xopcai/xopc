@@ -36,9 +36,9 @@ export function mergeDesktopPetActivities(
 ): Record<string, DesktopPetActivity> {
   const next = { ...current };
   for (const update of updates) {
-    const prior = next[update.sessionKey];
+    const prior = next[update.conversationId];
     if (prior?.runId === update.runId && update.sequence <= prior.sequence) continue;
-    next[update.sessionKey] = mergeDesktopPetActivity(prior, update);
+    next[update.conversationId] = mergeDesktopPetActivity(prior, update);
   }
   return next;
 }

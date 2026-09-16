@@ -22,7 +22,7 @@ export interface UserModelCapturePolicy {
 }
 
 export interface CaptureScopeContext {
-  sessionId: string;
+  conversationId: string;
   agentId: string;
   workspaceId: string;
   projectId?: string;
@@ -67,7 +67,7 @@ function scopeAllowed(type: UserModelScopeType, id: string | undefined, context:
     agent: context.agentId,
     workspace: context.workspaceId,
     project: context.projectId,
-    session: context.sessionId,
+    session: context.conversationId,
   })[type];
 }
 
@@ -144,9 +144,9 @@ export function executeUserModelInterpretation(input: {
     if (!item || item.role !== 'user') continue;
     const evidence = createContextEvidence({
       sourceType: 'conversation',
-      sourceRef: `session:${input.scopeContext.sessionId}:entry:${ref}`,
+      sourceRef: `session:${input.scopeContext.conversationId}:entry:${ref}`,
       sourceRunId: input.extractionRunId,
-      sessionId: input.scopeContext.sessionId,
+      conversationId: input.scopeContext.conversationId,
       ...(input.turnId ? { turnId: input.turnId } : {}),
       messageId: ref,
       contentHash: createHash('sha256').update(item.text).digest('hex'),

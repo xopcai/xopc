@@ -1,3 +1,4 @@
+import { ensureSessionRecord } from '../../storage/sqlite/session-repository.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -95,7 +96,7 @@ describe('WorkflowRunService helpers', () => {
     expect(prepared.graph.nodes.filter((node) => node.kind === 'agent').map((node) => node.config.toolset)).toEqual([[], []]);
     expect(prepared.connectors).toEqual([]);
     expect(original.graph.nodes[1]!.config).not.toHaveProperty('toolset');
-    const metadata = buildWorkflowRunMetadata({ definition: prepared, preparationOnly: true, agentId: 'main', sessionKey: 'prepare', source: { kind: 'webui' }, input: { payload: {} }, writebackPolicy: { targets: [{ kind: 'project', id: 'x', mode: 'record' }] } });
+    const metadata = buildWorkflowRunMetadata({ definition: prepared, preparationOnly: true, agentId: 'main', conversationId: 'prepare', source: { kind: 'webui' }, input: { payload: {} }, writebackPolicy: { targets: [{ kind: 'project', id: 'x', mode: 'record' }] } });
     expect(metadata.preparationOnly).toBe(true);
     expect(metadata.writebackPolicy).toEqual({ targets: [] });
   });
@@ -148,7 +149,7 @@ describe('WorkflowRunService helpers', () => {
     const metadata = buildWorkflowRunMetadata({
       definition: createDefinition(),
       agentId: 'main',
-      sessionKey: 'agent:main:webchat:default:direct:wf_run-abc',
+      conversationId: "aebcb6bd-3eae-48f2-82e4-ccf48054a7bb",
       source: { kind: 'automation', automationId: 'nightly', runId: 'run-1', scheduledAtMs: 123 },
       input,
       projectId: 'project-1',
@@ -157,7 +158,7 @@ describe('WorkflowRunService helpers', () => {
     });
 
     expect(metadata).toMatchObject({
-      sessionKey: 'agent:main:webchat:default:direct:wf_run-abc',
+      conversationId: "aebcb6bd-3eae-48f2-82e4-ccf48054a7bb",
       triggerSource: 'automation',
       agentId: 'main',
       projectId: 'project-1',
@@ -226,7 +227,7 @@ describe('WorkflowRunService helpers', () => {
             definition,
             agentId: 'main',
             projectId: 'project-index',
-            sessionKey: 'agent:main:webchat:default:direct:wf_run-existing',
+            conversationId: "85ff31b0-0fc1-4adb-8ccd-3ed973aee841",
             source: { kind: 'api', idempotencyKey: 'idem-1' },
             input: buildWorkflowRunInputEnvelope({}, 'Check release'),
             idempotencyKey: 'idem-1',
@@ -276,7 +277,7 @@ describe('WorkflowRunService helpers', () => {
     expect(result).toEqual({
       ok: true,
       runId: 'existing-run',
-      sessionKey: 'agent:main:webchat:default:direct:wf_run-existing',
+      conversationId: "85ff31b0-0fc1-4adb-8ccd-3ed973aee841",
     });
     expect(prepareRunSession).not.toHaveBeenCalled();
   });
@@ -295,15 +296,15 @@ describe('WorkflowRunService helpers', () => {
       contractVersion: task.latestContractVersion,
     });
     const prepareRunSession = vi.fn(async () => {
-      const sessionKey = 'agent:main:workflow:default:run:project-workflow';
+      const conversationId = "abd8b9b8-be39-4cd2-80ce-389f21711405";
       const now = Date.now();
       getSqliteDatabase().prepare(
         `INSERT INTO sessions (
-          session_key, agent_id, session_id, created_at, updated_at, last_accessed_at,
+          conversation_id, agent_id, active_transcript_id, created_at, updated_at, last_accessed_at,
           source_channel, source_chat_id, project_id
         ) VALUES (?, 'main', ?, ?, ?, ?, 'workflow', ?, ?)`,
-      ).run(sessionKey, 'project-workflow', now, now, now, 'project-workflow', project.id);
-      return { sessionKey };
+      ).run(conversationId, 'project-workflow', now, now, now, 'project-workflow', project.id);
+      return { conversationId };
     });
     const service = new WorkflowRunService({
       service: createGatewayHostStub(),
@@ -337,11 +338,12 @@ describe('WorkflowRunService helpers', () => {
   it('inherits project id from the parent session when starting a workflow run', async () => {
     const definition = createDefinition();
     const project = new ProjectService().create({ name: 'Parent Session Project' });
-    const parentSessionKey = 'agent:main:tui:parent-session-project';
-    const getMetadata = vi.fn(async (key: string) => (key === parentSessionKey ? { projectId: project.id } : null));
-    const prepareRunSession = vi.fn(async () => ({
-      sessionKey: 'agent:main:workflow:default:run:parent-session-project',
-    }));
+    const parentConversationId = "1e330c46-27bf-4f26-8774-778245d2c1c0";
+    const getMetadata = vi.fn(async (key: string) => (key === parentConversationId ? { projectId: project.id } : null));
+    const prepareRunSession = vi.fn(async () => {
+      ensureSessionRecord("73fe2035-5ac2-4cb3-86c3-2e15a91e3bd0", stateDir, { agentId: "main" });
+      return { conversationId: "73fe2035-5ac2-4cb3-86c3-2e15a91e3bd0" };
+    });
     const service = new WorkflowRunService({
       service: {
         ...createGatewayHostStub(),
@@ -363,13 +365,13 @@ describe('WorkflowRunService helpers', () => {
       agentId: 'main',
       definitionId: definition.id,
       input: {},
-      parentSessionKey,
-      source: { kind: 'chat', sessionKey: parentSessionKey },
+      parentConversationId,
+      source: { kind: 'chat', conversationId: parentConversationId },
     });
 
     expect(result.ok).toBe(true);
     expect(prepareRunSession).toHaveBeenCalledWith(expect.objectContaining({
-      parentSessionKey,
+      parentConversationId,
       projectId: project.id,
     }));
   });
@@ -392,13 +394,13 @@ describe('WorkflowRunService helpers', () => {
           goal: 'Check project release',
           input: { branch: 'main' },
           status: 'failed',
-          source: { kind: 'webui', sessionKey: 'agent:main:webchat:default:direct:project-run' },
+          source: { kind: 'webui', conversationId: "95e9e602-1683-4dbc-8a19-a80eefb818ef" },
           metadata: buildWorkflowRunMetadata({
             definition,
             agentId: 'main',
             projectId: project.id,
-            sessionKey: 'agent:main:webchat:default:direct:project-run',
-            source: { kind: 'webui', sessionKey: 'agent:main:webchat:default:direct:project-run' },
+            conversationId: "95e9e602-1683-4dbc-8a19-a80eefb818ef",
+            source: { kind: 'webui', conversationId: "95e9e602-1683-4dbc-8a19-a80eefb818ef" },
             input: {
               payload: { branch: 'main' },
               goal: 'Check project release',
@@ -419,9 +421,10 @@ describe('WorkflowRunService helpers', () => {
     });
     await runStore.rebuildRunView('project-run');
 
-    const prepareRunSession = vi.fn(async () => ({
-      sessionKey: 'agent:main:workflow:default:run:project-retry-2',
-    }));
+    const prepareRunSession = vi.fn(async () => {
+      ensureSessionRecord("6f9be9f7-60c6-44cc-8034-42eb26973c9b", stateDir, { agentId: "main" });
+      return { conversationId: "6f9be9f7-60c6-44cc-8034-42eb26973c9b" };
+    });
     const service = new WorkflowRunService({
       service: createGatewayHostStub(config),
       sessionBridge: { prepareRunSession } as never,
@@ -500,12 +503,12 @@ function createReplayView(): import('../domain/index.js').WorkflowRunView {
       goal: 'Check release',
       input: {},
       status: 'failed',
-      source: { kind: 'webui', sessionKey: 'agent:main:webchat:default:direct:wf_run-source' },
+      source: { kind: 'webui', conversationId: "5ad03734-b786-489d-8fbf-3246fc3002e8" },
       metadata: buildWorkflowRunMetadata({
         definition,
         agentId: 'main',
-        sessionKey: 'agent:main:webchat:default:direct:wf_run-source',
-        source: { kind: 'webui', sessionKey: 'agent:main:webchat:default:direct:wf_run-source' },
+        conversationId: "5ad03734-b786-489d-8fbf-3246fc3002e8",
+        source: { kind: 'webui', conversationId: "5ad03734-b786-489d-8fbf-3246fc3002e8" },
         input: buildWorkflowRunInputEnvelope({}, 'Check release'),
       }),
       metrics: {
@@ -532,7 +535,7 @@ function createReplayView(): import('../domain/index.js').WorkflowRunView {
         phaseId: 'inspect',
         status: 'done',
         prompt: 'Review stable files',
-        sessionKey: 'agent:main:workflow:run-source:subagent:agent-1',
+        conversationId: "84f47a27-c45c-42f4-80cd-6122dfa0173d",
         transcriptMessageCount: 2,
         resultPreview: 'ok',
         steps: [],
@@ -552,7 +555,7 @@ function createReplayView(): import('../domain/index.js').WorkflowRunView {
           toolset: ['file_read'],
           maxIterations: 3,
         },
-        sessionKey: 'agent:main:workflow:run-source:subagent:agent-2',
+        conversationId: "a61ba389-7e27-4670-8b9b-86b273c0c218",
         transcriptMessageCount: 2,
         error: 'failed',
         steps: [],

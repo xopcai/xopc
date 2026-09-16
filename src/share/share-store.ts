@@ -402,7 +402,7 @@ export class ShareStore {
 
   createSessionShare(input: {
     id: string;
-    sourceSessionId: string;
+    sourceTranscriptId: string;
     cutoffSeq: number;
     artifactRelativePath: string;
     artifactSize: number;
@@ -436,7 +436,7 @@ export class ShareStore {
       fileSize: input.artifactSize,
       mimeType: 'application/x-xopc-session',
       workspaceRelativePath: '',
-      sourceSessionId: input.sourceSessionId,
+      sourceTranscriptId: input.sourceTranscriptId,
       cutoffSeq: input.cutoffSeq,
       artifactRelativePath: input.artifactRelativePath,
       messageCount: input.messageCount,
@@ -454,7 +454,7 @@ export class ShareStore {
     };
     this.saveNew(record);
     this.persistAndAudit(record, 'share.create', `Session share created: ${record.fileName}`, {
-      sourceSessionId: record.sourceSessionId,
+      sourceTranscriptId: record.sourceTranscriptId,
       cutoffSeq: record.cutoffSeq,
       messageCount: record.messageCount,
       ttlMs,
@@ -462,9 +462,9 @@ export class ShareStore {
     return record;
   }
 
-  getSessionShares(sessionId: string): SessionShareRecord[] {
+  getSessionShares(transcriptId: string): SessionShareRecord[] {
     return this.getAllShares().filter(
-      (record): record is SessionShareRecord => record.kind === 'session' && record.sourceSessionId === sessionId,
+      (record): record is SessionShareRecord => record.kind === 'session' && record.sourceTranscriptId === transcriptId,
     );
   }
 
@@ -490,7 +490,7 @@ export class ShareStore {
       this.shares.set(record.id, record);
       logShareAudit(
         'share.update',
-        { shareId: id, sourceSessionId: record.sourceSessionId, cutoffSeq: record.cutoffSeq, snapshotRevision: record.snapshotRevision },
+        { shareId: id, sourceTranscriptId: record.sourceTranscriptId, cutoffSeq: record.cutoffSeq, snapshotRevision: record.snapshotRevision },
         `Session share snapshot updated: ${record.fileName}`,
       );
       return record;

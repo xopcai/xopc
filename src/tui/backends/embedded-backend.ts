@@ -1,8 +1,9 @@
+import { createConversation } from '../../storage/sqlite/conversation-repository.js';
 import type { ExtensionRegistryImpl } from '../../extensions/loader.js';
 import { isAbsolute, relative, resolve } from 'node:path';
 import type { AgentService } from '../../agent/service.js';
 import { listAgentEntries, normalizeAgentId } from '../../agent/agent-scope.js';
-import { resolveAgentIdFromSessionKey } from '../../routing/agent-session-key.js';
+import { resolveAgentIdFromConversationId } from '../../routing/agent-session-key.js';
 import { parseModelRef } from '../../agent/models/selection.js';
 import { createCreateShareTool, isShareToolAvailable } from '../../agent/tools/create-share-tool.js';
 import { transcriptRowsToClientHistory } from '../../session/client-history.js';
@@ -233,7 +234,7 @@ export class EmbeddedBackend implements TuiBackend {
       currentWorkspacePath: this.workspace,
       messageBusInstance: this.bus,
       agentService: {
-        getModelForSession: (sessionKey) => this.agent!.getModelForSession(sessionKey),
+        getModelForSession: (conversationId) => this.agent!.getModelForSession(conversationId),
       },
       sessionIndexInstance: this.sessionIndex,
       emit: (event, payload) => {
@@ -266,8 +267,8 @@ export class EmbeddedBackend implements TuiBackend {
     return Boolean(implicit && isPathSameOrInside(implicit, workspaceDir));
   }
 
-  async getStartupResources(sessionKey: string) {
-    return collectTuiStartupResources(this.activeConfig(), sessionKey, {
+  async getStartupResources(conversationId: string) {
+    return collectTuiStartupResources(this.activeConfig(), conversationId, {
       isWorkspaceTrusted: (workspaceDir) => this.isWorkspaceTrusted(workspaceDir),
     });
   }
@@ -278,12 +279,12 @@ export class EmbeddedBackend implements TuiBackend {
 
   async startWorkflowRun(opts: TuiWorkflowRunStartRequest): Promise<TuiWorkflowRunStartResult> {
     await this.sessionIndexReady;
-    const agentId = opts.agentId?.trim() || resolveAgentIdFromSessionKey(opts.sessionKey);
+    const agentId = opts.agentId?.trim() || resolveAgentIdFromConversationId(opts.conversationId);
     const result = await this.getWorkflowRunService().startWorkflowRun({
       agentId,
       definitionId: opts.definitionId,
-      parentSessionKey: opts.sessionKey,
-      source: { kind: 'chat', sessionKey: opts.sessionKey },
+      parentConversationId: opts.conversationId,
+      source: { kind: 'chat', conversationId: opts.conversationId },
       goal: opts.goal,
       input: opts.input,
     });
@@ -292,14 +293,14 @@ export class EmbeddedBackend implements TuiBackend {
     }
     return {
       runId: result.runId,
-      sessionKey: result.sessionKey,
+      conversationId: result.conversationId,
       definitionId: opts.definitionId,
     };
   }
 
   async resolveStartupProject(opts: {
     workspacePath: string;
-    sessionKey: string;
+    conversationId: string;
     agentId: string;
     autoCreate?: boolean;
   }): Promise<TuiStartupProjectResult> {
@@ -323,11 +324,11 @@ export class EmbeddedBackend implements TuiBackend {
     if (projectAgentId && projectAgentId !== normalizeAgentId(opts.agentId)) {
       return { project: match.project, created: match.created, reason: match.reason };
     }
-    if (!getSessionMetadata(opts.sessionKey)) {
-      await this.sessionIndex.getStore().resolveTranscriptPath(opts.sessionKey, {
+    if (!getSessionMetadata(opts.conversationId)) {
+      await this.sessionIndex.getStore().resolveTranscriptPath(opts.conversationId, {
         metadata: {
           sourceChannel: 'tui',
-          sourceChatId: `default:direct:${opts.sessionKey}`,
+          sourceChatId: `default:direct:${opts.conversationId}`,
           sessionType: 'chat',
           projectId: match.project.id,
           routing: {
@@ -335,36 +336,36 @@ export class EmbeddedBackend implements TuiBackend {
             source: 'tui',
             accountId: 'default',
             peerKind: 'direct',
-            peerId: opts.sessionKey,
+            peerId: opts.conversationId,
           },
         },
       });
     }
-    projects.attachSession(opts.sessionKey, match.project.id);
+    projects.attachSession(opts.conversationId, match.project.id);
     return { project: match.project, created: match.created, reason: match.reason };
   }
 
   async searchWorkspaceFiles(
-    sessionKey: string,
+    conversationId: string,
     query: string,
     options?: { limit?: number },
   ): Promise<TuiWorkspaceFileSearchEntry[]> {
     if (!this.agent) return [];
     try {
-      const workspaceRoot = await this.agent.getEffectiveWorkspacePathForSession(sessionKey);
+      const workspaceRoot = await this.agent.getEffectiveWorkspacePathForSession(conversationId);
       return await fuzzySearchWorkspaceFiles(workspaceRoot, query, options?.limit ?? 15);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      log.warn({ err: error, sessionKey, errorMessage }, `Embedded workspace file search failed: ${errorMessage}`);
+      log.warn({ err: error, conversationId, errorMessage }, `Embedded workspace file search failed: ${errorMessage}`);
       return [];
     }
   }
 
-  async getReviewContext(sessionKey: string) {
+  async getReviewContext(conversationId: string) {
     const config = this.activeConfig();
-    const metadata = getSessionMetadata(sessionKey);
+    const metadata = getSessionMetadata(conversationId);
     const project = metadata?.projectId ? new ProjectService().get(metadata.projectId) : null;
-    const workspace = effectiveWorkspacePathForSession(config, sessionKey, null, project);
+    const workspace = effectiveWorkspacePathForSession(config, conversationId, null, project);
     const cwd = await resolveGitRoot(workspace);
     return buildReviewContext(cwd);
   }
@@ -377,7 +378,7 @@ export class EmbeddedBackend implements TuiBackend {
     this.chatAbort = new AbortController();
     const signal = this.chatAbort.signal;
 
-    const mapper = new ChatStreamMapper({ runId, sessionKey: opts.sessionKey, channel: 'tui' });
+    const mapper = new ChatStreamMapper({ runId, conversationId: opts.conversationId, channel: 'tui' });
     for (const event of mapper.start()) {
       this.onEvent?.({ event: event.type, data: event, source: 'embedded' });
     }
@@ -394,7 +395,7 @@ export class EmbeddedBackend implements TuiBackend {
 
         const stream = agent.turnDispatcher.processDirectStreaming(
           messageForAgent,
-          opts.sessionKey,
+          opts.conversationId,
           { type: 'system', source: 'cli' },
           opts.attachments,
           opts.thinking,
@@ -428,7 +429,7 @@ export class EmbeddedBackend implements TuiBackend {
     return { runId };
   }
 
-  async abortChat(_opts: { sessionKey: string; runId: string }): Promise<{ ok: boolean }> {
+  async abortChat(_opts: { conversationId: string; runId: string }): Promise<{ ok: boolean }> {
     if (this.chatAbort) {
       this.chatAbort.abort();
       this.chatAbort = null;
@@ -437,38 +438,38 @@ export class EmbeddedBackend implements TuiBackend {
     return { ok: false };
   }
 
-  async submitChatInput(opts: { sessionKey: string; message: string; delivery: 'next' | 'steer' }): Promise<{ ok: boolean; effectiveDelivery?: 'next' | 'steer' }> {
+  async submitChatInput(opts: { conversationId: string; message: string; delivery: 'next' | 'steer' }): Promise<{ ok: boolean; effectiveDelivery?: 'next' | 'steer' }> {
     if (!this.agent) return { ok: false };
     if (opts.delivery === 'steer') {
-      const ok = await this.agent.turnDispatcher.steerWebchatSession(opts.sessionKey, opts.message);
+      const ok = await this.agent.turnDispatcher.steerWebchatSession(opts.conversationId, opts.message);
       return { ok, effectiveDelivery: ok ? 'steer' : undefined };
     }
-    const { getEmbeddedRunBySessionKey } = await import('../../agent/embedded/runs.js');
-    const handle = getEmbeddedRunBySessionKey(opts.sessionKey);
+    const { getEmbeddedRunByConversationId } = await import('../../agent/embedded/runs.js');
+    const handle = getEmbeddedRunByConversationId(opts.conversationId);
     if (!handle) return { ok: false };
     await handle.session.followUp(opts.message);
     return { ok: true, effectiveDelivery: 'next' };
   }
 
-  async getChatInputState(sessionKey: string) {
-    const { getEmbeddedRunBySessionKey } = await import('../../agent/embedded/runs.js');
-    const handle = getEmbeddedRunBySessionKey(sessionKey);
+  async getChatInputState(conversationId: string) {
+    const { getEmbeddedRunByConversationId } = await import('../../agent/embedded/runs.js');
+    const handle = getEmbeddedRunByConversationId(conversationId);
     return {
-      sessionKey,
+      conversationId,
       revision: 0,
       inputs: Array.from({ length: handle?.session.pendingMessageCount ?? 0 }, (_, index) => ({ id: String(index), status: 'queued' })),
     };
   }
 
   async loadHistory(opts: {
-    sessionKey: string;
+    conversationId: string;
     limit?: number;
   }): Promise<{ messages: HistoryMessage[] }> {
     if (!this.agent) {
       return { messages: [] };
     }
     try {
-      const rows = await this.agent.sessionStore.loadTranscriptRows(opts.sessionKey);
+      const rows = await this.agent.sessionStore.loadTranscriptRows(opts.conversationId);
       return {
         messages: transcriptRowsToClientHistory(rows, { limit: opts.limit }),
       };
@@ -480,7 +481,7 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   async loadHistoryWindow(opts: {
-    sessionKey: string;
+    conversationId: string;
     rowNumber: number;
     before?: number;
     after?: number;
@@ -489,7 +490,7 @@ export class EmbeddedBackend implements TuiBackend {
       return { messages: [], startRowNumber: 0, endRowNumber: 0, totalRows: 0 };
     }
     try {
-      const rows = await this.agent.sessionStore.loadTranscriptRows(opts.sessionKey);
+      const rows = await this.agent.sessionStore.loadTranscriptRows(opts.conversationId);
       const totalRows = rows.length;
       if (totalRows === 0) {
         return { messages: [], startRowNumber: 0, endRowNumber: 0, totalRows };
@@ -508,46 +509,46 @@ export class EmbeddedBackend implements TuiBackend {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       log.warn(
-        { err: error, sessionKey: opts.sessionKey, rowNumber: opts.rowNumber, errorMessage },
+        { err: error, conversationId: opts.conversationId, rowNumber: opts.rowNumber, errorMessage },
         `Embedded loadHistoryWindow failed: ${errorMessage}`,
       );
       return { messages: [], startRowNumber: 0, endRowNumber: 0, totalRows: 0 };
     }
   }
 
-  async loadTranscriptTree(sessionKey: string): Promise<TuiTranscriptTreeEntry[]> {
+  async loadTranscriptTree(conversationId: string): Promise<TuiTranscriptTreeEntry[]> {
     if (!this.agent) return [];
     try {
-      const rows = await this.agent.sessionStore.loadTranscriptRows(sessionKey);
+      const rows = await this.agent.sessionStore.loadTranscriptRows(conversationId);
       return buildTuiTranscriptTree(rows);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      log.warn({ err: error, sessionKey, errorMessage }, `Embedded loadTranscriptTree failed: ${errorMessage}`);
+      log.warn({ err: error, conversationId, errorMessage }, `Embedded loadTranscriptTree failed: ${errorMessage}`);
       return [];
     }
   }
 
-  async loadTimeline(sessionKey: string): Promise<SessionTimelineItem[]> {
+  async loadTimeline(conversationId: string): Promise<SessionTimelineItem[]> {
     if (!this.agent) return [];
     try {
-      const rows = await this.agent.sessionStore.loadTranscriptRows(sessionKey);
+      const rows = await this.agent.sessionStore.loadTranscriptRows(conversationId);
       return buildSessionTimeline(rows);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      log.warn({ err: error, sessionKey, errorMessage }, `Embedded loadTimeline failed: ${errorMessage}`);
+      log.warn({ err: error, conversationId, errorMessage }, `Embedded loadTimeline failed: ${errorMessage}`);
       return [];
     }
   }
 
-  async getSessionStats(sessionKey: string): Promise<TuiSessionStats> {
+  async getSessionStats(conversationId: string): Promise<TuiSessionStats> {
     const store = this.agent?.sessionStore ?? this.sessionIndex?.getStore();
     if (!store) return computeTuiSessionStats([]);
     try {
-      const rows = await store.loadTranscriptRows(sessionKey);
+      const rows = await store.loadTranscriptRows(conversationId);
       return computeTuiSessionStats(rows);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      log.warn({ err: error, sessionKey, errorMessage }, `Embedded getSessionStats failed: ${errorMessage}`);
+      log.warn({ err: error, conversationId, errorMessage }, `Embedded getSessionStats failed: ${errorMessage}`);
       return computeTuiSessionStats([]);
     }
   }
@@ -592,42 +593,48 @@ export class EmbeddedBackend implements TuiBackend {
     return { agentId: result.agentId };
   }
 
-  async renameSession(sessionKey: string, name: string): Promise<{ ok: boolean }> {
+  async renameSession(conversationId: string, name: string): Promise<{ ok: boolean }> {
     if (!this.agent) return { ok: false };
     try {
-      await this.agent.sessionStore.updateMetadata(sessionKey, { name: name.trim() });
+      await this.agent.sessionStore.updateMetadata(conversationId, { name: name.trim() });
       return { ok: true };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      log.warn({ err: error, sessionKey, errorMessage }, `Embedded renameSession failed: ${errorMessage}`);
+      log.warn({ err: error, conversationId, errorMessage }, `Embedded renameSession failed: ${errorMessage}`);
       return { ok: false };
     }
   }
 
-  async deleteSession(sessionKey: string): Promise<{ ok: boolean }> {
+  async deleteSession(conversationId: string): Promise<{ ok: boolean }> {
     const store = this.agent?.sessionStore ?? this.sessionIndex?.getStore();
     if (!store) return { ok: false };
     try {
-      const ok = await store.deleteSession(sessionKey);
+      const ok = await store.deleteSession(conversationId);
       return { ok };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      log.warn({ err: error, sessionKey, errorMessage }, `Embedded deleteSession failed: ${errorMessage}`);
+      log.warn({ err: error, conversationId, errorMessage }, `Embedded deleteSession failed: ${errorMessage}`);
       return { ok: false };
     }
   }
 
-  async getSessionInfo(sessionKey: string): Promise<SessionInfo> {
+  async createConversation(agentId: string, conversationId?: string): Promise<string> {
+    return createConversation({ agentId, sourceChannel: 'tui', customData: { genericNewChatShell: true }, hiddenFromSessionList: true }, '', conversationId).key;
+  }
+
+  async getSessionInfo(conversationId: string): Promise<SessionInfo> {
     if (!this.agent) {
       const config = this.activeConfig();
       const model = getAgentDefaultModelRef(config);
       return { model: model ?? undefined };
     }
     try {
-      const cfg = await this.agent.sessionInspector.agentConfig(sessionKey);
+      const cfg = await this.agent.sessionInspector.agentConfig(conversationId);
       const parsed = parseModelRef(cfg.model);
-      const usage = await this.agent.sessionInspector.contextUsage(sessionKey);
+      const usage = await this.agent.sessionInspector.contextUsage(conversationId);
       return {
+        agentId: getSessionMetadata(conversationId)?.agentId,
+        generatedShell: getSessionMetadata(conversationId)?.customData?.genericNewChatShell === true,
         model: parsed?.model ?? cfg.model,
         modelProvider: parsed?.provider,
         thinkingLevel: cfg.thinkingLevel,
@@ -638,11 +645,11 @@ export class EmbeddedBackend implements TuiBackend {
         contextUsagePercent: usage.usagePercent,
         effectiveWorkspacePath: cfg.effectiveWorkspacePath,
         workingDirectoryLocked: cfg.workingDirectoryLocked,
-        projectId: getSessionMetadata(sessionKey)?.projectId,
+        projectId: getSessionMetadata(conversationId)?.projectId,
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      log.warn({ err, sessionKey, errorMessage }, `getSessionInfo failed: ${errorMessage}`);
+      log.warn({ err, conversationId, errorMessage }, `getSessionInfo failed: ${errorMessage}`);
       const config = this.activeConfig();
       const model = getAgentDefaultModelRef(config);
       return { model: model ?? undefined };
@@ -664,19 +671,19 @@ export class EmbeddedBackend implements TuiBackend {
     await this.refreshXopcCloudModels();
   }
 
-  async resetSession(sessionKey: string): Promise<void> {
+  async resetSession(conversationId: string): Promise<void> {
     if (!this.agent) return;
-    await this.agent.resetSession(sessionKey);
+    await this.agent.resetSession(conversationId);
   }
 
   async patchSession(
-    sessionKey: string,
+    conversationId: string,
     patch: Record<string, unknown>,
   ): Promise<void> {
     const agent = await this.ensureAgent();
     const hasProjectPatch = Object.prototype.hasOwnProperty.call(patch, 'projectId');
     const projectId = typeof patch.projectId === 'string' ? patch.projectId.trim() : '';
-    const result = await agent.sessionConfig.patch(sessionKey, {
+    const result = await agent.sessionConfig.patch(conversationId, {
       model: typeof patch.model === 'string' ? patch.model : undefined,
       thinkingLevel: typeof patch.thinkingLevel === 'string' ? patch.thinkingLevel : undefined,
       reasoningLevel: typeof patch.reasoningLevel === 'string' ? patch.reasoningLevel : undefined,
@@ -688,10 +695,10 @@ export class EmbeddedBackend implements TuiBackend {
     }
     if (projectId) {
       await this.sessionIndexReady;
-      await this.sessionIndex?.getStore().resolveTranscriptPath(sessionKey);
-      new ProjectService().attachSession(sessionKey, projectId);
+      await this.sessionIndex?.getStore().resolveTranscriptPath(conversationId);
+      new ProjectService().attachSession(conversationId, projectId);
     } else if (hasProjectPatch && patch.projectId === null) {
-      new ProjectService().detachSession(sessionKey);
+      new ProjectService().detachSession(conversationId);
     }
     const hiddenFromSessionList = typeof patch.hiddenFromSessionList === 'boolean'
       ? patch.hiddenFromSessionList
@@ -703,10 +710,10 @@ export class EmbeddedBackend implements TuiBackend {
       await this.sessionIndexReady;
       const store = this.sessionIndex?.getStore();
       if (store) {
-        await store.resolveTranscriptPath(sessionKey);
-        const existing = getSessionMetadata(sessionKey);
+        await store.resolveTranscriptPath(conversationId);
+        const existing = getSessionMetadata(conversationId);
         if (existing && existing.messageCount === 0) {
-          await store.updateMetadata(sessionKey, {
+          await store.updateMetadata(conversationId, {
             ...(hiddenFromSessionList !== undefined ? { hiddenFromSessionList } : {}),
             ...(customData ? { customData: { ...(existing.customData ?? {}), ...customData } } : {}),
           });
@@ -716,12 +723,12 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   async compactSession(
-    sessionKey: string,
+    conversationId: string,
     options?: { force?: boolean; instructions?: string },
   ): Promise<TuiCompactionResult> {
     if (!this.agent) return { compacted: false, summary: 'Agent not started' };
     try {
-      const result = await this.agent.sessionInspector.compact(sessionKey, {
+      const result = await this.agent.sessionInspector.compact(conversationId, {
         force: options?.force ?? true,
         instructions: options?.instructions,
       });
@@ -739,25 +746,25 @@ export class EmbeddedBackend implements TuiBackend {
     }
   }
 
-  async exportSession(sessionKey: string, format: ExportFormat): Promise<string> {
+  async exportSession(conversationId: string, format: ExportFormat): Promise<string> {
     if (!this.agent) {
       throw new Error('Agent not started');
     }
-    return this.agent.sessionStore.exportSession(sessionKey, format);
+    return this.agent.sessionStore.exportSession(conversationId, format);
   }
 
   async importSession(
-    targetSessionKey: string,
+    targetConversationId: string,
     jsonContent: string,
-  ): Promise<{ sessionKey: string; rowCount: number }> {
+  ): Promise<{ conversationId: string; rowCount: number }> {
     if (!this.agent) {
       throw new Error('Agent not started');
     }
-    return this.agent.sessionStore.importSessionExport(targetSessionKey, jsonContent);
+    return this.agent.sessionStore.importSessionExport(targetConversationId, jsonContent);
   }
 
   async createShare(
-    _sessionKey: string,
+    _conversationId: string,
     request: TuiShareRequest,
     _options?: { agentId?: string },
   ): Promise<TuiShareResult> {
@@ -819,28 +826,28 @@ export class EmbeddedBackend implements TuiBackend {
     };
   }
 
-  async btwQuery(sessionKey: string, question: string): Promise<{ text: string; error?: string }> {
+  async btwQuery(conversationId: string, question: string): Promise<{ text: string; error?: string }> {
     if (!this.agent) {
       return { text: '', error: 'Agent not started' };
     }
-    return this.agent.sessionInspector.btwQuery(sessionKey, question);
+    return this.agent.sessionInspector.btwQuery(conversationId, question);
   }
 
   async forkSession(
-    sourceSessionKey: string,
-    targetSessionKey: string,
-  ): Promise<{ sessionKey: string; rowCount: number }> {
+    sourceConversationId: string,
+    targetConversationId: string,
+  ): Promise<{ conversationId: string; rowCount: number }> {
     if (!this.agent) {
       throw new Error('Agent not started');
     }
-    return this.agent.sessionStore.forkSession(sourceSessionKey, targetSessionKey);
+    return this.agent.sessionStore.forkSession(sourceConversationId, targetConversationId);
   }
 
   async forkSessionAt(
-    sourceSessionKey: string,
-    targetSessionKey: string,
+    sourceConversationId: string,
+    targetConversationId: string,
     entryId: string,
-  ): Promise<{ sessionKey: string; rowCount: number }> {
+  ): Promise<{ conversationId: string; rowCount: number }> {
     if (!this.agent) {
       throw new Error('Agent not started');
     }
@@ -848,35 +855,35 @@ export class EmbeddedBackend implements TuiBackend {
     if (throughRow == null) {
       throw new Error(`Invalid transcript entry: ${entryId}`);
     }
-    return this.agent.sessionStore.forkSessionRows(sourceSessionKey, targetSessionKey, { throughRow });
+    return this.agent.sessionStore.forkSessionRows(sourceConversationId, targetConversationId, { throughRow });
   }
 
   async setTranscriptLabel(
-    sessionKey: string,
+    conversationId: string,
     entryId: string,
     label: string | undefined,
   ): Promise<{ ok: boolean }> {
     if (!this.agent) {
       throw new Error('Agent not started');
     }
-    await this.agent.sessionStore.appendTranscriptLabelEntry(sessionKey, { targetId: entryId, label });
+    await this.agent.sessionStore.appendTranscriptLabelEntry(conversationId, { targetId: entryId, label });
     return { ok: true };
   }
 
   async appendCustomEntry(
-    sessionKey: string,
+    conversationId: string,
     customType: string,
     data?: unknown,
   ): Promise<{ ok: boolean }> {
     if (!this.agent) {
       throw new Error('Agent not started');
     }
-    await this.agent.sessionStore.appendTranscriptCustomEntry(sessionKey, { customType, data });
+    await this.agent.sessionStore.appendTranscriptCustomEntry(conversationId, { customType, data });
     return { ok: true };
   }
 
   async appendCustomMessage(
-    sessionKey: string,
+    conversationId: string,
     message: {
       customType: string;
       content?: string | unknown[];
@@ -887,13 +894,13 @@ export class EmbeddedBackend implements TuiBackend {
     if (!this.agent) {
       throw new Error('Agent not started');
     }
-    await this.agent.sessionStore.appendTranscriptCustomMessageEntry(sessionKey, message);
-    evictEmbeddedSessionRunner(sessionKey, 'tui_custom_message_appended');
+    await this.agent.sessionStore.appendTranscriptCustomMessageEntry(conversationId, message);
+    evictEmbeddedSessionRunner(conversationId, 'tui_custom_message_appended');
     return { ok: true };
   }
 
   async appendBashExecution(
-    sessionKey: string,
+    conversationId: string,
     entry: {
       command: string;
       output?: string;
@@ -907,8 +914,8 @@ export class EmbeddedBackend implements TuiBackend {
     if (!this.agent) {
       throw new Error('Agent not started');
     }
-    await this.agent.sessionStore.appendTranscriptBashExecutionEntry(sessionKey, entry);
-    evictEmbeddedSessionRunner(sessionKey, 'tui_bash_execution_appended');
+    await this.agent.sessionStore.appendTranscriptBashExecutionEntry(conversationId, entry);
+    evictEmbeddedSessionRunner(conversationId, 'tui_bash_execution_appended');
     return { ok: true };
   }
 

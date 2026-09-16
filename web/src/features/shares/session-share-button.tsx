@@ -24,7 +24,7 @@ import { ReachabilityHint, ShareUrlCopyRows } from '@/features/shares/share-link
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
-export function SessionShareButton({ sessionKey }: { sessionKey: string }) {
+export function SessionShareButton({ conversationId }: { conversationId: string }) {
   const language = useLocaleStore((state) => state.language);
   const t = language === 'zh' ? LABELS_ZH : LABELS_EN;
   const [open, setOpen] = useState(false);
@@ -47,8 +47,8 @@ export function SessionShareButton({ sessionKey }: { sessionKey: string }) {
     setLoading(true);
     setError(null);
     void Promise.all([
-      fetchSessionSharePreview(sessionKey),
-      fetchSessionShares(sessionKey),
+      fetchSessionSharePreview(conversationId),
+      fetchSessionShares(conversationId),
       fetchHostedShareAuthStatus(),
     ])
       .then(async ([value, localShares, connected]) => {
@@ -61,7 +61,7 @@ export function SessionShareButton({ sessionKey }: { sessionKey: string }) {
         if (cancelled) return;
         setHostedPublishingAllowed(capabilities?.publishing.allowed === true);
         const hostedShares = connected
-          ? await fetchHostedSessionShares(sessionKey).catch(() => [])
+          ? await fetchHostedSessionShares(conversationId).catch(() => [])
           : [];
         if (cancelled) return;
         const shares = [...hostedShares, ...localShares];
@@ -71,7 +71,7 @@ export function SessionShareButton({ sessionKey }: { sessionKey: string }) {
       .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : String(err)); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [open, preview, result, sessionKey]);
+  }, [open, preview, result, conversationId]);
 
   const reset = () => {
     setPreview(null);
@@ -90,8 +90,8 @@ export function SessionShareButton({ sessionKey }: { sessionKey: string }) {
     setError(null);
     try {
       const createShare = delivery === 'hosted' ? createHostedSessionShare : createSessionShare;
-      setResult(await createShare(sessionKey, {
-        expectedSessionId: preview.sessionId,
+      setResult(await createShare(conversationId, {
+        expectedTranscriptId: preview.transcriptId,
         expectedCutoffSeq: preview.cutoffSeq,
         expectedMetadataUpdatedAt: preview.metadataUpdatedAt,
         ttlMs,
@@ -112,11 +112,11 @@ export function SessionShareButton({ sessionKey }: { sessionKey: string }) {
     setLoading(true);
     setError(null);
     try {
-      const latest = await fetchSessionSharePreview(sessionKey);
+      const latest = await fetchSessionSharePreview(conversationId);
       setPreview(latest);
       const refreshShare = result.delivery === 'hosted' ? refreshHostedSessionShare : refreshSessionShare;
-      setResult(await refreshShare(sessionKey, result.id, {
-        expectedSessionId: latest.sessionId,
+      setResult(await refreshShare(conversationId, result.id, {
+        expectedTranscriptId: latest.transcriptId,
         expectedCutoffSeq: latest.cutoffSeq,
         expectedMetadataUpdatedAt: latest.metadataUpdatedAt,
       }));
@@ -132,7 +132,7 @@ export function SessionShareButton({ sessionKey }: { sessionKey: string }) {
     setLoading(true);
     setError(null);
     try {
-      if (result.delivery === 'hosted') await revokeHostedSessionShare(sessionKey, result.id);
+      if (result.delivery === 'hosted') await revokeHostedSessionShare(conversationId, result.id);
       else await revokeShare(result.id);
       setOpen(false);
       reset();

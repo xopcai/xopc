@@ -49,7 +49,7 @@ describe('runBtwQuery', () => {
     ]);
 
     const result = await runBtwQuery({
-      sessionKey: 'agent:main:main',
+      conversationId: 'agent:main:main',
       question: 'what was reviewed?',
       sessionStore: sessionStore as never,
       modelForSession: 'openai/gpt-test',
@@ -71,7 +71,7 @@ describe('runBtwQuery', () => {
     } as Awaited<ReturnType<typeof completeSimple>>);
 
     const result = await runBtwQuery({
-      sessionKey: 'agent:main:main',
+      conversationId: 'agent:main:main',
       question: 'quick check',
       sessionStore: makeSessionStore([]) as never,
       modelForSession: 'openai/gpt-test',
@@ -91,7 +91,7 @@ describe('runBtwQuery', () => {
     const log = makeLog();
 
     const result = await runBtwQuery({
-      sessionKey: 'agent:main:main',
+      conversationId: 'agent:main:main',
       question: 'quick check',
       sessionStore: makeSessionStore([]) as never,
       modelForSession: 'openai-codex/gpt-5.6-luna',
@@ -112,7 +112,7 @@ describe('runBtwQuery', () => {
     } as Awaited<ReturnType<typeof completeSimple>>);
 
     const result = await runBtwQuery({
-      sessionKey: 'agent:main:main',
+      conversationId: 'agent:main:main',
       question: 'review this',
       sessionStore: makeSessionStore([]) as never,
       modelForSession: 'openai/gpt-test',
@@ -141,7 +141,7 @@ describe('runBtwQuery', () => {
     } as Awaited<ReturnType<typeof completeSimple>>);
 
     await runBtwQuery({
-      sessionKey: 'agent:main:main',
+      conversationId: 'agent:main:main',
       question: 'review this',
       sessionStore: makeSessionStore([]) as never,
       modelForSession: 'openai/gpt-test',
@@ -160,7 +160,7 @@ describe('runBtwQuery', () => {
     } as Awaited<ReturnType<typeof completeSimple>>);
 
     const result = await runBtwQuery({
-      sessionKey: 'agent:main:main',
+      conversationId: 'agent:main:main',
       question: 'quick check',
       sessionStore: makeSessionStore([]) as never,
       modelForSession: 'openai/gpt-test',
@@ -176,7 +176,7 @@ describe('runBtwQuery', () => {
     } as Awaited<ReturnType<typeof completeSimple>>);
 
     await runBtwQuery({
-      sessionKey: 'agent:main:main',
+      conversationId: 'agent:main:main',
       question: 'quick check',
       sessionStore: makeSessionStore([]) as never,
       modelForSession: 'openai-codex/gpt-5.6-luna',
@@ -195,7 +195,7 @@ describe('runBtwQuery', () => {
     const log = makeLog();
 
     const result = await runBtwQuery({
-      sessionKey: 'agent:main:main',
+      conversationId: 'agent:main:main',
       question: 'quick check',
       sessionStore: makeSessionStore([]) as never,
       modelForSession: 'openai/gpt-test',
@@ -220,7 +220,7 @@ describe('runBtwQuery', () => {
     const sessionStore = makeSessionStore([{ role: 'user', content: 'Unrelated conversation.' }]);
 
     await runBtwQuery({
-      sessionKey: 'agent:main:main',
+      conversationId: 'agent:main:main',
       question: 'Review this diff.',
       sessionStore: sessionStore as never,
       modelForSession: 'openai/gpt-test',
@@ -238,7 +238,7 @@ describe('runBtwQuery', () => {
     const sessionStore = makeSessionStore([]);
 
     const result = await runBtwQuery({
-      sessionKey: 'agent:main:main',
+      conversationId: 'agent:main:main',
       question: '   ',
       sessionStore: sessionStore as never,
       modelForSession: 'openai/gpt-test',
@@ -257,7 +257,7 @@ describe('runBtwQuery', () => {
     const log = makeLog();
 
     const result = await runBtwQuery({
-      sessionKey: 'agent:main:main',
+      conversationId: 'agent:main:main',
       question: 'quick check',
       sessionStore: makeSessionStore([]) as never,
       modelForSession: 'missing/model',
@@ -277,7 +277,7 @@ describe('runBtwQuery', () => {
     const log = makeLog();
 
     const result = await runBtwQuery({
-      sessionKey: 'agent:main:main',
+      conversationId: 'agent:main:main',
       question: 'quick check',
       sessionStore: makeSessionStore([]) as never,
       modelForSession: 'openai/gpt-test',
@@ -286,7 +286,7 @@ describe('runBtwQuery', () => {
 
     expect(result).toEqual({ text: '', error: 'provider down' });
     expect(log.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionKey: 'agent:main:main', errorMessage: 'provider down' }),
+      expect.objectContaining({ conversationId: 'agent:main:main', errorMessage: 'provider down' }),
       'btwQuery failed',
     );
   });

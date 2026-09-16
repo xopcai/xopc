@@ -71,7 +71,7 @@ export function useAtMentionPicker(
   value: string,
   cursor: number,
   options: {
-    sessionKey: string | null;
+    conversationId: string | null;
     slashPaletteOpen: boolean;
     isComposing?: boolean;
     selectedNoteIds?: ReadonlySet<string>;
@@ -98,17 +98,17 @@ export function useAtMentionPicker(
   const [debouncedQueryRaw] = useDebounce(rawQuery, DEBOUNCE_MS);
   const debouncedQuery = pickerActive ? debouncedQueryRaw : '';
 
-  const sessionKey = options.sessionKey?.trim() ?? '';
+  const conversationId = options.conversationId?.trim() ?? '';
   const selectedNoteIdsKey = [...(options.selectedNoteIds ?? [])].sort().join('\0');
   const itemsResource = useAsyncResource(
     async () => {
-      if (!sessionKey) {
+      if (!conversationId) {
         return [] as AtMentionItem[];
       }
 
       if (isBrowseModeQuery(debouncedQuery)) {
         const dir = browseDirFromQuery(debouncedQuery);
-        const entries = await fetchWorkspaceBrowseEntries(dir, { sessionKey });
+        const entries = await fetchWorkspaceBrowseEntries(dir, { conversationId });
         const mapped = entries.map((e) => ({
           kind: 'file' as const,
           name: e.name,
@@ -127,7 +127,7 @@ export function useAtMentionPicker(
 
       const [raw, notesPayload] = await Promise.all([
         searchWorkspaceFiles(debouncedQuery, {
-          sessionKey,
+          conversationId,
           limit: MAX_FILE_ITEMS,
         }),
         listNotes({
@@ -137,7 +137,7 @@ export function useAtMentionPicker(
           sortOrder: 'desc',
         }).catch(() => ({ items: [], total: 0 })),
       ]);
-      const recentPaths = getRecentAtPaths(sessionKey);
+      const recentPaths = getRecentAtPaths(conversationId);
       const recentItems: AtMentionItem[] = [];
       const seen = new Set(raw.map((r) => r.relativePath));
       for (const p of recentPaths) {
@@ -164,9 +164,9 @@ export function useAtMentionPicker(
         }));
       return [...noteItems, ...recentItems, ...raw];
     },
-    [debouncedQuery, language, selectedNoteIdsKey, sessionKey],
+    [debouncedQuery, language, selectedNoteIdsKey, conversationId],
     {
-      enabled: pickerActive && Boolean(sessionKey),
+      enabled: pickerActive && Boolean(conversationId),
       initial: [] as AtMentionItem[],
       errorData: [] as AtMentionItem[],
     },

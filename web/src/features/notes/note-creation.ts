@@ -15,7 +15,7 @@ export interface NoteCreationDraft {
 }
 
 /** Retain completed steps so a failed upload or handoff can resume the same note. */
-export async function prepareAgentNote(draft: NoteCreationDraft): Promise<{ noteId: string; sessionKey: string }> {
+export async function prepareAgentNote(draft: NoteCreationDraft): Promise<{ noteId: string; conversationId: string }> {
   draft.note ??= await createNote({
     title: draft.title, markdown: draft.markdown, projectId: draft.projectId, channel: 'web',
   }, draft.requestId);
@@ -33,10 +33,10 @@ export async function prepareAgentNote(draft: NoteCreationDraft): Promise<{ note
     });
   }
   const chat = await openNoteChat(noteId, { projectId: draft.projectId });
-  return { noteId, sessionKey: chat.sessionKey };
+  return { noteId, conversationId: chat.conversationId };
 }
 
-export function noteCreationChatHref(sessionKey: string, noteId: string, prompt: string): string {
+export function noteCreationChatHref(conversationId: string, noteId: string, prompt: string): string {
   const search = new URLSearchParams({ draft: prompt.replace('{{id}}', noteId), autoSend: '1' });
-  return `/chat/${encodeURIComponent(sessionKey)}?${search}`;
+  return `/chat/${encodeURIComponent(conversationId)}?${search}`;
 }

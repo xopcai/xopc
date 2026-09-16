@@ -54,7 +54,7 @@ export type BeforeMessageWriteHookResult =
 
 export interface ToolResultGuardOptions {
   /** Optional session key for transcript update broadcasts. */
-  sessionKey?: string;
+  conversationId?: string;
   /** Optional transform applied to any message before persistence. */
   transformMessageForPersistence?: (message: AgentMessage) => AgentMessage;
   /**
@@ -128,7 +128,7 @@ export function guardSessionManager(
   sessionManager: SessionManager,
   opts?: {
     agentId?: string;
-    sessionKey?: string;
+    conversationId?: string;
     config?: Config;
     contextWindowTokens?: number;
     allowSyntheticToolResults?: boolean;
@@ -142,7 +142,7 @@ export function guardSessionManager(
   }
 
   const result = installSessionToolResultGuard(sessionManager, {
-    sessionKey: opts?.sessionKey,
+    conversationId: opts?.conversationId,
     transformMessageForPersistence: opts?.transformMessageForPersistence,
     allowSyntheticToolResults: opts?.allowSyntheticToolResults,
     missingToolResultText: opts?.missingToolResultText,
@@ -224,7 +224,7 @@ function sanitizePersistedSessionDetail(value: unknown): unknown {
   const src = value as Record<string, unknown>;
   const out: Record<string, unknown> = {};
   for (const key of [
-    'sessionId',
+    'transcriptId',
     'status',
     'pid',
     'startedAt',
@@ -262,7 +262,7 @@ function buildPersistedDetailsFallback(
   }
   if (src) {
     fallback.originalDetailKeys = firstEnumerableOwnKeys(src, 40);
-    for (const key of ['status', 'sessionId', 'pid', 'exitCode', 'exitSignal', 'truncated']) {
+    for (const key of ['status', 'transcriptId', 'pid', 'exitCode', 'exitSignal', 'truncated']) {
       const field = src[key];
       if (field !== undefined) {
         fallback[key] =
@@ -323,7 +323,7 @@ function sanitizeToolResultDetailsForPersistence(details: unknown): unknown {
   };
   for (const key of [
     'status',
-    'sessionId',
+    'transcriptId',
     'pid',
     'startedAt',
     'endedAt',
@@ -630,9 +630,9 @@ class ToolResultGuard {
       const finalToolResult = capToolResultForPersistence(persisted, this.maxToolResultChars);
       const result = this.originalAppend(finalToolResult as never);
 
-      if (this.opts.sessionKey) {
+      if (this.opts.conversationId) {
         emitSessionTranscriptUpdate({
-          sessionKey: this.opts.sessionKey,
+          conversationId: this.opts.conversationId,
           message: finalToolResult,
           messageId: typeof result === 'string' ? result : undefined,
         });
@@ -675,9 +675,9 @@ class ToolResultGuard {
     }
     const result = this.originalAppend(finalMessage as never);
 
-    if (this.opts.sessionKey) {
+    if (this.opts.conversationId) {
       emitSessionTranscriptUpdate({
-        sessionKey: this.opts.sessionKey,
+        conversationId: this.opts.conversationId,
         message: finalMessage,
         messageId: typeof result === 'string' ? result : undefined,
       });

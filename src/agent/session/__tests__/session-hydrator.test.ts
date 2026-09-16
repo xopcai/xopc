@@ -13,7 +13,7 @@ import {
 } from '../../../storage/sqlite/index.js';
 import { SessionHydrator } from '../session-hydrator.js';
 
-const SESSION_KEY = 'agent:main:webchat:default:direct:missing-environment';
+const CONVERSATION_ID = 'agent:main:webchat:default:direct:missing-environment';
 
 const config = ConfigSchema.parse({
   agents: {
@@ -62,7 +62,7 @@ describe('SessionHydrator execution environment safety', () => {
       toStatus: 'ready',
       reason: 'test ready',
     });
-    store.bind({ sessionKey: SESSION_KEY, environmentId: ready.id });
+    store.bind({ conversationId: CONVERSATION_ID, environmentId: ready.id });
 
     const setSessionWorkspaceOverride = vi.fn();
     const hydrator = new SessionHydrator({
@@ -72,7 +72,7 @@ describe('SessionHydrator execution environment safety', () => {
       getConfig: () => config,
     });
 
-    await expect(hydrator.workspace(SESSION_KEY)).rejects.toThrow(/root is unavailable/);
+    await expect(hydrator.workspace(CONVERSATION_ID)).rejects.toThrow(/root is unavailable/);
     expect(setSessionWorkspaceOverride).not.toHaveBeenCalled();
     expect(existsSync(rootPath)).toBe(false);
   });

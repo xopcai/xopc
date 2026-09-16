@@ -158,13 +158,13 @@ export class MemoryManager {
         this.trace('sync', p.id, event, {
           resultCount: 1,
           durationMs: Date.now() - started,
-          sessionKey: options?.sessionId,
+          conversationId: options?.sessionId,
         });
       } catch (err) {
         this.trace('sync', p.id, event, {
           error: err instanceof Error ? err.message : String(err),
           durationMs: Date.now() - started,
-          sessionKey: options?.sessionId,
+          conversationId: options?.sessionId,
         });
         log.warn({ err, id: p.id }, 'memory sync failed');
       }
@@ -216,7 +216,7 @@ export class MemoryManager {
           resultCount: providerResults.length,
           selectedRecordIds: providerResults.map((result) => result.record.id),
           durationMs: Date.now() - started,
-          sessionKey: request.scope?.sessionKey,
+          conversationId: request.scope?.conversationId,
         });
         results.push(...providerResults);
         if (providerResults.length > 0 && this.routing.searchStrategy !== 'fanout') {
@@ -226,7 +226,7 @@ export class MemoryManager {
         this.trace('search', p.id, request, {
           error: err instanceof Error ? err.message : String(err),
           durationMs: Date.now() - started,
-          sessionKey: request.scope?.sessionKey,
+          conversationId: request.scope?.conversationId,
         });
         log.warn({ err, id: p.id }, 'memory search failed');
       }
@@ -261,14 +261,14 @@ export class MemoryManager {
           resultCount: result ? 1 : 0,
           selectedRecordIds: result ? [result.record.id] : [],
           durationMs: Date.now() - started,
-          sessionKey: request.scope?.sessionKey,
+          conversationId: request.scope?.conversationId,
         });
         if (result && this.canReadRecord(result.record, request.scope)) return result;
       } catch (err) {
         this.trace('read', p.id, request, {
           error: err instanceof Error ? err.message : String(err),
           durationMs: Date.now() - started,
-          sessionKey: request.scope?.sessionKey,
+          conversationId: request.scope?.conversationId,
         });
         log.warn({ err, id: p.id }, 'memory read failed');
       }
@@ -318,7 +318,7 @@ export class MemoryManager {
     if (record.providerId !== 'local') return true;
     if (this.memoryRuntime && !this.memoryRuntime.canRead(memorySourceForRecord(record))) return false;
     if (record.scope.userId && scope?.userId && record.scope.userId !== scope.userId) return false;
-    if (record.scope.sessionKey && record.scope.sessionKey !== scope?.sessionKey) return false;
+    if (record.scope.conversationId && record.scope.conversationId !== scope?.conversationId) return false;
     if (record.scope.projectId && record.scope.projectId !== scope?.projectId) return false;
     if (record.scope.workspaceId && record.scope.workspaceId !== scope?.workspaceId) return false;
     return true;
@@ -435,7 +435,7 @@ export class MemoryManager {
       if (!this.providerAllowedForWrite(p, operation, request)) {
         this.trace(operation, p.id, request, {
           skippedReason: 'policy',
-          sessionKey: request.scope?.sessionKey,
+          conversationId: request.scope?.conversationId,
         });
         continue;
       }
@@ -452,7 +452,7 @@ export class MemoryManager {
           selectedRecordIds: result.record ? [result.record.id] : [],
           error: result.success ? undefined : result.error,
           durationMs: Date.now() - started,
-          sessionKey: request.scope?.sessionKey,
+          conversationId: request.scope?.conversationId,
         });
         if (result.success) {
           firstSuccess ??= result;
@@ -467,7 +467,7 @@ export class MemoryManager {
         this.trace(operation, p.id, request, {
           error: message,
           durationMs: Date.now() - started,
-          sessionKey: request.scope?.sessionKey,
+          conversationId: request.scope?.conversationId,
         });
         errors.push(`${p.id}: ${message}`);
         log.warn({ err, id: p.id, operation }, 'memory write operation failed');
@@ -533,7 +533,7 @@ export class MemoryManager {
     providerId: string,
     request: unknown,
     meta: {
-      sessionKey?: string;
+      conversationId?: string;
       resultCount?: number;
       selectedRecordIds?: string[];
       skippedReason?: string;
@@ -547,7 +547,7 @@ export class MemoryManager {
 
 function memorySourceForRecord(record: MemoryRecord): MemorySource {
   if (record.source.provider !== 'builtin') return 'connector';
-  if (record.scope.sessionKey) return 'session';
+  if (record.scope.conversationId) return 'session';
   if (record.scope.projectId) return 'project';
   return 'workspace';
 }

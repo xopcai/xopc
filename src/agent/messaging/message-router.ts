@@ -20,12 +20,12 @@ export class MessageRouter {
    * Route an inbound message and determine handling strategy
    */
   async routeMessage(msg: InboundMessage): Promise<MessageRoutingResult> {
-    const sessionKey = this.resolveSessionKey(msg);
+    const conversationId = this.resolveConversationId(msg);
 
     const context: AgentContext = {
       channel: msg.channel,
       chatId: msg.chat_id,
-      sessionKey,
+      conversationId,
       senderId: (msg.metadata?.senderId as string) || msg.sender_id,
       isGroup: (msg.metadata?.isGroup as boolean) || false,
     };
@@ -43,10 +43,10 @@ export class MessageRouter {
   /**
    * Resolve session key from message metadata or derive from channel/chat_id
    */
-  private resolveSessionKey(msg: InboundMessage): string {
-    // Use sessionKey from metadata if available (for channels with custom session key format like Telegram)
-    if (msg.metadata?.sessionKey) {
-      return msg.metadata.sessionKey as string;
+  private resolveConversationId(msg: InboundMessage): string {
+    // Use conversationId from metadata if available (for channels with custom session key format like Telegram)
+    if (msg.metadata?.conversationId) {
+      return msg.metadata.conversationId as string;
     }
 
     // For system messages, parse origin channel from chat_id

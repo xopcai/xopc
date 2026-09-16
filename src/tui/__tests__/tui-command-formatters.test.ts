@@ -137,7 +137,7 @@ it('exposes native usage and context commands', () => {
   it('formats hidden debug snapshots with rendered line widths', () => {
     const text = formatTuiDebugInfo({
       state: {
-        currentSessionKey: 'agent:main:main',
+        currentConversationId: "6d9217fe-77c7-411d-8cc9-92aabe81a2d0",
         sessionInfo: { model: 'gpt-5' },
         toolsExpanded: false,
         showThinking: true,
@@ -148,7 +148,7 @@ it('exposes native usage and context commands', () => {
     });
 
     expect(text).toContain('Terminal: 80x24');
-    expect(text).toContain('"currentSessionKey": "agent:main:main"');
+    expect(text).toContain('"currentConversationId": "6d9217fe-77c7-411d-8cc9-92aabe81a2d0"');
     expect(text).toContain('=== Runtime Log Stats ===');
     expect(text).toContain('[0] (w=5) "plain"');
     expect(text).toContain('(w=3)');
@@ -185,13 +185,14 @@ it('exposes native usage and context commands', () => {
 
   it('formats current session status from local TUI state', () => {
     const text = formatTuiSessionInfo({
-      ...createInitialState('agent:research:tui-123'),
-      currentSessionKey: 'agent:research:tui-123',
+      ...createInitialState("dac36f29-33b7-4674-8425-ef9a14bf89cd"),
+      currentConversationId: "dac36f29-33b7-4674-8425-ef9a14bf89cd",
       activeRunId: null,
       isConnected: true,
       activityStatus: 'streaming',
       connectionStatus: 'ready',
       sessionInfo: {
+        agentId: "research",
         displayName: 'Focused work',
         modelProvider: 'openai',
         model: 'gpt-5',
@@ -212,7 +213,7 @@ it('exposes native usage and context commands', () => {
 
     expect(text).toContain('Session Info');
     expect(text).toContain('Name: Focused work');
-    expect(text).toContain('Key: agent:research:tui-123');
+    expect(text).toContain('Key: dac36f29-33b7-4674-8425-ef9a14bf89cd');
     expect(text).toContain('Agent: research');
     expect(text).toContain('Model: openai/gpt-5');
     expect(text).toContain('Reasoning: stream');
@@ -223,8 +224,8 @@ it('exposes native usage and context commands', () => {
 
   it('formats usage and context details from local TUI state', () => {
     const state = {
-      ...createInitialState('agent:main:main'),
-      currentSessionKey: 'agent:main:main',
+      ...createInitialState("6d9217fe-77c7-411d-8cc9-92aabe81a2d0"),
+      currentConversationId: "6d9217fe-77c7-411d-8cc9-92aabe81a2d0",
       activeRunId: null,
       isConnected: true,
       activityStatus: 'idle',
@@ -299,8 +300,8 @@ it('exposes native usage and context commands', () => {
 
   it('formats a local config summary', () => {
     const text = formatTuiConfigInfo({
-      ...createInitialState('agent:main:main'),
-      currentSessionKey: 'agent:main:main',
+      ...createInitialState("6d9217fe-77c7-411d-8cc9-92aabe81a2d0"),
+      currentConversationId: "6d9217fe-77c7-411d-8cc9-92aabe81a2d0",
       activeRunId: null,
       isConnected: true,
       activityStatus: 'idle',
@@ -335,7 +336,7 @@ it('exposes native usage and context commands', () => {
   it('formats startup help text', () => {
     const text = formatTuiStartText(
       {
-        ...createInitialState('agent:main:main'),
+        ...createInitialState("6d9217fe-77c7-411d-8cc9-92aabe81a2d0"),
         isConnected: true,
         connectionStatus: 'ready',
         sessionInfo: { modelProvider: 'openai', model: 'gpt-5' },
@@ -353,7 +354,7 @@ it('exposes native usage and context commands', () => {
     );
 
     expect(text).toContain('xopc TUI');
-    expect(text).toContain('Session: agent:main:main');
+    expect(text).toContain('Session: 6d9217fe-77c7-411d-8cc9-92aabe81a2d0');
     expect(text).toContain('Model: openai/gpt-5');
     expect(text).toContain('Press /start to show full startup help.');
     expect(text).toContain('[Context]');
@@ -400,7 +401,8 @@ it('exposes native usage and context commands', () => {
     const text = formatTuiSessionListInfo(
       [
         {
-          key: 'agent:main:main',
+          key: "6d9217fe-77c7-411d-8cc9-92aabe81a2d0",
+          agentId: 'main', sourceChannel: 'cli',
           displayName: 'Main',
           updatedAt: now,
           messageCount: 4,
@@ -408,18 +410,18 @@ it('exposes native usage and context commands', () => {
           model: 'openai/gpt-5',
         },
         {
-          key: 'agent:main:tui-2',
+          key: "42e3e68b-83d4-45fb-87b8-0a4d57a88167",
           updatedAt: now - 120_000,
           messageCount: 1,
         },
       ],
-      { currentSessionKey: 'agent:main:main', limit: 1 },
+      { currentConversationId: "6d9217fe-77c7-411d-8cc9-92aabe81a2d0", limit: 1 },
     );
 
     expect(text).toContain('* Main');
     expect(text).toContain('4 msgs');
     expect(text).toContain('openai/gpt-5');
-    expect(text).toContain('agent:main:main');
+    expect(text).toContain("6d9217fe-77c7-411d-8cc9-92aabe81a2d0");
     expect(text).toContain('Showing 1 of 2 sessions');
   });
 
@@ -428,32 +430,34 @@ it('exposes native usage and context commands', () => {
     const text = formatTuiSessionTreeInfo(
       [
         {
-          key: 'agent:main:main',
+          key: "6d9217fe-77c7-411d-8cc9-92aabe81a2d0",
+          agentId: 'main', sourceChannel: 'cli',
           displayName: 'Main',
           updatedAt: now,
           messageCount: 4,
         },
         {
-          key: 'agent:main:telegram:direct:alice',
+          key: "be248d51-6ecb-42cd-8a4a-c3e26464a824",
+          agentId: 'main', sourceChannel: 'telegram',
           displayName: 'Alice fork',
           updatedAt: now - 120_000,
           messageCount: 2,
-          forkedFromSessionKey: 'agent:main:main',
+          forkedFromConversationId: "6d9217fe-77c7-411d-8cc9-92aabe81a2d0",
         },
         {
           key: 'plain-session',
           updatedAt: now,
         },
       ],
-      { currentSessionKey: 'agent:main:main' },
+      { currentConversationId: "6d9217fe-77c7-411d-8cc9-92aabe81a2d0" },
     );
 
     expect(text).toContain('Session Tree');
-    expect(text).toContain('main/main');
+    expect(text).toContain('main/cli');
     expect(text).toContain('* Main');
     expect(text).toContain('main/telegram');
     expect(text).toContain('forked from Main');
-    expect(text).toContain('unknown/plain-session');
+    expect(text).toContain('unknown/chat');
   });
 
   it('formats a transcript tree', () => {

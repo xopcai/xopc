@@ -29,7 +29,7 @@ export const TaskRunSchema = z.object({
   contractVersion: z.number().int().positive(),
   contextSnapshotId: z.string().optional(),
   policySnapshot: z.record(z.string(), z.unknown()).optional(),
-  sessionKey: z.string().optional(),
+  conversationId: z.string().optional(),
   queuedAt: z.number().int().nonnegative(),
   scheduledAt: z.number().int().nonnegative().optional(),
   startedAt: z.number().int().nonnegative().optional(),

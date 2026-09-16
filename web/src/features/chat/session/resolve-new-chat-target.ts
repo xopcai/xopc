@@ -9,9 +9,9 @@ import type { SessionManager } from '@/features/chat/session/session-manager';
 import { normalizeAgentId } from '@/lib/agent-id';
 
 export type NewChatResolution =
-  | { kind: 'noop'; sessionKey: string }
-  | { kind: 'reuse'; sessionKey: string; session: SessionInfo }
-  | { kind: 'create'; sessionKey: string; session: SessionInfo };
+  | { kind: 'noop'; conversationId: string }
+  | { kind: 'reuse'; conversationId: string; session: SessionInfo }
+  | { kind: 'create'; conversationId: string; session: SessionInfo };
 
 function findSessionRow(sessions: SessionInfo[], key: string): SessionInfo | undefined {
   const k = key.trim();
@@ -55,7 +55,7 @@ export async function resolveNewChatTarget(opts: {
   sessionMgr: SessionManager;
   agentId: string;
   projectId?: string | null;
-  currentSessionKey?: string | null;
+  currentConversationId?: string | null;
   forceNew?: boolean;
   temporary?: boolean;
   initialAgentConfig?: SessionInitialAgentConfig;
@@ -63,7 +63,7 @@ export async function resolveNewChatTarget(opts: {
 }): Promise<NewChatResolution> {
   const agentId = normalizeAgentId(opts.agentId);
   const projectId = opts.projectId?.trim() || undefined;
-  const current = opts.currentSessionKey?.trim() || null;
+  const current = opts.currentConversationId?.trim() || null;
 
   if (opts.forceNew || opts.temporary || opts.executionMode) {
     const session = await opts.sessionMgr.createSession({
@@ -73,7 +73,7 @@ export async function resolveNewChatTarget(opts: {
       ...(opts.initialAgentConfig ? { initialAgentConfig: opts.initialAgentConfig } : {}),
       ...(opts.executionMode ? { executionMode: opts.executionMode } : {}),
     });
-    return { kind: 'create', sessionKey: session.key, session };
+    return { kind: 'create', conversationId: session.key, session };
   }
 
   const sessions = await loadAllWebchatSessions(opts.sessionMgr, agentId, projectId);
@@ -81,13 +81,13 @@ export async function resolveNewChatTarget(opts: {
   if (current) {
     const row = findSessionRow(sessions, current);
     if (row && isReusableEmptyShell(row, { agentId, projectId })) {
-      return { kind: 'noop', sessionKey: current };
+      return { kind: 'noop', conversationId: current };
     }
   }
 
   const reusable = pickReusableEmptyShell(sessions, { agentId, projectId });
   if (reusable && reusable.key.trim() !== current) {
-    return { kind: 'reuse', sessionKey: reusable.key, session: reusable };
+    return { kind: 'reuse', conversationId: reusable.key, session: reusable };
   }
 
   const session = await opts.sessionMgr.createSession({
@@ -95,5 +95,5 @@ export async function resolveNewChatTarget(opts: {
     projectId,
     ...(opts.initialAgentConfig ? { initialAgentConfig: opts.initialAgentConfig } : {}),
   });
-  return { kind: 'create', sessionKey: session.key, session };
+  return { kind: 'create', conversationId: session.key, session };
 }

@@ -53,13 +53,13 @@ export function useAttachmentPreviewResolved({
   open,
   attachment,
   authToken,
-  sessionKey,
+  conversationId,
   language,
 }: {
   open: boolean;
   attachment: MessageAttachment | null;
   authToken?: string;
-  sessionKey?: string | null;
+  conversationId?: string | null;
   language: StoredLanguage;
 }): AttachmentPreviewResolved {
   const [previewBase, setPreviewBase] = useState<MessageAttachment | null>(open ? attachment : null);
@@ -88,9 +88,9 @@ export function useAttachmentPreviewResolved({
       mimeType,
       size: preview.size,
       type,
-      source: preview.uri ? { kind: 'media-uri', uri: preview.uri, sessionKey } : { kind: 'inline' },
+      source: preview.uri ? { kind: 'media-uri', uri: preview.uri, conversationId } : { kind: 'inline' },
     };
-  }, [preview, sessionKey]);
+  }, [preview, conversationId]);
 
   const inlinePayload = preview ? getAttachmentBinaryPayload(preview) : undefined;
   const mediaUri = preview?.uri;
@@ -102,14 +102,14 @@ export function useAttachmentPreviewResolved({
   const gatewayFetch = useAsyncResource(
     async () => {
       const L = messages(language).chat;
-      const result = await fetchMediaUriBuffer({ uri: mediaUri!, sessionKey, taskId: preview?.taskId });
+      const result = await fetchMediaUriBuffer({ uri: mediaUri!, conversationId, taskId: preview?.taskId });
       if (!result.ok) {
         if (result.reason === 'http') throw new Error(`${L.attachmentPreviewLoadError} (HTTP ${result.status})`);
         throw new Error(result.message);
       }
       return result.buffer;
     },
-    [open, mediaUri, authToken, language, inlinePayload, preview?.taskId, sessionKey, readMode],
+    [open, mediaUri, authToken, language, inlinePayload, preview?.taskId, conversationId, readMode],
     { enabled: fetchEnabled, initial: null as ArrayBuffer | null, errorData: null },
   );
 

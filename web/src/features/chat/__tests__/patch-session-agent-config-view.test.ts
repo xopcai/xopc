@@ -4,7 +4,7 @@ import { defaultSessionMeta } from '@/features/chat/session/chat-session-default
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import { patchSessionAgentConfigView } from '@/features/chat/session/patch-session-agent-config-view';
 
-const sessionKey = 'agent:main:webchat:default:direct:new';
+const conversationId = 'agent:main:webchat:default:direct:new';
 
 describe('patchSessionAgentConfigView', () => {
   beforeEach(() => {
@@ -12,8 +12,8 @@ describe('patchSessionAgentConfigView', () => {
   });
 
   it('uses the global activity detail level instead of a session override', () => {
-    useChatSessionStore.getState().setCommittedSnapshot(sessionKey, { messages: [], hasMore: false });
-    patchSessionAgentConfigView(sessionKey, {
+    useChatSessionStore.getState().setCommittedSnapshot(conversationId, { messages: [], hasMore: false });
+    patchSessionAgentConfigView(conversationId, {
       model: 'openai/gpt-4o',
       thinkingLevel: 'high',
       reasoningLevel: 'off',
@@ -26,7 +26,7 @@ describe('patchSessionAgentConfigView', () => {
       userContextMode: 'temporary',
     });
 
-    const slice = useChatSessionStore.getState().sessions[sessionKey];
+    const slice = useChatSessionStore.getState().sessions[conversationId];
     expect(slice?.model).toBe('openai/gpt-4o');
     expect(slice?.thinkingLevel).toBe('high');
     expect(slice?.reasoningLevel).toBe('on');
@@ -34,17 +34,17 @@ describe('patchSessionAgentConfigView', () => {
   });
 
   it('uses explicit session key so metadata survives focused-key lag after /chat/new', () => {
-    useChatSessionStore.getState().setCommittedSnapshot(sessionKey, { messages: [], hasMore: false });
-    patchSessionAgentConfigView(sessionKey, { model: 'anthropic/claude-sonnet-4-6' });
+    useChatSessionStore.getState().setCommittedSnapshot(conversationId, { messages: [], hasMore: false });
+    patchSessionAgentConfigView(conversationId, { model: 'anthropic/claude-sonnet-4-6' });
 
-    expect(useChatSessionStore.getState().sessions[sessionKey]?.model).toBe('anthropic/claude-sonnet-4-6');
-    expect(useChatSessionStore.getState().sessions[sessionKey]?.model).not.toBe(defaultSessionMeta().model);
+    expect(useChatSessionStore.getState().sessions[conversationId]?.model).toBe('anthropic/claude-sonnet-4-6');
+    expect(useChatSessionStore.getState().sessions[conversationId]?.model).not.toBe(defaultSessionMeta().model);
   });
   it('ignores an older background response after a successful model change', () => {
-    useChatSessionStore.getState().setCommittedSnapshot(sessionKey, { messages: [], hasMore: false });
-    patchSessionAgentConfigView(sessionKey, { model: 'test/new', thinkingLevel: 'high', configVersion: 20 });
-    patchSessionAgentConfigView(sessionKey, { model: 'test/old', thinkingLevel: 'low', configVersion: 19 });
-    expect(useChatSessionStore.getState().sessions[sessionKey]).toMatchObject({ model: 'test/new', thinkingLevel: 'high', configVersion: 20 });
+    useChatSessionStore.getState().setCommittedSnapshot(conversationId, { messages: [], hasMore: false });
+    patchSessionAgentConfigView(conversationId, { model: 'test/new', thinkingLevel: 'high', configVersion: 20 });
+    patchSessionAgentConfigView(conversationId, { model: 'test/old', thinkingLevel: 'low', configVersion: 19 });
+    expect(useChatSessionStore.getState().sessions[conversationId]).toMatchObject({ model: 'test/new', thinkingLevel: 'high', configVersion: 20 });
   });
 
 });

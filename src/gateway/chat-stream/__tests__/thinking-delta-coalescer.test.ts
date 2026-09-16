@@ -7,7 +7,7 @@ function thinking(delta: string, messageId = 'message-1'): ThinkingDeltaEvent {
   return {
     type: 'thinking_delta',
     runId: 'run-1',
-    sessionKey: 'session-1',
+    conversationId: 'session-1',
     timestamp: 1,
     payload: { messageId, delta },
   };
@@ -17,7 +17,7 @@ function assistant(delta: string): AssistantDeltaEvent {
   return {
     type: 'assistant_delta',
     runId: 'run-1',
-    sessionKey: 'session-1',
+    conversationId: 'session-1',
     timestamp: 1,
     payload: { messageId: 'message-1', delta },
   };

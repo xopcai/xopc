@@ -5,7 +5,7 @@ import { imageContentToSource, normalizeGeneratedWorkspacePath } from '../image-
 const ctx = {
   apiUrl: (path: string) => `http://gateway.test${path}`,
   token: 'token-1',
-  sessionKey: 'agent:main:webchat:default:direct:chat_1',
+  conversationId: 'agent:main:webchat:default:direct:chat_1',
 };
 
 describe('image-source-utils', () => {
@@ -29,7 +29,7 @@ describe('image-source-utils', () => {
   it('converts media URI images to gateway media read URLs', () => {
     const source = imageContentToSource({ type: 'image', source: { data: 'media://generated/chat/cat.png' } }, ctx);
     expect(source?.uri).toBe(
-      'http://gateway.test/api/media/read?uri=media%3A%2F%2Fgenerated%2Fchat%2Fcat.png&sessionKey=agent%3Amain%3Awebchat%3Adefault%3Adirect%3Achat_1',
+      'http://gateway.test/api/media/read?uri=media%3A%2F%2Fgenerated%2Fchat%2Fcat.png&conversationId=agent%3Amain%3Awebchat%3Adefault%3Adirect%3Achat_1',
     );
     expect(source?.headers).toEqual({ Authorization: 'Bearer token-1' });
   });

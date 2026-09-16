@@ -6,8 +6,8 @@ export function buildSubagentContextSection(params: {
   goal: string;
   context?: string;
   workspace?: string;
-  requesterSessionKey?: string;
-  childSessionKey?: string;
+  requesterConversationId?: string;
+  childConversationId?: string;
 }): string {
   const taskBody = params.goal.trim();
   const roleLines =
@@ -67,13 +67,13 @@ export function buildSubagentContextSection(params: {
   if (params.workspace?.trim()) {
     lines.push(`Workspace: ${params.workspace.trim()}`, '');
   }
-  if (params.requesterSessionKey || params.childSessionKey) {
+  if (params.requesterConversationId || params.childConversationId) {
     lines.push(
       '## Session Context',
-      ...(params.requesterSessionKey
-        ? [`- Requester session: ${params.requesterSessionKey}`]
+      ...(params.requesterConversationId
+        ? [`- Requester session: ${params.requesterConversationId}`]
         : []),
-      ...(params.childSessionKey ? [`- Your session: ${params.childSessionKey}`] : []),
+      ...(params.childConversationId ? [`- Your session: ${params.childConversationId}`] : []),
       '',
     );
   }
@@ -89,8 +89,8 @@ export function buildSubagentSystemPrompt(params: {
   goal: string;
   context?: string;
   workspace?: string;
-  requesterSessionKey?: string;
-  childSessionKey?: string;
+  requesterConversationId?: string;
+  childConversationId?: string;
   toolNames?: string[];
   responseLanguage?: ResponseLanguage;
 }): string {

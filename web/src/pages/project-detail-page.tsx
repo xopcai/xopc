@@ -229,7 +229,7 @@ function activityActorLabel(activity: ProjectActivityEvent): string {
   if (actor.name) return actor.name;
   if (actor.agentId) return actor.agentId;
   if (actor.id) return actor.id;
-  if (actor.sessionKey) return actor.sessionKey;
+  if (actor.conversationId) return actor.conversationId;
   return actor.kind;
 }
 
@@ -249,10 +249,7 @@ function projectSessionSource(session: ProjectSession): string {
   const explicit = session.sourceChannel?.trim();
   if (explicit) return formatProjectSessionSource(explicit);
 
-  const parts = session.key.split(':').filter(Boolean);
-  const rest = parts[0]?.toLowerCase() === 'agent' ? parts.slice(2).join(':') : session.key;
-  const candidate = rest.split(':')[0]?.split(/[-_]/)[0]?.trim();
-  return formatProjectSessionSource(candidate || '');
+  return '';
 }
 
 function formatProjectSessionSource(source: string): string {

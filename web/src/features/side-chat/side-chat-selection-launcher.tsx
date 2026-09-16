@@ -22,7 +22,7 @@ type SelectionPopup = {
 /** Selection actions for the main conversation and its temporary side chats. */
 export function SideChatSelectionLauncher() {
   const { pathname } = useLocation();
-  const sessionKey = pathname.startsWith('/chat/') ? pathname.slice('/chat/'.length) : '';
+  const conversationId = pathname.startsWith('/chat/') ? pathname.slice('/chat/'.length) : '';
   const language = useLocaleStore((state) => state.language);
   const m = getMessages(language).sideChat;
   const requestCreate = useSideChatStore((state) => state.requestCreate);
@@ -30,7 +30,7 @@ export function SideChatSelectionLauncher() {
   const setWorkspaceOpen = useWorkspacePanelStore((state) => state.setOpen);
   const [popup, setPopup] = useState<SelectionPopup | null>(null);
   const inspectSelection = useCallback(() => {
-    if (!sessionKey || sessionKey === 'new' || pendingCreate) {
+    if (!conversationId || conversationId === 'new' || pendingCreate) {
       setPopup(null);
       return;
     }
@@ -70,7 +70,7 @@ export function SideChatSelectionLauncher() {
     const preferredTop = rect.bottom + 8;
     const top = preferredTop + 38 < window.innerHeight ? preferredTop : Math.max(VIEWPORT_GUTTER, rect.top - 42);
     setPopup({ text, left, top, fromSide });
-  }, [pathname, pendingCreate, sessionKey]);
+  }, [pathname, pendingCreate, conversationId]);
 
   useEffect(() => {
     if (!pathname.startsWith('/chat/')) {
@@ -91,7 +91,7 @@ export function SideChatSelectionLauncher() {
     };
   }, [inspectSelection, pathname]);
 
-  if (!popup || !sessionKey || sessionKey === 'new') return null;
+  if (!popup || !conversationId || conversationId === 'new') return null;
 
   return (
     <div
@@ -117,9 +117,9 @@ export function SideChatSelectionLauncher() {
         type="button"
         className="inline-flex flex-1 items-center justify-center gap-1.5 border-l border-edge px-3 transition-colors hover:bg-surface-hover focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
         onClick={() => {
-          const parentSessionKey = decodeURIComponent(sessionKey);
+          const parentConversationId = decodeURIComponent(conversationId);
           setWorkspaceOpen(false);
-          requestCreate(parentSessionKey, [{
+          requestCreate(parentConversationId, [{
             id: crypto.randomUUID(),
             type: 'text',
             text: popup.text,

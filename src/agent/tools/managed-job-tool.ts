@@ -23,7 +23,7 @@ function result(value: unknown): AgentToolResult<Record<string, unknown>> {
 
 export function createManagedJobTool(
   workspace: string,
-  getSessionKey: () => string | undefined,
+  getConversationId: () => string | undefined,
   getSkillPassthroughEnvVarNames?: () => string[],
   prepareEnv?: (baseEnv: Record<string, string>, cwd: string) => Promise<Record<string, string>>,
   getCommandIsolation?: () => CommandIsolation | undefined,
@@ -34,7 +34,7 @@ export function createManagedJobTool(
     parameters: ManagedJobSchema,
     supportsParallel: true, idempotent: false,
     async execute(_toolCallId: string, input: Static<typeof ManagedJobSchema>, signal?: AbortSignal) {
-      const owner = getSessionKey() ?? workspace;
+      const owner = getConversationId() ?? workspace;
       const registry = commandRegistry();
       if (input.action === 'list') return result(registry.list(owner));
       if (input.action !== 'start') {

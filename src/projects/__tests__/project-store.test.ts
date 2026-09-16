@@ -16,7 +16,7 @@ import { inferProjectKind } from '../project-kind.js';
 import { ProjectService } from '../project-service.js';
 import { canonicalWorkspacePath, ProjectWorkspaceConflictError } from '../workspace-project.js';
 
-const SESSION_KEY = 'agent:main:webchat:default:direct:project-test';
+const CONVERSATION_ID = "45152f36-8488-43a2-8ead-d08f18f5b1a2";
 
 describe('ProjectService', () => {
   let stateDir: string;
@@ -329,12 +329,12 @@ describe('ProjectService', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-09-01T00:00:00Z'));
     const older = projects.create({ name: 'Older Project' });
-    const olderKey = `${SESSION_KEY}-older`;
-    ensureSessionRecord(olderKey, process.cwd(), { projectId: older.id });
+    const olderKey = 'ae3a0d64-3c41-42cc-a777-d55055c8f7a4';
+    ensureSessionRecord(olderKey, process.cwd(), { agentId: "main", projectId: older.id });
 
     vi.setSystemTime(new Date('2026-09-02T00:00:00Z'));
     const newer = projects.create({ name: 'Newer Project' });
-    ensureSessionRecord(`${SESSION_KEY}-newer`, process.cwd(), { projectId: newer.id });
+    ensureSessionRecord('ae3a0d64-3c41-42cc-a777-d55055c8f7a1', process.cwd(), { agentId: "main", projectId: newer.id });
 
     const readPages = () => [0, 1].map((offset) => {
       const page = projects.listWithSidebarSessions({ status: 'active', limit: 1, offset });
@@ -345,7 +345,7 @@ describe('ProjectService', () => {
     expect(readPages()).toEqual([newer.id, older.id]);
 
     vi.setSystemTime(new Date('2026-09-03T00:00:00Z'));
-    ensureSessionRecord(`${SESSION_KEY}-new-conversation`, process.cwd(), { projectId: older.id });
+    ensureSessionRecord('ae3a0d64-3c41-42cc-a777-d55055c8f7a2', process.cwd(), { agentId: "main", projectId: older.id });
     expect(readPages()).toEqual([newer.id, older.id]);
 
     vi.setSystemTime(new Date('2026-09-04T00:00:00Z'));
@@ -372,8 +372,8 @@ describe('ProjectService', () => {
     expect(second.items.map((project) => project.id)).toEqual([older.id]);
     expect(second.hasMore).toBe(false);
 
-    ensureSessionRecord(SESSION_KEY, process.cwd(), { projectId: newer.id });
-    ensureSessionRecord(`${SESSION_KEY}-second`, process.cwd(), { projectId: newer.id });
+    ensureSessionRecord(CONVERSATION_ID, process.cwd(), { agentId: "main", projectId: newer.id });
+    ensureSessionRecord('ae3a0d64-3c41-42cc-a777-d55055c8f7a3', process.cwd(), { agentId: "main", projectId: newer.id });
     expect(projects.listWithSidebarSessions(query).total).toBe(2);
     expect(projects.listWithSidebarSessions(query).items.map((project) => project.id)).toEqual([newer.id]);
   });
@@ -384,10 +384,12 @@ describe('ProjectService', () => {
     const pinned = projects.create({ name: 'Pinned Sidebar Project' });
     vi.setSystemTime(new Date('2026-09-02T00:00:00Z'));
     const recent = projects.create({ name: 'Recent Sidebar Project' });
-    ensureSessionRecord('agent:main:webchat:default:direct:recent-sidebar-project', process.cwd(), {
+    ensureSessionRecord("5883cd96-e527-4395-8689-df6aa6cb36d2", process.cwd(), {
+      agentId: "main",
       projectId: recent.id,
     });
-    ensureSessionRecord('agent:main:webchat:default:direct:pinned-sidebar-project', process.cwd(), {
+    ensureSessionRecord("111830c3-bb42-4d44-8805-ee88a58cf86c", process.cwd(), {
+      agentId: "main",
       projectId: pinned.id,
     });
 
@@ -403,7 +405,7 @@ describe('ProjectService', () => {
 
   it('binds sessions and tasks without deleting them when project is deleted', () => {
     const project = projects.create({ name: 'Grouped Work' });
-    ensureSessionRecord(SESSION_KEY, process.cwd());
+    ensureSessionRecord(CONVERSATION_ID, process.cwd(), { agentId: "main" });
     const created = new TaskApplicationService().create({
       idempotencyKey: 'grouped-work',
       title: 'Ship grouped work',
@@ -417,12 +419,12 @@ describe('ProjectService', () => {
     });
     if (!created.ok) throw new Error('Expected task creation');
 
-    projects.attachSession(SESSION_KEY, project.id);
+    projects.attachSession(CONVERSATION_ID, project.id);
 
     const details = projects.getWithDetails(project.id);
     expect(details?.sessionCount).toBe(1);
     expect(details?.taskCount).toBe(1);
-    expect(projects.listSessionKeys(project.id)).toEqual([SESSION_KEY]);
+    expect(projects.listConversationIds(project.id)).toEqual([CONVERSATION_ID]);
 
     projects.delete(project.id);
     expect(projects.get(project.id)).toBeNull();

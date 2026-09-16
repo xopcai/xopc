@@ -8,7 +8,7 @@ import {
   selectDisplayMessages,
 } from '@/features/chat/session/chat-session-view';
 
-const sessionKey = 'agent:main:webchat:default:direct:abc';
+const conversationId = 'agent:main:webchat:default:direct:abc';
 
 describe('store-backed chat display', () => {
   beforeEach(() => {
@@ -19,13 +19,13 @@ describe('store-backed chat display', () => {
     const messages: Message[] = [
       { role: 'user', content: [{ type: 'text', text: 'a' }], timestamp: 1 },
     ];
-    useChatSessionStore.getState().setCommittedSnapshot(sessionKey, { messages, hasMore: false });
+    useChatSessionStore.getState().setCommittedSnapshot(conversationId, { messages, hasMore: false });
 
-    const slice = useChatSessionStore.getState().sessions[sessionKey];
+    const slice = useChatSessionStore.getState().sessions[conversationId];
     expect(
       selectDisplayMessages({
-        viewSessionKey: sessionKey,
-        sessionKey,
+        viewConversationId: conversationId,
+        conversationId,
         messages: slice?.messages ?? [],
         streamingMsg: null,
       }),
@@ -49,8 +49,8 @@ describe('store-backed chat display', () => {
     };
 
     expect(selectDisplayMessages({
-      viewSessionKey: sessionKey,
-      sessionKey,
+      viewConversationId: conversationId,
+      conversationId,
       messages: [previous],
       streamingMsg: streaming,
     })).toEqual([expect.objectContaining({
@@ -71,8 +71,8 @@ describe('store-backed chat display', () => {
     };
 
     expect(selectDisplayMessages({
-      viewSessionKey: sessionKey,
-      sessionKey,
+      viewConversationId: conversationId,
+      conversationId,
       messages,
       streamingMsg: streaming,
     })).toEqual([...messages, streaming]);
@@ -113,7 +113,7 @@ describe('store-backed chat display', () => {
 describe('chat shell and metadata state', () => {
   beforeEach(() => {
     useChatSessionStore.setState({
-      focusedSessionKey: null,
+      focusedConversationId: null,
       initLoading: true,
       loadingMore: false,
       shellError: null,
@@ -123,18 +123,18 @@ describe('chat shell and metadata state', () => {
 
   it('tracks focused session key and shell flags', () => {
     const store = useChatSessionStore.getState();
-    store.setFocusedSessionKey(sessionKey);
+    store.setFocusedConversationId(conversationId);
     store.setInitLoading(false);
     store.setShellError('oops');
 
-    expect(useChatSessionStore.getState().focusedSessionKey).toBe(sessionKey);
+    expect(useChatSessionStore.getState().focusedConversationId).toBe(conversationId);
     expect(useChatSessionStore.getState().initLoading).toBe(false);
     expect(useChatSessionStore.getState().shellError).toBe('oops');
   });
 
   it('setCommittedSnapshot seeds default metadata', () => {
-    useChatSessionStore.getState().setCommittedSnapshot(sessionKey, { messages: [], hasMore: false });
-    const slice = useChatSessionStore.getState().sessions[sessionKey];
+    useChatSessionStore.getState().setCommittedSnapshot(conversationId, { messages: [], hasMore: false });
+    const slice = useChatSessionStore.getState().sessions[conversationId];
     expect(slice?.model).toBe(defaultSessionMeta().model);
     expect(slice?.thinkingLevel).toBe(defaultSessionMeta().thinkingLevel);
   });

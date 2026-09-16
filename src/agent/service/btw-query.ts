@@ -51,7 +51,7 @@ function formatMessagesForBtw(messages: AgentMessage[]): string {
 
 /** One-shot LLM answer for /btw: transcript as background only; does not persist. */
 export async function runBtwQuery(opts: {
-  sessionKey: string;
+  conversationId: string;
   question: string;
   sessionStore: SessionStore;
   modelForSession: string;
@@ -92,7 +92,7 @@ export async function runBtwQuery(opts: {
   const includeSessionContext = opts.includeSessionContext ?? true;
   let userPrompt = q;
   if (includeSessionContext) {
-    const messages = await opts.sessionStore.load(opts.sessionKey);
+    const messages = await opts.sessionStore.load(opts.conversationId);
     const background = formatMessagesForBtw(messages.slice(-40));
     const systemBlock = [
       'You are answering an ephemeral /btw side question about the current conversation.',
@@ -167,7 +167,7 @@ export async function runBtwQuery(opts: {
     const stopReason = typeof response.stopReason === 'string' ? response.stopReason : undefined;
     const errorMessage = typeof response.errorMessage === 'string' ? response.errorMessage.trim() : '';
     if (stopReason === 'error' && errorMessage) {
-      opts.log.warn({ sessionKey: opts.sessionKey, modelRef, stopReason, errorMessage }, 'btwQuery model call failed');
+      opts.log.warn({ conversationId: opts.conversationId, modelRef, stopReason, errorMessage }, 'btwQuery model call failed');
       return { text: '', error: errorMessage };
     }
     const contentTypes = Array.isArray(response.content)
@@ -185,7 +185,7 @@ export async function runBtwQuery(opts: {
     ].filter(Boolean).join('; ');
     const error = `No text returned from model${detail ? ` (${detail})` : ''}.`;
     opts.log.warn({
-      sessionKey: opts.sessionKey,
+      conversationId: opts.conversationId,
       modelRef,
       stopReason,
       errorMessage: errorMessage || undefined,
@@ -195,7 +195,7 @@ export async function runBtwQuery(opts: {
     return { text: '', error };
   } catch (err) {
     const em = err instanceof Error ? err.message : String(err);
-    opts.log.warn({ err, sessionKey: opts.sessionKey, errorMessage: em }, 'btwQuery failed');
+    opts.log.warn({ err, conversationId: opts.conversationId, errorMessage: em }, 'btwQuery failed');
     return { text: '', error: em };
   } finally {
     clearTimeout(timeoutId);

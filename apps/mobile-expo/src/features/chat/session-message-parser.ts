@@ -210,14 +210,14 @@ export function mergeLatestSessionHistoryPage(
   }
 
   const oldPages = oldData.pages;
-  const oldSessionId = oldPages.find((page) => page?.session.sessionId)?.session.sessionId;
-  const latestSessionId = latestPage.session.sessionId;
+  const oldTranscriptId = oldPages.find((page) => page?.session.transcriptId)?.session.transcriptId;
+  const latestTranscriptId = latestPage.session.transcriptId;
 
   // A complete head page is the server's full snapshot. Likewise, a changed
   // session id means the key was reset and no pages from the previous
   // transcript may survive.
   if (!latestPage.pagination.hasMore || (
-    oldSessionId && latestSessionId && oldSessionId !== latestSessionId
+    oldTranscriptId && latestTranscriptId && oldTranscriptId !== latestTranscriptId
   )) {
     return { pages: [latestPage], pageParams: [undefined] };
   }

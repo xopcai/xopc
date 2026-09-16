@@ -33,7 +33,7 @@ export interface BackgroundReviewCoordinatorOptions {
 }
 
 export interface ScheduleReviewContext {
-  sessionKey: string;
+  conversationId: string;
   agent: Agent;
   /** Last assistant text — review is skipped when empty. */
   lastAssistantText: string | null;
@@ -52,11 +52,11 @@ export class BackgroundReviewCoordinator {
    * Called before the main `agent.prompt` for a user turn — bumps the review
    * counter and arms a review when the cadence interval is hit.
    */
-  beginUserTurn(sessionKey: string): void {
+  beginUserTurn(conversationId: string): void {
     const cfg = resolveBackgroundReviewSettings(this.opts.getConfig());
     if (!cfg.enabled) return;
 
-    const state = this.ensureState(sessionKey);
+    const state = this.ensureState(conversationId);
     const intervalTurns = cfg.reviewIntervalTurns;
     state.turnsSinceReview += 1;
     if (state.turnsSinceReview >= intervalTurns) {
@@ -72,13 +72,13 @@ export class BackgroundReviewCoordinator {
    */
   scheduleAfterUserTurn(ctx: ScheduleReviewContext): void {
     void this.runReviewIfNeeded(ctx).catch((err) => {
-      log.warn({ err, sessionKey: ctx.sessionKey }, 'Background review failed');
+      log.warn({ err, conversationId: ctx.conversationId }, 'Background review failed');
     });
   }
 
   /** Tear down state for a session (called by `AgentManager.removeAgent`). */
-  forgetSession(sessionKey: string): void {
-    this.states.delete(sessionKey);
+  forgetSession(conversationId: string): void {
+    this.states.delete(conversationId);
   }
 
   /** Clear every counter (`AgentManager.dispose` / hot reload). */
@@ -86,19 +86,19 @@ export class BackgroundReviewCoordinator {
     this.states.clear();
   }
 
-  private ensureState(sessionKey: string): NudgeState {
-    const existing = this.states.get(sessionKey);
+  private ensureState(conversationId: string): NudgeState {
+    const existing = this.states.get(conversationId);
     if (existing) return existing;
     const state: NudgeState = {
       turnsSinceReview: 0,
       pendingReview: false,
     };
-    this.states.set(sessionKey, state);
+    this.states.set(conversationId, state);
     return state;
   }
 
   private async runReviewIfNeeded(ctx: ScheduleReviewContext): Promise<void> {
-    const state = this.states.get(ctx.sessionKey);
+    const state = this.states.get(ctx.conversationId);
     if (!state) return;
     const settings = resolveBackgroundReviewSettings(this.opts.getConfig());
     if (!settings.enabled) return;
@@ -110,7 +110,7 @@ export class BackgroundReviewCoordinator {
     if (!shouldReview) return;
 
     await runBackgroundUserModelReview({
-      sessionKey: ctx.sessionKey,
+      conversationId: ctx.conversationId,
       mainAgent: ctx.agent,
       settings,
       workspaceId: ctx.workspaceId,

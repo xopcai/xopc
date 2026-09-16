@@ -17,7 +17,7 @@ describe('session_recall', () => {
     }]);
     const tool = createSessionRecallTool({
       getSessionStore: () => ({ recallSession } as any),
-      getCurrentSessionKey: () => 'agent:main:webchat:default:dm:user',
+      getCurrentConversationId: () => 'agent:main:webchat:default:dm:user',
     });
 
     const result = await tool.execute('call-1', { query: 'ORBIT-7429', limit: 4 });
@@ -38,10 +38,10 @@ describe('session_recall', () => {
     const recallSession = vi.fn();
     const tool = createSessionRecallTool({
       getSessionStore: () => ({ recallSession } as any),
-      getCurrentSessionKey: () => undefined,
+      getCurrentConversationId: () => undefined,
     });
 
-    const result = await tool.execute('call-2', { query: 'secret', sessionKey: 'other-session' } as any);
+    const result = await tool.execute('call-2', { query: 'secret', conversationId: 'other-session' } as any);
 
     expect(textOf(result)).toContain('unavailable outside an active session');
     expect(recallSession).not.toHaveBeenCalled();

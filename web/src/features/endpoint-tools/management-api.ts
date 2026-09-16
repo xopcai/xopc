@@ -48,7 +48,7 @@ export interface ManagedEndpointInvocation {
 }
 
 export interface ManagedEndpointSessionBinding {
-  sessionKey: string;
+  conversationId: string;
   endpointId: string;
   boundAt: number;
 }
@@ -72,8 +72,8 @@ export function endpointInvocationsKey(): string {
   return apiUrl('/api/endpoint-tools/invocations?limit=50');
 }
 
-export function endpointBindingKey(sessionKey: string): string {
-  return apiUrl(`/api/endpoint-tools/bindings/${encodeURIComponent(sessionKey)}`);
+export function endpointBindingKey(conversationId: string): string {
+  return apiUrl(`/api/endpoint-tools/bindings/${encodeURIComponent(conversationId)}`);
 }
 
 export async function fetchEndpointPrincipals(): Promise<ManagedEndpointPrincipal[]> {
@@ -84,24 +84,24 @@ export async function fetchEndpointInvocations(): Promise<ManagedEndpointInvocat
   return payload<ManagedEndpointInvocation[]>(await apiFetch(endpointInvocationsKey()));
 }
 
-export async function fetchEndpointBinding(sessionKey: string): Promise<ManagedEndpointSessionBinding | undefined> {
-  const response = await apiFetch(endpointBindingKey(sessionKey));
+export async function fetchEndpointBinding(conversationId: string): Promise<ManagedEndpointSessionBinding | undefined> {
+  const response = await apiFetch(endpointBindingKey(conversationId));
   if (response.status === 404) return undefined;
   return payload<ManagedEndpointSessionBinding>(response);
 }
 
 export async function bindEndpointToSession(
-  sessionKey: string,
+  conversationId: string,
   endpointId: string,
 ): Promise<ManagedEndpointSessionBinding> {
-  return payload<ManagedEndpointSessionBinding>(await apiFetch(endpointBindingKey(sessionKey), {
+  return payload<ManagedEndpointSessionBinding>(await apiFetch(endpointBindingKey(conversationId), {
     method: 'PUT',
     body: JSON.stringify({ endpointId }),
   }));
 }
 
-export async function unbindEndpointFromSession(sessionKey: string): Promise<boolean> {
-  const result = await payload<{ removed: boolean }>(await apiFetch(endpointBindingKey(sessionKey), {
+export async function unbindEndpointFromSession(conversationId: string): Promise<boolean> {
+  const result = await payload<{ removed: boolean }>(await apiFetch(endpointBindingKey(conversationId), {
     method: 'DELETE',
   }));
   return result.removed;

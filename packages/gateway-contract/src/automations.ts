@@ -106,7 +106,7 @@ export const AutomationRunSchema = z.object({
   durationMs: z.number().optional(),
   summary: z.string().optional(),
   error: z.string().optional(),
-  sessionKey: z.string().optional(),
+  conversationId: z.string().optional(),
   workflowRunId: z.string().optional(),
   model: z.string().optional(),
   deadlineAtMs: z.number().optional(),

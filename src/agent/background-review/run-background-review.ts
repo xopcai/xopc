@@ -37,7 +37,7 @@ const log = createLogger('UserModelInterpreter');
 type EvidenceMessage = CaptureEvidence & { message: AgentMessage };
 
 export interface RunUserModelReviewParams {
-  sessionKey: string;
+  conversationId: string;
   mainAgent: Agent;
   settings: BackgroundReviewSettings;
   workspaceId: string;
@@ -77,8 +77,8 @@ function tagMessage(entry: EvidenceMessage): AgentMessage {
   return copy;
 }
 
-function loadEvidenceMessages(sessionKey: string, max: number): EvidenceMessage[] {
-  const snapshot = loadCompactionSourceSnapshot(sessionKey);
+function loadEvidenceMessages(conversationId: string, max: number): EvidenceMessage[] {
+  const snapshot = loadCompactionSourceSnapshot(conversationId);
   if (!snapshot) return [];
   return snapshot.entries
     .filter((entry) => isReviewMessage(entry.row))
@@ -113,7 +113,7 @@ function isLocalModel(model: Model<Api>): boolean {
   }
 }
 
-function resolveInterpreterRuntime(params: Pick<RunUserModelReviewParams, 'sessionKey' | 'mainAgent' | 'getConfig'>): {
+function resolveInterpreterRuntime(params: Pick<RunUserModelReviewParams, 'conversationId' | 'mainAgent' | 'getConfig'>): {
   model: Model<Api>;
   processingPolicy: 'local_only' | 'remote_allowed';
   destination: 'local_model' | 'remote_model';
@@ -122,7 +122,7 @@ function resolveInterpreterRuntime(params: Pick<RunUserModelReviewParams, 'sessi
   const processingPolicy = config?.userContext.userModel.processingPolicy ?? 'remote_allowed';
   let model: Model<Api> | undefined;
   if (config) {
-    const agentId = extractProfileAgentId(params.sessionKey, config);
+    const agentId = extractProfileAgentId(params.conversationId, config);
     const ref = resolveModelIntentRef(config, agentId, 'understanding');
     if (ref) {
       try {
@@ -134,7 +134,7 @@ function resolveInterpreterRuntime(params: Pick<RunUserModelReviewParams, 'sessi
   }
   model ??= params.mainAgent.state.model as Model<Api>;
   if (processingPolicy === 'local_only' && !isLocalModel(model)) {
-    log.debug({ sessionKey: params.sessionKey, provider: model.provider, modelId: model.id }, 'Understanding interpretation skipped because no local model is configured');
+    log.debug({ conversationId: params.conversationId, provider: model.provider, modelId: model.id }, 'Understanding interpretation skipped because no local model is configured');
     return null;
   }
   return {
@@ -145,7 +145,7 @@ function resolveInterpreterRuntime(params: Pick<RunUserModelReviewParams, 'sessi
 }
 
 async function interpret(params: {
-  sessionKey: string;
+  conversationId: string;
   mainAgent: Agent;
   getConfig: () => Config | undefined;
   evidence: EvidenceMessage[];
@@ -184,7 +184,7 @@ async function interpret(params: {
       await reviewAgent.waitForIdle();
     }, Math.min(params.timeoutMs, resolveAgentTurnTimeoutMs(params.getConfig())));
   } catch (err) {
-    log.warn({ err, sessionKey: params.sessionKey }, 'User-understanding interpretation failed or timed out');
+    log.warn({ err, conversationId: params.conversationId }, 'User-understanding interpretation failed or timed out');
     reviewAgent.abort();
     await reviewAgent.waitForIdle().catch(() => {});
     return null;
@@ -198,7 +198,7 @@ async function interpret(params: {
 }
 
 async function executeReview(params: {
-  sessionKey: string;
+  conversationId: string;
   mainAgent: Agent;
   workspaceId: string;
   getConfig: () => Config | undefined;
@@ -228,7 +228,7 @@ async function executeReview(params: {
   }
   try {
     const config = params.getConfig();
-    const agentId = config ? extractProfileAgentId(params.sessionKey, config) : 'main';
+    const agentId = config ? extractProfileAgentId(params.conversationId, config) : 'main';
     const write = config?.userContext.userModel.writePolicy ?? 'deny';
     const result = executeUserModelInterpretation({
       interpretation,
@@ -236,11 +236,11 @@ async function executeReview(params: {
       extractionRunId: extraction.run.id,
       extractorId: params.extractorId,
       scopeContext: {
-        sessionId: params.sessionKey,
+        conversationId: params.conversationId,
         agentId,
         workspaceId: params.workspaceId,
-        ...(getSessionMetadata(params.sessionKey)?.projectId
-          ? { projectId: getSessionMetadata(params.sessionKey)!.projectId }
+        ...(getSessionMetadata(params.conversationId)?.projectId
+          ? { projectId: getSessionMetadata(params.conversationId)!.projectId }
           : {}),
       },
       policy: {
@@ -267,21 +267,21 @@ async function executeReview(params: {
 }
 
 export async function runTurnUserModelCapture(params: RunTurnUserModelCaptureParams): Promise<UserModelCaptureResult> {
-  const evidence = loadEvidenceMessages(params.sessionKey, params.maxHistoryMessages ?? 12);
+  const evidence = loadEvidenceMessages(params.conversationId, params.maxHistoryMessages ?? 12);
   if (!evidence.length) return emptyUserModelCaptureResult();
   const availableTargets = listUserAssertions({ limit: 200 }).map((item) => ({
     id: item.id,
     statement: item.statement,
   }));
   return executeReview({
-    sessionKey: params.sessionKey,
+    conversationId: params.conversationId,
     mainAgent: params.mainAgent,
     workspaceId: params.workspaceId,
     getConfig: params.getConfig,
     evidence,
     mode: 'turn',
     extractorId: 'turn-semantics',
-    sourceRef: `session:${params.sessionKey}:turn:${params.turnId}`,
+    sourceRef: `session:${params.conversationId}:turn:${params.turnId}`,
     contentForHash: params.userText,
     availableTargets,
     timeoutMs: 30_000,
@@ -290,19 +290,19 @@ export async function runTurnUserModelCapture(params: RunTurnUserModelCapturePar
 }
 
 export async function runBackgroundUserModelReview(params: RunUserModelReviewParams): Promise<void> {
-  const evidence = loadEvidenceMessages(params.sessionKey, params.settings.maxHistoryMessages);
+  const evidence = loadEvidenceMessages(params.conversationId, params.settings.maxHistoryMessages);
   if (!evidence.length) return;
   const first = evidence[0]!;
   const last = evidence[evidence.length - 1]!;
   await executeReview({
-    sessionKey: params.sessionKey,
+    conversationId: params.conversationId,
     mainAgent: params.mainAgent,
     workspaceId: params.workspaceId,
     getConfig: params.getConfig,
     evidence,
     mode: 'transcript',
     extractorId: 'transcript-synthesis',
-    sourceRef: `session:${params.sessionKey}:window:${first.ref}:${last.ref}`,
+    sourceRef: `session:${params.conversationId}:window:${first.ref}:${last.ref}`,
     contentForHash: evidence.map((entry) => entry.ref).join('\n'),
     availableTargets: [],
     timeoutMs: params.settings.maxDurationMs,

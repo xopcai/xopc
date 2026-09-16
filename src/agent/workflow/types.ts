@@ -145,9 +145,9 @@ export interface SubagentRunOptions<T = unknown> {
   /** Hint about which phase this agent belongs to (passed through for logging). */
   phase?: string;
   /** Persistent hidden session for this workflow subagent. */
-  sessionKey?: string;
+  conversationId?: string;
   sessionMetadata?: {
-    parentSessionKey?: string;
+    parentConversationId?: string;
     projectId?: string;
     workflowRunId: string;
     workflowDefinitionId: string;

@@ -30,7 +30,7 @@ import type {
 function isPetSessionUpdate(value: unknown): value is PetSessionUpdate {
   if (!value || typeof value !== "object") return false;
   const update = value as Partial<PetSessionUpdate>;
-  return typeof update.sessionKey === "string" && typeof update.runId === "string" && typeof update.sequence === "number" && typeof update.action === "string";
+  return typeof update.conversationId === "string" && typeof update.runId === "string" && typeof update.sequence === "number" && typeof update.action === "string";
 }
 
 function isDragPoint(value: unknown): value is DesktopPetDragPoint {
@@ -113,10 +113,10 @@ export function registerDesktopPetIpc(ipcMain: IpcMain): void {
   });
   ipcMain.handle(
     "desktop-pet:ack-event",
-    (event, sessionKey: unknown, runId: unknown) => {
+    (event, conversationId: unknown, runId: unknown) => {
       assertTrustedRenderer(event);
-      if (typeof sessionKey === "string" && typeof runId === "string") {
-        acknowledgeDesktopPetEvent(sessionKey, runId);
+      if (typeof conversationId === "string" && typeof runId === "string") {
+        acknowledgeDesktopPetEvent(conversationId, runId);
       }
     },
   );

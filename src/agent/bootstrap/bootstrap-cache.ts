@@ -28,19 +28,19 @@ function bootstrapFilesEqual(
   });
 }
 
-export function wasBootstrapContextInjected(sessionKey: string): boolean {
-  return bootstrapContextInjected.has(sessionKey);
+export function wasBootstrapContextInjected(conversationId: string): boolean {
+  return bootstrapContextInjected.has(conversationId);
 }
 
-export function markBootstrapContextInjected(sessionKey: string): void {
-  bootstrapContextInjected.add(sessionKey);
+export function markBootstrapContextInjected(conversationId: string): void {
+  bootstrapContextInjected.add(conversationId);
 }
 
 export async function getOrLoadBootstrapFiles(params: {
   profileDir: string;
-  sessionKey: string;
+  conversationId: string;
 }): Promise<WorkspaceBootstrapFile[]> {
-  const existing = cache.get(params.sessionKey);
+  const existing = cache.get(params.conversationId);
   const files = loadProfileBootstrapFiles(params.profileDir);
   if (
     existing &&
@@ -49,16 +49,16 @@ export async function getOrLoadBootstrapFiles(params: {
   ) {
     return existing.files;
   }
-  cache.set(params.sessionKey, {
+  cache.set(params.conversationId, {
     profileDir: params.profileDir,
     files,
   });
   return files;
 }
 
-export function clearBootstrapSnapshot(sessionKey: string): void {
-  cache.delete(sessionKey);
-  bootstrapContextInjected.delete(sessionKey);
+export function clearBootstrapSnapshot(conversationId: string): void {
+  cache.delete(conversationId);
+  bootstrapContextInjected.delete(conversationId);
 }
 
 export function clearAllBootstrapSnapshots(): void {

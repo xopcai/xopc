@@ -1,4 +1,4 @@
-import { isCronSessionKey, isSubagentSessionKey } from '../../routing/session-key.js';
+import { isCronConversationId, isSubagentConversationId } from '../../routing/session-key.js';
 import {
   DEFAULT_AGENTS_FILENAME,
   DEFAULT_IDENTITY_FILENAME,
@@ -17,9 +17,9 @@ const MINIMAL_BOOTSTRAP_ALLOWLIST = new Set<string>([
 /** Subagent and cron sessions load only the minimal identity and instruction profile. */
 export function filterBootstrapFilesForSession(
   files: WorkspaceBootstrapFile[],
-  sessionKey?: string,
+  conversationId?: string,
 ): WorkspaceBootstrapFile[] {
-  if (!sessionKey || (!isSubagentSessionKey(sessionKey) && !isCronSessionKey(sessionKey))) {
+  if (!conversationId || (!isSubagentConversationId(conversationId) && !isCronConversationId(conversationId))) {
     return files;
   }
   return files.filter((file) => MINIMAL_BOOTSTRAP_ALLOWLIST.has(file.name));

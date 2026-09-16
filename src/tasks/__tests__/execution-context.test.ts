@@ -25,7 +25,7 @@ describe('resolveExecutionContext', () => {
   it('does not accept task binding from mutable session metadata', () => {
     const context = resolveExecutionContext({
       runId: 'run-1',
-      sessionKey: 'session-1',
+      conversationId: 'session-1',
       channel: 'webchat',
       metadata: metadata({
         projectId: 'project-1',
@@ -49,10 +49,10 @@ describe('resolveExecutionContext', () => {
 
   it('derives automation and proactive origins from the session type', () => {
     expect(resolveExecutionContext({
-      runId: 'run-1', sessionKey: 'session-1', channel: 'webchat', metadata: metadata({ sessionType: 'cron' }),
+      runId: 'run-1', conversationId: 'session-1', channel: 'webchat', metadata: metadata({ sessionType: 'cron' }),
     })).toMatchObject({ origin: 'automation', triggerKind: 'schedule' });
     expect(resolveExecutionContext({
-      runId: 'run-2', sessionKey: 'session-2', channel: 'webchat', metadata: metadata({ sessionType: 'heartbeat' }),
+      runId: 'run-2', conversationId: 'session-2', channel: 'webchat', metadata: metadata({ sessionType: 'heartbeat' }),
     })).toMatchObject({ origin: 'proactive', triggerKind: 'proactive' });
   });
 });

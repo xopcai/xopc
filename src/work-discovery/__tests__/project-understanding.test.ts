@@ -56,7 +56,7 @@ describe('background project understanding', () => {
     expect(service.startProjectUnderstanding(project.id).id).toBe(run.id);
     expect(analyzeWorkContext).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(service.getRun(run.id)?.status).toBe('completed'));
-    expect(getSessionMetadata(run.sessionKey)?.hiddenFromSessionList).toBe(true);
+    expect(getSessionMetadata(run.conversationId)?.hiddenFromSessionList).toBe(true);
     expect(projects.listWithSidebarSessions({ status: 'active', updatedAfter: Date.now() - 60_000 }).items.map((item) => item.id)).toContain(project.id);
     expect(sessions.appendTranscriptCustomMessageEntry).not.toHaveBeenCalled();
     expect(sessions.updateSessionMetadata).not.toHaveBeenCalled();
@@ -65,8 +65,8 @@ describe('background project understanding', () => {
     expect(getProjectUnderstandingOverview(project.id)?.content).toContain('pnpm test');
     expect(getProjectUnderstandingOverview(project.id)?.content).toContain('unknown');
     expect(service.getRun(run.id)?.attempts).toBe(1);
-    const chat = 'agent:main:webchat:default:direct:user-chat';
-    ensureSessionRecord(chat, root, { projectId: project.id });
+    const chat = "b9d376ef-df81-41d6-8000-0ce9282047ae";
+    ensureSessionRecord(chat, root, { agentId: "main", projectId: project.id });
     expect(buildActiveProjectContextForPrompt(chat)).toContain('pnpm test');
     expect(buildActiveProjectContextForPrompt(chat)).toContain('provisional');
     expect(buildActiveProjectContextForPrompt(chat, { includeKnowledge: false })).not.toContain('pnpm test');

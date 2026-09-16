@@ -10,9 +10,9 @@ import { fetchComposerReferences, type ComposerReferenceItem, type ReferenceKind
 import { useGatewayStore } from '../../stores/gateway-store';
 import { radii, spacing, typography, useTheme } from '../../theme';
 
-export function ComposerReferenceSheet({ initialKind, sessionKey, selectedIds, onSelect, onClose, onLocalFile, filesDisabled, referencesFull }: {
+export function ComposerReferenceSheet({ initialKind, conversationId, selectedIds, onSelect, onClose, onLocalFile, filesDisabled, referencesFull }: {
   initialKind: ReferenceKind;
-  sessionKey: string;
+  conversationId: string;
   selectedIds: string[];
   onSelect: (item: ComposerReferenceItem) => void;
   onClose: () => void;
@@ -33,9 +33,9 @@ export function ComposerReferenceSheet({ initialKind, sessionKey, selectedIds, o
     return () => clearTimeout(timer);
   }, [search]);
   const results = useQuery({
-    queryKey: ['composer-references', gatewayId, sessionKey, kind, debouncedSearch, path],
-    queryFn: () => fetchComposerReferences(kind, sessionKey, debouncedSearch, path),
-    enabled: Boolean(gatewayId && sessionKey),
+    queryKey: ['composer-references', gatewayId, conversationId, kind, debouncedSearch, path],
+    queryFn: () => fetchComposerReferences(kind, conversationId, debouncedSearch, path),
+    enabled: Boolean(gatewayId && conversationId),
     staleTime: 0,
   });
   const searchLabel = kind === 'file' ? copy.searchFile : copy.search;

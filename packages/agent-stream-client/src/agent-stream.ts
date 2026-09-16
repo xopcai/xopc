@@ -69,14 +69,14 @@ export type AgentStreamCallbacks = {
 
 export type AgentStreamDispatchOptions = {
   /** Current session key (for persisting runId for abort/resume). */
-  sessionKey?: string;
-  savePendingRunId?: (sessionKey: string, runId: string) => void;
+  conversationId?: string;
+  savePendingRunId?: (conversationId: string, runId: string) => void;
 };
 
 type ParsedEvent = {
   type?: unknown;
   runId?: unknown;
-  sessionKey?: unknown;
+  conversationId?: unknown;
   payload?: unknown;
   timestamp?: unknown;
 };
@@ -178,8 +178,8 @@ export function dispatchAgentStreamEvent(
 
   switch (effectiveEvent) {
     case 'run_start':
-      if (typeof parsed.runId === 'string' && options?.sessionKey) {
-        options.savePendingRunId?.(options.sessionKey, parsed.runId);
+      if (typeof parsed.runId === 'string' && options?.conversationId) {
+        options.savePendingRunId?.(options.conversationId, parsed.runId);
       }
       cb?.onStreamStart();
       break;
@@ -380,12 +380,12 @@ export function dispatchAgentStreamEvent(
     case 'run_end':
       if (
         typeof parsed.runId === 'string'
-        && typeof parsed.sessionKey === 'string'
+        && typeof parsed.conversationId === 'string'
         && (p.status === 'success' || p.status === 'error' || p.status === 'cancelled' || p.status === 'suspended')
       ) {
         cb?.onResult({
           runId: parsed.runId,
-          sessionKey: parsed.sessionKey,
+          conversationId: parsed.conversationId,
           status: p.status,
           ...(typeof p.summary === 'string' && p.summary ? { summary: p.summary } : {}),
         });

@@ -47,15 +47,15 @@ export interface ResolvedStreamingTts {
 
 export interface VoiceRealtimeRuntimeOptions {
   isPrincipalActive?: (principalId: string) => boolean;
-  recordOmniTranscript?: (sessionKey: string, callId: string, entry: OmniTranscript, expectedSessionId: string) => Promise<void>;
-  getConversationContext?: (sessionKey: string, expectedSessionId: string) => Promise<VoiceConversationContext>;
-  getSessionIdentity?: (sessionKey: string) => Promise<string | undefined>;
+  recordOmniTranscript?: (conversationId: string, callId: string, entry: OmniTranscript, expectedTranscriptId: string) => Promise<void>;
+  getConversationContext?: (conversationId: string, expectedTranscriptId: string) => Promise<VoiceConversationContext>;
+  getSessionIdentity?: (conversationId: string) => Promise<string | undefined>;
   getConfig: () => Config;
-  sessionExists: (sessionKey: string) => Promise<boolean>;
-  sessionBusy: (sessionKey: string) => boolean;
+  sessionExists: (conversationId: string) => Promise<boolean>;
+  sessionBusy: (conversationId: string) => boolean;
   agentBroker: VoiceAgentBroker;
   recordInterruption: (entry: {
-    sessionKey: string;
+    conversationId: string;
     responseId: string;
     reason: 'barge_in' | 'client_cancelled';
     generatedCharacters: number;

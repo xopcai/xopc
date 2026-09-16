@@ -24,8 +24,8 @@ import { loadConfig } from '../config/index.js';
 import { resolveStateDir, resolveXopcDatabasePath } from '../config/paths.js';
 import { ensureStarterAgentsInitialized } from '../agent/starter-agents.js';
 import { MAX_CHAT_ATTACHMENTS, MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../gateway/chat-limits.js';
-import { resolveTuiSessionKey, resolveTuiStartupSessionKey } from '../routing/resolve-tui-session-key.js';
-import { normalizeAgentId, parseAgentSessionKey } from '../routing/agent-session-key.js';
+import { resolveTuiConversationId, resolveTuiStartupConversationId } from '../routing/resolve-tui-session-key.js';
+import { normalizeAgentId } from '../routing/agent-session-key.js';
 import {
   countPendingChatInputs,
   type TuiBackend,
@@ -78,7 +78,6 @@ import {
   cleanupAbandonedTuiSessions,
   deleteGeneratedTuiSessionIfEmpty,
   GENERATED_TUI_SESSION_SHELL_PATCH,
-  isGeneratedTuiSessionKey,
 } from './tui-empty-session-cleanup.js';
 import {
   createEditorSubmitHandler,
@@ -218,8 +217,8 @@ function wrapMarkdownExportAsHtml(markdown: string): string {
   ].join('\n');
 }
 
-function defaultExportPath(sessionKey: string, format: TuiExportFormat): string {
-  const safeKey = sessionKey.replace(/[^a-z0-9_.-]+/gi, '_').replace(/^_+|_+$/g, '') || 'session';
+function defaultExportPath(conversationId: string, format: TuiExportFormat): string {
+  const safeKey = conversationId.replace(/[^a-z0-9_.-]+/gi, '_').replace(/^_+|_+$/g, '') || 'session';
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   return resolve(process.cwd(), `xopc-session-${safeKey}-${stamp}.${exportExtension(format)}`);
 }
@@ -250,7 +249,7 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
-function formatTuiResumeCommand(opts: TuiOptions, sessionKey: string): string {
+function formatTuiResumeCommand(opts: TuiOptions, conversationId: string): string {
   const parts = ['xopc', 'tui'];
   if (opts.local === true) {
     parts.push('--local');
@@ -258,7 +257,7 @@ function formatTuiResumeCommand(opts: TuiOptions, sessionKey: string): string {
   if (opts.url) {
     parts.push('--url', shellQuote(opts.url));
   }
-  parts.push('--session', shellQuote(sessionKey));
+  parts.push('--session', shellQuote(conversationId));
   return parts.join(' ');
 }
 
@@ -311,34 +310,30 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   const isLocalMode = opts.local === true;
   const loadedConfig = loadConfig();
   const config = isLocalMode ? ensureStarterAgentsInitialized(loadedConfig).config : loadedConfig;
-  const startup = resolveTuiStartupSessionKey({
+  const startup = resolveTuiStartupConversationId({
     cfg: config,
     sessionOption: opts.session,
     agentOption: opts.agentId,
     cwd: process.cwd(),
   });
   let currentAgentId = startup.agentId;
-  const sessionScope = startup.sessionScope;
-  const sessionMainKey = startup.sessionMainKey;
-  const resolveSessionKey = (raw?: string) =>
-    resolveTuiSessionKey({
+  const resolveConversationId = (raw?: string) =>
+    resolveTuiConversationId({
       raw,
-      sessionScope,
-      currentAgentId,
-      sessionMainKey,
     });
   let tuiSettings = loadTuiSettings();
   const newSessionPreferenceKey = isLocalMode
     ? tuiGatewayPreferenceKey()
     : tuiGatewayPreferenceKey(opts.url ?? 'http://localhost:3120');
   initTuiTheme({ themeId: opts.theme ?? tuiSettings.theme });
-  const state = createInitialState(startup.sessionKey);
-  const generatedStartupSessionKey = !opts.session?.trim() && isGeneratedTuiSessionKey(startup.sessionKey)
-    ? startup.sessionKey
+  const state = createInitialState(startup.conversationId);
+  const generatedStartupConversationId = !opts.session?.trim()
+    ? startup.conversationId
     : null;
-  const generatedStartupSessionKeys = new Set(
-    generatedStartupSessionKey ? [generatedStartupSessionKey] : [],
+  const generatedStartupConversationIds = new Set(
+    generatedStartupConversationId ? [generatedStartupConversationId] : [],
   );
+  const isGeneratedTuiConversationId = (id: string) => generatedStartupConversationIds.has(id);
   let startupSessionHadUserTurn = false;
   const startupWorkingDirectory = resolveStartupWorkingDirectory(opts, isLocalMode);
   const implicitTrustedWorkspace = startupWorkingDirectory ?? (isLocalMode ? process.cwd() : undefined);
@@ -354,10 +349,10 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   const sessionStateDir = resolveStateDir();
   const sessionDatabasePath = resolveXopcDatabasePath();
   const sessionSnapshot = new TuiSessionSnapshot(
-    () => state.currentSessionKey,
+    () => state.currentConversationId,
     () => process.cwd(),
     () => state.sessionInfo.displayName,
-    () => `${sessionDatabasePath}#session=${encodeURIComponent(state.currentSessionKey)}`,
+    () => `${sessionDatabasePath}#session=${encodeURIComponent(state.currentConversationId)}`,
     () => sessionStateDir,
   );
   state.scopedModelRefs = loadScopedModelRefs();
@@ -431,7 +426,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     () => ({
       version: packageJson.version ?? 'dev',
       connectionLabel: client.connectionLabel,
-      sessionKey: state.currentSessionKey,
+      conversationId: state.currentConversationId,
       showHints: tuiSettings.showStartupHints,
     }),
     keybindings,
@@ -455,7 +450,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   setExtensionLabel = (entryId, label) => {
     sessionSnapshot.setLabel(entryId, label);
     void client
-      .setTranscriptLabel(state.currentSessionKey, entryId, label)
+      .setTranscriptLabel(state.currentConversationId, entryId, label)
       .catch((err: unknown) => {
         const errorMessage = err instanceof Error ? err.message : String(err);
         chatLog.addSystem(`Label update failed: ${errorMessage}`);
@@ -472,7 +467,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     }
     sessionSnapshot.appendCustomEntry(normalized, data);
     void client
-      .appendCustomEntry(state.currentSessionKey, normalized, data)
+      .appendCustomEntry(state.currentConversationId, normalized, data)
       .catch((err: unknown) => {
         const errorMessage = err instanceof Error ? err.message : String(err);
         chatLog.addSystem(`Custom entry append failed: ${errorMessage}`);
@@ -506,7 +501,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       tui.requestRender();
     }
     const persist = client
-      .appendCustomMessage(state.currentSessionKey, nextMessage)
+      .appendCustomMessage(state.currentConversationId, nextMessage)
       .catch((err: unknown) => {
         const errorMessage = err instanceof Error ? err.message : String(err);
         chatLog.addSystem(`Custom message append failed: ${errorMessage}`);
@@ -535,7 +530,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
         }
         if (state.activeRunId) {
           if (options?.deliverAs === 'next') {
-            void client.submitChatInput({ sessionKey: state.currentSessionKey, message: controlText, delivery: 'next' })
+            void client.submitChatInput({ conversationId: state.currentConversationId, message: controlText, delivery: 'next' })
               .then((result) => {
                 if (!result.ok) throw new Error('Session input was rejected');
                 chatLog.addSystem(theme.dim('Queued as the next message.'));
@@ -784,7 +779,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     getAllProviders().filter((provider) => isProviderConfiguredSync(provider)).length;
 
   const getExtensionSystemPrompt = () =>
-    resolveEffectiveAgentProfileForSession(config, state.currentSessionKey).customInstructions ?? '';
+    resolveEffectiveAgentProfileForSession(config, state.currentConversationId).customInstructions ?? '';
 
   const waitForTuiIdle = async () => {
     while (
@@ -891,7 +886,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       },
       model,
       cwd: process.cwd(),
-      sessionKey: state.currentSessionKey,
+      conversationId: state.currentConversationId,
       isProjectTrusted: isCurrentProjectTrusted,
       isIdle: () => !state.activeRunId && !state.isCompacting,
       hasPendingMessages: () => state.compactionQueue.length > 0,
@@ -905,7 +900,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       getSystemPrompt: getExtensionSystemPrompt,
       getSystemPromptOptions: () => ({
         cwd: process.cwd(),
-        sessionKey: state.currentSessionKey,
+        conversationId: state.currentConversationId,
         ...(model ? { model } : {}),
       }),
       waitForIdle: waitForTuiIdle,
@@ -965,7 +960,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const runExtensionNewSession = async (options?: TuiNewSessionOptions): Promise<TuiReplacementResult> => {
     await abortActive({ clearUi: false });
-    await startPreferredNewSession('session');
+    await startPreferredNewSession();
     await options?.setup?.(sessionSnapshot.manager());
     await runWithReplacementContext(options?.withSession);
     return { cancelled: false };
@@ -980,14 +975,14 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     if (throughRow <= 0) {
       throw new Error(`Invalid entry ID for forking: ${entryId}`);
     }
-    const sourceSessionKey = state.currentSessionKey;
-    const targetKey = resolveSessionKey(`fork-${randomUUID()}`);
+    const sourceConversationId = state.currentConversationId;
+    const targetKey = randomUUID();
     await abortActive({ clearUi: false });
-    const result = await client.forkSessionAt(sourceSessionKey, targetKey, `row-${throughRow}`);
-    await setSession(result.sessionKey);
+    const result = await client.forkSessionAt(sourceConversationId, targetKey, `row-${throughRow}`);
+    await setSession(result.conversationId);
     chatLog.addBranchSummary({
-      sourceSessionKey,
-      targetSessionKey: result.sessionKey,
+      sourceConversationId,
+      targetConversationId: result.conversationId,
       rowCount: result.rowCount,
       entryId,
     });
@@ -1032,8 +1027,8 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     getEditorText: () => editor.getExpandedText?.() ?? editor.getText(),
     setEditorComponent,
     getEditorComponent: () => editorComponentFactory,
-    searchWorkspaceFiles: (sessionKey, query, options) =>
-      client.searchWorkspaceFiles?.(sessionKey, query, options) ?? Promise.resolve([]),
+    searchWorkspaceFiles: (conversationId, query, options) =>
+      client.searchWorkspaceFiles?.(conversationId, query, options) ?? Promise.resolve([]),
     getThemeObject: () => theme,
     getAllThemes: getAllExtensionThemes,
     getTheme: getExtensionTheme,
@@ -1054,7 +1049,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     getSystemPrompt: getExtensionSystemPrompt,
     getSystemPromptOptions: () => ({
       cwd: process.cwd(),
-      sessionKey: state.currentSessionKey,
+      conversationId: state.currentConversationId,
       ...(state.sessionInfo.model
         ? {
             model: {
@@ -1224,7 +1219,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const syncTerminalTitle = () => {
     const shortKey =
-      state.currentSessionKey.length > 48 ? `${state.currentSessionKey.slice(0, 45)}…` : state.currentSessionKey;
+      state.currentConversationId.length > 48 ? `${state.currentConversationId.slice(0, 45)}…` : state.currentConversationId;
     tui.terminal.setTitle(`xopc · ${shortKey}`);
   };
 
@@ -1260,18 +1255,18 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     void (async () => {
       const removedEmptyStartupSessions = new Set<string>();
       if (!state.activeRunId) {
-        for (const sessionKey of generatedStartupSessionKeys) {
-          if (sessionKey === state.currentSessionKey && startupSessionHadUserTurn) continue;
-          const removed = await deleteGeneratedTuiSessionIfEmpty(client, sessionKey).catch(() => false);
-          if (removed) removedEmptyStartupSessions.add(sessionKey);
+        for (const conversationId of generatedStartupConversationIds) {
+          if (conversationId === state.currentConversationId && startupSessionHadUserTurn) continue;
+          const removed = await deleteGeneratedTuiSessionIfEmpty(client, conversationId).catch(() => false);
+          if (removed) removedEmptyStartupSessions.add(conversationId);
         }
       }
       client.stop();
       await drainAndStopTuiSafely(tui);
       restoreStdio();
-      const currentSessionWasRemoved = removedEmptyStartupSessions.has(state.currentSessionKey);
+      const currentSessionWasRemoved = removedEmptyStartupSessions.has(state.currentConversationId);
       if (options?.showResumeHint !== false && !currentSessionWasRemoved) {
-        process.stdout.write(`\nTo resume this session: ${formatTuiResumeCommand(opts, state.currentSessionKey)}\n`);
+        process.stdout.write(`\nTo resume this session: ${formatTuiResumeCommand(opts, state.currentConversationId)}\n`);
       }
       finishTui?.();
       process.exit(0);
@@ -1283,7 +1278,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     chatLog,
     tui,
     state,
-    resolveSessionKey,
+    resolveConversationId,
     updateHeader,
     updateFooter,
     setActivityStatus,
@@ -1320,9 +1315,10 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     saveTuiSettings(tuiSettings);
   };
 
-  const startPreferredNewSession = async (prefix = 'tui') => {
+  const startPreferredNewSession = async () => {
     const projectId = state.sessionInfo.projectId?.trim() || undefined;
-    const targetKey = resolveSessionKey(`${prefix}-${randomUUID()}`);
+    const targetKey = await client.createConversation(currentAgentId);
+    generatedStartupConversationIds.add(targetKey);
     await setSession(targetKey);
     const initialAgentConfig = tuiInitialAgentConfig(
       tuiSettings,
@@ -1330,10 +1326,10 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       currentAgentId,
     );
     if (initialAgentConfig || projectId) {
-      await client.patchSession(state.currentSessionKey, {
+      await client.patchSession(state.currentConversationId, {
         ...initialAgentConfig,
         ...(projectId ? { projectId } : {}),
-        ...(isGeneratedTuiSessionKey(state.currentSessionKey)
+        ...(isGeneratedTuiConversationId(state.currentConversationId)
           ? GENERATED_TUI_SESSION_SHELL_PATCH
           : {}),
       });
@@ -1354,7 +1350,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       return;
     }
     try {
-      startupResources = await client.getStartupResources(state.currentSessionKey);
+      startupResources = await client.getStartupResources(state.currentConversationId);
     } catch {
       startupResources = undefined;
     }
@@ -1378,9 +1374,9 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   const applyStartupWorkingDirectory = async () => {
     if (startupWorkingDirectoryApplied || !startupWorkingDirectory) return;
     startupWorkingDirectoryApplied = true;
-    await client.patchSession(state.currentSessionKey, {
+    await client.patchSession(state.currentConversationId, {
       workingDirectory: startupWorkingDirectory,
-      ...(isGeneratedTuiSessionKey(state.currentSessionKey)
+      ...(isGeneratedTuiConversationId(state.currentConversationId)
         ? GENERATED_TUI_SESSION_SHELL_PATCH
         : {}),
     });
@@ -1394,7 +1390,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     startupProjectApplied = true;
     const result = await client.resolveStartupProject?.({
       workspacePath: startupWorkingDirectory,
-      sessionKey: state.currentSessionKey,
+      conversationId: state.currentConversationId,
       agentId: currentAgentId,
       autoCreate: true,
     });
@@ -1402,30 +1398,27 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     const projectAgentId = result.project.defaultAgentId?.trim()
       ? normalizeAgentId(result.project.defaultAgentId)
       : undefined;
-    const currentParsed = parseAgentSessionKey(state.currentSessionKey);
-    if (!opts.agentId?.trim() && currentParsed?.rest && projectAgentId && projectAgentId !== currentAgentId) {
-      const targetSessionKey = `agent:${projectAgentId}:${currentParsed.rest}`;
-      await setSession(targetSessionKey);
-      if (isGeneratedTuiSessionKey(targetSessionKey)) {
-        generatedStartupSessionKeys.add(targetSessionKey);
-      }
+    if (!opts.agentId?.trim() && projectAgentId && projectAgentId !== currentAgentId) {
+      const targetConversationId = await client.createConversation(projectAgentId);
+      generatedStartupConversationIds.add(targetConversationId);
+      await setSession(targetConversationId);
       currentAgentId = projectAgentId;
-      if (isGeneratedTuiSessionKey(state.currentSessionKey)) {
-        await client.patchSession(state.currentSessionKey, GENERATED_TUI_SESSION_SHELL_PATCH);
+      if (isGeneratedTuiConversationId(state.currentConversationId)) {
+        await client.patchSession(state.currentConversationId, GENERATED_TUI_SESSION_SHELL_PATCH);
       }
-      await client.patchSession(state.currentSessionKey, {
+      await client.patchSession(state.currentConversationId, {
         projectId: result.project.id,
         workingDirectory: startupWorkingDirectory,
-        ...(isGeneratedTuiSessionKey(state.currentSessionKey)
+        ...(isGeneratedTuiConversationId(state.currentConversationId)
           ? GENERATED_TUI_SESSION_SHELL_PATCH
           : {}),
       });
       state.sessionInfo.effectiveWorkspacePath = startupWorkingDirectory;
       state.sessionInfo.workingDirectoryLocked = true;
     } else {
-      await client.patchSession(state.currentSessionKey, {
+      await client.patchSession(state.currentConversationId, {
         projectId: result.project.id,
-        ...(isGeneratedTuiSessionKey(state.currentSessionKey)
+        ...(isGeneratedTuiConversationId(state.currentConversationId)
           ? GENERATED_TUI_SESSION_SHELL_PATCH
           : {}),
       });
@@ -1450,7 +1443,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
           clearSeenStreamEventsForRun(runId);
           if (client.resumeChat) {
             const resumed = await client.resumeChat({
-              sessionKey: state.currentSessionKey,
+              conversationId: state.currentConversationId,
               runId,
             });
             if (resumed.ok) {
@@ -1495,7 +1488,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const setThinkingLevel = async (level: ThinkLevel) => {
     try {
-      await client.patchSession(state.currentSessionKey, {
+      await client.patchSession(state.currentConversationId, {
         thinkingLevel: level,
       });
       state.sessionInfo.thinkingLevel = level;
@@ -1524,7 +1517,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const setReasoningLevel = async (level: ReasoningLevel) => {
     try {
-      await client.patchSession(state.currentSessionKey, {
+      await client.patchSession(state.currentConversationId, {
         reasoningLevel: level,
       });
       state.sessionInfo.reasoningLevel = level;
@@ -1541,7 +1534,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const setVerboseLevel = async (level: VerboseLevel) => {
     try {
-      await client.patchSession(state.currentSessionKey, {
+      await client.patchSession(state.currentConversationId, {
         verboseLevel: level,
       });
       state.sessionInfo.verboseLevel = level;
@@ -1582,7 +1575,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       return;
     }
     try {
-      const result = await client.renameSession(state.currentSessionKey, nextName);
+      const result = await client.renameSession(state.currentConversationId, nextName);
       if (!result.ok) {
         chatLog.addSystem('Session rename failed.');
         tui.requestRender();
@@ -1662,7 +1655,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       return;
     }
     try {
-      await client.patchSession(state.currentSessionKey, { model: trimmed });
+      await client.patchSession(state.currentConversationId, { model: trimmed });
       state.sessionInfo.modelProvider = selected.provider;
       state.sessionInfo.model = selected.id;
       tuiSettings = rememberTuiAgentModel(
@@ -1697,10 +1690,10 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       ? isAbsolute(request.outputPath)
         ? request.outputPath
         : resolve(process.cwd(), request.outputPath)
-      : defaultExportPath(state.currentSessionKey, request.format);
+      : defaultExportPath(state.currentConversationId, request.format);
     try {
       const backendFormat = request.format === 'json' ? 'json' : 'markdown';
-      const raw = await client.exportSession(state.currentSessionKey, backendFormat);
+      const raw = await client.exportSession(state.currentConversationId, backendFormat);
       const content = request.format === 'html' ? wrapMarkdownExportAsHtml(raw) : raw;
       mkdirSync(dirname(outputPath), { recursive: true });
       writeFileSync(outputPath, content, 'utf8');
@@ -1721,12 +1714,12 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       return;
     }
     const inputPath = isAbsolute(rawPath) ? rawPath : resolve(process.cwd(), rawPath);
-    const targetRaw = request.targetKey?.trim() || `import-${randomUUID()}`;
-    const targetKey = resolveSessionKey(targetRaw);
+    const targetRaw = request.targetKey?.trim() || randomUUID();
+    const targetKey = resolveConversationId(targetRaw);
     try {
       const content = readFileSync(inputPath, 'utf8');
       const result = await client.importSession(targetKey, content);
-      await setSession(result.sessionKey);
+      await setSession(result.conversationId);
       chatLog.addStatus(theme.dim(`Imported ${result.rowCount} transcript rows from: ${inputPath}`));
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -1740,7 +1733,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     try {
       chatLog.addStatus(theme.dim(`Creating share for: ${request.path}`));
       tui.requestRender();
-      const result = await client.createShare(state.currentSessionKey, request, {
+      const result = await client.createShare(state.currentConversationId, request, {
         agentId: currentAgentId,
       });
       chatLog.addSystem(formatTuiShareResult(result));
@@ -1757,7 +1750,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       throw new Error('Workflow runs are not available in this mode.');
     }
     const result = await client.startWorkflowRun({
-      sessionKey: state.currentSessionKey,
+      conversationId: state.currentConversationId,
       definitionId: request.definitionId,
       agentId: currentAgentId,
       goal: request.goal,
@@ -1775,7 +1768,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       chatLog.addUser(`/btw ${question}`);
       chatLog.addStatus(theme.dim('BTW running...'));
       tui.requestRender();
-      const result = await client.btwQuery(state.currentSessionKey, question);
+      const result = await client.btwQuery(state.currentConversationId, question);
       if (result.error) {
         chatLog.addSystem(`BTW failed: ${result.error}`);
         return;
@@ -1799,21 +1792,21 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   };
 
   const forkCurrentSession = async (rawKey?: string) => {
-    const targetRaw = rawKey?.trim() || `fork-${randomUUID()}`;
-    const targetKey = resolveSessionKey(targetRaw);
-    if (targetKey === state.currentSessionKey) {
+    const targetRaw = rawKey?.trim() || randomUUID();
+    const targetKey = resolveConversationId(targetRaw);
+    if (targetKey === state.currentConversationId) {
       chatLog.addSystem('Fork target must be different from the current session.');
       tui.requestRender();
       return;
     }
-    const sourceSessionKey = state.currentSessionKey;
+    const sourceConversationId = state.currentConversationId;
     try {
       await abortActive({ clearUi: false });
-      const result = await client.forkSession(sourceSessionKey, targetKey);
-      await setSession(result.sessionKey);
+      const result = await client.forkSession(sourceConversationId, targetKey);
+      await setSession(result.conversationId);
       chatLog.addBranchSummary({
-        sourceSessionKey,
-        targetSessionKey: result.sessionKey,
+        sourceConversationId,
+        targetConversationId: result.conversationId,
         rowCount: result.rowCount,
       });
     } catch (err) {
@@ -1880,7 +1873,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     touchStreamingActivity();
     tui.requestRender();
     void client
-      .submitChatInput({ sessionKey: state.currentSessionKey, message: text, delivery: 'steer' })
+      .submitChatInput({ conversationId: state.currentConversationId, message: text, delivery: 'steer' })
       .then(({ ok, effectiveDelivery }) => {
         if (!ok) {
           if (!editor.getText().trim()) editor.setText(text);
@@ -1957,7 +1950,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
     void client
       .sendChat({
-        sessionKey: state.currentSessionKey,
+        conversationId: state.currentConversationId,
         message: messageText,
         attachments: attachments.length > 0 ? attachments : undefined,
         thinking: opts.thinking,
@@ -1987,7 +1980,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       return;
     }
     if (options?.deliverAs === 'next') {
-      void client.submitChatInput({ sessionKey: state.currentSessionKey, message: text, delivery: 'next' })
+      void client.submitChatInput({ conversationId: state.currentConversationId, message: text, delivery: 'next' })
         .then((result) => {
           if (!result.ok) throw new Error('Session input was rejected');
           chatLog.addSystem(theme.dim('Queued as the next message.'));
@@ -2018,7 +2011,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     );
     tui.requestRender();
     try {
-      const result = await client.compactSession(state.currentSessionKey, {
+      const result = await client.compactSession(state.currentConversationId, {
         force: true,
         instructions,
       });
@@ -2142,13 +2135,15 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     sendMessage(message);
   };
 
-  const switchAgentSession = async (sessionKey: string, agentId: string) => {
+  const switchAgentSession = async (conversationId: string, agentId: string) => {
     const previousWorkspace = state.sessionInfo.effectiveWorkspacePath?.trim();
-    await setSession(sessionKey);
+    await client.createConversation(agentId, conversationId);
+    generatedStartupConversationIds.add(conversationId);
+    await setSession(conversationId);
     await refreshStartupResources();
     if (previousWorkspace && state.sessionInfo.workingDirectoryLocked !== true) {
       try {
-        await client.patchSession(state.currentSessionKey, {
+        await client.patchSession(state.currentConversationId, {
           workingDirectory: previousWorkspace,
         });
         state.sessionInfo.effectiveWorkspacePath = previousWorkspace;
@@ -2189,10 +2184,10 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     listAgents: () => client.listAgents(),
     setTuiDefaultAgent: (agentId) => client.setTuiDefaultAgent?.(agentId) ?? Promise.reject(new Error('Not available')),
     switchAgentSession,
-    getSessionStats: () => client.getSessionStats(state.currentSessionKey),
+    getSessionStats: () => client.getSessionStats(state.currentConversationId),
     getStartupResources: () => startupResources,
-    loadTranscriptTree: () => client.loadTranscriptTree(state.currentSessionKey),
-    loadTimeline: () => client.loadTimeline(state.currentSessionKey),
+    loadTranscriptTree: () => client.loadTranscriptTree(state.currentConversationId),
+    loadTimeline: () => client.loadTimeline(state.currentConversationId),
     loadHistoryWindow,
     loadSessionHistory: () => loadSessionHistory(),
     exportSession: exportCurrentSession,
@@ -2257,7 +2252,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     },
     onComplete: async (entry) => {
       await client
-        .appendBashExecution(state.currentSessionKey, entry)
+        .appendBashExecution(state.currentConversationId, entry)
         .catch((err: unknown) => {
           const errorMessage = err instanceof Error ? err.message : String(err);
           chatLog.addSystem(`Bash transcript append failed: ${errorMessage}`);
@@ -2308,14 +2303,14 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       // History is an optional convenience; keep the editor responsive when unavailable.
     }
   };
-  const refreshPendingInputCount = async (sessionKey = state.currentSessionKey) => {
+  const refreshPendingInputCount = async (conversationId = state.currentConversationId) => {
     try {
-      const inputState = await client.getChatInputState(sessionKey);
-      if (state.currentSessionKey === sessionKey) {
+      const inputState = await client.getChatInputState(conversationId);
+      if (state.currentConversationId === conversationId) {
         state.pendingInputCount = countPendingChatInputs(inputState.inputs);
       }
     } catch {
-      if (state.currentSessionKey === sessionKey) state.pendingInputCount = 0;
+      if (state.currentConversationId === conversationId) state.pendingInputCount = 0;
     }
     bottomBar.invalidate();
     tui.requestRender();
@@ -2376,14 +2371,14 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
         tui.requestRender();
         return;
       }
-      const sessionKey = state.currentSessionKey;
-      void client.submitChatInput({ sessionKey, message: text, delivery: 'next' })
+      const conversationId = state.currentConversationId;
+      void client.submitChatInput({ conversationId, message: text, delivery: 'next' })
         .then(async ({ ok }) => {
           if (!ok) throw new Error('Gateway did not accept the message');
           recordChatHistory(text);
-          if (state.currentSessionKey === sessionKey && editor.getText().trim() === text) editor.setText('');
+          if (state.currentConversationId === conversationId && editor.getText().trim() === text) editor.setText('');
           chatLog.addSystem(theme.dim('Queued as the next message.'));
-          await refreshPendingInputCount(sessionKey);
+          await refreshPendingInputCount(conversationId);
         })
         .catch((error: unknown) => {
           const errorMessage = error instanceof Error ? error.message : String(error);
@@ -2395,18 +2390,17 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     submitBurst(text);
   };
 
-  const setSessionKey = (key: string) => {
-    state.currentSessionKey = resolveSessionKey(key);
+  const setConversationId = (key: string) => {
+    state.currentConversationId = resolveConversationId(key);
     state.pendingInputCount = 0;
-    void refreshPendingInputCount(state.currentSessionKey);
+    void refreshPendingInputCount(state.currentConversationId);
     updateAgentFromPicker(key);
   };
 
   const updateAgentFromPicker = (key: string) => {
-    const parsed = parseAgentSessionKey(resolveSessionKey(key));
-    if (parsed?.agentId) {
-      currentAgentId = parsed.agentId;
-    }
+    void client.getSessionInfo(resolveConversationId(key)).then(info => {
+      if (state.currentConversationId === resolveConversationId(key) && info.agentId) currentAgentId = info.agentId;
+    }).catch(() => undefined);
   };
 
   let ctrlCHandling = false;
@@ -2455,7 +2449,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     refreshSessionInfo,
     updateHeader,
     state,
-    setSessionKey,
+    setConversationId,
     switchAgentSession,
     clearChatForSessionSwitch,
     loadSessionHistory,
@@ -2642,7 +2636,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   client.onEvent = (evt: TuiEvent) => {
     const data = (evt.data ?? {}) as Record<string, unknown>;
     if (evt.event === 'session.input-state') {
-      if (data.sessionKey === state.currentSessionKey && Array.isArray(data.inputs)) {
+      if (data.conversationId === state.currentConversationId && Array.isArray(data.inputs)) {
         state.pendingInputCount = countPendingChatInputs(data.inputs);
         bottomBar.invalidate();
         tui.requestRender();
@@ -2689,12 +2683,17 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   };
 
   let startupSessionPickerOpened = false;
+  let startupConversationCreated = Boolean(opts.session?.trim());
 
   client.onConnected = () => {
     state.isConnected = true;
     setConnectionStatus(isLocalMode ? 'local ready' : 'gateway connected');
     touchStreamingActivity();
     void (async () => {
+      if (!startupConversationCreated) {
+        await client.createConversation(currentAgentId, state.currentConversationId);
+        startupConversationCreated = true;
+      }
       await refreshComposerHistory();
       if (opts.openSessionPickerOnStart && !startupSessionPickerOpened) {
         startupSessionPickerOpened = true;
@@ -2722,14 +2721,14 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
         const errorMessage = err instanceof Error ? err.message : String(err);
         chatLog.addSystem(`Project not selected: ${errorMessage}`);
       }
-      if (!opts.session?.trim() && isGeneratedTuiSessionKey(state.currentSessionKey)) {
+      if (!opts.session?.trim() && isGeneratedTuiConversationId(state.currentConversationId)) {
         const initialAgentConfig = tuiInitialAgentConfig(
           tuiSettings,
           newSessionPreferenceKey,
           currentAgentId,
         );
         if (initialAgentConfig || opts.thinking?.trim()) {
-          await client.patchSession(state.currentSessionKey, {
+          await client.patchSession(state.currentConversationId, {
             ...initialAgentConfig,
             ...(opts.thinking?.trim() ? { thinkingLevel: opts.thinking.trim() } : {}),
           });
@@ -2738,14 +2737,14 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       await refreshSessionInfoWithBorder();
       persistCurrentNewSessionContext();
       try {
-        const inputState = await client.getChatInputState(state.currentSessionKey);
+        const inputState = await client.getChatInputState(state.currentConversationId);
         state.pendingInputCount = countPendingChatInputs(inputState.inputs);
       } catch {
         state.pendingInputCount = 0;
       }
       await refreshModelChoices();
       await loadSessionHistory({ merge: true });
-      void cleanupAbandonedTuiSessions(client, state.currentSessionKey).catch(() => {});
+      void cleanupAbandonedTuiSessions(client, state.currentConversationId).catch(() => {});
       showStartupCardOnce();
       void refreshStartupResources().then(() => {
         updateFooter();

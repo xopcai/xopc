@@ -57,12 +57,12 @@ export async function acknowledgeHomeAttention(
 
 export async function retryHomeAttention(
   item: Pick<HomeAttention, 'kind' | 'runId'>,
-): Promise<{ ok: true; runId: string; sessionKey?: string }> {
+): Promise<{ ok: true; runId: string; conversationId?: string }> {
   const res = await apiFetch('/api/home/attention/retry', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(item),
   });
   if (!res.ok) throw new Error(`Failed to retry attention item: ${res.status}`);
-  return res.json() as Promise<{ ok: true; runId: string; sessionKey?: string }>;
+  return res.json() as Promise<{ ok: true; runId: string; conversationId?: string }>;
 }

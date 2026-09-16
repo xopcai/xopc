@@ -5,8 +5,8 @@ import {
   setPendingAgentRun,
 } from '../gateway/pending-agent-run';
 
-export async function resolveResumeRunId(sessionKey: string): Promise<string | null> {
-  const key = sessionKey.trim();
+export async function resolveResumeRunId(conversationId: string): Promise<string | null> {
+  const key = conversationId.trim();
   if (!key) return null;
 
   try {

@@ -32,7 +32,7 @@ describe('command palette API', () => {
     await getChatSkillsCached('main', 'agent:main:webchat:default:direct:project-chat');
 
     expect(apiFetch).toHaveBeenCalledWith(
-      '/api/chat/skills?agentId=main&sessionKey=agent%3Amain%3Awebchat%3Adefault%3Adirect%3Aproject-chat',
+      '/api/chat/skills?agentId=main&conversationId=agent%3Amain%3Awebchat%3Adefault%3Adirect%3Aproject-chat',
     );
   });
 
@@ -52,7 +52,7 @@ describe('command palette API', () => {
     expect(apiFetch).toHaveBeenCalledWith('/api/chat/workspace-trust', expect.objectContaining({
       method: 'PATCH',
       body: JSON.stringify({
-        sessionKey: 'agent:main:webchat:default:direct:project-chat',
+        conversationId: 'agent:main:webchat:default:direct:project-chat',
         trusted: true,
       }),
     }));

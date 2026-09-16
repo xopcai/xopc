@@ -15,7 +15,7 @@ export class TaskRunDispatcher {
   constructor(private readonly deps: {
     workerId: string;
     ensureSession: (taskId: string, runId: string, agentId?: string) => Promise<string>;
-    runAgent: (runId: string, sessionKey: string, message: string) => Promise<void>;
+    runAgent: (runId: string, conversationId: string, message: string) => Promise<void>;
   }) {}
 
   dispatch(): void {
@@ -47,8 +47,8 @@ export class TaskRunDispatcher {
             : run;
           if (!executableRun) continue;
           const agentId = typeof run.executorRef.agentId === 'string' ? run.executorRef.agentId : undefined;
-          const sessionKey = await this.deps.ensureSession(task.id, run.id, agentId);
-          await this.deps.runAgent(run.id, sessionKey, task.contract?.objective ?? task.title);
+          const conversationId = await this.deps.ensureSession(task.id, run.id, agentId);
+          await this.deps.runAgent(run.id, conversationId, task.contract?.objective ?? task.title);
         } catch (error) {
           const current = this.#runs.get(run.id);
           if (current && ['queued', 'running', 'waiting', 'verifying'].includes(current.status)) {

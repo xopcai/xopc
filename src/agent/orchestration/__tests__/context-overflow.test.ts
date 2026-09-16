@@ -4,6 +4,8 @@ import { isContextOverflowError } from '../context-overflow.js';
 
 describe('isContextOverflowError', () => {
   it.each([
+    '413 Request body is too large',
+    'Context budget exceeded before provider request',
     'maximum context length exceeded',
     'context_window_exceeded: prompt is too long',
     'Codex error: Your input exceeds the context window of this model. Please adjust your input and try again.',

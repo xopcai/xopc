@@ -34,7 +34,7 @@ function shouldSkipBusOutboundForChannel(channel: string): boolean {
 }
 
 export interface CommandContext {
-  sessionKey: string;
+  conversationId: string;
   channel: string;
   chatId: string;
   senderId: string;
@@ -50,33 +50,33 @@ export interface CommandHandlerConfig {
   sessionStore: SessionStore;
   sessionConfigStore?: SessionConfigStore;
   /** After /think persists, sync pi-agent */
-  applySessionThinkingLevel?: (sessionKey: string, level: ThinkLevel) => void;
+  applySessionThinkingLevel?: (conversationId: string, level: ThinkLevel) => void;
   getCurrentModel: () => string;
-  switchModelForSession: (sessionKey: string, modelId: string) => Promise<boolean>;
+  switchModelForSession: (conversationId: string, modelId: string) => Promise<boolean>;
   /** Drop in-memory agent after session file is cleared (e.g. /new) */
-  invalidateAgentSession?: (sessionKey: string) => void;
+  invalidateAgentSession?: (conversationId: string) => void;
   /** Reset session in place (archive transcript, new session id; preserve overrides) */
-  resetSession?: (sessionKey: string) => Promise<{ sessionId: string; previousSessionId: string } | null>;
+  resetSession?: (conversationId: string) => Promise<{ transcriptId: string; previousTranscriptId: string } | null>;
   /** Cancel streaming preview + in-flight LLM work for this session (e.g. /abort) */
-  abortSessionTurn?: (sessionKey: string) => Promise<void>;
+  abortSessionTurn?: (conversationId: string) => Promise<void>;
   /** Reload skills from disk and refresh active agent prompts. */
   reloadSkills?: () => void | Promise<void>;
   /** Install a managed skill from an explicit source and refresh active agent prompts. */
   installSkillFromSource?: (opts: SkillInstallToolOptions) => Promise<SkillInstallToolResult>;
 
   compactSession?: (
-    sessionKey: string,
+    conversationId: string,
     options?: { instructions?: string; force?: boolean },
   ) => Promise<CompactionResult>;
 
   btwQuery?: (
-    sessionKey: string,
+    conversationId: string,
     question: string,
     options?: BtwQueryOptions,
   ) => Promise<{ text: string; error?: string }>;
 
   getSessionContextReport?: (
-    sessionKey: string,
+    conversationId: string,
     mode: 'list' | 'detail' | 'json',
   ) => Promise<string>;
 
@@ -88,11 +88,11 @@ export class CommandHandler {
   private bus: MessageBus;
   private sessionStore: SessionStore;
   private sessionConfigStore?: SessionConfigStore;
-  private applySessionThinkingLevel?: (sessionKey: string, level: ThinkLevel) => void;
+  private applySessionThinkingLevel?: (conversationId: string, level: ThinkLevel) => void;
   private getCurrentModel: () => string;
-  private switchModelForSession: (sessionKey: string, modelId: string) => Promise<boolean>;
-  private invalidateAgentSession?: (sessionKey: string) => void;
-  private abortSessionTurn?: (sessionKey: string) => Promise<void>;
+  private switchModelForSession: (conversationId: string, modelId: string) => Promise<boolean>;
+  private invalidateAgentSession?: (conversationId: string) => void;
+  private abortSessionTurn?: (conversationId: string) => Promise<void>;
   private reloadSkills?: CommandHandlerConfig['reloadSkills'];
   private installSkillFromSource?: CommandHandlerConfig['installSkillFromSource'];
   private compactSession?: CommandHandlerConfig['compactSession'];
@@ -137,7 +137,7 @@ export class CommandHandler {
     const skipBusOutbound = shouldSkipBusOutboundForChannel(context.channel);
 
     const commandContext = createCommandContext({
-      sessionKey: context.sessionKey,
+      conversationId: context.conversationId,
       source: context.channel as 'telegram' | 'webui' | 'cli' | 'api' | 'system' | 'gateway',
       channelId: context.channel,
       chatId: context.chatId,
@@ -174,7 +174,7 @@ export class CommandHandler {
       getCurrentModel: this.getCurrentModel,
 
       switchModel: async (modelId: string) => {
-        return this.switchModelForSession(context.sessionKey, modelId);
+        return this.switchModelForSession(context.conversationId, modelId);
       },
 
       listModels: async () => {
@@ -198,7 +198,7 @@ export class CommandHandler {
       },
 
       getUsage: async () => {
-        const messages = await this.sessionStore.load(context.sessionKey);
+        const messages = await this.sessionStore.load(context.conversationId);
         let promptTokens = 0;
         let completionTokens = 0;
 
@@ -228,7 +228,7 @@ export class CommandHandler {
 
       abortCurrentTurn: this.abortSessionTurn
         ? async () => {
-            await this.abortSessionTurn!(context.sessionKey);
+            await this.abortSessionTurn!(context.conversationId);
           }
         : undefined,
       reloadSkills: this.reloadSkills
@@ -237,7 +237,7 @@ export class CommandHandler {
           }
         : undefined,
       installSkillFromSource: this.installSkillFromSource
-        ? (opts) => this.installSkillFromSource!({ ...opts, sessionKey: context.sessionKey })
+        ? (opts) => this.installSkillFromSource!({ ...opts, conversationId: context.conversationId })
         : undefined,
 
       compactSession: this.compactSession,
@@ -262,7 +262,7 @@ export class CommandHandler {
       return false;
     }
 
-    log.info({ command: commandName, sessionKey: context.sessionKey }, 'Executing command via new system');
+    log.info({ command: commandName, conversationId: context.conversationId }, 'Executing command via new system');
 
     const cmdCtx = this.buildCommandContext(context);
     const result = await commandRegistry.execute(commandName, cmdCtx, args);
@@ -293,7 +293,7 @@ export class CommandHandler {
       return { handled: false, aggregatedText: '' };
     }
 
-    log.info({ command: commandName, sessionKey: context.sessionKey }, 'Executing command (aggregate reply)');
+    log.info({ command: commandName, conversationId: context.conversationId }, 'Executing command (aggregate reply)');
 
     const segments: string[] = [];
     const wrapped = this.buildCommandContext(context, (text) => segments.push(text), options?.emitEvent);

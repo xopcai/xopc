@@ -22,7 +22,7 @@ import {
   type WeixinInboundMediaOpts,
 } from './inbound.js';
 import { isDebugMode } from './debug-mode.js';
-import { generateWeixinSessionKeyWithRouting } from '../routing-integration.js';
+import { generateWeixinConversationIdWithRouting } from '../routing-integration.js';
 
 function extractTextBody(itemList?: import('../api/types.js').MessageItem[]): string {
   if (!itemList?.length) return '';
@@ -199,7 +199,7 @@ export async function processWeixinInboundMessage(
   const ctx = weixinMessageToMsgContext(full, deps.accountId, mediaOpts);
   const body = ctx.Body?.trim() ?? '';
 
-  const sessionKey = generateWeixinSessionKeyWithRouting(
+  const conversationId = generateWeixinConversationIdWithRouting(
     { accountId: deps.accountId, senderId },
     deps.config,
   );
@@ -254,7 +254,7 @@ export async function processWeixinInboundMessage(
     content: body,
     metadata: {
       accountId: deps.accountId,
-      sessionKey,
+      conversationId,
       messageId: full.message_id != null ? String(full.message_id) : undefined,
       isGroup: false,
       isCommand: body.trim().startsWith('/'),

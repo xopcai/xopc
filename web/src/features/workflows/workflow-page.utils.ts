@@ -1,3 +1,4 @@
+import { conversationIdSchema } from '@xopcai/gateway-contract';
 import type { WorkflowDefinition, WorkflowResultEnvelope, WorkflowRunStatus, WorkflowRunSummary, WorkflowRunView } from './workflow-api';
 import { formatNumericDateTime } from '@/lib/date-formatters';
 import { collectWorkflowSearchText } from './workflow-meta-locale';
@@ -158,15 +159,15 @@ export function resolveWorkflowResultForDisplay(result: unknown): WorkflowResult
 }
 
 /** Dedicated web chat session for a workflow run (from run metadata). */
-export function resolveWorkflowSessionKey(view: WorkflowRunView): string | null {
-  const metadataKey = view.run.metadata?.sessionKey?.trim();
-  if (metadataKey && /^agent:[^:]+:webchat:/i.test(metadataKey)) return metadataKey;
+export function resolveWorkflowConversationId(view: WorkflowRunView): string | null {
+  const metadataKey = view.run.metadata?.conversationId?.trim();
+  if (metadataKey && conversationIdSchema.safeParse(metadataKey).success) return metadataKey;
   return null;
 }
 
 /** Navigate target for opening a workflow run in Chat. */
-export function workflowChatHref(sessionKey: string, draft?: string): string {
-  const href = `/chat/${encodeURIComponent(sessionKey)}`;
+export function workflowChatHref(conversationId: string, draft?: string): string {
+  const href = `/chat/${encodeURIComponent(conversationId)}`;
   const trimmedDraft = draft?.trim();
   if (!trimmedDraft) return href;
   const params = new URLSearchParams({ draft: trimmedDraft });

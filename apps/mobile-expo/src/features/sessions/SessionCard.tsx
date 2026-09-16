@@ -66,12 +66,7 @@ function relativeTime(dateStr: string, locale: string): string {
 }
 
 function resolveSessionAgentId(session: SessionListItem): string {
-  const routedAgentId = session.routing?.agentId?.trim().toLowerCase();
-  if (routedAgentId) return routedAgentId;
-
-  const parts = session.key.trim().toLowerCase().split(':').filter(Boolean);
-  if (parts[0] === 'agent' && parts[1]) return parts[1];
-  return 'main';
+  return session.agentId?.trim().toLowerCase() ?? '';
 }
 
 function resolveSessionAgentAvatar(session: SessionListItem): string | undefined {

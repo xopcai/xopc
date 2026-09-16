@@ -7,13 +7,13 @@ import { messageRowKey } from '@/features/chat/messages/thinking-blocks';
 export const ReadonlyMessageThread = memo(function ReadonlyMessageThread({
   messages,
   authToken,
-  sessionKey,
+  conversationId,
   reasoningLevel = 'on',
   compact = true,
 }: {
   messages: Message[];
   authToken?: string;
-  sessionKey?: string | null;
+  conversationId?: string | null;
   reasoningLevel?: ReasoningLevel;
   compact?: boolean;
 }) {
@@ -26,7 +26,7 @@ export const ReadonlyMessageThread = memo(function ReadonlyMessageThread({
           key={messageRowKey(message, index)}
           message={message}
           authToken={authToken}
-          sessionKey={sessionKey}
+          conversationId={conversationId}
           isStreaming={false}
           progress={null}
           reasoningLevel={reasoningLevel}

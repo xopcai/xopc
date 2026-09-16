@@ -8,7 +8,7 @@ export function registerBrowserSessionRoutes(app: Hono, deps: AuthenticatedRoute
   app.get('/api/browser-session', (c) => {
     c.header('Cache-Control', 'no-store');
     const principal = getGatewayPrincipal(c);
-    return c.json({ sessionKey: principal.principalId });
+    return c.json({ conversationId: principal.principalId });
   });
   app.post('/api/browser-session', deps.strictRateLimitMiddleware, (c) => {
     const principal = getGatewayPrincipal(c);
@@ -25,7 +25,7 @@ export function registerBrowserSessionRoutes(app: Hono, deps: AuthenticatedRoute
     }
     writeBrowserSessionCookie(c, session.token, session.expiresAt);
     c.header('Cache-Control', 'no-store');
-    return c.json({ sessionKey: `browser:${session.sessionId}` });
+    return c.json({ conversationId: `browser:${session.sessionId}` });
   });
   app.delete('/api/browser-session', (c) => {
     if (!browserCookieRequestAllowed(c)) return c.json({ error: 'Forbidden' }, 403);

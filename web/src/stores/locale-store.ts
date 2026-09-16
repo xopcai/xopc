@@ -91,7 +91,7 @@ function startGatewayLanguageSyncDrain(): void {
 }
 
 function syncGatewayLanguage(language: StoredLanguage): void {
-  const token = useGatewayStore.getState().sessionKey;
+  const token = useGatewayStore.getState().conversationId;
   if (!token) return;
 
   const target = { token, language };
@@ -136,7 +136,7 @@ export const useLocaleStore = create<LocaleState>((set) => ({
 export function syncElectronLocaleAfterHydration(): () => void {
   syncGatewayLanguage(useLocaleStore.getState().language);
   const offGateway = useGatewayStore.subscribe((state, previous) => {
-    if (state.sessionKey && state.sessionKey !== previous.sessionKey) {
+    if (state.conversationId && state.conversationId !== previous.conversationId) {
       syncGatewayLanguage(useLocaleStore.getState().language);
     }
   });

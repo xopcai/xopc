@@ -9,22 +9,22 @@ import {
 import { fetchSessionAgentConfig } from '../../query/models';
 
 export async function loadSessionHistoryHead(
-  sessionKey: string,
+  conversationId: string,
   before?: string,
 ): Promise<SessionMessagePage> {
-  const page = await fetchSessionMessagePage(sessionKey, { limit: 50, before });
-  return page ?? emptySessionMessagePage(sessionKey);
+  const page = await fetchSessionMessagePage(conversationId, { limit: 50, before });
+  return page ?? emptySessionMessagePage(conversationId);
 }
 
 /** Prime the exact infinite-query entry consumed by ChatScreen before navigation. */
 export function prefetchSessionHistoryHead(
   queryClient: QueryClient,
-  sessionKey: string,
+  conversationId: string,
   profileId?: string | null,
 ): Promise<void> {
   return queryClient.prefetchInfiniteQuery({
-    queryKey: queryKeys.sessionHistory(sessionKey, profileId),
-    queryFn: ({ pageParam }) => loadSessionHistoryHead(sessionKey, pageParam),
+    queryKey: queryKeys.sessionHistory(conversationId, profileId),
+    queryFn: ({ pageParam }) => loadSessionHistoryHead(conversationId, pageParam),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage: SessionMessagePage) => (
       lastPage.pagination.hasMore ? lastPage.pagination.nextBeforeCursor : undefined
@@ -36,14 +36,14 @@ export function prefetchSessionHistoryHead(
 /** Prime every query that can change the first rendered shape of a chat turn. */
 export async function prefetchSessionChatEntry(
   queryClient: QueryClient,
-  sessionKey: string,
+  conversationId: string,
   profileId?: string | null,
 ): Promise<void> {
   await Promise.all([
-    prefetchSessionHistoryHead(queryClient, sessionKey, profileId),
+    prefetchSessionHistoryHead(queryClient, conversationId, profileId),
     queryClient.prefetchQuery({
-      queryKey: queryKeys.sessionAgentConfig(sessionKey),
-      queryFn: () => fetchSessionAgentConfig(sessionKey),
+      queryKey: queryKeys.sessionAgentConfig(conversationId),
+      queryFn: () => fetchSessionAgentConfig(conversationId),
       staleTime: 15_000,
     }),
   ]);

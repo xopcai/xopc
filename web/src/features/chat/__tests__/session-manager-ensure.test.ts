@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiFetch } from '@/lib/fetch';
 import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
 import {
-  parseWebchatSessionKeyForCreate,
   SessionManager,
 } from '@/features/chat/session/session-manager';
 
@@ -25,32 +24,15 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-describe('parseWebchatSessionKeyForCreate', () => {
-  it('extracts agent and chat id from a canonical webchat key', () => {
-    expect(
-      parseWebchatSessionKeyForCreate('agent:coder:webchat:default:direct:chat_1782872704761'),
-    ).toEqual({
-      agentId: 'coder',
-      channel: 'webchat',
-      chatId: 'chat_1782872704761',
-    });
-  });
-
-  it('rejects non-webchat or malformed keys', () => {
-    expect(parseWebchatSessionKeyForCreate('agent:coder:telegram:default:direct:1')).toBeNull();
-    expect(parseWebchatSessionKeyForCreate('agent:coder:webchat:default')).toBeNull();
-  });
-});
-
 describe('SessionManager.forkSessionAtTurn', () => {
   beforeEach(() => mockedApiFetch.mockReset());
 
   it('posts the stable turn id and returns the server-generated key', async () => {
-    const sourceKey = 'agent:main:webchat:default:direct:source';
-    const targetKey = 'agent:main:webchat:default:direct:generated';
+    const sourceKey = '0d55d9c9-189f-5702-8a5f-815d346e8b17';
+    const targetKey = '80894040-67ed-5752-96d4-d973d59dcc7d';
     mockedApiFetch.mockResolvedValueOnce(jsonResponse({
       ok: true,
-      sessionKey: targetKey,
+      conversationId: targetKey,
       rowCount: 2,
       lastTurnId: 'turn-1',
       session: { key: targetKey, messages: [] },
@@ -58,7 +40,7 @@ describe('SessionManager.forkSessionAtTurn', () => {
 
     const result = await new SessionManager().forkSessionAtTurn(sourceKey, 'turn-1');
 
-    expect(result.sessionKey).toBe(targetKey);
+    expect(result.conversationId).toBe(targetKey);
     expect(mockedApiFetch).toHaveBeenCalledOnce();
     expect(mockedApiFetch.mock.calls[0]?.[0]).toContain(
       `/api/sessions/${encodeURIComponent(sourceKey)}/fork-at-turn`,
@@ -76,32 +58,22 @@ describe('SessionManager.ensureSessionExists', () => {
   it('does not create when the session already resolves', async () => {
     mockedApiFetch.mockResolvedValueOnce(jsonResponse({ ok: true, payload: {} }));
 
-    await new SessionManager().ensureSessionExists('agent:coder:webchat:default:direct:chat_a');
+    await new SessionManager().ensureSessionExists('134874b6-5536-51bc-8c22-57982488c47a');
 
     expect(mockedApiFetch).toHaveBeenCalledTimes(1);
   });
 
-  it('creates the same webchat session after a 404 resolve miss', async () => {
-    mockedApiFetch
-      .mockResolvedValueOnce(jsonResponse({ ok: false, error: 'Session not found' }, 404))
-      .mockResolvedValueOnce(jsonResponse({ session: { key: 'agent:coder:webchat:default:direct:chat_a' } }, 201));
-
-    await new SessionManager().ensureSessionExists('agent:coder:webchat:default:direct:chat_a');
-
-    expect(mockedApiFetch).toHaveBeenCalledTimes(2);
-    const createInit = mockedApiFetch.mock.calls[1]?.[1];
-    expect(JSON.parse(String(createInit?.body))).toEqual({
-      channel: 'webchat',
-      agentId: 'coder',
-      chat_id: 'chat_a',
-    });
+  it('does not resurrect a deleted conversation on a 404', async () => {
+    mockedApiFetch.mockResolvedValueOnce(jsonResponse({ error: 'Session not found' }, 404));
+    await expect(new SessionManager().ensureSessionExists('06e49449-6c47-45c3-868a-753193a8262a')).rejects.toThrow('Session not found');
+    expect(mockedApiFetch).toHaveBeenCalledOnce();
   });
 
   it('does not create when resolve fails for auth or other non-404 errors', async () => {
     mockedApiFetch.mockResolvedValueOnce(jsonResponse({ error: 'Invalid authentication token' }, 401));
 
     await expect(
-      new SessionManager().ensureSessionExists('agent:coder:webchat:default:direct:chat_a'),
+      new SessionManager().ensureSessionExists('134874b6-5536-51bc-8c22-57982488c47a'),
     ).rejects.toThrow('Invalid authentication token');
 
     expect(mockedApiFetch).toHaveBeenCalledTimes(1);
@@ -134,7 +106,7 @@ describe('SessionManager.loadSession', () => {
       .mockResolvedValueOnce(
         jsonResponse({
           session: {
-            key: 'agent:main:webchat:default:direct:chat_long',
+            key: '870ee827-28b5-5dd2-8884-4d6b153c5f3c',
             name: 'Long turn',
             messages: [
               {
@@ -162,7 +134,7 @@ describe('SessionManager.loadSession', () => {
       .mockResolvedValueOnce(
         jsonResponse({
           session: {
-            key: 'agent:main:webchat:default:direct:chat_long',
+            key: '870ee827-28b5-5dd2-8884-4d6b153c5f3c',
             name: 'Long turn',
             messages: [
               {
@@ -189,7 +161,7 @@ describe('SessionManager.loadSession', () => {
       );
 
     const result = await new SessionManager().loadSession(
-      'agent:main:webchat:default:direct:chat_long',
+      '870ee827-28b5-5dd2-8884-4d6b153c5f3c',
     );
 
     expect(mockedApiFetchWithStartupRetry).toHaveBeenCalledTimes(2);
@@ -205,14 +177,14 @@ describe('SessionManager.loadSession', () => {
     mockedApiFetchWithStartupRetry.mockResolvedValueOnce(
       jsonResponse({
         session: {
-          key: 'agent:main:webchat:default:direct:chat_invalid',
+          key: '88f62be8-0a58-546b-a62c-4146c54d81fd',
           messages: [],
         },
       }),
     );
 
     await expect(
-      new SessionManager().loadSession('agent:main:webchat:default:direct:chat_invalid'),
+      new SessionManager().loadSession('88f62be8-0a58-546b-a62c-4146c54d81fd'),
     ).rejects.toThrow();
   });
 });
@@ -226,7 +198,7 @@ describe('SessionManager.loadTimeline', () => {
     mockedApiFetchWithStartupRetry.mockResolvedValueOnce(jsonResponse({ ok: true }));
 
     await expect(
-      new SessionManager().loadTimeline('agent:main:webchat:default:direct:chat_invalid'),
+      new SessionManager().loadTimeline('88f62be8-0a58-546b-a62c-4146c54d81fd'),
     ).rejects.toThrow('Invalid session timeline response');
   });
 });

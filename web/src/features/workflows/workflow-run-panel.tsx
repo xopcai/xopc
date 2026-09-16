@@ -47,7 +47,7 @@ import {
   formatTime,
   interpolate,
   resolveWorkflowResultForDisplay,
-  resolveWorkflowSessionKey,
+  resolveWorkflowConversationId,
   statusTone,
   workflowResultToMarkdown,
   type WorkflowRunDiagnosticItem,
@@ -91,8 +91,8 @@ function buildDiagnosticHint(view: WorkflowRunView, labels: WorkflowsMessages): 
   return null;
 }
 
-function resolveWorkflowSessionKeyFromView(view: WorkflowRunView): string | null {
-  return resolveWorkflowSessionKey(view);
+function resolveWorkflowConversationIdFromView(view: WorkflowRunView): string | null {
+  return resolveWorkflowConversationId(view);
 }
 
 export function WorkflowRunPanel({
@@ -199,9 +199,9 @@ export function WorkflowRunPanel({
 
   const continueInChat = useCallback(() => {
     if (!view) return;
-    const sessionKey = resolveWorkflowSessionKeyFromView(view);
-    if (!sessionKey) return;
-    navigate(workflowChatHref(sessionKey));
+    const conversationId = resolveWorkflowConversationIdFromView(view);
+    if (!conversationId) return;
+    navigate(workflowChatHref(conversationId));
   }, [navigate, view]);
 
   const handleDownloadArtifact = useCallback(async (artifact: WorkflowArtifactRef) => {
@@ -220,12 +220,12 @@ export function WorkflowRunPanel({
 
   const handleStartFollowUp = useCallback((followUp: WorkflowFollowUp) => {
     if (!view || !followUp.prompt) return;
-    const sessionKey = resolveWorkflowSessionKeyFromView(view);
-    if (!sessionKey) {
+    const conversationId = resolveWorkflowConversationIdFromView(view);
+    if (!conversationId) {
       void copyTextToClipboard(followUp.prompt);
       return;
     }
-    navigate(workflowChatHref(sessionKey, followUp.prompt));
+    navigate(workflowChatHref(conversationId, followUp.prompt));
   }, [navigate, view]);
 
   const handleResultAction = useCallback((action: WorkflowNextAction) => {
@@ -258,7 +258,7 @@ export function WorkflowRunPanel({
     const parsed = Number.parseInt(rawAgentId, 10);
     setSelectedAgentId(Number.isFinite(parsed) ? parsed : index + 1);
   }, [view]);
-  const workflowSessionKey = view ? resolveWorkflowSessionKeyFromView(view) : null;
+  const workflowConversationId = view ? resolveWorkflowConversationIdFromView(view) : null;
   const resultActions = task?.actions.filter((action) => isResultActionAvailable(action, task)) ?? [];
   const hasEnvelopeCopyAction = resultActions.some((action) => action.kind === 'copy_result');
 
@@ -370,7 +370,7 @@ export function WorkflowRunPanel({
                           <p className="mt-0.5 text-xs text-fg-subtle">{labels.resultReadyHint}</p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                          {workflowSessionKey ? (
+                          {workflowConversationId ? (
                             <Button variant="primary" className="h-8 text-xs" onClick={continueInChat}>
                               <MessageSquare className="size-3.5" aria-hidden />
                               {labels.continueInChat}

@@ -6,9 +6,9 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { createSideChat, deleteSideChat, getSideChatMessages, realtime, sendSideChatInput, sideChatSelections, updateSideChatConfig } = vi.hoisted(() => ({
-  createSideChat: vi.fn(async (parentSessionKey: string, selections: unknown[]) => ({
+  createSideChat: vi.fn(async (parentConversationId: string, selections: unknown[]) => ({
     id: 'side-2',
-    parentSessionKey,
+    parentConversationId,
     context: { selections },
   })),
   getSideChatMessages: vi.fn(async () => [] as unknown[]),
@@ -21,7 +21,7 @@ const { createSideChat, deleteSideChat, getSideChatMessages, realtime, sendSideC
   sendSideChatInput: vi.fn(async () => 'run-1'),
   updateSideChatConfig: vi.fn(async (_id: string, config: { modelRef?: string; thinkingLevel?: string }) => ({
     id: 'side-1',
-    parentSessionKey: 'parent',
+    parentConversationId: 'parent',
     clientInstanceId: 'tab-1',
     status: 'idle' as const,
     createdAt: new Date(0).toISOString(),
@@ -29,7 +29,7 @@ const { createSideChat, deleteSideChat, getSideChatMessages, realtime, sendSideC
     expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
     messageCount: 0,
     context: {
-      parentSessionKey: 'parent', parentSessionId: 'parent-id', parentMessageCount: 0,
+      parentConversationId: 'parent', parentSessionId: 'parent-id', parentMessageCount: 0,
       createdAt: new Date(0).toISOString(), selections: [], contentHash: 'hash',
     },
     config: { modelRef: config.modelRef ?? 'openai/test', thinkingLevel: config.thinkingLevel ?? 'medium' },
@@ -44,7 +44,7 @@ vi.mock('@/features/side-chat/side-chat-api', () => ({
   deleteSideChat,
   getSideChat: vi.fn(async () => ({
     id: 'side-1',
-    parentSessionKey: 'parent',
+    parentConversationId: 'parent',
     clientInstanceId: 'tab-1',
     status: 'idle',
     createdAt: new Date(0).toISOString(),
@@ -52,7 +52,7 @@ vi.mock('@/features/side-chat/side-chat-api', () => ({
     expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
     messageCount: 0,
     context: {
-      parentSessionKey: 'parent',
+      parentConversationId: 'parent',
       parentSessionId: 'parent-id',
       parentMessageCount: 0,
       createdAt: new Date(0).toISOString(),
@@ -149,7 +149,7 @@ describe('SideChatConversation composer', () => {
         <SideChatConversation
           sideChatId="side-1"
           onRunIdChange={() => {}}
-          parentSessionKey="parent"
+          parentConversationId="parent"
         />,
       );
     });
@@ -348,11 +348,11 @@ describe('SideChatConversation composer', () => {
     useLocaleStore.setState({ language: 'zh' });
     useSideChatStore.setState({
       panes: { parent: { open: true, activeId: 'side-1' } },
-      tabs: [{ id: 'side-1', parentSessionKey: 'parent', title: 'Side chat' }],
+      tabs: [{ id: 'side-1', parentConversationId: 'parent', title: 'Side chat' }],
       pendingCreate: null,
     });
     await act(async () => {
-      root.render(<MemoryRouter><SideChatColumn parentSessionKey="parent" /></MemoryRouter>);
+      root.render(<MemoryRouter><SideChatColumn parentConversationId="parent" /></MemoryRouter>);
     });
 
     expect(container.querySelector('aside')?.getAttribute('aria-label')).toBe('侧边对话');
@@ -366,11 +366,11 @@ describe('SideChatConversation composer', () => {
     useLocaleStore.setState({ language: 'zh' });
     useSideChatStore.setState({
       panes: { parent: { open: true, activeId: 'side-1' } },
-      tabs: [{ id: 'side-1', parentSessionKey: 'parent', title: 'Side chat' }],
+      tabs: [{ id: 'side-1', parentConversationId: 'parent', title: 'Side chat' }],
       pendingCreate: null,
     });
     await act(async () => {
-      root.render(<MemoryRouter><SideChatColumn parentSessionKey="parent" /></MemoryRouter>);
+      root.render(<MemoryRouter><SideChatColumn parentConversationId="parent" /></MemoryRouter>);
     });
 
     await act(async () => {
@@ -394,11 +394,11 @@ describe('SideChatConversation composer', () => {
     getSideChatMessages.mockResolvedValue([{ role: 'user', content: 'keep me', timestamp: 1 }]);
     useSideChatStore.setState({
       panes: { parent: { open: true, activeId: 'side-1' } },
-      tabs: [{ id: 'side-1', parentSessionKey: 'parent', title: 'Side chat' }],
+      tabs: [{ id: 'side-1', parentConversationId: 'parent', title: 'Side chat' }],
       pendingCreate: null,
     });
     await act(async () => {
-      root.render(<MemoryRouter><SideChatColumn parentSessionKey="parent" /></MemoryRouter>);
+      root.render(<MemoryRouter><SideChatColumn parentConversationId="parent" /></MemoryRouter>);
     });
     await act(async () => {
       container.querySelector<HTMLButtonElement>('button[aria-label="Close side chat"]')?.click();
@@ -414,7 +414,7 @@ describe('SideChatConversation composer', () => {
 
     expect(localStorage.getItem('xopc:side-chat-close-confirm-disabled:v1')).toBe('true');
 
-    useSideChatStore.getState().addTab({ id: 'side-2', parentSessionKey: 'parent', title: 'Side chat' });
+    useSideChatStore.getState().addTab({ id: 'side-2', parentConversationId: 'parent', title: 'Side chat' });
     await act(async () => {});
     await act(async () => {
       container.querySelector<HTMLButtonElement>('button[aria-label="Close side chat"]')?.click();
@@ -427,11 +427,11 @@ describe('SideChatConversation composer', () => {
   it('creates a new empty side chat from the top tab bar', async () => {
     useSideChatStore.setState({
       panes: { parent: { open: true, activeId: 'side-1' } },
-      tabs: [{ id: 'side-1', parentSessionKey: 'parent', title: 'Side chat' }],
+      tabs: [{ id: 'side-1', parentConversationId: 'parent', title: 'Side chat' }],
       pendingCreate: null,
     });
     await act(async () => {
-      root.render(<MemoryRouter><SideChatColumn parentSessionKey="parent" /></MemoryRouter>);
+      root.render(<MemoryRouter><SideChatColumn parentConversationId="parent" /></MemoryRouter>);
     });
 
     const create = container.querySelector<HTMLButtonElement>('button[aria-label="New side chat"]');
@@ -445,8 +445,8 @@ describe('SideChatConversation composer', () => {
     expect(useSideChatStore.getState().tabs.map((tab) => tab.id)).toEqual(['side-1', 'side-2']);
   });
   async function renderColumn() {
-    useSideChatStore.getState().addTab({ id: 'side-1', parentSessionKey: 'parent', title: 'Side chat' });
-    await act(async () => { root.render(<MemoryRouter><SideChatColumn parentSessionKey="parent" /></MemoryRouter>); });
+    useSideChatStore.getState().addTab({ id: 'side-1', parentConversationId: 'parent', title: 'Side chat' });
+    await act(async () => { root.render(<MemoryRouter><SideChatColumn parentConversationId="parent" /></MemoryRouter>); });
   }
 
   it('retains reading content and the draft on expiry, replacing the tab only after a successful new chat', async () => {

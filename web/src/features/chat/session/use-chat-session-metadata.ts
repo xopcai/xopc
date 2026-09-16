@@ -11,14 +11,14 @@ export interface ChatSessionMetadata {
   sessionType: string | null;
   sourceNoteId: string | null;
   sourceNoteTitle: string | null;
-  parentSessionKey: string | null;
+  parentConversationId: string | null;
   forkedFromSessionName: string | null;
 }
 
 /** Read execution bindings from the session's authoritative metadata. */
-export function useChatSessionMetadata(sessionKey: string | null | undefined) {
-  const token = useGatewayStore((s) => s.sessionKey);
-  const trimmedKey = sessionKey?.trim() || null;
+export function useChatSessionMetadata(conversationId: string | null | undefined) {
+  const token = useGatewayStore((s) => s.conversationId);
+  const trimmedKey = conversationId?.trim() || null;
 
   return useSWR(
     token && trimmedKey ? ['chat-session-meta', trimmedKey, token] : null,
@@ -43,9 +43,9 @@ export function useChatSessionMetadata(sessionKey: string | null | undefined) {
         sourceBinding?.kind === 'note' && typeof sourceBinding.sourceId === 'string' && sourceBinding.sourceId.trim()
           ? sourceBinding.sourceId.trim()
           : null;
-      const parentSessionKey =
-        typeof detail.parentSessionKey === 'string' && detail.parentSessionKey.trim()
-          ? detail.parentSessionKey.trim()
+      const parentConversationId =
+        typeof detail.parentConversationId === 'string' && detail.parentConversationId.trim()
+          ? detail.parentConversationId.trim()
           : null;
       const rawForkedFromSessionName = detail.customData?.forkedFromSessionName;
       return {
@@ -55,7 +55,7 @@ export function useChatSessionMetadata(sessionKey: string | null | undefined) {
         sessionType,
         sourceNoteId,
         sourceNoteTitle: null,
-        parentSessionKey,
+        parentConversationId,
         forkedFromSessionName:
           typeof rawForkedFromSessionName === 'string' && rawForkedFromSessionName.trim()
             ? rawForkedFromSessionName.trim()

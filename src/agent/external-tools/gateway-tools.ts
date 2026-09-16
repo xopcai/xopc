@@ -56,7 +56,7 @@ export function createExternalToolGatewayTools(providers: ExternalToolProvider[]
     description: 'Search MCP, connected-app, extension, remote-memory, and current-endpoint tools. Use concise English capability keywords. Returns compact references only; call xopc_tool_describe before execution.',
     parameters: ToolSearchSchema,
     async execute(_toolCallId, params) {
-      return textResult({ ...await service.search(params), connectionCandidates: connectionCandidates(params.query), selectedConnections: getContext?.()?.sessionKey ? connectionBindings(getContext()!.sessionKey) : [], waitingObjective: getContext?.()?.sessionKey ? getActiveConnectionWait(getContext()!.sessionKey)?.summary : undefined });
+      return textResult({ ...await service.search(params), connectionCandidates: connectionCandidates(params.query), selectedConnections: getContext?.()?.conversationId ? connectionBindings(getContext()!.conversationId) : [], waitingObjective: getContext?.()?.conversationId ? getActiveConnectionWait(getContext()!.conversationId)?.summary : undefined });
     },
   };
   const describeTool: AgentTool<typeof ToolDescribeSchema, Record<string, unknown>> = {
@@ -111,9 +111,9 @@ export function createExternalToolGatewayTools(providers: ExternalToolProvider[]
       const range = params.checkpoint.timeRange;
       if (range && (!Number.isFinite(Date.parse(range.from)) || !Number.isFinite(Date.parse(range.to)) || Date.parse(range.from) >= Date.parse(range.to))) throw new Error('Provide a valid absolute time range.');
       if (range) new Intl.DateTimeFormat('en', { timeZone: range.timezone }).format();
-      const principal = connectorPrincipalForSession(context.sessionKey);
+      const principal = connectorPrincipalForSession(context.conversationId);
       if (!principal.isLocalOwner) throw new Error('Connection recovery is available in the owner chat.');
-      const selected = connectionBindings(context.sessionKey);
+      const selected = connectionBindings(context.conversationId);
       if (params.requirements.every(item => selected.some(need => need.connectorId === item.candidateRef
         && need.connectionId && (!item.accountId || item.accountId === need.accountId)
         && (!item.accountSelector || item.accountSelector === need.accountSelector)
@@ -122,7 +122,7 @@ export function createExternalToolGatewayTools(providers: ExternalToolProvider[]
         return textResult({ status: 'already_connected', selectedConnections: selected,
           instruction: 'These accounts were already checked for this objective. Missing tool contracts are a tool availability problem. Do not request authorization again or invent a revision. Explain the unavailable capability and stop retrying the same tools.' });
       }
-      const result = requireSessionConnection({ sessionKey: context.sessionKey,
+      const result = requireSessionConnection({ conversationId: context.conversationId,
         principalId: principal.principalId, agentId: principal.agentId ?? 'main', summary: params.purpose, checkpoint: params.checkpoint,
         needs: params.requirements.map(item => {
           const need = resolveConnectionCandidate(item.candidateRef);
@@ -131,7 +131,7 @@ export function createExternalToolGatewayTools(providers: ExternalToolProvider[]
             key: `${need.connectorId}:${item.accountId ?? item.accountSelector ?? 'default'}` };
         }),
       });
-      publishConnectionWait(context.sessionKey);
+      publishConnectionWait(context.conversationId);
       return textResult(result);
     },
   };
@@ -146,7 +146,7 @@ export function createExternalToolGatewayTools(providers: ExternalToolProvider[]
       const context = getContext?.();
       if (!context) throw new Error('No active conversation.');
       if (params.action === 'update' && !params.objective) throw new Error('The revised objective is required.');
-      reviseCurrentConnectionObjective(context.sessionKey, params.action === 'update' ? params.objective : undefined);
+      reviseCurrentConnectionObjective(context.conversationId, params.action === 'update' ? params.objective : undefined);
       return textResult({ status: params.action === 'update' ? 'updated' : 'cancelled' });
     },
   };

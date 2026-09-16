@@ -45,12 +45,12 @@ import {
 import type { ChatFollowUpClarifyApi } from '@/features/chat/session/use-chat-follow-up-clarify';
 
 export function useChatSessionStreaming(deps: {
-  sessionKey: string | null;
+  conversationId: string | null;
   taskId?: string;
   thinkingLevel: string;
   modelSupportsThinking: boolean;
 
-  sessionKeyRef: RefObject<string | null>;
+  conversationIdRef: RefObject<string | null>;
   sendingRef: RefObject<boolean>;
   streamingRef: RefObject<boolean>;
   sessionMgrRef: RefObject<SessionManager>;
@@ -65,7 +65,7 @@ export function useChatSessionStreaming(deps: {
     ) => Promise<void>
   >;
 
-  shouldApplyStreamUpdate: (streamSessionKey: string) => boolean;
+  shouldApplyStreamUpdate: (streamConversationId: string) => boolean;
   fq: ChatFollowUpClarifyApi;
 
   applyLoadedSessionSnapshot: (
@@ -77,11 +77,11 @@ export function useChatSessionStreaming(deps: {
   pollSessionNameAfterTurn: () => void;
 }) {
   const {
-    sessionKey,
+    conversationId,
     taskId,
     thinkingLevel,
     modelSupportsThinking,
-    sessionKeyRef,
+    conversationIdRef,
     sendingRef,
     streamingRef,
     sessionMgrRef,
@@ -99,8 +99,8 @@ export function useChatSessionStreaming(deps: {
   const clearShellError = () => store().setShellError(null);
 
   const finalizeMessage = useCallback(
-    (targetSessionKey?: string, terminalStatus?: AgentStreamRunStatus) => {
-      const cacheKey = targetSessionKey ?? sessionKeyRef.current;
+    (targetConversationId?: string, terminalStatus?: AgentStreamRunStatus) => {
+      const cacheKey = targetConversationId ?? conversationIdRef.current;
       if (cacheKey && !shouldApplyStreamUpdate(cacheKey)) {
         return;
       }
@@ -124,10 +124,10 @@ export function useChatSessionStreaming(deps: {
       if (cacheKey) chatRunManager.resetRunTracking(cacheKey);
       if (!terminalStatus || shouldDismissClarificationForTerminal(terminalStatus)) fq.dismissClarify();
       void pollSessionNameAfterTurn();
-      const syncKey = sessionKeyRef.current;
+      const syncKey = conversationIdRef.current;
       if (syncKey) {
         window.setTimeout(() => {
-          if (sessionKeyRef.current !== syncKey) return;
+          if (conversationIdRef.current !== syncKey) return;
           if (sendingRef.current || streamingRef.current) return;
           void loadSessionById(syncKey, 0);
         }, 400);
@@ -136,7 +136,7 @@ export function useChatSessionStreaming(deps: {
     [
       sendingRef,
       streamingRef,
-      sessionKeyRef,
+      conversationIdRef,
       fq.dismissClarify,
       fq.pendingFollowUpsRef,
       pollSessionNameAfterTurn,
@@ -252,7 +252,7 @@ export function useChatSessionStreaming(deps: {
   const interruptAndSend = useCallback(
     async (content: string, attachments?: WireAttachment[], levelOverride?: string, contextRefs?: ComposerContextRef[]) => {
       if (!content.trim() && !attachments?.length) return;
-      const key = sessionKeyRef.current;
+      const key = conversationIdRef.current;
       if (!key) return;
       if (!sendingRef.current && !streamingRef.current && !chatRunManager.isStreamingFor(key)) return;
       const trimmed = content.trim();
@@ -278,7 +278,7 @@ export function useChatSessionStreaming(deps: {
     [
       sendingRef,
       streamingRef,
-      sessionKeyRef,
+      conversationIdRef,
       fq.dismissClarifyAndClearPending,
       modelSupportsThinking,
       thinkingLevel,
@@ -296,11 +296,11 @@ export function useChatSessionStreaming(deps: {
       contextRefs?: ComposerContextRef[],
       replaceTurnId?: string,
     ) => {
-      if (!sessionKey) return;
-      if (!shouldApplyStreamUpdate(sessionKey)) return;
+      if (!conversationId) return;
+      if (!shouldApplyStreamUpdate(conversationId)) return;
       if (
         (!content.trim() && !attachments?.length) ||
-        (sendingRef.current || streamingRef.current || chatRunManager.isStreamingFor(sessionKey))
+        (sendingRef.current || streamingRef.current || chatRunManager.isStreamingFor(conversationId))
       ) {
         return;
       }
@@ -316,7 +316,7 @@ export function useChatSessionStreaming(deps: {
       }
 
       const effectiveThinking = modelSupportsThinking ? (levelOverride ?? thinkingLevel) : 'off';
-      const chatId = sessionKey;
+      const chatId = conversationId;
       const currentMessages = getSessionMessages(chatId);
       const replaceIndex = replaceTurnId
         ? currentMessages.findIndex(
@@ -426,7 +426,7 @@ export function useChatSessionStreaming(deps: {
       }
     },
     [
-      sessionKey,
+      conversationId,
       thinkingLevel,
       modelSupportsThinking,
       sendingRef,
@@ -454,7 +454,7 @@ export function useChatSessionStreaming(deps: {
   );
 
   const abort = useCallback(() => {
-    const key = sessionKeyRef.current;
+    const key = conversationIdRef.current;
     if (!key) return;
     chatRunManager.setUserAborted(key, true);
     fq.dismissClarifyAndClearPending();
@@ -473,13 +473,13 @@ export function useChatSessionStreaming(deps: {
     sendingRef,
     streamingRef,
     finalizeMessage,
-    sessionKeyRef,
+    conversationIdRef,
     loadSessionById,
   ]);
 
   const deleteMessageRound = useCallback(
     (messageIndex: number) => {
-      const key = sessionKeyRef.current;
+      const key = conversationIdRef.current;
       if (!key) return;
       if (sendingRef.current || streamingRef.current) return;
 
@@ -500,12 +500,12 @@ export function useChatSessionStreaming(deps: {
         void loadSessionById(key, 0);
       });
     },
-    [sessionKeyRef, sendingRef, streamingRef, sessionMgrRef, loadSessionById],
+    [conversationIdRef, sendingRef, streamingRef, sessionMgrRef, loadSessionById],
   );
 
   const retryUserMessageRound = useCallback(
     (messageIndex: number) => {
-      const key = sessionKeyRef.current;
+      const key = conversationIdRef.current;
       if (!key) return;
       if (sendingRef.current || streamingRef.current) return;
 
@@ -532,7 +532,7 @@ export function useChatSessionStreaming(deps: {
         void loadSessionById(key, 0);
       });
     },
-    [sessionKeyRef, sendingRef, streamingRef, loadSessionById, sendMessageRef],
+    [conversationIdRef, sendingRef, streamingRef, loadSessionById, sendMessageRef],
   );
 
   return {

@@ -14,7 +14,7 @@ import { logger as baseLogger } from '../../utils/logger.js';
 const log = baseLogger.child({ module: 'ContextMiddleware' });
 
 export interface RequestContext {
-  sessionKey: string;
+  conversationId: string;
   userId?: string;
   channel?: string;
   chatId?: string;
@@ -31,18 +31,13 @@ export class ContextMiddleware {
     return `req_${timestamp}_${random}`;
   }
 
-  private extractSessionId(sessionKey: string): string {
-    const parts = sessionKey.split(':');
-    return parts.slice(0, 2).join(':');
-  }
-
   onRequest(context: RequestContext): string {
     this.contextDepth++;
     const requestId = this.generateRequestId();
 
     this.currentContext = {
       requestId,
-      sessionId: this.extractSessionId(context.sessionKey),
+      conversationId: context.conversationId,
       userId: context.userId,
       module: context.channel,
       service: 'xopc',
@@ -52,7 +47,7 @@ export class ContextMiddleware {
     log.debug(
       {
         requestId,
-        sessionId: this.currentContext.sessionId,
+        conversationId: this.currentContext.conversationId,
         userId: context.userId,
         depth: this.contextDepth,
       },

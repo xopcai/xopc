@@ -15,7 +15,7 @@ export type AutoReadAloudCandidate = {
 };
 
 export type AutoReadAloudTracker = {
-  sessionKey: string;
+  conversationId: string;
   enabled: boolean;
   wasStreaming: boolean;
   lastSeenKey: string | null;
@@ -32,12 +32,12 @@ function shortTextHash(text: string): string {
 
 export function findLatestAutoReadAloudCandidate({
   messages,
-  sessionKey,
+  conversationId,
   language,
   title,
 }: {
   messages: Message[];
-  sessionKey: string;
+  conversationId: string;
   language: Language;
   title: string;
 }): AutoReadAloudCandidate | null {
@@ -49,7 +49,7 @@ export function findLatestAutoReadAloudCandidate({
     const identity = message.id
       ?? message.timestamp?.toString()
       ?? `${index}-${shortTextHash(text)}`;
-    const key = `${sessionKey}:${identity}`;
+    const key = `${conversationId}:${identity}`;
     const hasAudio = message.content.some((block) => block.type === 'audio');
     return {
       key,
@@ -57,7 +57,7 @@ export function findLatestAutoReadAloudCandidate({
         ? {
             source: {
               id: `${AUTO_READ_ALOUD_SOURCE_PREFIX}${key}`,
-              sessionKey,
+              conversationId,
               title,
               preview: text,
             },
@@ -73,17 +73,17 @@ export function findLatestAutoReadAloudCandidate({
 export function advanceAutoReadAloud(
   previous: AutoReadAloudTracker | undefined,
   current: {
-    sessionKey: string;
+    conversationId: string;
     enabled: boolean;
     streaming: boolean;
     candidate: AutoReadAloudCandidate | null;
   },
 ): { tracker: AutoReadAloudTracker; input: ReadAloudInput | null } {
-  const { sessionKey, enabled, streaming, candidate } = current;
-  if (!previous || previous.sessionKey !== sessionKey) {
+  const { conversationId, enabled, streaming, candidate } = current;
+  if (!previous || previous.conversationId !== conversationId) {
     return {
       tracker: {
-        sessionKey,
+        conversationId,
         enabled,
         wasStreaming: streaming,
         lastSeenKey: streaming ? null : (candidate?.key ?? null),
@@ -95,7 +95,7 @@ export function advanceAutoReadAloud(
   if (!enabled) {
     return {
       tracker: {
-        sessionKey,
+        conversationId,
         enabled,
         wasStreaming: streaming,
         lastSeenKey: streaming ? previous.lastSeenKey : (candidate?.key ?? previous.lastSeenKey),
@@ -107,7 +107,7 @@ export function advanceAutoReadAloud(
   if (!previous.enabled) {
     return {
       tracker: {
-        sessionKey,
+        conversationId,
         enabled,
         wasStreaming: streaming,
         lastSeenKey: streaming ? previous.lastSeenKey : (candidate?.key ?? previous.lastSeenKey),
@@ -125,7 +125,7 @@ export function advanceAutoReadAloud(
     && candidate.key !== previous.lastSeenKey;
   return {
     tracker: {
-      sessionKey,
+      conversationId,
       enabled,
       wasStreaming: completedNewReply ? false : awaitingCompletedReply,
       lastSeenKey: completedNewReply ? candidate.key : previous.lastSeenKey,
@@ -137,36 +137,36 @@ export function advanceAutoReadAloud(
 export function useAutoReadAloud({
   language,
   messages,
-  sessionKey,
+  conversationId,
   streaming,
   title,
 }: {
   language: Language;
   messages: Message[];
-  sessionKey: string;
+  conversationId: string;
   streaming: boolean;
   title: string;
 }): void {
   const trackerRef = useRef<AutoReadAloudTracker | undefined>(undefined);
-  const enabled = useReadAloudStore((state) => state.continuousSessionKey === sessionKey);
+  const enabled = useReadAloudStore((state) => state.continuousConversationId === conversationId);
   const requestStart = useReadAloudStore((state) => state.requestStart);
   const activeSourceId = useReadAloudStore((state) => state.source?.id);
   const stop = useReadAloudStore((state) => state.stop);
   const candidate = useMemo(
-    () => findLatestAutoReadAloudCandidate({ messages, sessionKey, language, title }),
-    [language, messages, sessionKey, title],
+    () => findLatestAutoReadAloudCandidate({ messages, conversationId, language, title }),
+    [language, messages, conversationId, title],
   );
 
   useEffect(() => {
     const next = advanceAutoReadAloud(trackerRef.current, {
-      sessionKey,
+      conversationId,
       enabled,
       streaming,
       candidate,
     });
     trackerRef.current = next.tracker;
     if (next.input) requestStart(next.input);
-  }, [candidate, enabled, requestStart, sessionKey, streaming]);
+  }, [candidate, enabled, requestStart, conversationId, streaming]);
 
   useEffect(() => {
     if (!enabled && activeSourceId?.startsWith(AUTO_READ_ALOUD_SOURCE_PREFIX)) stop();

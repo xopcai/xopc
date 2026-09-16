@@ -34,20 +34,20 @@ import { buildTaskExecutionDirective } from '../../tasks/task-context-assembler.
 import { prependAgentContext } from '../context/prepend.js';
 
 export interface HydratePerTurnStateDeps {
-  hydrateSessionWorkspaceFromStore: (sessionKey: string) => Promise<void>;
-  hydrateSessionModelFromStore: (sessionKey: string) => Promise<void>;
-  applyResolvedThinkingLevel: (sessionKey: string, thinking?: string | null) => Promise<void>;
+  hydrateSessionWorkspaceFromStore: (conversationId: string) => Promise<void>;
+  hydrateSessionModelFromStore: (conversationId: string) => Promise<void>;
+  applyResolvedThinkingLevel: (conversationId: string, thinking?: string | null) => Promise<void>;
 }
 
 /** Workspace + model + thinking level — common prep before any direct turn. */
 export async function hydratePerTurnState(
   deps: HydratePerTurnStateDeps,
-  sessionKey: string,
+  conversationId: string,
   thinking?: string,
 ): Promise<void> {
-  await deps.hydrateSessionWorkspaceFromStore(sessionKey);
-  await deps.hydrateSessionModelFromStore(sessionKey);
-  await deps.applyResolvedThinkingLevel(sessionKey, thinking);
+  await deps.hydrateSessionWorkspaceFromStore(conversationId);
+  await deps.hydrateSessionModelFromStore(conversationId);
+  await deps.applyResolvedThinkingLevel(conversationId, thinking);
 }
 
 export interface SlashCommandTask {
@@ -74,7 +74,7 @@ export interface TryRunSlashCommandDeps {
 export async function tryRunSlashCommand(
   deps: TryRunSlashCommandDeps,
   ctx: {
-    sessionKey: string;
+    conversationId: string;
     channel: string;
     chatId: string;
     senderId?: string;
@@ -111,7 +111,7 @@ export async function tryRunSlashCommand(
       parsed.command,
       parsed.args,
       {
-        sessionKey: ctx.sessionKey,
+        conversationId: ctx.conversationId,
         channel: ctx.channel,
         chatId: ctx.chatId,
         senderId: ctx.senderId ?? '',
@@ -125,7 +125,7 @@ export async function tryRunSlashCommand(
   } catch (err) {
     const em = err instanceof Error ? err.message : String(err);
     deps.log.warn(
-      { err, sessionKey: ctx.sessionKey, command: parsed.command },
+      { err, conversationId: ctx.conversationId, command: parsed.command },
       `Slash command failed: ${em}`,
     );
     return { matched: true, aggregatedText: `Command error: ${em}`, command: parsed.command };
@@ -140,7 +140,7 @@ export interface RunDirectAgentTurnDeps {
 }
 
 export interface RunDirectAgentTurnInput {
-  sessionKey: string;
+  conversationId: string;
   runId?: string;
   userMessage: AgentMessage;
   abortSignal?: AbortSignal;
@@ -166,13 +166,13 @@ export async function runDirectAgentTurn(
   input: RunDirectAgentTurnInput,
 ): Promise<RunDirectAgentTurnResult> {
   const turnId = input.runId ?? crypto.randomUUID();
-  const isConnectionResume = Boolean(getConnectionResumeInput(input.sessionKey, turnId));
-  const isClarificationResume = Boolean(getClarificationResumeInput(input.sessionKey, turnId));
+  const isConnectionResume = Boolean(getConnectionResumeInput(input.conversationId, turnId));
+  const isClarificationResume = Boolean(getClarificationResumeInput(input.conversationId, turnId));
   const isResume = isConnectionResume || isClarificationResume;
   const userPlain = extractAgentUserPlainText(input.userMessage);
   const userContext = await deps.agentManager.prepareUserTurnContext(
     input.userMessage,
-    input.sessionKey,
+    input.conversationId,
     turnId,
   );
   const sourceContexts = input.sourceContexts ?? [];
@@ -182,9 +182,9 @@ export async function runDirectAgentTurn(
   );
   const userMessageForModel = prependAgentContext(
     sourceEnrichedMessage,
-    buildTaskExecutionDirective(input.sessionKey),
+    buildTaskExecutionDirective(input.conversationId),
   );
-  const modelRef = deps.modelManager.getModelForSession(input.sessionKey);
+  const modelRef = deps.modelManager.getModelForSession(input.conversationId);
   const llmTurn = await hydrateUserTurnForLlm({
     message: input.userMessage as TranscriptUserMessage,
     modelRef,
@@ -196,7 +196,7 @@ export async function runDirectAgentTurn(
   const llmImages = [...llmTurn.images, ...sourceImages];
 
   const result = await runEmbeddedTurnForSession({
-    sessionKey: input.sessionKey,
+    conversationId: input.conversationId,
     runId: turnId,
     userMessage: userMessageForModel,
     llmImages,
@@ -207,15 +207,15 @@ export async function runDirectAgentTurn(
     getConfig: () => deps.config,
     abortSignal: input.abortSignal,
     deadlineAtMs: input.deadlineAtMs,
-    beforeTurn: isResume ? undefined : () => deps.agentManager.beginBackgroundReviewUserTurn(input.sessionKey),
+    beforeTurn: isResume ? undefined : () => deps.agentManager.beginBackgroundReviewUserTurn(input.conversationId),
     onEvent: input.onEvent,
   });
 
   if (!isResume) {
-    await deps.agentManager.afterAgentTurn(input.sessionKey, userPlain, turnId);
+    await deps.agentManager.afterAgentTurn(input.conversationId, userPlain, turnId);
   }
   if (!isResume && result.stopReason !== 'connection_required' && result.stopReason !== 'clarification_required') {
-    deps.agentManager.scheduleBackgroundReviewAfterUserTurn(input.sessionKey);
+    deps.agentManager.scheduleBackgroundReviewAfterUserTurn(input.conversationId);
   }
 
   return result;

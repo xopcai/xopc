@@ -11,15 +11,15 @@ export type FetchPreviewBlobResult =
 
 export async function fetchMediaUriBlob(params: {
   uri: string;
-  sessionKey?: string | null;
+  conversationId?: string | null;
   taskId?: string | null;
 }): Promise<FetchPreviewBlobResult> {
-  const { uri, sessionKey, taskId } = params;
+  const { uri, conversationId, taskId } = params;
   try {
     const fileResourceId = parseFileResourceArtifactUri(uri);
     const readPath = fileResourceId
       ? `/api/files/${encodeURIComponent(fileResourceId)}/content`
-      : mediaUriToReadUrl(uri, sessionKey, taskId);
+      : mediaUriToReadUrl(uri, conversationId, taskId);
     const res = await apiFetch(apiUrl(readPath));
     if (!res.ok) return { ok: false, reason: 'http', status: res.status };
     return { ok: true, blob: await res.blob() };
@@ -30,7 +30,7 @@ export async function fetchMediaUriBlob(params: {
 
 export async function fetchMediaUriBuffer(params: {
   uri: string;
-  sessionKey?: string | null;
+  conversationId?: string | null;
   taskId?: string | null;
 }): Promise<
   | { ok: true; buffer: ArrayBuffer }

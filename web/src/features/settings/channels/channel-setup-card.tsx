@@ -17,7 +17,7 @@ export type ChannelActionPayload =
   | { type?: 'ok'; message?: string; configChanged?: boolean; [key: string]: unknown }
   | {
       type: 'qr';
-      sessionKey: string;
+      conversationId: string;
       qrcodeUrl?: string;
       qrPayload?: string;
       statusAction?: string;
@@ -49,7 +49,7 @@ export type ChannelActionPayload =
 
 type ActionState = {
   payload: ChannelActionPayload | null;
-  poll: { actionId: string; sessionKey: string; intervalMs: number } | null;
+  poll: { actionId: string; conversationId: string; intervalMs: number } | null;
   busy: boolean;
   error: string | null;
   formDraft: Record<string, unknown>;
@@ -154,10 +154,10 @@ export function ChannelSetupCard({
         ...prev,
         payload,
         poll:
-          payload.type === 'qr' && payload.statusAction && payload.sessionKey
+          payload.type === 'qr' && payload.statusAction && payload.conversationId
             ? {
                 actionId: payload.statusAction,
-                sessionKey: payload.sessionKey,
+                conversationId: payload.conversationId,
                 intervalMs: Math.max(1000, payload.pollIntervalMs ?? 2500),
               }
             : null,
@@ -198,7 +198,7 @@ export function ChannelSetupCard({
         channelId: entry.id,
         actionId: poll.actionId,
         locale,
-        input: { sessionKey: poll.sessionKey },
+        input: { conversationId: poll.conversationId },
       })
         .then(async (next) => {
           if (cancelled) return;

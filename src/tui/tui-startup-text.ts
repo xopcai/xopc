@@ -63,7 +63,7 @@ export function formatTuiStartupText(input: {
 
   if (expanded) {
     lines.push('xopc TUI', '');
-    lines.push(`Session: ${input.state.currentSessionKey}`);
+    lines.push(`Session: ${input.state.currentConversationId}`);
     lines.push(`Mode: ${input.isLocal ? 'local embedded' : 'gateway'}`);
     lines.push(`Model: ${formatModelLabel(input.state)}`);
     lines.push('');

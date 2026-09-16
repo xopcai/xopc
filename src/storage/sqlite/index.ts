@@ -228,9 +228,9 @@ export {
 export {
   deleteSessionRecord,
   ensureSessionRecord,
-  getCurrentSessionId,
+  getCurrentTranscriptId,
   getGlobalSessionStats,
-  findSessionKeyBySessionId,
+  findConversationIdByTranscriptId,
   getSessionPersistedLevels,
   getSessionMetadata,
   incrementSessionStatsOnAppend,

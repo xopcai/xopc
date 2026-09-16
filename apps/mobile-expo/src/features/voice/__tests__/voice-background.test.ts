@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { shouldPauseVoiceForBackground, shouldResumeVoiceAfterForeground, type CallState } from '../voice-call-controller';
 
 const state = (phase: CallState['phase'], background = false): CallState => ({
-  phase, target: { gatewayId: 'gateway', sessionKey: 'test', background }, name: '',
+  phase, target: { gatewayId: 'gateway', conversationId: 'test', background }, name: '',
   expanded: true, muted: false, startedAt: 0, userText: '', assistantText: '', networkQuality: 'good',
 });
 

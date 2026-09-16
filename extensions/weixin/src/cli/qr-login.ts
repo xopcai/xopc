@@ -127,7 +127,7 @@ export async function runWeixinQrLoginCli(opts: WeixinQrLoginCliOptions): Promis
   console.log('\nWaiting for confirmation...\n');
 
   const waitResult = await waitForWeixinLogin({
-    sessionKey: startResult.sessionKey,
+    conversationId: startResult.conversationId,
     timeoutMs,
     verbose,
     routeTag,

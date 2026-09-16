@@ -17,21 +17,21 @@ import { FileListSkeleton, FileLoadError } from './FilesScreen';
 
 export function WorkspaceFileLinkScreen({
   path,
-  sessionKey,
+  conversationId,
 }: {
   path: string;
-  sessionKey?: string;
+  conversationId?: string;
 }) {
   const router = useRouter();
   const labels = useMessages().filesPage;
   const { colors } = useTheme();
   const normalizedPath = path.trim();
-  const normalizedSessionKey = sessionKey?.trim();
+  const normalizedConversationId = conversationId?.trim();
   const file = useQuery({
-    queryKey: ['files', 'workspace-link', normalizedSessionKey ?? 'default', normalizedPath],
+    queryKey: ['files', 'workspace-link', normalizedConversationId ?? 'default', normalizedPath],
     queryFn: async () => {
-      const space = normalizedSessionKey
-        ? await fetchFileSpaceForContext('session', normalizedSessionKey)
+      const space = normalizedConversationId
+        ? await fetchFileSpaceForContext('session', normalizedConversationId)
         : await fetchDefaultFileSpace();
       return resolveFileResource(space.id, normalizedPath);
     },

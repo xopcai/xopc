@@ -104,8 +104,8 @@ function fileSignature(profileDir: string): string {
   }).join('|');
 }
 
-function profileVersion(config: Config, sessionKey: string): string {
-  const profile = resolveEffectiveAgentProfileForSession(config, sessionKey);
+function profileVersion(config: Config, conversationId: string): string {
+  const profile = resolveEffectiveAgentProfileForSession(config, conversationId);
   return JSON.stringify({
     agentId: profile.agentId,
     name: profile.config.profile?.name,
@@ -116,16 +116,16 @@ function profileVersion(config: Config, sessionKey: string): string {
 
 export function buildVoicePersonaContext(input: {
   getConfig: () => Config;
-  sessionKey: string;
+  conversationId: string;
   maxChars?: number;
 }): VoicePersonaSnapshot {
   const config = input.getConfig();
-  const profile = resolveEffectiveAgentProfileForSession(config, input.sessionKey);
+  const profile = resolveEffectiveAgentProfileForSession(config, input.conversationId);
   const profileDir = resolveAgentProfileDir(config, profile.agentId);
   const files = loadProfileBootstrapFiles(profileDir);
   const identity = files.find((file) => file.name === DEFAULT_IDENTITY_FILENAME && !file.missing)?.content;
   const soul = files.find((file) => file.name === DEFAULT_SOUL_FILENAME && !file.missing)?.content;
-  const version = profileVersion(config, input.sessionKey);
+  const version = profileVersion(config, input.conversationId);
   const signature = fileSignature(profileDir);
   const block = buildVoicePersonaBlock({
     agentId: profile.agentId,
@@ -140,9 +140,9 @@ export function buildVoicePersonaContext(input: {
     isCurrent: () => {
       try {
         const currentConfig = input.getConfig();
-        const currentProfile = resolveEffectiveAgentProfileForSession(currentConfig, input.sessionKey);
+        const currentProfile = resolveEffectiveAgentProfileForSession(currentConfig, input.conversationId);
         const currentDir = resolveAgentProfileDir(currentConfig, currentProfile.agentId);
-        return profileVersion(currentConfig, input.sessionKey) === version
+        return profileVersion(currentConfig, input.conversationId) === version
           && currentDir === profileDir
           && fileSignature(currentDir) === signature;
       } catch {

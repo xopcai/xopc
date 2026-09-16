@@ -35,14 +35,14 @@ describe('exportCtxHistory', () => {
   });
 
   it('exports reset generations deterministically and excludes deleted session keys', async () => {
-    const first = ensureSessionRecord('agent:main:test', '/workspace', {
+    const first = ensureSessionRecord("259a62b5-df35-4b40-88ae-275ddf5f1ba0", '/workspace', {
       agentId: 'main',
       sessionType: 'chat',
     });
-    appendTranscriptEntry('agent:main:test', { role: 'user', content: 'first generation' });
-    const reset = resetSessionRecord('agent:main:test', '/workspace');
-    expect(reset?.previousSessionId).toBe(first.sessionId);
-    appendTranscriptEntry('agent:main:test', { role: 'assistant', content: 'second generation' });
+    appendTranscriptEntry("259a62b5-df35-4b40-88ae-275ddf5f1ba0", { role: 'user', content: 'first generation' });
+    const reset = resetSessionRecord("259a62b5-df35-4b40-88ae-275ddf5f1ba0", '/workspace');
+    expect(reset?.previousTranscriptId).toBe(first.transcriptId);
+    appendTranscriptEntry("259a62b5-df35-4b40-88ae-275ddf5f1ba0", { role: 'assistant', content: 'second generation' });
 
     const firstExport = await exportCtxHistory(db, { outputDir });
     const firstContents = await readFile(firstExport.historyPath, 'utf8');
@@ -54,22 +54,22 @@ describe('exportCtxHistory', () => {
     expect(await readFile(secondExport.historyPath, 'utf8')).toBe(firstContents);
     expect((await stat(secondExport.historyPath)).mtimeMs).toBe(firstMtime);
 
-    expect(deleteSessionRecord('agent:main:test')).toBe(true);
+    expect(deleteSessionRecord("259a62b5-df35-4b40-88ae-275ddf5f1ba0")).toBe(true);
     const afterDelete = await exportCtxHistory(db, { outputDir });
     expect(afterDelete).toMatchObject({ sessionCount: 0, eventCount: 0, changed: true });
   });
 
   it('keeps the last valid export when a transcript payload is malformed', async () => {
-    const session = ensureSessionRecord('agent:main:test', '/workspace', { agentId: 'main' });
-    appendTranscriptEntry('agent:main:test', { role: 'user', content: 'valid history' });
+    const session = ensureSessionRecord("259a62b5-df35-4b40-88ae-275ddf5f1ba0", '/workspace', { agentId: 'main' });
+    appendTranscriptEntry("259a62b5-df35-4b40-88ae-275ddf5f1ba0", { role: 'user', content: 'valid history' });
     const initial = await exportCtxHistory(db, { outputDir });
     const validContents = await readFile(initial.historyPath, 'utf8');
 
     db.prepare(
       `INSERT INTO transcript_entries
-       (entry_id, session_id, seq, entry_kind, role, payload_json, created_at)
+       (entry_id, transcript_id, seq, entry_kind, role, payload_json, created_at)
        VALUES (?, ?, ?, 'message', 'user', ?, ?)`,
-    ).run('broken-entry', session.sessionId, 2, '{not-json', Date.now());
+    ).run('broken-entry', session.transcriptId, 2, '{not-json', Date.now());
 
     await expect(exportCtxHistory(db, { outputDir })).rejects.toThrow(
       'Invalid transcript payload for entry broken-entry',

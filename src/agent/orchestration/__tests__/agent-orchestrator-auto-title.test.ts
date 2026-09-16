@@ -97,7 +97,7 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
     };
 
     const context: SessionContext = {
-      sessionKey: 'agent:main:telegram:default:direct:999',
+      conversationId: 'agent:main:telegram:default:direct:999',
       channel: 'telegram',
       chatId: '999',
       senderId: '1',
@@ -130,7 +130,7 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
     };
 
     const context: SessionContext = {
-      sessionKey: 'agent:main:telegram:default:direct:999',
+      conversationId: 'agent:main:telegram:default:direct:999',
       channel: 'telegram',
       chatId: '999',
       senderId: '1',

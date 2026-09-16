@@ -8,7 +8,7 @@ export type TaskSessionStatus = 'active' | 'completed' | 'superseded' | 'failed'
 
 export interface TaskConversationState {
   taskId: string;
-  activeSessionKey?: string;
+  activeConversationId?: string;
   currentExecutorAgentId?: string;
   assignmentEpoch: number;
   status: TaskConversationStatus;
@@ -18,7 +18,7 @@ export interface TaskConversationState {
 export interface TaskSessionLink {
   id: string;
   taskId: string;
-  sessionKey: string;
+  conversationId: string;
   role: TaskSessionRole;
   agentId?: string;
   runId?: string;
@@ -32,8 +32,8 @@ export interface TaskSessionLink {
 export interface TaskHandoffSnapshot {
   id: string;
   taskId: string;
-  fromSessionKey?: string;
-  toSessionKey: string;
+  fromConversationId?: string;
+  toConversationId: string;
   fromAgentId?: string;
   toAgentId: string;
   assignmentEpoch: number;
@@ -45,7 +45,7 @@ export class TaskConversationConflictError extends Error {}
 
 type ConversationStateRow = {
   task_id: string;
-  active_session_key: string | null;
+  active_conversation_id: string | null;
   current_executor_agent_id: string | null;
   assignment_epoch: number;
   status: TaskConversationStatus;
@@ -55,7 +55,7 @@ type ConversationStateRow = {
 type TaskSessionRow = {
   task_session_id: string;
   task_id: string;
-  session_key: string | null;
+  conversation_id: string | null;
   role: TaskSessionRole;
   agent_id: string | null;
   run_id: string | null;
@@ -69,8 +69,8 @@ type TaskSessionRow = {
 type HandoffSnapshotRow = {
   snapshot_id: string;
   task_id: string;
-  from_session_key: string | null;
-  to_session_key: string;
+  from_conversation_id: string | null;
+  to_conversation_id: string;
   from_agent_id: string | null;
   to_agent_id: string;
   assignment_epoch: number;
@@ -81,7 +81,7 @@ type HandoffSnapshotRow = {
 function stateFromRow(row: ConversationStateRow): TaskConversationState {
   return {
     taskId: row.task_id,
-    ...(row.active_session_key ? { activeSessionKey: row.active_session_key } : {}),
+    ...(row.active_conversation_id ? { activeConversationId: row.active_conversation_id } : {}),
     ...(row.current_executor_agent_id ? { currentExecutorAgentId: row.current_executor_agent_id } : {}),
     assignmentEpoch: row.assignment_epoch,
     status: row.status,
@@ -90,11 +90,11 @@ function stateFromRow(row: ConversationStateRow): TaskConversationState {
 }
 
 function linkFromRow(row: TaskSessionRow): TaskSessionLink | undefined {
-  if (!row.session_key) return undefined;
+  if (!row.conversation_id) return undefined;
   return {
     id: row.task_session_id,
     taskId: row.task_id,
-    sessionKey: row.session_key,
+    conversationId: row.conversation_id,
     role: row.role,
     ...(row.agent_id ? { agentId: row.agent_id } : {}),
     ...(row.run_id ? { runId: row.run_id } : {}),
@@ -110,8 +110,8 @@ function snapshotFromRow(row: HandoffSnapshotRow): TaskHandoffSnapshot {
   return {
     id: row.snapshot_id,
     taskId: row.task_id,
-    ...(row.from_session_key ? { fromSessionKey: row.from_session_key } : {}),
-    toSessionKey: row.to_session_key,
+    ...(row.from_conversation_id ? { fromConversationId: row.from_conversation_id } : {}),
+    toConversationId: row.to_conversation_id,
     ...(row.from_agent_id ? { fromAgentId: row.from_agent_id } : {}),
     toAgentId: row.to_agent_id,
     assignmentEpoch: row.assignment_epoch,
@@ -169,7 +169,7 @@ export class TaskConversationRepository {
 
   listSessions(taskId: string): TaskSessionLink[] {
     const rows = getSqliteDatabase().prepare(
-      `SELECT * FROM task_sessions WHERE task_id = ? AND session_key IS NOT NULL
+      `SELECT * FROM task_sessions WHERE task_id = ? AND conversation_id IS NOT NULL
        ORDER BY assignment_epoch DESC, created_at DESC, task_session_id DESC`,
     ).all(taskId) as TaskSessionRow[];
     return rows.flatMap((row) => {
@@ -187,18 +187,18 @@ export class TaskConversationRepository {
     return row ? linkFromRow(row) : undefined;
   }
 
-  resolveActiveExecutionSession(sessionKey: string): TaskSessionLink | undefined {
+  resolveActiveExecutionSession(conversationId: string): TaskSessionLink | undefined {
     const row = getSqliteDatabase().prepare(
       `SELECT * FROM task_sessions
-       WHERE session_key = ? AND role = 'execution' AND status = 'active'
+       WHERE conversation_id = ? AND role = 'execution' AND status = 'active'
        LIMIT 1`,
-    ).get(sessionKey) as TaskSessionRow | undefined;
+    ).get(conversationId) as TaskSessionRow | undefined;
     return row ? linkFromRow(row) : undefined;
   }
 
   activateExecutionSession(input: {
     taskId: string;
-    sessionKey: string;
+    conversationId: string;
     agentId: string;
     runId?: string;
     now?: number;
@@ -212,7 +212,7 @@ export class TaskConversationRepository {
         `SELECT * FROM task_sessions
          WHERE task_id = ? AND role = 'execution' AND status = 'active'`,
       ).get(input.taskId) as TaskSessionRow | undefined;
-      const sameSession = current?.session_key === input.sessionKey;
+      const sameSession = current?.conversation_id === input.conversationId;
       const assignmentEpoch = sameSession
         ? current.assignment_epoch
         : (existing?.assignment_epoch ?? 0) + 1;
@@ -226,10 +226,10 @@ export class TaskConversationRepository {
 
       db.prepare(
         `INSERT INTO task_sessions (
-          task_session_id, task_id, session_key, role, created_at,
+          task_session_id, task_id, conversation_id, role, created_at,
           agent_id, run_id, assignment_epoch, status, started_at, ended_at
         ) VALUES (?, ?, ?, 'execution', ?, ?, ?, ?, 'active', ?, NULL)
-        ON CONFLICT(task_id, session_key, role) WHERE session_key IS NOT NULL DO UPDATE SET
+        ON CONFLICT(task_id, conversation_id, role) WHERE conversation_id IS NOT NULL DO UPDATE SET
           agent_id = excluded.agent_id,
           run_id = COALESCE(excluded.run_id, task_sessions.run_id),
           assignment_epoch = excluded.assignment_epoch,
@@ -239,7 +239,7 @@ export class TaskConversationRepository {
       ).run(
         randomUUID(),
         input.taskId,
-        input.sessionKey,
+        input.conversationId,
         now,
         input.agentId,
         input.runId ?? null,
@@ -249,16 +249,16 @@ export class TaskConversationRepository {
 
       db.prepare(
         `INSERT INTO task_conversation_state (
-          task_id, active_session_key, current_executor_agent_id,
+          task_id, active_conversation_id, current_executor_agent_id,
           assignment_epoch, status, updated_at
         ) VALUES (?, ?, ?, ?, 'active', ?)
         ON CONFLICT(task_id) DO UPDATE SET
-          active_session_key = excluded.active_session_key,
+          active_conversation_id = excluded.active_conversation_id,
           current_executor_agent_id = excluded.current_executor_agent_id,
           assignment_epoch = excluded.assignment_epoch,
           status = 'active',
           updated_at = excluded.updated_at`,
-      ).run(input.taskId, input.sessionKey, input.agentId, assignmentEpoch, now);
+      ).run(input.taskId, input.conversationId, input.agentId, assignmentEpoch, now);
 
       return stateFromRow(db.prepare(
         'SELECT * FROM task_conversation_state WHERE task_id = ?',
@@ -269,7 +269,7 @@ export class TaskConversationRepository {
   completeHandoff(input: {
     taskId: string;
     expectedTaskVersion: number;
-    toSessionKey: string;
+    toConversationId: string;
     toAgentId: string;
     idempotencyKey: string;
     payload: Record<string, unknown>;
@@ -311,7 +311,7 @@ export class TaskConversationRepository {
         `SELECT * FROM task_sessions
          WHERE task_id = ? AND role = 'execution' AND status = 'active'`,
       ).get(input.taskId) as TaskSessionRow | undefined;
-      if (current?.session_key === input.toSessionKey && current.agent_id === input.toAgentId) {
+      if (current?.conversation_id === input.toConversationId && current.agent_id === input.toAgentId) {
         throw new TaskConversationConflictError('Executor is already active');
       }
       const assignmentEpoch = existing.assignment_epoch + 1;
@@ -327,22 +327,22 @@ export class TaskConversationRepository {
       ).run(now, input.taskId);
       db.prepare(
         `INSERT INTO task_sessions (
-          task_session_id, task_id, session_key, role, created_at,
+          task_session_id, task_id, conversation_id, role, created_at,
           agent_id, assignment_epoch, status, started_at, ended_at
         ) VALUES (?, ?, ?, 'execution', ?, ?, ?, 'active', ?, NULL)`,
-      ).run(randomUUID(), input.taskId, input.toSessionKey, now, input.toAgentId, assignmentEpoch, now);
+      ).run(randomUUID(), input.taskId, input.toConversationId, now, input.toAgentId, assignmentEpoch, now);
 
       const snapshotId = randomUUID();
       db.prepare(
         `INSERT INTO task_handoff_snapshots (
-          snapshot_id, task_id, from_session_key, to_session_key,
+          snapshot_id, task_id, from_conversation_id, to_conversation_id,
           from_agent_id, to_agent_id, assignment_epoch, payload_json, created_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         snapshotId,
         input.taskId,
-        current?.session_key ?? null,
-        input.toSessionKey,
+        current?.conversation_id ?? null,
+        input.toConversationId,
         current?.agent_id ?? existing.current_executor_agent_id ?? null,
         input.toAgentId,
         assignmentEpoch,
@@ -351,10 +351,10 @@ export class TaskConversationRepository {
       );
       db.prepare(
         `UPDATE task_conversation_state SET
-          active_session_key = ?, current_executor_agent_id = ?,
+          active_conversation_id = ?, current_executor_agent_id = ?,
           assignment_epoch = ?, status = 'active', updated_at = ?
          WHERE task_id = ?`,
-      ).run(input.toSessionKey, input.toAgentId, assignmentEpoch, now, input.taskId);
+      ).run(input.toConversationId, input.toAgentId, assignmentEpoch, now, input.taskId);
       db.prepare(
         `INSERT INTO command_deduplication (
           idempotency_key, command_type, subject_kind, subject_id,
@@ -377,8 +377,8 @@ export class TaskConversationRepository {
         snapshot: {
           id: snapshotId,
           taskId: input.taskId,
-          ...(current?.session_key ? { fromSessionKey: current.session_key } : {}),
-          toSessionKey: input.toSessionKey,
+          ...(current?.conversation_id ? { fromConversationId: current.conversation_id } : {}),
+          toConversationId: input.toConversationId,
           ...(current?.agent_id || existing.current_executor_agent_id
             ? { fromAgentId: current?.agent_id ?? existing.current_executor_agent_id! }
             : {}),

@@ -48,9 +48,9 @@ function prependTextToUserMessage(message: AgentMessage, prefix: string): AgentM
   return { ...(message as object), content: trimmedPrefix } as AgentMessage;
 }
 
-async function isBareSessionTurn(sessionStore: SessionStore, sessionKey: string): Promise<boolean> {
+async function isBareSessionTurn(sessionStore: SessionStore, conversationId: string): Promise<boolean> {
   try {
-    const messages = await sessionStore.loadMessages(sessionKey);
+    const messages = await sessionStore.loadMessages(conversationId);
     return !messages.some((message) => message.role === 'user');
   } catch {
     return true;
@@ -59,7 +59,7 @@ async function isBareSessionTurn(sessionStore: SessionStore, sessionKey: string)
 
 export async function applyStartupContextToUserMessage(params: {
   userMessage: AgentMessage;
-  sessionKey: string;
+  conversationId: string;
   workspaceDir: string;
   cfg?: Config;
   sessionStore: SessionStore;
@@ -67,7 +67,7 @@ export async function applyStartupContextToUserMessage(params: {
   force?: boolean;
 }): Promise<AgentMessage> {
   const action = params.startupAction ?? 'new';
-  if (!params.force && !(await isBareSessionTurn(params.sessionStore, params.sessionKey))) {
+  if (!params.force && !(await isBareSessionTurn(params.sessionStore, params.conversationId))) {
     return params.userMessage;
   }
   if (!shouldApplyStartupContext({ cfg: params.cfg, action })) {

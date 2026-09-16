@@ -4,7 +4,7 @@ import { ChatStreamMapper } from '../mapper.js';
 import { createPetFeedback } from '../pet-feedback.js';
 
 function mapper() {
-  return new ChatStreamMapper({ runId: 'run-1', sessionKey: 'sk', channel: 'webchat' });
+  return new ChatStreamMapper({ runId: 'run-1', conversationId: 'sk', channel: 'webchat' });
 }
 
 describe('ChatStreamMapper', () => {
@@ -24,7 +24,7 @@ describe('ChatStreamMapper', () => {
     expect(m.map({ type: 'agent_start', runId: 'run-1' })[0]).toMatchObject({
       type: 'run_start',
       runId: 'run-1',
-      sessionKey: 'sk',
+      conversationId: 'sk',
       payload: { channel: 'webchat' },
     });
     expect(m.map({ type: 'agent_end', runId: 'run-1' })).toEqual([]);

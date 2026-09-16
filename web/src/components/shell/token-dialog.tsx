@@ -16,7 +16,7 @@ export function TokenDialog() {
   const tokenExpired = useGatewayStore((s) => s.tokenExpired);
   const setBrowserSession = useGatewayStore((s) => s.setBrowserSession);
   const closeTokenDialog = useGatewayStore((s) => s.closeTokenDialog);
-  const storedToken = useGatewayStore((s) => s.sessionKey);
+  const storedToken = useGatewayStore((s) => s.conversationId);
 
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).token;

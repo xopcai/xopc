@@ -42,7 +42,7 @@ describe('Media Processing Integration', () => {
           },
         ],
         metadata: {
-          sessionKey: 'agent:main:telegram:default:direct:123456789',
+          conversationId: 'agent:main:telegram:default:direct:123456789',
           messageId: '456',
         },
       };
@@ -444,7 +444,7 @@ describe('Media Processing Integration', () => {
           },
         ],
         metadata: {
-          sessionKey: 'agent:main:telegram:default:direct:123',
+          conversationId: 'agent:main:telegram:default:direct:123',
           messageId: '789',
           isGroup: false,
           threadId: undefined,
@@ -454,7 +454,7 @@ describe('Media Processing Integration', () => {
       await bus.publishInbound(inboundMessage);
 
       expect(processedMessages[0].metadata).toEqual({
-        sessionKey: 'agent:main:telegram:default:direct:123',
+        conversationId: 'agent:main:telegram:default:direct:123',
         messageId: '789',
         isGroup: false,
         threadId: undefined,

@@ -58,14 +58,14 @@ export function VoiceCallSurface() {
 
   const approvalsEnabled = state.phase === 'connected' && state.mode === 'assistant' && Boolean(state.target);
   const approvals = useQuery({
-    ...voiceApprovalsOptions(state.target?.gatewayId, state.target?.sessionKey),
+    ...voiceApprovalsOptions(state.target?.gatewayId, state.target?.conversationId),
     enabled: approvalsEnabled,
   });
   const pendingApprovals = approvalsEnabled ? approvals.data ?? [] : [];
   const pendingApproval = pendingApprovals[0];
   const approval = useMutation({
-    mutationFn: ({ id, decision, sessionKey }: { id: string; decision: 'approved' | 'denied'; sessionKey: string }) =>
-      respondVoiceApproval(id, decision, sessionKey),
+    mutationFn: ({ id, decision, conversationId }: { id: string; decision: 'approved' | 'denied'; conversationId: string }) =>
+      respondVoiceApproval(id, decision, conversationId),
     onSuccess: () => approvals.refetch(),
     retry: false,
   });
@@ -168,7 +168,7 @@ export function VoiceCallSurface() {
 
   const showChat = () => {
     voiceCall.expand(false);
-    if (state.target) router.push(`/chat/${encodeURIComponent(state.target.sessionKey)}`);
+    if (state.target) router.push(`/chat/${encodeURIComponent(state.target.conversationId)}`);
   };
   const copyDiagnostics = () => {
     void setAppClipboardStringAsync(JSON.stringify(voiceCall.getDiagnostics(), null, 2))
@@ -334,7 +334,7 @@ export function VoiceCallSurface() {
                   <Button
                     compact
                     disabled={approval.isPending}
-                    onPress={() => approval.mutate({ id: pendingApproval.id, decision: 'denied', sessionKey: pendingApproval.sessionKey })}
+                    onPress={() => approval.mutate({ id: pendingApproval.id, decision: 'denied', conversationId: pendingApproval.conversationId })}
                   >
                     {m.deny}
                   </Button>
@@ -342,7 +342,7 @@ export function VoiceCallSurface() {
                     compact
                     mode="contained"
                     disabled={approval.isPending}
-                    onPress={() => approval.mutate({ id: pendingApproval.id, decision: 'approved', sessionKey: pendingApproval.sessionKey })}
+                    onPress={() => approval.mutate({ id: pendingApproval.id, decision: 'approved', conversationId: pendingApproval.conversationId })}
                   >
                     {m.approve}
                   </Button>

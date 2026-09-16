@@ -8,7 +8,7 @@ function escapeCsv(value: string): string {
 }
 
 export function logsToCsv(logs: readonly LogEntry[]): string {
-  const header = ['timestamp', 'level', 'module', 'phase', 'requestId', 'sessionId', 'message'];
+  const header = ['timestamp', 'level', 'module', 'phase', 'requestId', 'transcriptId', 'message'];
   const rows = logs.map((log) => {
     const module = String(log.module || '');
     const phase = String(log.phase ?? log.meta?.phase ?? '');
@@ -18,7 +18,7 @@ export function logsToCsv(logs: readonly LogEntry[]): string {
       module,
       phase,
       log.requestId ?? '',
-      log.sessionId ?? '',
+      log.transcriptId ?? '',
       log.message ?? '',
     ]
       .map((cell) => escapeCsv(String(cell)))

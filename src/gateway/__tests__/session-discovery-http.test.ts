@@ -33,7 +33,7 @@ it('filters sessions through the authenticated Gateway HTTP path', async () => {
     if (!address || typeof address === 'string') throw new Error('Missing test Gateway address');
     const base = `http://127.0.0.1:${address.port}`;
     for (const [name, customData] of [['extension', { createdSurface: 'browser_extension' }], ['workbench', {}]] as const) {
-      ensureSessionRecord(`agent:main:webchat:default:dm:${name}`, dir, { name, sourceChannel: 'webchat', customData, hiddenFromSessionList: false });
+      ensureSessionRecord(crypto.randomUUID(), dir, { agentId: "main", name, sourceChannel: 'webchat', customData, hiddenFromSessionList: false });
     }
     const path = buildSessionListPath({ sources: ['browser'], purposes: ['chat'], excludeArchived: true, limit: 20 });
     expect((await fetch(base + path)).status).toBe(401);

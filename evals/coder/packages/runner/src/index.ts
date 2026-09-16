@@ -430,7 +430,7 @@ export class EvalRunner {
       this.store.completeRun(runId, {
         status,
         finalText: agent.finalText,
-        ...(agent.sessionKey ? { sessionKey: agent.sessionKey } : {}),
+        ...(agent.conversationId ? { conversationId: agent.conversationId } : {}),
         ...(agent.agentRunId ? { agentRunId: agent.agentRunId } : {}),
         ...(agent.usage ? { usage: agent.usage } : {}),
         ...(agent.runtimeIdentity ? { runtimeIdentity: agent.runtimeIdentity } : {}),

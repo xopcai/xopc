@@ -14,15 +14,15 @@ export type NewChatHandoffOpts = {
   sessionMgr: SessionManager;
   agentId?: string | null;
   projectId?: string | null;
-  currentSessionKey?: string | null;
+  currentConversationId?: string | null;
   /** Decoded route session key (`null` on `/chat/new`). Used to skip redundant noop navigation. */
-  routeSessionKey?: string | null;
+  routeConversationId?: string | null;
   forceNew?: boolean;
   temporary?: boolean;
   initialAgentConfig?: SessionInitialAgentConfig;
   executionMode?: SessionCreateRequest['executionMode'];
   navigateToSession: NewChatHandoffNavigate;
-  onOpened: (sessionKey: string) => void;
+  onOpened: (conversationId: string) => void;
   replaceNavigate?: boolean;
   search?: string;
 };
@@ -40,7 +40,7 @@ export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
     agentId: opts.agentId?.trim() || 'main',
     projectId: opts.projectId ?? null,
   });
-  const cacheKey = JSON.stringify([scopeKey, gateway.sessionKey, opts.forceNew === true, opts.temporary === true, opts.executionMode, opts.search]);
+  const cacheKey = JSON.stringify([scopeKey, gateway.conversationId, opts.forceNew === true, opts.temporary === true, opts.executionMode, opts.search]);
   const existing = inflightByScope.get(cacheKey);
   if (existing) {
     existing.target.opts = opts;
@@ -48,14 +48,14 @@ export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
     return existing.promise;
   }
   const target = { opts, generation: ++latestHandoffGeneration };
-  const applyOpened = (sessionKey: string) => {
+  const applyOpened = (conversationId: string) => {
     if (target.generation !== latestHandoffGeneration) return;
     // A replay shares creation, but its callbacks replace the cancelled caller's closures.
     const current = target.opts;
-    current.onOpened(sessionKey);
-    const routeKey = current.routeSessionKey?.trim() || null;
-    if (routeKey !== sessionKey) {
-      current.navigateToSession(sessionKey, current.replaceNavigate ?? false, current.search);
+    current.onOpened(conversationId);
+    const routeKey = current.routeConversationId?.trim() || null;
+    if (routeKey !== conversationId) {
+      current.navigateToSession(conversationId, current.replaceNavigate ?? false, current.search);
     }
   };
 
@@ -65,7 +65,7 @@ export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
       sessionMgr: opts.sessionMgr,
       agentId: agentRaw?.trim() || 'main',
       projectId: opts.projectId,
-      currentSessionKey: opts.currentSessionKey,
+      currentConversationId: opts.currentConversationId,
       forceNew: opts.forceNew,
       temporary: opts.temporary,
       initialAgentConfig: opts.initialAgentConfig,
@@ -74,25 +74,27 @@ export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
 
     if (resolution.kind !== 'create' && opts.initialAgentConfig) {
       await opts.sessionMgr.patchSessionAgentConfig(
-        resolution.sessionKey,
+        resolution.conversationId,
         opts.initialAgentConfig,
       );
     }
 
     if (resolution.kind === 'noop') {
-      applyOpened(resolution.sessionKey);
-      return resolution.sessionKey;
+      applyOpened(resolution.conversationId);
+      return resolution.conversationId;
     }
 
     if (resolution.kind === 'reuse') {
-      applyOpened(resolution.sessionKey);
-      return resolution.sessionKey;
+      applyOpened(resolution.conversationId);
+      return resolution.conversationId;
     }
 
-    const { sessionKey, session } = resolution;
+    const { conversationId, session } = resolution;
     if (!opts.executionMode) addWebchatEmptyShellToCache({
-      key: sessionKey,
-      sessionId: session.sessionId,
+      key: conversationId,
+      agentId: session.agentId,
+      customData: session.customData,
+      transcriptId: session.transcriptId,
       name: session.name,
       messageCount: 0,
       updatedAt: session.updatedAt || new Date().toISOString(),
@@ -101,8 +103,8 @@ export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
       projectId: session.projectId,
       routing: session.routing,
     });
-    applyOpened(sessionKey);
-    return sessionKey;
+    applyOpened(conversationId);
+    return conversationId;
   })().finally(() => {
     inflightByScope.delete(cacheKey);
   });

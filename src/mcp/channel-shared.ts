@@ -8,7 +8,7 @@ function normalizeMessageChannel(value: string | undefined): string | undefined 
 export type ClaudeChannelMode = "off" | "on" | "auto";
 
 export type ConversationDescriptor = {
-  sessionKey: string;
+  conversationId: string;
   channel: string;
   to: string;
   accountId?: string;
@@ -54,7 +54,7 @@ export type ChatHistoryResult = {
 };
 
 export type SessionMessagePayload = {
-  sessionKey?: string;
+  conversationId?: string;
   messageId?: string;
   messageSeq?: number;
   message?: { role?: string; content?: unknown; [key: string]: unknown };
@@ -80,7 +80,7 @@ export type QueueEvent =
   | {
       cursor: number;
       type: "message";
-      sessionKey: string;
+      conversationId: string;
       conversation?: ConversationDescriptor;
       messageId?: string;
       messageSeq?: number;
@@ -115,7 +115,7 @@ export type ClaudePermissionRequest = {
 
 export type WaitFilter = {
   afterCursor: number;
-  sessionKey?: string;
+  conversationId?: string;
 };
 
 export const ClaudePermissionRequestSchema = z.object({
@@ -164,7 +164,7 @@ export function toConversation(row: SessionRow): ConversationDescriptor | null {
     return null;
   }
   return {
-    sessionKey: row.key,
+    conversationId: row.key,
     channel,
     to,
     accountId:
@@ -184,10 +184,10 @@ export function matchEventFilter(event: QueueEvent, filter: WaitFilter): boolean
   if (event.cursor <= filter.afterCursor) {
     return false;
   }
-  if (!filter.sessionKey) {
+  if (!filter.conversationId) {
     return true;
   }
-  return "sessionKey" in event && event.sessionKey === filter.sessionKey;
+  return "conversationId" in event && event.conversationId === filter.conversationId;
 }
 
 export function extractAttachmentsFromMessage(message: unknown): unknown[] {

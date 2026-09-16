@@ -18,7 +18,7 @@ export const COMMUNICATION_SCENARIO = 'communication_follow_up';
 export type MailFollowUp = {
   id: string; subscription_id: string; workspace_id: string; source_item_id: string; instructions: string;
   due_at: string; status: 'watching' | 'paused' | 'completed'; revision: number;
-  last_fingerprint: string | null; last_checked_at: string | null; session_key: string | null;
+  last_fingerprint: string | null; last_checked_at: string | null; conversation_id: string | null;
 };
 const CreateSchema = z.object({ sourceItemId: z.string().min(1), instructions: z.string().trim().min(1).max(12000), dueAt: z.string().datetime() }).strict();
 const UpdateSchema = z.object({ expectedRevision: z.number().int().positive(), instructions: z.string().trim().min(1).max(12000).optional(), dueAt: z.string().datetime().optional(), status: z.enum(['watching', 'paused', 'completed']).optional() }).strict();
@@ -43,7 +43,7 @@ export function mailFollowUpView(follow: MailFollowUp) {
   const sync = sourceFreshness(follow.source_item_id, Date.parse(follow.due_at) <= Date.now() ? follow.due_at : undefined);
   return {
     id: follow.id, subscriptionId: follow.subscription_id, instructions: follow.instructions, dueAt: follow.due_at,
-    status: follow.status, revision: follow.revision, lastCheckedAt: follow.last_checked_at, sessionKey: follow.session_key,
+    status: follow.status, revision: follow.revision, lastCheckedAt: follow.last_checked_at, conversationId: follow.conversation_id,
     sourceAvailable: Boolean(thread), enabled: follow.status === 'watching' && effectiveProactivePolicy(follow.subscription_id).enabled,
     subject: thread ? emailFields(thread.origin.normalizedText).subject ?? 'Email follow-up' : null,
     latestMessageAt: latest?.occurredAt ?? null,
@@ -103,11 +103,11 @@ export function updateMailFollowUp(workspace: string, id: string, value: unknown
 }
 
 /** Keep the existing chat and its exact connector confirmation flow as the write boundary. */
-export function continueMailFollowUp(workspace: string, id: string, sessionKey: string) {
+export function continueMailFollowUp(workspace: string, id: string, conversationId: string) {
   const follow = requireMailFollowUp(workspace, id);
   const thread = authorizedMailThread(follow);
   if (!thread || follow.status !== 'watching' || !effectiveProactivePolicy(follow.subscription_id).enabled) throw new Error('Resume and authorize this follow-up before continuing');
-  getSqliteDatabase().prepare('UPDATE proactive_follow_ups SET session_key = ? WHERE id = ?').run(sessionKey, id);
+  getSqliteDatabase().prepare('UPDATE proactive_follow_ups SET conversation_id = ? WHERE id = ?').run(conversationId, id);
   return { followUp: mailFollowUpView(requireMailFollowUp(workspace, id)), connectionId: thread.origin.metadata.connectionId,
     sourceItemId: thread.origin.id, threadId: emailFields(thread.origin.normalizedText).threadId,
     instruction: 'Read the current card and latest thread using this exact connection. Review the recipients and complete draft with the user before sending through the connector approval flow. Never infer successful delivery from a draft or approval. Use provider results, then continue watching synchronized replies.' };

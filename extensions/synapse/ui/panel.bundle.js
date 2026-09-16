@@ -153,15 +153,15 @@
         async sendMessage(message, opts) {
           return transport.request("agent.sendMessage", {
             message,
-            sessionKey: opts?.sessionKey,
+            conversationId: opts?.conversationId,
             newSession: opts?.newSession
           });
         },
-        onStreamEvent(sessionKey, handler) {
-          transport.emit("agent.subscribe", { sessionKey });
-          const unsub = transport.on(`agent.stream.${sessionKey}`, handler);
+        onStreamEvent(conversationId, handler) {
+          transport.emit("agent.subscribe", { conversationId });
+          const unsub = transport.on(`agent.stream.${conversationId}`, handler);
           return () => {
-            transport.emit("agent.unsubscribe", { sessionKey });
+            transport.emit("agent.unsubscribe", { conversationId });
             unsub();
           };
         }
@@ -170,8 +170,8 @@
         async listSessions() {
           return transport.request("session.list");
         },
-        async navigateToSession(sessionKey) {
-          await transport.request("session.navigate", { sessionKey });
+        async navigateToSession(conversationId) {
+          await transport.request("session.navigate", { conversationId });
         }
       },
       config: {

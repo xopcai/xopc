@@ -96,7 +96,7 @@ export class TaskApplicationService {
       });
       db.prepare(
         `INSERT INTO task_conversation_state (
-          task_id, active_session_key, current_executor_agent_id,
+          task_id, active_conversation_id, current_executor_agent_id,
           assignment_epoch, status, updated_at
         ) VALUES (?, NULL, ?, 0, 'idle', ?)`,
       ).run(task.id, task.delegateAgentId ?? task.ownerId ?? null, task.createdAt);

@@ -74,8 +74,8 @@ export interface WorkspaceTrustState {
   trusted: boolean;
 }
 
-function chatSkillsCacheKey(agentId: string | undefined, sessionKey: string | null | undefined): string {
-  return `${agentId?.trim() || 'main'}\u0000${sessionKey?.trim() || ''}`;
+function chatSkillsCacheKey(agentId: string | undefined, conversationId: string | null | undefined): string {
+  return `${agentId?.trim() || 'main'}\u0000${conversationId?.trim() || ''}`;
 }
 
 export async function fetchCommandsCached(forceRefresh = false): Promise<CommandEntry[]> {
@@ -106,10 +106,10 @@ export async function fetchCommandsCached(forceRefresh = false): Promise<Command
 
 export async function getChatSkillsCached(
   agentId: string | undefined,
-  sessionKey?: string | null,
+  conversationId?: string | null,
   forceRefresh = false,
 ): Promise<ChatSkillsPayload> {
-  const key = chatSkillsCacheKey(agentId, sessionKey);
+  const key = chatSkillsCacheKey(agentId, conversationId);
   const now = Date.now();
   const cached = _chatSkillsCache.get(key);
   if (!forceRefresh && cached && now < cached.expiry) {
@@ -120,7 +120,7 @@ export async function getChatSkillsCached(
 
   const generation = _chatSkillsGeneration;
   const params = new URLSearchParams({ agentId: agentId?.trim() || 'main' });
-  if (sessionKey?.trim()) params.set('sessionKey', sessionKey.trim());
+  if (conversationId?.trim()) params.set('conversationId', conversationId.trim());
   const request = apiFetch(apiUrl(`/api/chat/skills?${params.toString()}`))
     .then(async (res) => {
       if (!res.ok) throw new Error(await readErrorMessage(res));
@@ -143,10 +143,10 @@ export async function getChatSkillsCached(
 export async function addSkillToAgentAllowlist(
   agentId: string | undefined,
   skillName: string,
-  sessionKey?: string | null,
+  conversationId?: string | null,
 ): Promise<void> {
   const key = agentId?.trim() || 'main';
-  const current = await getChatSkillsCached(key, sessionKey, true);
+  const current = await getChatSkillsCached(key, conversationId, true);
   const selected = new Set(current.effectiveAllowlist ?? current.agentAllowlist ?? []);
   selected.add(skillName);
   const res = await apiFetch(apiUrl(`/api/agents/${encodeURIComponent(key)}`), {
@@ -174,8 +174,8 @@ export function clearChatSkillsCache(agentId?: string): void {
   _chatSkillsInflight.clear();
 }
 
-export async function getWorkspaceTrust(sessionKey: string): Promise<WorkspaceTrustState> {
-  const params = new URLSearchParams({ sessionKey });
+export async function getWorkspaceTrust(conversationId: string): Promise<WorkspaceTrustState> {
+  const params = new URLSearchParams({ conversationId });
   const res = await apiFetch(apiUrl(`/api/chat/workspace-trust?${params.toString()}`));
   if (!res.ok) throw new Error(await readErrorMessage(res));
   const data = (await res.json()) as { ok?: boolean; payload?: WorkspaceTrustState };
@@ -183,11 +183,11 @@ export async function getWorkspaceTrust(sessionKey: string): Promise<WorkspaceTr
   return data.payload;
 }
 
-export async function setWorkspaceTrust(sessionKey: string, trusted: boolean): Promise<WorkspaceTrustState> {
+export async function setWorkspaceTrust(conversationId: string, trusted: boolean): Promise<WorkspaceTrustState> {
   const res = await apiFetch(apiUrl('/api/chat/workspace-trust'), {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionKey, trusted }),
+    body: JSON.stringify({ conversationId, trusted }),
   });
   if (!res.ok) throw new Error(await readErrorMessage(res));
   const data = (await res.json()) as { ok?: boolean; payload?: WorkspaceTrustState };

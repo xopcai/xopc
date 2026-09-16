@@ -29,7 +29,7 @@ vi.mock('@xterm/xterm', () => ({
 
 vi.mock('@xterm/addon-fit', () => ({ FitAddon: class { fit() {} } }));
 vi.mock('@/features/sessions/session-api', () => ({
-  resolveSession: vi.fn(async () => ({ sessionId: 'session-id' })),
+  resolveSession: vi.fn(async () => ({ transcriptId: 'session-id' })),
 }));
 
 describe('ChatTerminalDock', () => {
@@ -60,9 +60,9 @@ describe('ChatTerminalDock', () => {
     document.documentElement.style.setProperty('--color-fg', '#111111');
     useLocaleStore.setState({ language: 'en' });
     useTerminalPanelStore.setState({
-      openBySessionKey: {},
-      tabsBySessionKey: {},
-      activeTabKeyBySessionKey: {},
+      openByConversationId: {},
+      tabsByConversationId: {},
+      activeTabKeyByConversationId: {},
       height: 300,
     });
     useTerminalPanelStore.getState().toggle('session-key');
@@ -81,7 +81,7 @@ describe('ChatTerminalDock', () => {
   });
 
   it('uses a full-width neutral canvas and starts the shell without confirmation', async () => {
-    await act(async () => root.render(<ChatTerminalDock sessionKey="session-key" />));
+    await act(async () => root.render(<ChatTerminalDock conversationId="session-key" />));
 
     expect(container.querySelector('section')?.classList.contains('w-full')).toBe(true);
     expect(container.querySelector('section')?.classList.contains('bg-surface-terminal')).toBe(true);
@@ -94,7 +94,7 @@ describe('ChatTerminalDock', () => {
   });
 
   it('updates the terminal theme in place without recreating the PTY', async () => {
-    await act(async () => root.render(<ChatTerminalDock sessionKey="session-key" />));
+    await act(async () => root.render(<ChatTerminalDock conversationId="session-key" />));
     await act(async () => {
       document.documentElement.style.setProperty('--color-surface-terminal', '#181818');
       document.documentElement.style.setProperty('--color-fg', '#f4f6f8');
@@ -108,7 +108,7 @@ describe('ChatTerminalDock', () => {
   });
 
   it('keeps new-tab and tab-close actions available in the compact header', async () => {
-    await act(async () => root.render(<ChatTerminalDock sessionKey="session-key" />));
+    await act(async () => root.render(<ChatTerminalDock conversationId="session-key" />));
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="New terminal"]')!.click());
     expect(container.querySelectorAll('[role="tab"]')).toHaveLength(2);
     expect(api.create).toHaveBeenCalledTimes(2);

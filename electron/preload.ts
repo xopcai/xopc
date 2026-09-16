@@ -185,8 +185,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       >,
   },
   agent: {
-    sendMessage: (message: string, sessionKey: string) =>
-      ipcRenderer.invoke("agent:send", message, sessionKey) as Promise<{
+    sendMessage: (message: string, conversationId: string) =>
+      ipcRenderer.invoke("agent:send", message, conversationId) as Promise<{
         done: boolean;
         error?: string;
       }>,
@@ -197,13 +197,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     },
   },
   terminal: {
-    create: (input: { sessionKey: string; sessionId: string; terminalKey: string; cols: number; rows: number }) =>
+    create: (input: { conversationId: string; transcriptId: string; terminalKey: string; cols: number; rows: number }) =>
       ipcRenderer.invoke('terminal:create', input),
     write: (terminalId: string, data: string) => ipcRenderer.send('terminal:write', terminalId, data),
     resize: (terminalId: string, cols: number, rows: number) =>
       ipcRenderer.invoke('terminal:resize', terminalId, cols, rows) as Promise<{ ok: true }>,
-    dispose: (sessionId: string, terminalKey: string) =>
-      ipcRenderer.invoke('terminal:dispose', sessionId, terminalKey) as Promise<{ ok: true }>,
+    dispose: (transcriptId: string, terminalKey: string) =>
+      ipcRenderer.invoke('terminal:dispose', transcriptId, terminalKey) as Promise<{ ok: true }>,
     onData: (callback: (event: { terminalId: string; data: string; sequence: number }) => void) => {
       const handler = (_: unknown, event: { terminalId: string; data: string; sequence: number }) => callback(event);
       ipcRenderer.on('terminal:data', handler);
@@ -462,8 +462,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("desktop-pet:set-click-through", enabled),
     sendEvent: (event: Record<string, unknown>) =>
       ipcRenderer.invoke("desktop-pet:send-event", event),
-    acknowledgeEvent: (sessionKey: string, runId: string) =>
-      ipcRenderer.invoke("desktop-pet:ack-event", sessionKey, runId),
+    acknowledgeEvent: (conversationId: string, runId: string) =>
+      ipcRenderer.invoke("desktop-pet:ack-event", conversationId, runId),
     openCustomPetsDir: () => ipcRenderer.invoke("desktop-pet:open-custom-dir"),
     createFromPrompt: (request: Record<string, unknown>) =>
       ipcRenderer.invoke("desktop-pet:create-from-prompt", request),

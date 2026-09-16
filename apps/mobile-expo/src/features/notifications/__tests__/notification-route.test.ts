@@ -4,7 +4,7 @@ import { resolveNotificationRoute } from '../notification-route';
 
 describe('resolveNotificationRoute', () => {
   it('allows app-owned activity routes', () => {
-    expect(resolveNotificationRoute({ target: { kind: 'chat', sessionKey: 'agent:main' } }))
+    expect(resolveNotificationRoute({ target: { kind: 'chat', conversationId: 'agent:main' } }))
       .toBe('/chat/agent%3Amain');
     expect(resolveNotificationRoute({ target: { kind: 'task', taskId: 'work-123' } }))
       .toBe('/tasks/work-123');
@@ -17,7 +17,7 @@ describe('resolveNotificationRoute', () => {
 
   it('rejects arbitrary or malformed routes from a push payload', () => {
     expect(resolveNotificationRoute({ target: { kind: 'unknown', id: '1' } })).toBeNull();
-    expect(resolveNotificationRoute({ target: { kind: 'chat', sessionKey: '' } })).toBeNull();
+    expect(resolveNotificationRoute({ target: { kind: 'chat', conversationId: '' } })).toBeNull();
     expect(resolveNotificationRoute({ route: '/chat/session' })).toBeNull();
     expect(resolveNotificationRoute({})).toBeNull();
   });

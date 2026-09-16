@@ -49,7 +49,7 @@ export interface ActivityPrincipal {
   kind: ActivityPrincipalKind;
   id?: string;
   name?: string;
-  sessionKey?: string;
+  conversationId?: string;
   agentId?: string;
 }
 

@@ -44,12 +44,12 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
 
-function useCurrentChatSessionKey(): string | undefined {
+function useCurrentChatConversationId(): string | undefined {
   const { pathname } = useLocation();
-  const { sessionKey: sessionKeyParam } = useParams();
+  const { conversationId: conversationIdParam } = useParams();
   if (!pathname.startsWith('/chat')) return undefined;
-  if (!sessionKeyParam) return undefined;
-  const sk = decodeURIComponent(sessionKeyParam);
+  if (!conversationIdParam) return undefined;
+  const sk = decodeURIComponent(conversationIdParam);
   return sk && sk !== 'new' ? sk : undefined;
 }
 
@@ -252,7 +252,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
   const { pathname } = useLocation();
   const language = useLocaleStore((s) => s.language);
   const uiExtensions = useUiExtensions();
-  const chatSessionKey = useCurrentChatSessionKey();
+  const chatConversationId = useCurrentChatConversationId();
   const editorAgentId = useWorkspaceEditorAgentStore((s) => s.agentId);
   const setPreviewPath = useWorkspacePreviewStore((s) => s.setPath);
 
@@ -342,11 +342,11 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
         q ? searchGlobal(q, { types: ['project'], limit: 8 }).catch(() => []) : [],
         listSessions({ search: q || undefined, limit: 8, offset: 0 }).catch(() => ({ items: [] })),
         (async () => {
-          const sk = chatSessionKey?.trim();
+          const sk = chatConversationId?.trim();
           const aid = editorAgentId.trim();
           if (!sk && !aid) return [];
           const items = await searchWorkspaceFiles(q, {
-            sessionKey: sk || undefined,
+            conversationId: sk || undefined,
             agentId: sk ? undefined : aid || undefined,
             limit: 10,
           }).catch(() => []);
@@ -489,7 +489,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
       routeSeeds,
       uiExtensions,
       navigate,
-      chatSessionKey,
+      chatConversationId,
       editorAgentId,
       pathname,
       setPreviewPath,

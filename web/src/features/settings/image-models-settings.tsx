@@ -172,7 +172,7 @@ function ImageSettingsSkeleton() {
 export function ImageModelsSettingsPanel() {
   const language = useLocaleStore((state) => state.language);
   const text = copy[language];
-  const hasToken = Boolean(useGatewayStore((state) => state.sessionKey));
+  const hasToken = Boolean(useGatewayStore((state) => state.conversationId));
   const [providerId, setProviderId] = useState('');
   const [modelId, setModelId] = useState('');
   const [apiKey, setApiKey] = useState('');

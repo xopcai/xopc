@@ -1,3 +1,11 @@
+import { requireXopcDatabase as openFixtureDatabase } from '../../../storage/sqlite/connection.js';
+import { ensureSessionRecord as ensureFixtureConversation } from '../../../storage/sqlite/session-repository.js';
+function seedConversationFixtures(): void {
+  openFixtureDatabase();
+  ensureFixtureConversation("f611af3a-b8a3-4874-8f1c-f25a1f50df7c", '', {"agentId":"coder","sourceChannel":"webchat","sourceChatId":"task-1","sessionType":"chat","routing":{"agentId":"coder","source":"webchat","accountId":"default","peerKind":"direct","peerId":"task-1"}});
+  ensureFixtureConversation("5ffa4d86-8052-4d17-80ae-3b1ba46ec223", '', {"agentId":"coder","sourceChannel":"workflow","sourceChatId":"run-1","sessionType":"workflow-run","routing":{"agentId":"coder","source":"workflow","accountId":"default","peerKind":"direct","peerId":"run-1"}});
+  ensureFixtureConversation("495cea4a-8cb2-49ec-8c72-6a599c899fef", '', {"agentId":"main","sourceChannel":"workflow","sourceChatId":"run-scope","sessionType":"workflow-run","routing":{"agentId":"main","source":"workflow","accountId":"default","peerKind":"direct","peerId":"run-scope"}});
+}
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,8 +25,9 @@ import { formatCurrentWorkForPrompt, resolveExecutionScope } from '../execution-
 
 describe('formatCurrentWorkForPrompt', () => {
   it('keeps the current task contract visible on every turn', () => {
+    seedConversationFixtures();
     const scope: ExecutionScope = {
-      sessionKey: 'agent:coder:webchat:default:direct:task-1',
+      conversationId: "f611af3a-b8a3-4874-8f1c-f25a1f50df7c",
       projectId: 'project-1',
       objective: {
         kind: 'task',
@@ -42,8 +51,9 @@ describe('formatCurrentWorkForPrompt', () => {
   });
 
   it('formats workflow objectives without inventing task criteria', () => {
+    seedConversationFixtures();
     const prompt = formatCurrentWorkForPrompt({
-      sessionKey: 'agent:coder:workflow:run-1',
+      conversationId: "5ffa4d86-8052-4d17-80ae-3b1ba46ec223",
       projectId: 'project-1',
       objective: {
         kind: 'workflow',
@@ -76,9 +86,10 @@ describe('resolveExecutionScope', () => {
   });
 
   it('recognizes workflow-run metadata as the current objective', () => {
-    const sessionKey = 'agent:main:workflow:run-scope';
-    ensureSessionRecord(sessionKey, process.cwd());
-    patchSessionMetadata(sessionKey, {
+    seedConversationFixtures();
+    const conversationId = "495cea4a-8cb2-49ec-8c72-6a599c899fef";
+    ensureSessionRecord(conversationId, process.cwd(), { agentId: "main" });
+    patchSessionMetadata(conversationId, {
       sessionType: 'workflow-run',
       workflowRunId: 'run-scope',
       workflowDefinitionId: 'project-research',
@@ -86,7 +97,7 @@ describe('resolveExecutionScope', () => {
       customData: { workflowGoal: 'Map the project architecture.' },
     });
 
-    expect(resolveExecutionScope(sessionKey)).toMatchObject({
+    expect(resolveExecutionScope(conversationId)).toMatchObject({
       projectId: 'project-1',
       objective: {
         kind: 'workflow',

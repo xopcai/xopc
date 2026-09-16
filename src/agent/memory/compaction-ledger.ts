@@ -91,7 +91,9 @@ const SUMMARY_GROUPS: Array<{ heading: string; kinds: HandoverItemKind[] }> = [
 ];
 
 export function renderCompactionHandover(handover: CompactionHandover): string {
-  const active = handover.items.filter((item) => item.status === 'active');
+  const completedFacts = new Set<HandoverItemKind>(['file_change', 'tool_outcome', 'current_state', 'decision']);
+  const active = handover.items.filter((item) => item.status === 'active'
+    || (item.status === 'completed' && completedFacts.has(item.kind)));
   const sections = SUMMARY_GROUPS.map(({ heading, kinds }) => {
     const items = active.filter((item) => kinds.includes(item.kind));
     return `## ${heading}\n${items.length > 0 ? items.map((item) => `- ${item.text}`).join('\n') : 'None'}`;

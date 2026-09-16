@@ -38,7 +38,7 @@ function scopeVisible(scope: UserModelScope, context: ExecutionContextRequest): 
     agent: context.agentId,
     workspace: context.workspaceId,
     project: context.projectId,
-    session: context.sessionId,
+    session: context.conversationId,
   })[scope.type];
 }
 
@@ -55,7 +55,7 @@ function applicabilityVisible(
     ['agentId', context.agentId],
     ['workspaceId', context.workspaceId],
     ['projectId', context.projectId],
-    ['sessionId', context.sessionId],
+    ['conversationId', context.conversationId],
   ] as const) {
     const expected = applicability[key];
     if (typeof expected === 'string' && expected !== actual) return false;

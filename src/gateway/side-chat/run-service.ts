@@ -14,7 +14,7 @@ const log = createLogger('Gateway:SideChatRun');
 interface ActiveSideChatRun {
   sideChatId: string;
   clientInstanceId: string;
-  executionSessionKey: string;
+  executionConversationId: string;
   runId: string;
   abortController: AbortController;
 }
@@ -49,7 +49,7 @@ export class SideChatRunService {
     const run: ActiveSideChatRun = {
       sideChatId,
       clientInstanceId,
-      executionSessionKey: this.options.manager.getRuntime(sideChatId, clientInstanceId).runtimeId,
+      executionConversationId: this.options.manager.getRuntime(sideChatId, clientInstanceId).runtimeId,
       runId: randomUUID(),
       abortController: new AbortController(),
     };
@@ -71,9 +71,9 @@ export class SideChatRunService {
     const active = this.activeBySideChat.get(sideChatId);
     if (!active || active.clientInstanceId !== clientInstanceId || (runId && active.runId !== runId)) return false;
     this.options.agentRunner.cancelClarificationForRun(active.runId);
-    this.options.agentRunner.unregisterExternalWebchatRun(active.executionSessionKey, active.runId);
+    this.options.agentRunner.unregisterExternalWebchatRun(active.executionConversationId, active.runId);
     active.abortController.abort();
-    await abortEmbeddedRun(active.executionSessionKey).catch(() => false);
+    await abortEmbeddedRun(active.executionConversationId).catch(() => false);
     return true;
   }
 
@@ -98,7 +98,7 @@ export class SideChatRunService {
     const topic = `run:${run.runId}`;
     const mapper = new ChatStreamMapper({
       runId: run.runId,
-      sessionKey: run.sideChatId,
+      conversationId: run.sideChatId,
       channel: 'side-chat',
     });
     const publish = (event: ReturnType<ChatStreamMapper['start']>[number]) => {
@@ -127,7 +127,7 @@ export class SideChatRunService {
         timestamp: Date.now(),
       });
       this.options.agentRunner.registerExternalWebchatRun(
-        run.executionSessionKey,
+        run.executionConversationId,
         run.runId,
         (event: ClarificationStreamEvent) => publishMapped(event),
         {
@@ -140,8 +140,8 @@ export class SideChatRunService {
         },
       );
       const result = await this.options.getAgentService().runEphemeralTurn({
-        executionSessionKey: run.executionSessionKey,
-        parentSessionKey: this.options.manager.get(run.sideChatId, run.clientInstanceId).parentSessionKey,
+        executionConversationId: run.executionConversationId,
+        parentConversationId: this.options.manager.get(run.sideChatId, run.clientInstanceId).parentConversationId,
         runId: run.runId,
         content: input.content,
         attachments: input.attachments,
@@ -162,7 +162,7 @@ export class SideChatRunService {
       for (const event of mapper.error(message)) publish(event);
       for (const event of mapper.end('error', message)) publish(event);
     } finally {
-      this.options.agentRunner.unregisterExternalWebchatRun(run.executionSessionKey, run.runId);
+      this.options.agentRunner.unregisterExternalWebchatRun(run.executionConversationId, run.runId);
       this.activeBySideChat.delete(run.sideChatId);
       try {
         this.options.manager.getMessages(run.sideChatId, run.clientInstanceId);

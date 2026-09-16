@@ -13,7 +13,7 @@ export interface ExecutionContextAudit {
   runId: string;
   principalId: string;
   turnId: string;
-  sessionId: string;
+  conversationId: string;
   queryHash: string;
   asOf: number;
   budget: ExecutionContextBudget;
@@ -32,7 +32,7 @@ export function recordExecutionContext(
   context: ExecutionContext,
   input: {
     turnId: string;
-    sessionId: string;
+    conversationId: string;
     budget: ExecutionContextBudget;
     renderedChars: number;
     includedContext?: ExecutionContext;
@@ -99,12 +99,12 @@ export function recordExecutionContext(
       .get(input.turnId);
     if (existing) return;
     db.prepare(`INSERT INTO execution_context_runs (
-      run_id, principal_id, turn_id, session_id, query_hash, as_of,
+      run_id, principal_id, turn_id, conversation_id, query_hash, as_of,
       budget_json, metrics_json, created_at
     ) VALUES (?, 'local-owner', ?, ?, ?, ?, ?, ?, ?)`).run(
       context.traceId,
       input.turnId,
-      input.sessionId,
+      input.conversationId,
       createHash('sha256').update(context.query).digest('hex'),
       context.asOf,
       JSON.stringify(input.budget),
@@ -124,7 +124,7 @@ export function recordExecutionContext(
 export function getExecutionContextAudit(turnId: string): ExecutionContextAudit | undefined {
   const db = getSqliteDatabase();
   const run = db.prepare('SELECT * FROM execution_context_runs WHERE turn_id = ?').get(turnId) as {
-    run_id: string; principal_id: string; turn_id: string; session_id: string;
+    run_id: string; principal_id: string; turn_id: string; conversation_id: string;
     query_hash: string; as_of: number; budget_json: string; metrics_json: string; created_at: number;
   } | undefined;
   if (!run) return undefined;
@@ -137,7 +137,7 @@ export function getExecutionContextAudit(turnId: string): ExecutionContextAudit 
     runId: run.run_id,
     principalId: run.principal_id,
     turnId: run.turn_id,
-    sessionId: run.session_id,
+    conversationId: run.conversation_id,
     queryHash: run.query_hash,
     asOf: run.as_of,
     budget: JSON.parse(run.budget_json),

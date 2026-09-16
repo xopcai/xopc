@@ -23,7 +23,7 @@ function entry(seq: number, row: TranscriptSourceEntry['row']): TranscriptSource
   return { entryId: `entry-${seq}`, seq, createdAt: 1_700_000_000_000 + seq, row };
 }
 
-function metadata(sessionId: string): SessionMetadata {
+function metadata(transcriptId: string): SessionMetadata {
   return {
     key: 'agent:main:webchat:direct:share-test',
     name: 'Public conversation',
@@ -38,7 +38,7 @@ function metadata(sessionId: string): SessionMetadata {
     sourceChannel: 'webchat',
     sourceChatId: 'private-chat-id',
     sessionType: 'chat',
-    sessionId,
+    transcriptId,
     cwd: '/private/workspace',
   };
 }
@@ -49,14 +49,14 @@ describe('SessionShareService', () => {
   let store: ShareStore;
   let snapshot: CompactionSourceSnapshot;
   let service: SessionShareService;
-  const sessionId = 'session-share-1';
+  const transcriptId = 'session-share-1';
 
   beforeEach(() => {
     rmSync(TEST_ROOT, { recursive: true, force: true });
     mkdirSync(TEST_STATE_DIR, { recursive: true });
     writeFileSync(TEST_MEDIA, Buffer.from('image-bytes'));
     snapshot = {
-      sessionId,
+      transcriptId,
       lastSeq: 6,
       entries: [
         entry(1, { role: 'system', content: 'private system prompt' }),
@@ -83,7 +83,7 @@ describe('SessionShareService', () => {
     };
     store = new ShareStore({ maxActiveShares: 20 });
     service = new SessionShareService(store, {
-      getMetadata: async () => metadata(sessionId),
+      getMetadata: async () => metadata(transcriptId),
       getSnapshot: async () => snapshot,
     });
   });
@@ -114,18 +114,18 @@ describe('SessionShareService', () => {
 
   it('creates an immutable artifact without session metadata', async () => {
     const record = await service.create('session-key', {
-      expectedSessionId: sessionId,
+      expectedTranscriptId: transcriptId,
       expectedCutoffSeq: 6,
       expectedMetadataUpdatedAt: '2024-01-01T00:00:00.000Z',
       gatewayTokenHash: 'creator-hash',
     });
     const manifest = await service.readManifest(record);
 
-    expect(record.sourceSessionId).toBe(sessionId);
+    expect(record.sourceTranscriptId).toBe(transcriptId);
     expect(record.cutoffSeq).toBe(6);
     expect(record.messageCount).toBe(2);
     expect(manifest.messages).toHaveLength(2);
-    expect(manifest).not.toHaveProperty('sessionKey');
+    expect(manifest).not.toHaveProperty('conversationId');
     expect(JSON.stringify(manifest)).not.toContain('/private/workspace');
     expect(JSON.stringify(manifest)).not.toContain('entry-');
     expect(existsSync(join(TEST_STATE_DIR, record.artifactRelativePath, 'manifest.json'))).toBe(true);
@@ -133,7 +133,7 @@ describe('SessionShareService', () => {
 
   it('rejects a snapshot that changed after preview', async () => {
     await expect(service.create('session-key', {
-      expectedSessionId: sessionId,
+      expectedTranscriptId: transcriptId,
       expectedCutoffSeq: 5,
       expectedMetadataUpdatedAt: '2024-01-01T00:00:00.000Z',
       gatewayTokenHash: 'creator-hash',
@@ -142,7 +142,7 @@ describe('SessionShareService', () => {
 
   it('rejects metadata that changed after preview', async () => {
     await expect(service.create('session-key', {
-      expectedSessionId: sessionId,
+      expectedTranscriptId: transcriptId,
       expectedCutoffSeq: 6,
       expectedMetadataUpdatedAt: '2024-01-02T00:00:00.000Z',
       gatewayTokenHash: 'creator-hash',
@@ -153,7 +153,7 @@ describe('SessionShareService', () => {
     const preview = await service.preview('session-key');
     const attachmentId = preview.attachmentCandidates[0]!.id;
     const record = await service.create('session-key', {
-      expectedSessionId: sessionId,
+      expectedTranscriptId: transcriptId,
       expectedCutoffSeq: 6,
       expectedMetadataUpdatedAt: '2024-01-01T00:00:00.000Z',
       gatewayTokenHash: 'creator-hash',
@@ -173,7 +173,7 @@ describe('SessionShareService', () => {
       entries: [...snapshot.entries, entry(7, { role: 'assistant', content: 'Later answer' })],
     };
     const refreshed = await service.refresh('session-key', record.id, {
-      expectedSessionId: sessionId,
+      expectedTranscriptId: transcriptId,
       expectedCutoffSeq: 7,
       expectedMetadataUpdatedAt: '2024-01-01T00:00:00.000Z',
     });
@@ -189,7 +189,7 @@ describe('SessionShareService', () => {
 
   it('keeps the same media reference isolated per message', async () => {
     snapshot = {
-      sessionId,
+      transcriptId,
       lastSeq: 2,
       entries: [
         entry(1, {
@@ -215,7 +215,7 @@ describe('SessionShareService', () => {
     expect(new Set(preview.attachmentCandidates.map((attachment) => attachment.id)).size).toBe(2);
 
     const record = await service.create('session-key', {
-      expectedSessionId: sessionId,
+      expectedTranscriptId: transcriptId,
       expectedCutoffSeq: 2,
       expectedMetadataUpdatedAt: '2024-01-01T00:00:00.000Z',
       gatewayTokenHash: 'creator-hash',

@@ -54,7 +54,7 @@ export interface UnifiedMessage {
   /** Command arguments */
   commandArgs?: string;
   /** Unified session key */
-  sessionKey: string;
+  conversationId: string;
   /** Platform-specific metadata */
   platformData: PlatformMetadata;
   /** Optional attachments */
@@ -166,7 +166,7 @@ export type BtwQueryOptions = {
 export interface CommandContext {
   // === Identity ===
   /** Unified session key */
-  sessionKey: string;
+  conversationId: string;
   /** Message source platform */
   source: MessageSource;
   /** Channel ID */
@@ -207,7 +207,7 @@ export interface CommandContext {
   /** List user's sessions */
   listSessions(): Promise<SessionInfo[]>;
   /** Switch to a different session */
-  switchSession(sessionKey: string): Promise<void>;
+  switchSession(conversationId: string): Promise<void>;
   
   // === Model Management ===
   /** Get current model ID */

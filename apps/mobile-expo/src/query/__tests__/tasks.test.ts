@@ -81,7 +81,7 @@ describe('task queries', () => {
   it('ensures a task conversation through the canonical task endpoint', async () => {
     mockedApiFetch.mockResolvedValue(new Response(JSON.stringify({
       ok: true,
-      sessionKey: 'agent:project:webchat:task-1',
+      conversationId: 'agent:project:webchat:task-1',
       agentId: 'project',
       created: true,
     })));
@@ -96,7 +96,7 @@ describe('task queries', () => {
   it('hands a task conversation to a new agent', async () => {
     mockedApiFetch.mockResolvedValue(new Response(JSON.stringify({
       ok: true,
-      activeSessionKey: 'agent:new:webchat:task-1',
+      activeConversationId: 'agent:new:webchat:task-1',
       toAgentId: 'new',
     })));
 

@@ -12,24 +12,24 @@ import type { useMessages } from '../../i18n/messages';
 import { canStartChatBootstrap } from './chat-bootstrap-gate';
 import { rootChatLookupComplete, rootChatResumeKey } from './chat-root-session';
 import { EMPTY_CHAT_SELECTION, useChatSelectionStore, type ChatSelection } from './chat-selection-store';
-import { takeNewChatSessionKey } from './session-prefetch';
+import { takeNewChatConversationId } from './session-prefetch';
 
 export type ChatBootstrapDeps = {
   scopeKey?: string;
-  urlSessionKey: string;
+  urlConversationId: string;
   gatewayReady: boolean;
   gatewayOnline: boolean;
   newSessionSpec: Pick<ResolvedNewSessionSpec, 'agentId' | 'projectId'>;
   initialAgentConfig?: SessionInitialAgentConfig;
   messages: ReturnType<typeof useMessages>;
-  activeSessionKeyRef: React.MutableRefObject<string>;
+  activeConversationIdRef: React.MutableRefObject<string>;
   shouldNavigateToRoute?: boolean;
   shouldAutoBootstrap?: boolean;
 };
 
 export function useChatPageBootstrap({
-  scopeKey = '', urlSessionKey, gatewayReady, gatewayOnline, newSessionSpec,
-  initialAgentConfig, messages, activeSessionKeyRef,
+  scopeKey = '', urlConversationId, gatewayReady, gatewayOnline, newSessionSpec,
+  initialAgentConfig, messages, activeConversationIdRef,
   shouldNavigateToRoute = true, shouldAutoBootstrap = true,
 }: ChatBootstrapDeps) {
   const router = useRouter();
@@ -59,11 +59,11 @@ export function useChatPageBootstrap({
   [scopeKey]);
 
   const commitSelection = useCallback((key: string) => {
-    activeSessionKeyRef.current = key;
+    activeConversationIdRef.current = key;
     useChatSelectionStore.getState().select(scopeKey, key);
     setCreating(null);
     setCreateError(null);
-  }, [activeSessionKeyRef, scopeKey]);
+  }, [activeConversationIdRef, scopeKey]);
 
   const setPendingBootstrapKey = useCallback((key: string) => {
     if (useGatewayStore.getState().activeGatewayId !== scopeKey) return;
@@ -76,38 +76,38 @@ export function useChatPageBootstrap({
     setFocused(true);
     // A new focus epoch invalidates requests started before leaving this screen/gateway.
     if (gatewayReady) useChatSelectionStore.getState().beginSelection(scopeKey);
-    if (gatewayReady && urlSessionKey && useChatSelectionStore.getState().selections[scopeKey]?.key !== urlSessionKey) {
-      setPendingBootstrapKey(urlSessionKey);
+    if (gatewayReady && urlConversationId && useChatSelectionStore.getState().selections[scopeKey]?.key !== urlConversationId) {
+      setPendingBootstrapKey(urlConversationId);
     }
     return () => {
       focusedRef.current = false;
       setFocused(false);
       attemptedRef.current = null;
     };
-  }, [gatewayReady, scopeKey, setPendingBootstrapKey, urlSessionKey]));
+  }, [gatewayReady, scopeKey, setPendingBootstrapKey, urlConversationId]));
 
   const validation = useQuery({
     queryKey: queryKeys.sessionResume(scopeKey, selection.key, selection.revision),
     queryFn: ({ signal }) => fetchSessionResumeStatus(selection.key, signal),
-    enabled: focused && shouldAutoBootstrap && gatewayReady && gatewayOnline && !urlSessionKey && Boolean(selection.key)
+    enabled: focused && shouldAutoBootstrap && gatewayReady && gatewayOnline && !urlConversationId && Boolean(selection.key)
       && !(attemptedRef.current?.scope === scopeKey && attemptedRef.current.selection === selection),
     staleTime: 0,
     refetchOnMount: 'always',
   });
 
   useEffect(() => {
-    if (!focused || urlSessionKey || !rootChatLookupComplete(validation) || validation.data !== 'unavailable') return;
+    if (!focused || urlConversationId || !rootChatLookupComplete(validation) || validation.data !== 'unavailable') return;
     if (!isCurrent(selection)) return;
     setRejected(previous => ({ scope: scopeKey, keys: [...(previous.scope === scopeKey ? previous.keys : []), selection.key] }));
     useChatSelectionStore.getState().selectIfCurrent(scopeKey, selection, '');
-  }, [focused, isCurrent, scopeKey, selection, urlSessionKey, validation]);
+  }, [focused, isCurrent, scopeKey, selection, urlConversationId, validation]);
 
   // Only a missing/confirmed-invalid local selection requires a blocking lookup.
   // The revision prevents an earlier lookup from choosing a chat after a user action.
   const candidates = useQuery({
     queryKey: [...queryKeys.sessionsAll, 'bootstrap', scopeKey, selection.revision],
     queryFn: ({ signal }) => fetchSessionsList({ limit: 6, offset: 0, channel: 'webchat', signal }),
-    enabled: focused && shouldAutoBootstrap && gatewayReady && gatewayOnline && !urlSessionKey && !selection.key,
+    enabled: focused && shouldAutoBootstrap && gatewayReady && gatewayOnline && !urlConversationId && !selection.key,
     staleTime: 0,
     refetchOnMount: 'always',
   });
@@ -126,7 +126,7 @@ export function useChatPageBootstrap({
 
   const startAutoSession = useCallback(() => {
     if (!focused || selection.key || !isCurrent(selection) || !canStartChatBootstrap({
-      gatewayReady, gatewayOnline, urlSessionKey,
+      gatewayReady, gatewayOnline, urlConversationId,
       resumeLookupComplete: rootChatLookupComplete(candidates),
       alreadyAttempted: attemptedRef.current?.scope === scopeKey && attemptedRef.current.selection === selection,
     })) return;
@@ -145,7 +145,7 @@ export function useChatPageBootstrap({
     }
     setCreating({ scope: scopeKey, selection });
     setCreateError(null);
-    void takeNewChatSessionKey(newSessionSpec, initialAgentConfig)
+    void takeNewChatConversationId(newSessionSpec, initialAgentConfig)
       .then(key => {
         if (!isCurrent(selection)) return;
         commitSelection(key);
@@ -159,18 +159,18 @@ export function useChatPageBootstrap({
         if (isCurrent(selection)) setCreating(null);
       });
   }, [candidates, commitSelection, focused, gatewayOnline, gatewayReady, initialAgentConfig, isCurrent, rejected,
-    messages.sessions.bootstrapFailed, newSessionSpec, router, scopeKey, selection, shouldNavigateToRoute, urlSessionKey]);
+    messages.sessions.bootstrapFailed, newSessionSpec, router, scopeKey, selection, shouldNavigateToRoute, urlConversationId]);
 
   useEffect(() => {
     if (shouldAutoBootstrap) startAutoSession();
   }, [shouldAutoBootstrap, startAutoSession]);
 
   const retryBootstrapSession = useCallback(() => {
-    if (!gatewayReady || urlSessionKey || !gatewayOnline || selection.key) return;
+    if (!gatewayReady || urlConversationId || !gatewayOnline || selection.key) return;
     attemptedRef.current = null;
     setCreateError(null);
     void candidates.refetch();
-  }, [candidates, gatewayOnline, gatewayReady, selection.key, urlSessionKey]);
+  }, [candidates, gatewayOnline, gatewayReady, selection.key, urlConversationId]);
 
   return {
     // A covered root must not start a second chat stream for the foreground detail route.
@@ -179,7 +179,7 @@ export function useChatPageBootstrap({
     setPendingBootstrapKey,
     beginSessionSelection,
     creatingInitialSession: creating?.scope === scopeKey && creating.selection === selection,
-    waitingForResume: !urlSessionKey && !selection.key && !candidates.isError && createError?.scope !== scopeKey,
+    waitingForResume: !urlConversationId && !selection.key && !candidates.isError && createError?.scope !== scopeKey,
     bootstrapError: createError?.scope === scopeKey ? createError.message
       : !selection.key && candidates.isError ? messages.sessions.bootstrapFailed : null,
     retryBootstrapSession,

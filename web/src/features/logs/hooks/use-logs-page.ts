@@ -34,7 +34,7 @@ type Filters = {
   selectedLevels: Set<LogLevel>;
   moduleFilter: string;
   requestIdFilter: string;
-  sessionIdFilter: string;
+  transcriptIdFilter: string;
   dateFrom: string;
   dateTo: string;
   autoRefresh: boolean;
@@ -47,7 +47,7 @@ type FiltersAction =
   | { type: 'toggleLevel'; level: LogLevel }
   | { type: 'setModule'; value: string }
   | { type: 'setRequestIdFilter'; value: string }
-  | { type: 'setSessionIdFilter'; value: string }
+  | { type: 'setTranscriptIdFilter'; value: string }
   | { type: 'setDateFrom'; value: string }
   | { type: 'setDateTo'; value: string }
   | { type: 'setAutoRefresh'; value: boolean }
@@ -72,8 +72,8 @@ function filtersReducer(state: Filters, action: FiltersAction): Filters {
       return state.moduleFilter === action.value ? state : { ...state, moduleFilter: action.value };
     case 'setRequestIdFilter':
       return state.requestIdFilter === action.value ? state : { ...state, requestIdFilter: action.value };
-    case 'setSessionIdFilter':
-      return state.sessionIdFilter === action.value ? state : { ...state, sessionIdFilter: action.value };
+    case 'setTranscriptIdFilter':
+      return state.transcriptIdFilter === action.value ? state : { ...state, transcriptIdFilter: action.value };
     case 'setDateFrom':
       return state.dateFrom === action.value ? state : { ...state, dateFrom: action.value };
     case 'setDateTo':
@@ -88,7 +88,7 @@ function filtersReducer(state: Filters, action: FiltersAction): Filters {
         isSameLogLevelSet(state.selectedLevels, p.selectedLevels) &&
         state.moduleFilter === p.moduleFilter &&
         state.requestIdFilter === p.requestIdFilter &&
-        state.sessionIdFilter === p.sessionIdFilter &&
+        state.transcriptIdFilter === p.transcriptIdFilter &&
         state.dateFrom === p.dateFrom &&
         state.dateTo === p.dateTo &&
         state.autoRefresh === p.autoRefresh;
@@ -101,7 +101,7 @@ function filtersReducer(state: Filters, action: FiltersAction): Filters {
         selectedLevels: new Set(),
         moduleFilter: '',
         requestIdFilter: '',
-        sessionIdFilter: '',
+        transcriptIdFilter: '',
         dateFrom: '',
         dateTo: '',
         autoRefresh: state.autoRefresh,
@@ -195,7 +195,7 @@ function dataReducer(state: Data, action: DataAction): Data {
 
 export function useLogsPage(language: StoredLanguage) {
   const L = messages(language).logs;
-  const token = useGatewayStore((st) => st.sessionKey);
+  const token = useGatewayStore((st) => st.conversationId);
   const hasToken = Boolean(token);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -209,7 +209,7 @@ export function useLogsPage(language: StoredLanguage) {
       selectedLevels: parseLogLevelsParam(sp.get('level')),
       moduleFilter: sp.get('module') ?? '',
       requestIdFilter: sp.get('requestId') ?? '',
-      sessionIdFilter: sp.get('sessionId') ?? '',
+      transcriptIdFilter: sp.get('transcriptId') ?? '',
       dateFrom: sp.get('from') ?? '',
       dateTo: sp.get('to') ?? '',
       autoRefresh: sp.get('live') === '1',
@@ -224,7 +224,7 @@ export function useLogsPage(language: StoredLanguage) {
   const [errorSummary, setErrorSummary] = useState<LogErrorSummaryItem[]>([]);
   const [errorSummaryLoading, setErrorSummaryLoading] = useState(false);
 
-  const { searchInput, debouncedSearch, selectedLevels, moduleFilter, requestIdFilter, sessionIdFilter, dateFrom, dateTo, autoRefresh } = filters;
+  const { searchInput, debouncedSearch, selectedLevels, moduleFilter, requestIdFilter, transcriptIdFilter, dateFrom, dateTo, autoRefresh } = filters;
   const { logs, loading, error, hasMore, modules, files, stats, logDir } = data;
 
   const setSearchInput = useCallback((value: string) => dispatchFilters({ type: 'setSearchInput', value }), []);
@@ -237,8 +237,8 @@ export function useLogsPage(language: StoredLanguage) {
     (value: string) => dispatchFilters({ type: 'setRequestIdFilter', value }),
     [],
   );
-  const setSessionIdFilter = useCallback(
-    (value: string) => dispatchFilters({ type: 'setSessionIdFilter', value }),
+  const setTranscriptIdFilter = useCallback(
+    (value: string) => dispatchFilters({ type: 'setTranscriptIdFilter', value }),
     [],
   );
   const setDateFrom = useCallback((value: string) => dispatchFilters({ type: 'setDateFrom', value }), []);
@@ -260,7 +260,7 @@ export function useLogsPage(language: StoredLanguage) {
     selectedLevels.size > 0 ||
     Boolean(moduleFilter) ||
     Boolean(requestIdFilter) ||
-    Boolean(sessionIdFilter) ||
+    Boolean(transcriptIdFilter) ||
     Boolean(dateFrom) ||
     Boolean(dateTo);
 
@@ -269,7 +269,7 @@ export function useLogsPage(language: StoredLanguage) {
     (selectedLevels.size > 0 ? 1 : 0) +
     (moduleFilter ? 1 : 0) +
     (requestIdFilter ? 1 : 0) +
-    (sessionIdFilter ? 1 : 0) +
+    (transcriptIdFilter ? 1 : 0) +
     (dateFrom || dateTo ? 1 : 0);
 
   useEffect(() => {
@@ -287,7 +287,7 @@ export function useLogsPage(language: StoredLanguage) {
         selectedLevels: parseLogLevelsParam(searchParams.get('level')),
         moduleFilter: searchParams.get('module') ?? '',
         requestIdFilter: searchParams.get('requestId') ?? '',
-        sessionIdFilter: searchParams.get('sessionId') ?? '',
+        transcriptIdFilter: searchParams.get('transcriptId') ?? '',
         dateFrom: searchParams.get('from') ?? '',
         dateTo: searchParams.get('to') ?? '',
         autoRefresh: searchParams.get('live') === '1',
@@ -311,8 +311,8 @@ export function useLogsPage(language: StoredLanguage) {
     else params.delete('module');
     if (requestIdFilter) params.set('requestId', requestIdFilter);
     else params.delete('requestId');
-    if (sessionIdFilter) params.set('sessionId', sessionIdFilter);
-    else params.delete('sessionId');
+    if (transcriptIdFilter) params.set('transcriptId', transcriptIdFilter);
+    else params.delete('transcriptId');
     if (dateFrom) params.set('from', dateFrom);
     else params.delete('from');
     if (dateTo) params.set('to', dateTo);
@@ -331,7 +331,7 @@ export function useLogsPage(language: StoredLanguage) {
     debouncedSearch,
     moduleFilter,
     requestIdFilter,
-    sessionIdFilter,
+    transcriptIdFilter,
     searchParams,
     selectedLevels,
     setSearchParams,
@@ -343,12 +343,12 @@ export function useLogsPage(language: StoredLanguage) {
       level: selectedLevels.size > 0 ? Array.from(selectedLevels) : undefined,
       module: moduleFilter || undefined,
       requestId: requestIdFilter || undefined,
-      sessionId: sessionIdFilter || undefined,
+      transcriptId: transcriptIdFilter || undefined,
       from: dateFrom || undefined,
       to: dateTo || undefined,
       limit: PAGE_LIMIT,
     }),
-    [debouncedSearch, selectedLevels, moduleFilter, requestIdFilter, sessionIdFilter, dateFrom, dateTo],
+    [debouncedSearch, selectedLevels, moduleFilter, requestIdFilter, transcriptIdFilter, dateFrom, dateTo],
   );
 
   const clientFilterSnapshot = useMemo(
@@ -357,11 +357,11 @@ export function useLogsPage(language: StoredLanguage) {
       selectedLevels,
       moduleFilter,
       requestIdFilter,
-      sessionIdFilter,
+      transcriptIdFilter,
       dateFrom,
       dateTo,
     }),
-    [debouncedSearch, selectedLevels, moduleFilter, requestIdFilter, sessionIdFilter, dateFrom, dateTo],
+    [debouncedSearch, selectedLevels, moduleFilter, requestIdFilter, transcriptIdFilter, dateFrom, dateTo],
   );
   const clientFilterRef = useRef(clientFilterSnapshot);
   clientFilterRef.current = clientFilterSnapshot;
@@ -525,12 +525,12 @@ export function useLogsPage(language: StoredLanguage) {
     [setRequestIdFilter],
   );
 
-  const filterBySessionId = useCallback(
-    (sessionId: string) => {
+  const filterByTranscriptId = useCallback(
+    (transcriptId: string) => {
       setSelectedLog(null);
-      setSessionIdFilter(sessionId);
+      setTranscriptIdFilter(transcriptId);
     },
-    [setSessionIdFilter],
+    [setTranscriptIdFilter],
   );
 
   const filterByErrorSummary = useCallback((item: LogErrorSummaryItem) => {
@@ -540,18 +540,18 @@ export function useLogsPage(language: StoredLanguage) {
     dispatchFilters({ type: 'setLevels', value: levelsForPreset('errors') });
   }, []);
 
-  const openChatForSession = useCallback((target: { sessionKey?: string; sessionId?: string }) => {
-    const directKey = target.sessionKey?.trim();
+  const openChatForSession = useCallback((target: { conversationId?: string; transcriptId?: string }) => {
+    const directKey = target.conversationId?.trim();
     if (directKey) {
-      window.dispatchEvent(new CustomEvent('navigate-to-chat', { detail: { sessionKey: directKey } }));
+      window.dispatchEvent(new CustomEvent('navigate-to-chat', { detail: { conversationId: directKey } }));
       return;
     }
-    const sessionId = target.sessionId?.trim();
-    if (!sessionId) return;
-    void resolveSession({ sessionId })
+    const transcriptId = target.transcriptId?.trim();
+    if (!transcriptId) return;
+    void resolveSession({ transcriptId: transcriptId })
       .then((resolved) => {
         window.dispatchEvent(
-          new CustomEvent('navigate-to-chat', { detail: { sessionKey: resolved.sessionKey } }),
+          new CustomEvent('navigate-to-chat', { detail: { conversationId: resolved.conversationId } }),
         );
       })
       .catch(() => {});
@@ -571,7 +571,7 @@ export function useLogsPage(language: StoredLanguage) {
     moduleFilter,
     setModuleFilter,
     requestIdFilter,
-    sessionIdFilter,
+    transcriptIdFilter,
     dateFrom,
     setDateFrom,
     dateTo,
@@ -599,7 +599,7 @@ export function useLogsPage(language: StoredLanguage) {
     levelSegment,
     handleLevelSegment,
     filterByRequestId,
-    filterBySessionId,
+    filterByTranscriptId,
     filterByErrorSummary,
     openChatForSession,
     errorSummary,

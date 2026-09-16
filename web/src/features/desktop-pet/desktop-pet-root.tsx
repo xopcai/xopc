@@ -34,7 +34,7 @@ function activityAnimation(item: Activity | undefined): DesktopPetAction {
 function stablePhrase(values: string[] | undefined, item: Activity): string | undefined {
   if (!values?.length) return undefined;
   let seed = item.sequence;
-  for (const char of `${item.sessionKey}:${item.runId}`) seed = (seed * 31 + char.charCodeAt(0)) >>> 0;
+  for (const char of `${item.conversationId}:${item.runId}`) seed = (seed * 31 + char.charCodeAt(0)) >>> 0;
   return values[seed % values.length];
 }
 
@@ -91,13 +91,13 @@ export function DesktopPetRoot() {
   const allActive = useMemo(() => visibleDesktopPetActivities(Object.values(activities), now), [activities, now]);
   const queued = useMemo(
     () => state.prefs.bubbleEnabled
-      ? allActive.filter((item) => !isDesktopPetActivityDismissed(item, dismissals[item.sessionKey]) && shouldShowDesktopPetActivity(item, state.prefs.behaviorMode, now, state.prefs.remindersPausedUntil))
+      ? allActive.filter((item) => !isDesktopPetActivityDismissed(item, dismissals[item.conversationId]) && shouldShowDesktopPetActivity(item, state.prefs.behaviorMode, now, state.prefs.remindersPausedUntil))
       : [],
     [allActive, dismissals, now, state.prefs.behaviorMode, state.prefs.bubbleEnabled, state.prefs.remindersPausedUntil],
   );
   const hiddenQueueCount = useMemo(
     () => state.prefs.bubbleEnabled
-      ? allActive.filter((item) => isDesktopPetActivityDismissed(item, dismissals[item.sessionKey]) && shouldShowDesktopPetActivity(item, state.prefs.behaviorMode, now, state.prefs.remindersPausedUntil)).length
+      ? allActive.filter((item) => isDesktopPetActivityDismissed(item, dismissals[item.conversationId]) && shouldShowDesktopPetActivity(item, state.prefs.behaviorMode, now, state.prefs.remindersPausedUntil)).length
       : 0,
     [allActive, dismissals, now, state.prefs.behaviorMode, state.prefs.bubbleEnabled, state.prefs.remindersPausedUntil],
   );
@@ -160,9 +160,9 @@ export function DesktopPetRoot() {
 
   const open = (item = primary) => {
     if (item && item.state !== "running") {
-      void window.electronAPI?.pet?.acknowledgeEvent(item.sessionKey, item.runId);
+      void window.electronAPI?.pet?.acknowledgeEvent(item.conversationId, item.runId);
       setActivities((current) => {
-        const { [item.sessionKey]: _opened, ...remaining } = current;
+        const { [item.conversationId]: _opened, ...remaining } = current;
         return remaining;
       });
     }
@@ -216,9 +216,9 @@ export function DesktopPetRoot() {
         Boolean(completion || health || reassurance),
       );
       const cta = activityCtaText(item, { open: t.viewSession, needsInput: t.petCtaNeedsInput, reviewIssue: t.petCtaReviewIssue });
-      return <div key={item.sessionKey} className={`desktop-pet-session desktop-pet-session--${item.state}${health ? " desktop-pet-session--health" : ""}`}><button type="button" className="desktop-pet-session-open" onClick={() => open(item)}><span className="desktop-pet-session-dot" /><span className="desktop-pet-session-main"><strong>{item.sessionLabel}</strong><span>{displayText}{completion || health ? "" : activityDetailText(item, now, t.tipTargetSuffix)}</span></span>{cta ? <span className="desktop-pet-session-cta">{cta}</span> : null}</button><button type="button" className="desktop-pet-session-close" aria-label={t.dismissSession} onClick={() => { void window.electronAPI?.pet?.acknowledgeEvent(item.sessionKey, item.runId); setDismissals((current) => ({ ...current, [item.sessionKey]: { runId: item.runId, state: item.state } })); }}><X size={12} /></button></div>;
+      return <div key={item.conversationId} className={`desktop-pet-session desktop-pet-session--${item.state}${health ? " desktop-pet-session--health" : ""}`}><button type="button" className="desktop-pet-session-open" onClick={() => open(item)}><span className="desktop-pet-session-dot" /><span className="desktop-pet-session-main"><strong>{item.sessionLabel}</strong><span>{displayText}{completion || health ? "" : activityDetailText(item, now, t.tipTargetSuffix)}</span></span>{cta ? <span className="desktop-pet-session-cta">{cta}</span> : null}</button><button type="button" className="desktop-pet-session-close" aria-label={t.dismissSession} onClick={() => { void window.electronAPI?.pet?.acknowledgeEvent(item.conversationId, item.runId); setDismissals((current) => ({ ...current, [item.conversationId]: { runId: item.runId, state: item.state } })); }}><X size={12} /></button></div>;
     })}</div> : null}
-    {idleTipVisible ? <div ref={queueRef} className="desktop-pet-bubble desktop-pet-queue desktop-pet-idle-tip"><div className="desktop-pet-session desktop-pet-session--idle"><button type="button" className="desktop-pet-session-open" onClick={() => open()}><span className="desktop-pet-session-dot" /><span className="desktop-pet-session-main"><strong>{t.idleTipTitle}</strong><span>{stablePhrase(selectedPet.persona?.phrases?.greeting ?? personaPhrases.greeting, { sessionKey: "idle", runId: "idle", sessionLabel: "", sequence: 0, timestamp: lastActivityAt, state: "running", phase: "waiting", action: t.idleTipBody }) ?? t.idleTipBody}</span></span></button><button type="button" className="desktop-pet-session-close" aria-label={t.dismissSession} onClick={() => setIdleDismissedUntil(now + IDLE_COMPANION_COOLDOWN_MS)}><X size={12} /></button></div></div> : null}
+    {idleTipVisible ? <div ref={queueRef} className="desktop-pet-bubble desktop-pet-queue desktop-pet-idle-tip"><div className="desktop-pet-session desktop-pet-session--idle"><button type="button" className="desktop-pet-session-open" onClick={() => open()}><span className="desktop-pet-session-dot" /><span className="desktop-pet-session-main"><strong>{t.idleTipTitle}</strong><span>{stablePhrase(selectedPet.persona?.phrases?.greeting ?? personaPhrases.greeting, { conversationId: "idle", runId: "idle", sessionLabel: "", sequence: 0, timestamp: lastActivityAt, state: "running", phase: "waiting", action: t.idleTipBody }) ?? t.idleTipBody}</span></span></button><button type="button" className="desktop-pet-session-close" aria-label={t.dismissSession} onClick={() => setIdleDismissedUntil(now + IDLE_COMPANION_COOLDOWN_MS)}><X size={12} /></button></div></div> : null}
     <div ref={stageRef} className="desktop-pet-stage"><button type="button" className="desktop-pet-menu-button" onClick={() => void toggle()} aria-label={t.menu}>{menuCount > 0 ? <span className="desktop-pet-tip-count">{Math.min(99, menuCount)}</span> : <ChevronDown className="desktop-pet-menu-chevron size-4" />}</button><button type="button" className="desktop-pet-hit-area" onClick={handlePetClick} onPointerEnter={() => { if (!primary && state.prefs.interactionEnabled && state.prefs.behaviorMode === "playful") setInteractionAction("greet"); }} onPointerLeave={() => { if (!dragRef.current) setInteractionAction(null); }} onPointerDown={beginDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} title={t.openApp}><DesktopPetSprite pet={selectedPet} action={action} reducedMotion={state.prefs.reducedMotion} displayHeight={Math.round(112 * sizeScale)} /></button></div>
   </div>;
 }

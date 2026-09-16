@@ -18,7 +18,7 @@ const FALLBACK: ThinkingLevel = 'medium';
  */
 export async function resolveEffectiveThinkingLevel(
   sessionConfigStore: SessionConfigStore,
-  sessionKey: string,
+  conversationId: string,
   requestOverride?: string | null,
   agentDefault?: ThinkLevel,
 ): Promise<ThinkingLevel> {
@@ -27,7 +27,7 @@ export async function resolveEffectiveThinkingLevel(
     return fromRequest as ThinkingLevel;
   }
 
-  const fromSession = await resolveThinkingLevel(sessionConfigStore, sessionKey, agentDefault);
+  const fromSession = await resolveThinkingLevel(sessionConfigStore, conversationId, agentDefault);
   if (fromSession !== undefined) {
     return fromSession as ThinkingLevel;
   }
@@ -49,10 +49,10 @@ export function resolveConfiguredActivityDetailDefault(config?: {
  */
 export async function resolveEffectiveReasoningLevel(
   sessionConfigStore: SessionConfigStore,
-  sessionKey: string,
+  conversationId: string,
   agentDefault?: ReasoningLevel,
 ): Promise<ReasoningLevel> {
   const def = agentDefault ?? DEFAULT_ACTIVITY_DETAIL_LEVEL;
-  const resolved = await resolveReasoningLevel(sessionConfigStore, sessionKey, def);
+  const resolved = await resolveReasoningLevel(sessionConfigStore, conversationId, def);
   return resolved ?? def;
 }

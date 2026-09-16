@@ -9,7 +9,7 @@ export type SideChatSelection = {
 
 export type SideChatView = {
   id: string;
-  parentSessionKey: string;
+  parentConversationId: string;
   clientInstanceId: string;
   status: 'idle' | 'running' | 'waiting-approval' | 'waiting-input' | 'closing';
   createdAt: string;
@@ -26,7 +26,7 @@ export type SideChatView = {
   };
   messageCount: number;
   context: {
-    parentSessionKey: string;
+    parentConversationId: string;
     parentSessionId: string;
     parentMessageCount: number;
     createdAt: string;
@@ -38,7 +38,7 @@ export type SideChatView = {
 
 export type SideChatTab = {
   id: string;
-  parentSessionKey: string;
+  parentConversationId: string;
   title: string;
   runId?: string;
   ended?: 'idle' | 'waiting' | 'unavailable';

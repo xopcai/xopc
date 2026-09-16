@@ -4,8 +4,8 @@ import { ExternalLink, FileText } from 'lucide-react';
 
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
-export function TaskResultEvidence({ evidence, projectId, sessionKey, language }: {
-  evidence: TaskEvidence[]; projectId?: string; sessionKey?: string; language: 'zh' | 'en';
+export function TaskResultEvidence({ evidence, projectId, conversationId, language }: {
+  evidence: TaskEvidence[]; projectId?: string; conversationId?: string; language: 'zh' | 'en';
 }) {
   const setPath = useWorkspacePreviewStore((state) => state.setPath);
   if (!evidence.length) return null;
@@ -18,7 +18,7 @@ export function TaskResultEvidence({ evidence, projectId, sessionKey, language }
       const controlClass = 'inline-flex min-h-11 items-center gap-2 text-sm font-medium text-accent hover:underline';
       return <div key={`${item.title}-${index}`} className="min-w-0 rounded-lg border border-edge-subtle p-3">
         {external ? <a className={controlClass} href={uri} target="_blank" rel="noopener noreferrer"><ExternalLink className="size-4 shrink-0" />{label}</a>
-          : file && (projectId || sessionKey) ? <button type="button" className={controlClass} onClick={() => setPath(uri, null, projectId, sessionKey)}><FileText className="size-4 shrink-0" />{label}</button>
+          : file && (projectId || conversationId) ? <button type="button" className={controlClass} onClick={() => setPath(uri, null, projectId, conversationId)}><FileText className="size-4 shrink-0" />{label}</button>
           : <p className="text-sm font-medium text-fg">{label}</p>}
         {external && item.kind === 'artifact' && <ArtifactRecovery key={uri} uri={uri} zh={language === 'zh'} />}
         {item.summary ? <p className="mt-1 break-words text-xs leading-5 text-fg-muted">{item.summary}</p> : null}

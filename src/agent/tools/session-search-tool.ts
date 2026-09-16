@@ -64,7 +64,7 @@ async function summarizeSession(
   query: string,
   deps: SessionSearchToolDeps,
   signal: AbortSignal | undefined,
-  logMeta?: { summarizingSessionKey: string },
+  logMeta?: { summarizingConversationId: string },
 ): Promise<string> {
   if (messages.length === 0) {
     return 'No messages in session.';
@@ -104,11 +104,11 @@ ${formatted}`;
     log.warn(
       {
         err,
-        summarizingSessionKey: logMeta?.summarizingSessionKey,
+        summarizingConversationId: logMeta?.summarizingConversationId,
         queryLength: query.length,
         messageCount: messages.length,
       },
-      `session_search LLM summarization failed${logMeta?.summarizingSessionKey ? ` (session ${logMeta.summarizingSessionKey})` : ''}: ${msg}`,
+      `session_search LLM summarization failed${logMeta?.summarizingConversationId ? ` (session ${logMeta.summarizingConversationId})` : ''}: ${msg}`,
     );
     return `[Summarization failed: ${msg}]`;
   }
@@ -128,7 +128,7 @@ const SessionSearchSchema = Type.Object({
     ]),
   ),
   limit: Type.Optional(Type.Number({ minimum: 1, maximum: 15 })),
-  excludeSessionKey: Type.Optional(
+  excludeConversationId: Type.Optional(
     Type.String({ description: 'Exclude this session key from keyword results (default: current chat).' }),
   ),
 });
@@ -136,7 +136,7 @@ const SessionSearchSchema = Type.Object({
 export interface SessionSearchToolDeps {
   getSessionStore: () => SessionStore;
   getPrimaryModel: () => Model<Api>;
-  getCurrentSessionKey?: () => string | undefined;
+  getCurrentConversationId?: () => string | undefined;
   canAccess?: () => boolean;
 }
 
@@ -144,7 +144,7 @@ type SessionSearchParams = {
   query?: string;
   roleFilter?: 'user' | 'assistant' | 'system' | 'tool' | 'toolResult';
   limit?: number;
-  excludeSessionKey?: string;
+  excludeConversationId?: string;
 };
 
 export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool {
@@ -209,7 +209,7 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
         });
         let matches = listed.items.map((item) => ({ key: item.key, score: 1 }));
 
-        const exclude = p.excludeSessionKey?.trim() || deps.getCurrentSessionKey?.() || '';
+        const exclude = p.excludeConversationId?.trim() || deps.getCurrentConversationId?.() || '';
         if (exclude) {
           matches = matches.filter((m) => m.key !== exclude);
         }
@@ -225,9 +225,9 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
             }
 
             const summary = await summarizeSession(messages, query, deps, signal, {
-              summarizingSessionKey: key,
+              summarizingConversationId: key,
             });
-            return { sessionKey: key, score, summary };
+            return { conversationId: key, score, summary };
           }),
         );
 

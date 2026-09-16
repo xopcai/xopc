@@ -6,7 +6,7 @@ export interface WorkflowRunLinkEntry {
   id: string;
   runId: string;
   ownerAgentId?: string;
-  workflowSessionKey: string;
+  workflowConversationId: string;
   definitionId: string;
   goal: string;
   status: WorkflowRunStatus;
@@ -25,11 +25,11 @@ function readContextRow(row: unknown): WorkflowRunLinkEntry | null {
   if (!data || data.kind !== WORKFLOW_RUN_LINK_CONTEXT_KIND) return null;
 
   const runId = typeof data.runId === 'string' ? data.runId.trim() : '';
-  const workflowSessionKey =
-    typeof data.workflowSessionKey === 'string' ? data.workflowSessionKey.trim() : '';
+  const workflowConversationId =
+    typeof data.workflowConversationId === 'string' ? data.workflowConversationId.trim() : '';
   const ownerAgentId = typeof data.ownerAgentId === 'string' ? data.ownerAgentId.trim() : '';
   const definitionId = typeof data.definitionId === 'string' ? data.definitionId.trim() : '';
-  if (!runId || !workflowSessionKey || !definitionId) return null;
+  if (!runId || !workflowConversationId || !definitionId) return null;
 
   const goal = typeof data.goal === 'string' ? data.goal : '';
   const statusRaw = typeof data.status === 'string' ? data.status : 'running';
@@ -45,7 +45,7 @@ function readContextRow(row: unknown): WorkflowRunLinkEntry | null {
     id,
     runId,
     ownerAgentId: ownerAgentId || undefined,
-    workflowSessionKey,
+    workflowConversationId,
     definitionId,
     goal,
     status,
@@ -65,7 +65,7 @@ export function parseWorkflowRunLinksFromTranscriptRows(rows: unknown[] | undefi
       ...previous,
       ...parsed,
       ownerAgentId: parsed.ownerAgentId ?? previous?.ownerAgentId,
-      workflowSessionKey: parsed.workflowSessionKey || previous?.workflowSessionKey || '',
+      workflowConversationId: parsed.workflowConversationId || previous?.workflowConversationId || '',
       definitionId: parsed.definitionId || previous?.definitionId || '',
       goal: parsed.goal || previous?.goal || '',
     });

@@ -104,14 +104,14 @@ function welcomeExplorationDaySeed(date = new Date()): string {
   return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 }
 
-export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: {
+export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId }: {
   embedded?: boolean;
-  sessionKey?: string;
+  conversationId?: string;
   taskId?: string;
 } = {}) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
-  const token = useGatewayStore((s) => s.sessionKey);
+  const token = useGatewayStore((s) => s.conversationId);
   const navigate = useNavigate();
   const location = useLocation();
   const { pathname } = location;
@@ -137,7 +137,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
   const taskId = boundTaskId?.trim() || null;
   const { data: taskDetail } = useTaskDetail(taskId ?? '');
   const { auth, session, messages: msgSlice, timeline, stream, followUp, clarify, agents } = useChatSession({
-    fixedSessionKey: sessionKey,
+    fixedConversationId: conversationId,
     taskId: taskId ?? undefined,
   });
 
@@ -148,35 +148,35 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
   const autoSendQuery = searchParams.get('autoSend') === '1';
   const attachmentHandoffId = searchParams.get('attachmentHandoff');
   const attachmentsHandoffId = searchParams.get('attachmentsHandoff');
-  const chatSessionKey = session.decodedKey ?? session.sessionKey;
+  const chatConversationId = session.decodedKey ?? session.conversationId;
   const [launchFile, setLaunchFile] = useState<Pick<File, 'name' | 'type'> | null>(null);
   const launchFileSessionRef = useRef<string | null>(null);
   useEffect(() => {
     if (attachmentHandoffId) {
       const file = peekComposerAttachmentHandoff(attachmentHandoffId);
       if (file) setLaunchFile(file);
-      launchFileSessionRef.current = chatSessionKey;
+      launchFileSessionRef.current = chatConversationId;
       return;
     }
-    if (launchFileSessionRef.current !== chatSessionKey) {
-      launchFileSessionRef.current = chatSessionKey;
+    if (launchFileSessionRef.current !== chatConversationId) {
+      launchFileSessionRef.current = chatConversationId;
       setLaunchFile(null);
     }
-  }, [attachmentHandoffId, chatSessionKey]);
+  }, [attachmentHandoffId, chatConversationId]);
   const markChatRunViewed = useChatRunPresenceStore((state) => state.markViewed);
   useEffect(() => {
-    if (chatSessionKey) markChatRunViewed(chatSessionKey);
-  }, [chatSessionKey, markChatRunViewed]);
-  const { data: sessionMetadata } = useChatSessionMetadata(chatSessionKey);
+    if (chatConversationId) markChatRunViewed(chatConversationId);
+  }, [chatConversationId, markChatRunViewed]);
+  const { data: sessionMetadata } = useChatSessionMetadata(chatConversationId);
   const handleForkAssistantTurn = useCallback(async (lastTurnId: string) => {
-    if (!chatSessionKey) return;
+    if (!chatConversationId) return;
     try {
-      const fork = await session.sessionManager.forkSessionAtTurn(chatSessionKey, lastTurnId);
+      const fork = await session.sessionManager.forkSessionAtTurn(chatConversationId, lastTurnId);
       window.dispatchEvent(new CustomEvent('session-created', {
-        detail: { key: fork.sessionKey, sessionKey: fork.sessionKey },
+        detail: { key: fork.conversationId, conversationId: fork.conversationId },
       }));
       showComposerNotification('success', m.chat.messageForkCreated);
-      navigate(`/chat/${encodeURIComponent(fork.sessionKey)}`);
+      navigate(`/chat/${encodeURIComponent(fork.conversationId)}`);
     } catch (err) {
       showComposerNotification(
         'error',
@@ -184,12 +184,12 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
       );
       throw err;
     }
-  }, [chatSessionKey, m.chat.messageForkCreated, m.chat.messageForkFailed, navigate, session.sessionManager]);
+  }, [chatConversationId, m.chat.messageForkCreated, m.chat.messageForkFailed, navigate, session.sessionManager]);
   const workflowRunId = sessionMetadata?.workflowRunId ?? null;
   const workflowOwnerAgentId = sessionMetadata?.ownerAgentId ?? undefined;
   const { view: workflowRunView } = useWorkflowRunLive(workflowRunId, { ownerAgentId: workflowOwnerAgentId });
   const { data: workflowRunLinks = [], mutate: refreshWorkflowRunLinks } =
-    useSessionWorkflowRunLinks(chatSessionKey);
+    useSessionWorkflowRunLinks(chatConversationId);
   const showWorkflowLiveBanner = Boolean(
     workflowRunId &&
       workflowRunView &&
@@ -197,11 +197,11 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
   );
 
   useEffect(() => {
-    if (!chatSessionKey) return;
+    if (!chatConversationId) return;
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent<{ key?: string; sessionKey?: string }>).detail;
-      const updatedKey = detail?.key ?? detail?.sessionKey;
-      if (updatedKey === chatSessionKey) {
+      const detail = (event as CustomEvent<{ key?: string; conversationId?: string }>).detail;
+      const updatedKey = detail?.key ?? detail?.conversationId;
+      if (updatedKey === chatConversationId) {
         void refreshWorkflowRunLinks();
       }
     };
@@ -211,18 +211,18 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
       window.removeEventListener('session-transcript-updated', handler);
       window.removeEventListener('workflow-run-started-from-chat', handler);
     };
-  }, [chatSessionKey, refreshWorkflowRunLinks]);
+  }, [chatConversationId, refreshWorkflowRunLinks]);
 
   useEffect(() => {
     routeComposerSeedMarkerRef.current = null;
-  }, [session.sessionKey]);
+  }, [session.conversationId]);
 
   useEffect(() => {
     if (!auth.hasToken) return;
     if (!skillQuery && !slashQuery && !draftQuery && !(session.projectPreparation && attachmentsHandoffId)) return;
     if (autoSendQuery && !session.projectPreparation) return;
     if (session.showSessionLoading || session.sessionRoutePending) return;
-    if (!session.sessionKey && !session.projectPreparation) return;
+    if (!session.conversationId && !session.projectPreparation) return;
 
     const preparedAttachments = session.projectPreparation && attachmentsHandoffId
       ? takeComposerPayloadHandoff(attachmentsHandoffId) ?? undefined : undefined;
@@ -257,7 +257,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
 
     const composerDraftSeed = buildComposerDraftSeed(skillQuery, draftQuery);
     if (composerDraftSeed || preparedAttachments?.length) {
-      const marker = `${session.sessionKey}:draft:${composerDraftSeed}`;
+      const marker = `${session.conversationId}:draft:${composerDraftSeed}`;
       applyWireSeed(composerDraftSeed ?? '', marker);
       return;
     }
@@ -272,7 +272,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
       stripRouteComposerParams();
       return;
     }
-    const marker = `${session.sessionKey}:slash:${slashQuery}`;
+    const marker = `${session.conversationId}:slash:${slashQuery}`;
     if (routeComposerSeedMarkerRef.current === marker) return;
     queueMicrotask(() => {
       void (async () => {
@@ -306,7 +306,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     searchParams,
     session.showSessionLoading,
     session.sessionRoutePending,
-    session.sessionKey,
+    session.conversationId,
     navigate,
     pathname,
   ]);
@@ -320,7 +320,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
   } = useChatScrollViewport({
     hasToken: auth.hasToken,
     showSessionLoading: session.showSessionLoading,
-    sessionKey: session.sessionKey,
+    conversationId: session.conversationId,
     sending: stream.sending,
     chatMessages: msgSlice.items,
     hasMore: session.hasMore,
@@ -465,7 +465,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
 
   useEffect(() => {
     scheduleTimelineActiveUpdate();
-  }, [msgSlice.items.length, scheduleTimelineActiveUpdate, session.sessionKey, timelineDisplayOffset]);
+  }, [msgSlice.items.length, scheduleTimelineActiveUpdate, session.conversationId, timelineDisplayOffset]);
 
   useEffect(() => {
     return () => {
@@ -480,7 +480,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     pendingWelcomeSelectionRef.current = null;
     welcomeImpressionRef.current = '';
     setWelcomeAffinity({});
-  }, [session.sessionKey]);
+  }, [session.conversationId]);
 
   const onPickWelcomePrompt = useCallback((selection: WelcomeSuggestionSelection) => {
     pendingWelcomeSelectionRef.current = selection;
@@ -510,7 +510,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     setWelcomeExplorationOffset((value) => value + 1);
   }, [agents.displayAgentId]);
   const canChangeWorkingDirectory = Boolean(
-    session.sessionKey &&
+    session.conversationId &&
     !session.showSessionLoading &&
     !session.sessionRoutePending &&
     session.workspaceSource !== 'project' &&
@@ -547,11 +547,11 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
   );
   const chatHeadline = useMemo(() => {
     const titleKey =
-      session.sessionRoutePending && session.decodedKey ? session.decodedKey : session.sessionKey;
+      session.sessionRoutePending && session.decodedKey ? session.decodedKey : session.conversationId;
     if (!titleKey) return m.nav.chat;
     return session.sessionName?.trim() || m.chat.newSession;
   }, [
-    session.sessionKey,
+    session.conversationId,
     session.sessionName,
     session.sessionRoutePending,
     session.decodedKey,
@@ -560,20 +560,20 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
   ]);
 
   const sourceNoteId = sessionMetadata?.sourceNoteId ?? null;
-  const loadedProject = useChatProjectScope(chatSessionKey, searchParams.get('projectId'));
+  const loadedProject = useChatProjectScope(chatConversationId, searchParams.get('projectId'));
   const scopedProject = session.projectPreparation?.project ?? loadedProject;
   const [composerContextRefs, setComposerContextRefs] = useState<ComposerContextRef[]>([]);
   const contextSwitchSourceRef = useRef<string | null | undefined>(undefined);
   const [updatingContext, setUpdatingContext] = useState(false);
   useLayoutEffect(() => {
     if (contextSwitchSourceRef.current !== undefined) {
-      if (chatSessionKey && chatSessionKey !== contextSwitchSourceRef.current) {
+      if (chatConversationId && chatConversationId !== contextSwitchSourceRef.current) {
         contextSwitchSourceRef.current = undefined;
       }
       return;
     }
     setComposerContextRefs([]);
-  }, [chatSessionKey]);
+  }, [chatConversationId]);
   useEffect(() => {
     let cancelled = false;
     setSourceNoteLoadedTitle(null);
@@ -596,11 +596,11 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
   const welcomeContextState = useWelcomeSuggestionContext({
     enabled:
       auth.hasToken &&
-      Boolean(chatSessionKey) &&
+      Boolean(chatConversationId) &&
       msgSlice.items.length === 0 &&
       !session.showSessionLoading &&
       !session.sessionRoutePending,
-    sessionKey: chatSessionKey,
+    conversationId: chatConversationId,
     sourceNoteId,
     sourceNoteTitle,
     effectiveWorkspacePath: session.effectiveWorkspacePath,
@@ -670,7 +670,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     if (msgSlice.items.length > 0 || stream.streaming) return;
     if (!activeWelcomeSpotlight) return;
     const recommendation = activeWelcomeSpotlight.primaryRecommendation;
-    const impressionKey = `${chatSessionKey ?? 'new'}:${activeWelcomeSpotlight.contextStatus}:${recommendation.id}`;
+    const impressionKey = `${chatConversationId ?? 'new'}:${activeWelcomeSpotlight.contextStatus}:${recommendation.id}`;
     if (welcomeImpressionRef.current === impressionKey) return;
     welcomeImpressionRef.current = impressionKey;
     recordWelcomeSuggestionMetric({
@@ -680,7 +680,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
       contextKind: activeWelcomeSpotlight.contextKind,
       agentId: agents.displayAgentId,
     });
-  }, [activeWelcomeSpotlight, agents.displayAgentId, chatSessionKey, msgSlice.items.length, stream.streaming]);
+  }, [activeWelcomeSpotlight, agents.displayAgentId, chatConversationId, msgSlice.items.length, stream.streaming]);
 
   const handleComposerSend = useCallback(
     (...args: Parameters<typeof stream.sendMessage>) => {
@@ -715,7 +715,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
 
   const projectComposer = useProjectSessionComposer({
     preparation: session.projectPreparation,
-    sessionKey: chatSessionKey,
+    conversationId: chatConversationId,
     ready: session.modelConfigReady && !isSessionTransitioning,
     onSend: handleComposerSend,
   });
@@ -742,18 +742,18 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
 
   useEffect(() => {
     setEditingUserTurn(null);
-  }, [session.sessionKey]);
+  }, [session.conversationId]);
 
   useEffect(() => {
     if (!autoSendQuery || (!draftQuery.trim() && !attachmentsHandoffId)) return;
     if (!auth.hasToken || session.showSessionLoading || session.sessionRoutePending) return;
-    if (!session.sessionKey || stream.sending || stream.streaming) return;
+    if (!session.conversationId || stream.sending || stream.streaming) return;
     const message = buildComposerDraftSeed(skillQuery, draftQuery);
     const attachments = attachmentsHandoffId
       ? takeComposerPayloadHandoff(attachmentsHandoffId)
       : undefined;
     if (!message && !attachments?.length) return;
-    const marker = `${session.sessionKey}:auto-send:${message ?? ''}:${attachmentsHandoffId ?? ''}`;
+    const marker = `${session.conversationId}:auto-send:${message ?? ''}:${attachmentsHandoffId ?? ''}`;
     if (routeComposerSeedMarkerRef.current === marker) return;
     routeComposerSeedMarkerRef.current = marker;
     const next = new URLSearchParams(searchParams);
@@ -774,7 +774,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     navigate,
     pathname,
     searchParams,
-    session.sessionKey,
+    session.conversationId,
     session.sessionRoutePending,
     session.showSessionLoading,
     skillQuery,
@@ -885,7 +885,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
           detail: {
             noteId: pending.sourceNoteId,
             source: 'chat',
-            sessionKey: chatSessionKey,
+            conversationId: chatConversationId,
           },
         }),
       );
@@ -898,7 +898,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
       setSourceNoteSaveSubmitting(false);
     }
   }, [
-    chatSessionKey,
+    chatConversationId,
     m.chat.sourceNoteAppendHeading,
     m.chat.sourceNoteSaveFailed,
     m.chat.sourceNoteSaveSuccess,
@@ -912,7 +912,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
       try {
         await createTaskNote(title.slice(0, 120), {
           sourceNoteId,
-          sourceSessionKey: chatSessionKey,
+          sourceConversationId: chatConversationId,
         });
       } catch (err) {
         showComposerNotification('error', err instanceof Error ? err.message : m.chat.sourceNoteTaskFailed);
@@ -920,7 +920,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
       }
     },
     [
-      chatSessionKey,
+      chatConversationId,
       m.chat.sourceNoteTaskFailed,
       m.chat.sourceNoteTaskFallbackTitle,
       m.chat.sourceNoteTaskSuccess,
@@ -961,7 +961,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
       return;
     }
     if (contextSwitchSourceRef.current !== undefined || stream.sending || stream.streaming || isSessionTransitioning) return;
-    contextSwitchSourceRef.current = chatSessionKey;
+    contextSwitchSourceRef.current = chatConversationId;
     setUpdatingContext(true);
     try {
       if (projectId) {
@@ -977,7 +977,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
     } finally {
       setUpdatingContext(false);
     }
-  }, [chatSessionKey, isSessionTransitioning, m.chat.composerContext.changeFailed, updatingContext, projectComposer.busy, session.createNewSession, session.projectPreparation, session.userContextMode, stream.sending, stream.streaming, navigate, agents.displayAgentId]);
+  }, [chatConversationId, isSessionTransitioning, m.chat.composerContext.changeFailed, updatingContext, projectComposer.busy, session.createNewSession, session.projectPreparation, session.userContextMode, stream.sending, stream.streaming, navigate, agents.displayAgentId]);
 
   const handleRemoveProject = useCallback(() => handleProjectChange(null), [handleProjectChange]);
   const selectWelcomeProject = useCallback((projectId: string) => handleProjectChange(projectId), [handleProjectChange]);
@@ -1043,7 +1043,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
         chatAgentId={agents.displayAgentId}
         onChatAgentChange={agents.onChatAgentChange}
         chatAgentDisabled={projectComposer.busy || updatingContext || (isSessionTransitioning && !session.projectPreparation)}
-        sessionKey={session.sessionKey}
+        conversationId={session.conversationId}
         hasMessages={!isSessionTransitioning && msgSlice.items.length > 0}
         workspacePath={session.effectiveWorkspacePath}
         userContextMode={session.userContextMode}
@@ -1059,10 +1059,10 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
       /> : null}
 
       <div className={cn('relative mx-auto flex min-h-0 w-full flex-1 flex-col', embedded ? 'max-w-none' : 'max-w-[calc(var(--max-width-chat-frame)+8rem)]')}>
-        {!embedded && sessionMetadata?.parentSessionKey ? (
+        {!embedded && sessionMetadata?.parentConversationId ? (
           <div className="shrink-0 border-b border-edge-subtle bg-surface-panel/80 px-3 py-2 text-xs text-fg-muted sm:px-5 xl:px-6">
             <Link
-              to={`/chat/${encodeURIComponent(sessionMetadata.parentSessionKey)}`}
+              to={`/chat/${encodeURIComponent(sessionMetadata.parentConversationId)}`}
               className="font-medium text-accent transition-colors hover:text-accent-fg"
             >
               {m.chat.forkedFromConversation.replace(
@@ -1173,23 +1173,23 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                   {showWorkflowLiveBanner && workflowRunView ? (
                     <WorkflowSessionBanner
                       view={workflowRunView}
-                      sessionKey={chatSessionKey}
+                      conversationId={chatConversationId}
                       onAbortCurrentTurn={stream.abort}
                     />
                   ) : null}
-                  {!embedded && chatSessionKey ? (
+                  {!embedded && chatConversationId ? (
                     <ProductAutomationFeedback
                       eventType="session.transcript.updated"
                       source="sessions"
-                      payloadKey="sessionKey"
-                      payloadValue={chatSessionKey}
+                      payloadKey="conversationId"
+                      payloadValue={chatConversationId}
                       className="mb-6"
                     />
                   ) : null}
                   <MessageList
                     messages={msgSlice.items}
                     authToken={token ?? undefined}
-                    sessionKey={session.decodedKey ?? session.sessionKey}
+                    conversationId={session.decodedKey ?? session.conversationId}
                     projectId={scopedProject?.id}
                     streaming={stream.streaming}
                     progress={stream.progress}
@@ -1321,7 +1321,7 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
                 }
                 sending={stream.sending}
                 streaming={stream.streaming}
-                sessionKey={session.sessionKey}
+                conversationId={session.conversationId}
                 welcomeDraftSeed={welcomeDraftSeed}
                 welcomeSuggestion={!skillDiscovery && compactWelcomeLayout ? primaryWelcomeSelection : null}
                 onAcceptWelcomeSuggestion={onPickWelcomePrompt}
@@ -1364,9 +1364,9 @@ export function ChatPage({ embedded = false, sessionKey, taskId: boundTaskId }: 
           </div>
         </div>
       </div>
-      {!embedded && chatSessionKey && window.electronAPI?.terminal ? (
+      {!embedded && chatConversationId && window.electronAPI?.terminal ? (
         <Suspense fallback={null}>
-          <ChatTerminalDock key={chatSessionKey} sessionKey={chatSessionKey} />
+          <ChatTerminalDock key={chatConversationId} conversationId={chatConversationId} />
         </Suspense>
       ) : null}
 

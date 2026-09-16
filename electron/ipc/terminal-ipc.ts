@@ -15,8 +15,8 @@ const MAX_TERMINALS = 8;
 const MAX_REPLAY_CHARS = 1_000_000;
 
 export type TerminalCreateInput = {
-  sessionKey: string;
-  sessionId: string;
+  conversationId: string;
+  transcriptId: string;
   terminalKey: string;
   cols: number;
   rows: number;
@@ -24,8 +24,8 @@ export type TerminalCreateInput = {
 
 export type TerminalDescriptor = {
   terminalId: string;
-  sessionKey: string;
-  sessionId: string;
+  conversationId: string;
+  transcriptId: string;
   terminalKey: string;
   cwd: string;
   replay: string;
@@ -42,7 +42,7 @@ type TerminalRecord = Omit<TerminalDescriptor, 'replay'> & {
 };
 
 type TerminalManagerOptions = {
-  resolveWorkspace?: (sessionKey: string, sessionId: string) => Promise<string>;
+  resolveWorkspace?: (conversationId: string, transcriptId: string) => Promise<string>;
   spawnPty?: typeof nodePty.spawn;
 };
 
@@ -117,22 +117,22 @@ async function fetchGatewayJson(url: string, token: string): Promise<Record<stri
   return await response.json() as Record<string, unknown>;
 }
 
-export async function resolveTerminalWorkspace(sessionKey: string, sessionId: string): Promise<string> {
+export async function resolveTerminalWorkspace(conversationId: string, transcriptId: string): Promise<string> {
   const connection = getGatewayConnection();
   if (!connection) {
     throw new Error('Integrated terminal requires a local desktop gateway connection');
   }
   const baseUrl = `http://127.0.0.1:${connection.port}`;
   const resolved = await fetchGatewayJson(
-    `${baseUrl}/api/sessions/resolve?sessionKey=${encodeURIComponent(sessionKey)}`,
+    `${baseUrl}/api/sessions/resolve?conversationId=${encodeURIComponent(conversationId)}`,
     connection.token,
   );
   const payload = resolved.payload as Record<string, unknown> | undefined;
-  if (payload?.sessionId !== sessionId) {
+  if (payload?.transcriptId !== transcriptId) {
     throw new Error('Session changed before the terminal was opened');
   }
   const config = await fetchGatewayJson(
-    `${baseUrl}/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`,
+    `${baseUrl}/api/sessions/${encodeURIComponent(conversationId)}/agent-config`,
     connection.token,
   );
   const configPayload = config.payload as Record<string, unknown> | undefined;
@@ -160,14 +160,14 @@ export class TerminalManager {
 
   async create(owner: WebContents, raw: TerminalCreateInput): Promise<TerminalDescriptor> {
     const input = {
-      sessionKey: requireText(raw?.sessionKey, 'sessionKey'),
-      sessionId: requireText(raw?.sessionId, 'sessionId'),
+      conversationId: requireText(raw?.conversationId, 'conversationId'),
+      transcriptId: requireText(raw?.transcriptId, 'transcriptId'),
       terminalKey: requireText(raw?.terminalKey, 'terminalKey'),
       cols: terminalSize(raw?.cols, 'cols', 20, 500),
       rows: terminalSize(raw?.rows, 'rows', 5, 300),
     };
     if (this.stopped) throw new Error('Terminal manager is stopped');
-    const key = this.identityKey(input.sessionId, input.terminalKey);
+    const key = this.identityKey(input.transcriptId, input.terminalKey);
     const existingId = this.terminalIdByKey.get(key);
     if (existingId) {
       const existing = this.records.get(existingId);
@@ -194,7 +194,7 @@ export class TerminalManager {
     input: TerminalCreateInput,
     key: string,
   ): Promise<TerminalDescriptor> {
-    const cwd = await this.resolveWorkspace(input.sessionKey, input.sessionId);
+    const cwd = await this.resolveWorkspace(input.conversationId, input.transcriptId);
     this.assertCanCreate(key);
     await ensureNodePtySpawnHelper();
     this.assertCanCreate(key);
@@ -209,8 +209,8 @@ export class TerminalManager {
     const terminalId = crypto.randomUUID();
     const record: TerminalRecord = {
       terminalId,
-      sessionKey: input.sessionKey,
-      sessionId: input.sessionId,
+      conversationId: input.conversationId,
+      transcriptId: input.transcriptId,
       terminalKey: input.terminalKey,
       cwd,
       replay: '',
@@ -264,17 +264,17 @@ export class TerminalManager {
     const record = this.records.get(terminalIdRaw);
     if (!record) return;
     this.records.delete(terminalIdRaw);
-    const key = this.identityKey(record.sessionId, record.terminalKey);
+    const key = this.identityKey(record.transcriptId, record.terminalKey);
     if (this.terminalIdByKey.get(key) === terminalIdRaw) {
       this.terminalIdByKey.delete(key);
     }
     if (!record.exited) record.pty.kill();
   }
 
-  dispose(sessionIdRaw: unknown, terminalKeyRaw: unknown): void {
-    const sessionId = requireText(sessionIdRaw, 'sessionId');
+  dispose(transcriptIdRaw: unknown, terminalKeyRaw: unknown): void {
+    const transcriptId = requireText(transcriptIdRaw, 'transcriptId');
     const terminalKey = requireText(terminalKeyRaw, 'terminalKey');
-    const key = this.identityKey(sessionId, terminalKey);
+    const key = this.identityKey(transcriptId, terminalKey);
     const terminalId = this.terminalIdByKey.get(key);
     if (terminalId) {
       this.close(terminalId);
@@ -295,8 +295,8 @@ export class TerminalManager {
     return record;
   }
 
-  private identityKey(sessionId: string, terminalKey: string): string {
-    return `${sessionId}\u0000${terminalKey}`;
+  private identityKey(transcriptId: string, terminalKey: string): string {
+    return `${transcriptId}\u0000${terminalKey}`;
   }
 
   private assertCanCreate(key: string): void {
@@ -307,8 +307,8 @@ export class TerminalManager {
   private descriptor(record: TerminalRecord): TerminalDescriptor {
     return {
       terminalId: record.terminalId,
-      sessionKey: record.sessionKey,
-      sessionId: record.sessionId,
+      conversationId: record.conversationId,
+      transcriptId: record.transcriptId,
       terminalKey: record.terminalKey,
       cwd: record.cwd,
       replay: record.replay,
@@ -346,9 +346,9 @@ export function registerTerminalIpc(ipcMain: IpcMain): void {
     manager.resize(terminalId, cols, rows);
     return { ok: true };
   });
-  ipcMain.handle('terminal:dispose', (event, sessionId: unknown, terminalKey: unknown) => {
+  ipcMain.handle('terminal:dispose', (event, transcriptId: unknown, terminalKey: unknown) => {
     assertTrustedRenderer(event);
-    manager.dispose(sessionId, terminalKey);
+    manager.dispose(transcriptId, terminalKey);
     return { ok: true };
   });
 }

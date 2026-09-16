@@ -58,7 +58,7 @@ describe('useChatScrollViewport', () => {
     viewport = useChatScrollViewport({
       hasToken: true,
       showSessionLoading: false,
-      sessionKey: 'session-1',
+      conversationId: 'session-1',
       sending: false,
       chatMessages,
       hasMore: false,

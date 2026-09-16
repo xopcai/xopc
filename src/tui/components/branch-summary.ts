@@ -14,8 +14,8 @@ function expandKeyLabel(keybindings: KeybindingsManager | undefined): string {
 function branchSummaryMarkdown(summary: TuiBranchSummary): string {
   const lines = [
     `**Rows forked:** ${summary.rowCount.toLocaleString()}`,
-    `**Source:** ${summary.sourceSessionKey}`,
-    `**Target:** ${summary.targetSessionKey}`,
+    `**Source:** ${summary.sourceConversationId}`,
+    `**Target:** ${summary.targetConversationId}`,
   ];
   if (summary.entryId) {
     lines.push(`**Entry:** ${summary.entryId}`);
@@ -58,7 +58,7 @@ export class BranchSummaryComponent extends Container {
     if (!this.expanded) {
       this.body.addChild(
         new Text(
-          theme.dim(`Forked to ${this.summary.targetSessionKey} (${expandKeyLabel(this.keybindings)} to expand)`),
+          theme.dim(`Forked to ${this.summary.targetConversationId} (${expandKeyLabel(this.keybindings)} to expand)`),
           1,
           0,
         ),

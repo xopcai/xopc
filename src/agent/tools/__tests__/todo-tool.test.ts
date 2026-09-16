@@ -14,10 +14,10 @@ describe('todo tool', () => {
       ['session-a', [{ id: 'existing', content: 'Existing', status: 'pending' }]],
     ]);
     const tool = createTodoTool({
-      getSessionKey: () => 'session-a',
+      getConversationId: () => 'session-a',
       repository: {
-        read: (sessionKey) => persisted.get(sessionKey) ?? [],
-        write: (sessionKey, items) => persisted.set(sessionKey, items),
+        read: (conversationId) => persisted.get(conversationId) ?? [],
+        write: (conversationId, items) => persisted.set(conversationId, items),
       },
     });
 
@@ -37,7 +37,7 @@ describe('todo tool', () => {
 
   it('falls back to in-memory state while the repository is unavailable', async () => {
     const tool = createTodoTool({
-      getSessionKey: () => 'session-a',
+      getConversationId: () => 'session-a',
       repository: {
         isAvailable: () => false,
         read: () => { throw new Error('must not read'); },
@@ -106,7 +106,7 @@ describe('todo tool', () => {
 
   it('isolates stores per session key', async () => {
     let session = 's1';
-    const tool = createTodoTool({ getSessionKey: () => session });
+    const tool = createTodoTool({ getConversationId: () => session });
 
     await tool.execute('1', { todos: [{ id: 'a', content: 'A', status: 'pending' }] });
     session = 's2';

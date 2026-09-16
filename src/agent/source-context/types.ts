@@ -74,7 +74,7 @@ export function parseTurnContextRefs(value: unknown, max = 5): TurnContextRef[] 
 
 export type AgentSourceContextResolver = (
   binding: SessionSourceBinding,
-  sessionKey: string,
+  conversationId: string,
 ) => Promise<AgentSourceContext | null>;
 
 export function isSessionSourceBinding(value: unknown): value is SessionSourceBinding {

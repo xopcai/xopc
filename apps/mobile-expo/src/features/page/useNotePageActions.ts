@@ -67,9 +67,9 @@ export function useNotePageActions({
     try {
       Keyboard.dismiss();
       await prepareSavedNote();
-      const { sessionKey } = await openNoteConversation(id);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.sessionContext(sessionKey) });
-      openChat(router, sessionKey);
+      const { conversationId } = await openNoteConversation(id);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.sessionContext(conversationId) });
+      openChat(router, conversationId);
     } catch (error) {
       setSnackMsg(error instanceof Error ? error.message : messages.actionFailed);
     } finally {

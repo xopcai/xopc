@@ -10,7 +10,7 @@ import type {
 
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 import { isXopcDatabaseOpen } from './connection.js';
-import { readCurrentSessionId } from './session-instance-repository.js';
+import { readCurrentTranscriptId } from './session-instance-repository.js';
 import {
   bumpSessionInputRevision,
   getSessionInputById,
@@ -25,15 +25,15 @@ const STALE_CONTEXT_MS = 24 * 60 * 60_000;
 
 type ClarificationRow = {
   id: string;
-  session_key: string;
-  session_id: string;
+  conversation_id: string;
+  transcript_id: string;
   status: ClarificationWait['status'];
   version: number;
   data_json: string;
 };
 
 export type CreateClarificationInput = {
-  sessionKey: string;
+  conversationId: string;
   runId: string;
   toolCallId: string;
   kind: ClarificationKind;
@@ -63,7 +63,7 @@ function rowToWait(row: ClarificationRow): ClarificationWait {
 
 function getRow(id: string): ClarificationRow | undefined {
   return getSqliteDatabase().prepare(
-    `SELECT id, session_key, session_id, status, version, data_json
+    `SELECT id, conversation_id, transcript_id, status, version, data_json
      FROM session_clarification_waits WHERE id = ?`,
   ).get(id) as ClarificationRow | undefined;
 }
@@ -147,33 +147,33 @@ export function getClarification(id: string): ClarificationWait | undefined {
   return row ? rowToWait(row) : undefined;
 }
 
-export function getActiveClarification(sessionKey: string): ClarificationWait | undefined {
+export function getActiveClarification(conversationId: string): ClarificationWait | undefined {
   if (!isXopcDatabaseOpen()) return undefined;
-  const sessionId = readCurrentSessionId(getSqliteDatabase(), sessionKey);
-  if (!sessionId) return undefined;
+  const transcriptId = readCurrentTranscriptId(getSqliteDatabase(), conversationId);
+  if (!transcriptId) return undefined;
   const row = getSqliteDatabase().prepare(
-    `SELECT id, session_key, session_id, status, version, data_json
+    `SELECT id, conversation_id, transcript_id, status, version, data_json
      FROM session_clarification_waits
-     WHERE session_key = ? AND session_id = ? AND status IN ('open', 'queued')
+     WHERE conversation_id = ? AND transcript_id = ? AND status IN ('open', 'queued')
      ORDER BY version DESC LIMIT 1`,
-  ).get(sessionKey, sessionId) as ClarificationRow | undefined;
+  ).get(conversationId, transcriptId) as ClarificationRow | undefined;
   return row ? rowToWait(row) : undefined;
 }
 
-export function getClarificationSnapshot(sessionKey: string): ClarificationWaitSnapshot | undefined {
+export function getClarificationSnapshot(conversationId: string): ClarificationWaitSnapshot | undefined {
   if (!isXopcDatabaseOpen()) return undefined;
-  const sessionId = readCurrentSessionId(getSqliteDatabase(), sessionKey);
-  if (!sessionId) return undefined;
-  const state = getSessionInputState(sessionKey);
+  const transcriptId = readCurrentTranscriptId(getSqliteDatabase(), conversationId);
+  if (!transcriptId) return undefined;
+  const state = getSessionInputState(conversationId);
   const now = Date.now();
-  const active = getActiveClarification(sessionKey);
+  const active = getActiveClarification(conversationId);
   const clarification = active?.kind === 'approval'
     && active.expiresAt !== undefined
     && active.expiresAt <= now
     ? expireApproval(active, now)
     : active;
   return {
-    sessionId,
+    transcriptId,
     revision: state.revision,
     serverTime: now,
     clarification: clarification?.status === 'open' || clarification?.status === 'queued'
@@ -184,22 +184,22 @@ export function getClarificationSnapshot(sessionKey: string): ClarificationWaitS
 
 export function createClarificationWait(input: CreateClarificationInput): ClarificationWait {
   return runSqliteWriteTransaction((db) => {
-    const sessionId = readCurrentSessionId(db, input.sessionKey);
-    if (!sessionId) throw new Error('Clarification requires a persisted session.');
+    const transcriptId = readCurrentTranscriptId(db, input.conversationId);
+    if (!transcriptId) throw new Error('Clarification requires a persisted session.');
 
     const duplicate = db.prepare(
-      `SELECT id, session_key, session_id, status, version, data_json
+      `SELECT id, conversation_id, transcript_id, status, version, data_json
        FROM session_clarification_waits
-       WHERE session_id = ? AND origin_run_id = ? AND origin_tool_call_id = ?`,
-    ).get(sessionId, input.runId, input.toolCallId) as ClarificationRow | undefined;
+       WHERE transcript_id = ? AND origin_run_id = ? AND origin_tool_call_id = ?`,
+    ).get(transcriptId, input.runId, input.toolCallId) as ClarificationRow | undefined;
     if (duplicate) return rowToWait(duplicate);
 
     const now = input.now ?? Date.now();
-    const runtime = getSessionInputState(input.sessionKey);
+    const runtime = getSessionInputState(input.conversationId);
     const origin = runtime.activeInputId
-      ? getSessionInputById(input.sessionKey, runtime.activeInputId)
+      ? getSessionInputById(input.conversationId, runtime.activeInputId)
       : undefined;
-    const active = getActiveClarification(input.sessionKey);
+    const active = getActiveClarification(input.conversationId);
     if (active) {
       const superseded: ClarificationWait = {
         ...active,
@@ -214,13 +214,13 @@ export function createClarificationWait(input: CreateClarificationInput): Clarif
     }
 
     const lastEntry = db.prepare(
-      'SELECT entry_id FROM transcript_entries WHERE session_id = ? ORDER BY seq DESC LIMIT 1',
-    ).get(sessionId) as { entry_id: string } | undefined;
+      'SELECT entry_id FROM transcript_entries WHERE transcript_id = ? ORDER BY seq DESC LIMIT 1',
+    ).get(transcriptId) as { entry_id: string } | undefined;
     const wait: ClarificationWait = {
       id: randomUUID(),
       principalId: 'local-owner',
-      sessionKey: input.sessionKey,
-      sessionId,
+      conversationId: input.conversationId,
+      transcriptId,
       objectiveId: origin?.id ?? input.runId,
       objectiveRevision: (active?.objectiveRevision ?? 0) + 1,
       originRunId: input.runId,
@@ -247,14 +247,14 @@ export function createClarificationWait(input: CreateClarificationInput): Clarif
     };
     db.prepare(
       `INSERT INTO session_clarification_waits (
-        id, principal_id, session_key, session_id, status, version, data_json,
+        id, principal_id, conversation_id, transcript_id, status, version, data_json,
         origin_run_id, origin_tool_call_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       wait.id,
       wait.principalId,
-      wait.sessionKey,
-      wait.sessionId,
+      wait.conversationId,
+      wait.transcriptId,
       wait.status,
       wait.version,
       JSON.stringify(wait),
@@ -262,13 +262,13 @@ export function createClarificationWait(input: CreateClarificationInput): Clarif
       wait.originToolCallId,
     );
     markTaskWaiting(wait);
-    bumpSessionInputRevision(db, input.sessionKey);
+    bumpSessionInputRevision(db, input.conversationId);
     return wait;
   });
 }
 
-export function isClarificationSuspended(sessionKey: string, runId: string): boolean {
-  const wait = getActiveClarification(sessionKey);
+export function isClarificationSuspended(conversationId: string, runId: string): boolean {
+  const wait = getActiveClarification(conversationId);
   return Boolean(wait?.status === 'open' && wait.originRunId === runId);
 }
 
@@ -283,14 +283,14 @@ function expireApproval(wait: ClarificationWait, now: number): ClarificationWait
   const updated = writeWait(expired, wait.version) ?? getClarification(wait.id) ?? expired;
   resolveTaskWait(updated, { expired: true });
   cancelTaskRun(updated, 'Approval expired before the task could continue.', now);
-  bumpSessionInputRevision(getSqliteDatabase(), wait.sessionKey);
+  bumpSessionInputRevision(getSqliteDatabase(), wait.conversationId);
   return updated;
 }
 
 export function resolveClarification(input: ResolveClarificationInput): ResolveClarificationResult {
   return runSqliteWriteTransaction((db) => {
     const wait = getClarification(input.id);
-    if (!wait || readCurrentSessionId(db, wait.sessionKey) !== wait.sessionId) {
+    if (!wait || readCurrentTranscriptId(db, wait.conversationId) !== wait.transcriptId) {
       return { ok: false, code: 'NOT_FOUND' };
     }
     const now = input.now ?? Date.now();
@@ -298,8 +298,8 @@ export function resolveClarification(input: ResolveClarificationInput): ResolveC
       return { ok: false, code: 'EXPIRED', clarification: expireApproval(wait, now) };
     }
     const existingInput = db.prepare(
-      'SELECT id FROM session_inputs WHERE session_key = ? AND client_message_id = ?',
-    ).get(wait.sessionKey, input.idempotencyKey) as { id: string } | undefined;
+      'SELECT id FROM session_inputs WHERE conversation_id = ? AND client_message_id = ?',
+    ).get(wait.conversationId, input.idempotencyKey) as { id: string } | undefined;
     if (existingInput) {
       return { ok: true, clarification: wait, idempotent: true, queued: wait.status === 'queued' };
     }
@@ -330,7 +330,7 @@ export function resolveClarification(input: ResolveClarificationInput): ResolveC
       if (!cancelled) return { ok: false, code: 'CONFLICT', clarification: getClarification(wait.id) };
       resolveTaskWait(cancelled, { cancelled: true });
       cancelTaskRun(cancelled, 'Task cancelled while waiting for clarification.', now);
-      bumpSessionInputRevision(db, wait.sessionKey);
+      bumpSessionInputRevision(db, wait.conversationId);
       return { ok: true, clarification: cancelled, idempotent: false, queued: false };
     }
 
@@ -356,11 +356,11 @@ export function resolveClarification(input: ResolveClarificationInput): ResolveC
       stale ? 'The request is over 24 hours old. Re-check mutable state before acting.' : '',
       'Do not repeat completed side effects. Continue from the stored transcript and current state.',
     ].filter(Boolean).join('\n');
-    const origin = getSessionInputById(wait.sessionKey, wait.originInputId);
+    const origin = getSessionInputById(wait.conversationId, wait.originInputId);
     insertSessionInput({
       id: randomUUID(),
-      sessionKey: wait.sessionKey,
-      expectedSessionId: wait.sessionId,
+      conversationId: wait.conversationId,
+      expectedTranscriptId: wait.transcriptId,
       clientMessageId: input.idempotencyKey,
       requestedDelivery: 'next',
       effectiveDelivery: 'next',
@@ -378,11 +378,11 @@ export function resolveClarification(input: ResolveClarificationInput): ResolveC
   });
 }
 
-export function getClarificationResumeInput(sessionKey: string, runId: string): SessionInput | undefined {
+export function getClarificationResumeInput(conversationId: string, runId: string): SessionInput | undefined {
   if (!isXopcDatabaseOpen()) return undefined;
-  const state = getSessionInputState(sessionKey);
+  const state = getSessionInputState(conversationId);
   if (state.activeRunId !== runId || !state.activeInputId) return undefined;
-  const input = getSessionInputById(sessionKey, state.activeInputId);
+  const input = getSessionInputById(conversationId, state.activeInputId);
   return input?.kind === 'clarification_resume' ? input : undefined;
 }
 
@@ -393,7 +393,7 @@ export function consumeClarificationResume(input: SessionInput): boolean {
     if (!wait || wait.status !== 'queued' || wait.objectiveRevision !== input.payload?.objectiveRevision) {
       return false;
     }
-    if (readCurrentSessionId(db, input.sessionKey) !== wait.sessionId) return false;
+    if (readCurrentTranscriptId(db, input.conversationId) !== wait.transcriptId) return false;
     if (wait.taskRunId) {
       const runs = new TaskRunRepository();
       const run = runs.get(wait.taskRunId);
@@ -418,19 +418,19 @@ export function consumeClarificationResume(input: SessionInput): boolean {
       updatedAt: Date.now(),
     }, wait.version);
     if (!resolved) return false;
-    bumpSessionInputRevision(db, wait.sessionKey);
+    bumpSessionInputRevision(db, wait.conversationId);
     return true;
   });
 }
 
 export function consumeClarificationApproval(
-  sessionKey: string,
+  conversationId: string,
   approvalKey: string,
 ): 'approved' | 'denied' | undefined {
   return runSqliteWriteTransaction(() => {
-    const state = getSessionInputState(sessionKey);
+    const state = getSessionInputState(conversationId);
     if (!state.activeInputId) return undefined;
-    const input = getSessionInputById(sessionKey, state.activeInputId);
+    const input = getSessionInputById(conversationId, state.activeInputId);
     if (input?.kind !== 'clarification_resume' || !input.payload) return undefined;
     const wait = getClarification(input.payload.waitId);
     if (!wait || wait.kind !== 'approval' || wait.approvalKey !== approvalKey || wait.approvalConsumedAt) {
@@ -442,16 +442,16 @@ export function consumeClarificationApproval(
   });
 }
 
-export function supersedeActiveClarification(sessionKey: string, now = Date.now()): ClarificationWait | undefined {
+export function supersedeActiveClarification(conversationId: string, now = Date.now()): ClarificationWait | undefined {
   return runSqliteWriteTransaction((db) => {
-    const wait = getActiveClarification(sessionKey);
+    const wait = getActiveClarification(conversationId);
     if (!wait) return undefined;
     if (wait.status === 'queued') {
       const queued = db.prepare(
         `SELECT id FROM session_inputs
-         WHERE session_key = ? AND kind = 'clarification_resume'
+         WHERE conversation_id = ? AND kind = 'clarification_resume'
            AND status = 'queued' AND json_extract(payload_json, '$.waitId') = ?`,
-      ).get(sessionKey, wait.id) as { id: string } | undefined;
+      ).get(conversationId, wait.id) as { id: string } | undefined;
       if (queued) {
         db.prepare(
           `UPDATE session_inputs SET status = 'cancelled', version = version + 1, updated_at_ms = ?
@@ -469,7 +469,7 @@ export function supersedeActiveClarification(sessionKey: string, now = Date.now(
     if (!updated) return undefined;
     resolveTaskWait(updated, { superseded: true });
     cancelTaskRun(updated, 'Task superseded by a newer instruction.', now);
-    bumpSessionInputRevision(db, sessionKey);
+    bumpSessionInputRevision(db, conversationId);
     return updated;
   });
 }

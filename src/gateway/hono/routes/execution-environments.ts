@@ -55,19 +55,19 @@ export function registerExecutionEnvironmentRoutes(
     return c.json({ ok: true, environments: store.list({ projectId, includeDeleted: c.req.query('includeDeleted') === 'true' }) });
   });
 
-  authenticated.get('/api/sessions/:sessionKey/environment', (c) => {
-    const environment = sessions.get(c.req.param('sessionKey'));
+  authenticated.get('/api/sessions/:conversationId/environment', (c) => {
+    const environment = sessions.get(c.req.param('conversationId'));
     return environment
       ? c.json({ ok: true, environment })
       : c.json({ ok: false, error: 'Execution environment not found' }, 404);
   });
 
-  authenticated.post('/api/sessions/:sessionKey/environment', async (c) => {
-    const sessionKey = c.req.param('sessionKey');
-    if (deps.service.getActiveWebchatRunId(sessionKey)) {
+  authenticated.post('/api/sessions/:conversationId/environment', async (c) => {
+    const conversationId = c.req.param('conversationId');
+    if (deps.service.getActiveWebchatRunId(conversationId)) {
       return c.json({ ok: false, error: 'Stop the active session run before changing its environment' }, 409);
     }
-    const session = await deps.service.sessions.getSession(sessionKey);
+    const session = await deps.service.sessions.getSession(conversationId);
     if (!session) return c.json({ ok: false, error: 'Session not found' }, 404);
     const projectId = session.projectId?.trim();
     const project = projectId ? deps.service.projects.get(projectId) : null;
@@ -77,7 +77,7 @@ export function registerExecutionEnvironmentRoutes(
     if (body.mode !== undefined && !mode) return c.json({ ok: false, error: 'Invalid execution mode' }, 400);
     try {
       const environment = await sessions.attach({
-        sessionKey,
+        conversationId,
         project,
         mode,
         baseRef: typeof body.baseRef === 'string' ? body.baseRef : undefined,
@@ -88,14 +88,14 @@ export function registerExecutionEnvironmentRoutes(
     }
   });
 
-  authenticated.delete('/api/sessions/:sessionKey/environment', async (c) => {
-    const sessionKey = c.req.param('sessionKey');
-    if (deps.service.getActiveWebchatRunId(sessionKey)) {
+  authenticated.delete('/api/sessions/:conversationId/environment', async (c) => {
+    const conversationId = c.req.param('conversationId');
+    if (deps.service.getActiveWebchatRunId(conversationId)) {
       return c.json({ ok: false, error: 'Stop the active session run before releasing its environment' }, 409);
     }
     try {
       const environment = await sessions.release(
-        sessionKey,
+        conversationId,
         c.req.query('keepManaged') !== 'true',
       );
       return c.json({ ok: true, environment });

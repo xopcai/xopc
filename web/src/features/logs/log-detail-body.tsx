@@ -12,12 +12,12 @@ export type LogDetailLabels = Pick<
   | 'message'
   | 'metadata'
   | 'requestId'
-  | 'sessionKey'
-  | 'sessionId'
+  | 'conversationId'
+  | 'transcriptId'
   | 'phase'
   | 'stackTrace'
   | 'filterByRequestId'
-  | 'filterBySessionId'
+  | 'filterByTranscriptId'
   | 'openChat'
 >;
 
@@ -25,21 +25,21 @@ type Props = {
   log: LogEntry;
   labels: LogDetailLabels;
   onFilterByRequestId?: (requestId: string) => void;
-  onFilterBySessionId?: (sessionId: string) => void;
-  onOpenChat?: (target: { sessionKey?: string; sessionId?: string }) => void;
+  onFilterByTranscriptId?: (transcriptId: string) => void;
+  onOpenChat?: (target: { conversationId?: string; transcriptId?: string }) => void;
 };
 
 export function LogDetailBody({
   log,
   labels,
   onFilterByRequestId,
-  onFilterBySessionId,
+  onFilterByTranscriptId,
   onOpenChat,
 }: Props) {
   const lv = log.level ?? 'info';
   const rid = typeof log.requestId === 'string' ? log.requestId : '';
-  const sk = typeof log.sessionKey === 'string' ? log.sessionKey : '';
-  const sid = typeof log.sessionId === 'string' ? log.sessionId : '';
+  const sk = typeof log.conversationId === 'string' ? log.conversationId : '';
+  const sid = typeof log.transcriptId === 'string' ? log.transcriptId : '';
   const phase = phaseLabel(log);
   const errDetail = extractErrorDetail(log);
   const isError = lv === 'error' || lv === 'fatal';
@@ -105,7 +105,7 @@ export function LogDetailBody({
         ) : null}
         {sk ? (
           <>
-            <span className="font-sans text-fg-muted">{labels.sessionKey}</span>
+            <span className="font-sans text-fg-muted">{labels.conversationId}</span>
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <code className="break-all text-fg">{sk}</code>
               {onOpenChat ? (
@@ -113,7 +113,7 @@ export function LogDetailBody({
                   type="button"
                   variant="secondary"
                   className="h-7 px-2 text-[11px]"
-                  onClick={() => onOpenChat({ sessionKey: sk })}
+                  onClick={() => onOpenChat({ conversationId: sk })}
                 >
                   {labels.openChat}
                 </Button>
@@ -123,17 +123,17 @@ export function LogDetailBody({
         ) : null}
         {sid ? (
           <>
-            <span className="font-sans text-fg-muted">{labels.sessionId}</span>
+            <span className="font-sans text-fg-muted">{labels.transcriptId}</span>
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <code className="break-all text-fg">{sid}</code>
-              {onFilterBySessionId ? (
+              {onFilterByTranscriptId ? (
                 <Button
                   type="button"
                   variant="secondary"
                   className="h-7 px-2 text-[11px]"
-                  onClick={() => onFilterBySessionId(sid)}
+                  onClick={() => onFilterByTranscriptId(sid)}
                 >
-                  {labels.filterBySessionId}
+                  {labels.filterByTranscriptId}
                 </Button>
               ) : null}
               {onOpenChat ? (
@@ -141,7 +141,7 @@ export function LogDetailBody({
                   type="button"
                   variant="secondary"
                   className="h-7 px-2 text-[11px]"
-                  onClick={() => onOpenChat({ sessionId: sid })}
+                  onClick={() => onOpenChat({ transcriptId: sid })}
                 >
                   {labels.openChat}
                 </Button>

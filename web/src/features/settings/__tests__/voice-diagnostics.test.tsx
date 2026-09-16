@@ -89,7 +89,7 @@ describe('voice diagnostics lifecycle', () => {
     await act(async () => onEvent({ type: 'input.transcript.final', payload: { text: 'Hello' } }));
     expect(container.textContent).toContain(v.setup.inputPassed);
     expect(mocks.preview).not.toHaveBeenCalled();
-    expect(mocks.connect.mock.calls[0][0]).not.toHaveProperty('sessionKey');
+    expect(mocks.connect.mock.calls[0][0]).not.toHaveProperty('conversationId');
   });
 
   it('releases microphone permission granted after unmount', async () => {

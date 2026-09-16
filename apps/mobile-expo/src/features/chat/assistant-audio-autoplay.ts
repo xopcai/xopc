@@ -34,7 +34,7 @@ async function playTrack(item: AssistantAudioAutoplayItem): Promise<AssistantAud
 
   try {
     const playbackUri = cache
-      ? await cache.download(buildGatewayMediaReadPath(item.uri, item.sessionKey), item.mimeType)
+      ? await cache.download(buildGatewayMediaReadPath(item.uri, item.conversationId), item.mimeType)
       : item.uri;
     if (isAudioCaptureActive()) return 'interrupted';
     await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
@@ -83,13 +83,13 @@ const autoplayQueue = new AssistantAudioAutoplayQueue(async (item) => {
 });
 
 /** Plays only newly streamed assistant audio; persisted history remains user-initiated. */
-export function queueAssistantAudioAutoplay(audio: AudioContent, sessionKey: string): void {
+export function queueAssistantAudioAutoplay(audio: AudioContent, conversationId: string): void {
   const uri = audio.uri?.trim();
   if (!uri) return;
   autoplayQueue.enqueue({
-    key: `${sessionKey}:${uri}`,
+    key: `${conversationId}:${uri}`,
     uri,
     mimeType: audio.mimeType,
-    sessionKey,
+    conversationId,
   });
 }

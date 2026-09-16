@@ -10,12 +10,12 @@ import {
 
 export function resolveResponseLanguageForSession(
   config: Config | undefined,
-  sessionKey?: string,
+  conversationId?: string,
 ): ResponseLanguage {
   const userPreference = config?.userContext?.preferences?.responseLanguage ?? 'auto';
   const sessionPreference =
-    sessionKey && isXopcDatabaseOpen()
-      ? getSessionConfig(sessionKey)?.responseLanguage
+    conversationId && isXopcDatabaseOpen()
+      ? getSessionConfig(conversationId)?.responseLanguage
       : undefined;
   return resolveResponseLanguage(userPreference, sessionPreference);
 }

@@ -18,7 +18,7 @@ import { getXopcDatabase } from './connection.js';
 import { runSqliteWriteTransaction } from './transaction.js';
 
 export type ReplaceLatestSessionTurnInput = {
-  sessionKey: string;
+  conversationId: string;
   targetTurnId: string;
   clientMessageId: string;
   content: string;
@@ -65,20 +65,20 @@ function validateTargetRows(
 
 /** Validate before aborting a run; the transactional mutation validates again. */
 export function validateLatestSessionTurnTarget(
-  sessionKey: string,
+  conversationId: string,
   targetTurnId: string,
 ): { ok: true } | { ok: false; code: 'TARGET_NOT_FOUND' | 'NOT_LATEST' } {
   const { db } = getXopcDatabase();
   const session = db
-    .prepare(`SELECT session_id FROM sessions WHERE session_key = ?`)
-    .get(sessionKey) as { session_id: string } | undefined;
+    .prepare(`SELECT active_transcript_id AS transcript_id FROM sessions WHERE conversation_id = ?`)
+    .get(conversationId) as { transcript_id: string } | undefined;
   if (!session) return { ok: false, code: 'TARGET_NOT_FOUND' };
   const entries = db
     .prepare(
-      `SELECT entry_id, session_id, seq, entry_kind, role, payload_json, created_at
-       FROM transcript_entries WHERE session_id = ? ORDER BY seq ASC`,
+      `SELECT entry_id, transcript_id, seq, entry_kind, role, payload_json, created_at
+       FROM transcript_entries WHERE transcript_id = ? ORDER BY seq ASC`,
     )
-    .all(session.session_id) as TranscriptEntryRow[];
+    .all(session.transcript_id) as TranscriptEntryRow[];
   const result = validateTargetRows(entries.map(transcriptEntryRowToStoredRow), targetTurnId);
   return result.ok ? { ok: true } : result;
 }
@@ -93,8 +93,8 @@ export function replaceLatestSessionTurnAndQueueInput(
 ): ReplaceLatestSessionTurnResult {
   return runSqliteWriteTransaction((db) => {
     const existing = db
-      .prepare(`SELECT id FROM session_inputs WHERE session_key = ? AND client_message_id = ?`)
-      .get(input.sessionKey, input.clientMessageId) as { id: string } | undefined;
+      .prepare(`SELECT id FROM session_inputs WHERE conversation_id = ? AND client_message_id = ?`)
+      .get(input.conversationId, input.clientMessageId) as { id: string } | undefined;
     if (existing) {
       return {
         ok: true,
@@ -106,33 +106,33 @@ export function replaceLatestSessionTurnAndQueueInput(
     }
 
     const session = db
-      .prepare(`SELECT session_id FROM sessions WHERE session_key = ?`)
-      .get(input.sessionKey) as { session_id: string } | undefined;
+      .prepare(`SELECT active_transcript_id AS transcript_id FROM sessions WHERE conversation_id = ?`)
+      .get(input.conversationId) as { transcript_id: string } | undefined;
     if (!session) return { ok: false, code: 'TARGET_NOT_FOUND' };
 
     db.prepare(
-      `INSERT INTO session_input_runtime(session_key, revision, updated_at_ms)
-       VALUES (?, 0, ?) ON CONFLICT(session_key) DO NOTHING`,
-    ).run(input.sessionKey, Date.now());
+      `INSERT INTO session_input_runtime(conversation_id, revision, updated_at_ms)
+       VALUES (?, 0, ?) ON CONFLICT(conversation_id) DO NOTHING`,
+    ).run(input.conversationId, Date.now());
 
     const runtime = db
-      .prepare(`SELECT active_run_id FROM session_input_runtime WHERE session_key = ?`)
-      .get(input.sessionKey) as { active_run_id: string | null } | undefined;
+      .prepare(`SELECT active_run_id FROM session_input_runtime WHERE conversation_id = ?`)
+      .get(input.conversationId) as { active_run_id: string | null } | undefined;
     const pending = db
       .prepare(
         `SELECT 1 AS found FROM session_inputs
-         WHERE session_key = ? AND status IN ('queued', 'running', 'injecting', 'interrupted')
+         WHERE conversation_id = ? AND status IN ('queued', 'running', 'injecting', 'interrupted')
          LIMIT 1`,
       )
-      .get(input.sessionKey) as { found: number } | undefined;
+      .get(input.conversationId) as { found: number } | undefined;
     if (runtime?.active_run_id || pending) return { ok: false, code: 'SESSION_BUSY' };
 
     const entries = db
       .prepare(
-        `SELECT entry_id, session_id, seq, entry_kind, role, payload_json, created_at
-         FROM transcript_entries WHERE session_id = ? ORDER BY seq ASC`,
+        `SELECT entry_id, transcript_id, seq, entry_kind, role, payload_json, created_at
+         FROM transcript_entries WHERE transcript_id = ? ORDER BY seq ASC`,
       )
-      .all(session.session_id) as TranscriptEntryRow[];
+      .all(session.transcript_id) as TranscriptEntryRow[];
     const rows = entries.map(transcriptEntryRowToStoredRow);
     const target = validateTargetRows(rows, input.targetTurnId);
     if (target.ok === false) return target;
@@ -161,32 +161,32 @@ export function replaceLatestSessionTurnAndQueueInput(
     const now = Date.now();
     db.prepare(
       `UPDATE sessions SET message_count = ?, estimated_tokens = ?, compacted_count = 0,
-       updated_at = ?, last_accessed_at = ?, last_interaction_at = ? WHERE session_key = ?`,
+       updated_at = ?, last_accessed_at = ?, last_interaction_at = ? WHERE conversation_id = ?`,
     ).run(
       llm.length,
       estimateTokensFromMessages(llm),
       now,
       now,
       now,
-      input.sessionKey,
+      input.conversationId,
     );
 
     const maxPosition = db
       .prepare(
         `SELECT COALESCE(MAX(position), 0) AS value FROM session_inputs
-         WHERE session_key = ? AND status IN ('queued', 'running', 'injecting', 'interrupted')`,
+         WHERE conversation_id = ? AND status IN ('queued', 'running', 'injecting', 'interrupted')`,
       )
-      .get(input.sessionKey) as { value: number };
+      .get(input.conversationId) as { value: number };
     const inputId = randomUUID();
     db.prepare(
-      `INSERT INTO session_inputs(id, session_key, client_message_id,
+      `INSERT INTO session_inputs(id, conversation_id, client_message_id,
        requested_delivery, effective_delivery, status, content, attachments_json,
        context_refs_json, context_snapshots_json, thinking, origin_json, position,
        target_run_id, version, created_at_ms, updated_at_ms)
        VALUES (?, ?, ?, 'next', 'next', 'queued', ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?)`,
     ).run(
       inputId,
-      input.sessionKey,
+      input.conversationId,
       input.clientMessageId,
       input.content,
       input.attachments ? JSON.stringify(input.attachments) : null,
@@ -200,8 +200,8 @@ export function replaceLatestSessionTurnAndQueueInput(
     );
     db.prepare(
       `UPDATE session_input_runtime SET revision = revision + 1, updated_at_ms = ?
-       WHERE session_key = ?`,
-    ).run(now, input.sessionKey);
+       WHERE conversation_id = ?`,
+    ).run(now, input.conversationId);
 
     return {
       ok: true,

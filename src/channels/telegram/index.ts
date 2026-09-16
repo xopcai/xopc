@@ -4,5 +4,5 @@
 
 export { telegramPlugin, defineChannelPluginEntry } from '../../../extensions/telegram/src/index.js';
 export type { TelegramAccount } from '../../../extensions/telegram/src/index.js';
-export { generateSessionKeyWithRouting } from '../../../extensions/telegram/src/routing-integration.js';
+export { generateConversationIdWithRouting } from '../../../extensions/telegram/src/routing-integration.js';
 export { normalizeTelegramDeliveryChatId } from '../../../extensions/telegram/src/delivery-chat-id.js';

@@ -56,10 +56,11 @@ export function ensureXopcDatabaseSchema(db: DatabaseSync, options: { databasePa
   ensureSchemaMetaTable(db);
 
   let currentVersion = readSchemaVersion(db);
+  const fresh = currentVersion === 0;
   if (currentVersion === 0) {
     bootstrapFreshDatabase(db);
     currentVersion = XOPC_DB_BASELINE_SCHEMA_VERSION;
   }
 
-  applyPendingMigrations(db, { targetVersion: XOPC_DB_SCHEMA_VERSION, databasePath: options.databasePath });
+  applyPendingMigrations(db, { targetVersion: XOPC_DB_SCHEMA_VERSION, databasePath: fresh ? undefined : options.databasePath });
 }

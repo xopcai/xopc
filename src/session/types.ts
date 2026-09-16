@@ -62,7 +62,7 @@ export interface SessionRoutingMeta {
   peerId: string;
   threadId?: string;
   scopeId?: string;
-  mainSessionKey?: string;
+  mainConversationId?: string;
   lastRoutePolicy?: 'main' | 'session';
 }
 
@@ -92,6 +92,7 @@ export type SessionType = 'chat' | 'workflow-run' | 'workflow-subagent' | 'cron'
 /** Session metadata (stored in index) */
 export interface SessionMetadata {
   key: string;
+  agentId: string;
   name?: string;
   status: SessionStatus;
   tags: string[];
@@ -118,13 +119,13 @@ export interface SessionMetadata {
    */
   sessionType: SessionType;
   hiddenFromSessionList?: boolean;
-  parentSessionKey?: string;
+  parentConversationId?: string;
   workflowRunId?: string;
   workflowDefinitionId?: string;
   workflowAgentId?: string;
   workflowAgentLabel?: string;
   /** Active OpenClaw-style session instance id. Rotates on reset while `key` stays stable. */
-  sessionId?: string;
+  transcriptId?: string;
   /** Workspace/cwd recorded for the active transcript. */
   cwd?: string;
   /** First activity time for this session row (ISO), from transcript header when available. */
@@ -164,7 +165,7 @@ export interface SessionListQuery extends SessionDiscoveryQuery {
   unassigned?: boolean;
   updatedAfter?: number;
   includePinned?: boolean;
-  includeSessionKey?: string;
+  includeConversationId?: string;
   sortBy?: 'updatedAt' | 'createdAt' | 'messageCount' | 'lastAccessedAt';
   sortOrder?: 'asc' | 'desc';
   limit?: number;

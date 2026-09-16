@@ -91,11 +91,11 @@ async function main() {
       try {
         unsubStream?.();
         unsubStream = undefined;
-        const { sessionKey } = await client.agent.sendMessage(agInput.value.trim() || 'Hi', {
+        const { conversationId } = await client.agent.sendMessage(agInput.value.trim() || 'Hi', {
           newSession: true,
         });
-        agLog.textContent += `sessionKey: ${sessionKey}\n`;
-        unsubStream = client.agent.onStreamEvent(sessionKey, (ev) => {
+        agLog.textContent += `conversationId: ${conversationId}\n`;
+        unsubStream = client.agent.onStreamEvent(conversationId, (ev) => {
           agLog.textContent += `${JSON.stringify(ev)}\n`;
           agLog.scrollTop = agLog.scrollHeight;
         });
@@ -120,7 +120,7 @@ async function main() {
   const sePre = pre('…', '100px');
   const skInput = document.createElement('input');
   skInput.type = 'text';
-  skInput.placeholder = 'sessionKey to open';
+  skInput.placeholder = 'conversationId to open';
   skInput.style.cssText =
     'width:100%;padding:6px 8px;border-radius:6px;border:1px solid rgba(127,127,127,.4);background:transparent;color:inherit;font-size:11px;';
   se.body.appendChild(
@@ -135,7 +135,7 @@ async function main() {
   );
   se.body.appendChild(skInput);
   se.body.appendChild(
-    btn('Navigate to sessionKey above', async () => {
+    btn('Navigate to conversationId above', async () => {
       const k = skInput.value.trim();
       if (!k) return;
       await client.session.navigateToSession(k);

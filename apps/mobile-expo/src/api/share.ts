@@ -23,7 +23,7 @@ export type ShareReachability = 'public' | 'lan' | 'local-only';
 export type ThumbnailStatus = 'ready' | 'pending' | 'unavailable';
 
 export type ShareAutoRequest = ({ fileId: string; path?: never } | { path: string; fileId?: never }) & {
-  sessionKey?: string;
+  conversationId?: string;
   agentId?: string;
   mode?: ShareAutoMode;
   audience?: ShareAudience;

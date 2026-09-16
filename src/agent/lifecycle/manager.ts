@@ -22,25 +22,25 @@ export class LifecycleManager {
 
   async emit<T>(
     eventType: LifecycleEventType,
-    sessionKey: string,
+    conversationId: string,
     payload: T,
     context: AgentContext
   ): Promise<void> {
     const handlers = this.handlers.get(eventType) || [];
     
     if (handlers.length === 0) {
-      logger.debug({ eventType, sessionKey }, 'No handlers registered for event');
+      logger.debug({ eventType, conversationId }, 'No handlers registered for event');
       return;
     }
 
     const event: LifecycleEventData<T> = {
       type: eventType,
-      sessionKey,
+      conversationId,
       payload,
       timestamp: Date.now(),
     };
 
-    logger.debug({ eventType, sessionKey, handlerCount: handlers.length }, 'Emitting lifecycle event');
+    logger.debug({ eventType, conversationId, handlerCount: handlers.length }, 'Emitting lifecycle event');
 
     const results = await Promise.allSettled(
       handlers.map(async (handler) => {

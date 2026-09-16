@@ -129,7 +129,7 @@ function appendMediaAttachedLines(textParts: string[], media: MediaRef[]): void 
 
 async function expandUserText(
   text: string,
-  sessionKey: string,
+  conversationId: string,
   agentManager: AgentInstanceGateway,
 ): Promise<string> {
   if (!text.trim()) {
@@ -137,8 +137,7 @@ async function expandUserText(
   }
   let out = text;
   if (/@file:/.test(out)) {
-    const wsKey = sessionKey || 'agent:main:main';
-    const root = agentManager.getResolvedWorkspaceForSession(wsKey);
+    const root = agentManager.getResolvedWorkspaceForSession(conversationId);
     out = await expandAtFileMentionsInPlainText(out, root);
   }
   return out.trim();
@@ -150,12 +149,12 @@ async function expandUserText(
 export async function buildTranscriptUserMessage(opts: {
   text: string;
   prepared: MediaRef[] | undefined;
-  sessionKey: string;
+  conversationId: string;
   modelRef: string;
   config: Config | undefined;
   agentManager: AgentInstanceGateway;
 }): Promise<TranscriptUserMessage> {
-  const expandedText = await expandUserText(opts.text, opts.sessionKey, opts.agentManager);
+  const expandedText = await expandUserText(opts.text, opts.conversationId, opts.agentManager);
   const prepared = opts.prepared ?? [];
   const imageRefs = prepared.filter(isImageInboundAttachment);
 
@@ -170,7 +169,7 @@ export async function buildTranscriptUserMessage(opts: {
 
   if (imageRefs.length > 0 && strategy !== 'native') {
     const images = await Promise.all(imageRefs.map((ref) => readImageBase64FromRef(ref)));
-    const agentId = opts.config ? extractProfileAgentId(opts.sessionKey, opts.config) : undefined;
+    const agentId = opts.config ? extractProfileAgentId(opts.conversationId, opts.config) : undefined;
     const parts = await resolveInboundImageContentParts({
       modelRef: opts.modelRef,
       cfg: opts.config,
@@ -245,50 +244,50 @@ function pendingMatchesMessage(pending: TranscriptUserMessage, message: AgentMes
       || pendingUserText.includes(actualUserText));
 }
 
-export function setPendingTranscriptUserMessage(sessionKey: string, message: TranscriptUserMessage): void {
+export function setPendingTranscriptUserMessage(conversationId: string, message: TranscriptUserMessage): void {
   assertTranscriptUserMessage(message);
-  pendingTranscriptBySession.set(sessionKey, message);
+  pendingTranscriptBySession.set(conversationId, message);
 }
 
-export function getPendingTranscriptUserText(sessionKey: string): string | undefined {
-  const message = pendingTranscriptBySession.get(sessionKey);
+export function getPendingTranscriptUserText(conversationId: string): string | undefined {
+  const message = pendingTranscriptBySession.get(conversationId);
   if (!message) return undefined;
   return stripRuntimeUserMessageEnvelope(messageTextForPendingCompare(message)).trim();
 }
 
-export function takePendingTranscriptUserMessage(sessionKey: string): TranscriptUserMessage | undefined {
-  const msg = pendingTranscriptBySession.get(sessionKey);
-  pendingTranscriptBySession.delete(sessionKey);
+export function takePendingTranscriptUserMessage(conversationId: string): TranscriptUserMessage | undefined {
+  const msg = pendingTranscriptBySession.get(conversationId);
+  pendingTranscriptBySession.delete(conversationId);
   return msg;
 }
 
-export function clearPendingTranscriptUserMessage(sessionKey: string, message?: TranscriptUserMessage): void {
-  const existing = pendingTranscriptBySession.get(sessionKey);
+export function clearPendingTranscriptUserMessage(conversationId: string, message?: TranscriptUserMessage): void {
+  const existing = pendingTranscriptBySession.get(conversationId);
   if (!existing) {
     return;
   }
   if (message && existing !== message) {
     return;
   }
-  pendingTranscriptBySession.delete(sessionKey);
+  pendingTranscriptBySession.delete(conversationId);
 }
 
-export function pendingTranscriptReferencesMediaUri(sessionKey: string, uri: string): boolean {
-  const pending = pendingTranscriptBySession.get(sessionKey);
+export function pendingTranscriptReferencesMediaUri(conversationId: string, uri: string): boolean {
+  const pending = pendingTranscriptBySession.get(conversationId);
   return pending?.media?.some((ref) => ref.uri === uri.trim()) === true;
 }
 
 export function transformUserMessageForPersistence(
-  sessionKey: string | undefined,
+  conversationId: string | undefined,
   message: AgentMessage,
 ): AgentMessage {
   if ((message as { role?: string }).role !== 'user') {
     return message;
   }
-  if (sessionKey) {
-    const pending = pendingTranscriptBySession.get(sessionKey);
+  if (conversationId) {
+    const pending = pendingTranscriptBySession.get(conversationId);
     if (pending && pendingMatchesMessage(pending, message)) {
-      pendingTranscriptBySession.delete(sessionKey);
+      pendingTranscriptBySession.delete(conversationId);
       return pending;
     }
   }

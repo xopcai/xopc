@@ -8,11 +8,11 @@ import { savedContentRoute } from '../save-navigation';
 
 describe('content chat intake handoff', () => {
   it('only consumes matching session intake once', () => {
-    setContentChatIntake({ sessionKey: 'agent:one', text: 'Explore this', prompt: 'Prompt', source: 'clipboard' });
+    setContentChatIntake({ conversationId: 'agent:one', text: 'Explore this', prompt: 'Prompt', source: 'clipboard' });
 
     expect(consumeContentChatIntake('agent:two')).toBeNull();
     expect(consumeContentChatIntake('agent:one')).toEqual({
-      sessionKey: 'agent:one',
+      conversationId: 'agent:one',
       text: 'Explore this',
       prompt: 'Prompt',
       source: 'clipboard',
@@ -21,12 +21,12 @@ describe('content chat intake handoff', () => {
   });
 
   it('keeps only the latest pending chat intake', () => {
-    setContentChatIntake({ sessionKey: 'agent:old', text: 'Old', prompt: 'Old prompt', source: 'clipboard' });
-    setContentChatIntake({ sessionKey: 'agent:new', text: 'New', prompt: 'New prompt', source: 'share' });
+    setContentChatIntake({ conversationId: 'agent:old', text: 'Old', prompt: 'Old prompt', source: 'clipboard' });
+    setContentChatIntake({ conversationId: 'agent:new', text: 'New', prompt: 'New prompt', source: 'share' });
 
     expect(consumeContentChatIntake('agent:old')).toBeNull();
     expect(consumeContentChatIntake('agent:new')).toEqual({
-      sessionKey: 'agent:new',
+      conversationId: 'agent:new',
       text: 'New',
       prompt: 'New prompt',
       source: 'share',

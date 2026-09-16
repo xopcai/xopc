@@ -37,14 +37,14 @@ describe('public Session share routes', () => {
   });
 
   it('serves the immutable public projection and consumes only POST views', async () => {
-    const sessionId = 'public-session-1';
+    const transcriptId = 'public-session-1';
     const metadata: SessionMetadata = {
       key: 'session-key', name: 'Shared conversation', status: SessionStatus.ACTIVE, tags: [],
       createdAt: '2024-01-01T00:00:00.000Z', updatedAt: '2024-01-01T00:00:00.000Z', lastAccessedAt: '2024-01-01T00:00:00.000Z',
-      messageCount: 2, estimatedTokens: 2, compactedCount: 0, sourceChannel: 'webchat', sourceChatId: 'private', sessionType: 'chat', sessionId,
+      messageCount: 2, estimatedTokens: 2, compactedCount: 0, sourceChannel: 'webchat', sourceChatId: 'private', sessionType: 'chat', transcriptId,
     };
     const snapshot = {
-      sessionId,
+      transcriptId,
       lastSeq: 2,
       entries: [
         { entryId: 'one', seq: 1, createdAt: 1, row: {
@@ -65,7 +65,7 @@ describe('public Session share routes', () => {
     });
     const preview = await sessionShares.preview(metadata.key);
     const record = await sessionShares.create(metadata.key, {
-      expectedSessionId: sessionId,
+      expectedTranscriptId: transcriptId,
       expectedCutoffSeq: 2,
       expectedMetadataUpdatedAt: metadata.updatedAt,
       gatewayTokenHash: 'hash',

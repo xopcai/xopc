@@ -27,7 +27,7 @@ export function NotesHomePage() {
   const language = useLocaleStore((s) => s.language);
   const n = messages(language).notes;
   const h = n.home;
-  const token = useGatewayStore((s) => s.sessionKey);
+  const token = useGatewayStore((s) => s.conversationId);
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
   const navigate = useNavigate();

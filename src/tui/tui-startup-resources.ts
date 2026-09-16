@@ -22,15 +22,15 @@ function uniqueSorted(values: Iterable<string>): string[] {
 
 export function collectTuiStartupResources(
   config: Config,
-  sessionKey?: string,
+  conversationId?: string,
   options: { isWorkspaceTrusted?: (workspaceDir: string) => boolean } = {},
 ): TuiStartupResources {
-  const profile = resolveEffectiveAgentProfileForSession(config, sessionKey);
+  const profile = resolveEffectiveAgentProfileForSession(config, conversationId);
   const profileDir = resolveAgentProfileDir(config, profile.agentId);
   const workspaceDir = profile.resolvedWorkspacePath || getWorkspacePath(config);
 
   const context = uniqueSorted(
-    resolveBootstrapFilesSync({ profileDir, sessionKey })
+    resolveBootstrapFilesSync({ profileDir, conversationId })
       .filter((file) => !file.missing)
       .map((file) => file.name || basename(file.path)),
   );

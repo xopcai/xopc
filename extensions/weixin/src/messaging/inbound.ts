@@ -38,7 +38,7 @@ function parsePersistedPeerVal(val: unknown): WeixinContextTokenEntry | null {
 }
 
 /**
- * Session keys use {@link canonicalWeixinPeerId} (same as `buildSessionKey`); cron `delivery.to`
+ * Session keys use {@link canonicalWeixinPeerId} (same as `resolveConversationId`); cron `delivery.to`
  * and outbound `ctx.to` use that shape. ilink `from_user_id` is often `…@im.wechat` while the
  * session peer is `…-im-wechat`. Normalize so context_token cache keys match lookups.
  */
@@ -319,7 +319,7 @@ export type WeixinMsgContext = {
   Provider: "weixin";
   ChatType: "direct";
   /** Set by monitor after resolveAgentRoute so dispatchReplyFromConfig uses the correct session. */
-  SessionKey?: string;
+  ConversationId?: string;
   context_token?: string;
   MediaUrl?: string;
   MediaPath?: string;

@@ -6,8 +6,8 @@ export function findCommand(value: string, cursor: number) {
   const match = /(?:^|\s)\/([\w.-]*)$/.exec(value.slice(0, cursor));
   return match ? { start: cursor - match[1].length - 1, end: cursor, query: match[1] } : undefined;
 }
-export async function loadComposerCommands(sessionKey?: string): Promise<ComposerCommand[]> {
-  const params = new URLSearchParams(sessionKey ? { sessionKey } : {});
+export async function loadComposerCommands(conversationId?: string): Promise<ComposerCommand[]> {
+  const params = new URLSearchParams(conversationId ? { conversationId } : {});
   const responses = await Promise.all([
     gatewayFetch('/api/commands'), gatewayFetch(`/api/chat/skills?${params}`),
   ]);

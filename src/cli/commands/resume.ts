@@ -6,7 +6,7 @@ import { prepareTuiStartup, runTuiFromCliOptions, type TuiCliOptions } from './t
 function createResumeCommand(ctx: CLIContext): Command {
   return new Command('resume')
     .description('Resume a previous TUI session')
-    .argument('[sessionKey]', 'Session key to resume directly')
+    .argument('[conversationId]', 'Session key to resume directly')
     .addHelpText(
       'after',
       formatExamples([
@@ -24,11 +24,11 @@ function createResumeCommand(ctx: CLIContext): Command {
     .option('--gateway', 'Force gateway mode even without an explicit URL or credential')
     .option('--theme <name>', 'Theme: auto, dark, light, or custom name from ~/.xopc/themes/')
     .option('--thinking <level>', 'Thinking level override')
-    .action(async (sessionKey: string | undefined, options: TuiCliOptions) => {
+    .action(async (conversationId: string | undefined, options: TuiCliOptions) => {
       prepareTuiStartup(ctx.configPath);
       await runTuiFromCliOptions(options, {
-        session: sessionKey,
-        openSessionPickerOnStart: sessionKey === undefined,
+        session: conversationId,
+        openSessionPickerOnStart: conversationId === undefined,
       });
     });
 }

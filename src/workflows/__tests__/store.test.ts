@@ -21,7 +21,7 @@ function createRun(runId: string, createdAtMs: number, projectId?: string): Work
     status: 'queued',
     source: { kind: 'webui' },
     metadata: {
-      sessionKey: `agent:main:webchat:default:direct:wf_${runId}`,
+      conversationId: `agent:main:webchat:default:direct:wf_${runId}`,
       triggerSource: 'webui',
       agentId: 'main',
       ...(projectId ? { projectId } : {}),

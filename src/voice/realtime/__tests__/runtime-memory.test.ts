@@ -19,7 +19,7 @@ describe('native voice memory lifecycle', () => {
   let server: Server;
   let socket: WebSocket;
   let events: VoiceServerEvent[];
-  const sessionKey = 'agent:main:webchat:default:direct:test';
+  const conversationId = 'agent:main:webchat:default:direct:test';
   afterEach(async () => {
     socket?.terminate(); runtime?.close();
     if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -34,7 +34,7 @@ describe('native voice memory lifecycle', () => {
       agentBroker: { delegate: vi.fn(), cancel: vi.fn(async () => true) } });
     server = createServer(); server.on('upgrade', (request, client, head) => runtime.handleUpgrade(request, client as Socket, head));
     server.listen(0, '127.0.0.1'); await once(server, 'listening');
-    const session = await runtime.createSession({ purpose: 'conversation', mode: 'natural', sessionKey,
+    const session = await runtime.createSession({ purpose: 'conversation', mode: 'natural', conversationId,
       supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] }, 'owner');
     socket = new WebSocket(`ws://127.0.0.1:${(server.address() as AddressInfo).port}${session.websocketPath}`);
     socket.on('message', (data) => events.push(parseVoiceServerEvent(JSON.parse(data.toString()))));
@@ -56,7 +56,7 @@ describe('native voice memory lifecycle', () => {
     await closed;
     expect(engine.close).toHaveBeenCalledOnce();
     expect(events).toContainEqual(expect.objectContaining({ type: 'session.error', payload: expect.objectContaining({ code: 'CONTEXT_CHANGED' }) }));
-    expect(runtime.hasConversation(sessionKey)).toBe(false);
+    expect(runtime.hasConversation(conversationId)).toBe(false);
     notifyUserContextChange({ kind: 'policy' }); await Promise.resolve();
     expect(engine.close).toHaveBeenCalledOnce();
   });
@@ -74,7 +74,7 @@ describe('native voice memory lifecycle', () => {
     notifyUserContextChange({ kind: 'policy' }); await Promise.resolve();
     expect(engine.close).not.toHaveBeenCalled();
     const closed = once(socket, 'close');
-    notifyUserContextChange({ kind: 'session-reset', id: sessionKey }); await closed;
+    notifyUserContextChange({ kind: 'session-reset', id: conversationId }); await closed;
     expect(engine.close).toHaveBeenCalledOnce();
   });
 

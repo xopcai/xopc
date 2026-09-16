@@ -8,13 +8,13 @@
 import { describe, it, expect } from 'vitest';
 import type { Config } from '../../config/schema.js';
 import {
-  buildSessionKey,
-  parseSessionKey,
+  resolveConversationId,
+  getConversationRouting,
   resolveBindingRoute,
   type BindingRule,
   type RouteContext,
 } from '../index.js';
-import { generateSessionKeyWithRouting } from '../../channels/telegram/index.js';
+import { generateConversationIdWithRouting } from '../../channels/telegram/index.js';
 describe('Routing E2E', () => {
   describe('Complete Message Flow', () => {
     it('should route Telegram DM message correctly', () => {
@@ -26,7 +26,7 @@ describe('Routing E2E', () => {
         },
       };
 
-      const sessionKey = generateSessionKeyWithRouting(
+      const conversationId = generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: '123456',
@@ -37,7 +37,7 @@ describe('Routing E2E', () => {
       );
 
       // Verify session key format
-      const parsed = parseSessionKey(sessionKey);
+      const parsed = getConversationRouting(conversationId);
       expect(parsed).toBeTruthy();
       expect(parsed?.agentId).toBe('main');
       expect(parsed?.source).toBe('telegram');
@@ -80,7 +80,7 @@ describe('Routing E2E', () => {
         },
       };
 
-      const sessionKey = generateSessionKeyWithRouting(
+      const conversationId = generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: '-1001234567',
@@ -90,7 +90,7 @@ describe('Routing E2E', () => {
         config
       );
 
-      const parsed = parseSessionKey(sessionKey);
+      const parsed = getConversationRouting(conversationId);
       expect(parsed?.agentId).toBe('researcher');
       expect(parsed?.peerKind).toBe('group');
       expect(parsed?.peerId).toBe('-1001234567');
@@ -113,7 +113,7 @@ describe('Routing E2E', () => {
       };
 
       // Telegram message from Alice
-      const tgSessionKey = generateSessionKeyWithRouting(
+      const tgConversationId = generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: '123456',
@@ -124,7 +124,7 @@ describe('Routing E2E', () => {
       );
 
       // Discord message from Alice
-      const discordSessionKey = generateSessionKeyWithRouting(
+      const discordConversationId = generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: '555555',
@@ -136,14 +136,15 @@ describe('Routing E2E', () => {
       );
 
       // Both should resolve to canonical name 'alice'
-      const tgParsed = parseSessionKey(tgSessionKey);
-      const discordParsed = parseSessionKey(discordSessionKey);
+      const tgParsed = getConversationRouting(tgConversationId);
+      const discordParsed = getConversationRouting(discordConversationId);
 
       expect(tgParsed?.peerId).toBe('alice');
       expect(discordParsed?.peerId).toBe('alice');
 
       // Different sources, same user
       expect(tgParsed?.source).toBe('telegram');
+      expect(discordConversationId).not.toBe(tgConversationId);
       expect(discordParsed?.source).toBe('discord');
     });
 
@@ -166,7 +167,7 @@ describe('Routing E2E', () => {
       };
 
       // Personal account
-      const personalKey = generateSessionKeyWithRouting(
+      const personalKey = generateConversationIdWithRouting(
         {
           accountId: 'acc_personal',
           chatId: '123456',
@@ -177,7 +178,7 @@ describe('Routing E2E', () => {
       );
 
       // Work account
-      const workKey = generateSessionKeyWithRouting(
+      const workKey = generateConversationIdWithRouting(
         {
           accountId: 'acc_work',
           chatId: '123456',
@@ -187,8 +188,8 @@ describe('Routing E2E', () => {
         config
       );
 
-      const personalParsed = parseSessionKey(personalKey);
-      const workParsed = parseSessionKey(workKey);
+      const personalParsed = getConversationRouting(personalKey);
+      const workParsed = getConversationRouting(workKey);
 
       // Different agents
       expect(personalParsed?.agentId).toBe('main');
@@ -208,7 +209,7 @@ describe('Routing E2E', () => {
         },
       };
 
-      const sessionKey = generateSessionKeyWithRouting(
+      const conversationId = generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: '-1001234567',
@@ -219,9 +220,9 @@ describe('Routing E2E', () => {
         config
       );
 
-      expect(sessionKey).toContain(':thread:999');
+      expect(getConversationRouting(conversationId)?.threadId).toBe('999');
 
-      const parsed = parseSessionKey(sessionKey);
+      const parsed = getConversationRouting(conversationId);
       expect(parsed?.threadId).toBe('999');
     });
   });
@@ -341,13 +342,13 @@ describe('Routing E2E', () => {
         scopeId: 'project-a',
       };
 
-      const sessionKey = buildSessionKey(original);
-      const parsed = parseSessionKey(sessionKey);
+      const conversationId = resolveConversationId(original);
+      const parsed = getConversationRouting(conversationId);
 
       expect(parsed?.agentId).toBe(original.agentId);
       expect(parsed?.source).toBe(original.source);
       // Group keys omit account segment in agent:{id}:{channel}:group:{peer} form.
-      expect(parsed?.accountId).toBe('default');
+      expect(parsed?.accountId).toBe('acc_work');
       expect(parsed?.peerKind).toBe(original.peerKind);
       expect(parsed?.peerId).toBe(original.peerId);
       expect(parsed?.threadId).toBeUndefined();
@@ -355,7 +356,7 @@ describe('Routing E2E', () => {
     });
 
     it('should handle optional fields', () => {
-      const sessionKey = buildSessionKey({
+      const conversationId = resolveConversationId({
         agentId: 'main',
         source: 'telegram',
         accountId: '_',
@@ -363,7 +364,7 @@ describe('Routing E2E', () => {
         peerId: '123456',
       });
 
-      const parsed = parseSessionKey(sessionKey);
+      const parsed = getConversationRouting(conversationId);
       expect(parsed?.threadId).toBeUndefined();
       expect(parsed?.scopeId).toBeUndefined();
     });
@@ -377,7 +378,7 @@ describe('Routing E2E', () => {
         session: { dmScope: 'per-peer' },
       };
 
-      const sessionKey = generateSessionKeyWithRouting(
+      const conversationId = generateConversationIdWithRouting(
         {
           accountId: 'acc_default',
           chatId: '123456',
@@ -387,11 +388,11 @@ describe('Routing E2E', () => {
         config
       );
 
-      expect(sessionKey).toMatch(/^agent:main:telegram:acc_default:direct:789012$/);
+      expect(getConversationRouting(conversationId)).toMatchObject({ agentId: 'main', source: 'telegram', accountId: 'acc_default', peerId: '789012' });
     });
 
     it('should handle missing accountId', () => {
-      const sessionKey = buildSessionKey({
+      const conversationId = resolveConversationId({
         agentId: 'main',
         source: 'telegram',
         accountId: null,
@@ -400,25 +401,16 @@ describe('Routing E2E', () => {
       });
 
       // sanitizeSegment returns 'default' for null/empty accountId
-      expect(sessionKey).toContain(':default:direct:');
+      expect(getConversationRouting(conversationId)?.accountId).toBe('default');
     });
 
-    it('should sanitize invalid characters', () => {
-      const sessionKey = buildSessionKey({
-        agentId: 'Main Agent!',
-        source: 'telegram',
-        accountId: '_',
-        peerKind: 'dm',
-        peerId: '123',
-      });
-
-      // Should sanitize to valid format
-      expect(sessionKey).toMatch(/^[a-z0-9_-]+:/);
+    it('rejects invalid agent identities instead of silently rewriting them', () => {
+      expect(() => resolveConversationId({ agentId: 'Main Agent!', source: 'telegram', peerKind: 'dm', peerId: '123' })).toThrow();
     });
 
     it('should handle very long peer IDs', () => {
       const longPeerId = 'a'.repeat(100);
-      const sessionKey = buildSessionKey({
+      const conversationId = resolveConversationId({
         agentId: 'main',
         source: 'telegram',
         accountId: '_',
@@ -426,7 +418,7 @@ describe('Routing E2E', () => {
         peerId: longPeerId,
       });
 
-      const parsed = parseSessionKey(sessionKey);
+      const parsed = getConversationRouting(conversationId);
       expect(parsed?.peerId).toBe(longPeerId);
     });
   });

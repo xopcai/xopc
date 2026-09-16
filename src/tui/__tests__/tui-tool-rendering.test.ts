@@ -706,8 +706,8 @@ describe('tui tool renderers', () => {
     const keybindings = new XopcKeybindingsManager({ 'app.tools.expand': 'x' });
     const component = new BranchSummaryComponent(
       {
-        sourceSessionKey: 'agent:main:main',
-        targetSessionKey: 'agent:main:fork-1',
+        sourceConversationId: 'agent:main:main',
+        targetConversationId: 'agent:main:fork-1',
         rowCount: 12,
         entryId: 'row-4',
         restoredText: 'Continue from here',
@@ -731,8 +731,8 @@ describe('tui tool renderers', () => {
   it('propagates tool expansion to branch summaries in chat log', () => {
     const chatLog = new ChatLog(new XopcKeybindingsManager({ 'app.tools.expand': 'x' }));
     chatLog.addBranchSummary({
-      sourceSessionKey: 'agent:main:main',
-      targetSessionKey: 'agent:main:fork-1',
+      sourceConversationId: 'agent:main:main',
+      targetConversationId: 'agent:main:fork-1',
       rowCount: 3,
       restoredText: 'branch input',
     });

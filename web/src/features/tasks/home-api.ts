@@ -33,7 +33,7 @@ export async function fetchTask(taskId: string): Promise<TaskDetail> {
 
 export async function ensureTaskConversation(taskId: string): Promise<{
   ok: true;
-  sessionKey: string;
+  conversationId: string;
   agentId: string;
   created: boolean;
 }> {
@@ -190,7 +190,7 @@ export function feedbackAgentJudgment(itemId: string, rating: 'useful' | 'not_us
 
 export function retryWorkAttention(
   item: Pick<HomeAttention, 'kind' | 'runId'>,
-): Promise<{ ok: true; runId: string; sessionKey?: string }> {
+): Promise<{ ok: true; runId: string; conversationId?: string }> {
   return fetchJson(apiUrl('/api/home/attention/retry'), {
     method: 'POST',
     body: JSON.stringify(item),

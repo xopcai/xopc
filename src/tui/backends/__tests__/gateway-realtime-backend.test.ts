@@ -9,20 +9,20 @@ describe('GatewayRealtimeBackend', () => {
     const backend = new GatewayRealtimeBackend({ url: 'http://127.0.0.1:19777' });
     const resumeChat = vi.spyOn(backend, 'resumeChat').mockResolvedValue(undefined);
     const internals = backend as unknown as {
-      observedSessionKey: string;
+      observedConversationId: string;
       handleRealtimeEvent(event: RealtimeEventPayload): void;
     };
-    internals.observedSessionKey = 'agent:main:web:chat-1';
+    internals.observedConversationId = 'agent:main:web:chat-1';
 
     internals.handleRealtimeEvent({
       topic: 'sessions',
       seq: 1,
       event: 'run.started',
-      data: { sessionKey: 'agent:main:web:chat-1', runId: 'run-2' },
+      data: { conversationId: 'agent:main:web:chat-1', runId: 'run-2' },
     });
 
     expect(resumeChat).toHaveBeenCalledWith({
-      sessionKey: 'agent:main:web:chat-1',
+      conversationId: 'agent:main:web:chat-1',
       runId: 'run-2',
     });
   });

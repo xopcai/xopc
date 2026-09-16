@@ -42,7 +42,7 @@ function visibility(options: KnowledgeToolOptions) {
   return {
     agentId: options.agentId,
     workspaceId: options.workspaceId,
-    sessionId: options.getSessionId() ?? '',
+    conversationId: options.getSessionId() ?? '',
     ...(projectId ? { projectId } : {}),
   };
 }
@@ -135,7 +135,7 @@ export function createKnowledgeWriteTool(options: KnowledgeToolOptions): AgentTo
         importance: input.importance ?? 0.5,
         originClass: 'agent',
         sourceAgentId: options.agentId,
-        ...(sessionId ? { sourceSessionId: sessionId } : {}),
+        ...(sessionId ? { sourceConversationId: sessionId } : {}),
         source: { tool: 'knowledge_write' },
       });
       const details = { ...result, writePolicy };

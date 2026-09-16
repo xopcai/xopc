@@ -34,7 +34,7 @@ export type ShareItem = {
   sourceVersion?: number;
   snapshotRevision?: number;
   attachmentCount?: number;
-  sourceSessionId?: string;
+  sourceTranscriptId?: string;
   cutoffSeq?: number;
   messageCount?: number;
 };
@@ -54,7 +54,7 @@ export type CreateShareParams = (
   ttlMs?: number;
   maxViews?: number | null;
   description?: string;
-  sessionKey?: string;
+  conversationId?: string;
   agentId?: string;
   kind?: Exclude<ShareKind, 'note' | 'session'>;
   directoryMode?: 'browse' | 'zip-only';
@@ -155,7 +155,7 @@ export async function createHostedStaticSite(input: {
   ttlMs?: number;
   maxViews?: number | null;
   spaFallback?: boolean;
-  sessionKey?: string;
+  conversationId?: string;
   agentId?: string;
 }): Promise<Omit<HostedPublicationItem, 'shareUrl'> & { shareUrl: string; fileCount: number; totalBytes: number }> {
   return (await fetchJson<{ ok: true; payload: Omit<HostedPublicationItem, 'shareUrl'> & { shareUrl: string; fileCount: number; totalBytes: number } }>(
@@ -238,7 +238,7 @@ export type SessionShareAttachmentCandidate = {
 };
 
 export type SessionSharePreview = {
-  sessionId: string;
+  transcriptId: string;
   cutoffSeq: number;
   metadataUpdatedAt: string;
   title: string;
@@ -275,23 +275,23 @@ export type SessionShareListItem = SessionShareResult & {
   cutoffSeq: number;
 };
 
-export async function fetchSessionSharePreview(sessionKey: string): Promise<SessionSharePreview> {
+export async function fetchSessionSharePreview(conversationId: string): Promise<SessionSharePreview> {
   const response = await fetchJson<{ ok: true; payload: SessionSharePreview }>(
-    apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/share-preview`),
+    apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}/share-preview`),
   );
   return response.payload;
 }
 
-export async function fetchSessionShares(sessionKey: string): Promise<SessionShareListItem[]> {
+export async function fetchSessionShares(conversationId: string): Promise<SessionShareListItem[]> {
   const response = await fetchJson<{ ok: true; payload: { shares: SessionShareListItem[] } }>(
-    apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/shares`),
+    apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}/shares`),
   );
   return response.payload.shares;
 }
 
-export async function fetchHostedSessionShares(sessionKey: string): Promise<SessionShareListItem[]> {
+export async function fetchHostedSessionShares(conversationId: string): Promise<SessionShareListItem[]> {
   const response = await fetchJson<{ ok: true; payload: { shares: SessionShareListItem[] } }>(
-    apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/hosted-shares`),
+    apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}/hosted-shares`),
   );
   return response.payload.shares;
 }
@@ -304,9 +304,9 @@ export async function fetchHostedShareAuthStatus(): Promise<boolean> {
 }
 
 export async function createSessionShare(
-  sessionKey: string,
+  conversationId: string,
   input: {
-    expectedSessionId: string;
+    expectedTranscriptId: string;
     expectedCutoffSeq: number;
     expectedMetadataUpdatedAt: string;
     ttlMs: number;
@@ -317,28 +317,28 @@ export async function createSessionShare(
   },
 ): Promise<SessionShareResult> {
   const response = await fetchJson<{ ok: true; payload: SessionShareResult }>(
-    apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/shares`),
+    apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}/shares`),
     { method: 'POST', body: JSON.stringify(input) },
   );
   return response.payload;
 }
 
 export async function createHostedSessionShare(
-  sessionKey: string,
+  conversationId: string,
   input: Parameters<typeof createSessionShare>[1],
 ): Promise<SessionShareResult> {
   const response = await fetchJson<{ ok: true; payload: SessionShareResult }>(
-    apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/hosted-shares`),
+    apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}/hosted-shares`),
     { method: 'POST', body: JSON.stringify(input) },
   );
   return response.payload;
 }
 
 export async function refreshSessionShare(
-  sessionKey: string,
+  conversationId: string,
   shareId: string,
   input: {
-    expectedSessionId: string;
+    expectedTranscriptId: string;
     expectedCutoffSeq: number;
     expectedMetadataUpdatedAt: string;
     includeToolActivities?: boolean;
@@ -346,27 +346,27 @@ export async function refreshSessionShare(
   },
 ): Promise<SessionShareResult> {
   const response = await fetchJson<{ ok: true; payload: SessionShareResult }>(
-    apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/shares/${encodeURIComponent(shareId)}/refresh`),
+    apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}/shares/${encodeURIComponent(shareId)}/refresh`),
     { method: 'POST', body: JSON.stringify(input) },
   );
   return response.payload;
 }
 
 export async function refreshHostedSessionShare(
-  sessionKey: string,
+  conversationId: string,
   shareId: string,
   input: Parameters<typeof refreshSessionShare>[2],
 ): Promise<SessionShareResult> {
   const response = await fetchJson<{ ok: true; payload: SessionShareResult }>(
-    apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/hosted-shares/${encodeURIComponent(shareId)}/refresh`),
+    apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}/hosted-shares/${encodeURIComponent(shareId)}/refresh`),
     { method: 'POST', body: JSON.stringify(input) },
   );
   return response.payload;
 }
 
-export async function revokeHostedSessionShare(sessionKey: string, shareId: string): Promise<void> {
+export async function revokeHostedSessionShare(conversationId: string, shareId: string): Promise<void> {
   await fetchJson(
-    apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/hosted-shares/${encodeURIComponent(shareId)}`),
+    apiUrl(`/api/sessions/${encodeURIComponent(conversationId)}/hosted-shares/${encodeURIComponent(shareId)}`),
     { method: 'DELETE' },
   );
 }

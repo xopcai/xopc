@@ -21,7 +21,7 @@ type NavigationItem = { icon: string; label: string; route: string; count?: numb
 export const ChatNavigationSheet = memo(function ChatNavigationSheet({
   visible,
   onDismiss,
-  currentSessionKey,
+  currentConversationId,
   recentSessions,
   attentionCount,
   onSessionSelect,
@@ -29,10 +29,10 @@ export const ChatNavigationSheet = memo(function ChatNavigationSheet({
 }: {
   visible: boolean;
   onDismiss: () => void;
-  currentSessionKey: string;
+  currentConversationId: string;
   recentSessions: SessionListItem[];
   attentionCount: number;
-  onSessionSelect: (sessionKey: string) => void;
+  onSessionSelect: (conversationId: string) => void;
   onNewChat: () => void;
 }) {
   const router = useRouter();
@@ -48,9 +48,9 @@ export const ChatNavigationSheet = memo(function ChatNavigationSheet({
     router.push(route as never);
   }, [onDismiss, router]);
 
-  const chooseSession = useCallback((sessionKey: string) => {
+  const chooseSession = useCallback((conversationId: string) => {
     onDismiss();
-    onSessionSelect(sessionKey);
+    onSessionSelect(conversationId);
   }, [onDismiss, onSessionSelect]);
 
   const startNewChat = useCallback(() => {
@@ -124,7 +124,7 @@ export const ChatNavigationSheet = memo(function ChatNavigationSheet({
             <Text style={[styles.sectionLabel, { color: colors.text.tertiary }]}>{copy.recentChats}</Text>
             <View style={[styles.group, { backgroundColor: colors.surface.panel, borderColor: colors.border.subtle }]}>
               {recentSessions.slice(0, 5).map((session) => {
-                const current = session.key === currentSessionKey;
+                const current = session.key === currentConversationId;
                 return (
                   <Pressable
                     key={session.key}
