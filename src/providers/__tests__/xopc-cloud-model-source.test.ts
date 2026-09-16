@@ -1,8 +1,14 @@
+import { voiceFixture } from '../../voice/__tests__/voice-fixture.js';
 import { describe, expect, it, vi } from 'vitest';
 
 import { XopcCloudModelError, XopcCloudModelSource } from '../xopc-cloud-model-source.js';
 
 describe('XopcCloudModelSource', () => {
+  it('discovers a new conversation service without a vendor allowlist', async () => {
+    const voice = voiceFixture(['conversation']);
+    const source = new XopcCloudModelSource({credentials:{resolveApiKey:async () => 'token'},fetchImpl:async () => Response.json({data:[{id:'future-vendor',xopc:{kind:'omni',voice,capabilities:{input:['audio'],output:['audio','text']}}}]})});
+    await expect(source.fetch()).resolves.toMatchObject({status:'fetched',models:[{id:'future-vendor',kind:'omni',operations:['audio.conversation'],voice}]});
+  });
   it('retains localized names and public IDs, falling back for old catalogs', async () => {
     const source = new XopcCloudModelSource({
       credentials: { resolveApiKey: async () => 'token' },

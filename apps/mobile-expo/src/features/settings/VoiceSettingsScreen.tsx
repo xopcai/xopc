@@ -1,3 +1,4 @@
+import { VoiceModelSettings } from './VoiceModelSettings';
 import { useEffect, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { Switch, Text } from 'react-native-paper';
@@ -49,6 +50,7 @@ export function VoiceSettingsScreen() {
         <SettingsRow icon="closed-caption-outline" label={m.captions} showChevron={false} rightAccessory={<Switch value={prefs.captions} onValueChange={captions => prefs.update({ captions })} />} />
         <SettingsRow icon="phone-outline" label={m.background} isLast showChevron={false} rightAccessory={<Switch value={prefs.background} onValueChange={background => prefs.update({ background })} />} />
       </SettingsSection>
+      <VoiceModelSettings />
       <SettingsSection title={m.service}>
         {status.isPending && gatewayId ? <ListSkeleton count={3} /> :
           status.data ? (['dictation', 'natural', 'assistant'] as const).map((kind, index) => <SettingsRow key={kind} icon="waveform" label={kind === 'dictation' ? m.dictation : kind === 'natural' ? m.chatOnly : m.tools} value={status.data.capabilities[kind].available ? m.ready : m.unavailable} isLast={index === 2} showChevron={false} />) : <Text style={[styles.notice, { color: colors.semantic.error }]}>{voiceErrorMessage(status.error?.message ?? 'SERVICE_UNAVAILABLE', m)}</Text>}

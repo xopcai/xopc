@@ -27,7 +27,7 @@ describe('voice service setup', () => {
     const next = configureRealtimeService(form, 'alibaba');
     expect(next.voice.realtime.tts!.voice).toBe('Serena');
     expect(next.voice.realtime.omni!.apiKey).toBe('explicit-test-key');
-    expect(configureRealtimeService(form, 'xopc-cloud').voice.realtime.omni!.apiKey).toBeUndefined();
+    expect(configureRealtimeService(form, 'xopc-cloud').voice.realtime.omni).toBeUndefined();
   });
 
 });

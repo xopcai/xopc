@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiFetch } from '../../api/client';
-import { respondVoiceApproval, voiceApprovalsOptions, VoiceRequestError } from '../voice';
+import { updateVoiceSelection, voiceCatalogOptions, respondVoiceApproval, voiceApprovalsOptions, VoiceRequestError } from '../voice';
 
 vi.mock('../../api/client', () => ({ apiFetch: vi.fn() }));
-vi.mock('../query-client', () => ({ queryClient: {} }));
+vi.mock('../query-client', () => ({ queryClient: {setQueryData: vi.fn(), invalidateQueries: vi.fn()} }));
 vi.mock('../sessions', () => ({ fetchSession: vi.fn() }));
 
 const api = vi.mocked(apiFetch);
@@ -35,5 +35,21 @@ describe('voice confirmation queries', () => {
     expect(api).toHaveBeenCalledWith('/api/connectors/approvals/respond', {
       method: 'POST', body: JSON.stringify({ id: 'approval', decision: 'approved', conversationId: 'chat/a' }),
     });
+  });
+});
+
+
+describe('shared voice model settings', () => {
+  it.each([[403, 'VOICE_CONFIGURE_FORBIDDEN'], [409, 'SETTINGS_CHANGED'], [503, 'SERVICE_UNAVAILABLE']] as const)('retains actionable settings failure %s', async (status, code) => {
+    api.mockResolvedValue(new Response('{}', {status}));
+    await expect(updateVoiceSelection('gateway', 'revision', {mode:'conversation',model:'future-model'})).rejects.toMatchObject({status,code});
+    expect(api).toHaveBeenCalledWith('/api/voice/selection', {method:'PUT', body:JSON.stringify({revision:'revision',selection:{mode:'conversation',model:'future-model'}})});
+  });
+  it('shares the returned revision while separating gateway caches', async () => {
+    const catalog = {revision:'next',catalogVersion:'2',selections:[],models:[]};
+    api.mockResolvedValue(new Response(JSON.stringify({payload:catalog})));
+    await expect(updateVoiceSelection('gateway','old')).resolves.toEqual(catalog);
+    expect(api).toHaveBeenCalledWith('/api/voice/catalog/refresh',{method:'POST'});
+    expect(voiceCatalogOptions('a').queryKey).not.toEqual(voiceCatalogOptions('b').queryKey);
   });
 });

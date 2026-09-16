@@ -1,3 +1,4 @@
+import { voiceManifestSchema } from '@xopcai/realtime-protocol/voice';
 import { readFileSync, rmSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 
@@ -46,7 +47,8 @@ const catalogModelSchema = z.object({
   name: z.string().min(1),
   displayNames: z.object({ 'zh-CN': z.string().min(1).optional(), en: z.string().min(1).optional() }).strict().optional(),
   availability: z.enum(['available', 'unavailable']),
-  kind: z.enum(['language', 'image', 'stt', 'tts']),
+  kind: z.enum(['language', 'image', 'stt', 'tts', 'omni']),
+  voice: voiceManifestSchema.optional(),
   input: z.array(z.enum(['text', 'image', 'audio'])),
   output: z.array(z.enum(['text', 'image', 'audio'])),
   operations: z.array(z.enum([
@@ -56,6 +58,7 @@ const catalogModelSchema = z.object({
     'images.edit',
     'audio.transcription',
     'audio.speech',
+    'audio.conversation',
   ])),
   reasoning: z.boolean(),
   contextWindow: z.number().int().positive(),

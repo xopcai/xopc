@@ -39,6 +39,19 @@ export const en = {
     "local": "Local recording"
 },
   voice: {
+    modelSettings: 'Managed voice models',
+    recordedModel: 'Recorded transcription',
+    dictationModel: 'Live dictation / assistant input',
+    readoutModel: 'Message readout',
+    assistantVoiceModel: 'Assistant speech',
+    conversationModel: 'Natural conversation',
+    chooseModel: 'Choose model',
+    chooseVoice: 'Choose voice',
+    settingsChanged: 'Settings changed on another device. Refresh and retry.',
+    configureForbidden: 'This device needs voice.configure permission. Reauthorize it in the Gateway and retry.',
+    selectionFailed: 'Could not save. Refresh and retry.',
+    sharedSettings: 'Devices share gateway settings. Changes apply to the next call.',
+
     realtimeCall: 'Realtime call',
     assistantCall: 'Assistant call',
     realtimeCallHint: 'Conversation without tasks',
