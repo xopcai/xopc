@@ -10,7 +10,7 @@ import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest 
 import { createHonoApp } from '../hono/app.js';
 import type { GatewayService } from '../service.js';
 
-it('imports skills and context in one click through authenticated real Gateway HTTP and lazy bundles', async () => {
+it('imports only selected content through authenticated real Gateway HTTP and lazy bundles', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'xopc-import-http-'));
   vi.stubEnv('XOPC_STATE_DIR', dir);
   vi.stubEnv('HOME', dir);
@@ -44,17 +44,26 @@ it('imports skills and context in one click through authenticated real Gateway H
     mkdirSync(join(dir, '.claude/skills/http-import-fixture'), { recursive: true });
     writeFileSync(join(dir, '.claude/skills/http-import-fixture/SKILL.md'), '---\nname: http-import-fixture\ndescription: Test import\n---\nRead a file.');
     writeFileSync(join(dir, '.claude/CLAUDE.md'), 'Prefer concise weekly reports.');
-    const requestId = randomUUID();
-    const result = await request('/sources/claude-code/import', { requestId });
-    expect(result).toMatchObject({ skills: 1, context: 1, projects: 0, issues: [] });
+    const inventory = await request('/sources/claude-code/scan', {});
+    expect(existsSync(join(dir, 'skills/http-import-fixture/SKILL.md'))).toBe(false);
+    expect((await request(`/inventories/${inventory.id}`)).id).toBe(inventory.id);
+    const candidateId = inventory.candidates.find((i: { kind: string }) => i.kind === 'skill').id;
+    expect((await request(`/inventories/${inventory.id}/items/${candidateId}/preview`)).text).toContain('Read a file');
+    const body = { inventoryId: inventory.id, candidateIds: [candidateId], requestId: randomUUID() };
+    const result = await request('/runs', body);
+    expect(result).toMatchObject({ skills: 1, context: 0, projects: 0, status: 'completed', issues: [] });
     expect(existsSync(join(dir, 'skills/http-import-fixture/SKILL.md'))).toBe(true);
-    expect(await request('/sources/claude-code/import', { requestId })).toEqual(result);
-    const repeated = await request('/sources/claude-code/import', { requestId: randomUUID() });
-    expect(repeated).toMatchObject({ skills: 0, context: 0, skipped: 2, issues: [] });
+    expect(await request('/runs', body)).toEqual(result);
+    expect(await request(`/runs/${result.id}`)).toEqual(result);
+    const rescanned = await request('/sources/claude-code/scan', {});
+    expect(rescanned.candidates.find((i: { kind: string }) => i.kind === 'skill').status).toBe('existing');
     expect(refresh).toHaveBeenCalledTimes(1);
-    expect((await request('/sources')).sources.find((s: { id: string }) => s.id === 'claude-code').lastImport.id).toBe(repeated.id);
-    const invalid = await fetch(base + '/sources/codex/import', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ requestId: randomUUID(), root: '/etc' }) });
+    const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
+    const invalid = await fetch(base + '/runs', { method: 'POST', headers, body: JSON.stringify({ ...body, root: '/etc' }) });
     expect(invalid.status).toBe(400);
+    expect((await fetch(base + '/runs', { method: 'POST', headers, body: JSON.stringify({ requestId: randomUUID() }) })).status).toBe(400);
+    expect((await fetch(base + '/sources/claude-code/import', { method: 'POST', headers, body: JSON.stringify({ requestId: randomUUID() }) })).status).toBe(404);
+
   } finally {
     if (server.listening) await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
     closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); vi.unstubAllEnvs(); rmSync(dir, { recursive: true, force: true });

@@ -12,9 +12,13 @@ import {
   type EndpointToolErrorCode,
 } from '@xopcai/endpoint-tools-protocol';
 
+import { createLogger } from '../utils/logger.js';
+
 import { EndpointRegistry } from './registry.js';
 import { EndpointToolPolicy, EndpointToolPolicyError } from './policy.js';
 import type { EndpointUploadService } from './upload-service.js';
+
+const log = createLogger('EndpointInvocations');
 
 type ToolClientMessage = Exclude<ClientEndpointMessage, { type: `endpoint.${string}` }>;
 type PendingState = 'sent' | 'running';
@@ -142,7 +146,7 @@ export class EndpointInvocationService {
         startedAt,
       });
     } catch (error) {
-      this.options.uploads?.abort(invocationId);
+      this.abortUploads(invocationId, params.endpointId, params.toolName);
       return Promise.reject(error);
     }
     return new Promise<EndpointInvocationResult>((resolve, reject) => {
@@ -263,27 +267,47 @@ export class EndpointInvocationService {
   private succeed(invocationId: string, result: EndpointInvocationResult): void {
     const pending = this.take(invocationId);
     if (!pending) return;
-    try {
-      this.options.audit?.finished({ id: invocationId, status: 'succeeded', completedAt: Date.now() });
-    } finally {
-      pending.resolve(result);
-    }
+    this.finishAudit(pending, { id: invocationId, status: 'succeeded', completedAt: Date.now() });
+    pending.resolve(result);
   }
 
   private fail(invocationId: string, error: Error): void {
     const pending = this.take(invocationId);
     if (!pending) return;
+    this.abortUploads(invocationId, pending.endpointId, pending.toolName);
+    this.finishAudit(pending, {
+      id: invocationId,
+      status: 'failed',
+      ...(error instanceof EndpointToolExecutionError ? { errorCode: error.code } : {}),
+      errorMessage: error.message,
+      completedAt: Date.now(),
+    });
+    pending.reject(error);
+  }
+
+  // Completion also runs from timers and abort listeners, outside the caller's try/catch.
+  private finishAudit(
+    pending: PendingInvocation,
+    result: Parameters<EndpointInvocationAuditSink['finished']>[0],
+  ): void {
+    try {
+      this.options.audit?.finished(result);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      log.error({
+        err, errorMessage, invocationId: pending.id, endpointId: pending.endpointId,
+        toolName: pending.toolName, phase: 'audit_finish', status: result.status,
+      }, `Endpoint invocation audit failed: ${errorMessage}`);
+    }
+  }
+
+  private abortUploads(invocationId: string, endpointId: string, toolName: string): void {
     try {
       this.options.uploads?.abort(invocationId);
-      this.options.audit?.finished({
-        id: invocationId,
-        status: 'failed',
-        ...(error instanceof EndpointToolExecutionError ? { errorCode: error.code } : {}),
-        errorMessage: error.message,
-        completedAt: Date.now(),
-      });
-    } finally {
-      pending.reject(error);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      log.error({ err, errorMessage, invocationId, endpointId, toolName, phase: 'upload_abort' },
+        `Endpoint upload cleanup failed: ${errorMessage}`);
     }
   }
 
