@@ -135,7 +135,7 @@ describe('fetchSessionsList', () => {
   });
 
   it('forwards limit, offset, and search into the URL query string', async () => {
-    await fetchSessionsList({ limit: 20, offset: 40, search: '  hello  ' });
+    await fetchSessionsList({ limit: 20, offset: 40, search: '  hello  ', projectId: ' project-1 ' });
 
     const [url] = mockedApiFetch.mock.calls[0] as [string];
     expect(url.startsWith('/api/sessions?')).toBe(true);
@@ -144,6 +144,15 @@ describe('fetchSessionsList', () => {
     expect(params.get('offset')).toBe('40');
     expect(params.get('search')).toBe('hello');
     expect(params.get('channel')).toBe('webchat');
+    expect(params.get('projectId')).toBe('project-1');
+  });
+
+  it('supports filtering sessions without a project', async () => {
+    await fetchSessionsList({ unassigned: true });
+
+    const [url] = mockedApiFetch.mock.calls[0] as [string];
+    const params = new URLSearchParams(url.split('?')[1]);
+    expect(params.get('unassigned')).toBe('true');
   });
 
   it('omits the search param when empty', async () => {
