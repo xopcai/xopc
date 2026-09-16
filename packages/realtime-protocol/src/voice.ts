@@ -1,3 +1,4 @@
+export { voiceManifestSchema, voiceModeCapabilitySchema, type VoiceManifest, type VoiceModeCapability } from './voice-catalog.js';
 import { z } from 'zod';
 export { encodeVoiceAudioFrame, decodeVoiceAudioFrame, encodeVoiceUplinkAudioFrame, decodeVoiceUplinkAudioFrame,
   type VoiceAudioFrame, type VoiceUplinkAudioFrame } from './voice-audio.js';
@@ -244,3 +245,5 @@ export function parseVoiceClientJsonFrame(text: string): unknown {
   }
   return JSON.parse(text) as unknown;
 }
+export { voiceSelectionSchema, voiceSettingsCatalogSchema, type VoiceSelection, type VoiceSettingsCatalog } from './voice-catalog.js';
+export { VoiceReceiveState } from './voice-receive-state.js';

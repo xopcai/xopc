@@ -19,10 +19,10 @@ export function OmniVoiceSettings({ value, onChange }: {
   return <details className="space-y-3 rounded-xl border border-edge p-4">
     <summary className="cursor-pointer text-sm font-medium text-fg">{label('Natural conversation · advanced', '自然对话 · 高级设置')}</summary>
     <p className="text-sm text-fg-muted">{label('Calls continue the same session using recent history. Service and credentials are shared with voice setup; override them here only when needed.', '通话会接续同一会话的近期历史。默认共用语音服务与凭据，仅在需要独立配置时修改。')}</p>
-    {!value ? <Button variant="secondary" onClick={() => onChange({ provider: 'xopc-cloud', model: 'qwen3-omni-flash-realtime', voice: 'Cherry', instructions: 'You are a friendly voice companion. You cannot execute tools.' })}>{label('Configure natural conversation', '配置自然聊天')}</Button> : <>
+    {!value ? <Button variant="secondary" onClick={() => onChange({ provider: 'alibaba', model: 'qwen3-omni-flash-realtime', voice: 'Cherry', instructions: 'You are a friendly voice companion. You cannot execute tools.' })}>{label('Configure natural conversation', '配置自然聊天')}</Button> : <>
       <label className="block space-y-1 text-sm"><span>{label('Connection', '连接方式')}</span>
         <Select value={value.provider} onChange={(event) => onChange({ model: value.model, voice: value.voice, instructions: value.instructions, provider: event.target.value as 'alibaba' | 'xopc-cloud' })}>
-          <SelectOption value="xopc-cloud">XOPC Platform</SelectOption><SelectOption value="alibaba">DashScope · {label('Your API key', '自有 API Key')}</SelectOption>
+          <SelectOption value="alibaba">DashScope · {label('Your API key', '自有 API Key')}</SelectOption>
         </Select>
       </label>
       <p className="text-xs text-fg-muted">{value.provider === 'xopc-cloud' ? label('Uses your XOPC sign-in and the platform’s published Omni route and credits.', '使用 XOPC 登录授权、平台发布的 Omni 路由和额度。') : label('Leave empty to use the shared voice service credential.', '留空使用语音服务中已配置的凭据。')}</p>

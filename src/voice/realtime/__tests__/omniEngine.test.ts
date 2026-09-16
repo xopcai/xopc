@@ -16,7 +16,7 @@ describe('Omni voice engine', () => {
     vi.restoreAllMocks();
   });
 
-  async function setup(recordOverride?: () => Promise<void>, bargeIn = true) {
+  async function setup(recordOverride?: () => Promise<void>, bargeIn = true, managed = false) {
     server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
     await once(server, 'listening');
     const received: Array<Record<string, any>> = [];
@@ -26,13 +26,13 @@ describe('Omni voice engine', () => {
       socket.send(JSON.stringify({ type: 'session.created' }));
       socket.on('message', (raw) => {
         const event = JSON.parse(raw.toString()); received.push(event);
-        if (event.type === 'session.update') socket.send(JSON.stringify({ type: 'session.updated' }));
+        if (event.type === 'session.update') socket.send(JSON.stringify({ type: 'session.updated', session: {input_sample_rate:16000, output_sample_rate:24000} }));
       });
     });
     const send = vi.fn(); const sendAudio = vi.fn(); const record = vi.fn(recordOverride ?? (async () => {}));
     engine = createOmniVoiceEngine({
       callId: 'test-call',
-      route: { url: `ws://127.0.0.1:${(server.address() as { port: number }).port}`, apiKey: 'test', voice: 'Cherry', instructions: 'Test', route: { provider: 'test', model: 'test', managed: false } },
+      route: { url: `ws://127.0.0.1:${(server.address() as { port: number }).port}`, apiKey: 'test', voice: 'Cherry', instructions: 'Test', route: { provider: 'test', model: 'test', managed } },
       silenceDurationMs: 700, bargeIn, send, sendAudio, record,
       onClose: vi.fn(async () => engine.close()),
     });
@@ -51,6 +51,16 @@ describe('Omni voice engine', () => {
     });
     return callbacks;
   }
+
+  it('negotiates a vendor-neutral managed session and explicitly cancels interrupted generation', async () => {
+    const test = await setup(undefined, true, true);
+    const update = test.received.find(event => event.type === 'session.update');
+    expect(update?.session.input_audio_format).toBeUndefined();
+    expect(update?.session.input_audio_transcription).toBeUndefined();
+    test.emit({type:'response.created',response:{id:'managed-response'}});
+    test.emit({type:'input_audio_buffer.speech_started',item_id:'interrupt'});
+    await vi.waitFor(() => expect(test.received.filter(event => event.type === 'response.cancel')).toHaveLength(1));
+  });
 
   it('withholds premature text and audio and discards both when the user continues', async () => {
     const test = await setup();

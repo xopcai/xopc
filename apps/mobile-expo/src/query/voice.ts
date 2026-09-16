@@ -1,3 +1,4 @@
+import { voiceSettingsCatalogSchema, type VoiceSelection } from '@xopcai/realtime-protocol/voice';
 import {
   realtimeVoiceStatusSchema,
   createVoiceSessionResponseSchema,
@@ -87,4 +88,23 @@ export function voiceApprovalsOptions(gatewayId: string | undefined, conversatio
 export async function respondVoiceApproval(id: string, decision: 'approved' | 'denied', conversationId: string) {
   const response = await apiFetch('/api/connectors/approvals/respond', { method: 'POST', body: JSON.stringify({ id, decision, conversationId }) });
   if (!response.ok) throw new VoiceRequestError('APPROVAL_FAILED', response.status);
+}
+
+export const voiceCatalogOptions = (gatewayId: string | null) => ({
+  queryKey: ['voice-catalog', gatewayId], staleTime: 30_000, retry: false as const,
+  queryFn: async ({signal}: {signal: AbortSignal}) => {
+    const response = await apiFetch('/api/voice/catalog', {signal});
+    if (!response.ok) throw new VoiceRequestError('SERVICE_UNAVAILABLE', response.status);
+    return voiceSettingsCatalogSchema.parse((await response.json()).payload);
+  },
+});
+export async function updateVoiceSelection(gatewayId: string, revision: string, selection?: VoiceSelection) {
+  const response = await apiFetch(selection ? '/api/voice/selection' : '/api/voice/catalog/refresh', {
+    method: selection ? 'PUT' : 'POST', ...(selection ? {body: JSON.stringify({revision, selection})} : {}),
+  });
+  if (!response.ok) throw new VoiceRequestError(response.status === 409 ? 'SETTINGS_CHANGED' : response.status === 403 ? 'VOICE_CONFIGURE_FORBIDDEN' : 'SERVICE_UNAVAILABLE', response.status);
+  const catalog = voiceSettingsCatalogSchema.parse((await response.json()).payload);
+  queryClient.setQueryData(['voice-catalog', gatewayId], catalog);
+  await queryClient.invalidateQueries({queryKey: ['voice-status', gatewayId]});
+  return catalog;
 }

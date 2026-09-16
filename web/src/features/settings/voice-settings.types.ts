@@ -101,7 +101,8 @@ export interface VoiceSettingsState {
       maxDictationMs: number;
       maxConversationMs: number;
       bargeIn: boolean;
-      tts?: { provider: 'alibaba' | 'xopc-cloud'; voice?: string };
+      stt?: { provider: 'xopc-cloud'; model: string };
+      tts?: { provider: 'alibaba' | 'xopc-cloud'; model?: string; voice?: string };
       omni?: {
         provider: 'alibaba' | 'xopc-cloud';
         model: string;

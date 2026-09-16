@@ -1,3 +1,4 @@
+import { PlatformVoiceSettings } from './platform-voice-settings';
 import { Loader2, Mic, Play, Square, Volume2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
@@ -508,7 +509,8 @@ export function VoiceSettingsPanel() {
       </> : null}
       {group === 'devices' ? <VoiceDeviceSettings v={v} /> : null}
       {group === 'service' ? <>
-        {form.voice.realtime.enabled ? <OmniVoiceSettings value={form.voice.realtime.omni} onChange={(omni) => updateRealtime({ omni })} /> : null}
+        <PlatformVoiceSettings disabled={dirty || autosave.status === 'saving'} />
+        {form.voice.realtime.enabled && form.voice.realtime.omni?.provider === 'alibaba' ? <OmniVoiceSettings value={form.voice.realtime.omni} onChange={(omni) => updateRealtime({ omni })} /> : null}
         <details className="rounded-xl border border-edge bg-surface-panel px-4 py-3"><summary className="cursor-pointer text-sm font-medium text-fg">{v.experience.technical}</summary>
           <SttSection v={v} apiKeyLabels={apiKeyLabels} stt={stt} models={models} sttProviders={sttProviders} updateStt={updateStt} updateSttFallback={updateSttFallback} />
           <p className="text-xs text-fg-muted">{v.notes.envVars}</p>

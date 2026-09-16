@@ -1,3 +1,4 @@
+import { voiceFixture } from '../../voice/__tests__/voice-fixture.js';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { getModelCatalogStore, resetModelCatalogStore } from '../../providers/model-catalog-store.js';
@@ -16,6 +17,7 @@ describe('getVoiceModelsConfig', () => {
       lastSuccessAt: 1,
       models: [
         {
+          voice: voiceFixture(['transcription']),
           id: 'cloud-stt', name: 'Cloud STT', availability: 'available', kind: 'stt',
           input: ['audio'], output: ['text'], operations: ['audio.transcription'],
           reasoning: false, contextWindow: 0, maxOutputTokens: null,
@@ -26,6 +28,7 @@ describe('getVoiceModelsConfig', () => {
           reasoning: false, contextWindow: 0, maxOutputTokens: null,
         },
         {
+          voice: voiceFixture(['speech']),
           id: 'cloud-tts', name: 'Cloud TTS', availability: 'available', kind: 'tts',
           input: ['text'], output: ['audio'], operations: ['audio.speech'],
           reasoning: false, contextWindow: 0, maxOutputTokens: null,

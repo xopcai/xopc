@@ -1,3 +1,4 @@
+import { voiceManifestSchema } from '@xopcai/realtime-protocol/voice';
 import type { AvailableCatalogModel, CatalogSource } from './model-catalog-store.js';
 import { getProviderAuthService, type ProviderAuthService } from './provider-auth-service.js';
 import { resolveXopcModelRouterUrl } from './xopc-cloud-config.js';
@@ -49,6 +50,7 @@ export class XopcCloudModelSource {
           displayName?: unknown;
           displayNames?: unknown;
           kind?: unknown;
+          voice?: unknown;
           maxOutputTokens?: unknown;
           operations?: unknown;
           capabilities?: {
@@ -108,7 +110,7 @@ export class XopcCloudModelSource {
           ? declaredInput.filter((value): value is 'text' | 'image' | 'audio' =>
               value === 'text' || value === 'image' || value === 'audio')
           : [];
-        const kind = model.xopc?.kind === 'image' || model.xopc?.kind === 'stt' || model.xopc?.kind === 'tts'
+        const kind = model.xopc?.kind === 'image' || model.xopc?.kind === 'stt' || model.xopc?.kind === 'tts' || model.xopc?.kind === 'omni'
           ? model.xopc.kind
           : 'language';
         const input: Array<'text' | 'image' | 'audio'> = kind === 'stt' ? ['audio']
@@ -120,7 +122,7 @@ export class XopcCloudModelSource {
           ? declaredOutput.filter((value): value is 'text' | 'image' | 'audio' => value === 'text' || value === 'image' || value === 'audio')
           : ['text' as const];
         const declaredOperations = model.xopc?.operations ?? model.xopc?.capabilities?.operations;
-        const operations = kind === 'stt' ? ['audio.transcription' as const]
+        const operations = kind === 'omni' ? ['audio.conversation' as const] : kind === 'stt' ? ['audio.transcription' as const]
           : kind === 'tts' ? ['audio.speech' as const] : Array.isArray(declaredOperations)
           ? declaredOperations.filter((value): value is 'chat.completions' | 'responses' | 'images.generate' | 'images.edit' | 'audio.transcription' | 'audio.speech' =>
               value === 'chat.completions' || value === 'responses'
@@ -130,7 +132,9 @@ export class XopcCloudModelSource {
         const generation = parseImageGenerationCapabilities(model.xopc?.capabilities?.imageGeneration);
         const stt = kind === 'stt' ? parseSttCapabilities(model.xopc?.capabilities) : undefined;
         const tts = kind === 'tts' ? parseTtsCapabilities(model.xopc?.capabilities, model.xopc?.defaultVoice) : undefined;
+        const voice = voiceManifestSchema.safeParse(model.xopc?.voice);
         const catalogModel: AvailableCatalogModel = {
+          ...(voice.success ? { voice: voice.data } : {}),
           id: model.id,
           name: typeof model.xopc?.displayName === 'string' && model.xopc.displayName.trim() ? model.xopc.displayName.trim() : model.id,
           ...parseDisplayNames(model.xopc?.displayNames),

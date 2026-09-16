@@ -145,8 +145,8 @@ export function createOmniVoiceEngine(options: {
       save({ itemId: response.id, role: 'assistant', text: response.text, interrupted: true });
       options.send('response.cancelled', { responseId: response.id, reason });
     }
-    // VAD may already have cancelled generation; do not send duplicate cancellations.
-    if ((reason === 'client_cancelled' || (reason === 'barge_in' && !options.bargeIn)) && response.generating && socket?.readyState === WebSocket.OPEN) {
+    // The platform owns supplier cancellation semantics and deduplicates races with VAD.
+    if ((reason === 'client_cancelled' || (reason === 'barge_in' && (options.route.route.managed || !options.bargeIn))) && response.generating && socket?.readyState === WebSocket.OPEN) {
       cancellationPending = true;
       send('response.cancel');
     }
@@ -231,17 +231,18 @@ export function createOmniVoiceEngine(options: {
             const event = JSON.parse(raw.toString());
             if (event.type === 'error') {
               // Qwen may finish generation before a local cancellation reaches it.
-              if (cancellationPending && event.error?.type === 'invalid_request_error' && event.error?.message === 'Conversation has none active response') { cancellationPending = false; return; }
+              if (!options.route.route.managed && cancellationPending && event.error?.type === 'invalid_request_error' && event.error?.message === 'Conversation has none active response') { cancellationPending = false; return; }
               fail('OMNI_PROVIDER_ERROR'); return;
             }
             if (event.type === 'session.created') {
               send('session.update', { session: {
                 modalities: ['text', 'audio'], voice: options.route.voice,
-                instructions: options.route.instructions, input_audio_format: 'pcm', output_audio_format: 'pcm',
-                input_audio_transcription: { model: 'gummy-realtime-v1' },
+                instructions: options.route.instructions,
+                ...(!options.route.route.managed ? { input_audio_format: 'pcm', output_audio_format: 'pcm', input_audio_transcription: { model: 'gummy-realtime-v1' } } : {}),
                 turn_detection: { type: 'server_vad', threshold: 0.5, silence_duration_ms: options.silenceDurationMs, create_response: true, interrupt_response: options.bargeIn },
               } });
             } else if (event.type === 'session.updated' && !ready) {
+              if (options.route.route.managed && (event.session?.input_sample_rate !== 16000 || event.session?.output_sample_rate !== 24000)) throw new Error('Unsupported platform audio format');
               ready = true; clearTimeout(timer); rejectStart = undefined; resolve();
             } else if (event.type === 'input_audio_buffer.cleared') {
               clearingInput = false;
