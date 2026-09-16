@@ -248,9 +248,11 @@ export function normalizeVoiceSettings(config: unknown): VoiceSettingsState {
         maxDictationMs: typeof realtime.maxDictationMs === 'number' ? realtime.maxDictationMs : 600_000,
         maxConversationMs: typeof realtime.maxConversationMs === 'number' ? realtime.maxConversationMs : 3_600_000,
         bargeIn: realtime.bargeIn !== false,
+        ...(isRecord(realtime.stt) && realtime.stt.provider === 'xopc-cloud' && typeof realtime.stt.model === 'string' ? {stt: {provider: 'xopc-cloud' as const, model: realtime.stt.model}} : {}),
         ...(isRecord(realtime.tts) && (realtime.tts.provider === 'alibaba' || realtime.tts.provider === 'xopc-cloud')
           ? { tts: {
               provider: realtime.tts.provider,
+              ...(typeof realtime.tts.model === 'string' ? { model: realtime.tts.model } : {}),
               ...(typeof realtime.tts.voice === 'string' ? { voice: realtime.tts.voice } : {}),
             } }
           : {}),

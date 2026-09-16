@@ -59,6 +59,7 @@ describe('lazy route bundles', () => {
   });
 
   it('uses distinct bundles for voice models vs voice settings', () => {
+    for (const path of ['/api/voice/catalog', '/api/voice/catalog/refresh', '/api/voice/selection']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('voice');
     expect(findAuthenticatedLazyRouteBundle('/api/voice/models')?.id).toBe('agents');
     expect(findAuthenticatedLazyRouteBundle('/api/voice/providers')?.id).toBe('voice');
     expect(findAuthenticatedLazyRouteBundle('/api/voice/realtime/sessions/cancel')?.id).toBe('voice');

@@ -1,9 +1,11 @@
+import type { VoiceManifest } from '@xopcai/realtime-protocol/voice';
 export interface CatalogModel {
+  voice?: VoiceManifest;
   id: string;
   name: string;
   displayNames?: Partial<Record<'zh-CN' | 'en', string>>;
   availability: 'available' | 'unavailable';
-  kind: 'language' | 'image' | 'stt' | 'tts';
+  kind: 'language' | 'image' | 'stt' | 'tts' | 'omni';
   input: Array<'text' | 'image' | 'audio'>;
   output: Array<'text' | 'image' | 'audio'>;
   operations: Array<
@@ -13,6 +15,7 @@ export interface CatalogModel {
     | 'images.edit'
     | 'audio.transcription'
     | 'audio.speech'
+    | 'audio.conversation'
   >;
   reasoning: boolean;
   contextWindow: number;

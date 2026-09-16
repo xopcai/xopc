@@ -4,14 +4,14 @@ import { getProviderAuthService } from '../../../providers/provider-auth-service
 import { resolveXopcModelRouterUrl } from '../../../providers/xopc-cloud-config.js';
 import { registerMediaUnderstandingProvider } from '../../../media-understanding/registry.js';
 import type { AudioTranscriptionRequest, MediaUnderstandingProvider } from '../../../media-understanding/types.js';
-import { openDashScopeStreamingStt } from '../../dashscope/streaming-stt-session.js';
+import { openPlatformStt } from '../../platform-streams.js';
+import { platformVoiceModels, requirePlatformVoiceModel } from '../../platform-catalog.js';
 
-const DEFAULT_STREAMING_MODEL = 'qwen-audio-3.0-asr-flash-streaming';
 
 function defaultModel(): string | undefined {
   const source = getModelCatalogStore().getSource('xopc-cloud');
   return source?.models
-    .filter((model) => model.availability === 'available' && model.kind === 'stt')
+    .filter((model) => model.availability === 'available' && model.kind === 'stt' && model.voice?.modes.includes('transcription'))
     .sort((left, right) => compareCatalogModels(left, right, source.recommended?.stt))[0]?.id;
 }
 
@@ -24,6 +24,7 @@ export const xopcCloudTranscriptionProvider: MediaUnderstandingProvider = {
   transcribeAudio: async (request: AudioTranscriptionRequest) => {
     const model = request.model ?? defaultModel();
     if (!model) throw new Error('No XOPC Cloud speech-to-text model is available');
+    requirePlatformVoiceModel(model, 'transcription');
     const accessToken = await getProviderAuthService().resolveApiKey('xopc-cloud', request.signal);
     if (!accessToken) throw new Error('XOPC Cloud authorization is unavailable');
     const source = getModelCatalogStore().getSource('xopc-cloud');
@@ -49,22 +50,24 @@ export const xopcCloudTranscriptionProvider: MediaUnderstandingProvider = {
   streamingAudio: {
     inputSampleRates: [16_000],
     turnDetection: ['server_vad'],
-    defaultModel: DEFAULT_STREAMING_MODEL,
-    models: [DEFAULT_STREAMING_MODEL],
+    get defaultModel() { return platformVoiceModels('transcription.stream')[0]?.id ?? ''; },
+    get models() { return platformVoiceModels('transcription.stream').map(model => model.id); },
   },
   openAudioStream: async (request) => {
+    const catalogModel = requirePlatformVoiceModel(request.model, 'transcription.stream');
     const accessToken = await getProviderAuthService().resolveApiKey('xopc-cloud', request.signal);
     if (!accessToken) throw new Error('XOPC Cloud authorization is unavailable');
     const source = getModelCatalogStore().getSource('xopc-cloud');
     const baseUrl = (request.baseUrl ?? source?.baseUrl ?? resolveXopcModelRouterUrl()).replace(/\/+$/, '');
     const relayUrl = new URL(`${baseUrl}/audio/transcriptions/realtime`);
     relayUrl.protocol = relayUrl.protocol === 'https:' ? 'wss:' : 'ws:';
-    relayUrl.searchParams.set('model', request.model || DEFAULT_STREAMING_MODEL);
-    return openDashScopeStreamingStt({
+    relayUrl.searchParams.set('model', request.model);
+    relayUrl.searchParams.set('service_version', String(catalogModel.voice.serviceVersion));
+    return openPlatformStt({
       ...request,
       apiKey: accessToken,
       baseUrl: relayUrl.toString(),
-      model: request.model || DEFAULT_STREAMING_MODEL,
+      model: request.model,
     });
   },
 };

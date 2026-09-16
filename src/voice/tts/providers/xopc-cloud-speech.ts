@@ -2,7 +2,8 @@ import { getModelCatalogStore } from '../../../providers/model-catalog-store.js'
 import { compareCatalogModels } from '../../../providers/model-catalog-ranking.js';
 import { getProviderAuthService } from '../../../providers/provider-auth-service.js';
 import { resolveXopcModelRouterUrl } from '../../../providers/xopc-cloud-config.js';
-import { openDashScopeStreamingTts } from '../../dashscope/streaming-tts-stream.js';
+import { openPlatformTts } from '../../platform-streams.js';
+import { requirePlatformVoiceModel } from '../../platform-catalog.js';
 import { registerSpeechProvider } from '../speech-registry.js';
 import type { SpeechProviderConfig, SpeechProviderPlugin, SpeechSynthesisResult } from '../speech-provider-types.js';
 
@@ -44,11 +45,11 @@ export const xopcCloudSpeechProvider: SpeechProviderPlugin = {
   resolveConfig: ({ rawConfig }) => {
     const raw = rawConfig['xopc-cloud'];
     const slice = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
-    const model = typeof slice.model === 'string' ? slice.model : availableModels()[0]?.id;
+    const model = typeof slice.model === 'string' ? slice.model : availableModels().find(model => model.voice?.modes.includes('speech'))?.id;
     const catalogModel = availableModels().find((entry) => entry.id === model);
     return {
       model,
-      voice: typeof slice.voice === 'string' ? slice.voice : catalogModel?.tts?.defaultVoice,
+      voice: typeof slice.voice === 'string' ? slice.voice : catalogModel?.voice?.defaultVoice,
       speed: readSpeed(slice.speed),
       instructions: typeof slice.instructions === 'string' && slice.instructions.trim()
         ? slice.instructions.trim()
@@ -63,15 +64,7 @@ export const xopcCloudSpeechProvider: SpeechProviderPlugin = {
   listVoices: async ({ providerConfig }) => {
     const config = readConfig(providerConfig ?? {});
     if (!config.model) return [];
-    const token = await getProviderAuthService().resolveApiKey('xopc-cloud');
-    if (!token) return [];
-    const response = await fetch(`${config.baseUrl.replace(/\/+$/, '')}/audio/voices?model=${encodeURIComponent(config.model)}`, {
-      headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(30_000), redirect: 'error',
-    });
-    if (!response.ok) return [];
-    const body = await response.json().catch(() => null) as { data?: Array<{ id?: unknown; name?: unknown }> } | null;
-    return (body?.data ?? []).filter((voice): voice is { id: string; name?: string } => typeof voice.id === 'string')
-      .map((voice) => ({ id: voice.id, ...(typeof voice.name === 'string' ? { name: voice.name } : {}) }));
+    return availableModels().find(model => model.id === config.model)?.voice?.voices.map(({id, name}) => ({id, name})) ?? [];
   },
   synthesize: async (request): Promise<SpeechSynthesisResult> => {
     const config = readConfig(request.providerConfig);
@@ -79,6 +72,7 @@ export const xopcCloudSpeechProvider: SpeechProviderPlugin = {
     const voice = typeof request.providerOverrides?.voice === 'string' ? request.providerOverrides.voice : config.voice;
     if (!model || !voice) throw new Error('XOPC Cloud TTS model or voice is unavailable');
     const catalogModel = availableModels().find((entry) => entry.id === model);
+    requirePlatformVoiceModel(model, 'speech');
     if (!catalogModel) throw new Error(`XOPC Cloud TTS model is unavailable: ${model}`);
     const speed = readSpeed(request.providerOverrides?.speed ?? config.speed);
     const instructions = typeof request.providerOverrides?.instructions === 'string'
@@ -114,22 +108,19 @@ export const xopcCloudSpeechProvider: SpeechProviderPlugin = {
     const model = typeof request.providerOverrides?.model === 'string' ? request.providerOverrides.model : config.model;
     const voice = typeof request.providerOverrides?.voice === 'string' ? request.providerOverrides.voice : config.voice;
     if (!model || !voice) throw new Error('XOPC Cloud realtime TTS model or voice is unavailable');
-    const catalogModel = availableModels().find((entry) => entry.id === model);
-    if (!catalogModel?.tts?.streaming || !catalogModel.tts.outputFormats.includes('pcm')) {
-      throw new Error(`XOPC Cloud TTS model does not support PCM streaming: ${model}`);
-    }
+    const catalogModel = requirePlatformVoiceModel(model, 'speech.stream');
     const token = await getProviderAuthService().resolveApiKey('xopc-cloud', request.signal);
     if (!token) throw new Error('XOPC Cloud authorization is unavailable');
     const relayUrl = new URL(`${config.baseUrl.replace(/\/+$/, '')}/audio/speech/realtime`);
     relayUrl.protocol = relayUrl.protocol === 'https:' ? 'wss:' : 'ws:';
     relayUrl.searchParams.set('model', model);
+    relayUrl.searchParams.set('service_version', String(catalogModel.voice.serviceVersion));
     const instructions = typeof request.providerOverrides?.instructions === 'string'
       ? request.providerOverrides.instructions.trim()
       : config.instructions;
-    return openDashScopeStreamingTts({
+    return openPlatformTts({
       apiKey: token,
       baseUrl: relayUrl.toString(),
-      model,
       voice,
       text: request.text,
       ...(instructions ? { instructions } : {}),

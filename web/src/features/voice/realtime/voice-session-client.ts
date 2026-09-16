@@ -1,4 +1,5 @@
 import {
+  VoiceReceiveState,
   VOICE_REALTIME_PROTOCOL_VERSION,
   createVoiceSessionResponseSchema,
   parseVoiceServerEvent,
@@ -43,6 +44,7 @@ function websocketUrl(path: string): string {
 }
 
 export class VoiceSessionClient {
+  private receive: VoiceReceiveState;
   private heartbeatId: number | undefined;
   private inputRemainder = new Uint8Array();
   private utteranceId = crypto.randomUUID();
@@ -51,7 +53,7 @@ export class VoiceSessionClient {
   private constructor(
     private readonly socket: WebSocket,
     readonly session: CreateVoiceSessionResponse,
-  ) {}
+  ) { this.receive = new VoiceReceiveState(session); }
 
   static async preflight(options: Pick<VoiceSessionClientOptions, 'purpose' | 'mode' | 'conversationId' | 'signal'>): Promise<void> {
     await fetchJson(apiUrl('/api/voice/realtime/preflight'), {
@@ -86,8 +88,6 @@ export class VoiceSessionClient {
     await new Promise<void>((resolve, reject) => {
       let settled = false;
       let timeout: number | undefined;
-      let audioSeq = 0;
-      let eventSeq = 0;
       const fail = (error: Error) => {
         if (settled) return;
         settled = true;
@@ -118,15 +118,13 @@ export class VoiceSessionClient {
         if (typeof message.data !== 'string') {
           try {
             const frame = decodeVoiceAudioFrame(new Uint8Array(message.data));
-            if (frame.connectionEpoch !== session.connectionEpoch || frame.seq !== audioSeq + 1) throw new Error('Invalid audio sequence');
-            audioSeq = frame.seq;
-            options.onAudio?.(frame.audio.buffer as ArrayBuffer, frame.responseId);
+            if (client.receive.audio(frame)) options.onAudio?.(frame.audio.slice().buffer as ArrayBuffer, frame.responseId);
           } catch { socket.close(4400, 'Invalid voice audio frame'); }
           return;
         }
         try {
           const event = parseVoiceServerEvent(JSON.parse(message.data) as unknown);
-          if (event.sessionId !== session.sessionId || event.seq !== ++eventSeq) throw new Error('Invalid voice event sequence');
+          client.receive.event(event);
           options.onEvent(event);
           if (event.type === 'session.ready' && !settled) {
             if (event.payload.connectionEpoch !== session.connectionEpoch || event.payload.mode !== session.mode) throw new Error('Voice session mismatch');
@@ -195,6 +193,7 @@ export class VoiceSessionClient {
 
   private sendControl(type: VoiceClientMessage['type'], payload: VoiceClientMessage['payload']): void {
     if (this.socket.readyState !== WebSocket.OPEN) return;
+    if (type === 'response.stop_playback' && 'responseId' in payload) this.receive.cancel(payload.responseId);
     this.socket.send(JSON.stringify(controlMessage(type, payload)));
   }
 

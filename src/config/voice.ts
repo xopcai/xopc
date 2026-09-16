@@ -40,10 +40,10 @@ export function getVoiceModelsConfig(): VoiceModelsConfig {
 
   const cloudModels = getModelCatalogStore().getSource('xopc-cloud')?.models ?? [];
   config.stt['xopc-cloud'] = cloudModels
-    .filter((model) => model.availability === 'available' && model.kind === 'stt')
+    .filter((model) => model.availability === 'available' && model.kind === 'stt' && model.voice?.modes.includes('transcription'))
     .map((model) => ({ id: model.id, name: model.name }));
   config.tts['xopc-cloud'] = cloudModels
-    .filter((model) => model.availability === 'available' && model.kind === 'tts')
+    .filter((model) => model.availability === 'available' && model.kind === 'tts' && model.voice?.modes.includes('speech'))
     .map((model) => ({
       id: model.id,
       name: model.name,

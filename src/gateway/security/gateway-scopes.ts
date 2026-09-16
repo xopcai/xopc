@@ -1,4 +1,5 @@
 export const GATEWAY_SCOPES = [
+  'voice.configure',
   'gateway.status',
   'agents.read',
   'agents.run',
@@ -20,6 +21,7 @@ export type GatewayScope = typeof GATEWAY_SCOPES[number];
 const KNOWN_GATEWAY_SCOPES = new Set<string>(GATEWAY_SCOPES);
 
 export const DEFAULT_MOBILE_SCOPES: readonly GatewayScope[] = [
+  'voice.configure',
   'gateway.status',
   'agents.read',
   'agents.run',
@@ -97,6 +99,7 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
   if (path.startsWith('/api/workflows')) {
     return methodScope(method, 'automations.read', 'automations.write');
   }
+  if (path === '/api/voice/selection' || path === '/api/voice/catalog/refresh') return 'voice.configure';
   if (path.startsWith('/api/voice') || path.startsWith('/api/media') || path.startsWith('/api/clarifications')) {
     return 'sessions.write';
   }

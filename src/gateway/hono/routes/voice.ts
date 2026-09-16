@@ -1,3 +1,5 @@
+import { voiceSelectionSchema } from '@xopcai/realtime-protocol/voice';
+import { voiceSettingsCatalog, selectPlatformVoice } from '../../../voice/platform-settings.js';
 /**
  * Voice routes — POST /api/voice/transcriptions (multipart).
  *
@@ -189,6 +191,26 @@ async function refineTranscript(
 
 export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
+
+  authenticated.get('/api/voice/catalog', (c) => c.json({ ok: true, payload: voiceSettingsCatalog(service.currentConfig as Config) }));
+  authenticated.post('/api/voice/catalog/refresh', strictRateLimitMiddleware, async (c) => {
+    const result = await service.getModelCatalogSync().refreshNow();
+    if (result.error || result.state !== 'ready') return c.json({ ok: false, error: { code: 'CATALOG_REFRESH_FAILED', message: 'Voice catalog could not be refreshed' } }, 503);
+    return c.json({ ok: true, payload: voiceSettingsCatalog(service.currentConfig as Config) });
+  });
+  authenticated.put('/api/voice/selection', strictRateLimitMiddleware, async (c) => {
+    const parsed = z.strictObject({ revision: z.string(), selection: voiceSelectionSchema }).safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ ok: false, error: { message: 'Invalid voice selection' } }, 400);
+    return withModelConfigLock('__voice_settings__', async () => {
+      if (voiceSettingsCatalog(service.currentConfig as Config).revision !== parsed.data.revision) return c.json({ ok: false, error: { message: 'Voice settings changed; refresh before saving' } }, 409);
+      try {
+        const next = selectPlatformVoice(service.currentConfig as Config, parsed.data.selection);
+        const result = await service.saveConfig(next);
+        if (!result.saved) return c.json({ ok: false, error: { message: result.error } }, 500);
+        return c.json({ ok: true, payload: voiceSettingsCatalog(service.currentConfig as Config) });
+      } catch (error) { return c.json({ ok: false, error: { message: error instanceof Error ? error.message : 'Voice selection failed' } }, 400); }
+    });
+  });
 
   authenticated.get('/api/voice/realtime/status', async (c) => {
     const config = service.currentConfig as Config;

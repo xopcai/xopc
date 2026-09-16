@@ -98,6 +98,7 @@ export class ModelCatalogStore {
             backgrounds: [...model.imageGeneration.backgrounds],
           },
         } : {}),
+        ...(model.voice ? { voice: structuredClone(model.voice) } : {}),
         ...(model.stt ? { stt: { ...model.stt, inputFormats: [...model.stt.inputFormats], languages: [...model.stt.languages], timestamps: [...model.stt.timestamps] } } : {}),
         ...(model.tts ? { tts: { ...model.tts, languages: [...model.tts.languages], outputFormats: [...model.tts.outputFormats] } } : {}),
       })),

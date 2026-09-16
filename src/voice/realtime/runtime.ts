@@ -83,10 +83,15 @@ function isStreamingProvider(
 
 export function resolveStreamingStt(config: Config, language?: string): ResolvedStreamingStt | undefined {
   const sttConfig = mergeSttConfigFromAppConfig(config.tools?.media?.audio, config.tools?.media);
-  for (const entry of resolveSTTProviderChain(sttConfig)) {
+  const configured = config.voice?.realtime?.stt;
+  const chain = configured ? [{ id: configured.provider, model: configured.model }] : resolveSTTProviderChain(sttConfig);
+  for (const entry of chain) {
     const plugin = getMediaUnderstandingProvider(entry.id);
     if (!isStreamingProvider(plugin)) continue;
-    const model = plugin.streamingAudio.defaultModel;
+    const model = plugin.id === 'xopc-cloud'
+      ? config.voice?.realtime?.stt?.model ?? entry.model ?? plugin.streamingAudio.defaultModel
+      : plugin.streamingAudio.defaultModel;
+    if (!plugin.streamingAudio.models.includes(model)) continue;
     return {
       plugin,
       model,
@@ -119,6 +124,7 @@ export function resolveStreamingTts(config: Config): ResolvedStreamingTts | unde
           // Explicit conversation setup reuses the input credential on the server only.
           ...(apiKey ? { apiKey } : {}),
           ...(slice.baseUrl ? { baseUrl: slice.baseUrl } : {}),
+          ...(selection.model ? { model: selection.model } : {}),
           ...(selection.voice ? { voice: selection.voice } : selection.provider === 'alibaba' ? { voice: 'Cherry' } : {}),
         },
       },
@@ -143,7 +149,7 @@ export function resolveStreamingTts(config: Config): ResolvedStreamingTts | unde
       const catalogModel = getModelCatalogStore().getSource('xopc-cloud')?.models.find(
         (entry) => entry.id === candidate,
       );
-      if (!catalogModel?.tts?.streaming || !catalogModel.tts.outputFormats.includes('pcm')) continue;
+      if (catalogModel?.availability !== 'available' || !catalogModel.voice?.modes.includes('speech.stream')) continue;
       model = candidate;
     } else {
       continue;
@@ -273,7 +279,7 @@ export class VoiceRealtimeRuntime {
     const ticket = crypto.randomBytes(32).toString('base64url');
     const connectionEpoch = crypto.randomInt(1, 0x1_0000_0000);
     const maxSessionMs = request.purpose === 'conversation'
-      ? Math.min(config.voice.realtime.maxConversationMs, omni?.route.managed ? 30 * 60_000 : Number.MAX_SAFE_INTEGER)
+      ? Math.min(config.voice.realtime.maxConversationMs, omni?.maxSessionSeconds ? omni.maxSessionSeconds * 1000 : Number.MAX_SAFE_INTEGER)
       : config.voice.realtime.maxDictationMs;
     const claim: VoiceTicketClaim = {
       conversationSessionId,
