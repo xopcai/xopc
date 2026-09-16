@@ -179,12 +179,31 @@ GUI model receives those previews with the current window, not old screenshots.
 Repeated identical input on an unchanged observed state stops before a third
 dispatch. This is loop detection, not a guarantee against duplicate business writes.
 
-`step` and `observe` accept an optional `expect`: either `{kind:"text",text:"Saved"}`
-or `{kind:"field",label:"Title",value:"Expected title"}`. Native scoped accessibility
-evidence returns `satisfied`, `not_met` or `unavailable`. A pre-existing satisfied
-condition skips input. `verified:true` confirms that condition only, not the whole
+`step` and `observe` accept an optional `expect`: `{kind:"text",text:"Saved"}`,
+`{kind:"field",label:"Title",value:"Expected title"}`, or
+`{kind:"selected",label:"Memories"}`. Native scoped accessibility
+evidence returns `satisfied`, `not_met` or `unavailable`. Only pre-existing field
+or selected-state conditions skip input. An already-visible navigation label does
+not verify navigation: a text expectation never skips an action, and an unchanged
+text match returns `preexisting:true` with `verified:false`. Prefer selected state
+or page-specific content for navigation. `verified:true` confirms that condition only, not the whole
 task or a remote transaction. Missing/ambiguous accessibility evidence is unknown,
 not success. Delayed application changes require a later observation.
+Clipped trees cannot establish a unique field/selected control. Web-content
+AXValue alone cannot prove the renderer accepted text; inspect the resulting UI.
+
+When a prepared app is hidden and exposes multiple windows, preparation first
+activates that app, then re-enumerates before binding an exact window. Unknown
+window probes remain candidates; they are not silently discarded as proxies.
+Unprepared observation never activates an app. Genuine ambiguity still returns
+window references instead of guessing from window titles.
+
+Invalid GUI outputs carry bounded `validationReason` and `diagnosticId` metadata.
+One budgeted correction may send the failed response back to the **same** GUI
+model with validation feedback before any input is dispatched. Invalid JSON is
+never locally repaired into coordinates. The private reply is not stored in
+transcripts or error logs. Failure after correction stops the session; this is
+not a guarantee that a hosted model will always obey the output protocol.
 
 Both GUI profiles support action, answer, finished claim and user takeover.
 `structured-tools-v1` uses a single `computer_proposal` function for control

@@ -17,7 +17,8 @@ const Schema = Type.Object({
   expect: Type.Optional(Type.Union([
     Type.Object({ kind: Type.Literal('text'), text: Type.String({ minLength: 1, maxLength: 1000 }) }, { additionalProperties: false }),
     Type.Object({ kind: Type.Literal('field'), label: Type.String({ minLength: 1, maxLength: 300 }), value: Type.String({ maxLength: 4000 }) }, { additionalProperties: false }),
-  ], { description: 'For observe or step: a completion condition grounded in the user task. Native evidence only. Text checks visible AX text; field checks the exact value of a uniquely labelled text field. Does not prove unrelated business outcomes.' })),
+    Type.Object({ kind: Type.Literal('selected'), label: Type.String({ minLength: 1, maxLength: 300 }) }, { additionalProperties: false }),
+  ], { description: 'For observe or step: a native condition grounded in the user task. Text checks visible AX text; an already-visible navigation label does not prove a page change. Field checks an exact field value. Selected checks a uniquely labelled control with native selected=true. Does not prove unrelated business outcomes.' })),
 }, { additionalProperties: false });
 export function createComputerUseTool(deps: {
   runtime: ComputerRuntime;

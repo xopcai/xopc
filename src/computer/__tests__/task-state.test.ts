@@ -21,6 +21,22 @@ describe('bounded desktop task state', () => {
     expect(() => state.assertProgress(action, obs)).toThrow('NO_PROGRESS');
     expect(() => state.assertProgress(action, { ...obs, stateDigest: 'changed' })).not.toThrow();
   });
+  it('requires native selected state, not the presence of a navigation label', () => {
+    const observation = (elements: any[]) => ({ summary: JSON.stringify({ text: 'Memories', elements: [{ role: 'AXWindow' }, ...elements] }) } as any);
+    const condition = { kind: 'selected', label: 'Memories' } as const;
+    expect(verifyComputerExpectation(condition, observation([{ label: 'Memories' }]))?.status).toBe('unavailable');
+    expect(verifyComputerExpectation(condition, observation([{ label: 'Memories', selected: false }]))?.status).toBe('not_met');
+    expect(verifyComputerExpectation(condition, observation([{ label: 'Memories', selected: true }]))?.status).toBe('satisfied');
+    expect(verifyComputerExpectation(condition, observation([{ label: 'Memories', selected: true }, { label: 'Memories', selected: false }]))?.status).toBe('unavailable');
+  });
+  it('does not claim exact field evidence from a clipped tree or an unverified web AX write', () => {
+    const field = { role: 'AXTextField', label: 'Message', value: 'hello' };
+    const condition = { kind: 'field', label: 'Message', value: 'hello' } as const;
+    for (const data of [{ truncated: true, elements: [{ role: 'AXWindow' }, field] },
+      { elements: [{ role: 'AXWindow' }, { ...field, in_web_content: true }] }]) {
+      expect(verifyComputerExpectation(condition, { summary: JSON.stringify(data) } as any)?.status).toBe('unavailable');
+    }
+  });
   it('bounds history and clears it; unknown dispatch never becomes a completed step', () => {
     const state = new ComputerTaskState();
     for (let i = 0; i < 10; i++) state.record('x'.repeat(5000), action, obs, receipt, obs);
