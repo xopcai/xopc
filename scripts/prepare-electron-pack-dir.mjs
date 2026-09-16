@@ -150,6 +150,16 @@ function stageVoiceHotkeyHelper(repoRoot, packDirPath, target) {
   cpSync(source, join(destDir, name));
 }
 
+export function stageComputerDriver(repoRoot, packDirPath, target) {
+  const computerDriverDir = join(packDirPath, '_pack-resources', 'computer-driver');
+  mkdirSync(computerDriverDir, { recursive: true });
+  if (target.platform !== 'darwin') return;
+  const driver = join(repoRoot, '.cache', 'computer-driver', '0.28.2', 'cua-driver');
+  if (!existsSync(driver)) throw new Error('Run node scripts/setup-computer-driver.mjs before packaging macOS Computer Use.');
+  cpSync(driver, join(computerDriverDir, 'cua-driver'));
+  cpSync(join(repoRoot, 'electron/resources/computer-driver-LICENSE.txt'), join(computerDriverDir, 'computer-driver-LICENSE.txt'));
+}
+
 export function prepareElectronPackDir(
   repoRoot = root,
   target = { platform: process.platform, arch: process.arch },
@@ -175,14 +185,7 @@ export function prepareElectronPackDir(
   pruneElectronRuntimeDeps(packDir, target);
   stageRipgrepBinary(packDir, target);
   stageVoiceHotkeyHelper(repoRoot, packDir, target);
-  const computerDriverDir = join(packDir, '_pack-resources', 'computer-driver');
-  mkdirSync(computerDriverDir, { recursive: true });
-  if (target.platform === 'darwin') {
-    const driver = join(repoRoot, '.cache', 'computer-driver', '0.28.2', 'cua-driver');
-    if (!existsSync(driver)) throw new Error('Run node scripts/setup-computer-driver.mjs before packaging macOS Computer Use.');
-    cpSync(driver, join(computerDriverDir, 'cua-driver'));
-    cpSync(join(repoRoot, 'electron/resources/computer-driver-LICENSE.txt'), join(computerDriverDir, 'computer-driver-LICENSE.txt'));
-  }
+  stageComputerDriver(repoRoot, packDir, target);
   rmSync(join(packDir, 'node_modules', '@vscode', `ripgrep-${target.platform}-${target.arch}`), {
     recursive: true,
     force: true,
