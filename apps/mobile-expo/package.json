@@ -1,6 +1,6 @@
 {
   "name": "@xopcai/mobile-expo",
-  "version": "0.0.60",
+  "version": "0.0.61",
   "private": true,
   "description": "Expo mobile client for the xopc gateway",
   "main": "index.js",
