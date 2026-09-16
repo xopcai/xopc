@@ -53,7 +53,6 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 45
     env:
-      HARMONY_TOOLS_DIR: ${{ runner.temp }}/command-line-tools
       HARMONY_TOOLS_SHA256: d53802c52d3d0a6a0836333c9e8f2bb73d9f6753d1658185539e2659c46df1ad
     steps:
       - uses: actions/checkout@v6
@@ -63,6 +62,7 @@ jobs:
       - name: Download verified Huawei command-line tools 26.0.0.821 (macOS ARM64)
         env:
           HARMONY_TOOLS_URL: ${{ secrets.HARMONY_TOOLS_URL }}
+          HARMONY_TOOLS_DIR: ${{ runner.temp }}/command-line-tools
         shell: bash
         run: |
           set -euo pipefail
@@ -78,6 +78,7 @@ jobs:
           rm -- "$RUNNER_TEMP/harmony-tools.zip"
           "$HARMONY_TOOLS_DIR/bin/ohpm" --version
           "$HARMONY_TOOLS_DIR/bin/hvigorw" --version
+          echo "HARMONY_TOOLS_DIR=$HARMONY_TOOLS_DIR" >> "$GITHUB_ENV"
       - name: Install HarmonyOS dependencies
         working-directory: apps/mobile-harmony
         run: |
