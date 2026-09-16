@@ -696,8 +696,10 @@ export const ChatComposer = memo(function ChatComposer({
       ) : null}
 
       {contextControl || contextRefs.length || att.attachments.length ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+        <ScrollView key={conversationId} horizontal showsHorizontalScrollIndicator={false}
           directionalLockEnabled keyboardShouldPersistTaps="handled"
+          removeClippedSubviews={false} contentInsetAdjustmentBehavior="never"
+          automaticallyAdjustContentInsets={false} alwaysBounceVertical={false}
           style={styles.contextControl} contentContainerStyle={styles.contextRow}>
           {contextControl}
           <ComposerContextChips refs={contextRefs}
@@ -848,8 +850,8 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 18,
   },
-  contextControl: { flexGrow: 0, marginBottom: spacing.sm },
-  contextRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  contextControl: { flexGrow: 0, flexShrink: 0, backgroundColor: 'transparent', marginBottom: spacing.sm },
+  contextRow: { backgroundColor: 'transparent', flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   compactRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -19,6 +19,9 @@ import {
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 import { getDevice } from '../../../storage/sqlite/device-access-repository.js';
+import { createLogger } from '../../../utils/logger.js';
+
+const log = createLogger('EndpointUpload');
 
 async function readBoundedBody(
   body: ReadableStream<Uint8Array> | null,
@@ -33,19 +36,21 @@ async function readBoundedBody(
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > maxBytes) throw new EndpointUploadError('Uploaded file is too large');
+      if (size > maxBytes) {
+        value.fill(0);
+        throw new EndpointUploadError('Uploaded file is too large', 'UPLOAD_TOO_LARGE');
+      }
       chunks.push(value);
     }
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    return bytes;
   } finally {
+    await reader.cancel().catch(() => {});
+    for (const chunk of chunks) chunk.fill(0);
     reader.releaseLock();
   }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return bytes;
 }
 
 export function registerEndpointToolRoutes(
@@ -195,9 +200,11 @@ export function registerEndpointToolRoutes(
     if (declaredLength > ENDPOINT_UPLOAD_MAX_BYTES) {
       return c.json({ ok: false, error: { code: 'RESULT_TOO_LARGE', message: 'Uploaded file is too large' } }, 413);
     }
+    let bytes: Uint8Array | undefined;
     try {
       const limits = deps.service.endpointTools.uploads.getGrantLimits(invocationId, endpointId, token);
-      const bytes = await readBoundedBody(c.req.raw.body, limits.maxBytes);
+      if (declaredLength > limits.maxBytes) throw new EndpointUploadError('Uploaded file is too large', 'UPLOAD_TOO_LARGE');
+      bytes = await readBoundedBody(c.req.raw.body, limits.maxBytes);
       const file = await deps.service.endpointTools.uploads.uploadValidated({
         invocationId,
         endpointId,
@@ -218,12 +225,15 @@ export function registerEndpointToolRoutes(
         },
       }, 201);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const code = error instanceof EndpointUploadError ? error.code : 'UPLOAD_FAILED';
+      const status = code === 'UPLOAD_TOO_LARGE' ? 413 : code === 'UPLOAD_BUSY' ? 429 : 400;
+      log.warn({ invocationId, endpointId, phase: 'frame_upload', errorCode: code, httpStatus: status,
+        size: bytes?.byteLength ?? declaredLength }, `Endpoint upload rejected: ${code}`);
       return c.json({
         ok: false,
-        error: { code: error instanceof EndpointUploadError ? 'INVALID_UPLOAD_GRANT' : 'UPLOAD_FAILED', message },
-      }, 400);
-    }
+        error: { code, message: error instanceof EndpointUploadError ? error.message : 'Endpoint upload failed' },
+      }, status);
+    } finally { bytes?.fill(0); }
   });
 
   authenticated.get('/api/endpoint-tools/files/:fileId', (c) => {

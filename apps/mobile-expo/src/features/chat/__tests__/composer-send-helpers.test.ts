@@ -79,6 +79,16 @@ describe('mergeOptimisticUserMessages', () => {
     ]);
   });
 
+  it('reconciles a sending prompt when its durable transcript row arrives first', () => {
+    const server = textMessage('row-1', 'hello', 10_010);
+    const assistant = textMessage('row-2', 'working', 10_020, 'assistant');
+    const optimistic = { ...textMessage('local-1', 'hello', 10_000), deliveryState: 'sending' as const };
+
+    expect(mergeOptimisticUserMessages([server, assistant], [optimistic])).toEqual([
+      { ...server, renderKey: 'local-1' }, assistant,
+    ]);
+  });
+
   it('does not reconcile an old same-text user tail', () => {
     const previous = textMessage('row-1', 'try again', 10_000);
     const repeated = textMessage('optimistic-1', 'try again', 200_001);

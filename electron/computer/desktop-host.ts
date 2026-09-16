@@ -17,6 +17,8 @@ import { MIME_TYPE_BY_EXTENSION } from '../ipc/file-ipc.js';
 import { normalizeExternalHttpUrl } from '../external-url.js';
 import { assertGatewayCompatibility, GATEWAY_PROTOCOL_INCOMPATIBLE } from '../gateway-compatibility.js';
 import { writeTextAtomic } from '../../src/infra/write-file-atomic.js';
+import { uploadDesktopFrame } from './frame-upload.js';
+import { executeComputerCommand } from './execute-command.js';
 
 type Identity = { principalId: string; publicKey: string; encryptedPrivateKey: string };
 
@@ -217,19 +219,7 @@ export class DesktopEndpointHost {
       { descriptor: structuredClone(COMPUTER_DESCRIPTOR) as any, execute: async (args, context) => {
         const command = ComputerCommandSchema.parse(args);
         if (this.controlPaused && command.op !== 'status' && command.op !== 'release') throw new Error('COMPUTER_CONTROL_PAUSED');
-        const abort = () => { void this.broker.cancel(command); };
-        context.signal.throwIfAborted();
-        context.signal.addEventListener('abort', abort, { once: true });
-        try {
-          const result = await this.broker.command(command);
-          const { frame, ...metadata } = result;
-          const content: import('@xopcai/endpoint-tools-protocol').EndpointToolContent[] = [{ type: 'json', value: metadata }];
-          if (frame) {
-            try { content.push(await context.uploadFile({ name: 'observation.png', mimeType: frame.mimeType, bytes: frame.bytes })); }
-            finally { frame.bytes.fill(0); }
-          }
-          return { content };
-        } finally { context.signal.removeEventListener('abort', abort); }
+        return executeComputerCommand(this.broker, command, context);
       } },
     ]);
     const controller = new EndpointToolHostController({ registry,
@@ -241,14 +231,8 @@ export class DesktopEndpointHost {
           detail: JSON.stringify(request.arguments).slice(0, 4000), buttons: [t.cancel, t.allow], defaultId: 0, cancelId: 0, signal: request.signal });
         return !request.signal.aborted && answer.response === 1;
       },
-      uploadFile: async (grant, file) => {
-        if (!grant || !/^\/api\/endpoint-tools\/invocations\/[^/]+\/files$/.test(grant.path) || file.bytes.length > grant.maxBytes) throw new Error('Invalid upload grant');
-        const response = await fetch(`${base}${grant.path}?name=${encodeURIComponent(file.name)}`, { method: 'POST', redirect: 'error',
-          headers: { Authorization: headers.Authorization, 'Content-Type': file.mimeType, 'x-endpoint-id': endpointId, 'x-endpoint-upload-token': grant.token },
-          body: Buffer.from(file.bytes), signal: AbortSignal.timeout(15_000) });
-        if (!response.ok) throw new Error('Computer frame upload failed');
-        return (await response.json()).payload;
-      },
+      uploadFile: (grant, file, context) => uploadDesktopFrame({ base, token: connection.token, endpointId, grant, file,
+        invocationId: context.invocationId, signal: AbortSignal.any([context.signal, this.lifetime.signal]) }),
     });
     const clientId = randomUUID();
     const realtime = new RealtimeClient({ clientId, clientKind: 'desktop', createMessageId: randomUUID,

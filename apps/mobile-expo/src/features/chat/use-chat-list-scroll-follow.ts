@@ -1,6 +1,9 @@
 /** Follow measured content growth without mistaking native layout adjustments for user scrolling. */
 import type { FlashListRef } from '@shopify/flash-list';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useKeyboardHandler, useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
+import { useSharedValue } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
 import { applyPinHysteresis, chatListDistanceFromBottom, shouldShowChatScrollToBottom } from './chat-scroll-geometry';
@@ -10,7 +13,6 @@ export function useChatListScrollFollow({
   listRef,
   messages,
   loadingOlder = false,
-  keyboardPadding,
   conversationId,
   onAtBottomChange,
   getMessageKey,
@@ -18,11 +20,13 @@ export function useChatListScrollFollow({
   listRef: RefObject<FlashListRef<Message> | null>;
   messages: Message[];
   loadingOlder?: boolean;
-  keyboardPadding: number;
   conversationId?: string;
   onAtBottomChange?: (isAtBottom: boolean) => void;
   getMessageKey: (msg: Message, index: number) => string;
 }) {
+  const keyboard = useReanimatedKeyboardAnimation();
+  const keyboardTransition = useSharedValue(false);
+  const pendingContentFollow = useRef(false);
   const pinnedRef = useRef(true);
   const draggingRef = useRef(false);
   const momentumRef = useRef(false);
@@ -34,15 +38,27 @@ export function useChatListScrollFollow({
   const buttonVisibleRef = useRef(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
+  const keyboardInset = useCallback(() => Math.abs(keyboard.height.value), [keyboard.height]);
+  const keyboardMoving = useCallback(() => keyboardTransition.value || (keyboard.progress.value > 0 && keyboard.progress.value < 1), [keyboard.progress, keyboardTransition]);
+  const scrollToLiveEdge = useCallback(() => {
+    const inset = keyboardInset();
+    if (inset > 0) {
+      const { contentHeight, viewportHeight } = metricsRef.current;
+      listRef.current?.scrollToOffset({ offset: Math.max(0, contentHeight + inset - viewportHeight), animated: false });
+    } else {
+      void listRef.current?.scrollToEnd({ animated: false });
+    }
+  }, [keyboardInset, listRef]);
+
   const syncButtonVisibility = useCallback(() => {
     const { offsetY, contentHeight, viewportHeight } = metricsRef.current;
     const visible = !pinnedRef.current && shouldShowChatScrollToBottom(
-      offsetY, contentHeight, viewportHeight, buttonVisibleRef.current,
+      offsetY, contentHeight + keyboardInset(), viewportHeight, buttonVisibleRef.current,
     );
     if (buttonVisibleRef.current === visible) return;
     buttonVisibleRef.current = visible;
     setShowScrollToBottom(visible);
-  }, []);
+  }, [keyboardInset]);
 
   const setPinned = useCallback((pinned: boolean) => {
     if (pinnedRef.current === pinned) return;
@@ -56,14 +72,38 @@ export function useChatListScrollFollow({
     frameRef.current = null;
   }, []);
 
-  const scheduleFollow = useCallback(() => {
-    if (!pinnedRef.current || draggingRef.current || momentumRef.current || frameRef.current != null) return;
+  const scheduleFollow = useCallback((deferContent = false) => {
+    if (!pinnedRef.current || draggingRef.current || momentumRef.current) return;
+    if (deferContent) pendingContentFollow.current = true;
+    if (keyboardMoving()) return;
+    if (frameRef.current != null) return;
     frameRef.current = requestAnimationFrame(() => {
       frameRef.current = null;
       if (!pinnedRef.current || draggingRef.current || momentumRef.current) return;
-      void listRef.current?.scrollToEnd({ animated: false });
+      if (keyboardMoving()) {
+        if (deferContent) pendingContentFollow.current = true;
+        return;
+      }
+      pendingContentFollow.current = false;
+      scrollToLiveEdge();
     });
-  }, [listRef]);
+  }, [keyboardMoving, scrollToLiveEdge]);
+
+  const finishKeyboardTransition = useCallback(() => {
+    if (!pendingContentFollow.current) return;
+    pendingContentFollow.current = false;
+    scheduleFollow(true);
+  }, [scheduleFollow]);
+
+  useKeyboardHandler({
+    onStart: () => { 'worklet'; keyboardTransition.value = true; },
+    onInteractive: () => { 'worklet'; keyboardTransition.value = true; },
+    onEnd: () => {
+      'worklet';
+      keyboardTransition.value = false;
+      scheduleOnRN(finishKeyboardTransition);
+    },
+  }, [finishKeyboardTransition]);
 
   useLayoutEffect(() => {
     const previous = previousRef.current;
@@ -71,6 +111,7 @@ export function useChatListScrollFollow({
     const lastKey = last ? getMessageKey(last, messages.length - 1) : '';
     if (previous.conversationId !== conversationId) {
       cancelFollow();
+      pendingContentFollow.current = false;
       draggingRef.current = false;
       momentumRef.current = false;
       pinnedRef.current = true;
@@ -85,24 +126,23 @@ export function useChatListScrollFollow({
         setPinned(true);
       }
       // Assistant rows follow only while already pinned; history readers stay undisturbed.
-      scheduleFollow();
+      scheduleFollow(true);
     }
     previousRef.current = { conversationId, lastKey, length: messages.length };
   }, [conversationId, messages, getMessageKey, cancelFollow, onAtBottomChange, setPinned, scheduleFollow]);
 
   useEffect(() => cancelFollow, [cancelFollow]);
-  useEffect(() => { scheduleFollow(); }, [keyboardPadding, scheduleFollow]);
 
   const updateUserPosition = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     metricsRef.current = { offsetY: contentOffset.y, contentHeight: contentSize.height, viewportHeight: layoutMeasurement.height };
-    const distance = chatListDistanceFromBottom(contentOffset.y, contentSize.height, layoutMeasurement.height);
-    setPinned(contentSize.height <= layoutMeasurement.height
+    const distance = chatListDistanceFromBottom(contentOffset.y, contentSize.height + keyboardInset(), layoutMeasurement.height);
+    setPinned(contentSize.height + keyboardInset() <= layoutMeasurement.height
       || applyPinHysteresis(pinnedRef.current, distance));
     if (contentSize.height > layoutMeasurement.height
       && draggingRef.current && contentOffset.y < dragStartYRef.current - 2) setPinned(false);
     syncButtonVisibility();
-  }, [setPinned, syncButtonVisibility]);
+  }, [keyboardInset, setPinned, syncButtonVisibility]);
 
   const recordMetrics = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
@@ -118,9 +158,8 @@ export function useChatListScrollFollow({
     contentLayoutHeightRef.current = height;
     metricsRef.current.contentHeight = height;
     syncButtonVisibility();
-    // FlashList owns continuous bottom anchoring while streamed content grows.
-    // Only restore the live edge after a completion collapses transient details.
-    if (!loadingOlder && previousHeight > 0 && height < previousHeight - 1) scheduleFollow();
+    // One owner for content follow; FlashList must not scroll again on viewport resize.
+    if (!loadingOlder && Math.abs(height - previousHeight) > 1) scheduleFollow(true);
   }, [loadingOlder, scheduleFollow, syncButtonVisibility]);
 
   const onLayout = useCallback((event: LayoutChangeEvent) => {
@@ -163,8 +202,8 @@ export function useChatListScrollFollow({
 
   const scrollToBottom = useCallback(() => {
     setPinned(true);
-    void listRef.current?.scrollToEnd({ animated: false });
-  }, [listRef, setPinned]);
+    scrollToLiveEdge();
+  }, [scrollToLiveEdge, setPinned]);
 
   return {
     listKey: conversationId ?? '',

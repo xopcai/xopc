@@ -258,7 +258,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
           />
         </View>
 
-        <ChatComposerDock root={root} panelOpen={composerActionsOpen} bottomInset={insets.bottom} backgroundColor={canvasBg}>
+        <ChatComposerDock root={root} panelOpen={composerActionsOpen} bottomInset={insets.bottom}>
           <View onStartShouldSetResponderCapture={dismissActionsOnOutsideTouch}>
           <ContinuousReadAloudBar conversationId={conversationId} />
           <ClarifyPrompt

@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
+import { COMPUTER_DESCRIPTOR, COMPUTER_FRAME_MAX_BYTES } from '@xopcai/computer-control-contract';
 import { ENDPOINT_PROTOCOL_VERSION } from '@xopcai/endpoint-tools-protocol';
 import { REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 
@@ -73,6 +73,7 @@ describe('resolveGatewayStartupMode', () => {
       if (req.url === '/api/endpoint-tools/compatibility' && req.headers.authorization === `Bearer ${token}`) {
         res.writeHead(200, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ ok: true, payload: { realtimeProtocolVersion: REALTIME_PROTOCOL_VERSION,
+          computerFrameUploadMaxBytes: COMPUTER_FRAME_MAX_BYTES,
           endpointProtocolVersion: ENDPOINT_PROTOCOL_VERSION, computerControl: { ...COMPUTER_DESCRIPTOR, title: 'Updated display title' } } }));
         return;
       }
@@ -94,7 +95,7 @@ describe('resolveGatewayStartupMode', () => {
     ).resolves.toBe('spawn');
   });
 
-  it.each(['missing', 'old-contract', 'old-realtime', 'old-endpoint', 'html'])('rejects %s gateways before reuse and after spawn', async (variant) => {
+  it.each(['missing', 'old-contract', 'old-realtime', 'old-endpoint', 'old-upload-limit', 'html'])('rejects %s gateways before reuse and after spawn', async (variant) => {
     const server = createServer((req, res) => {
       if (req.url === '/api/config') { res.end('{}'); return; }
       if (variant === 'missing') { res.writeHead(404); res.end(); return; }
@@ -102,6 +103,7 @@ describe('resolveGatewayStartupMode', () => {
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ ok: true, payload: {
         realtimeProtocolVersion: variant === 'old-realtime' ? -1 : REALTIME_PROTOCOL_VERSION,
+        computerFrameUploadMaxBytes: variant === 'old-upload-limit' ? 1024 * 1024 : COMPUTER_FRAME_MAX_BYTES,
         endpointProtocolVersion: variant === 'old-endpoint' ? -1 : ENDPOINT_PROTOCOL_VERSION,
         computerControl: variant === 'old-contract' ? { ...COMPUTER_DESCRIPTOR, inputSchema: {} } : COMPUTER_DESCRIPTOR,
       } }));

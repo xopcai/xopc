@@ -101,16 +101,19 @@ export function useChatPageBootstrap({
     useChatSelectionStore.getState().selectIfCurrent(selectionScope, selection, '');
   }, [focused, isCurrent, selectionScope, selection, urlConversationId, validation]);
 
-  const beginSessionSelection = useCallback(() => {
+  const beginSessionSelection = useCallback((destination: 'current' | 'home' = 'current') => {
     const expected = useChatSelectionStore.getState().beginSelection(selectionScope);
     attemptedRef.current = { scope: scopeKey, selection: expected };
     setCreating(null);
     setCreateError(null);
     return (key: string): boolean => {
       if (!isCurrent(expected)) return false;
-      if (!urlConversationId) {
-        openChat(router, key);
-        return false;
+      if (destination === 'home' && urlConversationId) {
+        useChatSelectionStore.getState().select(scopeKey, key);
+        setCreating(null);
+        setCreateError(null);
+        router.dismissTo('/');
+        return true;
       }
       commitSelection(key);
       return true;

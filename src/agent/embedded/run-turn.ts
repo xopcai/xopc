@@ -1,5 +1,5 @@
 import { getConnectionResumeInput, isConnectionSuspended } from '../../storage/sqlite/connection-wait-repository.js';
-import { isComputerControlActive, stopComputerControl } from '../../computer/control-guard.js';
+import { isComputerControlActive, isComputerLeaseTool, stopComputerControl } from '../../computer/control-guard.js';
 import {
   getClarificationResumeInput,
   getClarification,
@@ -372,8 +372,8 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       if (wait?.approvalKey?.startsWith('computer:') && wait.answer !== '已在桌面端处理，继续') {
         await stopComputerControl(conversationId);
       }
-      if (isComputerControlActive(conversationId) && !['computer_use', 'clarify'].includes(context.toolCall.name)) {
-        return { block: true, reason: 'A desktop-control lease is active. Only computer_use and clarification are admitted until it is released. Never use shell, browser or raw MCP to bypass a desktop refusal.' };
+      if (isComputerControlActive(conversationId) && !isComputerLeaseTool(context.toolCall.name)) {
+        return { block: true, reason: 'A desktop-control lease is active. Only computer_use, clarification and static tool manuals are admitted until release is confirmed. Close the lease before an authorized tool handoff. Never use shell, browser or raw MCP to bypass a desktop refusal.' };
       }
       if (connectionStopped) return { block: true, reason: 'Waiting for the user to connect an app.', terminate: true };
       if (clarificationStopped) return { block: true, reason: 'Waiting for the user to answer.', terminate: true };
