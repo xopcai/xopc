@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
+import sharp from 'sharp';
 
 import { EndpointUploadService } from '../upload-service.js';
 
@@ -13,6 +14,27 @@ afterEach(() => {
 });
 
 describe('EndpointUploadService', () => {
+  it('bounds concurrent decodes and rechecks revoked grants after decoding', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'xopc-endpoint-upload-')); roots.push(root);
+    const service = new EndpointUploadService(root);
+    try {
+      const bytes = await sharp({ create: { width: 8, height: 8, channels: 3, background: 'blue' } }).png().toBuffer();
+      const inputs = ['a', 'b', 'c'].map(invocationId => ({ invocationId, endpointId: 'desktop',
+        token: service.createGrant(invocationId, 'desktop', Date.now(), 'computer-frame').token,
+        name: 'frame.png', mimeType: 'image/png', bytes }));
+      const first = service.uploadValidated(inputs[0]).catch(error => error);
+      const second = service.uploadValidated(inputs[1]);
+      const duplicate = service.uploadValidated(inputs[0]).catch(error => error);
+      const third = service.uploadValidated(inputs[2]).catch(error => error);
+      service.abort('a');
+      expect(await duplicate).toMatchObject({ code: 'UPLOAD_BUSY' });
+      expect(await third).toMatchObject({ code: 'UPLOAD_BUSY' });
+      expect(await first).toMatchObject({ code: 'INVALID_UPLOAD_GRANT' });
+      const file = await second;
+      service.abort('b');
+      expect(service.takeComputerFrame(file.fileId, 'b')).toBeUndefined();
+    } finally { service.close(); }
+  });
   it('accepts grant-bound files and rejects forged result descriptors', () => {
     const root = mkdtempSync(join(tmpdir(), 'xopc-endpoint-upload-'));
     roots.push(root);

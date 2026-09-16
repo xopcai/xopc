@@ -335,6 +335,7 @@ describe('ChatPageHeaderRegistration', () => {
     const openButton = container.querySelector<HTMLButtonElement>('[aria-label="Open side chat"]');
     expect(openButton).not.toBeNull();
     expect(openButton?.getAttribute('aria-expanded')).toBe('false');
+    expect(openButton?.parentElement?.lastElementChild).toBe(openButton);
 
     act(() => openButton!.click());
     expect(useSideChatStore.getState().panes['session-1']?.open).toBe(true);

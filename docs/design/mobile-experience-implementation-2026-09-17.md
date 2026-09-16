@@ -6,7 +6,7 @@
 
 - 一级导航为「对话 / 进展 / 资料 / 我的」。历史抽屉只负责对话历史；旧工作台抽屉导航和独立 Attention 页面删除，原设置页面进入「我的」的子导航。
 - 聊天顶部恢复为当前模型名称与切换入口，不展示 Agent 头像、名称或连接/运行状态。Agent 选择保留在对话操作菜单。打开下一个弹层需等待原弹层关闭，避免两个原生 Modal 同时展示。
-- 每个网关在本机保存独立主会话。历史会话和新建对话作为详情打开，不改写主会话。删除最近会话回退查找；首次使用新结构会建立主会话，原会话仍在历史中。没有读取旧偏好或旧导航的兼容分支。
+- 每个网关在本机保存独立主会话。历史会话作为详情打开，不改写主会话；新建对话直接替换首页主会话，从详情新建则返回 Chat 首页。删除最近会话回退查找；首次使用新结构会建立主会话，原会话仍在历史中。没有读取旧偏好或旧导航的兼容分支。
 - 「进展」复用 Home 和 Task API，展示待决定事项、后台工作、最近结束工作。取消、重复和不再推进保留各自结果，不显示成成功。项目、工作流和自动化保留在二级入口。
 - 「资料」展示真实最近文件和笔记，图片可预览，文件、笔记和收件箱可继续进入完整管理页面。
 - 流式回复期间可继续排队发送或明确选择补充当前任务。输入通过现有持久化 inputs 协议提交；手动重试保留同一 clientMessageId 和 delivery。队列可编辑、取消；版本冲突显式报错并刷新，不自动覆盖。
@@ -77,3 +77,25 @@
 - 浏览时底部安全区由导航承接；面板打开时交给输入区；键盘打开时移除重复安全区留白。原有消息列表可见位置维护继续保留，不新增滚到底部逻辑。
 - 导航隐藏时禁用点击并从无障碍树隐藏；面板过渡遵循系统减少动态效果设置。
 - 类型检查、ESLint、169 个测试文件共 929 项测试通过。新增导航占位释放/恢复、双向键盘交接不闪回、其他 Tab 隔离和输入区安全区回归。实际设备动画与触控仍待验收。
+
+
+## Chat keyboard and context refinement
+
+- Use the installed native `KeyboardChatScrollView` as FlashList's scroll component and for the empty conversation. Remove the JS destination-height padding hook; keyboard insets and content movement now share the native keyboard frames.
+- Keep history reading stationary, avoid JS scroll-to-end commands during keyboard transitions, and include the native inset when returning to the latest message.
+- Keep the composer dock and horizontal context strip transparent. Only the individual chips and composer shell paint surfaces. Disable context-strip clipping and reset its horizontal position when switching conversations; keep the project chip stable while loading.
+- Initial simulator inspection timed out; the subsequent iOS simulator validation below supersedes that limitation for the scenarios actually exercised.
+
+
+### Keyboard flicker follow-up
+
+- FlashList 2.0.2 automatically calls `scrollToEnd` when its viewport height changes if `autoscrollToBottomThreshold` is configured. The tab dock's animated height therefore competed with native keyboard scrolling. Remove that automatic follow; retain visible-item anchoring for prepended history and initial bottom rendering.
+- Content follow now has one owner, coalesces changes within a frame, and waits for keyboard `onEnd`. `onStart` and interactive events block extra scrolling even at progress 0 or 1; viewport-only changes do not queue a second scroll after keyboard completion. User history-reading intent still wins over queued stream follow.
+- On iPhone 17 Pro / iOS 26.4 Simulator, repeated software-keyboard opening and closing reproduced cumulative list drift. The installed keyboard component's relative displacement did not remain symmetric when composer safe-area padding changed the viewport by 34pt. After the first close, the list was no longer within its end threshold.
+- `ChatKeyboardScrollView` now retains native keyboard insets but disables that relative lift. A UI-thread scroll owner computes the live edge from content height, current keyboard height and current viewport height. It yields when the user starts dragging and leaves readers away from the end stationary. No timer, platform compatibility branch or dependency patch was added.
+- After a fresh app launch, the same existing long conversation retained matching open/closed positions through three keyboard cycles. Context chips rendered with a transparent surrounding strip. No persistent blank-list state or accumulated offset was observed in these cycles. This is endpoint/position verification using simulator observations, not a frame-by-frame FPS certification.
+- A hidden gateway-connect modal was also removed from the native tree when closed, after the simulator inspector exposed its full-screen container during touch troubleshooting.
+- Automated validation: the full mobile suite passed (169 files, 943 tests), including 5 new native-scroll regression cases. They cover repeated cycles with changing safe-area height, tab-dock height changes, history-reader position, gesture ownership, and viewport measurement arriving after keyboard end.
+- Remaining limits: the computer-control service subsequently returned invalid accessibility IDs even after reconnect/reset, blocking the final homepage panel/keyboard and history-drag checks. Android release compilation is separate from Android visual verification; Android UI control was not available through that service. Do not mark those scenarios or device FPS as verified. No data-sharing consent was granted to send new test content; existing messages were used instead.
+
+- Final local Android APK build succeeded (7m 7s); APK v2 signature verification passed. Artifact: `apps/mobile-expo/dist/android/xopc-android.apk`. The existing AAB was not rebuilt. Typecheck, ESLint and `git diff --check` passed.

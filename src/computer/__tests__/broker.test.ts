@@ -80,7 +80,7 @@ describe('desktop computer authority', () => {
     await expect(f.broker.command({ op: 'observe', sessionId: 's', owner: 'other' })).rejects.toThrow('NOT_FOUND');
     const obs = await f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' });
     f.move();
-    await expect(f.broker.command({ op: 'act', sessionId: 's', owner: 'o', envelope: envelope(obs) })).rejects.toThrow('TARGET_CHANGED');
+    expect(await f.broker.command({ op: 'act', sessionId: 's', owner: 'o', envelope: envelope(obs) })).toMatchObject({ status: 'ready', errorCode: 'COMPUTER_OBSERVATION_CHANGED' });
     expect(f.driver.perform).not.toHaveBeenCalled();
     f.hide();
     await expect(f.broker.command({ ...opening, sessionId: 'new' })).rejects.toThrow('LOCAL_UI_REQUIRED');
@@ -107,7 +107,7 @@ describe('desktop computer authority', () => {
   it('rejects target changes after approval', async () => {
     const f = fixture(); const obs = await ready(f); const command = { op: 'act' as const, sessionId: 's', owner: 'o', envelope: envelope(obs) };
     await f.broker.command(command); f.settle(true); await Promise.resolve(); await Promise.resolve(); f.move();
-    await expect(f.broker.command(command)).rejects.toThrow('TARGET_CHANGED'); expect(f.driver.perform).not.toHaveBeenCalled();
+    expect(await f.broker.command(command)).toMatchObject({ status: 'ready', errorCode: 'COMPUTER_OBSERVATION_CHANGED' }); expect(f.driver.perform).not.toHaveBeenCalled();
   });
   it('revokes a pending decision synchronously on stop', async () => {
     const f = fixture(); const obs = await ready(f); const command = { op: 'act' as const, sessionId: 's', owner: 'o', envelope: envelope(obs) };
@@ -124,5 +124,16 @@ describe('desktop computer authority', () => {
     await f.broker.command(command); f.settle(true); await Promise.resolve(); await Promise.resolve();
     expect((await f.broker.command(command)).receipt?.dispatch).toBe('unknown');
     await expect(f.broker.command(command)).rejects.toThrow('REVOKED'); expect(f.driver.perform).toHaveBeenCalledTimes(1);
+  });
+  it('preserves completed dispatch when only the post-action observation fails', async () => {
+    const f = fixture(true); await f.open();
+    const obs = await f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' });
+    vi.mocked(f.driver.perform).mockImplementation(async () => {
+      vi.mocked(f.driver.observe).mockRejectedValue(new Error('capture disconnected'));
+    });
+    const result = await f.broker.command({ op: 'act', sessionId: 's', owner: 'o', envelope: envelope(obs) });
+    expect(result).toMatchObject({ status: 'stopped', errorCode: 'COMPUTER_POST_ACTION_OBSERVATION_FAILED',
+      receipt: { dispatch: 'completed', outcome: 'unknown', verification: 'none' } });
+    expect(f.driver.perform).toHaveBeenCalledTimes(1);
   });
 });

@@ -56,7 +56,16 @@ try {
   assert.ok(ready, 'Built Gateway did not start');
   assert.equal((await fetch(`${origin}/api/endpoint-tools/compatibility`)).status, 401);
   await assertGatewayCompatibility({ port, token });
-  console.log('[electron-compatibility] PASS: built desktop + built Gateway, authenticated preflight, isolated clean state');
+  // This must reach grant validation, never the generic 1MB limiter. No upload grant is issued.
+  const probe = Buffer.alloc(2 * 1024 * 1024);
+  const upload = await fetch(`${origin}/api/endpoint-tools/invocations/pack-probe/files?name=probe.png`, {
+    method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'image/png' },
+    body: probe, signal: AbortSignal.timeout(5000), redirect: 'error',
+  });
+  assert.equal(upload.status, 400, 'Built Gateway must admit >1MB uploads to grant validation');
+  assert.equal((await upload.json()).error.code, 'INVALID_UPLOAD_GRANT');
+  probe.fill(0);
+  console.log('[electron-compatibility] PASS: built desktop + built Gateway, authenticated preflight, >1MB upload admission, isolated clean state');
 } catch (error) {
   console.error(output.replaceAll(token, '[REDACTED]'));
   throw error;

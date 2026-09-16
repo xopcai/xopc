@@ -71,6 +71,13 @@ describe('private native driver admission', () => {
     expect(await f.driver.resolveTarget('fixture', new AbortController().signal, { prepare: true })).toMatchObject({ windowId: '9' });
     expect(f.call).toHaveBeenCalledWith('bring_to_front', { pid: 42, window_id: 9 }, expect.any(AbortSignal));
   });
+  it('also brings an already-visible window forward when preparation is authorized', async () => {
+    const f = native([window(9, 'Today', true)]);
+    await f.driver.resolveTarget('fixture', new AbortController().signal, { prepare: false });
+    expect(f.call).not.toHaveBeenCalledWith('bring_to_front', expect.anything(), expect.anything());
+    await f.driver.resolveTarget('fixture', new AbortController().signal, { prepare: true });
+    expect(f.call).toHaveBeenCalledWith('bring_to_front', { pid: 42, window_id: 9 }, expect.any(AbortSignal));
+  });
   it.each(['ai.xopc.xopc', 'com.github.Electron', 'custom.host'])('refuses self-control of %s before starting the driver', async appId => {
     const driver = new CuaComputerDriver('/fixture/cua-driver', 'custom.host');
     await expect(driver.resolveTarget(appId, new AbortController().signal, { prepare: false })).rejects.toThrow('SELF_CONTROL_DENIED');

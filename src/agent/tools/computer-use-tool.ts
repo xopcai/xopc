@@ -2,7 +2,7 @@ import { Type } from '@sinclair/typebox';
 import { z } from 'zod';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { ComputerUseInputSchema, type ComputerRuntime } from '../../computer/runtime.js';
-import { computerRecovery } from '../../computer/errors.js';
+import { computerDiagnostic, computerRecovery } from '../../computer/errors.js';
 import type { GatewayClarifyRequestFn } from './clarify-tool.js';
 
 const Schema = Type.Object({
@@ -14,6 +14,10 @@ const Schema = Type.Object({
   prepare: Type.Optional(Type.Boolean({ description: 'Required for open. True only when the task authorizes starting/restoring the app; false for inspecting existing windows without desktop changes.' })),
   question: Type.Optional(Type.String({ minLength: 1, maxLength: 4000, description: 'For observe: optional question to answer visually without any input actions.' })),
   goal: Type.Optional(Type.String({ minLength: 1, maxLength: 4000, description: 'Required only for op=step: the next concrete GUI goal.' })),
+  expect: Type.Optional(Type.Union([
+    Type.Object({ kind: Type.Literal('text'), text: Type.String({ minLength: 1, maxLength: 1000 }) }, { additionalProperties: false }),
+    Type.Object({ kind: Type.Literal('field'), label: Type.String({ minLength: 1, maxLength: 300 }), value: Type.String({ maxLength: 4000 }) }, { additionalProperties: false }),
+  ], { description: 'For observe or step: a completion condition grounded in the user task. Native evidence only. Text checks visible AX text; field checks the exact value of a uniquely labelled text field. Does not prove unrelated business outcomes.' })),
 }, { additionalProperties: false });
 export function createComputerUseTool(deps: {
   runtime: ComputerRuntime;
@@ -29,9 +33,10 @@ export function createComputerUseTool(deps: {
       try { result = await deps.runtime.execute(context.conversationId, ComputerUseInputSchema.parse(raw), signal); }
       catch (error) {
         if (signal?.aborted) throw error;
-        const code = error instanceof z.ZodError ? 'COMPUTER_INVALID_INPUT'
-          : error instanceof Error && /^COMPUTER_[A-Z_0-9]+$/.test(error.message) ? error.message : 'COMPUTER_OPERATION_FAILED';
-        const details = { status: 'error', errorCode: code, nextAction: computerRecovery(code) };
+        const diagnostic = computerDiagnostic(error);
+        const code = diagnostic?.errorCode ?? (error instanceof z.ZodError ? 'COMPUTER_INVALID_INPUT'
+          : error instanceof Error && /^COMPUTER_[A-Z_0-9]+$/.test(error.message) ? error.message : 'COMPUTER_OPERATION_FAILED');
+        const details = { status: 'error', ...diagnostic, errorCode: code, nextAction: computerRecovery(code) };
         throw new Error(JSON.stringify(details));
       }
       if (result.pending) {
@@ -41,8 +46,7 @@ export function createComputerUseTool(deps: {
           approvalKey: `computer:${result.sessionId}`,
         }).catch(async error => { await deps.runtime.close(context.conversationId); throw error; });
         if (answer.status === 'answered' && answer.answer !== '已在桌面端处理，继续') {
-          await deps.runtime.close(context.conversationId);
-          result = { status: 'stopped', sessionId: result.sessionId };
+          result = await deps.runtime.execute(context.conversationId, { op: 'close' });
         }
       }
       // pi marks only thrown executions as errors; retain bounded recovery metadata in the message.

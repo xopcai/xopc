@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('expo-constants', () => ({ default: { executionEnvironment: 'storeClient' }, ExecutionEnvironment: { StoreClient: 'storeClient' } }));
-const environment = vi.hoisted(() => ({ gatewayId: 'a', focused: true, router: {} }));
+const environment = vi.hoisted(() => ({ gatewayId: 'a', focused: true, router: { dismissTo: vi.fn() } }));
 vi.mock('expo-router', () => ({
   useRouter: () => environment.router,
   useFocusEffect: (callback: () => void | (() => void)) => useEffect(() => environment.focused ? callback() : undefined, [callback, environment.focused]),
@@ -136,7 +136,7 @@ describe('chat startup lifecycle', () => {
     expect(result.pendingBootstrapKey).toBe('chosen');
   });
 
-  it('ignores late creation after a new user choice and opens new chats without replacing the main conversation', async () => {
+  it('ignores stale creation and replaces the main conversation in place', async () => {
     useChatSelectionStore.getState().select('a', 'saved');
     await render();
     let finish!: (key: string) => boolean;
@@ -144,9 +144,39 @@ describe('chat startup lifecycle', () => {
     await act(async () => result.setPendingBootstrapKey('chosen'));
     await act(async () => { expect(finish('late-create')).toBe(false); });
     await act(async () => { finish = result.beginSessionSelection(); });
-    await act(async () => { expect(finish('new-chat')).toBe(false); });
-    expect(JSON.parse(storage.getString(KEYS.mainChatSessionByGateway)!)).toEqual({ a: 'chosen' });
-    expect(openChat).toHaveBeenCalledWith(environment.router, 'new-chat');
+    await act(async () => { expect(finish('new-chat')).toBe(true); });
+    expect(JSON.parse(storage.getString(KEYS.mainChatSessionByGateway)!)).toEqual({ a: 'new-chat' });
+    expect(result.pendingBootstrapKey).toBe('new-chat');
+    expect(props.activeConversationIdRef.current).toBe('new-chat');
+    expect(openChat).not.toHaveBeenCalled();
+    expect(environment.router.dismissTo).not.toHaveBeenCalled();
+  });
+
+  it('returns a new conversation from a detail route to the home tab', async () => {
+    useChatSelectionStore.getState().select('a', 'saved');
+    await render({ urlConversationId: 'detail-chat', shouldNavigateToRoute: true });
+    let finish!: (key: string) => boolean;
+    await act(async () => { finish = result.beginSessionSelection('home'); });
+    await act(async () => { expect(finish('new-home-chat')).toBe(true); });
+    expect(useChatSelectionStore.getState().selections.a.key).toBe('new-home-chat');
+    expect(result.pendingBootstrapKey).toBe('detail-chat');
+    expect(environment.router.dismissTo).toHaveBeenCalledWith('/');
+    expect(openChat).not.toHaveBeenCalled();
+    await render({ urlConversationId: '', shouldNavigateToRoute: false });
+    expect(result.pendingBootstrapKey).toBe('new-home-chat');
+    expect(takeNewChatConversationId).not.toHaveBeenCalled();
+  });
+
+  it('does not replace home when a detail creation completes after leaving', async () => {
+    useChatSelectionStore.getState().select('a', 'saved');
+    await render({ urlConversationId: 'detail-chat' });
+    let finish!: (key: string) => boolean;
+    await act(async () => { finish = result.beginSessionSelection('home'); });
+    environment.focused = false;
+    await render();
+    await act(async () => { expect(finish('late-chat')).toBe(false); });
+    expect(useChatSelectionStore.getState().selections.a.key).toBe('saved');
+    expect(environment.router.dismissTo).not.toHaveBeenCalled();
   });
 
   it('shows a failed creation and supports an explicit retry', async () => {

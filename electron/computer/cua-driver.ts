@@ -204,7 +204,7 @@ export class CuaComputerDriver implements ComputerDriver {
       }
     }
     if (!window && windows.length > 1) throw new ComputerTargetError('COMPUTER_WINDOW_AMBIGUOUS', candidates);
-    if (window && !window.is_on_screen && options.prepare) {
+    if (window && options.prepare) {
       signal.throwIfAborted();
       if (await this.processIdentity(pid) !== processIdentity) throw new Error('COMPUTER_PROCESS_CHANGED');
       await this.call('bring_to_front', { pid, window_id: window.window_id }, signal);

@@ -6,11 +6,10 @@ import { motion, useReducedMotion } from '../../motion';
 import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding } from '../../theme';
 
 /** Safe-area space belongs to the tab dock when browsing, and the accessory when open. */
-export function ChatComposerDock({ root, panelOpen, bottomInset, backgroundColor, children }: {
+export function ChatComposerDock({ root, panelOpen, bottomInset, children }: {
   root: boolean;
   panelOpen: boolean;
   bottomInset: number;
-  backgroundColor: string;
   children: ReactNode;
 }) {
   const keyboard = useReanimatedKeyboardAnimation();
@@ -27,7 +26,7 @@ export function ChatComposerDock({ root, panelOpen, bottomInset, backgroundColor
     paddingBottom: restingInset * (root ? panel.value : 1)
       * (1 - Math.min(1, Math.max(0, keyboard.progress.value))),
   }));
-  return <KeyboardStickyView offset={{ closed: 0, opened: 0 }} style={{ backgroundColor, marginBottom: FLOATING_BOTTOM_OFFSET }}>
+  return <KeyboardStickyView offset={{ closed: 0, opened: 0 }} style={{ backgroundColor: 'transparent', marginBottom: FLOATING_BOTTOM_OFFSET }}>
     <Animated.View style={style}>{children}</Animated.View>
   </KeyboardStickyView>;
 }
