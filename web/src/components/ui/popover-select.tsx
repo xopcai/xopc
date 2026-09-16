@@ -31,7 +31,7 @@ export function SelectOptionList({ options, values, multiple = false, onChange, 
     <fieldset aria-label={ariaLabel} className="min-w-0 space-y-0.5">
       {options.map((option) => (
         <label key={option.value} className={cn(
-          'flex min-h-10 min-w-0 items-center gap-3 rounded-md px-2 py-2 text-sm text-fg has-focus-visible:ring-2 has-focus-visible:ring-accent',
+          'touch-target flex min-h-10 min-w-0 items-center gap-3 rounded-md px-2 py-2 text-sm text-fg has-focus-visible:ring-2 has-focus-visible:ring-accent',
           option.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-surface-hover',
         )}>
           <input
@@ -152,8 +152,8 @@ export function PopoverSelect({
           title={title}
           disabled={disabled}
           className={cn(
-            'box-border flex h-10 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-edge bg-surface-subtle px-3 text-left text-sm font-normal text-fg',
-            'hover:border-edge-strong focus-visible:outline-none focus-visible:border-edge-strong',
+            'touch-target box-border flex h-10 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-edge bg-surface-subtle px-3 text-left text-sm font-normal text-fg',
+            'hover:border-edge-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
             disabled && 'cursor-not-allowed opacity-50 hover:border-edge',
             triggerClassName,
           )}
@@ -183,7 +183,7 @@ export function PopoverSelect({
               placeholder={searchPlaceholder}
               value={searchValue}
               onChange={(event) => onSearchChange?.(event.target.value)}
-              className="mb-1 w-full shrink-0 rounded-md bg-surface-base px-3 py-2 text-sm text-fg placeholder:text-fg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="mb-1 w-full shrink-0 rounded-md bg-surface-base px-3 py-2 text-base text-fg placeholder:text-fg-subtle sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             />
           ) : null}
           <div data-select-scroll-region className={cn(selectPopoverScrollAreaClass, 'max-h-64')}>
@@ -192,7 +192,7 @@ export function PopoverSelect({
                 type="button"
                 disabled={emptyDisabled}
                 className={cn(
-                  'flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-fg hover:bg-surface-hover',
+                  'touch-target flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-fg hover:bg-surface-hover',
                   value === '' && 'bg-surface-active font-medium',
                   emptyDisabled && 'cursor-not-allowed opacity-45 hover:bg-transparent',
                 )}
@@ -224,7 +224,7 @@ export function PopoverSelect({
                     type="button"
                     disabled={disabled}
                     className={cn(
-                      'flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-fg hover:bg-surface-hover',
+                      'touch-target flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-fg hover:bg-surface-hover',
                       option.value === value && 'bg-surface-active font-medium',
                       disabled && 'cursor-not-allowed opacity-45 hover:bg-transparent',
                     )}

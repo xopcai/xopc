@@ -35,7 +35,7 @@ export interface UseChatScrollViewportArgs {
 
 export interface UseChatScrollViewportResult {
   scrollRef: RefObject<HTMLDivElement | null>;
-  /** True while auto-following the transcript tail (hides scroll-to-bottom affordance). */
+  /** True when the viewport is within the near-bottom threshold, including non-overflowing content. */
   atBottom: boolean;
   registerListContentRef: (el: HTMLDivElement | null) => void;
   scrollToBottom: (smooth?: boolean) => void;
@@ -80,7 +80,6 @@ export function useChatScrollViewport({
 
   const setFollowing = useCallback((next: boolean) => {
     followingRef.current = next;
-    setAtBottom((prev) => (prev === next ? prev : next));
   }, []);
 
   const scrollToEnd = useCallback(
@@ -99,13 +98,28 @@ export function useChatScrollViewport({
       }
 
       scrollChatToEnd(el);
+      setAtBottom(isNearChatBottom(el));
     },
     [setFollowing],
   );
 
   const stopFollowing = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || el.scrollHeight <= el.clientHeight) return;
+    // Input intent pauses auto-follow before scrolling, but does not imply a
+    // change in position (the gesture may be consumed by a nested scroll area).
     setFollowing(false);
+    setAtBottom(isNearChatBottom(el));
   }, [setFollowing]);
+
+  const onResize = useCallback(() => {
+    scrollToEnd();
+    const el = scrollRef.current;
+    if (!el) return;
+    const near = isNearChatBottom(el);
+    setAtBottom(near);
+    if (near) setFollowing(true);
+  }, [scrollToEnd, setFollowing]);
 
   const registerListContentRef = useCallback(
     (el: HTMLDivElement | null) => {
@@ -117,15 +131,12 @@ export function useChatScrollViewport({
 
       if (!el) return;
 
-      const ro = new ResizeObserver(() => {
-        // ResizeObserver runs before paint. Correct the tail position here so a
-        // growing streaming row never paints one frame at the stale scrollTop.
-        scrollToEnd();
-      });
+      // Correct the tail before paint and remeasure after rows grow or collapse.
+      const ro = new ResizeObserver(onResize);
       ro.observe(el);
       resizeObserverRef.current = ro;
     },
-    [scrollToEnd],
+    [onResize],
   );
 
   useEffect(() => {
@@ -140,6 +151,7 @@ export function useChatScrollViewport({
 
     const near = isNearChatBottom(el);
     setFollowing(near);
+    setAtBottom(near);
 
     if (el.scrollTop < 100 && !near && hasMore && !loadingMore) {
       void loadMoreMessages();
@@ -215,6 +227,9 @@ export function useChatScrollViewport({
     const root = scrollRef.current;
     if (!root) return;
 
+    const viewportObserver = new ResizeObserver(onResize);
+    viewportObserver.observe(root);
+
     const onWheel = (e: WheelEvent) => {
       if (Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
       if (Math.abs(e.deltaY) < 0.25) return;
@@ -250,12 +265,13 @@ export function useChatScrollViewport({
     root.addEventListener('touchstart', onTouchStart, { passive: true });
     root.addEventListener('touchmove', onTouchMove, { passive: true });
     return () => {
+      viewportObserver.disconnect();
       root.removeEventListener('wheel', onWheel);
       root.removeEventListener('pointerdown', onPointerDown);
       root.removeEventListener('touchstart', onTouchStart);
       root.removeEventListener('touchmove', onTouchMove);
     };
-  }, [hasToken, showSessionLoading, stopFollowing]);
+  }, [hasToken, showSessionLoading, stopFollowing, onResize]);
 
   return {
     scrollRef,

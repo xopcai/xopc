@@ -6,7 +6,7 @@ export function SettingsPageFrame({
   children,
   className,
   gap = 'gap-4',
-  padding = 'px-3 py-6 sm:px-5 xl:px-6',
+  padding = 'px-4 py-6 sm:px-5 xl:px-6',
   ...props
 }: {
   children: ReactNode;
