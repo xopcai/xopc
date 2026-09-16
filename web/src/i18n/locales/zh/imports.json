@@ -1,0 +1,24 @@
+{
+  "imports": {
+    "title": "导入",
+    "subtitle": "把熟悉的技能、工作上下文和项目带到 xopc。",
+    "apps": "从其他 AI 产品导入",
+    "detectedHint": "已在运行 xopc 的设备上发现以下产品。",
+    "includes": "技能 · 工作上下文 · 项目",
+    "import": "导入",
+    "importing": "正在导入…",
+    "importAgain": "再次导入",
+    "finished": "导入完成",
+    "finishedWithIssues": "导入结束，部分内容需要处理",
+    "summary": "已添加 {skills} 个技能 · {context} 份上下文 · {projects} 个项目",
+    "skipped": "{count} 项已存在",
+    "details": "查看未导入的内容",
+    "empty": "暂未发现支持的产品。在运行 xopc 的设备上使用 Codex 或 Claude Code 后，可以刷新重试。",
+    "refresh": "刷新",
+    "retry": "重试",
+    "footnote": "自动保留已有内容。偏好与规则作为参考资料用于知识检索；工具连接需要重新连接，密码和登录状态不会导入。",
+    "openSkills": "查看技能",
+    "openProjects": "查看项目",
+    "connections": "工具连接"
+  }
+}

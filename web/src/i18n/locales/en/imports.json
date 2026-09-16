@@ -1,0 +1,24 @@
+{
+  "imports": {
+    "title": "Import",
+    "subtitle": "Bring your skills, working context and projects into xopc.",
+    "apps": "Import from another AI app",
+    "detectedHint": "Apps found on the device running xopc.",
+    "includes": "Skills · Working context · Projects",
+    "import": "Import",
+    "importing": "Importing…",
+    "importAgain": "Import again",
+    "finished": "Import complete",
+    "finishedWithIssues": "Finished with some items to check",
+    "summary": "{skills} skills · {context} context documents · {projects} projects added",
+    "skipped": "{count} already available",
+    "details": "Items to check",
+    "empty": "No supported apps found. Use Codex or Claude Code on the device running xopc, then refresh.",
+    "refresh": "Refresh",
+    "retry": "Try again",
+    "footnote": "Existing content is preserved. Context documents become searchable reference material. Tool connections need to be reconnected; passwords and sign-in sessions are not imported.",
+    "openSkills": "View skills",
+    "openProjects": "View projects",
+    "connections": "Connections"
+  }
+}

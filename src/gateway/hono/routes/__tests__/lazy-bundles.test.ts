@@ -6,6 +6,12 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps every import route family without swallowing nearby paths', () => {
+    for (const path of ['/api/imports/sources', '/api/imports/sources/codex/import', '/api/imports/sources/claude-code/import']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('imports');
+    }
+    for (const path of ['/api/imports-other', '/api/import', '/api/migrations']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('imports');
+  });
   it('maps project understanding without swallowing other project resources', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/projects/example/understanding')?.id).toBe('project-understanding');
     for (const path of ['/api/projects/example', '/api/projects/example/sessions', '/api/projects/example/understanding-other']) {

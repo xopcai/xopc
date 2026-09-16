@@ -21,7 +21,7 @@ describe('settings navigation information architecture', () => {
       'settingsAgentDefaults',
     ]);
     expect(connection?.tabs).toEqual(['settingsDevices', 'settingsTunnel', 'settingsShares']);
-    expect(system?.tabs).toEqual(['settingsGateway', 'settingsRuntimes', 'sessions', 'logs']);
+    expect(system?.tabs).toEqual(['settingsGateway', 'settingsRuntimes', 'settingsImports', 'sessions', 'logs']);
   });
 
   it('uses concise group labels', () => {

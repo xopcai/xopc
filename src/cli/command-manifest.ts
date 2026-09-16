@@ -45,6 +45,7 @@ export const ROOT_HELP_COMMANDS: RootHelpCommand[] = [
   { name: 'providers', description: 'Manage LLM provider credentials (user-friendly hub over `xopc auth`)' },
   { name: 'voice', description: 'Configure text-to-speech (TTS) output' },
   { name: 'search', description: 'Manage web-search providers (brave / tavily / bing / searxng)' },
+  { name: 'import [source]', description: 'Import skills, context and projects from another AI app' },
   { name: 'skills', description: 'Manage skills' },
   { name: 'connectors', description: 'Browse and install verified connector capabilities from xopc-store' },
   { name: 'tailscale', description: 'Tailscale status for gateway remote access' },

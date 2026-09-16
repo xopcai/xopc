@@ -225,7 +225,9 @@ export function searchKnowledgeItems(input: {
   const visible = visibilityClause(input.context);
   const sourceParts: string[] = [];
   const sourceValues: string[] = [];
-  if (input.sources?.includes('connector')) sourceParts.push("k.record_class = 'source_index'");
+  const importedSource = "COALESCE(json_extract(k.source_json, '$.kind'), '') = 'product_import'";
+  if (input.sources?.includes('connector')) sourceParts.push(`(k.record_class = 'source_index' AND NOT (${importedSource}))`);
+  if (input.sources?.includes('workspace')) sourceParts.push(`(k.record_class = 'source_index' AND ${importedSource})`);
   const memoryScopes = input.sources?.filter((source) => source !== 'connector') ?? [];
   if (memoryScopes.length) {
     sourceParts.push(`(k.record_class = 'memory' AND k.scope_type IN (${memoryScopes.map(() => '?').join(', ')}))`);
@@ -253,7 +255,8 @@ export function knowledgeSourceAllowed(
   item: KnowledgeItem,
   sources: readonly KnowledgeSource[],
 ): boolean {
-  if (item.recordClass === 'source_index') return sources.includes('connector');
+  // Imported local documents use the local-file policy, independently of their visibility scope.
+  if (item.recordClass === 'source_index') return sources.includes(item.source.kind === 'product_import' ? 'workspace' : 'connector');
   return item.scope.type === 'session'
     ? sources.includes('session')
     : item.scope.type === 'workspace'

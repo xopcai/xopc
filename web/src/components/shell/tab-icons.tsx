@@ -34,6 +34,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   channels: Plug,
   agents: Users,
   logs: FileText,
+  settingsImports: FolderOpen,
   settingsOverview: Activity,
   settingsModels: Layers,
   settingsVoice: Mic,
