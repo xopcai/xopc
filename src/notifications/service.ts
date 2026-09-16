@@ -27,6 +27,8 @@ import {
   type NotificationDelivery,
 } from './store.js';
 import type { NotificationPreferences } from './types.js';
+import { sendHarmonyPush } from './harmony-push.js';
+import { getOrCreateGatewayIdentity } from '../storage/sqlite/gateway-identity-repository.js';
 
 const log = createLogger('Notifications');
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
@@ -76,6 +78,7 @@ export class NotificationService {
     publish: (type: string, payload: unknown) => void;
     fetch?: typeof fetch;
     sendChannel?: ProactiveChannelSender;
+    sendHarmony?: typeof sendHarmonyPush;
   }) {}
 
   start(): void {
@@ -171,6 +174,17 @@ export class NotificationService {
     const fetchImpl = this.options.fetch ?? fetch;
     const localized = localizeNotification(delivery.event, delivery.locale);
     try {
+      if (delivery.platform === 'harmonyos') {
+        const ticket = await (this.options.sendHarmony ?? sendHarmonyPush)({
+          pushToken: delivery.pushToken, eventId: delivery.event.id,
+          gatewayId: getOrCreateGatewayIdentity().id, target: delivery.event.target,
+          title: delivery.event.type === 'proactive.insight' ? (delivery.locale === 'zh' ? '有一项工作需要查看' : 'A work update is ready') : localized.localizedTitle,
+          body: delivery.event.type === 'proactive.insight' ? (delivery.locale === 'zh' ? '打开 xopc 查看详情。' : 'Open xopc to review it.') : localized.localizedBody,
+        }, fetchImpl);
+        // Provider acceptance is not a device delivery receipt. V3 has no Expo receipt to poll.
+        markNotificationDeliveryAccepted(delivery.event.id, delivery.deviceId, ticket, Number.MAX_SAFE_INTEGER);
+        return;
+      }
       const response = await fetchImpl(EXPO_PUSH_URL, {
         method: 'POST',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
@@ -213,7 +227,7 @@ export class NotificationService {
 
   private async checkReceipts(): Promise<void> {
     const deliveries = listDueNotificationDeliveries('accepted');
-    const withTickets = deliveries.filter((delivery) => delivery.providerTicketId);
+    const withTickets = deliveries.filter((delivery) => delivery.platform !== 'harmonyos' && delivery.providerTicketId);
     if (withTickets.length === 0) return;
     const fetchImpl = this.options.fetch ?? fetch;
     try {

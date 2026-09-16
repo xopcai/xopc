@@ -1,0 +1,6 @@
+{
+  "modelVersion": "6.0.2",
+  "dependencies": {},
+  "execution": { "daemon": false },
+  "logging": { "level": "info" }
+}

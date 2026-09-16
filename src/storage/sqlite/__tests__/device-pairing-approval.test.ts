@@ -34,12 +34,24 @@ describe('computer-approved device pairing', () => {
     return { ...body, signature: crypto.sign('sha256', Buffer.from(buildDevicePairingProof(action, body)),
       { key: keys.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url') };
   }
-  function request() {
+  function request(platform: 'ios' | 'harmonyos' = 'ios') {
     return submitDevicePairingRequest(signed('request', { device: {
-      displayName: 'Work phone', platform: 'ios', publicKeyJwk: keys.publicKey.export({ format: 'jwk' }),
+      displayName: 'Work phone', platform, publicKeyJwk: keys.publicKey.export({ format: 'jwk' }),
     } }), now);
   }
   const refreshToken = () => `xopc_rt_${crypto.randomUUID()}_${crypto.randomBytes(32).toString('base64url')}`;
+
+  it('pairs HarmonyOS with mobile scopes and requires the same explicit approval', () => {
+    const pending = request('harmonyos');
+    expect(pending.platform).toBe('harmonyos');
+    expect(pending.status).toBe('pending');
+    const complete = signed('complete', { idempotencyKey: crypto.randomUUID(), initialRefreshToken: refreshToken() });
+    expect(() => operateDevicePairingRequest('complete', complete, now)).toThrow('PAIRING_NOT_APPROVED');
+    decideDevicePairingRequest(pending.requestId, 'approve', pending.revision, now);
+    expect(operateDevicePairingRequest('complete', complete, now).request.status).toBe('completed');
+    expect(listDevices()[0]).toMatchObject({ platform: 'harmonyos' });
+    expect(listDevices()[0].scopes).not.toContain('gateway.admin');
+  });
 
   it('requires approval and recovers a lost completion response without creating another device', () => {
     const pending = request();

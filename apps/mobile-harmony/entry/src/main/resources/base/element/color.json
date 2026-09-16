@@ -1,0 +1,8 @@
+{ "color": [
+  { "name": "surface", "value": "#F8FAFC" },
+  { "name": "panel", "value": "#FFFFFF" },
+  { "name": "foreground", "value": "#0F172A" },
+  { "name": "secondary", "value": "#64748B" },
+  { "name": "accent", "value": "#2563EB" },
+  { "name": "danger", "value": "#B91C1C" }
+] }

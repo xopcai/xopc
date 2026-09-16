@@ -1,0 +1,10 @@
+.hvigor/
+oh_modules/
+build/
+local.properties
+*.p12
+*.p7b
+*.cer
+signing/
+.test/
+entry/src/ohosTest/resources/rawfile/native-test-ca.pem

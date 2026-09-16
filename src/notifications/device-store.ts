@@ -54,7 +54,7 @@ function normalizePreferences(input?: Partial<NotificationPreferences>): Notific
 function deviceFromRow(row: NotificationDeviceRow): NotificationDevice {
   return {
     id: row.device_id,
-    platform: row.platform === 'android' ? 'android' : 'ios',
+    platform: row.platform === 'harmonyos' ? 'harmonyos' : row.platform === 'android' ? 'android' : 'ios',
     pushToken: row.push_token,
     enabled: row.enabled !== 0,
     permissions: row.permissions === 'granted' || row.permissions === 'denied' ? row.permissions : 'unknown',

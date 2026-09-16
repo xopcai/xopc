@@ -36,7 +36,7 @@ function parseCaptureSource(body: Record<string, unknown>): CaptureSource {
   const channel = typeof body.channel === 'string' && VALID_CHANNELS.has(body.channel as CaptureChannel)
     ? (body.channel as CaptureChannel)
     : 'web';
-  const platform = body.platform === 'ios' || body.platform === 'android' ? body.platform : undefined;
+  const platform = body.platform === 'ios' || body.platform === 'android' || body.platform === 'harmonyos' ? body.platform : undefined;
   return { channel, platform };
 }
 

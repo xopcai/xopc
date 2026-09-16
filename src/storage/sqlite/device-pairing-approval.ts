@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import {
   buildDevicePairingProof, devicePairingCompleteSchema, devicePairingDeviceSchema,
   type DevicePairingAction, type DevicePairingState, type DevicePairingStatus,
-  type DevicePairingTargetKind,
+  type DevicePairingTargetKind, type DevicePlatform,
 } from '@xopcai/gateway-contract';
 
 import { BROWSER_EXTENSION_ID } from '../../browser/extension-identity.js';
@@ -39,7 +39,7 @@ export class DevicePairingError extends Error {
 }
 const hash = (value: string) => crypto.createHash('sha256').update(value).digest('hex');
 const fail = (code: string, status?: 400 | 401 | 404 | 409): never => { throw new DevicePairingError(code, status); };
-const scopesForPlatform = (platform: 'ios' | 'android' | 'chrome') => platform === 'chrome'
+const scopesForPlatform = (platform: DevicePlatform) => platform === 'chrome'
   ? DEFAULT_BROWSER_EXTENSION_SCOPES
   : DEFAULT_MOBILE_SCOPES;
 

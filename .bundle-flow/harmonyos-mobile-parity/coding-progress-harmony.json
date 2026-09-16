@@ -1,0 +1,23 @@
+{
+  "requirement_id": "harmonyos-mobile-parity",
+  "platform": "harmony",
+  "status": "in_progress",
+  "updated_at": "2026-09-17",
+  "execution_order": ["4.1.1", "4.1.2", "4.2.1", "4.2.2", "4.3.1", "4.4.1", "4.5.1", "4.6.1", "4.7.1"],
+  "subtasks": [
+    { "id": "4.1.1", "status": "completed", "evidence": "API 26 HAP built, installed and launched on Pura 90 Pro emulator 127.0.0.1:5555" },
+    { "id": "4.1.2", "status": "completed", "evidence": "HarmonyOS contract, SQLite v179 with FK-preservation tests, notes/push platforms; deterministic contract fixture generation/check; backend regression passes" },
+    { "id": "4.2.1", "status": "in_progress", "evidence": "3 native crypto/Asset tests plus actual emulator TLS pairing/native signatures/credential restore and rotation pass against isolated real Gateway handlers; physical scan and signed-device acceptance pending" },
+    { "id": "4.2.2", "status": "in_progress", "evidence": "WS v2 client builds; hello, cursors, reconnect, gap recovery and terminal revocation tests pass; native WSS with real agent acceptance pending" },
+    { "id": "4.3.1", "status": "in_progress", "evidence": "Chat/session workflows, native Markdown and file/image input implemented; stale-history and input identity tests pass; full real-agent journey pending" },
+    { "id": "4.4.1", "status": "in_progress", "evidence": "Task/project/automation CRUD/actions/history implemented, version/idempotency contracts tested and automation options preserved; cross-client UI acceptance pending" },
+    { "id": "4.5.1", "status": "in_progress", "evidence": "Notes Markdown CRUD/search and file spaces/search/text edits/picker transfer implemented; native transfer/large collection acceptance pending" },
+    { "id": "4.6.1", "status": "in_progress", "evidence": "Native recording/playback/transcription and lifecycle tests; Huawei V3 provider and native PushKit registration/tap routing implemented; settings UI smoke passes; AGC/signing/real push/audio acceptance require external setup" },
+    { "id": "4.7.1", "status": "in_progress", "evidence": "Repeatable harmony:verify command, debug/release unsigned builds, host/backend tests, native security/pairing/UI checks, verification record and staged rollout/release gates added; physical-device acceptance outstanding" }
+  ],
+  "constraints": [
+    "Never migrate the user's active database during verification; use temporary test databases",
+    "Unsigned emulator builds are not production-signed release artifacts",
+    "Core parity is not complete until end-to-end journeys and remaining capability work pass"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "files": ["entry/src/main/ets/**/*.ets", "entry/src/main/ets/**/*.ts"],
+  "ignore": ["**/oh_modules/**", "**/build/**", "**/.hvigor/**", "**/node_modules/**"],
+  "ruleSet": [
+    "plugin:@typescript-eslint/recommended",
+    "plugin:@security/recommended",
+    "plugin:@performance/recommended",
+    "plugin:@correctness/recommended",
+    "plugin:@compatibility/recommended"
+  ],
+  "rules": {}
+}

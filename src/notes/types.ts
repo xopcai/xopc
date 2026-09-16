@@ -80,7 +80,7 @@ export interface NoteAiDeepMeta {
 
 export interface CaptureSource {
   channel: CaptureChannel;
-  platform?: 'ios' | 'android';
+  platform?: 'ios' | 'android' | 'harmonyos';
 }
 
 export interface NoteTaskMeta {

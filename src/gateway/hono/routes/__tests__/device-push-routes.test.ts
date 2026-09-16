@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { Hono } from 'hono';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { setGatewayPrincipal } from '../../../security/gateway-principal.js';
 import {
@@ -39,6 +39,7 @@ describe('device push routes', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
@@ -77,5 +78,27 @@ describe('device push routes', () => {
     });
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({ error: 'Device identity must come from authentication' });
+  });
+  it('rejects attempts to switch a paired device to another push provider', async () => {
+    const response = await app.request('/api/devices/me/push', { method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ platform: 'harmonyos', pushToken: 'token', permissions: 'granted', locale: 'en' }) });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: 'Push platform must match the paired device' });
+  });
+  it('registers HarmonyOS only when its independent provider is configured', async () => {
+    createDevice({ id: 'harmony-device', displayName: 'Harmony', platform: 'harmonyos', publicKeyJwk: { kty: 'EC' }, scopes: ['notifications.self'] });
+    const harmony = new Hono();
+    harmony.use('*', async (c, next) => {
+      setGatewayPrincipal(c, { kind: 'device', principalId: 'harmony-device', deviceId: 'harmony-device', accessSessionId: 'access-harmony', scopes: ['notifications.self'] });
+      await next();
+    });
+    registerDevicePushRoutes(harmony);
+    const request = () => harmony.request('/api/devices/me/push', { method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ platform: 'harmonyos', pushToken: 'huawei-token', permissions: 'granted', locale: 'zh' }) });
+    vi.stubEnv('XOPC_HARMONY_PUSH_SERVICE_ACCOUNT', '');
+    expect((await request()).status).toBe(503);
+    vi.stubEnv('XOPC_HARMONY_PUSH_SERVICE_ACCOUNT', '/private/account.json'); vi.stubEnv('XOPC_HARMONY_PUSH_CATEGORY', 'WORK');
+    const response = await request(); expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({ device: { platform: 'harmonyos', id: 'harmony-device' } });
   });
 });

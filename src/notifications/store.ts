@@ -6,6 +6,7 @@ import {
 } from '@xopcai/gateway-contract';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
+import type { NotificationDevicePlatform } from './types.js';
 
 type NotificationEventRow = {
   event_id: string;
@@ -24,6 +25,7 @@ export type NotificationDelivery = {
   event: ProductNotification;
   deviceId: string;
   pushToken: string;
+  platform: NotificationDevicePlatform;
   locale: 'en' | 'zh';
   attempts: number;
   providerTicketId?: string;
@@ -32,6 +34,7 @@ export type NotificationDelivery = {
 type NotificationDeliveryRow = NotificationEventRow & {
   device_id: string;
   push_token: string;
+  platform: NotificationDevicePlatform;
   locale: string;
   attempts: number;
   provider_ticket_id: string | null;
@@ -64,6 +67,7 @@ function deliveryFromRow(row: NotificationDeliveryRow): NotificationDelivery {
     event: eventFromRow(row),
     deviceId: row.device_id,
     pushToken: row.push_token,
+    platform: row.platform,
     locale: row.locale === 'zh' ? 'zh' : 'en',
     attempts: row.attempts,
     ...(row.provider_ticket_id ? { providerTicketId: row.provider_ticket_id } : {}),
@@ -162,7 +166,7 @@ export function acknowledgeNotification(
 
 const DELIVERY_JOIN = `
   SELECT e.*, d.device_id, d.attempts, d.provider_ticket_id,
-         n.push_token, n.locale
+         n.push_token, n.locale, n.platform
   FROM notification_deliveries d
   JOIN notification_events e ON e.event_id = d.event_id
   JOIN device_push_endpoints n ON n.device_id = d.device_id
