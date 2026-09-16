@@ -113,6 +113,17 @@ describe('openXopcDatabase', () => {
     expect(tables).not.toContain('dreaming_decisions');
   });
 
+  it('does not copy runtime data into another fresh database', () => {
+    const first = openXopcDatabase({ path: dbPath });
+    first.db.exec("CREATE TABLE runtime_only(value TEXT); INSERT INTO runtime_only VALUES ('private')");
+    closeXopcDatabase();
+
+    const secondPath = join(stateDir, 'second.db');
+    const second = openXopcDatabase({ path: secondPath });
+    expect(second.db.prepare("SELECT name FROM sqlite_master WHERE name = 'runtime_only'").get()).toBeUndefined();
+    expect(readSchemaVersionForTest(second.db)).toBe(XOPC_DB_SCHEMA_VERSION);
+  });
+
   it('sets restrictive permissions on database files', () => {
     openXopcDatabase({ path: dbPath });
     closeXopcDatabase();

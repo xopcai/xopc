@@ -4,6 +4,7 @@ import { resolveProviderOrder, resolveSpeechProviderChain } from '../factory.js'
 import '../providers/index.js';
 import type { TTSConfig } from '../types.js';
 import { getModelCatalogStore, resetModelCatalogStore } from '../../../providers/model-catalog-store.js';
+import { voiceFixture } from '../../__tests__/voice-fixture.js';
 
 afterEach(() => resetModelCatalogStore());
 
@@ -49,6 +50,7 @@ describe('resolveProviderOrder', () => {
       maxOutputTokens: null,
       tts: { maxCharacters: 1_000, languages: ['en'], outputFormats: ['mp3' as const],
         streaming: false, speed: false, pitch: false, instructions: false, defaultVoice: 'coral' },
+      voice: voiceFixture(['speech']),
     })));
     const chain = resolveSpeechProviderChain({
       enabled: true, provider: 'xopc-cloud', trigger: 'off', managedAuto: false,
