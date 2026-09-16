@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useDebounce } from 'use-debounce';
+import { resolveSkillPresentation } from '@xopcai/composer-core/skill-localization';
 
 import {
   deleteSkill,
@@ -751,6 +752,7 @@ export function useSkillsPage() {
       const blob = [
         row.name,
         row.description,
+        ...Object.values(row.localizations ?? {}).flatMap((entry) => entry ? [entry.displayName, entry.description] : []),
         row.directoryId,
         row.path,
         row.source,
@@ -763,6 +765,11 @@ export function useSkillsPage() {
       return blob.includes(q);
     });
   }, [catalog, searchQuery]);
+
+  const skillPresentation = useCallback(
+    (row: SkillCatalogEntry) => resolveSkillPresentation(row, language),
+    [language],
+  );
 
   const builtinTabStats = useMemo(() => {
     const rows = catalog.filter((r) => r.source === 'builtin');
@@ -784,6 +791,7 @@ export function useSkillsPage() {
     () => (detailTitle ? catalog.find((r) => r.name === detailTitle) : undefined),
     [catalog, detailTitle],
   );
+  const detailPresentation = detailFromCatalog ? skillPresentation(detailFromCatalog) : null;
   const detailEnabled =
     detailFromCatalog == null
       ? true
@@ -862,9 +870,9 @@ export function useSkillsPage() {
       const ae = resolveSkillEnabled(a);
       const be = resolveSkillEnabled(b);
       if (ae !== be) return ae ? -1 : 1;
-      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+      return skillPresentation(a).displayName.localeCompare(skillPresentation(b).displayName, language, { sensitivity: 'base' });
     });
-  }, [categoryFilteredCatalog, catalogStatusFilter, resolveSkillEnabled]);
+  }, [categoryFilteredCatalog, catalogStatusFilter, language, resolveSkillEnabled, skillPresentation]);
 
   const runUpload = async (file: File) => {
     setActionFeedback(null);
@@ -1189,6 +1197,7 @@ export function useSkillsPage() {
     builtinTabStats,
     userTabStats,
     detailEnabled,
+    detailPresentation,
     detailDirectoryId,
     detailManaged,
     detailExternalUrl,
@@ -1196,6 +1205,7 @@ export function useSkillsPage() {
     builtinCategories,
     categoryFilteredCatalog,
     catalogDisplayRows,
+    skillPresentation,
     catalogDisabledCount,
     catalogStatusFilter,
     setCatalogStatusFilter,

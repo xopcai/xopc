@@ -111,6 +111,7 @@ export interface SkillCatalogEntry {
   directoryId: string;
   name: string;
   description: string;
+  localizations?: Skill['localizations'];
   category?: string;
   source: Skill['source'];
   origin: Skill['origin']['id'];
@@ -776,6 +777,7 @@ export class AgentManager implements AgentInstanceGateway {
       directoryId,
       name: s.name,
       description: s.description,
+      ...(s.localizations ? { localizations: s.localizations } : {}),
       category: s.category,
       source: s.source,
       origin: s.origin.id,

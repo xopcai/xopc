@@ -1,6 +1,8 @@
 /**
  * API layer for the command palette — fetches commands and skills with in-memory caching.
  */
+import { resolveSkillPresentation, type SkillLocalizations } from '@xopcai/composer-core/skill-localization';
+
 import { apiFetch, formatApiHttpError } from '../../api/client';
 import type { CommandEntry, PaletteItem } from './command-palette.types';
 
@@ -9,6 +11,7 @@ export interface SkillCatalogEntry {
   directoryId: string;
   name: string;
   description: string;
+  localizations?: SkillLocalizations;
   source: 'builtin' | 'workspace' | 'global' | 'extra';
   path: string;
   managed: boolean;
@@ -94,7 +97,7 @@ export async function fetchSkillsCached(forceRefresh = false): Promise<SkillCata
 /**
  * Fetch all palette items (commands + skills) with caching.
  */
-export async function fetchAllPaletteItems(): Promise<PaletteItem[]> {
+export async function fetchAllPaletteItems(language: string): Promise<PaletteItem[]> {
   const [commands, skills] = await Promise.all([fetchCommandsCached(), fetchSkillsCached()]);
 
   const commandItems: PaletteItem[] = commands.map((c) => ({
@@ -107,14 +110,19 @@ export async function fetchAllPaletteItems(): Promise<PaletteItem[]> {
     acceptsArgs: c.acceptsArgs,
   }));
 
-  const skillItems: PaletteItem[] = skills.map((s) => ({
-    kind: 'skill' as const,
-    id: `skill:${s.name}`,
-    name: s.name,
-    description: s.description,
-    category: 'skill',
-    source: s.source,
-  }));
+  const skillItems: PaletteItem[] = skills.map((s) => {
+    const presentation = resolveSkillPresentation(s, language);
+    return {
+      kind: 'skill' as const,
+      id: `skill:${s.name}`,
+      name: presentation.displayName,
+      canonicalName: s.name,
+      description: presentation.description,
+      aliases: presentation.aliases,
+      category: 'skill',
+      source: s.source,
+    };
+  });
 
   return [...skillItems, ...commandItems];
 }

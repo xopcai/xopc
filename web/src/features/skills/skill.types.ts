@@ -1,4 +1,5 @@
 /** Skills catalog — managed global skills (~/.xopc/skills) and workspace skills (.xopc/skills). */
+import type { SkillLocalizations } from '@xopcai/composer-core/skill-localization';
 
 export type SkillInstallTarget = 'workspace' | 'global';
 
@@ -70,6 +71,7 @@ export interface SkillCatalogEntry {
   directoryId: string;
   name: string;
   description: string;
+  localizations?: SkillLocalizations;
   /** Category derived from parent directory (e.g. skills/creative/algorithmic-art → 'creative') */
   category?: string;
   source: 'builtin' | 'workspace' | 'global' | 'extra';

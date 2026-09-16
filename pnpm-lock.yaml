@@ -356,6 +356,9 @@ importers:
       '@xopcai/agent-stream-client':
         specifier: workspace:*
         version: link:../../packages/agent-stream-client
+      '@xopcai/composer-core':
+        specifier: workspace:*
+        version: link:../../packages/composer-core
       '@xopcai/endpoint-tools-client':
         specifier: workspace:*
         version: link:../../packages/endpoint-tools-client

@@ -20,9 +20,11 @@ function MetaRow({ label, children }: { label: string; children: ReactNode }) {
 
 export function SkillCatalogStructuredPreview({
   preview,
+  description,
   sk,
 }: {
   preview: SkillMarkdownPreviewPayload;
+  description?: string;
   sk: SkillsCopy;
 }) {
   const meta = preview.metadata;
@@ -56,7 +58,7 @@ export function SkillCatalogStructuredPreview({
             </p>
           ) : null}
           <p className={cn('text-sm leading-relaxed text-fg', meta.emoji?.trim() ? 'mt-2' : '')}>
-            {preview.description}
+            {description ?? preview.description}
           </p>
           {preview.disableModelInvocation ? (
             <p className="mt-3 rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-xs leading-snug text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
