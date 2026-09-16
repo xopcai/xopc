@@ -1,10 +1,10 @@
 import { createServer, type Server } from 'node:http';
 import { createRequire } from 'node:module';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { WebSocket as WebSocketType } from 'ws';
 
-import { REALTIME_PROTOCOL_VERSION, parseServerRealtimeMessage } from '@xopcai/realtime-protocol';
+import { REALTIME_MAX_CLIENT_FRAME_BYTES, REALTIME_PROTOCOL_VERSION, parseServerRealtimeMessage } from '@xopcai/realtime-protocol';
 import { RealtimeRuntime } from '../runtime.js';
 
 const { WebSocket } = createRequire(import.meta.url)('ws') as typeof import('ws');
@@ -94,4 +94,60 @@ describe('RealtimeRuntime', () => {
       payload: { seq: 2, event: 'assistant.delta', data: { delta: 'hello' } },
     });
   });
+
+  it.each(['socket error', 'authentication exception', 'heartbeat exception'])(
+    'isolates %s to its connection and accepts a new connection', async (failure) => {
+      let failAuth = failure === 'authentication exception';
+      const checks = vi.fn(() => {
+        if (failAuth) throw new Error('database is locked');
+        return true;
+      });
+      const intervals: Array<() => void> = [];
+      const originalInterval = globalThis.setInterval;
+      const intervalSpy = vi.spyOn(globalThis, 'setInterval').mockImplementation(((fn: () => void, ms: number) => {
+        intervals.push(fn);
+        return originalInterval(fn, ms);
+      }) as typeof setInterval);
+      try {
+        runtime = new RealtimeRuntime(undefined, checks);
+        server = createServer();
+        server.on('upgrade', (request, connection, head) => runtime!.handleUpgrade(request, connection, head));
+        await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
+        const address = server.address();
+        if (!address || typeof address === 'string') throw new Error('Missing address');
+        const url = `ws://127.0.0.1:${address.port}/api/realtime/v1/ws`;
+        const hello = () => ({
+          protocolVersion: REALTIME_PROTOCOL_VERSION, messageId: crypto.randomUUID(),
+          kind: 'realtime.hello', sentAt: Date.now(), payload: {
+            ticket: runtime!.tickets.issue('client', 'web', { principalId: 'owner', scopes: ['gateway.admin'] }).ticket,
+            clientId: 'client', clientKind: 'web', subscriptions: [],
+          },
+        });
+        socket = new WebSocket(url);
+        await waitForOpen(socket);
+        const closed = new Promise<void>((resolve) => socket!.once('close', () => resolve()));
+        if (failure === 'socket error') {
+          socket.send('x'.repeat(REALTIME_MAX_CLIENT_FRAME_BYTES + 1));
+        } else {
+          const messages = collectMessages(socket);
+          socket.send(JSON.stringify(hello()));
+          if (failure === 'heartbeat exception') {
+            await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.ready' });
+            failAuth = true;
+            expect(() => intervals[0]!()).not.toThrow();
+          }
+        }
+        await closed;
+        failAuth = false;
+        socket = new WebSocket(url);
+        await waitForOpen(socket);
+        const messages = collectMessages(socket);
+        socket.send(JSON.stringify(hello()));
+        await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.ready' });
+      } finally {
+        intervalSpy.mockRestore();
+      }
+    },
+  );
+
 });

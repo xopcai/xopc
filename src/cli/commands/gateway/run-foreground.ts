@@ -1,3 +1,7 @@
+import { dirname, join } from 'node:path';
+
+import { installProcessDiagnostics } from '../../../infra/process-diagnostics.js';
+
 import type { CLIContext } from '../../registry.js';
 
 export type GatewayRunCliOptions = {
@@ -41,6 +45,9 @@ export async function runGatewayFromCliOptions(
   options: GatewayRunCliOptions,
   ctx: CLIContext,
 ): Promise<void> {
+  installProcessDiagnostics(process.env.XOPC_GATEWAY_DIAGNOSTIC_PATH
+    ?? join(process.env.XOPC_LOG_DIR ?? join(dirname(ctx.configPath), 'logs'), 'gateway-process.log'));
+
   const tailscaleModes = new Set(['off', 'serve', 'funnel']);
   const tailscaleRaw =
     typeof options.tailscale === 'string' ? options.tailscale.trim().toLowerCase() : undefined;

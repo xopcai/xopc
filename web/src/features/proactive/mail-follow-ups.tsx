@@ -23,22 +23,25 @@ export function MailFollowUpView({ follow, zh, refresh }: { follow: MailFollowUp
   const [editing, setEditing] = useState(false);
   const [instructions, setInstructions] = useState(follow.instructions);
   const [dueAt, setDueAt] = useState(localDate(follow.dueAt));
+  const [draftRevision, setDraftRevision] = useState(follow.revision);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   async function update(patch: Record<string, unknown>) {
     setBusy(true); setError('');
-    try { await proactiveWrite(`/api/proactive/follow-ups/${encodeURIComponent(follow.id)}`, 'PATCH', { expectedRevision: follow.revision, ...patch }); setEditing(false); refresh(); }
+    try { await proactiveWrite(`/api/proactive/follow-ups/${encodeURIComponent(follow.id)}`, 'PATCH', { expectedRevision: editing ? draftRevision : follow.revision, ...patch }); setEditing(false); refresh(); }
     catch (cause) { setError(String(cause)); }
     finally { setBusy(false); }
   }
   return <article className="rounded-2xl border border-edge bg-surface-panel p-5">
     <h2 className="font-medium">{follow.subject ?? (zh ? '邮件跟进' : 'Email follow-up')}</h2><p className="mt-2 text-sm text-fg-muted">{mailFollowUpState(follow, zh)}</p>
     <dl className="mt-4 space-y-4 text-sm"><div><dt className="text-xs text-fg-subtle">{zh ? '助理在等什么' : 'What the assistant is waiting for'}</dt><dd className="mt-1 whitespace-pre-wrap text-fg">{follow.instructions}</dd></div><div><dt className="text-xs text-fg-subtle">{zh ? '什么时候回来找你' : 'When to come back'}</dt><dd className="mt-1 text-fg">{formatAssistantDate(follow.dueAt, zh)}</dd></div></dl>
+    <p className="mt-3 text-xs text-fg-muted">{zh ? '最近成功同步' : 'Last successful sync'}：{formatAssistantDate(follow.lastSyncedAt, zh)} · {zh ? '最近检查' : 'Last checked'}：{formatAssistantDate(follow.lastCheckedAt, zh)}</p>
     {follow.syncFailed && <p className="mt-3 text-sm text-danger">{zh ? '助理暂时看不到最新回复，请检查邮箱连接。' : 'The assistant cannot see the latest replies right now. Check the email connection.'}</p>}
-    {!follow.sourceAvailable && <Link className="mt-3 block text-sm text-accent" to="/connectors">{zh ? '检查邮箱连接' : 'Check email connection'}</Link>}
+    {(!follow.sourceAvailable || !follow.sourceFresh) && <Link className="mt-3 block text-sm text-accent" to="/connectors">{zh ? '检查邮箱连接' : 'Check email connection'}</Link>}
     {follow.sessionKey && <Link className="mt-3 block text-sm text-accent" to={`/chat/${encodeURIComponent(follow.sessionKey)}`}>{zh ? '继续原来的对话' : 'Continue the conversation'}</Link>}
-    {editing && <div className="mt-4 space-y-3"><textarea aria-label={zh ? '跟进要求' : 'Instructions'} className={field} rows={3} maxLength={12000} value={instructions} onChange={event => setInstructions(event.target.value)} /><input aria-label={zh ? '跟进时间' : 'Follow-up time'} type="datetime-local" className={field} value={dueAt} onChange={event => setDueAt(event.target.value)} /><Button disabled={busy || !instructions.trim() || !dueAt} onClick={() => void update({ instructions, ...(localDate(follow.dueAt) !== dueAt ? { dueAt: new Date(dueAt).toISOString() } : {}) })}>{zh ? '保存安排' : 'Save arrangement'}</Button></div>}
-    <div className="mt-4 flex flex-wrap gap-2"><Button variant="ghost" disabled={busy} onClick={() => setEditing(!editing)}>{editing ? (zh ? '取消修改' : 'Cancel edit') : (zh ? '调整安排' : 'Adjust arrangement')}</Button><Button variant="ghost" disabled={busy} onClick={() => void update({ status: follow.status === 'watching' ? 'paused' : 'watching' })}>{follow.status === 'watching' ? (zh ? '暂停' : 'Pause') : (zh ? '恢复' : 'Resume')}</Button>{follow.status !== 'completed' && <Button variant="ghost" disabled={busy} onClick={() => void update({ status: 'completed' })}>{zh ? '结束安排' : 'End arrangement'}</Button>}</div>
+    {editing && <div className="mt-4 space-y-3"><textarea aria-label={zh ? '跟进要求' : 'Instructions'} className={field} rows={3} maxLength={12000} value={instructions} onChange={event => setInstructions(event.target.value)} /><input aria-label={zh ? '跟进时间' : 'Follow-up time'} type="datetime-local" className={field} value={dueAt} onChange={event => setDueAt(event.target.value)} /><Button disabled={busy || draftRevision !== follow.revision || !instructions.trim() || !dueAt} onClick={() => void update({ instructions, ...(localDate(follow.dueAt) !== dueAt ? { dueAt: new Date(dueAt).toISOString() } : {}) })}>{zh ? '保存安排' : 'Save arrangement'}</Button></div>}
+    <div className="mt-4 flex flex-wrap gap-2"><Button variant="ghost" disabled={busy} onClick={() => { setDraftRevision(follow.revision); setInstructions(follow.instructions); setDueAt(localDate(follow.dueAt)); setEditing(!editing); }}>{editing ? (zh ? '取消修改' : 'Cancel edit') : (zh ? '调整安排' : 'Adjust arrangement')}</Button><Button variant="ghost" disabled={busy} onClick={() => void update({ status: follow.status === 'watching' ? 'paused' : 'watching' })}>{follow.status === 'watching' ? (zh ? '暂停' : 'Pause') : (zh ? '恢复' : 'Resume')}</Button>{follow.status !== 'completed' && <Button variant="ghost" disabled={busy} onClick={() => void update({ status: 'completed' })}>{zh ? '结束安排' : 'End arrangement'}</Button>}</div>
+    {editing && draftRevision !== follow.revision && <p role="alert" className="mt-3 text-sm text-danger">{zh ? '安排已更新，请取消修改后重新编辑。' : 'This follow-up changed. Cancel and reopen the editor.'}</p>}
     {error && <p role="alert" className="mt-3 text-sm text-danger">{error}</p>}
   </article>;
 }

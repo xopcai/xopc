@@ -9,6 +9,7 @@ export interface InboxItem {
   revision?: number;
   notificationRevision?: number;
   expiresAt?: string;
+  actionableUntil?: string;
   withdrawnAt?: string;
   correlationKey?: string;
   status: InboxStatus;

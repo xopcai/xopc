@@ -154,6 +154,7 @@ function syncRunFromRow(row: KnowledgeSyncRunRow): KnowledgeSyncRun {
 
 export function startKnowledgeSyncRun(input: {
   sourceInstanceId: string;
+  collectionScope?: string;
   cursorBefore?: string;
   nowMs?: number;
 }): KnowledgeSyncRun {
@@ -162,9 +163,9 @@ export function startKnowledgeSyncRun(input: {
   runSqliteWriteTransaction((db) => {
     db.prepare(
       `INSERT INTO knowledge_sync_runs (
-        run_id, source_instance_id, status, cursor_before, started_at
-      ) VALUES (?, ?, 'running', ?, ?)`,
-    ).run(id, input.sourceInstanceId, input.cursorBefore ?? null, now);
+        run_id, source_instance_id, status, cursor_before, started_at, collection_scope
+      ) VALUES (?, ?, 'running', ?, ?, ?)`,
+    ).run(id, input.sourceInstanceId, input.cursorBefore ?? null, now, input.collectionScope ?? null);
   });
   return {
     id,

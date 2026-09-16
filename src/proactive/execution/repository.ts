@@ -44,7 +44,7 @@ export function claimNextRun(owner: string, now = new Date(), leaseSeconds = 120
       WHERE status = 'running' AND lease_expires_at <= ? AND attempt >= 3`).run(nowIso, nowIso);
     const retry = db.prepare(`SELECT * FROM proactive_runs WHERE status = 'retryable' AND next_attempt_at <= ? ORDER BY next_attempt_at LIMIT 1`).get(nowIso) as Row | undefined;
     if (retry) {
-      db.prepare(`UPDATE proactive_runs SET status = 'running', attempt = attempt + 1, lease_owner = ?, lease_expires_at = ?, next_attempt_at = NULL, updated_at = ? WHERE run_id = ?`)
+      db.prepare(`UPDATE proactive_runs SET status = 'running', attempt = attempt + CASE WHEN outcome_reason = 'source_stale' THEN 0 ELSE 1 END, lease_owner = ?, lease_expires_at = ?, next_attempt_at = NULL, updated_at = ? WHERE run_id = ?`)
         .run(owner, new Date(now.getTime() + leaseSeconds * 1000).toISOString(), nowIso, str(retry, 'run_id'));
       db.prepare("UPDATE proactive_signal_batches SET status = 'processing', updated_at = ? WHERE batch_id = ?").run(nowIso, str(retry, 'batch_id'));
       return runFromRow(db.prepare('SELECT * FROM proactive_runs WHERE run_id = ?').get(str(retry, 'run_id')) as Row);
@@ -164,6 +164,22 @@ export function finishRun(input: {
     if (insight.artifact) db.prepare('UPDATE proactive_insights SET artifact_json = ? WHERE insight_id = ?')
       .run(JSON.stringify(insight.artifact), insight.id);
     return insight;
+  });
+}
+
+/** Stale evidence waits without spending model attempts; never retain work indefinitely. */
+export function deferRunForSource(run: ClaimedRun, now = new Date()): void {
+  runSqliteWriteTransaction(db => {
+    const row = db.prepare('SELECT started_at FROM proactive_runs WHERE run_id = ?').get(run.id) as { started_at: string };
+    if (now.getTime() - Date.parse(row.started_at) >= 86400000) {
+      finishRun({ run, rawOutput: '', outcomeReason: 'source_unavailable' }, now);
+      return;
+    }
+    const updated = db.prepare(`UPDATE proactive_runs SET status = 'retryable', outcome_reason = 'source_stale',
+      lease_owner = NULL, lease_expires_at = NULL, next_attempt_at = ?, updated_at = ?
+      WHERE run_id = ? AND status = 'running' AND attempt = ?`)
+      .run(new Date(now.getTime() + 60000).toISOString(), now.toISOString(), run.id, run.attempt);
+    if (updated.changes) db.prepare("UPDATE proactive_signal_batches SET status = 'failed_retryable', updated_at = ? WHERE batch_id = ?").run(now.toISOString(), run.batchId);
   });
 }
 

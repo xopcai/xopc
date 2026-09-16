@@ -3,8 +3,8 @@ import type { ProductNotification } from '@xopcai/gateway-contract';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 import { digestCards } from '../proactive/inbox/digest.js';
 import { recheckProactiveNotification } from '../proactive/inbox/notification-policy.js';
-import { proactivePreferences, quietHoursEnd } from '../proactive/policy/service.js';
-import { viewingProactiveCards } from '../proactive/policy/presence.js';
+import { proactivePreferences, proactiveChecksAllowed, quietHoursEnd } from '../proactive/policy/service.js';
+import { viewingProactiveCard } from '../proactive/policy/presence.js';
 
 export function proactiveNotificationWorkspace(notification: Pick<ProductNotification, 'target'>): string | null {
   const target = notification.target;
@@ -20,11 +20,13 @@ export function recheckNotificationDelivery(notification: ProductNotification, c
   if (!workspace) return 'cancel';
   const preferences = proactivePreferences(workspace);
   if (!['all', 'auto', channel].includes(preferences.preferredChannel)) return 'cancel';
-  if (preferences.level === 'off' || (preferences.pausedUntil && Date.parse(preferences.pausedUntil) > now.getTime())) return 'cancel';
-  if (preferences.suppressWhileViewing && viewingProactiveCards(workspace, now.getTime())) return 'cancel';
+  if (!proactiveChecksAllowed(preferences, now) || preferences.notificationsMuted) return 'cancel';
+  if (preferences.suppressWhileViewing && notification.target.kind === 'insight' && viewingProactiveCard(workspace, notification.target.inboxItemId, Number(notification.payload.notificationRevision ?? 1), now.getTime())) return new Date(now.getTime() + 60000);
   if (notification.target.kind === 'insight') return recheckProactiveNotification(notification.target.inboxItemId, now, notification.payload.notificationRevision);
   if (notification.target.kind === 'proactive_digest') {
-    if (!digestCards(notification.target.digestId, workspace).length) return 'cancel';
+    const decisions = digestCards(notification.target.digestId, workspace, true).map(card => recheckProactiveNotification(card.id, now, card.notificationRevision, true));
+    if (!decisions.length || decisions.every(value => value === 'cancel')) return 'cancel';
+    if (!decisions.includes('send')) return decisions.find(value => value instanceof Date) ?? 'cancel';
     return quietHoursEnd(preferences, now) ?? 'send';
   }
   return 'cancel';

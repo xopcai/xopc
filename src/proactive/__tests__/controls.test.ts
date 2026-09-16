@@ -43,6 +43,17 @@ describe('proactive user controls', () => {
     new ProactiveInboxService().project();
     return { sub, card: listCards('default').cards[0]! };
   }
+  it('invalidates pending observations on pause without re-enabling individually paused subscriptions', () => {
+    const project = new ProjectService().create({ name: 'Resume current facts' });
+    const sub = createControlledSubscription('default', { scenarioKey: 'project_delivery_risk', scopeKind: 'project', scopeId: project.id });
+    getSqliteDatabase().prepare("UPDATE proactive_schedule_state SET last_fingerprint = 'observed' WHERE subscription_id = ?").run(sub.id);
+    updateControlledSubscription('default', sub.id, { expectedRevision: sub.revision, enabled: false });
+    const revision = proactivePreferences('default').revision;
+    updateProactivePreferences('default', { expectedRevision: revision, checksPaused: true });
+    expect(getSqliteDatabase().prepare('SELECT last_fingerprint FROM proactive_schedule_state WHERE subscription_id = ?').get(sub.id)).toMatchObject({ last_fingerprint: null });
+    updateProactivePreferences('default', { expectedRevision: revision + 1, checksPaused: false });
+    expect(effectiveProactivePolicy(sub.id).enabled).toBe(false);
+  });
   it('accepts honest no-findings without requiring fabricated evidence or insight fields', () => {
     expect(parseAnalysisResult('{"result":"no_insight","reason":"unchanged"}', new Set())).toEqual({ result: 'no_insight', reason: 'unchanged' });
     expect(() => parseAnalysisResult('{"result":"no_insight","reason":"unchanged","title":"invented"}', new Set())).toThrow();
@@ -50,12 +61,25 @@ describe('proactive user controls', () => {
   it('persists user settings, uses explicit revisions and keeps global off authoritative', () => {
     const sub = subscribe();
     const prefs = proactivePreferences('default');
-    updateProactivePreferences('default', { expectedRevision: prefs.revision, level: 'off' });
+    updateProactivePreferences('default', { expectedRevision: prefs.revision, checksPaused: true });
     updateControlledSubscription('default', sub.id, { expectedRevision: 1, level: 'active' });
     expect(effectiveProactivePolicy(sub.id).enabled).toBe(false);
     expect(() => updateControlledSubscription('default', sub.id, { expectedRevision: 1, level: 'quiet' })).toThrow('changed');
     expect(() => updateProactivePreferences('default', { expectedRevision: 1, timezone: 'not/a/zone' })).toThrow();
     expect(() => updateControlledSubscription('other', sub.id, { expectedRevision: 2, enabled: false })).toThrow('not found');
+  });
+  it('keeps delivery edits out of scheduling and recalculates intervals from the last check', () => {
+    const sub = subscribe();
+    const db = getSqliteDatabase();
+    const last = new Date(Date.now() - 60000).toISOString();
+    const next = new Date(Date.now() + 7200000).toISOString();
+    db.prepare('UPDATE proactive_schedule_state SET last_checked_at = ?, next_due_at = ?, last_fingerprint = ? WHERE subscription_id = ?').run(last, next, 'same', sub.id);
+    updateControlledSubscription('default', sub.id, { expectedRevision: 1, delivery: 'digest' });
+    expect(db.prepare('SELECT next_due_at, last_fingerprint FROM proactive_schedule_state WHERE subscription_id = ?').get(sub.id)).toEqual({ next_due_at: next, last_fingerprint: 'same' });
+    updateControlledSubscription('default', sub.id, { expectedRevision: 2, scanIntervalMinutes: 30 });
+    expect(db.prepare('SELECT next_due_at FROM proactive_schedule_state WHERE subscription_id = ?').get(sub.id)).toEqual({ next_due_at: new Date(Date.parse(last) + 1800000).toISOString() });
+    updateControlledSubscription('default', sub.id, { expectedRevision: 3, userInstructions: 'Watch the deadline' });
+    expect(db.prepare('SELECT last_fingerprint FROM proactive_schedule_state WHERE subscription_id = ?').get(sub.id)).toEqual({ last_fingerprint: null });
   });
   it('emits one durable scan on due changes, skips unchanged input, and respects disabling', () => {
     const sub = subscribe();
@@ -162,7 +186,7 @@ describe('proactive user controls', () => {
     expect(send).not.toHaveBeenCalled();
     expect(getSqliteDatabase().prepare('SELECT status FROM proactive_web_push_deliveries').get()).toMatchObject({ status: 'failed' });
     getSqliteDatabase().prepare("UPDATE proactive_web_push_deliveries SET notification_revision = 2, status = 'pending', next_attempt_at = 0").run();
-    updateProactivePreferences('default', { expectedRevision: 1, level: 'off' });
+    updateProactivePreferences('default', { expectedRevision: 1, checksPaused: true });
     await drainBrowserPush(send);
     expect(send).not.toHaveBeenCalled();
   });

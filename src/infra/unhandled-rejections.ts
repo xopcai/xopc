@@ -1,3 +1,4 @@
+import { recordProcessDiagnostic } from './process-diagnostics.js';
 import { createLogger } from '../utils/logger.js';
 import { isTransientSqliteError } from './sqlite-errors.js';
 import { resolveGlobalSingleton } from '../utils/global-singleton.js';
@@ -19,11 +20,14 @@ export function installSqliteTransientRejectionHandler(): void {
   }
 
   process.on('unhandledRejection', (reason) => {
-    if (!isTransientSqliteError(reason)) {
-      return;
-    }
+    recordProcessDiagnostic('unhandled_rejection', reason);
     const em = reason instanceof Error ? reason.message : String(reason);
-    log.warn({ err: reason instanceof Error ? reason : undefined, errorMessage: em }, `Transient SQLite rejection: ${em}`);
+    const fields = { err: reason instanceof Error ? reason : undefined, errorMessage: em };
+    if (isTransientSqliteError(reason)) {
+      log.warn(fields, `Transient SQLite rejection: ${em}`);
+    } else {
+      log.error(fields, `Unhandled promise rejection: ${em}`);
+    }
   });
 
   state.installed = true;

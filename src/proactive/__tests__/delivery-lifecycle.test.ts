@@ -4,6 +4,8 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { syncedSource } from './source-fixture.js';
+
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest, upsertConnectorConnection, upsertConnectorSyncPolicy, upsertKnowledgeSourceItems } from '../../storage/sqlite/index.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { ProjectService } from '../../projects/index.js';
@@ -90,13 +92,25 @@ describe('proactive delivery and lifecycle', () => {
     for (const id of [first.card.id, second.card.id]) performCardAction(id, 'default', { actionId: 'decide', choice: 'approve', expectedRevision: getCard(id, 'default').revision, idempotencyKey: `approve-${id}` });
     expect(getSqliteDatabase().prepare('SELECT COUNT(*) AS n FROM tasks WHERE project_id = ?').get(first.project)).toMatchObject({ n: 1 });
   });
+  it('keeps an in-app notification and a digest when another page is active', async () => {
+    const { card, sub } = await projectCard();
+    recordProactivePresence('default', { clientId: 'another-page', active: true, surface: 'web' });
+    sendCard(card.id);
+    expect(getSqliteDatabase().prepare('SELECT COUNT(*) AS n FROM notification_events').get()).toMatchObject({ n: 1 });
+    updateControlledSubscription('default', sub.id, { expectedRevision: sub.revision, delivery: 'digest' });
+    sendCard(card.id);
+    vi.setSystemTime(new Date('2026-09-12T18:00:00Z'));
+    recordProactivePresence('default', { clientId: 'another-page', active: true, surface: 'web' });
+    expect(flushDueDigests(plan => notifications().persistPlan(plan))).toHaveLength(1);
+    expect(getSqliteDatabase().prepare('SELECT COUNT(*) AS n FROM proactive_digests').get()).toMatchObject({ n: 1 });
+  });
   it('uses one browser in automatic mode and cancels a queued alert while the cards are visible', async () => {
     const { card } = await projectCard(); prepareBrowserPush();
     registerBrowserPush('default', subscription('one')); registerBrowserPush('default', subscription('two'));
     updateProactivePreferences('default', { expectedRevision: 1, preferredChannel: 'auto' });
     sendCard(card.id);
     expect(getSqliteDatabase().prepare('SELECT COUNT(*) AS n FROM proactive_web_push_deliveries').get()).toMatchObject({ n: 1 });
-    recordProactivePresence('default', { clientId: 'visible-browser', active: true, surface: 'web' });
+    recordProactivePresence('default', { clientId: 'visible-browser', active: true, surface: 'web', inboxItemId: card.id, notificationRevision: card.notificationRevision });
     const send = vi.fn(async () => ({ statusCode: 201, headers: {}, body: '' }));
     await drainBrowserPush(send); expect(send).not.toHaveBeenCalled();
   });
@@ -115,6 +129,7 @@ describe('proactive delivery and lifecycle', () => {
     upsertConnectorConnection({ id: 'calendar', connectorId: 'googlecalendar', provider: 'composio', principalId: 'local-owner', providerConnectionId: 'test', identity: {}, status: 'active', isDefault: true, metadata: {} });
     upsertConnectorSyncPolicy({ accountId: 'account:calendar', scanEnabled: true, proactiveEnabled: true });
     createControlledSubscription('default', { scenarioKey: 'meeting_preparation', scopeKind: 'workspace', scopeId: 'default', delivery: 'important' });
+    syncedSource('calendar', 'events');
     upsertKnowledgeSourceItems([{ sourceInstanceId: 'calendar', collectionScope: 'events', externalId: 'meeting', itemType: 'calendar_event', occurredAt: '2026-09-12T13:00:00Z', contentHash: 'one', normalizedText: JSON.stringify({ title: 'Private meeting' }), metadata: { workspaceId: 'default', connectionId: 'calendar', connectorId: 'googlecalendar' }, sensitivity: 'personal', retentionClass: 'bounded', synthesisPipeline: 'connected_knowledge', synthesisStatus: 'pending' }]);
     const source = events(); await new ProactiveTemporalWorker(source).tick(); source.markReadyBatches(new Date(Date.now() + 600000));
     await new ProactiveWorker({ execute: async () => ({ text: JSON.stringify(candidate([source.listEvents()[0]!.id])) }) }).tick();
@@ -177,6 +192,20 @@ describe('proactive delivery and lifecycle', () => {
     expect(flushDueDigests((plan) => notifications().persistPlan(plan))).toEqual([]);
     vi.setSystemTime(new Date('2026-09-12T20:00:00Z'));
     expect(flushDueDigests((plan) => notifications().persistPlan(plan))).toHaveLength(1);
+  });
+  it('keeps digest membership through pause and mute without notifying externally', async () => {
+    const { card } = await projectCard();
+    updateProactivePreferences('default', { expectedRevision: 1, digestEnabled: true }); sendCard(card.id);
+    updateProactivePreferences('default', { expectedRevision: 2, checksPaused: true });
+    vi.setSystemTime(new Date('2026-09-12T18:00:00Z'));
+    expect(flushDueDigests(plan => notifications().persistPlan(plan))).toEqual([]);
+    expect(getSqliteDatabase().prepare('SELECT consumed_at FROM proactive_digest_queue').get()).toMatchObject({ consumed_at: null });
+    updateProactivePreferences('default', { expectedRevision: 3, checksPaused: false, notificationsMuted: true });
+    vi.setSystemTime(new Date('2026-09-12T18:02:00Z'));
+    const [notification] = flushDueDigests(plan => notifications().persistPlan(plan));
+    expect(notification?.target.kind).toBe('proactive_digest');
+    expect(recheckNotificationDelivery(notification!, 'browser')).toBe('cancel');
+    if (notification!.target.kind === 'proactive_digest') expect(digestCards(notification!.target.digestId, 'default')).toHaveLength(1);
   });
   it('cancels daily digest delivery after the user disables summaries', async () => {
     const { card } = await projectCard();

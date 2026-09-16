@@ -28,6 +28,8 @@ import { radii, spacing, typography, useTheme } from '../theme';
 export type BottomSheetModalProps = {
   visible: boolean;
   onDismiss: () => void;
+  /** Runs after the native modal is gone, safe for presenting another picker or sheet. */
+  onAfterDismiss?: () => void;
   title?: string;
   subtitle?: string;
   headerAction?: ReactNode;
@@ -44,6 +46,7 @@ export type BottomSheetModalProps = {
 export function BottomSheetModal({
   visible,
   onDismiss,
+  onAfterDismiss,
   title,
   subtitle,
   headerAction,
@@ -61,7 +64,13 @@ export function BottomSheetModal({
   const motionDisabled = disableAnimation || reducedMotion;
   const { height: screenHeight } = useWindowDimensions();
   const [mounted, setMounted] = useState(visible);
-  const progress = useSharedValue(visible ? 1 : 0);
+  const mountedRef = useRef(mounted);
+  mountedRef.current = mounted;
+  const progress = useSharedValue(0);
+  const sheetHeight = useSharedValue(screenHeight);
+  const didCloseRef = useRef(false);
+  const onAfterDismissRef = useRef(onAfterDismiss);
+  onAfterDismissRef.current = onAfterDismiss;
   const dragY = useSharedValue(0);
   const closingRef = useRef(false);
   const onDismissRef = useRef(onDismiss);
@@ -69,6 +78,7 @@ export function BottomSheetModal({
 
   const completeClose = useCallback((notify: boolean) => {
     closingRef.current = false;
+    didCloseRef.current = true;
     setMounted(false);
     if (notify) onDismissRef.current();
   }, []);
@@ -93,26 +103,40 @@ export function BottomSheetModal({
 
   const requestDismiss = useCallback(() => close(true), [close]);
 
-  useEffect(() => {
-    if (!visible) {
-      if (mounted) close(false);
-      return;
-    }
+  const completeNativeDismiss = useCallback(() => {
+    if (!didCloseRef.current) return;
+    didCloseRef.current = false;
+    onAfterDismissRef.current?.();
+  }, []);
 
+  useEffect(() => {
+    // Android removes its dialog during the commit; iOS reports native dismissal below.
+    if (!mounted && Platform.OS !== 'ios') completeNativeDismiss();
+  }, [completeNativeDismiss, mounted]);
+
+  const animateOpen = useCallback(() => {
     closingRef.current = false;
-    setMounted(true);
+    didCloseRef.current = false;
     cancelAnimation(progress);
     dragY.value = 0;
-    if (motionDisabled) {
-      progress.value = 1;
-      return;
-    }
-    progress.value = 0;
-    progress.value = withTiming(1, {
+    progress.value = motionDisabled ? 1 : withTiming(1, {
       duration: motion.duration.standard,
       easing: motion.easing.enter,
     });
-  }, [close, dragY, mounted, motionDisabled, progress, visible]);
+  }, [dragY, motionDisabled, progress]);
+
+  useEffect(() => {
+    if (!visible) {
+      if (mountedRef.current) close(false);
+      return;
+    }
+    if (mountedRef.current) {
+      animateOpen();
+    } else {
+      progress.value = 0;
+      setMounted(true);
+    }
+  }, [animateOpen, close, progress, visible]);
 
   const dismissGesture = Gesture.Pan()
     .enabled(!motionDisabled)
@@ -137,11 +161,9 @@ export function BottomSheetModal({
     transform: [{
       translateY: motionDisabled
         ? 0
-        : (1 - progress.value) * screenHeight + dragY.value,
+        : (1 - progress.value) * sheetHeight.value + dragY.value,
     }],
   }));
-
-  if (!mounted) return null;
 
   const content = (
     <View style={styles.overlay}>
@@ -155,6 +177,7 @@ export function BottomSheetModal({
         />
       </Animated.View>
       <Animated.View
+        onLayout={event => { sheetHeight.value = event.nativeEvent.layout.height; }}
         testID={testID}
         style={[
           styles.sheet,
@@ -210,18 +233,20 @@ export function BottomSheetModal({
       animationType="none"
       statusBarTranslucent
       onRequestClose={requestDismiss}
+      onDismiss={completeNativeDismiss}
       onShow={() => {
+        animateOpen();
         if (title) AccessibilityInfo.announceForAccessibility(title);
       }}
     >
-      {keyboardAvoiding ? (
+      {mounted ? keyboardAvoiding ? (
         <KeyboardAvoidingView
           style={styles.flex}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
           {content}
         </KeyboardAvoidingView>
-      ) : content}
+      ) : content : null}
     </Modal>
   );
 }

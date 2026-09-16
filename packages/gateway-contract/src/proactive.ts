@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const ProactiveLevelSchema = z.enum(['off', 'quiet', 'balanced', 'active']);
+export const ProactiveLevelSchema = z.enum(['quiet', 'balanced', 'active']);
 export const ProactiveTimezoneSchema = z.string().min(1).max(100).refine((value) => {
   try { new Intl.DateTimeFormat('en', { timeZone: value }); return true; } catch { return false; }
 }, 'Invalid timezone');
@@ -16,7 +16,9 @@ export const ProactivePreferencesSchema = z.object({
   preferredChannel: z.enum(['all', 'auto', 'browser', 'mobile', 'telegram']).default('all'),
   suppressWhileViewing: z.boolean().default(true),
   telegram: z.object({ chatId: z.string().regex(/^-?[0-9]{1,20}$/), accountId: z.string().min(1).max(100).optional(), publicUrl: z.url().refine((value) => { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password && !url.search && !url.hash; }, 'Use an HTTPS console URL without credentials or query parameters') }).nullable().default(null),
-  pausedUntil: z.iso.datetime().nullable().default(null),
+  checksPaused: z.boolean().default(false),
+  checksPausedUntil: z.iso.datetime().nullable().default(null),
+  notificationsMuted: z.boolean().default(false),
   revision: z.number().int().nonnegative().default(0),
 });
 export const ProactivePreferencesUpdateSchema = z.object({
@@ -31,7 +33,9 @@ export const ProactivePreferencesUpdateSchema = z.object({
   preferredChannel: ProactivePreferencesSchema.shape.preferredChannel.removeDefault().optional(),
   suppressWhileViewing: ProactivePreferencesSchema.shape.suppressWhileViewing.removeDefault().optional(),
   telegram: ProactivePreferencesSchema.shape.telegram.removeDefault().optional(),
-  pausedUntil: ProactivePreferencesSchema.shape.pausedUntil.removeDefault().optional(),
+  checksPaused: ProactivePreferencesSchema.shape.checksPaused.removeDefault().optional(),
+  checksPausedUntil: ProactivePreferencesSchema.shape.checksPausedUntil.removeDefault().optional(),
+  notificationsMuted: ProactivePreferencesSchema.shape.notificationsMuted.removeDefault().optional(),
   expectedRevision: z.number().int().nonnegative(),
 }).strict();
 export const ProactiveSubscriptionSettingsSchema = z.object({
@@ -75,6 +79,7 @@ export const ProactiveCardActionSchema = z.object({
   artifact: ProactiveArtifactSchema.optional(),
   taskDraft: ProactiveTaskDraftSchema.optional(),
   instruction: z.string().trim().min(1).max(2000).optional(),
+  feedbackReason: z.enum(['irrelevant', 'bad_timing', 'outdated', 'too_frequent']).optional(),
 }).strict();
 export type ProactiveLevel = z.infer<typeof ProactiveLevelSchema>;
 export type ProactivePreferences = z.infer<typeof ProactivePreferencesSchema>;
@@ -109,4 +114,12 @@ export interface ProactiveCard {
   updatedAt: string;
   expiresAt?: string;
   fallbackText: string;
+}
+
+/** Read-only projection of persisted checks and their next eligible attempt. */
+export interface ProactiveCheckStatus {
+  health: 'waiting' | 'queued' | 'running' | 'retrying' | 'blocked';
+  lastCheckedAt: string | null;
+  nextCheckAt: string | null;
+  recent: Array<{ id: string; status: string; outcome: string | null; startedAt: string; completedAt: string | null; retryAt: string | null; attempt: number }>;
 }

@@ -28,16 +28,13 @@ export function updateProactivePreferences(workspaceId: string, value: unknown):
     db.prepare(`INSERT INTO proactive_preferences(workspace_id, preferences_json, revision) VALUES (?, ?, ?)
       ON CONFLICT(workspace_id) DO UPDATE SET preferences_json = excluded.preferences_json, revision = excluded.revision`)
       .run(workspaceId, JSON.stringify(next), next.revision);
+    if (proactiveChecksAllowed(current) && !proactiveChecksAllowed(next)) {
+      db.prepare(`UPDATE proactive_schedule_state SET last_fingerprint = NULL WHERE subscription_id IN
+        (SELECT subscription_id FROM proactive_scenario_subscriptions WHERE workspace_id = ?)`).run(workspaceId);
+      db.prepare("UPDATE proactive_follow_ups SET last_fingerprint = NULL WHERE workspace_id = ? AND status = 'watching'").run(workspaceId);
+    }
     if (next.timezone !== current.timezone || next.digestHour !== current.digestHour || next.digestMinute !== current.digestMinute) {
       db.prepare("UPDATE proactive_digest_queue SET due_at = ? WHERE workspace_id = ? AND mode = 'daily' AND consumed_at IS NULL").run(nextDigestTime(next, new Date()).toISOString(), workspaceId);
-    }
-    if (next.level === 'off') {
-      db.prepare('DELETE FROM proactive_digest_queue WHERE workspace_id = ?').run(workspaceId);
-      db.prepare(`UPDATE proactive_delivery_outbox SET status = 'delivered', error_message = 'proactive_disabled'
-        WHERE status IN ('pending', 'retryable') AND inbox_item_id IN (
-          SELECT i.inbox_item_id FROM proactive_inbox_items i JOIN proactive_insights x USING(insight_id)
-          JOIN proactive_scenario_subscriptions s USING(subscription_id) WHERE s.workspace_id = ?
-        )`).run(workspaceId);
     }
     return next;
   });
@@ -47,9 +44,8 @@ export function effectiveProactivePolicy(subscriptionId: string, now = new Date(
   const sub = getSqliteDatabase().prepare('SELECT workspace_id, enabled FROM proactive_scenario_subscriptions WHERE subscription_id = ?').get(subscriptionId) as { workspace_id: string; enabled: number } | undefined;
   const settings = subscriptionSettings(subscriptionId);
   const preferences = proactivePreferences(sub?.workspace_id ?? 'default');
-  const level: ProactiveLevel = preferences.level === 'off' ? 'off' : settings.level ?? preferences.level;
-  const enabled = Boolean(sub?.enabled) && !settings.completedAt && level !== 'off'
-    && !(preferences.pausedUntil && Date.parse(preferences.pausedUntil) > now.getTime());
+  const level: ProactiveLevel = settings.level ?? preferences.level;
+  const enabled = Boolean(sub?.enabled) && !settings.completedAt && proactiveChecksAllowed(preferences, now);
   return { enabled, level, settings, preferences, workspaceId: sub?.workspace_id ?? '',
     scanIntervalMinutes: settings.scanIntervalMinutes ?? 120 };
 }
@@ -76,7 +72,7 @@ export function quietHoursEnd(preferences: ProactivePreferences, now: Date): Dat
 export function reserveProactiveNotification(subscriptionId: string, dedupeKey: string, now = new Date()): 'allowed' | 'suppressed' | Date {
   return runSqliteWriteTransaction((db) => {
     const policy = effectiveProactivePolicy(subscriptionId, now);
-    if (!policy.enabled) return 'suppressed';
+    if (!policy.enabled || policy.preferences.notificationsMuted) return 'suppressed';
     if (policy.level === 'quiet' || policy.settings.delivery === 'inbox') return 'suppressed';
     const end = quietHoursEnd(policy.preferences, now);
     if (end) return end;
@@ -103,4 +99,8 @@ export function nextDigestTime(preferences: ProactivePreferences, after: Date): 
     previousMinute = minute; previousDay = day;
   }
   return new Date(after.getTime() + 86400000);
+}
+
+export function proactiveChecksAllowed(preferences: ProactivePreferences, now = new Date()): boolean {
+  return !preferences.checksPaused && !(preferences.checksPausedUntil && Date.parse(preferences.checksPausedUntil) > now.getTime());
 }
