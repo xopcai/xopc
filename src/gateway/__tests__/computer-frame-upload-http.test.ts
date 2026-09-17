@@ -68,6 +68,7 @@ it('keeps ordinary and neighboring APIs at 1MB', async () => {
   for (const path of ['/api/config', '/api/endpoint-tools/invocations/test/files-other']) {
     const res = await fetch(base + path, { method: 'POST', body: png });
     expect(res.status).toBe(413);
+    await res.arrayBuffer();
   }
 });
 it('requires Gateway authentication and the correct endpoint-bound upload grant', async () => {
