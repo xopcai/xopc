@@ -92,11 +92,20 @@ vi.mock('@/features/chat/messages/message-list', () => ({
   MessageList: ({
     messages,
     registerListContentRef,
+    conversationId,
+    workspaceConversationId,
   }: {
     messages: Array<{ content: Array<{ type: string; text?: string }> }>;
     registerListContentRef: (element: HTMLDivElement | null) => void;
+    conversationId?: string | null;
+    workspaceConversationId?: string | null;
   }) => (
-    <div ref={registerListContentRef} data-testid="message-thread">
+    <div
+      ref={registerListContentRef}
+      data-testid="message-thread"
+      data-conversation-id={conversationId}
+      data-workspace-conversation-id={workspaceConversationId}
+    >
       {messages.flatMap((message) => message.content).map((block) => block.type === 'text' ? block.text : '').join('\n')}
     </div>
   ),
@@ -185,6 +194,15 @@ describe('SideChatConversation composer', () => {
 
     expect(sendSideChatInput).toHaveBeenCalledWith('side-1', 'hello', []);
     expect(input?.textContent).toBe('');
+  });
+
+  it('keeps the Sidechat message identity while resolving files from the parent workspace', async () => {
+    getSideChatMessages.mockResolvedValue([{ role: 'assistant', content: [{ type: 'text', text: 'done' }] }]);
+    await renderConversation();
+
+    const thread = container.querySelector<HTMLElement>('[data-testid="message-thread"]');
+    expect(thread?.dataset.conversationId).toBe('side-1');
+    expect(thread?.dataset.workspaceConversationId).toBe('parent');
   });
 
   it('clears the editor immediately when the send button submits the draft', async () => {

@@ -1,7 +1,4 @@
 import { Loader2, PanelRight, Plus, SquareTerminal } from 'lucide-react';
-import type { SessionIdentityInput } from '@xopcai/gateway-contract';
-import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
-import { sessionIdentityLabel } from '@/features/sessions/session-identity-label';
 import { memo, useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
@@ -13,6 +10,11 @@ import { SessionContextPanel, type SessionContextPanelProps } from '@/features/c
 import { useSessionContext } from '@/features/chat/context/use-session-context';
 import { ChatWorkspaceControl } from '@/features/chat/workspace/chat-workspace-control';
 import { matchesTerminalShortcut, terminalShortcutLabel } from '@/features/chat/terminal/terminal-shortcut';
+import {
+  matchesSideChatShortcut,
+  sideChatAriaKeyShortcut,
+  sideChatShortcutLabel,
+} from '@/features/side-chat/side-chat-shortcut';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useAppShellStore } from '@/stores/app-shell-store';
@@ -29,7 +31,6 @@ const MAX_MD = '(max-width: 767px)';
 
 type ChatPageHeaderRegistrationProps = {
   chatHeadline: string;
-  sessionIdentity?: SessionIdentityInput;
   chatAgents: ChatAgentOption[];
   showChatAgentSelector: boolean;
   chatAgentId: string;
@@ -53,7 +54,6 @@ type ChatPageHeaderRegistrationProps = {
  */
 export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistration({
   chatHeadline,
-  sessionIdentity,
   chatAgents,
   showChatAgentSelector,
   chatAgentId,
@@ -94,6 +94,8 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
   const terminalPlatform = window.electronAPI?.platform;
   const terminalShortcut = terminalShortcutLabel(terminalPlatform);
+  const sideChatShortcut = sideChatShortcutLabel(terminalPlatform);
+  const sideChatAriaShortcut = sideChatAriaKeyShortcut(terminalPlatform);
   const terminalAvailable = Boolean(window.electronAPI?.terminal && (activeConversationId || prepareTerminalSession));
 
   const handleTerminalToggle = useCallback(() => {
@@ -110,6 +112,12 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
       })
       .finally(() => setTerminalPreparing(false));
   }, [activeConversationId, openTerminalPanel, prepareTerminalSession, terminalAvailable, terminalDisabled, terminalPreparing, toggleTerminalPanel]);
+
+  const handleSideChatToggle = useCallback(() => {
+    if (!activeConversationId || !hasMessages) return;
+    const open = useSideChatStore.getState().panes[activeConversationId]?.open === true;
+    setSideChatOpen(activeConversationId, !open);
+  }, [activeConversationId, hasMessages, setSideChatOpen]);
 
   const isMobileLayout = useMediaQuery(MAX_MD);
   const chromeLayout = resolveShellChromeLayout({
@@ -137,6 +145,17 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [handleTerminalToggle, terminalAvailable, terminalPlatform]);
+
+  useEffect(() => {
+    if (!activeConversationId || !hasMessages) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!matchesSideChatShortcut(event, terminalPlatform)) return;
+      event.preventDefault();
+      handleSideChatToggle();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [activeConversationId, handleSideChatToggle, hasMessages, terminalPlatform]);
 
   useLayoutEffect(() => {
     setPageHeader({
@@ -166,10 +185,6 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
           >
             {chatHeadline}
           </h1>
-          {sessionIdentity ? <div className={cn('mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-fg-muted', showNewChatLink && 'md:justify-center')}>
-            <SessionChannelIcon sourceChannel={sessionIdentity.sourceChannel} session={sessionIdentity} className="size-3.5" />
-            <span className="truncate">{sessionIdentityLabel(sessionIdentity, m.sidebar.sessionFilters)}</span>
-          </div> : null}
         </div>
       ),
       end: (
@@ -248,11 +263,12 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
                 'rounded-md p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
                 sideChatOpen && 'bg-surface-hover text-fg',
               )}
-              title={sideChatOpen ? m.sideChat.closePaneAria : m.sideChat.openPaneAria}
+              title={`${sideChatOpen ? m.sideChat.closePaneAria : m.sideChat.openPaneAria} (${sideChatShortcut})`}
               aria-label={sideChatOpen ? m.sideChat.closePaneAria : m.sideChat.openPaneAria}
+              aria-keyshortcuts={sideChatAriaShortcut}
               aria-controls="app-side-chat-panel"
               aria-expanded={sideChatOpen}
-              onClick={() => setSideChatOpen(activeConversationId, !sideChatOpen)}
+              onClick={handleSideChatToggle}
             >
               <PanelRight className="size-4" strokeWidth={1.5} aria-hidden />
             </button>
@@ -262,7 +278,6 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     });
   }, [
     chatHeadline,
-    sessionIdentity,
     chatAgents,
     showChatAgentSelector,
     chatAgentId,
@@ -276,8 +291,9 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     m.chat.temporarySessionHint,
     m.chat.terminal.open,
     terminalShortcut,
+    sideChatShortcut,
+    sideChatAriaShortcut,
     m.sidebar.newTask,
-    m.sidebar.sessionFilters,
     projectId,
     context,
     terminalPanelOpen,
@@ -296,6 +312,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     workspaceDisabled,
     onWorkspaceChange,
     handleTerminalToggle,
+    handleSideChatToggle,
     setPageHeader,
   ]);
 

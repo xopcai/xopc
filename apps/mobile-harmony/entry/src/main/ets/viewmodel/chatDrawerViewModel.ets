@@ -1,0 +1,38 @@
+import { XopcSessionItem, XopcSessionGroup } from '../model/chat';
+import { XopcChatRepository } from '../repository/chatRepository';
+import { groupChatSessions } from '../common/sessionGroups';
+
+@ObservedV2
+export class XopcChatDrawerViewModel {
+  @Trace items: XopcSessionItem[] = [];
+  @Trace groups: XopcSessionGroup[] = [];
+  @Trace total: number = 0;
+  @Trace hasMore: boolean = false;
+  @Trace loading: boolean = false;
+  @Trace error: string = '';
+  private repository: XopcChatRepository = new XopcChatRepository();
+  private generation: number = 0;
+  private offset: number = 0;
+  private search: string = '';
+  dispose(): void { this.generation++; this.loading = false; }
+  async open(): Promise<void> { await this.load('', false); }
+  async load(search: string = this.search, more: boolean = false): Promise<void> {
+    if (more && (this.loading || !this.hasMore)) return;
+    const generation = ++this.generation;
+    this.loading = true; this.error = ''; this.search = search;
+    if (!more) this.offset = 0;
+    try {
+      const page = await this.repository.list(search, this.offset, 20);
+      if (generation !== this.generation) return;
+      const combined = more ? this.items.concat(page.items) : page.items;
+      const seen: Set<string> = new Set<string>();
+      this.items = combined.filter((item: XopcSessionItem): boolean => {
+        if (seen.has(item.key)) return false; seen.add(item.key); return true;
+      });
+      this.offset += page.items.length;
+      this.groups = groupChatSessions(this.items); this.total = page.total;
+      this.hasMore = page.hasMore && page.items.length > 0;
+    } catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
+    finally { if (generation === this.generation) this.loading = false; }
+  }
+}

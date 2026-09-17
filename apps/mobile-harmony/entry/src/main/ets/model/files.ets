@@ -1,5 +1,6 @@
 export interface XopcFileSpace { id: string; title: string; kind: string; writable: boolean; }
 export interface XopcFileSpaces { spaces: XopcFileSpace[]; }
+export interface XopcFileSpaceResult { space: XopcFileSpace; }
 export interface XopcFile {
   id: string; spaceId: string; name: string; relativePath: string; parentPath: string;
   kind: string; mimeType: string; size: number; modifiedAt: number; revision: string; capabilities: string[];

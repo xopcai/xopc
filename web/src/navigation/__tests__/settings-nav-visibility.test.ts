@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   isGatewaySettingsTabVisibleInMode,
@@ -6,9 +7,24 @@ import {
 import {
   isSettingsPathVisibleInMode,
   isSettingsTabVisibleInMode,
+  isSettingsPathVisibleOnPlatform,
+  isSettingsTabVisibleOnPlatform,
 } from '@/navigation/settings-nav-visibility';
 
+const previousApi = window.electronAPI;
+afterEach(() => { window.electronAPI = previousApi; });
+
 describe('settings-nav-visibility', () => {
+  it.each(['darwin', 'win32', 'linux', undefined])('gates computer use navigation and deep links on %s', (platform) => {
+    window.electronAPI = platform ? { platform } as Window['electronAPI'] : undefined;
+    const supported = platform === 'darwin';
+    expect(isSettingsTabVisibleOnPlatform('settingsComputerUse')).toBe(supported);
+    expect(isSettingsPathVisibleOnPlatform('/settings/computer-use')).toBe(supported);
+    expect(isSettingsPathVisibleOnPlatform('/settings/computer-use/')).toBe(supported);
+    expect(isSettingsTabVisibleOnPlatform('settingsAgentBrowser')).toBe(true);
+    expect(isSettingsPathVisibleOnPlatform('/settings/agent-browser')).toBe(true);
+    expect(isSettingsPathVisibleOnPlatform('/settings/overview')).toBe(true);
+  });
   it('hides power-user tabs in simple mode', () => {
     expect(isSettingsTabVisibleInMode('settingsOverview', 'simple')).toBe(true);
     expect(isSettingsTabVisibleInMode('settingsModels', 'simple')).toBe(true);

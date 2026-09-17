@@ -5,6 +5,7 @@ export interface XopcWorkspaceItem {
 }
 export interface XopcTask {
   id: string; title: string; body?: string; phase: string; version: number; projectId?: string; priority: string;
+  closedAt?: number; updatedAt?: number; resolution?: string;
 }
 export interface XopcTaskResult { task: XopcTask; allowedCommands?: string[]; }
 export interface XopcTaskList { items: XopcTaskResult[]; }
@@ -35,7 +36,7 @@ export interface XopcAutomationList { automations: XopcAutomation[]; }
 export interface XopcAutomationResult { automation: XopcAutomation; }
 export interface XopcAutomationRun { id: string; status: string; startedAt?: number; error?: string; }
 export interface XopcAutomationRuns { runs: XopcAutomationRun[]; }
-export interface XopcNote { id: string; title?: string; markdown?: string; snippet?: string; status: string; remoteVersion?: number; }
+export interface XopcNote { id: string; title?: string; markdown?: string; snippet?: string; status: string; remoteVersion?: number; updatedAt?: number; }
 export interface XopcNoteList { items: XopcNote[]; hasMore?: boolean; }
 export interface XopcNoteResult { note: XopcNote; }
 export interface XopcNoteWrite { title?: string; markdown: string; kind?: string; channel?: string; platform?: string; }

@@ -3,6 +3,8 @@
     "title": "Computer use",
     "subtitle": "管理 xopc 如何观察和操作你电脑上的应用。",
     "preview": "macOS 预览版",
+    "experimental": "实验性",
+    "experimentalDescription": "电脑操作仍在实验阶段，识别和操作可能出错。建议先用于非关键任务，留意执行过程，并核对结果。",
     "control": "控制能力",
     "desktop": "桌面应用",
     "desktopDescription": "观察和操作一个应用窗口，按本机授权模式执行。",

@@ -1,5 +1,6 @@
 import { webSocket } from '@kit.NetworkKit';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { XopcDeviceCrypto } from './deviceCrypto';
 import { gatewaySession } from './gatewaySession';
 import { XopcHttpError } from './transport';
@@ -118,15 +119,25 @@ export class XopcRealtimeClient {
       });
       socket.on('message', (_error: BusinessError, value: string | ArrayBuffer): void => {
         if (generation !== this.generation) return;
-        if (typeof value !== 'string' || value.length > 4 * 1024 * 1024) { this.retry(generation); return; }
-        try { this.receive(value); } catch (_) { this.retry(generation); }
+        if (typeof value !== 'string' || value.length > 4 * 1024 * 1024) {
+          hilog.warn(0x0000, 'XopcRealtime', 'Rejected frame: type=%{public}s', typeof value);
+          this.retry(generation); return;
+        }
+        try { this.receive(value); } catch (error) {
+          const message = (error as Error).message;
+          const reason = ['INVALID_REALTIME_FRAME', 'INVALID_EVENT', 'MISSING_ENDPOINT_CLAIM'].includes(message) ? message : 'CALLBACK_OR_JSON';
+          hilog.warn(0x0000, 'XopcRealtime', 'Frame processing failed: %{public}s', reason); this.retry(generation);
+        }
       });
       socket.on('close', (_error: BusinessError, value: webSocket.CloseResult): void => {
         if (generation !== this.generation) return;
+        hilog.info(0x0000, 'XopcRealtime', 'Socket closed: %{public}d', value.code);
         if (value.code === 4409 || value.code === 4403) this.fail(value.code === 4409 ? 'protocol_incompatible' : 'unauthorized');
         else this.retry(generation);
       });
-      socket.on('error', (_error: BusinessError): void => { this.retry(generation); });
+      socket.on('error', (error: BusinessError): void => {
+        hilog.warn(0x0000, 'XopcRealtime', 'Socket failed: %{public}d', error.code); this.retry(generation);
+      });
       this.lastReceived = Date.now();
       this.heartbeatTimer = setInterval((): void => {
         if (Date.now() - this.lastReceived > 45000 || (!this.ready && Date.now() - this.lastReceived > 10000)) this.retry(generation);
@@ -135,6 +146,7 @@ export class XopcRealtimeClient {
       await socket.connect(origin.replace(/^https:/, 'wss:') + '/api/realtime/v1/ws');
     } catch (error) {
       if (generation !== this.generation) return;
+      hilog.warn(0x0000, 'XopcRealtime', 'Connection setup failed: HTTP %{public}d', error instanceof XopcHttpError ? error.status : 0);
       if ((error instanceof XopcHttpError && (error.status === 401 || error.status === 403))
         || (error as Error).message === 'DEVICE_AUTH_DENIED') this.fail('unauthorized');
       else this.retry(generation);
@@ -162,8 +174,9 @@ export class XopcRealtimeClient {
       this.onState('connected');
     } else if (frame.kind === 'realtime.event') {
       const event = frame.payload as XopcEvent;
-      if (typeof event.topic !== 'string' || typeof event.event !== 'string' || !event.data) throw new Error('INVALID_EVENT');
-      if (this.cursors.accept(event.topic, event.seq)) this.onEvent(event);
+      if (typeof event.topic !== 'string' || typeof event.event !== 'string') throw new Error('INVALID_EVENT');
+      // Gateway invalidations may have a null payload. Advance their cursor without disconnecting.
+      if (this.cursors.accept(event.topic, event.seq) && event.data !== null && event.data !== undefined) this.onEvent(event);
     } else if (frame.kind === 'realtime.subscribed') {
       const subscribed = frame.payload as XopcSubscribed;
       this.cursors.rebase(subscribed.topic, subscribed.cursor);

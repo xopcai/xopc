@@ -743,6 +743,7 @@ export function SideChatConversation({
               messages={messages}
               authToken={token}
               conversationId={sideChatId}
+              workspaceConversationId={parentConversationId}
               streaming={running}
               progress={null}
               reasoningLevel="on"

@@ -3,6 +3,8 @@
     "title": "Computer use",
     "subtitle": "Manage how xopc observes and controls applications on your computer.",
     "preview": "macOS preview",
+    "experimental": "Experimental",
+    "experimentalDescription": "Computer use is experimental. It may misread the screen or perform incorrect actions. Start with non-critical tasks, watch its progress, and check the results.",
     "control": "Control",
     "desktop": "Desktop applications",
     "desktopDescription": "Observe and operate one application window using this device’s approval mode.",

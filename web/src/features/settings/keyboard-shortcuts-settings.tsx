@@ -17,6 +17,7 @@ import {
   defaultVoiceInputShortcut,
   useVoiceInputShortcutStore,
 } from '@/stores/voice-input-shortcut-store';
+import { sideChatShortcutKeys } from '@/features/side-chat/side-chat-shortcut';
 
 type ShortcutEntry = {
   keys: string[];
@@ -328,6 +329,7 @@ export function KeyboardShortcutsSettingsPanel() {
       { keys: ['Shift', 'Enter'], label: k.chatNewLine },
       { keys: [MOD, 'Enter'], label: k.chatForceSend },
       { keys: shortcutDisplayKeys(voiceInputShortcut), label: k.chatVoiceInput },
+      { keys: sideChatShortcutKeys(window.electronAPI?.platform), label: k.chatToggleSideChat },
     ],
   });
 

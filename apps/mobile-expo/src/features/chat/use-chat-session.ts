@@ -82,6 +82,8 @@ import { resolveResumeRunId } from './resolve-resume-run-id';
 import { shouldWakeStreamRecoveryOnForeground } from './stream-recovery-foreground';
 import { formatMobileAgentRunError } from './agent-run-error';
 import { queueAssistantAudioAutoplay } from './assistant-audio-autoplay';
+import { sessionContainsFinalAssistant } from './session-refresh-confirmation';
+import { recordConnectionEvent } from '../gateway/connection-log';
 
 // Discrete 10 Hz text commits keep the answer responsive without continuously
 // rebuilding Markdown and remeasuring the virtualized row.
@@ -103,9 +105,8 @@ export interface UseChatSessionReturn {
   clarifySubmitting: boolean;
   clarifySubmitError: string | null;
   optimisticMessages: Message[];
+  finalizedMessages: Message[];
   sending: boolean;
-  awaitingSessionRefresh: boolean;
-  sessionDataUpdatedAtRef: React.MutableRefObject<number>;
 
   // Actions
   send: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[], delivery?: 'next' | 'steer') => Promise<boolean>;
@@ -116,6 +117,7 @@ export interface UseChatSessionReturn {
   letAgentDecideClarification: () => Promise<void>;
   cancelClarification: () => Promise<void>;
   clearAllState: () => void;
+  reconcileFinalizedMessages: (messages: Message[]) => void;
 
   // Refs (needed by parent)
   activeConversationIdRef: React.MutableRefObject<string>;
@@ -142,10 +144,11 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   const runBusyRef = useRef(false);
   const resumeInFlightRef = useRef(false);
   const streamingMsgRef = useRef<Message | null>(null);
+  const finalizedMessagesRef = useRef<Message[]>([]);
+  const finalizedAtRef = useRef(new Map<string, number>());
   const streamingFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const displayMessagesRef = useRef<Message[]>([]);
   const messageListAtBottomRef = useRef(true);
-  const sessionDataUpdatedAtRef = useRef(0);
   const sessionHeadRefreshGenerationRef = useRef(new Map<string, number>());
   const prevGatewayOnlineForStreamRef = useRef(gatewayOnline);
 
@@ -158,6 +161,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
 
   // ── Streaming state ──────────────────────────────────────
   const [streamingMsg, setStreamingMsg] = useState<Message | null>(null);
+  const [finalizedMessages, setFinalizedMessages] = useState<Message[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [progress, setProgress] = useState<ProgressState | null>(null);
   const [snackMsg, setSnackMsg] = useState('');
@@ -193,7 +197,6 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   }, [setOptimisticMessages]);
   const activeMessageIdRef = useRef<string | null>(null);
   const sending = optimisticMessages.some(message => message.deliveryState === 'sending');
-  const [awaitingSessionRefresh, setAwaitingSessionRefresh] = useState(false);
   const [pendingRunTick, setPendingRunTick] = useState(0);
 
   // ── Streaming helpers ────────────────────────────────────
@@ -259,8 +262,34 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     setClarifySubmitting(false);
     setOptimisticMessages(messages => messages.filter(message =>
       message.deliveryState === 'failed' || message.deliveryState === 'sending'));
-    setAwaitingSessionRefresh(false);
+    finalizedMessagesRef.current = [];
+    finalizedAtRef.current.clear();
+    setFinalizedMessages([]);
   }, [clearStreamingMessage, setOptimisticMessages]);
+
+  const reconcileFinalizedMessages = useCallback((messages: Message[]) => {
+    const current = finalizedMessagesRef.current;
+    const pending = current.filter((message) => {
+      if (!sessionContainsFinalAssistant(messages, message)) return true;
+      const identity = message.turnId ?? message.id;
+      if (!identity) return true;
+      const startedAt = finalizedAtRef.current.get(identity);
+      finalizedAtRef.current.delete(identity);
+      recordConnectionEvent({
+        kind: 'chatRun',
+        ok: true,
+        reason: 'history_confirmed',
+        ...(startedAt ? { latencyMs: Date.now() - startedAt } : {}),
+      });
+      return false;
+    });
+    if (pending.length === current.length) return;
+    finalizedMessagesRef.current = pending;
+    setFinalizedMessages(pending);
+    setOptimisticMessages((optimistic) => optimistic.filter(
+      (message) => message.deliveryState === 'failed' || message.deliveryState === 'sending',
+    ));
+  }, [setOptimisticMessages]);
 
 
   // ── Session invalidation ─────────────────────────────────
@@ -328,8 +357,8 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
 
   // ── Run busy tracking ────────────────────────────────────
   useEffect(() => {
-    runBusyRef.current = streaming || awaitingSessionRefresh || sendingRef.current;
-  }, [streaming, awaitingSessionRefresh, sending]);
+    runBusyRef.current = streaming || sendingRef.current;
+  }, [streaming, sending]);
 
   // ── Finalize message ─────────────────────────────────────
   const finalizeMessage = useCallback((targetConversationId = conversationId) => {
@@ -346,23 +375,57 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     setClarifyPrompt(null);
     setClarifySubmitError(null);
     setClarifySubmitting(false);
-    sessionDataUpdatedAtRef.current =
-      queryClient.getQueryState(
-        queryKeys.sessionHistory(targetConversationId, activeGatewayId),
-      )?.dataUpdatedAt ?? 0;
-    setAwaitingSessionRefresh(true);
-    void refreshSessionHeadByKey(targetConversationId).catch(() => {
-      invalidateSessionByKey(targetConversationId);
-    });
+    const finalized = streamingMsgRef.current;
+    if (finalized) {
+      const snapshot = cloneMessageForRender(finalized);
+      const identity = snapshot.turnId ?? snapshot.id ?? randomUUID();
+      snapshot.id ??= identity;
+      const withoutCurrent = finalizedMessagesRef.current.filter(
+        (message) => (message.turnId ?? message.id) !== identity,
+      );
+      const next = [...withoutCurrent, snapshot];
+      finalizedMessagesRef.current = next;
+      finalizedAtRef.current.set(identity, Date.now());
+      setFinalizedMessages(next);
+    }
+    clearStreamingMessage();
     void refreshClarification(targetConversationId).catch(() => undefined);
-  }, [activeGatewayId, invalidateSessionByKey, queryClient, refreshClarification, refreshSessionHeadByKey, conversationId]);
+  }, [clearStreamingMessage, refreshClarification, conversationId]);
 
-  // Safety: never leave the composer blocked if history refresh stalls (common on slow FRP).
   useEffect(() => {
-    if (!awaitingSessionRefresh) return;
-    const timer = setTimeout(() => setAwaitingSessionRefresh(false), 15_000);
-    return () => clearTimeout(timer);
-  }, [awaitingSessionRefresh]);
+    if (!conversationId || finalizedMessages.length === 0) return undefined;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let finishDelay: (() => void) | undefined;
+    const delays = [0, 300, 900];
+    const sync = async () => {
+      for (const delayMs of delays) {
+        if (delayMs > 0) {
+          await new Promise<void>((resolve) => {
+            finishDelay = resolve;
+            timer = setTimeout(() => {
+              timer = undefined;
+              finishDelay = undefined;
+              resolve();
+            }, delayMs);
+          });
+        }
+        if (cancelled) return;
+        try {
+          await refreshSessionHeadByKey(conversationId);
+        } catch {
+          if (cancelled) return;
+        }
+      }
+      if (!cancelled) invalidateSessionByKey(conversationId);
+    };
+    void sync();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      finishDelay?.();
+    };
+  }, [conversationId, finalizedMessages.length, invalidateSessionByKey, refreshSessionHeadByKey]);
 
   // ── Build callbacks ──────────────────────────────────────
   const buildCallbacks = useCallback((callbackConversationId: string): MessagingCallbacks => {
@@ -577,6 +640,12 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
           finalizeRunningTools(streamingMsgRef.current.content);
           flushStreamingMessage();
         }
+        recordConnectionEvent({
+          kind: 'chatRun',
+          ok: true,
+          reason: 'terminal_tail',
+          latencyMs: Math.max(0, Date.now() - lastStreamActivityAtRef.current),
+        });
         finalizeMessage(callbackConversationId);
       },
       onError: (msg) => {
@@ -587,13 +656,13 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
         if (activeMessageIdRef.current) setMessageDeliveryState(activeMessageIdRef.current, 'sent');
         if (isTransientNetworkError(msg) && streamRecoveryRef.current.recover(msg)) {
           sendingRef.current = false;
-          runBusyRef.current = streamingRef.current || awaitingSessionRefresh;
+          runBusyRef.current = streamingRef.current;
           return;
         }
         sendingRef.current = false;
         setStreaming(false);
         streamingRef.current = false;
-        runBusyRef.current = awaitingSessionRefresh;
+        runBusyRef.current = false;
         clearStreamingMessage();
         setProgress(null);
         setClarifyPrompt(null);
@@ -603,7 +672,6 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
           modelQuotaExhausted: m.chat.modelQuotaExhausted,
           platformTokenLimitExceeded: m.chat.platformTokenLimitExceeded,
         }));
-        setAwaitingSessionRefresh(false);
         invalidateSession();
       },
     };
@@ -617,7 +685,6 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     flushStreamingMessage,
     clearStreamingMessage,
     finalizeMessage,
-    awaitingSessionRefresh,
     setOptimisticMessages,
     setMessageDeliveryState,
     m.chat.modelQuotaExhausted,
@@ -690,7 +757,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
 
   const send = useCallback(async (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[], delivery: 'next' | 'steer' = 'next'): Promise<boolean> => {
     if (!canSendComposerDraft(text, attachments?.length ?? 0, contextRefs?.length ?? 0) || !conversationId || !activeGatewayId
-      || awaitingSessionRefresh || sendingRef.current
+      || sendingRef.current
       || readLocalMessages(scope).some(message => message.deliveryState === 'sending')) return false;
     const input: MessageSubmission = {
       clientMessageId: randomUUID(),
@@ -713,15 +780,15 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     await submitMessage(input);
     // The message now owns its content, including when submission failed.
     return true;
-  }, [activeGatewayId, awaitingSessionRefresh, scope, conversationId, setOptimisticMessages, submitMessage, taskId]);
+  }, [activeGatewayId, scope, conversationId, setOptimisticMessages, submitMessage, taskId]);
 
   const retryMessage = useCallback(async (message: Message): Promise<void> => {
     const current = readLocalMessages(scope).find(row => row.id === message.id);
     if (current?.deliveryState !== 'failed' || !current.submission
-      || awaitingSessionRefresh || sendingRef.current
+      || sendingRef.current
       || readLocalMessages(scope).some(row => row.deliveryState === 'sending')) return;
     await submitMessage(current.submission);
-  }, [awaitingSessionRefresh, scope, submitMessage]);
+  }, [scope, submitMessage]);
 
   // ── Abort ────────────────────────────────────────────────
   const abort = useCallback(() => {
@@ -796,7 +863,6 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
         senderRef.current.detachLocalStream();
       }
       if (senderRef.current.isStreamingFor(conversationId)) return;
-      setAwaitingSessionRefresh(false);
       setProgress(null);
       setStreaming(true);
       streamingRef.current = true;
@@ -861,10 +927,10 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       senderRef.current.detachLocalStream();
     }
     sendingRef.current = false;
-    runBusyRef.current = streamingRef.current || awaitingSessionRefresh;
+    runBusyRef.current = streamingRef.current;
     lastStreamActivityAtRef.current = Date.now();
     streamRecoveryRef.current.wake();
-  }, [awaitingSessionRefresh, conversationId]);
+  }, [conversationId]);
 
   const triggerStreamRecovery = useCallback(() => {
     requestMobileRealtimeReconnect();
@@ -919,11 +985,19 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
         !senderRef.current.isStreamingFor(conversationId)
       ) {
         streamRecoveryRef.current.wake();
-      } else if (!streamingRef.current && !sendingRef.current && !awaitingSessionRefresh) {
+      } else if (!streamingRef.current && !sendingRef.current) {
         void refreshSessionHeadByKey(conversationId).catch(() => invalidateSessionByKey(conversationId));
       }
     });
-  }, [conversationId, awaitingSessionRefresh, refreshSessionHeadByKey, invalidateSessionByKey]);
+  }, [conversationId, refreshSessionHeadByKey, invalidateSessionByKey]);
+
+  useEffect(() => {
+    return subscribeGatewayEvent('session.transcript_updated', (detail) => {
+      const key = (detail as { key?: string } | null)?.key;
+      if (key !== conversationId || finalizedMessages.length === 0) return;
+      void refreshSessionHeadByKey(conversationId).catch(() => undefined);
+    });
+  }, [conversationId, finalizedMessages.length, refreshSessionHeadByKey]);
 
   useEffect(() => subscribeGatewayEvent('clarification.updated', (detail) => {
     if (!detail || typeof detail !== 'object') return;
@@ -1020,9 +1094,8 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     clarifySubmitting,
     clarifySubmitError,
     optimisticMessages,
+    finalizedMessages,
     sending,
-    awaitingSessionRefresh,
-    sessionDataUpdatedAtRef,
 
     // Actions
     send,
@@ -1033,6 +1106,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     letAgentDecideClarification,
     cancelClarification,
     clearAllState,
+    reconcileFinalizedMessages,
 
     // Refs
     activeConversationIdRef,

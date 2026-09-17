@@ -417,6 +417,7 @@ function renderTextOrImageBlock(
   onImagePreview?: (block: ImageContent, index: number) => void,
   contentIndex?: number,
   conversationId?: string | null,
+  workspaceConversationId?: string | null,
   projectId?: string | null,
   animateInitialContent?: boolean,
   onProgressiveRenderComplete?: () => void,
@@ -448,7 +449,7 @@ function renderTextOrImageBlock(
         <ChatMarkdownView
           content={visibleText}
           compact
-          conversationId={conversationId}
+          conversationId={workspaceConversationId ?? conversationId}
           projectId={projectId}
           streaming={isAssistantMessageStreaming}
           animateInitialContent={animateInitialContent}
@@ -531,6 +532,7 @@ export function ChunkedContent({
   imagePreviewLabel,
   onImagePreview,
   conversationId,
+  workspaceConversationId,
   projectId,
   workflowOptions,
   assistantActivity,
@@ -577,6 +579,7 @@ export function ChunkedContent({
   imagePreviewLabel: string;
   onImagePreview: ((block: ImageContent, index: number) => void) | undefined;
   conversationId: string | null | undefined;
+  workspaceConversationId?: string | null;
   projectId?: string | null;
   workflowOptions: AssistantActivityWorkflowOptions;
   assistantActivity?: AssistantTurnActivityPresentation;
@@ -657,6 +660,7 @@ export function ChunkedContent({
         onImagePreview,
         b.type === 'image' ? imgIdx : i,
         conversationId,
+        workspaceConversationId,
         projectId,
         progressiveRender,
         onProgressiveRenderComplete,

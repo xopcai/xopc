@@ -1,12 +1,23 @@
-import { describe, expect, it } from 'vitest';
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { buildRouteSeeds } from '@/features/search/global-command-palette/routes-provider';
 
+const previousApi = window.electronAPI;
+afterEach(() => { window.electronAPI = previousApi; });
+
 describe('buildRouteSeeds', () => {
   it('finds the dedicated computer use settings page', () => {
+    window.electronAPI = { platform: 'darwin' } as Window['electronAPI'];
     const computer = buildRouteSeeds('zh').find(s => s.path === '/settings/computer-use');
     expect(computer).toBeDefined();
     expect(computer?.keywords).toContain('电脑操作');
+  });
+  it.each(['win32', 'linux', undefined])('hides computer use search on %s but preserves browser automation', (platform) => {
+    window.electronAPI = platform ? { platform } as Window['electronAPI'] : undefined;
+    const seeds = buildRouteSeeds('zh');
+    expect(seeds.find(seed => seed.path === '/settings/computer-use')).toBeUndefined();
+    expect(seeds.find(seed => seed.path === '/settings/agent-browser')).toBeDefined();
   });
   it('maps browser settings to the standalone browser route', () => {
     const seeds = buildRouteSeeds('en');

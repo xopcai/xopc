@@ -37,7 +37,7 @@ export const queryKeys = {
   notesAll: ['notes'] as const,
   homeRecentNotes: ['notes', 'home-recent'] as const,
   homeInboxCount: ['notes', 'home-inbox-count'] as const,
-  workspaceSearch: (query: string) => ['workspace-search', query.trim()] as const,
+  librarySearch: (query: string) => ['library-search', query.trim()] as const,
   note: (id: string) => ['note', id] as const,
   projects: ['projects'] as const,
   userProfile: (gatewayId: string) => ['user-profile', gatewayId] as const,

@@ -1,13 +1,30 @@
 import { XopcFilesViewModel } from '../viewmodel/filesViewModel';
 import { XopcFile, XopcFileSpace } from '../model/files';
+import { XopcHubRow } from './MobileComponents';
 
 @ComponentV2
 export struct XopcFilesView {
+  @Param initialId: string = '';
+  @Param conversationId: string = '';
+  @Event onExit: () => void = (): void => {};
   @Local model: XopcFilesViewModel = new XopcFilesViewModel();
   @Local search: string = '';
 
-  aboutToAppear(): void { this.model.load(); }
+  aboutToAppear(): void { this.model.start(this.initialId, this.conversationId); }
   aboutToDisappear(): void { this.model.dispose(); }
+
+  private async goBack(): Promise<void> {
+    if (this.model.busy) return;
+    try {
+      if (this.model.selected && this.model.editable && this.model.content !== this.model.savedContent) {
+        const result = await this.getUIContext().getPromptAction().showDialog({ message: $r('app.string.discard_changes'),
+          buttons: [{ text: $r('app.string.cancel'), color: $r('app.color.secondary') }, { text: $r('app.string.confirm'), color: $r('app.color.danger') }] });
+        if (result.index !== 1) return;
+      }
+      if (this.conversationId && !this.model.directory && !this.model.selected) this.onExit();
+      else if (!this.initialId && (this.model.space || this.model.selected)) this.model.parent(); else this.onExit();
+    } catch (error) { this.model.error = (error as Error).message; }
+  }
 
   private async remove(): Promise<void> {
     try {
@@ -21,11 +38,12 @@ export struct XopcFilesView {
   }
 
   build() {
+    NavDestination() {
     Column() {
       Row({ space: 8 }) {
-        if (this.model.space || this.model.selected) {
-          Button($r('app.string.back')).enabled(!this.model.busy).onClick((): void => { this.model.parent(); })
-        }
+        Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([$r('app.color.foreground')]) }
+          .width(44).height(44).backgroundColor(Color.Transparent).accessibilityText($r('app.string.back'))
+          .enabled(!this.model.busy).onClick((): void => { this.goBack(); })
         Text($r('app.string.files')).fontSize(24).fontWeight(FontWeight.Bold).layoutWeight(1).fontColor($r('app.color.foreground'))
         if (this.model.space?.writable && !this.model.selected) {
           Button($r('app.string.upload')).enabled(!this.model.busy).onClick((): void => {
@@ -70,16 +88,17 @@ export struct XopcFilesView {
           }
           ForEach(this.model.items, (file: XopcFile) => {
             ListItem() {
-              Column({ space: 6 }) {
-                Text((file.kind === 'directory' ? '▸ ' : '') + file.name).fontSize(16).fontColor($r('app.color.foreground')).maxLines(2)
-                Text(file.relativePath).fontSize(12).fontColor($r('app.color.secondary')).maxLines(2)
-              }.padding(16).width('100%').alignItems(HorizontalAlign.Start).backgroundColor($r('app.color.panel')).borderRadius(12)
-                .onClick((): void => { this.model.open(file); })
+              XopcHubRow({ heading: file.name, summary: file.relativePath,
+                symbol: file.kind === 'directory' ? $r('sys.symbol.folder') : $r('sys.symbol.doc'),
+                onOpen: (): void => { this.model.open(file); } })
             }
           }, (file: XopcFile): string => file.id)
         }.layoutWeight(1).width('100%').padding(12)
         Text($r('app.string.transfer_limits')).fontSize(11).fontColor($r('app.color.secondary')).padding(8)
       }
     }.height('100%').width('100%').backgroundColor($r('app.color.surface'))
+    }.hideTitleBar(true).onBackPressed((): boolean => {
+      this.goBack(); return true;
+    })
   }
 }

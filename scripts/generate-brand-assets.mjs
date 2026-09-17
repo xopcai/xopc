@@ -25,7 +25,7 @@ if (!mark || !markViewBox) {
 
 const check = process.argv.includes('--check');
 const requestedTarget = process.argv.find((argument) => argument.startsWith('--target='))?.slice('--target='.length);
-const validTargets = new Set(['all', 'web', 'docs', 'mobile', 'electron', 'browser-ext']);
+const validTargets = new Set(['all', 'web', 'docs', 'mobile', 'harmony', 'electron', 'browser-ext']);
 const target = requestedTarget ?? 'all';
 
 if (!validTargets.has(target)) {
@@ -43,6 +43,9 @@ const SOURCE_HUMAN = '#007AFF';
 // The canonical mark occupies ~78% of its source canvas, so 0.72 yields a
 // visible footprint of ~56% with generous, optically balanced padding.
 const MOBILE_MARK_SCALE = 0.72;
+// Android displays the central 72dp of a 108dp adaptive layer. Match that
+// visible footprint in Harmony's flat icon instead of retaining the overscan.
+const HARMONY_MARK_SCALE = MOBILE_MARK_SCALE * 108 / 72;
 
 const ROLE_LIGHT = { ai: AI_LIGHT, human: HUMAN_LIGHT };
 const ROLE_DARK = { ai: AI_DARK, human: HUMAN_DARK };
@@ -170,6 +173,7 @@ function renderSvg(scene) {
   if (scene === 'mobile-app-light') return mobileAppIconSvg('light');
   if (scene === 'mobile-adaptive-light') return mobileAdaptiveIconSvg(ROLE_LIGHT);
   if (scene === 'mobile-adaptive-monochrome') return mobileAdaptiveIconSvg(LIGHT);
+  if (scene === 'harmony-app-light') return appIconSvg('light', { markScale: HARMONY_MARK_SCALE });
   if (scene === 'desktop') return desktopIconSvg();
   if (scene === 'badge') return badgeSvg();
   if (scene === 'favicon') return faviconSvg();
@@ -307,6 +311,13 @@ queue('mobile', 'apps/mobile-expo/assets/adaptive-icon-monochrome.png', renderPn
 queue('mobile', 'apps/mobile-expo/assets/favicon.png', badgePngs.get(48));
 queue('mobile', 'apps/mobile-expo/assets/splash-icon.png', renderPng('mark-dark-plain', 1024));
 queue('mobile', 'apps/mobile-expo/assets/splash-icon-dark.png', renderPng('mark-light-plain', 1024));
+
+// Preserve the mobile artwork, compensating for Android's adaptive viewport.
+queue('harmony', 'apps/mobile-harmony/AppScope/resources/base/media/app_icon.png', renderPng('harmony-app-light', 1024));
+for (const [appearance, qualifier] of [['light', 'base'], ['dark', 'dark']]) {
+  queue('harmony', `apps/mobile-harmony/entry/src/main/resources/${qualifier}/media/brand_logo.svg`,
+    readFileSync(join(root, `assets/brand/concepts/xopc-human-ai-loop-role-${appearance}.svg`)));
+}
 
 // Desktop packaging and tray assets. The macOS tray image is a template image: Electron
 // recolours it against the current menu-bar appearance after setTemplateImage(true).

@@ -4,7 +4,19 @@ User authorised autonomous implementation and self-verification on 2026-09-17. R
 
 ## Architecture
 
+### UI acceptance correction (2026-09-17)
+
+Physical-device feedback rejected the placeholder brand and simplified screens. API coverage is not mobile UI parity. Reopen visual/product acceptance using `apps/mobile-harmony/docs/mobile-ui-parity-audit.md`: shared brand assets, four-destination shell, main-chat/history/composer, Progress/Library, domain-specific details and grouped settings. Do not mark stage 4.7.1 complete until reference screenshots and interactions match on device. Existing protocol and storage verification remains valid only for its original scope.
+
+First correction pass implements the brand, retained four-tab shell, Gateway-scoped main chat, independent detail navigation, real Progress/Library feeds, Inbox judgment routing, native settings subpages and keyboard-resize behavior. Its original evidence was a debug build, 69 host tests and CodeLinter; it did not establish full parity.
+
+The subsequent Chat/dock/drawer-focused pass has 109 host tests, debug/release builds, zero CodeLinter diagnostics and repeatable paired-emulator UI evidence, including cold-restart draft persistence and root/detail isolation. An earlier Mate 60 signed update installed while the phone was locked; the USB target disconnected before final installation, so the final version and physical acceptance remain pending. See `apps/mobile-harmony/docs/chat-parity-checklist.md` for implementation details, evidence and explicit remaining gaps (realtime voice calls, rich-message parity, spotlight/attention/session-management and end-to-end mutation tests). Stages 4.3.1 and 4.7.1 are not fully accepted.
+
 ArkUI ComponentV2 -> observed view models -> repositories -> typed Gateway client -> NetworkKit. Platform services provide cryptography, secure storage, scanning, files, audio and push. The application owns connection lifecycle and releases listeners/network resources on shutdown. System theme resources and Chinese/English strings are shared by views.
+
+The next follow-up adds Markdown tables/safe links/code actions, call-ID tool-result grouping across history pages, the full Chat attention sheet action wiring with Gateway-scoped seen revisions, and mobile welcome starters derived from shared localized copy and parity-tested ranking. Evidence: 133 host tests (28 files), debug/release builds, empty CodeLinter report, and seven emulator journeys including editable starter prefill. The paired Gateway lacks an unseen attention fixture, so attention UI is explicitly skipped; rich-message/action fixtures, realtime voice, session management and physical acceptance remain open. See the follow-up section in `apps/mobile-harmony/docs/chat-parity-checklist.md`; these additions do not close stages 4.3.1 or 4.7.1.
+
+The session-management follow-up replaces the inline history list with an independent native destination. It adds all-channel debounced search, virtualized calendar groups, explicit menu-to-multiselect interaction, rename/pin/archive actions, five-second single-delete undo, confirmed batch deletion, partial-failure retention and Gateway/async isolation. Host verification now has 152 passing tests across 30 files. See the session-management evidence in `apps/mobile-harmony/docs/chat-parity-checklist.md`; isolated mutation journeys, Agent avatars and physical/visual acceptance remain open, so stages 4.3.1 and 4.7.1 remain unaccepted.
 
 ## Four: file-level changes and dependencies
 

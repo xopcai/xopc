@@ -16,6 +16,7 @@ export const MessageList = memo(function MessageList({
   messages: list,
   authToken,
   conversationId,
+  workspaceConversationId,
   projectId,
   streaming,
   progress,
@@ -44,6 +45,8 @@ export const MessageList = memo(function MessageList({
   messages: Message[];
   authToken?: string;
   conversationId?: string | null;
+  /** Persistent session whose workspace backs file links in this message list. */
+  workspaceConversationId?: string | null;
   projectId?: string | null;
   streaming: boolean;
   progress: ProgressState | null;
@@ -125,6 +128,7 @@ export const MessageList = memo(function MessageList({
               message={msg}
               authToken={authToken}
               conversationId={conversationId}
+              workspaceConversationId={workspaceConversationId}
               projectId={projectId}
               isStreaming={isStreamRow}
               progress={isStreamRow ? progress : null}

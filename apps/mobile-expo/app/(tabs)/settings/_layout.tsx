@@ -15,7 +15,8 @@ export default function SettingsLayout() {
         ...themedScreenOptions,
       }}
     >
-      <Stack.Screen name="index" options={{ title: s.title }} />
+      <Stack.Screen name="index" options={{ title: m.mobileExperience.personal }} />
+      <Stack.Screen name="preferences" options={{ title: s.title }} />
       <Stack.Screen name="gateway" options={{ headerShown: false }} />
       <Stack.Screen name="about" options={{ title: s.about }} />
       <Stack.Screen name="privacy" options={{ title: m.privacy.title }} />

@@ -335,10 +335,21 @@ describe('ChatPageHeaderRegistration', () => {
     const openButton = container.querySelector<HTMLButtonElement>('[aria-label="Open side chat"]');
     expect(openButton).not.toBeNull();
     expect(openButton?.getAttribute('aria-expanded')).toBe('false');
+    expect(openButton?.getAttribute('aria-keyshortcuts')).toBe('Control+Alt+B');
+    expect(openButton?.title).toContain('Ctrl+Alt+B');
     expect(openButton?.parentElement?.lastElementChild).toBe(openButton);
 
-    act(() => openButton!.click());
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', {
+      altKey: true,
+      ctrlKey: true,
+      key: 'b',
+      bubbles: true,
+      cancelable: true,
+    })));
     expect(useSideChatStore.getState().panes['session-1']?.open).toBe(true);
     expect(container.querySelector('[aria-label="Collapse side chat"]')).not.toBeNull();
+
+    act(() => container.querySelector<HTMLButtonElement>('[aria-label="Collapse side chat"]')!.click());
+    expect(useSideChatStore.getState().panes['session-1']?.open).toBe(false);
   });
 });
