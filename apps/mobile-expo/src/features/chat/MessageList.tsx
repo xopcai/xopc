@@ -29,6 +29,7 @@ import { useChatListScrollFollow } from './use-chat-list-scroll-follow';
 import { StaticLoadingIndicator } from './StaticLoadingIndicator';
 
 const LIST_BASE_PADDING_BOTTOM = 8;
+const LIST_DRAW_DISTANCE = 720;
 const LOADING_INDICATOR_DELAY_MS = 160;
 const CHAT_MAINTAIN_VISIBLE_CONTENT_POSITION = {
   startRenderingFromBottom: true,
@@ -159,23 +160,16 @@ export const MessageList = memo(function MessageList({
   });
 
   const listHeader = useMemo(() => {
-    if (!networkUnreachableTip && !loadingOlder) return null;
+    if (!networkUnreachableTip) return null;
     return (
       <View>
-        {networkUnreachableTip ? (
-          <GatewayUnreachableTip
-            message={networkUnreachableTip.message}
-            onPress={networkUnreachableTip.onPress}
-          />
-        ) : null}
-        {loadingOlder ? (
-          <View style={styles.loadingOlderRow}>
-            <StaticLoadingIndicator size={16} />
-          </View>
-        ) : null}
+        <GatewayUnreachableTip
+          message={networkUnreachableTip.message}
+          onPress={networkUnreachableTip.onPress}
+        />
       </View>
     );
-  }, [networkUnreachableTip, loadingOlder]);
+  }, [networkUnreachableTip]);
 
   const listContentStyle = useMemo(
     () => ({
@@ -251,6 +245,7 @@ export const MessageList = memo(function MessageList({
     (item: Message, index: number) => messageKey(item, index),
     [],
   );
+  const getItemType = useCallback((item: Message) => item.role === 'assistant' ? 'assistant' : 'user', []);
 
   if (loading && messages.length === 0) {
     return (
@@ -366,6 +361,8 @@ export const MessageList = memo(function MessageList({
         renderScrollComponent={ChatKeyboardScrollView}
         style={styles.listFlex}
         data={messages}
+        drawDistance={LIST_DRAW_DISTANCE}
+        getItemType={getItemType}
         maintainVisibleContentPosition={CHAT_MAINTAIN_VISIBLE_CONTENT_POSITION}
         renderItem={renderItem}
         keyExtractor={keyExtractor}
@@ -388,6 +385,11 @@ export const MessageList = memo(function MessageList({
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={listHeader}
       />
+      {loadingOlder ? (
+        <View pointerEvents="none" style={styles.loadingOlderOverlay}>
+          <StaticLoadingIndicator size={16} />
+        </View>
+      ) : null}
       {showScrollToBottom ? (
         <IconButton
           icon="arrow-down"
@@ -420,10 +422,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     gap: 10,
   },
-  loadingOlderRow: {
+  loadingOlderOverlay: {
+    position: 'absolute',
+    top: 8,
+    left: 0,
+    right: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
   },
   emptyTitle: {
     ...typography.heading,

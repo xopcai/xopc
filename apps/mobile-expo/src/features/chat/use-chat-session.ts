@@ -24,7 +24,7 @@ import {
 } from '../../api/agent-client';
 import { queryKeys } from '../../query/keys';
 import { invalidateSessionLists } from '../../query/workspace-sync';
-import { fetchSessionMessagePage, type SessionMessagePage } from '../../query/sessions';
+import { fetchSessionActiveRun, fetchSessionMessagePage, type SessionMessagePage } from '../../query/sessions';
 import { useGatewayStore } from '../../stores/gateway-store';
 import { useAgentStreamResume } from './use-agent-stream-resume';
 import { useAgentStreamRecovery } from './use-agent-stream-recovery';
@@ -88,6 +88,7 @@ import { recordConnectionEvent } from '../gateway/connection-log';
 // Discrete 10 Hz text commits keep the answer responsive without continuously
 // rebuilding Markdown and remeasuring the virtualized row.
 const STREAMING_RENDER_THROTTLE_MS = 100;
+const MESSAGE_END_RECONCILE_DELAYS_MS = [600, 1_800, 4_000] as const;
 
 export interface UseChatSessionOptions {
   conversationId: string;
@@ -147,6 +148,8 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   const finalizedMessagesRef = useRef<Message[]>([]);
   const finalizedAtRef = useRef(new Map<string, number>());
   const streamingFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const messageEndReconcileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const messageEndReconcileGenerationRef = useRef(0);
   const displayMessagesRef = useRef<Message[]>([]);
   const messageListAtBottomRef = useRef(true);
   const sessionHeadRefreshGenerationRef = useRef(new Map<string, number>());
@@ -345,15 +348,51 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     clearAllState();
   }, [clearAllState, invalidateSessionByKey, refreshSessionHeadByKey, conversationId, setMessageDeliveryState]);
 
+  const cancelMessageEndReconcile = useCallback(() => {
+    messageEndReconcileGenerationRef.current += 1;
+    if (messageEndReconcileTimerRef.current) clearTimeout(messageEndReconcileTimerRef.current);
+    messageEndReconcileTimerRef.current = null;
+  }, []);
+
+  const scheduleMessageEndReconcile = useCallback((targetConversationId: string) => {
+    cancelMessageEndReconcile();
+    const generation = messageEndReconcileGenerationRef.current;
+    const check = (attempt: number) => {
+      messageEndReconcileTimerRef.current = setTimeout(() => {
+        messageEndReconcileTimerRef.current = null;
+        void fetchSessionActiveRun(targetConversationId).then(async (activeRun) => {
+          if (
+            generation !== messageEndReconcileGenerationRef.current
+            || activeConversationIdRef.current !== targetConversationId
+            || !streamingRef.current
+          ) return;
+          if (!activeRun.active) {
+            senderRef.current.settleCompletedStream();
+            await reconcileSessionHead(targetConversationId);
+            return;
+          }
+          const nextAttempt = attempt + 1;
+          if (nextAttempt < MESSAGE_END_RECONCILE_DELAYS_MS.length) check(nextAttempt);
+        }).catch(() => {
+          const nextAttempt = attempt + 1;
+          if (generation === messageEndReconcileGenerationRef.current
+            && nextAttempt < MESSAGE_END_RECONCILE_DELAYS_MS.length) check(nextAttempt);
+        });
+      }, MESSAGE_END_RECONCILE_DELAYS_MS[attempt]);
+    };
+    check(0);
+  }, [cancelMessageEndReconcile, reconcileSessionHead]);
+
   // ── Session key change ───────────────────────────────────
   useEffect(() => {
     senderRef.current.detachLocalStream();
+    cancelMessageEndReconcile();
     activeConversationIdRef.current = conversationId;
     sendingRef.current = false;
     runBusyRef.current = false;
     clearAllState();
     if (conversationId) void refreshClarification(conversationId).catch(() => undefined);
-  }, [conversationId, clearAllState, refreshClarification]);
+  }, [conversationId, clearAllState, refreshClarification, cancelMessageEndReconcile]);
 
   // ── Run busy tracking ────────────────────────────────────
   useEffect(() => {
@@ -362,6 +401,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
 
   // ── Finalize message ─────────────────────────────────────
   const finalizeMessage = useCallback((targetConversationId = conversationId) => {
+    cancelMessageEndReconcile();
     if (activeConversationIdRef.current !== targetConversationId) {
       void refreshSessionHeadByKey(targetConversationId).catch(() => {
         invalidateSessionByKey(targetConversationId);
@@ -390,7 +430,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     }
     clearStreamingMessage();
     void refreshClarification(targetConversationId).catch(() => undefined);
-  }, [clearStreamingMessage, refreshClarification, conversationId]);
+  }, [cancelMessageEndReconcile, clearStreamingMessage, refreshClarification, conversationId]);
 
   useEffect(() => {
     if (!conversationId || finalizedMessages.length === 0) return undefined;
@@ -433,6 +473,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       && activeConversationIdRef.current === callbackConversationId
       && useGatewayStore.getState().activeGatewayId === activeGatewayId;
     const touchStreamActivity = () => {
+      cancelMessageEndReconcile();
       lastStreamActivityAtRef.current = Date.now();
     };
 
@@ -500,9 +541,11 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       },
       onAssistantMessageEnd: (messageId, presentation, usage) => {
         if (!isCurrentSession() || !streamingMsgRef.current) return;
+        touchStreamActivity();
         finishTextSegment(streamingMsgRef.current.content, messageId, presentation);
         if (usage) streamingMsgRef.current.usage = usage;
         flushStreamingMessage();
+        scheduleMessageEndReconcile(callbackConversationId);
       },
       onThinking: (text, isDelta, messageId) => {
         if (!isCurrentSession()) return;
@@ -684,7 +727,9 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     appendAudioToStreamingAssistant,
     flushStreamingMessage,
     clearStreamingMessage,
+    cancelMessageEndReconcile,
     finalizeMessage,
+    scheduleMessageEndReconcile,
     setOptimisticMessages,
     setMessageDeliveryState,
     m.chat.modelQuotaExhausted,
@@ -1028,9 +1073,10 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     return () => {
       mountedRef.current = false;
       senderRef.current.detachLocalStream();
+      cancelMessageEndReconcile();
       clearStreamingFlushTimer();
     };
-  }, [clearStreamingFlushTimer]);
+  }, [cancelMessageEndReconcile, clearStreamingFlushTimer]);
 
   // ── Gateway connectivity effects ─────────────────────────
   // Resume streams when gateway connectivity returns
