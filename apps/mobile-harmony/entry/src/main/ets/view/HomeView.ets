@@ -21,7 +21,8 @@ export struct XopcHomeView {
   @Local detailVisible: boolean = false;
   @Local layout: XopcLayoutState = layoutState;
   @Local attention: XopcProgressViewModel = new XopcProgressViewModel();
-  @Local visibleChatId: string = '';
+  @Local requestedChatId: string = '';
+  @Local chatRequestRevision: number = 0;
   private readonly onMotionChange = (reduced: boolean): void => { layoutState.reduceMotion = reduced; };
   private attentionTimer: number = -1;
   private pathStack: NavPathStack = new NavPathStack();
@@ -47,23 +48,17 @@ export struct XopcHomeView {
     try { accessibility.offAnimationReduceStateChange(this.onMotionChange); } catch (_) {}
   }
   private navigate(route: XopcMobileRoute): void {
-    if (route.page === 'chat' && !route.itemId) { this.pathStack.clear(); this.tab = 0; return; }
+    if (route.page === 'chat') {
+      if (route.itemId) { this.requestedChatId = route.itemId; this.chatRequestRevision++; }
+      this.pathStack.clear(); this.tab = 0; return;
+    }
     if (route.page === 'progress') { this.pathStack.clear(); this.tab = 1; return; }
     this.pathStack.pushPath({ name: route.page, param: route });
   }
 
   @Builder
   destination(page: string, param: Object) {
-    if (page === 'chat') {
-      NavDestination() {
-        XopcChatView({ initialId: (param as XopcMobileRoute).itemId, activePage: this.visibleChatId === (param as XopcMobileRoute).itemId,
-          attentionItems: this.attention.needsUser, onAttentionRefresh: (): void => { this.attention.refresh(); }, onExit: (): void => { this.pathStack.pop(); },
-          onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
-      }.hideTitleBar(true).backgroundColor($r('app.color.surface'))
-        .onShown((): void => { this.visibleChatId = (param as XopcMobileRoute).itemId; })
-        .onHidden((): void => { if (this.visibleChatId === (param as XopcMobileRoute).itemId) this.visibleChatId = ''; })
-        .onBackPressed((): boolean => { return layoutState.dismissChatOverlay?.() ?? false; })
-    } else if (page === 'sessions') {
+    if (page === 'sessions') {
       XopcSessionsView({ onExit: (): void => { this.pathStack.pop(); },
         onOpen: (id: string): void => { this.navigate({ page: 'chat', itemId: id }); } })
     } else if (page === 'tasks' || page === 'projects' || page === 'notes' || page === 'automations' || page === 'inbox') {
@@ -121,7 +116,8 @@ export struct XopcHomeView {
     Navigation(this.pathStack) {
       Column() {
       Tabs({ barPosition: BarPosition.End, index: this.tab }) {
-        TabContent() { XopcChatView({ activePage: this.tab === 0 && !this.detailVisible, attentionItems: this.attention.needsUser, onAttentionRefresh: (): void => { this.attention.refresh(); },
+        TabContent() { XopcChatView({ requestedId: this.requestedChatId, requestRevision: this.chatRequestRevision,
+          activePage: this.tab === 0 && !this.detailVisible, attentionItems: this.attention.needsUser, onAttentionRefresh: (): void => { this.attention.refresh(); },
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); },
           onOpenConversation: (id: string): void => { this.navigate({ page: 'chat', itemId: id }); } }) }
         TabContent() { XopcProgressView({ activePage: this.tab === 1 && !this.detailVisible, onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } }) }

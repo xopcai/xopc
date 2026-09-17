@@ -49,6 +49,8 @@ async function screen(name: string): Promise<void> {
 const passed: string[] = [];
 try {
   let nodes = await tree('before');
+  node(nodes, 'chat-composer');
+  nodes = await until('before', items => items.some(item => item.id?.startsWith('chat-starter-') || item.type === 'ListItem'));
   const draft = node(nodes, 'chat-composer').text;
   assert.notEqual(node(nodes, 'chat-composer').focused, 'true', 'Start with the keyboard closed.');
   assert(!nodes.some(item => item.id === 'chat-stop'), 'Do not interfere with an active run.');
