@@ -4,6 +4,8 @@ export const DEVICE_PAIRING_VERSION = 3;
 export const BROWSER_PAIRING_INVITATION_VERSION = 1;
 export const BROWSER_PAIRING_INVITATION_PREFIX = `XOPC-BROWSER-INVITE-V${BROWSER_PAIRING_INVITATION_VERSION}:`;
 export const devicePairingTargetKindSchema = z.enum(['mobile', 'browser']);
+export const devicePlatformSchema = z.enum(['ios', 'android', 'harmonyos', 'chrome']);
+export type DevicePlatform = z.infer<typeof devicePlatformSchema>;
 export type DevicePairingTargetKind = z.infer<typeof devicePairingTargetKindSchema>;
 export const devicePairingRouteSchema = z.strictObject({
   id: z.string().trim().min(1).max(80),
@@ -39,7 +41,7 @@ export const devicePairingKeySchema = z.strictObject({
 });
 export const devicePairingDeviceSchema = z.strictObject({
   displayName: z.string().trim().min(1).max(80),
-  platform: z.enum(['ios', 'android', 'chrome']),
+  platform: devicePlatformSchema,
   publicKeyJwk: devicePairingKeySchema,
   extensionId: z.string().regex(/^[a-p]{32}$/).optional(),
 }).superRefine((device, context) => {
@@ -69,7 +71,7 @@ export type DevicePairingAction = 'request' | 'status' | 'complete' | 'cancel';
 export type DevicePairingState = 'pending' | 'approved' | 'completed' | 'rejected' | 'cancelled' | 'expired';
 export type DevicePairingStatus = {
   requestId: string; setupId: string; status: DevicePairingState; revision: number;
-  displayName: string; platform: 'ios' | 'android' | 'chrome'; confirmationCode: string;
+  displayName: string; platform: DevicePlatform; confirmationCode: string;
   expiresAt: number; serverTime: number; deviceId?: string; connectedAt?: number;
 };
 

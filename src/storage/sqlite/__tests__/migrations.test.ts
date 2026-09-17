@@ -46,9 +46,9 @@ describe('SQLite migrations', () => {
     rmSync(migrationsDir, { recursive: true, force: true });
   });
 
-  it('keeps the retained release window at v165 through v178', () => {
+  it('keeps the retained release window at v165 through v179', () => {
     expect(XOPC_DB_BASELINE_SCHEMA_VERSION).toBe(165);
-    expect(XOPC_DB_SCHEMA_VERSION).toBe(178);
+    expect(XOPC_DB_SCHEMA_VERSION).toBe(179);
 
     const db = openEmptyDb();
     try {

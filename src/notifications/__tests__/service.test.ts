@@ -88,6 +88,19 @@ describe('NotificationService', () => {
     expect(getNotificationDevice('device-1')?.enabled).toBe(false);
   });
 
+  it('routes HarmonyOS only to its own provider and never polls Expo receipts for it', async () => {
+    registerNotificationDevice({ deviceId: 'device-1', platform: 'harmonyos', pushToken: 'harmony-token', permissions: 'granted', locale: 'zh' });
+    const fetchMock = vi.fn<typeof fetch>();
+    const sendHarmony = vi.fn().mockResolvedValue('huawei-request-id');
+    const published: Array<{ id: string }> = [];
+    const service = new NotificationService({ publish: (_type, value) => published.push(value as { id: string }), fetch: fetchMock, sendHarmony });
+    service.handleGatewayEvent('agent.run.ended', chatEvent);
+    await vi.waitFor(() => expect(notificationDeliveryMetrics()).toMatchObject({ accepted: 1, delivered: 0 }));
+    expect(sendHarmony).toHaveBeenCalledOnce(); expect(fetchMock).not.toHaveBeenCalled();
+    rescheduleNotificationDelivery(published[0]!.id, 'device-1', 'accepted', 0, 'receipt now');
+    await service.drain(); expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('publishes and queues a review notification when work discovery completes', async () => {
     const published: unknown[] = [];
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({

@@ -116,7 +116,7 @@ describe('device pairing routes', () => {
     const pairing = JSON.parse(Buffer.from(body.setup.browserInvitation.slice('XOPC-BROWSER-INVITE-V1:'.length), 'base64url').toString());
     expect(pairing).toMatchObject({ version: 3, targetKind: 'browser' });
   });
-  it('requires a desktop decision before issuing a v3 device and signs its status', async () => {
+  it.each(['ios', 'android', 'harmonyos'])('requires a desktop decision before issuing a v3 %s device and signs its status', async (platform) => {
     const setup = await (await app.request('/api/device-pairing/setups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetKind: 'mobile' }) })).json();
     const pairing = JSON.parse(Buffer.from(new URL(setup.setup.universalLink).hash.slice(3), 'base64url').toString());
     expect(pairing.version).toBe(3);
@@ -129,7 +129,7 @@ describe('device pairing routes', () => {
       return app.request(action === 'request' ? '/api/device-pairing/requests' : `/api/device-pairing/requests/${requestId}/${action}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, signature }) });
     }
-    const submitted = await (await send('request', { device: { displayName: 'Phone', platform: 'ios', publicKeyJwk: keys.publicKey.export({ format: 'jwk' }) } })).json();
+    const submitted = await (await send('request', { device: { displayName: 'Phone', platform, publicKeyJwk: keys.publicKey.export({ format: 'jwk' }) } })).json();
     expect(crypto.verify(null, Buffer.from(submitted.signedPayload), crypto.createPublicKey({ format: 'jwk', key: { kty: 'OKP', crv: 'Ed25519', x: pairing.gatewayPublicKey } }), Buffer.from(submitted.signature, 'base64url'))).toBe(true);
     const pending = JSON.parse(Buffer.from(submitted.signedPayload, 'base64url').toString()).request;
     const completion = { idempotencyKey: crypto.randomUUID(), initialRefreshToken: `xopc_rt_${crypto.randomUUID()}_${crypto.randomBytes(32).toString('base64url')}` };
