@@ -1,8 +1,40 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ComputerModelAdapter, parseGuiPlusProposal, predictComputerStep, readComputerJson } from '../model-adapter.js';
+import { ComputerModelAdapter, GUI_PLUS_SYSTEM_PROMPT, parseGuiPlusProposal, predictComputerStep, readComputerJson } from '../model-adapter.js';
 
 const call = (arguments_: unknown) => `<tool_call>${JSON.stringify({ name: 'computer_use', arguments: arguments_ })}</tool_call>`;
 describe('GUI-Plus adapter', () => {
+  it('uses a flat hosted signature without advertising unsupported native actions', () => {
+    const tool = JSON.parse(GUI_PLUS_SYSTEM_PROMPT.match(/<tools>\n(.*)\n<\/tools>/)![1]);
+    expect(tool.function.parameters.type).toBe('object');
+    expect(tool.function.parameters.anyOf).toBeUndefined();
+    expect(tool.function.parameters.properties.coordinate.type).toBe('array');
+    expect(tool.function.parameters.properties.action.enum).not.toEqual(expect.arrayContaining(['mouse_move', 'left_click_drag', 'middle_click']));
+  });
+  it('refuses the malformed coordinate returned by a hosted grounding regression', () => {
+    expect(() => parseGuiPlusProposal('<tool_call>{"name":"computer_use","arguments":{"action":"left_click","coordinate":224, 205]}}</tool_call>', 800, 600)).toThrow('COMPUTER_INVALID_MODEL_OUTPUT');
+  });
+  it('honors the frozen service output ceiling and rejects invalid budgets', async () => {
+    const connection = { modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26' as const, maxOutputTokens: 512 };
+    const fetch = vi.fn().mockResolvedValue(Response.json({ choices: [{ message: { content: call({ action: 'wait', time: 0 }) } }] }));
+    const adapter = new ComputerModelAdapter(connection, fetch);
+    await adapter.predict({ goal: 'Wait', image: new Uint8Array([1]), mimeType: 'image/png', width: 1, height: 1, summary: '' });
+    expect(JSON.parse(fetch.mock.calls[0][1].body).max_tokens).toBe(512);
+    expect(JSON.parse(fetch.mock.calls[0][1].body).messages[1].content[0].type).toBe('image_url');
+    expect(() => new ComputerModelAdapter({ ...connection, maxOutputTokens: 0 })).toThrow('COMPUTER_MODEL_OUTPUT_BUDGET');
+  });
+  it.each([
+    { kind: 'action', action: { kind: 'wait', durationMs: 0 } },
+    { kind: 'finished', claimedSuccess: true },
+    { kind: 'takeover', reason: 'Please sign in' },
+    { kind: 'answer', text: 'Visible text' },
+  ])('supports complete structured decision semantics: $kind', async proposal => {
+    const fetch = vi.fn().mockResolvedValue(Response.json({ choices: [{ message: { tool_calls: [{ function: {
+      name: 'computer_proposal', arguments: JSON.stringify({ proposal }),
+    } }] } }] }));
+    const adapter = new ComputerModelAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'structured-tools-v1' }, fetch);
+    expect(await adapter.predict({ goal: 'Do the task', image: new Uint8Array([1]), mimeType: 'image/png', width: 800, height: 600, summary: '' })).toEqual(proposal);
+    expect(JSON.parse(fetch.mock.calls[0][1].body).tools[0].function.name).toBe('computer_proposal');
+  });
   it('distinguishes a visual answer from a request for human intervention', () => {
     expect(parseGuiPlusProposal(call({ action: 'answer', text: 'A blue button' }), 800, 600)).toEqual({ kind: 'answer', text: 'A blue button' });
     expect(parseGuiPlusProposal(call({ action: 'interact', text: 'Please sign in' }), 800, 600)).toEqual({ kind: 'takeover', reason: 'Please sign in' });

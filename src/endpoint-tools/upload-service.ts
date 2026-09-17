@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import sharp from 'sharp';
+import { COMPUTER_FRAME_MAX_BYTES, COMPUTER_FRAME_MAX_PIXELS } from '@xopcai/computer-control-contract';
 
 import {
   ENDPOINT_MAX_FILE_BYTES,
@@ -41,13 +42,18 @@ export interface EndpointUploadGrant {
   expiresAt: number;
 }
 
-export class EndpointUploadError extends Error {}
+export class EndpointUploadError extends Error {
+  constructor(message: string, readonly code: 'INVALID_UPLOAD_GRANT' | 'UPLOAD_TOO_LARGE' | 'INVALID_COMPUTER_FRAME' | 'UPLOAD_BUSY' = 'INVALID_UPLOAD_GRANT') {
+    super(message);
+  }
+}
 
 export class EndpointUploadService {
   private readonly grants = new Map<string, UploadGrantRecord>();
   private readonly files = new Map<string, EndpointUploadedFile>();
   private readonly frames = new Map<string, { bytes: Buffer; expiresAt: number; endpointId: string }>();
   private readonly pruneTimer: ReturnType<typeof setInterval>;
+  private readonly validatingFrames = new Set<string>();
 
   constructor(private readonly rootDir: string) {
     mkdirSync(rootDir, { recursive: true, mode: 0o700 });
@@ -63,7 +69,7 @@ export class EndpointUploadService {
       endpointId,
       token,
       expiresAt: now + GRANT_TTL_MS,
-      maxBytes: profile === 'computer-frame' ? 5 * 1024 * 1024 : ENDPOINT_UPLOAD_MAX_BYTES,
+      maxBytes: profile === 'computer-frame' ? COMPUTER_FRAME_MAX_BYTES : ENDPOINT_UPLOAD_MAX_BYTES,
       maxFiles: profile === 'computer-frame' ? 1 : DEFAULT_MAX_FILES,
       uploadedFileIds: [],
     };
@@ -102,7 +108,7 @@ export class EndpointUploadService {
       throw new EndpointUploadError('Upload grant file limit exceeded');
     }
     if (params.bytes.byteLength > grant.maxBytes) {
-      throw new EndpointUploadError('Uploaded file is too large');
+      throw new EndpointUploadError('Uploaded file is too large', 'UPLOAD_TOO_LARGE');
     }
     if (!params.name || params.name.length > 255 || !params.mimeType || params.mimeType.length > 255) {
       throw new EndpointUploadError('Uploaded file metadata is invalid');
@@ -178,20 +184,31 @@ export class EndpointUploadService {
     const actual = Buffer.from(token), expected = Buffer.from(grant?.token ?? '');
     if (!grant || grant.endpointId !== endpointId || actual.length !== expected.length
       || !crypto.timingSafeEqual(actual, expected) || grant.expiresAt <= Date.now()) throw new EndpointUploadError('Upload grant is invalid or expired');
+    if (grant.uploadedFileIds.length >= grant.maxFiles) throw new EndpointUploadError('Upload grant file limit exceeded');
     return { maxBytes: grant.maxBytes, profile: grant.profile };
   }
 
   async uploadValidated(params: Parameters<EndpointUploadService['upload']>[0]): Promise<EndpointUploadedFile> {
     const grant = this.getGrantLimits(params.invocationId, params.endpointId, params.token);
-    if (params.bytes.length > grant.maxBytes) throw new EndpointUploadError('Uploaded file is too large');
+    if (params.bytes.length > grant.maxBytes) throw new EndpointUploadError('Uploaded file is too large', 'UPLOAD_TOO_LARGE');
     if (grant.profile === 'computer-frame') {
-      const metadata = await sharp(params.bytes, { limitInputPixels: 16_000_000 }).metadata();
-      const format = params.mimeType === 'image/png' ? 'png' : params.mimeType === 'image/jpeg' ? 'jpeg' : undefined;
-      if (!format || metadata.format !== format || !metadata.width || !metadata.height
-        || metadata.width * metadata.height > 16_000_000 || (metadata.pages ?? 1) !== 1) throw new EndpointUploadError('Invalid computer frame image');
-      // Force a bounded decode; valid headers alone do not prove a valid image payload.
-      const decoded = await sharp(params.bytes, { limitInputPixels: 16_000_000, failOn: 'warning' }).raw().toBuffer();
-      decoded.fill(0);
+      if (this.validatingFrames.has(params.invocationId) || this.validatingFrames.size >= 2) {
+        throw new EndpointUploadError('Computer frame validation is busy', 'UPLOAD_BUSY');
+      }
+      this.validatingFrames.add(params.invocationId);
+      try {
+        const metadata = await sharp(params.bytes, { limitInputPixels: COMPUTER_FRAME_MAX_PIXELS }).metadata();
+        const format = params.mimeType === 'image/png' ? 'png' : params.mimeType === 'image/jpeg' ? 'jpeg' : undefined;
+        if (!format || metadata.format !== format || !metadata.width || !metadata.height
+          || metadata.width * metadata.height > COMPUTER_FRAME_MAX_PIXELS || (metadata.pages ?? 1) !== 1) throw new EndpointUploadError('Invalid computer frame image', 'INVALID_COMPUTER_FRAME');
+        // Force a bounded decode; valid headers alone do not prove a valid image payload.
+        const decoded = await sharp(params.bytes, { limitInputPixels: COMPUTER_FRAME_MAX_PIXELS, failOn: 'warning' }).raw().toBuffer();
+        decoded.fill(0);
+      } catch (error) {
+        if (error instanceof EndpointUploadError) throw error;
+        throw new EndpointUploadError('Computer frame could not be decoded', 'INVALID_COMPUTER_FRAME');
+      } finally { this.validatingFrames.delete(params.invocationId); }
+      // Revalidate after async decode; cancellation may have revoked the grant.
       return this.upload({ ...params, validatedFrame: true });
     }
     return this.upload(params);

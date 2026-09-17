@@ -11,13 +11,12 @@ import { ListSkeleton } from '../../components/ListSkeleton';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
-  ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
 import { Button, Icon, IconButton, Text } from 'react-native-paper';
 
-import { useKeyboardListPadding } from '../../hooks/use-keyboard-list-padding';
+import { ChatKeyboardScrollView } from './ChatKeyboardScrollView';
 import { useMessages } from '../../i18n/messages';
 import { typography, useTheme } from '../../theme';
 import { GatewayUnreachableTip } from '../gateway/GatewayUnreachableTip';
@@ -33,8 +32,6 @@ const LIST_BASE_PADDING_BOTTOM = 8;
 const LOADING_INDICATOR_DELAY_MS = 160;
 const CHAT_MAINTAIN_VISIBLE_CONTENT_POSITION = {
   startRenderingFromBottom: true,
-  autoscrollToBottomThreshold: 0.08,
-  animateAutoScrollToBottom: false,
 } as const;
 
 function useDelayedLoadingIndicator(loading: boolean): boolean {
@@ -131,7 +128,6 @@ export const MessageList = memo(function MessageList({
 }) {
   const { colors, elevation } = useTheme();
   const chatMessages = useMessages().chat;
-  const keyboardPadding = useKeyboardListPadding();
   const showLoadingIndicator = useDelayedLoadingIndicator(loading);
   const listRef = useRef<FlashListRef<Message>>(null);
   const lastMessageIndex = messages.length - 1;
@@ -157,7 +153,6 @@ export const MessageList = memo(function MessageList({
     listRef,
     messages,
     loadingOlder,
-    keyboardPadding,
     conversationId,
     onAtBottomChange,
     getMessageKey: messageKey,
@@ -185,17 +180,17 @@ export const MessageList = memo(function MessageList({
   const listContentStyle = useMemo(
     () => ({
       paddingTop: 12,
-      paddingBottom: LIST_BASE_PADDING_BOTTOM + keyboardPadding,
+      paddingBottom: LIST_BASE_PADDING_BOTTOM,
     }),
-    [keyboardPadding],
+    [],
   );
 
   const emptyContentStyle = useMemo(
     () => [
       styles.emptyContent,
-      { paddingBottom: 32 + keyboardPadding },
+      { paddingBottom: 32 },
     ],
-    [keyboardPadding],
+    [],
   );
 
   const renderItem = useCallback(
@@ -286,7 +281,7 @@ export const MessageList = memo(function MessageList({
       ? []
       : (suggestions?.filter(Boolean) ?? []);
     return (
-      <ScrollView
+      <ChatKeyboardScrollView
         style={styles.listFlex}
         contentContainerStyle={emptyContentStyle}
         keyboardDismissMode="interactive"
@@ -359,7 +354,7 @@ export const MessageList = memo(function MessageList({
             ))}
           </View>
         ) : null}
-      </ScrollView>
+      </ChatKeyboardScrollView>
     );
   }
 
@@ -368,6 +363,7 @@ export const MessageList = memo(function MessageList({
       <FlashList
         key={listKey}
         ref={listRef}
+        renderScrollComponent={ChatKeyboardScrollView}
         style={styles.listFlex}
         data={messages}
         maintainVisibleContentPosition={CHAT_MAINTAIN_VISIBLE_CONTENT_POSITION}

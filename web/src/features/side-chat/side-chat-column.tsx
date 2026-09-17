@@ -231,7 +231,7 @@ export function SideChatColumn({ parentConversationId }: { parentConversationId:
       className={cn(
         'relative flex min-h-0 shrink-0 flex-col overflow-hidden border-l border-edge bg-surface-base',
         'max-md:fixed max-md:inset-y-0 max-md:right-0 max-md:z-50 max-md:w-[min(92vw,34rem)] max-md:shadow-popover',
-        'app-side-chat-expanded-width',
+        'app-side-chat-expanded-width app-side-chat-panel-enter',
         resizing && 'side-chat-panel-resizing',
       )}
       style={{ '--side-chat-panel-px': `${widthPx}px` } as CSSProperties}
