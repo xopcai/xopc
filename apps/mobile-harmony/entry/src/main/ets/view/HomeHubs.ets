@@ -95,7 +95,6 @@ export struct XopcProgressView {
               }.layoutWeight(1).alignItems(HorizontalAlign.Start)
             }.width('100%').constraintSize({ minHeight: 92 }).padding(16).borderRadius(20)
               .backgroundColor($r('app.color.accent_soft')).border({ width: 0.5, color: $r('app.color.border_subtle') })
-              .margin({ bottom: 16 })
             if (this.model.loading) { XopcListSkeleton() }
             else {
               if (this.model.homeError) {
@@ -131,7 +130,7 @@ export struct XopcProgressView {
               this.workTool($r('app.string.automations'), $r('sys.symbol.clock'), 'automations')
             }.width('100%')
           }.width('100%').padding({ left: 20, right: 20, bottom: 28 }).alignItems(HorizontalAlign.Start)
-        }.width('100%').height('100%').scrollBar(BarState.Off)
+        }.width('100%').height('100%').align(Alignment.Top).scrollBar(BarState.Off)
       }.layoutWeight(1).onRefreshing((): void => {
         this.pulling = true; this.model.refresh().finally((): void => { this.pulling = false; });
       })
@@ -173,7 +172,7 @@ export struct XopcLibraryView {
       Refresh({ refreshing: this.pulling }) {
         Scroll() {
           Column() {
-            Text($r('app.string.library_hint')).fontSize(15).lineHeight(22).fontColor($r('app.color.secondary')).width('100%').margin({ bottom: 16 })
+            Text($r('app.string.library_hint')).fontSize(15).lineHeight(22).fontColor($r('app.color.secondary')).width('100%')
             XopcSectionLabel({ heading: $r('app.string.quick_access') })
             Row({ space: 12 }) {
               this.shortcut($r('app.string.notes'), $r('sys.symbol.doc_text'), 'notes')
@@ -200,7 +199,7 @@ export struct XopcLibraryView {
               XopcHubRow({ heading: note.title || $r('app.string.untitled'), summary: note.snippet ?? '', symbol: $r('sys.symbol.doc_text'), onOpen: (): void => { this.openPage('notes', note.id); } })
             }, (note: XopcNote): string => note.id + ':' + (note.remoteVersion ?? 0))
           }.width('100%').padding({ left: 20, right: 20, bottom: 28 }).alignItems(HorizontalAlign.Start)
-        }.width('100%').height('100%').scrollBar(BarState.Off)
+        }.width('100%').height('100%').align(Alignment.Top).scrollBar(BarState.Off)
       }.layoutWeight(1).onRefreshing((): void => {
         this.pulling = true; this.model.refresh().finally((): void => { this.pulling = false; });
       })
