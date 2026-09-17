@@ -9,6 +9,7 @@ import { ChunkedContent } from '@/features/chat/messages/message-content-rendere
 import { firstNarrationSentence } from '@/features/chat/messages/assistant-text-presentation';
 import type { AssistantTurnActivityPresentation } from '@/features/chat/messages/assistant-turn-view-model';
 import type { MessageContent } from '@/features/chat/messages/messages.types';
+import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
 const emptyLabels = {
   input: '',
@@ -62,11 +63,13 @@ describe('streaming assistant Markdown rendering', () => {
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
+    useWorkspacePreviewStore.getState().setPath(null);
   });
 
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+    useWorkspacePreviewStore.getState().setPath(null);
     vi.useRealTimers();
   });
 
@@ -75,6 +78,7 @@ describe('streaming assistant Markdown rendering', () => {
     streaming: boolean,
     progressiveRender = false,
     assistantActivity?: AssistantTurnActivityPresentation,
+    workspaceConversationId?: string,
   ) {
     act(() => {
       root.render(
@@ -89,7 +93,8 @@ describe('streaming assistant Markdown rendering', () => {
             cardLabels={{} as never}
             imagePreviewLabel=""
             onImagePreview={undefined}
-            conversationId={null}
+            conversationId="side-chat-id"
+            workspaceConversationId={workspaceConversationId}
             workflowOptions={{ labels: {} as never }}
             assistantActivity={assistantActivity}
             progressiveRender={progressiveRender}
@@ -98,6 +103,23 @@ describe('streaming assistant Markdown rendering', () => {
       );
     });
   }
+
+  it('opens Sidechat workspace links against the parent conversation', () => {
+    render(
+      [{ type: 'text', text: '[Open page](checklist.html)' }],
+      false,
+      false,
+      undefined,
+      'parent-conversation-id',
+    );
+
+    act(() => container.querySelector<HTMLAnchorElement>('a')?.click());
+
+    expect(useWorkspacePreviewStore.getState()).toMatchObject({
+      path: 'checklist.html',
+      conversationId: 'parent-conversation-id',
+    });
+  });
 
   it('preserves the tail DOM node when it becomes a completed block', () => {
     vi.useFakeTimers();

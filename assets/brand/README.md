@@ -28,6 +28,12 @@ The generator uses three purpose-built compositions:
 - **Desktop / badge:** a transparent outer canvas with a rounded desktop tile or
   compact badge, so Windows taskbar and browser toolbar icons remain legible.
 
+Harmony's flat launcher/start-window icon uses the same artwork at approximately
+84% of the canvas, matching Android's central 72dp viewport within its 108dp
+adaptive layer. This removes overscan padding from the flat export without
+changing Android/iOS assets or the approved in-app concept marks. Regenerate only
+Harmony resources with `node scripts/generate-brand-assets.mjs --target=harmony`.
+
 The role palette is deliberately compact:
 
 - Light surfaces: AI graphite `#1D1D1F`, human blue `#007AFF`.

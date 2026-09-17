@@ -58,7 +58,8 @@ type ScopeFilter = 'all' | 'inbox' | 'tasks' | 'archived';
 
 export function NotesScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ kind?: string }>();
+  const params = useLocalSearchParams<{ kind?: string; create?: string }>();
+  const createRequestHandled = useRef(false);
   useDismissOnHardwareBack(router);
   const queryClient = useQueryClient();
   const { colors } = useTheme();
@@ -157,6 +158,12 @@ export function NotesScreen() {
     if (createNoteMutation.isPending) return;
     createNoteMutation.mutate();
   }, [createNoteMutation]);
+
+  useEffect(() => {
+    if (!configured || params.create !== '1' || createRequestHandled.current) return;
+    createRequestHandled.current = true;
+    handleCreateNote();
+  }, [configured, handleCreateNote, params.create]);
 
   const handleNoteSelect = useCallback((note: NoteIndexEntry) => {
     if (selectionMode) return;

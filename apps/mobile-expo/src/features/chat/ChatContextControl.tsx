@@ -93,14 +93,16 @@ export const ChatContextControl = memo(function ChatContextControl({
   const summary = context.data;
   const chips = useMemo(() => {
     const items: Array<{ key: string; icon: string; label: string; primary?: boolean }> = [];
-    items.push({ key: 'project', icon: 'folder-outline', label: summary?.work.project?.title ?? copy.chooseProject, primary: Boolean(summary?.work.project) });
-    if (summary?.work.task) items.push({ key: 'task', icon: 'target', label: summary.work.task.title, primary: !summary.work.project });
+    items.push({
+      key: 'project',
+      icon: 'folder-outline',
+      label: summary?.work.project?.title ?? copy.chooseProject,
+      primary: Boolean(summary?.work.project),
+    });
     const environment = environmentLabel(summary?.environment);
     if (environment) items.push({ key: 'environment', icon: summary?.environment?.kind === 'managed_worktree' ? 'source-branch' : 'laptop', label: environment });
-    const sourceCount = summary?.sources.length ?? 0;
-    if (sourceCount) items.push({ key: 'sources', icon: 'notebook-outline', label: sourceCount === 1 && summary?.sources[0]?.title ? summary.sources[0].title : `${copy.sources} ${sourceCount}${summary?.sourcesHasMore ? '+' : ''}` });
     return items;
-  }, [copy.sources, copy.chooseProject, summary]);
+  }, [copy.chooseProject, summary]);
 
   return <>
     <View style={styles.strip}>
@@ -154,6 +156,21 @@ export const ChatContextControl = memo(function ChatContextControl({
           </>}
         </Menu>;
       })}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={copy.open}
+        hitSlop={6}
+        onPress={() => {
+          setDirectoryError(null);
+          setDirectoryPath(undefined);
+          setOpen(true);
+        }}
+        style={({ pressed }) => [styles.detailButton, {
+          backgroundColor: pressed ? colors.surface.pressed : 'transparent',
+        }]}
+      >
+        <Icon source="dots-horizontal" size={18} color={colors.text.tertiary} />
+      </Pressable>
     </View>
 
     <BottomSheetModal
@@ -266,9 +283,10 @@ export const ChatContextControl = memo(function ChatContextControl({
 });
 
 const styles = StyleSheet.create({
-  strip: { minHeight: 44, backgroundColor: 'transparent', flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  chip: { minHeight: 44, maxWidth: 160, flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.full, paddingHorizontal: spacing.sm },
-  chipText: { ...typography.caption, flexShrink: 1 },
+  strip: { minHeight: 32, backgroundColor: 'transparent', flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  chip: { minHeight: 30, maxWidth: 180, flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.full, paddingHorizontal: spacing.sm },
+  chipText: { ...typography.micro, flexShrink: 1 },
+  detailButton: { width: 30, height: 30, flexShrink: 0, alignItems: 'center', justifyContent: 'center', borderRadius: radii.full },
   sectionTitle: { ...typography.caption, marginTop: spacing.sm, marginBottom: spacing.xs, paddingHorizontal: spacing.sm },
   row: { minHeight: 50, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
   rowCopy: { flex: 1, minWidth: 0 },

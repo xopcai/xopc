@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
+  <title id="title">xopc Human–AI Loop role color logo for light backgrounds</title>
+  <desc id="description">The graphite 80 percent segment represents quiet AI execution. The blue 20 percent segment represents human intention and judgment.</desc>
+  <circle cx="512" cy="512" r="330" fill="none" stroke="#1D1D1F" stroke-linecap="round" stroke-width="136" stroke-dasharray="1419.162121 654.289030" transform="rotate(11.8 512 512)" />
+  <circle cx="512" cy="512" r="330" fill="none" stroke="#007AFF" stroke-linecap="round" stroke-width="136" stroke-dasharray="354.790530 1718.660621" transform="rotate(284.2 512 512)" />
+</svg>

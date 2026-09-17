@@ -6,6 +6,7 @@ import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
+import { isComputerUseAvailable } from '@/lib/electron-env';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { capabilitySettingsPath } from '@/navigation';
@@ -137,7 +138,7 @@ export function ModelCatalogStatus() {
     : data?.sync.lastError ?? Object.values(data?.sync.sourceErrors ?? {})[0]);
   const capabilityNeedsAttention = Object.entries(readiness?.capabilities ?? {}).some(
     ([capability, plan]) => (plan.status === 'degraded' || plan.status === 'unavailable')
-      && (capability !== 'computer-use' || Boolean(plan.rejected?.length)),
+      && (capability !== 'computer-use' || (isComputerUseAvailable() && Boolean(plan.rejected?.length))),
   );
 
   const refresh = async () => {
@@ -183,6 +184,7 @@ export function ModelCatalogStatus() {
             CapabilityId,
             CapabilityReadinessPayload['capabilities'][CapabilityId],
           ]>).map(([capability, plan]) => {
+            if (capability === 'computer-use' && !isComputerUseAvailable()) return null;
             const label = capability === 'vision'
               ? (zh ? '图片理解' : 'Vision')
               : capability === 'image-generation'

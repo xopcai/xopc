@@ -6,11 +6,11 @@ import type { DrawerLayoutProps, DrawerLayoutMethods } from 'react-native-gestur
 
 const state = vi.hoisted(() => ({
   props: {} as DrawerLayoutProps,
+  listProps: {} as { removeClippedSubviews?: boolean },
   back: (() => false) as () => boolean,
   open: vi.fn(), close: vi.fn(), dismissKeyboard: vi.fn(), remove: vi.fn(),
 }));
 vi.mock('expo-router', () => ({ useRouter: () => ({ push: vi.fn() }), useFocusEffect: (fn: () => () => void) => useEffect(fn, [fn]) }));
-vi.mock('@shopify/flash-list', () => ({ FlashList: () => null }));
 vi.mock('@tanstack/react-query', () => ({
   useQuery: () => ({ data: undefined }),
   useInfiniteQuery: () => ({
@@ -21,6 +21,7 @@ vi.mock('@tanstack/react-query', () => ({
 vi.mock('react-native', () => ({
   BackHandler: { addEventListener: (_: string, fn: () => boolean) => { state.back = fn; return { remove: state.remove }; } },
   Keyboard: { dismiss: state.dismissKeyboard },
+  FlatList: (props: typeof state.listProps) => { state.listProps = props; return null; },
   View: ({ children }: { children: ReactNode }) => createElement('div', null, children),
   ScrollView: () => null, Pressable: () => null,
   useWindowDimensions: () => ({ width: 390 }),
@@ -32,8 +33,12 @@ vi.mock('../../../theme', async () => {
   const tokens = await import('../../../theme/tokens');
   return { ...tokens, useTheme: () => ({ colors: tokens.colors.light, elevation: tokens.elevations.light }) };
 });
-vi.mock('../../../i18n/messages', () => ({ useMessages: () => ({ drawer: {}, common: {}, sessions: { untitled: 'Untitled' } }) }));
+vi.mock('../../../i18n/messages', () => ({ useMessages: () => ({
+  drawer: { you: 'You' }, common: {}, sessions: { untitled: 'Untitled' },
+  sessionsPage: { groups: { today: 'Today', yesterday: 'Yesterday', thisWeek: 'This week', lastWeek: 'Last week', thisMonth: 'This month', earlier: 'Earlier' } },
+}) }));
 vi.mock('../../../stores/gateway-store', () => ({ useGatewayStore: (selector: (state: { activeGatewayId: string }) => unknown) => selector({ activeGatewayId: 'gateway' }) }));
+vi.mock('../../../stores/preferences-store', () => ({ usePreferencesStore: (selector: (state: { language: string }) => unknown) => selector({ language: 'en' }) }));
 vi.mock('../../../query/projects', () => ({ fetchProjects: vi.fn() }));
 vi.mock('../../../query/sessions', () => ({ fetchSessionsList: vi.fn() }));
 vi.mock('../../../query/user-profile', () => ({ fetchUserProfileSummary: vi.fn() }));
@@ -43,7 +48,7 @@ vi.mock('react-native-gesture-handler/ReanimatedDrawerLayout', () => ({
   default: (props: DrawerLayoutProps & { ref: React.Ref<DrawerLayoutMethods> }) => {
     state.props = props;
     useImperativeHandle(props.ref, () => ({ openDrawer: state.open, closeDrawer: state.close }), []);
-    return createElement('div', null, props.children as ReactNode);
+    return createElement('div', null, props.renderNavigationView({ value: 1 } as never), props.children as ReactNode);
   },
 }));
 import { ChatNavigationDrawer, type ChatNavigationDrawerHandle } from '../ChatNavigationDrawer';
@@ -62,7 +67,10 @@ async function mount(swipeEnabled = true) {
   })));
   return { ref, onInteraction };
 }
-afterEach(async () => { await act(async () => root.unmount()); vi.clearAllMocks(); });
+afterEach(async () => {
+  await act(async () => root.unmount());
+  vi.clearAllMocks();
+});
 
 it('opens from the header and dismisses keyboard and composer actions', async () => {
   const { ref, onInteraction } = await mount();
@@ -84,4 +92,8 @@ it('handles back during opening and releases back after closing', async () => {
 it('disables opening gestures on pushed chat detail screens', async () => {
   await mount(false);
   expect(state.props.drawerLockMode).toBe(1);
+});
+it('keeps drawer rows mounted while the animated drawer transforms', async () => {
+  await mount();
+  expect(state.listProps.removeClippedSubviews).toBe(false);
 });

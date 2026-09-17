@@ -86,7 +86,13 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
 
   return <SettingsPageFrame gap="gap-7">
     <SettingsPageHeader title={t.title} subtitle={t.subtitle}
-      meta={<span className="mt-3 inline-flex rounded-md border border-edge px-2 py-1 text-xs text-fg-muted">{t.preview}</span>}
+      meta={<div className="mt-3 space-y-3">
+        <div className="flex flex-wrap gap-2">
+          <span className="inline-flex rounded-md border border-edge px-2 py-1 text-xs text-fg-muted">{t.experimental}</span>
+          <span className="inline-flex rounded-md border border-edge px-2 py-1 text-xs text-fg-muted">{t.preview}</span>
+        </div>
+        <p className="text-sm leading-relaxed text-fg-muted">{t.experimentalDescription}</p>
+      </div>}
       actions={native && <Button onClick={() => { void stop(); }}><Square className="size-3.5" />{t.stop}</Button>} />
 
     {error && <p role="alert" className="text-sm text-red-600">{error}</p>}

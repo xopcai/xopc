@@ -1,16 +1,19 @@
 import { XopcChatRepository } from '../repository/chatRepository';
 import { realtimeClient } from '../service/realtimeClient';
-import { XopcChatRow, XopcSessionItem, XopcStreamEvent, XopcChatAttachment } from '../model/chat';
+import { XopcChatRow, XopcSessionItem, XopcStreamEvent, XopcChatAttachment, XopcContextRef, XopcQueueState } from '../model/chat';
 import { chatInputIdentity } from '../common/attachments';
 import { XopcEvent } from '../model/realtime';
-import { historyRows } from '../common/chatProtocol';
+import { historyRows, mergeHistoryToolResults } from '../common/chatProtocol';
 
 @ObservedV2
 export class XopcChatViewModel {
+  private static owner?: XopcChatViewModel;
   @Trace sessions: XopcSessionItem[] = [];
   @Trace rows: XopcChatRow[] = [];
   @Trace selectedId: string = '';
   @Trace title: string = '';
+  @Trace agentId: string = '';
+  @Trace projectId: string = '';
   @Trace status: string = '';
   @Trace loading: boolean = false;
   @Trace sending: boolean = false;
@@ -22,6 +25,7 @@ export class XopcChatViewModel {
   @Trace tool: string = '';
   @Trace hasMore: boolean = false;
   @Trace hasOlder: boolean = false;
+  @Trace auxiliaryRevision: number = 0;
   private repository: XopcChatRepository = new XopcChatRepository();
   private selection: number = 0;
   private historyRequest: number = 0;
@@ -33,8 +37,21 @@ export class XopcChatViewModel {
   private refreshTimer: number = -1;
   private pendingContent: string = '';
   private pendingId: string = '';
+  private main: boolean = false;
+  private disposed: boolean = false;
+  private listRequest: number = 0;
+  private recoveryRequest: number = 0;
 
   start(initialId: string = ''): void {
+    this.main = !initialId;
+    this.activate();
+    if (initialId) this.open(initialId); else this.restoreMain();
+  }
+
+  activate(): void {
+    if (this.disposed || XopcChatViewModel.owner === this) return;
+    XopcChatViewModel.owner?.deactivate();
+    XopcChatViewModel.owner = this;
     realtimeClient.onState = (state: string): void => {
       this.connection = state;
       if (state === 'connected' && this.selectedId) this.recover();
@@ -43,39 +60,66 @@ export class XopcChatViewModel {
     realtimeClient.onGap = (_topic: string): void => { this.recover(); };
     try { realtimeClient.turnClaim(); this.connection = 'connected'; } catch (_) {}
     realtimeClient.start();
-    if (initialId) this.open(initialId); else this.loadList();
+    realtimeClient.subscribe('gateway'); realtimeClient.subscribe('sessions');
+    if (this.selectedId) this.recover();
   }
 
-  dispose(): void {
-    this.selection++; clearTimeout(this.refreshTimer);
+  deactivate(): void {
+    clearTimeout(this.refreshTimer); this.refreshTimer = -1;
+    if (XopcChatViewModel.owner !== this) return;
     if (this.runId) realtimeClient.unsubscribe('run:' + this.runId);
     realtimeClient.onState = (_state: string): void => {};
     realtimeClient.onEvent = (_event: XopcEvent): void => {};
     realtimeClient.onGap = (_topic: string): void => {};
+    XopcChatViewModel.owner = undefined;
+  }
+
+  private async restoreMain(): Promise<void> {
+    this.loading = true;
+    const selection = this.selection;
+    try {
+      const id = await this.repository.mainConversation();
+      if (this.disposed || selection !== this.selection) return;
+      this.loading = false;
+      if (id) await this.open(id); else await this.create();
+    } catch (error) { if (!this.disposed) { this.error = (error as Error).message; this.loading = false; } }
+  }
+
+  dispose(): void {
+    this.deactivate(); this.disposed = true; this.listRequest++;
+    this.selection++; clearTimeout(this.refreshTimer);
   }
 
   async loadList(search: string = this.search, more: boolean = false): Promise<void> {
     if (this.loading) return;
     this.loading = true; this.error = ''; this.search = search;
+    const request = ++this.listRequest;
     try {
       const page = await this.repository.list(search, more ? this.sessions.length : 0);
+      if (request !== this.listRequest || this.disposed) return;
       this.sessions = more ? this.sessions.concat(page.items.filter((item): boolean => !this.sessions.some((old): boolean => old.key === item.key))) : page.items;
       this.hasMore = page.hasMore;
-    } catch (error) { this.error = (error as Error).message; }
-    finally { this.loading = false; }
+    } catch (error) { if (request === this.listRequest && !this.disposed) this.error = (error as Error).message; }
+    finally { if (request === this.listRequest && !this.disposed) this.loading = false; }
   }
 
-  async create(): Promise<void> {
-    if (this.loading || this.sending) return;
+  async create(agentId: string = this.agentId, projectId: string | null = this.projectId || null, executionMode?: string): Promise<void> {
+    if (this.loading || this.sending || this.disposed) return;
     this.loading = true;
-    try { const id = await this.repository.create(); this.loading = false; await this.open(id); }
-    catch (error) { this.error = (error as Error).message; }
-    finally { this.loading = false; }
+    const selection = this.selection;
+    try {
+      const id = await this.repository.create(projectId, agentId || undefined, executionMode);
+      if (this.disposed || selection !== this.selection) return;
+      if (this.main) await this.repository.saveMainConversation(id);
+      if (this.disposed || selection !== this.selection) return;
+      this.loading = false; await this.open(id);
+    } catch (error) { if (!this.disposed) this.error = (error as Error).message; }
+    finally { if (!this.disposed) this.loading = false; }
   }
 
   async open(id: string): Promise<void> {
     if (this.sending) return;
-    if (this.runId) realtimeClient.unsubscribe('run:' + this.runId);
+    if (this.runId && XopcChatViewModel.owner === this) realtimeClient.unsubscribe('run:' + this.runId);
     this.selection++; this.historyRequest++; this.olderPending = false;
     this.selectedId = id; this.rows = []; this.runId = ''; this.streaming = ''; this.thinking = ''; this.tool = '';
     this.transcriptId = undefined; this.title = ''; this.status = ''; this.hasOlder = false;
@@ -90,19 +134,28 @@ export class XopcChatViewModel {
     this.selection++; clearTimeout(this.refreshTimer); this.refreshTimer = -1;
     if (this.runId) realtimeClient.unsubscribe('run:' + this.runId);
     this.selectedId = ''; this.runId = ''; this.rows = []; this.loading = false;
-    this.loadList();
   }
 
   private async recover(): Promise<void> {
     const id = this.selectedId; const selection = this.selection;
     if (!id) return;
+    const request = ++this.recoveryRequest;
     this.snapshotMode = true; this.streaming = ''; this.thinking = '';
     try {
       await this.loadHistory(false);
+      if (request !== this.recoveryRequest || selection !== this.selection || this.disposed) return;
       const run = await this.repository.activeRun(id);
-      if (selection !== this.selection) return;
+      if (request !== this.recoveryRequest || selection !== this.selection || this.disposed) return;
       this.trackRun(run.active ? run.runId ?? '' : '');
-    } catch (error) { if (selection === this.selection) this.error = (error as Error).message; }
+    } catch (error) { if (request === this.recoveryRequest && selection === this.selection && !this.disposed) this.error = (error as Error).message; }
+  }
+
+  async retryHistory(): Promise<void> {
+    if (this.loading || this.disposed) return;
+    this.error = '';
+    if (!this.selectedId && this.main) { await this.restoreMain(); return; }
+    this.loading = true;
+    try { await this.recover(); } finally { this.loading = false; }
   }
 
   async loadHistory(older: boolean): Promise<void> {
@@ -114,8 +167,10 @@ export class XopcChatViewModel {
       const result = await this.repository.history(this.selectedId, before);
       if (selection !== this.selection || request !== this.historyRequest) return;
       const rows = historyRows(result, before || 'latest');
-      this.rows = older ? rows.concat(this.rows) : rows;
+      this.rows = older ? mergeHistoryToolResults(rows.concat(this.rows)) : rows;
       this.title = result.session.name ?? '';
+      this.agentId = result.session.agentId ?? '';
+      this.projectId = result.session.projectId ?? '';
       this.status = result.session.status ?? '';
       this.transcriptId = result.session.transcriptId;
       this.before = result.pagination.nextBeforeCursor ?? '';
@@ -125,39 +180,50 @@ export class XopcChatViewModel {
   }
 
   private trackRun(id: string): void {
-    if (this.runId === id) return;
-    if (this.runId && this.runId !== id) realtimeClient.unsubscribe('run:' + this.runId);
+    if (this.runId && this.runId !== id && XopcChatViewModel.owner === this) realtimeClient.unsubscribe('run:' + this.runId);
     this.runId = id;
-    if (id) realtimeClient.subscribe('run:' + id);
+    if (id && XopcChatViewModel.owner === this) realtimeClient.subscribe('run:' + id);
   }
 
-  async send(content: string, attachments: XopcChatAttachment[] = []): Promise<boolean> {
-    if (this.sending || this.runId || !this.selectedId || (!content.trim() && !attachments.length) || this.connection !== 'connected') return false;
+  async send(content: string, attachments: XopcChatAttachment[] = [], delivery: string = 'next', refs: XopcContextRef[] = []): Promise<boolean> {
+    if (this.sending || !this.selectedId || (!content.trim() && !attachments.length && !refs.length) || this.connection !== 'connected') return false;
+    if (delivery !== 'next' && delivery !== 'steer') return false;
     this.sending = true; this.error = '';
     const selection = this.selection;
     // Retry an ambiguous network result with the same idempotent input identity.
-    const identity = chatInputIdentity(content, attachments);
+    const identity = delivery + ':' + chatInputIdentity(content, attachments) + ':' + JSON.stringify(refs);
     if (identity !== this.pendingContent || !this.pendingId) { this.pendingContent = identity; this.pendingId = this.repository.uuid(); }
     try {
-      const run = await this.repository.send(this.selectedId, content, this.pendingId, this.transcriptId, attachments);
+      const alreadyRunning = !!this.runId;
+      const run = await this.repository.send(this.selectedId, content, this.pendingId, this.transcriptId, attachments, delivery, refs);
       if (selection !== this.selection) return false;
       const attachmentNames = attachments.map((file: XopcChatAttachment): string => '[' + file.name + ']').join('\n');
-      this.rows = this.rows.concat([{ id: this.pendingId, role: 'user', text: content + (attachmentNames ? '\n' + attachmentNames : '') }]);
-      this.pendingId = ''; this.pendingContent = ''; this.snapshotMode = false;
-      this.streaming = ''; this.thinking = ''; this.trackRun(run);
+      if (!alreadyRunning) this.rows = this.rows.concat([{ id: this.pendingId, role: 'user', text: content + (attachmentNames ? '\n' + attachmentNames : '') }]);
+      this.pendingId = ''; this.pendingContent = '';
+      if (!alreadyRunning) { this.snapshotMode = false; this.streaming = ''; this.thinking = ''; }
+      this.trackRun(run);
       if (!run) await this.recover();
       return true;
-    } catch (error) { this.error = (error as Error).message; return false; }
+    } catch (error) { if (selection === this.selection) this.error = (error as Error).message; return false; }
     finally { this.sending = false; }
   }
 
   private event(event: XopcEvent): void {
+    if (event.topic === 'gateway' || event.topic === 'sessions') {
+      const state = event.data as XopcStreamEvent;
+      if (state.conversationId === this.selectedId && (event.event === 'session.input-state' || event.event === 'clarification.updated')) {
+        this.auxiliaryRevision++;
+        if (event.event === 'session.input-state' && !this.sending && ((event.data as XopcQueueState).activeRunId || '') !== this.runId) this.recover();
+      }
+      return;
+    }
     if (event.topic !== 'run:' + this.runId) return;
     const data = event.data as XopcStreamEvent;
     if (data.conversationId !== this.selectedId || !data.payload) return;
     const payload = data.payload;
     if (event.event === 'run_end') {
       this.trackRun(''); this.streaming = ''; this.thinking = ''; this.tool = '';
+      this.auxiliaryRevision++;
       this.loadHistory(false);
     } else if (event.event === 'error') this.error = payload.message ?? 'RUN_FAILED';
     else if (event.event === 'tool_start') this.tool = payload.toolName ?? '';
@@ -183,7 +249,10 @@ export class XopcChatViewModel {
   async action(action: string): Promise<void> {
     try {
       await this.repository.action(this.selectedId, action);
-      if (action === 'delete' || action === 'archive') this.back(); else await this.recover();
+      if (action === 'delete' || action === 'archive') {
+        this.back();
+        if (this.main) { await this.repository.saveMainConversation(''); this.loading = false; await this.create(); }
+      } else await this.recover();
     } catch (error) { this.error = (error as Error).message; }
   }
 }

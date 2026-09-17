@@ -1,6 +1,6 @@
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { keepPreviousData, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, TextInput, View } from 'react-native';
 import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
@@ -49,6 +49,7 @@ const sessionRowType = (item: SessionListRow) => item.type;
 
 export function SessionsScreen() {
   const router = useRouter();
+  const { search: searchParam } = useLocalSearchParams<{ search?: string }>();
   useDismissOnHardwareBack(router);
   const queryClient = useQueryClient();
   const activeGatewayId = useGatewayStore((state) => state.activeGatewayId);
@@ -64,7 +65,7 @@ export function SessionsScreen() {
   const [renameTarget, setRenameTarget] = useState<SessionListItem | null>(null);
   const [showBatchDelete, setShowBatchDelete] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(searchParam === '1');
   const [committedSearch, setCommittedSearch] = useState('');
   const listRef = useRef<FlashListRef<SessionListRow>>(null);
   const searchInputRef = useRef<TextInput>(null);
