@@ -17,4 +17,10 @@ describe('messageKey', () => {
     expect(messageKey(message, 1)).toBe('user-42');
     expect(messageKey(message, 101)).toBe('user-42');
   });
+
+  it('keeps a content-backed fallback stable when older history is prepended', () => {
+    const message: Message = { role: 'assistant', content: [{ type: 'text', text: 'Stable answer' }] };
+
+    expect(messageKey(message, 1)).toBe(messageKey(message, 101));
+  });
 });
