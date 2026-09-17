@@ -69,6 +69,7 @@ export function AttachmentRenderer({
   attachments,
   authToken,
   conversationId,
+  workspaceConversationId,
   projectId,
   layout = 'assistant',
   centerUserVoiceRow = false,
@@ -76,6 +77,7 @@ export function AttachmentRenderer({
   attachments: MessageAttachment[];
   authToken?: string;
   conversationId?: string | null;
+  workspaceConversationId?: string | null;
   projectId?: string | null;
   /** User bubbles align voice messages to the right (WeChat-style). */
   layout?: 'user' | 'assistant';
@@ -87,8 +89,9 @@ export function AttachmentRenderer({
 
   const setPreviewPath = useWorkspacePreviewStore((state) => state.setPath);
   const openAttachment = (attachment: MessageAttachment) => {
-    if (layout === 'assistant' && attachment.workspaceRelativePath?.trim() && (projectId?.trim() || conversationId?.trim())) {
-      setPreviewPath(attachment.workspaceRelativePath.trim(), null, projectId, conversationId);
+    const fileConversationId = workspaceConversationId ?? conversationId;
+    if (layout === 'assistant' && attachment.workspaceRelativePath?.trim() && (projectId?.trim() || fileConversationId?.trim())) {
+      setPreviewPath(attachment.workspaceRelativePath.trim(), null, projectId, fileConversationId);
       return;
     }
     setActive(attachment);

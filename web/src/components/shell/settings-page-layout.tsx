@@ -18,7 +18,7 @@ import {
   SETTINGS_SHELL_NAV_GROUPS,
 } from '@/navigation';
 import type { SettingsShellNavGroup } from '@/navigation';
-import { isSettingsPathVisibleInMode, isSettingsTabVisibleInMode } from '@/navigation/settings-nav-visibility';
+import { isSettingsPathVisibleInMode, isSettingsTabVisibleInMode, isSettingsPathVisibleOnPlatform, isSettingsTabVisibleOnPlatform } from '@/navigation/settings-nav-visibility';
 import { isElectron } from '@/lib/electron-env';
 import { preloadRouteForPath } from '@/lib/route-preload';
 import { SETTINGS_SHEET_PORTAL_BODY_MQ } from '@/lib/settings-shell-dialog-layer';
@@ -57,7 +57,7 @@ const mobileToolbarButtonClass = cn(
 
 function visibleSettingsNavTabs(group: SettingsShellNavGroup, settingsMode: ReturnType<typeof useSettingsModeStore.getState>['mode']) {
   return group.tabs.filter((tab) => {
-    if (!isSettingsTabVisibleInMode(tab, settingsMode)) {
+    if (!isSettingsTabVisibleInMode(tab, settingsMode) || !isSettingsTabVisibleOnPlatform(tab)) {
       return false;
     }
     return !ELECTRON_ONLY_SETTINGS_TABS.has(tab) || isElectron();
@@ -215,7 +215,8 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
     [location, railNavGroups, settingsMode],
   );
 
-  const settingsPathBlocked = !isSettingsPathVisibleInMode(location.pathname, settingsMode);
+  const settingsPathBlocked = !isSettingsPathVisibleInMode(location.pathname, settingsMode)
+    || !isSettingsPathVisibleOnPlatform(location.pathname);
 
   const activeTitle = activeSettingsTab ? tabLabel(language, activeSettingsTab) : m.nav.settings;
 

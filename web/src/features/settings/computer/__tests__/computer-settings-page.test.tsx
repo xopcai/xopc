@@ -17,6 +17,7 @@ vi.mock('@/lib/fetch', () => ({ fetchJson: vi.fn() }));
 import { ComputerSettingsPanel } from '../computer-settings-page';
 import { fetchJson } from '@/lib/fetch';
 import { fetchGlobalDefaults, updateGlobalDefaults } from '@/features/settings/global-defaults-api';
+import { messages, tabLabel } from '@/i18n/messages';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let root: ReturnType<typeof createRoot> | undefined;
@@ -28,6 +29,20 @@ async function renderPanel(zh = true) {
   await act(async () => root!.render(<MemoryRouter><ComputerSettingsPanel zh={zh} /></MemoryRouter>));
   return container;
 }
+
+it.each([
+  { language: 'zh' as const, badge: '实验性', notice: '识别和操作可能出错', label: '电脑操作（实验性）' },
+  { language: 'en' as const, badge: 'Experimental', notice: 'perform incorrect actions', label: 'Computer use (Experimental)' },
+])('labels computer use as experimental in $language without changing settings', async ({ language, badge, notice, label }) => {
+  window.electronAPI = undefined;
+  const container = await renderPanel(language === 'zh');
+  expect([...container.querySelectorAll('span')].some(span => span.textContent === badge)).toBe(true);
+  expect(container.textContent).toContain(notice);
+  expect(tabLabel(language, 'settingsComputerUse')).toBe(label);
+  expect(messages(language).settingsSections['computer-use']).toBe(label);
+  expect(fetchJson).not.toHaveBeenCalled();
+  expect(updateGlobalDefaults).not.toHaveBeenCalled();
+});
 
 it('offers native reenrollment even when computer control is disabled and keeps cancellation retryable', async () => {
   const status = { connected: false, reenrollmentRequired: true, permissions: { accessibility: false, screenRecording: 'unknown' } };

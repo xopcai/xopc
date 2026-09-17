@@ -251,25 +251,24 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     return parseSessionMessages(dedupeWireMessages(raw as Array<Record<string, unknown>>));
   }, [sessionHistoryQuery.data?.pages]);
 
-  const sessionRefreshComplete =
-    !chatSession.streaming &&
-    sessionHistoryQuery.dataUpdatedAt > chatSession.sessionDataUpdatedAtRef.current &&
-    (chatSession.streamingMsg
-      ? sessionContainsFinalAssistant(sessionMessages, chatSession.streamingMsg)
-      : chatSession.awaitingSessionRefresh);
-
   const committedRowsRef = useRef({ scope: '', messages: [] as Message[] });
   const rowScope = JSON.stringify([activeGatewayId, conversationId]);
   const displayMessages = useMemo<Message[]>(() => {
     const base = mergeOptimisticUserMessages(sessionMessages, chatSession.optimisticMessages);
+    const withFinalized = chatSession.finalizedMessages.reduce(
+      (messages, finalized) => sessionContainsFinalAssistant(messages, finalized)
+        ? messages
+        : mergeStreamingAssistantIntoMessages(messages, finalized),
+      base,
+    );
     const next = chatSession.streamingMsg
-      ? mergeStreamingAssistantIntoMessages(base, chatSession.streamingMsg)
-      : base;
+      ? mergeStreamingAssistantIntoMessages(withFinalized, chatSession.streamingMsg)
+      : withFinalized;
     return reconcileMessageRows(
       committedRowsRef.current.scope === rowScope ? committedRowsRef.current.messages : [],
       next,
     );
-  }, [rowScope, sessionMessages, chatSession.optimisticMessages, chatSession.streamingMsg]);
+  }, [rowScope, sessionMessages, chatSession.optimisticMessages, chatSession.finalizedMessages, chatSession.streamingMsg]);
 
   useLayoutEffect(() => {
     committedRowsRef.current = { scope: rowScope, messages: displayMessages };
@@ -280,9 +279,8 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   }, [displayMessages, chatSession.displayMessagesRef]);
 
   useEffect(() => {
-    if (!sessionRefreshComplete) return;
-    chatSession.clearAllState();
-  }, [sessionRefreshComplete, chatSession]);
+    chatSession.reconcileFinalizedMessages(sessionMessages);
+  }, [chatSession.reconcileFinalizedMessages, sessionMessages]);
 
   // ── Theme colors ─────────────────────────────────────────
   const colors = getColors(isDark);
@@ -549,7 +547,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   const handleAssistantRegenerate = useCallback(
     (assistantIndex: number) => {
-      if (!conversationId || chatSession.streaming || chatSession.awaitingSessionRefresh || Boolean(chatSession.clarifyPrompt)) return;
+      if (!conversationId || chatSession.streaming || Boolean(chatSession.clarifyPrompt)) return;
       const userMessage = findPrecedingUserMessage(displayMessages, assistantIndex);
       if (!userMessage) return;
       const payload = buildUserResendPayload(userMessage);

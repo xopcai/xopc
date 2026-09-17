@@ -1,6 +1,6 @@
 import { BottomTabBar, type BottomTabBarProps, type BottomTabBarButtonProps } from 'expo-router/js-tabs';
-import { useEffect, useRef, useState } from 'react';
-import { I18nManager, Pressable, StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon } from 'react-native-paper';
 import { KeyboardController, useKeyboardHandler, useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,44 +12,16 @@ import { useChatChromeStore } from './chat-chrome-store';
 import { motion, useReducedMotion } from '../../motion';
 import { radii, spacing, useTheme } from '../../theme';
 
-export const TAB_DOCK_HEIGHT = spacing.xxxl + spacing.lg;
+export const TAB_DOCK_HEIGHT = spacing.xxxl + spacing.xs;
 export const TAB_DOCK_INSET = spacing.xs;
 
-function SelectionCapsule({ index, count }: { index: number; count: number }) {
+function DockBackground() {
   const { colors } = useTheme();
-  const reducedMotion = useReducedMotion();
-  const [width, setWidth] = useState(0);
-  const offset = useSharedValue(0);
-  const initialized = useRef(false);
-  const slotWidth = Math.max(0, width - TAB_DOCK_INSET * 2) / count;
-  const visualIndex = I18nManager.isRTL ? count - 1 - index : index;
-
-  useEffect(() => {
-    if (!width) return;
-    const target = visualIndex * slotWidth;
-    offset.value = !initialized.current || reducedMotion
-      ? target
-      : withSpring(target, { ...motion.spring.settle, overshootClamping: true });
-    initialized.current = true;
-  }, [offset, reducedMotion, slotWidth, visualIndex, width]);
-
-  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ translateX: offset.value }] }));
   return (
     <View
       pointerEvents="none"
-      onLayout={event => setWidth(event.nativeEvent.layout.width)}
       style={[styles.background, { backgroundColor: colors.surface.elevated, borderColor: colors.border.subtle }]}
-    >
-      {width > 0 ? (
-        <Animated.View
-          style={[
-            styles.selection,
-            { width: slotWidth - spacing.xs, backgroundColor: colors.surface.grouped },
-            animatedStyle,
-          ]}
-        />
-      ) : null}
-    </View>
+    />
   );
 }
 
@@ -96,7 +68,7 @@ export function CapsuleTabBar(props: BottomTabBarProps) {
     ...descriptor,
     options: {
       ...descriptor.options,
-      tabBarBackground: () => <SelectionCapsule index={props.state.index} count={props.state.routes.length} />,
+      tabBarBackground: () => <DockBackground />,
     },
   }]));
   return <Animated.View style={[styles.dockClip, dockStyle]} pointerEvents={hidden ? 'none' : 'auto'}
@@ -134,8 +106,12 @@ export function CapsuleTabIcon({ source, focused }: { source: string; focused: b
   }, [focused, reducedMotion, scale]);
   const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   return (
-    <Animated.View style={style}>
-      <Icon source={source} size={spacing.xl} color={focused ? colors.accent.primary : colors.text.secondary} />
+    <Animated.View style={[
+      styles.iconSelection,
+      { backgroundColor: focused ? colors.surface.grouped : 'transparent' },
+      style,
+    ]}>
+      <Icon source={source} size={22} color={focused ? colors.accent.primary : colors.text.secondary} />
     </Animated.View>
   );
 }
@@ -143,12 +119,6 @@ export function CapsuleTabIcon({ source, focused }: { source: string; focused: b
 const styles = StyleSheet.create({
   dockClip: { overflow: 'hidden' },
   background: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, borderRadius: radii.full, borderWidth: StyleSheet.hairlineWidth },
-  selection: {
-    position: 'absolute',
-    top: TAB_DOCK_INSET,
-    bottom: TAB_DOCK_INSET,
-    left: TAB_DOCK_INSET + spacing.xxs,
-    borderRadius: radii.full,
-  },
+  iconSelection: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 15 },
   button: { minHeight: 44, borderRadius: radii.full, backgroundColor: 'transparent' },
 });

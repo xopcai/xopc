@@ -695,13 +695,12 @@ export const ChatComposer = memo(function ChatComposer({
         </View>
       ) : null}
 
-      {contextControl || contextRefs.length || att.attachments.length ? (
+      {contextRefs.length || att.attachments.length ? (
         <ScrollView key={conversationId} horizontal showsHorizontalScrollIndicator={false}
           directionalLockEnabled keyboardShouldPersistTaps="handled"
           removeClippedSubviews={false} contentInsetAdjustmentBehavior="never"
           automaticallyAdjustContentInsets={false} alwaysBounceVertical={false}
           style={styles.contextControl} contentContainerStyle={styles.contextRow}>
-          {contextControl}
           <ComposerContextChips refs={contextRefs}
             onRemove={(sourceId, kind) => onContextRefsChange(contextRefs.filter(ref => ref.sourceId !== sourceId || ref.kind !== kind))} />
           <ComposerAttachmentStrip attachments={att.attachments}
@@ -718,6 +717,11 @@ export const ChatComposer = memo(function ChatComposer({
           { backgroundColor: surface, borderColor: shellBorder },
         ]}
       >
+        {contextControl ? (
+          <View style={[styles.scopeRail, { borderBottomColor: colors.border.subtle }]}>
+            {contextControl}
+          </View>
+        ) : null}
         {mode === 'text' ? (
           <>
             <View style={isExpanded ? undefined : styles.compactRow}>
@@ -826,14 +830,20 @@ const styles = StyleSheet.create({
   deliveryHint: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, gap: spacing.sm },
   steerButton: { minHeight: 44, minWidth: 44, justifyContent: 'center', paddingHorizontal: spacing.sm },
   wrap: {
-    paddingHorizontal: spacing.content,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xxs,
   },
   shell: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radii.xxl,
+    borderRadius: radii.xl,
     overflow: 'hidden',
+  },
+  scopeRail: {
+    minHeight: 36,
+    justifyContent: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.sm,
   },
   contextNotice: {
     marginBottom: spacing.sm,
@@ -850,7 +860,7 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 18,
   },
-  contextControl: { flexGrow: 0, flexShrink: 0, backgroundColor: 'transparent', marginBottom: spacing.sm },
+  contextControl: { flexGrow: 0, flexShrink: 0, backgroundColor: 'transparent', marginBottom: spacing.xs },
   contextRow: { backgroundColor: 'transparent', flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   compactRow: {
     flexDirection: 'row',

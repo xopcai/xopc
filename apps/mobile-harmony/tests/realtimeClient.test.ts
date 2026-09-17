@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ create: vi.fn(), request: vi.fn() }));
 vi.mock('@kit.NetworkKit', () => ({ webSocket: { createWebSocket: mocks.create } }));
 vi.mock('@kit.BasicServicesKit', () => ({}));
+vi.mock('@kit.PerformanceAnalysisKit', () => ({ hilog: { warn: vi.fn(), info: vi.fn() } }));
 vi.mock('../entry/src/main/ets/service/deviceCrypto.ets', () => ({ XopcDeviceCrypto: class {
   uuid() { return randomUUID(); } async publicKeyDer() { return 'public-key'; } async sign() { return 'signature'; }
 } }));
@@ -58,6 +59,13 @@ describe('Harmony realtime lifecycle', () => {
     socket.frame('realtime.event', { topic: 'run:r1', seq: 1, event: 'assistant_delta', data: {} });
     expect(event).toHaveBeenCalledTimes(2);
     const sent = socket.send.mock.calls.length; client.subscribe('run:r1'); expect(socket.send.mock.calls).toHaveLength(sent);
+  });
+  it('accepts payload-free invalidations without entering a reconnect loop', async () => {
+    client.subscribe('gateway'); const socket = await connect(); const events = vi.fn(); client.onEvent = events;
+    socket.frame('realtime.event', { topic: 'gateway', seq: 1, event: 'config.reload', data: null });
+    expect(client.turnClaim().endpointId).toBe('harmonyos:device-1'); expect(socket.close).not.toHaveBeenCalled();
+    socket.frame('realtime.event', { topic: 'gateway', seq: 2, event: 'config.reload', data: {} });
+    expect(events).toHaveBeenCalledOnce();
   });
   it('stops retrying revoked authentication and incompatible endpoint contracts', async () => {
     const states = vi.fn(); client.onState = states;

@@ -13,7 +13,9 @@ function run(command: string, args: string[], cwd = repo): void {
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${command} exited with ${result.status ?? result.signal}`);
 }
+run('node', [join(repo, 'scripts/generate-brand-assets.mjs'), '--target=harmony', '--check']);
 run('pnpm', ['exec', 'tsx', join(project, 'scripts/export-contracts.mts'), '--check']);
+run('pnpm', ['exec', 'tsx', join(project, 'scripts/export-welcome.mts'), '--check']);
 run('pnpm', ['exec', 'vitest', 'run', '--config', join(project, 'vitest.config.ts'), '--root', project]);
 run('pnpm', ['exec', 'vitest', 'run',
   'src/storage/sqlite/migrations/__tests__/harmonyos-devices.test.ts',

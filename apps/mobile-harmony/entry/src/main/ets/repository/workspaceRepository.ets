@@ -10,7 +10,7 @@ import { taskItem, projectItem, automationItem, noteItem, newTask, scheduledAuto
 
 export class XopcWorkspaceRepository {
   uuid(): string { return new XopcDeviceCrypto().uuid(); }
-  async list(section: XopcSection, search: string, offset: number = 0): Promise<XopcWorkspacePage> {
+  async list(section: XopcSection, search: string, offset: number = 0, noteStatus: string = ''): Promise<XopcWorkspacePage> {
     const query = encodeURIComponent(search.trim());
     let items: XopcWorkspaceItem[] = [];
     let hasMore: boolean = false;
@@ -27,7 +27,7 @@ export class XopcWorkspaceRepository {
       if (!Array.isArray(result.automations)) throw new Error('INVALID_AUTOMATION_LIST');
       items = result.automations.map(automationItem).filter((item): boolean => item.title.toLowerCase().includes(search.toLowerCase()));
     } else {
-      const result = JSON.parse(await gatewaySession.request('/api/notes?limit=30&offset=' + offset + '&sortBy=updatedAt&sortOrder=desc&search=' + query)) as XopcNoteList;
+      const result = JSON.parse(await gatewaySession.request('/api/notes?limit=30&offset=' + offset + '&sortBy=updatedAt&sortOrder=desc&search=' + query + (noteStatus ? '&status=' + encodeURIComponent(noteStatus) : ''))) as XopcNoteList;
       if (!Array.isArray(result.items)) throw new Error('INVALID_NOTE_LIST');
       items = result.items.map(noteItem); hasMore = result.hasMore ?? false;
     }

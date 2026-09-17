@@ -7,6 +7,7 @@ import {
   recordStreamingDelta,
   recordStreamingParse,
   recordStreamingShape,
+  recordStreamingTerminalFlush,
   resetStreamingRenderMetrics,
   startStreamingRenderMetrics,
 } from '@/components/markdown/streaming-render-metrics';
@@ -20,6 +21,7 @@ describe('streaming render metrics', () => {
     recordStreamingCommit('message-1', 24);
     recordStreamingParse('message-1', 3.5);
     recordStreamingShape('message-1', 2, 8);
+    recordStreamingTerminalFlush('message-1', 12);
     finishStreamingRenderMetrics('message-1');
 
     expect(getStreamingRenderMetrics()).toEqual([
@@ -33,6 +35,7 @@ describe('streaming render metrics', () => {
         stableBlockCount: 2,
         tailLength: 8,
         latestContentLength: 24,
+        terminalBacklogChars: 12,
         active: false,
       }),
     ]);
