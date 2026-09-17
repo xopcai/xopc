@@ -7,6 +7,7 @@ import { ensureSchemaMetaTable, readSchemaVersion, setSchemaVersion } from '../s
 import {
   applyPendingMigrations,
   XOPC_DB_BASELINE_SCHEMA_VERSION,
+  XOPC_DB_SCHEMA_VERSION,
 } from '../migrations/runner.js';
 import { migrateConversationUuids } from '../migrations/conversation-uuid.js';
 import { conversationRouteKey, resolveConversationRoute } from '../../../routing/conversation-route.js';
@@ -85,11 +86,11 @@ describe('one-time conversation UUID migration', () => {
   it('runs exactly once through the upgrade runner and supplies missing routing metadata', () => {
     const original = ensureSessionRecord(key, '/workspace', { routing });
     database.prepare('UPDATE sessions SET routing_json=NULL').run();
-    expect(applyPendingMigrations(database)).toBe(178);
+    expect(applyPendingMigrations(database)).toBe(XOPC_DB_SCHEMA_VERSION);
     const migrated = database.prepare('SELECT * FROM sessions').get()!;
     expect(migrated.active_transcript_id).toBe(original.sessionId);
     expect(JSON.parse(String(migrated.routing_json))).toMatchObject(routing);
-    expect(applyPendingMigrations(database)).toBe(178);
+    expect(applyPendingMigrations(database)).toBe(XOPC_DB_SCHEMA_VERSION);
     expect(database.prepare('SELECT * FROM sessions').get()).toEqual(migrated);
   });
 
@@ -216,7 +217,7 @@ describe('one-time conversation UUID migration', () => {
     database.prepare("INSERT INTO transcript_entries(entry_id,session_id,seq,entry_kind,role,payload_json,created_at) VALUES ('imported-entry',?,1,'message','user',?,1)")
       .run(original.sessionId, payload);
 
-    expect(applyPendingMigrations(database)).toBe(178);
+    expect(applyPendingMigrations(database)).toBe(XOPC_DB_SCHEMA_VERSION);
     const migrated = database.prepare('SELECT * FROM sessions').get()!;
     const customData = JSON.parse(String(migrated.custom_data_json));
     expect(customData).toMatchObject({
@@ -232,7 +233,7 @@ describe('one-time conversation UUID migration', () => {
     expect(migrated.active_transcript_id).toBe(original.sessionId);
     expect(database.prepare('SELECT payload_json FROM transcript_entries').get()?.payload_json).toBe(payload);
     expect(database.prepare('SELECT count(*) AS n FROM sessions').get()?.n).toBe(1);
-    expect(applyPendingMigrations(database)).toBe(178);
+    expect(applyPendingMigrations(database)).toBe(XOPC_DB_SCHEMA_VERSION);
     expect(database.prepare('SELECT * FROM sessions').get()).toEqual(migrated);
   });
 
