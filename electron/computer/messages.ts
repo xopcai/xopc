@@ -4,6 +4,7 @@ import type { ElectronUiLanguage } from '../i18n.js';
 
 const messages = {
   zh: {
+    protocolIncompatible: '桌面端与 Gateway 版本不兼容。请将两者更新至同一构建并重新启动；无需重新授权或重配模型。',
     title: 'xopc 电脑操作', cancel: '取消', allow: '允许这一次',
     fullControl: {
       message: '允许 xopc 完全控制应用？', confirm: '开启完全控制',
@@ -24,6 +25,7 @@ const messages = {
       at: '位置', text: '文字', horizontal: '水平', vertical: '垂直', milliseconds: '毫秒' },
   },
   en: {
+    protocolIncompatible: 'Desktop and Gateway protocols differ. Update both to the same build and restart. No permission or model changes are needed.',
     title: 'xopc Computer Use', cancel: 'Cancel', allow: 'Allow once',
     fullControl: {
       message: 'Allow xopc full control of apps?', confirm: 'Enable full control',

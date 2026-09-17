@@ -24,6 +24,14 @@ function startsWithAny(path: string, prefixes: readonly string[]): boolean {
 
 export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBundle[] = [
   {
+    id: 'endpoint-compatibility',
+    match: (path) => path === '/api/endpoint-tools/compatibility',
+    load: async () => {
+      const { registerEndpointCompatibilityRoutes } = await import('./endpoint-compatibility.js');
+      return { register: registerEndpointCompatibilityRoutes };
+    },
+  },
+  {
     id: 'imports',
     match: (path) => startsWithAny(path, ['/api/imports']),
     load: async () => {

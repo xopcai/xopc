@@ -9,6 +9,15 @@ function decodePage(dataUrl: string): string {
 }
 
 describe('getLoadingPageDataUrl', () => {
+  it('explains incompatible gateways and preserves user data in both locales', () => {
+    const failure = { kind: 'gateway_protocol_incompatible' as const, message: 'incompatible', port: 18790, isPackaged: true };
+    const zh = decodePage(getStartupRecoveryPageDataUrl('zh-CN', failure));
+    const en = decodePage(getStartupRecoveryPageDataUrl('en', failure));
+    expect(zh).toContain('桌面端与 Gateway 版本不兼容');
+    expect(zh).toContain('没有结束现有服务');
+    expect(en).toContain('Desktop and Gateway versions are incompatible');
+    expect(en).toContain('Do not delete your data');
+  });
   it('presents startup as a branded product experience', () => {
     const html = decodePage(getLoadingPageDataUrl('en-US'));
 
