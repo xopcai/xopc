@@ -5,17 +5,42 @@ export interface XopcSessionItem {
   updatedAt: string; status?: string; projectId?: string; agentId?: string;
 }
 export interface XopcSessionList { items: XopcSessionItem[]; total: number; hasMore: boolean; }
-export interface XopcContentBlock { type: string; text?: string; thinking?: string; name?: string; id?: string; input?: Object; args?: Object; arguments?: Object; }
-export interface XopcHistoryMedia { id: string; name: string; type: string; mimeType: string; size: number; uri: string; }
+export interface XopcContentBlock { type: string; text?: string; thinking?: string; name?: string; id?: string; input?: Object; args?: Object; arguments?: Object;
+  segmentId?: string; presentation?: string; status?: string; result?: Object; details?: Object;
+  source?: XopcImageSource; data?: string; mimeType?: string; uri?: string; workspaceRelativePath?: string;
+  target?: string; summary?: string; findings?: XopcReviewFinding[]; overallCorrectness?: string; overallExplanation?: string;
+}
+export interface XopcImageSource { data?: string; media_type?: string; }
+export interface XopcAudioWire { uri?: string; url?: string; audioUri?: string; audio_url?: string;
+  workspaceRelativePath?: string; workspace_relative_path?: string; path?: string;
+  data?: string; mimeType?: string; mime_type?: string; name?: string;
+}
+export type XopcAudioCandidate = string | XopcAudioWire;
+export interface XopcReviewFinding { title: string; body: string; priority: number; filePath?: string; lineStart?: number; lineEnd?: number; }
+export interface XopcChatBlock { id: string; kind: string; text: string; segmentId?: string; presentation?: string; active?: boolean;
+  call?: XopcChatTool; file?: XopcHistoryMedia; review?: XopcContentBlock; plan?: XopcPlanStep[];
+}
+export interface XopcPlanStep { step: string; status: string; }
+export interface XopcArtifact { artifactId: string; sourceFileId?: string; title: string; kind: string; mimeType?: string; sizeBytes?: number;
+  availability: string; location?: string; capabilities?: string[]; uri?: string; workspaceRelativePath?: string; shareUrl?: string;
+}
+export interface XopcTurnOutcome { version: number; outcomeId: string; runId: string; turnId: string; status: string; summary?: string; deliverables: XopcArtifact[]; }
+export interface XopcProductReference { kind: string; id: string; title: string; summary?: string; status?: string; capabilities?: string[]; }
+export interface XopcProductDelivery { version: number; operation: string; primary?: XopcProductReference; related?: XopcProductReference[]; }
+export interface XopcHistoryMedia { id: string; name: string; type: string; mimeType: string; size: number; uri: string; workspaceRelativePath?: string; data?: string; }
 export interface XopcHistorySource { kind: string; sourceId: string; version: string; title?: string; }
-export interface XopcMessageMetadata { sourceContexts?: XopcHistorySource[]; }
-export interface XopcHistoryToolCall { id?: string; name?: string; args?: Object; result?: Object; isError?: boolean; }
+export interface XopcMessageMetadata { sourceContexts?: XopcHistorySource[]; turnOutcome?: XopcTurnOutcome; review?: XopcContentBlock; }
+export interface XopcHistoryToolCall { id?: string; name?: string; args?: Object; result?: Object; isError?: boolean; details?: Object; }
 export interface XopcOpenAiToolCall { id: string; function: XopcToolFunction; }
 export interface XopcToolFunction { name: string; arguments?: string; }
 export interface XopcMessage { id?: string; messageId?: string; role: string; content: string | XopcContentBlock[];
-  rawContent?: XopcContentBlock[]; media?: XopcHistoryMedia[]; metadata?: XopcMessageMetadata;
+  rawContent?: XopcContentBlock[]; media?: XopcHistoryMedia[]; attachments?: XopcHistoryMedia[]; metadata?: XopcMessageMetadata;
   toolCalls?: XopcHistoryToolCall[]; tool_calls?: XopcOpenAiToolCall[];
-  toolCallId?: string; tool_call_id?: string; isError?: boolean;
+  toolCallId?: string; tool_call_id?: string; isError?: boolean; details?: Object; turnId?: string;
+  ttsAudio?: XopcAudioCandidate | XopcAudioCandidate[]; tts_audio?: XopcAudioCandidate | XopcAudioCandidate[];
+  tts?: XopcAudioCandidate | XopcAudioCandidate[]; audio?: XopcAudioCandidate | XopcAudioCandidate[];
+  ttsAudioUri?: string; tts_audio_uri?: string; audioUri?: string; audio_url?: string;
+  mimeType?: string; mime_type?: string; name?: string;
 }
 export interface XopcSessionDetail { key: string; transcriptId?: string; name?: string; status?: string; agentId?: string; projectId?: string; messages: XopcMessage[]; }
 export interface XopcHistoryPagination { hasMore: boolean; nextBeforeCursor?: string; }
@@ -33,11 +58,16 @@ export interface XopcInputResult { state: XopcInputState; }
 export interface XopcRun { active: boolean; runId?: string; }
 export interface XopcAbort { runId: string; }
 export interface XopcRename { name: string; }
-export interface XopcStreamPayload { delta?: string; messageId?: string; message?: string; toolName?: string; status?: string; }
+export interface XopcStreamPayload { delta?: string; messageId?: string; message?: string; toolName?: string; status?: string;
+  toolCallId?: string; args?: Object; result?: Object; details?: Object; textDelta?: string; presentation?: string;
+  command?: string; cwd?: string; exitCode?: number; timedOut?: boolean; diff?: string; review?: XopcContentBlock;
+  plan?: XopcPlanStep[]; explanation?: string; uri?: string; mimeType?: string; name?: string;
+}
 export interface XopcStreamEvent { type: string; runId: string; conversationId: string; payload: XopcStreamPayload; }
-export interface XopcChatTool { id: string; name: string; input?: Object; result?: string; isError?: boolean; }
+export interface XopcChatTool { id: string; name: string; input?: Object; result?: string; isError?: boolean; status?: string; details?: Object; }
 export interface XopcChatRow { id: string; role: string; text: string; thinking?: string; tools?: string; media?: XopcHistoryMedia[]; refs?: XopcContextRef[];
-  toolCalls?: XopcChatTool[]; toolResultId?: string; toolResultError?: boolean;
+  toolCalls?: XopcChatTool[]; toolResultId?: string; toolResultError?: boolean; toolResultDetails?: Object;
+  blocks?: XopcChatBlock[]; outcome?: XopcTurnOutcome; turnId?: string; live?: boolean; progress?: string; sourceIds?: string[];
 }
 export interface XopcDrawerProfile { profile?: XopcProfileFields; suggestedCallName?: string; }
 export interface XopcProfileFields { callName?: string; role?: string; }

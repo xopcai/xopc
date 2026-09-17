@@ -53,6 +53,7 @@ vi.mock('../entry/src/main/ets/service/transport.ets', () => ({
 
 import { XopcGatewaySession } from '../entry/src/main/ets/service/gatewaySession.ets';
 import { XopcHttpError } from '../entry/src/main/ets/service/transport.ets';
+import { gatewayCredentialKey } from '../entry/src/main/ets/service/gatewayProfiles.ets';
 
 describe('native session against real Gateway pairing/auth routes', () => {
   let app: Hono;
@@ -123,11 +124,12 @@ describe('native session against real Gateway pairing/auth routes', () => {
   it('recovers a refresh whose server response was lost without rotating twice', async () => {
     loseRefreshResponse = true;
     await expect(session.pair(await invitation(), () => {})).rejects.toThrow('NO_VERIFIED_ROUTE');
-    const attempt = JSON.parse(mocks.records.get('refresh-attempt')!);
+    const id = session.currentProfile()!.gatewayId;
+    const attempt = JSON.parse(mocks.records.get(gatewayCredentialKey(id, 'refresh-attempt'))!);
     const token = await session.accessToken();
     expect(token).toMatch(/^xopc_at_/);
-    expect(mocks.records.get('refresh')).toBe(attempt.nextRefreshToken);
-    expect(mocks.records.has('refresh-attempt')).toBe(false);
+    expect(mocks.records.get(gatewayCredentialKey(id, 'refresh'))).toBe(attempt.nextRefreshToken);
+    expect(mocks.records.has(gatewayCredentialKey(id, 'refresh-attempt'))).toBe(false);
   });
   it('resumes a completed pairing after process restart using the original completion identity', async () => {
     loseCompleteResponse = true;

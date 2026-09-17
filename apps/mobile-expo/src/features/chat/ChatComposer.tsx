@@ -72,6 +72,7 @@ export const ChatComposer = memo(function ChatComposer({
   placeholder,
   suggestionDraft,
   mainConversation = false,
+  embedded = false,
   onConsumeSuggestionDraft,
   contextRefs,
   onContextRefsChange,
@@ -90,6 +91,7 @@ export const ChatComposer = memo(function ChatComposer({
   placeholder?: string;
   suggestionDraft?: string;
   mainConversation?: boolean;
+  embedded?: boolean;
   onConsumeSuggestionDraft?: () => void;
   contextRefs: ComposerContextRef[];
   onContextRefsChange: (refs: ComposerContextRef[]) => void;
@@ -626,7 +628,7 @@ export const ChatComposer = memo(function ChatComposer({
   };
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, embedded && styles.embeddedWrap]}>
       <View onStartShouldSetResponderCapture={() => {
         onCloseActions();
         return false;
@@ -713,7 +715,8 @@ export const ChatComposer = memo(function ChatComposer({
       <View
         style={[
           styles.shell,
-          elevation.raised,
+          !embedded && elevation.raised,
+          embedded && styles.embeddedShell,
           { backgroundColor: surface, borderColor: shellBorder },
         ]}
       >
@@ -839,6 +842,8 @@ const styles = StyleSheet.create({
     borderRadius: radii.xl,
     overflow: 'hidden',
   },
+  embeddedWrap: { paddingHorizontal: spacing.sm, paddingTop: spacing.sm, paddingBottom: spacing.sm },
+  embeddedShell: { borderRadius: radii.lg },
   scopeRail: {
     minHeight: 36,
     justifyContent: 'center',

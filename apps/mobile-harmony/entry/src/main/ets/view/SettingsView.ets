@@ -1,9 +1,9 @@
 import { appSettings, XopcSettings } from '../service/settings';
 import { gatewaySession } from '../service/gatewaySession';
-import { realtimeClient } from '../service/realtimeClient';
 import { common } from '@kit.AbilityKit';
 import { pushNotifications, XopcPushNotifications } from '../service/pushNotifications';
 import { XopcPageHeader, XopcHubRow, XopcSectionLabel } from './MobileComponents';
+import { connectionModel } from '../viewmodel/connectionViewModel';
 
 @ComponentV2
 export struct XopcSettingsView {
@@ -18,6 +18,7 @@ export struct XopcSettingsView {
   @Local section: string = '';
   aboutToAppear(): void { this.section = this.initialSection; }
   private openSection(section: string): void {
+    if (section === 'connection') { connectionModel.openGateways(); return; }
     if (this.useNavigation) this.onOpenSection(section); else this.section = section;
   }
 
@@ -31,20 +32,6 @@ export struct XopcSettingsView {
   private async choose(language: string, theme: string): Promise<void> {
     try { const context = this.getUIContext().getHostContext(); if (context) await this.preferences.update(context, language, theme); }
     catch (error) { this.error = (error as Error).message; }
-  }
-  private async disconnect(): Promise<void> {
-    try {
-      const result = await this.getUIContext().getPromptAction().showDialog({
-        title: $r('app.string.disconnect'), message: $r('app.string.disconnect_help'),
-        buttons: [{ text: $r('app.string.cancel'), color: $r('app.color.secondary') },
-          { text: $r('app.string.confirm'), color: $r('app.color.danger') }]
-      });
-      if (result.index !== 1) return;
-      if (this.push.busy) { this.error = 'PUSH_OPERATION_IN_PROGRESS'; return; }
-      if (this.push.enabled && !await this.push.disable()) return;
-      this.push.reset();
-      await realtimeClient.forgetIdentity(); await gatewaySession.disconnect(); this.onDisconnected();
-    } catch (error) { this.error = (error as Error).message; }
   }
   @Builder
   option(label: ResourceStr, selected: boolean, id: string, action: () => void) {
@@ -109,8 +96,8 @@ export struct XopcSettingsView {
             this.option($r('app.string.dark'), this.preferences.theme === 'dark', 'theme-dark', (): void => { this.choose(this.preferences.language, 'dark'); })
           } else if (this.section === 'connection') {
             XopcHubRow({ heading: gatewaySession.currentProfile()?.name ?? '', summary: $r('app.string.connection'), navigable: false })
-            Button($r('app.string.disconnect')).fontColor($r('app.color.danger')).backgroundColor($r('app.color.panel'))
-              .width('100%').height(48).margin({ top: 24 }).enabled(!this.push.busy).onClick((): void => { this.disconnect(); })
+            Button($r('app.string.gateways_title')).id('open-gateways').fontColor($r('app.color.accent')).backgroundColor($r('app.color.panel'))
+              .width('100%').height(48).margin({ top: 24 }).enabled(!this.push.busy).onClick((): void => { connectionModel.openGateways(); })
           } else if (this.section === 'notifications') {
         Text(this.push.registered ? $r('app.string.push_registered') : $r('app.string.push_help'))
           .fontColor($r('app.color.secondary')).fontSize(16).lineHeight(24).width('100%').margin({ bottom: 20 })

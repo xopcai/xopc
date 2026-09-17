@@ -1,0 +1,12 @@
+{"string":[
+  {"name":"gateways_title","value":"Gateways"},
+  {"name":"gateways_add","value":"Add Gateway"},
+  {"name":"gateways_hint","value":"Keep multiple Gateways. Tap one to switch your active workspace."},
+  {"name":"gateways_name","value":"Gateway name"},
+  {"name":"gateways_rename","value":"Rename"},
+  {"name":"gateways_remove","value":"Remove"},
+  {"name":"gateways_remove_hint","value":"Remove this connection from this phone? Other Gateways and server conversations are kept. Pair again to reconnect."},
+  {"name":"gateways_empty","value":"No saved Gateways. Add one to get started."},
+  {"name":"gateways_working","value":"Updating connection…"},
+  {"name":"gateways_failed","value":"Could not complete this operation. Your saved connections are kept. Check the Gateway and try again."}
+]}

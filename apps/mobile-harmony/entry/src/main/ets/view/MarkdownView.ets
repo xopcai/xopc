@@ -1,6 +1,8 @@
 import { common } from '@kit.AbilityKit';
 import { markdownBlocks, markdownSpans, markdownLink, XopcMarkdownBlock, XopcMarkdownSpan, XopcMarkdownTableRow, XopcMarkdownCell } from '../common/markdown';
 import { copyChatMessage } from '../service/chatMessageActions';
+import { XopcChatMediaView } from './ChatMediaView';
+import { XopcHistoryMedia } from '../model/chat';
 
 @ComponentV2
 struct XopcMarkdownInline {
@@ -38,7 +40,11 @@ struct XopcMarkdownInline {
 @ComponentV2
 export struct XopcMarkdownView {
   @Param content: string = '';
+  @Param conversationId: string = '';
   @Computed get blocks(): XopcMarkdownBlock[] { return markdownBlocks(this.content); }
+  private imageFile(block: XopcMarkdownBlock): XopcHistoryMedia {
+    return { id: block.id, name: block.text || 'image', type: 'image', mimeType: 'image/png', size: 0, uri: block.href || '' };
+  }
 
   private async copyCode(text: string): Promise<void> {
     try { await copyChatMessage(text); this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_copied') }); }
@@ -54,7 +60,8 @@ export struct XopcMarkdownView {
   build() {
     Column({ space: 12 }) {
       ForEach(this.blocks, (block: XopcMarkdownBlock) => {
-        if (block.kind === 'rule') { Divider().color($r('app.color.secondary')).opacity(0.3) }
+        if (block.kind === 'image') { XopcChatMediaView({ file: this.imageFile(block), conversationId: this.conversationId }) }
+        else if (block.kind === 'rule') { Divider().color($r('app.color.secondary')).opacity(0.3) }
         else if (block.kind === 'code') {
           Column() {
             Row() {

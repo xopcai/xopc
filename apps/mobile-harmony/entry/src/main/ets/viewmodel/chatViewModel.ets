@@ -1,9 +1,11 @@
 import { XopcChatRepository } from '../repository/chatRepository';
 import { realtimeClient } from '../service/realtimeClient';
-import { XopcChatRow, XopcSessionItem, XopcStreamEvent, XopcChatAttachment, XopcContextRef, XopcQueueState } from '../model/chat';
+import { XopcChatRow, XopcSessionItem, XopcStreamEvent, XopcChatAttachment, XopcContextRef, XopcQueueState, XopcHistoryMedia } from '../model/chat';
 import { chatInputIdentity } from '../common/attachments';
 import { XopcEvent } from '../model/realtime';
 import { historyRows, mergeHistoryToolResults } from '../common/chatProtocol';
+import { mergeAssistantRows, chatAttachments } from '../common/chatRichContent';
+import { reduceChatStream } from '../common/chatStream';
 
 @ObservedV2
 export class XopcChatViewModel {
@@ -23,6 +25,7 @@ export class XopcChatViewModel {
   @Trace streaming: string = '';
   @Trace thinking: string = '';
   @Trace tool: string = '';
+  @Trace liveRow?: XopcChatRow;
   @Trace hasMore: boolean = false;
   @Trace hasOlder: boolean = false;
   @Trace auxiliaryRevision: number = 0;
@@ -120,6 +123,7 @@ export class XopcChatViewModel {
     if (this.runId && XopcChatViewModel.owner === this) realtimeClient.unsubscribe('run:' + this.runId);
     this.selection++; this.historyRequest++; this.olderPending = false;
     this.selectedId = id; this.rows = []; this.runId = ''; this.streaming = ''; this.thinking = ''; this.tool = '';
+    this.liveRow = undefined;
     this.transcriptId = undefined; this.title = ''; this.agentId = ''; this.projectId = ''; this.status = ''; this.hasOlder = false;
     this.pendingId = ''; this.pendingContent = ''; this.before = ''; this.error = ''; this.loading = true;
     const selection = this.selection;
@@ -136,14 +140,14 @@ export class XopcChatViewModel {
     if (this.sending) return;
     this.selection++; clearTimeout(this.refreshTimer); this.refreshTimer = -1;
     if (this.runId) realtimeClient.unsubscribe('run:' + this.runId);
-    this.selectedId = ''; this.runId = ''; this.rows = []; this.loading = false;
+    this.selectedId = ''; this.runId = ''; this.rows = []; this.loading = false; this.liveRow = undefined;
   }
 
   private async recover(): Promise<void> {
     const id = this.selectedId; const selection = this.selection;
     if (!id) return;
     const request = ++this.recoveryRequest;
-    this.snapshotMode = true; this.streaming = ''; this.thinking = '';
+    this.snapshotMode = true;
     try {
       await this.loadHistory(false);
       if (request !== this.recoveryRequest || selection !== this.selection || this.disposed) return;
@@ -170,7 +174,8 @@ export class XopcChatViewModel {
       const result = await this.repository.history(this.selectedId, before);
       if (selection !== this.selection || request !== this.historyRequest) return;
       const rows = historyRows(result, before || 'latest');
-      this.rows = older ? mergeHistoryToolResults(rows.concat(this.rows)) : rows;
+      this.rows = mergeAssistantRows(older ? mergeHistoryToolResults(rows.concat(this.rows)) : rows);
+      if (!older && this.snapshotMode) { this.liveRow = undefined; this.streaming = ''; this.thinking = ''; this.tool = ''; }
       this.title = result.session.name ?? '';
       this.agentId = result.session.agentId ?? '';
       this.projectId = result.session.projectId ?? '';
@@ -200,10 +205,14 @@ export class XopcChatViewModel {
       const alreadyRunning = !!this.runId;
       const run = await this.repository.send(this.selectedId, content, this.pendingId, this.transcriptId, attachments, delivery, refs);
       if (selection !== this.selection) return false;
-      const attachmentNames = attachments.map((file: XopcChatAttachment): string => '[' + file.name + ']').join('\n');
-      if (!alreadyRunning) this.rows = this.rows.concat([{ id: this.pendingId, role: 'user', text: content + (attachmentNames ? '\n' + attachmentNames : '') }]);
+      if (!alreadyRunning) {
+        const media = attachments.map((file: XopcChatAttachment, index: number): XopcHistoryMedia => ({
+          id: this.pendingId + ':attachment:' + index, name: file.name, type: file.type, mimeType: file.mimeType,
+          size: file.size, uri: file.uri || '', data: file.data, workspaceRelativePath: file.workspaceRelativePath }));
+        this.rows = this.rows.concat([{ id: this.pendingId, role: 'user', text: content, media: chatAttachments(media, this.pendingId), refs }]);
+      }
       this.pendingId = ''; this.pendingContent = '';
-      if (!alreadyRunning) { this.snapshotMode = false; this.streaming = ''; this.thinking = ''; }
+      if (!alreadyRunning) { this.snapshotMode = false; this.streaming = ''; this.thinking = ''; this.tool = ''; this.liveRow = undefined; }
       this.trackRun(run);
       if (!run) await this.recover();
       return true;
@@ -225,18 +234,21 @@ export class XopcChatViewModel {
     if (data.conversationId !== this.selectedId || !data.payload) return;
     const payload = data.payload;
     if (event.event === 'run_end') {
+      if (this.liveRow) this.liveRow = reduceChatStream(this.liveRow, event.event, payload, this.runId);
       this.trackRun(''); this.streaming = ''; this.thinking = ''; this.tool = '';
       this.auxiliaryRevision++;
+      this.snapshotMode = true;
       this.loadHistory(false);
     } else if (event.event === 'error') this.error = payload.message ?? 'RUN_FAILED';
-    else if (event.event === 'tool_start') this.tool = payload.toolName ?? '';
-    else if (event.event === 'tool_end') this.tool = '';
     else if (this.snapshotMode) {
       if (this.refreshTimer === -1) this.refreshTimer = setTimeout((): void => {
         this.refreshTimer = -1; this.loadHistory(false);
       }, 750);
-    } else if (event.event === 'assistant_delta') this.streaming += payload.delta ?? '';
-    else if (event.event === 'thinking_delta') this.thinking += payload.delta ?? '';
+    } else {
+      this.liveRow = reduceChatStream(this.liveRow, event.event, payload, this.runId);
+      this.streaming = this.liveRow.text; this.thinking = this.liveRow.thinking || '';
+      this.tool = this.liveRow.toolCalls?.find((call): boolean => call.status === 'running')?.name || '';
+    }
   }
 
   async abort(): Promise<void> {
