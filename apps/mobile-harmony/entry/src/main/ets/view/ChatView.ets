@@ -33,11 +33,11 @@ import { COMPOSER_INPUT_MIN, COMPOSER_INPUT_MAX, COMPOSER_TOOL_SIZE, COMPOSER_SE
 
 @ComponentV2
 export struct XopcChatView {
-  @Param initialId: string = '';
+  @Param requestedId: string = '';
+  @Param requestRevision: number = 0;
   @Param activePage: boolean = true;
   @Param attentionItems: XopcHomeItem[] = [];
   @Event onOpenConversation: (id: string) => void = (_id: string): void => {};
-  @Event onExit: () => void = (): void => {};
   @Event onAttentionRefresh: () => void = (): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Local chat: XopcChatViewModel = new XopcChatViewModel();
@@ -83,6 +83,7 @@ export struct XopcChatView {
   private firstVisible: number = 0;
   private loadingOlder: boolean = false;
   private initialScrollPending: boolean = true;
+  private appliedRequestRevision: number = -1;
 
   private applyPalette(item: XopcPaletteItem): void {
     const range = this.palette.range; if (!range || this.restoringDraft) return;
@@ -173,7 +174,12 @@ export struct XopcChatView {
     finally { this.savingNote = false; }
   }
 
-  aboutToAppear(): void { this.visible = this.activePage; if (this.visible) { this.bindBack(); this.attention.activate(); } this.chat.start(this.initialId); }
+  aboutToAppear(): void {
+    this.visible = this.activePage;
+    if (this.visible) { this.bindBack(); this.attention.activate(); }
+    this.appliedRequestRevision = this.requestRevision;
+    this.chat.start(this.requestedId, true);
+  }
   private bindBack(): void { layoutState.dismissChatOverlay = (): boolean => { return this.dismissOverlay(); }; }
   private dismissOverlay(): boolean {
     if (this.drawerOpen) { this.setDrawer(false); return true; }
@@ -182,11 +188,11 @@ export struct XopcChatView {
   }
   private setDrawer(open: boolean): void {
     if (open) { this.palette.close(); this.editor.stopEditing(); this.setPanel(false); }
-    this.drawerOpen = open; if (!this.initialId) layoutState.chatDrawerOpen = open;
+    this.drawerOpen = open; layoutState.chatDrawerOpen = open;
   }
   private setPanel(open: boolean): void {
     if (open) { this.palette.close(); this.editor.stopEditing(); }
-    this.panelOpen = open; if (!this.initialId) layoutState.chatActionsOpen = open;
+    this.panelOpen = open; layoutState.chatActionsOpen = open;
   }
   private dismissComposer(): void {
     clearTimeout(this.composerFocusTimer);
@@ -212,11 +218,18 @@ export struct XopcChatView {
     if (!this.activePage) { clearTimeout(this.composerFocusTimer); this.focusComposerOnMount = false; this.attention.dispose(); this.saveDraft(); this.palette.close(); this.voice.cancel(); this.reader.stop(); this.setDrawer(false); this.setPanel(false); this.sheetOpen = false; this.options.pause(); this.prompt.pause(); this.chat.deactivate(); }
     else { this.attention.activate(); this.bindBack(); this.chat.activate(); this.onHistoryReady(); this.options.resume(); this.prompt.resume(); }
   }
-  @Monitor('initialId')
+  @Monitor('requestRevision', 'chat.sending')
   onTargetChange(): void {
-    if (this.initialId && this.initialId !== this.chat.selectedId) {
-      this.voice.cancel(); this.reader.stop(); this.chat.open(this.initialId);
-    }
+    if (this.disposed || !this.requestedId || this.appliedRequestRevision === this.requestRevision || this.chat.sending) return;
+    this.appliedRequestRevision = this.requestRevision;
+    this.dismissComposer(); this.setDrawer(false); this.sheetOpen = false;
+    if (this.requestedId === this.chat.selectedId) return;
+    this.saveDraft(); this.voice.cancel(); this.reader.stop(); this.showVoice = false;
+    this.options.dispose(); this.context.dispose(); this.prompt.dispose();
+    this.options = new XopcChatOptionsViewModel(); this.context = new XopcChatContextViewModel();
+    this.prompt = new XopcChatPromptViewModel(); this.optionsId = '';
+    this.expandedThoughts = []; this.loadingOlder = false; this.firstVisible = 0;
+    this.chat.open(this.requestedId);
   }
   aboutToDisappear(): void { this.attention.dispose(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.scrollTimer); clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setDrawer(false); this.setPanel(false); this.prompt.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voice.cancel(); this.reader.stop(); this.attachments = []; }
 
@@ -642,25 +655,22 @@ export struct XopcChatView {
     Stack({ alignContent: Alignment.Start }) {
     Column() {
       Row({ space: 12 }) {
-        if (this.initialId) {
-          Button() { SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([$r('app.color.foreground')]) }
-            .width(44).height(44).backgroundColor(Color.Transparent).accessibilityText($r('app.string.back'))
-            .enabled(!this.chat.sending && !this.pickingAttachment)
-            .onClick((): void => { this.onExit(); })
-        } else {
           Button() { SymbolGlyph($r('sys.symbol.line_3_horizontal')).fontSize(23).fontColor([$r('app.color.foreground')]) }
             .id('chat-open-drawer')
             .width(44).height(44).padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.history'))
             .onClick((): void => { this.setDrawer(true); })
-        }
-        Button({ type: ButtonType.Normal }) {
-          Row({ space: 4 }) {
-            Text(this.options.modelName(appSettings.effectiveLanguage()))
-              .fontSize(16).fontWeight(FontWeight.Medium).fontColor($r('app.color.foreground')).maxLines(1).layoutWeight(1)
-            Text('⌄').fontSize(16).fontColor($r('app.color.foreground'))
-          }.width('100%')
-        }.id('chat-model-picker').layoutWeight(1).height(44).padding(8).backgroundColor(Color.Transparent)
-          .onClick((): void => { this.openSheet('model'); })
+        Row() {
+          Button({ type: ButtonType.Normal }) {
+            Row({ space: 6 }) {
+              Text(this.options.modelName(appSettings.effectiveLanguage()))
+                .fontSize(16).fontWeight(FontWeight.Medium).fontColor($r('app.color.foreground'))
+                .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).flexShrink(1)
+              SymbolGlyph($r('sys.symbol.chevron_down')).fontSize(12).fontColor([$r('app.color.foreground')])
+                .width(14).flexShrink(0)
+            }.constraintSize({ maxWidth: '100%' }).alignItems(VerticalAlign.Center)
+          }.id('chat-model-picker').constraintSize({ maxWidth: '100%' }).height(44).padding(8).backgroundColor(Color.Transparent)
+            .onClick((): void => { this.openSheet('model'); })
+        }.layoutWeight(1).justifyContent(FlexAlign.Start)
         if (this.chat.selectedId) {
           Button('···').width(44).height(44).padding(0).fontSize(24).backgroundColor(Color.Transparent).fontColor($r('app.color.foreground'))
             .id('chat-header-actions').accessibilityText($r('app.string.chat_actions')).onClick((): void => { this.openSheet('actions'); })
@@ -682,7 +692,7 @@ export struct XopcChatView {
     }.width('100%').height('100%').backgroundColor($r('app.color.surface'))
       .accessibilityLevel(this.drawerOpen ? 'no-hide-descendants' : 'auto')
       .bindSheet($$this.sheetOpen, this.optionsSheet, { height: '80%', dragBar: true, showClose: false, backgroundColor: $r('app.color.panel') })
-    if (!this.initialId && !this.drawerOpen) {
+    if (!this.drawerOpen) {
       Column() {}.width(24).height('100%').backgroundColor(Color.Transparent)
         .gesture(PanGesture({ direction: PanDirection.Horizontal, distance: 16 })
           .onActionEnd((event: GestureEvent): void => { if (event.offsetX > 32) this.setDrawer(true); }))
