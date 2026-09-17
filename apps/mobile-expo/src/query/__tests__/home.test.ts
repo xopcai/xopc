@@ -64,4 +64,18 @@ describe('fetchHome', () => {
     expect(home).not.toHaveProperty('inboxCount');
     expect(mockedApiFetch).toHaveBeenCalledWith('/api/home?locale=en');
   });
+  it('pairs approval details by approval identity rather than display order', async () => {
+    const data = currentGatewayHomeResponse();
+    const response = {
+      ...data,
+      needsUser: [{ ...data.needsUser[0], primaryAction: { type: 'connector_decision', label: 'Approve', approvalId: 'requested', decision: 'approve' } }],
+      decisions: [
+        { id: 'other', kind: 'connector_approval', title: 'Other', detail: 'Do not mix this request', reason: 'approval_required', urgency: 'now', href: '/connectors', updatedAt: 1, response: { kind: 'connector_approval', approvalId: 'other' } },
+        { id: 'requested', kind: 'connector_approval', title: 'Requested', detail: 'Requested scope and target', reason: 'approval_required', urgency: 'now', href: '/connectors', updatedAt: 1, response: { kind: 'connector_approval', approvalId: 'requested' } },
+      ],
+    };
+    mockedApiFetch.mockResolvedValue(new Response(JSON.stringify(response)));
+    expect((await fetchHome('en')).needsUser[0].reviewDetail).toBe('Requested scope and target');
+  });
+
 });

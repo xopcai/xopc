@@ -52,8 +52,10 @@ const OPERATION_LABELS = {
 
 export const ProductDeliveryCard = memo(function ProductDeliveryCard({
   delivery,
+  conversationId,
 }: {
   delivery: ProductDeliveryEnvelope;
+  conversationId?: string | null;
 }) {
   const reference = delivery.primary;
   const router = useRouter();
@@ -64,7 +66,7 @@ export const ProductDeliveryCard = memo(function ProductDeliveryCard({
   const hasNativeDestination = MOBILE_NATIVE_PRODUCT_KINDS.has(reference.kind);
   const destination = mobileProductRoute(reference);
   const canOpen = reference.capabilities.includes('open') && destination !== null;
-  const canContinue = reference.capabilities.includes('continue_in_chat');
+  const canContinue = Boolean(conversationId) && reference.capabilities.includes('continue_in_chat');
   const canShare = reference.kind !== 'file' && reference.capabilities.includes('share');
   const statusText = [
     OPERATION_LABELS[delivery.operation][language],
@@ -72,13 +74,13 @@ export const ProductDeliveryCard = memo(function ProductDeliveryCard({
   ].filter(Boolean).join(' · ');
 
   const open = () => {
-    if (destination) router.push(destination as Href);
+    if (destination) router.push((reference.kind === 'file' && conversationId ? `${destination}?conversationId=${encodeURIComponent(conversationId)}` : destination) as Href);
   };
   const continueInChat = () => {
     const text = language === 'zh'
       ? `继续处理${KIND_LABELS[reference.kind].zh}「${reference.title}」（ID: ${reference.id}）：`
       : `Continue working on ${KIND_LABELS[reference.kind].en.toLowerCase()} "${reference.title}" (ID: ${reference.id}): `;
-    dispatchMobileComposerFill(text);
+    if (conversationId) dispatchMobileComposerFill(conversationId, text);
   };
   const share = () => {
     void Share.share({
@@ -109,7 +111,7 @@ export const ProductDeliveryCard = memo(function ProductDeliveryCard({
         </View>
         <View style={styles.content}>
           <View style={styles.titleRow}>
-            <Text variant="titleSmall" numberOfLines={1} style={styles.title}>
+            <Text variant="titleMedium" numberOfLines={2} style={styles.title}>
               {reference.title}
             </Text>
             <View style={[styles.kindPill, { borderColor: colors.border.subtle }]}>
@@ -123,8 +125,8 @@ export const ProductDeliveryCard = memo(function ProductDeliveryCard({
           </Text>
           {reference.summary ? (
             <Text
-              variant="bodySmall"
-              numberOfLines={2}
+              variant="bodyMedium"
+              numberOfLines={4}
               style={[styles.summary, { color: colors.text.tertiary }]}
             >
               {reference.summary}
@@ -227,7 +229,7 @@ const styles = StyleSheet.create({
   },
   summary: {
     marginTop: 3,
-    lineHeight: 17,
+    lineHeight: 22,
   },
   fallback: {
     marginTop: 4,

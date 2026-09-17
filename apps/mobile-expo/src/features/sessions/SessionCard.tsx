@@ -7,7 +7,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
 import { ListSelectionCheckbox } from '../../components/ListSelectionCheckbox';
-import { SwipeableRow, type SwipeAction } from '../../components/SwipeableRow';
+import { ListItemMenu, type ListItemAction } from '../../components/ListItemMenu';
 import { LIST_DELAY_LONG_PRESS } from '../../constants/list-interaction';
 import { t, useMessages } from '../../i18n/messages';
 import { sessionDisplayName } from '../../lib/session-helpers';
@@ -89,8 +89,8 @@ type SessionCardProps = {
   session: SessionListItem;
   onPress: (session: SessionListItem) => void;
   onPressIn?: (session: SessionListItem) => void;
-  onLongPress?: (session: SessionListItem) => void;
-  onSwipeAction?: (session: SessionListItem, action: SwipeAction) => void;
+  onSelect?: (session: SessionListItem) => void;
+  onMenuAction?: (session: SessionListItem, action: ListItemAction) => void;
   selectionMode?: boolean;
   selected?: boolean;
   isFirst?: boolean;
@@ -101,8 +101,8 @@ export const SessionCard = memo(function SessionCard({
   session,
   onPress,
   onPressIn,
-  onLongPress,
-  onSwipeAction,
+  onSelect,
+  onMenuAction,
   selectionMode = false,
   selected = false,
   isFirst = false,
@@ -127,26 +127,26 @@ export const SessionCard = memo(function SessionCard({
     onPressIn?.(session);
   }, [onPressIn, session]);
 
-  const handleLongPress = useCallback(() => {
-    onLongPress?.(session);
-  }, [onLongPress, session]);
+  const handleSelect = useCallback(() => {
+    onSelect?.(session);
+  }, [onSelect, session]);
 
-  const swipeActions: SwipeAction[] = useMemo(() => [
+  const menuActions: ListItemAction[] = useMemo(() => [
     isArchived
-      ? { key: 'archive', icon: 'archive-arrow-up-outline', color: 'blue', label: sa.unarchive }
-      : { key: 'archive', icon: 'archive-arrow-down-outline', color: 'blue', label: sa.archive },
-    { key: 'delete', icon: 'trash-can-outline', color: 'red', label: sa.delete, destructive: true },
+      ? { key: 'archive', icon: 'archive-arrow-up-outline', label: sa.unarchive }
+      : { key: 'archive', icon: 'archive-arrow-down-outline', label: sa.archive },
+    { key: 'delete', icon: 'trash-can-outline', label: sa.delete, destructive: true },
   ], [isArchived, sa.archive, sa.delete, sa.unarchive]);
 
-  const handleSwipeAction = useCallback((action: SwipeAction) => {
-    onSwipeAction?.(session, action);
-  }, [onSwipeAction, session]);
+  const handleMenuAction = useCallback((action: ListItemAction) => {
+    onMenuAction?.(session, action);
+  }, [onMenuAction, session]);
 
-  const cardContent = (
+  const cardContent = (openMenu: () => void) => (
     <Pressable
       onPress={handlePress}
       onPressIn={onPressIn ? handlePressIn : undefined}
-      onLongPress={handleLongPress}
+      onLongPress={openMenu}
       delayLongPress={LIST_DELAY_LONG_PRESS}
       android_ripple={{ color: colors.surface.hover }}
       accessibilityState={selectionMode ? { selected } : undefined}
@@ -201,20 +201,10 @@ export const SessionCard = memo(function SessionCard({
     </Pressable>
   );
 
-  // Wrap with SwipeableRow only when not in selection mode
-  if (!selectionMode && onSwipeAction) {
-    return (
-      <SwipeableRow
-        actions={swipeActions}
-        onActionPress={handleSwipeAction}
-        enabled={!selectionMode}
-      >
-        {cardContent}
-      </SwipeableRow>
-    );
-  }
-
-  return cardContent;
+  return <ListItemMenu title={title} actions={menuActions} onActionPress={handleMenuAction}
+    onSelect={onSelect ? handleSelect : undefined} enabled={!selectionMode}>
+    {cardContent}
+  </ListItemMenu>;
 });
 
 const styles = StyleSheet.create({

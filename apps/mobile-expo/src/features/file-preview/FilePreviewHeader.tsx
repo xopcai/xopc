@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon, IconButton, Text } from 'react-native-paper';
 
@@ -37,10 +37,13 @@ export function FilePreviewHeader({
   const { colors } = useTheme();
   const [menuVisible, setMenuVisible] = useState(false);
 
+  const afterDismiss = useRef<FilePreviewHeaderAction['onPress'] | null>(null);
+
   const runAction = (action: FilePreviewHeaderAction) => {
-    if (action.disabled || action.loading) return;
+    if (action.disabled || action.loading || afterDismiss.current) return;
+    afterDismiss.current = action.onPress;
     setMenuVisible(false);
-    void action.onPress();
+
   };
 
   return (
@@ -73,7 +76,17 @@ export function FilePreviewHeader({
           accessibilityLabel={closeLabel}
         />
       </View>
-      <BottomSheetModal visible={menuVisible} onDismiss={() => setMenuVisible(false)} title={title} maxHeight="48%">
+      <BottomSheetModal
+        visible={menuVisible}
+        onDismiss={() => setMenuVisible(false)}
+        onAfterDismiss={() => {
+          const action = afterDismiss.current;
+          afterDismiss.current = null;
+          void action?.();
+        }}
+        title={title}
+        maxHeight="48%"
+      >
         <View style={styles.actionList}>
           {moreActions.map((action) => {
             const disabled = Boolean(action.disabled || action.loading);

@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Icon, Text } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
@@ -17,10 +18,11 @@ import { MarkdownView } from '../chat/MarkdownView';
 
 export function TaskDetailScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { id = '' } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
   const queryClient = useQueryClient();
-  const { homePage: hm, tasksPage: labels } = useMessages();
+  const { homePage: hm, tasksPage: labels, mobileExperience } = useMessages();
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const query = useQuery({ queryKey: queryKeys.task(id), queryFn: () => fetchTask(id), enabled: Boolean(id) });
   const agents = useQuery({ queryKey: queryKeys.agents, queryFn: fetchChatAgents });
@@ -30,6 +32,10 @@ export function TaskDetailScreen() {
     queryFn: () => ensureTaskConversation(id),
     enabled: Boolean(id && query.data && !query.data.conversation.activeConversationId),
     retry: 1,
+  });
+
+  const refreshMutation = useMutation({
+    mutationFn: () => Promise.all([query.refetch()]),
   });
 
   const invalidateTaskViews = async () => {
@@ -73,7 +79,7 @@ export function TaskDetailScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
       <NativeScreenHeader title={labels.detailTitle} onBack={() => router.back()} />
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={query.isFetching} onRefresh={() => void query.refetch()} />}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xxl }]} refreshControl={<RefreshControl refreshing={refreshMutation.isPending} onRefresh={() => { if (!refreshMutation.isPending) refreshMutation.mutate(); }} />}>
         {query.isLoading ? <ListSkeleton count={4} /> : query.isError || !detail ? (
           <View style={styles.emptyState}>
             <Icon source="cloud-alert-outline" size={36} color={colors.semantic.error} />
@@ -85,7 +91,7 @@ export function TaskDetailScreen() {
             <View style={styles.hero}>
               <View style={styles.statusLine}>
                 <View style={[styles.statusDot, { backgroundColor: detail.attention.length ? colors.semantic.warning : colors.accent.primary }]} />
-                <Text style={[styles.eyebrow, { color: detail.attention.length ? colors.semantic.warning : colors.text.secondary }]}>{phaseLabels[detail.task.phase]}</Text>
+                <Text style={[styles.eyebrow, { color: detail.attention.length ? colors.semantic.warning : colors.text.secondary }]}>{detail.task.resolution ? mobileExperience.closedState[detail.task.resolution] : phaseLabels[detail.task.phase]}</Text>
               </View>
               <Text style={[styles.title, { color: colors.text.primary }]}>{detail.task.title}</Text>
               {detail.task.body ? <Text style={[styles.body, { color: colors.text.secondary }]}>{detail.task.body}</Text> : null}
@@ -161,8 +167,8 @@ export function TaskDetailScreen() {
               <View style={styles.details}>
                 {detail.dependencies.length || detail.dependents.length ? (
                   <Section title={hm.taskRelations}>
-                    {detail.dependencies.map((item) => <RelationRow key={`dependency:${item.id}`} title={item.title} phase={phaseLabels[item.phase]} onPress={() => router.push(`/tasks/${item.id}`)} />)}
-                    {detail.dependents.map((item) => <RelationRow key={`dependent:${item.id}`} title={item.title} phase={phaseLabels[item.phase]} onPress={() => router.push(`/tasks/${item.id}`)} />)}
+                    {detail.dependencies.map((item) => <RelationRow key={`dependency:${item.id}`} title={item.title} phase={item.resolution ? mobileExperience.closedState[item.resolution] : phaseLabels[item.phase]} onPress={() => router.push(`/tasks/${item.id}`)} />)}
+                    {detail.dependents.map((item) => <RelationRow key={`dependent:${item.id}`} title={item.title} phase={item.resolution ? mobileExperience.closedState[item.resolution] : phaseLabels[item.phase]} onPress={() => router.push(`/tasks/${item.id}`)} />)}
                   </Section>
                 ) : null}
                 {detail.context.length ? (

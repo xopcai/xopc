@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
@@ -41,6 +41,8 @@ export const ChatHeader = memo(function ChatHeader({
   onNewChat: () => void;
 }) {
   const m = useMessages();
+  const afterDismiss = useRef<(() => void) | null>(null);
+  const queueAction = (action: () => void) => { afterDismiss.current = action; setActionsVisible(false); };
   const [actionsVisible, setActionsVisible] = useState(false);
   const [modelPickerVisible, setModelPickerVisible] = useState(false);
 
@@ -113,10 +115,13 @@ export const ChatHeader = memo(function ChatHeader({
       <ChatActionsSheet
         visible={actionsVisible}
         agentName={agentName}
+        modelName={modelName}
+        onModelPress={() => queueAction(openModelPicker)}
+        onAfterDismiss={() => { const action = afterDismiss.current; afterDismiss.current = null; action?.(); }}
         onDismiss={() => setActionsVisible(false)}
-        onAgentPress={openAgentPicker}
-        onFilesPress={onFilesPress ? openFiles : undefined}
-        onNewChat={startNewChat}
+        onAgentPress={() => queueAction(openAgentPicker)}
+        onFilesPress={onFilesPress ? () => queueAction(openFiles) : undefined}
+        onNewChat={() => queueAction(startNewChat)}
       />
       <ModelPickerMenu
         visible={modelPickerVisible}

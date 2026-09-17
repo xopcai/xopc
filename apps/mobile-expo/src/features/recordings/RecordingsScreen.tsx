@@ -8,7 +8,7 @@ import { BatchActionBar } from '../../components/BatchActionBar';
 import { ListSkeleton } from '../../components/ListSkeleton';
 import { ListSelectionCheckbox } from '../../components/ListSelectionCheckbox';
 import { NativeScreenHeader } from '../../components/NativeScreenHeader';
-import { SwipeableRow } from '../../components/SwipeableRow';
+import { ListItemMenu } from '../../components/ListItemMenu';
 import { LIST_DELAY_LONG_PRESS } from '../../constants/list-interaction';
 import { useListSelection } from '../../hooks/use-list-selection';
 import { useMessages } from '../../i18n/messages';
@@ -92,14 +92,14 @@ export function RecordingsScreen() {
         {error && <Text accessibilityRole="alert">{errorText}</Text>}
       </View>}
       ListEmptyComponent={<Text>{m.empty}</Text>}
-      renderItem={({ item }) => <SwipeableRow enabled={!selection.selectionMode} actions={[{ key: 'open', icon: 'open-in-new', color: 'blue', label: m.open }]} onActionPress={() => selectRecording(item.id)}>
-        <Pressable accessibilityRole="button" onPress={() => selection.selectionMode ? selection.toggleSelected(item.id) : selectRecording(item.id)}
-          delayLongPress={LIST_DELAY_LONG_PRESS} onLongPress={() => { if (!selection.selectionMode) selection.startSelection(); selection.toggleSelected(item.id); }}
+      renderItem={({ item }) => <ListItemMenu title={new Date(item.recordedAt).toLocaleString()} onSelect={() => { selection.startSelection(); selection.toggleSelected(item.id); }} enabled={!selection.selectionMode} actions={[{ key: 'open', icon: 'open-in-new', label: m.open }]} onActionPress={() => selectRecording(item.id)}>
+        {(openMenu) => <Pressable accessibilityRole="button" onPress={() => selection.selectionMode ? selection.toggleSelected(item.id) : selectRecording(item.id)}
+          delayLongPress={LIST_DELAY_LONG_PRESS} onLongPress={openMenu}
           style={[styles.row, { backgroundColor: colors.surface.base }]}>
           {selection.selectionMode && <ListSelectionCheckbox selected={selection.selectedIds.has(item.id)} />}
           <View style={styles.panel}><Text>{new Date(item.recordedAt).toLocaleString()}</Text><Text style={{ color: colors.text.secondary }}>{m[item.state]}</Text></View>
-        </Pressable>
-      </SwipeableRow>} />
+        </Pressable>}
+      </ListItemMenu>} />
     {selection.selectionMode && <BatchActionBar items={[{ key: 'sync', icon: 'cloud-upload-outline', label: m.syncSelected,
       disabled: action.isPending || !selection.selectedCount || items.some(item => selection.selectedIds.has(item.id) && item.state !== 'saved'),
       onPress: () => run(async () => { for (const item of items.filter(row => selection.selectedIds.has(row.id))) await sync(item); selection.exitSelectionMode(); }),

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { SessionListItem } from '../../../query/sessions';
-import { resumableRootChatSessions, rootChatResumeKey, rootChatLookupComplete } from '../chat-root-session';
+import { resumableRootChatSessions, rootChatLookupComplete } from '../chat-root-session';
 
 function session(key: string, overrides: Partial<SessionListItem> = {}): SessionListItem {
   return { key, messageCount: 1, updatedAt: '2026-09-10T00:00:00.000Z', ...overrides };
@@ -15,13 +15,13 @@ describe('root chat resume', () => {
     expect(rootChatLookupComplete({ ...ready, isFetchedAfterMount: false })).toBe(false);
     expect(rootChatLookupComplete({ ...ready, isSuccess: false })).toBe(false);
   });
-  it('resumes the latest usable web chat', () => {
+  it('lists only usable web chats in history', () => {
     const items = [
       session('archived', { status: 'archived' }),
       session('telegram', { sourceChannel: 'telegram' }),
       session('webchat', { sourceChannel: 'webchat' }),
     ];
-    expect(rootChatResumeKey(items)).toBe('webchat');
+    expect(resumableRootChatSessions(items).map(item => item.key)).toEqual(['webchat']);
   });
 
   it('excludes rows without explicit web chat source metadata', () => {

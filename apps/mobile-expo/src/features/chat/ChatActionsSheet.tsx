@@ -65,14 +65,20 @@ function ChatActionRow({
 export const ChatActionsSheet = memo(function ChatActionsSheet({
   visible,
   agentName,
+  modelName,
+  onModelPress,
   onDismiss,
+  onAfterDismiss,
   onAgentPress,
   onFilesPress,
   onNewChat,
 }: {
   visible: boolean;
   agentName: string;
+  modelName: string;
+  onModelPress: () => void;
   onDismiss: () => void;
+  onAfterDismiss: () => void;
   onAgentPress: () => void;
   onFilesPress?: () => void;
   onNewChat: () => void;
@@ -84,7 +90,7 @@ export const ChatActionsSheet = memo(function ChatActionsSheet({
     <BottomSheetModal
       visible={visible}
       onDismiss={onDismiss}
-      disableAnimation
+      onAfterDismiss={onAfterDismiss}
       title={m.chat.headerSettingsTitle}
       maxHeight="68%"
       testID="chat-actions-sheet"
@@ -104,8 +110,8 @@ export const ChatActionsSheet = memo(function ChatActionsSheet({
             label={m.chat.headerCurrentAgent}
             description={agentName}
             onPress={onAgentPress}
-            isLast
           />
+          <ChatActionRow icon="tune-variant" label={m.chat.headerModelPicker} description={modelName} onPress={onModelPress} isLast />
         </View>
 
         <Text style={[styles.sectionLabel, styles.actionsLabel, { color: colors.text.tertiary }]}>

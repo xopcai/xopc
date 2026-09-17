@@ -41,7 +41,7 @@ import { prefetchSessionChatEntry } from '../chat/session-history-prefetch';
 import { RenameDialog } from './RenameDialog';
 import { SessionCard } from './SessionCard';
 import { buildSessionListRows, type SessionListRow } from './session-time-groups';
-import type { SwipeAction } from '../../components/SwipeableRow';
+import type { ListItemAction } from '../../components/ListItemMenu';
 
 const PAGE_SIZE = 20;
 const sessionRowKey = (item: SessionListRow) => item.key;
@@ -249,13 +249,13 @@ export function SessionsScreen() {
     handleOpenSession(session);
   }, [handleOpenSession, selectionMode, toggleSelected]);
 
-  const handleSessionLongPress = useCallback((session: SessionListItem) => {
+  const handleSessionSelect = useCallback((session: SessionListItem) => {
     if (selectionMode) return;
     startSelection();
     toggleSelected(session.key);
   }, [selectionMode, startSelection, toggleSelected]);
 
-  const handleSwipeAction = useCallback(async (session: SessionListItem, action: SwipeAction) => {
+  const handleMenuAction = useCallback(async (session: SessionListItem, action: ListItemAction) => {
     try {
       if (action.key === 'archive') {
         if (session.status === 'archived') {
@@ -380,15 +380,15 @@ export function SessionsScreen() {
         session={item.session}
         onPress={handleSessionPress}
         onPressIn={selectionMode ? undefined : handleSessionPressIn}
-        onLongPress={handleSessionLongPress}
-        onSwipeAction={handleSwipeAction}
+        onSelect={handleSessionSelect}
+        onMenuAction={handleMenuAction}
         selectionMode={selectionMode}
         selected={selectedIds.has(item.session.key)}
         isFirst={item.isFirst}
         isLast={item.isLast}
       />
     );
-  }, [colors.text.secondary, handleSessionLongPress, handleSessionPress, handleSessionPressIn, handleSwipeAction, selectedIds, selectionMode]);
+  }, [colors.text.secondary, handleSessionSelect, handleSessionPress, handleSessionPressIn, handleMenuAction, selectedIds, selectionMode]);
 
   const handleSearchChange = useCallback((value: string) => {
     searchDraftRef.current = value;

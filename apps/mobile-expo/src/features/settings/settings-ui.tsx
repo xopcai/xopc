@@ -76,14 +76,16 @@ export function SettingsRow({
       <View style={[styles.iconWrap, { backgroundColor: colors.iconBg }]}>
         <Icon source={icon} size={18} color={resolvedIconColor} />
       </View>
-      <Text style={[styles.rowLabel, { color: colors.text }]} numberOfLines={1}>
-        {label}
-      </Text>
-      {value ? (
-        <Text style={[styles.rowValue, { color: colors.textMuted }]} numberOfLines={1}>
-          {value}
+      <View style={styles.rowCopy}>
+        <Text style={[styles.rowLabel, { color: colors.text }]}>
+          {label}
         </Text>
-      ) : null}
+        {value ? (
+          <Text style={[styles.rowValue, { color: colors.textMuted }]} numberOfLines={2}>
+            {value}
+          </Text>
+        ) : null}
+      </View>
       {rightAccessory ?? (showChevron ? <Icon source="chevron-right" size={20} color={colors.textMuted} /> : null)}
     </View>
   );
@@ -93,6 +95,8 @@ export function SettingsRow({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={value ? `${label}, ${value}` : label}
       style={({ pressed }) => pressed && { backgroundColor: colors.pressed }}
     >
       {content}
@@ -119,6 +123,9 @@ export function SettingsOptionRow({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected }}
       style={({ pressed }) => [
         styles.optionRow,
         !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
@@ -224,15 +231,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rowLabel: {
+  rowCopy: {
     flex: 1,
+    minWidth: 0,
+    gap: spacing.xxs,
+  },
+  rowLabel: {
     ...typography.ui,
     fontWeight: '500',
   },
   rowValue: {
-    ...typography.ui,
-    maxWidth: '42%',
-    textAlign: 'right',
+    ...typography.label,
   },
   optionRow: {
     flexDirection: 'row',

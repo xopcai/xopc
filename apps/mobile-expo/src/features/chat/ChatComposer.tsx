@@ -1,7 +1,7 @@
 /**
  * Chat composer — content-sized input, attachments, and text / voice modes.
  */
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   type LayoutChangeEvent,
@@ -48,6 +48,8 @@ import {
   writeComposerDraftSnapshot,
 } from './composer-draft-storage';
 import { useComposerAttachments } from './use-composer-attachments';
+import { useComposerHandoff } from './composer-handoff';
+import { useGatewayStore } from '../../stores/gateway-store';
 import { MOBILE_COMPOSER_APPEND_EVENT, MOBILE_COMPOSER_FILL_EVENT } from './mobile-composer-fill';
 import { VoiceRecordingCard } from './VoiceRecordingCard';
 import { useChatVoiceRecording } from './use-chat-voice-recording';
@@ -69,6 +71,7 @@ export const ChatComposer = memo(function ChatComposer({
   onAbort,
   placeholder,
   suggestionDraft,
+  mainConversation = false,
   onConsumeSuggestionDraft,
   contextRefs,
   onContextRefsChange,
@@ -82,10 +85,11 @@ export const ChatComposer = memo(function ChatComposer({
   onActionsOpenChange: (open: boolean) => void;
   disabled: boolean;
   streaming: boolean;
-  onSend: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[]) => Promise<boolean>;
+  onSend: (text: string, attachments?: WireAttachment[], contextRefs?: ComposerContextRef[], delivery?: 'next' | 'steer') => Promise<boolean>;
   onAbort: () => void;
   placeholder?: string;
   suggestionDraft?: string;
+  mainConversation?: boolean;
   onConsumeSuggestionDraft?: () => void;
   contextRefs: ComposerContextRef[];
   onContextRefsChange: (refs: ComposerContextRef[]) => void;
@@ -112,8 +116,9 @@ export const ChatComposer = memo(function ChatComposer({
   useEffect(() => {
     const fillSubscription = DeviceEventEmitter.addListener(
       MOBILE_COMPOSER_FILL_EVENT,
-      (text: unknown) => {
-        if (typeof text !== 'string') return;
+      (event: { conversationId: string; text: string }) => {
+        if (event.conversationId !== conversationId) return;
+        const text = event.text;
         setMode('text');
         setDraft(text);
         setCursorPos(text.length);
@@ -122,8 +127,9 @@ export const ChatComposer = memo(function ChatComposer({
     );
     const appendSubscription = DeviceEventEmitter.addListener(
       MOBILE_COMPOSER_APPEND_EVENT,
-      (text: unknown) => {
-        if (typeof text !== 'string') return;
+      (event: { conversationId: string; text: string }) => {
+        if (event.conversationId !== conversationId) return;
+        const text = event.text;
         setMode('text');
         setDraft((current) => {
           const separator = current && !/\s$/.test(current) ? ' ' : '';
@@ -138,7 +144,7 @@ export const ChatComposer = memo(function ChatComposer({
       fillSubscription.remove();
       appendSubscription.remove();
     };
-  }, []);
+  }, [conversationId]);
 
   const att = useComposerAttachments({
     maxAttachmentsReached: cm.maxAttachmentsReached,
@@ -150,6 +156,7 @@ export const ChatComposer = memo(function ChatComposer({
   });
 
   useEffect(() => { onCloseActions(); }, [conversationId, disabled, onCloseActions]);
+  useFocusEffect(useCallback(() => () => onCloseActions(), [onCloseActions]));
 
   const atRangeActive = detectAtMentionRange(draft, cursorPos) !== null;
   const palette = useCommandPalette(draft, cursorPos, atRangeActive);
@@ -172,6 +179,8 @@ export const ChatComposer = memo(function ChatComposer({
 
   const draftRef = useRef(draft);
   draftRef.current = draft;
+  const contextRefsRef = useRef(contextRefs);
+  contextRefsRef.current = contextRefs;
   const onRecordingDraft = useCallback((attachment: WireAttachment) => {
     att.setAttachments(previous => [...previous, {
       id: attachment.localUri!, type: 'audio', name: attachment.name!,
@@ -282,6 +291,18 @@ export const ChatComposer = memo(function ChatComposer({
     [inputWidth],
   );
 
+  const gatewayId = useGatewayStore(state => state.activeGatewayId);
+  const handoff = useComposerHandoff(state => state.pending);
+  useFocusEffect(useCallback(() => {
+    if (!gatewayId || !conversationId || !handoff) return;
+    const text = useComposerHandoff.getState().consume(gatewayId, conversationId, mainConversation);
+    if (text) {
+      setMode('text');
+      setDraft(current => current ? `${current}\n\n${text}` : text);
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [conversationId, gatewayId, handoff, mainConversation]));
+
   useEffect(() => {
     if (suggestionDraft == null || suggestionDraft === '') return;
     updateDraft(suggestionDraft);
@@ -290,7 +311,7 @@ export const ChatComposer = memo(function ChatComposer({
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [suggestionDraft, onConsumeSuggestionDraft, updateDraft]);
 
-  const canSendIdle = hasDraft && !runBusy && !voiceInteractionActive && !callInChat;
+  const canSendIdle = hasDraft && !disabled && !voiceInteractionActive && !callInChat;
 
   const handlePaletteSelect = useCallback(
     (item: import('./command-palette.types').PaletteItem) => {
@@ -351,8 +372,8 @@ export const ChatComposer = memo(function ChatComposer({
     requestAnimationFrame(() => inputRef.current?.focus());
   };
 
-  const handleSend = useCallback(() => {
-    if (!canSendIdle || runBusy) return;
+  const handleSend = useCallback((delivery: 'next' | 'steer' = 'next') => {
+    if (!canSendIdle) return;
 
     const previousDraft = draft;
     const previousAttachments = att.attachments;
@@ -362,16 +383,19 @@ export const ChatComposer = memo(function ChatComposer({
     resetEditor();
     att.clearAttachments();
     onContextRefsChange([]);
-    inputRef.current?.blur();
+    onCloseActions();
 
     void onSend(
       input.text,
       input.attachments.length ? input.attachments : undefined,
       previousContextRefs.length ? previousContextRefs : undefined,
+      delivery,
     )
       .then((accepted) => {
         if (accepted) {
-          clearComposerDraftSnapshot(conversationId);
+          if (!draftRef.current && !att.toWirePayload().length && !contextRefsRef.current.length) {
+            clearComposerDraftSnapshot(conversationId);
+          }
           return;
         }
         updateDraft(previousDraft);
@@ -385,7 +409,7 @@ export const ChatComposer = memo(function ChatComposer({
         onContextRefsChange(previousContextRefs);
         requestAnimationFrame(() => inputRef.current?.focus());
       });
-  }, [att, canSendIdle, contextRefs, draft, onContextRefsChange, onSend, resetEditor, runBusy, conversationId, updateDraft]);
+  }, [att, canSendIdle, contextRefs, draft, onContextRefsChange, onSend, resetEditor, onCloseActions, conversationId, updateDraft]);
 
   const handleAbort = useCallback(() => {
     onAbort();
@@ -423,9 +447,15 @@ export const ChatComposer = memo(function ChatComposer({
   const toggleMode = useCallback(() => {
     if (voiceToggleDisabled) return;
     onCloseActions();
-    Keyboard.dismiss();
-    setMode(current => current === 'voice' ? 'text' : 'voice');
-  }, [onCloseActions, voiceToggleDisabled]);
+    if (mode === 'voice') {
+      setMode('text');
+      requestAnimationFrame(() => inputRef.current?.focus());
+    } else {
+      inputRef.current?.blur();
+      Keyboard.dismiss();
+      setMode('voice');
+    }
+  }, [mode, onCloseActions, voiceToggleDisabled]);
 
   const openActionSheet = useCallback(() => {
     if (disabled || voiceInteractionActive) return;
@@ -538,7 +568,9 @@ export const ChatComposer = memo(function ChatComposer({
 
   const renderStreamingRightActions = () => (
     <View style={styles.streamingActions}>
-      {renderMoreButton()}
+      {hasDraft ? <Pressable style={[styles.sendCircle, { backgroundColor: colors.text.primary }]} onPress={() => handleSend()} disabled={!canSendIdle} accessibilityRole="button" accessibilityLabel={m.mobileExperience.sendNext}>
+        <Icon source="arrow-up" size={22} color={colors.text.inverse} />
+      </Pressable> : renderMoreButton()}
       {renderAbortButton()}
     </View>
   );
@@ -555,7 +587,7 @@ export const ChatComposer = memo(function ChatComposer({
     return (
       <Pressable
         style={[styles.sendCircle, { backgroundColor: canSendIdle ? colors.text.primary : colors.surface.active }]}
-        onPress={handleSend}
+        onPress={() => handleSend()}
         disabled={!canSendIdle}
         hitSlop={8}
         accessibilityLabel={cm.send}
@@ -584,6 +616,7 @@ export const ChatComposer = memo(function ChatComposer({
         : 'center') as 'top' | 'center',
     autoCapitalize: 'sentences' as const,
     onFocus: onCloseActions,
+    onPressIn: onCloseActions,
   };
 
   const contextNotice = att.snack || snack;
@@ -598,6 +631,12 @@ export const ChatComposer = memo(function ChatComposer({
         onCloseActions();
         return false;
       }}>
+      {streaming && hasDraft ? <View style={styles.deliveryHint}>
+        <Text style={[typography.caption, { color: colors.text.secondary, flex: 1 }]}>{m.mobileExperience.queueHint}</Text>
+        <Pressable accessibilityRole="button" disabled={!canSendIdle} onPress={() => handleSend('steer')} style={styles.steerButton}>
+          <Text style={[typography.caption, { color: colors.accent.primary }]}>{m.mobileExperience.steer}</Text>
+        </Pressable>
+      </View> : null}
       {callInChat && <Text style={{ color: colors.text.secondary }}>{m.voice.finishCallToSend}</Text>}
       <VoiceRecordingCard
         visible={voiceInteractionActive}
@@ -782,6 +821,8 @@ export const ChatComposer = memo(function ChatComposer({
 });
 
 const styles = StyleSheet.create({
+  deliveryHint: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, gap: spacing.sm },
+  steerButton: { minHeight: 44, minWidth: 44, justifyContent: 'center', paddingHorizontal: spacing.sm },
   wrap: {
     paddingHorizontal: spacing.content,
     paddingTop: spacing.sm,
@@ -845,8 +886,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sendCircle: {
-    width: 34,
-    height: 34,
+    width: 44,
+    height: 44,
     borderRadius: radii.full,
     alignItems: 'center',
     justifyContent: 'center',
