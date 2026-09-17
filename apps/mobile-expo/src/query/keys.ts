@@ -1,6 +1,8 @@
 export const queryKeys = {
   sessions: (search?: string) => ['sessions', 'search', search?.trim() ?? ''] as const,
   sessionsRecent: ['sessions', 'recent'] as const,
+  drawerSessions: (gatewayId: string, search: string, project: string) =>
+    ['sessions', 'drawer', gatewayId, search.trim(), project] as const,
   sessionsAll: ['sessions'] as const,
   session: (key: string) => ['session', key] as const,
   sessionResume: (gatewayId: string, key: string, revision: number) => ['session', key, 'resume', gatewayId, revision] as const,
@@ -38,6 +40,7 @@ export const queryKeys = {
   workspaceSearch: (query: string) => ['workspace-search', query.trim()] as const,
   note: (id: string) => ['note', id] as const,
   projects: ['projects'] as const,
+  userProfile: (gatewayId: string) => ['user-profile', gatewayId] as const,
   project: (id: string) => ['project', id] as const,
   projectOperatingView: (id: string) => ['project', id, 'operating-view'] as const,
   projectSessions: (id: string) => ['project', id, 'sessions'] as const,
