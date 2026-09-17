@@ -9,9 +9,11 @@ interface XopcTransferHeaders { Authorization: string; 'Content-Type'?: string; 
 
 export class XopcFileTransfer {
   async upload(context: common.Context, spaceId: string, directory: string): Promise<XopcFile | undefined> {
+    const revision = gatewaySession.connectionRevision();
     const options = new picker.DocumentSelectOptions(); options.maxSelectNumber = 1;
     const uris = await new picker.DocumentViewPicker(context).select(options);
     if (!uris.length) return undefined;
+    gatewaySession.assertConnection(revision);
     const uri = uris[0]; const name = new fileUri.FileUri(uri).name;
     const file = await fs.open(uri, fs.OpenMode.READ_ONLY);
     let data: ArrayBuffer;
@@ -22,7 +24,9 @@ export class XopcFileTransfer {
       const read = await fs.read(file.fd, data);
       if (read !== stat.size) throw new Error('INCOMPLETE_FILE_READ');
     } finally { await fs.close(file); }
+    gatewaySession.assertConnection(revision);
     const auth = await gatewaySession.transferAuth();
+    gatewaySession.assertConnection(revision);
     const request = http.createHttp();
     const headers: XopcTransferHeaders = { Authorization: 'Bearer ' + auth.token, 'Content-Type': 'multipart/form-data' };
     const optionsHttp: http.HttpRequestOptions = {
@@ -35,6 +39,7 @@ export class XopcFileTransfer {
     };
     try {
       const response = await request.request(auth.origin + '/api/files/spaces/' + encodeURIComponent(spaceId) + '/upload', optionsHttp);
+      gatewaySession.assertConnection(revision);
       if (response.responseCode !== 201) throw new XopcHttpError(response.responseCode);
       const result = JSON.parse(response.result as string) as XopcFileResult;
       if (!result.resource?.id) throw new Error('INVALID_UPLOAD');

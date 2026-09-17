@@ -41,8 +41,8 @@ describe('Harmony workspace contracts', () => {
   });
   it('renders message blocks without coercing objects or losing their role', () => {
     expect(historyRows({ session: { key: 'id', messages: [{ role: 'assistant', content: [{ type: 'text', text: 'Hello' }, { type: 'toolCall', name: 'search' }] }] }, pagination: { hasMore: false } }))
-      .toEqual([{ id: 'latest:0', role: 'assistant', text: 'Hello', thinking: '', tools: 'search', media: [],
-        toolCalls: [{ id: 'anonymous:0', name: 'search', input: undefined, result: undefined, isError: undefined }] }]);
+      .toMatchObject([{ id: 'latest:0', role: 'assistant', text: 'Hello', thinking: '', tools: 'search', media: [],
+        toolCalls: [{ id: 'latest:0:anonymous:0', name: 'search', status: 'pending' }] }]);
     expect(() => historyRows({ session: { key: 'id', messages: null! }, pagination: { hasMore: false } })).toThrow('INVALID_HISTORY');
   });
 });

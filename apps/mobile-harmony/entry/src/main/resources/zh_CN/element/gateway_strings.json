@@ -1,0 +1,12 @@
+{"string":[
+  {"name":"gateways_title","value":"Gateway 管理"},
+  {"name":"gateways_add","value":"添加 Gateway"},
+  {"name":"gateways_hint","value":"保存多个 Gateway，点击即可切换当前工作区。"},
+  {"name":"gateways_name","value":"Gateway 名称"},
+  {"name":"gateways_rename","value":"重命名"},
+  {"name":"gateways_remove","value":"移除"},
+  {"name":"gateways_remove_hint","value":"从本机移除此连接？其他 Gateway 和服务器上的对话不会删除。再次连接需重新配对。"},
+  {"name":"gateways_empty","value":"暂无已保存的 Gateway，添加一个开始使用。"},
+  {"name":"gateways_working","value":"正在更新连接…"},
+  {"name":"gateways_failed","value":"操作未完成，已保存的连接仍然保留。请检查 Gateway 后重试。"}
+]}

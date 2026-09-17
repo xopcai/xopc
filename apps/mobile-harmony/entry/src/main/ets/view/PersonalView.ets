@@ -3,6 +3,7 @@ import { gatewaySession } from '../service/gatewaySession';
 import { pushNotifications, XopcPushNotifications } from '../service/pushNotifications';
 import { XopcPersonalViewModel } from '../viewmodel/homeViewModel';
 import { XopcPageHeader, XopcHubRow, XopcSectionLabel } from './MobileComponents';
+import { connectionModel } from '../viewmodel/connectionViewModel';
 
 @ComponentV2
 export struct XopcPersonalView {
@@ -43,7 +44,7 @@ export struct XopcPersonalView {
           XopcSectionLabel({ heading: $r('app.string.device_status') })
           Column() {
             XopcHubRow({ heading: $r('app.string.connection'), summary: gatewaySession.currentProfile()?.name ?? '',
-              symbol: $r('sys.symbol.link'), onOpen: (): void => { this.onNavigate({ page: 'settings', itemId: 'connection' }); } })
+              symbol: $r('sys.symbol.link'), onOpen: (): void => { connectionModel.openGateways(); } })
             XopcHubRow({ heading: $r('app.string.notifications'),
               summary: this.push.enabled ? $r('app.string.status_on') : $r('app.string.status_off'),
               symbol: $r('sys.symbol.bell'), onOpen: (): void => { this.onNavigate({ page: 'settings', itemId: 'notifications' }); } })

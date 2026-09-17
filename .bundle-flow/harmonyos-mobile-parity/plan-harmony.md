@@ -34,6 +34,21 @@ The session-management follow-up replaces the inline history list with an indepe
 
 ## Test stories
 
+### Rich Chat completion (2026-09-18)
+
+User requested deep scenario parity, including thinking, tools, deliverables and images. Continue under existing autonomous authorization. Source of truth: Expo `session-message-parser`, `assistant-turn-view-model`, `AssistantStepsBlock`, `ToolUseBlock`, `AssistantDeliverablesCard`, `AttachmentRenderer` and gateway-contract / agent-stream-client. No backend or Expo edits planned.
+
+1. Extend `model/chat.ets`, `common/chatProtocol.ets`; add `common/chatRichContent.ets`, `common/chatStream.ets`: typed ordered blocks, tool identities/results/details, reviews, media, authoritative outcome, product references. Preserve existing text fields for actions. Merge assistant fragments without crossing user/turn boundaries. Tests include partial pages, duplicate/replayed events, unknown blocks and malformed metadata.
+2. Replace live string-only rendering in `chatViewModel.ets` and `ChatView.ets` with the same rich row projection as history. Keep snapshot recovery conservative (do not append deltas already persisted); retain terminal content until successful history reload. Cover command, patch, review, outcome, progress and thinking-end events.
+3. Add `ChatMessageContent.ets`, `ChatStepsView.ets`, `ChatDeliverablesView.ets`; extend tool/media/Markdown views. Calm timeline, reasoning preferences, safe expandable input/output, artifact availability, product routing, image preview and safe authenticated media reads. No credential-bearing external links.
+4. Add deterministic rich-chat host fixtures and emulator UI acceptance with isolated data. Build, lint, run all Harmony tests, then signed device acceptance when available. Record each coverage level honestly; voice-call parity is a separate outstanding capability, not implicitly accepted by message rendering tests.
+
+Order: protocol → stream → presentation/media → regression/device evidence. Retain all existing composer, keyboard dismissal and main-page conversation navigation contracts. Rollback is a corrective app build, never a database migration. Keep unavailable media recoverable and never report inferred/generated files as authoritative deliverables.
+
+Pass evidence: rich projection/presentation implemented, 204 host tests / 35 files and 5 native rich-message fixtures pass; debug/release/signed debug builds pass and CodeLinter is empty. Device/real-service acceptance is still open, as are the explicit remaining capabilities in `apps/mobile-harmony/docs/chat-parity-checklist.md`. Mate 60 was not connected at this pass; do not close 4.3.1 or 4.7.1.
+
+Attachment follow-up: normalize Expo historical speech aliases, render attachments/references after a successful send, allow bounded safe document data previews, fetch before save-picker creation and reject malformed/oversized HTTP bodies. Filter empty execution steps and add conservative recovery/replay regression cases. Introduce `service/chatMediaPlayback.ets` with explicit native audio lifecycle, progress/pause and stale-callback/resource cleanup guards. Evidence is 229 host tests / 36 files and 7 native fixtures, including synthesized WAV playback/progress/pause/cache cleanup and offline text preview. Actual video/remote transfers/real WSS resume/phone acceptance remain separate open gates.
+
 - US1: Open unpaired app, paste/scan valid invitation, approve on Gateway, confirm connection survives restart. Invalid/expired/untrusted invitations stay disconnected.
 - US2: Create conversation, send input, observe streamed output, background/resume, verify no duplicates. Abort stops the current run.
 - US3: Create/update task, associate project, change status, verify on existing mobile/Gateway.

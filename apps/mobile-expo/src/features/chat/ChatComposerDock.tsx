@@ -1,9 +1,11 @@
 import { useEffect, type ReactNode } from 'react';
+import { StyleSheet } from 'react-native';
 import { KeyboardStickyView, useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { motion, useReducedMotion } from '../../motion';
-import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding } from '../../theme';
+import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding, radii, spacing, useTheme } from '../../theme';
+import { ChatTabDock } from '../navigation/ChatTabDockContext';
 
 /** Safe-area space belongs to the tab dock when browsing, and the accessory when open. */
 export function ChatComposerDock({ root, panelOpen, bottomInset, children }: {
@@ -12,6 +14,7 @@ export function ChatComposerDock({ root, panelOpen, bottomInset, children }: {
   bottomInset: number;
   children: ReactNode;
 }) {
+  const { colors, elevation } = useTheme();
   const keyboard = useReanimatedKeyboardAnimation();
   const reducedMotion = useReducedMotion();
   const panel = useSharedValue(panelOpen ? 1 : 0);
@@ -26,7 +29,23 @@ export function ChatComposerDock({ root, panelOpen, bottomInset, children }: {
     paddingBottom: restingInset * (root ? panel.value : 1)
       * (1 - Math.min(1, Math.max(0, keyboard.progress.value))),
   }));
-  return <KeyboardStickyView offset={{ closed: 0, opened: 0 }} style={{ backgroundColor: 'transparent', marginBottom: FLOATING_BOTTOM_OFFSET }}>
-    <Animated.View style={style}>{children}</Animated.View>
+  return <KeyboardStickyView offset={{ closed: 0, opened: 0 }} style={{ backgroundColor: 'transparent', marginBottom: root ? 0 : FLOATING_BOTTOM_OFFSET }}>
+    <Animated.View testID={root ? 'chat-bottom-region' : undefined} style={[
+      root && styles.rootSurface,
+      root && elevation.raised,
+      root && { backgroundColor: colors.surface.elevated, borderColor: colors.border.subtle },
+      style,
+    ]}>
+      {children}
+      {root ? <ChatTabDock /> : null}
+    </Animated.View>
   </KeyboardStickyView>;
 }
+
+const styles = StyleSheet.create({
+  rootSurface: {
+    marginHorizontal: spacing.md,
+    borderRadius: radii.xl,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+});
