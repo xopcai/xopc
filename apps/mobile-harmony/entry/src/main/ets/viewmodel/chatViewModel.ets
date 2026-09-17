@@ -42,8 +42,8 @@ export class XopcChatViewModel {
   private listRequest: number = 0;
   private recoveryRequest: number = 0;
 
-  start(initialId: string = ''): void {
-    this.main = !initialId;
+  start(initialId: string = '', main: boolean = !initialId): void {
+    this.main = main;
     this.activate();
     if (initialId) this.open(initialId); else this.restoreMain();
   }
@@ -82,7 +82,7 @@ export class XopcChatViewModel {
       if (this.disposed || selection !== this.selection) return;
       this.loading = false;
       if (id) await this.open(id); else await this.create();
-    } catch (error) { if (!this.disposed) { this.error = (error as Error).message; this.loading = false; } }
+    } catch (error) { if (!this.disposed && selection === this.selection) { this.error = (error as Error).message; this.loading = false; } }
   }
 
   dispose(): void {
@@ -110,21 +110,24 @@ export class XopcChatViewModel {
     try {
       const id = await this.repository.create(projectId, agentId || undefined, executionMode);
       if (this.disposed || selection !== this.selection) return;
-      if (this.main) await this.repository.saveMainConversation(id);
-      if (this.disposed || selection !== this.selection) return;
       this.loading = false; await this.open(id);
-    } catch (error) { if (!this.disposed) this.error = (error as Error).message; }
-    finally { if (!this.disposed) this.loading = false; }
+    } catch (error) { if (!this.disposed && selection === this.selection) this.error = (error as Error).message; }
+    finally { if (!this.disposed && selection === this.selection) this.loading = false; }
   }
 
   async open(id: string): Promise<void> {
-    if (this.sending) return;
+    if (this.sending || this.disposed || !id) return;
     if (this.runId && XopcChatViewModel.owner === this) realtimeClient.unsubscribe('run:' + this.runId);
     this.selection++; this.historyRequest++; this.olderPending = false;
     this.selectedId = id; this.rows = []; this.runId = ''; this.streaming = ''; this.thinking = ''; this.tool = '';
-    this.transcriptId = undefined; this.title = ''; this.status = ''; this.hasOlder = false;
+    this.transcriptId = undefined; this.title = ''; this.agentId = ''; this.projectId = ''; this.status = ''; this.hasOlder = false;
     this.pendingId = ''; this.pendingContent = ''; this.before = ''; this.error = ''; this.loading = true;
     const selection = this.selection;
+    if (this.main) {
+      this.repository.saveMainConversation(id).catch((_error: Error): void => {
+        if (!this.disposed && selection === this.selection) this.error = 'CHAT_SELECTION_SAVE_FAILED';
+      });
+    }
     await this.recover();
     if (selection === this.selection) this.loading = false;
   }

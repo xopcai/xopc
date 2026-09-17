@@ -20,7 +20,65 @@ const page = (id: string, text: string, before = '') => ({
   pagination: { hasMore: !!before, nextBeforeCursor: before },
 });
 describe('chat history isolation', () => {
-  beforeEach(() => { vi.resetAllMocks(); mocks.activeRun.mockResolvedValue({ active: false }); });
+  beforeEach(() => { vi.resetAllMocks(); mocks.activeRun.mockResolvedValue({ active: false }); mocks.saveMainConversation.mockResolvedValue(undefined); });
+  it('opens a requested conversation as the persistent main chat and switches run subscriptions', async () => {
+    mocks.history.mockImplementation(async (id) => page(id, id));
+    mocks.activeRun.mockImplementation(async (id) => ({ active: true, runId: id + '-run' }));
+    const chat = new XopcChatViewModel(); chat.start('first', true);
+    await vi.waitFor(() => expect(chat.runId).toBe('first-run'));
+    await chat.open('second');
+    expect(chat.selectedId).toBe('second'); expect(chat.rows[0].text).toBe('second');
+    expect(mocks.unsubscribe).toHaveBeenCalledWith('run:first-run');
+    expect(mocks.subscribe).toHaveBeenCalledWith('run:second-run');
+    expect(mocks.saveMainConversation.mock.calls.map(call => call[0])).toEqual(['first', 'second']);
+    expect(mocks.mainConversation).not.toHaveBeenCalled(); expect(mocks.create).not.toHaveBeenCalled();
+    chat.dispose();
+  });
+  it('does not let startup restoration overwrite an explicit conversation selection', async () => {
+    let finish!: (id: string) => void;
+    mocks.mainConversation.mockImplementation(() => new Promise<string>(resolve => { finish = resolve; }));
+    mocks.history.mockImplementation(async id => page(id, id));
+    const chat = new XopcChatViewModel(); chat.start();
+    await chat.open('selected'); finish('previous');
+    await Promise.resolve();
+    expect(chat.selectedId).toBe('selected'); expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.saveMainConversation).toHaveBeenLastCalledWith('selected'); chat.dispose();
+  });
+  it('ignores startup restoration failure after the user has selected a conversation', async () => {
+    let fail!: (error: Error) => void;
+    mocks.mainConversation.mockImplementation(() => new Promise((_resolve, reject) => { fail = reject; }));
+    mocks.history.mockImplementation(async id => page(id, id));
+    const chat = new XopcChatViewModel(); chat.start();
+    await chat.open('selected'); fail(new Error('OLD_STORE_ERROR')); await Promise.resolve();
+    expect(chat.error).toBe(''); expect(chat.selectedId).toBe('selected'); chat.dispose();
+  });
+  it('clears the previous agent and project while the next history loads', async () => {
+    let finish!: (value: unknown) => void;
+    mocks.history.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const chat = new XopcChatViewModel(); chat.agentId = 'old-agent'; chat.projectId = 'old-project';
+    const pending = chat.open('next');
+    expect(chat.agentId).toBe(''); expect(chat.projectId).toBe('');
+    finish(page('next', 'next')); await pending; chat.dispose();
+  });
+  it('does not let a late create clear the loading state of a selected conversation', async () => {
+    let finishCreate!: (id: string) => void;
+    let finishHistory!: (value: unknown) => void;
+    mocks.create.mockImplementation(() => new Promise<string>(resolve => { finishCreate = resolve; }));
+    mocks.history.mockImplementation(() => new Promise(resolve => { finishHistory = resolve; }));
+    const chat = new XopcChatViewModel(); const creating = chat.create();
+    const opening = chat.open('chosen'); finishCreate('late-created'); await creating;
+    expect(chat.selectedId).toBe('chosen'); expect(chat.loading).toBe(true);
+    finishHistory(page('chosen', 'chosen')); await opening;
+    expect(chat.loading).toBe(false); chat.dispose();
+  });
+  it('keeps history usable and reports a local selection save failure', async () => {
+    mocks.saveMainConversation.mockRejectedValue(new Error('STORE_UNAVAILABLE'));
+    mocks.history.mockImplementation(async id => page(id, id));
+    const chat = new XopcChatViewModel(); chat.start('chosen', true);
+    await vi.waitFor(() => expect(chat.loading).toBe(false));
+    expect(chat.selectedId).toBe('chosen'); expect(chat.rows[0].text).toBe('chosen');
+    expect(chat.error).toBe('CHAT_SELECTION_SAVE_FAILED'); chat.dispose();
+  });
   it('ignores a slow previous conversation when a new conversation is opened', async () => {
     let finish!: (value: unknown) => void;
     mocks.history.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
