@@ -15,7 +15,17 @@ describe('native Markdown subset', () => {
     expect(markdownSpans('A **bold** `code` *italic* [site](https://example.com)').map(({ kind, text }) => ({ kind, text })))
       .toEqual([{ kind: 'text', text: 'A ' }, { kind: 'bold', text: 'bold' }, { kind: 'text', text: ' ' }, { kind: 'code', text: 'code' },
         { kind: 'text', text: ' ' }, { kind: 'italic', text: 'italic' }, { kind: 'text', text: ' ' }, { kind: 'link', text: 'site' }]);
-    expect(markdownSpans('![image](https://example.com/image.png)')[0]).toMatchObject({ kind: 'link', href: 'https://example.com/image.png' });
+    expect(markdownSpans('![image](https://example.com/image.png)')[0]).toMatchObject({ kind: 'image', href: 'https://example.com/image.png' });
+  });
+  it('renders embedded images in text order and supports file/media sources', () => {
+    expect(markdownBlocks('Before **bold** ![one](https://example.com/a_(b).png "title") after ![two](xopc-file:id)').map(b => [b.kind, b.text, b.href]))
+      .toEqual([['paragraph', 'Before **bold**', undefined], ['image', 'one', 'https://example.com/a_(b).png'], ['paragraph', 'after', undefined], ['image', 'two', 'xopc-file:id']]);
+    expect(markdownBlocks('![image](media://a)')[0]).toMatchObject({ kind: 'image', href: 'media://a' });
+  });
+  it('does not interpret fenced, inline-code, escaped or unsafe images as media', () => {
+    for (const text of ['`![image](https://example.com/a.png)`', '\\![image](https://example.com/a.png)', '```md\n![image](media://a)\n```', '![image](file:///etc/private)', '![image](http://example.com/a.png)']) {
+      expect(markdownBlocks(text).some(b => b.kind === 'image')).toBe(false);
+    }
   });
   it('parses tables with alignments, empty cells, escaped pipes and code pipes', () => {
     const [table, paragraph] = markdownBlocks('| Name | Value | Center |\n| :--- | ---: | :---: |\n| a\\|b | `x|y` | |\n\nAfter');

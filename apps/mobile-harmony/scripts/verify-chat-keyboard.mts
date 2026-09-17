@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 // Physical-device safe: focus/touch only. No typing, sending or Gateway mutations.
 const target = process.argv[2];
+const edgeOnly = process.argv.includes('--edge-only');
 assert(target, 'Pass an explicit HDC device target with Chat already open.');
 const hdc = process.env.HDC_PATH || 'hdc';
 const output = fileURLToPath(new URL('../.test/chat-keyboard/', import.meta.url));
@@ -59,7 +60,7 @@ try {
   const initialBottom = bounds(node(nodes, 'chat-composer-shell'))[3];
   const starterIds = nodes.filter(item => item.id?.startsWith('chat-starter-')).map(item => item.id);
   const hasDock = nodes.some(item => item.id === 'main-tab-dock');
-  for (let cycle = 0; cycle < 3; cycle++) {
+  for (let cycle = 0; cycle < (edgeOnly ? 3 : 6); cycle++) {
     click(node(nodes, 'chat-composer'));
     nodes = await until('open-' + cycle, items => {
       const editor = items.find(item => item.id === 'chat-composer');
@@ -72,9 +73,9 @@ try {
     assert.equal(node(nodes, 'chat-composer').text, draft, 'Focus must preserve the draft.');
     if (cycle === 0) await screen('open');
     const [left, top, right, bottom] = bounds(surface);
-    // Stay inside the content inset and outside the left-edge drawer gesture strip.
-    const inset = surfaceId === 'chat-welcome' ? (right - left) * 0.07 : (right - left) * 0.015;
-    command('shell', 'uitest', 'uiInput', 'click', String(Math.round(left + inset)), String(Math.round((top + bottom) / 2)));
+    const strip = bounds(node(nodes, 'chat-drawer-gesture-strip'));
+    const tapX = !edgeOnly && cycle < 3 ? left + (right - left) * 0.08 : (strip[0] + strip[2]) / 2;
+    command('shell', 'uitest', 'uiInput', 'click', String(Math.round(tapX)), String(Math.round((top + bottom) / 2)));
     nodes = await until('closed-' + cycle, items => node(items, 'chat-composer').focused === 'false'
       && Math.abs(bounds(node(items, 'chat-composer-shell'))[3] - initialBottom) < 3
       && (!hasDock || items.some(item => item.id === 'main-tab-dock')));
@@ -82,7 +83,7 @@ try {
     assert.equal(bounds(node(nodes, surfaceId))[1], initialTop);
   }
   await screen('closed');
-  passed.push(surfaceId + ': three focus/dismiss cycles preserve draft, content and header position');
+  passed.push(surfaceId + (edgeOnly ? ': three drawer-edge' : ': three body and three drawer-edge') + ' focus/dismiss cycles preserve draft, content and header position');
   writeFileSync(join(output, 'result.json'), JSON.stringify({ status: 'passed', at: new Date().toISOString(), target, passed, gatewayMutations: false }, null, 2));
   console.log(JSON.stringify({ passed, output }));
 } catch (error) {

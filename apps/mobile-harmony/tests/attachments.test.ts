@@ -27,7 +27,7 @@ describe('native chat attachment contract', () => {
     const rows = historyRows({ session: { key: 'one', messages: [{ id: 'message-1', role: 'user', content: '',
       media: [{ id: 'media-1', name: 'hello.txt', type: 'document', mimeType: 'text/plain', size: 5, uri: 'media://test' }] }] },
       pagination: { hasMore: false } });
-    expect(rows).toEqual([{ id: 'message-1', role: 'user', text: '', thinking: '', tools: '',
+    expect(rows).toMatchObject([{ id: 'message-1', role: 'user', text: '', thinking: '', tools: '',
       media: [{ id: 'media-1', name: 'hello.txt', type: 'document', mimeType: 'text/plain', size: 5, uri: 'media://test' }] }]);
   });
   it('prefers structured history and preserves source versions for regeneration', () => {

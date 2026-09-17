@@ -2,6 +2,8 @@ import { XopcChatDrawerViewModel } from '../viewmodel/chatDrawerViewModel';
 import { XopcSessionGroup, XopcSessionItem } from '../model/chat';
 import { XopcListSkeleton } from './MobileComponents';
 import { layoutState } from '../service/layoutState';
+import { connectionModel } from '../viewmodel/connectionViewModel';
+import { gatewaySession } from '../service/gatewaySession';
 
 @ComponentV2
 export struct XopcChatDrawer {
@@ -40,6 +42,15 @@ export struct XopcChatDrawer {
             .id('chat-drawer-search').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
             .accessibilityText($r('app.string.search')).onClick((): void => { this.onClose(); this.onSearch(); })
         }.width('100%').height(52).padding({ left: 16, right: 16 })
+        Button({ type: ButtonType.Normal }) {
+          Row({ space: 10 }) {
+            SymbolGlyph($r('sys.symbol.link')).fontSize(20).fontColor([$r('app.color.accent')])
+            Text(gatewaySession.currentProfile()?.name || $r('app.string.gateways_title')).fontSize(15)
+              .fontColor($r('app.color.foreground')).layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+            SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(16).fontColor([$r('app.color.secondary')])
+          }.width('100%').height(48).padding({ left: 16, right: 16 })
+        }.id('drawer-gateways').width('88%').padding(0).backgroundColor($r('app.color.grouped')).borderRadius(14)
+          .accessibilityText($r('app.string.gateways_title')).onClick((): void => { this.onClose(); connectionModel.openGateways(); })
         Row() {
           Text($r('app.string.history')).fontSize(18).fontWeight(FontWeight.Bold).fontColor($r('app.color.foreground'))
           Blank().layoutWeight(1)

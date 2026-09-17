@@ -26,7 +26,8 @@ function DockBackground() {
 }
 
 /** One layout owner for keyboard and accessory-panel transitions. */
-export function CapsuleTabBar(props: BottomTabBarProps) {
+export function CapsuleTabBar({ embedded = false, ...props }: BottomTabBarProps & { embedded?: boolean }) {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const keyboard = useReanimatedKeyboardAnimation();
   const panelOpen = useChatChromeStore(state => state.actionPanelOpen);
@@ -68,7 +69,16 @@ export function CapsuleTabBar(props: BottomTabBarProps) {
     ...descriptor,
     options: {
       ...descriptor.options,
-      tabBarBackground: () => <DockBackground />,
+      tabBarBackground: embedded ? undefined : () => <DockBackground />,
+      ...(embedded ? { tabBarStyle: [descriptor.options.tabBarStyle, {
+        marginHorizontal: 0,
+        marginBottom: 0,
+        borderRadius: 0,
+        borderTopWidth: StyleSheet.hairlineWidth,
+        borderTopColor: colors.border.subtle,
+        height: dockHeight,
+        paddingBottom: TAB_DOCK_INSET + Math.max(insets.bottom, spacing.sm),
+      }] } : {}),
     },
   }]));
   return <Animated.View style={[styles.dockClip, dockStyle]} pointerEvents={hidden ? 'none' : 'auto'}
