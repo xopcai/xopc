@@ -155,7 +155,7 @@ export class ComputerRuntime {
         try {
           const verification = verifyComputerExpectation(input.expect, observed.value.observation);
           if (input.op === 'observe' && !input.question) return { ...this.present(observed.value), verification, verified: verification?.status === 'satisfied', budget: this.budget(s) };
-          if (input.op === 'step' && verification?.status === 'satisfied') return { status: 'condition_satisfied', sessionId: s.id, verification, verified: true, budget: this.budget(s),
+          if (input.op === 'step' && input.expect?.kind !== 'text' && verification?.status === 'satisfied') return { status: 'condition_satisfied', sessionId: s.id, verification, verified: true, budget: this.budget(s),
             nextAction: 'Only the supplied condition was verified. No input was dispatched. Check remaining task requirements before reporting completion.' };
           if (input.op === 'step' && s.actions >= config.computer.maxActionsPerSession) throw new Error('COMPUTER_ACTION_BUDGET');
           const o = observed.value.observation;
@@ -208,11 +208,12 @@ export class ComputerRuntime {
       return { ...this.present(reply.value), budget: this.budget(s) };
     }
     const context = s.pendingContext;
-    const verification = verifyComputerExpectation(context?.expectation, reply.value.observation);
+    const verification = verifyComputerExpectation(context?.expectation, reply.value.observation, context?.before);
     if (context && reply.value.receipt) s.task.record(context.goal, envelope.action, context.before, reply.value.receipt, reply.value.observation, verification);
     if (!s.pending) s.pendingContext = undefined;
     if (reply.value.status === 'stopped') this.forget(s);
-    return { ...this.present(reply.value), verification, verified: verification?.status === 'satisfied',
+    return { ...this.present(reply.value), verification, verified: verification?.status === 'satisfied' && !verification.preexisting,
+      ...(verification?.preexisting ? { nextAction: 'The expected text was already visible before this action; it does not verify the requested change. Observe the selected control or page-specific result before claiming success.' } : {}),
       ...(reply.value.status !== 'stopped' ? { budget: this.budget(s) } : {}) };
   }
   private budget(s: Session) {
