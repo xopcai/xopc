@@ -52,11 +52,13 @@ export function AssistantAttachmentList({
   attachments,
   authToken,
   conversationId,
+  workspaceConversationId,
   projectId,
 }: {
   attachments?: MessageAttachment[];
   authToken?: string;
   conversationId?: string | null;
+  workspaceConversationId?: string | null;
   projectId?: string | null;
 }) {
   if (!attachments?.length) return null;
@@ -65,6 +67,7 @@ export function AssistantAttachmentList({
       attachments={attachments}
       authToken={authToken}
       conversationId={conversationId}
+      workspaceConversationId={workspaceConversationId}
       projectId={projectId}
       layout="assistant"
     />

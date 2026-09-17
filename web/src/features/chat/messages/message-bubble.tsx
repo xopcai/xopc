@@ -81,6 +81,7 @@ export const MessageBubble = memo(function MessageBubble({
   message,
   authToken,
   conversationId,
+  workspaceConversationId,
   projectId,
   isStreaming,
   progress,
@@ -105,6 +106,7 @@ export const MessageBubble = memo(function MessageBubble({
   message: Message;
   authToken?: string;
   conversationId?: string | null;
+  workspaceConversationId?: string | null;
   projectId?: string | null;
   isStreaming: boolean;
   progress: ProgressState | null;
@@ -599,6 +601,7 @@ export const MessageBubble = memo(function MessageBubble({
                     imagePreviewLabel={m.chat.attachmentPreviewImage}
                     onImagePreview={openInlineImagePreview}
                     conversationId={conversationId}
+                    workspaceConversationId={workspaceConversationId}
                     projectId={projectId}
                     workflowOptions={{
                       labels: workflowCardLabels(language),
@@ -635,7 +638,7 @@ export const MessageBubble = memo(function MessageBubble({
               <AssistantTurnTasks
                 view={assistantTurnView}
                 authToken={authToken}
-                conversationId={conversationId}
+                conversationId={workspaceConversationId ?? conversationId}
                 projectId={projectId}
                 compactProductDelivery={compactProductDelivery}
                 sourcesLabel={m.chat.searchSourcesHeading.replace(
@@ -651,6 +654,7 @@ export const MessageBubble = memo(function MessageBubble({
                   attachments={attachmentsForBubble}
                   authToken={authToken}
                   conversationId={conversationId}
+                  workspaceConversationId={workspaceConversationId}
                   layout="user"
                   centerUserVoiceRow={userCopyText.length === 0}
                 />
@@ -659,6 +663,7 @@ export const MessageBubble = memo(function MessageBubble({
                   attachments={attachmentsForBubble}
                   authToken={authToken}
                   conversationId={conversationId}
+                  workspaceConversationId={workspaceConversationId}
                   projectId={projectId}
                 />
               )

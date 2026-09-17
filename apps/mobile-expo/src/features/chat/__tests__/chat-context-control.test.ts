@@ -32,7 +32,7 @@ vi.mock('../../../theme', async () => {
   const tokens = await import('../../../theme/tokens');
   return { ...tokens, useTheme: () => ({ colors: tokens.colors.light }) };
 });
-vi.mock('../../../i18n/messages', () => ({ useMessages: () => ({ common: {}, chat: { contextCenter: { chooseProject: 'Choose project', chooseEnvironment: 'Environment', environmentReason: {} } } }) }));
+vi.mock('../../../i18n/messages', () => ({ useMessages: () => ({ common: {}, chat: { contextCenter: { chooseProject: 'Choose project', chooseEnvironment: 'Environment', open: 'Open context', environmentReason: {} } } }) }));
 import { ChatContextControl } from '../ChatContextControl';
 const { createRoot } = createRequire(import.meta.url)('react-dom/client') as { createRoot: (element: HTMLElement) => { render: (node: ReactNode) => void; unmount: () => void } };
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -65,4 +65,8 @@ it('does not switch into an unavailable Worktree', () => {
   state.unavailable = true;
   click('Environment: Local'); click('Worktree');
   expect(change).not.toHaveBeenCalled();
+});
+it('keeps the full context available behind the compact details action', () => {
+  click('Open context');
+  expect(container.querySelector('[data-detail]')).not.toBeNull();
 });

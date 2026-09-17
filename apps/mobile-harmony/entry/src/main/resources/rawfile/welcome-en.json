@@ -1,0 +1,493 @@
+{
+  "copy": {
+    "otherSuggestionsLabel": "Suggested starts",
+    "acceptSuggestionHint": "Tap to fill",
+    "refreshExplorationLabel": "Refresh",
+    "contextLoading": "Reading current context…",
+    "contextFallback": "Some context is unavailable, so these are based on what is available.",
+    "retryContext": "Retry",
+    "contextFallbackTitle": "current task",
+    "agentTagline": "{{agentName}} is handling this, so starters are tuned to its workflow.",
+    "reasons": {
+      "general": "A quick starting point you can edit before sending",
+      "agent": "Better matched to {{agentName}}",
+      "project": "Based on project \"{{projectName}}\"",
+      "note": "Continuing from note \"{{noteTitle}}\"",
+      "blocked": "Focused on the current blocker: {{blockedReason}}",
+      "nextAction": "Following the known next action: {{nextAction}}",
+      "directory": "Based on the current folder \"{{path}}\""
+    },
+    "contextPrompts": {
+      "codingWorkspace": "Start from \"{{workspaceRoot}}\" and understand project \"{{projectName}}\". Identify entry points, core modules, and the files worth reading first.",
+      "projectBlocked": "Project \"{{projectName}}\" is blocked by {{blockedReason}}. Propose the smallest way to unblock it and begin.",
+      "projectNextAction": "Continue the next action for project \"{{projectName}}\": {{nextAction}}. Check the state, then proceed.",
+      "projectFailure": "Project \"{{projectName}}\" failed: {{recentFailure}}. Find the cause and propose a verified fix.",
+      "taskAttention": "Task \"{{taskTitle}}\" needs attention: {{attentionSummary}}. Explain what I need to decide.",
+      "taskNextAction": "Continue the next action for task \"{{taskTitle}}\": {{nextAction}}. Check constraints, then proceed.",
+      "taskFailure": "Task \"{{taskTitle}}\" failed: {{recentFailure}}. Analyze the cause and propose verified recovery.",
+      "taskReview": "Check task \"{{taskTitle}}\" against its acceptance criteria and list evidence, gaps, and a completion verdict.",
+      "taskClosed": "Summarize the result, evidence, and remaining work for task \"{{taskTitle}}\".",
+      "fileStart": "Read \"{{fileName}}\", identify the most valuable improvements, and provide an editing plan.",
+      "workflowNextAction": "Continue the next action for workflow \"{{workflowName}}\": {{nextAction}}.",
+      "workflowFailure": "Workflow \"{{workflowName}}\" failed: {{recentFailure}}. Propose a recovery plan."
+    },
+    "exploreCards": [
+      {
+        "id": "explore-ai-news",
+        "icon": "search",
+        "title": "Today’s AI news",
+        "description": "Latest developments, impact, why it matters",
+        "scenarios": [
+          {
+            "prompt": "Find today’s latest AI news, pick the 3 developments most worth attention, and explain in plain language what they are and why they matter."
+          }
+        ]
+      },
+      {
+        "id": "explore-learn",
+        "icon": "search",
+        "title": "Learn something new",
+        "description": "Concepts, sources, learning paths",
+        "scenarios": [
+          {
+            "prompt": "Design a focused 30-minute learning session on a topic you recommend."
+          }
+        ]
+      }
+    ],
+    "agentCards": {
+      "coding": {
+        "id": "agent-coding",
+        "icon": "code",
+        "title": "Move code forward",
+        "description": "Find, change, verify",
+        "scenarios": [
+          {
+            "prompt": "Start from the current context, identify the best code change to make next, and give me the smallest verification plan."
+          }
+        ]
+      },
+      "writing": {
+        "id": "agent-writing",
+        "icon": "content",
+        "title": "Shape a draft",
+        "description": "Structure, rewrite, polish",
+        "scenarios": [
+          {
+            "prompt": "Turn my current idea into a clear message I can send."
+          }
+        ]
+      },
+      "research": {
+        "id": "agent-research",
+        "icon": "search",
+        "title": "Research and verify",
+        "description": "Sources, claims, conclusions",
+        "scenarios": [
+          {
+            "prompt": "Do a quick research pass on the current topic. List key findings, sources, and uncertainties."
+          }
+        ]
+      },
+      "data": {
+        "id": "agent-data",
+        "icon": "documents",
+        "title": "Analyze data",
+        "description": "Metrics, tables, insight",
+        "scenarios": [
+          {
+            "prompt": "Analyze the current data or material and extract the most important metrics, anomalies, and next questions."
+          }
+        ]
+      },
+      "creative": {
+        "id": "agent-creative",
+        "icon": "content",
+        "title": "Explore options",
+        "description": "Directions, drafts, tradeoffs",
+        "scenarios": [
+          {
+            "prompt": "Based on the current context, give me 3 different creative directions and explain the tradeoffs."
+          }
+        ]
+      }
+    },
+    "empty": {
+      "headline": "What do you want to move forward?",
+      "tagline": "Choose a starter, then edit it before sending.",
+      "categories": [
+        {
+          "id": "work",
+          "icon": "documents",
+          "title": "Work output",
+          "description": "Summary, update, message",
+          "scenarios": [
+            {
+              "prompt": "I have a meeting in 30 minutes. Help me prepare a concise update."
+            }
+          ]
+        },
+        {
+          "id": "writing",
+          "icon": "content",
+          "title": "Writing polish",
+          "description": "Draft, structure, wording",
+          "scenarios": [
+            {
+              "prompt": "Help me make the following text clearer and more suitable to send."
+            }
+          ]
+        }
+      ]
+    },
+    "codingProject": {
+      "headline": "Start from this project",
+      "tagline": "Understand the entry points, then move forward.",
+      "categories": [
+        {
+          "id": "understand-codebase",
+          "icon": "code",
+          "title": "Understand codebase",
+          "description": "Structure, entry points, modules",
+          "scenarios": [
+            {
+              "prompt": "Map the structure, entry points, and core modules of project \"{{projectName}}\"."
+            }
+          ]
+        },
+        {
+          "id": "implement-feature",
+          "icon": "target",
+          "title": "Move a change forward",
+          "description": "Locate, implement, verify",
+          "scenarios": [
+            {
+              "prompt": "Find the best change to move forward in project \"{{projectName}}\" and give verification steps."
+            }
+          ]
+        },
+        {
+          "id": "review-debug",
+          "icon": "review",
+          "title": "Review and debug",
+          "description": "Risks, tests, failures",
+          "scenarios": [
+            {
+              "prompt": "Check project \"{{projectName}}\" for risks, test gaps, and failures."
+            }
+          ]
+        }
+      ]
+    },
+    "codingWorkspace": {
+      "headline": "Start from this code workspace",
+      "tagline": "Understand the structure and entry points, then make the next change.",
+      "categories": [
+        {
+          "id": "directory-understand",
+          "icon": "folder",
+          "title": "Understand folder",
+          "description": "Structure and key files",
+          "scenarios": [
+            {
+              "prompt": "Understand the structure, stack, and key files in \"{{path}}\"."
+            }
+          ]
+        },
+        {
+          "id": "directory-entry",
+          "icon": "code",
+          "title": "Find entry points",
+          "description": "Startup and config",
+          "scenarios": [
+            {
+              "prompt": "Find startup entry points, config, and dependencies in \"{{path}}\"."
+            }
+          ]
+        },
+        {
+          "id": "directory-organize",
+          "icon": "review",
+          "title": "Engineering review",
+          "description": "Risks and cleanup",
+          "scenarios": [
+            {
+              "prompt": "Review module boundaries and risks in \"{{path}}\"."
+            }
+          ]
+        }
+      ]
+    },
+    "generalProject": {
+      "headline": "Continue this project",
+      "tagline": "Use its current state to start the next step quickly.",
+      "categories": [
+        {
+          "id": "project-next-step",
+          "icon": "target",
+          "title": "Continue next step",
+          "description": "Follow the current recommendation",
+          "scenarios": [
+            {
+              "prompt": "Review project \"{{projectName}}\" and execute its smallest next step."
+            }
+          ]
+        },
+        {
+          "id": "project-status",
+          "icon": "search",
+          "title": "Check project status",
+          "description": "Progress, risks, blockers",
+          "scenarios": [
+            {
+              "prompt": "Summarize progress, risks, and blockers for project \"{{projectName}}\"."
+            }
+          ]
+        },
+        {
+          "id": "project-material",
+          "icon": "documents",
+          "title": "Prepare project update",
+          "description": "Summary and communication",
+          "scenarios": [
+            {
+              "prompt": "Prepare a concise progress update for project \"{{projectName}}\"."
+            }
+          ]
+        }
+      ]
+    },
+    "note": {
+      "headline": "Continue this note",
+      "tagline": "Summarize, expand, or turn it into action.",
+      "categories": [
+        {
+          "id": "note-summarize",
+          "icon": "note",
+          "title": "Summarize note",
+          "description": "Ideas and conclusions",
+          "scenarios": [
+            {
+              "prompt": "Summarize the core ideas and conclusions in \"{{noteTitle}}\"."
+            }
+          ]
+        },
+        {
+          "id": "note-think",
+          "icon": "search",
+          "title": "Think further",
+          "description": "Questions and gaps",
+          "scenarios": [
+            {
+              "prompt": "Find questions and gaps worth exploring in \"{{noteTitle}}\"."
+            }
+          ]
+        },
+        {
+          "id": "note-output",
+          "icon": "content",
+          "title": "Turn into output",
+          "description": "Article, tasks, plan",
+          "scenarios": [
+            {
+              "prompt": "Turn \"{{noteTitle}}\" into an actionable output."
+            }
+          ]
+        }
+      ]
+    },
+    "workingDirectory": {
+      "headline": "Start from the current folder",
+      "tagline": "Understand structure, entry points, and next direction.",
+      "categories": [
+        {
+          "id": "directory-understand",
+          "icon": "folder",
+          "title": "Understand folder",
+          "description": "Structure, type, key files",
+          "scenarios": [
+            {
+              "prompt": "Help me understand the structure, project type, and most important files in \"{{path}}\"."
+            }
+          ]
+        },
+        {
+          "id": "directory-entry",
+          "icon": "code",
+          "title": "Find entry points",
+          "description": "Startup, config, dependencies",
+          "scenarios": [
+            {
+              "prompt": "Find likely entry points, config files, and dependency docs in \"{{path}}\"."
+            }
+          ]
+        },
+        {
+          "id": "directory-organize",
+          "icon": "documents",
+          "title": "Organize files",
+          "description": "Classify, summarize, clean up",
+          "scenarios": [
+            {
+              "prompt": "Organize the files in \"{{path}}\" and suggest categories and cleanup steps."
+            }
+          ]
+        }
+      ]
+    },
+    "task": {
+      "headline": "Move task \"{{taskTitle}}\" forward",
+      "tagline": "Handle its next step, blockers, and acceptance.",
+      "categories": [
+        {
+          "id": "task-next-step",
+          "icon": "target",
+          "title": "Continue next step",
+          "description": "Act and verify",
+          "scenarios": [
+            {
+              "prompt": "Execute the smallest verifiable next step for task \"{{taskTitle}}\"."
+            }
+          ]
+        },
+        {
+          "id": "task-clarify",
+          "icon": "search",
+          "title": "Fill key gaps",
+          "description": "Inputs, dependencies, decisions",
+          "scenarios": [
+            {
+              "prompt": "Check which input, dependency, or decision task \"{{taskTitle}}\" still needs."
+            }
+          ]
+        },
+        {
+          "id": "task-recover",
+          "icon": "review",
+          "title": "Diagnose and recover",
+          "description": "Failures, blockers, retries",
+          "scenarios": [
+            {
+              "prompt": "Inspect failures and blockers for task \"{{taskTitle}}\" and propose recovery."
+            }
+          ]
+        },
+        {
+          "id": "task-verify",
+          "icon": "review",
+          "title": "Verify result",
+          "description": "Criteria and evidence",
+          "scenarios": [
+            {
+              "prompt": "Verify task \"{{taskTitle}}\" against its acceptance criteria."
+            }
+          ]
+        }
+      ]
+    },
+    "file": {
+      "headline": "Work with \"{{fileName}}\"",
+      "tagline": "Understand, edit, or extract.",
+      "categories": [
+        {
+          "id": "file-understand",
+          "icon": "documents",
+          "title": "Understand file",
+          "description": "Summary and highlights",
+          "scenarios": [
+            {
+              "prompt": "Summarize the structure and core content of \"{{fileName}}\"."
+            }
+          ]
+        },
+        {
+          "id": "file-edit",
+          "icon": "content",
+          "title": "Edit file",
+          "description": "Rewrite and organize",
+          "scenarios": [
+            {
+              "prompt": "Review \"{{fileName}}\" and propose edits."
+            }
+          ]
+        },
+        {
+          "id": "file-extract",
+          "icon": "task",
+          "title": "Extract actions",
+          "description": "Tasks and conclusions",
+          "scenarios": [
+            {
+              "prompt": "Extract tasks, data, and conclusions from \"{{fileName}}\"."
+            }
+          ]
+        }
+      ]
+    },
+    "workflow": {
+      "headline": "Continue workflow \"{{workflowName}}\"",
+      "tagline": "Review results or continue.",
+      "categories": [
+        {
+          "id": "workflow-next-step",
+          "icon": "target",
+          "title": "Continue next step",
+          "description": "Build on existing output",
+          "scenarios": [
+            {
+              "prompt": "Continue the best next step from workflow \"{{workflowName}}\"."
+            }
+          ]
+        },
+        {
+          "id": "workflow-review",
+          "icon": "review",
+          "title": "Review results",
+          "description": "Outputs and gaps",
+          "scenarios": [
+            {
+              "prompt": "Summarize results and gaps from workflow \"{{workflowName}}\"."
+            }
+          ]
+        },
+        {
+          "id": "workflow-recover",
+          "icon": "search",
+          "title": "Handle failure",
+          "description": "Recover and retry",
+          "scenarios": [
+            {
+              "prompt": "Inspect workflow \"{{workflowName}}\" errors and propose recovery."
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "names": {
+    "assistant": {
+      "name": "Smart Assistant",
+      "description": "Your personal intelligent assistant for questions, everyday tasks, and conversation."
+    },
+    "coding": {
+      "name": "Coding Expert",
+      "description": "Build, debug, refactor, and test software."
+    },
+    "writing": {
+      "name": "Writing Assistant",
+      "description": "Draft, edit, and refine content for its audience."
+    },
+    "research": {
+      "name": "Research Assistant",
+      "description": "Research topics, compare sources, and synthesize findings."
+    },
+    "data": {
+      "name": "Data Analyst",
+      "description": "Clean and analyze data, create visualizations, and report results."
+    },
+    "creative": {
+      "name": "Creative Assistant",
+      "description": "Explore visual direction, prompts, critique, and creative options."
+    }
+  }
+}

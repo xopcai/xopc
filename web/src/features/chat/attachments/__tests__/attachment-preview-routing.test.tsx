@@ -64,6 +64,21 @@ describe('file preview entry points', () => {
     expect(useWorkspacePreviewStore.getState().conversationId).toBeNull();
   });
 
+  it('uses the parent workspace for generated Sidechat attachments', () => {
+    act(() => root.render(
+      <AttachmentRenderer
+        attachments={[file]}
+        conversationId="side-chat-id"
+        workspaceConversationId="parent-session-id"
+      />,
+    ));
+    act(() => container.querySelector<HTMLButtonElement>('button')?.click());
+    expect(useWorkspacePreviewStore.getState()).toMatchObject({
+      path: 'output/report.md',
+      conversationId: 'parent-session-id',
+    });
+  });
+
   it.each([
     { layout: 'user' as const, attachment: file, conversationId: 'session-a' },
     { layout: 'assistant' as const, attachment: { ...file, workspaceRelativePath: undefined }, conversationId: 'session-a' },

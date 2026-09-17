@@ -1,89 +1,577 @@
 {
   "string": [
-    { "name": "connection_revoked", "value": "Device authorization expired or was revoked. Pair again in Settings." },
-    { "name": "protocol_incompatible", "value": "Gateway protocol is incompatible. Update the Gateway or this app." },
-    { "name": "play_recording", "value": "Play recording" },
-    { "name": "notifications", "value": "Notifications" },
-    { "name": "enable_push", "value": "Enable / refresh" },
-    { "name": "disable_push", "value": "Disable" },
-    { "name": "push_registered", "value": "Registered with this Gateway" },
-    { "name": "push_help", "value": "Requires a signed app with Push Kit enabled, notification permission, and Huawei push configured on your Gateway." },
-    { "name": "app_description", "value": "Your personal AI workspace" },
-    { "name": "microphone_reason", "value": "Record your voice when you choose voice input, then transcribe it into a draft." },
-    { "name": "record_voice", "value": "Voice input" },
-    { "name": "stop_recording", "value": "Finish recording" },
-    { "name": "transcribe", "value": "Transcribe to draft" },
-    { "name": "voice_working", "value": "Processing voice…" },
-    { "name": "connect_title", "value": "Connect to your xopc" },
-    { "name": "connect_help", "value": "Open Devices in your Gateway and create a mobile invitation." },
-    { "name": "invitation_hint", "value": "Paste the pairing link" },
-    { "name": "connect", "value": "Connect" },
-    { "name": "cancel", "value": "Cancel" },
-    { "name": "retry", "value": "Retry" },
-    {"name":"confirm_change","value":"Confirm change"},
-    {"name":"confirm_change_help","value":"This changes the conversation. Continue?"},
-    {"name":"confirm","value":"Confirm"},
-    {"name":"search","value":"Search"},
-    {"name":"refresh","value":"Refresh"},
-    {"name":"untitled","value":"New conversation"},
-    {"name":"load_more","value":"Load more"},
-    {"name":"no_conversations","value":"No conversations yet"},
-    {"name":"name","value":"Name"},
-    {"name":"save","value":"Save"},
-    {"name":"pin","value":"Pin"},
-    {"name":"archive","value":"Archive"},
-    {"name":"unarchive","value":"Unarchive"},
-    {"name":"add_attachment","value":"Attach"},
-    {"name":"remove_attachment","value":"Remove"},
-    {"name":"reset","value":"Reset"},
-    {"name":"delete","value":"Delete"},
-    {"name":"older_messages","value":"Earlier messages"},
-    {"name":"stop","value":"Stop"},
-    {"name":"message_hint","value":"Message xopc…"},
-    {"name":"send","value":"Send"},
-    {"name":"back","value":"Back"},
-    {"name":"conversations","value":"Conversations"},
-    {"name":"new_chat","value":"New"},
-    {"name":"reconnecting","value":"Connecting to Gateway…"}
-    ,
-    {"name":"mark_ready","value":"Mark ready"},
-    {"name":"request_review","value":"Request review"},
-    {"name":"complete","value":"Complete"},
-    {"name":"reopen","value":"Reopen"},
-    {"name":"start_task","value":"Start task"},
-    {"name":"run_now","value":"Run now"},
-    {"name":"pause","value":"Pause"},
-    {"name":"resume","value":"Resume"},
-    {"name":"unpin","value":"Unpin"},
-    {"name":"confirm_action_help","value":"Apply this action to the selected item?"},
-    {"name":"empty_list","value":"Nothing here yet"},
-    {"name":"description","value":"Description / Markdown"},
-    {"name":"cron_help","value":"Cron expression · Gateway time zone"},
-    {"name":"project_id","value":"Project ID (optional)"},
-    {"name":"agent_id","value":"Executor agent ID"},
-    {"name":"edit","value":"Edit"},
-    {"name":"tasks","value":"Tasks"},
-    {"name":"projects","value":"Projects"},
-    {"name":"automations","value":"Automations"},
-    {"name":"notes","value":"Notes"},
-    {"name":"chat","value":"Chat"}
-    ,
-    {"name":"scan","value":"Scan QR code"},
-    {"name":"files","value":"Files"},
-    {"name":"upload","value":"Upload"},
-    {"name":"download","value":"Download"},
-    {"name":"file_preview_help","value":"Text preview is available for text files up to 1 MB. Download other files to open them."},
-    {"name":"recent_files","value":"Recent files / Spaces"},
-    {"name":"transfer_limits","value":"Upload ≤ 8 MB · Download ≤ 16 MB"}
-    ,
-    {"name":"settings","value":"Settings"},
-    {"name":"more","value":"More"},
-    {"name":"language","value":"Language"},
-    {"name":"appearance","value":"Appearance"},
-    {"name":"system","value":"System"},
-    {"name":"light","value":"Light"},
-    {"name":"dark","value":"Dark"},
-    {"name":"disconnect","value":"Forget connection"},
-    {"name":"disconnect_help","value":"Remove local Gateway credentials? You will need to pair again. Server conversations and files are not deleted."}
+    { "name": "pair_title", "value": "Connect your computer" },
+    { "name": "pair_hint", "value": "Open xopc on your computer and create a mobile pairing QR code." },
+    { "name": "pair_scan", "value": "Scan to connect" },
+    { "name": "pair_manual", "value": "Use a pairing link" },
+    { "name": "pair_manual_title", "value": "Connect with a link" },
+    { "name": "pair_manual_hint", "value": "Copy the mobile pairing link from xopc on your computer, then paste it below." },
+    { "name": "pair_help", "value": "Not set up yet?" },
+    { "name": "pair_help_title", "value": "Start on your computer" },
+    { "name": "pair_help_steps", "value": "1. Visit xopc.ai on your computer.\n\n2. Install xopc and complete setup.\n\n3. Open Devices and create a mobile invitation. Then scan its QR code with your phone." },
+    { "name": "pair_ready", "value": "Ready to connect" },
+    { "name": "pair_requirement", "value": "Keep your computer running and connected to the internet." },
+    { "name": "pair_waiting", "value": "Confirm on your computer" },
+    { "name": "pair_approve_hint", "value": "Check that the code below matches the one on your computer, then approve this phone." },
+    { "name": "pair_compare", "value": "Only approve if both codes match." },
+    { "name": "pair_connecting", "value": "Connecting securely…" },
+    { "name": "pair_connecting_hint", "value": "Verifying your computer and restoring your connection. This may take a moment." },
+    { "name": "pair_error_expired", "value": "This invitation has expired. Create a new one on your computer." },
+    { "name": "pair_error_rejected", "value": "The connection was declined on your computer. Create a new invitation to try again." },
+    { "name": "pair_error_identity", "value": "The computer’s identity could not be verified. Connection stopped for your security." },
+    { "name": "pair_error_link", "value": "This is not a valid xopc pairing link. Copy a new invitation from your computer." },
+    { "name": "pair_error_camera", "value": "The scanner is unavailable. Check camera permission or use a pairing link." },
+    { "name": "pair_error_retry", "value": "Could not connect. Check that your computer is online and try again." },
+    { "name": "chat_switch_keyboard", "value": "Switch to keyboard" },
+    { "name": "sessions_now", "value": "now" },
+    { "name": "sessions_minutes_ago", "value": "%d min ago" },
+    { "name": "sessions_hours_ago", "value": "%d hr ago" },
+    { "name": "sessions_days_ago", "value": "%d d ago" },
+    { "name": "sessions_weeks_ago", "value": "%d wk ago" },
+    { "name": "sessions_search", "value": "Search conversations" },
+    { "name": "sessions_no_results", "value": "No conversations found. Try another search." },
+    { "name": "sessions_select", "value": "Select conversations" },
+    { "name": "sessions_rename", "value": "Rename" },
+    { "name": "sessions_selected", "value": "%d selected" },
+    { "name": "sessions_message_count", "value": "%d messages" },
+    { "name": "sessions_pinned", "value": "Pinned" },
+    { "name": "sessions_archived", "value": "Archived" },
+    { "name": "sessions_delete_confirm", "value": "Delete %d conversations? This cannot be undone." },
+    { "name": "sessions_deleted", "value": "Conversation deleted" },
+    { "name": "sessions_undo", "value": "Undo" },
+    { "name": "chat_tool_done", "value": "Completed" },
+    { "name": "chat_tool_failed", "value": "Failed" },
+    { "name": "chat_tool_show_all", "value": "Show full result" },
+    { "name": "open", "value": "Open" },
+    { "name": "chat_open_link", "value": "Open external link" },
+    { "name": "chat_link_failed", "value": "Unable to open this link" },
+    { "name": "chat_copy_failed", "value": "Unable to copy" },
+    { "name": "chat_review_details", "value": "Review details" },
+    { "name": "chat_attention_all", "value": "View all in Progress" },
+    { "name": "chat_attention_retried", "value": "Retry started" },
+    { "name": "chat_attention_completed", "value": "Action completed" },
+    { "name": "chat_agent_decide", "value": "Let agent decide" },
+    { "name": "chat_camera", "value": "Take photo" },
+    { "name": "chat_ref_limit", "value": "Up to 5 note/task references per message" },
+    { "name": "chat_add_reference", "value": "Add reference" },
+    { "name": "chat_directory_locked", "value": "This conversation owns a fixed working directory" },
+    { "name": "chat_change_directory", "value": "Change working directory" },
+    { "name": "chat_use_directory", "value": "Use this directory" },
+    { "name": "chat_context_hint", "value": "Current associations, not a record of everything the model has read." },
+    { "name": "chat_source_unavailable", "value": "Source unavailable" },
+    { "name": "chat_today", "value": "Today" },
+    { "name": "chat_yesterday", "value": "Yesterday" },
+    { "name": "chat_this_week", "value": "This week" },
+    { "name": "chat_last_week", "value": "Last week" },
+    { "name": "chat_this_month", "value": "This month" },
+    { "name": "chat_earlier", "value": "Earlier" },
+    { "name": "chat_close_drawer", "value": "Close chat drawer" },
+    { "name": "chat_profile_hint", "value": "Your personal workspace" },
+    { "name": "chat_automation_hint", "value": "Let xopc work on a schedule" },
+    { "name": "chat_history_failed", "value": "Could not load conversations" },
+    { "name": "chat_model", "value": "Model" },
+    { "name": "chat_agent", "value": "Agent" },
+    { "name": "chat_actions", "value": "Conversation settings" },
+    { "name": "chat_session_files", "value": "Conversation files" },
+    { "name": "chat_queue", "value": "Queued messages" },
+    { "name": "chat_queue_empty", "value": "No queued messages" },
+    { "name": "chat_read_aloud", "value": "Read aloud" },
+    { "name": "chat_more_sources", "value": "More sources are included in this context." },
+    { "name": "chat_queue_hint", "value": "Send next, or steer the current response" },
+    { "name": "chat_steer", "value": "Steer now" },
+    { "name": "chat_send_next", "value": "Send next" },
+    { "name": "chat_copy", "value": "Copy" },
+    { "name": "chat_edit", "value": "Edit and resend" },
+    { "name": "chat_regenerate", "value": "Regenerate" },
+    { "name": "chat_save_note", "value": "Save to notes" },
+    { "name": "chat_copied", "value": "Copied" },
+    { "name": "chat_saved_note", "value": "Saved to notes" },
+    { "name": "chat_config_failed", "value": "Could not load conversation options" },
+    { "name": "chat_close", "value": "Close" },
+    { "name": "chat_jump_bottom", "value": "Latest messages" },
+    { "name": "chat_thinking", "value": "Thinking" },
+    { "name": "chat_tools", "value": "Tool activity" },
+    { "name": "chat_project", "value": "Choose project" },
+    { "name": "chat_no_project", "value": "No project" },
+    { "name": "chat_context", "value": "Context" },
+    { "name": "chat_photos", "value": "Photos" },
+    { "name": "chat_local_files", "value": "Local files" },
+    { "name": "chat_reconnect", "value": "Reconnect" },
+    { "name": "discard_changes", "value": "Discard unsaved changes?" },
+    {
+      "name": "connection_revoked",
+      "value": "Device authorization expired or was revoked. Pair again in Settings."
+    },
+    {
+      "name": "protocol_incompatible",
+      "value": "Gateway protocol is incompatible. Update the Gateway or this app."
+    },
+    {
+      "name": "play_recording",
+      "value": "Play recording"
+    },
+    {
+      "name": "notifications",
+      "value": "Notifications"
+    },
+    {
+      "name": "enable_push",
+      "value": "Enable / refresh"
+    },
+    {
+      "name": "disable_push",
+      "value": "Disable"
+    },
+    {
+      "name": "push_registered",
+      "value": "Registered with this Gateway"
+    },
+    {
+      "name": "push_help",
+      "value": "Requires a signed app with Push Kit enabled, notification permission, and Huawei push configured on your Gateway."
+    },
+    {
+      "name": "app_description",
+      "value": "Your personal AI workspace"
+    },
+    {
+      "name": "microphone_reason",
+      "value": "Record your voice when you choose voice input, then transcribe it into a draft."
+    },
+    {
+      "name": "record_voice",
+      "value": "Voice input"
+    },
+    {
+      "name": "stop_recording",
+      "value": "Finish recording"
+    },
+    {
+      "name": "transcribe",
+      "value": "Transcribe to draft"
+    },
+    {
+      "name": "voice_working",
+      "value": "Processing voice…"
+    },
+    {
+      "name": "connect_title",
+      "value": "Connect to your xopc"
+    },
+    {
+      "name": "connect_help",
+      "value": "Open Devices in your Gateway and create a mobile invitation."
+    },
+    {
+      "name": "invitation_hint",
+      "value": "Paste the pairing link"
+    },
+    {
+      "name": "connect",
+      "value": "Connect"
+    },
+    {
+      "name": "cancel",
+      "value": "Cancel"
+    },
+    {
+      "name": "retry",
+      "value": "Retry"
+    },
+    {
+      "name": "confirm_change",
+      "value": "Confirm change"
+    },
+    {
+      "name": "confirm_change_help",
+      "value": "This changes the conversation. Continue?"
+    },
+    {
+      "name": "confirm",
+      "value": "Confirm"
+    },
+    {
+      "name": "search",
+      "value": "Search"
+    },
+    {
+      "name": "refresh",
+      "value": "Refresh"
+    },
+    {
+      "name": "untitled",
+      "value": "New conversation"
+    },
+    {
+      "name": "load_more",
+      "value": "Load more"
+    },
+    {
+      "name": "no_conversations",
+      "value": "No conversations yet"
+    },
+    {
+      "name": "name",
+      "value": "Name"
+    },
+    {
+      "name": "save",
+      "value": "Save"
+    },
+    {
+      "name": "pin",
+      "value": "Pin"
+    },
+    {
+      "name": "archive",
+      "value": "Archive"
+    },
+    {
+      "name": "unarchive",
+      "value": "Unarchive"
+    },
+    {
+      "name": "add_attachment",
+      "value": "Attach"
+    },
+    {
+      "name": "remove_attachment",
+      "value": "Remove"
+    },
+    {
+      "name": "reset",
+      "value": "Reset"
+    },
+    {
+      "name": "delete",
+      "value": "Delete"
+    },
+    {
+      "name": "older_messages",
+      "value": "Earlier messages"
+    },
+    {
+      "name": "stop",
+      "value": "Stop"
+    },
+    {
+      "name": "message_hint",
+      "value": "Message xopc…"
+    },
+    {
+      "name": "send",
+      "value": "Send"
+    },
+    {
+      "name": "back",
+      "value": "Back"
+    },
+    {
+      "name": "conversations",
+      "value": "Conversations"
+    },
+    {
+      "name": "new_chat",
+      "value": "New"
+    },
+    {
+      "name": "reconnecting",
+      "value": "Connecting to Gateway…"
+    },
+    {
+      "name": "mark_ready",
+      "value": "Mark ready"
+    },
+    {
+      "name": "request_review",
+      "value": "Request review"
+    },
+    {
+      "name": "complete",
+      "value": "Complete"
+    },
+    {
+      "name": "reopen",
+      "value": "Reopen"
+    },
+    {
+      "name": "start_task",
+      "value": "Start task"
+    },
+    {
+      "name": "run_now",
+      "value": "Run now"
+    },
+    {
+      "name": "pause",
+      "value": "Pause"
+    },
+    {
+      "name": "resume",
+      "value": "Resume"
+    },
+    {
+      "name": "unpin",
+      "value": "Unpin"
+    },
+    {
+      "name": "confirm_action_help",
+      "value": "Apply this action to the selected item?"
+    },
+    {
+      "name": "empty_list",
+      "value": "Nothing here yet"
+    },
+    {
+      "name": "description",
+      "value": "Description / Markdown"
+    },
+    {
+      "name": "cron_help",
+      "value": "Cron expression · Gateway time zone"
+    },
+    {
+      "name": "project_id",
+      "value": "Project ID (optional)"
+    },
+    {
+      "name": "agent_id",
+      "value": "Executor agent ID"
+    },
+    {
+      "name": "edit",
+      "value": "Edit"
+    },
+    {
+      "name": "tasks",
+      "value": "Tasks"
+    },
+    {
+      "name": "projects",
+      "value": "Projects"
+    },
+    {
+      "name": "automations",
+      "value": "Automations"
+    },
+    {
+      "name": "notes",
+      "value": "Notes"
+    },
+    {
+      "name": "chat",
+      "value": "Chat"
+    },
+    {
+      "name": "scan",
+      "value": "Scan QR code"
+    },
+    {
+      "name": "files",
+      "value": "Files"
+    },
+    {
+      "name": "upload",
+      "value": "Upload"
+    },
+    {
+      "name": "download",
+      "value": "Download"
+    },
+    {
+      "name": "file_preview_help",
+      "value": "Text preview is available for text files up to 1 MB. Download other files to open them."
+    },
+    {
+      "name": "recent_files",
+      "value": "Recent files / Spaces"
+    },
+    {
+      "name": "transfer_limits",
+      "value": "Upload ≤ 8 MB · Download ≤ 16 MB"
+    },
+    {
+      "name": "settings",
+      "value": "Settings"
+    },
+    {
+      "name": "more",
+      "value": "More"
+    },
+    {
+      "name": "language",
+      "value": "Language"
+    },
+    {
+      "name": "appearance",
+      "value": "Appearance"
+    },
+    {
+      "name": "system",
+      "value": "System"
+    },
+    {
+      "name": "light",
+      "value": "Light"
+    },
+    {
+      "name": "dark",
+      "value": "Dark"
+    },
+    {
+      "name": "disconnect",
+      "value": "Forget connection"
+    },
+    {
+      "name": "disconnect_help",
+      "value": "Remove local Gateway credentials? You will need to pair again. Server conversations and files are not deleted."
+    },
+    {
+      "name": "progress",
+      "value": "Progress"
+    },
+    {
+      "name": "library",
+      "value": "Library"
+    },
+    {
+      "name": "personal",
+      "value": "You"
+    },
+    { "name": "personal_default_name", "value": "You" },
+    { "name": "personal_profile_hint", "value": "Your personal AI workspace" },
+    { "name": "personal_profile_unavailable", "value": "Profile details are temporarily unavailable." },
+    { "name": "workspace_connected", "value": "Workspace connected" },
+    { "name": "device_status", "value": "Device status" },
+    { "name": "status_on", "value": "On" },
+    { "name": "status_off", "value": "Off" },
+    { "name": "personal_settings_hint", "value": "Language, appearance, connection, and notifications" },
+    {
+      "name": "loading",
+      "value": "Loading"
+    },
+    {
+      "name": "progress_hint",
+      "value": "What needs you, and what is moving forward."
+    },
+    { "name": "progress_summary", "value": "%d need you · %d moving" },
+    { "name": "work_tools", "value": "Work tools" },
+    { "name": "quick_access", "value": "Quick access" },
+    {
+      "name": "library_hint",
+      "value": "Files, notes, and things worth keeping."
+    },
+    {
+      "name": "needs_you",
+      "value": "Needs you"
+    },
+    {
+      "name": "ongoing",
+      "value": "Ongoing"
+    },
+    {
+      "name": "recent_closed",
+      "value": "Recently closed"
+    },
+    {
+      "name": "nothing_needed",
+      "value": "Nothing needs your attention right now."
+    },
+    {
+      "name": "nothing_running",
+      "value": "No work running in the background."
+    },
+    {
+      "name": "no_closed",
+      "value": "No recently closed work."
+    },
+    {
+      "name": "all_work",
+      "value": "All work"
+    },
+    {
+      "name": "workflows",
+      "value": "Workflows"
+    },
+    {
+      "name": "inbox",
+      "value": "Inbox"
+    },
+    {
+      "name": "library_recent_files",
+      "value": "Recent files"
+    },
+    {
+      "name": "recent_notes",
+      "value": "Recent notes"
+    },
+    {
+      "name": "no_files",
+      "value": "No files yet."
+    },
+    {
+      "name": "no_notes",
+      "value": "No notes yet."
+    },
+    {
+      "name": "load_failed",
+      "value": "Couldn't load this section"
+    },
+    {
+      "name": "unsupported_route",
+      "value": "This destination is not available on HarmonyOS yet."
+    },
+    {
+      "name": "preferences",
+      "value": "Preferences"
+    },
+    {
+      "name": "connection",
+      "value": "Connection"
+    },
+    {
+      "name": "about",
+      "value": "About"
+    },
+    {
+      "name": "chat_welcome",
+      "value": "What would you like to work on?"
+    },
+    {
+      "name": "history",
+      "value": "Chat history"
+    },
+    {
+      "name": "back_to_chat",
+      "value": "Back to chat"
+    },
+    {
+      "name": "closed_done",
+      "value": "Done"
+    },
+    {
+      "name": "closed_cancelled",
+      "value": "Cancelled"
+    },
+    {
+      "name": "closed_wont_do",
+      "value": "Won't do"
+    },
+    {
+      "name": "closed_duplicate",
+      "value": "Duplicate"
+    },
+    {
+      "name": "close",
+      "value": "Close"
+    },
+    {
+      "name": "tomorrow",
+      "value": "Tomorrow"
+    },
+    {
+      "name": "dismiss",
+      "value": "Dismiss"
+    }
   ]
 }

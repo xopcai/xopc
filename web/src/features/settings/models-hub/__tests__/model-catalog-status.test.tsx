@@ -1,0 +1,37 @@
+// @vitest-environment jsdom
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
+import { afterEach, expect, it, vi } from 'vitest';
+
+vi.mock('swr', () => ({ default: (key: string) => ({ data: key === 'model-catalog'
+  ? { sources: {}, references: [], sync: { refreshing: false } }
+  : { capabilities: {
+    vision: { status: 'ready', selectionSource: 'explicit-config' },
+    'computer-use': { status: 'unavailable', selectionSource: 'explicit-config', rejected: [{ provider: 'cloud', model: 'gui' }] },
+  } }, isLoading: false }) }));
+vi.mock('../models-hub-cache', () => ({
+  MODEL_CATALOG_SWR_KEY: 'model-catalog', CAPABILITY_READINESS_SWR_KEY: 'capability-readiness',
+  revalidateModelsHubCaches: vi.fn(),
+}));
+
+import { ModelCatalogStatus } from '../model-catalog-status';
+
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+const previousApi = window.electronAPI;
+let root: ReturnType<typeof createRoot> | undefined;
+afterEach(async () => {
+  await act(async () => root?.unmount());
+  root = undefined;
+  window.electronAPI = previousApi;
+});
+
+it.each(['darwin', 'win32', 'linux', undefined])('shows computer setup and its warning only on macOS desktop: %s', async platform => {
+  window.electronAPI = platform ? { platform } as Window['electronAPI'] : undefined;
+  const container = document.createElement('div');
+  root = createRoot(container);
+  await act(async () => root!.render(<MemoryRouter><ModelCatalogStatus /></MemoryRouter>));
+  expect(Boolean(container.querySelector('a[href="/settings/computer-use"]'))).toBe(platform === 'darwin');
+  expect(Boolean(container.querySelector('.lucide-triangle-alert'))).toBe(platform === 'darwin');
+  expect(container.textContent).toMatch(/Vision|图片理解/);
+});

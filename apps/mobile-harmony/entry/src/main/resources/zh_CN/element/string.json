@@ -1,89 +1,577 @@
 {
   "string": [
-    { "name": "connection_revoked", "value": "设备授权已失效或被撤销，请在设置中重新配对。" },
-    { "name": "protocol_incompatible", "value": "Gateway 协议不兼容，请更新 Gateway 或此应用。" },
-    { "name": "play_recording", "value": "试听录音" },
-    { "name": "notifications", "value": "通知" },
-    { "name": "enable_push", "value": "启用 / 刷新" },
-    { "name": "disable_push", "value": "关闭" },
-    { "name": "push_registered", "value": "已向当前 Gateway 注册" },
-    { "name": "push_help", "value": "需要已开通 Push Kit 的签名应用、系统通知授权，以及 Gateway 的华为推送配置。" },
-    { "name": "microphone_reason", "value": "仅在你选择语音输入时录音，并将录音转写为草稿。" },
-    { "name": "record_voice", "value": "语音输入" },
-    { "name": "stop_recording", "value": "结束录音" },
-    { "name": "transcribe", "value": "转写到草稿" },
-    { "name": "voice_working", "value": "正在处理语音…" },
-    { "name": "app_description", "value": "你的个人 AI 工作空间" },
-    { "name": "connect_title", "value": "连接你的 xopc" },
-    { "name": "connect_help", "value": "在 Gateway 的设备页面创建移动端邀请，然后粘贴配对链接。" },
-    { "name": "invitation_hint", "value": "粘贴配对链接" },
-    { "name": "connect", "value": "连接" },
-    { "name": "cancel", "value": "取消" },
-    { "name": "retry", "value": "重试" },
-    {"name":"confirm_change","value":"确认操作"},
-    {"name":"confirm_change_help","value":"此操作会更改会话，是否继续？"},
-    {"name":"confirm","value":"确认"},
-    {"name":"search","value":"搜索"},
-    {"name":"refresh","value":"刷新"},
-    {"name":"untitled","value":"新会话"},
-    {"name":"load_more","value":"加载更多"},
-    {"name":"no_conversations","value":"还没有会话"},
-    {"name":"name","value":"名称"},
-    {"name":"save","value":"保存"},
-    {"name":"pin","value":"置顶"},
-    {"name":"archive","value":"归档"},
-    {"name":"unarchive","value":"取消归档"},
-    {"name":"add_attachment","value":"附件"},
-    {"name":"remove_attachment","value":"移除"},
-    {"name":"reset","value":"重置"},
-    {"name":"delete","value":"删除"},
-    {"name":"older_messages","value":"更早的消息"},
-    {"name":"stop","value":"停止"},
-    {"name":"message_hint","value":"发送消息给 xopc…"},
-    {"name":"send","value":"发送"},
-    {"name":"back","value":"返回"},
-    {"name":"conversations","value":"会话"},
-    {"name":"new_chat","value":"新建"},
-    {"name":"reconnecting","value":"正在连接 Gateway…"}
-    ,
-    {"name":"mark_ready","value":"标记就绪"},
-    {"name":"request_review","value":"请求审核"},
-    {"name":"complete","value":"完成"},
-    {"name":"reopen","value":"重新打开"},
-    {"name":"start_task","value":"启动任务"},
-    {"name":"run_now","value":"立即运行"},
-    {"name":"pause","value":"暂停"},
-    {"name":"resume","value":"恢复"},
-    {"name":"unpin","value":"取消置顶"},
-    {"name":"confirm_action_help","value":"确认对当前内容执行此操作？"},
-    {"name":"empty_list","value":"暂无内容"},
-    {"name":"description","value":"描述 / Markdown"},
-    {"name":"cron_help","value":"Cron 表达式 · 按 Gateway 时区执行"},
-    {"name":"project_id","value":"项目 ID（可选）"},
-    {"name":"agent_id","value":"执行 Agent ID"},
-    {"name":"edit","value":"编辑"},
-    {"name":"tasks","value":"任务"},
-    {"name":"projects","value":"项目"},
-    {"name":"automations","value":"自动化"},
-    {"name":"notes","value":"笔记"},
-    {"name":"chat","value":"聊天"}
-    ,
-    {"name":"scan","value":"扫描二维码"},
-    {"name":"files","value":"文件"},
-    {"name":"upload","value":"上传"},
-    {"name":"download","value":"下载"},
-    {"name":"file_preview_help","value":"支持预览 1 MB 内文本文件，其他文件请下载后打开。"},
-    {"name":"recent_files","value":"最近文件 / 文件空间"},
-    {"name":"transfer_limits","value":"上传 ≤ 8 MB · 下载 ≤ 16 MB"}
-    ,
-    {"name":"settings","value":"设置"},
-    {"name":"more","value":"更多"},
-    {"name":"language","value":"语言"},
-    {"name":"appearance","value":"外观"},
-    {"name":"system","value":"跟随系统"},
-    {"name":"light","value":"浅色"},
-    {"name":"dark","value":"深色"},
-    {"name":"disconnect","value":"忘记连接"},
-    {"name":"disconnect_help","value":"删除本机 Gateway 凭据，需要重新配对。不会删除服务端的会话和文件。"}
+    { "name": "pair_title", "value": "连接工作电脑" },
+    { "name": "pair_hint", "value": "在电脑上打开 xopc。\n生成配对二维码，用手机扫码连接。" },
+    { "name": "pair_scan", "value": "扫码连接" },
+    { "name": "pair_manual", "value": "使用配对链接" },
+    { "name": "pair_manual_title", "value": "通过链接连接" },
+    { "name": "pair_manual_hint", "value": "从电脑端 xopc 复制手机配对链接，粘贴到下方。" },
+    { "name": "pair_help", "value": "还没安装？" },
+    { "name": "pair_help_title", "value": "先在电脑上准备" },
+    { "name": "pair_help_steps", "value": "1. 在电脑上访问 xopc.ai。\n\n2. 安装 xopc，完成首次设置。\n\n3. 打开「设备」，创建手机邀请，再用手机扫描二维码。" },
+    { "name": "pair_ready", "value": "准备好了，开始连接" },
+    { "name": "pair_requirement", "value": "电脑需保持运行并联网" },
+    { "name": "pair_waiting", "value": "在电脑上确认" },
+    { "name": "pair_approve_hint", "value": "核对下方确认码与电脑上显示的一致，再允许这台手机连接。" },
+    { "name": "pair_compare", "value": "仅在两端确认码一致时允许连接" },
+    { "name": "pair_connecting", "value": "正在安全连接…" },
+    { "name": "pair_connecting_hint", "value": "正在验证电脑身份并恢复连接，请稍候。" },
+    { "name": "pair_error_expired", "value": "邀请已过期，请在电脑上重新生成。" },
+    { "name": "pair_error_rejected", "value": "电脑端已拒绝连接，请创建新邀请后重试。" },
+    { "name": "pair_error_identity", "value": "无法验证电脑身份，已停止连接以保护你的数据。" },
+    { "name": "pair_error_link", "value": "这不是有效的 xopc 配对链接，请从电脑端重新复制邀请。" },
+    { "name": "pair_error_camera", "value": "暂时无法扫码，请检查相机权限，或使用配对链接。" },
+    { "name": "pair_error_retry", "value": "暂时无法连接，请确认电脑在线后重试。" },
+    { "name": "chat_switch_keyboard", "value": "切换键盘输入" },
+    { "name": "sessions_now", "value": "刚刚" },
+    { "name": "sessions_minutes_ago", "value": "%d 分钟前" },
+    { "name": "sessions_hours_ago", "value": "%d 小时前" },
+    { "name": "sessions_days_ago", "value": "%d 天前" },
+    { "name": "sessions_weeks_ago", "value": "%d 周前" },
+    { "name": "sessions_search", "value": "搜索会话" },
+    { "name": "sessions_no_results", "value": "没有找到会话，请尝试其他关键词。" },
+    { "name": "sessions_select", "value": "多选会话" },
+    { "name": "sessions_rename", "value": "重命名" },
+    { "name": "sessions_selected", "value": "已选 %d 项" },
+    { "name": "sessions_message_count", "value": "%d 条消息" },
+    { "name": "sessions_pinned", "value": "已置顶" },
+    { "name": "sessions_archived", "value": "已归档" },
+    { "name": "sessions_delete_confirm", "value": "删除 %d 个会话？此操作无法撤销。" },
+    { "name": "sessions_deleted", "value": "会话已删除" },
+    { "name": "sessions_undo", "value": "撤销" },
+    { "name": "chat_tool_done", "value": "已完成" },
+    { "name": "chat_tool_failed", "value": "失败" },
+    { "name": "chat_tool_show_all", "value": "显示完整结果" },
+    { "name": "open", "value": "打开" },
+    { "name": "chat_open_link", "value": "打开外部链接" },
+    { "name": "chat_link_failed", "value": "无法打开此链接" },
+    { "name": "chat_copy_failed", "value": "复制失败" },
+    { "name": "chat_review_details", "value": "查看审批详情" },
+    { "name": "chat_attention_all", "value": "在进展中查看全部" },
+    { "name": "chat_attention_retried", "value": "已开始重试" },
+    { "name": "chat_attention_completed", "value": "操作已完成" },
+    { "name": "chat_agent_decide", "value": "让智能体决定" },
+    { "name": "chat_camera", "value": "拍照" },
+    { "name": "chat_ref_limit", "value": "每条消息最多引用 5 个笔记或任务" },
+    { "name": "chat_add_reference", "value": "添加引用" },
+    { "name": "chat_directory_locked", "value": "此会话的工作目录已锁定" },
+    { "name": "chat_change_directory", "value": "更改工作目录" },
+    { "name": "chat_use_directory", "value": "使用此目录" },
+    { "name": "chat_context_hint", "value": "当前关联的资料，不代表模型已读取全部内容。" },
+    { "name": "chat_source_unavailable", "value": "资料不可用" },
+    { "name": "chat_today", "value": "今天" },
+    { "name": "chat_yesterday", "value": "昨天" },
+    { "name": "chat_this_week", "value": "本周" },
+    { "name": "chat_last_week", "value": "上周" },
+    { "name": "chat_this_month", "value": "本月" },
+    { "name": "chat_earlier", "value": "更早" },
+    { "name": "chat_close_drawer", "value": "关闭会话抽屉" },
+    { "name": "chat_profile_hint", "value": "你的个人工作空间" },
+    { "name": "chat_automation_hint", "value": "让 xopc 定时为你工作" },
+    { "name": "chat_history_failed", "value": "无法加载会话" },
+    { "name": "chat_model", "value": "模型" },
+    { "name": "chat_agent", "value": "智能体" },
+    { "name": "chat_actions", "value": "会话设置" },
+    { "name": "chat_session_files", "value": "会话文件" },
+    { "name": "chat_queue", "value": "待发送消息" },
+    { "name": "chat_queue_empty", "value": "没有待发送的消息" },
+    { "name": "chat_read_aloud", "value": "朗读" },
+    { "name": "chat_more_sources", "value": "此上下文还包含其他来源。" },
+    { "name": "chat_queue_hint", "value": "排队发送，或立即介入当前回复" },
+    { "name": "chat_steer", "value": "立即介入" },
+    { "name": "chat_send_next", "value": "排队发送" },
+    { "name": "chat_copy", "value": "复制" },
+    { "name": "chat_edit", "value": "编辑后重发" },
+    { "name": "chat_regenerate", "value": "重新生成" },
+    { "name": "chat_save_note", "value": "保存到笔记" },
+    { "name": "chat_copied", "value": "已复制" },
+    { "name": "chat_saved_note", "value": "已保存到笔记" },
+    { "name": "chat_config_failed", "value": "无法加载会话选项" },
+    { "name": "chat_close", "value": "关闭" },
+    { "name": "chat_jump_bottom", "value": "回到最新消息" },
+    { "name": "chat_thinking", "value": "思考过程" },
+    { "name": "chat_tools", "value": "工具活动" },
+    { "name": "chat_project", "value": "选择项目" },
+    { "name": "chat_no_project", "value": "无项目" },
+    { "name": "chat_context", "value": "上下文" },
+    { "name": "chat_photos", "value": "照片" },
+    { "name": "chat_local_files", "value": "本地文件" },
+    { "name": "chat_reconnect", "value": "重新连接" },
+    { "name": "discard_changes", "value": "放弃尚未保存的修改？" },
+    {
+      "name": "connection_revoked",
+      "value": "设备授权已失效或被撤销，请在设置中重新配对。"
+    },
+    {
+      "name": "protocol_incompatible",
+      "value": "Gateway 协议不兼容，请更新 Gateway 或此应用。"
+    },
+    {
+      "name": "play_recording",
+      "value": "试听录音"
+    },
+    {
+      "name": "notifications",
+      "value": "通知"
+    },
+    {
+      "name": "enable_push",
+      "value": "启用 / 刷新"
+    },
+    {
+      "name": "disable_push",
+      "value": "关闭"
+    },
+    {
+      "name": "push_registered",
+      "value": "已向当前 Gateway 注册"
+    },
+    {
+      "name": "push_help",
+      "value": "需要已开通 Push Kit 的签名应用、系统通知授权，以及 Gateway 的华为推送配置。"
+    },
+    {
+      "name": "microphone_reason",
+      "value": "仅在你选择语音输入时录音，并将录音转写为草稿。"
+    },
+    {
+      "name": "record_voice",
+      "value": "语音输入"
+    },
+    {
+      "name": "stop_recording",
+      "value": "结束录音"
+    },
+    {
+      "name": "transcribe",
+      "value": "转写到草稿"
+    },
+    {
+      "name": "voice_working",
+      "value": "正在处理语音…"
+    },
+    {
+      "name": "app_description",
+      "value": "你的个人 AI 工作空间"
+    },
+    {
+      "name": "connect_title",
+      "value": "连接你的 xopc"
+    },
+    {
+      "name": "connect_help",
+      "value": "在 Gateway 的设备页面创建移动端邀请，然后粘贴配对链接。"
+    },
+    {
+      "name": "invitation_hint",
+      "value": "粘贴配对链接"
+    },
+    {
+      "name": "connect",
+      "value": "连接"
+    },
+    {
+      "name": "cancel",
+      "value": "取消"
+    },
+    {
+      "name": "retry",
+      "value": "重试"
+    },
+    {
+      "name": "confirm_change",
+      "value": "确认操作"
+    },
+    {
+      "name": "confirm_change_help",
+      "value": "此操作会更改会话，是否继续？"
+    },
+    {
+      "name": "confirm",
+      "value": "确认"
+    },
+    {
+      "name": "search",
+      "value": "搜索"
+    },
+    {
+      "name": "refresh",
+      "value": "刷新"
+    },
+    {
+      "name": "untitled",
+      "value": "新会话"
+    },
+    {
+      "name": "load_more",
+      "value": "加载更多"
+    },
+    {
+      "name": "no_conversations",
+      "value": "还没有会话"
+    },
+    {
+      "name": "name",
+      "value": "名称"
+    },
+    {
+      "name": "save",
+      "value": "保存"
+    },
+    {
+      "name": "pin",
+      "value": "置顶"
+    },
+    {
+      "name": "archive",
+      "value": "归档"
+    },
+    {
+      "name": "unarchive",
+      "value": "取消归档"
+    },
+    {
+      "name": "add_attachment",
+      "value": "附件"
+    },
+    {
+      "name": "remove_attachment",
+      "value": "移除"
+    },
+    {
+      "name": "reset",
+      "value": "重置"
+    },
+    {
+      "name": "delete",
+      "value": "删除"
+    },
+    {
+      "name": "older_messages",
+      "value": "更早的消息"
+    },
+    {
+      "name": "stop",
+      "value": "停止"
+    },
+    {
+      "name": "message_hint",
+      "value": "发送消息给 xopc…"
+    },
+    {
+      "name": "send",
+      "value": "发送"
+    },
+    {
+      "name": "back",
+      "value": "返回"
+    },
+    {
+      "name": "conversations",
+      "value": "会话"
+    },
+    {
+      "name": "new_chat",
+      "value": "新建"
+    },
+    {
+      "name": "reconnecting",
+      "value": "正在连接 Gateway…"
+    },
+    {
+      "name": "mark_ready",
+      "value": "标记就绪"
+    },
+    {
+      "name": "request_review",
+      "value": "请求审核"
+    },
+    {
+      "name": "complete",
+      "value": "完成"
+    },
+    {
+      "name": "reopen",
+      "value": "重新打开"
+    },
+    {
+      "name": "start_task",
+      "value": "启动任务"
+    },
+    {
+      "name": "run_now",
+      "value": "立即运行"
+    },
+    {
+      "name": "pause",
+      "value": "暂停"
+    },
+    {
+      "name": "resume",
+      "value": "恢复"
+    },
+    {
+      "name": "unpin",
+      "value": "取消置顶"
+    },
+    {
+      "name": "confirm_action_help",
+      "value": "确认对当前内容执行此操作？"
+    },
+    {
+      "name": "empty_list",
+      "value": "暂无内容"
+    },
+    {
+      "name": "description",
+      "value": "描述 / Markdown"
+    },
+    {
+      "name": "cron_help",
+      "value": "Cron 表达式 · 按 Gateway 时区执行"
+    },
+    {
+      "name": "project_id",
+      "value": "项目 ID（可选）"
+    },
+    {
+      "name": "agent_id",
+      "value": "执行 Agent ID"
+    },
+    {
+      "name": "edit",
+      "value": "编辑"
+    },
+    {
+      "name": "tasks",
+      "value": "任务"
+    },
+    {
+      "name": "projects",
+      "value": "项目"
+    },
+    {
+      "name": "automations",
+      "value": "自动化"
+    },
+    {
+      "name": "notes",
+      "value": "笔记"
+    },
+    {
+      "name": "chat",
+      "value": "聊天"
+    },
+    {
+      "name": "scan",
+      "value": "扫描二维码"
+    },
+    {
+      "name": "files",
+      "value": "文件"
+    },
+    {
+      "name": "upload",
+      "value": "上传"
+    },
+    {
+      "name": "download",
+      "value": "下载"
+    },
+    {
+      "name": "file_preview_help",
+      "value": "支持预览 1 MB 内文本文件，其他文件请下载后打开。"
+    },
+    {
+      "name": "recent_files",
+      "value": "最近文件 / 文件空间"
+    },
+    {
+      "name": "transfer_limits",
+      "value": "上传 ≤ 8 MB · 下载 ≤ 16 MB"
+    },
+    {
+      "name": "settings",
+      "value": "设置"
+    },
+    {
+      "name": "more",
+      "value": "更多"
+    },
+    {
+      "name": "language",
+      "value": "语言"
+    },
+    {
+      "name": "appearance",
+      "value": "外观"
+    },
+    {
+      "name": "system",
+      "value": "跟随系统"
+    },
+    {
+      "name": "light",
+      "value": "浅色"
+    },
+    {
+      "name": "dark",
+      "value": "深色"
+    },
+    {
+      "name": "disconnect",
+      "value": "忘记连接"
+    },
+    {
+      "name": "disconnect_help",
+      "value": "删除本机 Gateway 凭据，需要重新配对。不会删除服务端的会话和文件。"
+    },
+    {
+      "name": "progress",
+      "value": "进展"
+    },
+    {
+      "name": "library",
+      "value": "资料库"
+    },
+    {
+      "name": "personal",
+      "value": "我的"
+    },
+    { "name": "personal_default_name", "value": "你" },
+    { "name": "personal_profile_hint", "value": "你的个人 AI 工作空间" },
+    { "name": "personal_profile_unavailable", "value": "暂时无法获取个人资料。" },
+    { "name": "workspace_connected", "value": "工作空间已连接" },
+    { "name": "device_status", "value": "设备状态" },
+    { "name": "status_on", "value": "已开启" },
+    { "name": "status_off", "value": "未开启" },
+    { "name": "personal_settings_hint", "value": "语言、外观、连接和通知" },
+    {
+      "name": "loading",
+      "value": "加载中"
+    },
+    {
+      "name": "progress_hint",
+      "value": "需要你处理的事，以及正在推进的工作。"
+    },
+    { "name": "progress_summary", "value": "%d 项待处理 · %d 项进行中" },
+    { "name": "work_tools", "value": "工作工具" },
+    { "name": "quick_access", "value": "快速入口" },
+    {
+      "name": "library_hint",
+      "value": "文件、笔记，以及值得保留的资料。"
+    },
+    {
+      "name": "needs_you",
+      "value": "需要你"
+    },
+    {
+      "name": "ongoing",
+      "value": "正在进行"
+    },
+    {
+      "name": "recent_closed",
+      "value": "最近关闭"
+    },
+    {
+      "name": "nothing_needed",
+      "value": "目前没有需要你处理的事项。"
+    },
+    {
+      "name": "nothing_running",
+      "value": "目前没有后台进行中的工作。"
+    },
+    {
+      "name": "no_closed",
+      "value": "暂无最近关闭的工作。"
+    },
+    {
+      "name": "all_work",
+      "value": "全部工作"
+    },
+    {
+      "name": "workflows",
+      "value": "工作流"
+    },
+    {
+      "name": "inbox",
+      "value": "收件箱"
+    },
+    {
+      "name": "library_recent_files",
+      "value": "最近文件"
+    },
+    {
+      "name": "recent_notes",
+      "value": "最近笔记"
+    },
+    {
+      "name": "no_files",
+      "value": "暂无文件。"
+    },
+    {
+      "name": "no_notes",
+      "value": "暂无笔记。"
+    },
+    {
+      "name": "load_failed",
+      "value": "此部分加载失败"
+    },
+    {
+      "name": "unsupported_route",
+      "value": "此页面尚未完成鸿蒙适配。"
+    },
+    {
+      "name": "preferences",
+      "value": "偏好设置"
+    },
+    {
+      "name": "connection",
+      "value": "连接"
+    },
+    {
+      "name": "about",
+      "value": "关于"
+    },
+    {
+      "name": "chat_welcome",
+      "value": "今天想一起做点什么？"
+    },
+    {
+      "name": "history",
+      "value": "聊天记录"
+    },
+    {
+      "name": "back_to_chat",
+      "value": "返回聊天"
+    },
+    {
+      "name": "closed_done",
+      "value": "已完成"
+    },
+    {
+      "name": "closed_cancelled",
+      "value": "已取消"
+    },
+    {
+      "name": "closed_wont_do",
+      "value": "不再处理"
+    },
+    {
+      "name": "closed_duplicate",
+      "value": "重复事项"
+    },
+    {
+      "name": "close",
+      "value": "关闭"
+    },
+    {
+      "name": "tomorrow",
+      "value": "明天再看"
+    },
+    {
+      "name": "dismiss",
+      "value": "忽略"
+    }
   ]
 }

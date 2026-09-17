@@ -1,0 +1,493 @@
+{
+  "copy": {
+    "otherSuggestionsLabel": "建议开始",
+    "acceptSuggestionHint": "点击填入",
+    "refreshExplorationLabel": "换一组",
+    "contextLoading": "正在读取当前上下文…",
+    "contextFallback": "部分上下文暂时不可用，已根据可用信息生成建议。",
+    "retryContext": "重试",
+    "contextFallbackTitle": "当前任务",
+    "agentTagline": "当前由 {{agentName}} 处理，建议会贴合它的工作方式。",
+    "reasons": {
+      "general": "一个容易开始、发送前仍可修改的起点",
+      "agent": "更贴合 {{agentName}} 的能力",
+      "project": "根据项目「{{projectName}}」的当前上下文",
+      "note": "根据笔记「{{noteTitle}}」继续推进",
+      "blocked": "优先处理当前阻塞：{{blockedReason}}",
+      "nextAction": "沿用已经明确的下一步：{{nextAction}}",
+      "directory": "根据当前目录「{{path}}」开始"
+    },
+    "contextPrompts": {
+      "codingWorkspace": "请从目录「{{workspaceRoot}}」开始理解项目「{{projectName}}」，先定位入口、核心模块和最值得阅读的文件。",
+      "projectBlocked": "项目「{{projectName}}」被“{{blockedReason}}”阻塞。请给出解除阻塞的最小方案并开始推进。",
+      "projectNextAction": "继续项目「{{projectName}}」的下一步：“{{nextAction}}”。核对状态后直接推进。",
+      "projectFailure": "项目「{{projectName}}」最近失败：“{{recentFailure}}”。请定位原因并给出修复验证方案。",
+      "taskAttention": "任务「{{taskTitle}}」需要处理：“{{attentionSummary}}”。请说明需要我决定什么。",
+      "taskNextAction": "继续任务「{{taskTitle}}」的下一步：“{{nextAction}}”。核对约束后直接推进。",
+      "taskFailure": "任务「{{taskTitle}}」失败：“{{recentFailure}}”。请分析原因并给出恢复验证方案。",
+      "taskReview": "按验收标准检查任务「{{taskTitle}}」，列出证据、缺口和完成结论。",
+      "taskClosed": "总结任务「{{taskTitle}}」的结果、证据和遗留工作。",
+      "fileStart": "阅读文件「{{fileName}}」，找出最值得修改的地方并给出编辑方案。",
+      "workflowNextAction": "继续工作流「{{workflowName}}」的下一步：“{{nextAction}}”。",
+      "workflowFailure": "工作流「{{workflowName}}」失败：“{{recentFailure}}”。请给出恢复方案。"
+    },
+    "exploreCards": [
+      {
+        "id": "explore-ai-news",
+        "icon": "search",
+        "title": "今日 AI 新闻",
+        "description": "最新进展、影响、为什么重要",
+        "scenarios": [
+          {
+            "prompt": "帮我收集今天最新的 AI 新闻，挑出 3 条最值得关注的进展，用通俗语言说明它们是什么、为什么重要。"
+          }
+        ]
+      },
+      {
+        "id": "explore-learn",
+        "icon": "search",
+        "title": "学习新主题",
+        "description": "概念、资料、学习路径",
+        "scenarios": [
+          {
+            "prompt": "给我设计一个 30 分钟可以完成的微型学习计划，主题由你推荐。"
+          }
+        ]
+      }
+    ],
+    "agentCards": {
+      "coding": {
+        "id": "agent-coding",
+        "icon": "code",
+        "title": "推进代码任务",
+        "description": "定位、修改、验证",
+        "scenarios": [
+          {
+            "prompt": "从当前上下文开始，帮我定位最适合推进的代码改动，并给出最小验证步骤。"
+          }
+        ]
+      },
+      "writing": {
+        "id": "agent-writing",
+        "icon": "content",
+        "title": "整理成文",
+        "description": "草稿、结构、润色",
+        "scenarios": [
+          {
+            "prompt": "帮我把当前想法整理成一段清晰、可直接发送的文字。"
+          }
+        ]
+      },
+      "research": {
+        "id": "agent-research",
+        "icon": "search",
+        "title": "调研验证",
+        "description": "资料、来源、结论",
+        "scenarios": [
+          {
+            "prompt": "围绕当前主题做一次快速调研，列出关键结论、来源和不确定点。"
+          }
+        ]
+      },
+      "data": {
+        "id": "agent-data",
+        "icon": "documents",
+        "title": "分析数据",
+        "description": "指标、表格、洞察",
+        "scenarios": [
+          {
+            "prompt": "帮我分析当前数据或资料，提炼最重要的指标、异常和下一步问题。"
+          }
+        ]
+      },
+      "creative": {
+        "id": "agent-creative",
+        "icon": "content",
+        "title": "发散方案",
+        "description": "方向、草案、取舍",
+        "scenarios": [
+          {
+            "prompt": "基于当前上下文，给我 3 个不同方向的创意方案，并说明各自取舍。"
+          }
+        ]
+      }
+    },
+    "empty": {
+      "headline": "今天想推进什么？",
+      "tagline": "选择一个起点，填入后可继续编辑。",
+      "categories": [
+        {
+          "id": "work",
+          "icon": "documents",
+          "title": "办公输出",
+          "description": "总结、同步、消息",
+          "scenarios": [
+            {
+              "prompt": "我 30 分钟后要开会，帮我准备一份简短的同步材料。"
+            }
+          ]
+        },
+        {
+          "id": "writing",
+          "icon": "content",
+          "title": "写作润色",
+          "description": "草稿、结构、表达",
+          "scenarios": [
+            {
+              "prompt": "帮我把下面这段内容整理得更清晰、更适合发送。"
+            }
+          ]
+        }
+      ]
+    },
+    "codingProject": {
+      "headline": "继续这个代码项目",
+      "tagline": "理解、实现或排查。",
+      "categories": [
+        {
+          "id": "understand-codebase",
+          "icon": "code",
+          "title": "理解代码库",
+          "description": "结构、入口、模块",
+          "scenarios": [
+            {
+              "prompt": "快速梳理项目「{{projectName}}」的结构、入口和核心模块。"
+            }
+          ]
+        },
+        {
+          "id": "implement-feature",
+          "icon": "target",
+          "title": "推进改动",
+          "description": "定位、实现、验证",
+          "scenarios": [
+            {
+              "prompt": "定位项目「{{projectName}}」最适合推进的改动并给出验证步骤。"
+            }
+          ]
+        },
+        {
+          "id": "review-debug",
+          "icon": "review",
+          "title": "审查与排查",
+          "description": "风险、测试、失败",
+          "scenarios": [
+            {
+              "prompt": "检查项目「{{projectName}}」的风险、测试缺口和失败。"
+            }
+          ]
+        }
+      ]
+    },
+    "codingWorkspace": {
+      "headline": "从这个代码工作区开始",
+      "tagline": "先理解结构和入口，再完成下一处改动。",
+      "categories": [
+        {
+          "id": "directory-understand",
+          "icon": "folder",
+          "title": "理解目录",
+          "description": "结构与关键文件",
+          "scenarios": [
+            {
+              "prompt": "理解代码目录「{{path}}」的结构、技术栈和关键文件。"
+            }
+          ]
+        },
+        {
+          "id": "directory-entry",
+          "icon": "code",
+          "title": "找到入口",
+          "description": "启动与配置",
+          "scenarios": [
+            {
+              "prompt": "找出代码目录「{{path}}」的启动入口、配置和依赖。"
+            }
+          ]
+        },
+        {
+          "id": "directory-organize",
+          "icon": "review",
+          "title": "工程审查",
+          "description": "风险与清理建议",
+          "scenarios": [
+            {
+              "prompt": "审查代码目录「{{path}}」的模块边界和潜在风险。"
+            }
+          ]
+        }
+      ]
+    },
+    "generalProject": {
+      "headline": "继续推进这个项目",
+      "tagline": "围绕当前状态，快速开始下一步。",
+      "categories": [
+        {
+          "id": "project-next-step",
+          "icon": "target",
+          "title": "继续下一步",
+          "description": "按当前建议推进",
+          "scenarios": [
+            {
+              "prompt": "梳理项目「{{projectName}}」的状态，并直接推进最小下一步。"
+            }
+          ]
+        },
+        {
+          "id": "project-status",
+          "icon": "search",
+          "title": "检查项目状态",
+          "description": "进展、风险、阻塞",
+          "scenarios": [
+            {
+              "prompt": "总结项目「{{projectName}}」的进展、风险和阻塞。"
+            }
+          ]
+        },
+        {
+          "id": "project-material",
+          "icon": "documents",
+          "title": "整理项目材料",
+          "description": "摘要、同步、汇报",
+          "scenarios": [
+            {
+              "prompt": "为项目「{{projectName}}」整理一份简洁的进展同步。"
+            }
+          ]
+        }
+      ]
+    },
+    "note": {
+      "headline": "继续这条笔记",
+      "tagline": "提炼、扩展或转成行动。",
+      "categories": [
+        {
+          "id": "note-summarize",
+          "icon": "note",
+          "title": "提炼笔记",
+          "description": "观点与结论",
+          "scenarios": [
+            {
+              "prompt": "总结笔记「{{noteTitle}}」的核心观点和结论。"
+            }
+          ]
+        },
+        {
+          "id": "note-think",
+          "icon": "search",
+          "title": "继续思考",
+          "description": "问题与缺口",
+          "scenarios": [
+            {
+              "prompt": "找出笔记「{{noteTitle}}」值得继续思考的问题和缺口。"
+            }
+          ]
+        },
+        {
+          "id": "note-output",
+          "icon": "content",
+          "title": "转成产出",
+          "description": "文章、任务、计划",
+          "scenarios": [
+            {
+              "prompt": "把笔记「{{noteTitle}}」整理成可执行的产出。"
+            }
+          ]
+        }
+      ]
+    },
+    "workingDirectory": {
+      "headline": "从当前目录开始",
+      "tagline": "先理解结构，再找到入口和整理方向。",
+      "categories": [
+        {
+          "id": "directory-understand",
+          "icon": "folder",
+          "title": "理解目录",
+          "description": "结构、类型、关键文件",
+          "scenarios": [
+            {
+              "prompt": "帮我理解目录「{{path}}」的结构、项目类型和最重要的文件。"
+            }
+          ]
+        },
+        {
+          "id": "directory-entry",
+          "icon": "code",
+          "title": "找入口",
+          "description": "启动、配置、依赖",
+          "scenarios": [
+            {
+              "prompt": "帮我找出目录「{{path}}」里可能的启动入口、配置文件和依赖说明。"
+            }
+          ]
+        },
+        {
+          "id": "directory-organize",
+          "icon": "documents",
+          "title": "整理文件",
+          "description": "分类、摘要、清理建议",
+          "scenarios": [
+            {
+              "prompt": "帮我整理目录「{{path}}」里的文件，并给出分类和清理建议。"
+            }
+          ]
+        }
+      ]
+    },
+    "task": {
+      "headline": "推进任务「{{taskTitle}}」",
+      "tagline": "处理下一步、阻塞和验收。",
+      "categories": [
+        {
+          "id": "task-next-step",
+          "icon": "target",
+          "title": "继续下一步",
+          "description": "直接推进并验证",
+          "scenarios": [
+            {
+              "prompt": "执行任务「{{taskTitle}}」最小可验证的下一步。"
+            }
+          ]
+        },
+        {
+          "id": "task-clarify",
+          "icon": "search",
+          "title": "补齐关键信息",
+          "description": "输入、依赖、决策",
+          "scenarios": [
+            {
+              "prompt": "检查任务「{{taskTitle}}」缺少的输入、依赖或决策。"
+            }
+          ]
+        },
+        {
+          "id": "task-recover",
+          "icon": "review",
+          "title": "排查与恢复",
+          "description": "失败、阻塞、重试",
+          "scenarios": [
+            {
+              "prompt": "检查任务「{{taskTitle}}」的失败和阻塞并给出恢复方案。"
+            }
+          ]
+        },
+        {
+          "id": "task-verify",
+          "icon": "review",
+          "title": "验证任务结果",
+          "description": "验收标准与证据",
+          "scenarios": [
+            {
+              "prompt": "按验收标准验证任务「{{taskTitle}}」的结果。"
+            }
+          ]
+        }
+      ]
+    },
+    "file": {
+      "headline": "处理文件「{{fileName}}」",
+      "tagline": "理解、编辑或提取信息。",
+      "categories": [
+        {
+          "id": "file-understand",
+          "icon": "documents",
+          "title": "理解文件",
+          "description": "摘要与重点",
+          "scenarios": [
+            {
+              "prompt": "总结文件「{{fileName}}」的结构和核心内容。"
+            }
+          ]
+        },
+        {
+          "id": "file-edit",
+          "icon": "content",
+          "title": "编辑文件",
+          "description": "改写与整理",
+          "scenarios": [
+            {
+              "prompt": "检查文件「{{fileName}}」并提出编辑方案。"
+            }
+          ]
+        },
+        {
+          "id": "file-extract",
+          "icon": "task",
+          "title": "提取行动",
+          "description": "任务与结论",
+          "scenarios": [
+            {
+              "prompt": "从文件「{{fileName}}」提取任务、数据和结论。"
+            }
+          ]
+        }
+      ]
+    },
+    "workflow": {
+      "headline": "继续工作流「{{workflowName}}」",
+      "tagline": "检查结果或继续下一步。",
+      "categories": [
+        {
+          "id": "workflow-next-step",
+          "icon": "target",
+          "title": "继续下一步",
+          "description": "沿用已有产物",
+          "scenarios": [
+            {
+              "prompt": "基于工作流「{{workflowName}}」的产物继续下一步。"
+            }
+          ]
+        },
+        {
+          "id": "workflow-review",
+          "icon": "review",
+          "title": "检查结果",
+          "description": "产物与缺口",
+          "scenarios": [
+            {
+              "prompt": "总结工作流「{{workflowName}}」的结果和缺口。"
+            }
+          ]
+        },
+        {
+          "id": "workflow-recover",
+          "icon": "search",
+          "title": "处理异常",
+          "description": "恢复与重试",
+          "scenarios": [
+            {
+              "prompt": "检查工作流「{{workflowName}}」的异常并给出恢复方案。"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "names": {
+    "assistant": {
+      "name": "智能助手",
+      "description": "你的个人智能助手：解答疑问、协助日常事务，并随时与你交流。"
+    },
+    "coding": {
+      "name": "编程专家",
+      "description": "编写、调试、重构和测试软件。"
+    },
+    "writing": {
+      "name": "写作助手",
+      "description": "根据受众需求起草、编辑和润色内容。"
+    },
+    "research": {
+      "name": "研究助手",
+      "description": "研究主题、比较来源并综合结论。"
+    },
+    "data": {
+      "name": "数据分析师",
+      "description": "清洗和分析数据，生成可视化并交付报告。"
+    },
+    "creative": {
+      "name": "创意助手",
+      "description": "探索视觉方向、提示词、设计评审和创意方案。"
+    }
+  }
+}

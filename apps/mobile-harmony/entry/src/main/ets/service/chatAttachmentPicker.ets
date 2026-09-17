@@ -8,7 +8,11 @@ export async function pickChatAttachment(context: common.Context, current: XopcC
   const options = new picker.DocumentSelectOptions(); options.maxSelectNumber = 1;
   const uris = await new picker.DocumentViewPicker(context).select(options);
   if (!uris.length) return undefined;
-  const uri = uris[0]; const name = new fileUri.FileUri(uri).name;
+  return readChatAttachment(uris[0], current);
+}
+
+export async function readChatAttachment(uri: string, current: XopcChatAttachment[]): Promise<XopcChatAttachment> {
+  const name = new fileUri.FileUri(uri).name;
   const file = await fs.open(uri, fs.OpenMode.READ_ONLY);
   try {
     const size = (await fs.stat(file.fd)).size;

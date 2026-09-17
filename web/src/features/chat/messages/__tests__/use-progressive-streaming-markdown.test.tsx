@@ -72,16 +72,10 @@ describe('useProgressiveStreamingMarkdown', () => {
     expect(container.textContent).toBe('abcdefghijkl');
   });
 
-  it('keeps draining pending text after the realtime stream ends', () => {
+  it('flushes pending text when the realtime stream ends', () => {
     act(() => root.render(<Harness content="abcdef" streaming />));
     act(() => root.render(<Harness content="abcdefghijklmnopqr" streaming />));
     act(() => root.render(<Harness content="abcdefghijklmnopqr" streaming={false} />));
-    expect(container.textContent).toBe('abcdef');
-
-    act(() => vi.advanceTimersByTime(48));
-    expect(container.textContent).toBe('abcdefghijkl');
-
-    act(() => vi.advanceTimersByTime(32));
     expect(container.textContent).toBe('abcdefghijklmnopqr');
   });
 

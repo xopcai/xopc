@@ -78,7 +78,7 @@ export function SettingsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-      <NativeScreenHeader title={m.mobileExperience.personal} largeTitle />
+      <NativeScreenHeader title={s.title} largeTitle />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scroll}
@@ -116,6 +116,7 @@ export function SettingsScreen() {
             iconColor={colors.accent}
             label={s.clipboardIntake}
             showChevron={false}
+            isLast={!configured}
             rightAccessory={(
               <Switch
                 value={clipboardIntakeEnabled}
@@ -123,47 +124,16 @@ export function SettingsScreen() {
               />
             )}
           />
+          {configured ? (
+            <SettingsRow
+              icon="waveform"
+              iconColor={colors.accent}
+              label={m.voice.settings}
+              isLast
+              onPress={() => router.push('/settings/voice')}
+            />
+          ) : null}
         </SettingsSection>
-
-        {configured ? (
-          <>
-            <SettingsSection title={s.sectionAi}>
-              <SettingsRow
-                icon="robot-outline"
-                iconColor={colors.accent}
-                label={m.agentsPage.title}
-                onPress={() => router.push('/ai/agents')}
-              />
-              <SettingsRow
-                icon="waveform"
-                iconColor={colors.accent}
-                label={m.voice.settings}
-                isLast
-                onPress={() => router.push('/settings/voice')}
-              />
-            </SettingsSection>
-
-            <SettingsSection title={s.sectionAutomation}>
-              <SettingsRow
-                icon="clock-outline"
-                iconColor={colors.warning}
-                label={m.automationPage.title}
-                isLast
-                onPress={() => router.push('/automation')}
-              />
-            </SettingsSection>
-
-            <SettingsSection title={s.sectionSharing}>
-              <SettingsRow
-                icon="share-variant"
-                iconColor={colors.accent}
-                label={m.sharingPage.title}
-                isLast
-                onPress={() => router.push('/sharing')}
-              />
-            </SettingsSection>
-          </>
-        ) : null}
 
         <AppearanceSection />
 

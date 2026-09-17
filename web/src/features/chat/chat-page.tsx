@@ -1014,7 +1014,6 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
       <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface-panel">
         <ChatRealtimeStatus />
         <ChatPageHeaderRegistration
-          sessionIdentity={sessionMetadata?.identity}
           chatHeadline={m.chat.sessionNotFoundTitle}
           chatAgents={agents.chatAgents?.items ?? []}
           showChatAgentSelector={false}
@@ -1036,7 +1035,6 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
       <ChatRealtimeStatus />
 
       {!embedded ? <ChatPageHeaderRegistration
-          sessionIdentity={sessionMetadata?.identity}
         chatHeadline={skillDiscovery && msgSlice.items.length === 0 ? m.skills.findTitle : chatHeadline}
         chatAgents={agents.chatAgents?.items ?? []}
         showChatAgentSelector={agents.showChatAgentSelector}

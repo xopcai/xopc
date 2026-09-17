@@ -21,7 +21,7 @@ export default function PrimaryTabs() {
       tabBarLabelPosition: 'below-icon',
       tabBarActiveTintColor: colors.accent.primary,
       tabBarInactiveTintColor: colors.text.secondary,
-      tabBarLabelStyle: { ...typography.caption, fontWeight: '600' },
+      tabBarLabelStyle: { ...typography.micro, fontWeight: '600' },
       tabBarItemStyle: { borderRadius: radii.full, paddingVertical: 0 },
       tabBarStyle: {
         backgroundColor: 'transparent',

@@ -10,6 +10,7 @@ export type StreamingRenderMetricsSnapshot = {
   stableBlockCount: number;
   tailLength: number;
   latestContentLength: number;
+  terminalBacklogChars: number;
   layoutShiftScore: number;
   longTaskCount: number;
   longestTaskMs: number;
@@ -29,6 +30,7 @@ type MutableStreamingRenderMetrics = {
   stableBlockCount: number;
   tailLength: number;
   latestContentLength: number;
+  terminalBacklogChars: number;
   layoutShiftScore: number;
   longTaskCount: number;
   longestTaskMs: number;
@@ -66,6 +68,7 @@ function metricFor(key: string): MutableStreamingRenderMetrics | null {
     stableBlockCount: 0,
     tailLength: 0,
     latestContentLength: 0,
+    terminalBacklogChars: 0,
     layoutShiftScore: 0,
     longTaskCount: 0,
     longestTaskMs: 0,
@@ -153,6 +156,12 @@ export function recordStreamingCommit(key: string, contentLength: number): void 
   metric.latestContentLength = contentLength;
 }
 
+export function recordStreamingTerminalFlush(key: string, backlogChars: number): void {
+  const metric = metricFor(key);
+  if (!metric) return;
+  metric.terminalBacklogChars = Math.max(0, backlogChars);
+}
+
 export function recordStreamingParse(key: string, durationMs: number): void {
   const metric = metricFor(key);
   if (!metric) return;
@@ -191,6 +200,7 @@ function snapshot(metric: MutableStreamingRenderMetrics): StreamingRenderMetrics
     stableBlockCount: metric.stableBlockCount,
     tailLength: metric.tailLength,
     latestContentLength: metric.latestContentLength,
+    terminalBacklogChars: metric.terminalBacklogChars,
     layoutShiftScore: metric.layoutShiftScore,
     longTaskCount: metric.longTaskCount,
     longestTaskMs: metric.longestTaskMs,

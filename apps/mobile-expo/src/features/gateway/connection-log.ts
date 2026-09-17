@@ -12,7 +12,7 @@ import { storage } from '../../storage/mmkv';
 const STORAGE_KEY = 'gateway.connectionLog';
 const MAX_EVENTS = 100;
 
-export type ConnectionEventKind = 'apiFetch' | 'realtime';
+export type ConnectionEventKind = 'apiFetch' | 'realtime' | 'chatRun';
 
 export type ConnectionEvent = {
   at: number;

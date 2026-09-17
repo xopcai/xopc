@@ -10,6 +10,7 @@ import {
   getLatestStreamingParseMs,
   recordStreamingCommit,
   recordStreamingDelta,
+  recordStreamingTerminalFlush,
 } from '@/components/markdown/streaming-render-metrics';
 
 export function useProgressiveStreamingMarkdown(
@@ -40,6 +41,17 @@ export function useProgressiveStreamingMarkdown(
     }
     if (!hasStreamedRef.current) {
       visibleContentRef.current = content;
+      setVisibleContent(content);
+      return;
+    }
+    if (!streaming && visibleContent !== content) {
+      recordStreamingTerminalFlush(metricsKey, content.length - visibleContent.length);
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      visibleContentRef.current = content;
+      lastCommitAtRef.current = null;
       setVisibleContent(content);
       return;
     }

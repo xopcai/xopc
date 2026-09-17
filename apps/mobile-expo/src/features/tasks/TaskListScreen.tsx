@@ -1,8 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
-import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import PagerView from 'react-native-pager-view';
 import { Button, Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,25 +19,23 @@ import { radii, spacing, typography, useTheme } from '../../theme';
 
 import {
   formatProjectRelativeTime,
-  selectWorkOverviewProjects,
-  selectWorkOverviewTasks,
   sortProjectPortfolio,
 } from './project-presentation';
 
-type WorkTab = 'overview' | 'projects' | 'tasks';
+type WorkTab = 'projects' | 'tasks';
 
 const TAB_INDEX: Record<WorkTab, number> = {
-  overview: 0,
-  projects: 1,
-  tasks: 2,
+  projects: 0,
+  tasks: 1,
 };
 
 export function TaskListScreen() {
   const router = useRouter();
   const configured = useGatewayConfigured();
   const { colors } = useTheme();
-  const labels = useMessages().tasksPage;
-  const [tab, setTab] = useState<WorkTab>('overview');
+  const messages = useMessages();
+  const labels = messages.tasksPage;
+  const [tab, setTab] = useState<WorkTab>('projects');
   const pagerRef = useRef<PagerView>(null);
   const tasks = useQuery({ queryKey: queryKeys.tasks, queryFn: () => fetchTasks(), enabled: configured });
   const projects = useQuery({ queryKey: queryKeys.projects, queryFn: fetchProjects, enabled: configured });
@@ -49,7 +46,7 @@ export function TaskListScreen() {
   }, []);
 
   const onPageSelected = useCallback((position: number) => {
-    setTab(position === 0 ? 'overview' : position === 1 ? 'projects' : 'tasks');
+    setTab(position === 0 ? 'projects' : 'tasks');
   }, []);
 
   return (
@@ -64,25 +61,20 @@ export function TaskListScreen() {
           accessibilityLabel: labels.create,
         }]}
       />
+      <View style={styles.toolLinks}>
+        <WorkLink icon="source-branch" label={messages.workflowsPage.title} onPress={() => router.push('/workflows')} />
+        <WorkLink icon="clock-outline" label={messages.automationPage.title} onPress={() => router.push('/automation')} />
+      </View>
       <View style={[styles.tabBar, { backgroundColor: colors.surface.input }]}>
-        <WorkTabButton label={labels.overviewTab} active={tab === 'overview'} onPress={() => selectTab('overview')} />
         <WorkTabButton label={labels.projectsTab} active={tab === 'projects'} onPress={() => selectTab('projects')} />
         <WorkTabButton label={labels.tasksTab} active={tab === 'tasks'} onPress={() => selectTab('tasks')} />
       </View>
       <PagerView
         ref={pagerRef}
         style={styles.pager}
-        initialPage={TAB_INDEX.overview}
+        initialPage={TAB_INDEX.projects}
         onPageSelected={(event) => onPageSelected(event.nativeEvent.position)}
       >
-        <View key="overview" style={styles.page} collapsable={false}>
-          <WorkOverview
-            tasksQuery={tasks}
-            projectsQuery={projects}
-            onShowProjects={() => selectTab('projects')}
-            onShowTasks={() => selectTab('tasks')}
-          />
-        </View>
         <View key="projects" style={styles.page} collapsable={false}>
           <ProjectsPage query={projects} />
         </View>
@@ -91,6 +83,24 @@ export function TaskListScreen() {
         </View>
       </PagerView>
     </View>
+  );
+}
+
+function WorkLink({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.toolLink, {
+        backgroundColor: pressed ? colors.surface.pressed : colors.surface.panel,
+        borderColor: colors.border.subtle,
+      }]}
+    >
+      <Icon source={icon} size={19} color={colors.accent.primary} />
+      <Text style={[styles.toolLinkLabel, { color: colors.text.primary }]}>{label}</Text>
+      <Icon source="chevron-right" size={17} color={colors.text.tertiary} />
+    </Pressable>
   );
 }
 
@@ -112,96 +122,6 @@ function WorkTabButton({ label, active, onPress }: { label: string; active: bool
 
 type TasksQuery = ReturnType<typeof useQuery<TaskListItem[]>>;
 type ProjectsQuery = ReturnType<typeof useQuery<Project[]>>;
-
-function WorkOverview({
-  tasksQuery,
-  projectsQuery,
-  onShowProjects,
-  onShowTasks,
-}: {
-  tasksQuery: TasksQuery;
-  projectsQuery: ProjectsQuery;
-  onShowProjects: () => void;
-  onShowTasks: () => void;
-}) {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
-  const labels = useMessages().tasksPage;
-  const openTasks = useMemo(
-    () => (tasksQuery.data ?? []).filter((item) => item.task.phase !== 'closed'),
-    [tasksQuery.data],
-  );
-  const attentionTasks = useMemo(
-    () => openTasks.filter((item) => item.attention.length > 0).slice(0, 3),
-    [openTasks],
-  );
-  const activeTasks = useMemo(
-    () => selectWorkOverviewTasks(tasksQuery.data ?? []),
-    [tasksQuery.data],
-  );
-  const activeProjects = useMemo(
-    () => selectWorkOverviewProjects(projectsQuery.data ?? []),
-    [projectsQuery.data],
-  );
-
-  const refresh = useCallback(async () => {
-    await Promise.all([tasksQuery.refetch(), projectsQuery.refetch()]);
-  }, [projectsQuery, tasksQuery]);
-
-  if (tasksQuery.isLoading || projectsQuery.isLoading) {
-    return <View style={styles.skeleton}><ListSkeleton count={6} /></View>;
-  }
-  if (tasksQuery.isError || projectsQuery.isError) {
-    return <WorkLoadError onRetry={() => void refresh()} retrying={tasksQuery.isFetching || projectsQuery.isFetching} />;
-  }
-
-  return (
-    <ScrollView
-      contentContainerStyle={[styles.overview, { paddingBottom: insets.bottom + spacing.xxl }]}
-      refreshControl={<RefreshControl refreshing={tasksQuery.isFetching || projectsQuery.isFetching} onRefresh={() => void refresh()} />}
-    >
-      <WorkSection title={labels.needsAttention}>
-        {attentionTasks.length ? attentionTasks.map((item, index) => (
-          <TaskRow key={item.task.id} item={item} last={index === attentionTasks.length - 1} />
-        )) : (
-          <View style={[styles.clearState, { backgroundColor: colors.surface.panel }]}>
-            <Icon source="check-circle-outline" size={20} color={colors.semantic.success} />
-            <Text style={[styles.clearText, { color: colors.text.secondary }]}>{labels.attentionClear}</Text>
-          </View>
-        )}
-      </WorkSection>
-
-      <WorkSection title={labels.activeProjects} actionLabel={labels.viewAll} onAction={onShowProjects}>
-        {activeProjects.length ? activeProjects.map((project, index) => (
-          <ProjectRow key={project.id} project={project} last={index === activeProjects.length - 1} />
-        )) : <EmptySection label={labels.noActiveProjects} />}
-      </WorkSection>
-
-      <WorkSection title={labels.activeTasks} actionLabel={labels.viewAll} onAction={onShowTasks}>
-        {activeTasks.length ? activeTasks.map((item, index) => (
-          <TaskRow key={item.task.id} item={item} last={index === activeTasks.length - 1} />
-        )) : <EmptySection label={labels.noActiveTasks} />}
-      </WorkSection>
-
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => router.push('/workflows')}
-        style={({ pressed }) => [styles.workflowLink, {
-          backgroundColor: pressed ? colors.surface.pressed : colors.surface.panel,
-          borderColor: colors.border.default,
-        }]}
-      >
-        <Icon source="source-branch" size={22} color={colors.accent.primary} />
-        <View style={styles.workflowBody}>
-          <Text style={[styles.workflowTitle, { color: colors.text.primary }]}>{labels.workflowRuns}</Text>
-          <Text style={[styles.workflowHint, { color: colors.text.secondary }]}>{labels.workflowRunsHint}</Text>
-        </View>
-        <Icon source="chevron-right" size={20} color={colors.text.tertiary} />
-      </Pressable>
-    </ScrollView>
-  );
-}
 
 function ProjectsPage({ query }: { query: ProjectsQuery }) {
   const insets = useSafeAreaInsets();
@@ -247,33 +167,6 @@ function TasksPage({ query }: { query: TasksQuery }) {
       refreshControl={<RefreshControl refreshing={query.isFetching} onRefresh={() => void query.refetch()} />}
       ListEmptyComponent={<EmptySection label={labels.empty} />}
     />
-  );
-}
-
-function WorkSection({
-  title,
-  actionLabel,
-  onAction,
-  children,
-}: {
-  title: string;
-  actionLabel?: string;
-  onAction?: () => void;
-  children: ReactNode;
-}) {
-  const { colors } = useTheme();
-  return (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{title}</Text>
-        {actionLabel && onAction ? (
-          <Pressable accessibilityRole="button" onPress={onAction} hitSlop={8}>
-            <Text style={[styles.sectionAction, { color: colors.accent.primary }]}>{actionLabel}</Text>
-          </Pressable>
-        ) : null}
-      </View>
-      <View style={styles.sectionBody}>{children}</View>
-    </View>
   );
 }
 
@@ -376,7 +269,7 @@ function WorkLoadError({
   onRetry,
   retrying,
 }: {
-  message?: string;
+  message: string;
   onRetry: () => void;
   retrying: boolean;
 }) {
@@ -385,7 +278,7 @@ function WorkLoadError({
   return (
     <View style={styles.center}>
       <Icon source="cloud-alert-outline" size={36} color={colors.text.tertiary} />
-      <Text style={[styles.errorText, { color: colors.text.secondary }]}>{message ?? labels.workLoadFailed}</Text>
+      <Text style={[styles.errorText, { color: colors.text.secondary }]}>{message}</Text>
       <Button loading={retrying} disabled={retrying} onPress={onRetry}>{labels.retry}</Button>
     </View>
   );
@@ -406,14 +299,11 @@ const styles = StyleSheet.create({
   tabButton: { flex: 1, minHeight: 44, borderRadius: radii.md, alignItems: 'center', justifyContent: 'center' },
   tabLabel: { ...typography.ui, fontWeight: '500' },
   tabLabelActive: { fontWeight: '600' },
-  overview: { padding: spacing.lg, gap: spacing.section },
+  toolLinks: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, marginBottom: spacing.md },
+  toolLink: { flex: 1, minHeight: 52, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.lg, paddingHorizontal: spacing.md, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  toolLinkLabel: { ...typography.label, flex: 1, fontWeight: '600' },
   skeleton: { padding: spacing.lg },
   list: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, flexGrow: 1 },
-  section: { gap: spacing.sm },
-  sectionHeader: { minHeight: 28, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  sectionTitle: { ...typography.heading },
-  sectionAction: { ...typography.label, fontWeight: '600' },
-  sectionBody: { borderRadius: radii.lg, overflow: 'hidden' },
   row: { minHeight: 70, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.md, paddingVertical: spacing.md },
   rowBody: { flex: 1, minWidth: 0, gap: spacing.xxs },
   rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
@@ -421,14 +311,8 @@ const styles = StyleSheet.create({
   rowMeta: { ...typography.caption },
   rowTime: { ...typography.micro },
   healthDot: { width: 8, height: 8, borderRadius: 4 },
-  clearState: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md },
-  clearText: { ...typography.body },
   empty: { minHeight: 120, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   emptyText: { ...typography.label, textAlign: 'center' },
-  workflowLink: { minHeight: 72, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.lg, flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md },
-  workflowBody: { flex: 1, gap: spacing.xxs },
-  workflowTitle: { ...typography.ui, fontWeight: '600' },
-  workflowHint: { ...typography.caption },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, padding: spacing.xl },
   errorText: { ...typography.body, textAlign: 'center' },
 });

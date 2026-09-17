@@ -1,7 +1,7 @@
 import type { StoredLanguage } from '@/lib/storage';
 import { messages, tabLabel, type Tab } from '@/i18n/messages';
 import { capabilitySettingsPath, pathForTab } from '@/navigation';
-import { isSettingsPathVisibleInMode, isSettingsTabVisibleInMode } from '@/navigation/settings-nav-visibility';
+import { isSettingsPathVisibleInMode, isSettingsTabVisibleInMode, isSettingsPathVisibleOnPlatform } from '@/navigation/settings-nav-visibility';
 import { channelDetailPath } from '@/features/settings/channels/channels-routes';
 import { useSettingsModeStore } from '@/stores/settings-mode-store';
 
@@ -42,7 +42,10 @@ function filterRouteSeedsBySettingsMode(
   seeds: RouteHitSeed[],
   settingsMode: ReturnType<typeof useSettingsModeStore.getState>['mode'],
 ): RouteHitSeed[] {
-  return seeds.filter((seed) => isSettingsPathVisibleInMode(seed.path.split('?')[0] ?? seed.path, settingsMode));
+  return seeds.filter((seed) => {
+    const pathname = seed.path.split('?')[0] ?? seed.path;
+    return isSettingsPathVisibleInMode(pathname, settingsMode) && isSettingsPathVisibleOnPlatform(pathname);
+  });
 }
 
 export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {

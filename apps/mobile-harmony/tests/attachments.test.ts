@@ -27,6 +27,15 @@ describe('native chat attachment contract', () => {
     const rows = historyRows({ session: { key: 'one', messages: [{ id: 'message-1', role: 'user', content: '',
       media: [{ id: 'media-1', name: 'hello.txt', type: 'document', mimeType: 'text/plain', size: 5, uri: 'media://test' }] }] },
       pagination: { hasMore: false } });
-    expect(rows).toEqual([{ id: 'message-1', role: 'user', text: '\n[hello.txt]' }]);
+    expect(rows).toEqual([{ id: 'message-1', role: 'user', text: '', thinking: '', tools: '',
+      media: [{ id: 'media-1', name: 'hello.txt', type: 'document', mimeType: 'text/plain', size: 5, uri: 'media://test' }] }]);
+  });
+  it('prefers structured history and preserves source versions for regeneration', () => {
+    const rows = historyRows({ session: { key: 'one', messages: [{ messageId: 'm', role: 'assistant', content: 'flattened',
+      rawContent: [{ type: 'thinking', thinking: 'reasoning' }, { type: 'text', text: 'answer' }, { type: 'toolCall', id: 'call', name: 'search', args: { q: 'x' } }],
+      toolCalls: [{ id: 'call', name: 'search' }, { id: 'other', name: 'read', args: { path: 'a' } }],
+      metadata: { sourceContexts: [{ kind: 'note', sourceId: 'note', version: '7', title: 'Context' }] } }] }, pagination: { hasMore: false } });
+    expect(rows[0]).toMatchObject({ id: 'm', text: 'answer', thinking: 'reasoning', refs: [{ kind: 'note', sourceId: 'note', expectedVersion: '7', title: 'Context' }] });
+    expect(rows[0].tools?.match(/search/g)).toHaveLength(1); expect(rows[0].tools).toContain('read');
   });
 });
