@@ -6,7 +6,7 @@ import { ComputerModelAdapter, GUI_PLUS_SYSTEM_PROMPT, predictComputerStep } fro
 
 const token = await getApiKey('xopc-cloud');
 if (!token) throw new Error('Sign into xopc Cloud before verification');
-const image = await sharp(Buffer.from('<svg width="800" height="600"><rect width="800" height="600" fill="white"/><rect x="300" y="250" width="200" height="80" rx="10" fill="#1769e0"/><text x="400" y="302" text-anchor="middle" font-size="28" fill="white">Continue</text></svg>')).png().toBuffer();
+const image = await sharp(Buffer.from('<svg width="800" height="600"><rect width="800" height="600" fill="white"/><rect x="300" y="250" width="200" height="80" rx="10" fill="#1769e0"/><text x="400" y="302" text-anchor="middle" font-size="28" fill="white">Continue</text></svg>')).png({ compressionLevel: process.argv.includes('--large-frame') ? 0 : 9 }).toBuffer();
 if (process.argv.includes('--provision-preview')) {
   const helper = process.env.XOPC_COMPUTER_PROVISION_BUNDLE;
   if (!helper || !process.env.XOPC_SERVER || !process.env.DASHSCOPE_API_KEY) throw new Error('Provisioning prerequisites unavailable');
@@ -42,14 +42,14 @@ const adapter = new ComputerModelAdapter({ modelId, baseUrl, apiKey: token,
   profile: 'gui-plus-2026-02-26', deploymentRevision: deployment.revision });
 try {
   let modelRequests = 0;
+  const observation = await predictComputerStep(adapter, { image, mimeType: 'image/png', width: 800, height: 600,
+    goal: 'Read the label on the blue button. Do not click or suggest an action.', summary: 'Synthetic test only.', readOnly: true }, () => { modelRequests++; });
+  if (observation.kind !== 'answer' || !/continue/i.test(observation.text)) throw new Error('Managed visual observation assertion failed');
   const proposal = await predictComputerStep(adapter, { image, mimeType: 'image/png', width: 800, height: 600,
     goal: 'Click the blue Continue button once.', summary: 'Synthetic test only.' }, () => { modelRequests++; });
   if (proposal.kind !== 'action' || proposal.action.kind !== 'click'
     || proposal.action.point.x < 300 || proposal.action.point.x >= 500
     || proposal.action.point.y < 250 || proposal.action.point.y >= 330) throw new Error('Managed grounding assertion failed');
-  const observation = await predictComputerStep(adapter, { image, mimeType: 'image/png', width: 800, height: 600,
-    goal: 'Read the label on the blue button. Do not click or suggest an action.', summary: 'Synthetic test only.', readOnly: true }, () => { modelRequests++; });
-  if (observation.kind !== 'answer' || !/continue/i.test(observation.text)) throw new Error('Managed visual observation assertion failed');
   console.log(JSON.stringify({ status: 'passed', route: `xopc-cloud/${modelId}`, hostedModel: 'gui-plus-2026-02-26', fixture: 'synthetic-button', modelRequests,
-    visualObservation: 'passed', unpinnedRequest: 'rejected-409', screenshotOfPersonalDesktop: false }));
+    imageBytes: image.length, visualObservation: 'passed', unpinnedRequest: 'rejected-409', screenshotOfPersonalDesktop: false }));
 } finally { image.fill(0); }
