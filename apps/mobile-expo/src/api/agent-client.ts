@@ -296,6 +296,18 @@ export class AgentMessageSender {
     }
   }
 
+  /** Close a stale local attachment without sending an abort or retaining its pending run. */
+  settleCompletedStream(): void {
+    if (!this._abort) return;
+    const abortController = this._abort;
+    abortController.abort();
+    this._streamCleanup?.();
+    this._streamCleanup = undefined;
+    if (this._abort === abortController) {
+      this._abort = undefined;
+    }
+  }
+
   abort(): void {
     this._notifyServerAbort();
     this._forceClearPendingRun();

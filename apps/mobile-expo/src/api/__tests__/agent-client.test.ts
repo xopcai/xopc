@@ -314,6 +314,21 @@ describe('AgentMessageSender local detach', () => {
     expect(testState.memory.get('pending:session-a')).toBe(JSON.stringify({ runId: 'run-123', lastSeq: 0 }));
   });
 
+  it('settles a server-completed attachment without aborting or retaining the pending run', async () => {
+    const sender = new AgentMessageSender();
+    const pending = sender.resume('run-complete', 'session-a');
+
+    await vi.waitFor(() => {
+      expect(testState.memory.get('pending:session-a')).toBe(JSON.stringify({ runId: 'run-complete', lastSeq: 0 }));
+    });
+
+    sender.settleCompletedStream();
+
+    await expect(pending).resolves.toBeUndefined();
+    expect(testState.apiFetch).not.toHaveBeenCalledWith('/api/agent/abort', expect.anything());
+    expect(testState.memory.get('pending:session-a')).toBeUndefined();
+  });
+
   it('clears an expired run after a replay gap', async () => {
     const sender = new AgentMessageSender();
     const pending = sender.resume('run-expired', 'session-a');
