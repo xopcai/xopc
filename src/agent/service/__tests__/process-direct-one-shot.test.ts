@@ -46,6 +46,7 @@ describe('one-shot turn outcome', () => {
       content: 'hello', conversationId: 'agent:main:automation:run',
       origin: { type: 'system', source: 'automation' },
     })).rejects.toThrow('Model attempt budget exhausted');
+    expect(deps.sessionStore.updateMetadata).not.toHaveBeenCalled();
     expect(endDirectRequestContext).toHaveBeenCalledOnce();
   });
 
@@ -57,6 +58,23 @@ describe('one-shot turn outcome', () => {
       origin: { type: 'system', source: 'automation' },
     })).resolves.toBe('');
     expect(onTurnComplete).toHaveBeenCalledWith('agent:main:automation:run', undefined);
+    expect(deps.sessionStore.updateMetadata).not.toHaveBeenCalled();
+  });
+
+  it('reveals automation sessions after assistant output is ready', async () => {
+    mocks.run.mockResolvedValue({ ok: true, lastAssistantText: 'Automation completed' });
+    const { deps } = setup();
+    const conversationId = 'agent:main:automation:run';
+    await expect(runProcessDirect(deps, {
+      content: 'hello', conversationId,
+      origin: { type: 'system', source: 'automation' },
+    })).resolves.toBe('Automation completed');
+    expect(deps.sessionStore.updateMetadata).toHaveBeenCalledWith(
+      conversationId,
+      {
+        hiddenFromSessionList: false,
+      },
+    );
   });
 
   it('reveals automation command sessions after persisting their reply', async () => {
@@ -67,7 +85,9 @@ describe('one-shot turn outcome', () => {
       content: '/status', conversationId, origin: { type: 'system', source: 'automation' },
     })).resolves.toBe('Command completed');
     expect(deps.sessionStore.appendTranscriptMessage).toHaveBeenCalledOnce();
-    expect(deps.sessionStore.updateMetadata).toHaveBeenCalledWith(conversationId, { hiddenFromSessionList: false });
+    expect(deps.sessionStore.updateMetadata).toHaveBeenCalledWith(conversationId, {
+      hiddenFromSessionList: false,
+    });
     expect(onTurnComplete).toHaveBeenCalledWith(conversationId, 'Command completed');
     expect(mocks.run).not.toHaveBeenCalled();
   });

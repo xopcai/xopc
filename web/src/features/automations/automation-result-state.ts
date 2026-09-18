@@ -6,11 +6,22 @@ export function latestAutomationRun(automationId: string, runs: AutomationRun[])
   ), undefined);
 }
 
-export function automationHasExecutionIssue(automation: Automation, runs: AutomationRun[]): boolean {
+export function automationExecutionIssueMarker(automation: Automation, runs: AutomationRun[]): string | null {
   const latest = latestAutomationRun(automation.id, runs);
   // The task state remains available when its latest run is outside the results window.
-  const status = automation.state.lastRunAtMs && (!latest || automation.state.lastRunAtMs > latest.createdAtMs)
+  const useTaskState = Boolean(
+    automation.state.lastRunAtMs && (!latest || automation.state.lastRunAtMs > latest.createdAtMs),
+  );
+  const status = useTaskState
     ? automation.state.lastRunStatus
     : latest?.status ?? automation.state.lastRunStatus;
-  return status === 'failed' || status === 'timeout';
+  if (status !== 'failed' && status !== 'timeout') return null;
+  const occurredAtMs = useTaskState
+    ? automation.state.lastRunAtMs
+    : latest?.createdAtMs ?? automation.state.lastRunAtMs;
+  return `${status}:${occurredAtMs ?? 'unknown'}`;
+}
+
+export function automationHasExecutionIssue(automation: Automation, runs: AutomationRun[]): boolean {
+  return automationExecutionIssueMarker(automation, runs) !== null;
 }

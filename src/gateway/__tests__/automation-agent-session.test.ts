@@ -78,7 +78,7 @@ describe('prepareAutomationAgentSession', () => {
     expect(projects.listConversationIds(project.id)).toContain(conversationId);
   });
 
-  it('hides new automation shells until a user message is persisted without changing existing sessions', async () => {
+  it('hides new automation shells until output is ready without hiding existing sessions', async () => {
     const conversationId = "2d73ace2-6b0a-4a42-841a-fa5c37ffa41a";
     const input = {
       conversationId, agentId: 'main', peerId: 'new-run',
@@ -86,13 +86,19 @@ describe('prepareAutomationAgentSession', () => {
     };
     await prepareAutomationAgentSession(store, projects, input);
     expect(await store.getMetadata(conversationId)).toMatchObject({
-      hiddenFromSessionList: true, name: 'Daily brief', messageCount: 0,
+      hiddenFromSessionList: true,
+      name: 'Daily brief',
+      messageCount: 0,
+      customData: { deferVisibilityUntilOutput: true },
     });
     expect((await store.list()).items.map((s) => s.key)).not.toContain(conversationId);
     await store.appendTranscriptMessage(conversationId, {
       role: 'user', content: 'Summarize today', timestamp: Date.now(),
     });
-    await store.updateMetadata(conversationId, { name: 'My title' });
+    expect(await store.getMetadata(conversationId)).toMatchObject({
+      hiddenFromSessionList: true, messageCount: 1,
+    });
+    await store.updateMetadata(conversationId, { name: 'My title', hiddenFromSessionList: false });
     await prepareAutomationAgentSession(store, projects, input);
     expect(await store.getMetadata(conversationId)).toMatchObject({
       hiddenFromSessionList: false, name: 'My title', messageCount: 1,
