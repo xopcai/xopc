@@ -5,7 +5,7 @@ import { cn } from '@/lib/cn';
 export function SettingsPageFrame({
   children,
   className,
-  gap = 'gap-4',
+  gap = 'gap-5',
   padding = 'px-4 py-6 sm:px-5 xl:px-6',
   ...props
 }: {
@@ -17,7 +17,7 @@ export function SettingsPageFrame({
   return (
     <div
       className={cn(
-        'mx-auto flex min-h-full w-full max-w-[56rem] flex-col bg-surface-panel',
+        'settings-page-frame mx-auto flex min-h-full w-full max-w-[56rem] flex-col',
         gap,
         padding,
         className,

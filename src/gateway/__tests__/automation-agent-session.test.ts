@@ -106,6 +106,40 @@ describe('prepareAutomationAgentSession', () => {
     expect((await store.list()).items.map((s) => s.key)).toContain(conversationId);
   });
 
+  it('marks system memory maintenance sessions as internal', async () => {
+    const conversationId = "52a35ec1-5884-4c89-a274-783c7b201ba4";
+    await prepareAutomationAgentSession(store, projects, {
+      conversationId,
+      agentId: 'main',
+      peerId: 'system-memory-daily-reconciliation-run-1',
+      automationId: 'system-memory-daily-reconciliation',
+      runId: 'run-1',
+      automationName: 'Memory daily reconciliation',
+    });
+
+    await expect(store.getMetadata(conversationId)).resolves.toMatchObject({
+      hiddenFromSessionList: true,
+      customData: {
+        automationId: 'system-memory-daily-reconciliation',
+        systemInternal: true,
+      },
+    });
+
+    await store.updateMetadata(conversationId, { hiddenFromSessionList: false });
+    await prepareAutomationAgentSession(store, projects, {
+      conversationId,
+      agentId: 'main',
+      peerId: 'system-memory-daily-reconciliation-run-2',
+      automationId: 'system-memory-daily-reconciliation',
+      runId: 'run-2',
+      automationName: 'Memory daily reconciliation',
+    });
+    await expect(store.getMetadata(conversationId)).resolves.toMatchObject({
+      hiddenFromSessionList: true,
+      customData: { systemInternal: true, latestAutomationRunId: 'run-2' },
+    });
+  });
+
   it('leaves historical empty sessions visible and unnamed', async () => {
     const conversationId = "73966681-34eb-4553-89db-c79ec0d5f23a";
     await store.resolveTranscriptPath(conversationId, { metadata: { agentId: "main" } });

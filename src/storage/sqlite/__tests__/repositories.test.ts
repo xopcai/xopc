@@ -263,6 +263,24 @@ describe('sqlite repositories', () => {
     expect(listSessionMetadata({ limit: 10 }).items.map((item) => item.key)).toContain(CONVERSATION_ID);
   });
 
+  it('always hides system memory maintenance sessions from default lists', () => {
+    ensureSessionRecord(CONVERSATION_ID, CWD, {
+      ...METADATA,
+      name: 'Memory daily reconciliation',
+      sourceChannel: 'automation',
+      hiddenFromSessionList: false,
+      customData: {
+        origin: 'automation',
+        automationId: 'system-memory-daily-reconciliation',
+      },
+    });
+    appendTranscriptEntry(CONVERSATION_ID, assistantMessage('completed'));
+
+    expect(listSessionMetadata({ limit: 10 }).items.map((item) => item.key)).not.toContain(CONVERSATION_ID);
+    expect(listSessionMetadata({ includeHidden: true, limit: 10 }).items.map((item) => item.key))
+      .toContain(CONVERSATION_ID);
+  });
+
   it('appends transcript rows and paginates messages', () => {
     ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: "main" });
     appendTranscriptEntry(CONVERSATION_ID, userMessage('hello'));

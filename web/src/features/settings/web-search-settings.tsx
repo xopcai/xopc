@@ -1,4 +1,4 @@
-import { Ban, Plus, Search, Trash2 } from 'lucide-react';
+import { Plus, Plug, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useReducer, useRef, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -153,13 +153,51 @@ export function WebSearchSettingsPanel() {
   }
 
   return (
-    <div className="flex flex-col gap-4" onBlurCapture={autosave.onBlurCapture}>
+    <div className="flex flex-col gap-5" onBlurCapture={autosave.onBlurCapture}>
       {autosave.error ? <p className="text-sm text-red-600 dark:text-red-400">{autosave.error}</p> : null}
 
       <SettingsFormSection>
-        <SettingsFormSectionHeader icon={Search} title={w.sectionRegion} trailing={<AutosaveStatus status={autosave.status} error={autosave.error} />} />
-        <div className="flex max-w-md flex-col gap-4">
-          <Field label={w.regionLabel}>
+        <SettingsFormSectionHeader
+          icon={Plug}
+          title={w.sectionSearch}
+          subtitle={w.sectionSearchHint}
+          trailing={<AutosaveStatus status={autosave.status} error={autosave.error} />}
+        />
+        <div className="flex max-w-2xl flex-col gap-3">
+          <div className="text-xs font-medium text-fg-muted">{w.providersTitle}</div>
+          {form.providers.map((row, index) => (
+            <ProviderRowEditor
+              key={`${row.type}:${row.url}:${row.apiKey}:${row.disabled}`}
+              row={row}
+              providerIndex={index}
+              labels={w}
+              secretLabels={secretInputLabelsFromChannels(m.providersSettings)}
+              onChange={(next) => {
+                const nextRows = [...form.providers];
+                nextRows[index] = next;
+                update({ providers: nextRows });
+              }}
+              onRemove={() => {
+                update({ providers: form.providers.filter((_, i) => i !== index) });
+              }}
+            />
+          ))}
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-fit gap-1.5 text-sm"
+            onClick={() => update({ providers: [...form.providers, emptyProviderRow()] })}
+          >
+            <Plus className="size-4" />
+            {w.addProvider}
+          </Button>
+        </div>
+      </SettingsFormSection>
+
+      <SettingsFormSection>
+        <SettingsFormSectionHeader icon={SlidersHorizontal} title={w.sectionPreferences} />
+        <div className="grid max-w-2xl gap-4 sm:grid-cols-2">
+          <Field label={w.regionLabel} description={w.regionDesc}>
             <Select
               className={selectClassName()}
               value={form.regionMode}
@@ -174,13 +212,27 @@ export function WebSearchSettingsPanel() {
               <SelectOption value="global">{w.regionGlobal}</SelectOption>
             </Select>
           </Field>
+          <Field label={w.maxResultsLabel} description={w.maxResultsDesc}>
+            <input
+              type="number"
+              min={1}
+              max={50}
+              className={inputClassName()}
+              value={form.maxResults}
+              onChange={(e) => update({ maxResults: Math.max(1, Math.min(50, Number(e.target.value) || 5)) })}
+            />
+          </Field>
         </div>
       </SettingsFormSection>
 
       <SettingsAdvancedGate>
         <SettingsFormSection>
-          <SettingsFormSectionHeader icon={Ban} title={w.sectionBlocklist} />
-          <div className="flex max-w-xl flex-col gap-4">
+          <SettingsFormSectionHeader
+            icon={ShieldCheck}
+            title={w.sectionBlocklist}
+            subtitle={w.sectionBlocklistHint}
+          />
+          <div className="flex max-w-2xl flex-col gap-4">
             <label className="flex cursor-pointer items-start gap-2 text-sm text-fg">
               <input
                 type="checkbox"
@@ -193,70 +245,25 @@ export function WebSearchSettingsPanel() {
                 <span className="mt-0.5 block text-xs text-fg-subtle">{w.blocklistEnabledDesc}</span>
               </span>
             </label>
-            <Field label={w.blocklistDomains} description={w.blocklistDomainsDesc}>
-              <textarea
-                className={cn(inputClassName(), 'min-h-[6rem] font-mono text-xs')}
-                value={form.blocklistDomains.join('\n')}
-                placeholder={w.blocklistDomainsPlaceholder}
-                disabled={!form.blocklistEnabled}
-                onChange={(e) => {
-                  const domains = e.target.value.split(/\r?\n/).flatMap((line) => {
-                    const v = line.trim().toLowerCase();
-                    return v ? [v] : [];
-                  });
-                  update({ blocklistDomains: domains });
-                }}
-              />
-            </Field>
+            {form.blocklistEnabled ? (
+              <Field label={w.blocklistDomains} description={w.blocklistDomainsDesc}>
+                <textarea
+                  className={cn(inputClassName(), 'min-h-[6rem] font-mono text-xs')}
+                  value={form.blocklistDomains.join('\n')}
+                  placeholder={w.blocklistDomainsPlaceholder}
+                  onChange={(e) => {
+                    const domains = e.target.value.split(/\r?\n/).flatMap((line) => {
+                      const v = line.trim().toLowerCase();
+                      return v ? [v] : [];
+                    });
+                    update({ blocklistDomains: domains });
+                  }}
+                />
+              </Field>
+            ) : null}
           </div>
         </SettingsFormSection>
       </SettingsAdvancedGate>
-
-      <SettingsFormSection>
-        <SettingsFormSectionHeader icon={Search} title={w.sectionSearch} />
-        <div className="flex max-w-xl flex-col gap-6">
-          <Field label={w.maxResultsLabel}>
-            <input
-              type="number"
-              min={1}
-              max={50}
-              className={inputClassName()}
-              value={form.maxResults}
-              onChange={(e) => update({ maxResults: Math.max(1, Math.min(50, Number(e.target.value) || 5)) })}
-            />
-          </Field>
-
-          <div className="flex flex-col gap-3">
-            <div className="text-sm font-medium text-fg">{w.providersTitle}</div>
-            {form.providers.map((row, index) => (
-              <ProviderRowEditor
-                key={`${row.type}:${row.url}:${row.apiKey}:${row.disabled}`}
-                row={row}
-                providerIndex={index}
-                labels={w}
-                secretLabels={secretInputLabelsFromChannels(m.providersSettings)}
-                onChange={(next) => {
-                  const nextRows = [...form.providers];
-                  nextRows[index] = next;
-                  update({ providers: nextRows });
-                }}
-                onRemove={() => {
-                  update({ providers: form.providers.filter((_, i) => i !== index) });
-                }}
-              />
-            ))}
-            <Button
-              type="button"
-              variant="secondary"
-              className="w-fit gap-1.5 text-sm"
-              onClick={() => update({ providers: [...form.providers, emptyProviderRow()] })}
-            >
-              <Plus className="size-4" />
-              {w.addProvider}
-            </Button>
-          </div>
-        </div>
-      </SettingsFormSection>
 
     </div>
   );
@@ -283,7 +290,7 @@ function ProviderRowEditor({
   );
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl bg-surface-panel/70 p-4 shadow-surface">
+    <div className="flex flex-col gap-3 rounded-xl bg-surface-panel/60 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Select
           className={cn(selectClassName(), 'min-w-[8rem]')}
@@ -306,7 +313,7 @@ function ProviderRowEditor({
           <label className="flex cursor-pointer items-center gap-1.5 text-xs text-fg-muted">
             <input
               type="checkbox"
-              className="size-3.5 rounded border-edge"
+              className="ui-checkbox"
               checked={row.disabled}
               onChange={(e) => onChange({ ...row, disabled: e.target.checked })}
             />

@@ -100,7 +100,7 @@ function ShortcutEditor({
   };
 
   return (
-    <section className="rounded-xl bg-surface-base px-4 py-3.5 sm:px-5 sm:py-4" aria-label={title}>
+    <section className="rounded-xl bg-surface-hover/20 px-4 py-3.5 sm:px-5 sm:py-4" aria-label={title}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-fg">{title}</h2>
@@ -141,7 +141,7 @@ function ShortcutEditor({
         {recording ? (
           <button
             type="button"
-            className="rounded-lg border border-accent bg-accent-soft px-3 py-1.5 text-sm font-medium text-accent-fg outline-none"
+            className="rounded-lg bg-accent-soft px-3 py-1.5 text-sm font-medium text-accent-fg outline-none focus-visible:ring-2 focus-visible:ring-accent"
             onKeyDown={onKeyDown}
             onClick={() => setRecording(false)}
           >
@@ -150,7 +150,7 @@ function ShortcutEditor({
         ) : null}
       </div>
       {error ? <p className="mt-2 text-sm text-danger-fg">{error}</p> : null}
-      {notice ? <div className="mt-3 border-t border-edge pt-3">{notice}</div> : null}
+      {notice ? <div className="mt-3 rounded-lg bg-surface-base/55 p-3">{notice}</div> : null}
     </section>
   );
 }
@@ -229,7 +229,7 @@ function MacVoiceHotkeyPermissionNotice() {
           type="button"
           disabled={requesting}
           className={cn(
-            'rounded-lg border border-edge-strong bg-surface-panel px-3 py-1.5 text-xs font-medium text-fg transition-colors hover:bg-surface-hover',
+            'rounded-lg bg-surface-base/70 px-3 py-1.5 text-xs font-medium text-fg transition-colors hover:bg-surface-hover',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:text-fg-disabled',
           )}
           onClick={async () => {
@@ -251,7 +251,7 @@ function MacVoiceHotkeyPermissionNotice() {
 
 function Kbd({ children }: { children: string }) {
   return (
-    <kbd className="inline-flex min-w-[1.5rem] items-center justify-center rounded-md border border-edge-subtle bg-surface-hover/60 px-1.5 py-0.5 font-mono text-xs font-medium text-fg-muted shadow-[0_1px_0_0_var(--color-edge-subtle)]">
+    <kbd className="inline-flex min-w-[1.5rem] items-center justify-center rounded-md bg-surface-hover/70 px-1.5 py-0.5 font-mono text-xs font-medium text-fg-muted shadow-sm">
       {children}
     </kbd>
   );
@@ -275,7 +275,7 @@ function ShortcutRow({ keys, label, note }: ShortcutEntry) {
 
 function ShortcutSection({ title, shortcuts }: ShortcutCategory) {
   return (
-    <section className={cn('rounded-xl bg-surface-base px-4 sm:px-5')} aria-label={title}>
+    <section className={cn('rounded-xl bg-surface-hover/20 px-4 sm:px-5')} aria-label={title}>
       <h2 className="pb-1 pt-3.5 text-sm font-semibold text-fg sm:pt-4">{title}</h2>
       <div className="grid gap-1 pb-3 sm:pb-4">
         {shortcuts.map((s) => (

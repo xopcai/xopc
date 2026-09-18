@@ -137,7 +137,7 @@ export function VoiceDiagnostics({ v, canListen, canSpeak, disabled, onVerified 
 
   const busy = phase === 'connecting' || phase === 'listening' || phase === 'playing';
   return (
-    <div className="space-y-3 border-t border-edge pt-4">
+    <div className="space-y-3 rounded-xl bg-surface-base/45 p-4">
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" variant="primary" disabled={callActive || disabled || !canListen || busy} onClick={() => void run(true)}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : <Mic className="size-4" />}

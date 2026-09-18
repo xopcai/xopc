@@ -532,7 +532,7 @@ function ChannelSetupReadinessBanner({
   const setup = channelSetupStatus(entry);
   if (setup.ready || setup.issues.length === 0) return null;
   return (
-    <section className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+    <section className="rounded-xl bg-amber-50 px-4 py-3 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
       <div className="flex items-start gap-3">
         <AlertTriangle className="mt-0.5 size-4 shrink-0" />
         <div className="min-w-0">

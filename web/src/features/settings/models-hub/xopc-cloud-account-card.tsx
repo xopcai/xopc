@@ -59,12 +59,12 @@ export function XopcCloudAccountCard({ labels }: { labels: XopcCloudAccountMessa
   );
 
   if (isLoading) {
-    return <Skeleton className="h-48 w-full rounded-2xl" />;
+    return <Skeleton className="h-40 w-full rounded-xl" />;
   }
 
   if (error || !data) {
     return (
-      <section className="rounded-2xl border border-edge-subtle bg-surface-panel/40 p-4">
+      <section className="rounded-xl bg-surface-hover/25 p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3">
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500" aria-hidden />
@@ -89,33 +89,15 @@ export function XopcCloudAccountCard({ labels }: { labels: XopcCloudAccountMessa
     .replace('{{requests}}', number.format(data.usage.requests));
 
   return (
-    <section className="rounded-2xl border border-edge-subtle bg-surface-panel/40 p-5">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <Cloud className="size-4 text-accent-fg" aria-hidden />
-            <h2 className="text-sm font-semibold text-fg">{labels.title}</h2>
-            <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-              {labels.connected}
-            </span>
-          </div>
-
-          <p className="mt-5 text-xs font-medium text-fg-subtle">{labels.availableCredits}</p>
-          <p className="mt-1 text-3xl font-semibold tracking-tight text-fg">
-            {number.format(data.balance.credits)}
-            <span className="ml-2 text-sm font-medium text-fg-muted">credits</span>
-          </p>
-          {data.balance.credits === 0 ? (
-            <p className="mt-2 text-sm font-medium text-danger">{labels.zeroBalance}</p>
-          ) : null}
-
-          <p className="mt-5 text-xs font-medium text-fg-subtle">{labels.recentUsage}</p>
-          <p className="mt-1 text-sm text-fg-muted">{usageSummary}</p>
-          <p className="mt-2 text-xs text-fg-subtle">
-            {labels.updatedAt.replace('{{time}}', new Date(data.balance.updatedAt).toLocaleString(locale))}
-          </p>
+    <section className="rounded-xl bg-surface-hover/40 p-4 sm:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-2">
+          <Cloud className="size-4 text-accent-fg" aria-hidden />
+          <h2 className="text-sm font-semibold text-fg">{labels.title}</h2>
+          <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+            {labels.connected}
+          </span>
         </div>
-
         <div className="flex shrink-0 flex-wrap gap-2">
           <Button asChild variant="primary">
             <a href={data.links.purchase} target="_blank" rel="noreferrer">
@@ -129,6 +111,26 @@ export function XopcCloudAccountCard({ labels }: { labels: XopcCloudAccountMessa
               <ExternalLink className="size-3.5" aria-hidden />
             </a>
           </Button>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 rounded-lg bg-surface-base/45 p-3 sm:grid-cols-[minmax(12rem,0.7fr)_minmax(0,1.3fr)] sm:gap-6">
+        <div>
+          <p className="text-xs font-medium text-fg-subtle">{labels.availableCredits}</p>
+          <p className="mt-1 text-2xl font-semibold tracking-tight text-fg">
+            {number.format(data.balance.credits)}
+            <span className="ml-2 text-sm font-medium text-fg-muted">credits</span>
+          </p>
+          {data.balance.credits === 0 ? (
+            <p className="mt-1 text-sm font-medium text-danger">{labels.zeroBalance}</p>
+          ) : null}
+        </div>
+        <div>
+          <p className="text-xs font-medium text-fg-subtle">{labels.recentUsage}</p>
+          <p className="mt-1 text-sm leading-relaxed text-fg-muted">{usageSummary}</p>
+          <p className="mt-1 text-xs text-fg-subtle">
+            {labels.updatedAt.replace('{{time}}', new Date(data.balance.updatedAt).toLocaleString(locale))}
+          </p>
         </div>
       </div>
     </section>

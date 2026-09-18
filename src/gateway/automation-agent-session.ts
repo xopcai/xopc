@@ -7,6 +7,7 @@ export async function prepareAutomationAgentSession(
   projects: ProjectService,
   input: PrepareAutomationAgentSessionInput,
 ): Promise<void> {
+  const isSystemMemoryMaintenance = input.automationId.startsWith('system-memory-');
   await store.resolveTranscriptPath(input.conversationId, {
     metadata: {
       // Only seed new sessions; automation output makes them visible.
@@ -15,6 +16,7 @@ export async function prepareAutomationAgentSession(
       customData: {
         titleSource: 'provisional',
         deferVisibilityUntilOutput: true,
+        ...(isSystemMemoryMaintenance ? { systemInternal: true } : {}),
       },
       projectId: input.projectId,
       sourceChannel: 'automation',
@@ -32,6 +34,7 @@ export async function prepareAutomationAgentSession(
 
   const current = await store.getMetadata(input.conversationId);
   await store.updateMetadata(input.conversationId, {
+    ...(isSystemMemoryMaintenance ? { hiddenFromSessionList: true } : {}),
     sourceChannel: 'automation',
     sourceChatId: `default:dm:${input.peerId}`,
     sessionType: 'chat',
@@ -48,6 +51,7 @@ export async function prepareAutomationAgentSession(
       origin: 'automation',
       automationId: input.automationId,
       latestAutomationRunId: input.runId,
+      ...(isSystemMemoryMaintenance ? { systemInternal: true } : {}),
     },
   });
 

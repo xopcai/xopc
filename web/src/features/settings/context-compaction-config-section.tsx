@@ -323,10 +323,10 @@ export function ContextCompactionConfigSection({ hasToken }: { hasToken: boolean
         )}
       />
 
-      {autosave.error ? <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300" role="alert">{autosave.error}</p> : null}
+      {autosave.error ? <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300" role="alert">{autosave.error}</p> : null}
 
       {!form.enabled ? (
-        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+        <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
           {t.disabledWarning}
         </p>
       ) : null}
@@ -351,12 +351,12 @@ export function ContextCompactionConfigSection({ hasToken }: { hasToken: boolean
                 type="button"
                 aria-pressed={activePreset === presetId}
                 className={cn(
-                  'rounded-xl border px-3 py-3 text-left',
+                  'rounded-xl bg-surface-base/55 px-3 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                   interaction.transition,
                   interaction.focusRingPanel,
                   activePreset === presetId
-                    ? 'border-accent/50 bg-accent-soft text-accent-fg'
-                    : 'border-edge bg-surface-panel text-fg hover:bg-surface-hover',
+                    ? 'bg-accent-soft text-accent-fg shadow-surface'
+                    : 'text-fg hover:bg-surface-hover',
                 )}
                 onClick={() => applyPreset(presetId)}
               >
@@ -369,7 +369,7 @@ export function ContextCompactionConfigSection({ hasToken }: { hasToken: boolean
           </div>
         </div>
 
-        <div className="rounded-xl border border-edge-subtle bg-surface-hover/35 p-4 dark:border-edge">
+        <div className="rounded-xl bg-surface-base/45 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <div className="text-sm font-medium text-fg">{t.budgetPreview}</div>
@@ -443,7 +443,7 @@ export function ContextCompactionConfigSection({ hasToken }: { hasToken: boolean
         </div>
 
         {retentionWarning ? (
-          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
             {t.retentionWarning}
           </p>
         ) : null}
@@ -488,13 +488,13 @@ export function ContextCompactionConfigSection({ hasToken }: { hasToken: boolean
         </div>
 
         {!form.qualityGuard ? (
-          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
             {t.qualityGuardWarning}
           </p>
         ) : null}
 
         <SettingsAdvancedGate>
-          <div className="space-y-5 border-t border-edge pt-5">
+          <div className="space-y-5 rounded-xl bg-surface-base/45 p-4">
             <div>
               <div className="text-sm font-semibold text-fg">{t.advancedTitle}</div>
               <p className="mt-0.5 text-xs text-fg-subtle">{t.advancedHint}</p>
@@ -566,12 +566,12 @@ export function ContextCompactionConfigSection({ hasToken }: { hasToken: boolean
             </div>
 
             {summaryBudgetWarning ? (
-              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
                 {t.summaryBudgetWarning}
               </p>
             ) : null}
 
-            <div className="border-t border-edge pt-5">
+            <div className="rounded-xl bg-surface-base/45 p-4">
               <div className="text-sm font-medium text-fg">{t.postCompactionSections}</div>
               <p className="mt-1 text-xs text-fg-subtle">{t.postCompactionSectionsHint}</p>
               {form.postCompactionSections.length > 0 ? (

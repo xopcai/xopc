@@ -1,5 +1,4 @@
 import type { Tab } from '@/i18n/messages';
-import { isComputerUseAvailable } from '@/lib/electron-env';
 import type { SettingsMode } from '@/stores/settings-mode-store';
 
 /** Settings rail tabs hidden when `mode === 'simple'`. */
@@ -14,12 +13,11 @@ const SIMPLE_MODE_HIDDEN_SETTINGS_PATH_PREFIXES = [
 ] as const;
 
 export function isSettingsTabVisibleOnPlatform(tab: Tab): boolean {
-  return tab !== 'settingsComputerUse' || isComputerUseAvailable();
+  return Boolean(tab);
 }
 
 export function isSettingsPathVisibleOnPlatform(pathname: string): boolean {
-  return !(pathname === '/settings/computer-use' || pathname.startsWith('/settings/computer-use/'))
-    || isComputerUseAvailable();
+  return Boolean(pathname);
 }
 
 export function isSettingsTabVisibleInMode(tab: Tab, mode: SettingsMode): boolean {

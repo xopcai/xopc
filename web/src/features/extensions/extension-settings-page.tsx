@@ -7,6 +7,7 @@
 import { Link, useParams } from 'react-router-dom';
 
 import { ExtensionSttProviderSettings } from '@/features/settings/extension-stt-provider-settings';
+import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -55,8 +56,8 @@ export function ExtensionSettingsPage() {
   const title = panel?.title ?? `${extension.name} Settings`;
 
   return (
-    <div className="flex w-full flex-col gap-3 px-3 py-8 sm:px-5 xl:px-6">
-      <h1 className="text-lg font-semibold text-fg">{title}</h1>
+    <SettingsPageFrame gap="gap-5">
+      <SettingsPageHeader title={title} />
       {isMediaProvider ? (
         <div className="flex flex-col gap-2 rounded-lg bg-surface-base px-4 py-3 text-sm">
           <p className="leading-relaxed text-fg-muted">{xs.banner}</p>
@@ -81,14 +82,14 @@ export function ExtensionSettingsPage() {
           />
         </div>
       ) : null}
-    </div>
+    </SettingsPageFrame>
   );
 }
 
 function SettingsPanelNotFound({ message }: { message: string }) {
   return (
-    <div className="flex w-full flex-col gap-3 px-3 py-8 sm:px-5 xl:px-6">
+    <SettingsPageFrame gap="gap-3">
       <p className="text-sm text-fg-muted">{message}</p>
-    </div>
+    </SettingsPageFrame>
   );
 }

@@ -93,11 +93,11 @@ export function ImportsPage() {
   const detected = sources?.filter(s => s.detected || s.lastImport);
   return <SettingsPageFrame>
     <SettingsPageHeader title={t.title} subtitle={t.subtitle} />
-    {error && <div role="alert" className="rounded-xl border border-edge p-4 text-sm text-fg"><p>{error}</p>{!sources && <Button variant="ghost" onClick={() => setReload(v => v + 1)}>{t.retry}</Button>}</div>}
+    {error && <div role="alert" className="rounded-xl bg-danger-soft p-4 text-sm text-danger"><p>{error}</p>{!sources && <Button variant="ghost" onClick={() => setReload(v => v + 1)}>{t.retry}</Button>}</div>}
     {!sources && !error && <SettingsPageSkeleton sections={1} />}
     {sources && <section className="space-y-4">
       <div><h2 className="text-base font-medium text-fg">{t.apps}</h2><p className="mt-1 text-sm text-fg-muted">{t.detectedHint}</p></div>
-      {detected?.length ? <div className="divide-y divide-edge overflow-hidden rounded-2xl border border-edge">
+      {detected?.length ? <div className="flex flex-col gap-1 overflow-hidden rounded-xl bg-surface-hover/20 p-1 [&>*]:rounded-lg [&>*]:bg-surface-base/45">
         {detected.map(item => <article key={item.id} className="space-y-3 p-5 sm:p-6">
           <div className="flex items-center gap-4"><div aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-hover text-fg"><Download className="h-5 w-5" /></div>
             <div className="min-w-0 flex-1"><h3 className="font-medium text-fg">{item.name}</h3><p className="mt-1 text-xs text-fg-muted">{t.includes}</p></div>
@@ -110,7 +110,7 @@ export function ImportsPage() {
             {item.lastImport.status === 'partial' && <Button variant="ghost" disabled={busy || !!pending} onClick={() => void retryFailed(item.lastImport!)}>{t.retryFailed}</Button>}
           </div>}
         </article>)}
-      </div> : <div className="rounded-2xl border border-edge p-6 text-sm text-fg-muted"><p>{t.empty}</p><Button variant="ghost" className="mt-3" onClick={() => setReload(v => v + 1)}>{t.refresh}</Button></div>}
+      </div> : <div className="rounded-xl bg-surface-hover/20 p-6 text-sm text-fg-muted"><p>{t.empty}</p><Button variant="ghost" className="mt-3" onClick={() => setReload(v => v + 1)}>{t.refresh}</Button></div>}
       <p className="text-xs leading-relaxed text-fg-muted">{t.footnote}</p>
       {detected?.some(s => s.lastImport) && <div className="flex gap-4 text-sm"><Link className="text-accent" to="/skills">{t.openSkills}</Link><Link className="text-accent" to="/projects">{t.openProjects}</Link><Link className="text-accent" to="/connectors">{t.connections}</Link></div>}
     </section>}

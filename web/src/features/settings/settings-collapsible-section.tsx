@@ -32,7 +32,7 @@ export function SettingsCollapsibleSection({
   const [open, setOpen] = useState(defaultOpen ?? false);
 
   const section = (
-    <section className={cn('rounded-2xl bg-surface-base', className)}>
+    <section className={cn('rounded-xl bg-surface-hover/20', className)}>
       <button
         type="button"
         aria-expanded={open}

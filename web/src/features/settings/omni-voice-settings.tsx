@@ -16,7 +16,7 @@ export function OmniVoiceSettings({ value, onChange }: {
   const update = (patch: Partial<NonNullable<RealtimeSettings['omni']>>) => {
     if (value) onChange({ ...value, ...patch });
   };
-  return <details className="space-y-3 rounded-xl border border-edge p-4">
+  return <details className="space-y-3 rounded-xl bg-surface-hover/20 p-4">
     <summary className="cursor-pointer text-sm font-medium text-fg">{label('Natural conversation · advanced', '自然对话 · 高级设置')}</summary>
     <p className="text-sm text-fg-muted">{label('Calls continue the same session using recent history. Service and credentials are shared with voice setup; override them here only when needed.', '通话会接续同一会话的近期历史。默认共用语音服务与凭据，仅在需要独立配置时修改。')}</p>
     {!value ? <Button variant="secondary" onClick={() => onChange({ provider: 'alibaba', model: 'qwen3-omni-flash-realtime', voice: 'Cherry', instructions: 'You are a friendly voice companion. You cannot execute tools.' })}>{label('Configure natural conversation', '配置自然聊天')}</Button> : <>

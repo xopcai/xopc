@@ -166,7 +166,7 @@ export function SessionCard({
 
       <div
         role="group"
-        className="flex flex-wrap items-center gap-0.5 border-t border-edge-subtle/80 bg-surface-hover/25 p-2 dark:border-edge-subtle"
+        className="m-1 mt-0 flex flex-wrap items-center gap-0.5 rounded-lg bg-surface-hover/35 p-1.5"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}
       >

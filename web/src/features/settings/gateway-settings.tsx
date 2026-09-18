@@ -447,7 +447,7 @@ export function GatewaySettingsPanel() {
 
       {tokenExpired ? (
         <div
-          className="flex flex-col gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-950/40"
+          className="flex flex-col gap-3 rounded-lg bg-red-50 px-4 py-3 dark:bg-red-950/40"
           role="alert"
         >
           <div className="flex items-start gap-2">
@@ -465,7 +465,7 @@ export function GatewaySettingsPanel() {
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
 
       {showRestartPrompt ? (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40">
+        <div className="flex items-center justify-between gap-3 rounded-lg bg-amber-50 px-3 py-2 dark:bg-amber-950/40">
           <p className="text-xs text-amber-950 dark:text-amber-100">{g.restartHint}</p>
           <Button
             type="button"
@@ -570,7 +570,7 @@ export function GatewaySettingsPanel() {
 
       <GatewayTabPanel g={g} id="access" activeTab={activeTab}>
         {form.auth.mode === 'none' ? (
-          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
             {g.authModeNone}
           </p>
         ) : null}
@@ -665,7 +665,7 @@ export function GatewaySettingsPanel() {
           </Select>
         </div>
 
-        <div className="space-y-4 border-t border-edge pt-4">
+        <div className="space-y-4 rounded-xl bg-surface-base/45 p-4">
           <div className="text-sm font-medium text-fg">{g.updateAutoSection}</div>
           <label className="flex cursor-pointer items-start gap-2 text-sm text-fg">
             <input
@@ -894,7 +894,7 @@ function GatewaySecurityFields({
       </label>
 
       {form.dangerouslyAllowHostHeaderOriginFallback ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
           {g.dangerouslyAllowHostHeaderOriginFallbackWarning}
         </p>
       ) : null}
@@ -918,7 +918,7 @@ function TrustedProxyAuthFields({
   const tp = form.auth.trustedProxy;
 
   return (
-    <div className="space-y-4 border-t border-edge pt-4">
+    <div className="space-y-4 rounded-xl bg-surface-base/45 p-4">
       <p className="text-xs text-fg-subtle">{g.authModeTrustedProxyHint}</p>
 
       <div>
@@ -1010,7 +1010,7 @@ function GatewayAdvancedFields({
 }) {
   return (
     <div className="space-y-4">
-      <div className="space-y-2 border-t border-edge pt-4">
+      <div className="space-y-2 rounded-xl bg-surface-base/45 p-4">
         <label className="text-sm font-medium text-fg" htmlFor="gateway-channel-defer-mode">
           {g.channelConnectDeferMode}
         </label>
@@ -1085,7 +1085,7 @@ function GatewayStringListField({
   );
 
   return (
-    <div className="space-y-2 border-t border-edge pt-4">
+    <div className="space-y-2 rounded-xl bg-surface-base/45 p-4">
       <div className="text-sm font-medium text-fg">{title}</div>
       <p className="text-xs text-fg-subtle">{hint}</p>
       {values.length === 0 ? (
@@ -1152,7 +1152,7 @@ function CorsOriginsField({
       onChange={onChange}
     >
       {detected.length > 0 ? (
-        <div className="rounded-lg border border-edge bg-surface-muted px-3 py-2">
+        <div className="rounded-lg bg-surface-base/55 px-3 py-2">
           <p className="text-xs font-medium text-fg">{g.corsDetectedOrigins}</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {detected.map((candidate) => (
@@ -1175,7 +1175,7 @@ function CorsOriginsField({
         </div>
       ) : null}
       {hasWildcard ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
           {g.corsOriginsWildcardWarning}
         </p>
       ) : null}
@@ -1193,7 +1193,7 @@ function AuthRateLimitFields({
   onChange: (patch: Partial<GatewaySettingsState['auth']['rateLimit']>) => void;
 }) {
   return (
-    <div className="space-y-3 border-t border-edge pt-4">
+    <div className="space-y-3 rounded-xl bg-surface-base/45 p-4">
       <div>
         <div className="text-sm font-medium text-fg">{g.rateLimitTitle}</div>
         <p className="mt-1 text-xs text-fg-subtle">{g.rateLimitHint}</p>

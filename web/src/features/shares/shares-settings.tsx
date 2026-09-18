@@ -252,7 +252,7 @@ function SharesManageTab({
         {isLoading && !data ? (
           <div className="grid gap-2" aria-busy="true">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="rounded-lg border border-edge bg-surface-base p-3">
+              <div key={i} className="rounded-lg bg-surface-base/55 p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <Skeleton className="h-4 w-2/3" />
@@ -352,7 +352,7 @@ function HostedStaticSiteSection({ language, connected, publishingAllowed, onCre
             {zh ? '把工作区内的 HTML 文件，或包含 index.html 的网站目录，发布到隔离的托管域名。' : 'Publish an HTML file or a website directory containing index.html to the isolated hosted origin.'}
           </p>
           {connected && !publishingAllowed ? (
-            <p className="mt-3 rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning">
+            <p className="mt-3 rounded-md bg-warning-soft px-3 py-2 text-xs text-warning">
               {zh ? '管理员已暂停你的公网分享能力。已有远端链接当前不可访问；你仍可在下方撤销它们。' : 'An administrator has paused public sharing for your account. Existing hosted links are unavailable, but you can still revoke them below.'}
             </p>
           ) : null}
@@ -447,7 +447,7 @@ function HostedPublicationsSection({
       {isLoading && !data ? (
         <div className="grid gap-2" aria-busy="true">
           {Array.from({ length: 2 }).map((_, index) => (
-            <div key={index} className="rounded-lg border border-edge bg-surface-base p-3">
+            <div key={index} className="rounded-lg bg-surface-base/55 p-3">
               <Skeleton className="h-4 w-2/3" />
               <Skeleton className="mt-2 h-3 w-1/2" />
             </div>
@@ -468,7 +468,7 @@ function HostedPublicationsSection({
       ) : (
         <div className="space-y-3">
           {!data.publishingAllowed ? (
-            <p className="rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-xs text-warning">
+            <p className="rounded-md bg-warning-soft px-3 py-2 text-xs text-warning">
               {language === 'zh' ? '管理员已暂停公网分享。已有托管链接当前不可访问，也不能更新；撤销操作仍然可用。' : 'An administrator has paused public sharing. Existing hosted links are unavailable and cannot be updated; revocation remains available.'}
             </p>
           ) : null}
@@ -578,7 +578,7 @@ function HostedPublicationRow({
 
   return (
     <>
-      <div className="rounded-lg border border-edge bg-surface-panel/80 px-3 py-2.5">
+      <div className="rounded-lg bg-surface-base/55 px-3 py-2.5">
         <div className="flex items-start gap-3">
           <PublicationIcon className="mt-0.5 size-4 shrink-0 text-fg-muted" aria-hidden />
           <div className="min-w-0 flex-1">
