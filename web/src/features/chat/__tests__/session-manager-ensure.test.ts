@@ -96,6 +96,26 @@ describe('SessionManager.createSession environment', () => {
   });
 });
 
+describe('SessionManager.resetSession', () => {
+  beforeEach(() => mockedApiFetch.mockReset());
+
+  it('resets the existing conversation without creating another project session', async () => {
+    const conversationId = '134874b6-5536-51bc-8c22-57982488c47a';
+    mockedApiFetch.mockResolvedValueOnce(jsonResponse({
+      ok: true,
+      reset: true,
+      transcriptId: '98936ed0-fbe7-5ca2-8add-03aa88dfbc35',
+    }));
+
+    await new SessionManager().resetSession(conversationId);
+
+    expect(mockedApiFetch).toHaveBeenCalledWith(
+      expect.stringContaining(`/api/sessions/${encodeURIComponent(conversationId)}/reset`),
+      { method: 'POST' },
+    );
+  });
+});
+
 describe('SessionManager.loadSession', () => {
   beforeEach(() => {
     mockedApiFetchWithStartupRetry.mockReset();

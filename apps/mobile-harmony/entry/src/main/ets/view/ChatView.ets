@@ -1,7 +1,10 @@
 import { XopcChatViewModel } from '../viewmodel/chatViewModel';
-import { XopcChatRow, XopcChatAttachment, XopcContextRef, XopcReferenceItem, XopcChatAgent } from '../model/chat';
+import { XopcChatRow, XopcChatAttachment, XopcContextRef, XopcReferenceItem, XopcChatAgent, XopcHistoryMedia } from '../model/chat';
 import { XopcChatMessageContent } from './ChatMessageContent';
-import { chatAnswerText } from '../common/chatRichContent';
+import { chatAnswerText, chatAttachments } from '../common/chatRichContent';
+import { extractMarkdownCodeBlocks } from '../common/chatDisplay';
+import { XopcChatMediaView } from './ChatMediaView';
+import { XopcChatDisclosure } from '../common/chatDisclosure';
 import { common } from '@kit.AbilityKit';
 import { voiceCapture, XopcVoiceCapture } from '../service/voiceCapture';
 import { appSettings } from '../service/settings';
@@ -41,6 +44,7 @@ export struct XopcChatView {
   @Event onAttentionRefresh: () => void = (): void => {};
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Local chat: XopcChatViewModel = new XopcChatViewModel();
+  @Local disclosure: XopcChatDisclosure = new XopcChatDisclosure();
   @Local options: XopcChatOptionsViewModel = new XopcChatOptionsViewModel();
   @Local context: XopcChatContextViewModel = new XopcChatContextViewModel();
   @Local prompt: XopcChatPromptViewModel = new XopcChatPromptViewModel();
@@ -59,6 +63,13 @@ export struct XopcChatView {
   @Local reader: XopcChatReadAloud = chatReadAloud;
   @Local attachments: XopcChatAttachment[] = [];
   @Local pickingAttachment: boolean = false;
+  @Computed get attachmentPreviews(): XopcHistoryMedia[] {
+    return this.attachments.map((file: XopcChatAttachment, index: number): XopcHistoryMedia => {
+      const media: XopcHistoryMedia = { id: 'draft:' + index, name: file.name, type: file.type, mimeType: file.mimeType, size: file.size,
+        uri: file.uri || '', data: file.data, workspaceRelativePath: file.workspaceRelativePath };
+      return chatAttachments([media], media.id)[0] || media;
+    });
+  }
   @Local atBottom: boolean = true;
   @Local savingNote: boolean = false;
   @Local attention: XopcChatAttentionViewModel = new XopcChatAttentionViewModel();
@@ -80,8 +91,10 @@ export struct XopcChatView {
   private messagesScroller: Scroller = new Scroller();
   private scrollTimer: number = -1;
   private firstVisible: number = 0;
-  private loadingOlder: boolean = false;
+  @Local loadingOlder: boolean = false;
+  @Local olderFailed: boolean = false;
   private initialScrollPending: boolean = true;
+  private olderGeneration: number = 0;
   private appliedRequestRevision: number = -1;
 
   private applyPalette(item: XopcPaletteItem): void {
@@ -113,6 +126,7 @@ export struct XopcChatView {
     if (!this.chat.selectedId || scope === this.draftScope) return;
     clearTimeout(this.draftTimer); this.saveDraft();
     this.initialScrollPending = true; this.atBottom = true; this.palette.close();
+    this.olderGeneration++; this.loadingOlder = false; this.olderFailed = false; this.firstVisible = 0;
     const generation = ++this.draftGeneration;
     this.restoringDraft = true; this.draftScope = scope; this.draft = ''; this.refs = []; this.attachments = [];
     try {
@@ -134,31 +148,51 @@ export struct XopcChatView {
     }, 50);
   }
   private async loadOlder(): Promise<void> {
-    if (this.loadingOlder) return;
+    if (this.loadingOlder || !this.chat.hasOlder || this.chat.loading || this.initialScrollPending) return;
     this.loadingOlder = true;
+    this.olderFailed = false;
     const conversationId = this.chat.selectedId;
-    const anchor = this.chat.rows[Math.max(0, this.firstVisible - (this.chat.hasOlder ? 1 : 0))]?.id;
+    const generation = ++this.olderGeneration;
+    const headerCount = this.chat.hasOlder ? 1 : 0;
+    const anchorIndex = Math.max(headerCount, this.firstVisible);
+    const anchor = this.chat.rows[anchorIndex - headerCount]?.id;
+    let anchorOffset = 0;
+    try { anchorOffset = this.messagesScroller.getItemRect(anchorIndex).y; } catch (_) {}
+    const previousRows = this.chat.rows;
     await this.chat.loadHistory(true);
+    if (!this.visible || generation !== this.olderGeneration || conversationId !== this.chat.selectedId) return;
+    this.olderFailed = previousRows === this.chat.rows && !!this.chat.error;
     if (anchor && this.visible) {
       const index = this.chat.rows.findIndex((row: XopcChatRow): boolean => row.id === anchor || !!row.sourceIds?.includes(anchor));
-      setTimeout((): void => { if (this.visible && conversationId === this.chat.selectedId && index >= 0) this.messagesScroller.scrollToIndex(index + (this.chat.hasOlder ? 1 : 0), false, ScrollAlign.START); }, 30);
+      setTimeout((): void => {
+        if (generation !== this.olderGeneration) return;
+        if (this.visible && conversationId === this.chat.selectedId && index >= 0) {
+          this.messagesScroller.scrollToIndex(index + (this.chat.hasOlder ? 1 : 0), false, ScrollAlign.START);
+          this.messagesScroller.scrollBy(0, -anchorOffset);
+        }
+        this.loadingOlder = false;
+      }, 30);
+    } else {
+      this.loadingOlder = false;
     }
-    this.loadingOlder = false;
   }
   private async messageAction(action: string, row: XopcChatRow): Promise<void> {
     try {
       if (action === 'copy') {
-        await copyChatMessage(row.text); this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_copied') });
+        await copyChatMessage(row.role === 'assistant' ? chatAnswerText(row) : row.text); this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_copied') });
+      } else if (action === 'copy-code') {
+        await copyChatMessage(extractMarkdownCodeBlocks(chatAnswerText(row))); this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_copied') });
       } else if (action === 'edit') { this.draft = row.text; }
       else if (action === 'read') {
-        if (this.reader.sourceId === row.id) await this.reader.stop();
+        if (this.reader.sourceId === row.id && this.reader.state === 'loading') return;
+        if (this.reader.sourceId === row.id && ['playing', 'paused'].includes(this.reader.state)) await this.reader.toggle();
         else {
           const context = this.getUIContext().getHostContext();
           if (context) { await this.voice.cancel(); await this.reader.speak(context, chatAnswerText(row), row.id, appSettings.effectiveLanguage()); }
         }
       }
       else if (action === 'save' && !this.savingNote) {
-        this.savingNote = true; await saveChatMessage(row.text);
+        this.savingNote = true; await saveChatMessage(chatAnswerText(row));
         this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_saved_note') });
       } else if (action === 'regenerate' && !this.chat.runId) {
         let index = this.chat.rows.findIndex((item: XopcChatRow): boolean => item.id === row.id) - 1;
@@ -235,7 +269,7 @@ export struct XopcChatView {
     this.options.dispose(); this.context.dispose(); this.prompt.dispose();
     this.options = new XopcChatOptionsViewModel(); this.context = new XopcChatContextViewModel();
     this.prompt = new XopcChatPromptViewModel(); this.optionsId = '';
-    this.loadingOlder = false; this.firstVisible = 0;
+    this.olderGeneration++; this.loadingOlder = false; this.olderFailed = false; this.firstVisible = 0;
     this.chat.open(this.requestedId);
   }
   aboutToDisappear(): void { this.attention.dispose(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.scrollTimer); clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setDrawer(false); this.setPanel(false); this.prompt.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voice.cancel(); this.reader.stop(); this.attachments = []; }
@@ -420,15 +454,22 @@ export struct XopcChatView {
     Stack({ alignContent: Alignment.Bottom }) {
     List({ space: 16, scroller: this.messagesScroller }) {
       if (this.chat.hasOlder) {
-        ListItem() { Button($r('app.string.older_messages')).onClick((): void => { this.loadOlder(); }) }
+        ListItem() {
+          Row() {
+            if (this.loadingOlder) { LoadingProgress().width(20).height(20).color($r('app.color.secondary')) }
+            else { Button(this.olderFailed ? $r('app.string.refresh') : $r('app.string.older_messages'))
+              .height(44).backgroundColor(Color.Transparent).fontColor($r('app.color.secondary'))
+              .onClick((): void => { this.loadOlder(); }) }
+          }.width('100%').height(44).justifyContent(FlexAlign.Center)
+        }
       }
       Repeat<XopcChatRow>(this.chat.rows).each((item: RepeatItem<XopcChatRow>) => {
         ListItem() {
           Column({ space: 8 }) {
-            XopcChatMessageContent({ row: item.item, conversationId: this.chat.selectedId, reasoning: this.context.config?.reasoningLevel || 'on', onNavigate: this.onNavigate,
+            XopcChatMessageContent({ row: item.item, conversationId: this.chat.selectedId, disclosure: this.disclosure, reasoning: this.context.config?.reasoningLevel || 'on', onNavigate: this.onNavigate,
               onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
             if (item.item.text && (item.item.role === 'user' || item.item.role === 'assistant')) {
-              Row({ space: 4 }) {
+              Row({ space: 8 }) {
                 Button() { SymbolGlyph($r('sys.symbol.doc_plaintext')).fontSize(18).fontColor([$r('app.color.tertiary')]) }
                   .width(44).height(44).padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.chat_copy'))
                   .onClick((): void => { this.messageAction('copy', item.item); })
@@ -443,29 +484,45 @@ export struct XopcChatView {
                   Button() { SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(18).fontColor([$r('app.color.tertiary')]) }
                     .width(44).height(44).padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.chat_regenerate'))
                     .enabled(!this.chat.runId && !this.chat.sending).onClick((): void => { this.messageAction('regenerate', item.item); })
-                  Button() { SymbolGlyph($r('sys.symbol.speaker_wave_2')).fontSize(18).fontColor([this.reader.sourceId === item.item.id ? $r('app.color.accent') : $r('app.color.tertiary')]) }
-                    .width(44).height(44).padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.chat_read_aloud'))
+                  if (extractMarkdownCodeBlocks(chatAnswerText(item.item))) {
+                    Button() { Text('</>').fontSize(16).fontColor($r('app.color.secondary')) }
+                      .width(44).height(44).padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.chat_copy_code'))
+                      .onClick((): void => { this.messageAction('copy-code', item.item); })
+                  }
+                  if (!(item.item.media || []).some((file: XopcHistoryMedia): boolean => file.mimeType.startsWith('audio/'))) {
+                  Button() {
+                    if (this.reader.sourceId === item.item.id && this.reader.state === 'loading') { LoadingProgress().width(18).height(18).color($r('app.color.secondary')) }
+                    else if (this.reader.sourceId === item.item.id && this.reader.state === 'playing') { Text('Ⅱ').fontSize(18).fontColor($r('app.color.secondary')) }
+                    else { SymbolGlyph($r('sys.symbol.speaker_wave_2')).fontSize(18).fontColor([$r('app.color.secondary')]) }
+                  }
+                    .width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+                    .accessibilityText(this.reader.sourceId === item.item.id && this.reader.state === 'playing' ? $r('app.string.pause') : this.reader.sourceId === item.item.id && this.reader.state === 'paused' ? $r('app.string.resume') : $r('app.string.chat_read_aloud'))
                     .enabled(!!chatAnswerText(item.item)).onClick((): void => { this.messageAction('read', item.item); })
+                  }
                 }
-              }.width('100%')
+              }.width('100%').justifyContent(item.item.role === 'user' ? FlexAlign.End : FlexAlign.Start)
             }
           }.width('100%').padding(16).alignItems(HorizontalAlign.Start).borderRadius(12)
             .backgroundColor(item.item.role === 'user' ? $r('app.color.panel') : $r('app.color.surface'))
         }
-      }).key((row: XopcChatRow): string => this.chat.selectedId + ':' + row.id)
+      }).key((row: XopcChatRow): string => this.chat.selectedId + ':' + row.id).virtualScroll({ totalCount: this.chat.rows.length })
       if (this.chat.liveRow) {
         ListItem() {
-          XopcChatMessageContent({ row: this.chat.liveRow, conversationId: this.chat.selectedId,
+          XopcChatMessageContent({ row: this.chat.liveRow, conversationId: this.chat.selectedId, disclosure: this.disclosure,
             reasoning: this.context.config?.reasoningLevel || 'on', onNavigate: this.onNavigate,
             onFillDraft: (text: string): void => { this.fillProductDraft(text); } }).padding(16)
         }
       } else if (this.chat.runId) {
         ListItem() { Text($r('app.string.chat_running')).fontSize(13).fontColor($r('app.color.secondary')).padding(16) }
       }
-    }.id('chat-message-list').height('100%').width('100%').padding({ left: 16, right: 16 })
+    }.id('chat-message-list').height('100%').width('100%').padding({ left: 16, right: 16 }).cachedCount(3)
       .onScrollIndex((start: number, end: number): void => {
         this.firstVisible = start;
-        if (!this.initialScrollPending && !this.chat.loading) this.atBottom = end >= this.chat.rows.length - 1 + (this.chat.hasOlder ? 1 : 0) + (this.chat.liveRow || this.chat.runId ? 1 : 0);
+      })
+      .onDidScroll((offset: number, state: ScrollState): void => {
+        if (this.initialScrollPending || this.loadingOlder || this.chat.loading || state === ScrollState.Idle) return;
+        this.atBottom = this.messagesScroller.isAtEnd();
+        if (offset < 0 && this.messagesScroller.currentOffset().yOffset < 160 && !this.olderFailed) this.loadOlder();
       })
       .onTouch((event: TouchEvent): void => { if (event.type === TouchType.Down) this.dismissComposer(); })
     if (!this.atBottom) {
@@ -522,14 +579,17 @@ export struct XopcChatView {
       Scroll() {
         Column({ space: 4 }) {
           ForEach(this.attachments, (file: XopcChatAttachment, index: number) => {
+            if (file.mimeType.startsWith('image/') && this.attachmentPreviews[index]) {
+              XopcChatMediaView({ file: this.attachmentPreviews[index], conversationId: this.chat.selectedId, draftPreview: true })
+            }
             Row({ space: 8 }) {
               Text(file.name).layoutWeight(1).maxLines(1).fontColor($r('app.color.foreground'))
-              Button($r('app.string.remove_attachment')).enabled(!this.chat.sending)
+              Button($r('app.string.remove_attachment')).enabled(!this.chat.sending).backgroundColor(Color.Transparent).fontColor($r('app.color.secondary'))
                 .onClick((): void => { this.attachments = this.attachments.filter((_file: XopcChatAttachment, i: number): boolean => i !== index); })
             }.width('100%')
           }, (file: XopcChatAttachment, index: number): string => index.toString() + ':' + file.name)
         }.padding(8)
-      }.width('100%').constraintSize({ maxHeight: 120 })
+      }.width('100%').constraintSize({ maxHeight: 180 })
     }
     if (this.voice.error) { Text(this.voice.error).fontColor($r('app.color.danger')).padding(8) }
     if (this.reader.error) { Text(this.reader.error).fontColor($r('app.color.danger')).padding(8) }
@@ -539,9 +599,10 @@ export struct XopcChatView {
         if (this.reader.state === 'loading') { LoadingProgress().width(24).height(24) }
         else {
           Button(this.reader.state === 'paused' ? $r('app.string.resume') : $r('app.string.pause')).height(44)
+            .backgroundColor($r('app.color.grouped')).fontColor($r('app.color.secondary'))
             .onClick((): void => { this.reader.toggle(); })
         }
-        Button($r('app.string.stop')).height(44).onClick((): void => { this.reader.stop(); })
+        Button($r('app.string.stop')).height(44).backgroundColor($r('app.color.grouped')).fontColor($r('app.color.secondary')).onClick((): void => { this.reader.stop(); })
       }.padding({ left: 16, right: 16 }).width('100%')
     }
     if (this.palette.range && (this.palette.loading || this.palette.items.length || this.palette.error)) {

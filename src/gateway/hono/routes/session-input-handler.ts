@@ -10,6 +10,9 @@ import type { UserTurnAttachment } from '../../user-turn-input.js';
 import { parseTurnContextRefs } from '../../../agent/source-context/types.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { browserPageContextToAgentContext } from '../../../agent/source-context/browser-page.js';
+import { isTaskDestructiveCommand } from '../../../session/reset-triggers.js';
+import { parseSlashCommand, commandRegistry } from '../../../chat-commands/index.js';
+import { isVoiceLikeAttachment } from '../../../channels/attachments/voice-stt-webchat.js';
 
 const MAX_TURN_CONTEXTS = 5;
 
@@ -17,6 +20,7 @@ export async function submitSessionInput(
   c: Context,
   deps: AuthenticatedRouteDeps,
   conversationId: string,
+  options?: { taskConversation?: boolean },
 ) {
   const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
   if (!body || !conversationId) {
@@ -32,6 +36,23 @@ export async function submitSessionInput(
     return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid browser page context' } }, 400);
   }
   const content = typeof body.content === 'string' ? body.content : '';
+  if (options?.taskConversation && isTaskDestructiveCommand(content)) {
+    return c.json({
+      ok: false,
+      error: { code: 'BAD_REQUEST', message: 'A task has one continuous conversation.' },
+    }, 400);
+  }
+  const parsedCommand = parseSlashCommand(content);
+  if (
+    parsedCommand
+    && commandRegistry.has(parsedCommand.command)
+    && attachments?.some((attachment) => !isVoiceLikeAttachment(attachment as UserTurnAttachment))
+  ) {
+    return c.json({
+      ok: false,
+      error: { code: 'BAD_REQUEST', message: 'Slash commands do not accept file or image attachments.' },
+    }, 400);
+  }
   const contentError = validateWebchatContent(content);
   if (contentError) return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: contentError } }, 400);
   const attachmentError = validateWebchatAttachments(attachments);
