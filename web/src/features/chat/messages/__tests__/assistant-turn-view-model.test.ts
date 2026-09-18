@@ -24,8 +24,8 @@ describe('buildAssistantTurnViewModel', () => {
       reasoningLevel: 'off',
     });
 
-    expect(view.activity.blocks).toHaveLength(1);
-    expect(view.activity.blocks[0]?.type).toBe('tool_use');
+    expect(view.workLog.items).toHaveLength(1);
+    expect(view.workLog.items[0]?.type).toBe('tool_use');
     expect(view.lifecycle.state).toBe('using_tool');
   });
 
@@ -49,30 +49,28 @@ describe('buildAssistantTurnViewModel', () => {
 
   it.each<{
     level: ReasoningLevel;
-    expectedContent: string[];
+    expectedWorkLog: string[];
   }>([
-    { level: 'off', expectedContent: ['tool:read-1', 'text:最终答案。'] },
+    { level: 'off', expectedWorkLog: ['tool:read-1'] },
     {
       level: 'on',
-      expectedContent: [
+      expectedWorkLog: [
         'thinking',
         'text:正在分析。',
         'text:我先检查项目。',
         'tool:read-1',
-        'text:最终答案。',
       ],
     },
     {
       level: 'stream',
-      expectedContent: [
+      expectedWorkLog: [
         'thinking',
         'text:正在分析。',
         'text:我先检查项目。',
         'tool:read-1',
-        'text:最终答案。',
       ],
     },
-  ])('filters message content for $level activity detail', ({ level, expectedContent }) => {
+  ])('partitions answer and work log for $level activity detail', ({ level, expectedWorkLog }) => {
     const message: Message = {
       role: 'assistant',
       content: [
@@ -85,13 +83,16 @@ describe('buildAssistantTurnViewModel', () => {
     };
 
     const view = buildAssistantTurnViewModel({ message, isStreaming: false, reasoningLevel: level });
-    const contentLabels = view.displayContent.map((block) => {
+    const contentLabels = view.workLog.items.map((block) => {
       if (block.type === 'text') return `text:${block.text}`;
       if (block.type === 'tool_use') return `tool:${block.id}`;
       return block.type;
     });
 
-    expect(contentLabels).toEqual(expectedContent);
+    expect(contentLabels).toEqual(expectedWorkLog);
+    expect(view.answerContent).toEqual([
+      { type: 'text', text: '最终答案。', presentation: 'answer' },
+    ]);
   });
 
   it.each<{
@@ -113,8 +114,8 @@ describe('buildAssistantTurnViewModel', () => {
 
     const view = buildAssistantTurnViewModel({ message, isStreaming: true, reasoningLevel: level });
 
-    expect(view.activity.blocks.map((block) => block.type)).toEqual(expectedTypes);
-    expect(view.activity.expandedByDefault).toBe(expanded);
+    expect(view.workLog.items.map((block) => block.type)).toEqual(expectedTypes);
+    expect(view.workLog.expandedByDefault).toBe(expanded);
   });
 
   it('promotes the latest object delivery to the turn result surface', () => {
