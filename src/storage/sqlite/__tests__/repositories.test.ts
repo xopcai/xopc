@@ -234,6 +234,35 @@ describe('sqlite repositories', () => {
     expect(listSessionMetadata({ limit: 10 }).items.map((item) => item.key)).toContain(CONVERSATION_ID);
   });
 
+  it('keeps background shells hidden until their output is ready', () => {
+    ensureSessionRecord(CONVERSATION_ID, CWD, {
+      ...METADATA,
+      hiddenFromSessionList: true,
+      customData: { deferVisibilityUntilOutput: true },
+    });
+
+    appendTranscriptEntry(CONVERSATION_ID, userMessage('internal automation instruction'));
+    expect(getSessionMetadata(CONVERSATION_ID)?.hiddenFromSessionList).toBe(true);
+
+    replaceTranscriptRows(CONVERSATION_ID, [userMessage('restored internal instruction')]);
+    expect(getSessionMetadata(CONVERSATION_ID)?.hiddenFromSessionList).toBe(true);
+  });
+
+  it('filters legacy automation shells without output from visible session lists', () => {
+    ensureSessionRecord(CONVERSATION_ID, CWD, {
+      ...METADATA,
+      sourceChannel: 'automation',
+      hiddenFromSessionList: false,
+    });
+    appendTranscriptEntry(CONVERSATION_ID, userMessage('internal automation instruction'));
+
+    expect(getSessionMetadata(CONVERSATION_ID)?.hiddenFromSessionList).toBe(false);
+    expect(listSessionMetadata({ limit: 10 }).items.map((item) => item.key)).not.toContain(CONVERSATION_ID);
+
+    appendTranscriptEntry(CONVERSATION_ID, assistantMessage('automation output'));
+    expect(listSessionMetadata({ limit: 10 }).items.map((item) => item.key)).toContain(CONVERSATION_ID);
+  });
+
   it('appends transcript rows and paginates messages', () => {
     ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: "main" });
     appendTranscriptEntry(CONVERSATION_ID, userMessage('hello'));

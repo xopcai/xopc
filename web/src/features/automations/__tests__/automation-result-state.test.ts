@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Automation, AutomationRun } from '../automation-api';
-import { automationHasExecutionIssue, latestAutomationRun } from '../automation-result-state';
+import {
+  automationExecutionIssueMarker,
+  automationHasExecutionIssue,
+  latestAutomationRun,
+} from '../automation-result-state';
 
 const automation = { id: 'a', state: {} } as Automation;
 const run = (status: AutomationRun['status'], createdAtMs: number, automationId = 'a') => (
@@ -26,5 +30,11 @@ describe('automation result state', () => {
   it('prefers newer task state over stale results', () => {
     expect(automationHasExecutionIssue({ ...automation, state: { lastRunStatus: 'succeeded', lastRunAtMs: 30 } }, [run('failed', 10)])).toBe(false);
     expect(automationHasExecutionIssue({ ...automation, state: { lastRunStatus: 'failed', lastRunAtMs: 30 } }, [run('succeeded', 10)])).toBe(true);
+  });
+
+  it('changes the issue marker when a newer failure occurs', () => {
+    expect(automationExecutionIssueMarker(automation, [run('failed', 10)])).toBe('failed:10');
+    expect(automationExecutionIssueMarker(automation, [run('failed', 20)])).toBe('failed:20');
+    expect(automationExecutionIssueMarker(automation, [run('succeeded', 30)])).toBeNull();
   });
 });

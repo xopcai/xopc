@@ -29,6 +29,28 @@ describe('notificationPlanFromGatewayEvent', () => {
     });
   });
 
+  it('renders Markdown response previews as plain notification text', () => {
+    const plan = notificationPlanFromGatewayEvent('agent.run.ended', {
+      schemaVersion: 1,
+      runId: 'run-markdown',
+      conversationId: 'conversation-markdown',
+      status: 'success',
+      completedAtMs: 1,
+      source: 'webchat',
+      target: { kind: 'chat', conversationId: 'conversation-markdown' },
+      responsePreview: '## **Deployment complete**\n\n- Updated `api.ts`\n- See [release notes](https://example.com)',
+    });
+
+    expect(plan).toMatchObject({
+      notification: {
+        body: {
+          en: 'Deployment complete • Updated api.ts • See release notes',
+          zh: 'Deployment complete • Updated api.ts • See release notes',
+        },
+      },
+    });
+  });
+
   it('keeps failed chat notifications free of response content', () => {
     const plan = notificationPlanFromGatewayEvent('agent.run.ended', {
       schemaVersion: 1,

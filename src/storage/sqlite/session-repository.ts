@@ -165,6 +165,18 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
 
   if (!query.includeHidden) {
     conditions.push(`s.hidden_from_session_list = 0`);
+    // Legacy background sessions may have been revealed by their internal user
+    // prompt before any assistant/result output was persisted. Keep those
+    // shells out of user-facing lists without deleting their run linkage.
+    conditions.push(`(
+      s.source_channel NOT IN ('automation', 'workflow')
+      OR COALESCE(TRIM(s.name), '') != ''
+      OR EXISTS (
+        SELECT 1 FROM transcript_entries visible_output
+        WHERE visible_output.transcript_id = s.active_transcript_id
+          AND visible_output.role IN ('assistant', 'toolResult')
+      )
+    )`);
   }
 
   if (query.sessionTypes?.length) {

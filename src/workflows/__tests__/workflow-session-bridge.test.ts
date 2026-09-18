@@ -72,6 +72,57 @@ describe('WorkflowSessionBridge project association', () => {
     await expect(store.getMetadata(result.conversationId)).resolves.toMatchObject({
       projectId: project.id,
       sessionType: 'workflow-run',
+      hiddenFromSessionList: true,
+      messageCount: 1,
+      customData: { deferVisibilityUntilOutput: true },
+    });
+  });
+
+  it('reveals workflow sessions when a terminal result is persisted', async () => {
+    const result = await bridge.prepareRunSession({
+      runId: 'run-terminal-output',
+      agentId: 'main',
+      definitionId: 'wf',
+      definitionTitle: 'Workflow',
+      goal: 'Do workflow work',
+    });
+
+    await bridge.handleRunViewUpdated({
+      run: {
+        id: 'run-terminal-output',
+        definitionId: 'wf',
+        definitionVersion: '1.0.0',
+        title: 'Workflow',
+        goal: 'Do workflow work',
+        input: {},
+        status: 'failed',
+        source: { kind: 'automation', automationId: 'automation-1' },
+        metadata: {
+          conversationId: result.conversationId,
+          triggerSource: 'automation',
+          agentId: 'main',
+          definition: {} as never,
+        },
+        error: { code: 'runtime_error', message: 'failed', recoverable: false },
+        metrics: { agentCount: 0, doneAgentCount: 0, errorAgentCount: 0, skippedAgentCount: 0, artifactCount: 0 },
+        createdAtMs: 1,
+      },
+      phases: [],
+      agents: [],
+      nodes: [],
+      logs: [],
+      artifacts: [],
+      timeline: [],
+      controls: { canCancel: false, canRetry: true, canArchive: true },
+    });
+
+    await expect(store.getMetadata(result.conversationId)).resolves.toMatchObject({
+      hiddenFromSessionList: false,
+      messageCount: 3,
+      customData: {
+        workflowRunId: 'run-terminal-output',
+        deferVisibilityUntilOutput: true,
+      },
     });
   });
 
