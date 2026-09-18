@@ -1,16 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  BookOpen,
-  CheckCircle2,
-  ChevronDown,
-  FilePenLine,
-  FolderOpen,
-  Globe2,
-  Loader2,
-  Search,
-  SquareTerminal,
-  XCircle,
-} from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import {
@@ -28,9 +17,14 @@ import {
 } from '@/features/chat/messages/memory-activity';
 import type { AssistantTurnActivityPresentation } from '@/features/chat/messages/assistant-turn-view-model';
 import { formatParamsJson, getKeyDetailLine } from '@/features/chat/messages/tool-input-preview';
-import { getFriendlyToolTitle } from '@/features/chat/messages/tool-friendly-title';
+import {
+  getToolExecutionTitle,
+  hasSpecificToolExecutionTitle,
+  type ToolExecutionLabels,
+} from '@/features/chat/messages/tool-friendly-title';
 import {
   classifyTool,
+  actionKindRunningLabel,
   type ActionKind,
   type StepsClusterDoneLabels,
   type StepsClusterIngLabels,
@@ -44,6 +38,7 @@ import {
   WriteFileCard,
   type ToolCardLabels,
 } from '@/features/chat/tool-results/tool-result-cards';
+import { parseToolResult } from '@/features/chat/tool-results/parse-tool-result';
 import { useDevViewStore } from '@/stores/dev-view-store';
 import { formatStepRoundDuration } from '@/features/chat/time/step-round-duration';
 import {
@@ -65,47 +60,6 @@ import { isWorkflowToolBlock } from '@/features/chat/workflow/workflow.utils';
 
 export interface AssistantActivityWorkflowOptions {
   labels: WorkflowCardLabels;
-}
-
-const AssistantStepsHeaderStatusIcon = memo(function AssistantStepsHeaderStatusIcon({
-  active,
-  failed,
-}: {
-  active: boolean;
-  failed: boolean;
-}) {
-  if (active) {
-    return <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-accent-fg" aria-hidden />;
-  }
-  if (failed) {
-    return <XCircle className="mt-0.5 size-4 shrink-0 text-red-600 dark:text-red-400" aria-hidden />;
-  }
-  return <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-fg-muted" aria-hidden />;
-});
-
-function CompletedToolIcon({ kind }: { kind: ActionKind }) {
-  const className = 'size-4 text-fg-muted';
-  switch (kind) {
-    case 'webSearch':
-    case 'memorySearch':
-    case 'codeSearch':
-    case 'search':
-      return <Search className={className} aria-hidden />;
-    case 'runCommand':
-      return <SquareTerminal className={className} aria-hidden />;
-    case 'readFile':
-      return <BookOpen className={className} aria-hidden />;
-    case 'editFile':
-    case 'writeFile':
-      return <FilePenLine className={className} aria-hidden />;
-    case 'listDir':
-      return <FolderOpen className={className} aria-hidden />;
-    case 'openUrl':
-    case 'fetchUrl':
-      return <Globe2 className={className} aria-hidden />;
-    case 'other':
-      return <CheckCircle2 className={className} aria-hidden />;
-  }
 }
 
 /**
@@ -173,13 +127,10 @@ export function AssistantStepsBlock({
     openUrl: string;
     fetchUrl: string;
     unknownTool: string;
-    activityCompleted: string;
-    activityFailedCount: string;
     activityAnalysisComplete: string;
-    toolFailedImpact: string;
     rawThinking: string;
-    toolRunning: string;
     toolError: string;
+    toolActivity: ToolExecutionLabels;
     memoryActivity: MemoryActivityLabels;
   };
   clusterLabels: {
@@ -195,13 +146,42 @@ export function AssistantStepsBlock({
   const visibleBlocks = activity.blocks;
   const stepCount = visibleBlocks.length;
   const anyActive = activity.active;
-  const failedCount = activity.failedCount;
-  const stepsDrawerOpen = activity.expandedByDefault && (anyActive || failedCount > 0);
+  const stepsDrawerOpen = activity.expandedByDefault && anyActive;
   const [userExpanded, setUserExpanded] = useState<boolean | null>(null);
 
   const expanded = userExpanded ?? stepsDrawerOpen;
   const effectiveStartedAt = activity.startedAt ?? null;
   const completedDurationMs = activity.durationMs ?? null;
+  const friendlyTitleLabels = useMemo(() => ({
+    searchedWeb: stepLabels.searchedWeb,
+    searchedMemory: stepLabels.searchedMemory,
+    searchedCode: stepLabels.searchedCode,
+    searched: stepLabels.searched,
+    readFile: stepLabels.readFile,
+    runCommand: stepLabels.runCommand,
+    listDirectory: stepLabels.listDirectory,
+    writeFile: stepLabels.writeFile,
+    editFile: stepLabels.editFile,
+    openUrl: stepLabels.openUrl,
+    fetchUrl: stepLabels.fetchUrl,
+    unknownTool: stepLabels.unknownTool,
+  }), [stepLabels]);
+
+  const semanticTitle = useMemo(() => (
+    block: ToolUseContent,
+    state: 'running' | 'completed',
+  ): string | null => {
+    const kind = classifyTool(block.name, block.activity);
+    if (kind !== 'other' && !hasSpecificToolExecutionTitle(block.name)) return null;
+    return getToolExecutionTitle(
+      block.name,
+      block.input,
+      state,
+      stepLabels.toolActivity,
+      friendlyTitleLabels,
+      block.activity,
+    );
+  }, [friendlyTitleLabels, stepLabels.toolActivity]);
 
   const completedHeader = useMemo(() => {
     if (anyActive) return '';
@@ -211,13 +191,8 @@ export function AssistantStepsBlock({
       clusterLabels.join,
       language,
       viewStepsLabel(stepCount, stepLabels),
+      (block) => semanticTitle(block, 'completed'),
     );
-    if (failedCount > 0) {
-      return stepLabels.activityFailedCount.replace(
-        /\{\{count\}\}/g,
-        String(failedCount),
-      );
-    }
     return activity.hasTool ? detail : stepLabels.activityAnalysisComplete;
   }, [
     anyActive,
@@ -226,14 +201,18 @@ export function AssistantStepsBlock({
     stepCount,
     stepLabels,
     clusterLabels,
-    failedCount,
     activity.hasTool,
+    semanticTitle,
   ]);
 
   const streamingHeaderText = useMemo(() => {
     if (!anyActive) return null;
-    return buildStepsRoundStreamingSummary(visibleBlocks, clusterLabels.ing);
-  }, [anyActive, visibleBlocks, clusterLabels]);
+    return buildStepsRoundStreamingSummary(
+      visibleBlocks,
+      clusterLabels.ing,
+      (block) => semanticTitle(block, 'running'),
+    );
+  }, [anyActive, visibleBlocks, clusterLabels, semanticTitle]);
 
   if (stepCount === 0) {
     return null;
@@ -255,10 +234,10 @@ export function AssistantStepsBlock({
     openUrl: stepLabels.openUrl,
     fetchUrl: stepLabels.fetchUrl,
     unknownTool: stepLabels.unknownTool,
-    toolFailedImpact: stepLabels.toolFailedImpact,
     rawThinking: stepLabels.rawThinking,
-    toolRunning: stepLabels.toolRunning,
     toolError: stepLabels.toolError,
+    toolActivity: stepLabels.toolActivity,
+    runningActions: clusterLabels.ing,
     memoryActivity: stepLabels.memoryActivity,
   };
 
@@ -309,7 +288,6 @@ export function AssistantStepsBlock({
         onClick={() => setUserExpanded((current) => !(current ?? stepsDrawerOpen))}
         aria-expanded={expanded}
       >
-        <AssistantStepsHeaderStatusIcon active={anyActive} failed={failedCount > 0} />
         <div className="min-w-0 flex-1">
           <span className="inline-flex max-w-full flex-wrap items-baseline">
             {headerMain}
@@ -365,10 +343,10 @@ export function AssistantStepsTimeline({
     openUrl: string;
     fetchUrl: string;
     unknownTool: string;
-    toolFailedImpact: string;
     rawThinking: string;
-    toolRunning: string;
     toolError: string;
+    toolActivity: ToolExecutionLabels;
+    runningActions: StepsClusterIngLabels;
     memoryActivity: MemoryActivityLabels;
   };
   cardLabels: ToolCardLabels;
@@ -399,7 +377,7 @@ export function AssistantStepsTimeline({
       ref={scrollRegionRef}
       className={cn('min-w-0 overflow-x-hidden', className)}
     >
-      <div className="min-w-0 space-y-2.5">
+      <div className="min-w-0 space-y-2.5 pl-1">
         {blocks.map((b, i) => (
           <StepRow
             key={b.type === 'tool_use' ? b.id : `thinking-${i}`}
@@ -453,6 +431,38 @@ const KINDS_WITH_CARD: ReadonlySet<ActionKind> = new Set([
   'fetchUrl',
 ]);
 
+const FAILURE_SUMMARY_MAX = 240;
+
+function compactFailureSummary(value: string): string {
+  const line = value
+    .split('\n')
+    .map((part) => part.trim())
+    .find(Boolean) ?? '';
+  if (line.length <= FAILURE_SUMMARY_MAX) return line;
+  return `${line.slice(0, FAILURE_SUMMARY_MAX)}…`;
+}
+
+function toolFailureSummary(
+  block: ToolUseContent,
+  fallback: string,
+  cardLabels: ToolCardLabels,
+): string {
+  const parsed = parseToolResult(block.result);
+  const liveDetails = block.details && typeof block.details === 'object' && !Array.isArray(block.details)
+    ? block.details as Record<string, unknown>
+    : null;
+  const details = liveDetails ?? parsed.details;
+  if (details?.timedOut === true) return cardLabels.timedOut;
+  if (typeof details?.exitCode === 'number' && details.exitCode !== 0) {
+    return cardLabels.exitCodeNonZero.replace(/\{\{code\}\}/g, String(details.exitCode));
+  }
+  for (const key of ['errorMessage', 'error', 'message', 'reason'] as const) {
+    const value = details?.[key];
+    if (typeof value === 'string' && value.trim()) return compactFailureSummary(value);
+  }
+  return compactFailureSummary(parsed.text) || fallback;
+}
+
 function StepRow({
   block,
   toolLabels,
@@ -479,10 +489,10 @@ function StepRow({
     openUrl: string;
     fetchUrl: string;
     unknownTool: string;
-    toolFailedImpact: string;
     rawThinking: string;
-    toolRunning: string;
     toolError: string;
+    toolActivity: ToolExecutionLabels;
+    runningActions: StepsClusterIngLabels;
     memoryActivity: MemoryActivityLabels;
   };
   cardLabels: ToolCardLabels;
@@ -527,15 +537,8 @@ function StepRow({
     if (!text && !streaming) return null;
 
     return (
-      <div className="flex min-w-0 gap-2.5">
-        <div className="mt-0.5 shrink-0">
-          {streaming ? (
-            <Loader2 className="size-4 animate-spin text-fg-muted" aria-hidden />
-          ) : (
-            <CheckCircle2 className="size-4 text-fg-muted" aria-hidden />
-          )}
-        </div>
-        <div className="min-w-0 flex-1 space-y-1">
+      <div className="min-w-0">
+        <div className="min-w-0 space-y-1">
           <span className="inline-flex max-w-full min-w-0 break-words text-sm text-fg-muted [overflow-wrap:anywhere]">
             {streaming ? stepLabels.thoughtsStreaming : stepLabels.thoughts}
           </span>
@@ -569,6 +572,9 @@ function StepRow({
 
   const isStreaming = block.status === 'running';
   const isError = block.status === 'error' || block.activity?.status === 'failed';
+  const failureSummary = isError
+    ? toolFailureSummary(block, stepLabels.toolError, cardLabels)
+    : '';
   const resultText = toolResultText;
   const liveOutputText = isStreaming && block.details && typeof block.details === 'object'
     && !Array.isArray(block.details) && typeof (block.details as { text?: unknown }).text === 'string'
@@ -590,7 +596,7 @@ function StepRow({
     ? buildMemoryActivityView(block, stepLabels.memoryActivity)
     : null;
 
-  const title = memoryActivity?.title ?? getFriendlyToolTitle(block.name, {
+  const friendlyLabels = {
     searchedWeb: stepLabels.searchedWeb,
     searchedMemory: stepLabels.searchedMemory,
     searchedCode: stepLabels.searchedCode,
@@ -603,7 +609,19 @@ function StepRow({
     openUrl: stepLabels.openUrl,
     fetchUrl: stepLabels.fetchUrl,
     unknownTool: stepLabels.unknownTool,
-  }, block.activity);
+  };
+  const statefulTitle = kind === 'other' || hasSpecificToolExecutionTitle(block.name);
+  const title = memoryActivity?.title
+    ?? (isStreaming && !statefulTitle
+      ? actionKindRunningLabel(kind, stepLabels.runningActions)
+      : getToolExecutionTitle(
+          block.name,
+          block.input,
+          isStreaming ? 'running' : 'completed',
+          stepLabels.toolActivity,
+          friendlyLabels,
+          block.activity,
+        ));
   const detailLine = memoryActivity ? '' : getKeyDetailLine(block.input);
 
   const paramsJson = block.input !== undefined ? formatParamsJson(block.input) : '';
@@ -626,26 +644,12 @@ function StepRow({
   const showRawDetails = !isStreaming && showRawToolData;
 
   return (
-    <div className="flex min-w-0 gap-2.5">
-      <div className="mt-0.5 shrink-0">
-        {isStreaming ? (
-          <Loader2 className="size-4 animate-spin text-fg-muted" aria-hidden />
-        ) : isError ? (
-          <XCircle className="size-4 text-red-600 dark:text-red-400" aria-hidden />
-        ) : (
-          <CompletedToolIcon kind={kind} />
-        )}
-      </div>
-      <div className="min-w-0 flex-1 space-y-1.5">
+    <div className="min-w-0">
+      <div className="min-w-0 space-y-1.5">
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
           <span className="inline-flex max-w-full min-w-0 break-words text-sm text-fg-muted [overflow-wrap:anywhere]">
             {title}
           </span>
-          {isStreaming ? (
-            <span className="text-xs text-fg-disabled">{stepLabels.toolRunning}</span>
-          ) : isError ? (
-            <span className="text-xs text-red-600 dark:text-red-400">{stepLabels.toolError}</span>
-          ) : null}
         </div>
         {card}
         {memoryActivity ? (
@@ -669,9 +673,9 @@ function StepRow({
             </details>
           </div>
         ) : null}
-        {isError ? (
-          <p className="text-xs leading-relaxed text-red-600 dark:text-red-400">
-            {stepLabels.toolFailedImpact}
+        {failureSummary ? (
+          <p className="text-xs leading-relaxed text-fg-subtle">
+            {failureSummary}
           </p>
         ) : null}
         {!hasCard && detailLine ? (

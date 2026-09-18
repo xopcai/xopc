@@ -154,6 +154,13 @@ function ingLabel(kind: ActionKind, labels: StepsClusterIngLabels): string {
   }
 }
 
+export function actionKindRunningLabel(
+  kind: ActionKind,
+  labels: StepsClusterIngLabels,
+): string {
+  return ingLabel(kind, labels);
+}
+
 function orderKinds(map: ClusterMap): ActionKind[] {
   const present: ActionKind[] = [];
   for (const k of KIND_ORDER) {
@@ -214,13 +221,28 @@ export function summarizeClustersCompleted(
   doneLabels: StepsClusterDoneLabels,
   joinLabels: StepsClusterJoinLabels,
   language: StoredLanguage,
+  semanticTitle?: (block: ToolUseContent) => string | null,
 ): string | null {
-  const map = clusterToolUses(blocks);
-  if (map.size === 0) return null;
+  const semanticBlocks = new Set<ToolUseContent>();
+  const semanticPhrases: string[] = [];
+  if (semanticTitle) {
+    for (const block of blocks) {
+      if (block.type !== 'tool_use') continue;
+      const title = semanticTitle(block);
+      if (!title) continue;
+      semanticBlocks.add(block);
+      if (!semanticPhrases.includes(title)) semanticPhrases.push(title);
+    }
+  }
+  const ordinaryBlocks = semanticBlocks.size > 0
+    ? blocks.filter((block) => block.type !== 'tool_use' || !semanticBlocks.has(block))
+    : blocks;
+  const map = clusterToolUses(ordinaryBlocks);
+  if (map.size === 0 && semanticPhrases.length === 0) return null;
 
   // Single-tool, single-call: preserve the rich "title: detail" preview that
   // power users rely on (e.g. the search query, the file path).
-  const onlyKind = map.size === 1 ? [...map.keys()][0] : null;
+  const onlyKind = semanticPhrases.length === 0 && map.size === 1 ? [...map.keys()][0] : null;
   if (onlyKind && map.get(onlyKind)!.total === 1) {
     const firstTool = blocks.find(
       (b): b is ToolUseContent => b.type === 'tool_use' && classifyTool(b.name, b.activity) === onlyKind,
@@ -233,10 +255,13 @@ export function summarizeClustersCompleted(
 
   // Many clusters, or many calls within one cluster: aggregate-by-kind phrasing.
   const ordered = orderKinds(map);
-  const head = ordered.slice(0, MAX_CLUSTERS_IN_LINE);
-  const overflow = ordered.length - head.length;
-  const phrases = head.map((k) => pluralLabel(k, map.get(k)!.total, doneLabels));
-  let line = joinPhrases(phrases, joinLabels);
+  const phrases = [
+    ...ordered.map((k) => pluralLabel(k, map.get(k)!.total, doneLabels)),
+    ...semanticPhrases,
+  ];
+  const head = phrases.slice(0, MAX_CLUSTERS_IN_LINE);
+  const overflow = phrases.length - head.length;
+  let line = joinPhrases(head, joinLabels);
   if (overflow > 0) {
     line = `${line}${joinLabels.moreSuffix}`;
   }
@@ -254,6 +279,7 @@ export function summarizeClustersCompleted(
 export function summarizeClustersStreaming(
   blocks: ReadonlyArray<ThinkingContent | ToolUseContent>,
   ingLabels: StepsClusterIngLabels,
+  semanticTitle?: (block: ToolUseContent) => string | null,
 ): string | null {
   const map = clusterToolUses(blocks);
   const runningKinds: ActionKind[] = [];
@@ -263,6 +289,11 @@ export function summarizeClustersStreaming(
   }
 
   if (runningKinds.length === 1) {
+    const runningTool = [...blocks].reverse().find(
+      (block): block is ToolUseContent => block.type === 'tool_use' && block.status === 'running',
+    );
+    const semantic = runningTool ? semanticTitle?.(runningTool) : null;
+    if (semantic) return semantic;
     return ingLabel(runningKinds[0], ingLabels);
   }
   if (runningKinds.length > 1) {

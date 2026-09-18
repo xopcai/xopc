@@ -238,4 +238,43 @@ describe('xopcCloudOAuthProvider', () => {
       refresh: 'refresh-token-2',
     });
   });
+
+  it('retries the same refresh token after a transport failure', async () => {
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockRejectedValueOnce(new TypeError('connection reset'))
+      .mockResolvedValueOnce(Response.json({
+        access_token: 'access-token-2',
+        refresh_token: 'refresh-token-2',
+        expires_in: 900,
+      }));
+    vi.stubGlobal('fetch', fetchImpl);
+
+    await expect(xopcCloudOAuthProvider.refreshToken({
+      access: 'access-token-1',
+      refresh: 'refresh-token-1',
+      expires: Date.now(),
+    })).resolves.toMatchObject({
+      access: 'access-token-2',
+      refresh: 'refresh-token-2',
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    for (const call of fetchImpl.mock.calls) {
+      expect(new URLSearchParams(String(call[1]?.body)).get('refresh_token')).toBe('refresh-token-1');
+    }
+  });
+
+  it('does not retry a rejected refresh and gives a reconnect action', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => Response.json({
+      error: 'invalid_grant',
+      error_description: 'Refresh token reuse detected; the grant was revoked',
+    }, { status: 400 }));
+    vi.stubGlobal('fetch', fetchImpl);
+
+    await expect(xopcCloudOAuthProvider.refreshToken({
+      access: 'access-token-1',
+      refresh: 'refresh-token-1',
+      expires: Date.now(),
+    })).rejects.toThrow('reconnect the affected service in Settings');
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
 });

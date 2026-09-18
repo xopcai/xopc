@@ -12,7 +12,6 @@
 // Cards never throw on missing fields: if `details`/`text` is unavailable they
 // degrade to the minimum readable info (e.g. just the path).
 
-import { Loader2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 
 import { cn } from '@/lib/cn';
@@ -254,33 +253,12 @@ export const CommandCard = memo(function CommandCard({
     ? (block.details as Record<string, unknown>)
     : null;
   const details = liveDetails ?? detailsAsRecord(parsed);
-  const exitCode = typeof details.exitCode === 'number' ? details.exitCode : null;
-  const timedOut = Boolean(details.timedOut);
   const truncated = Boolean(details.truncated);
-  const isRunning = block.status === 'running';
-  const isError = block.status === 'error';
   const output =
     typeof details.aggregatedOutput === 'string' && details.aggregatedOutput.length > 0
       ? details.aggregatedOutput
       : parsed.text;
   const { preview } = useMemo(() => commandOutputPreview(output), [output]);
-
-  const exitBadge = isRunning ? (
-    <ToolCardBadge>
-      <Loader2 className="size-3 animate-spin" aria-hidden />
-      <span>{labels.exitCodeUnknown}</span>
-    </ToolCardBadge>
-  ) : timedOut ? (
-    <ToolCardBadge tone="warning">{labels.timedOut}</ToolCardBadge>
-  ) : exitCode === 0 ? (
-    <ToolCardBadge tone="positive">{labels.exitCodeOk}</ToolCardBadge>
-  ) : exitCode != null ? (
-    <ToolCardBadge tone="negative">
-      {interpolate(labels.exitCodeNonZero, { code: exitCode })}
-    </ToolCardBadge>
-  ) : isError ? (
-    <ToolCardBadge tone="negative">{labels.exitCodeUnknown}</ToolCardBadge>
-  ) : null;
 
   return (
     <div className="space-y-1.5">
@@ -291,8 +269,7 @@ export const CommandCard = memo(function CommandCard({
             {command}
           </ToolCardPath>
         ) : null}
-        {exitBadge}
-        {truncated ? <ToolCardBadge tone="warning">{labels.truncatedBadge}</ToolCardBadge> : null}
+        {truncated ? <ToolCardBadge>{labels.truncatedBadge}</ToolCardBadge> : null}
         {command ? (
           <ToolCardCopyButton
             text={command}
@@ -305,7 +282,7 @@ export const CommandCard = memo(function CommandCard({
         <ToolCardCollapsible summary={labels.viewOutput}>
           <ToolCardPre>{preview}</ToolCardPre>
         </ToolCardCollapsible>
-      ) : !isRunning ? (
+      ) : block.status !== 'running' ? (
         <p className="text-xs text-fg-disabled">{labels.noOutput}</p>
       ) : null}
     </div>

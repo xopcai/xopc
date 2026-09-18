@@ -37,6 +37,7 @@ interface ExtensionStatusPayload {
   bridgeHeld: boolean;
   refCount: number;
   transport: 'gateway-realtime';
+  setupState?: 'not_installed' | 'installed_not_connected' | 'connected';
 }
 
 async function extensionStatus(
@@ -55,6 +56,11 @@ async function extensionStatus(
     ? await import('../../../browser/providers/browser-ext-install.js')
       .then(({ browserExtDoctor }) => browserExtDoctor({ runtimeExtensionVersion: extensionVersion ?? undefined }))
     : undefined;
+  const setupState = connected
+    ? 'connected'
+    : doctor
+      ? doctor.installed === true ? 'installed_not_connected' : 'not_installed'
+      : undefined;
   return {
     running: true,
     socketConnected: connected,
@@ -86,6 +92,7 @@ async function extensionStatus(
     bridgeHeld: false,
     refCount: endpoints.length,
     transport: 'gateway-realtime',
+    ...(setupState ? { setupState } : {}),
   };
 }
 

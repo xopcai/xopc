@@ -113,7 +113,6 @@ export function projectTurnOutcome(params: {
   const diffs: string[] = [];
   let added = 0;
   let removed = 0;
-  let failedToolCount = 0;
   let createdAtMs = 0;
   let verificationSummary: Record<string, unknown> | null = null;
 
@@ -129,7 +128,6 @@ export function projectTurnOutcome(params: {
     if (Number.isFinite(timestamp)) createdAtMs = Math.max(createdAtMs, timestamp);
     if (row.role !== 'toolResult' && row.role !== 'tool') continue;
     const details = record(row.details) ?? {};
-    if (row.isError === true && record(details.verification)?.kind !== 'check') failedToolCount += 1;
     const explicit = Array.isArray(details.artifacts)
       ? details.artifacts.flatMap((value): TurnOutcomeDeliverable[] => {
           const parsed = TurnOutcomeDeliverableSchema.safeParse(value);
@@ -202,8 +200,7 @@ export function projectTurnOutcome(params: {
   const evidenceItems = [...evidence.values()];
   const collectedArtifacts = [...deliverables.values()];
   const artifactItems = mergeTurnOutcomeDeliverables(collectedArtifacts);
-  const partial = (!verificationSummary && failedToolCount > 0)
-    || evidenceItems.some((item) => item.status !== 'passed')
+  const partial = evidenceItems.some((item) => item.status !== 'passed')
     || (verificationSummary?.required === true && verificationSummary.changed === true && !evidenceItems.some((item) => item.status === 'passed'))
     || collectedArtifacts.some((item) => item.availability !== 'available');
   const diff = diffs.join('\n');

@@ -41,6 +41,7 @@ export const MessageList = memo(function MessageList({
   editLatestUserOnly = false,
   editRequiresTurnId = false,
   responseFeedbackEnabled,
+  trailingContent,
 }: {
   messages: Message[];
   authToken?: string;
@@ -72,6 +73,8 @@ export const MessageList = memo(function MessageList({
   editLatestUserOnly?: boolean;
   editRequiresTurnId?: boolean;
   responseFeedbackEnabled?: boolean;
+  /** Ephemeral UI rendered after the latest transcript message; never persisted as a message. */
+  trailingContent?: ReactNode;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -157,6 +160,7 @@ export const MessageList = memo(function MessageList({
           </div>
         );
       })}
+      {trailingContent}
     </div>
   );
 });

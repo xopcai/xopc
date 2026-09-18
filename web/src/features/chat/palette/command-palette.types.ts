@@ -15,29 +15,52 @@ export interface CommandEntry {
 
 export type SkillAvailabilityStatus = 'available' | 'agent-denied' | 'disabled' | 'requirements-unmet' | 'model-invocation-disabled' | 'tool-gated';
 
-export interface PaletteItem {
-  kind: PaletteItemKind;
+interface PaletteItemBase {
   id: string;
   name: string;
-  /** Stable machine name used in /skill:name wire tokens. */
-  canonicalName?: string;
   description: string;
-  category?: string;
+  aliases?: string[];
+}
+
+export interface SkillPaletteItem extends PaletteItemBase {
+  kind: 'skill';
+  /** Stable machine name used in /skill:name wire tokens. */
+  canonicalName: string;
+  category: 'skill';
   /** Skill source (builtin, workspace, …) */
   source?: string;
-  aliases?: string[];
   /** Canonical and alternate-locale descriptions used only for search. */
   searchTerms?: string[];
-  acceptsArgs?: boolean;
-  acceptsContext?: boolean;
-  /** Current agent skill availability; only set for `kind === 'skill'`. */
-  availability?: {
+  availability: {
     status: SkillAvailabilityStatus;
     reason?: string;
   };
-  /** Agent avatar URL (only used by `kind === 'agent'` rows). */
+}
+
+export interface CommandPaletteItem extends PaletteItemBase {
+  kind: 'command';
+  category: CommandCategory;
+  aliases: string[];
+  acceptsArgs: boolean;
+  acceptsContext: boolean;
+  examples: string[];
+}
+
+export interface AgentPaletteItem extends PaletteItemBase {
+  kind: 'agent';
+  category: 'agent';
+  agentId: string;
   avatar?: string;
 }
+
+export type PaletteItem = SkillPaletteItem | CommandPaletteItem | AgentPaletteItem;
+
+export type PaletteSection = {
+  [Kind in PaletteItemKind]: {
+    kind: Kind;
+    items: Array<Extract<PaletteItem, { kind: Kind }>>;
+  };
+}[PaletteItemKind];
 
 export interface SlashRange {
   start: number;

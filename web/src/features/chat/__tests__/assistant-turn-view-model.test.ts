@@ -56,7 +56,7 @@ describe('buildAssistantTurnViewModel', () => {
     expect(view.activity.durationMs).toBe(500);
   });
 
-  it('retains a structured tool failure when transport completion succeeded', () => {
+  it('retains a structured tool failure without downgrading a completed turn', () => {
     const view = buildAssistantTurnViewModel({
       message: assistantMessage([{
         type: 'tool_use',
@@ -71,7 +71,7 @@ describe('buildAssistantTurnViewModel', () => {
       reasoningLevel: 'stream',
     });
 
-    expect(view.lifecycle.state).toBe('partial');
+    expect(view.lifecycle.state).toBe('completed');
     expect(view.activity.failedCount).toBe(1);
   });
 

@@ -9,6 +9,7 @@ import { ChunkedContent } from '@/features/chat/messages/message-content-rendere
 import { firstNarrationSentence } from '@/features/chat/messages/assistant-text-presentation';
 import type { AssistantTurnActivityPresentation } from '@/features/chat/messages/assistant-turn-view-model';
 import type { MessageContent } from '@/features/chat/messages/messages.types';
+import { messages } from '@/i18n/messages';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
 const emptyLabels = {
@@ -35,13 +36,10 @@ const stepLabels = {
   openUrl: '',
   fetchUrl: '',
   unknownTool: '',
-  activityCompleted: '',
-  activityFailedCount: '',
   activityAnalysisComplete: '',
-  toolFailedImpact: '',
   rawThinking: '',
-  toolRunning: '',
   toolError: '',
+  toolActivity: messages('en').chat.toolActivity,
   memoryActivity: {
     running: '', found_one: '', found_other: '', empty: '', failed: '', purpose: '', why: '', explanation: '', manage: '', privacy: '',
   },
@@ -52,6 +50,10 @@ const clusterLabels = {
   ing: new Proxy({}, { get: (_target, key) => String(key) }) as never,
   join: { join: ', ', joinFinal: ' and ', moreSuffix: ' and more' },
 };
+
+const cardLabels = new Proxy({}, {
+  get: (_target, key) => key === 'exitCodeNonZero' ? 'Exit {{code}}' : String(key),
+}) as never;
 
 describe('streaming assistant Markdown rendering', () => {
   let container: HTMLDivElement;
@@ -90,7 +92,7 @@ describe('streaming assistant Markdown rendering', () => {
             toolLabels={emptyLabels}
             stepLabels={stepLabels}
             clusterLabels={clusterLabels}
-            cardLabels={{} as never}
+            cardLabels={cardLabels}
             imagePreviewLabel=""
             onImagePreview={undefined}
             conversationId="side-chat-id"
@@ -409,8 +411,56 @@ describe('streaming assistant Markdown rendering', () => {
       durationMs: 1_000,
     });
 
-    expect(container.querySelector('.animate-spin')).not.toBeNull();
+    expect(container.querySelector('.animate-spin')).toBeNull();
     expect(container.textContent).toContain('30');
+  });
+
+  it('keeps a failed tool neutral and shows its reason only inside the expanded trace', () => {
+    const failedTool = {
+      type: 'tool_use',
+      id: 'command-1',
+      name: 'run_command',
+      status: 'error',
+      result: JSON.stringify({ details: { exitCode: 1 }, content: [] }),
+    } as const;
+
+    render([failedTool], false, false, {
+      blocks: [failedTool],
+      active: false,
+      failedCount: 1,
+      hasTool: true,
+      expandedByDefault: false,
+    });
+
+    expect(container.textContent).toContain('runCommand_one');
+    expect(container.textContent).not.toContain('Exit 1');
+    const disclosure = container.querySelector<HTMLButtonElement>('button[aria-expanded="false"]');
+    act(() => disclosure?.click());
+
+    const trace = container.querySelector('.assistant-steps-scroll');
+    expect(trace?.textContent).toContain('Exit 1');
+    expect(trace?.querySelector('svg')).toBeNull();
+    expect(trace?.querySelector('[class*="text-red"]')).toBeNull();
+  });
+
+  it('uses input-aware wording for xopc_use in the collapsed trace', () => {
+    const xopcTool = {
+      type: 'tool_use',
+      id: 'xopc-1',
+      name: 'xopc_use',
+      status: 'done',
+      input: { mode: 'note', command: 'update' },
+    } as const;
+
+    render([xopcTool], false, false, {
+      blocks: [xopcTool],
+      active: false,
+      failedCount: 0,
+      hasTool: true,
+      expandedByDefault: false,
+    });
+
+    expect(container.textContent).toContain('Updated note');
   });
 
   it('keeps expanded assistant activity in a bounded scroll region', () => {
