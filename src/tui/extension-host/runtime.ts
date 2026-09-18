@@ -10,7 +10,7 @@ import {
   type TUI,
 } from '@earendil-works/pi-tui';
 
-import type { ExtensionRegistryImpl } from '../../extensions/loader.js';
+import type { ExtensionRegistryImpl } from '../../extensions/extension-registry-impl.js';
 import type {
   TuiAutocompleteProvider,
   TuiAutocompleteProviderFactory,

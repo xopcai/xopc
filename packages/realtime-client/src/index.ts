@@ -4,10 +4,12 @@ import type {
   ServerEndpointMessage,
 } from '@xopcai/endpoint-tools-protocol';
 import {
+  REALTIME_CAPABILITIES,
   REALTIME_PROTOCOL_VERSION,
   parseServerRealtimeMessage,
   type ClientRealtimeMessage,
   type RealtimeClientKind,
+  type RealtimeCapability,
   type RealtimeEventPayload,
   type RealtimeSubscription,
 } from '@xopcai/realtime-protocol';
@@ -36,7 +38,7 @@ export interface RealtimeClientOptions {
   clientKind: RealtimeClientKind;
   createMessageId?: () => string;
   getWebSocketUrl: () => string;
-  issueTicket: (signal?: AbortSignal) => Promise<string>;
+  issueTicket: (signal?: AbortSignal) => Promise<string | RealtimeTicket>;
   createWebSocket: (url: string) => RealtimeWebSocket;
   maxReconnectAttempts?: number;
   connectionTimeoutMs?: number;
@@ -44,6 +46,16 @@ export interface RealtimeClientOptions {
   onEvent?: (event: RealtimeEventPayload) => void;
   onGap?: (gap: { topic: string; requestedSeq: number; earliestSeq: number; recoverable: boolean }) => void | Promise<void>;
   onEndpointMessage?: (message: ServerEndpointMessage) => void;
+  onCapabilities?: (capabilities: readonly RealtimeCapability[]) => void;
+}
+
+export interface RealtimeTicket {
+  ticket: string;
+  realtime?: {
+    minVersion: number;
+    maxVersion: number;
+    capabilities: readonly string[];
+  };
 }
 
 export interface RealtimeEndpointBinding {
@@ -82,6 +94,7 @@ export class RealtimeClient {
   private lastServerMessageAt = 0;
   private endpointBinding: RealtimeEndpointBinding | undefined;
   private reconnectWhenSocketOpens = false;
+  private offeredCapabilities = new Set<RealtimeCapability>();
 
   constructor(private readonly options: RealtimeClientOptions) {}
 
@@ -97,6 +110,7 @@ export class RealtimeClient {
     this.generation += 1;
     this.clearTimers();
     this.ready = false;
+    this.offeredCapabilities.clear();
     this.endpointBinding?.onDisconnected?.();
     this.socket?.close(1000, 'Client disconnected');
     this.socket = undefined;
@@ -172,6 +186,7 @@ export class RealtimeClient {
       ticketAbort.abort();
       if (this.ticketAbort === ticketAbort) this.ticketAbort = undefined;
       this.ready = false;
+      this.offeredCapabilities.clear();
       this.endpointBinding?.onDisconnected?.();
       this.clearHeartbeat();
       if (this.socket === socket) this.socket = undefined;
@@ -191,11 +206,19 @@ export class RealtimeClient {
     this.connectionTimer = setTimeout(() => failAttempt('Realtime connection timed out'), timeoutMs);
     this.options.onStateChange?.(reconnecting ? 'reconnecting' : 'connecting');
     try {
-      const [ticket, endpoint] = await Promise.all([
+      const [issuedTicket, endpoint] = await Promise.all([
         this.options.issueTicket(ticketAbort.signal),
         this.endpointBinding?.createHello(),
       ]);
+      const ticket = typeof issuedTicket === 'string' ? issuedTicket : issuedTicket.ticket;
+      const capabilities = typeof issuedTicket === 'string'
+        || !issuedTicket.realtime
+        || REALTIME_PROTOCOL_VERSION < issuedTicket.realtime.minVersion
+        || REALTIME_PROTOCOL_VERSION > issuedTicket.realtime.maxVersion
+        ? undefined
+        : REALTIME_CAPABILITIES.filter(capability => issuedTicket.realtime!.capabilities.includes(capability));
       if (closed || !this.shouldReconnect || generation !== this.generation) return;
+      this.offeredCapabilities = new Set(capabilities ?? []);
       socket = this.options.createWebSocket(this.options.getWebSocketUrl());
       this.socket = socket;
       socket.onopen = () => {
@@ -213,6 +236,7 @@ export class RealtimeClient {
           clientId: this.options.clientId,
           clientKind: this.options.clientKind,
           subscriptions,
+          ...(capabilities?.length ? { capabilities } : {}),
           ...(endpoint ? { endpoint } : {}),
         }));
       };
@@ -266,11 +290,16 @@ export class RealtimeClient {
     const message = parseServerRealtimeMessage(JSON.parse(text));
     this.lastServerMessageAt = Date.now();
     if (message.kind === 'realtime.ready') {
+      const negotiated = message.payload.negotiatedCapabilities ?? [];
+      if (negotiated.some(capability => !this.offeredCapabilities.has(capability as RealtimeCapability))) {
+        throw new Error('Realtime server negotiated a capability the client did not offer');
+      }
       this.ready = true;
       this.reconnectAttempts = 0;
       this.clearConnectionTimer();
       this.ticketAbort = undefined;
       this.options.onStateChange?.('connected');
+      this.options.onCapabilities?.(negotiated as RealtimeCapability[]);
       if (message.payload.endpoint) this.endpointBinding?.onReady(message.payload.endpoint);
       this.clearHeartbeat();
       this.heartbeatTimer = setInterval(() => {

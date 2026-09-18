@@ -92,9 +92,6 @@
   "activation": {
     "onChannels": [
       "weixin"
-    ],
-    "onCapabilities": [
-      "channel"
     ]
   },
   "setup": {

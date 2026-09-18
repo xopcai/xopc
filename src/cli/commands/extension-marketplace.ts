@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { confirm } from '@inquirer/prompts';
@@ -17,17 +17,21 @@ import { loadConfig } from '../../config/loader.js';
 import { resolveExtensionsDir } from '../../config/paths.js';
 import type { InstallResult } from '../../extensions/install.js';
 import {
-  installFromLocal,
-  installFromNpm,
   peekExtensionManifestFromStoreZip,
 } from '../../extensions/install.js';
 import {
   commitStagedExtensionInstall,
   finalizeStagedExtensionInstall,
   rollbackStagedExtensionInstall,
+  stageExtensionLocal,
+  stageExtensionNpm,
   stageExtensionStoreZip,
+  type StagedExtensionInstall,
 } from '../../extensions/install-transaction.js';
-import { getExtensionLockfileManager } from '../../extensions/lockfile.js';
+import {
+  computeExtensionDirectoryIntegrity,
+  getExtensionLockfileManager,
+} from '../../extensions/lockfile.js';
 import * as marketplace from '../../extensions/marketplace.js';
 import { colors } from '../utils/colors.js';
 import { getContextWithOpts } from '../context.js';
@@ -151,13 +155,35 @@ async function upsertNpmExtensionLock(
     version: ver,
     resolved,
     source: 'npm',
+    installedIntegrity: computeExtensionDirectoryIntegrity(join(targetDir, result.extensionId)),
     ...readInstalledSnapshots(targetDir, result.extensionId),
   });
+}
+
+async function commitStagedWithLock(
+  transaction: StagedExtensionInstall,
+  force: boolean,
+  lock: ReturnType<typeof getExtensionLockfileManager>,
+  writeLock: () => Promise<void>,
+): Promise<void> {
+  const lockSnapshot = await lock.load();
+  let lockWriteStarted = false;
+  try {
+    commitStagedExtensionInstall(transaction, force);
+    lockWriteStarted = true;
+    await writeLock();
+  } catch (error) {
+    rollbackStagedExtensionInstall(transaction);
+    if (lockWriteStarted) await lock.save(lockSnapshot);
+    throw error;
+  }
+  finalizeStagedExtensionInstall(transaction);
 }
 
 async function installExtensionFromStoreWithLock(params: {
   storeBase: string;
   packageName: string;
+  expectedExtensionId?: string;
   version?: string;
   targetDir: string;
   lock: ReturnType<typeof getExtensionLockfileManager>;
@@ -191,6 +217,13 @@ async function installExtensionFromStoreWithLock(params: {
     }
 
     const transaction = await stageExtensionStoreZip(buf, params.targetDir);
+    if (params.expectedExtensionId && transaction.extensionId !== params.expectedExtensionId) {
+      rollbackStagedExtensionInstall(transaction);
+      return {
+        ok: false,
+        error: `Expected extension ${params.expectedExtensionId}, received ${transaction.extensionId}`,
+      };
+    }
     const lockSnapshot = await params.lock.load();
     let lockWriteStarted = false;
     try {
@@ -203,6 +236,7 @@ async function installExtensionFromStoreWithLock(params: {
         source: 'store',
         artifactUrl: downloadUrl,
         integrity: actualIntegrity,
+        installedIntegrity: computeExtensionDirectoryIntegrity(transaction.targetDir),
         ...readInstalledSnapshots(params.targetDir, transaction.extensionId),
       });
     } catch (err) {
@@ -308,46 +342,49 @@ export function createExtensionInstallCommand(): Command {
         if (npmExplicit) {
           const spec = installTarget;
           console.log(colors.cyan('📦'), `Installing from npm: ${spec}…`);
-          const result = await installFromNpm(spec, targetDir);
-          if (!result.ok) {
-            console.error(colors.red('error:'), result.error ?? 'install failed');
+          try {
+            const transaction = await stageExtensionNpm(spec, targetDir);
+            await commitStagedWithLock(transaction, opts.force, lock, () =>
+              upsertNpmExtensionLock(
+                lock,
+                targetDir,
+                { ok: true, extensionId: transaction.extensionId, targetDir: transaction.targetDir },
+                spec,
+              ));
+            console.log(colors.green('✓'), transaction.extensionId, '(npm)');
+          } catch (error) {
+            console.error(colors.red('error:'), error instanceof Error ? error.message : String(error));
             process.exit(1);
           }
-          await upsertNpmExtensionLock(lock, targetDir, result, spec);
-          console.log(colors.green('✓'), result.extensionId ?? 'ok', '(npm)');
           return;
         }
 
         if (looksLikeLocalPath(installTarget)) {
           const sourceDir = resolve(process.cwd(), installTarget);
-          if (opts.force) {
-            const manifestPath = join(sourceDir, MANIFEST);
-            if (existsSync(manifestPath)) {
-              try {
-                const raw = readFileSync(manifestPath, 'utf-8');
-                const m = JSON.parse(raw) as { id?: string };
-                const extId =
-                  typeof m.id === 'string' &&
-                  m.id &&
-                  !m.id.includes('/') &&
-                  !m.id.includes('\\')
-                    ? m.id
-                    : undefined;
-                if (extId && existsSync(join(targetDir, extId))) {
-                  rmSync(join(targetDir, extId), { recursive: true, force: true });
-                }
-              } catch {
-                /* installFromLocal will surface manifest errors */
-              }
-            }
-          }
           console.log(colors.cyan('📂'), 'Installing from local directory…');
-          const result = await installFromLocal(sourceDir, targetDir);
-          if (!result.ok) {
-            console.error(colors.red('error:'), result.error ?? 'install failed');
+          try {
+            const transaction = await stageExtensionLocal(sourceDir, targetDir);
+            const snapshots = readInstalledSnapshots(transaction.stagingRoot, transaction.extensionId);
+            const version = typeof snapshots.manifest?.version === 'string'
+              ? snapshots.manifest.version
+              : '0.0.0';
+            await commitStagedWithLock(transaction, opts.force, lock, () => lock.upsert(
+              transaction.extensionId,
+              {
+                name: transaction.extensionId,
+                version,
+                resolved: sourceDir,
+                source: 'local',
+                localPath: sourceDir,
+                installedIntegrity: computeExtensionDirectoryIntegrity(transaction.targetDir),
+                ...readInstalledSnapshots(targetDir, transaction.extensionId),
+              },
+            ));
+            console.log(colors.green('✓'), transaction.extensionId);
+          } catch (error) {
+            console.error(colors.red('error:'), error instanceof Error ? error.message : String(error));
             process.exit(1);
           }
-          console.log(colors.green('✓'), result.extensionId ?? 'ok');
           return;
         }
 
@@ -479,14 +516,13 @@ export function createExtensionUpdateCommand(): Command {
         if (entry.source === 'store') {
           const pkgName = entry.resolved?.trim() || id;
           console.log(colors.cyan('Updating'), id, '←', `store:${pkgName}`);
-          if (existsSync(join(targetDir, id))) {
-            rmSync(join(targetDir, id), { recursive: true, force: true });
-          }
           const r = await installExtensionFromStoreWithLock({
             storeBase,
             packageName: pkgName,
+            expectedExtensionId: id,
             targetDir,
             lock,
+            force: true,
             yes: true,
           });
           if (r.ok === false) {
@@ -506,22 +542,24 @@ export function createExtensionUpdateCommand(): Command {
           continue;
         }
         console.log(colors.cyan('Updating'), id, '←', spec);
-        if (existsSync(join(targetDir, id))) {
-          rmSync(join(targetDir, id), { recursive: true, force: true });
-        }
-        const result = await installFromNpm(spec, targetDir);
-        if (!result.ok) {
-          console.error(colors.red('error:'), result.error ?? id);
+        try {
+          const transaction = await stageExtensionNpm(spec, targetDir);
+          if (transaction.extensionId !== id) {
+            rollbackStagedExtensionInstall(transaction);
+            throw new Error(`Expected extension ${id}, received ${transaction.extensionId}`);
+          }
+          await commitStagedWithLock(transaction, true, lock, () =>
+            upsertNpmExtensionLock(
+              lock,
+              targetDir,
+              { ok: true, extensionId: transaction.extensionId, targetDir: transaction.targetDir },
+              spec,
+            ));
+          console.log(colors.green('✓'), id);
+        } catch (error) {
+          console.error(colors.red('error:'), error instanceof Error ? error.message : String(error));
           process.exit(1);
         }
-        await lock.upsert(id, {
-          name: id,
-          version: entry.version,
-          resolved: spec,
-          source: 'npm',
-          ...readInstalledSnapshots(targetDir, id),
-        });
-        console.log(colors.green('✓'), id);
       }
     });
 }

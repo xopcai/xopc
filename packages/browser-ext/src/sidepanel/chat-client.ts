@@ -293,8 +293,8 @@ export class BrowserChatClient {
           body: JSON.stringify({ clientId: id, clientKind: 'browser_extension' }),
           signal,
         });
-        const body = await json<{ payload: { ticket: string } }>(response);
-        return body.payload.ticket;
+        const body = await json<{ payload: { ticket: string; realtime?: { minVersion: number; maxVersion: number; capabilities: string[] } } }>(response);
+        return body.payload;
       },
       createWebSocket: (url) => new WebSocket(url) as unknown as RealtimeWebSocket,
       onStateChange: (connection, error) => this.update({

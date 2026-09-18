@@ -5,7 +5,7 @@ import { getDefaultEnvironment } from "@modelcontextprotocol/sdk/client/stdio.js
 import { ReadBuffer, serializeMessage } from "@modelcontextprotocol/sdk/shared/stdio.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
-import { killProcessTree } from "../../process/kill-tree.js";
+import { terminateProcess } from "../../process/kill-tree.js";
 
 export type XopcStdioServerParameters = {
   command: string;
@@ -117,7 +117,7 @@ export class XopcStdioClientTransport implements Transport {
       }
       await Promise.race([closePromise, delay(CLOSE_TIMEOUT_MS)]);
       if (processToClose.exitCode === null && processToClose.pid) {
-        killProcessTree(processToClose.pid);
+        await terminateProcess(processToClose, { tree: true, detached: process.platform !== "win32" });
         await Promise.race([closePromise, delay(CLOSE_TIMEOUT_MS)]);
       }
     }

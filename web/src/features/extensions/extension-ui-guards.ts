@@ -12,8 +12,7 @@ function manifestDeclaresGatewayContributions(e: ExtensionApiRow): boolean {
   return (
     (Array.isArray(c.pages) && c.pages.length > 0) ||
     (Array.isArray(c.settingsPanels) && c.settingsPanels.length > 0) ||
-    (Array.isArray(c.chatWidgets) && c.chatWidgets.length > 0) ||
-    (Array.isArray(c.sidebarPanels) && c.sidebarPanels.length > 0)
+    (Array.isArray(c.chatWidgets) && c.chatWidgets.length > 0)
   );
 }
 

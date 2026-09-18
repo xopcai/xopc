@@ -1,5 +1,4 @@
-import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { Command } from 'commander';
@@ -11,7 +10,10 @@ import { ExtensionLoader } from '../../extensions/loader.js';
 import { collectExtensionPackageDependencyIssues } from '../../extensions/package-contract.js';
 import { PACKAGE_VERSION } from '../../package-version.js';
 import { createLogger } from '../../utils/logger.js';
-import { getExtensionLockfileManager } from '../../extensions/lockfile.js';
+import {
+  computeExtensionDirectoryIntegrity,
+  getExtensionLockfileManager,
+} from '../../extensions/lockfile.js';
 import {
   getExtensionHealthChecker,
   checkAllExtensionsHealth,
@@ -74,30 +76,6 @@ export function createExtensionListCommand(): Command {
 // ============================================
 // Extension Inspect Command
 // ============================================
-
-function hashInstalledExtensionDir(extensionDir: string): string | undefined {
-  if (!existsSync(extensionDir)) return undefined;
-  const hash = createHash('sha256');
-  const walk = (dir: string, prefix = '') => {
-    const entries = readdirSync(dir, { withFileTypes: true })
-      .filter((entry) => entry.name !== 'node_modules')
-      .sort((a, b) => a.name.localeCompare(b.name));
-    for (const entry of entries) {
-      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
-      const full = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        walk(full, rel);
-      } else if (entry.isFile()) {
-        const st = statSync(full);
-        hash.update(`file\0${rel}\0${st.size}\0`);
-        hash.update(readFileSync(full));
-        hash.update('\0');
-      }
-    }
-  };
-  walk(extensionDir);
-  return `dir-sha256-${hash.digest('base64')}`;
-}
 
 function readJson(path: string): Record<string, unknown> | undefined {
   try {
@@ -487,7 +465,7 @@ export function createExtensionDoctorCommand(): Command {
               ...entry,
               manifest: readJson(join(extensionDir, 'xopc.extension.json')),
               packageJson: readJson(join(extensionDir, 'package.json')),
-              installedIntegrity: hashInstalledExtensionDir(extensionDir),
+              installedIntegrity: computeExtensionDirectoryIntegrity(extensionDir),
             });
           }
         }
@@ -529,7 +507,7 @@ export function createExtensionDoctorCommand(): Command {
                 source: 'local',
                 manifest,
                 packageJson,
-                installedIntegrity: hashInstalledExtensionDir(extensionDir),
+                installedIntegrity: computeExtensionDirectoryIntegrity(extensionDir),
               });
             }
           }
