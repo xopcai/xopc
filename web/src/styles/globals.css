@@ -1347,6 +1347,166 @@ html.dark[data-color-scheme="clay"] {
   );
 }
 
+/*
+ * Dawn — rain-blue to moon-wash to peach atmosphere, translucent white glass,
+ * charcoal primary actions, and restrained blue-gray information accents.
+ * The dark adaptation keeps the same dawn color memory without inverting into neon.
+ */
+html[data-color-scheme="dawn"] {
+  --font-sans:
+    "Figtree Variable", Figtree, ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+    "Noto Sans CJK SC", "Microsoft YaHei", 微软雅黑, sans-serif;
+
+  --color-surface-base: #edf2f7;
+  --color-surface-rail: rgb(240 246 251 / 0.52);
+  --color-surface-panel: rgb(255 255 255 / 0.6);
+  --color-surface-hover: rgb(255 255 255 / 0.48);
+  --color-surface-active: rgb(255 255 255 / 0.7);
+
+  --color-fg: rgb(0 0 0 / 0.85);
+  --color-fg-muted: rgb(0 0 0 / 0.65);
+  --color-fg-subtle: rgb(0 0 0 / 0.6);
+  --color-fg-disabled: rgb(0 0 0 / 0.48);
+
+  --color-edge-subtle: rgb(255 255 255 / 0.42);
+  --color-edge: rgb(111 137 163 / 0.2);
+  --color-edge-strong: rgb(83 108 134 / 0.32);
+
+  /* Charcoal metal for primary actions; blue remains the link / information signal. */
+  --color-accent: #34363a;
+  --color-accent-hover: #202225;
+  --color-accent-soft: rgb(0 138 255 / 0.1);
+  --color-accent-fg: #1676ae;
+  --color-loop-indigo: #627da0;
+  --color-momentum-cyan: #66b8ff;
+  --color-checkbox-accent: #34363a;
+
+  --color-success: #268b5a;
+  --color-success-soft: rgb(48 164 108 / 0.13);
+  --color-danger: #d63e43;
+  --color-danger-soft: rgb(229 72 77 / 0.12);
+  --color-warning: #9b6a00;
+  --color-warning-soft: rgb(255 197 61 / 0.2);
+  --color-scrim: rgb(36 48 62 / 0.3);
+
+  --radius-sm: 0.75rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: clamp(1.375rem, 3vw, 2rem);
+
+  --shadow-surface:
+    inset 0 1px 0 rgb(255 255 255 / 0.72),
+    0 10px 30px rgb(77 108 139 / 0.08);
+  --shadow-elevated:
+    inset 0 1px 0 rgb(255 255 255 / 0.78),
+    0 16px 38px rgb(69 99 129 / 0.12);
+  --shadow-float:
+    inset 0 1px 0 rgb(255 255 255 / 0.82),
+    0 22px 58px rgb(65 94 123 / 0.15);
+  --shadow-popover:
+    inset 0 1px 0 rgb(255 255 255 / 0.82),
+    0 18px 48px rgb(65 94 123 / 0.16);
+
+  --app-chrome-bg: linear-gradient(
+    180deg,
+    #accdec 0%,
+    #e7ebf4 61.54%,
+    #ffddb9 100%
+  );
+  --app-chrome-sidebar-bg: var(--app-chrome-bg);
+}
+
+html[data-color-scheme="dawn"] body {
+  letter-spacing: -0.006em;
+}
+
+html[data-color-scheme="dawn"] .app-main-surface,
+html[data-color-scheme="dawn"] .app-chrome-sidebar,
+html[data-color-scheme="dawn"] [role="dialog"] {
+  -webkit-backdrop-filter: blur(20px) saturate(118%);
+  backdrop-filter: blur(20px) saturate(118%);
+}
+
+html[data-color-scheme="dawn"] .app-main-surface {
+  border-color: rgb(255 255 255 / 0.48);
+  box-shadow:
+    inset 1px 1px 0 rgb(255 255 255 / 0.68),
+    0 18px 56px rgb(63 91 119 / 0.12);
+}
+
+/*
+ * Dawn emphasizes keyboard focus with a white halo rather than a colored neon ring.
+ * Text-editing surfaces own their focus treatment; applying this shadow to their editable
+ * child creates a second frame inside the component (notably Composer and ProseMirror).
+ */
+html[data-color-scheme="dawn"]
+  :focus-visible:not(input):not(textarea):not([contenteditable]):not([role="textbox"]) {
+  outline-color: rgb(255 255 255 / 0.96);
+  box-shadow:
+    0 0 0 2px rgb(255 255 255 / 0.96),
+    0 0 0 5px rgb(46 58 72 / 0.45);
+}
+
+html.dark[data-color-scheme="dawn"] {
+  --color-surface-base: #172433;
+  --color-surface-rail: rgb(22 35 48 / 0.68);
+  --color-surface-panel: rgb(31 45 59 / 0.68);
+  --color-surface-hover: rgb(255 255 255 / 0.09);
+  --color-surface-active: rgb(255 255 255 / 0.14);
+
+  --color-fg: rgb(255 255 255 / 0.92);
+  --color-fg-muted: rgb(239 244 249 / 0.72);
+  --color-fg-subtle: rgb(225 233 241 / 0.58);
+  --color-fg-disabled: rgb(211 222 233 / 0.4);
+
+  --color-edge-subtle: rgb(255 255 255 / 0.08);
+  --color-edge: rgb(255 255 255 / 0.14);
+  --color-edge-strong: rgb(255 255 255 / 0.24);
+
+  --color-accent: #d9dde2;
+  --color-accent-hover: #ffffff;
+  --color-accent-soft: rgb(102 184 255 / 0.14);
+  --color-accent-fg: #8dcbff;
+  --color-loop-indigo: #aebce5;
+  --color-momentum-cyan: #8dcbff;
+  --color-checkbox-accent: #5c6d7e;
+
+  --color-success: #68c894;
+  --color-success-soft: rgb(48 164 108 / 0.2);
+  --color-danger: #ff8589;
+  --color-danger-soft: rgb(229 72 77 / 0.2);
+  --color-warning: #ffd36a;
+  --color-warning-soft: rgb(255 197 61 / 0.18);
+  --color-scrim: rgb(5 11 17 / 0.58);
+
+  --shadow-surface:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    0 14px 38px rgb(0 0 0 / 0.2);
+  --shadow-elevated:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    0 18px 48px rgb(0 0 0 / 0.3);
+  --shadow-float:
+    inset 0 1px 0 rgb(255 255 255 / 0.13),
+    0 24px 64px rgb(0 0 0 / 0.36);
+  --shadow-popover:
+    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    0 20px 56px rgb(0 0 0 / 0.38);
+
+  --app-chrome-bg: linear-gradient(
+    180deg,
+    #21394f 0%,
+    #283545 61.54%,
+    #564536 100%
+  );
+  --app-chrome-sidebar-bg: var(--app-chrome-bg);
+}
+
+/* Primary buttons stay readable when the dark adaptation uses a light metal fill. */
+html.dark[data-color-scheme="dawn"] .bg-accent.text-white {
+  color: #20252b;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
