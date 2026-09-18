@@ -198,14 +198,6 @@ export class CommandContextImpl implements CommandContext {
       return;
     }
 
-    await this.deps.bus.publishOutbound({
-      channel: this.source,
-      chat_id: this.chatId,
-      content: '✅ New session started. Previous transcript archived; model and session overrides kept.',
-      type: 'message',
-      metadata: this.outboundMetadata(),
-    });
-
     log.info({ conversationId: this.conversationId }, 'Session reset');
   }
 
@@ -239,17 +231,29 @@ export class CommandContextImpl implements CommandContext {
   }
 
   async listSessions(): Promise<SessionInfo[]> {
-    // TODO: Implement listSessions in SessionStore
-    // For now, return current session only
-    const messages = await this.getSession();
-    return [{
-      key: this.conversationId,
-      name: getSessionDisplayName(this.conversationId),
-      messageCount: messages.length,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      isActive: true,
-    }];
+    const { items } = await this.deps.sessionStore.list({
+      channel: this.channelId,
+      limit: 100,
+      sortBy: 'updatedAt',
+      sortOrder: 'desc',
+    });
+    return items
+      .filter((item) => {
+        if (this.channelId === 'webchat') return true;
+        const routing = item.routing;
+        if (!routing) return item.key === this.conversationId;
+        return routing.peerId === this.chatId
+          && (!this.accountId || routing.accountId === this.accountId)
+          && (!this.threadId || routing.threadId === this.threadId);
+      })
+      .map((item) => ({
+        key: item.key,
+        name: item.name ?? getSessionDisplayName(item.key),
+        messageCount: item.messageCount,
+        createdAt: new Date(item.createdAt),
+        updatedAt: new Date(item.updatedAt),
+        isActive: item.key === this.conversationId,
+      }));
   }
 
   async switchSession(conversationId: string): Promise<void> {

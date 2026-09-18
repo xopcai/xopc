@@ -43,6 +43,10 @@ import {
   hasRenderableAssistantContent,
 } from '@/features/chat/messages/streaming';
 import type { ChatFollowUpClarifyApi } from '@/features/chat/session/use-chat-follow-up-clarify';
+import {
+  isBareResetCommand,
+  isTaskDestructiveCommand,
+} from '@/features/chat/session/slash-command-semantics';
 
 export function useChatSessionStreaming(deps: {
   conversationId: string | null;
@@ -73,7 +77,7 @@ export function useChatSessionStreaming(deps: {
     data: { messages: Message[]; hasMore: boolean; name?: string },
   ) => void;
   loadSessionById: (key: string, offset?: number) => Promise<Message[] | undefined>;
-  createNewSession: (opts?: { forceNew?: boolean; projectId?: string | null }) => Promise<void>;
+  resetCurrentSession: () => Promise<void>;
   pollSessionNameAfterTurn: () => void;
 }) {
   const {
@@ -90,7 +94,7 @@ export function useChatSessionStreaming(deps: {
     fq,
     applyLoadedSessionSnapshot,
     loadSessionById,
-    createNewSession,
+    resetCurrentSession,
     pollSessionNameAfterTurn,
   } = deps;
 
@@ -256,12 +260,12 @@ export function useChatSessionStreaming(deps: {
       if (!key) return;
       if (!sendingRef.current && !streamingRef.current && !chatRunManager.isStreamingFor(key)) return;
       const trimmed = content.trim();
-      if (trimmed === '/new' && !attachments?.length) {
-        if (taskId) {
-          setShellError('A task has one continuous conversation.');
-          return;
-        }
-        await createNewSession({ forceNew: true });
+      if (taskId && isTaskDestructiveCommand(trimmed)) {
+        setShellError('A task has one continuous conversation.');
+        return;
+      }
+      if (isBareResetCommand(trimmed) && !attachments?.length) {
+        await resetCurrentSession();
         return;
       }
       fq.dismissClarifyAndClearPending();
@@ -284,7 +288,8 @@ export function useChatSessionStreaming(deps: {
       thinkingLevel,
       finalizeMessage,
       sendMessageRef,
-      createNewSession,
+      resetCurrentSession,
+      taskId,
     ],
   );
 
@@ -306,12 +311,12 @@ export function useChatSessionStreaming(deps: {
       }
 
       const trimmed = content.trim();
-      if (trimmed === '/new' && !attachments?.length) {
-        if (taskId) {
-          setShellError('A task has one continuous conversation.');
-          return;
-        }
-        await createNewSession({ forceNew: true });
+      if (taskId && isTaskDestructiveCommand(trimmed)) {
+        setShellError('A task has one continuous conversation.');
+        return;
+      }
+      if (isBareResetCommand(trimmed) && !attachments?.length) {
+        await resetCurrentSession();
         return;
       }
 
@@ -436,7 +441,7 @@ export function useChatSessionStreaming(deps: {
       applyLoadedSessionSnapshot,
       finalizeMessage,
       fq.dismissClarify,
-      createNewSession,
+      resetCurrentSession,
       taskId,
       loadSessionById,
     ],

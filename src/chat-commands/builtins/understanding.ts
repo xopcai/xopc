@@ -93,6 +93,7 @@ const learningCommand: CommandDefinition = {
           ? 'User understanding is off for this conversation. Existing chat history is still stored; use /remember for anything you explicitly want saved.'
           : 'User understanding is disabled globally. Existing chat history is still stored.',
       success: true,
+      ...(action !== 'status' ? { metadata: { sessionConfigChanged: true } } : {}),
     };
   },
 };

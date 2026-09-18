@@ -8,6 +8,16 @@ const parse = (messages: XopcMessage[]) => mergeAssistantRows(historyRows({ sess
 const artifact = { artifactId: 'a', title: 'image.png', kind: 'image', availability: 'available', uri: 'xopc-file:a' };
 const outcome = { version: 1, outcomeId: 'o', runId: 'r', turnId: 't', status: 'succeeded', deliverables: [artifact] };
 describe('rich chat parity projection', () => {
+  it('keeps prior stream snapshots immutable without serializing large tool inputs per delta', () => {
+    const input = { script: 'x'.repeat(200000) };
+    const previous = reduceChatStream(undefined, 'tool_start', { toolCallId: 't', toolName: 'exec', args: input }, 'r');
+    const next = reduceChatStream(previous, 'tool_update', { toolCallId: 't', toolName: 'exec', textDelta: 'output' }, 'r');
+    expect(previous.blocks?.[0].call?.result).toBeUndefined();
+    expect(next.blocks?.[0].call?.result).toBe('output');
+    expect(next.blocks?.[0].call?.input).toBe(input);
+    const done = reduceChatStream(next, 'run_end', { status: 'cancelled' }, 'r');
+    expect(next.blocks?.[0].call?.status).toBe('running'); expect(done.blocks?.[0].call?.status).toBe('error');
+  });
   it.each(['ttsAudio', 'tts_audio', 'tts', 'audio'])('preserves historical voice-only messages from %s', key => {
     const rows = parse([{ id: 'voice', role: 'assistant', content: '', [key]: ['media://a', { url: 'media://b', mime_type: 'audio/wav', name: 'speech.wav' }] }]);
     expect(rows).toHaveLength(1);

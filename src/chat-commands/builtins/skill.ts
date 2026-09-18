@@ -85,7 +85,6 @@ function parseInstallArgs(args: string): ParsedInstallArgs {
 const skillCommand: CommandDefinition = {
   id: 'system.skill',
   name: 'skill',
-  aliases: ['skills'],
   description: 'Install skills from explicit sources. Subcommands: install <source>',
   category: 'tool',
   scope: ['global', 'private'],

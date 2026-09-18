@@ -122,6 +122,7 @@ const switchCommand: CommandDefinition = {
           'This model will be used for your next message.',
         ),
         success: true,
+        metadata: { sessionConfigChanged: true },
       };
     }
 

@@ -75,6 +75,17 @@ export function bareResetAckMessage(matchedTrigger?: string): string {
 
 /** Slash command names that overlap reset triggers — skip when init already reset. */
 export const RESET_OVERLAP_COMMANDS = new Set(['new', 'reset', 'restart']);
+export const TASK_DESTRUCTIVE_COMMANDS = new Set([
+  ...RESET_OVERLAP_COMMANDS,
+  'clear',
+  'archive',
+]);
+
+export function isTaskDestructiveCommand(body: string): boolean {
+  const normalized = stripLeadingEnvelopeTimestamp(body.trim());
+  const match = /^\/([^\s@]+)(?:@[^\s]+)?(?:\s|$)/.exec(normalized);
+  return Boolean(match && TASK_DESTRUCTIVE_COMMANDS.has(match[1]!.toLowerCase()));
+}
 
 export function shouldSkipResetOverlapCommand(
   command: string | undefined,

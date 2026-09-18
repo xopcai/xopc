@@ -3,9 +3,11 @@ import {
   buildSessionHistoryPath,
   parseSessionForkAtTurnResponse,
   parseSessionMessagePage,
+  parseSessionResetResponse,
   type SessionCreateRequest,
   type SessionForkAtTurnResponse,
   type SessionInitialAgentConfig,
+  type SessionResetResponse,
 } from '@xopcai/gateway-contract';
 
 import type { Message } from '@/features/chat/messages/messages.types';
@@ -368,6 +370,16 @@ export class SessionManager {
     if (!res.ok) throw new Error(await readErrorMessage(res));
     const data = (await res.json()) as { session: SessionInfo };
     return data.session;
+  }
+
+  async resetSession(conversationId: string): Promise<SessionResetResponse> {
+    const key = conversationId.trim();
+    if (!key) throw new Error('Session key is required');
+    const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/reset`), {
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error(await readErrorMessage(res));
+    return parseSessionResetResponse(await res.json());
   }
 
   async ensureSessionExists(conversationId: string): Promise<void> {

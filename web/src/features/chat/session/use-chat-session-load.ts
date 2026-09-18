@@ -385,6 +385,24 @@ export function useChatSessionLoad(deps: {
     ],
   );
 
+  const resetCurrentSession = useCallback(async () => {
+    if (!conversationId) return;
+    store().setShellError(null);
+    try {
+      await sessionMgrRef.current.resetSession(conversationId);
+      detachForNewConversation();
+      historyBeforeCursorRef.current = null;
+      store().setCommittedSnapshot(conversationId, {
+        messages: [],
+        hasMore: false,
+        name: null,
+      });
+      void applySessionAgentConfig(conversationId);
+    } catch (error) {
+      store().setShellError(error instanceof Error ? error.message : 'Failed to reset session');
+    }
+  }, [applySessionAgentConfig, conversationId, detachForNewConversation, sessionMgrRef]);
+
   return {
     refreshModelThinkingSupport,
     pollSessionNameAfterTurn,
@@ -395,5 +413,6 @@ export function useChatSessionLoad(deps: {
     onSessionThinkingLevelChange,
     onSessionWorkingDirectoryChange,
     createNewSession,
+    resetCurrentSession,
   };
 }

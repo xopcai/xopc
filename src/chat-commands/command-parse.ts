@@ -4,8 +4,7 @@
  */
 export function normalizeTelegramCommandName(command: string): string {
   const at = command.indexOf('@');
-  if (at === -1) return command;
-  return command.slice(0, at);
+  return (at === -1 ? command : command.slice(0, at)).toLowerCase();
 }
 
 /**
@@ -22,13 +21,13 @@ export function parseSlashCommand(text: string): { command: string; args: string
     if (!line.startsWith('/')) continue;
 
     const withoutPrefix = line.slice(1);
-    const spaceIndex = withoutPrefix.indexOf(' ');
-    if (spaceIndex === -1) {
+    const whitespaceIndex = withoutPrefix.search(/\s/);
+    if (whitespaceIndex === -1) {
       return { command: normalizeTelegramCommandName(withoutPrefix), args: '' };
     }
     return {
-      command: normalizeTelegramCommandName(withoutPrefix.slice(0, spaceIndex)),
-      args: withoutPrefix.slice(spaceIndex + 1).trim(),
+      command: normalizeTelegramCommandName(withoutPrefix.slice(0, whitespaceIndex)),
+      args: withoutPrefix.slice(whitespaceIndex + 1).trim(),
     };
   }
 

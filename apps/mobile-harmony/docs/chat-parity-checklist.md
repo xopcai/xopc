@@ -159,6 +159,24 @@ Evidence: **229 host tests / 36 files passed**, and **7/7 native `XopcRichChat` 
 
 Debug/release and locally signed debug builds pass; CodeLinter is empty. Mate 60 remains absent from HDC, so these changes are not installed or accepted on the physical phone. Actual system save-picker completion, authenticated remote media transfer, video codecs, audio interruptions/routing, and real WSS resume remain open.
 
+## 2026-09-18 RN message audit implementation and self-review
+
+Implemented in this pass (Expo and Gateway unchanged):
+
+- User display text uses the RN scrub contract: model-only image understanding, runtime/source/skill envelopes and media claim checks are removed from display/copy/edit without altering stored wire content or structured attachments. Fixtures compare directly with the Expo scrubber.
+- Top-directed scrolling near the history boundary triggers guarded pagination. The loading/retry header is neutral, message identity and intra-row offset are retained, and old requests cannot reposition a newly selected conversation. Overlapping recovery snapshots retain loaded older pages and the oldest cursor; transcript resets and non-overlapping snapshots replace instead of stitching an unknown gap.
+- User actions are right aligned; assistant copy/save/read use final answer text; fenced-code copying is available. Read aloud supports loading, pause and resume, and audio-bearing messages do not offer redundant synthesis. Playback/download/retry actions use explicit neutral styling rather than system-default blue fills.
+- Draft images have previews. Expanded images decode from source bytes with a 4096-pixel edge / eight-megapixel bound and preserve aspect ratio. Markdown files render with the existing native Markdown renderer. File sharing uses a sandbox file URI, never a Gateway credential-bearing URL. Failed writes/handoffs clean their own file; successful handoffs retain files for receivers, prune files older than one day on subsequent shares, and cap the cache at 32 files / 64 MiB.
+- Media requests coalesce, return independent buffers, and use a Gateway-revision/session-scoped bounded cache (4 MiB per entry, 16 MiB total, 32 entries, 30-second freshness). Embedded data is not cached again. Stream reduction no longer JSON-clones large tool payloads on every delta. History rows use virtualized Repeat with bounded cached rows; disclosure state is keyed by conversation/message/tool rather than recycled view identity. Markdown block keys no longer contain the entire body.
+
+Self-review fixes: retain tool summaries on duplicate stream events; do not anchor to the pagination header; ignore old pagination completions after conversation switches; preserve diff disclosure identity; preserve one-to-one draft thumbnail indices even for duplicate attachments; avoid action-row overflow at 320 vp. These are source-level findings, not device performance measurements.
+
+Evidence: **275 host tests / 43 files pass**, Debug/Release/ohosTest builds pass, and CodeLinter reports `[]`. A new native fixture checks same-block Markdown streaming updates; it is built but **not yet run**. Existing native fixtures from earlier passes do not validate this pass's changed components. Compiler SDK warnings remain separate from CodeLinter results.
+
+Current device gate: HDC has no targets. Starting the existing Pura 90 Pro emulator stops at its license agreement; user confirmation has been requested, not accepted automatically. No updated HAP has been installed this pass. Next acceptance must cover long-history automatic pagination/offset anchoring, recycled disclosure state, streamed Markdown, remote image/audio/file preview and system-share cancellation/completion. No real-device FPS or memory claim is made.
+
+Remaining implementation gaps from the audit: continuous/automatic read-aloud, full composer image editing, encrypted offline history/prefetch, sandboxed HTML preview, complete Markdown extensions and deeper preview gestures. These are not silently declared aligned by the tests above. Full Chat parity remains in progress.
+
 ## Still open — do not mark full Chat parity complete
 
 Physical follow-up (2026-09-18): Mate 60 `9CN0223C27020749` is connected again. Installed the latest signed debug HAP with `install -r` without clearing app data (SHA-256 `aa0afb905f0a1950b599cfab4991b1f1e9878558d6892ae4acae21195bb82f11`). Launch returned `10106102`; the captured UI tree confirms `ScreenLockRootComponent`. The installation supersedes the earlier device-absent/not-installed status, but Chat interaction acceptance has not started: user unlock is required. Evidence: ignored `.test/phone-rich-chat/initial.json`. No Gateway mutations or lock-screen bypass were attempted.

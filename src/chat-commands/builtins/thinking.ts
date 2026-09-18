@@ -96,8 +96,9 @@ const thinkCommand: CommandDefinition = {
       content: `🧠 *Thinking Level Set*\n\n` +
         `Level: *${level}*\n` +
         `${levelDescriptions[level]}\n\n` +
-        `Applies for this gateway process (until restart). Persists only if you use /config set.`,
+        `Saved for this conversation until you change it.`,
       success: true,
+      metadata: { sessionConfigChanged: true },
     };
   },
 };
@@ -155,8 +156,9 @@ const reasoningCommand: CommandDefinition = {
       content: `💭 *Reasoning Visibility Set*\n\n` +
         `Mode: *${level}*\n` +
         `${modeDescriptions[level]}\n\n` +
-        `Applies for this gateway process (until restart). Persists only if you use /config set.`,
+        `Saved for this conversation until you change it.`,
       success: true,
+      metadata: { sessionConfigChanged: true },
     };
   },
 };
@@ -183,8 +185,9 @@ const verboseCommand: CommandDefinition = {
       return {
         content: `📝 *Verbose Mode*\n\n` +
           `Mode: *${newLevel}*\n\n` +
-          `${newLevel === 'on' ? 'Verbose output enabled (process lifetime).' : 'Verbose output disabled (process lifetime).'}`,
+          `${newLevel === 'on' ? 'Verbose output enabled for this conversation.' : 'Verbose output disabled for this conversation.'}`,
         success: true,
+        metadata: { sessionConfigChanged: true },
       };
     }
     
@@ -212,8 +215,9 @@ const verboseCommand: CommandDefinition = {
       content: `📝 *Verbose Mode Set*\n\n` +
         `Mode: *${level}*\n` +
         `${modeDescriptions[level]}\n\n` +
-        `Applies for this gateway process (until restart). Persists only if you use /config set.`,
+        `Saved for this conversation until you change it.`,
       success: true,
+      metadata: { sessionConfigChanged: true },
     };
   },
 };

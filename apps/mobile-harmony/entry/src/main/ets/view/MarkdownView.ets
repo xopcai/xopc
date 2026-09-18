@@ -51,31 +51,25 @@ export struct XopcMarkdownView {
     catch (_) { this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_copy_failed') }); }
   }
 
-  @Builder
-  richText(block: XopcMarkdownBlock) {
-    XopcMarkdownInline({ content: block.text, headingLevel: block.kind === 'heading' ? block.level : 0, muted: block.kind === 'quote' })
-      .width('100%').padding({ left: block.kind === 'quote' ? 12 : block.kind === 'list' ? Math.min(block.level, 6) * 12 : 0 })
-  }
-
   build() {
     Column({ space: 12 }) {
-      ForEach(this.blocks, (block: XopcMarkdownBlock) => {
-        if (block.kind === 'image') { XopcChatMediaView({ file: this.imageFile(block), conversationId: this.conversationId }) }
-        else if (block.kind === 'rule') { Divider().color($r('app.color.secondary')).opacity(0.3) }
-        else if (block.kind === 'code') {
+      Repeat<XopcMarkdownBlock>(this.blocks).each((item: RepeatItem<XopcMarkdownBlock>) => {
+        if (item.item.kind === 'image') { XopcChatMediaView({ file: this.imageFile(item.item), conversationId: this.conversationId }) }
+        else if (item.item.kind === 'rule') { Divider().color($r('app.color.secondary')).opacity(0.3) }
+        else if (item.item.kind === 'code') {
           Column() {
             Row() {
-              Text(block.language || '').fontSize(12).fontColor($r('app.color.secondary')).layoutWeight(1)
+              Text(item.item.language || '').fontSize(12).fontColor($r('app.color.secondary')).layoutWeight(1)
               Button($r('app.string.chat_copy')).height(44).backgroundColor(Color.Transparent).fontColor($r('app.color.accent'))
-                .onClick((): void => { this.copyCode(block.text); })
+                .onClick((): void => { this.copyCode(item.item.text); })
             }.width('100%')
-            Text(block.text).fontFamily('monospace').fontSize(14).lineHeight(22)
+            Text(item.item.text).fontFamily('monospace').fontSize(14).lineHeight(22)
               .fontColor($r('app.color.foreground')).copyOption(CopyOptions.InApp).width('100%')
           }.padding(12).width('100%').borderRadius(8).backgroundColor($r('app.color.grouped'))
-        } else if (block.kind === 'table') {
+        } else if (item.item.kind === 'table') {
           Scroll() {
             Column() {
-              ForEach(block.rows || [], (row: XopcMarkdownTableRow) => {
+              ForEach(item.item.rows || [], (row: XopcMarkdownTableRow) => {
                 Row() {
                   ForEach(row.cells, (cell: XopcMarkdownCell) => {
                     XopcMarkdownInline({ content: cell.text, strong: row.header, alignment: cell.align })
@@ -86,8 +80,8 @@ export struct XopcMarkdownView {
               }, (row: XopcMarkdownTableRow): string => row.id + ':' + JSON.stringify(row.cells))
             }
           }.width('100%').scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Auto)
-        } else { this.richText(block) }
-      }, (block: XopcMarkdownBlock): string => block.id + ':' + JSON.stringify(block))
+        } else { XopcMarkdownInline({ content: item.item.text, headingLevel: item.item.kind === 'heading' ? item.item.level : 0, muted: item.item.kind === 'quote' }).width('100%').padding({ left: item.item.kind === 'quote' ? 12 : item.item.kind === 'list' ? Math.min(item.item.level, 6) * 12 : 0 }) }
+      }).key((block: XopcMarkdownBlock): string => block.id + ':' + block.kind)
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
 }

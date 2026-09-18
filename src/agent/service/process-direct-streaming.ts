@@ -427,13 +427,16 @@ export async function* runProcessDirectStreaming(
       if (slash.matched) {
         ranSlashCommand = true;
         slashCommandMetadata = slash.metadata;
+        if (slash.metadata?.sessionConfigChanged === true) {
+          pushVisible({ type: 'session_config_updated' });
+        }
         const text = slash.aggregatedText.trim();
         if (text) {
           webchatSlashReceipt = text;
           pushAssistantReceipt(queue, text, input.runId, slashCommandMetadata);
         } else if (channel === 'webchat') {
           webchatSlashReceipt =
-            'Command finished with no assistant text. An Task continuation may still be scheduled automatically.';
+            'Command finished with no assistant text. A task continuation may still be scheduled automatically.';
           pushAssistantReceipt(queue, webchatSlashReceipt, input.runId);
         }
         const workflowRun = slash.metadata?.workflowRun;

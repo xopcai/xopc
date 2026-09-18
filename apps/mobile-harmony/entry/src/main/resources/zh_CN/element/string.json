@@ -1,5 +1,6 @@
 {
   "string": [
+    { "name": "chat_copy_code", "value": "复制代码" },
     { "name": "chat_product_created", "value": "已创建" },
     { "name": "chat_product_updated", "value": "已更新" },
     { "name": "chat_product_started", "value": "已启动" },

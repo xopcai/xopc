@@ -197,7 +197,7 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     if (expectedConversationId && expectedConversationId !== active.conversationId) {
       return c.json({ ok: false, error: { code: 'CONFLICT', message: 'Task executor changed; refresh the conversation' } }, 409);
     }
-    return submitSessionInput(c, deps, active.conversationId);
+    return submitSessionInput(c, deps, active.conversationId, { taskConversation: true });
   });
 
   authenticated.patch('/api/tasks/:id/conversation/config', taskRateLimit, async (c) => {

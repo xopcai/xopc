@@ -1,13 +1,16 @@
 import { XopcChatTool } from '../model/chat';
 import { common } from '@kit.AbilityKit';
+import { XopcChatDisclosure } from '../common/chatDisclosure';
 import { chatToolKey, chatToolPreview, toolOutputText, chatSearchLinks, XopcSearchLink } from '../common/chatRichContent';
 
 @ComponentV2
 export struct XopcChatToolView {
   @Param call: XopcChatTool = { id: '', name: '' };
   @Param live: boolean = false;
-  @Local expanded: boolean = false;
-  @Local fullResult: boolean = false;
+  @Param disclosure: XopcChatDisclosure = new XopcChatDisclosure();
+  @Param scope: string = '';
+  @Computed get expanded(): boolean { return this.disclosure.get(this.scope + ':tool:' + this.call.id) ?? false; }
+  @Computed get fullResult(): boolean { return this.disclosure.get(this.scope + ':full:' + this.call.id) ?? false; }
   @Computed get resultText(): string { return toolOutputText(this.call); }
   @Computed get links(): XopcSearchLink[] { return chatSearchLinks(this.call); }
   private async openLink(link: XopcSearchLink): Promise<void> {
@@ -40,7 +43,7 @@ export struct XopcChatToolView {
           SymbolGlyph(this.expanded ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down')).fontSize(12).fontColor([$r('app.color.secondary')])
         }.width('100%')
       }.id('chat-tool-' + this.call.id).width('100%').constraintSize({ minHeight: 44 }).padding(8).borderRadius(10).backgroundColor($r('app.color.grouped'))
-        .onClick((): void => { this.expanded = !this.expanded; })
+        .onClick((): void => { this.disclosure.set(this.scope + ':tool:' + this.call.id, !this.expanded); })
       if (this.expanded) {
         ForEach(this.links, (link: XopcSearchLink) => {
           Button(link.title).constraintSize({ minHeight: 44 }).width('100%').fontSize(13)
@@ -62,7 +65,7 @@ export struct XopcChatToolView {
           }.width('100%').constraintSize({ maxHeight: 280 }).align(Alignment.TopStart)
           if (!this.fullResult && this.resultText.length > 6000) {
             Button($r('app.string.chat_tool_show_all')).height(44).backgroundColor(Color.Transparent).fontColor($r('app.color.accent'))
-              .onClick((): void => { this.fullResult = true; })
+              .onClick((): void => { this.disclosure.set(this.scope + ':full:' + this.call.id, true); })
           }
         }
       }

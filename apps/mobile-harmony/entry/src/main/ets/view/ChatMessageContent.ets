@@ -5,12 +5,14 @@ import { XopcChatStepsView } from './ChatStepsView';
 import { XopcChatMediaView } from './ChatMediaView';
 import { XopcChatDeliverablesView } from './ChatDeliverablesView';
 import { chatActivities } from '../common/chatRichContent';
+import { XopcChatDisclosure } from '../common/chatDisclosure';
 
 @ComponentV2
 export struct XopcChatMessageContent {
   @Param row: XopcChatRow = { id: '', role: 'assistant', text: '' };
   @Param conversationId: string = '';
   @Param reasoning: string = 'on';
+  @Param disclosure: XopcChatDisclosure = new XopcChatDisclosure();
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Event onFillDraft: (text: string) => void = (_text: string): void => {};
   @Computed get visibleMedia(): XopcHistoryMedia[] {
@@ -38,7 +40,7 @@ export struct XopcChatMessageContent {
       }, (ref: XopcContextRef): string => ref.kind + ':' + ref.sourceId)
       if (this.row.role === 'assistant') {
         Repeat<XopcChatBlock>(this.body).each((item: RepeatItem<XopcChatBlock>) => {
-          if (item.item.kind === 'steps') { XopcChatStepsView({ row: this.row, reasoning: this.reasoning }) }
+          if (item.item.kind === 'steps') { XopcChatStepsView({ row: this.row, reasoning: this.reasoning, disclosure: this.disclosure, scope: this.conversationId }) }
           else if (item.item.kind === 'text' && item.item.text) {
             XopcMarkdownView({ content: item.item.text, conversationId: this.conversationId })
           } else if (item.item.review) {

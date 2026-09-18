@@ -20,6 +20,27 @@ const page = (id: string, text: string, before = '') => ({
   pagination: { hasMore: !!before, nextBeforeCursor: before },
 });
 describe('chat history isolation', () => {
+  it.each(['reset', 'gap'])('does not stitch retained pages across a transcript %s', async reason => {
+    const history = (ids: string[], transcriptId = 't') => ({ session: { key: 'one', transcriptId, messages: ids.map(id => ({ id, role: 'user', content: id })) }, pagination: { hasMore: true, nextBeforeCursor: ids[0] } });
+    mocks.history.mockResolvedValueOnce(history(['3', '4']));
+    const chat = new XopcChatViewModel(); await chat.open('one');
+    mocks.history.mockResolvedValueOnce(history(['1', '2'])); await chat.loadHistory(true);
+    mocks.history.mockResolvedValueOnce(history(reason === 'reset' ? ['3', '4'] : ['8', '9'], reason === 'reset' ? 'new' : 't'));
+    await chat.loadHistory(false);
+    expect(chat.rows.map(row => row.id)).toEqual(reason === 'reset' ? ['3', '4'] : ['8', '9']);
+    chat.dispose();
+  });
+  it('retains loaded older pages and cursor when the latest page overlaps', async () => {
+    const history = (ids: string[], cursor: string) => ({ session: { key: 'one', transcriptId: 't', messages: ids.map(id => ({ id, role: 'user', content: id })) }, pagination: { hasMore: !!cursor, nextBeforeCursor: cursor } });
+    mocks.history.mockResolvedValueOnce(history(['3', '4'], 'older'));
+    const chat = new XopcChatViewModel(); await chat.open('one');
+    mocks.history.mockResolvedValueOnce(history(['1', '2', '3'], 'oldest')); await chat.loadHistory(true);
+    mocks.history.mockResolvedValueOnce(history(['3', '4', '5'], 'head-cursor')); await chat.loadHistory(false);
+    expect(chat.rows.map(row => row.id)).toEqual(['1', '2', '3', '4', '5']);
+    mocks.history.mockResolvedValueOnce(history(['0'], '')); await chat.loadHistory(true);
+    expect(mocks.history).toHaveBeenLastCalledWith('one', 'oldest');
+    expect(chat.rows.map(row => row.id)).toEqual(['0', '1', '2', '3', '4', '5']); chat.dispose();
+  });
   beforeEach(() => { vi.resetAllMocks(); mocks.activeRun.mockResolvedValue({ active: false }); mocks.saveMainConversation.mockResolvedValue(undefined); });
   it('opens a requested conversation as the persistent main chat and switches run subscriptions', async () => {
     mocks.history.mockImplementation(async (id) => page(id, id));

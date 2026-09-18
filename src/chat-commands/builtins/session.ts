@@ -25,9 +25,8 @@ const newCommand: CommandDefinition = {
     
     await ctx.resetSession();
     
-    // Note: resetSession already sends confirmation message
     return {
-      content: '',
+      content: '✅ New session started. Previous transcript archived; model and session overrides kept.',
       success: true,
     };
   },
@@ -58,7 +57,7 @@ const listCommand: CommandDefinition = {
     // Build text response
     const lines = sessions.slice(0, 10).map(s => {
       const indicator = s.isActive ? '▶️' : '  ';
-      const name = getSessionDisplayName(s.key);
+      const name = s.name ?? getSessionDisplayName(s.key);
       const date = s.updatedAt.toLocaleDateString();
       return `${indicator} ${name}\n   ${s.messageCount} messages · ${date}`;
     });
@@ -71,7 +70,7 @@ const listCommand: CommandDefinition = {
         type: 'session-list',
         sessions: sessions.slice(0, 5).map(s => ({
           ...s,
-          name: getSessionDisplayName(s.key),
+          name: s.name ?? getSessionDisplayName(s.key),
         })),
         currentSession: ctx.conversationId,
       };
@@ -93,18 +92,15 @@ const listCommand: CommandDefinition = {
 const clearCommand: CommandDefinition = {
   id: 'session.clear',
   name: 'clear',
-  description: 'Clear current session without archiving',
+  description: 'Clear current session and archive its previous transcript',
   category: 'session',
   scope: ['global', 'private', 'group'],
   handler: async (ctx: CommandContext) => {
     await ctx.setTyping(true);
     
-    // Just delete without archiving
-    const messages = await ctx.getSession();
-    await ctx.clearSession();
-    
+    await ctx.resetSession();
     return {
-      content: `🗑️ Session cleared. ${messages.length} messages deleted.`,
+      content: '🗑️ Session cleared. Previous transcript archived.',
       success: true,
     };
   },
@@ -243,6 +239,12 @@ const archiveCommand: CommandDefinition = {
   category: 'session',
   scope: ['global', 'private', 'group'],
   handler: async (ctx: CommandContext) => {
+    if (ctx.channelId === 'webchat') {
+      return {
+        content: 'Archive this chat from the sidebar so the app can navigate away safely.',
+        success: false,
+      };
+    }
     await ctx.setTyping(true);
     
     await ctx.archiveSession();
