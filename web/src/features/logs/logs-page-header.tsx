@@ -30,13 +30,13 @@ export function LogsPageHeader({
   logs,
 }: Props) {
   return (
-    <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <header className="flex flex-col gap-4">
       <div className="min-w-0">
-        <h1 className="text-xl font-semibold tracking-tight text-fg">{L.title}</h1>
-        <p className="mt-0.5 text-sm leading-relaxed text-fg-muted">{L.subtitle}</p>
+        <h1 className="text-2xl font-semibold tracking-tight text-fg sm:text-lg">{L.title}</h1>
+        <p className="mt-2 text-sm leading-relaxed text-fg-muted sm:mt-1">{L.subtitle}</p>
       </div>
-      <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:max-w-md sm:flex-row sm:items-center sm:justify-end">
-        <div className="w-full sm:w-48">
+      <div className="flex w-full shrink-0 flex-col gap-2 rounded-xl bg-surface-hover/20 p-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="w-full sm:w-52">
           <SlidingSegmented
             aria-label={L.refreshModeAria}
             value={autoRefresh ? 'live' : 'paused'}
@@ -48,7 +48,7 @@ export function LogsPageHeader({
             buttonClassName="h-8"
           />
         </div>
-        <div className="flex items-center gap-1 self-end sm:self-center">
+        <div className="flex min-w-0 items-center justify-end gap-1 sm:self-center">
           <LogsLevelPopover L={L} />
           <LogsExportMenu L={L} logs={logs} disabled={loading} />
           <Button

@@ -72,88 +72,96 @@ export function LogsListSection({
             {interpolate(L.showingCount, { count: String(logs.length) })}
             {hasMore ? <span className="text-fg-subtle"> · {L.moreAvailable}</span> : null}
           </p>
-          <ul
-            className="overflow-hidden rounded-xl bg-surface-hover/20 p-1 font-mono text-sm leading-6"
-          >
-            {logs.map((log) => {
-              const lv = log.level ?? 'info';
-              const rid = typeof log.requestId === 'string' ? log.requestId.trim() : '';
-              const phase = phaseLabel(log);
-              const isError = lv === 'error' || lv === 'fatal';
-              return (
-                <li key={logEntryKey(log)} className="rounded-lg bg-surface-base/45">
-                  <button
-                    type="button"
-                    onClick={() => onSelectLog(log)}
-                    className={cn(
-                      'flex w-full min-w-0 items-center gap-3 px-3 py-2.5 text-left transition-colors duration-150 ease-out',
-                      'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
-                      isError && 'bg-red-500/5',
-                    )}
-                  >
-                    <span className="w-[5.25rem] shrink-0 tabular-nums text-fg-subtle">
-                      {formatTimeCompact(log.timestamp)}
-                    </span>
-                    <span
+          <div className="overflow-hidden rounded-xl bg-surface-hover/20 p-1 text-sm leading-6">
+            <div className="hidden items-center gap-3 px-3 py-2 text-xs font-medium text-fg-subtle md:flex" aria-hidden>
+              <span className="w-[5.25rem] shrink-0">{L.time}</span>
+              <span className="w-[4.5rem] shrink-0">{L.level}</span>
+              <span className="w-[4.5rem] shrink-0 sm:w-[5.25rem]">{L.requestId}</span>
+              <span className="hidden max-w-[6rem] shrink-0 xl:block">{L.phase}</span>
+              <span className="hidden max-w-[7rem] shrink-0 lg:block">{L.module}</span>
+              <span className="min-w-0 flex-1">{L.message}</span>
+            </div>
+            <ul className="flex flex-col gap-0.5">
+              {logs.map((log) => {
+                const lv = log.level ?? 'info';
+                const rid = typeof log.requestId === 'string' ? log.requestId.trim() : '';
+                const phase = phaseLabel(log);
+                const isError = lv === 'error' || lv === 'fatal';
+                return (
+                  <li key={logEntryKey(log)} className="rounded-lg bg-surface-base/45">
+                    <button
+                      type="button"
+                      onClick={() => onSelectLog(log)}
                       className={cn(
-                        'w-[4.5rem] shrink-0 truncate',
-                        isError ? 'font-medium text-red-600 dark:text-red-400' : 'text-fg-muted',
+                        'flex w-full min-w-0 items-center gap-3 px-3 py-2.5 text-left transition-colors duration-150 ease-out',
+                        'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+                        isError && 'bg-red-500/5',
                       )}
-                      title={lv}
                     >
-                      {levelLabel(lv)}
-                    </span>
-                    <span className="w-[4.5rem] shrink-0 truncate sm:w-[5.25rem]">
-                      {rid ? (
-                        onFilterByRequestId ? (
-                          <span
-                            role="link"
-                            tabIndex={0}
-                            className="cursor-pointer text-accent hover:underline"
-                            title={`${L.requestId}: ${rid}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onFilterByRequestId(rid);
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
+                      <span className="w-[4.75rem] shrink-0 font-mono text-xs tabular-nums text-fg-subtle sm:w-[5.25rem] sm:text-sm">
+                        {formatTimeCompact(log.timestamp)}
+                      </span>
+                      <span
+                        className={cn(
+                          'w-[4.5rem] shrink-0 truncate',
+                          isError ? 'font-medium text-red-600 dark:text-red-400' : 'text-fg-muted',
+                        )}
+                        title={lv}
+                      >
+                        {levelLabel(lv)}
+                      </span>
+                      <span className="hidden w-[4.5rem] shrink-0 truncate font-mono sm:block sm:w-[5.25rem]">
+                        {rid ? (
+                          onFilterByRequestId ? (
+                            <span
+                              role="link"
+                              tabIndex={0}
+                              className="cursor-pointer text-accent hover:underline"
+                              title={`${L.requestId}: ${rid}`}
+                              onClick={(e) => {
                                 e.stopPropagation();
                                 onFilterByRequestId(rid);
-                              }
-                            }}
-                          >
-                            {requestIdPreview(rid)}
-                          </span>
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  onFilterByRequestId(rid);
+                                }
+                              }}
+                            >
+                              {requestIdPreview(rid)}
+                            </span>
+                          ) : (
+                            <span className="text-fg-subtle" title={`${L.requestId}: ${rid}`}>
+                              {requestIdPreview(rid)}
+                            </span>
+                          )
                         ) : (
-                          <span className="text-fg-subtle" title={`${L.requestId}: ${rid}`}>
-                            {requestIdPreview(rid)}
-                          </span>
-                        )
-                      ) : (
-                        <span className="text-fg-subtle">—</span>
-                      )}
-                    </span>
-                    <span
-                      className="hidden max-w-[6rem] shrink-0 truncate text-fg-subtle xl:inline"
-                      title={phase !== '—' ? phase : undefined}
-                    >
-                      {phase !== '—' ? phase : '—'}
-                    </span>
-                    <span
-                      className="hidden max-w-[7rem] shrink-0 truncate text-fg-muted lg:inline"
-                      title={moduleLabel(log)}
-                    >
-                      {moduleLabel(log)}
-                    </span>
-                    <span className={cn('min-w-0 flex-1 truncate', isError ? 'text-fg' : 'text-fg')}>
-                      {messagePreview(log)}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+                          <span className="text-fg-subtle">—</span>
+                        )}
+                      </span>
+                      <span
+                        className="hidden max-w-[6rem] shrink-0 truncate text-fg-subtle xl:inline"
+                        title={phase !== '—' ? phase : undefined}
+                      >
+                        {phase !== '—' ? phase : '—'}
+                      </span>
+                      <span
+                        className="hidden max-w-[7rem] shrink-0 truncate text-fg-muted lg:inline"
+                        title={moduleLabel(log)}
+                      >
+                        {moduleLabel(log)}
+                      </span>
+                      <span className={cn('min-w-0 flex-1 truncate', isError ? 'text-fg' : 'text-fg')}>
+                        {messagePreview(log)}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
           {hasMore ? (
             <div className="flex justify-center pt-1">
               <Button type="button" variant="secondary" className="gap-2" disabled={loading} onClick={onLoadMore}>

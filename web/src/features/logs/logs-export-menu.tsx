@@ -21,7 +21,7 @@ export function LogsExportMenu({ L, logs, disabled }: Props) {
         <Button
           type="button"
           variant="secondary"
-          className="h-9 gap-2 px-3 text-xs"
+          className="h-9 gap-2 whitespace-nowrap px-3 text-xs"
           disabled={disabled || logs.length === 0}
           title={L.exportLogs}
         >

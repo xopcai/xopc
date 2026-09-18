@@ -16,11 +16,11 @@ describe('settings navigation information architecture', () => {
     expect(capabilities?.tabs).toEqual([
       'settingsModels',
       'settingsVoice',
-      'settingsComputerUse',
       'settingsSearch',
       'settingsAgentDefaults',
     ]);
     expect(SETTINGS_SHELL_NAV_GROUPS.find(group => group.id === 'integrations')?.tabs).toEqual([
+      'settingsComputerUse',
       'settingsAgentBrowser',
     ]);
     expect(connection?.tabs).toEqual(['settingsDevices', 'settingsTunnel', 'settingsShares']);

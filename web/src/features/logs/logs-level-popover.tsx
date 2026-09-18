@@ -51,7 +51,7 @@ export function LogsLevelPopover({ L }: Props) {
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
-        <Button type="button" variant="secondary" className="h-9 gap-2 px-3 text-xs" title={L.logLevelTitle}>
+        <Button type="button" variant="secondary" className="h-9 gap-2 whitespace-nowrap px-3 text-xs" title={L.logLevelTitle}>
           <Gauge className="size-4" strokeWidth={1.75} />
           <span className="hidden sm:inline">{L.logLevelTitle}</span>
           <span className="tabular-nums text-fg-muted">{current}</span>

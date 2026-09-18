@@ -7,7 +7,16 @@ import {
   Search,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 
 import * as Dialog from '@radix-ui/react-dialog';
 
@@ -169,7 +178,7 @@ export function AddProviderDialog({
       <Dialog.Portal>
         <Dialog.Overlay
           className={cn(
-            'xopc-dialog-overlay fixed inset-0 bg-scrim backdrop-blur-[1px]',
+            'xopc-dialog-overlay fixed inset-0 bg-scrim',
             SETTINGS_SHELL_OVERLAY_Z,
           )}
         />
@@ -254,6 +263,14 @@ function PickProviderStep({
   onPickCustom: () => void;
 }) {
   const query = searchQuery.trim().toLowerCase();
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    if (container && scrollTopRef.current > 0) {
+      container.scrollTop = scrollTopRef.current;
+    }
+  }, [scrollTopRef]);
 
   const filteredRows = useMemo(() => {
     if (!query) return builtinRows;
@@ -317,13 +334,11 @@ function PickProviderStep({
       </div>
 
       <div
-        ref={(node) => {
-          if (node) node.scrollTop = scrollTopRef.current;
-        }}
+        ref={scrollContainerRef}
         onScroll={(event) => {
           scrollTopRef.current = event.currentTarget.scrollTop;
         }}
-        className="min-h-0 flex-1 overflow-y-auto px-5 pb-5"
+        className="min-h-0 flex-1 overscroll-contain overflow-y-auto px-5 pb-5"
       >
         {query && filteredRows.length === 0 ? (
           <p className="py-6 text-center text-sm text-fg-muted">{labels.noResults}</p>
@@ -391,7 +406,6 @@ function PickProviderStep({
               className={cn(
                 'flex w-full items-center gap-3 rounded-xl bg-surface-hover/25 px-4 py-3 text-left transition-colors',
                 'hover:bg-surface-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                interaction.press,
               )}
             >
               <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-base/60 text-fg-muted">
@@ -440,7 +454,6 @@ function ProviderPickButton({
         'flex min-h-12 w-full items-center gap-3 rounded-lg bg-surface-base/55 px-3 py-2.5 text-left transition-colors',
         'hover:bg-surface-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         prominent && 'bg-surface-base/80',
-        interaction.press,
       )}
     >
       <span className="min-w-0 flex-1">

@@ -22,12 +22,12 @@ export function LogsErrorSummarySection({ L, items, loading, onSelectItem }: Pro
   const totalCount = items.reduce((sum, item) => sum + item.count, 0);
 
   return (
-    <section className="overflow-hidden rounded-xl bg-surface-panel shadow-surface">
+    <section className="overflow-hidden rounded-xl bg-surface-hover/20">
       <button
         type="button"
         onClick={() => setExpanded((open) => !open)}
         aria-expanded={expanded}
-        className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
+        className="flex w-full items-start justify-between gap-3 px-4 py-4 text-left transition-colors hover:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset sm:px-5"
       >
         <div className="min-w-0">
           <h2 className="text-sm font-semibold tracking-tight text-fg">{L.errorSummaryTitle}</h2>
@@ -61,7 +61,7 @@ export function LogsErrorSummarySection({ L, items, loading, onSelectItem }: Pro
       </button>
 
       {expanded && !loading && items.length > 0 ? (
-        <ul className="flex flex-col gap-1 rounded-xl bg-surface-hover/20 p-1 [&>li]:rounded-lg [&>li]:bg-surface-base/45">
+        <ul className="mx-1 mb-1 flex flex-col gap-1 rounded-lg bg-surface-base/45 p-1 [&>li]:rounded-lg">
           {items.map((item) => (
             <li key={item.key}>
               <button
