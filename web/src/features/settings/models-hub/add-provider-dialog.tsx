@@ -7,7 +7,7 @@ import {
   Search,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 
 import * as Dialog from '@radix-ui/react-dialog';
 
@@ -94,6 +94,11 @@ export interface AddProviderDialogMessages {
   discoverModelsHint: string;
   noResults: string;
   recommended: string;
+  connected: string;
+  quickStart: string;
+  connectedSection: string;
+  searchResults: string;
+  step1Subtitle: string;
   step1Title: string;
   step2BuiltinTitle: string;
   step2CustomTitle: string;
@@ -138,6 +143,7 @@ export function AddProviderDialog({
 }: AddProviderDialogProps) {
   const [step, setStep] = useState<DialogStep>({ type: 'pick' });
   const [searchQuery, setSearchQuery] = useState('');
+  const pickScrollTopRef = useRef(0);
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -145,6 +151,7 @@ export function AddProviderDialog({
         window.setTimeout(() => {
           setStep({ type: 'pick' });
           setSearchQuery('');
+          pickScrollTopRef.current = 0;
         }, 200);
       }
       onOpenChange(next);
@@ -168,7 +175,7 @@ export function AddProviderDialog({
         />
         <Dialog.Content
           className={cn(
-            'fixed left-1/2 top-1/2 flex max-h-[85vh] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base shadow-xl',
+            'fixed left-1/2 top-1/2 flex h-[min(40rem,calc(100vh-3rem))] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-surface-panel shadow-popover',
             SETTINGS_SHELL_CONTENT_Z,
           )}
         >
@@ -178,6 +185,8 @@ export function AddProviderDialog({
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
               labels={labels}
+              language={language}
+              scrollTopRef={pickScrollTopRef}
               onPickBuiltin={(id) => {
                 const presetKey = modelsJsonPresetKeyForProviderId(id);
                 setStep(presetKey ? { type: 'custom', presetKey } : { type: 'builtin', providerId: id });
@@ -230,6 +239,8 @@ function PickProviderStep({
   searchQuery,
   onSearchChange,
   labels,
+  language,
+  scrollTopRef,
   onPickBuiltin,
   onPickCustom,
 }: {
@@ -237,6 +248,8 @@ function PickProviderStep({
   searchQuery: string;
   onSearchChange: (q: string) => void;
   labels: AddProviderDialogMessages;
+  language: StoredLanguage;
+  scrollTopRef: { current: number };
   onPickBuiltin: (id: string) => void;
   onPickCustom: () => void;
 }) {
@@ -256,19 +269,33 @@ function PickProviderStep({
   }, [builtinRows, query]);
 
   const recommendedRow = filteredRows.find((row) => row.id === RECOMMENDED_PROVIDER_ID);
+  const connectedRows = filteredRows.filter(
+    (row) => row.configured && row.id !== RECOMMENDED_PROVIDER_ID,
+  );
   const groups = useMemo(
-    () => groupByCategory(filteredRows.filter((row) => row.id !== RECOMMENDED_PROVIDER_ID)),
+    () => groupByCategory(filteredRows.filter(
+      (row) => row.id !== RECOMMENDED_PROVIDER_ID && !row.configured,
+    )),
     [filteredRows],
   );
+  const providerDescription = (row: ProviderRowModel) => {
+    const enrichment = PROVIDER_ENRICHMENT[row.id];
+    return language === 'zh'
+      ? enrichment?.descriptionZh ?? enrichment?.description
+      : enrichment?.description;
+  };
 
   return (
     <>
-      <div className="flex items-center justify-between gap-2 border-b border-edge-subtle px-5 py-4">
-        <Dialog.Title className="min-w-0 flex-1 text-base font-semibold text-fg">{labels.step1Title}</Dialog.Title>
+      <div className="flex items-start justify-between gap-4 px-5 pb-3 pt-5">
+        <div className="min-w-0 flex-1">
+          <Dialog.Title className="text-base font-semibold text-fg">{labels.step1Title}</Dialog.Title>
+          <Dialog.Description className="mt-1 text-sm text-fg-muted">{labels.step1Subtitle}</Dialog.Description>
+        </div>
         <DialogCloseButton label={labels.close} />
       </div>
 
-      <div className="px-5 pt-3">
+      <div className="px-5 pb-3">
         <div className="relative">
           <Search
             className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-subtle"
@@ -282,62 +309,100 @@ function PickProviderStep({
             placeholder={labels.searchPlaceholder}
             autoComplete="off"
             className={cn(
-              'w-full rounded-lg border border-edge bg-surface-panel py-2 pl-10 pr-3 text-sm text-fg placeholder:text-fg-subtle',
+              'h-10 w-full rounded-xl border border-edge bg-surface-base py-2 pl-10 pr-3 text-sm text-fg placeholder:text-fg-subtle',
               settingsInputFocusClass,
             )}
           />
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-5 py-3">
-        {recommendedRow ? (
-          <div className="mb-2">
-            <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-fg-subtle">
-              {labels.recommended}
-            </p>
-            <ProviderPickButton row={recommendedRow} onPick={onPickBuiltin} />
-          </div>
-        ) : null}
-
-        {/* Custom provider entry */}
-        {!query ? (
-          <button
-            type="button"
-            onClick={onPickCustom}
-            className={cn(
-              'mb-3 flex w-full items-center gap-3 rounded-xl border border-dashed border-edge-subtle bg-surface-panel/40 px-4 py-3 text-left transition-colors',
-              'hover:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-              interaction.press,
-            )}
-          >
-            <Globe className="size-5 shrink-0 text-fg-subtle" strokeWidth={1.75} aria-hidden />
-            <div className="min-w-0 flex-1">
-              <span className="text-sm font-medium text-fg">{labels.addCustom}</span>
-              <p className="mt-0.5 text-xs text-fg-muted">{labels.customDescription}</p>
-            </div>
-            <ChevronRight className="size-4 shrink-0 text-fg-subtle" aria-hidden />
-          </button>
-        ) : null}
-
-        {/* Built-in provider list */}
-        {filteredRows.length === 0 ? (
+      <div
+        ref={(node) => {
+          if (node) node.scrollTop = scrollTopRef.current;
+        }}
+        onScroll={(event) => {
+          scrollTopRef.current = event.currentTarget.scrollTop;
+        }}
+        className="min-h-0 flex-1 overflow-y-auto px-5 pb-5"
+      >
+        {query && filteredRows.length === 0 ? (
           <p className="py-6 text-center text-sm text-fg-muted">{labels.noResults}</p>
+        ) : query ? (
+          <ProviderSection title={labels.searchResults}>
+            {filteredRows.map((row) => (
+              <ProviderPickButton
+                key={row.id}
+                row={row}
+                description={providerDescription(row)}
+                labels={labels}
+                onPick={onPickBuiltin}
+              />
+            ))}
+          </ProviderSection>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-4">
+            {recommendedRow ? (
+              <ProviderSection title={labels.quickStart}>
+                <ProviderPickButton
+                  row={recommendedRow}
+                  description={providerDescription(recommendedRow)}
+                  labels={labels}
+                  prominent
+                  onPick={onPickBuiltin}
+                />
+              </ProviderSection>
+            ) : null}
+
+            {connectedRows.length > 0 ? (
+              <ProviderSection title={labels.connectedSection}>
+                {connectedRows.map((row) => (
+                  <ProviderPickButton
+                    key={row.id}
+                    row={row}
+                    description={providerDescription(row)}
+                    labels={labels}
+                    onPick={onPickBuiltin}
+                  />
+                ))}
+              </ProviderSection>
+            ) : null}
+
             {CATEGORY_ORDER.map((cat) => {
               const list = groups.get(cat) ?? [];
               if (list.length === 0) return null;
               return (
-                <div key={cat}>
-                  <p className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-fg-subtle">
-                    {labels.categories[cat] ?? cat}
-                  </p>
-                  <div className="flex flex-col gap-0.5">
-                    {list.map((row) => <ProviderPickButton key={row.id} row={row} onPick={onPickBuiltin} />)}
-                  </div>
-                </div>
+                <ProviderSection key={cat} title={labels.categories[cat] ?? cat}>
+                  {list.map((row) => (
+                    <ProviderPickButton
+                      key={row.id}
+                      row={row}
+                      description={providerDescription(row)}
+                      labels={labels}
+                      onPick={onPickBuiltin}
+                    />
+                  ))}
+                </ProviderSection>
               );
             })}
+
+            <button
+              type="button"
+              onClick={onPickCustom}
+              className={cn(
+                'flex w-full items-center gap-3 rounded-xl bg-surface-hover/25 px-4 py-3 text-left transition-colors',
+                'hover:bg-surface-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                interaction.press,
+              )}
+            >
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-base/60 text-fg-muted">
+                <Globe className="size-4" strokeWidth={1.75} aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-medium text-fg">{labels.addCustom}</span>
+                <span className="mt-0.5 block text-xs text-fg-muted">{labels.customDescription}</span>
+              </span>
+              <ChevronRight className="size-4 shrink-0 text-fg-subtle" aria-hidden />
+            </button>
           </div>
         )}
       </div>
@@ -345,11 +410,26 @@ function PickProviderStep({
   );
 }
 
+function ProviderSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section>
+      <h3 className="mb-1.5 px-1 text-xs font-semibold text-fg-muted">{title}</h3>
+      <div className="flex flex-col gap-1 rounded-xl bg-surface-hover/20 p-1">{children}</div>
+    </section>
+  );
+}
+
 function ProviderPickButton({
   row,
+  description,
+  labels,
+  prominent = false,
   onPick,
 }: {
   row: ProviderRowModel;
+  description?: string;
+  labels: AddProviderDialogMessages;
+  prominent?: boolean;
   onPick: (id: string) => void;
 }) {
   return (
@@ -357,15 +437,30 @@ function ProviderPickButton({
       type="button"
       onClick={() => onPick(row.id)}
       className={cn(
-        'flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left transition-colors',
-        'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'flex min-h-12 w-full items-center gap-3 rounded-lg bg-surface-base/55 px-3 py-2.5 text-left transition-colors',
+        'hover:bg-surface-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        prominent && 'bg-surface-base/80',
         interaction.press,
       )}
     >
-      <span className="truncate text-sm text-fg">{row.name}</span>
+      <span className="min-w-0 flex-1">
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-sm font-medium text-fg">{row.name}</span>
+          {prominent ? (
+            <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-fg">
+              {labels.recommended}
+            </span>
+          ) : null}
+        </span>
+        {description ? <span className="mt-0.5 block truncate text-xs text-fg-muted">{description}</span> : null}
+      </span>
       {row.configured ? (
-        <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+          <CheckCircle2 className="size-3.5" aria-hidden />
+          {labels.connected}
+        </span>
       ) : null}
+      <ChevronRight className="size-4 shrink-0 text-fg-subtle" aria-hidden />
     </button>
   );
 }
@@ -389,6 +484,9 @@ function ConfigureBuiltinStep({
 }) {
   const row = builtinRows.find((r) => r.id === providerId);
   const enrichment = PROVIDER_ENRICHMENT[providerId];
+  const enrichmentDescription = language === 'zh'
+    ? enrichment?.descriptionZh ?? enrichment?.description
+    : enrichment?.description;
   const [apiKey, setApiKey] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -535,7 +633,7 @@ function ConfigureBuiltinStep({
 
   return (
     <>
-      <div className="flex items-center gap-2 border-b border-edge-subtle px-5 py-4">
+      <div className="flex items-center gap-2 px-5 pb-3 pt-5">
         <button
           type="button"
           onClick={onBack}
@@ -550,10 +648,11 @@ function ConfigureBuiltinStep({
         <DialogCloseButton label={labels.close} />
       </div>
 
-      <div className="flex flex-col gap-4 px-5 py-4">
-        {enrichment?.description ? (
-          <p className="text-sm text-fg-muted">{enrichment.description}</p>
-        ) : null}
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
+        <div className="flex flex-col gap-4 rounded-xl bg-surface-hover/20 p-4">
+          {enrichmentDescription ? (
+            <p className="text-sm text-fg-muted">{enrichmentDescription}</p>
+          ) : null}
 
         {supportsApiKey ? (
           <div className="flex flex-col gap-1.5">
@@ -575,7 +674,7 @@ function ConfigureBuiltinStep({
         ) : null}
 
         {supportsOAuth ? (
-          <div className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-panel/60 p-3">
+          <div className="flex flex-col gap-2 rounded-lg bg-surface-base/55 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-fg">{providerLabels.oauth}</p>
@@ -617,7 +716,7 @@ function ConfigureBuiltinStep({
             ) : null}
             {instructions ? <p className="text-xs text-fg-muted">{instructions}</p> : null}
             {deviceCode ? (
-              <div className="rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2">
+              <div className="rounded-lg bg-surface-base/70 px-3 py-2">
                 <p className="text-xs text-fg-muted">{providerLabels.deviceCodeLabel}</p>
                 <code className="mt-1 block select-all font-mono text-lg font-semibold tracking-widest text-fg">
                   {deviceCode}
@@ -667,33 +766,35 @@ function ConfigureBuiltinStep({
           <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
         ) : null}
 
-        <div className="flex items-center justify-end gap-2">
-          <Button type="button" variant="secondary" onClick={onBack}>
-            {labels.cancel}
-          </Button>
-          {supportsApiKey ? (
-            <Button
-              type="button"
-              variant="primary"
-              disabled={!apiKey.trim() || saving || saved}
-              onClick={() => void handleSave()}
-            >
-              {saved ? (
-                <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="size-3.5" aria-hidden />
-                  {labels.saved}
-                </span>
-              ) : saving ? (
-                <span className="flex items-center gap-1.5">
-                  <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                  {labels.saving}
-                </span>
-              ) : (
-                labels.save
-              )}
-            </Button>
-          ) : null}
         </div>
+      </div>
+
+      <div className="flex items-center justify-end gap-2 bg-surface-hover/15 px-5 py-3">
+        <Button type="button" variant="secondary" onClick={onBack}>
+          {labels.cancel}
+        </Button>
+        {supportsApiKey ? (
+          <Button
+            type="button"
+            variant="primary"
+            disabled={!apiKey.trim() || saving || saved}
+            onClick={() => void handleSave()}
+          >
+            {saved ? (
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="size-3.5" aria-hidden />
+                {labels.saved}
+              </span>
+            ) : saving ? (
+              <span className="flex items-center gap-1.5">
+                <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                {labels.saving}
+              </span>
+            ) : (
+              labels.save
+            )}
+          </Button>
+        ) : null}
       </div>
     </>
   );
@@ -881,7 +982,7 @@ function ConfigureCustomStep({
 
   return (
     <>
-      <div className="flex items-center gap-2 border-b border-edge-subtle px-5 py-4">
+      <div className="flex items-center gap-2 px-5 pb-3 pt-5">
         <button
           type="button"
           onClick={onBack}
@@ -896,7 +997,8 @@ function ConfigureCustomStep({
         <DialogCloseButton label={labels.close} />
       </div>
 
-      <div className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto px-5 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4">
+        <div className="flex flex-col gap-4 rounded-xl bg-surface-hover/20 p-4">
         <p className="text-sm text-fg-muted">{labels.customDescription}</p>
 
         {/* Preset */}
@@ -1043,9 +1145,10 @@ function ConfigureCustomStep({
         {error ? (
           <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
         ) : null}
+        </div>
       </div>
 
-      <div className="flex items-center justify-end gap-2 border-t border-edge-subtle px-5 py-3">
+      <div className="flex items-center justify-end gap-2 bg-surface-hover/15 px-5 py-3">
         <Button type="button" variant="secondary" onClick={onBack}>
           {labels.cancel}
         </Button>
