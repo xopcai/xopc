@@ -43,6 +43,7 @@
   --color-accent-hover: #315ce6;
   --color-accent-soft: #eef3ff;
   --color-accent-fg: #2f5ef6;
+  --color-on-accent: #ffffff;
   --color-loop-indigo: #5b57ff;
   --color-momentum-cyan: #2ed8ff;
 
@@ -118,6 +119,7 @@ html.dark {
   --color-accent-hover: #6f91ff;
   --color-accent-soft: rgb(58 107 255 / 0.2);
   --color-accent-fg: #adc0ff;
+  --color-on-accent: #ffffff;
   --color-loop-indigo: #7b78ff;
   --color-momentum-cyan: #64e3ff;
 
@@ -573,16 +575,11 @@ html.dark {
 .xopc-onboarding-experience,
 .xopc-work-discovery-experience {
   isolation: isolate;
-}
-
-.xopc-onboarding-ambient {
-  background:
-    radial-gradient(
-      circle at 24% 48%,
-      color-mix(in oklab, var(--color-accent) 5%, transparent),
-      transparent 30%
-    ),
-    var(--color-surface-base);
+  background-image: var(--app-chrome-bg);
+  background-attachment: fixed;
+  background-position: left top;
+  background-repeat: no-repeat;
+  background-size: 100vw 100vh;
 }
 
 .xopc-onboarding-mark {
@@ -610,26 +607,13 @@ html.dark {
   animation: xopc-onboarding-logo-in 620ms cubic-bezier(.22, 1, .36, 1) 80ms both;
 }
 
-.xopc-onboarding-mark-core img {
-  filter: drop-shadow(0 10px 22px color-mix(in oklab, var(--color-accent) 14%, transparent));
-}
-
 .xopc-loop-logo {
-  --xopc-loop-ai: #1d1d1f;
-  --xopc-loop-ai-highlight: #4a4a4e;
-  --xopc-loop-ai-shadow: #0d0d0f;
-  --xopc-loop-human: #007aff;
-  --xopc-loop-human-highlight: #58adff;
-  --xopc-loop-human-shadow: #0062cc;
-}
-
-.dark .xopc-loop-logo {
-  --xopc-loop-ai: #f5f5f7;
-  --xopc-loop-ai-highlight: #ffffff;
-  --xopc-loop-ai-shadow: #c9c9ce;
-  --xopc-loop-human: #0a84ff;
-  --xopc-loop-human-highlight: #67b7ff;
-  --xopc-loop-human-shadow: #006edb;
+  --xopc-loop-ai: var(--color-fg);
+  --xopc-loop-ai-highlight: color-mix(in oklab, var(--color-fg) 66%, var(--color-surface-panel));
+  --xopc-loop-ai-shadow: color-mix(in oklab, var(--color-fg) 78%, black);
+  --xopc-loop-human: var(--color-accent);
+  --xopc-loop-human-highlight: color-mix(in oklab, var(--color-accent) 68%, white);
+  --xopc-loop-human-shadow: color-mix(in oklab, var(--color-accent) 80%, black);
 }
 
 .xopc-loop-logo circle {
@@ -1013,6 +997,7 @@ html[data-color-scheme="emerald"] {
   --color-accent-hover: #047857;
   --color-accent-soft: #d1fae5;
   --color-accent-fg: #047857;
+  --color-on-accent: #001a0d;
 
   --color-checkbox-accent: #059669;
 
@@ -1057,6 +1042,7 @@ html.dark[data-color-scheme="emerald"] {
   --color-accent-hover: #34d399;
   --color-accent-soft: rgb(6 78 59 / 0.6);
   --color-accent-fg: #34d399;
+  --color-on-accent: #052e16;
 
   --color-checkbox-accent: #10b981;
 
@@ -1120,6 +1106,7 @@ html[data-color-scheme="clay"] {
   --color-accent-hover: #1a1a1a;
   --color-accent-soft: #f5f0e0;
   --color-accent-fg: #1a3a3a;
+  --color-on-accent: #ffffff;
 
   --color-checkbox-accent: #0a0a0a;
 
@@ -1184,6 +1171,7 @@ html.dark[data-color-scheme="clay"] {
   --color-accent-hover: #ffc9a8;
   --color-accent-soft: rgb(26 58 58 / 0.55);
   --color-accent-fg: #ffb084;
+  --color-on-accent: #0a1a1a;
 
   --color-checkbox-accent: #a4d4c5;
 
@@ -1251,6 +1239,7 @@ html[data-color-scheme="dawn"] {
   --color-accent-hover: #202225;
   --color-accent-soft: rgb(0 138 255 / 0.1);
   --color-accent-fg: #1676ae;
+  --color-on-accent: #ffffff;
   --color-loop-indigo: #627da0;
   --color-momentum-cyan: #66b8ff;
   --color-checkbox-accent: #34363a;
@@ -1341,6 +1330,7 @@ html.dark[data-color-scheme="dawn"] {
   --color-accent-hover: #ffffff;
   --color-accent-soft: rgb(102 184 255 / 0.14);
   --color-accent-fg: #8dcbff;
+  --color-on-accent: #20252b;
   --color-loop-indigo: #aebce5;
   --color-momentum-cyan: #8dcbff;
   --color-checkbox-accent: #5c6d7e;
@@ -1373,11 +1363,6 @@ html.dark[data-color-scheme="dawn"] {
     #564536 100%
   );
   --app-chrome-sidebar-bg: var(--app-chrome-bg);
-}
-
-/* Primary buttons stay readable when the dark adaptation uses a light metal fill. */
-html.dark[data-color-scheme="dawn"] .bg-accent.text-white {
-  color: #20252b;
 }
 
 ::-webkit-scrollbar {

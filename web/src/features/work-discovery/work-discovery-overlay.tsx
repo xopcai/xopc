@@ -54,7 +54,7 @@ export function WorkDiscoveryOverlay({
         <Dialog.Content
           className="xopc-work-discovery-dialog pointer-events-none fixed inset-0 z-[76] flex items-center justify-center p-3 outline-none sm:p-6"
         >
-          <section className="xopc-work-discovery-panel pointer-events-auto flex h-[min(47.5rem,calc(100dvh-1.5rem))] w-[min(45rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-edge bg-surface-base shadow-float sm:h-[min(47.5rem,calc(100dvh-3rem))] sm:w-[min(45rem,calc(100vw-3rem))]">
+          <section className="xopc-work-discovery-panel pointer-events-auto flex h-[min(47.5rem,calc(100dvh-1.5rem))] w-[min(45rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-edge bg-surface-base shadow-float sm:h-[min(47.5rem,calc(100dvh-3rem))] sm:w-[min(45rem,calc(100vw-3rem))]">
             <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-edge bg-surface-panel px-4 sm:px-5">
               <div className="flex min-w-0 items-center gap-2.5">
                 <BrandLogo className="size-7 shrink-0" aria-hidden />

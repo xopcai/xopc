@@ -62,7 +62,7 @@ export function VoiceMiniPlayer({ noteId, attachmentId, durationSec, className }
         className={cn(
           'flex size-7 shrink-0 items-center justify-center rounded-full transition-colors',
           isPlaying
-            ? 'bg-accent text-white'
+            ? 'bg-accent text-on-accent'
             : 'bg-accent/10 text-accent hover:bg-accent/20',
         )}
         aria-label={isPlaying ? 'Pause' : 'Play'}

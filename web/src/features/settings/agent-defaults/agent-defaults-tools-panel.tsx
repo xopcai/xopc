@@ -97,7 +97,7 @@ export function AgentDefaultsToolsPanel({
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex rounded-lg bg-surface-base p-1">
-                    {(['allow', 'ask', 'deny'] as const).map((mode) => <button key={mode} type="button" onClick={() => updateTool(id, { mode })} className={cn('rounded-md px-2.5 py-1 text-xs font-medium capitalize', policy.mode === mode ? 'bg-accent text-white' : 'text-fg-muted hover:text-fg')}>{mode === 'allow' ? (zh ? '允许' : 'Allow') : mode === 'ask' ? (zh ? '询问' : 'Ask') : (zh ? '禁用' : 'Deny')}</button>)}
+                    {(['allow', 'ask', 'deny'] as const).map((mode) => <button key={mode} type="button" onClick={() => updateTool(id, { mode })} className={cn('rounded-md px-2.5 py-1 text-xs font-medium capitalize', policy.mode === mode ? 'bg-accent text-on-accent' : 'text-fg-muted hover:text-fg')}>{mode === 'allow' ? (zh ? '允许' : 'Allow') : mode === 'ask' ? (zh ? '询问' : 'Ask') : (zh ? '禁用' : 'Deny')}</button>)}
                   </div>
                   <Button variant="ghost" className="px-2 py-1" aria-label={zh ? `${id} 调用限制` : `${id} call limits`} onClick={() => setExpandedTool(expanded ? undefined : id)}><SlidersHorizontal className="size-4" /></Button>
                 </div>

@@ -256,11 +256,9 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
   };
 
   return (
-    <div className="xopc-onboarding-experience relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-surface-base" data-step={step}>
-      <div className="xopc-onboarding-ambient pointer-events-none absolute inset-0" aria-hidden />
+    <div className="xopc-onboarding-experience relative flex h-full min-h-0 w-full flex-col overflow-hidden" data-step={step}>
       <header className="relative z-20 flex h-18 shrink-0 items-center justify-end px-5 sm:px-8 lg:px-10">
         <div className="flex items-center gap-2">
-          <Link to="/settings/imports" className="rounded-lg px-2 py-2 text-sm text-accent hover:underline" aria-disabled={busy} onClick={event => { if (busy) event.preventDefault(); }}>{messages(language).imports.title}</Link>
           <OnboardingLanguageSwitch
             value={language}
             onChange={(nextLanguage) => {
@@ -292,7 +290,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
           </div>
         </section>
 
-        <section className="xopc-onboarding-scroll flex min-h-[30rem] items-center overflow-y-auto border-t border-edge-subtle bg-surface-panel/45 px-5 py-8 sm:px-10 lg:min-h-0 lg:border-l lg:border-t-0 lg:px-[clamp(3rem,6vw,6rem)]">
+        <section className="app-main-surface xopc-onboarding-scroll flex min-h-[30rem] items-center overflow-y-auto bg-surface-panel px-5 py-8 sm:px-10 lg:min-h-0 lg:px-[clamp(3rem,6vw,6rem)]">
           <div className="xopc-onboarding-stage w-full max-w-[30rem]" key={step}>
             {step === 'callName' ? (
               <div className="flex min-h-[30rem] flex-col">
@@ -318,7 +316,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                 <div className="mt-auto grid grid-cols-[1fr_auto_1fr] items-center gap-3 pt-10">
                   <span />
                   <OnboardingProgress step={step} label={stepLabel} />
-                  <Button className="h-11 justify-self-end bg-accent px-5 text-white hover:bg-accent-hover" disabled={busy} onClick={() => void continueFromCallName()}>
+                  <Button variant="primary" className="h-11 justify-self-end px-5" disabled={busy} onClick={() => void continueFromCallName()}>
                     {busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
                     {busy ? o.savingProfile : o.continue}
                     {!busy ? <ChevronRight className="size-4" aria-hidden /> : null}
@@ -390,7 +388,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                   <Button variant="ghost" className="justify-self-start" disabled={busy} onClick={() => dispatch({ type: 'patch', patch: { step: 'provider', error: null } })}>{o.back}</Button>
                   <OnboardingProgress step={step} label={stepLabel} />
                   {selectedProvider !== 'xopc-cloud' ? (
-                    <Button className="h-11 justify-self-end bg-accent px-5 text-white hover:bg-accent-hover" disabled={busy || !apiKey.trim()} onClick={() => void onContinueApiKey()}>
+                    <Button variant="primary" className="h-11 justify-self-end px-5" disabled={busy || !apiKey.trim()} onClick={() => void onContinueApiKey()}>
                       {busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
                       {o.continue}
                       {!busy ? <ChevronRight className="size-4" aria-hidden /> : null}

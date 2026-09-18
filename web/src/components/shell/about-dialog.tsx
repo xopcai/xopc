@@ -415,7 +415,7 @@ function NpmAboutUpdateHint({
           type="button"
           onClick={onUpgrade}
           className={cn(
-            'w-full rounded-lg bg-accent px-3 py-1.5 text-center text-xs font-medium text-white',
+            'w-full rounded-lg bg-accent px-3 py-1.5 text-center text-xs font-medium text-on-accent',
             'hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
             'disabled:pointer-events-none disabled:opacity-50',
           )}
