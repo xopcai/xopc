@@ -1,6 +1,6 @@
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, expect, it } from 'vitest';
 import { ConfigSchema } from '../../../../config/schema.js';
 import { getModelCatalogStore, resetModelCatalogStore } from '../../../../providers/model-catalog-store.js';
 import { voiceFixture } from '../../../../voice/__tests__/voice-fixture.js';
