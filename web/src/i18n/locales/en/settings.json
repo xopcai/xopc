@@ -1010,6 +1010,7 @@
     "colorSchemeLightGreen": "Light green",
     "colorSchemeModernMono": "Mono",
     "colorSchemeClay": "Clay",
+    "colorSchemeDawn": "Dawn",
     "fontScaleTitle": "Text size",
     "fontScaleDescription": "Adjust text size in chat and reading areas.",
     "fontScaleCompact": "Small",

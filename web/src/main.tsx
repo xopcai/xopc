@@ -10,6 +10,7 @@ import { initGatewayFromWindow } from '@/stores/gateway-store';
 import { hydrateFontScaleFromStorage } from '@/stores/font-scale-store';
 import { hydrateThemeFromStorage } from '@/stores/theme-store';
 
+import '@fontsource-variable/figtree';
 import '@/styles/globals.css';
 
 async function bootstrap(): Promise<void> {

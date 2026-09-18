@@ -19,7 +19,6 @@ import {
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { Button } from '@/components/ui/button';
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
 import { cn } from '@/lib/cn';
 import { withDetailReturnTo } from '@/lib/navigation-return';
@@ -60,6 +59,37 @@ const OPERATION_LABELS = {
   failed: { en: 'Failed', zh: '失败' },
 } satisfies Record<ProductDeliveryEnvelope['operation'], { en: string; zh: string }>;
 
+const STATUS_LABELS: Record<string, { en: string; zh: string }> = {
+  active: { en: 'Active', zh: '运行中' },
+  completed: { en: 'Completed', zh: '已完成' },
+  disabled: { en: 'Disabled', zh: '已停用' },
+  enabled: { en: 'Enabled', zh: '已启用' },
+  failed: { en: 'Failed', zh: '失败' },
+  paused: { en: 'Paused', zh: '已暂停' },
+  ready: { en: 'Ready', zh: '已就绪' },
+  running: { en: 'Running', zh: '运行中' },
+};
+
+function localizedStatus(status: string | undefined, language: 'en' | 'zh'): string | null {
+  const value = status?.trim();
+  if (!value) return null;
+  return STATUS_LABELS[value.toLowerCase()]?.[language] ?? value;
+}
+
+function deliveryMeta(
+  delivery: ProductDeliveryEnvelope,
+  reference: ProductReference,
+  language: 'en' | 'zh',
+): string {
+  const operation = OPERATION_LABELS[delivery.operation][language];
+  const status = localizedStatus(reference.status, language);
+  if (!status) return operation;
+  if (delivery.operation === 'opened' || status.toLowerCase() === operation.toLowerCase()) {
+    return status;
+  }
+  return `${operation} · ${status}`;
+}
+
 function continuePrompt(reference: ProductReference, language: 'en' | 'zh'): string {
   return language === 'zh'
     ? `继续处理${KIND_LABELS[reference.kind].zh}「${reference.title}」（ID: ${reference.id}）：`
@@ -86,6 +116,7 @@ export function ProductDeliveryCard({
   const canContinue = reference.capabilities.includes('continue_in_chat');
   const isNote = reference.kind === 'note';
   const isFailure = delivery.operation === 'failed';
+  const meta = deliveryMeta(delivery, reference, language);
 
   const open = () => {
     if (route) navigate(withDetailReturnTo(route, `${location.pathname}${location.search}`));
@@ -141,84 +172,60 @@ export function ProductDeliveryCard({
   return (
     <section
       className={cn(
-        'mt-2 overflow-hidden rounded-xl border bg-surface-raised',
-        isFailure ? 'border-red-300/70 dark:border-red-500/35' : 'border-edge',
+        'mt-2 overflow-hidden rounded-xl',
+        isFailure
+          ? 'border border-red-300/70 bg-danger-soft/30 dark:border-red-500/35'
+          : 'bg-surface-elevated/20',
       )}
       aria-label={`${OPERATION_LABELS[delivery.operation][language]} ${KIND_LABELS[reference.kind][language]}`}
     >
-      <button
-        type="button"
-        onClick={canOpen ? open : undefined}
-        disabled={!canOpen}
-        className={cn(
-          'flex w-full items-start gap-3 p-3 text-left',
-          canOpen && 'transition-colors hover:bg-surface-hover/60',
-          !canOpen && 'cursor-default',
-        )}
-      >
-        <span
+      <div className="flex min-h-14 items-start gap-1 rounded-xl p-1.5">
+        <button
+          type="button"
+          onClick={canOpen ? open : undefined}
+          disabled={!canOpen}
           className={cn(
-            'flex size-9 shrink-0 items-center justify-center rounded-lg',
-            isFailure
-              ? 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300'
-              : 'bg-accent-soft text-accent-fg',
+            'flex min-w-0 flex-1 items-start gap-3 rounded-xl p-1 text-left',
+            canOpen && 'transition-colors hover:bg-surface-hover/50',
+            !canOpen && 'cursor-default',
           )}
-          aria-hidden
         >
-          <Icon className="size-4.5" strokeWidth={1.75} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-            <span className="truncate text-sm font-semibold text-fg">{reference.title}</span>
-            <span className="rounded-full border border-edge px-1.5 py-0.5 text-[10px] font-medium text-fg-muted">
-              {KIND_LABELS[reference.kind][language]}
-            </span>
+          <span
+            className={cn(
+              'flex size-8 shrink-0 items-center justify-center rounded-xl',
+              isFailure
+                ? 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300'
+                : 'bg-accent-soft/70 text-accent-fg',
+            )}
+            aria-hidden
+          >
+            <Icon className="size-4" strokeWidth={1.75} />
           </span>
-          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-fg-muted">
-            <span>{OPERATION_LABELS[delivery.operation][language]}</span>
-            {reference.status ? <span>· {reference.status}</span> : null}
+          <span className="min-w-0 flex-1">
+            <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <span className="truncate text-sm font-medium text-fg">{reference.title}</span>
+              <span className="text-[11px] font-medium tracking-[0.08em] text-fg-subtle">
+                {language === 'zh' ? '交付物' : 'Deliverable'} · {KIND_LABELS[reference.kind][language]}
+              </span>
+            </span>
+            <span className="mt-0.5 block text-xs text-fg-muted">{meta}</span>
+            {reference.summary ? (
+              <span className="mt-1 line-clamp-1 block text-xs leading-relaxed text-fg-subtle">
+                {reference.summary}
+              </span>
+            ) : null}
           </span>
-          {reference.summary ? (
-            <span className="mt-1.5 line-clamp-2 block text-xs leading-relaxed text-fg-subtle">
-              {reference.summary}
-            </span>
-          ) : null}
-        </span>
-        {canOpen ? (
-          isNote ? (
-            <span className="mt-1.5 flex shrink-0 items-center gap-0.5 text-xs font-medium text-accent">
-              {language === 'zh' ? '打开笔记' : 'Open Note'}
-              <ChevronRight className="size-3.5" aria-hidden />
-            </span>
-          ) : (
-            <ChevronRight className="mt-2 size-4 shrink-0 text-fg-disabled" aria-hidden />
-          )
+        </button>
+        {!isNote && canContinue ? (
+          <button
+            type="button"
+            className="inline-flex min-h-8 shrink-0 items-center self-center rounded-lg px-2 py-1 text-xs font-medium text-accent-fg transition-colors hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            onClick={() => dispatchFillChatComposer(continuePrompt(reference, language))}
+          >
+            {language === 'zh' ? '继续' : 'Continue'}
+          </button>
         ) : null}
-      </button>
-      {!isNote && (canOpen || canContinue) ? (
-        <div className="flex flex-wrap justify-end gap-2 border-t border-edge px-3 py-2">
-          {canContinue ? (
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-8 px-3 py-1.5 text-xs"
-              onClick={() => dispatchFillChatComposer(continuePrompt(reference, language))}
-            >
-              {language === 'zh' ? '在对话中继续' : 'Continue in chat'}
-            </Button>
-          ) : null}
-          {canOpen ? (
-            <Button
-              type="button"
-              variant="primary"
-              className="h-8 px-3 py-1.5 text-xs"
-              onClick={open}
-            >
-              {language === 'zh' ? '打开' : 'Open'}
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
+      </div>
     </section>
   );
 }
