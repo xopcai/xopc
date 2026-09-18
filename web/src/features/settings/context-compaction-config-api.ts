@@ -28,7 +28,7 @@ export const DEFAULT_CONTEXT_COMPACTION_CONFIG: ContextCompactionConfigState = {
   minMessagesBeforeCompact: 10,
   keepRecentTokens: 20_000,
   recentTurnsPreserve: 3,
-  summaryMaxTokens: 8_000,
+  summaryMaxTokens: 16_000,
   summaryChunkTokens: 24_000,
   summaryTimeoutMs: 180_000,
   summaryRetries: 2,
