@@ -29,14 +29,16 @@ function isBlockedPath(path: string[]): boolean {
   return false;
 }
 
-function redactConfigForDisplay(plain: Record<string, unknown>): void {
-  if (plain.gateway && typeof plain.gateway === 'object') {
-    const gw = plain.gateway as Record<string, unknown>;
-    if (gw.auth && typeof gw.auth === 'object') {
-      (gw.auth as Record<string, unknown>).token = '[redacted]';
-    }
+const SENSITIVE_CONFIG_KEY = /(?:api[_-]?key|token|secret|password|passwd|credential|private[_-]?key|authorization|cookie)$/i;
+
+export function redactConfigForDisplay(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactConfigForDisplay);
+  if (!value || typeof value !== 'object') return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    out[key] = SENSITIVE_CONFIG_KEY.test(key) ? '[redacted]' : redactConfigForDisplay(entry);
   }
-  if (plain.providers !== undefined) plain.providers = '[redacted]';
+  return out;
 }
 
 function senderMayWritePersistentConfig(ctx: CommandContext): boolean {
@@ -97,9 +99,14 @@ const configCommand: CommandDefinition = {
     const rest = parts.slice(1).join(' ').trim();
 
     if (!action || action === 'show' || action === 'get') {
+      if (!senderMayWritePersistentConfig(ctx)) {
+        return {
+          content: '⚠️ You are not allowed to view configuration from this chat surface.',
+          success: false,
+        };
+      }
       const config = ctx.getConfig?.() ?? loadConfig(resolveConfigPath());
-      const plain = JSON.parse(JSON.stringify(config)) as Record<string, unknown>;
-      redactConfigForDisplay(plain);
+      const plain = redactConfigForDisplay(JSON.parse(JSON.stringify(config))) as Record<string, unknown>;
 
       if (rest) {
         const parsed = parseConfigPath(rest);

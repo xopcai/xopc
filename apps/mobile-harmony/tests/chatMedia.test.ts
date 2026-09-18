@@ -8,16 +8,30 @@ vi.mock('@kit.NetworkKit', () => ({ http: { createHttp: () => ({ request: mocks.
 vi.mock('../entry/src/main/ets/service/transport.ets', () => ({ XopcHttpError: class extends Error { constructor(code: number) { super(`HTTP_${code}`); } } }));
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { transferAuth: mocks.transferAuth, request: mocks.gateway,
   connectionRevision: () => 1, assertConnection: mocks.assertConnection } }));
-import { readChatMedia, saveChatMedia } from '../entry/src/main/ets/service/chatMedia.ets';
+import { readChatMedia, saveChatMedia, clearChatMediaCache } from '../entry/src/main/ets/service/chatMedia.ets';
 const file = { id: 'f', name: 'f.png', type: 'image', mimeType: 'image/png', size: 5, uri: 'xopc-file:f' };
 describe('authenticated chat media transport', () => {
-  beforeEach(() => { vi.resetAllMocks(); mocks.transferAuth.mockResolvedValue({ origin: 'https://gateway.test', token: 'fixture-token' });
+  beforeEach(() => { clearChatMediaCache(); vi.resetAllMocks(); mocks.transferAuth.mockResolvedValue({ origin: 'https://gateway.test', token: 'fixture-token' });
     mocks.request.mockResolvedValue({ responseCode: 200, result: new ArrayBuffer(5) }); });
   it('does not resolve an old workspace path against a newly activated Gateway', async () => {
     mocks.gateway.mockResolvedValueOnce(JSON.stringify({ space: { id: 'old-space' } }));
     mocks.assertConnection.mockImplementationOnce(() => { throw new Error('OPERATION_CANCELLED'); });
     await expect(readChatMedia({ ...file, uri: '', workspaceRelativePath: 'out/report.png' }, 'old-chat')).rejects.toThrow('OPERATION_CANCELLED');
-    expect(mocks.gateway).toHaveBeenCalledTimes(1); expect(mocks.transferAuth).not.toHaveBeenCalled();
+    expect(mocks.gateway).not.toHaveBeenCalled(); expect(mocks.transferAuth).not.toHaveBeenCalled();
+  });
+  it('deduplicates concurrent reads and returns independent buffers from bounded cache', async () => {
+    const [one, two] = await Promise.all([readChatMedia(file, 'c'), readChatMedia(file, 'c')]);
+    new Uint8Array(one)[0] = 42;
+    expect(new Uint8Array(two)[0]).toBe(0);
+    expect(new Uint8Array(await readChatMedia(file, 'c'))[0]).toBe(0);
+    expect(mocks.request).toHaveBeenCalledOnce();
+    await readChatMedia(file, 'different-session'); expect(mocks.request).toHaveBeenCalledTimes(2);
+  });
+  it('does not cache failed requests and clears retained bytes explicitly', async () => {
+    mocks.request.mockRejectedValueOnce(new Error('OFFLINE'));
+    await expect(readChatMedia(file, 'c')).rejects.toThrow('OFFLINE');
+    await readChatMedia(file, 'c'); clearChatMediaCache(); await readChatMedia(file, 'c');
+    expect(mocks.request).toHaveBeenCalledTimes(3);
   });
   it('uses bounded authenticated requests for registered artifacts', async () => {
     await readChatMedia(file, 'c');

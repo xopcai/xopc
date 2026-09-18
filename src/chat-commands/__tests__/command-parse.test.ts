@@ -14,6 +14,9 @@ describe('normalizeTelegramCommandName', () => {
 });
 
 describe('parseSlashCommand', () => {
+  it('normalizes command names and accepts tab-separated arguments', () => {
+    expect(parseSlashCommand('/HELP\tTopic')).toEqual({ command: 'help', args: 'Topic' });
+  });
   it('parses first slash line when transcript precedes caption', () => {
     expect(parseSlashCommand('hello world\n/tts always')).toEqual({
       command: 'tts',

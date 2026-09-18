@@ -1,5 +1,6 @@
 {
   "string": [
+    { "name": "chat_copy_code", "value": "Copy code" },
     { "name": "chat_product_created", "value": "Created" },
     { "name": "chat_product_updated", "value": "Updated" },
     { "name": "chat_product_started", "value": "Started" },

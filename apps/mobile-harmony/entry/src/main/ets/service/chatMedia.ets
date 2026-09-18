@@ -9,8 +9,48 @@ import { XopcFileSpaceResult, XopcFileResult } from '../model/files';
 
 interface XopcChatMediaHeaders { Authorization: string; }
 interface XopcChatFileResolve { spaceId: string; path: string; }
+interface XopcMediaCacheEntry { bytes: ArrayBuffer; expires: number; }
+const mediaCache = new Map<string, XopcMediaCacheEntry>();
+const mediaPending = new Map<string, Promise<ArrayBuffer>>();
+let mediaCacheRevision: number = -1;
+let mediaCacheGeneration: number = 0;
+let mediaCacheSize: number = 0;
+
+export function clearChatMediaCache(): void {
+  mediaCache.clear(); mediaPending.clear(); mediaCacheSize = 0; mediaCacheGeneration++;
+}
 
 export async function readChatMedia(file: XopcHistoryMedia, conversationId: string): Promise<ArrayBuffer> {
+  if (file.size > CHAT_MEDIA_LIMIT) throw new Error('INVALID_MEDIA_OR_TOO_LARGE');
+  const revision = gatewaySession.connectionRevision();
+  gatewaySession.assertConnection(revision);
+  if (mediaCacheRevision !== revision) { clearChatMediaCache(); mediaCacheRevision = revision; }
+  // Embedded payloads already live in message memory. Do not retain another copy.
+  if (file.uri.startsWith('data:')) return fetchChatMedia(file, conversationId);
+  const key = JSON.stringify([conversationId, file.uri, file.workspaceRelativePath || '']);
+  const cached = mediaCache.get(key);
+  if (cached && cached.expires > Date.now()) { mediaCache.delete(key); mediaCache.set(key, cached); return cached.bytes.slice(0); }
+  if (cached) { mediaCacheSize -= cached.bytes.byteLength; mediaCache.delete(key); }
+  let pending = mediaPending.get(key);
+  if (!pending) {
+    const generation = mediaCacheGeneration;
+    pending = fetchChatMedia(file, conversationId).then((bytes: ArrayBuffer): ArrayBuffer => {
+      gatewaySession.assertConnection(revision);
+      if (generation === mediaCacheGeneration && bytes.byteLength <= 4 * 1024 * 1024) {
+        while (mediaCacheSize + bytes.byteLength > CHAT_MEDIA_LIMIT || mediaCache.size >= 32) {
+          const first = Array.from(mediaCache.keys())[0]; if (!first) break;
+          mediaCacheSize -= mediaCache.get(first)!.bytes.byteLength; mediaCache.delete(first);
+        }
+        mediaCache.set(key, { bytes, expires: Date.now() + 30000 }); mediaCacheSize += bytes.byteLength;
+      }
+      return bytes;
+    }).finally((): void => { if (generation === mediaCacheGeneration) mediaPending.delete(key); });
+    mediaPending.set(key, pending);
+  }
+  return pending.then((bytes: ArrayBuffer): ArrayBuffer => bytes.slice(0));
+}
+
+async function fetchChatMedia(file: XopcHistoryMedia, conversationId: string): Promise<ArrayBuffer> {
   const revision = gatewaySession.connectionRevision();
   if (file.size > CHAT_MEDIA_LIMIT) throw new Error('INVALID_MEDIA_OR_TOO_LARGE');
   let uri = file.uri;

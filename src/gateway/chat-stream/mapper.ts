@@ -143,6 +143,8 @@ export class ChatStreamMapper {
         const outcome = parseTurnOutcome(event.outcome);
         return outcome ? [this.make('turn_outcome', outcome)] : [];
       }
+      case 'session_config_updated':
+        return [this.make('session_config_updated', {})];
       case 'error':
         return [this.make('error', {
           code: 'AGENT_RUN_ERROR',

@@ -1,5 +1,6 @@
 import type { XopcHistory, XopcChatRow, XopcContentBlock, XopcContextRef, XopcChatTool, XopcChatBlock, XopcHistoryMedia } from '../model/chat';
 import { chatMedia, chatOutcome, chatReview, chatAttachments, chatHistoryAudio, refreshChatRow } from './chatRichContent';
+import { stripUserMessageForDisplay } from './chatDisplay';
 
 function toolText(name: string, input?: Object, result?: Object): string {
   return name + (input !== undefined ? '\n' + JSON.stringify(input).slice(0, 6000) : '')
@@ -89,6 +90,10 @@ export function historyRows(history: XopcHistory, page: string = 'latest'): Xopc
     });
     tools = calls.map((call: XopcChatTool): string => toolText(call.name, call.input, call.result)).join('');
     const media = chatAttachments((Array.isArray(message.media) ? message.media : []).concat(Array.isArray(message.attachments) ? message.attachments : [], chatHistoryAudio(message, rowId), inlineMedia), rowId);
+    if (message.role === 'user' || message.role === 'user-with-attachments') {
+      text = stripUserMessageForDisplay(text);
+      blocks.forEach((block: XopcChatBlock): void => { if (block.kind === 'text') block.text = stripUserMessageForDisplay(block.text); });
+    }
     const review = chatReview(message.metadata?.review);
     if (review?.type === 'review' && !blocks.some((block: XopcChatBlock): boolean => block.kind === 'review')) blocks.push({ id: rowId + ':review', kind: 'review', text: '', review });
     const outcome = chatOutcome(message.metadata?.turnOutcome);

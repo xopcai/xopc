@@ -9,6 +9,7 @@ import {
   useChatSessionStore,
 } from '@/features/chat/session/chat-session-store';
 import type { SessionManager } from '@/features/chat/session/session-manager';
+import { patchSessionAgentConfigView } from '@/features/chat/session/patch-session-agent-config-view';
 import {
   clearChatRunPresence,
   markChatRunCompleted,
@@ -275,6 +276,13 @@ export function createAgentStreamMessagingCallbacks(opts: {
       }
     },
     onClarifyRequest: fq.makeOnClarifyRequest(chatId),
+    onSessionConfigUpdated: () => {
+      store().patchSessionMeta(chatId, { modelConfigSaving: true });
+      void sessionMgrRef.current.loadSessionAgentConfig(chatId)
+        .then((cfg) => patchSessionAgentConfigView(chatId, cfg))
+        .catch(() => {})
+        .finally(() => store().patchSessionMeta(chatId, { modelConfigSaving: false }));
+    },
     onResult: ({ status }) => {
       flushReviewDeltas();
       const visible = shouldApplyStreamUpdate(chatId);

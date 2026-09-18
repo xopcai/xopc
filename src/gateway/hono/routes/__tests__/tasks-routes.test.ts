@@ -11,6 +11,7 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../../storage/sqlite/index.js';
+import { TaskConversationRepository } from '../../../../tasks/task-conversation-repository.js';
 import { TaskRepository } from '../../../../tasks/task-repository.js';
 import { TaskRunRepository } from '../../../../tasks/task-run-repository.js';
 import { registerTaskRoutes } from '../tasks.js';
@@ -62,6 +63,41 @@ describe('task routes', () => {
     expect(abortAgentRun).toHaveBeenCalledWith('live-run');
     expect(new TaskRunRepository().listActiveWaits(task.id)[0]?.kind).toBe('paused');
   });
+
+  it.each(['/new', '/RESET prompt', '/restart', '/clear', '/archive'])(
+    'rejects destructive conversation command %s',
+    async (content) => {
+      const task = new TaskRepository().create({ title: 'Continuous task', objective: 'Keep one transcript' });
+      const conversationId = '86f460b7-2578-4f2d-9216-06dd70f50e30';
+      ensureSessionRecord(conversationId, stateDir, { agentId: 'main' });
+      new TaskRunRepository().create({
+        taskId: task.id,
+        conversationId,
+        executorKind: 'agent',
+        executorRef: { agentId: 'main' },
+        trigger: { kind: 'manual' },
+        correlationId: `continuous-${content}`,
+        idempotencyKey: `continuous-${content}`,
+        contractVersion: task.latestContractVersion,
+      });
+      new TaskConversationRepository().activateExecutionSession({
+        taskId: task.id,
+        conversationId,
+        agentId: 'main',
+      });
+
+      const response = await app.request(`/api/tasks/${task.id}/inputs`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ content }),
+      });
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { message: 'A task has one continuous conversation.' },
+      });
+    },
+  );
 
   it('deletes an idle Task and reports a stable missing-task error', async () => {
     const task = new TaskRepository().create({ title: 'Delete route', objective: 'Delete through REST' });
