@@ -4,7 +4,7 @@ import type { ComposerContextRef, ComposerSendHandler, ResetEditorOptions, WireA
 import { commitAcceptedSend } from './commit-accepted-send';
 import type {
   PaletteItem,
-  PaletteItemKind,
+  SkillPaletteItem,
   SlashRange,
 } from '@/features/chat/palette/command-palette.types';
 
@@ -53,32 +53,36 @@ export interface PaletteApplyContext {
     onAddPendingFollowUp?: (text: string, atts?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void | Promise<void>;
     /** Used when runBusy and command is abort-class: stop the current generation. */
     onAbort?: () => void;
-    onUnavailableSkill?: (item: PaletteItem) => void;
+    onUnavailableSkill?: (item: SkillPaletteItem) => void;
     /** Opens the structured review launcher for the built-in `/review` command. */
     onReviewLauncher?: () => void;
   };
 }
 
-export type PaletteItemHandler = (item: PaletteItem, ctx: PaletteApplyContext) => void;
-
 export function replaceRange(text: string, start: number, end: number, insert: string): string {
   return text.slice(0, start) + insert + text.slice(end);
 }
 
-const applySkillItem: PaletteItemHandler = (item, ctx) => {
+const applySkillItem = (
+  item: Extract<PaletteItem, { kind: 'skill' }>,
+  ctx: PaletteApplyContext,
+) => {
   const range = ctx.slashRange;
   if (!range) return;
-  if (item.availability?.status && item.availability.status !== 'available') {
+  if (item.availability.status !== 'available') {
     ctx.callbacks.onUnavailableSkill?.(item);
     return;
   }
-  const insert = `/skill:${item.canonicalName ?? item.name} `;
+  const insert = `/skill:${item.canonicalName} `;
   const next = replaceRange(ctx.editor.valueRef.current, range.start, range.end, insert);
   const pos = range.start + insert.length;
   ctx.editor.resetEditor({ nextText: next, caretOffset: pos, focus: true });
 };
 
-const applyCommandItem: PaletteItemHandler = (item, ctx) => {
+const applyCommandItem = (
+  item: Extract<PaletteItem, { kind: 'command' }>,
+  ctx: PaletteApplyContext,
+) => {
   const range = ctx.slashRange;
   if (!range) return;
   // Slash commands only run at position 0 (parent filtered already; guard for safety).
@@ -148,30 +152,34 @@ const applyCommandItem: PaletteItemHandler = (item, ctx) => {
   });
 };
 
-const applyAgentItem: PaletteItemHandler = (item, ctx) => {
+const applyAgentItem = (
+  item: Extract<PaletteItem, { kind: 'agent' }>,
+  ctx: PaletteApplyContext,
+) => {
   const range = ctx.slashRange;
   if (!range) return;
   // Agent switching is sentence-level; only at start of composer.
   if (range.start !== 0) return;
   if (!ctx.callbacks.onChatAgentChange) return;
 
-  // Strip the slash token from the editor before navigating; otherwise the next
-  // session boots with leftover `/` text.
+  // Strip only the slash token. The composer stays mounted across agent navigation,
+  // so the remaining draft, attachments, and context references are preserved.
   const v = ctx.editor.valueRef.current;
-  const next = v.slice(0, range.start) + v.slice(range.end);
+  const suffix = v.slice(range.end);
+  const next = v.slice(0, range.start) + (suffix.startsWith(' ') ? suffix.slice(1) : suffix);
   ctx.editor.resetEditor({ nextText: next, caretOffset: range.start });
-  ctx.attachments.clearAttachments();
-  ctx.callbacks.onChatAgentChange(item.name);
-};
-
-export const paletteItemHandlers: Record<PaletteItemKind, PaletteItemHandler> = {
-  skill: applySkillItem,
-  command: applyCommandItem,
-  agent: applyAgentItem,
+  ctx.callbacks.onChatAgentChange(item.agentId);
 };
 
 export function applyPaletteItem(item: PaletteItem, ctx: PaletteApplyContext): void {
-  const handler = paletteItemHandlers[item.kind];
-  if (!handler) return;
-  handler(item, ctx);
+  switch (item.kind) {
+    case 'skill':
+      applySkillItem(item, ctx);
+      return;
+    case 'command':
+      applyCommandItem(item, ctx);
+      return;
+    case 'agent':
+      applyAgentItem(item, ctx);
+  }
 }

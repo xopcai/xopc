@@ -48,6 +48,24 @@ const TOOL_ACTIVITY_CATALOG: Readonly<Record<string, ToolActivityDefinition>> = 
   memory_get: {
     category: 'memory', action: 'read', source: 'memory', sensitivity: 'personal', purpose: 'personal_context',
   },
+  knowledge_search: {
+    category: 'memory', action: 'search', source: 'memory', sensitivity: 'personal', purpose: 'personal_context',
+  },
+  knowledge_get: {
+    category: 'memory', action: 'read', source: 'memory', sensitivity: 'personal', purpose: 'personal_context',
+  },
+  knowledge_write: {
+    category: 'memory', action: 'write', source: 'memory', sensitivity: 'personal', purpose: 'personal_context',
+  },
+  user_context_search: {
+    category: 'memory', action: 'search', source: 'memory', sensitivity: 'personal', purpose: 'personal_context',
+  },
+  user_context_get: {
+    category: 'memory', action: 'read', source: 'memory', sensitivity: 'personal', purpose: 'personal_context',
+  },
+  user_context_update: {
+    category: 'memory', action: 'edit', source: 'memory', sensitivity: 'personal', purpose: 'personal_context',
+  },
   web_search: { category: 'web', action: 'search', source: 'internet', sensitivity: 'normal' },
   brave_search: { category: 'web', action: 'search', source: 'internet', sensitivity: 'normal' },
   image_query: { category: 'web', action: 'search', source: 'internet', sensitivity: 'normal' },
@@ -56,6 +74,7 @@ const TOOL_ACTIVITY_CATALOG: Readonly<Record<string, ToolActivityDefinition>> = 
   open_url: { category: 'navigation', action: 'open', source: 'internet', sensitivity: 'normal' },
   browser_use: { category: 'navigation', action: 'open', source: 'internet', sensitivity: 'normal' },
   grep: { category: 'code', action: 'search', source: 'workspace', sensitivity: 'normal' },
+  find: { category: 'code', action: 'search', source: 'workspace', sensitivity: 'normal' },
   glob: { category: 'code', action: 'search', source: 'workspace', sensitivity: 'normal' },
   find_files: { category: 'code', action: 'search', source: 'workspace', sensitivity: 'normal' },
   session_search: { category: 'other', action: 'search', source: 'runtime', sensitivity: 'normal' },

@@ -52,6 +52,7 @@ import {
 } from '@/components/markdown/streaming-render-metrics';
 import { useProgressiveStreamingMarkdown } from '@/features/chat/messages/use-progressive-streaming-markdown';
 import type { AssistantTurnActivityPresentation } from '@/features/chat/messages/assistant-turn-view-model';
+import type { ToolExecutionLabels } from '@/features/chat/messages/tool-friendly-title';
 import { getActivityTiming } from '@/features/chat/messages/activity-timing';
 import { assistantTextForDisplay } from '@/features/chat/messages/assistant-text-presentation';
 import { messages } from '@/i18n/messages';
@@ -561,13 +562,10 @@ export function ChunkedContent({
     openUrl: string;
     fetchUrl: string;
     unknownTool: string;
-    activityCompleted: string;
-    activityFailedCount: string;
     activityAnalysisComplete: string;
-    toolFailedImpact: string;
     rawThinking: string;
-    toolRunning: string;
     toolError: string;
+    toolActivity: ToolExecutionLabels;
     memoryActivity: MemoryActivityLabels;
   };
   clusterLabels: {

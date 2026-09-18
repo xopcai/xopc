@@ -7,6 +7,7 @@ import { ReadAloudDock } from '@/features/voice/read-aloud-dock';
 import { fetchCommandsCached } from '@/features/chat/palette/command-palette-api';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SkillDiscoveryWelcome } from '@/features/skills/skill-discovery-welcome';
+import { BrowserExtensionNudge } from '@/features/chat/browser/browser-extension-nudge';
 import { ChatComposer } from '@/features/chat/composer/chat-composer';
 import { ProjectEnvironmentPicker } from '@/features/chat/composer/project-environment-picker';
 import { useProjectSessionComposer } from '@/features/chat/composer/use-project-session-composer';
@@ -63,6 +64,7 @@ import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-st
 import { useChatRunPresenceStore } from '@/features/chat/session/chat-run-presence-store';
 import { AgentRunErrorBanner } from '@/features/chat/messages/agent-run-error-banner';
 import { parseAgentRunError } from '@/features/chat/messages/agent-run-error-parser';
+import { parseBrowserSetupRequired } from '@/features/chat/tool-results/browser-setup-required-parser';
 import { agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { showActivity } from '@/stores/activity-store';
@@ -195,6 +197,16 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
       workflowRunView &&
       ACTIVE_RUN_STATUSES.has(workflowRunView.run.status),
   );
+  const latestMessage = msgSlice.items.at(-1);
+  const latestMessageHasBrowserSetup = latestMessage?.role === 'assistant'
+    && latestMessage.content.some((block) => block.type === 'tool_use'
+      && block.name === 'browser_use'
+      && parseBrowserSetupRequired(block.details) !== null);
+  const showBrowserExtensionNudge = !embedded
+    && !stream.streaming
+    && !stream.sending
+    && latestMessage?.role === 'assistant'
+    && !latestMessageHasBrowserSetup;
 
   useEffect(() => {
     if (!chatConversationId) return;
@@ -1230,6 +1242,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                         ? handleForkAssistantTurn
                         : undefined
                     }
+                    trailingContent={<BrowserExtensionNudge enabled={showBrowserExtensionNudge} />}
                   />
                 </>
               )}

@@ -7,7 +7,12 @@ export async function doctorCli(): Promise<void> {
   console.log('Browser Control v2');
   console.log(`Driver: ${config.browser.driver.kind}`);
   if (!readiness) {
-    console.log('Status: ready');
+    if (config.browser.driver.kind === 'extension') {
+      console.log('Artifacts: ready');
+      console.log('Connection: not checked (use the Gateway browser status to verify the live extension endpoint)');
+    } else {
+      console.log('Status: ready');
+    }
     return;
   }
   console.error(`Status: ${readiness.hint.reason}`);

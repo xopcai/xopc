@@ -36,6 +36,24 @@ function written(source = sourceFileId): TranscriptStoredRow {
 }
 
 describe('turn outcome projector', () => {
+  it('does not downgrade a successful run for a recoverable tool failure', () => {
+    const outcome = projectTurnOutcome({
+      turnId: 'turn-1',
+      runStatus: 'success',
+      rows: [{
+        role: 'toolResult',
+        turnId: 'turn-1',
+        toolCallId: 'tool-1',
+        toolName: 'exec_command',
+        isError: true,
+        content: [{ type: 'text', text: 'Process exited with code 1' }],
+        timestamp: 1,
+      } as TranscriptStoredRow],
+    });
+
+    expect(outcome.status).toBe('succeeded');
+  });
+
   it('does not infer passing checks from command names or stale tool evidence', () => {
     const rows = [
       { ...toolResult('turn-1', { command: 'echo test', exitCode: 0 }), toolName: 'exec_command' },

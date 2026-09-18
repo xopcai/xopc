@@ -49,8 +49,9 @@ export function buildStepsRoundCompleteSummary(
   joinLabels: StepsClusterJoinLabels,
   language: StoredLanguage,
   noToolFallback: string,
+  semanticTitle?: (block: ToolUseContent) => string | null,
 ): string {
-  const line = summarizeClustersCompleted(visibleBlocks, doneLabels, joinLabels, language);
+  const line = summarizeClustersCompleted(visibleBlocks, doneLabels, joinLabels, language, semanticTitle);
   return line ?? noToolFallback;
 }
 
@@ -62,6 +63,7 @@ export function buildStepsRoundCompleteSummary(
 export function buildStepsRoundStreamingSummary(
   visibleBlocks: Array<ThinkingContent | ToolUseContent>,
   ingLabels: StepsClusterIngLabels,
+  semanticTitle?: (block: ToolUseContent) => string | null,
 ): string | null {
-  return summarizeClustersStreaming(visibleBlocks, ingLabels);
+  return summarizeClustersStreaming(visibleBlocks, ingLabels, semanticTitle);
 }

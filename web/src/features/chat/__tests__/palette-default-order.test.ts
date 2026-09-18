@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import type { PaletteItem } from '@/features/chat/palette/command-palette.types';
+import type { CommandCategory, PaletteItem } from '@/features/chat/palette/command-palette.types';
 import { paletteDefaultTiebreak } from '@/features/chat/palette/palette-default-order';
 
 function cmd(
   name: string,
-  category: NonNullable<PaletteItem['category']> = 'session',
+  category: CommandCategory = 'session',
 ): PaletteItem {
   return {
     kind: 'command',
@@ -12,6 +12,10 @@ function cmd(
     name,
     description: '',
     category,
+    aliases: [],
+    acceptsArgs: false,
+    acceptsContext: false,
+    examples: [],
   };
 }
 
@@ -22,6 +26,8 @@ function skill(name: string): PaletteItem {
     name,
     description: '',
     category: 'skill',
+    canonicalName: name,
+    availability: { status: 'available' },
   };
 }
 
