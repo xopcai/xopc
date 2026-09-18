@@ -488,12 +488,15 @@ export function VoiceSettingsPanel() {
       {group === 'listening' || group === 'service' || group === 'diagnostics' ? <VoiceSetup section={group} v={v} form={form} pending={dirty || autosave.status === 'saving' || Boolean(autosave.error)} apiKeyLabels={apiKeyLabels} sttProviders={sttProviders} onChange={updateForm} /> : null}
       {group === 'listening' ? <>
         <VoiceLanguageSection v={v} voice={form.voice} updateLanguageMode={updateVoiceLanguageMode} />
-        <label className="flex items-center justify-between gap-3 text-sm text-fg">{v.experience.pace}
-          <Select className={selectClassName()} value={String(form.voice.realtime.silenceDurationMs)} onChange={(e) => updateRealtime({ silenceDurationMs: Number(e.target.value) })}>
-            <SelectOption value="800">{v.experience.fast}</SelectOption><SelectOption value="1200">{v.experience.standard}</SelectOption><SelectOption value="2000">{v.experience.relaxed}</SelectOption>
-            {![800, 1200, 2000].includes(form.voice.realtime.silenceDurationMs) ? <SelectOption value={String(form.voice.realtime.silenceDurationMs)}>{form.voice.realtime.silenceDurationMs} ms</SelectOption> : null}
-          </Select>
-        </label>
+        <section className="rounded-xl bg-surface-hover/20 px-4 py-5 sm:px-5">
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,18rem)] sm:items-center">
+            <div className="text-sm font-semibold text-fg">{v.experience.pace}</div>
+            <Select className={selectClassName()} value={String(form.voice.realtime.silenceDurationMs)} onChange={(e) => updateRealtime({ silenceDurationMs: Number(e.target.value) })}>
+              <SelectOption value="800">{v.experience.fast}</SelectOption><SelectOption value="1200">{v.experience.standard}</SelectOption><SelectOption value="2000">{v.experience.relaxed}</SelectOption>
+              {![800, 1200, 2000].includes(form.voice.realtime.silenceDurationMs) ? <SelectOption value={String(form.voice.realtime.silenceDurationMs)}>{form.voice.realtime.silenceDurationMs} ms</SelectOption> : null}
+            </Select>
+          </div>
+        </section>
       </> : null}
       {group === 'input' ? <>
         <label className="flex items-center justify-between text-sm">{v.experience.captions}<input type="checkbox" role="switch" aria-checked={captions} className="ui-checkbox" checked={captions} onChange={(e) => setCaptions(e.target.checked)} /></label>

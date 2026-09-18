@@ -40,7 +40,7 @@ export function LogsFiltersSection({
   autoRefresh,
 }: Props) {
   return (
-    <section className="flex flex-col gap-3 rounded-xl bg-surface-hover/20 p-4" aria-label={L.filters}>
+    <section className="flex flex-col gap-4 rounded-xl bg-surface-hover/20 p-4 sm:p-5" aria-label={L.filters}>
       <div className="overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="min-w-[min(100%,36rem)]">
           <SlidingSegmented<LevelSegmentValue>
@@ -60,7 +60,7 @@ export function LogsFiltersSection({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+      <div className="grid gap-2 lg:grid-cols-[minmax(16rem,1fr)_minmax(12rem,16rem)_auto] lg:items-center">
         <label className="relative min-w-0 flex-1 sm:min-w-[12rem]">
           <span className="sr-only">{L.searchPlaceholder}</span>
           <Search
@@ -88,10 +88,7 @@ export function LogsFiltersSection({
           onChange={(e) => onModuleFilterChange(e.target.value)}
           aria-label={L.module}
           title={L.module}
-          className={cn(
-            selectTriggerClass,
-            'h-10 w-full min-w-0 rounded-md py-0 sm:w-[min(100%,14rem)] sm:shrink-0',
-          )}
+          className={cn(selectTriggerClass, 'h-10 w-full min-w-0 rounded-md py-0')}
         >
           <SelectOption value="">{L.allModules}</SelectOption>
           {modules.map((mod) => (
@@ -101,7 +98,7 @@ export function LogsFiltersSection({
           ))}
         </Select>
 
-        <div className="flex min-w-0 shrink-0 items-center gap-2">
+        <div className="flex min-w-0 shrink-0 items-center justify-end gap-2">
           <Button
             type="button"
             variant="secondary"

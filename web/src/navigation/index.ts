@@ -91,12 +91,11 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
     tabs: [
       'settingsModels',
       'settingsVoice',
-      'settingsComputerUse',
       'settingsSearch',
       'settingsAgentDefaults',
     ],
   },
-  { id: 'integrations', tabs: ['settingsAgentBrowser'] },
+  { id: 'integrations', tabs: ['settingsComputerUse', 'settingsAgentBrowser'] },
   {
     id: 'connection',
     tabs: ['settingsDevices', 'settingsTunnel', 'settingsShares'],
