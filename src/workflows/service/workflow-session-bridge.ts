@@ -74,6 +74,7 @@ export class WorkflowSessionBridge {
         workflowRunId: params.runId,
         workflowDefinitionId: params.definitionId,
         workflowGoal: params.goal,
+        deferVisibilityUntilOutput: true,
         ...(params.triggerSource ? { triggerSource: params.triggerSource } : {}),
         ...(params.parentConversationId ? { parentConversationId: params.parentConversationId } : {}),
       },
@@ -166,6 +167,7 @@ export class WorkflowSessionBridge {
 
     await store.updateMetadata(conversationId, {
       status: SessionStatus.ACTIVE,
+      hiddenFromSessionList: false,
     });
   }
 
