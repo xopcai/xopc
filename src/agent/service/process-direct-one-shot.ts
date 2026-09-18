@@ -112,7 +112,9 @@ export async function runProcessDirect(
             : {}),
         } as AgentMessage);
         if (input.origin.type === 'system' && input.origin.source === 'automation') {
-          await deps.sessionStore.updateMetadata(input.conversationId, { hiddenFromSessionList: false });
+          await deps.sessionStore.updateMetadata(input.conversationId, {
+            hiddenFromSessionList: false,
+          });
         }
         deps.onTurnComplete?.(input.conversationId, trimmed);
       }
@@ -155,6 +157,15 @@ export async function runProcessDirect(
       }
     })();
 
+    if (
+      input.origin.type === 'system'
+      && input.origin.source === 'automation'
+      && result.lastAssistantText?.trim()
+    ) {
+      await deps.sessionStore.updateMetadata(input.conversationId, {
+        hiddenFromSessionList: false,
+      });
+    }
     deps.onTurnComplete?.(input.conversationId, result.lastAssistantText);
     if (!result.ok) {
       throw new Error(result.errorMessage ?? 'Agent turn failed');

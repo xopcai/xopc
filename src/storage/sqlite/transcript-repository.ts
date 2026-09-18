@@ -49,6 +49,18 @@ function nextSeq(db: DatabaseSync, transcriptId: string): number {
   return (row.max_seq ?? 0) + 1;
 }
 
+function shouldRevealSessionForUserMessage(db: DatabaseSync, conversationId: string): boolean {
+  const row = db.prepare(`SELECT custom_data_json FROM sessions WHERE conversation_id = ?`)
+    .get(conversationId) as { custom_data_json?: string | null } | undefined;
+  if (!row?.custom_data_json) return true;
+  try {
+    const customData = JSON.parse(row.custom_data_json) as Record<string, unknown>;
+    return customData.deferVisibilityUntilOutput !== true;
+  } catch {
+    return true;
+  }
+}
+
 function insertEntry(
   db: DatabaseSync,
   params: {
@@ -145,7 +157,10 @@ export function appendTranscriptEntry(
     if (classifyStoredRow(persistedRow).entryKind === 'message') {
       const tokenDelta = opts?.tokenDelta ?? 0;
       const now = Date.now();
-      const hiddenUpdate = isUserMessageRow(persistedRow) ? `hidden_from_session_list = 0,` : '';
+      const hiddenUpdate = isUserMessageRow(persistedRow)
+        && shouldRevealSessionForUserMessage(db, conversationId)
+        ? `hidden_from_session_list = 0,`
+        : '';
       db.prepare(
         `UPDATE sessions SET
           message_count = message_count + 1,
@@ -354,7 +369,9 @@ export function replaceTranscriptRows(
     const llm = buildSessionContextForLlm(rows);
     const now = Date.now();
     const hasUserMessage = llm.some((message) => message.role === 'user');
-    const hiddenUpdate = hasUserMessage ? `hidden_from_session_list = 0,` : '';
+    const hiddenUpdate = hasUserMessage && shouldRevealSessionForUserMessage(db, conversationId)
+      ? `hidden_from_session_list = 0,`
+      : '';
     db.prepare(
       `UPDATE sessions SET
         message_count = ?,

@@ -89,13 +89,32 @@ import {
 
 import { automationScenarios, type AutomationTemplate } from './automation-scenarios';
 import { AutomationQuickCreate } from './automation-quick-create';
-import { automationHasExecutionIssue, latestAutomationRun } from './automation-result-state';
+import {
+  automationExecutionIssueMarker,
+  automationHasExecutionIssue,
+  latestAutomationRun,
+} from './automation-result-state';
 
 type CreateMode = 'blank' | 'draft' | 'quick';
 type AutomationFilter = 'all' | 'active' | 'paused' | 'system' | 'attention';
 type AutomationsMessages = MessageBundle['automations'];
 type CronMessages = MessageBundle['cron'];
 type RunEventLabels = AutomationsMessages['events'];
+
+const DISMISSED_EXECUTION_ISSUES_STORAGE_KEY = 'xopc.automations.dismissedExecutionIssues';
+
+function readDismissedExecutionIssues(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const value: unknown = JSON.parse(window.localStorage.getItem(DISMISSED_EXECUTION_ISSUES_STORAGE_KEY) ?? '{}');
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    return Object.fromEntries(
+      Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+    );
+  } catch {
+    return {};
+  }
+}
 
 function formatDate(ms: number | undefined, labels: AutomationsMessages, language: StoredLanguage): string {
   if (!ms) return labels.never;
@@ -283,6 +302,7 @@ export function AutomationsWorkspace({
   const [repairApproved, setRepairApproved] = useState(false);
   const [refreshBusy, setRefreshBusy] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [dismissedExecutionIssues, setDismissedExecutionIssues] = useState(readDismissedExecutionIssues);
 
   const automationsSwr = useSWR(
     ['automations', projectIdParam],
@@ -400,7 +420,30 @@ export function AutomationsWorkspace({
         ? selectedBrowserAutomation !== null && browserAutomationInputsComplete(selectedBrowserAutomation, form.browserAutomationInputs)
         : Boolean(form.instruction.trim()));
   const templates = useMemo(() => automationScenarios(labels), [labels]);
-  const executionIssues = userAutomations.filter((automation) => automationHasExecutionIssue(automation, userRuns));
+  const executionIssues = useMemo(
+    () => userAutomations.filter((automation) => automationHasExecutionIssue(automation, userRuns)),
+    [userAutomations, userRuns],
+  );
+  const hasUndismissedExecutionIssues = executionIssues.some((automation) => {
+    const marker = automationExecutionIssueMarker(automation, userRuns);
+    return marker !== null && dismissedExecutionIssues[automation.id] !== marker;
+  });
+
+  const dismissExecutionIssues = useCallback(() => {
+    setDismissedExecutionIssues((current) => {
+      const next = { ...current };
+      for (const automation of executionIssues) {
+        const marker = automationExecutionIssueMarker(automation, userRuns);
+        if (marker) next[automation.id] = marker;
+      }
+      try {
+        window.localStorage.setItem(DISMISSED_EXECUTION_ISSUES_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // Keep the dismissal for this page even when persistent storage is unavailable.
+      }
+      return next;
+    });
+  }, [executionIssues, userRuns]);
 
   useEffect(() => {
     if (filteredAutomations.length === 0) {
@@ -835,11 +878,22 @@ export function AutomationsWorkspace({
             <Button className="mt-4" variant="ghost" onClick={() => openCreate('draft')}>{labels.experience.custom}</Button>
           </section>
         ) : null}
-        {!initialLoading && executionIssues.length > 0 && filter !== 'system' ? (
-          <button type="button" onClick={() => setFilter('attention')} className="flex items-center gap-3 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-left focus-visible:ring-2 focus-visible:ring-accent">
-            <CircleAlert className="size-4 shrink-0 text-red-700 dark:text-red-300" aria-hidden />
-            <span className="min-w-0 text-sm text-fg"><span className="font-medium">{labels.experience.executionIssues} · {executionIssues.length}</span><span className="ml-2 text-fg-muted">{labels.experience.issuesDescription}</span></span>
-          </button>
+        {!initialLoading && hasUndismissedExecutionIssues && filter !== 'system' ? (
+          <div className="flex items-center rounded-lg border border-red-500/20 bg-red-500/5">
+            <button type="button" onClick={() => setFilter('attention')} className="flex min-w-0 flex-1 items-center gap-3 rounded-l-lg px-4 py-3 text-left focus-visible:ring-2 focus-visible:ring-accent">
+              <CircleAlert className="size-4 shrink-0 text-red-700 dark:text-red-300" aria-hidden />
+              <span className="min-w-0 text-sm text-fg"><span className="font-medium">{labels.experience.executionIssues} · {executionIssues.length}</span><span className="ml-2 text-fg-muted">{labels.experience.issuesDescription}</span></span>
+            </button>
+            <button
+              type="button"
+              onClick={dismissExecutionIssues}
+              className="mr-2 rounded-md p-2 text-fg-muted hover:bg-red-500/10 hover:text-fg focus-visible:ring-2 focus-visible:ring-accent"
+              aria-label={labels.close}
+              title={labels.close}
+            >
+              <X className="size-4" aria-hidden />
+            </button>
+          </div>
         ) : null}
         {initialLoading ? (
           <AutomationsPageSkeleton />

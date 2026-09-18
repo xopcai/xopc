@@ -6,6 +6,7 @@ import {
 } from '@xopcai/gateway-contract';
 
 import type { AutomationRun } from '../automations/domain/types.js';
+import { markdownNotificationPreview } from './plain-text.js';
 
 export type NotificationPlan = {
   dedupeKey: string;
@@ -36,7 +37,7 @@ function chatPlan(payload: unknown): NotificationPlan | null {
   };
   const sessionTitle = typeof event.sessionTitle === 'string' ? event.sessionTitle.trim().slice(0, 120) : '';
   const responsePreview = completed && typeof event.responsePreview === 'string'
-    ? Array.from(event.responsePreview.trim()).slice(0, 180).join('')
+    ? markdownNotificationPreview(event.responsePreview, 180)
     : '';
   return {
     dedupeKey: `${type}:${event.runId}`,

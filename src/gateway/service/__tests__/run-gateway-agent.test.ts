@@ -165,7 +165,7 @@ describe('runGatewayAgent', () => {
               message,
               assistantMessageEvent: {
                 type: 'text_delta',
-                delta: 'Here is the completed response with details.\nSecond line.',
+                delta: '## **Response complete**\n\n- Updated `api.ts`\n- See [release notes](https://example.com).',
               },
             };
             yield { type: 'message_end', message };
@@ -223,7 +223,7 @@ describe('runGatewayAgent', () => {
         conversationId,
         status: 'success',
         sessionTitle: 'Finish notifications',
-        responsePreview: 'Here is the completed response with details. Second line.',
+        responsePreview: 'Response complete • Updated api.ts • See release notes.',
         target: { kind: 'chat', conversationId },
       }),
     }]);

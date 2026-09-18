@@ -17,6 +17,7 @@ import {
 } from '../../utils/logger.js';
 import { getConversationRouting } from '../../routing/session-key.js';
 import { recordExplicitRelationshipFollowUp } from '../../user-context/relationship-continuity.js';
+import { markdownNotificationPreview } from '../../notifications/plain-text.js';
 import { resolveExecutionContext } from '../../tasks/execution-context.js';
 import { TaskRunCoordinator } from '../../tasks/task-run-coordinator.js';
 import {
@@ -388,13 +389,9 @@ export async function *runGatewayAgent(
     }
     if (webchatConversationId) {
       const metaAfter = await sessionIndex.getSessionMetadata(webchatConversationId).catch(() => undefined);
-      const normalizedResponse = terminalStatus === 'success'
-        ? mapper.getLastAssistantText().replace(/\s+/g, ' ').trim()
+      const responsePreview = terminalStatus === 'success'
+        ? markdownNotificationPreview(mapper.getLastAssistantText(), 180)
         : '';
-      const responseCharacters = Array.from(normalizedResponse);
-      const responsePreview = responseCharacters.length > 180
-        ? `${responseCharacters.slice(0, 179).join('')}…`
-        : normalizedResponse;
       if (metaAfter?.name) {
         emit('session.updated', { key: webchatConversationId, name: metaAfter.name });
       }

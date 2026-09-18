@@ -9,10 +9,13 @@ export async function prepareAutomationAgentSession(
 ): Promise<void> {
   await store.resolveTranscriptPath(input.conversationId, {
     metadata: {
-      // Only seed new sessions; the first persisted user message makes them visible.
+      // Only seed new sessions; automation output makes them visible.
       hiddenFromSessionList: true,
       name: input.automationName,
-      customData: { titleSource: 'provisional' },
+      customData: {
+        titleSource: 'provisional',
+        deferVisibilityUntilOutput: true,
+      },
       projectId: input.projectId,
       sourceChannel: 'automation',
       sourceChatId: `default:dm:${input.peerId}`,
