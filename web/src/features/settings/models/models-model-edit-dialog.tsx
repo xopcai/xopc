@@ -269,7 +269,7 @@ function ModelEditForm({
             {m.cancel}
           </Button>
         </Dialog.Close>
-        <Button type="button" className="bg-accent text-white hover:bg-accent/90" onClick={handleSave}>
+        <Button type="button" variant="primary" className="hover:bg-accent/90" onClick={handleSave}>
           {isNew ? m.addModelConfirm : m.saveModelConfirm}
         </Button>
       </div>

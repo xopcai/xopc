@@ -18,11 +18,7 @@ import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
-/**
- * First-run model / provider setup: modal so it appears regardless of chat route or session loading.
- * Chat page may still mount {@link OnboardingCard} only when the welcome overlay is shown; this shell
- * layer is the reliable entry point.
- */
+/** First-run model setup and work-understanding flow, mounted above every authenticated route. */
 export function OnboardingDialog() {
   const token = useGatewayStore((s) => s.conversationId);
   const language = useLocaleStore((s) => s.language);
@@ -87,7 +83,7 @@ export function OnboardingDialog() {
       <Dialog.Portal>
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[55] bg-scrim backdrop-blur-md" />
         <Dialog.Content
-          className="xopc-onboarding-dialog fixed inset-0 z-[56] overflow-hidden bg-surface-base outline-none"
+          className="xopc-onboarding-dialog app-chrome-shell fixed inset-0 z-[56] overflow-hidden outline-none"
           onPointerDownOutside={(e) => e.preventDefault()}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >

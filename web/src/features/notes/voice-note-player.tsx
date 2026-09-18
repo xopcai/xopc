@@ -78,7 +78,7 @@ export function VoiceNotePlayer({ noteId, attachment, transcript, className }: V
               className={cn(
                 'flex size-8 shrink-0 items-center justify-center rounded-full transition-colors',
                 isPlaying
-                  ? 'bg-accent text-white'
+                  ? 'bg-accent text-on-accent'
                   : 'bg-accent/10 text-accent hover:bg-accent/20',
               )}
               aria-label={isPlaying ? 'Pause' : 'Play'}

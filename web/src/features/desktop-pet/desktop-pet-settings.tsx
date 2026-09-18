@@ -256,7 +256,7 @@ export function DesktopPetSettings() {
             <button
               type="button"
               className={cn(
-                'inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-accent px-3 text-xs font-semibold text-white hover:bg-accent/90',
+                'inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-accent px-3 text-xs font-semibold text-on-accent hover:bg-accent/90',
                 interaction.press,
               )}
               onClick={openCreatePetChat}

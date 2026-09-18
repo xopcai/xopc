@@ -19,7 +19,7 @@ const copy = {
     replace: 'Change app', confirmReplace: 'Confirm switch to', apps: 'apps need connecting', preserved: 'Objective preserved', retry: 'Retry check', toolsUnavailable: 'App tools unavailable', toolsHint: 'The account is connected, but the tools needed for this task are unavailable. Retry the check without reconnecting.' },
 };
 const secondary = 'rounded-lg border border-edge px-3 py-1.5 text-sm text-fg hover:bg-surface-hover disabled:opacity-50';
-const primary = 'rounded-lg bg-accent px-3 py-1.5 text-sm text-white disabled:opacity-50';
+const primary = 'rounded-lg bg-accent px-3 py-1.5 text-sm text-on-accent disabled:opacity-50';
 
 export function ConnectionActionBar({ conversationId }: { conversationId: string }) {
   const { wait, isLoading, busy, error, act } = useConnectionWait(conversationId);

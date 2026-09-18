@@ -88,7 +88,7 @@ function ContextGroup({ title, icon: Icon, empty, items, selected, kind, onToggl
             const active = selected.some((ref) => ref.kind === kind && ref.id === item.id);
             return (
               <button key={item.id} type="button" className={cn('flex min-w-0 items-start gap-3 rounded-xl border p-3 text-left', active ? 'border-accent bg-accent-soft' : 'border-edge-subtle hover:bg-surface-hover')} aria-pressed={active} onClick={() => onToggle({ kind, id: item.id, role: kind === 'task' ? 'objective' : 'reference', title: item.title })}>
-                <span className={cn('mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border', active ? 'border-accent bg-accent text-white' : 'border-edge')}>{active ? <Check className="size-3.5" aria-hidden /> : null}</span>
+                <span className={cn('mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border', active ? 'border-accent bg-accent text-on-accent' : 'border-edge')}>{active ? <Check className="size-3.5" aria-hidden /> : null}</span>
                 <span className="min-w-0"><strong className="block truncate text-sm font-medium text-fg">{item.title}</strong>{item.subtitle ? <span className="mt-0.5 line-clamp-2 block text-xs text-fg-muted">{item.subtitle}</span> : null}</span>
               </button>
             );

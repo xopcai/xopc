@@ -128,7 +128,7 @@ export function WorkDiscoveryConnectorsStep({
         <p className="mx-auto mt-3 max-w-[36rem] text-[0.95rem] leading-7 text-fg-muted">{copy.connectorStepSubtitle}</p>
       </div>
 
-      <div className="mt-7 rounded-[1.75rem] border border-edge bg-surface-panel/75 p-3 shadow-surface backdrop-blur-xl sm:p-4">
+      <div className="mt-7 rounded-xl border border-edge bg-surface-panel p-3 shadow-surface sm:p-4">
         <div className="flex items-center justify-between gap-3 px-1 pb-3">
           <div>
             <h2 className="text-sm font-semibold text-fg">{copy.popularWorkServices}</h2>

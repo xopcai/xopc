@@ -156,7 +156,7 @@ export function DatePicker({
                     'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
                     outsideMonth && 'text-fg-disabled',
                     isToday && !isSelected && 'bg-accent-soft font-semibold text-accent-fg',
-                    isSelected && 'bg-accent font-semibold text-white hover:bg-accent-hover',
+                    isSelected && 'bg-accent font-semibold text-on-accent hover:bg-accent-hover',
                   )}
                   onClick={() => selectDate(dayValue)}
                 >
