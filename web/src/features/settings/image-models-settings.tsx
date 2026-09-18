@@ -316,7 +316,7 @@ export function ImageModelsSettingsPanel() {
 
   return (
     <div className="flex flex-col gap-4">
-      <section className="rounded-xl border border-edge bg-surface-base p-4">
+      <section className="rounded-xl bg-surface-hover/20 p-4">
         <div className="flex items-start gap-3">
           <div className="rounded-lg bg-accent/10 p-2 text-accent"><ImageIcon className="size-5" /></div>
           <div className="min-w-0 flex-1">
@@ -342,7 +342,7 @@ export function ImageModelsSettingsPanel() {
                 key={provider.id}
                 type="button"
                 onClick={() => chooseProvider(provider)}
-                className={`min-h-24 rounded-xl border p-4 text-left transition-colors ${selected ? 'border-accent bg-accent/5 ring-1 ring-accent/20' : 'border-edge bg-surface-base hover:border-edge-strong'}`}
+                className={`min-h-24 rounded-xl p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${selected ? 'bg-accent-soft shadow-surface' : 'bg-surface-base/55 hover:bg-surface-hover'}`}
               >
                 <span className="flex items-center justify-between gap-2">
                   <span className="flex min-w-0 items-center gap-2">
@@ -367,7 +367,7 @@ export function ImageModelsSettingsPanel() {
       </section>
 
       {selectedProvider ? (
-        <section className="rounded-xl border border-edge bg-surface-base p-4">
+        <section className="rounded-xl bg-surface-hover/20 p-4">
           <div className="grid gap-4 md:grid-cols-2">
             <label className="block text-xs font-medium text-fg-muted">
               {text.model}
@@ -433,7 +433,7 @@ export function ImageModelsSettingsPanel() {
             </span>
           </div> : null}
 
-          {selectedProvider.configFields.some((field) => !field.required) ? <details className="mt-4 rounded-lg border border-edge bg-surface-subtle px-3 py-2.5">
+          {selectedProvider.configFields.some((field) => !field.required) ? <details className="mt-4 rounded-lg bg-surface-base/55 px-3 py-2.5">
             <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-medium text-fg-muted">
               <SlidersHorizontal className="size-4" />{text.advanced}
             </summary>

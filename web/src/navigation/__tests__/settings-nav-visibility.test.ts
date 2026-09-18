@@ -15,12 +15,11 @@ const previousApi = window.electronAPI;
 afterEach(() => { window.electronAPI = previousApi; });
 
 describe('settings-nav-visibility', () => {
-  it.each(['darwin', 'win32', 'linux', undefined])('gates computer use navigation and deep links on %s', (platform) => {
+  it.each(['darwin', 'win32', 'linux', undefined])('keeps computer model navigation available on %s', (platform) => {
     window.electronAPI = platform ? { platform } as Window['electronAPI'] : undefined;
-    const supported = platform === 'darwin';
-    expect(isSettingsTabVisibleOnPlatform('settingsComputerUse')).toBe(supported);
-    expect(isSettingsPathVisibleOnPlatform('/settings/computer-use')).toBe(supported);
-    expect(isSettingsPathVisibleOnPlatform('/settings/computer-use/')).toBe(supported);
+    expect(isSettingsTabVisibleOnPlatform('settingsComputerUse')).toBe(true);
+    expect(isSettingsPathVisibleOnPlatform('/settings/computer-use')).toBe(true);
+    expect(isSettingsPathVisibleOnPlatform('/settings/computer-use/')).toBe(true);
     expect(isSettingsTabVisibleOnPlatform('settingsAgentBrowser')).toBe(true);
     expect(isSettingsPathVisibleOnPlatform('/settings/agent-browser')).toBe(true);
     expect(isSettingsPathVisibleOnPlatform('/settings/overview')).toBe(true);

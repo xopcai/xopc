@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { CheckCircle2, Download, ExternalLink, Laptop, PanelRight, Smartphone, X } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Download, ExternalLink, Laptop, PanelRight, Smartphone, X, type LucideIcon } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
@@ -50,6 +50,31 @@ export function DevicePairingWizard({ open, onOpenChange, onPaired, targetKind }
   </Dialog.Root>;
 }
 
+function DeviceChoice({ icon: Icon, title, hint, onClick }: {
+  icon: LucideIcon;
+  title: string;
+  hint: string;
+  onClick: () => void;
+}) {
+  return <button
+    type="button"
+    className="group flex min-h-18 w-full items-center gap-4 rounded-xl bg-surface-hover/45 px-4 py-3.5 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel"
+    onClick={onClick}
+  >
+    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-fg">
+      <Icon className="size-5" aria-hidden="true" />
+    </span>
+    <span className="min-w-0 flex-1">
+      <span className="block text-sm font-semibold text-fg">{title}</span>
+      <span className="mt-0.5 block text-xs leading-5 text-fg-muted">{hint}</span>
+    </span>
+    <ChevronRight
+      className="size-4 shrink-0 text-fg-disabled transition-transform group-hover:translate-x-0.5 group-hover:text-fg-muted"
+      aria-hidden="true"
+    />
+  </button>;
+}
+
 function DeviceKindChooser({ onChoose, onChooseLocalBrowser, onClose }: {
   onChoose: (target: DevicePairingTargetKind) => void;
   onChooseLocalBrowser: () => void;
@@ -59,30 +84,33 @@ function DeviceKindChooser({ onChoose, onChooseLocalBrowser, onClose }: {
   const copy = messages(language).endpointToolsSettings.deviceAccess;
   return <Dialog.Portal>
     <Dialog.Overlay className={cn('fixed inset-0 bg-scrim backdrop-blur-[1px]', SETTINGS_SHELL_OVERLAY_Z)} />
-    <Dialog.Content className={cn('fixed left-1/2 top-1/2 flex h-[min(460px,calc(100dvh-48px))] w-[min(520px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-popover', SETTINGS_SHELL_CONTENT_Z)}>
+    <Dialog.Content className={cn('fixed left-1/2 top-1/2 flex h-[min(28rem,calc(100dvh-2rem))] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-popover', SETTINGS_SHELL_CONTENT_Z)}>
       <header className="flex shrink-0 items-center justify-between border-b border-edge-subtle px-6 py-3">
         <span className="text-lg font-semibold tracking-tight text-fg">xopc</span>
         <button type="button" className="flex size-10 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover" aria-label={copy.cancel} onClick={onClose}><X className="size-4" /></button>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto px-8 py-7">
-        <Dialog.Title className="text-xl font-semibold tracking-tight text-fg">{copy.chooseTitle}</Dialog.Title>
-        <Dialog.Description className="mt-2 text-sm leading-relaxed text-fg-muted">{copy.chooseHint}</Dialog.Description>
-        <div className="mt-7 grid gap-3 sm:grid-cols-3">
-          <button type="button" className="rounded-xl border border-edge bg-surface-base p-5 text-left hover:border-edge-strong hover:bg-surface-hover" onClick={onChooseLocalBrowser}>
-            <Laptop className="size-5 text-accent" />
-            <span className="mt-4 block text-sm font-semibold text-fg">{copy.localBrowserTitle}</span>
-            <span className="mt-1 block text-xs leading-5 text-fg-muted">{copy.localBrowserHint}</span>
-          </button>
-          <button type="button" className="rounded-xl border border-edge bg-surface-base p-5 text-left hover:border-edge-strong hover:bg-surface-hover" onClick={() => onChoose('mobile')}>
-            <Smartphone className="size-5 text-accent" />
-            <span className="mt-4 block text-sm font-semibold text-fg">{copy.mobileTitle}</span>
-            <span className="mt-1 block text-xs leading-5 text-fg-muted">{copy.mobileHint}</span>
-          </button>
-          <button type="button" className="rounded-xl border border-edge bg-surface-base p-5 text-left hover:border-edge-strong hover:bg-surface-hover" onClick={() => onChoose('browser')}>
-            <PanelRight className="size-5 text-accent" />
-            <span className="mt-4 block text-sm font-semibold text-fg">{copy.remoteBrowserTitle}</span>
-            <span className="mt-1 block text-xs leading-5 text-fg-muted">{copy.remoteBrowserHint}</span>
-          </button>
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-6 sm:px-8">
+        <Dialog.Title className="text-lg font-semibold tracking-tight text-fg sm:text-xl">{copy.chooseTitle}</Dialog.Title>
+        <Dialog.Description className="mt-1.5 text-sm leading-6 text-fg-muted">{copy.chooseHint}</Dialog.Description>
+        <div className="mt-5 flex flex-col gap-2.5">
+          <DeviceChoice
+            icon={Laptop}
+            title={copy.localBrowserTitle}
+            hint={copy.localBrowserHint}
+            onClick={onChooseLocalBrowser}
+          />
+          <DeviceChoice
+            icon={Smartphone}
+            title={copy.mobileTitle}
+            hint={copy.mobileHint}
+            onClick={() => onChoose('mobile')}
+          />
+          <DeviceChoice
+            icon={PanelRight}
+            title={copy.remoteBrowserTitle}
+            hint={copy.remoteBrowserHint}
+            onClick={() => onChoose('browser')}
+          />
         </div>
       </div>
     </Dialog.Content>

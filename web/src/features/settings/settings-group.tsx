@@ -18,7 +18,7 @@ export function SettingsGroup({
       {title ? (
         <h2 className="mb-2 px-1 text-xs font-medium text-fg-muted">{title}</h2>
       ) : null}
-      <div className="divide-y divide-edge-subtle overflow-hidden rounded-xl border border-edge-subtle bg-surface-base">
+      <div className="flex flex-col gap-1 overflow-hidden rounded-xl bg-surface-hover/20 p-1 [&>*]:rounded-lg [&>*]:bg-surface-base/45">
         {children}
       </div>
       {footer ? (

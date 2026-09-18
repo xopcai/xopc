@@ -32,7 +32,7 @@ export function PlatformVoiceSettings({ disabled = false }: { disabled?: boolean
     } catch (error) { setError(error instanceof Error ? error.message : String(error)); await mutate(); }
     finally { setBusy(false); }
   };
-  return <section className="space-y-4 rounded-xl border border-edge p-4">
+  return <section className="space-y-4 rounded-xl bg-surface-hover/20 p-4">
     <div className="flex items-center justify-between gap-3"><h3 className="font-medium">{zh ? 'XOPC 托管语音模型' : 'XOPC managed voice models'}</h3><Button variant="secondary" disabled={busy || disabled || !data} onClick={() => void request()}>{zh ? '刷新目录' : 'Refresh catalog'}</Button></div>
     <p className="text-sm text-fg-muted">{zh ? '各设备共用此 Gateway 的模型设置，修改在下次调用生效。仅显示支持对应场景的已发布模型。' : 'Devices share this gateway’s selections. Changes apply to the next call. Only published models supporting each mode are shown.'}</p>
     {error || loadError ? <p role="alert" className="text-sm text-red-600">{error || String(loadError)}</p> : null}

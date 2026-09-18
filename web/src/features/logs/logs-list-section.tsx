@@ -40,7 +40,7 @@ export function LogsListSection({
     <>
       {loading && logs.length === 0 ? (
         <div
-          className="overflow-hidden rounded-xl bg-surface-panel shadow-surface"
+          className="overflow-hidden rounded-xl bg-surface-hover/20"
           aria-busy="true"
         >
           {Array.from({ length: 8 }).map((_, i) => (
@@ -55,7 +55,7 @@ export function LogsListSection({
       ) : null}
 
       {!loading && logs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-surface-base py-16 text-center">
+        <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-surface-hover/20 py-16 text-center">
           <FileText className="size-12 text-fg-subtle" strokeWidth={1.5} aria-hidden />
           <h2 className="text-base font-semibold tracking-tight text-fg">{L.noLogs}</h2>
           <p className="max-w-sm text-sm leading-relaxed text-fg-muted">{L.noLogsDescription}</p>
@@ -73,7 +73,7 @@ export function LogsListSection({
             {hasMore ? <span className="text-fg-subtle"> · {L.moreAvailable}</span> : null}
           </p>
           <ul
-            className="overflow-hidden rounded-xl bg-surface-panel font-mono text-sm leading-6 shadow-surface"
+            className="overflow-hidden rounded-xl bg-surface-hover/20 p-1 font-mono text-sm leading-6"
           >
             {logs.map((log) => {
               const lv = log.level ?? 'info';
@@ -81,14 +81,14 @@ export function LogsListSection({
               const phase = phaseLabel(log);
               const isError = lv === 'error' || lv === 'fatal';
               return (
-                <li key={logEntryKey(log)}>
+                <li key={logEntryKey(log)} className="rounded-lg bg-surface-base/45">
                   <button
                     type="button"
                     onClick={() => onSelectLog(log)}
                     className={cn(
                       'flex w-full min-w-0 items-center gap-3 px-3 py-2.5 text-left transition-colors duration-150 ease-out',
                       'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
-                      isError && 'border-l-2 border-l-red-500/70',
+                      isError && 'bg-red-500/5',
                     )}
                   >
                     <span className="w-[5.25rem] shrink-0 tabular-nums text-fg-subtle">

@@ -13,10 +13,10 @@ describe('buildRouteSeeds', () => {
     expect(computer).toBeDefined();
     expect(computer?.keywords).toContain('电脑操作');
   });
-  it.each(['win32', 'linux', undefined])('hides computer use search on %s but preserves browser automation', (platform) => {
+  it.each(['win32', 'linux', undefined])('keeps computer model search available on %s', (platform) => {
     window.electronAPI = platform ? { platform } as Window['electronAPI'] : undefined;
     const seeds = buildRouteSeeds('zh');
-    expect(seeds.find(seed => seed.path === '/settings/computer-use')).toBeUndefined();
+    expect(seeds.find(seed => seed.path === '/settings/computer-use')).toBeDefined();
     expect(seeds.find(seed => seed.path === '/settings/agent-browser')).toBeDefined();
   });
   it('maps browser settings to the standalone browser route', () => {

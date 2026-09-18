@@ -35,7 +35,7 @@ export function SettingsTabPanel<T extends string>({
       className={cn(
         'min-w-0',
         framed &&
-          'rounded-2xl border border-edge-subtle bg-surface-base px-4 py-5 sm:px-5',
+          'rounded-xl bg-surface-hover/20 px-4 py-5 sm:px-5',
         className,
       )}
     >
