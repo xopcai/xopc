@@ -7,7 +7,10 @@ import { afterEach, expect, it, vi } from 'vitest';
 vi.mock('swr', () => ({ default: (key: string) => ({ data: key === 'model-catalog'
   ? { sources: {}, references: [], sync: { refreshing: false } }
   : { capabilities: {
-    vision: { status: 'ready', selectionSource: 'explicit-config' },
+    vision: { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'vision' } },
+    'image-generation': { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'image' } },
+    stt: { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'stt' } },
+    tts: { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'tts' } },
     'computer-use': { status: 'unavailable', selectionSource: 'explicit-config', rejected: [{ provider: 'cloud', model: 'gui' }] },
   } }, isLoading: false }) }));
 vi.mock('../models-hub-cache', () => ({
@@ -34,4 +37,20 @@ it.each(['darwin', 'win32', 'linux', undefined])('shows computer setup and its w
   expect(Boolean(container.querySelector('a[href="/settings/computer-use"]'))).toBe(platform === 'darwin');
   expect(Boolean(container.querySelector('.lucide-triangle-alert'))).toBe(platform === 'darwin');
   expect(container.textContent).toMatch(/Vision|图片理解/);
+});
+
+it('links every available capability card to its configuration page', async () => {
+  window.electronAPI = undefined;
+  const container = document.createElement('div');
+  root = createRoot(container);
+  await act(async () => root!.render(<MemoryRouter><ModelCatalogStatus /></MemoryRouter>));
+
+  expect(container.querySelector('a[href="/settings/capabilities/models"]')?.textContent).toMatch(/Vision|图片理解/);
+  expect(container.querySelector('a[href="/settings/capabilities/image"]')?.textContent).toMatch(/Image generation|图片生成/);
+  const voiceCards = container.querySelectorAll('a[href="/settings/capabilities/voice"]');
+  expect(voiceCards).toHaveLength(2);
+  expect(Array.from(voiceCards, card => card.textContent)).toEqual(expect.arrayContaining([
+    expect.stringMatching(/STT/),
+    expect.stringMatching(/TTS/),
+  ]));
 });
