@@ -10,6 +10,7 @@ import {
   dialog,
   globalShortcut,
   ipcMain,
+  nativeTheme,
   powerMonitor,
   session,
   shell,
@@ -43,6 +44,7 @@ import { registerSearchIpc } from './ipc/search-ipc.js';
 import { registerTerminalIpc, stopAllTerminals } from './ipc/terminal-ipc.js';
 import {
   getElectronShellLanguage,
+  getElectronShellThemePreference,
   initElectronShellPreferences,
   isShellNotificationGranted,
   registerSystemSettingsIpc,
@@ -135,6 +137,8 @@ let currentStartupFailure: GatewayStartupFailure | null = null;
 
 const debugWindowLifecycle = process.env['XOPC_ELECTRON_DEBUG_LIFECYCLE'] === '1';
 const openBrowserOnRendererCrash = process.env['XOPC_ELECTRON_OPEN_BROWSER_ON_CRASH'] === '1';
+const LIGHT_WINDOW_BACKGROUND = '#f7f8fa';
+const DARK_WINDOW_BACKGROUND = '#14171c';
 
 function currentMenuMessages() {
   return getElectronMenuMessages(getElectronShellLanguage());
@@ -201,7 +205,7 @@ function startLocalCrashReporter(): void {
   }
 }
 
-function browserWindowChromeOptions(): Pick<
+function browserWindowChromeOptions(isDark: boolean): Pick<
   BrowserWindowConstructorOptions,
   'titleBarStyle' | 'titleBarOverlay' | 'autoHideMenuBar'
 > {
@@ -213,7 +217,7 @@ function browserWindowChromeOptions(): Pick<
       titleBarStyle: 'hidden',
       titleBarOverlay: {
         color: '#00000000',
-        symbolColor: '#475569',
+        symbolColor: isDark ? '#e2e8f0' : '#475569',
         height: 36,
       },
       autoHideMenuBar: true,
@@ -221,6 +225,19 @@ function browserWindowChromeOptions(): Pick<
   }
   // Linux keeps the native frame so menu bar and caption buttons follow the window manager.
   return {};
+}
+
+function syncMainWindowNativeTheme(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const isDark = nativeTheme.shouldUseDarkColors;
+  mainWindow.setBackgroundColor(isDark ? DARK_WINDOW_BACKGROUND : LIGHT_WINDOW_BACKGROUND);
+  if (process.platform === 'win32') {
+    mainWindow.setTitleBarOverlay({
+      color: '#00000000',
+      symbolColor: isDark ? '#e2e8f0' : '#475569',
+      height: 36,
+    });
+  }
 }
 
 const MACOS_WINDOW_BUTTON_X = 16;
@@ -680,13 +697,15 @@ function createWindow(): void {
   }
 
   const initialWindowState = resolveInitialMainWindowState();
+  const isDark = nativeTheme.shouldUseDarkColors;
   const win = new BrowserWindow({
     ...initialWindowState.bounds,
     minWidth: MAIN_WINDOW_MIN_WIDTH,
     minHeight: MAIN_WINDOW_MIN_HEIGHT,
     /** Allows renderer `Element.requestFullscreen()` (file preview) like Chromium. */
     fullscreenable: true,
-    ...browserWindowChromeOptions(),
+    backgroundColor: isDark ? DARK_WINDOW_BACKGROUND : LIGHT_WINDOW_BACKGROUND,
+    ...browserWindowChromeOptions(isDark),
     ...(!app.isPackaged && existsSync(devWindowIcon) ? { icon: devWindowIcon } : {}),
     webPreferences: {
       preload: join(import.meta.dirname, '../preload/index.cjs'),
@@ -916,7 +935,10 @@ function createWindow(): void {
     const embed = shouldEmbedGateway();
     try {
       if (embed || app.isPackaged) {
-        await loadMainWindowUrl(win, getLoadingPageDataUrl(app.getLocale()));
+        await loadMainWindowUrl(
+          win,
+          getLoadingPageDataUrl(getElectronShellLanguage(), getElectronShellThemePreference()),
+        );
       }
       const load = await resolveWindowLoad((detail) => {
         if (!win.isDestroyed()) {
@@ -1006,6 +1028,8 @@ app.whenReady().then(async () => {
   });
 
   await initElectronShellPreferences();
+  nativeTheme.themeSource = getElectronShellThemePreference();
+  nativeTheme.on('updated', syncMainWindowNativeTheme);
   const electronUserPaths = getElectronUserPaths();
   const gatewayConfig = await ensureGatewayConfigForElectron(electronUserPaths);
   registerGatewayConnection({ port: gatewayConfig.port, token: gatewayConfig.token });
@@ -1036,6 +1060,10 @@ app.whenReady().then(async () => {
   registerSystemSettingsIpc(ipcMain, {
     onLanguageChanged: (language) => {
       refreshElectronMenus(language);
+    },
+    onThemeChanged: (theme) => {
+      nativeTheme.themeSource = theme;
+      syncMainWindowNativeTheme();
     },
     isMainWindowFocused: () => Boolean(
       mainWindow

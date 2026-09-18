@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { CheckCircle2, ChevronRight, Download, ExternalLink, Laptop, PanelRight, Smartphone, X, type LucideIcon } from 'lucide-react';
+import { CheckCircle2, ChevronRight, Clock3, Download, ExternalLink, Laptop, PanelRight, Smartphone, X, type LucideIcon } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
@@ -58,7 +58,7 @@ function DeviceChoice({ icon: Icon, title, hint, onClick }: {
 }) {
   return <button
     type="button"
-    className="group flex min-h-18 w-full items-center gap-4 rounded-xl bg-surface-hover/45 px-4 py-3.5 text-left transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel"
+    className="group flex min-h-18 w-full cursor-pointer items-center gap-4 rounded-xl border border-edge bg-surface-panel px-4 py-3.5 text-left shadow-surface transition-[background-color,border-color,box-shadow,transform] hover:border-edge-strong hover:bg-surface-active hover:shadow-elevated active:translate-y-px active:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel motion-reduce:active:translate-y-0"
     onClick={onClick}
   >
     <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-fg">
@@ -188,6 +188,12 @@ function DevicePairingWizardContent({ targetKind, onClose, onPaired }: {
   const serverNow = clock + serverOffset.current;
   const expired = setup && serverNow >= setup.expiresAt && !request;
   const ended = request && ['expired', 'rejected', 'cancelled'].includes(request.status);
+  const expiresSoon = setup ? setup.expiresAt - serverNow < 60_000 : false;
+  const expiryLabel = setup
+    ? expiresSoon
+      ? `${Math.max(0, Math.ceil((setup.expiresAt - serverNow) / 1000))}s`
+      : f.valid
+    : '';
   const targetCopy = targetKind === 'mobile' ? {
     connect: copy.mobileScan, connectHint: copy.mobileScanHint, allowTitle: copy.mobileAllowTitle,
     success: copy.mobileSuccess, successHint: copy.mobileSuccessHint,
@@ -257,11 +263,31 @@ function DevicePairingWizardContent({ targetKind, onClose, onPaired }: {
             <p className="mt-3 text-xs text-fg-muted">{f.compare}</p>
             <details className="mt-6 text-xs text-fg-muted"><summary className="cursor-pointer py-2">{f.access}</summary><p>{f.accessHint}</p></details>
           </> : setup?.targetKind === 'mobile' ? <>
-            <div className="my-6 flex justify-center">{qr.data ? <img src={qr.data} alt={copy.qrAlt} width={216} height={216} className="size-[216px] max-w-full rounded-lg bg-white" /> : qr.error ? null : <Skeleton className="size-[216px]" />}</div>
+            <div className="my-6 flex flex-col items-center">
+              <div className="rounded-[1.75rem] border border-edge bg-surface-hover/55 p-2.5 shadow-surface">
+                <div className="rounded-[1.25rem] bg-white p-2 shadow-sm ring-1 ring-black/5">
+                  {qr.data
+                    ? <img src={qr.data} alt={copy.qrAlt} width={240} height={240} className="size-[240px] max-w-full rounded-xl bg-white" />
+                    : qr.error ? null : <Skeleton className="size-[240px] rounded-xl" />}
+                </div>
+              </div>
+              {!qr.error ? <p
+                className={cn('mt-4 inline-flex min-h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium', expiresSoon ? 'bg-warning-soft text-warning' : 'bg-surface-hover text-fg-muted')}
+                aria-live="polite"
+              >
+                <Clock3 className="size-3.5" aria-hidden="true" />
+                {expiryLabel}
+              </p> : null}
+            </div>
             {qr.error ? <p role="status" className="text-center text-sm text-warning">{f.qrFailed}</p> : null}
-            <p className="text-center text-xs text-fg-muted">{setup.expiresAt - serverNow < 60_000 ? `${Math.max(0, Math.ceil((setup.expiresAt - serverNow) / 1000))}s` : f.valid}</p>
             {qr.error ? <div className="mt-5"><CopyTextRow text={setup.universalLink} labels={{ copy: copy.copy, copied: copy.copied, copyFailed: m.clipboard.copyFailed }} /></div>
-              : <details className="mt-5 text-xs text-fg-muted"><summary className="cursor-pointer py-2">{f.fallback}</summary><CopyTextRow text={setup.universalLink} labels={{ copy: copy.copy, copied: copy.copied, copyFailed: m.clipboard.copyFailed }} /></details>}
+              : <details className="group mx-auto mt-1 w-full max-w-sm rounded-xl border border-edge bg-surface-panel text-xs text-fg-muted">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-3.5 transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent [&::-webkit-details-marker]:hidden">
+                  <span>{f.fallback}</span>
+                  <ChevronRight className="size-3.5 shrink-0 transition-transform group-open:rotate-90" aria-hidden="true" />
+                </summary>
+                <div className="border-t border-edge-subtle p-3"><CopyTextRow text={setup.universalLink} labels={{ copy: copy.copy, copied: copy.copied, copyFailed: m.clipboard.copyFailed }} /></div>
+              </details>}
           </> : setup ? <>
             <ol className="mt-7 space-y-2 text-sm leading-6 text-fg-muted">
               <li><span className="mr-2 text-fg-subtle">1.</span>{copy.browserConnectStep1}</li>

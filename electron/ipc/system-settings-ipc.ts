@@ -36,9 +36,12 @@ type ElectronShellPreferences = {
   notifyEnabled: boolean;
   notifySoundEnabled: boolean;
   language?: ElectronUiLanguage;
+  themePreference?: ElectronThemePreference;
   /** Best-effort macOS UNUserNotificationCenter status after probe / request. */
   notificationAuthStatus?: TccTriState;
 };
+
+export type ElectronThemePreference = 'light' | 'dark' | 'system';
 
 type EndpointNotificationInput = { title: string; body: string };
 type ProductNotificationInput = EndpointNotificationInput & { id: string; target: NotificationTarget };
@@ -75,6 +78,10 @@ async function readPrefsFile(): Promise<ElectronShellPreferences> {
       notifyEnabled: typeof j.notifyEnabled === 'boolean' ? j.notifyEnabled : defaultPrefs.notifyEnabled,
       notifySoundEnabled: typeof j.notifySoundEnabled === 'boolean' ? j.notifySoundEnabled : defaultPrefs.notifySoundEnabled,
       language: j.language === 'en' || j.language === 'zh' ? j.language : undefined,
+      themePreference:
+        j.themePreference === 'light' || j.themePreference === 'dark' || j.themePreference === 'system'
+          ? j.themePreference
+          : undefined,
       notificationAuthStatus:
         j.notificationAuthStatus === 'granted' || j.notificationAuthStatus === 'denied' || j.notificationAuthStatus === 'unknown'
           ? j.notificationAuthStatus
@@ -105,12 +112,27 @@ export function getElectronShellLanguage(): ElectronUiLanguage {
   return normalizeElectronUiLanguage(prefs.language, app.getLocale());
 }
 
+export function getElectronShellThemePreference(): ElectronThemePreference {
+  return prefs.themePreference ?? 'system';
+}
+
 async function setElectronShellLanguage(language: unknown): Promise<ElectronUiLanguage> {
   const next = normalizeElectronUiLanguage(language, app.getLocale());
   if (prefs.language === next) {
     return next;
   }
   prefs = { ...prefs, language: next };
+  await writePrefsFile(prefs);
+  return next;
+}
+
+async function setElectronShellThemePreference(theme: unknown): Promise<ElectronThemePreference> {
+  const next: ElectronThemePreference =
+    theme === 'light' || theme === 'dark' || theme === 'system' ? theme : 'system';
+  if (prefs.themePreference === next) {
+    return next;
+  }
+  prefs = { ...prefs, themePreference: next };
   await writePrefsFile(prefs);
   return next;
 }
@@ -620,6 +642,7 @@ export function registerSystemSettingsIpc(
   ipcMain: IpcMain,
   options?: {
     onLanguageChanged?: (language: ElectronUiLanguage) => void;
+    onThemeChanged?: (theme: ElectronThemePreference) => void;
     isMainWindowFocused?: () => boolean;
     navigateMainWindow?: (route: string) => void;
   },
@@ -633,6 +656,24 @@ export function registerSystemSettingsIpc(
     assertTrustedRenderer(event);
     return getElectronShellLanguage();
   });
+
+  ipcMain.handle('electron-theme:get', (event): ElectronThemePreference => {
+    assertTrustedRenderer(event);
+    return getElectronShellThemePreference();
+  });
+
+  ipcMain.handle(
+    'electron-theme:set',
+    async (event: IpcMainInvokeEvent, theme: unknown): Promise<{ ok: true; theme: ElectronThemePreference }> => {
+      assertTrustedRenderer(event);
+      const before = getElectronShellThemePreference();
+      const next = await setElectronShellThemePreference(theme);
+      if (next !== before) {
+        options?.onThemeChanged?.(next);
+      }
+      return { ok: true, theme: next };
+    },
+  );
 
   ipcMain.handle(
     'electron-locale:set',
