@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  isTaskDestructiveCommand,
   DEFAULT_RESET_TRIGGERS,
   matchResetTriggers,
   resolveResetTriggers,
@@ -44,6 +45,16 @@ describe('matchResetTriggers', () => {
     const m = matchResetTriggers('/fresh start', ['/fresh']);
     expect(m.resetTriggered).toBe(true);
     expect(m.bodyStripped).toBe('start');
+  });
+});
+
+describe('isTaskDestructiveCommand', () => {
+  it.each(['/new', '/NEW prompt', '/reset', '/restart', '/clear', '/archive'])('blocks %s', (value) => {
+    expect(isTaskDestructiveCommand(value)).toBe(true);
+  });
+
+  it.each(['/help', '/compact', 'explain /clear'])('allows %s', (value) => {
+    expect(isTaskDestructiveCommand(value)).toBe(false);
   });
 });
 

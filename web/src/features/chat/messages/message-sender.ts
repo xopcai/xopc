@@ -304,6 +304,8 @@ export type MessagingCallbacks = {
     definitionId: string;
     parentConversationId?: string;
   }) => void;
+  /** A slash command changed persisted model/thinking/session settings. */
+  onSessionConfigUpdated?: () => void;
   onResult: (payload: AgentStreamRunEndPayload) => void;
   onError: (msg: string) => void;
 };
@@ -731,6 +733,9 @@ export class MessageSender {
         if (outcome) cb?.onTurnOutcome?.(outcome);
         break;
       }
+      case 'session_config_updated':
+        cb?.onSessionConfigUpdated?.();
+        break;
       case 'tts_audio':
         cb?.onTtsAudio?.({
           uri: String(payload.uri || ''),

@@ -96,7 +96,14 @@ export async function tryRunSlashCommand(
     return { matched: false, aggregatedText: '' };
   }
   if (!commandRegistry.has(parsed.command)) {
-    return { matched: false, aggregatedText: '' };
+    if (parsed.command.startsWith('skill:')) {
+      return { matched: false, aggregatedText: '' };
+    }
+    return {
+      matched: true,
+      aggregatedText: `Unknown command: /${parsed.command}\nType /help to see available commands.`,
+      command: parsed.command,
+    };
   }
   const command = commandRegistry.findByName(parsed.command);
   if (options?.sourceContexts?.length && !command?.acceptsContext) {

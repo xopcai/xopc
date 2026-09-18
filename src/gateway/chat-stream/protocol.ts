@@ -115,6 +115,7 @@ export type TurnDiffEvent = ChatStreamEnvelope<
   { messageId: string; files: string[]; diff: string; added: number; removed: number }
 >;
 export type TurnOutcomeEvent = ChatStreamEnvelope<'turn_outcome', TurnOutcome>;
+export type SessionConfigUpdatedEvent = ChatStreamEnvelope<'session_config_updated', Record<string, never>>;
 export type ReviewStartEvent = ChatStreamEnvelope<
   'review_start',
   { messageId: string; reviewId: string; target: string; stage: 'preparing' | 'reviewing' }
@@ -191,6 +192,7 @@ export type ChatStreamEvent =
   | TaskPlanUpdatedEvent
   | TurnDiffEvent
   | TurnOutcomeEvent
+  | SessionConfigUpdatedEvent
   | ReviewStartEvent
   | ReviewDeltaEvent
   | ReviewEndEvent

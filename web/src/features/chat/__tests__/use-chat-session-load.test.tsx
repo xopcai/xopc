@@ -63,6 +63,54 @@ describe('useChatSessionLoad', () => {
     }
   });
 
+  it('resets /new in place instead of creating another project session', async () => {
+    vi.mocked(openNewChatHandoff).mockClear();
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    const resetSession = vi.fn(async () => ({ ok: true, reset: true }));
+    const detachForNewConversation = vi.fn();
+    let resetCurrentSession!: ReturnType<typeof useChatSessionLoad>['resetCurrentSession'];
+
+    function Harness() {
+      ({ resetCurrentSession } = useChatSessionLoad({
+        sessionMgrRef: { current: {
+          resetSession,
+          loadSessionAgentConfig: vi.fn(async () => { throw new Error('not needed'); }),
+        } as unknown as SessionManager },
+        routeConversationIdRef: { current: conversationId },
+        sendingRef: { current: false },
+        streamingRef: { current: false },
+        loadingSessionRef: { current: false },
+        messagesLenRef: { current: 1 },
+        thinkingSupportGenRef: { current: 0 },
+        navigateToSession: vi.fn(),
+        resolveAgentIdForPost: () => 'main',
+        detachForNewConversation,
+        conversationId,
+        sessionAgentId: 'main',
+        currentProjectId: 'project-with-dirty-checkout',
+        hasMore: false,
+      }));
+      return null;
+    }
+
+    try {
+      useChatSessionStore.getState().setCommittedSnapshot(conversationId, {
+        messages: [{ role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: 1 }],
+        hasMore: false,
+      });
+      await act(async () => root.render(<Harness />));
+      await act(async () => resetCurrentSession());
+
+      expect(resetSession).toHaveBeenCalledWith(conversationId);
+      expect(openNewChatHandoff).not.toHaveBeenCalled();
+      expect(detachForNewConversation).toHaveBeenCalledOnce();
+      expect(useChatSessionStore.getState().sessions[conversationId]?.messages).toEqual([]);
+    } finally {
+      act(() => root.unmount());
+    }
+  });
+
   it('preserves a run error during a background transcript refresh', async () => {
     const container = document.createElement('div');
     document.body.append(container);

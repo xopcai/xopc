@@ -34,6 +34,17 @@ The session-management follow-up replaces the inline history list with an indepe
 
 ## Test stories
 
+### RN Chat audit follow-up (2026-09-18, user approved)
+
+Implement the reviewed differences in order, then perform a separate correctness/security/performance review. No Gateway schema changes or Expo edits. Preserve paired-device data.
+
+1. Display contract: port RN user-text scrubbing to `common/chatDisplay.ets`, compare shared fixtures, wire history and message actions without mutating stored content.
+2. History/scroll: automatic top pagination, concurrency/error guards, row-offset anchoring, preserve loaded pages on snapshot refresh, virtualized rows with identity-safe rendering.
+3. Actions/audio: neutral secondary action styling, copy-code action, right-aligned user actions, unified pause/resume/retry, audio deduplication.
+4. Attachments: composer image previews, full-resolution bounded image preview, Markdown preview, safe sharing/download, bounded request dedup/cache with Gateway isolation and lifecycle tests. Do not enable arbitrary active HTML without sandboxing.
+5. Stream/render: replace full JSON clones with typed copy-on-write projection, stable Markdown rendering identities, test previous snapshot immutability and rich state transitions.
+6. Verification/review: host fixtures, debug/release builds, lint, emulator UI fixtures and non-mutating physical journeys where available; record incomplete capabilities explicitly rather than marking full parity from build success.
+
 ### Rich Chat completion (2026-09-18)
 
 User requested deep scenario parity, including thinking, tools, deliverables and images. Continue under existing autonomous authorization. Source of truth: Expo `session-message-parser`, `assistant-turn-view-model`, `AssistantStepsBlock`, `ToolUseBlock`, `AssistantDeliverablesCard`, `AttachmentRenderer` and gateway-contract / agent-stream-client. No backend or Expo edits planned.

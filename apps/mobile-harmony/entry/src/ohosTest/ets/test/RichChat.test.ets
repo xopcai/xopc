@@ -27,6 +27,10 @@ struct RichChatFixture {
         const updated = JSON.parse(JSON.stringify(this.row)) as XopcChatRow;
         const call = updated.blocks?.find((block): boolean => block.call?.id === 'read')?.call;
         if (call) call.result = 'Reference updated.';
+        if (updated.id === 'stable-paragraph') {
+          updated.text = 'A streamed paragraph continues without replacing its identity.';
+          updated.blocks = [{ id: 'same-block', kind: 'text', text: updated.text, presentation: 'answer' }];
+        }
         this.row = refreshChatRow(updated);
       })
       if (this.row.live) {
@@ -70,6 +74,21 @@ function silentWav(): string {
 
 export default function richChatTest(): void {
   describe('XopcRichChat', (): void => {
+    it('updatesStreamingMarkdownWithAStableBlockIdentity', 0, async (): Promise<void> => {
+      const delegator = abilityDelegatorRegistry.getAbilityDelegator();
+      const driver = Driver.create();
+      await delegator.startAbility({ bundleName: 'ai.xopc.mobile', abilityName: 'EntryAbility' });
+      await driver.waitForComponent(ON.id('connect-title'), 10000);
+      const ui = (await window.getLastWindow((await delegator.getCurrentTopAbility()).context)).getUIContext();
+      const row: XopcChatRow = { id: 'stable-paragraph', role: 'assistant', text: 'A streamed paragraph', blocks: [{ id: 'same-block', kind: 'text', text: 'A streamed paragraph', presentation: 'answer' }] };
+      const content = new ComponentContent(ui, wrapBuilder(fixtureBuilder), { row } as FixtureArgs);
+      await ui.getPromptAction().openCustomDialog(content, { autoCancel: false });
+      try {
+        await driver.waitForComponent(ON.text('A streamed paragraph'), 5000);
+        await (await driver.findComponent(ON.id('fixture-refresh'))).click();
+        await driver.waitForComponent(ON.text('A streamed paragraph continues without replacing its identity.'), 5000);
+      } finally { await ui.getPromptAction().closeCustomDialog(content); content.dispose(); }
+    }, 30000);
     it('preservesExpandedStepsAndToolDetailsAcrossSnapshotReplacement', 0, async (): Promise<void> => {
       const delegator = abilityDelegatorRegistry.getAbilityDelegator();
       const driver = Driver.create();

@@ -5,7 +5,16 @@ interface XopcCommandInput { command: string; cwd?: string; }
 interface XopcToolEventDetails { kind?: string; }
 
 export function reduceChatStream(previous: XopcChatRow | undefined, event: string, payload: XopcStreamPayload, runId: string): XopcChatRow {
-  const row: XopcChatRow = previous ? JSON.parse(JSON.stringify(previous)) as XopcChatRow
+  // Copy mutable shells only. Tool payloads and media bytes are immutable inputs;
+  // serializing the entire accumulated reply per token makes long turns quadratic.
+  const row: XopcChatRow = previous ? { id: previous.id, role: previous.role, text: previous.text,
+    thinking: previous.thinking, tools: previous.tools, toolCalls: previous.toolCalls, refs: previous.refs, outcome: previous.outcome,
+    turnId: previous.turnId, live: previous.live, progress: previous.progress, sourceIds: previous.sourceIds,
+    media: previous.media?.slice(), blocks: previous.blocks?.map((block: XopcChatBlock): XopcChatBlock => ({
+      id: block.id, kind: block.kind, text: block.text, segmentId: block.segmentId, presentation: block.presentation,
+      active: block.active, file: block.file, review: block.review, plan: block.plan,
+      call: block.call ? { id: block.call.id, name: block.call.name, input: block.call.input, result: block.call.result,
+        isError: block.call.isError, status: block.call.status, details: block.call.details } : undefined })) }
     : { id: 'live:' + runId, role: 'assistant', text: '', blocks: [], live: true };
   const blocks = row.blocks || [];
   const settleThinking = (): void => { blocks.forEach((block: XopcChatBlock): void => { if (block.kind === 'thinking') block.active = false; }); };

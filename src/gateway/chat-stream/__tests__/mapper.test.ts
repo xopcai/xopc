@@ -8,6 +8,12 @@ function mapper() {
 }
 
 describe('ChatStreamMapper', () => {
+  it('forwards session configuration invalidation events', () => {
+    const m = mapper();
+    expect(m.map({ type: 'session_config_updated' })).toEqual([
+      expect.objectContaining({ type: 'session_config_updated', payload: {} }),
+    ]);
+  });
   it('publishes only summaries that a producer explicitly marks for the pet', () => {
     expect(createPetFeedback('success', { publicSummary: '  Tests passed  ' })).toMatchObject({
       sensitivity: 'public',

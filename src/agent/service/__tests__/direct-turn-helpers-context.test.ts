@@ -72,4 +72,14 @@ describe('slash command source context policy', () => {
       expect.any(Object),
     );
   });
+
+  it('returns an explicit receipt for unknown commands but preserves skill tokens', async () => {
+    const deps = { commandHandler: { executeCommandAndAggregateReply: vi.fn() }, log: { warn: vi.fn() } };
+    const unknown = await tryRunSlashCommand(deps, commandContext, '/does-not-exist');
+    const skill = await tryRunSlashCommand(deps, commandContext, '/skill:weather Paris');
+
+    expect(unknown).toMatchObject({ matched: true, command: 'does-not-exist' });
+    expect(unknown.aggregatedText).toContain('Unknown command');
+    expect(skill.matched).toBe(false);
+  });
 });

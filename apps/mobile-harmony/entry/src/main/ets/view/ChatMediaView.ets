@@ -1,15 +1,21 @@
 import { image } from '@kit.ImageKit';
+import { common } from '@kit.AbilityKit';
 import { fileIo as fs } from '@kit.CoreFileKit';
 import { util } from '@kit.ArkTS';
 import { XopcHistoryMedia } from '../model/chat';
 import { readChatMedia, saveChatMedia } from '../service/chatMedia';
 import { XopcChatMediaPlayback } from '../service/chatMediaPlayback';
+import { shareChatMedia } from '../service/chatMediaShare';
+import { XopcMarkdownView } from './MarkdownView';
 
 @ComponentV2
 export struct XopcChatMediaView {
   @Param file: XopcHistoryMedia = { id: '', name: '', type: '', mimeType: '', size: 0, uri: '' };
   @Param conversationId: string = '';
+  @Param draftPreview: boolean = false;
   @Local picture?: image.PixelMap;
+  @Local previewPicture?: image.PixelMap;
+  @Local pictureRatio: number = 1;
   @Local expanded: boolean = false;
   @Local error: string = '';
   @Local busy: boolean = false;
@@ -39,6 +45,7 @@ export struct XopcChatMediaView {
     this.clearPlayback();
   }
   private async clearPlayback(): Promise<void> {
+    this.previewPicture?.release(); this.previewPicture = undefined;
     try { this.controller.stop(); } catch (_) {}
     const path = this.playbackPath; this.playbackPath = '';
     this.playbackReady = false; this.playing = false; this.playTime = 0; this.playDuration = 0;
@@ -51,7 +58,23 @@ export struct XopcChatMediaView {
     const sourceIdentity = this.sourceKey();
     if (this.file.mimeType.startsWith('image/') && !this.picture) await this.load();
     if (sourceIdentity !== this.sourceKey()) return;
-    if (this.picture) { this.zoom = 1; this.expanded = true; return; }
+    if (this.picture) {
+      this.zoom = 1; this.expanded = true;
+      const generation = this.generation;
+      try {
+        const bytes = await readChatMedia(this.file, this.conversationId);
+        if (generation !== this.generation || !this.expanded) return;
+        const source = image.createImageSource(bytes);
+        try {
+          const info = await source.getImageInfo();
+          const scale = Math.min(1, 4096 / Math.max(info.size.width, info.size.height), Math.sqrt(8 * 1024 * 1024 / (info.size.width * info.size.height)));
+          const picture = await source.createPixelMap({ desiredSize: { width: Math.max(1, Math.round(info.size.width * scale)), height: Math.max(1, Math.round(info.size.height * scale)) } });
+          if (generation !== this.generation || !this.expanded) { await picture.release(); return; }
+          this.previewPicture?.release(); this.previewPicture = picture;
+        } finally { await source.release(); }
+      } catch (_) { /* The existing thumbnail remains usable when full preview fails. */ }
+      return;
+    }
     if (!this.previewable() || this.file.mimeType.startsWith('image/')) return;
     const context = this.getUIContext().getHostContext(); if (!context) return;
     this.sourceIdentity = this.sourceKey();
@@ -75,7 +98,7 @@ export struct XopcChatMediaView {
     finally { if (generation === this.generation) this.busy = false; }
   }
   private previewable(): boolean {
-    return /^(image|audio|video|text)\//.test(this.file.mimeType) || /\.(md|txt|csv|json|log)$/i.test(this.file.name);
+    return /^(image|audio|video|text)\//.test(this.file.mimeType) || /\.(md|markdown|txt|csv|json|log)$/i.test(this.file.name);
   }
   private timeLabel(seconds: number): string {
     const time = Math.max(0, Math.floor(seconds));
@@ -94,6 +117,7 @@ export struct XopcChatMediaView {
       const source = image.createImageSource(bytes);
       try {
         const info = await source.getImageInfo();
+        this.pictureRatio = info.size.width / Math.max(1, info.size.height);
         const scale = Math.min(1, 1024 / Math.max(info.size.width, info.size.height));
         const picture = await source.createPixelMap({ desiredSize: { width: Math.max(1, Math.round(info.size.width * scale)), height: Math.max(1, Math.round(info.size.height * scale)) } });
         if (generation !== this.generation) { await picture.release(); return; }
@@ -110,10 +134,19 @@ export struct XopcChatMediaView {
     catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
     finally { if (generation === this.generation) this.busy = false; }
   }
+  private async share(): Promise<void> {
+    const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    if (!context || this.busy) return;
+    const generation = this.generation;
+    this.busy = true; this.error = ''; this.failedAction = 'share';
+    try { await shareChatMedia(context, this.file, this.conversationId); }
+    catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
+    finally { if (generation === this.generation) this.busy = false; }
+  }
   build() {
     Column({ space: 8 }) {
       if (this.picture) {
-        Image(this.picture).width('100%').height(200).objectFit(ImageFit.Contain).borderRadius(12)
+        Image(this.picture).width(this.draftPreview ? 120 : '100%').height(this.draftPreview ? 100 : 200).objectFit(ImageFit.Contain).borderRadius(12)
           .id('chat-image-' + this.file.id).accessibilityText(this.file.name).onClick((): void => { this.openPreview(); })
       } else if (this.file.mimeType.startsWith('image/') && !this.error) {
         Column() {}.width('100%').height(160).borderRadius(12).backgroundColor($r('app.color.grouped'))
@@ -125,11 +158,16 @@ export struct XopcChatMediaView {
           Button($r('app.string.chat_preview')).height(44).fontSize(12).fontColor($r('app.color.accent')).backgroundColor(Color.Transparent)
             .id('chat-preview-' + this.file.id).enabled(!this.busy && !!(this.file.uri || this.file.workspaceRelativePath)).onClick((): void => { this.openPreview(); })
         }
-        Button($r('app.string.download')).height(44).fontSize(12).enabled(!this.busy && !!(this.file.uri || this.file.workspaceRelativePath)).onClick((): void => { this.save(); })
+        if (!this.draftPreview) {
+          Button($r('app.string.chat_share')).height(44).fontSize(12).backgroundColor(Color.Transparent).fontColor($r('app.color.secondary'))
+            .enabled(!this.busy && !!(this.file.uri || this.file.workspaceRelativePath)).onClick((): void => { this.share(); })
+          Button($r('app.string.download')).height(44).fontSize(12).backgroundColor(Color.Transparent).fontColor($r('app.color.secondary'))
+            .enabled(!this.busy && !!(this.file.uri || this.file.workspaceRelativePath)).onClick((): void => { this.save(); })
+        }
       }.width('100%')
       if (this.error) {
         Text(this.error === 'INVALID_MEDIA_OR_TOO_LARGE' ? $r('app.string.chat_media_too_large') : $r('app.string.chat_media_failed')).fontSize(12).fontColor($r('app.color.danger'))
-        Button($r('app.string.refresh')).onClick((): void => { if (this.failedAction === 'save') this.save(); else this.openPreview(); })
+        Button($r('app.string.refresh')).backgroundColor($r('app.color.grouped')).fontColor($r('app.color.secondary')).onClick((): void => { if (this.failedAction === 'save') this.save(); else if (this.failedAction === 'share') this.share(); else this.openPreview(); })
       }
     }.width('100%').onVisibleAreaChange([0.1], (visible: boolean): void => { if (visible && !this.attempted) this.load(); })
       .bindSheet($$this.expanded, this.preview, { height: this.file.mimeType.startsWith('audio/') ? 280 : '90%', dragBar: true, onDisappear: (): void => { this.clearPlayback(); } })
@@ -140,16 +178,17 @@ export struct XopcChatMediaView {
       Text(this.file.name).fontSize(15).fontColor($r('app.color.foreground')).maxLines(2)
       if (this.error || this.audioPlayer.error) { Text($r('app.string.chat_media_failed')).fontSize(13).fontColor($r('app.color.danger')) }
       if (this.picture) {
-        Scroll() { Image(this.picture).width((this.zoom * 100) + '%').aspectRatio(1).objectFit(ImageFit.Contain) }
+        Scroll() { Image(this.previewPicture || this.picture).width((this.zoom * 100) + '%').aspectRatio(this.pictureRatio).objectFit(ImageFit.Contain) }
           .width('100%').layoutWeight(1).scrollable(ScrollDirection.FREE)
         Row({ space: 8 }) {
-          Button('−').width(44).height(44).onClick((): void => { this.zoom = Math.max(1, this.zoom - 0.5); })
-          Button('+').width(44).height(44).onClick((): void => { this.zoom = Math.min(3, this.zoom + 0.5); })
+          Button('−').width(44).height(44).backgroundColor($r('app.color.grouped')).fontColor($r('app.color.secondary')).onClick((): void => { this.zoom = Math.max(1, this.zoom - 0.5); })
+          Button('+').width(44).height(44).backgroundColor($r('app.color.grouped')).fontColor($r('app.color.secondary')).onClick((): void => { this.zoom = Math.min(3, this.zoom + 0.5); })
         }
       } else if (this.playbackPath && this.file.mimeType.startsWith('audio/')) {
         Row({ space: 12 }) {
           Button(this.audioPlayer.state === 'playing' ? $r('app.string.pause') : $r('app.string.chat_media_play'))
             .id(this.audioPlayer.state === 'playing' ? 'chat-media-pause' : 'chat-media-play').height(44)
+            .backgroundColor($r('app.color.grouped')).fontColor($r('app.color.secondary'))
             .enabled(['prepared', 'playing', 'paused', 'completed'].includes(this.audioPlayer.state))
             .onClick((): void => { this.audioPlayer.toggle(); })
           Text(this.timeLabel(this.audioPlayer.position)).id('chat-media-position').fontSize(14).fontColor($r('app.color.secondary'))
@@ -169,14 +208,17 @@ export struct XopcChatMediaView {
         Row({ space: 12 }) {
           Button(this.playing ? $r('app.string.pause') : $r('app.string.chat_media_play'))
             .id(this.playing ? 'chat-media-pause' : 'chat-media-play').height(44).enabled(this.playbackReady && !this.error)
+            .backgroundColor($r('app.color.grouped')).fontColor($r('app.color.secondary'))
             .onClick((): void => { this.togglePlayback(); })
           Text(this.timeLabel(this.playTime)).id('chat-media-position').fontSize(14).fontColor($r('app.color.secondary'))
           if (this.playbackReady) { Text('/ ' + this.timeLabel(this.playDuration)).id('chat-media-duration').fontSize(14).fontColor($r('app.color.secondary')) }
         }.width('100%')
+      } else if (/\.(md|markdown)$/i.test(this.file.name) || this.file.mimeType === 'text/markdown') {
+        Scroll() { XopcMarkdownView({ content: this.previewText, conversationId: this.conversationId }) }.layoutWeight(1).width('100%')
       } else {
         Scroll() { Text(this.previewText).id('chat-media-text').fontSize(14).fontFamily('monospace').fontColor($r('app.color.foreground')).copyOption(CopyOptions.InApp) }.layoutWeight(1).width('100%')
       }
-      Button($r('app.string.chat_close')).id('chat-media-close').height(44).onClick((): void => { this.expanded = false; this.clearPlayback(); })
+      Button($r('app.string.chat_close')).id('chat-media-close').height(44).backgroundColor($r('app.color.grouped')).fontColor($r('app.color.secondary')).onClick((): void => { this.expanded = false; this.clearPlayback(); })
     }.id('chat-media-preview').width('100%').height('100%').padding(16)
   }
 }

@@ -3,6 +3,11 @@
   "platform": "harmony",
   "status": "in_progress",
   "updated_at": "2026-09-18",
+  "chat_audit_followup": {
+    "status": "in_progress",
+    "evidence": "RN display scrub, top pagination/offset guards, retained overlapping history, neutral actions/pause-resume/copy-code, draft/full image and Markdown previews, bounded media cache/file sharing, virtualized history and immutable streaming updates implemented. 275 host tests / 43 files pass; Debug, Release and ohosTest builds pass; CodeLinter empty. Self-review corrections and remaining implementation gaps are recorded in apps/mobile-harmony/docs/chat-parity-checklist.md.",
+    "device_gate": "No HDC targets. Existing emulator requires license confirmation requested from the user; new native fixture is built but not run. No installation or physical acceptance this pass."
+  },
   "execution_order": ["4.1.1", "4.1.2", "4.2.1", "4.2.2", "4.3.1", "4.4.1", "4.5.1", "4.6.1", "4.7.1"],
   "subtasks": [
     { "id": "4.1.1", "status": "completed", "evidence": "API 26 HAP built, installed and launched on Pura 90 Pro emulator 127.0.0.1:5555" },

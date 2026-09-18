@@ -202,6 +202,7 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
     onSessionThinkingLevelChange,
     onSessionWorkingDirectoryChange,
     createNewSession,
+    resetCurrentSession,
   } = useChatSessionLoad({
     sessionMgrRef,
     routeConversationIdRef,
@@ -263,7 +264,7 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
       fq,
       applyLoadedSessionSnapshot,
       loadSessionById,
-      createNewSession,
+      resetCurrentSession,
       pollSessionNameAfterTurn,
     });
 

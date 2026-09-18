@@ -158,7 +158,7 @@ const ttsCommand: CommandDefinition = {
     switch (arg) {
       case 'on':
       case 'enable': {
-        const success = await ctx.updateConfig?.('tts.enabled', true);
+        const success = await ctx.updateConfig?.('messages.tts.enabled', true);
         const base = success
           ? '✅ TTS enabled. Use `/tts always` or `/tts inbound` to set trigger mode.'
           : '❌ Failed to enable TTS.';
@@ -170,7 +170,7 @@ const ttsCommand: CommandDefinition = {
 
       case 'off':
       case 'disable': {
-        const success = await ctx.updateConfig?.('tts.enabled', false);
+        const success = await ctx.updateConfig?.('messages.tts.enabled', false);
         return {
           content: success
             ? '✅ TTS disabled.'
@@ -183,10 +183,10 @@ const ttsCommand: CommandDefinition = {
       case 'inbound':
       case 'tagged': {
         const mode = arg as TTSAutoMode;
-        const success = await ctx.updateConfig?.('tts.trigger', mode);
+        const success = await ctx.updateConfig?.('messages.tts.trigger', mode);
         if (success && !isEnabled) {
           // Also enable TTS if setting a trigger mode
-          await ctx.updateConfig?.('tts.enabled', true);
+          await ctx.updateConfig?.('messages.tts.enabled', true);
         }
         const base = success
           ? `✅ TTS trigger mode set to *${mode}*${!isEnabled ? ' and TTS enabled' : ''}.`
@@ -198,7 +198,7 @@ const ttsCommand: CommandDefinition = {
       }
 
       case 'never': {
-        const success = await ctx.updateConfig?.('tts.trigger', 'off');
+        const success = await ctx.updateConfig?.('messages.tts.trigger', 'off');
         return {
           content: success
             ? '✅ TTS trigger mode set to *off*.'
@@ -266,7 +266,7 @@ const ttsCommand: CommandDefinition = {
               success: false,
             };
           }
-          const success = await ctx.updateConfig?.('tts.provider', provider);
+          const success = await ctx.updateConfig?.('messages.tts.provider', provider);
           const base = success
             ? `✅ TTS provider set to *${provider}*.`
             : '❌ Failed to set TTS provider.';
@@ -279,7 +279,7 @@ const ttsCommand: CommandDefinition = {
         if (subcommand === 'voice' && subarg) {
           const voice = subarg;
           const provider = currentProvider;
-          const success = await ctx.updateConfig?.(`tts.${provider}.voice`, voice);
+          const success = await ctx.updateConfig?.(`messages.tts.providers.${provider}.voice`, voice);
           return {
             content: success
               ? `✅ TTS voice set to *${voice}* for ${provider}.`

@@ -1,9 +1,10 @@
 import { XopcChatRepository } from '../repository/chatRepository';
 import { realtimeClient } from '../service/realtimeClient';
-import { XopcChatRow, XopcSessionItem, XopcStreamEvent, XopcChatAttachment, XopcContextRef, XopcQueueState, XopcHistoryMedia } from '../model/chat';
+import { XopcChatRow, XopcSessionItem, XopcStreamEvent, XopcChatAttachment, XopcContextRef, XopcQueueState, XopcHistoryMedia, XopcMessage, XopcHistory } from '../model/chat';
+import { dedupeChatHistory, chatHistoryOverlap } from '../common/chatHistory';
 import { chatInputIdentity } from '../common/attachments';
 import { XopcEvent } from '../model/realtime';
-import { historyRows, mergeHistoryToolResults } from '../common/chatProtocol';
+import { historyRows } from '../common/chatProtocol';
 import { mergeAssistantRows, chatAttachments } from '../common/chatRichContent';
 import { reduceChatStream } from '../common/chatStream';
 
@@ -32,6 +33,7 @@ export class XopcChatViewModel {
   private repository: XopcChatRepository = new XopcChatRepository();
   private selection: number = 0;
   private historyRequest: number = 0;
+  private historyMessages: XopcMessage[] = [];
   private olderPending: boolean = false;
   private transcriptId?: string;
   private before: string = '';
@@ -123,7 +125,7 @@ export class XopcChatViewModel {
     if (this.runId && XopcChatViewModel.owner === this) realtimeClient.unsubscribe('run:' + this.runId);
     this.selection++; this.historyRequest++; this.olderPending = false;
     this.selectedId = id; this.rows = []; this.runId = ''; this.streaming = ''; this.thinking = ''; this.tool = '';
-    this.liveRow = undefined;
+    this.liveRow = undefined; this.historyMessages = [];
     this.transcriptId = undefined; this.title = ''; this.agentId = ''; this.projectId = ''; this.status = ''; this.hasOlder = false;
     this.pendingId = ''; this.pendingContent = ''; this.before = ''; this.error = ''; this.loading = true;
     const selection = this.selection;
@@ -173,16 +175,26 @@ export class XopcChatViewModel {
     try {
       const result = await this.repository.history(this.selectedId, before);
       if (selection !== this.selection || request !== this.historyRequest) return;
-      const rows = historyRows(result, before || 'latest');
-      this.rows = mergeAssistantRows(older ? mergeHistoryToolResults(rows.concat(this.rows)) : rows);
+      // Validate before touching retained pages or their cursor.
+      historyRows(result, before || 'latest');
+      const sameTranscript = !!this.transcriptId && this.transcriptId === result.session.transcriptId;
+      const overlap = !older && sameTranscript ? chatHistoryOverlap(this.historyMessages, result.session.messages) : -1;
+      const preserveCursor = !older && overlap >= 0;
+      this.historyMessages = dedupeChatHistory(older && sameTranscript
+        ? result.session.messages.concat(this.historyMessages)
+        : preserveCursor ? this.historyMessages.slice(0, overlap).concat(result.session.messages) : result.session.messages);
+      const combined: XopcHistory = { session: { key: result.session.key, messages: this.historyMessages }, pagination: result.pagination };
+      this.rows = mergeAssistantRows(historyRows(combined));
       if (!older && this.snapshotMode) { this.liveRow = undefined; this.streaming = ''; this.thinking = ''; this.tool = ''; }
       this.title = result.session.name ?? '';
       this.agentId = result.session.agentId ?? '';
       this.projectId = result.session.projectId ?? '';
       this.status = result.session.status ?? '';
       this.transcriptId = result.session.transcriptId;
-      this.before = result.pagination.nextBeforeCursor ?? '';
-      this.hasOlder = result.pagination.hasMore && this.before.length > 0;
+      if (!preserveCursor) {
+        this.before = result.pagination.nextBeforeCursor ?? '';
+        this.hasOlder = result.pagination.hasMore && this.before.length > 0;
+      }
     } catch (error) { if (selection === this.selection && request === this.historyRequest) this.error = (error as Error).message; }
     finally { if (older && selection === this.selection) this.olderPending = false; }
   }
