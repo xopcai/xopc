@@ -34,6 +34,7 @@ export type BrowserExtensionStatus = {
   bridgeHeld?: boolean;
   refCount?: number;
   transport?: 'gateway-realtime';
+  setupState?: 'not_installed' | 'installed_not_connected' | 'connected';
   error?: string;
 };
 

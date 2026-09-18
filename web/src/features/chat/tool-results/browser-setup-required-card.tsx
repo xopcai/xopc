@@ -1,4 +1,4 @@
-import { Cloud, Globe, MonitorPlay, Puzzle, Terminal } from 'lucide-react';
+import { Cloud, Globe, Loader2, MonitorPlay, Puzzle, Terminal } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,7 @@ import type { BrowserSetupRequiredPayload } from '@/features/chat/tool-results/b
 import { useLocaleStore } from '@/stores/locale-store';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { useBrowserExtensionSetup } from '@/features/chat/browser/use-browser-extension-setup';
 
 const DRIVER_ICON = {
   extension: Puzzle,
@@ -22,6 +23,9 @@ export function BrowserSetupRequiredCard({ payload }: { payload: BrowserSetupReq
   const Icon = DRIVER_ICON[payload.driver] ?? Globe;
   const title = m.browserSetupRequiredTitle;
   const reasonCopy = m.browserSetupRequiredReasons[payload.reason] ?? m.browserSetupRequiredReasons.generic;
+  const extensionSetup = useBrowserExtensionSetup(payload.driver === 'extension');
+  const canManageExtension = payload.driver === 'extension'
+    && extensionSetup.status?.localManagementAvailable === true;
 
   return (
     <section
@@ -50,15 +54,28 @@ export function BrowserSetupRequiredCard({ payload }: { payload: BrowserSetupReq
         </div>
       </div>
       <div className="flex flex-wrap items-center justify-end gap-2">
+        {canManageExtension ? (
+          <Button
+            type="button"
+            variant="primary"
+            className="h-8 px-3 py-1.5 text-xs"
+            disabled={extensionSetup.busy}
+            onClick={() => void extensionSetup.prepareAndOpen()}
+          >
+            {extensionSetup.busy ? <Loader2 className="size-3.5 animate-spin" /> : null}
+            {extensionSetup.installed ? m.browserSetupRequiredOpenCta : m.browserSetupRequiredInstallCta}
+          </Button>
+        ) : null}
         <Button
           type="button"
-          variant="primary"
+          variant={canManageExtension ? 'ghost' : 'primary'}
           className="h-8 px-3 py-1.5 text-xs"
           onClick={() => navigate(payload.deepLink)}
         >
           {m.browserSetupRequiredCta}
         </Button>
       </div>
+      {extensionSetup.error ? <p className="text-xs text-danger" role="alert">{extensionSetup.error}</p> : null}
       {payload.detail ? (
         <details className="group min-w-0 text-xs">
           <summary className="cursor-pointer select-none text-amber-800/80 underline-offset-2 hover:text-amber-900 dark:text-amber-200/80 dark:hover:text-amber-100">

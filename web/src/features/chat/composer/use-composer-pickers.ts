@@ -10,7 +10,7 @@ import type { ComposerContextRef, ComposerSendHandler, ResetEditorOptions, WireA
 import { useDismissOnOutsideClick } from '@/features/chat/composer/use-dismiss-on-outside-click';
 import type { AtMentionItem } from '@/features/chat/palette/at-mention-api';
 import { recordRecentAtPath } from '@/features/chat/palette/at-mention-recent';
-import type { PaletteItem } from '@/features/chat/palette/command-palette.types';
+import type { PaletteItem, SkillPaletteItem } from '@/features/chat/palette/command-palette.types';
 import { formatFilePathForWire } from '@/features/chat/palette/file-wire-pattern';
 import {
   browseDirFromQuery,
@@ -41,7 +41,7 @@ export interface UseComposerPickersOptions {
   currentAgentId?: string;
   contextRefs: ComposerContextRef[];
   onAddContextRef: (ref: ComposerContextRef) => void;
-  onUnavailableSkill?: (item: PaletteItem) => void;
+  onUnavailableSkill?: (item: SkillPaletteItem) => void;
   onReviewLauncher?: () => void;
   /** When runBusy and command is `acceptsArgs=false` non-abort: queue the command. */
   onAddPendingFollowUp?: (text: string, atts?: WireAttachment[], contextRefs?: ComposerContextRef[]) => void | Promise<void>;
@@ -320,7 +320,7 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
       isActive: () => paletteRef.current.open && !isComposingRef.current,
       handleKey: (e) => {
         const p = paletteRef.current;
-        if (p.items.length > 0) {
+        if (p.flatItems.length > 0) {
           if (e.key === 'ArrowDown') {
             e.preventDefault();
             p.onNavigate('down');
@@ -333,7 +333,7 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
           }
           if ((e.key === 'Enter' || e.key === 'Tab') && !e.shiftKey) {
             e.preventDefault();
-            const item = p.items[p.selectedIndex];
+            const item = p.flatItems[p.selectedIndex];
             if (!item) return true;
             // Disabled row (e.g. queue full): consume the key so the global Enter
             // doesn't send the editor draft, but do nothing else — tooltip already

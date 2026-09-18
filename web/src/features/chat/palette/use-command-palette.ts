@@ -11,7 +11,12 @@ import {
 } from '@/features/settings/agents/agent-display-names';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
-import type { PaletteItem, SlashRange } from '@/features/chat/palette/command-palette.types';
+import type {
+  PaletteItem,
+  PaletteItemKind,
+  PaletteSection,
+  SlashRange,
+} from '@/features/chat/palette/command-palette.types';
 import { FILE_WIRE_TAIL_BODY } from '@/features/chat/palette/file-wire-pattern';
 import { paletteDefaultTiebreak } from '@/features/chat/palette/palette-default-order';
 import { useAsyncResource } from '@/lib/use-async-resource';
@@ -84,11 +89,6 @@ function atFileTokenSpanContainingIndex(text: string, index: number): { start: n
   }
   return null;
 }
-
-/** Max rows when filtering (flat list, by relevance). */
-const MAX_FLAT_PALETTE_ITEMS = 20;
-/** When grouped (empty query), rows per section before "Show N more". */
-const GROUPED_INITIAL_PER_SECTION = 3;
 
 /** Slash token body after the leading `/` looks like a filesystem path, not a skill name. */
 function looksLikePathQuery(query: string): boolean {
@@ -178,19 +178,21 @@ export function paletteItemMatchRank(item: PaletteItem, q: string): number | nul
       return 5;
     }
   }
-  const desc = (item.description ?? '').toLowerCase();
+  const desc = item.description.toLowerCase();
   if (desc.includes(needle)) {
     return 100;
   }
-  if ((item.category ?? '').toLowerCase().includes(needle)) {
+  if (item.category.toLowerCase().includes(needle)) {
     return 101;
   }
   if (item.kind === 'skill' && (item.source ?? '').toLowerCase().includes(needle)) {
     return 102;
   }
-  for (const term of item.searchTerms ?? []) {
-    if (term.toLowerCase().includes(needle)) {
-      return 103;
+  if (item.kind === 'skill') {
+    for (const term of item.searchTerms ?? []) {
+      if (term.toLowerCase().includes(needle)) {
+        return 103;
+      }
     }
   }
   return null;
@@ -199,6 +201,51 @@ export function paletteItemMatchRank(item: PaletteItem, q: string): number | nul
 function clampPaletteIndex(index: number, length: number): number {
   if (length === 0) return 0;
   return Math.min(index, length - 1);
+}
+
+export function buildPaletteSections(
+  allItems: PaletteItem[],
+  options: {
+    query: string;
+    value: string;
+    commandsAllowed: boolean;
+    agentsAllowed: boolean;
+  },
+): { sections: PaletteSection[]; flatItems: PaletteItem[] } {
+  const { query, value, commandsAllowed, agentsAllowed } = options;
+  const unfiltered = query.trim() === '';
+  const alreadyPicked = listSkillNamesInWire(value);
+  const scored: Array<{ item: PaletteItem; rank: number }> = [];
+
+  for (const item of allItems) {
+    if (item.kind === 'command' && !commandsAllowed) continue;
+    if (item.kind === 'agent' && !agentsAllowed) continue;
+    if (item.kind === 'skill' && alreadyPicked.has(item.canonicalName)) continue;
+    if (item.kind === 'skill' && unfiltered && item.availability.status !== 'available') continue;
+    const rank = paletteItemMatchRank(item, query);
+    if (rank !== null) scored.push({ item, rank });
+  }
+
+  scored.sort((a, b) => {
+    const aUnavailableSkill = a.item.kind === 'skill' && a.item.availability.status !== 'available';
+    const bUnavailableSkill = b.item.kind === 'skill' && b.item.availability.status !== 'available';
+    if (aUnavailableSkill !== bUnavailableSkill) return aUnavailableSkill ? 1 : -1;
+    if (a.rank !== b.rank) return a.rank - b.rank;
+    return paletteDefaultTiebreak(a.item, b.item);
+  });
+
+  const orderedItems = scored.map((entry) => entry.item);
+  const sections: PaletteSection[] = [];
+  const skills = orderedItems.filter((item) => item.kind === 'skill');
+  const commands = orderedItems.filter((item) => item.kind === 'command');
+  const agents = orderedItems.filter((item) => item.kind === 'agent');
+  if (skills.length > 0) sections.push({ kind: 'skill', items: skills });
+  if (commands.length > 0) sections.push({ kind: 'command', items: commands });
+  if (agents.length > 0) sections.push({ kind: 'agent', items: agents });
+
+  const flatItems: PaletteItem[] = [];
+  for (const section of sections) flatItems.push(...section.items);
+  return { sections, flatItems };
 }
 
 export function useCommandPalette(
@@ -213,10 +260,6 @@ export function useCommandPalette(
 ) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [skillsVersion, setSkillsVersion] = useState(0);
-  /** Grouped (empty) palette: each section can expand independently after "Show N more". */
-  const [groupedSkillsExpanded, setGroupedSkillsExpanded] = useState(false);
-  const [groupedCommandsExpanded, setGroupedCommandsExpanded] = useState(false);
-  const [groupedAgentsExpanded, setGroupedAgentsExpanded] = useState(false);
   const language = useLocaleStore((s) => s.language);
 
   const slashRange = useMemo(
@@ -242,23 +285,19 @@ export function useCommandPalette(
     return () => window.removeEventListener('config-reload', onConfigReload);
   }, []);
 
-  if (
-    !paletteActive &&
-    (groupedSkillsExpanded || groupedCommandsExpanded || groupedAgentsExpanded)
-  ) {
-    setGroupedSkillsExpanded(false);
-    setGroupedCommandsExpanded(false);
-    setGroupedAgentsExpanded(false);
-  }
-
   const itemsResource = useAsyncResource(
     async () => {
-      const [commands, skillsPayload, agentsPayload] = await Promise.all([
+      const [commandsResult, skillsResult, agentsResult] = await Promise.allSettled([
         fetchCommandsCached(),
         getChatSkillsCached(options?.currentAgentId, options?.conversationId),
-        fetchChatAgents().catch(() => null),
+        fetchChatAgents(),
       ]);
-      const commandItems: PaletteItem[] = commands.map((c) => ({
+      const failedKinds: PaletteItemKind[] = [];
+      if (skillsResult.status === 'rejected') failedKinds.push('skill');
+      if (commandsResult.status === 'rejected') failedKinds.push('command');
+      if (agentsResult.status === 'rejected') failedKinds.push('agent');
+
+      const commandItems: PaletteItem[] = (commandsResult.status === 'fulfilled' ? commandsResult.value : []).map((c) => ({
         kind: 'command' as const,
         id: `cmd:${c.id}`,
         name: c.name,
@@ -267,8 +306,9 @@ export function useCommandPalette(
         aliases: c.aliases,
         acceptsArgs: c.acceptsArgs,
         acceptsContext: c.acceptsContext,
+        examples: c.examples,
       }));
-      const skillItems: PaletteItem[] = skillsPayload.skills.map((s) => {
+      const skillItems: PaletteItem[] = (skillsResult.status === 'fulfilled' ? skillsResult.value.skills : []).map((s) => {
         const presentation = resolveSkillPresentation(s, language);
         return {
           kind: 'skill' as const,
@@ -288,11 +328,13 @@ export function useCommandPalette(
       });
       // Agents: only when there is more than one (matches header `showChatAgentSelector`).
       const agentsMessages = messages(language).agentsSettings;
+      const agentsPayload = agentsResult.status === 'fulfilled' ? agentsResult.value : null;
       const agentItems: PaletteItem[] =
         agentsPayload && agentsPayload.items.length > 1
           ? agentsPayload.items.map((a) => ({
               kind: 'agent' as const,
               id: `agent:${a.id}`,
+              agentId: a.id,
               name: agentListDisplayName(a, agentsMessages),
               description: agentListDisplayDescription(a, agentsMessages),
               category: 'agent',
@@ -300,12 +342,16 @@ export function useCommandPalette(
               aliases: [a.id, ...(a.name ? [a.name] : [])],
             }))
           : [];
-      return [...skillItems, ...commandItems, ...agentItems];
+      return { items: [...skillItems, ...commandItems, ...agentItems], failedKinds };
     },
     [language, options?.currentAgentId, options?.conversationId, skillsVersion],
-    { enabled: paletteActive, initial: [] as PaletteItem[], errorData: [] },
+    {
+      enabled: paletteActive,
+      initial: { items: [] as PaletteItem[], failedKinds: [] as PaletteItemKind[] },
+      errorData: { items: [] as PaletteItem[], failedKinds: [] as PaletteItemKind[] },
+    },
   );
-  const allItems = itemsResource.data;
+  const allItems = itemsResource.data.items;
   const loadError = itemsResource.error == null
     ? null
     : itemsResource.error instanceof Error
@@ -319,136 +365,10 @@ export function useCommandPalette(
   /** Agents are sentence-level switches; only meaningful at the start of the composer. */
   const agentsAllowed = commandsAllowed;
 
-  const qTrim = query.trim();
-  const grouped = qTrim === '';
-
-  const effectiveGroupedSkillsExpanded = paletteActive && grouped && groupedSkillsExpanded;
-  const effectiveGroupedCommandsExpanded = paletteActive && grouped && groupedCommandsExpanded;
-  const effectiveGroupedAgentsExpanded = paletteActive && grouped && groupedAgentsExpanded;
-
-  const expandGroupedSkills = useCallback(() => {
-    setGroupedSkillsExpanded(true);
-  }, []);
-  const expandGroupedCommands = useCallback(() => {
-    setGroupedCommandsExpanded(true);
-  }, []);
-  const expandGroupedAgents = useCallback(() => {
-    setGroupedAgentsExpanded(true);
-  }, []);
-  const {
-    items,
-    skillRowCount,
-    commandRowCount,
-    groupedHasSkills,
-    groupedHasCommands,
-    groupedHasAgents,
-    groupedSkillsMoreCount,
-    groupedCommandsMoreCount,
-    groupedAgentsMoreCount,
-  } = useMemo(() => {
-    const alreadyPicked = listSkillNamesInWire(value);
-    const scored: Array<{ item: PaletteItem; rank: number }> = [];
-
-    for (const item of allItems) {
-      if (item.kind === 'command' && !commandsAllowed) {
-        continue;
-      }
-      if (item.kind === 'agent' && !agentsAllowed) {
-        continue;
-      }
-      if (item.kind === 'skill' && alreadyPicked.has(item.canonicalName ?? item.name)) {
-        continue;
-      }
-      if (item.kind === 'skill' && grouped && item.availability?.status !== 'available') {
-        continue;
-      }
-      const rank = paletteItemMatchRank(item, query);
-      if (rank === null) {
-        continue;
-      }
-      scored.push({ item, rank });
-    }
-
-    if (grouped) {
-      const sortByDefault = (a: { item: PaletteItem }, b: { item: PaletteItem }) => {
-        const t = paletteDefaultTiebreak(a.item, b.item);
-        if (t !== 0) return t;
-        return a.item.id.localeCompare(b.item.id);
-      };
-      const skills = scored.filter((s) => s.item.kind === 'skill').sort(sortByDefault).map((s) => s.item);
-      const commands = scored.filter((s) => s.item.kind === 'command').sort(sortByDefault).map((s) => s.item);
-      const agents = scored.filter((s) => s.item.kind === 'agent').sort(sortByDefault).map((s) => s.item);
-
-      const visSkills = effectiveGroupedSkillsExpanded
-        ? skills
-        : skills.slice(0, GROUPED_INITIAL_PER_SECTION);
-      const visCommands = effectiveGroupedCommandsExpanded
-        ? commands
-        : commands.slice(0, GROUPED_INITIAL_PER_SECTION);
-      const visAgents = effectiveGroupedAgentsExpanded
-        ? agents
-        : agents.slice(0, GROUPED_INITIAL_PER_SECTION);
-
-      const moreSkills = !effectiveGroupedSkillsExpanded
-        ? Math.max(0, skills.length - GROUPED_INITIAL_PER_SECTION)
-        : 0;
-      const moreCommands = !effectiveGroupedCommandsExpanded
-        ? Math.max(0, commands.length - GROUPED_INITIAL_PER_SECTION)
-        : 0;
-      const moreAgents = !effectiveGroupedAgentsExpanded
-        ? Math.max(0, agents.length - GROUPED_INITIAL_PER_SECTION)
-        : 0;
-      return {
-        items: [...visSkills, ...visCommands, ...visAgents],
-        skillRowCount: visSkills.length,
-        commandRowCount: visCommands.length,
-        groupedHasSkills: skills.length > 0,
-        groupedHasCommands: commands.length > 0,
-        groupedHasAgents: agents.length > 0,
-        groupedSkillsMoreCount: moreSkills,
-        groupedCommandsMoreCount: moreCommands,
-        groupedAgentsMoreCount: moreAgents,
-      };
-    }
-
-    scored.sort((a, b) => {
-      const aUnavailableSkill = a.item.kind === 'skill' && a.item.availability?.status !== 'available';
-      const bUnavailableSkill = b.item.kind === 'skill' && b.item.availability?.status !== 'available';
-      if (aUnavailableSkill !== bUnavailableSkill) {
-        return aUnavailableSkill ? 1 : -1;
-      }
-      if (a.rank !== b.rank) {
-        return a.rank - b.rank;
-      }
-      const byDefault = paletteDefaultTiebreak(a.item, b.item);
-      if (byDefault !== 0) {
-        return byDefault;
-      }
-      return 0;
-    });
-
-    return {
-      items: scored.slice(0, MAX_FLAT_PALETTE_ITEMS).map((s) => s.item),
-      skillRowCount: 0,
-      commandRowCount: 0,
-      groupedHasSkills: false,
-      groupedHasCommands: false,
-      groupedHasAgents: false,
-      groupedSkillsMoreCount: 0,
-      groupedCommandsMoreCount: 0,
-      groupedAgentsMoreCount: 0,
-    };
-  }, [
-    allItems,
-    commandsAllowed,
-    agentsAllowed,
-    grouped,
-    effectiveGroupedCommandsExpanded,
-    effectiveGroupedSkillsExpanded,
-    effectiveGroupedAgentsExpanded,
-    query,
-    value,
-  ]);
+  const { sections, flatItems } = useMemo(
+    () => buildPaletteSections(allItems, { query, value, commandsAllowed, agentsAllowed }),
+    [allItems, commandsAllowed, agentsAllowed, query, value],
+  );
 
   const selectionKey = slashRange ? query : '';
   const trackedSelectionKeyRef = useRef(selectionKey);
@@ -458,17 +378,17 @@ export function useCommandPalette(
       setSelectedIndex(0);
     }
   }
-  const resolvedSelectedIndex = clampPaletteIndex(selectedIndex, items.length);
+  const resolvedSelectedIndex = clampPaletteIndex(selectedIndex, flatItems.length);
 
   const onNavigate = useCallback(
     (dir: 'up' | 'down') => {
-      if (items.length === 0) return;
+      if (flatItems.length === 0) return;
       setSelectedIndex((i) => {
-        if (dir === 'down') return (i + 1) % items.length;
-        return (i - 1 + items.length) % items.length;
+        if (dir === 'down') return (i + 1) % flatItems.length;
+        return (i - 1 + flatItems.length) % flatItems.length;
       });
     },
-    [items.length],
+    [flatItems.length],
   );
 
   return {
@@ -478,29 +398,14 @@ export function useCommandPalette(
     commandsAllowed,
     /** False when `/` is not at position 0 - agents are sentence-level switches. */
     agentsAllowed,
-    /** `true` when the slash token has no filter text: show grouped sections. */
-    grouped,
-    /** In grouped mode, Skills lead, followed by Commands and Agents. */
-    skillRowCount,
-    commandRowCount,
-    /** In grouped mode, whether the full (untruncated) lists include each kind. */
-    groupedHasSkills,
-    groupedHasCommands,
-    groupedHasAgents,
-    /** Hidden skill rows in that section when the section is collapsed. */
-    groupedSkillsMoreCount,
-    /** Hidden command rows in that section when the section is collapsed. */
-    groupedCommandsMoreCount,
-    /** Hidden agent rows in that section when the section is collapsed. */
-    groupedAgentsMoreCount,
-    items,
+    sections,
+    flatItems,
     selectedIndex: resolvedSelectedIndex,
     query,
+    loading: itemsResource.loading,
+    failedKinds: itemsResource.data.failedKinds,
     loadError,
     onNavigate,
     setSelectedIndex,
-    expandGroupedSkills,
-    expandGroupedCommands,
-    expandGroupedAgents,
   };
 }

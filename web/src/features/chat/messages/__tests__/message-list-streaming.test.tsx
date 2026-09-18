@@ -70,4 +70,21 @@ describe('MessageList streaming row props', () => {
     expect(propsByMessageIndex.get(2)?.deleteRoundDisabled).toBe(true);
     expect(propsByMessageIndex.get(3)?.suppressAssistantActions).toBe(true);
   });
+
+  it('renders ephemeral trailing content after transcript messages', () => {
+    act(() => {
+      root.render(
+        <MessageList
+          messages={list}
+          streaming={false}
+          progress={null}
+          reasoningLevel="stream"
+          registerListContentRef={() => {}}
+          trailingContent={<div data-testid="trailing-content">Browser setup</div>}
+        />,
+      );
+    });
+
+    expect(container.querySelector('[data-testid="trailing-content"]')?.textContent).toBe('Browser setup');
+  });
 });

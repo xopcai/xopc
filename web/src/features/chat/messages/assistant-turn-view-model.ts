@@ -122,7 +122,9 @@ export function buildAssistantTurnViewModel({
 
   let state: AssistantTurnLifecycleState;
   if (!isStreaming) {
-    state = failedToolCount > 0 ? 'partial' : 'completed';
+    state = message.outcome?.status === 'partial' || message.outcome?.status === 'failed'
+      ? 'partial'
+      : 'completed';
   } else if (runningTool) {
     state = 'using_tool';
   } else if (

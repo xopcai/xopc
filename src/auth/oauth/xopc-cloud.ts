@@ -14,11 +14,15 @@ const TUNNEL_REGISTRATION_SCOPE = 'tunnel:register';
 const HOSTED_SHARE_SCOPE = 'shares:read shares:write offline_access';
 const CALLBACK_PATH = '/oauth/callback';
 const AUTHORIZATION_TIMEOUT_MS = 5 * 60_000;
+const REFRESH_ATTEMPT_TIMEOUT_MS = 7_000;
+const REFRESH_RETRY_DELAY_MS = 100;
 
 interface OAuthErrorResponse {
   error?: string;
   error_description?: string;
 }
+
+class OAuthRefreshRejectedError extends Error {}
 
 function consoleUrl(): string {
   return (
@@ -424,14 +428,30 @@ async function login(
 }
 
 async function refreshToken(current: OAuthCredentials, signal?: AbortSignal): Promise<OAuthCredentials> {
-  const response = await tokenRequest(new URLSearchParams({
-    grant_type: 'refresh_token',
-    client_id: CLIENT_ID,
-    refresh_token: current.refresh,
-  }), signal);
-  const body = await readJson(response) as Record<string, unknown> & OAuthErrorResponse;
-  if (!response.ok) throw new Error(body.error_description ?? body.error ?? 'XOPC OAuth refresh failed');
-  return credentials(body);
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const attemptSignal = signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(REFRESH_ATTEMPT_TIMEOUT_MS)])
+        : AbortSignal.timeout(REFRESH_ATTEMPT_TIMEOUT_MS);
+      const response = await tokenRequest(new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: CLIENT_ID,
+        refresh_token: current.refresh,
+      }), attemptSignal);
+      const body = await readJson(response) as Record<string, unknown> & OAuthErrorResponse;
+      if (!response.ok) {
+        const detail = body.error_description ?? body.error ?? 'XOPC OAuth refresh failed';
+        throw new OAuthRefreshRejectedError(body.error === 'invalid_grant'
+          ? `XOPC authorization expired; reconnect the affected service in Settings. ${detail}`
+          : detail);
+      }
+      return credentials(body);
+    } catch (error) {
+      if (error instanceof OAuthRefreshRejectedError || attempt === 2 || signal?.aborted) throw error;
+      await delay(REFRESH_RETRY_DELAY_MS, undefined, signal ? { signal } : undefined);
+    }
+  }
+  throw new Error('XOPC OAuth refresh failed');
 }
 
 function createXopcOAuthProvider(options: {

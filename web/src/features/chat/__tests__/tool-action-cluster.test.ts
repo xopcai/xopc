@@ -252,6 +252,23 @@ describe('summarizeClustersCompleted', () => {
     // because singleToolDetailLine returns null on an empty input.
     expect(s).toBe('执行了 1 个工具');
   });
+
+  it('combines semantic tool wording with ordinary action clusters', () => {
+    const blocks = [
+      tool('1', 'read_file', { path: 'a.ts' }),
+      tool('2', 'xopc_use', { mode: 'note', command: 'update' }),
+      tool('3', 'xopc_use', { mode: 'note', command: 'update' }),
+    ];
+    const s = summarizeClustersCompleted(
+      blocks,
+      doneEn,
+      joinEn,
+      'en',
+      (block) => block.name === 'xopc_use' ? 'Updated note' : null,
+    );
+
+    expect(s).toBe('Read 1 file and Updated note');
+  });
 });
 
 describe('summarizeClustersStreaming', () => {

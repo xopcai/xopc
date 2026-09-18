@@ -6,30 +6,46 @@ import {
 } from '@/features/chat/palette/use-command-palette';
 import type { PaletteItem } from '@/features/chat/palette/command-palette.types';
 
-const skill: PaletteItem = { kind: 'skill', id: 'skill:docx', name: 'docx', description: '' };
+const skill: PaletteItem = {
+  kind: 'skill', id: 'skill:docx', name: 'docx', canonicalName: 'docx', description: '',
+  category: 'skill', availability: { status: 'available' },
+};
 const cmdNoArgs: PaletteItem = {
   kind: 'command',
   id: 'cmd:new',
   name: 'new',
   description: '',
+  category: 'session',
+  aliases: [],
   acceptsArgs: false,
+  acceptsContext: false,
+  examples: [],
 };
 const cmdWithArgs: PaletteItem = {
   kind: 'command',
   id: 'cmd:reply',
   name: 'reply',
   description: '',
+  category: 'session',
+  aliases: [],
   acceptsArgs: true,
+  acceptsContext: false,
+  examples: [],
 };
 const cmdAbort: PaletteItem = {
   kind: 'command',
   id: 'cmd:abort',
   name: 'abort',
   description: '',
+  category: 'session',
   aliases: ['stop', 'cancel'],
   acceptsArgs: false,
+  acceptsContext: false,
+  examples: [],
 };
-const agent: PaletteItem = { kind: 'agent', id: 'agent:x', name: 'x', description: '' };
+const agent: PaletteItem = {
+  kind: 'agent', id: 'agent:x', agentId: 'x', name: 'x', description: '', category: 'agent',
+};
 
 const idle = { runBusy: false, pendingFollowUpsCount: 0, maxPendingFollowUps: 10 };
 const streaming = { runBusy: true, pendingFollowUpsCount: 0, maxPendingFollowUps: 10 };
