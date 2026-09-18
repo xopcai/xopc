@@ -449,7 +449,10 @@ export function getStartupRecoveryPageDataUrl(
   return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
 }
 
-export function getLoadingPageDataUrl(appLocale: string): string {
+export function getLoadingPageDataUrl(
+  appLocale: string,
+  themePreference: 'light' | 'dark' | 'system' = 'system',
+): string {
   const lang = uiLangFromAppLocale(appLocale || 'en');
   const isEn = lang === 'en';
   const htmlLang = isEn ? 'en' : 'zh-CN';
@@ -479,6 +482,12 @@ export function getLoadingPageDataUrl(appLocale: string): string {
         'connecting-assistant': '正在连接你的助手…',
         'opening-workspace': '正在打开工作空间…',
       };
+  const darkMediaQuery =
+    themePreference === 'dark'
+      ? 'all'
+      : themePreference === 'light'
+        ? 'not all'
+        : '(prefers-color-scheme: dark)';
 
   const html = `<!DOCTYPE html>
 <html lang="${htmlLang}">
@@ -746,7 +755,7 @@ export function getLoadingPageDataUrl(appLocale: string): string {
       .loop-logo { width: 5rem; height: 5rem; }
       .privacy { margin-top: 1.3rem; }
     }
-    @media (prefers-color-scheme: dark) {
+    @media ${darkMediaQuery} {
       :root {
         --canvas: #0c0c0e;
         --ink: #f5f5f7;

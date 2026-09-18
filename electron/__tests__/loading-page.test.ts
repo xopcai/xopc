@@ -52,6 +52,16 @@ describe('getLoadingPageDataUrl', () => {
     expect(html).toContain('@media (prefers-reduced-motion: reduce)');
   });
 
+  it('honors an explicitly persisted Electron theme instead of the OS theme', () => {
+    const dark = decodePage(getLoadingPageDataUrl('en', 'dark'));
+    const light = decodePage(getLoadingPageDataUrl('en', 'light'));
+    const system = decodePage(getLoadingPageDataUrl('en', 'system'));
+
+    expect(dark).toContain('@media all');
+    expect(light).toContain('@media not all');
+    expect(system).toContain('@media (prefers-color-scheme: dark)');
+  });
+
   it('renders real startup phases and progressively explains a slow launch', () => {
     const html = decodePage(getLoadingPageDataUrl('en'));
 
