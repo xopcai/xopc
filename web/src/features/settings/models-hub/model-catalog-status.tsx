@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, CircleDashed, Loader2, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import useSWR from 'swr';
@@ -46,6 +46,17 @@ interface CapabilityReadinessPayload {
     primary?: { provider: string; model: string };
     rejected?: Array<{ provider: string; model: string }>;
   }>;
+}
+
+export type CapabilityDisplayStatus = 'ready' | 'off' | 'not-configured' | 'degraded' | 'misconfigured';
+
+export function deriveCapabilityDisplayStatus(
+  plan: CapabilityReadinessPayload['capabilities'][CapabilityId],
+): CapabilityDisplayStatus {
+  if (plan.status === 'ready') return 'ready';
+  if (plan.status === 'disabled') return 'off';
+  if (plan.status === 'degraded') return 'degraded';
+  return plan.rejected?.length ? 'misconfigured' : 'not-configured';
 }
 
 function capabilityAction(capability: CapabilityId, zh: boolean) {
@@ -150,10 +161,15 @@ export function ModelCatalogStatus() {
   const failure = actionError ?? (error instanceof Error
     ? error.message
     : data?.sync.lastError ?? Object.values(data?.sync.sourceErrors ?? {})[0]);
-  const capabilityNeedsAttention = Object.entries(readiness?.capabilities ?? {}).some(
-    ([capability, plan]) => (plan.status === 'degraded' || plan.status === 'unavailable')
-      && (capability !== 'computer-use' || (isComputerUseAvailable() && Boolean(plan.rejected?.length))),
-  );
+  const capabilityEntries = (Object.entries(readiness?.capabilities ?? {}) as Array<[
+    CapabilityId,
+    CapabilityReadinessPayload['capabilities'][CapabilityId],
+  ]>).filter(([capability]) => capability !== 'computer-use' || isComputerUseAvailable());
+  const capabilityNeedsAttention = capabilityEntries.some(([, plan]) => {
+    const status = deriveCapabilityDisplayStatus(plan);
+    return status === 'degraded' || status === 'misconfigured';
+  });
+  const readyCount = capabilityEntries.filter(([, plan]) => deriveCapabilityDisplayStatus(plan) === 'ready').length;
 
   const refresh = async () => {
     setRefreshing(true);
@@ -171,99 +187,106 @@ export function ModelCatalogStatus() {
 
   return (
     <section className="rounded-xl bg-surface-hover/25 p-4 sm:p-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            {failure || unavailable.length > 0 || capabilityNeedsAttention ? (
+      <details className="group" open={capabilityNeedsAttention || undefined}>
+        <summary className="cursor-pointer list-none rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+          <div className="flex min-h-10 items-center gap-2">
+            {capabilityNeedsAttention ? (
               <AlertTriangle className="size-4 text-amber-500" aria-hidden />
-            ) : (
+            ) : readyCount === capabilityEntries.length && capabilityEntries.length > 0 ? (
               <CheckCircle2 className="size-4 text-emerald-500" aria-hidden />
+            ) : (
+              <CircleDashed className="size-4 text-fg-muted" aria-hidden />
             )}
-            <h2 className="text-sm font-semibold text-fg">{zh ? '模型目录同步' : 'Model catalog sync'}</h2>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-fg">{zh ? '可选能力' : 'Optional capabilities'}</span>
+              <span className="mt-0.5 block text-xs font-normal text-fg-muted">
+                {zh
+                  ? `${readyCount}/${capabilityEntries.length} 项已配置，不影响基础聊天功能`
+                  : `${readyCount} of ${capabilityEntries.length} configured · Not required for chat`}
+              </span>
+            </span>
+            <ChevronRight className="size-4 shrink-0 text-fg-subtle transition-transform group-open:rotate-90 motion-reduce:transition-none" aria-hidden />
           </div>
-          <p className="mt-1 text-sm text-fg-muted">
-            {zh
-              ? `${sources.length} 个来源，${availableCount} 个可用模型${lastSuccessAt ? ` · 最近同步 ${new Date(lastSuccessAt).toLocaleString()}` : ''}`
-              : `${sources.length} sources, ${availableCount} available models${lastSuccessAt ? ` · Last synced ${new Date(lastSuccessAt).toLocaleString()}` : ''}`}
-          </p>
-        </div>
-        <Button className="shrink-0" type="button" variant="secondary" disabled={refreshing} onClick={() => void refresh()}>
-          {refreshing ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <RefreshCw className="size-4" aria-hidden />}
-          {refreshing ? (zh ? '刷新中…' : 'Refreshing…') : (zh ? '立即刷新' : 'Refresh now')}
-        </Button>
-      </div>
-      {readiness ? (
-        <div className="mt-3 grid gap-1 sm:grid-cols-2">
-          {(Object.entries(readiness.capabilities) as Array<[
-            CapabilityId,
-            CapabilityReadinessPayload['capabilities'][CapabilityId],
-          ]>).map(([capability, plan]) => {
-            if (capability === 'computer-use' && !isComputerUseAvailable()) return null;
-            const label = capability === 'vision'
-              ? (zh ? '图片理解' : 'Vision')
-              : capability === 'image-generation'
-                ? (zh ? '图片生成' : 'Image generation')
-                : capability === 'computer-use' ? (zh ? '电脑操作模型' : 'Computer use model') : capability.toUpperCase();
-            const automatic = plan.selectionSource !== 'explicit-config';
-            const unselected = capability === 'computer-use' && !plan.primary && !plan.rejected?.length;
-            const needsAttention = !unselected && (plan.status === 'degraded' || plan.status === 'unavailable');
-            const action = capabilityAction(capability, zh);
-            const content = (
-              <>
-                <div className="flex items-start justify-between gap-2">
-                  <span className="min-w-0 text-xs font-medium text-fg">{label}</span>
-                  <span className={plan.status === 'ready'
-                    ? 'shrink-0 text-xs text-emerald-600 dark:text-emerald-400'
-                    : plan.status === 'disabled' || unselected
-                      ? 'shrink-0 text-xs text-fg-muted'
-                      : 'shrink-0 text-xs text-amber-600 dark:text-amber-400'}>
-                    {unselected ? (zh ? '未选择' : 'Not selected') : plan.status === 'ready'
-                      ? capability === 'computer-use' ? (zh ? '已配置' : 'Configured') : (zh ? '可用' : 'Ready')
-                      : plan.status === 'disabled'
-                        ? (zh ? '已关闭' : 'Off')
-                        : (zh ? '需处理' : 'Needs attention')}
-                  </span>
-                </div>
-                <p className="mt-1 truncate text-xs text-fg-muted" title={plan.primary
-                  ? `${plan.primary.provider}/${plan.primary.model}`
-                  : undefined}>
-                  {plan.primary
-                    ? `${automatic ? (zh ? '自动' : 'Auto') : (zh ? '显式' : 'Explicit')} · ${plan.primary.provider}/${plan.primary.model}`
-                    : unselected ? (zh ? '不继承聊天模型' : 'Does not inherit chat model') : (zh ? '无可用实现' : 'No available implementation')}
-                </p>
-                {needsAttention ? (
-                  <div className="mt-2 rounded-lg bg-amber-500/10 p-2">
-                    <p className="text-xs leading-5 text-amber-700 dark:text-amber-300">
-                      {plan.status === 'degraded'
-                        ? (zh ? `当前配置不可用，正在使用备用方案。${action.guidance}` : `The current configuration is unavailable, so a fallback is in use. ${action.guidance}.`)
-                        : action.guidance}
-                    </p>
-                    <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-accent">
-                      {action.action}
-                      <ArrowRight className="size-3.5" aria-hidden />
+        </summary>
+        {readiness ? (
+          <div className="mt-3 grid gap-1 sm:grid-cols-2">
+            {(Object.entries(readiness.capabilities) as Array<[
+              CapabilityId,
+              CapabilityReadinessPayload['capabilities'][CapabilityId],
+            ]>).map(([capability, plan]) => {
+              if (capability === 'computer-use' && !isComputerUseAvailable()) return null;
+              const label = capability === 'vision'
+                ? (zh ? '图片理解' : 'Vision')
+                : capability === 'image-generation'
+                  ? (zh ? '图片生成' : 'Image generation')
+                  : capability === 'computer-use' ? (zh ? '电脑操作模型' : 'Computer use model') : capability.toUpperCase();
+              const automatic = plan.selectionSource !== 'explicit-config';
+              const displayStatus = deriveCapabilityDisplayStatus(plan);
+              const needsAttention = displayStatus === 'degraded' || displayStatus === 'misconfigured';
+              const action = capabilityAction(capability, zh);
+              const content = (
+                <>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="min-w-0 text-xs font-medium text-fg">{label}</span>
+                    <span className={displayStatus === 'ready'
+                      ? 'shrink-0 text-xs text-emerald-600 dark:text-emerald-400'
+                      : displayStatus === 'off' || displayStatus === 'not-configured'
+                        ? 'shrink-0 text-xs text-fg-muted'
+                        : 'shrink-0 text-xs text-amber-600 dark:text-amber-400'}>
+                      {displayStatus === 'ready'
+                        ? capability === 'computer-use' ? (zh ? '已配置' : 'Configured') : (zh ? '可用' : 'Ready')
+                        : displayStatus === 'off'
+                          ? (zh ? '已关闭' : 'Off')
+                          : displayStatus === 'not-configured'
+                            ? (zh ? '未配置' : 'Not configured')
+                            : displayStatus === 'degraded'
+                              ? (zh ? '正在使用备用方案' : 'Using fallback')
+                              : (zh ? '需处理' : 'Needs attention')}
                     </span>
                   </div>
-                ) : null}
-              </>
-            );
+                  <p className="mt-1 truncate text-xs text-fg-muted" title={plan.primary
+                    ? `${plan.primary.provider}/${plan.primary.model}`
+                    : undefined}>
+                    {plan.primary
+                      ? `${automatic ? (zh ? '自动' : 'Auto') : (zh ? '显式' : 'Explicit')} · ${plan.primary.provider}/${plan.primary.model}`
+                      : displayStatus === 'not-configured'
+                        ? (zh ? '可稍后按需配置' : 'Set up later if needed')
+                        : (zh ? '已配置的模型不可用' : 'The configured model is unavailable')}
+                  </p>
+                  {needsAttention ? (
+                    <div className="mt-2 rounded-lg bg-amber-500/10 p-2">
+                      <p className="text-xs leading-5 text-amber-700 dark:text-amber-300">
+                        {plan.status === 'degraded'
+                          ? (zh ? `当前配置不可用，正在使用备用方案。${action.guidance}` : `The current configuration is unavailable, so a fallback is in use. ${action.guidance}.`)
+                          : action.guidance}
+                      </p>
+                      <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-accent">
+                        {action.action}
+                        <ArrowRight className="size-3.5" aria-hidden />
+                      </span>
+                    </div>
+                  ) : null}
+                </>
+              );
 
-            return (
-              <Link
-                key={capability}
-                to={needsAttention ? action.href : capabilitySettingsHref(capability)}
-                aria-label={needsAttention ? `${label}：${action.action}` : `${zh ? '配置' : 'Configure'} ${label}`}
-                className={cn(
-                  'rounded-lg bg-surface-base/45 px-3 py-3 transition-colors',
-                  needsAttention ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-surface-hover/30',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                )}
-              >
-                {content}
-              </Link>
-            );
-          })}
-        </div>
-      ) : null}
+              return (
+                <Link
+                  key={capability}
+                  to={needsAttention ? action.href : capabilitySettingsHref(capability)}
+                  aria-label={needsAttention ? `${label}：${action.action}` : `${zh ? '配置' : 'Configure'} ${label}`}
+                  className={cn(
+                    'rounded-lg bg-surface-base/45 px-3 py-3 transition-colors',
+                    needsAttention ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-surface-hover/30',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                  )}
+                >
+                  {content}
+                </Link>
+              );
+            })}
+          </div>
+        ) : null}
+      </details>
       {unavailable.length > 0 ? (
         <div className="mt-2 space-y-1 text-sm text-amber-700 dark:text-amber-300">
           {unavailable.slice(0, 3).map((reference) => (
@@ -275,7 +298,23 @@ export function ModelCatalogStatus() {
           ))}
         </div>
       ) : null}
-      {failure ? <p className="mt-2 text-sm text-danger">{failure}</p> : null}
+      {failure ? <p className="mt-3 text-sm text-danger" role="alert">{failure}</p> : null}
+      <details className="mt-4 border-t border-edge-subtle pt-3">
+        <summary className="min-h-8 cursor-pointer rounded-md py-1.5 text-xs font-medium text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+          {zh ? '高级诊断' : 'Advanced diagnostics'}
+        </summary>
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-fg-muted">
+            {zh
+              ? `${sources.length} 个来源，${availableCount} 个可用模型${lastSuccessAt ? ` · 最近同步 ${new Date(lastSuccessAt).toLocaleString()}` : ''}`
+              : `${sources.length} sources, ${availableCount} available models${lastSuccessAt ? ` · Last synced ${new Date(lastSuccessAt).toLocaleString()}` : ''}`}
+          </p>
+          <Button className="shrink-0" type="button" variant="secondary" disabled={refreshing} onClick={() => void refresh()}>
+            {refreshing ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <RefreshCw className="size-4" aria-hidden />}
+            {refreshing ? (zh ? '刷新中…' : 'Refreshing…') : (zh ? '刷新目录' : 'Refresh catalog')}
+          </Button>
+        </div>
+      </details>
     </section>
   );
 }

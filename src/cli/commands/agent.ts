@@ -96,6 +96,7 @@ function createAgentCommand(_ctx: CLIContext): Command {
         extensionLoader.setConfig(config as Parameters<ExtensionLoader['setConfig']>[0]);
         extensionLoader.setRuntimeContext({ bus });
         await extensionLoader.loadByActivationPlan();
+        await extensionLoader.startServices();
         const n = extensionLoader.getRegistry().extensions.size;
         if (n > 0) {
           log.info({ count: n }, 'Extensions loaded');
@@ -145,6 +146,7 @@ function createAgentCommand(_ctx: CLIContext): Command {
         running = false;
         bus.shutdown();
         await agent.stop();
+        await extensionLoader?.shutdown();
       };
 
       process.on('SIGINT', shutdown);

@@ -18,8 +18,6 @@ import type {
   ProviderAuthChoice,
   SettingsPanelContribution,
   SetupDeclaration,
-  SidebarPanelContribution,
-  StatusBarItemContribution,
 } from './types/manifest.js';
 import type { ExtensionKind } from './types/core.js';
 
@@ -225,15 +223,11 @@ const VALID_UI_PERMISSIONS = new Set<ExtensionUiPermission>([
   'agent.send',
   'agent.subscribe',
   'session.read',
-  'session.write',
   'config.read',
   'config.write',
   'storage',
   'notification',
-  'clipboard',
   'theme',
-  'workspace.read',
-  'workspace.write',
 ]);
 
 export function normalizeUiManifest(raw: unknown): ExtensionUiManifest | undefined {
@@ -261,44 +255,17 @@ export function normalizeUiManifest(raw: unknown): ExtensionUiManifest | undefin
 
 function normalizeUiContributions(raw: unknown): ExtensionUiContributions | undefined {
   if (!isRecord(raw)) return undefined;
-  const sidebarPanels = normalizeSidebarPanels(raw.sidebarPanels);
   const settingsPanels = normalizeSettingsPanels(raw.settingsPanels);
   const chatWidgets = normalizeChatWidgets(raw.chatWidgets);
   const pages = normalizePages(raw.pages);
   const commands = normalizeCommands(raw.commands);
-  const statusBarItems = normalizeStatusBarItems(raw.statusBarItems);
   const out: ExtensionUiContributions = {
-    ...(sidebarPanels ? { sidebarPanels } : {}),
     ...(settingsPanels ? { settingsPanels } : {}),
     ...(chatWidgets ? { chatWidgets } : {}),
     ...(pages ? { pages } : {}),
     ...(commands ? { commands } : {}),
-    ...(statusBarItems ? { statusBarItems } : {}),
   };
   return Object.keys(out).length ? out : undefined;
-}
-
-function normalizeSidebarPanels(raw: unknown): SidebarPanelContribution[] | undefined {
-  if (!Array.isArray(raw)) return undefined;
-  const out: SidebarPanelContribution[] = [];
-  for (const item of raw) {
-    if (!isRecord(item)) continue;
-    const id = item.id;
-    const title = item.title;
-    const entrypoint = item.entrypoint;
-    if (typeof id !== 'string' || typeof title !== 'string' || typeof entrypoint !== 'string') {
-      continue;
-    }
-    out.push({
-      id,
-      title,
-      entrypoint,
-      icon: typeof item.icon === 'string' ? item.icon : undefined,
-      defaultVisible: typeof item.defaultVisible === 'boolean' ? item.defaultVisible : undefined,
-      when: typeof item.when === 'string' && item.when.length > 0 ? item.when : undefined,
-    });
-  }
-  return out.length ? out : undefined;
 }
 
 function normalizeSettingsPanels(raw: unknown): SettingsPanelContribution[] | undefined {
@@ -383,7 +350,6 @@ function normalizePages(raw: unknown): PageContribution[] | undefined {
       entrypoint,
       showInNav: typeof item.showInNav === 'boolean' ? item.showInNav : undefined,
       navIcon: typeof item.navIcon === 'string' ? item.navIcon : undefined,
-      when: typeof item.when === 'string' && item.when.length > 0 ? item.when : undefined,
     });
   }
   return out.length ? out : undefined;
@@ -404,27 +370,6 @@ function normalizeCommands(raw: unknown): CommandContribution[] | undefined {
       opensPanel: typeof item.opensPanel === 'string' ? item.opensPanel : undefined,
       chatAlias:
         typeof item.chatAlias === 'string' && item.chatAlias.length > 0 ? item.chatAlias : undefined,
-      when: typeof item.when === 'string' && item.when.length > 0 ? item.when : undefined,
-    });
-  }
-  return out.length ? out : undefined;
-}
-
-function normalizeStatusBarItems(raw: unknown): StatusBarItemContribution[] | undefined {
-  if (!Array.isArray(raw)) return undefined;
-  const out: StatusBarItemContribution[] = [];
-  for (const item of raw) {
-    if (!isRecord(item)) continue;
-    const id = item.id;
-    const entrypoint = item.entrypoint;
-    if (typeof id !== 'string' || typeof entrypoint !== 'string') continue;
-    const position = item.position;
-    out.push({
-      id,
-      entrypoint,
-      position: position === 'left' || position === 'right' ? position : undefined,
-      width: typeof item.width === 'number' ? item.width : undefined,
-      when: typeof item.when === 'string' && item.when.length > 0 ? item.when : undefined,
     });
   }
   return out.length ? out : undefined;
@@ -496,29 +441,17 @@ function normalizeActivation(raw: unknown): ActivationDeclaration | undefined {
   const onProviders = Array.isArray(raw.onProviders)
     ? raw.onProviders.filter((x): x is string => typeof x === 'string')
     : undefined;
-  const onCommands = Array.isArray(raw.onCommands)
-    ? raw.onCommands.filter((x): x is string => typeof x === 'string')
-    : undefined;
   const onChannels = Array.isArray(raw.onChannels)
     ? raw.onChannels.filter((x): x is string => typeof x === 'string')
-    : undefined;
-  const capRaw = raw.onCapabilities;
-  const onCapabilities = Array.isArray(capRaw)
-    ? capRaw.filter(
-        (x): x is 'provider' | 'channel' | 'tool' | 'hook' =>
-          x === 'provider' || x === 'channel' || x === 'tool' || x === 'hook',
-      )
     : undefined;
   if (
     onStartup === undefined &&
     !onProviders?.length &&
-    !onCommands?.length &&
-    !onChannels?.length &&
-    !onCapabilities?.length
+    !onChannels?.length
   ) {
     return undefined;
   }
-  return { onStartup, onProviders, onCommands, onChannels, onCapabilities };
+  return { onStartup, onProviders, onChannels };
 }
 
 function normalizeContracts(raw: unknown): ContractDeclaration | undefined {

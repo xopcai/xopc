@@ -26,6 +26,11 @@ import {
 import { PACKAGE_VERSION } from '../package-version.js';
 import { createLogger } from '../utils/logger.js';
 import { checkEngineCompatibility } from './engine-check.js';
+import {
+  checkExtensionApiCompatibility,
+  EXTENSION_API_VERSION,
+  EXTENSION_UI_API_VERSION,
+} from './api-version.js';
 import { collectExtensionPackageDependencyIssues } from './package-contract.js';
 import { MAX_EXTENSION_STORE_ZIP_BYTES } from './store-zip-limits.js';
 
@@ -171,7 +176,7 @@ function installExtensionProdDependencies(extensionDir: string): { ok: true } | 
     const pnpm = run(
       'pnpm',
       pnpmExecutable,
-      ['install', '--prod', '--no-frozen-lockfile', ...scriptArgs],
+      ['install', '--prod', '--no-frozen-lockfile', '--package-import-method=copy', ...scriptArgs],
     );
     if (pnpm.ok) return pnpm;
     const npmFallback = run(
@@ -668,6 +673,15 @@ async function installFromDirectory(
       ok: false,
       error: engineCheck.reason ?? `xopc ${PACKAGE_VERSION} does not satisfy engines.xopc ${manifest.engines.xopc}`,
     };
+  }
+  for (const [engineName, requiredRange, currentVersion] of [
+    ['extensionApi', manifest.engines.extensionApi, EXTENSION_API_VERSION],
+    ['extensionUiApi', manifest.engines.extensionUiApi, EXTENSION_UI_API_VERSION],
+  ] as const) {
+    const result = checkExtensionApiCompatibility(requiredRange, currentVersion, engineName);
+    if (result.parseWarning || !result.compatible) {
+      return { ok: false, error: result.reason ?? `Incompatible engines.${engineName}` };
+    }
   }
 
   if (!manifest.main) {

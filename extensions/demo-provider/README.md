@@ -1,6 +1,6 @@
 # Demo Provider extension
 
-Bundled mock LLM provider for validating the extension provider pipeline (`registerProviderPlugin`, model resolution, gateway model list, and `streamFn` bridge).
+Bundled mock LLM provider for validating the extension provider pipeline (`registerProvider`, model resolution, gateway model list, and `streamFn` bridge).
 
 ## Models
 

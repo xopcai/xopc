@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import type { Socket } from 'node:net';
 
 import {
+  REALTIME_CAPABILITIES,
   REALTIME_HEARTBEAT_INTERVAL_MS,
   REALTIME_HEARTBEAT_TIMEOUT_MS,
   REALTIME_HELLO_TIMEOUT_MS,
@@ -292,10 +293,15 @@ export class RealtimeRuntime {
         }
         clearTimeout(helloTimer);
         releaseBudget();
+        const negotiatedCapabilities = message.payload.capabilities
+          ? [...new Set(message.payload.capabilities.filter(capability =>
+            (REALTIME_CAPABILITIES as readonly string[]).includes(capability)))]
+          : undefined;
         writer.enqueue(serverMessage('realtime.ready', {
           connectionId,
           heartbeatIntervalMs: REALTIME_HEARTBEAT_INTERVAL_MS,
           heartbeatTimeoutMs: REALTIME_HEARTBEAT_TIMEOUT_MS,
+          ...(message.payload.capabilities ? { negotiatedCapabilities } : {}),
           ...(endpointReady ? { endpoint: endpointReady } : {}),
         }), 'critical');
         subscribe(message.payload.subscriptions);

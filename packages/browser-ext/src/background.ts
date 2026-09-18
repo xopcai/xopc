@@ -97,9 +97,9 @@ async function connect(generation: number): Promise<void> {
         body: JSON.stringify({ clientId: id, clientKind: 'browser_extension' }),
         signal,
       });
-      const body = await response.json() as { payload?: { ticket?: string } };
+      const body = await response.json() as { payload?: { ticket?: string; realtime?: { minVersion: number; maxVersion: number; capabilities: string[] } } };
       if (!response.ok || !body.payload?.ticket) throw new Error(`Realtime ticket failed (${response.status})`);
-      return body.payload.ticket;
+      return { ...body.payload, ticket: body.payload.ticket };
     },
     createWebSocket: (url) => new WebSocket(url) as unknown as RealtimeWebSocket,
     onStateChange: (state, error) => {

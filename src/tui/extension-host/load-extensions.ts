@@ -1,5 +1,5 @@
 import { ExtensionLoader } from '../../extensions/loader.js';
-import type { ExtensionRegistryImpl } from '../../extensions/loader.js';
+import type { ExtensionRegistryImpl } from '../../extensions/extension-registry-impl.js';
 import { loadConfig, getWorkspacePath } from '../../config/index.js';
 import { resolveExtensionsDir } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';

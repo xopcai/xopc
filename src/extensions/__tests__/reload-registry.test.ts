@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ExtensionRegistryImpl } from '../loader.ts';
+import { ExtensionRegistryImpl } from '../extension-registry-impl.ts';
 
 describe('ExtensionRegistryImpl reload registry', () => {
   it('addReloadRegistration replaces same extension id', () => {

@@ -10,6 +10,8 @@ export const REALTIME_MAX_CLIENT_FRAME_BYTES = 256 * 1024;
 export const REALTIME_HELLO_TIMEOUT_MS = 5_000;
 export const REALTIME_HEARTBEAT_INTERVAL_MS = 15_000;
 export const REALTIME_HEARTBEAT_TIMEOUT_MS = 45_000;
+export const REALTIME_CAPABILITIES = ['realtime.capability-negotiation.v1'] as const;
+export type RealtimeCapability = (typeof REALTIME_CAPABILITIES)[number];
 
 export const realtimeClientKindSchema = z.enum([
   'web',
@@ -25,11 +27,12 @@ export const realtimeEventNameSchema = z.string().regex(/^[a-z][a-z0-9_.-]*$/).m
 const messageIdSchema = z.uuid();
 const timestampSchema = z.number().int().nonnegative();
 const sequenceSchema = z.number().int().positive();
+const capabilitySchema = z.string().min(1).max(160);
 
 const envelope = <TKind extends string, TPayload extends z.ZodType>(
   kind: TKind,
   payload: TPayload,
-) => z.strictObject({
+) => z.object({
   protocolVersion: z.literal(REALTIME_PROTOCOL_VERSION),
   messageId: messageIdSchema,
   kind: z.literal(kind),
@@ -37,30 +40,31 @@ const envelope = <TKind extends string, TPayload extends z.ZodType>(
   payload,
 });
 
-export const realtimeSubscriptionSchema = z.strictObject({
+export const realtimeSubscriptionSchema = z.object({
   topic: realtimeTopicSchema,
   afterSeq: z.number().int().nonnegative().optional(),
 });
 
 export const clientRealtimeMessageSchema = z.discriminatedUnion('kind', [
-  envelope('realtime.hello', z.strictObject({
+  envelope('realtime.hello', z.object({
     ticket: z.string().min(32).max(512),
     clientId: z.string().min(1).max(160),
     clientKind: realtimeClientKindSchema,
     subscriptions: z.array(realtimeSubscriptionSchema).max(100).default([]),
+    capabilities: z.array(capabilitySchema).max(64).optional(),
     endpoint: endpointHelloPayloadSchema.optional(),
   })),
-  envelope('realtime.subscribe', z.strictObject({
+  envelope('realtime.subscribe', z.object({
     subscriptions: z.array(realtimeSubscriptionSchema).min(1).max(100),
   })),
-  envelope('realtime.unsubscribe', z.strictObject({
+  envelope('realtime.unsubscribe', z.object({
     topics: z.array(realtimeTopicSchema).min(1).max(100),
   })),
-  envelope('realtime.ping', z.strictObject({})),
+  envelope('realtime.ping', z.object({})),
   envelope('endpoint.message', clientEndpointMessageSchema),
 ]);
 
-export const realtimeEventPayloadSchema = z.strictObject({
+export const realtimeEventPayloadSchema = z.object({
   topic: realtimeTopicSchema,
   seq: sequenceSchema,
   event: realtimeEventNameSchema,
@@ -68,28 +72,29 @@ export const realtimeEventPayloadSchema = z.strictObject({
 });
 
 export const serverRealtimeMessageSchema = z.discriminatedUnion('kind', [
-  envelope('realtime.ready', z.strictObject({
+  envelope('realtime.ready', z.object({
     connectionId: z.uuid(),
     heartbeatIntervalMs: z.literal(REALTIME_HEARTBEAT_INTERVAL_MS),
     heartbeatTimeoutMs: z.literal(REALTIME_HEARTBEAT_TIMEOUT_MS),
-    endpoint: z.strictObject({
+    negotiatedCapabilities: z.array(capabilitySchema).max(64).optional(),
+    endpoint: z.object({
       endpointId: z.string().min(1).max(160),
       turnToken: z.string().min(32).max(160),
     }).optional(),
   })),
   envelope('realtime.event', realtimeEventPayloadSchema),
-  envelope('realtime.subscribed', z.strictObject({
+  envelope('realtime.subscribed', z.object({
     topic: realtimeTopicSchema,
     cursor: z.number().int().nonnegative(),
   })),
-  envelope('realtime.gap', z.strictObject({
+  envelope('realtime.gap', z.object({
     topic: realtimeTopicSchema,
     requestedSeq: z.number().int().nonnegative(),
     earliestSeq: sequenceSchema,
     recoverable: z.boolean(),
   })),
-  envelope('realtime.pong', z.strictObject({})),
-  envelope('realtime.error', z.strictObject({
+  envelope('realtime.pong', z.object({})),
+  envelope('realtime.error', z.object({
     code: z.string().min(1).max(80),
     message: z.string().min(1).max(500),
   })),

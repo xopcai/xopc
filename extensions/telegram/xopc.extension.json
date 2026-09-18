@@ -449,9 +449,6 @@
   "activation": {
     "onChannels": [
       "telegram"
-    ],
-    "onCapabilities": [
-      "channel"
     ]
   },
   "setup": {

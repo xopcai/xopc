@@ -110,7 +110,7 @@ export default function register(api: ExtensionApi) {
       : (process.env.DEMO_API_KEY ?? '');
 
   const provider = createDemoProvider({ baseUrl, apiKey });
-  api.registerProviderPlugin(provider);
+  api.registerProvider(provider);
 
   api.logger.info(
     `Registered provider: ${provider.id} with models: ${provider.models.map((m) => m.id).join(', ')}`,

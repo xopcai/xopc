@@ -15,7 +15,6 @@ import type { TypedEventBus } from './events.js';
 import type { ExtensionHookEvent, ExtensionHookHandler, HookOptions, HookHandlerMap } from './hooks.js';
 import type { ChannelPlugin } from '../../channels/plugin-types.js';
 import type { SessionMetadata } from '../../session/types.js';
-import type { FlagConfig, FlagValue, ShortcutConfig } from './registration.js';
 import type { ProviderPlugin } from './providers.js';
 import type { TuiExtensionRegistrar } from './tui.js';
 import type { Migration } from '../../migrations/types.js';
@@ -207,7 +206,6 @@ export interface ExtensionApi {
   
   //  Provider Registration
   registerProvider(plugin: ProviderPlugin): void;
-  registerProviderPlugin(plugin: ProviderPlugin): void;
 
   /** Register a speech (TTS) provider plugin. */
   registerSpeechProvider(
@@ -228,11 +226,6 @@ export interface ExtensionApi {
     adapter: import('../../agent/skills/marketplace/adapter.types.js').SkillsMarketplaceAdapter;
     displayName?: string;
   }): void;
-
-  //  Advanced Features
-  registerFlag(name: string, config: FlagConfig, extensionId?: string): void;
-  getFlag(name: string): FlagValue;
-  registerShortcut(key: string, config: ShortcutConfig): void;
 
   /**
    * Register TUI contributions (footer/header widgets, autocomplete, tool renderers).

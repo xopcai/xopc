@@ -58,6 +58,7 @@ describe('LocalWorktreeManager', () => {
     expect(environment).toMatchObject({
       projectId,
       kind: 'managed_worktree',
+      ownership: 'xopc_created',
       status: 'ready',
       baseRef: 'HEAD',
     });
@@ -111,6 +112,12 @@ describe('LocalWorktreeManager', () => {
 
     expect(deleted.status).toBe('deleted');
     expect(existsSync(join(repositoryRoot, 'README.md'))).toBe(true);
+  });
+
+  it('records local checkouts as registered rather than owned', async () => {
+    const environment = await manager.registerLocalCheckout({ workspacePath: repositoryRoot });
+
+    expect(environment.ownership).toBe('registered');
   });
 
   it('preserves uncommitted work and restores the Git lock when cleanup is refused', async () => {

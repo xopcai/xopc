@@ -20,6 +20,7 @@ type EnvironmentRow = {
   environment_id: string;
   project_id: string | null;
   kind: ExecutionEnvironment['kind'];
+  ownership: ExecutionEnvironment['ownership'];
   status: ExecutionEnvironmentStatus;
   root_path: string;
   repository_root: string | null;
@@ -69,6 +70,7 @@ function environmentFromRow(row: EnvironmentRow): ExecutionEnvironment {
     id: row.environment_id,
     ...(row.project_id ? { projectId: row.project_id } : {}),
     kind: row.kind,
+    ownership: row.ownership,
     status: row.status,
     rootPath: row.root_path,
     ...(row.repository_root ? { repositoryRoot: row.repository_root } : {}),
@@ -123,19 +125,21 @@ export class ExecutionEnvironmentStore {
     if (input.kind === 'managed_worktree' && (!repositoryRoot || !gitCommonDir)) {
       throw new Error('managed_worktree requires repositoryRoot and gitCommonDir');
     }
+    const ownership = input.kind === 'managed_worktree' ? 'xopc_created' : 'registered';
 
     const now = Date.now();
     runSqliteWriteTransaction((db) => {
       db.prepare(
         `INSERT INTO execution_environments (
-          environment_id, project_id, kind, status, root_path,
+          environment_id, project_id, kind, ownership, status, root_path,
           repository_root, git_common_dir, base_ref, base_sha, branch_ref,
           version, created_at, updated_at
-        ) VALUES (?, ?, ?, 'requested', ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, 'requested', ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
       ).run(
         id,
         projectId ?? null,
         input.kind,
+        ownership,
         rootPath,
         repositoryRoot ? resolve(repositoryRoot) : null,
         gitCommonDir ? resolve(gitCommonDir) : null,

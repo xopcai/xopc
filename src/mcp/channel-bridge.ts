@@ -82,7 +82,7 @@ export class XopcChannelBridge {
       },
       issueTicket: async () => {
         const response = await this.client!.postJson<{
-          payload?: { ticket?: string };
+          payload?: { ticket?: string; realtime?: { minVersion: number; maxVersion: number; capabilities: string[] } };
           error?: { message?: string };
         }>('/api/realtime/tickets', {
           clientId: this.realtimeClientId,
@@ -91,7 +91,7 @@ export class XopcChannelBridge {
         if (!response.payload?.ticket) {
           throw new Error(response.error?.message ?? 'Realtime ticket response is invalid');
         }
-        return response.payload.ticket;
+        return { ...response.payload, ticket: response.payload.ticket };
       },
       createWebSocket: (url) => new WebSocket(url) as unknown as RealtimeWebSocket,
       onEvent: (event) => this.handleRealtimeEvent(event),

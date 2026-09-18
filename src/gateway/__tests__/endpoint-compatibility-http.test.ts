@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import { serve } from '@hono/node-server';
 import { COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
+import { REALTIME_CAPABILITIES, REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 import { expect, it } from 'vitest';
 
 import { assertGatewayCompatibility } from '../../../electron/gateway-compatibility.js';
@@ -33,7 +34,14 @@ it('checks compatibility through a running authenticated Gateway and its lazy ro
     const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(await response.json()).toMatchObject({ payload: { computerControl: COMPUTER_DESCRIPTOR } });
+    expect(await response.json()).toMatchObject({ payload: {
+      computerControl: COMPUTER_DESCRIPTOR,
+      realtime: {
+        minVersion: REALTIME_PROTOCOL_VERSION,
+        maxVersion: REALTIME_PROTOCOL_VERSION,
+        capabilities: REALTIME_CAPABILITIES,
+      },
+    } });
     await expect(assertGatewayCompatibility({ port: address.port, token })).resolves.toBeUndefined();
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));

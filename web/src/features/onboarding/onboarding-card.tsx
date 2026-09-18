@@ -1,6 +1,5 @@
-import { ChevronRight, ExternalLink, LoaderCircle, ShieldCheck, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useReducer } from 'react';
-import { Link } from 'react-router-dom';
+import { CheckCircle2, ChevronRight, ExternalLink, LoaderCircle, ShieldCheck, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 
 import { AnimatedLoopLogo } from '@/components/brand/animated-loop-logo';
 import { Button } from '@/components/ui/button';
@@ -13,6 +12,8 @@ import { OnboardingLanguageSwitch } from '@/features/onboarding/onboarding-langu
 import { OnboardingProviderGrid } from '@/features/onboarding/onboarding-provider-grid';
 import { cn } from '@/lib/cn';
 import { OAuthProviderConnect } from '@/features/settings/models-hub/oauth-provider-connect';
+import { AddProviderDialog } from '@/features/settings/models-hub/add-provider-dialog';
+import { useConnectedProviders } from '@/features/settings/models-hub/connected-providers-grid';
 import { buildProviderConfigFromPresetProviderId } from '@/features/settings/models/models-settings-lib';
 import { fetchModelsJson, saveModelsJson } from '@/features/settings/models-json-api';
 import {
@@ -33,7 +34,7 @@ interface OnboardingCardProps {
   canDismiss?: boolean;
 }
 
-type OnboardingStep = 'callName' | 'provider' | 'apiKey';
+type OnboardingStep = 'callName' | 'provider' | 'apiKey' | 'success';
 
 type OnboardingState = {
   step: OnboardingStep;
@@ -42,6 +43,7 @@ type OnboardingState = {
   busy: boolean;
   error: string | null;
   callName: string;
+  connectedModelRef: string | null;
 };
 
 type OnboardingAction =
@@ -55,6 +57,7 @@ const initialOnboarding: OnboardingState = {
   busy: false,
   error: null,
   callName: '',
+  connectedModelRef: null,
 };
 
 function onboardingReducer(state: OnboardingState, action: OnboardingAction): OnboardingState {
@@ -66,7 +69,7 @@ function onboardingReducer(state: OnboardingState, action: OnboardingAction): On
   }
 }
 
-const STEP_ORDER: OnboardingStep[] = ['callName', 'provider', 'apiKey'];
+const STEP_ORDER: OnboardingStep[] = ['callName', 'provider', 'apiKey', 'success'];
 
 const stepNumber = (step: OnboardingStep): number => STEP_ORDER.indexOf(step) + 1;
 
@@ -95,6 +98,8 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
   const o = messages(language).onboarding;
 
   const [state, dispatch] = useReducer(onboardingReducer, initialOnboarding);
+  const [providerDialogOpen, setProviderDialogOpen] = useState(false);
+  const providerData = useConnectedProviders();
   const {
     step, selectedProvider, apiKey, busy, error, callName,
   } = state;
@@ -197,8 +202,25 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
       timezone: detectBrowserTimezone(),
       locale: language === 'zh' ? 'zh-CN' : 'en-US',
     });
-    await onComplete();
-  }, [callName, language, onComplete]);
+    dispatch({
+      type: 'patch',
+      patch: { step: 'success', connectedModelRef: modelRef, error: null },
+    });
+  }, [callName, language]);
+
+  const completeOnboarding = async () => {
+    dispatch({ type: 'patch', patch: { busy: true, error: null } });
+    try {
+      await onComplete();
+    } catch (cause) {
+      dispatch({
+        type: 'patch',
+        patch: { error: cause instanceof Error ? cause.message : String(cause) },
+      });
+    } finally {
+      dispatch({ type: 'patch', patch: { busy: false } });
+    }
+  };
 
   const onContinueApiKey = async () => {
     if (!selectedProvider || !apiKey.trim()) return;
@@ -224,8 +246,8 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
       const recommendedModel = await resolveRecommendedModel(selectedProvider);
       if (!recommendedModel) {
         throw new Error(language === 'zh'
-          ? '没有找到可用模型，请检查密钥或前往“模型”进行高级配置。'
-          : 'No available model was found. Check the key or open Models for advanced setup.');
+          ? '服务已连接，但没有找到可用模型。请检查服务配置或选择其他服务。'
+          : 'The service is connected, but no available model was found. Check its configuration or choose another service.');
       }
       await finishSetup(recommendedModel.id);
     } catch (cause) {
@@ -243,6 +265,26 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
         throw new Error(language === 'zh'
           ? 'XOPC Cloud 已连接，但没有找到可用模型，请稍后重试。'
           : 'XOPC Cloud connected, but no available model was found. Try again shortly.');
+      }
+      await finishSetup(recommendedModel.id);
+    } catch (cause) {
+      dispatch({
+        type: 'patch',
+        patch: { error: cause instanceof Error ? cause.message : String(cause) },
+      });
+    } finally {
+      dispatch({ type: 'patch', patch: { busy: false } });
+    }
+  };
+
+  const finishConnectedProviderSetup = async (providerId: string) => {
+    dispatch({ type: 'patch', patch: { busy: true, error: null } });
+    try {
+      const recommendedModel = await resolveRecommendedModel(providerId);
+      if (!recommendedModel) {
+        throw new Error(language === 'zh'
+          ? '服务已连接，但没有找到可用模型。请检查服务配置或选择其他服务。'
+          : 'The service is connected, but no available model was found. Check its configuration or choose another service.');
       }
       await finishSetup(recommendedModel.id);
     } catch (cause) {
@@ -333,14 +375,16 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                 <div className="mt-8">
                   <OnboardingProviderGrid
                     onSelect={(id) => dispatch({ type: 'patch', patch: { selectedProvider: id, step: 'apiKey', apiKey: '', error: null } })}
+                    onBrowseProviders={() => setProviderDialogOpen(true)}
+                    disabled={busy}
+                    browseDisabled={providerData.loading}
                   />
                 </div>
+                <div className="mt-3 min-h-5">{error ? <p className="text-sm text-danger" role="alert">{error}</p> : null}</div>
                 <div className="mt-auto grid grid-cols-[1fr_auto_1fr] items-center gap-3 pt-8">
                   <Button variant="ghost" className="justify-self-start" onClick={() => dispatch({ type: 'patch', patch: { step: 'callName', error: null } })}>{o.back}</Button>
                   <OnboardingProgress step={step} label={stepLabel} />
-                  <Link to="/settings/capabilities/models" className="justify-self-end text-right text-xs font-medium text-fg-muted hover:text-accent-fg hover:underline">
-                    {language === 'zh' ? '打开高级模型设置' : 'Open advanced model settings'}
-                  </Link>
+                  <span />
                 </div>
               </div>
             ) : null}
@@ -397,9 +441,53 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                 </div>
               </div>
             ) : null}
+
+            {step === 'success' ? (
+              <div className="flex min-h-[30rem] flex-col">
+                <span className="flex size-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2 className="size-6" aria-hidden />
+                </span>
+                <p className="mt-6 text-xs font-medium tracking-wide text-accent-fg">
+                  {language === 'zh' ? '模型设置完成' : 'Model setup complete'}
+                </p>
+                <h1 className="mt-3 text-[2rem] font-semibold leading-tight tracking-[-0.035em] text-fg sm:text-4xl">
+                  {language === 'zh' ? '一切准备好了' : 'You’re ready to go'}
+                </h1>
+                <p className="mt-3 max-w-md text-sm leading-6 text-fg-muted">
+                  {language === 'zh'
+                    ? '聊天模型已经可用。图片生成、语音和电脑操作等能力可以稍后按需配置。'
+                    : 'Your chat model is ready. Image, voice, and computer-use capabilities can be configured later.'}
+                </p>
+                {state.connectedModelRef ? (
+                  <div className="mt-8 rounded-xl bg-surface-hover/25 px-4 py-3">
+                    <p className="text-xs text-fg-muted">{language === 'zh' ? '默认聊天模型' : 'Default chat model'}</p>
+                    <p className="mt-1 truncate text-sm font-medium text-fg" title={state.connectedModelRef}>{state.connectedModelRef}</p>
+                  </div>
+                ) : null}
+                <div className="mt-3 min-h-5">{error ? <p className="text-sm text-danger" role="alert">{error}</p> : null}</div>
+                <div className="mt-auto grid grid-cols-[1fr_auto_1fr] items-center gap-3 pt-10">
+                  <span />
+                  <OnboardingProgress step={step} label={stepLabel} />
+                  <Button variant="primary" className="h-11 justify-self-end px-5" disabled={busy} onClick={() => void completeOnboarding()}>
+                    {busy ? <LoaderCircle className="size-4 animate-spin" aria-hidden /> : null}
+                    {language === 'zh' ? '开始使用 XOPC' : 'Start using XOPC'}
+                    {!busy ? <ChevronRight className="size-4" aria-hidden /> : null}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </div>
         </section>
       </main>
+      <AddProviderDialog
+        open={providerDialogOpen}
+        onOpenChange={setProviderDialogOpen}
+        builtinRows={providerData.builtinRows}
+        customConfig={providerData.customConfig}
+        labels={messages(language).capabilitiesSettings.addProviderDialog}
+        language={language}
+        onSaved={(providerId) => void finishConnectedProviderSetup(providerId)}
+      />
     </div>
   );
 }

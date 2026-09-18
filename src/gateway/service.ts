@@ -944,6 +944,7 @@ export class GatewayService {
     }
     try {
       await this.extensionLoader.loadByActivationPlan({ phase: 'startup' });
+      await this.extensionLoader.startServices();
       this.registerExtensionChannelPlugins();
       const reg = this.extensionLoader.getRegistry();
       log.debug(
@@ -992,6 +993,7 @@ export class GatewayService {
       config: {},
     };
     await this.extensionLoader.loadExtension(extensionConfig);
+    await this.extensionLoader.startServices();
     this.registerExtensionChannelPlugins();
     const plugin = this.channelManager.getPlugin(channelId);
     if (!plugin) {
@@ -1007,6 +1009,7 @@ export class GatewayService {
     }
     try {
       await this.extensionLoader.loadByActivationPlan({ phase: 'deferred' });
+      await this.extensionLoader.startServices();
       this.registerExtensionChannelPlugins();
       log.debug('Deferred-phase extensions loaded');
     } catch (err) {
@@ -1512,6 +1515,8 @@ export class GatewayService {
     this.lastChannelConnectDeferSource = 'off';
 
     await this.channelManager.stop();
+
+    await this.extensionLoader?.shutdown();
 
     await this.automationService.stop();
     this.stopAutomationProductEventBridge?.();

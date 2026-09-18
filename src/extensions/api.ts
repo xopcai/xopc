@@ -18,9 +18,6 @@ import type {
   ExtensionCommandHandler,
   ExtensionReloadHandler,
   ExtensionService,
-  FlagConfig,
-  FlagValue,
-  ShortcutConfig,
   HookHandlerMap,
   ExtensionHookEvent,
   ExtensionHookHandler,
@@ -52,6 +49,7 @@ import { registerMediaUnderstandingProvider as registerMediaUnderstandingProvide
 import type { MediaUnderstandingProvider } from '../media-understanding/types.js';
 import { registerMigration as registerRuntimeMigration } from '../migrations/registry.js';
 import type { Migration } from '../migrations/types.js';
+import { getProviderRegistry } from '../providers/plugin-registry.js';
 
 export class ExtensionApiImpl implements ExtensionApi {
   private _tools: Map<string, AgentTool> = new Map();
@@ -71,6 +69,7 @@ export class ExtensionApiImpl implements ExtensionApi {
   private _registeredSpeechProviderIds: string[] = [];
   private _registeredMediaUnderstandingProviderIds: string[] = [];
   private _registeredMarketplaceAdapterIds: string[] = [];
+  private _providerCleanup: Array<() => void> = [];
   private readonly _manifestCommands = new Map<string, CommandContribution>();
 
   constructor(
@@ -141,17 +140,19 @@ export class ExtensionApiImpl implements ExtensionApi {
     if (!this._hooks.has(event)) {
       this._hooks.set(event, new Set());
     }
-    this._hooks.get(event)!.add(handler);
-
-    if (opts?.once) {
-      const wrapper = async (...args: unknown[]) => {
-        await handler(...args);
-        this._hooks.get(event)?.delete(wrapper);
-      };
-      this._hooks.get(event)!.add(wrapper);
-    }
-
-    this._registry.addHook(event as ExtensionHookEvent, handler as ExtensionHookHandler, this.id, opts?.priority ?? 0);
+    const hookEvent = event as ExtensionHookEvent;
+    const registeredHandler: ExtensionHookHandler = opts?.once
+      ? async (...args: Parameters<ExtensionHookHandler>) => {
+          try {
+            return await (handler as ExtensionHookHandler)(...args);
+          } finally {
+            this._hooks.get(event)?.delete(registeredHandler);
+            this._registry.removeHook(hookEvent, registeredHandler);
+          }
+        }
+      : handler as ExtensionHookHandler;
+    this._hooks.get(event)!.add(registeredHandler);
+    this._registry.addHook(hookEvent, registeredHandler, this.id, opts?.priority ?? 0);
     this._logger.info(`Registered hook: ${event}`);
   }
 
@@ -168,7 +169,7 @@ export class ExtensionApiImpl implements ExtensionApi {
   onHook<K extends ExtensionHookEvent>(
     hookName: K,
     handler: HookHandlerMap[K],
-    _opts?: { priority?: number },
+    opts?: { priority?: number },
   ): void {
     this._assertContract('hooks', hookName);
     // Get execution mode for this hook
@@ -179,6 +180,12 @@ export class ExtensionApiImpl implements ExtensionApi {
     }
     
     this._typedHooks.get(hookName)!.add(handler);
+    this._registry.addHook(
+      hookName,
+      handler as ExtensionHookHandler,
+      this.id,
+      opts?.priority ?? 0,
+    );
 
     this._logger.debug(`Registered typed hook: ${hookName} (mode: ${mode})`);
   }
@@ -195,7 +202,7 @@ export class ExtensionApiImpl implements ExtensionApi {
   registerChannel(registration: { plugin: ChannelPlugin }): void {
     const plugin = registration.plugin;
     this._assertContract('channels', plugin.id);
-    this._registry.addChannelPlugin(plugin);
+    this._registry.addChannelPlugin(plugin, this.id);
     for (const migration of plugin.migrations ?? []) {
       this.registerMigration(migration);
     }
@@ -205,7 +212,7 @@ export class ExtensionApiImpl implements ExtensionApi {
 
   registerHttpRoute(path: string, handler: HttpRequestHandler): void {
     this._assertContract('httpRoutes', path);
-    this._registry.addHttpRoute(path, handler);
+    this._registry.addHttpRoute(path, handler, this.id);
     this._eventBus.emit('http:route', { path, handler });
     this._logger.info(`Registered HTTP route: ${path}`);
   }
@@ -246,7 +253,7 @@ export class ExtensionApiImpl implements ExtensionApi {
 
     commandRegistry.register(definition);
     this._registeredCommandIds.push(commandId);
-    this._registry.addCommand(command);
+    this._registry.addCommand(command, this.id);
 
     this._eventBus.emit('command:register', command);
     this._logger.info(`Registered chat command: /${command.name}`);
@@ -311,14 +318,14 @@ export class ExtensionApiImpl implements ExtensionApi {
 
   registerService(service: ExtensionService): void {
     this._assertContract('services', service.id);
-    this._registry.addService(service);
+    this._registry.addService(service, this.id);
     this._eventBus.emit('service:register', service);
     this._logger.info(`Registered service: ${service.id}`);
   }
 
   registerGatewayMethod(method: string, handler: GatewayMethodHandler): void {
     this._assertContract('gatewayMethods', method);
-    this._registry.addGatewayMethod(method, handler);
+    this._registry.addGatewayMethod(method, handler, this.id);
     this._eventBus.emit('gateway:method', { method, handler });
     this._logger.info(`Registered gateway method: ${method}`);
   }
@@ -370,25 +377,13 @@ export class ExtensionApiImpl implements ExtensionApi {
    */
   registerProvider(plugin: import('./types/providers.js').ProviderPlugin): void {
     this._assertContract('providers', plugin.id);
-    import('../providers/plugin-registry.js').then(({ getProviderRegistry }) => {
-      const registry = getProviderRegistry();
-      registry.register(plugin);
-      this._logger.info(`Extension registered provider: ${plugin.id}`);
-    }).catch((err: unknown) => {
-      this._logger.error(`Failed to register provider: ${err instanceof Error ? err.message : String(err)}`);
-    });
-  }
-
-  /**
-   * Register a full ProviderPlugin (alias for registerProvider)
-   */
-  registerProviderPlugin(plugin: import('./types/providers.js').ProviderPlugin): void {
-    this.registerProvider(plugin);
+    this._providerCleanup.push(getProviderRegistry().register(plugin));
+    this._logger.info(`Extension registered provider: ${plugin.id}`);
   }
 
   registerSpeechProvider(plugin: SpeechProviderPlugin): void {
     this._assertContract('speechProviders', plugin.id);
-    registerSpeechProviderInRegistry(plugin);
+    this._providerCleanup.push(registerSpeechProviderInRegistry(plugin));
     if (!this._registeredSpeechProviderIds.includes(plugin.id)) {
       this._registeredSpeechProviderIds.push(plugin.id);
     }
@@ -402,7 +397,7 @@ export class ExtensionApiImpl implements ExtensionApi {
 
   registerMediaUnderstandingProvider(plugin: MediaUnderstandingProvider): void {
     this._assertContract('mediaUnderstandingProviders', plugin.id);
-    registerMediaUnderstandingProviderInRegistry(plugin);
+    this._providerCleanup.push(registerMediaUnderstandingProviderInRegistry(plugin));
     if (!this._registeredMediaUnderstandingProviderIds.includes(plugin.id)) {
       this._registeredMediaUnderstandingProviderIds.push(plugin.id);
     }
@@ -428,18 +423,6 @@ export class ExtensionApiImpl implements ExtensionApi {
       this._registeredMarketplaceAdapterIds.push(adapterId);
     }
     this._logger.info(`Extension registered marketplace adapter: ${adapterId}`);
-  }
-
-  registerFlag(_name: string, _config: FlagConfig): void {
-    // this._registry.registerFlag(name, config, this.id);
-  }
-
-  getFlag(_name: string): FlagValue {
-    return undefined; // this._registry.getFlag(name);
-  }
-
-  registerShortcut(_key: string, _config: ShortcutConfig): void {
-    // this._registry.registerShortcut(key, config, { extensionId: this.id });
   }
 
   registerTui(register: TuiExtensionRegistrar): void {
@@ -496,6 +479,8 @@ export class ExtensionApiImpl implements ExtensionApi {
       _unregisterMarketplaceAdapter(adapterId);
     }
     this._registeredMarketplaceAdapterIds = [];
+
+    for (const cleanup of this._providerCleanup.splice(0).reverse()) cleanup();
 
     this._typedEventBus.cleanupAll();
     this._eventBus.removeAllListeners();

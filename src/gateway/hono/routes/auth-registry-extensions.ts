@@ -4,7 +4,7 @@ import { relative, resolve } from 'node:path';
 
 import type { Config as SurfaceConfig } from '../../../config/config-surface.js';
 import type { GatewayService } from '../../service.js';
-import { buildWhenContextSnapshot } from '../../../extensions/when-context.js';
+import { validateExtensionConfig } from '../../../extensions/config-validation.js';
 import * as extensionMarketplace from '../../../extensions/marketplace.js';
 import { mergeActivationContext } from '../../../extensions/activation-context.js';
 import { ActivationPlanner } from '../../../extensions/activation-planner.js';
@@ -366,7 +366,11 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
 
   authenticated.get('/api/extensions/:id/config', async (c) => {
     const extensionId = c.req.param('id');
-    return c.json(await loadExtensionStore(`__config__${extensionId}`));
+    const configured = service.currentConfig.extensions?.[extensionId];
+    const config = configured && typeof configured === 'object' && !Array.isArray(configured)
+      ? configured
+      : {};
+    return c.json(config);
   });
 
   authenticated.patch('/api/extensions/:id/config', async (c) => {
@@ -375,20 +379,58 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
     if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
       return c.json({ error: 'Request body must be a JSON object' }, 400);
     }
-    const namespace = `__config__${extensionId}`;
-    const config = await loadExtensionStore(namespace);
-    Object.assign(config, patch);
-    await saveExtensionStore(namespace, config);
+    const loader = service.getExtensionLoader();
+    if (!loader) return c.json({ error: 'Extensions unavailable' }, 503);
+    const extension = loader.discoverExtensions().find((entry) => entry.id === extensionId);
+    if (!extension) return c.json({ error: 'Extension not found' }, 404);
+
+    const current = service.currentConfig.extensions?.[extensionId];
+    const config = {
+      ...(current && typeof current === 'object' && !Array.isArray(current) ? current : {}),
+      ...patch,
+    };
+    const validation = validateExtensionConfig(extension.manifest.configSchema, config);
+    if (validation.valid === false) {
+      return c.json({ error: `Invalid extension config: ${validation.reason}` }, 400);
+    }
+
+    const extensions = { ...(service.currentConfig.extensions ?? {}), [extensionId]: config };
+    const result = await service.updateConfig({ extensions });
+    if (!result.updated) return c.json({ error: result.error ?? 'Failed to update config' }, 500);
     return c.json({ ok: true });
   });
 
-  authenticated.get('/api/context', (c) => {
-    const loader = service.getExtensionLoader();
-    const snapshot = buildWhenContextSnapshot(
-      service.currentConfig as unknown as SurfaceConfig,
-      loader,
-    );
-    return c.json(snapshot);
+  authenticated.all('/api/extensions/:id/runtime/*', async (c) => {
+    const extensionId = c.req.param('id');
+    const prefix = `/api/extensions/${extensionId}/runtime`;
+    const path = c.req.path.slice(prefix.length) || '/';
+    const handler = service.getExtensionRegistry()?.getHttpRoute(extensionId, path);
+    if (!handler) return c.json({ error: 'Extension route not found' }, 404);
+
+    const contentType = c.req.header('content-type') ?? '';
+    let body: unknown;
+    if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
+      body = contentType.includes('application/json')
+        ? await c.req.json().catch(() => undefined)
+        : await c.req.text().catch(() => undefined);
+    }
+    const response = await handler({
+      method: c.req.method,
+      url: c.req.url,
+      headers: c.req.header(),
+      body,
+    });
+    const headers = new Headers(response.headers);
+    let responseBody: string | Uint8Array | null = null;
+    if (response.body !== undefined) {
+      if (typeof response.body === 'string' || response.body instanceof Uint8Array) {
+        responseBody = response.body;
+      } else {
+        headers.set('Content-Type', headers.get('Content-Type') ?? 'application/json; charset=utf-8');
+        responseBody = JSON.stringify(response.body);
+      }
+    }
+    return new Response(responseBody, { status: response.status, headers });
   });
 
   authenticated.get('/api/marketplace', async (c) => {

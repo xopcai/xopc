@@ -4,14 +4,10 @@ const PERMISSION_LABELS_EN: Record<string, string> = {
   'agent.send': 'Send messages to the assistant',
   'agent.subscribe': 'Receive live agent stream events for a chat',
   'session.read': 'List and open chat sessions',
-  'session.write': 'Modify chat sessions',
   'config.read': 'Read extension configuration',
   'config.write': 'Write extension configuration',
   storage: 'Read and write extension storage',
   notification: 'Show in-app notifications',
-  clipboard: 'Use the clipboard',
-  'workspace.read': 'Read workspace files',
-  'workspace.write': 'Write workspace files',
 };
 
 const PERMISSION_LABELS_ZH: Record<string, string> = {
@@ -19,14 +15,10 @@ const PERMISSION_LABELS_ZH: Record<string, string> = {
   'agent.send': '向助手发送消息',
   'agent.subscribe': '接收会话的实时助手流式事件',
   'session.read': '列出并打开聊天会话',
-  'session.write': '修改聊天会话',
   'config.read': '读取扩展配置',
   'config.write': '写入扩展配置',
   storage: '读写扩展存储',
   notification: '显示应用内通知',
-  clipboard: '使用剪贴板',
-  'workspace.read': '读取工作区文件',
-  'workspace.write': '写入工作区文件',
 };
 
 export function describePermission(permission: string, language: string): string {

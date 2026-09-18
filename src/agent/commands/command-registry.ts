@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { appendFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { DurableState } from '../../storage/sqlite/durable-state.js';
 import { resolveStateDir } from '../../config/paths.js';
 import { resolveGlobalSingleton } from '../../utils/global-singleton.js';
+import { spawnProcess } from '../../process/run-process.js';
 import { isolatedCommand, removeCommandContainer, type CommandIsolation } from './command-isolation.js';
 import { readWorkspaceRevision } from '../coding/workspace-revision.js';
 
@@ -47,16 +48,6 @@ export function commandTimeout(raw: unknown, ceiling = MAX_COMMAND_TIMEOUT_MS): 
   return Math.min(ceiling, Math.max(1, typeof raw === 'number' && Number.isFinite(raw) ? Math.floor(raw) : DEFAULT_COMMAND_TIMEOUT_MS));
 }
 
-function killTree(child: ChildProcess): void {
-  if (!child.pid) return;
-  if (process.platform === 'win32') {
-    const killer = spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], { stdio: 'ignore', windowsHide: true });
-    killer.on('error', () => child.kill('SIGKILL')); killer.unref();
-  } else {
-    try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); }
-  }
-}
-
 /** Foreground and background tools share ownership, cancellation, output and durable receipts. */
 export class CommandRegistry {
   private readonly prunedAt = new Map<string, number>();
@@ -96,7 +87,6 @@ export class CommandRegistry {
     };
     writeFileSync(result.logPath, '', { mode: 0o600, flag: 'wx' });
     this.persist(input.owner, result);
-    const child = spawn(launch.executable, launch.args, { shell: launch.shell, cwd: input.cwd, env: input.env, detached: process.platform !== 'win32' });
     const limit = input.maxOutputChars ?? 50_000;
     let logBytes = 0;
     let closed = false;
@@ -116,31 +106,42 @@ export class CommandRegistry {
       result.logTruncated ||= bytes.length > remaining;
       input.onOutput?.(stream, value.length > 16_000 ? `${value.slice(0, 16_000)}\n[stream delta truncated]` : value);
     };
+    const handle = spawnProcess({
+      program: launch.executable,
+      args: launch.args,
+      shell: launch.shell,
+      cwd: input.cwd,
+      env: input.env,
+      detached: process.platform !== 'win32',
+      terminationPolicy: 'tree',
+      keepStdinOpen: true,
+      maxOutputBytes: 0,
+      onOutput: append,
+    });
+    const child = handle.child;
     const stop = (status: 'cancelled' | 'timed_out') => {
       if (result.status !== 'running' || closed) return;
       result.status = status; result.timedOut = status === 'timed_out';
       if (launch.containerName) containerCleanup = removeCommandContainer(launch.containerName).catch(error => {
         result.status = 'interrupted'; append('stderr', `Container cleanup failed: ${String(error)}`);
       });
-      killTree(child);
+      handle.terminate(status === 'timed_out' ? 'timed_out' : 'cancelled');
     };
     const timer = setTimeout(() => stop('timed_out'), commandTimeout(input.timeoutMs));
     timer.unref();
     const abort = () => stop('cancelled');
     input.signal?.addEventListener('abort', abort, { once: true });
     const done = new Promise<CommandResult>(resolve => {
-      child.stdout?.on('data', value => append('stdout', value));
-      child.stderr?.on('data', value => append('stderr', value));
       child.on('error', error => append('stderr', error.message));
       child.stdin?.on('error', error => append('stderr', error.message));
-      child.on('close', async exitCode => {
+      void handle.completion.then(async processResult => {
         closed = true;
         clearTimeout(timer); input.signal?.removeEventListener('abort', abort);
         if (containerCleanup) await containerCleanup;
         // Wait for the completion snapshot before publishing terminal evidence.
         if (input.snapshot) result.endRevision = await readWorkspaceRevision(input.cwd);
-        if (result.status === 'running') result.status = exitCode === 0 ? 'success' : 'failed';
-        result.exitCode = exitCode; result.durationMs = Date.now() - result.createdAtMs;
+        if (result.status === 'running') result.status = processResult.exitCode === 0 ? 'success' : 'failed';
+        result.exitCode = processResult.exitCode; result.durationMs = Date.now() - result.createdAtMs;
         try { this.persist(input.owner, result); } catch { result.logTruncated = true; }
         this.running.delete(id);
         resolve({ ...result });

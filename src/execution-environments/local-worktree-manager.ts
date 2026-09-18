@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, rm, stat } from 'node:fs/promises';
-import { dirname, relative, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
 import lockfile from 'proper-lockfile';
 
@@ -12,12 +12,19 @@ import {
   resolveGitCommit,
   runGit,
 } from './git.js';
-import { resolveExecutionWorktreesRoot, resolveManagedWorktreePath } from './paths.js';
+import { resolveManagedWorktreePath } from './paths.js';
 import { ExecutionEnvironmentStore } from './store.js';
 import {
   ExecutionEnvironmentConflictError,
   type ExecutionEnvironment,
 } from './types.js';
+import {
+  assertManagedWorktreePath,
+  assertNoNestedRegisteredWorktrees,
+  readDirectoryIdentity,
+  sameDirectoryIdentity,
+  type DirectoryIdentity,
+} from './worktree-safety.js';
 
 const log = createLogger('ExecutionEnvironment:LocalWorktree');
 
@@ -67,15 +74,6 @@ async function isDirectory(path: string): Promise<boolean> {
     return (await stat(path)).isDirectory();
   } catch {
     return false;
-  }
-}
-
-function assertManagedPath(rootPath: string, stateDir?: string): void {
-  const managedRoot = resolveExecutionWorktreesRoot(stateDir);
-  const candidate = resolve(rootPath);
-  const child = relative(managedRoot, candidate);
-  if (!child || child.startsWith('..') || resolve(managedRoot, child) !== candidate) {
-    throw new Error(`Refusing to manage worktree outside ${managedRoot}`);
   }
 }
 
@@ -135,7 +133,7 @@ export class LocalWorktreeManager {
     const baseSha = await resolveGitCommit(repository.repositoryRoot, baseRef);
     const environmentId = input.environmentId?.trim() || randomUUID();
     const rootPath = resolveManagedWorktreePath(input.projectId, environmentId, this.stateDir);
-    assertManagedPath(rootPath, this.stateDir);
+    assertManagedWorktreePath(rootPath, this.stateDir, repository.repositoryRoot);
     if (existsSync(rootPath)) throw new ExecutionEnvironmentConflictError(`Worktree path already exists: ${rootPath}`);
 
     const environment = this.store.create({
@@ -155,9 +153,12 @@ export class LocalWorktreeManager {
       reason: 'managed worktree provisioning started',
     });
 
+    let createdDirectory: DirectoryIdentity | undefined;
     try {
       await withRepositoryLock(repository.gitCommonDir, async () => {
         await mkdir(dirname(rootPath), { recursive: true, mode: 0o700 });
+        await mkdir(rootPath, { mode: 0o700 });
+        createdDirectory = await readDirectoryIdentity(rootPath);
         await runGit(repository.repositoryRoot, ['worktree', 'add', '--detach', '--lock', rootPath, baseSha]);
         const registered = await findGitWorktree(repository.repositoryRoot, rootPath);
         if (!registered) throw new Error(`Git did not register worktree ${rootPath}`);
@@ -172,7 +173,7 @@ export class LocalWorktreeManager {
       log.info({ environmentId: ready.id, projectId: ready.projectId, path: ready.rootPath }, 'Managed worktree ready');
       return ready;
     } catch (error) {
-      await this.cleanupFailedProvision(repository.repositoryRoot, repository.gitCommonDir, rootPath);
+      await this.cleanupFailedProvision(repository.repositoryRoot, repository.gitCommonDir, rootPath, createdDirectory);
       const failed = this.store.transition({
         environmentId: environment.id,
         expectedVersion: provisioning.version,
@@ -272,7 +273,10 @@ export class LocalWorktreeManager {
     if (environment.kind !== 'managed_worktree' || !environment.repositoryRoot || !environment.gitCommonDir) {
       throw new Error(`Execution environment ${environmentId} is not a managed worktree`);
     }
-    assertManagedPath(environment.rootPath, this.stateDir);
+    if (environment.ownership !== 'xopc_created') {
+      throw new ExecutionEnvironmentConflictError(`Managed worktree ${environmentId} is not owned by xopc`);
+    }
+    assertManagedWorktreePath(environment.rootPath, this.stateDir, environment.repositoryRoot);
     const bindings = this.store.listBindings(environmentId);
     if (bindings.some(binding => binding.conversationId !== options?.releaseConversationId)) {
       throw new ExecutionEnvironmentConflictError(`Managed worktree ${environmentId} still has active bindings`);
@@ -286,6 +290,8 @@ export class LocalWorktreeManager {
 
     try {
       await withRepositoryLock(environment.gitCommonDir, async () => {
+        await readDirectoryIdentity(environment.rootPath);
+        await assertNoNestedRegisteredWorktrees(environment.repositoryRoot!, environment.rootPath);
         const registered = await findGitWorktree(environment.repositoryRoot!, environment.rootPath);
         if (!registered && existsSync(environment.rootPath)) {
           throw new ExecutionEnvironmentConflictError('Refusing to delete a directory no longer registered as this worktree');
@@ -329,14 +335,24 @@ export class LocalWorktreeManager {
     }
   }
 
-  private async cleanupFailedProvision(repositoryRoot: string, gitCommonDir: string, rootPath: string): Promise<void> {
+  private async cleanupFailedProvision(
+    repositoryRoot: string,
+    gitCommonDir: string,
+    rootPath: string,
+    createdDirectory: DirectoryIdentity | undefined,
+  ): Promise<void> {
     await withRepositoryLock(gitCommonDir, async () => {
       const registered = await findGitWorktree(repositoryRoot, rootPath).catch(() => undefined);
       if (registered) {
         await runGit(repositoryRoot, ['worktree', 'unlock', rootPath]).catch(() => '');
-        await runGit(repositoryRoot, ['worktree', 'remove', '--force', rootPath]).catch(() => '');
+        const removed = await runGit(repositoryRoot, ['worktree', 'remove', '--force', rootPath])
+          .then(() => true, () => false);
+        if (!removed || await findGitWorktree(repositoryRoot, rootPath).catch(() => undefined)) return;
       }
-      if (existsSync(rootPath)) await rm(rootPath, { recursive: true, force: true });
+      const currentDirectory = await readDirectoryIdentity(rootPath);
+      if (createdDirectory && sameDirectoryIdentity(createdDirectory, currentDirectory)) {
+        await rm(rootPath, { recursive: true, force: true });
+      }
     }).catch(() => undefined);
   }
 }

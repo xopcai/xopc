@@ -26,6 +26,8 @@ export type {
   ExtensionCliRegistration,
 } from '../types/index.js';
 
+export { EXTENSION_API_VERSION, EXTENSION_UI_API_VERSION } from '../api-version.js';
+
 // ============================================================================
 // Tools (re-exported from @earendil-works/pi-agent-core)
 // ============================================================================
@@ -147,10 +149,6 @@ export type {
   OAuthConfig,
   OAuthCallbacks,
   OAuthCredentials,
-  FlagConfig,
-  FlagValue,
-  ShortcutConfig,
-  ShortcutHandler,
 } from '../types/index.js';
 
 export type {
@@ -250,7 +248,7 @@ export type {
 // ============================================================================
 
 export { TypedEventBus } from '../typed-event-bus.js';
-export { ExtensionRegistryImpl } from '../loader.js';
+export { ExtensionRegistryImpl } from '../extension-registry-impl.js';
 export { ProviderPluginRegistry, getProviderRegistry } from '../../providers/plugin-registry.js';
 export { SlotRegistry, getSlotRegistry, registerSlotType } from '../slots.js';
 export { HOOK_EXECUTION_MODES } from '../types/hooks.js';

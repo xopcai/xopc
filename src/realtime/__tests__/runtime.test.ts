@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { WebSocket as WebSocketType } from 'ws';
 
-import { REALTIME_MAX_CLIENT_FRAME_BYTES, REALTIME_PROTOCOL_VERSION, parseServerRealtimeMessage } from '@xopcai/realtime-protocol';
+import { REALTIME_CAPABILITIES, REALTIME_MAX_CLIENT_FRAME_BYTES, REALTIME_PROTOCOL_VERSION, parseServerRealtimeMessage } from '@xopcai/realtime-protocol';
 import { RealtimeRuntime } from '../runtime.js';
 import { COMPUTER_DESCRIPTOR } from '@xopcai/computer-control-contract';
 import { endpointHelloSigningPayload, type EndpointHelloPayload } from '@xopcai/endpoint-tools-protocol';
@@ -126,7 +126,9 @@ describe('RealtimeRuntime', () => {
       },
     }));
 
-    await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.ready' });
+    const ready = await messages.next();
+    expect(ready).toMatchObject({ kind: 'realtime.ready' });
+    expect(ready.payload).not.toHaveProperty('negotiatedCapabilities');
     await expect(messages.next()).resolves.toMatchObject({
       kind: 'realtime.subscribed',
       payload: { topic: 'run:r1', cursor: 0 },
@@ -141,6 +143,37 @@ describe('RealtimeRuntime', () => {
     await expect(live).resolves.toMatchObject({
       kind: 'realtime.event',
       payload: { seq: 2, event: 'assistant.delta', data: { delta: 'hello' } },
+    });
+  });
+
+  it('negotiates only server-supported capabilities when the client opts in', async () => {
+    runtime = new RealtimeRuntime();
+    server = createServer();
+    server.on('upgrade', (request, connection, head) => runtime!.handleUpgrade(request, connection, head));
+    await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing test server address');
+    const issued = runtime.tickets.issue('capable-client', 'web', { principalId: 'owner', scopes: ['gateway.admin'] });
+    socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/realtime/v1/ws`);
+    await waitForOpen(socket);
+    const messages = collectMessages(socket);
+    socket.send(JSON.stringify({
+      protocolVersion: REALTIME_PROTOCOL_VERSION,
+      messageId: crypto.randomUUID(),
+      kind: 'realtime.hello',
+      sentAt: Date.now(),
+      payload: {
+        ticket: issued.ticket,
+        clientId: 'capable-client',
+        clientKind: 'web',
+        subscriptions: [],
+        capabilities: [...REALTIME_CAPABILITIES, 'future.capability'],
+      },
+    }));
+
+    await expect(messages.next()).resolves.toMatchObject({
+      kind: 'realtime.ready',
+      payload: { negotiatedCapabilities: REALTIME_CAPABILITIES },
     });
   });
 

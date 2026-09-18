@@ -494,9 +494,6 @@
     "onChannels": [
       "feishu",
       "lark"
-    ],
-    "onCapabilities": [
-      "tool"
     ]
   },
   "setup": {
