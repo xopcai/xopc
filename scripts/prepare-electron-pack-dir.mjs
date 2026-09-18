@@ -1,6 +1,6 @@
 /** Stage the minimal Electron app directory consumed by electron-builder. */
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -150,13 +150,28 @@ function stageVoiceHotkeyHelper(repoRoot, packDirPath, target) {
   cpSync(source, join(destDir, name));
 }
 
-export function stageComputerDriver(repoRoot, packDirPath, target) {
+export function thinMacBinary(source, destination, arch, runLipo = spawnSync) {
+  const slice = arch === 'x64' ? 'x86_64' : arch;
+  if (slice !== 'arm64' && slice !== 'x86_64') {
+    throw new Error(`[prepare-electron-pack-dir] Unsupported macOS Computer Use architecture: ${arch}`);
+  }
+  const result = runLipo('lipo', [source, '-thin', slice, '-output', destination], {
+    encoding: 'utf8',
+  });
+  if ((result.status ?? 1) !== 0) {
+    const reason = result.error?.message ?? result.stderr?.trim() ?? 'unknown lipo failure';
+    throw new Error(`[prepare-electron-pack-dir] Failed to thin Computer Use driver for ${arch}: ${reason}`);
+  }
+  chmodSync(destination, 0o755);
+}
+
+export function stageComputerDriver(repoRoot, packDirPath, target, thinBinary = thinMacBinary) {
   const computerDriverDir = join(packDirPath, '_pack-resources', 'computer-driver');
   mkdirSync(computerDriverDir, { recursive: true });
   if (target.platform !== 'darwin') return;
   const driver = join(repoRoot, '.cache', 'computer-driver', '0.28.2', 'cua-driver');
   if (!existsSync(driver)) throw new Error('Run node scripts/setup-computer-driver.mjs before packaging macOS Computer Use.');
-  cpSync(driver, join(computerDriverDir, 'cua-driver'));
+  thinBinary(driver, join(computerDriverDir, 'cua-driver'), target.arch);
   cpSync(join(repoRoot, 'electron/resources/computer-driver-LICENSE.txt'), join(computerDriverDir, 'computer-driver-LICENSE.txt'));
 }
 
