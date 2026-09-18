@@ -58,22 +58,6 @@ const SCHEME_PREVIEW: Record<
       muted: '#134e2a',
     },
   },
-  mono: {
-    light: {
-      canvas: '#ffffff',
-      panel: '#f5f5f5',
-      accent: '#111111',
-      fg: '#111111',
-      muted: '#e5e7eb',
-    },
-    dark: {
-      canvas: '#101010',
-      panel: '#1a1a1a',
-      accent: '#737373',
-      fg: '#fafafa',
-      muted: '#333333',
-    },
-  },
   clay: {
     light: {
       canvas: '#fffaf0',
@@ -123,10 +107,7 @@ function SchemePreviewHalf({
 }) {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center gap-1 p-1.5" style={{ backgroundColor: canvas }}>
-      <div
-        className="flex flex-col gap-0.5 rounded-sm border p-1"
-        style={{ backgroundColor: panel, borderColor: muted }}
-      >
+      <div className="flex flex-col gap-0.5 rounded-sm p-1" style={{ backgroundColor: panel }}>
         <div className="flex items-center gap-1">
           <div className="size-1 shrink-0 rounded-full" style={{ backgroundColor: accent }} />
           <div className="h-1 min-w-0 flex-1 rounded-full" style={{ backgroundColor: fg, opacity: 0.85 }} />
@@ -142,7 +123,7 @@ function SchemePreviewHalf({
 function SchemePreviewSwatch({ scheme }: { scheme: ColorScheme }) {
   const { light, dark } = SCHEME_PREVIEW[scheme];
   return (
-    <div className="flex h-11 w-full overflow-hidden rounded-md border border-edge-subtle">
+    <div className="flex h-11 w-full overflow-hidden rounded-md">
       <SchemePreviewHalf {...light} />
       <div className="w-px shrink-0 bg-black/12 dark:bg-white/12" aria-hidden />
       <SchemePreviewHalf {...dark} />
@@ -155,15 +136,13 @@ const COLOR_SCHEME_OPTIONS: {
   labelKey:
     | 'colorSchemeDefault'
     | 'colorSchemeLightGreen'
-    | 'colorSchemeModernMono'
     | 'colorSchemeClay'
     | 'colorSchemeDawn';
 }[] = [
   { value: 'default', labelKey: 'colorSchemeDefault' },
-  { value: 'emerald', labelKey: 'colorSchemeLightGreen' },
-  { value: 'mono', labelKey: 'colorSchemeModernMono' },
-  { value: 'clay', labelKey: 'colorSchemeClay' },
   { value: 'dawn', labelKey: 'colorSchemeDawn' },
+  { value: 'emerald', labelKey: 'colorSchemeLightGreen' },
+  { value: 'clay', labelKey: 'colorSchemeClay' },
 ];
 
 function ColorSchemeSelector() {
@@ -178,7 +157,7 @@ function ColorSchemeSelector() {
       <div className="min-w-0">
         <div className="text-sm font-medium text-fg">{a.colorSchemeTitle}</div>
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {COLOR_SCHEME_OPTIONS.map(({ value, labelKey }) => {
           const isSelected = colorScheme === value;
           return (
@@ -188,11 +167,11 @@ function ColorSchemeSelector() {
               aria-pressed={isSelected}
               onClick={() => setColorScheme(value)}
               className={cn(
-                'flex flex-col gap-2 rounded-xl border-2 p-2.5 text-left transition-[border-color,box-shadow,transform] duration-150',
+                'flex flex-col gap-2 rounded-xl bg-surface-hover/25 p-2.5 text-left transition-[background-color,box-shadow,transform] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                 interaction.pressCard,
                 isSelected
-                  ? 'border-accent shadow-[0_0_0_1px_var(--color-accent)]'
-                  : 'border-edge-subtle hover:border-edge',
+                  ? 'bg-surface-active shadow-surface'
+                  : 'hover:bg-surface-hover/60',
               )}
             >
               <SchemePreviewSwatch scheme={value} />

@@ -61,7 +61,7 @@ export function LogsErrorSummarySection({ L, items, loading, onSelectItem }: Pro
       </button>
 
       {expanded && !loading && items.length > 0 ? (
-        <ul className="divide-y divide-edge-subtle border-t border-edge-subtle dark:divide-edge dark:border-edge">
+        <ul className="flex flex-col gap-1 rounded-xl bg-surface-hover/20 p-1 [&>li]:rounded-lg [&>li]:bg-surface-base/45">
           {items.map((item) => (
             <li key={item.key}>
               <button

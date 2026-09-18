@@ -27,7 +27,7 @@ export function SshCliSection({ embedded = false }: { embedded?: boolean }) {
 
   const commandBlock = (
     <>
-      <pre className="overflow-x-auto rounded-lg border border-edge bg-surface px-3 py-2 text-xs text-fg-muted">
+      <pre className="overflow-x-auto rounded-lg bg-surface-base/55 px-3 py-2 text-xs text-fg-muted">
         {command}
       </pre>
       <div className="mt-2">

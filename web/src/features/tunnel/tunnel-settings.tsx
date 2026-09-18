@@ -499,7 +499,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
           ) : null}
 
           {st.subdomain || st.publicUrl ? (
-            <div className="space-y-2 border-t border-edge-subtle pt-4">
+            <div className="space-y-2 rounded-xl bg-surface-base/45 p-4">
               <Button
                 type="button"
                 variant="secondary"
@@ -516,7 +516,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
         </SettingsCollapsibleSection>
 
         <SettingsCollapsibleSection showLabel={t.showAdvanced} hideLabel={t.hideAdvanced}>
-          <div className="flex flex-col gap-2 border-t border-edge-subtle pt-4 text-xs text-fg-subtle">
+          <div className="flex flex-col gap-2 rounded-xl bg-surface-base/45 p-4 text-xs text-fg-subtle">
             <p className="flex items-start gap-2">
               <Globe className="mt-0.5 size-4 shrink-0 text-accent" />
               <span>{t.brokerNote}</span>

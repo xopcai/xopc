@@ -127,12 +127,12 @@ export function RuntimeToolsSettingsPanel() {
       />
 
       {actionError ? (
-        <div className="rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+        <div className="rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger">
           {actionError}
         </div>
       ) : null}
 
-      <section className="rounded-xl border border-edge bg-surface-subtle p-4">
+      <section className="rounded-xl bg-surface-hover/20 p-4">
         <label className="flex items-center justify-between gap-4">
           <span>
             <span className="block text-sm font-medium text-fg">{t.enabled}</span>
@@ -148,7 +148,7 @@ export function RuntimeToolsSettingsPanel() {
       </section>
 
       <SettingsAdvancedGate>
-      <section className="grid gap-4 rounded-xl border border-edge bg-surface-subtle p-4 md:grid-cols-2">
+      <section className="grid gap-4 rounded-xl bg-surface-hover/20 p-4 md:grid-cols-2">
         <label className="space-y-1.5 text-xs font-medium text-fg-muted">
           {t.downloadSource}
           <Select
@@ -212,7 +212,7 @@ export function RuntimeToolsSettingsPanel() {
           const currentProgress = progress[runtime];
           const runtimeConfig = runtime === 'uv' ? draft.uv : draft[runtime];
           return (
-            <section key={runtime} className="flex min-w-0 flex-col gap-4 rounded-xl border border-edge bg-surface-panel p-4">
+            <section key={runtime} className="flex min-w-0 flex-col gap-4 rounded-xl bg-surface-base/55 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="text-base font-semibold text-fg">{t.runtimeNames[runtime]}</h2>

@@ -120,7 +120,7 @@ export function TailscaleServeSection({ embedded = false }: { embedded?: boolean
       ) : null}
 
       {embedded && data?.tailscale.cliAvailable === false ? (
-        <p className="rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-sm text-fg-muted">
+        <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-fg-muted">
           {t.cliMissingIntro}{' '}
           <TailscaleDownloadLink label={t.cliMissingDownloadLink} />
           {t.cliMissingSuffix}

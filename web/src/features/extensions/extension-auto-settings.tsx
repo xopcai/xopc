@@ -129,7 +129,7 @@ export function ExtensionAutoSettings({ extensionId }: { extensionId: string }) 
   }
 
   return (
-    <div className="mb-6 flex flex-col gap-3 rounded-xl bg-surface-base p-4" onBlurCapture={autosave.onBlurCapture}>
+    <div className="flex flex-col gap-3 rounded-xl bg-surface-hover/20 p-4" onBlurCapture={autosave.onBlurCapture}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-fg">Configuration</h2>
         <div className="flex flex-wrap items-center gap-2">

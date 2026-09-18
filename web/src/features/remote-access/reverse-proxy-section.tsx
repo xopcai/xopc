@@ -165,7 +165,7 @@ export function ReverseProxySection() {
           <p className="text-xs text-fg-subtle">{rp.urlHint}</p>
 
           {isAutoDetectedOnly && detected ? (
-            <div className="rounded-lg border border-accent/40 bg-accent-soft/50 px-3 py-2 text-xs leading-relaxed text-accent-fg">
+            <div className="rounded-lg bg-accent-soft/60 px-3 py-2 text-xs leading-relaxed text-accent-fg">
               <div className="font-medium">{rp.autoDetectedTitle}</div>
               <div className="mt-1 break-all font-mono text-[11px]">{detected}</div>
               <p className="mt-1">{rp.autoDetectedHint}</p>
@@ -205,7 +205,7 @@ export function ReverseProxySection() {
             <p className="text-xs text-red-800 dark:text-red-200">{savingState.error}</p>
           ) : null}
 
-          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:border-amber-800/60 dark:bg-amber-950/30 dark:text-amber-100">
+          <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
             {rp.certWarning}
           </div>
         </div>
@@ -231,7 +231,7 @@ function ProbeResultPill({
 }) {
   if (result.ok) {
     return (
-      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800/60 dark:bg-emerald-950/30 dark:text-emerald-100">
+      <div className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100">
         <span className="font-medium">{labels.ok}</span>
         {' · '}
         <span className="font-mono">{result.latencyMs}ms</span>
@@ -247,7 +247,7 @@ function ProbeResultPill({
   const key = `code_${result.code}` as const;
   const codeLabel = (labels as Record<string, string>)[key] ?? labels.codeUnknown;
   return (
-    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-900 dark:border-red-800/60 dark:bg-red-950/30 dark:text-red-100">
+    <div className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-900 dark:bg-red-950/30 dark:text-red-100">
       <span className="font-medium">{codeLabel}</span>
       {result.message ? (
         <>

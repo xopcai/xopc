@@ -18,7 +18,7 @@ function SettingRow({ icon, title, description, children }: {
   icon?: ReactNode; title: string; description?: ReactNode; children?: ReactNode;
 }) {
   return <div className="flex flex-wrap items-center gap-4 p-4 sm:flex-nowrap sm:p-5">
-    {icon && <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-edge bg-surface-base text-fg-muted" aria-hidden>{icon}</div>}
+    {icon && <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-base/70 text-fg-muted" aria-hidden>{icon}</div>}
     <div className="min-w-0 flex-1">
       <h3 className="text-sm font-medium text-fg">{title}</h3>
       {description && <div className="mt-1 text-sm leading-relaxed text-fg-muted">{description}</div>}
@@ -97,16 +97,18 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
 
     {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
     {notice && <p role="status" className="text-sm text-fg-muted">{t.stoppedNotice}</p>}
-    {desktop?.controlPaused && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-edge p-4">
+    {desktop?.controlPaused && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-warning-soft p-4">
       <p className="text-sm text-fg-muted">{t.pausedNotice}</p>
       <Button disabled={busy} onClick={() => { void perform(async () => { if (native) setDesktop(await native.resume()); setNotice(false); }); }}>{t.resume}</Button>
     </div>}
+
+    <ComputerModelSettings zh={zh} />
 
     <section aria-labelledby="computer-control-title" className="space-y-3">
       <h2 id="computer-control-title" className="text-sm font-semibold text-fg">{t.control}</h2>
       {!config && !loadError ? <Skeleton className="h-40 w-full rounded-xl" /> : loadError ?
         <div role="alert" className="text-sm text-fg-muted">{String(loadError)} <Button onClick={() => { void perform(() => mutate()); }}>{t.retry}</Button></div> :
-        <div className="divide-y divide-edge rounded-xl border border-edge">
+        <div className="flex flex-col gap-1 rounded-xl bg-surface-hover/20 p-1 [&>*]:rounded-lg [&>*]:bg-surface-base/45">
           <SettingRow icon={<MousePointer2 className="size-5" />} title={t.desktop} description={t.desktopDescription}>
             <button type="button" role="switch" aria-label={t.desktop} aria-checked={config?.computer?.enabled === true}
               disabled={busy} onClick={() => { void saveEnabled(config?.computer?.enabled !== true); }}
@@ -138,10 +140,10 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
 
     <section aria-labelledby="computer-permissions-title" className="space-y-3">
       <h2 id="computer-permissions-title" className="text-sm font-semibold text-fg">{t.permissions}</h2>
-      {!native ? <p className="rounded-xl border border-edge p-5 text-sm leading-relaxed text-fg-muted">{window.electronAPI && window.electronAPI.platform !== 'darwin' ? t.unsupportedPlatform : t.desktopRequired}</p> :
-        nativeError ? <p role="alert" className="rounded-xl border border-edge p-5 text-sm text-fg-muted">{t.nativeError}</p> :
+      {!native ? <p className="rounded-xl bg-surface-hover/20 p-5 text-sm leading-relaxed text-fg-muted">{window.electronAPI && window.electronAPI.platform !== 'darwin' ? t.unsupportedPlatform : t.desktopRequired}</p> :
+        nativeError ? <p role="alert" className="rounded-xl bg-danger-soft p-5 text-sm text-danger">{t.nativeError}</p> :
         !desktop ? <div aria-label={t.checking}><Skeleton className="h-52 w-full rounded-xl" /></div> :
-        <div className="divide-y divide-edge rounded-xl border border-edge">
+        <div className="flex flex-col gap-1 rounded-xl bg-surface-hover/20 p-1 [&>*]:rounded-lg [&>*]:bg-surface-base/45">
           <SettingRow icon={<Monitor className="size-5" />} title={t.device} description={<>
             <span aria-live="polite">{desktop.connected ? t.connected : t.disconnected} · {sessionLabel}</span>
             {desktop.reenrollmentRequired && <p className="mt-1">{t.revoked}</p>}
@@ -162,6 +164,5 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
       {(desktop?.error || desktop?.session?.errorCode) && <p role="alert" className="break-words text-sm text-red-600">{desktop.error || desktop.session?.errorCode}</p>}
     </section>
 
-    <ComputerModelSettings zh={zh} />
   </SettingsPageFrame>;
 }

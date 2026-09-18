@@ -503,7 +503,7 @@ export function VoiceSettingsPanel() {
             {refinement.mode === 'custom' ? <SelectOption value="custom">{v.setup.advanced}</SelectOption> : null}
           </Select>
         </label>
-        <details className="rounded-xl border border-edge bg-surface-panel px-4 py-3"><summary className="cursor-pointer text-sm font-medium text-fg">{v.setup.readout} · {tts.enabled ? ttsTriggerLabel(tts.trigger, v) : v.overview.off}</summary>
+        <details className="rounded-xl bg-surface-base/55 px-4 py-3"><summary className="cursor-pointer text-sm font-medium text-fg">{v.setup.readout} · {tts.enabled ? ttsTriggerLabel(tts.trigger, v) : v.overview.off}</summary>
           <p className="mt-3 text-xs text-fg-muted">{v.setup.readoutHint}</p><TtsSection v={v} apiKeyLabels={apiKeyLabels} tts={tts} models={models} ttsProviders={ttsProviders} updateTts={updateTts} />
         </details>
       </> : null}
@@ -511,7 +511,7 @@ export function VoiceSettingsPanel() {
       {group === 'service' ? <>
         <PlatformVoiceSettings disabled={dirty || autosave.status === 'saving'} />
         {form.voice.realtime.enabled && form.voice.realtime.omni?.provider === 'alibaba' ? <OmniVoiceSettings value={form.voice.realtime.omni} onChange={(omni) => updateRealtime({ omni })} /> : null}
-        <details className="rounded-xl border border-edge bg-surface-panel px-4 py-3"><summary className="cursor-pointer text-sm font-medium text-fg">{v.experience.technical}</summary>
+        <details className="rounded-xl bg-surface-base/55 px-4 py-3"><summary className="cursor-pointer text-sm font-medium text-fg">{v.experience.technical}</summary>
           <SttSection v={v} apiKeyLabels={apiKeyLabels} stt={stt} models={models} sttProviders={sttProviders} updateStt={updateStt} updateSttFallback={updateSttFallback} />
           <p className="text-xs text-fg-muted">{v.notes.envVars}</p>
         </details>
@@ -530,7 +530,7 @@ function VoiceLanguageSection({
   updateLanguageMode: (mode: 'auto' | 'manual') => void;
 }) {
   return (
-    <section className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
+    <section className="rounded-xl bg-surface-hover/20 px-4 py-5 sm:px-5">
       <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,18rem)] sm:items-center">
         <div>
           <div className="text-sm font-semibold text-fg">{v.language.title}</div>
@@ -611,7 +611,7 @@ function SttSection({
   }, [configuredModel, currentModel, modelField, updateProviderSlice]);
 
   return (
-    <section className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
+    <section className="rounded-xl bg-surface-hover/20 px-4 py-5 sm:px-5">
       <div className="mb-4">
         <div className="flex items-center gap-2 text-sm font-semibold text-fg">
           <Mic className="size-4 text-accent" strokeWidth={1.75} />
@@ -722,7 +722,7 @@ function LocalVoiceModelsPanel({ v }: { v: VoiceSettingsMessages }) {
   );
 
   return (
-    <div className="rounded-xl border border-edge bg-surface-panel/60 p-3">
+    <div className="rounded-xl bg-surface-base/55 p-3">
       <div className="text-sm font-medium text-fg">{v.stt.localModels}</div>
       <p className="mt-1 text-xs text-fg-muted">{v.stt.localModelsDesc}</p>
       {error ? <p className="mt-3 text-xs text-red-600 dark:text-red-400">{String(error)}</p> : null}
@@ -944,7 +944,7 @@ function TtsSection({
   }, [currentModel, currentVoice, providerSlice, stopTestAudio, testText, tts.provider, v.tts.test.emptyText, v.tts.test.playFailed]);
 
   return (
-    <section className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
+    <section className="rounded-xl bg-surface-hover/20 px-4 py-5 sm:px-5">
       <div className="mb-4">
         <div className="flex items-center gap-2 text-sm font-semibold text-fg">
           <Volume2 className="size-4 text-accent" strokeWidth={1.75} />
@@ -1198,7 +1198,7 @@ function VoiceToggle({
       aria-checked={checked}
       onClick={() => onChange(!checked)}
       className={cn(
-        'group flex w-full items-center justify-between gap-4 rounded-lg border border-edge px-3 py-3 text-left transition-colors',
+        'group flex w-full items-center justify-between gap-4 rounded-lg bg-surface-base/55 px-3 py-3 text-left transition-colors',
         settingsInputFocusClass,
         checked
           ? 'bg-surface-panel text-fg'

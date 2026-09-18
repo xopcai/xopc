@@ -40,7 +40,7 @@ export function LogsFiltersSection({
   autoRefresh,
 }: Props) {
   return (
-    <section className="flex flex-col gap-3" aria-label={L.filters}>
+    <section className="flex flex-col gap-3 rounded-xl bg-surface-hover/20 p-4" aria-label={L.filters}>
       <div className="overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <div className="min-w-[min(100%,36rem)]">
           <SlidingSegmented<LevelSegmentValue>
