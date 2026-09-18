@@ -11,6 +11,12 @@ describe('tool activity contract', () => {
     expect(resolveToolActivity('filesystem__read_file', 'completed')).toMatchObject({
       category: 'file', action: 'read', source: 'workspace', status: 'completed',
     });
+    expect(resolveToolActivity('find', 'completed')).toMatchObject({
+      category: 'code', action: 'search', source: 'workspace', status: 'completed',
+    });
+    expect(resolveToolActivity('user_context_update', 'completed')).toMatchObject({
+      category: 'memory', action: 'edit', source: 'memory', sensitivity: 'personal', status: 'completed',
+    });
   });
 
   it('uses a neutral activity for unregistered tools', () => {

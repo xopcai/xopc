@@ -9,6 +9,7 @@ import { Sparkles, Zap } from 'lucide-react';
 import {
   Fragment,
   memo,
+  useEffect,
   useLayoutEffect,
   useState,
   type PointerEvent,
@@ -17,18 +18,23 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 
-import type { PaletteItem } from '@/features/chat/palette/command-palette.types';
+import type {
+  PaletteItem,
+  PaletteItemKind,
+  PaletteSection,
+} from '@/features/chat/palette/command-palette.types';
 import {
   commandRowDisabled,
   commandRowWillQueue,
 } from '@/features/chat/palette/use-command-palette';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
 
 /** Above shell `overflow-hidden`; portal + fixed avoids clipping (only shadow was visible). */
 const PORTAL_Z = 100;
 /** Cap width so the list stays readable; full composer width is often unnecessarily wide. */
-const MAX_PALETTE_WIDTH_PX = 280;
+const MAX_PALETTE_WIDTH_PX = 560;
 
 function highlightFuzzyName(name: string, q: string): ReactNode {
   const needle = q.trim().toLowerCase();
@@ -103,6 +109,7 @@ const PaletteOptionRow = memo(function PaletteOptionRow({
   queueFullTooltip,
   skillUnavailableLabel,
   skillAgentDeniedLabel,
+  skillSourceLabels,
   onSelectItem,
 }: {
   item: PaletteItem;
@@ -120,21 +127,22 @@ const PaletteOptionRow = memo(function PaletteOptionRow({
   queueFullTooltip: string;
   skillUnavailableLabel: string;
   skillAgentDeniedLabel: string;
+  skillSourceLabels: Record<string, string>;
   onSelectItem: (item: PaletteItem) => void;
 }) {
   const isSkill = item.kind === 'skill';
   const isAgent = item.kind === 'agent';
   const icon = isAgent ? (
     <AgentAvatarDisplay
-      agentId={item.name}
+      agentId={item.agentId}
       avatar={item.avatar}
       size={18}
       className="size-[18px] shrink-0"
     />
   ) : isSkill ? (
-    <Sparkles className="size-3 shrink-0 text-accent-fg" aria-hidden />
+    <Sparkles className="size-4 shrink-0 text-accent-fg" aria-hidden />
   ) : (
-    <Zap className="size-3 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+    <Zap className="size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
   );
   // Agents render as names; skills/commands keep the leading slash.
   const nameLine = isAgent ? (
@@ -152,8 +160,8 @@ const PaletteOptionRow = memo(function PaletteOptionRow({
     <span className="text-fg">/{item.name}</span>
   );
   const isCurrentAgent =
-    isAgent && currentAgentId != null && currentAgentId.length > 0 && item.name === currentAgentId;
-  const isUnavailableSkill = isSkill && item.availability?.status !== 'available';
+    isAgent && currentAgentId != null && currentAgentId.length > 0 && item.agentId === currentAgentId;
+  const isUnavailableSkill = isSkill && item.availability.status !== 'available';
   const streamContext = { runBusy, pendingFollowUpsCount, maxPendingFollowUps };
   const willQueue = commandRowWillQueue(item, streamContext);
   const isDisabled = commandRowDisabled(item, streamContext);
@@ -172,9 +180,15 @@ const PaletteOptionRow = memo(function PaletteOptionRow({
     trailingBadge = (
       <span
         className="ml-1 shrink-0 rounded bg-surface-hover px-1 py-px text-[0.6rem] font-medium leading-none text-fg-muted"
-        aria-label={item.availability?.reason ?? 'unavailable'}
+        aria-label={item.availability.reason ?? 'unavailable'}
       >
-        {item.availability?.status === 'agent-denied' ? skillAgentDeniedLabel : skillUnavailableLabel}
+        {item.availability.status === 'agent-denied' ? skillAgentDeniedLabel : skillUnavailableLabel}
+      </span>
+    );
+  } else if (isSkill && item.source) {
+    trailingBadge = (
+      <span className="ml-2 shrink-0 text-[11px] font-normal text-fg-muted">
+        {skillSourceLabels[item.source] ?? item.source}
       </span>
     );
   } else if (isDisabled) {
@@ -223,22 +237,17 @@ const PaletteOptionRow = memo(function PaletteOptionRow({
 export const CommandPalette = memo(function CommandPalette({
   open,
   anchorRef,
-  items,
+  sections,
+  flatItems,
+  loading,
+  failedKinds,
   selectedIndex,
   noResults,
-  grouped,
-  skillRowCount,
-  commandRowCount,
+  sectionLoadFailedLabel,
   query,
   skillsLabel,
   commandsLabel,
   agentsLabel,
-  groupedHasSkills,
-  groupedHasCommands,
-  groupedHasAgents,
-  groupedSkillsShowMoreLabel,
-  groupedCommandsShowMoreLabel,
-  groupedAgentsShowMoreLabel,
   currentAgentId,
   currentBadgeLabel,
   runBusy,
@@ -249,9 +258,7 @@ export const CommandPalette = memo(function CommandPalette({
   queueFullTooltip,
   skillUnavailableLabel,
   skillAgentDeniedLabel,
-  onExpandSkills,
-  onExpandCommands,
-  onExpandAgents,
+  skillSourceLabels,
   onSelectItem,
   panelRef,
 }: {
@@ -259,25 +266,17 @@ export const CommandPalette = memo(function CommandPalette({
   anchorRef: RefObject<HTMLElement | null>;
   /** The floating listbox `div` (for outside-click to dismiss the slash token in the parent). */
   panelRef?: RefObject<HTMLDivElement | null>;
-  items: PaletteItem[];
+  sections: PaletteSection[];
+  flatItems: PaletteItem[];
+  loading: boolean;
+  failedKinds: PaletteItemKind[];
   selectedIndex: number;
   noResults: string;
-  /** When true, show section labels (query empty). */
-  grouped: boolean;
-  /** Leading rows in `items` that are skills. */
-  skillRowCount: number;
-  /** Rows after skills that are commands; agents follow. */
-  commandRowCount: number;
+  sectionLoadFailedLabel: string;
   query: string;
   skillsLabel: string;
   commandsLabel: string;
   agentsLabel: string;
-  groupedHasSkills: boolean;
-  groupedHasCommands: boolean;
-  groupedHasAgents: boolean;
-  groupedSkillsShowMoreLabel: string | null;
-  groupedCommandsShowMoreLabel: string | null;
-  groupedAgentsShowMoreLabel: string | null;
   /** Active session agent id; the matching agent row gets a "current" trailing badge. */
   currentAgentId?: string;
   /** Localized text for the "current" badge (e.g. "current" / "当前"). */
@@ -294,9 +293,7 @@ export const CommandPalette = memo(function CommandPalette({
   queueFullTooltip: string;
   skillUnavailableLabel: string;
   skillAgentDeniedLabel: string;
-  onExpandSkills: () => void;
-  onExpandCommands: () => void;
-  onExpandAgents: () => void;
+  skillSourceLabels: Record<string, string>;
   /** Same behavior as choosing the row with Enter (skill pill / slash command / agent switch). */
   onSelectItem: (item: PaletteItem) => void;
 }) {
@@ -335,20 +332,29 @@ export const CommandPalette = memo(function CommandPalette({
     };
   }, [open, anchorRef]);
 
+  useEffect(() => {
+    if (!open || flatItems.length === 0) return;
+    document.getElementById(`palette-${selectedIndex}`)?.scrollIntoView?.({ block: 'nearest' });
+  }, [flatItems.length, open, selectedIndex]);
+
   if (!open || typeof document === 'undefined' || box === null) {
     return null;
   }
 
-  const totalRows = items.length;
+  const totalRows = flatItems.length;
+  const selectedItem = flatItems[selectedIndex];
   const panelWidth = Math.min(box.width, MAX_PALETTE_WIDTH_PX);
   const filterQuery = query.trim();
-  const showHighlight = !grouped && filterQuery.length > 0;
-
-  const showMoreClass =
-    'w-full px-2.5 py-1 text-left text-[11px] leading-tight text-fg-muted transition hover:bg-surface-hover/80 hover:text-fg';
+  const showHighlight = filterQuery.length > 0;
 
   const sectionHeaderClass =
-    'mb-1.5 px-2.5 pt-2.5 text-[0.6rem] font-medium uppercase leading-none tracking-wide text-fg-muted';
+    'sticky top-0 z-10 flex items-center justify-between bg-surface-panel px-2.5 py-2 text-[0.65rem] font-medium uppercase leading-none tracking-wide text-fg-muted dark:bg-surface-panel';
+
+  const sectionLabels: Record<PaletteItemKind, string> = {
+    skill: skillsLabel,
+    command: commandsLabel,
+    agent: agentsLabel,
+  };
 
   const optionRowProps = {
     selectedIndex,
@@ -364,114 +370,69 @@ export const CommandPalette = memo(function CommandPalette({
     queueFullTooltip,
     skillUnavailableLabel,
     skillAgentDeniedLabel,
+    skillSourceLabels,
     onSelectItem,
   };
 
-  const listBody =
-    totalRows === 0 ? (
-      <div className="p-2.5 text-xs leading-normal text-fg-muted">{noResults}</div>
-    ) : grouped ? (
-      <>
-        {groupedHasSkills ? (
-          <div>
-            <div className={sectionHeaderClass} aria-hidden>
-              {skillsLabel}
-            </div>
-            {items.slice(0, skillRowCount).map((item, j) => (
-              <PaletteOptionRow key={item.id} item={item} index={j} {...optionRowProps} />
-            ))}
-            {groupedSkillsShowMoreLabel ? (
-              <button
-                type="button"
-                className={showMoreClass}
-                onClick={(e) => {
-                  e.preventDefault();
-                  onExpandSkills();
-                }}
-              >
-                {groupedSkillsShowMoreLabel}
-              </button>
-            ) : null}
+  const sectionByKind = new Map(sections.map((section) => [section.kind, section]));
+  const renderedKinds: PaletteItemKind[] = (['skill', 'command', 'agent'] as const).filter(
+    (kind) => sectionByKind.has(kind) || failedKinds.includes(kind),
+  );
+  let sectionStart = 0;
+  const listBody = loading && totalRows === 0 ? (
+    <div className="space-y-2 p-2.5" aria-busy="true">
+      {Array.from({ length: 6 }, (_, index) => (
+        <div key={index} className="flex items-center gap-2 py-1">
+          <Skeleton className="size-4 shrink-0" />
+          <Skeleton className="h-3 w-28" />
+          <Skeleton className="h-3 flex-1" />
+        </div>
+      ))}
+    </div>
+  ) : totalRows === 0 && failedKinds.length === 0 ? (
+    <div className="p-2.5 text-xs leading-normal text-fg-muted">{noResults}</div>
+  ) : (
+    renderedKinds.map((kind, sectionIndex) => {
+      const section = sectionByKind.get(kind);
+      const sectionItems = section?.items ?? [];
+      const startIndex = sectionStart;
+      sectionStart += sectionItems.length;
+      const headingId = `palette-section-${kind}`;
+      return (
+        <div
+          key={kind}
+          role="group"
+          aria-labelledby={headingId}
+          className={cn(sectionIndex > 0 && 'border-t border-edge-subtle')}
+        >
+          <div id={headingId} className={sectionHeaderClass}>
+            <span>{sectionLabels[kind]}</span>
+            <span className="tabular-nums" aria-hidden>{sectionItems.length}</span>
           </div>
-        ) : null}
-        {groupedHasCommands ? (
-          <div
-            className={cn(
-              groupedHasSkills && 'mt-1 border-t border-edge-subtle',
-            )}
-          >
-            <div className={sectionHeaderClass} aria-hidden>
-              {commandsLabel}
+          {failedKinds.includes(kind) ? (
+            <div className="px-2.5 pb-2 text-[11px] leading-relaxed text-fg-muted">
+              {sectionLoadFailedLabel}
             </div>
-            {items
-              .slice(skillRowCount, skillRowCount + commandRowCount)
-              .map((item, j) => (
-                <PaletteOptionRow
-                  key={item.id}
-                  item={item}
-                  index={skillRowCount + j}
-                  {...optionRowProps}
-                />
-              ))}
-            {groupedCommandsShowMoreLabel ? (
-              <button
-                type="button"
-                className={showMoreClass}
-                onClick={(e) => {
-                  e.preventDefault();
-                  onExpandCommands();
-                }}
-              >
-                {groupedCommandsShowMoreLabel}
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-        {groupedHasAgents ? (
-          <div
-            className={cn(
-              (groupedHasSkills || groupedHasCommands) && 'mt-1 border-t border-edge-subtle',
-            )}
-          >
-            <div className={sectionHeaderClass} aria-hidden>
-              {agentsLabel}
-            </div>
-            {items
-              .slice(skillRowCount + commandRowCount)
-              .map((item, j) => (
-                <PaletteOptionRow
-                  key={item.id}
-                  item={item}
-                  index={skillRowCount + commandRowCount + j}
-                  {...optionRowProps}
-                />
-              ))}
-            {groupedAgentsShowMoreLabel ? (
-              <button
-                type="button"
-                className={showMoreClass}
-                onClick={(e) => {
-                  e.preventDefault();
-                  onExpandAgents();
-                }}
-              >
-                {groupedAgentsShowMoreLabel}
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-      </>
-    ) : (
-      items.map((item, i) => (
-        <PaletteOptionRow key={item.id} item={item} index={i} {...optionRowProps} />
-      ))
-    );
+          ) : (
+            sectionItems.map((item, index) => (
+              <PaletteOptionRow
+                key={item.id}
+                item={item}
+                index={startIndex + index}
+                {...optionRowProps}
+              />
+            ))
+          )}
+        </div>
+      );
+    })
+  );
 
   const shell = (
     <TooltipProvider delayDuration={0} skipDelayDuration={0} disableHoverableContent={false}>
       <div
         ref={panelRef}
-        className="pointer-events-auto max-h-[min(24rem,55vh)] min-h-8 overflow-y-auto rounded-md border border-edge bg-surface-panel text-xs leading-4 shadow-lg dark:bg-surface-panel/95"
+        className="pointer-events-auto max-h-[min(32rem,60vh)] min-h-8 overflow-y-auto rounded-md border border-edge bg-surface-panel text-xs leading-4 shadow-lg dark:bg-surface-panel/95"
         style={{
           position: 'fixed',
           left: box.left,
@@ -481,9 +442,12 @@ export const CommandPalette = memo(function CommandPalette({
           zIndex: PORTAL_Z,
         }}
         role="listbox"
-        aria-label="Commands"
-        aria-activedescendant={selectedIndex >= 0 && selectedIndex < totalRows ? `palette-${selectedIndex}` : undefined}
+        aria-label={`${skillsLabel}, ${commandsLabel}, ${agentsLabel}`}
+        aria-busy={loading}
       >
+        <span className="sr-only" aria-live="polite">
+          {selectedItem ? `${sectionLabels[selectedItem.kind]}: ${selectedItem.name}` : ''}
+        </span>
         {listBody}
       </div>
     </TooltipProvider>
@@ -521,10 +485,10 @@ const PaletteRow = memo(function PaletteRow({
   disabledTooltip?: string;
   onSelect: () => void;
 }) {
-  const descPlain = (item.description ?? '').trim();
+  const descPlain = item.description.trim();
   const showDescription = descPlain.length > 0 && descriptionLine != null;
   const showDescTooltip = descPlain.length > 0;
-  const fullDescription = item.description ?? '';
+  const fullDescription = item.description;
 
   // Hide the category chip on agent rows when a trailing badge is shown (otherwise we get
   // both "agent" and "current" stacked, which looks noisy in the small palette width).
@@ -550,7 +514,7 @@ const PaletteRow = memo(function PaletteRow({
   );
 
   const optionClassName = cn(
-    'flex w-full min-w-0 items-center gap-1.5 px-2.5 py-1 text-left text-xs leading-4',
+    'flex min-h-11 w-full min-w-0 items-center gap-2 px-2.5 py-1.5 text-left text-sm leading-5 sm:min-h-9',
     disabled
       ? 'cursor-not-allowed opacity-50 text-fg-muted'
       : selected

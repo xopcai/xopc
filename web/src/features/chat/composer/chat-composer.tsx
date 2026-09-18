@@ -257,8 +257,8 @@ export const ChatComposer = memo(function ChatComposer({
   }, [m.chat.commandPalette.contextLimitReached, setContextRefs]);
 
   const onUnavailableSkill = useCallback(
-    (item: import('@/features/chat/palette/command-palette.types').PaletteItem) => {
-      const reason = item.availability?.status === 'agent-denied'
+    (item: import('@/features/chat/palette/command-palette.types').SkillPaletteItem) => {
+      const reason = item.availability.status === 'agent-denied'
         ? m.chat.commandPalette.skillAgentDeniedReason
         : m.chat.commandPalette.skillDisabledReason;
       const message = interpolate(m.chat.commandPalette.skillUnavailableMessage, {
@@ -266,8 +266,8 @@ export const ChatComposer = memo(function ChatComposer({
         agent: currentAgentId || 'main',
         reason,
       });
-      if (item.availability?.status === 'agent-denied' && window.confirm(`${message}\n\n${m.chat.commandPalette.skillAddToAllowlistConfirm}`)) {
-        void addSkillToAgentAllowlist(currentAgentId, item.canonicalName ?? item.name, conversationId).catch((err) => {
+      if (item.availability.status === 'agent-denied' && window.confirm(`${message}\n\n${m.chat.commandPalette.skillAddToAllowlistConfirm}`)) {
+        void addSkillToAgentAllowlist(currentAgentId, item.canonicalName, conversationId).catch((err) => {
           window.alert(err instanceof Error ? err.message : String(err));
         });
         return;
@@ -691,43 +691,17 @@ export const ChatComposer = memo(function ChatComposer({
             open={pickers.palette.open}
             anchorRef={editor.editorRef}
             panelRef={commandPalettePanelRef}
-            items={pickers.palette.loadError ? [] : pickers.palette.items}
+            sections={pickers.palette.loadError ? [] : pickers.palette.sections}
+            flatItems={pickers.palette.loadError ? [] : pickers.palette.flatItems}
+            loading={pickers.palette.loading}
+            failedKinds={pickers.palette.failedKinds}
             selectedIndex={pickers.palette.selectedIndex}
             noResults={pickers.palette.loadError ?? m.chat.commandPalette.noResults}
-            grouped={pickers.palette.loadError ? false : pickers.palette.grouped}
-            skillRowCount={pickers.palette.loadError ? 0 : pickers.palette.skillRowCount}
-            commandRowCount={pickers.palette.loadError ? 0 : pickers.palette.commandRowCount}
+            sectionLoadFailedLabel={m.chat.commandPalette.sectionLoadFailed}
             query={pickers.palette.query}
             skillsLabel={m.chat.commandPalette.skillsSection}
             commandsLabel={m.chat.commandPalette.commandsSection}
             agentsLabel={m.chat.commandPalette.agentsSection}
-            groupedHasSkills={pickers.palette.loadError ? false : pickers.palette.groupedHasSkills}
-            groupedHasCommands={pickers.palette.loadError ? false : pickers.palette.groupedHasCommands}
-            groupedHasAgents={pickers.palette.loadError ? false : pickers.palette.groupedHasAgents}
-            groupedSkillsShowMoreLabel={
-              pickers.palette.loadError || !pickers.palette.grouped
-                ? null
-                : pickers.palette.groupedSkillsMoreCount > 0
-                  ? interpolate(m.chat.commandPalette.showGroupedMore, { count: pickers.palette.groupedSkillsMoreCount })
-                  : null
-            }
-            groupedCommandsShowMoreLabel={
-              pickers.palette.loadError || !pickers.palette.grouped
-                ? null
-                : pickers.palette.groupedCommandsMoreCount > 0
-                  ? interpolate(m.chat.commandPalette.showGroupedMore, { count: pickers.palette.groupedCommandsMoreCount })
-                  : null
-            }
-            groupedAgentsShowMoreLabel={
-              pickers.palette.loadError || !pickers.palette.grouped
-                ? null
-                : pickers.palette.groupedAgentsMoreCount > 0
-                  ? interpolate(m.chat.commandPalette.showGroupedMore, { count: pickers.palette.groupedAgentsMoreCount })
-                  : null
-            }
-            onExpandSkills={pickers.palette.expandGroupedSkills}
-            onExpandCommands={pickers.palette.expandGroupedCommands}
-            onExpandAgents={pickers.palette.expandGroupedAgents}
             currentAgentId={currentAgentId}
             currentBadgeLabel={m.chat.commandPalette.currentBadge}
             runBusy={runBusy}
@@ -738,6 +712,12 @@ export const ChatComposer = memo(function ChatComposer({
             queueFullTooltip={m.chat.commandPalette.queueFullTooltip}
             skillUnavailableLabel={m.chat.commandPalette.skillUnavailableBadge}
             skillAgentDeniedLabel={m.chat.commandPalette.skillAgentDeniedBadge}
+            skillSourceLabels={{
+              builtin: m.chat.commandPalette.sourceBuiltin,
+              workspace: m.chat.commandPalette.sourceWorkspace,
+              global: m.chat.commandPalette.sourceGlobal,
+              extra: m.chat.commandPalette.sourceExtra,
+            }}
             onSelectItem={pickers.applyPalette}
           />
           {voice.voiceActive ? (

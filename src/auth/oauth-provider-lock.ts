@@ -29,6 +29,36 @@ function isMissing(error: unknown): boolean {
   return (error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT';
 }
 
+function isProcessMissing(error: unknown): boolean {
+  return (error as NodeJS.ErrnoException | undefined)?.code === 'ESRCH';
+}
+
+async function removeAbandonedLock(path: string): Promise<boolean> {
+  let owner: string;
+  try {
+    owner = await readFile(path, 'utf8');
+  } catch (error) {
+    if (isMissing(error)) return true;
+    throw error;
+  }
+  const pid = Number.parseInt(owner.split(':', 1)[0] ?? '', 10);
+  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    if (!isProcessMissing(error)) return false;
+  }
+  try {
+    if (await readFile(path, 'utf8') !== owner) return false;
+    await rm(path, { force: true });
+    return true;
+  } catch (error) {
+    if (isMissing(error)) return true;
+    throw error;
+  }
+}
+
 async function removeStaleLock(path: string): Promise<boolean> {
   try {
     const info = await stat(path);
@@ -70,6 +100,7 @@ async function acquireFileLock(
       };
     } catch (error) {
       if (!isAlreadyExists(error)) throw error;
+      if (await removeAbandonedLock(path)) continue;
       if (await removeStaleLock(path)) continue;
       if (Date.now() >= deadline) {
         throw new Error(`Timed out waiting for OAuth credential lock for ${providerId}`);

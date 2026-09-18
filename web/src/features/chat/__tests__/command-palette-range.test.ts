@@ -71,6 +71,10 @@ describe('paletteItemMatchRank', () => {
     name: 'new',
     description: 'Start a new session',
     category: 'session',
+    aliases: [],
+    acceptsArgs: false,
+    acceptsContext: false,
+    examples: [],
   };
   const skillDocx: PaletteItem = {
     kind: 'skill',
@@ -78,6 +82,8 @@ describe('paletteItemMatchRank', () => {
     name: 'docx',
     description: 'Create a new Word document',
     category: 'skill',
+    canonicalName: 'docx',
+    availability: { status: 'available' },
   };
 
   it('ranks exact name above description-only substring', () => {
@@ -93,6 +99,8 @@ describe('paletteItemMatchRank', () => {
       name: 'network',
       description: 'Networking help',
       category: 'skill',
+      canonicalName: 'network',
+      availability: { status: 'available' },
     };
     const skillDescOnly: PaletteItem = {
       kind: 'skill',
@@ -100,6 +108,8 @@ describe('paletteItemMatchRank', () => {
       name: 'zzz',
       description: 'Uses net protocol',
       category: 'skill',
+      canonicalName: 'zzz',
+      availability: { status: 'available' },
     };
     expect(paletteItemMatchRank(skillNet, 'net')).toBe(2);
     expect(paletteItemMatchRank(skillDescOnly, 'net')).toBe(100);
@@ -114,6 +124,9 @@ describe('paletteItemMatchRank', () => {
       id: 'skill:meeting-to-actions',
       name: '会议行动闭环',
       description: '从会议记录中提取行动项。',
+      canonicalName: 'meeting-to-actions',
+      category: 'skill',
+      availability: { status: 'available' },
       searchTerms: ['Convert meeting notes into actions.'],
     };
     expect(paletteItemMatchRank(localizedSkill, 'meeting notes')).toBe(103);

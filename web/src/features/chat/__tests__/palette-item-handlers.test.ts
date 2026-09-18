@@ -5,7 +5,12 @@ import {
   applyPaletteItem,
   type PaletteApplyContext,
 } from '@/features/chat/composer/palette-item-handlers';
-import type { PaletteItem, SlashRange } from '@/features/chat/palette/command-palette.types';
+import type {
+  AgentPaletteItem,
+  CommandPaletteItem,
+  SkillPaletteItem,
+  SlashRange,
+} from '@/features/chat/palette/command-palette.types';
 import type { ComposerContextRef } from '@/features/chat/composer/composer.types';
 
 const TEST_MAX_PENDING = 10;
@@ -81,59 +86,81 @@ function makeCtx(opts: {
   };
 }
 
-const skillItem: PaletteItem = {
+const skillItem: SkillPaletteItem = {
   kind: 'skill',
   id: 'skill:docx',
   name: 'docx',
+  canonicalName: 'docx',
   description: '',
+  category: 'skill',
+  availability: { status: 'available' },
 };
 
-const cmdNoArgs: PaletteItem = {
+const cmdNoArgs: CommandPaletteItem = {
   kind: 'command',
   id: 'cmd:new',
   name: 'new',
   description: '',
+  category: 'session',
+  aliases: [],
   acceptsArgs: false,
+  acceptsContext: false,
+  examples: [],
 };
 
-const cmdWithArgs: PaletteItem = {
+const cmdWithArgs: CommandPaletteItem = {
   kind: 'command',
   id: 'cmd:reply',
   name: 'reply',
   description: '',
+  category: 'session',
+  aliases: [],
   acceptsArgs: true,
+  acceptsContext: false,
+  examples: [],
 };
 
-const cmdAbort: PaletteItem = {
+const cmdAbort: CommandPaletteItem = {
   kind: 'command',
   id: 'cmd:abort',
   name: 'abort',
   description: '',
+  category: 'session',
   aliases: ['stop', 'cancel'],
   acceptsArgs: false,
+  acceptsContext: false,
+  examples: [],
 };
 
-const cmdStopAlias: PaletteItem = {
+const cmdStopAlias: CommandPaletteItem = {
   kind: 'command',
   id: 'cmd:halt',
   name: 'halt',
   description: '',
+  category: 'session',
   aliases: ['stop'],
   acceptsArgs: false,
+  acceptsContext: false,
+  examples: [],
 };
 
-const cmdReview: PaletteItem = {
+const cmdReview: CommandPaletteItem = {
   kind: 'command',
   id: 'cmd:review',
   name: 'review',
   description: '',
+  category: 'tool',
+  aliases: [],
   acceptsArgs: true,
+  acceptsContext: false,
+  examples: [],
 };
 
-const agentItem: PaletteItem = {
+const agentItem: AgentPaletteItem = {
   kind: 'agent',
   id: 'agent:secondary',
-  name: 'secondary',
+  agentId: 'secondary',
+  name: 'Writing assistant',
   description: 'Side agent',
   category: 'agent',
 };
@@ -208,6 +235,21 @@ describe('palette-item-handlers / command (acceptsArgs=false, idle)', () => {
     applyPaletteItem(cmdNoArgs, ctx);
     expect(ctx.onSend).not.toHaveBeenCalled();
     expect(ctx.resetEditor).not.toHaveBeenCalled();
+  });
+
+  it('keeps draft text after the selected agent token', () => {
+    const onChange = vi.fn();
+    const ctx = makeCtx({
+      initialText: '/sec continue this draft',
+      slashRange: { start: 0, end: 4, query: 'sec' },
+      onChatAgentChange: onChange,
+    });
+
+    applyPaletteItem(agentItem, ctx);
+
+    expect(ctx.editor.valueRef.current).toBe('continue this draft');
+    expect(ctx.clearAttachments).not.toHaveBeenCalled();
+    expect(onChange).toHaveBeenCalledWith('secondary');
   });
 });
 
@@ -385,7 +427,7 @@ describe('palette-item-handlers / command (acceptsArgs=true)', () => {
 });
 
 describe('palette-item-handlers / agent', () => {
-  it('strips slash range, clears attachments, and calls onChatAgentChange', () => {
+  it('strips slash range, preserves attachments, and switches by canonical agent id', () => {
     const onChange = vi.fn();
     const ctx = makeCtx({
       initialText: '/sec',
@@ -395,7 +437,7 @@ describe('palette-item-handlers / agent', () => {
     applyPaletteItem(agentItem, ctx);
     expect(ctx.editor.valueRef.current).toBe('');
     expect(ctx.resetEditor).toHaveBeenCalledWith({ nextText: '', caretOffset: 0 });
-    expect(ctx.clearAttachments).toHaveBeenCalledTimes(1);
+    expect(ctx.clearAttachments).not.toHaveBeenCalled();
     expect(onChange).toHaveBeenCalledWith('secondary');
   });
 
@@ -422,7 +464,7 @@ describe('palette-item-handlers / agent', () => {
     applyPaletteItem(agentItem, ctx);
     expect(onChange).toHaveBeenCalledWith('secondary');
     expect(ctx.editor.valueRef.current).toBe('');
-    expect(ctx.clearAttachments).toHaveBeenCalledTimes(1);
+    expect(ctx.clearAttachments).not.toHaveBeenCalled();
   });
 
   it('no-op when onChatAgentChange is not provided', () => {
@@ -434,18 +476,5 @@ describe('palette-item-handlers / agent', () => {
     applyPaletteItem(agentItem, ctx);
     expect(ctx.resetEditor).not.toHaveBeenCalled();
     expect(ctx.clearAttachments).not.toHaveBeenCalled();
-  });
-});
-
-describe('applyPaletteItem unknown kind', () => {
-  it('is a no-op for an unregistered kind', () => {
-    const ctx = makeCtx({
-      initialText: '/x',
-      slashRange: { start: 0, end: 2, query: 'x' },
-    });
-    const fakeItem = { ...skillItem, kind: 'mcp' as unknown as PaletteItem['kind'] };
-    applyPaletteItem(fakeItem, ctx);
-    expect(ctx.resetEditor).not.toHaveBeenCalled();
-    expect(ctx.onSend).not.toHaveBeenCalled();
   });
 });
