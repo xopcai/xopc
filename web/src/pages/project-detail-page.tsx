@@ -1984,18 +1984,18 @@ export function ProjectDetailPage() {
 
       {tab === 'files' ? (
         <section id="project-panel-files" role="tabpanel" aria-labelledby="project-primary-tab-files" className="flex h-full min-h-[28rem] flex-col">
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg bg-surface-panel shadow-surface">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-surface-panel">
             {project.effectiveWorkspaceRoot ? (
               <div
                 data-project-files-grid
                 className={cn(
-                  'grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[var(--project-files-panel-width)_6px_minmax(0,1fr)]',
+                  'grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[var(--project-files-panel-width)_8px_minmax(0,1fr)]',
                   projectFilesPanelResizing && 'cursor-col-resize select-none',
                 )}
                 style={{ '--project-files-panel-width': `${projectFilesPanelWidth}px` } as CSSProperties}
               >
-                <aside className="flex min-h-0 flex-col border-b border-edge lg:border-b-0 lg:border-r">
-                  <div className="flex h-11 items-center gap-1 border-b border-edge bg-surface-muted/50 px-3 text-sm">
+                <aside className="flex min-h-0 flex-col border-b border-edge bg-surface-panel lg:border-b-0">
+                  <div className="flex h-11 items-center gap-1 bg-surface-hover/30 px-3 text-sm">
                     {projectRootFileResource ? (
                       <WorkspaceOpenLocationMenu
                         resourceId={projectRootFileResource.fileId}
@@ -2026,8 +2026,8 @@ export function ProjectDetailPage() {
                   </div>
 
                   {projectFileSearchOpen ? (
-                    <div className="shrink-0 border-b border-edge bg-surface-muted/40 px-3 py-2">
-                      <div className="flex h-8 items-center gap-2 rounded-md border border-edge bg-surface-panel px-2 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20">
+                    <div className="shrink-0 bg-surface-hover/20 px-3 py-2">
+                      <div className="flex h-8 items-center gap-2 rounded-md bg-surface-base px-2 focus-within:ring-2 focus-within:ring-accent/30">
                         <Search className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />
                         <input
                           type="text"
@@ -2055,7 +2055,7 @@ export function ProjectDetailPage() {
                   ) : null}
 
                   {filesError ? (
-                    <div className="border-b border-edge bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">{filesError}</div>
+                    <div className="bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">{filesError}</div>
                   ) : null}
 
                   {normalizedProjectFileSearchQuery ? (
@@ -2128,12 +2128,16 @@ export function ProjectDetailPage() {
                   aria-orientation="vertical"
                   aria-label={pm.files.resizeHandle}
                   className={cn(
-                    'hidden cursor-col-resize touch-none items-stretch justify-center bg-surface-panel transition-colors hover:bg-surface-hover lg:flex',
-                    projectFilesPanelResizing && 'bg-surface-hover',
+                    'group hidden cursor-col-resize touch-none items-stretch justify-center bg-transparent transition-colors hover:bg-surface-hover/60 lg:flex',
+                    projectFilesPanelResizing && 'bg-surface-hover/70',
                   )}
                   onPointerDown={handleProjectFilesResizePointerDown}
                 >
-                  <div className="my-3 w-px rounded-full bg-edge-strong/70" />
+                  <div className={cn(
+                    'my-3 w-px rounded-full bg-transparent transition-colors',
+                    'group-hover:bg-edge-strong/55',
+                    projectFilesPanelResizing && 'bg-accent/60',
+                  )} />
                 </div>
 
                 <div className="min-h-0 min-w-0 overflow-hidden bg-surface-base">
