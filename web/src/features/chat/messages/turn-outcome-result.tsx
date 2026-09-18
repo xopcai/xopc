@@ -90,7 +90,7 @@ export function TurnOutcomeResult({
 
   return (
     <section
-      className="overflow-hidden rounded-xl border border-edge-subtle/80 bg-surface-elevated/25"
+      className="overflow-hidden rounded-xl bg-surface-elevated/20"
       aria-label={t.heading}
     >
       <div className="flex flex-wrap items-start justify-between gap-3 px-3.5 py-3">

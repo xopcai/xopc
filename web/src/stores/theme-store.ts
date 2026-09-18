@@ -4,7 +4,7 @@ import { persist } from 'zustand/middleware';
 export type ThemePreference = 'light' | 'dark' | 'system';
 
 /** Visual color scheme — orthogonal to light/dark mode. */
-export type ColorScheme = 'default' | 'emerald' | 'mono' | 'clay';
+export type ColorScheme = 'default' | 'emerald' | 'mono' | 'clay' | 'dawn';
 
 const DEFAULT_COLOR_SCHEME: ColorScheme = 'default';
 
@@ -14,12 +14,14 @@ const THEME_META_COLOR: Record<'light' | 'dark', Record<ColorScheme, string>> = 
     emerald: '#f0fdf4',
     mono: '#ffffff',
     clay: '#fffaf0',
+    dawn: '#accdec',
   },
   dark: {
     default: '#14171c',
     emerald: '#000000',
     mono: '#101010',
     clay: '#0a1a1a',
+    dawn: '#172433',
   },
 };
 
@@ -53,7 +55,11 @@ function prefersReducedMotion(): boolean {
 }
 
 function normalizeColorScheme(value: unknown): ColorScheme {
-  return value === 'default' || value === 'emerald' || value === 'mono' || value === 'clay'
+  return value === 'default' ||
+    value === 'emerald' ||
+    value === 'mono' ||
+    value === 'clay' ||
+    value === 'dawn'
     ? value
     : DEFAULT_COLOR_SCHEME;
 }

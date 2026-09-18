@@ -32,7 +32,7 @@ describe('ProductDeliveryCard', () => {
     container.remove();
   });
 
-  it('uses the Note card itself as the only action', () => {
+  it('uses the borderless Note result row itself as the only action', () => {
     const delivery: ProductDeliveryEnvelope = {
       version: 1,
       operation: 'updated',
@@ -62,13 +62,76 @@ describe('ProductDeliveryCard', () => {
       );
     });
 
-    expect(container.textContent).toContain('打开笔记');
+    expect(container.textContent).toContain('财经新闻整理');
+    expect(container.textContent).not.toContain('打开笔记');
     expect(container.textContent).not.toContain('在对话中继续');
     expect(container.querySelectorAll('button')).toHaveLength(1);
+    expect(container.querySelector('section')?.classList.contains('border')).toBe(false);
 
     act(() => container.querySelector('button')?.click());
     expect(container.querySelector('[data-testid="location"]')?.textContent).toBe(
       '/notes/note-1?returnTo=%2Fchat%2Fsession-1',
     );
+  });
+
+  it('presents an automation as a localized result row with a secondary continue action', () => {
+    const delivery: ProductDeliveryEnvelope = {
+      version: 1,
+      operation: 'opened',
+      primary: {
+        kind: 'automation',
+        id: 'automation-1',
+        title: 'Memory daily reconciliation',
+        status: 'enabled',
+        summary: 'Run deterministic daily_reconciliation without model inference.',
+        capabilities: ['open', 'continue_in_chat'],
+      },
+    };
+
+    act(() => {
+      root.render(
+        <MemoryRouter initialEntries={['/chat/session-1']}>
+          <ProductDeliveryCard delivery={delivery} />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(container.textContent).toContain('Memory daily reconciliation');
+    expect(container.textContent).toContain('交付物 · 自动化');
+    expect(container.textContent).toContain('自动化');
+    expect(container.textContent).toContain('已启用');
+    expect(container.textContent).toContain('继续');
+    expect(container.textContent).not.toContain('继续在对话中处理');
+    expect(container.textContent).not.toContain('已就绪');
+    expect(container.textContent).not.toContain('enabled');
+    expect(container.querySelectorAll('button')).toHaveLength(2);
+    const sectionClasses = container.querySelector('section')?.className ?? '';
+    expect(sectionClasses).not.toContain('border');
+    expect(sectionClasses).not.toContain('before:');
+  });
+
+  it('keeps a visible boundary for failed deliveries', () => {
+    const delivery: ProductDeliveryEnvelope = {
+      version: 1,
+      operation: 'failed',
+      primary: {
+        kind: 'automation',
+        id: 'automation-1',
+        title: 'Memory daily reconciliation',
+        status: 'failed',
+        capabilities: [],
+      },
+    };
+
+    act(() => {
+      root.render(
+        <MemoryRouter>
+          <ProductDeliveryCard delivery={delivery} />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(container.textContent).toContain('失败');
+    expect(container.querySelector('section')?.classList.contains('border')).toBe(true);
   });
 });
