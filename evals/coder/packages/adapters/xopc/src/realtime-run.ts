@@ -1,7 +1,7 @@
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 
 import { endpointHelloSigningPayload, type EndpointHelloPayload, type EndpointTurnClaim } from '@xopcai/endpoint-tools-protocol';
-import { RealtimeClient, type RealtimeWebSocket } from '@xopcai/realtime-client';
+import { RealtimeClient, type RealtimeTicket, type RealtimeWebSocket } from '@xopcai/realtime-client';
 
 export async function runRealtimeInput(input: {
   baseUrl: string;
@@ -13,12 +13,12 @@ export async function runRealtimeInput(input: {
   onRunId: (runId: string) => void;
   onEvent: (event: string, data: Record<string, unknown>, seq: number) => Promise<void>;
 }): Promise<string> {
-  const json = async (path: string, body: unknown, signal = input.signal) => {
+  const json = async <Payload = Record<string, any>>(path: string, body: unknown, signal = input.signal) => {
     const response = await fetch(`${input.baseUrl}${path}`, {
       method: 'POST', headers: input.headers, body: JSON.stringify(body), signal,
     });
     if (!response.ok) throw new Error(`xopc ${path} returned HTTP ${response.status}: ${await response.text()}`);
-    return await response.json() as { payload: Record<string, any> };
+    return await response.json() as { payload: Payload };
   };
   const principalId = randomUUID();
   const endpointId = `${principalId}:${randomUUID()}`;
@@ -51,7 +51,7 @@ export async function runRealtimeInput(input: {
     getWebSocketUrl: () => wsUrl.href,
     createWebSocket: url => new WebSocket(url) as unknown as RealtimeWebSocket,
     issueTicket: async signal => {
-      const response = await json('/api/realtime/tickets', { clientId, clientKind: 'web' }, signal);
+      const response = await json<RealtimeTicket>('/api/realtime/tickets', { clientId, clientKind: 'web' }, signal);
       return response.payload;
     },
     onStateChange: (state, message) => {

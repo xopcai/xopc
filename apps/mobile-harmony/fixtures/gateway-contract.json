@@ -314,6 +314,15 @@
                     "additionalProperties": false
                   }
                 },
+                "capabilities": {
+                  "maxItems": 64,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  }
+                },
                 "endpoint": {
                   "type": "object",
                   "properties": {
@@ -1163,6 +1172,15 @@
                 "heartbeatTimeoutMs": {
                   "type": "number",
                   "const": 45000
+                },
+                "negotiatedCapabilities": {
+                  "maxItems": 64,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  }
                 },
                 "endpoint": {
                   "type": "object",
