@@ -127,7 +127,7 @@ export function FilePreviewHeader({
   };
 
   return (
-    <div className={cn('shrink-0 border-b border-edge px-3 py-2 dark:border-edge sm:px-4', APP_CHROME_NO_DRAG_CLASS)}>
+    <div className={cn('shrink-0 bg-surface-hover/20 px-3 py-2 sm:px-4', APP_CHROME_NO_DRAG_CLASS)}>
       <div className="flex min-w-0 items-start gap-2">
         <div className="min-w-0 flex-1 py-0.5">
           <h2 className="truncate text-base font-semibold leading-tight tracking-tight text-fg" title={name}>{name}</h2>
@@ -198,7 +198,7 @@ export function FilePreviewHeader({
       </div>
       {hasPreviewControls || textView ? <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-0.5">
         {textView ? (
-          <div className="mr-2 flex shrink-0 rounded-lg border border-edge p-0.5" role="group" aria-label={labels.chat.attachmentPreviewText}>
+          <div className="mr-2 flex shrink-0 rounded-lg bg-surface-hover p-0.5" role="group" aria-label={labels.chat.attachmentPreviewText}>
             {[{ active: false, label: previewLabel }, { active: true, label: labels.chat.attachmentPreviewText }].map((option) => (
               <button key={option.label} type="button" aria-pressed={textView.active === option.active}
                 className={cn('rounded-md px-2.5 py-1 text-xs font-medium', textView.active === option.active ? 'bg-surface-hover text-fg' : 'text-fg-muted hover:text-fg')}

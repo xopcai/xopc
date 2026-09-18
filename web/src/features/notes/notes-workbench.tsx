@@ -620,7 +620,7 @@ export function NotesWorkbench({
       <section
         ref={notesListRef}
         className={cn(
-          'relative flex min-h-0 w-full shrink-0 flex-col overflow-hidden border-r border-edge bg-surface-rail',
+          'relative flex min-h-0 w-full shrink-0 flex-col overflow-hidden bg-surface-rail',
           !resizingList && 'lg:transition-[width] lg:duration-[280ms] lg:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:lg:transition-none',
           notesListCollapsed ? 'lg:w-0 lg:min-w-0 lg:max-w-0 lg:pointer-events-none' : 'lg:w-[var(--notes-list-width)]',
           selectedNoteId && 'hidden lg:flex',
@@ -780,7 +780,7 @@ export function NotesWorkbench({
         onKeyDown={handleListResizeKeyDown}
         title={n.resizeNotesList}
         className={cn(
-          'group relative z-10 hidden shrink-0 cursor-col-resize touch-none select-none items-center justify-center bg-surface-base lg:flex',
+          'group relative z-10 hidden shrink-0 cursor-col-resize touch-none select-none items-center justify-center bg-transparent hover:bg-surface-hover/60 lg:flex',
           'lg:transition-[width,opacity] lg:duration-[280ms] lg:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:lg:transition-none',
           notesListCollapsed ? 'lg:w-0 lg:opacity-0 lg:pointer-events-none' : 'lg:w-2 lg:opacity-100',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-0',
@@ -789,7 +789,7 @@ export function NotesWorkbench({
         <span
           aria-hidden
           className={cn(
-            'h-full w-px bg-edge transition-[background-color,transform] duration-150',
+            'h-full w-px bg-transparent transition-[background-color,transform] duration-150',
             'group-hover:bg-accent/70 group-focus-visible:bg-accent',
             resizingList && 'bg-accent scale-x-[2]',
           )}

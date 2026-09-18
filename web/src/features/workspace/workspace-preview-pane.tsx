@@ -64,7 +64,7 @@ export const WorkspacePreviewPane = memo(function WorkspacePreviewPane({
     <div
       role="region"
       aria-label="File preview"
-      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border border-edge bg-surface-panel dark:border-edge"
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel"
     >
       <WorkspaceFilePreviewPanel
         filePath={path}
