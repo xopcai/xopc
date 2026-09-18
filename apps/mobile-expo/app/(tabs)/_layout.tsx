@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAttentionFeed } from '@/features/attention/use-attention-feed';
 import { CapsuleTabBar, CapsuleTabButton, CapsuleTabIcon, TAB_DOCK_HEIGHT, TAB_DOCK_INSET } from '@/features/navigation/CapsuleTabBar';
+import { ChatTabDockProvider } from '@/features/navigation/ChatTabDockContext';
 import { useMessages } from '@/i18n/messages';
 import { radii, spacing, typography, useTheme } from '@/theme';
 
@@ -13,7 +14,8 @@ export default function PrimaryTabs() {
   const attention = useAttentionFeed();
   const count = attention.data?.needsUser.length ?? 0;
   return (
-    <Tabs tabBar={props => <CapsuleTabBar {...props} />} screenOptions={{
+    <Tabs layout={props => <ChatTabDockProvider {...props} />}
+      tabBar={props => props.state.routes[props.state.index].name === '(chat)' ? null : <CapsuleTabBar {...props} />} screenOptions={{
       headerShown: false,
       tabBarActiveBackgroundColor: 'transparent',
       tabBarInactiveBackgroundColor: 'transparent',

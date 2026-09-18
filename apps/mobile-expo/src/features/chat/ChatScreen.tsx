@@ -273,6 +273,7 @@ export function ChatScreen({ root = false }: ChatScreenProps) {
           </View>
           {conversationId ? <ChatQueueTray key={`${activeGatewayId}:${conversationId}`} conversationId={conversationId} /> : null}
           <ChatComposer
+            embedded={root}
             mainConversation={root}
             actionsOpen={composerActionsOpen}
             onActionsOpenChange={setComposerActionsOpen}

@@ -1,4 +1,5 @@
-import { XopcConnectionViewModel } from '../viewmodel/connectionViewModel';
+import { connectionModel, XopcConnectionViewModel } from '../viewmodel/connectionViewModel';
+import { XopcGatewayProfilesView } from '../view/GatewayProfilesView';
 import { XopcHomeView } from '../view/HomeView';
 import { scanBarcode, scanCore } from '@kit.ScanKit';
 import { BusinessError } from '@kit.BasicServicesKit';
@@ -10,7 +11,7 @@ import { layoutState } from '../service/layoutState';
 @ComponentV2
 struct XopcIndex {
   @Local invitation: string = '';
-  @Local connection: XopcConnectionViewModel = new XopcConnectionViewModel();
+  @Local connection: XopcConnectionViewModel = connectionModel;
   @Local showSettings: boolean = false;
   @Local manualEntry: boolean = false;
   @Local showHelp: boolean = false;
@@ -19,8 +20,14 @@ struct XopcIndex {
   private invitationEditor: TextAreaController = new TextAreaController();
 
   aboutToAppear(): void { this.connection.restore(); }
+  @Monitor('connection.adding')
+  onAddingGateway(): void {
+    if (this.connection.adding) { this.invitation = ''; this.manualEntry = false; this.showHelp = false; this.showSettings = false; }
+  }
   onBackPress(): boolean {
     if (this.showSettings) { this.showSettings = false; return true; }
+    if (this.connection.managing) { this.connection.closeGateways(); return true; }
+    if (this.connection.adding) { if (!this.connection.busy) this.connection.cancel(); return true; }
     if (!this.connection.connected && !this.connection.busy && (this.manualEntry || this.showHelp)) {
       this.closeSecondary(); return true;
     }
@@ -66,11 +73,13 @@ struct XopcIndex {
   @Builder
   connectionHeader() {
     Row({ space: 10 }) {
-      if (this.manualEntry || this.showHelp) {
+      if (this.manualEntry || this.showHelp || this.connection.adding) {
         Button({ type: ButtonType.Circle }) {
           SymbolGlyph($r('sys.symbol.chevron_left')).fontSize(22).fontColor([$r('app.color.foreground')])
         }.id('pairing-back').width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-          .enabled(!this.connection.busy).accessibilityText($r('app.string.back')).onClick((): void => { this.closeSecondary(); })
+          .enabled(!this.connection.busy).accessibilityText($r('app.string.back')).onClick((): void => {
+            if (this.manualEntry || this.showHelp) this.closeSecondary(); else this.connection.cancel();
+          })
       } else {
         Image($r('app.media.brand_logo')).width(32).height(32).objectFit(ImageFit.Contain).accessibilityText('xopc')
         Text('xopc').fontSize(22).fontWeight(FontWeight.Medium).fontColor($r('app.color.foreground'))
@@ -150,12 +159,14 @@ struct XopcIndex {
 
   build() {
     Column() {
-    if (this.showSettings) {
+    if (this.connection.managing) {
+      XopcGatewayProfilesView()
+    } else if (this.showSettings) {
       Column() {
         Button($r('app.string.back')).id('settings-back').onClick((): void => { this.showSettings = false; })
         Column() { XopcSettingsView() }.layoutWeight(1).width('100%')
       }.height('100%').width('100%')
-    } else if (this.connection.connected) {
+    } else if (this.connection.connected && !this.connection.adding) {
       XopcHomeView({ onDisconnected: (): void => { this.connection.connected = false; this.invitation = ''; } })
     } else {
       this.connectionHeader()

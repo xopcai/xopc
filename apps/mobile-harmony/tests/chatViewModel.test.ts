@@ -113,7 +113,8 @@ describe('chat history isolation', () => {
     expect(await chat.send('', [attachment])).toBe(true);
     expect(mocks.uuid).toHaveBeenCalledOnce();
     expect(mocks.send.mock.calls.map((call) => call[2])).toEqual(['input-1', 'input-1']);
-    expect(mocks.send.mock.calls[1][4]).toEqual([attachment]); expect(chat.rows[0].text).toContain('a.txt');
+    expect(mocks.send.mock.calls[1][4]).toEqual([attachment]); expect(chat.rows[0].text).toBe('');
+    expect(chat.rows[0].media?.[0]).toMatchObject({ name: 'a.txt', uri: 'data:text/plain;base64,YQ==' });
   });
   it('uses a new input identity after changing an attachment', async () => {
     const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected';
@@ -170,10 +171,57 @@ describe('chat history isolation', () => {
     const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected';
     mocks.uuid.mockReturnValue('reference'); mocks.send.mockResolvedValue('run');
     expect(await chat.send('', [], 'next', [{ kind: 'task', sourceId: 't', expectedVersion: '2' }])).toBe(true);
+    expect(chat.rows[0].refs).toEqual([{ kind: 'task', sourceId: 't', expectedVersion: '2' }]);
+  });
+  it('shows an uploaded image immediately without adding its filename to message text', async () => {
+    const chat = new XopcChatViewModel(); chat.selectedId = 'one'; chat.connection = 'connected';
+    mocks.uuid.mockReturnValue('image-input'); mocks.send.mockResolvedValue('run');
+    await chat.send('Look at this', [{ type: 'image', name: 'photo.png', mimeType: 'image/png', size: 1, data: 'YQ==' }]);
+    expect(chat.rows[0]).toMatchObject({ text: 'Look at this', media: [{ type: 'image', uri: 'data:image/png;base64,YQ==' }] });
+    chat.dispose();
   });
   it('does not erase streaming text when the queue changes on the same active run', async () => {
     const chat = new XopcChatViewModel(); chat.activate(); chat.selectedId = 'one'; chat.runId = 'run'; chat.streaming = 'live text';
     realtimeClient.onEvent({ topic: 'gateway', seq: 1, event: 'session.input-state', data: { conversationId: 'one', activeRunId: 'run', inputs: [] } });
     expect(chat.auxiliaryRevision).toBe(1); expect(chat.streaming).toBe('live text'); expect(mocks.history).not.toHaveBeenCalled(); chat.dispose();
+  });
+  it('retains terminal rich output when history refresh fails and replaces it after a successful retry', async () => {
+    const chat = new XopcChatViewModel(); chat.activate(); chat.selectedId = 'one'; chat.runId = 'run';
+    const event = (name: string, payload: object) => realtimeClient.onEvent({ topic: 'run:run', seq: 1, event: name,
+      data: { conversationId: 'one', runId: 'run', payload } });
+    event('thinking_delta', { delta: 'plan' }); event('assistant_delta', { delta: 'answer' });
+    mocks.history.mockRejectedValueOnce(new Error('OFFLINE'));
+    event('run_end', { status: 'cancelled' });
+    await vi.waitFor(() => expect(chat.error).toBe('OFFLINE'));
+    expect(chat.liveRow?.live).toBe(false); expect(chat.liveRow?.text).toBe('answer'); expect(chat.liveRow?.blocks?.[0].active).toBe(false);
+    mocks.history.mockResolvedValueOnce(page('one', 'answer')); await chat.loadHistory(false);
+    expect(chat.liveRow).toBeUndefined(); expect(chat.rows[0].text).toBe('answer'); chat.dispose();
+  });
+  it('recovers ordered rich history on a gap without appending replayed deltas twice', async () => {
+    vi.useFakeTimers();
+    const chat = new XopcChatViewModel();
+    try {
+      chat.activate(); chat.selectedId = 'one'; chat.runId = 'run';
+      const recovered = { session: { key: 'one', messages: [{ id: 'assistant', role: 'assistant', content: [
+        { type: 'thinking', thinking: 'Inspect' }, { type: 'toolCall', id: 'call', name: 'read' }, { type: 'text', text: 'Answer' }] },
+        { role: 'toolResult', toolCallId: 'call', content: 'Tool output' }] }, pagination: { hasMore: false } };
+      mocks.history.mockResolvedValue(recovered); mocks.activeRun.mockResolvedValue({ active: true, runId: 'run' });
+      realtimeClient.onGap('run:run'); await vi.advanceTimersByTimeAsync(0);
+      expect(chat.rows[0].blocks?.map(block => block.kind)).toEqual(['thinking', 'tool', 'text']);
+      expect(chat.rows[0].toolCalls?.[0].result).toBe('Tool output');
+      for (let seq = 1; seq <= 3; seq++) realtimeClient.onEvent({ topic: 'run:run', seq, event: 'assistant_delta',
+        data: { conversationId: 'one', runId: 'run', payload: { messageId: 'assistant', delta: 'Answer' } } });
+      await vi.advanceTimersByTimeAsync(750);
+      expect(mocks.history).toHaveBeenCalledTimes(2); expect(chat.rows[0].text).toBe('Answer'); expect(chat.liveRow).toBeUndefined();
+    } finally { chat.dispose(); vi.useRealTimers(); }
+  });
+  it('keeps the partial rich projection visible when reconnect history is unavailable', async () => {
+    const chat = new XopcChatViewModel(); chat.activate(); chat.selectedId = 'one'; chat.runId = 'run';
+    realtimeClient.onEvent({ topic: 'run:run', seq: 1, event: 'assistant_delta',
+      data: { conversationId: 'one', runId: 'run', payload: { delta: 'Partial answer' } } });
+    mocks.history.mockRejectedValueOnce(new Error('OFFLINE')); mocks.activeRun.mockResolvedValue({ active: true, runId: 'run' });
+    realtimeClient.onState('connected');
+    await vi.waitFor(() => expect(chat.error).toBe('OFFLINE'));
+    expect(chat.liveRow?.text).toBe('Partial answer'); expect(chat.runId).toBe('run'); chat.dispose();
   });
 });

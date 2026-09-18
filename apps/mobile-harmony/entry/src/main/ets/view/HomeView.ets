@@ -112,11 +112,32 @@ export struct XopcHomeView {
       .onClick((): void => { this.tab = index; })
   }
 
+  @Builder
+  dockItems() {
+    Row() {
+      this.tabItem(0, $r('app.string.chat'), $r('sys.symbol.message'))
+      this.tabItem(1, $r('app.string.progress'), $r('sys.symbol.checkmark_circle'))
+      this.tabItem(2, $r('app.string.library'), $r('sys.symbol.square_stack_3d'))
+      this.tabItem(3, $r('app.string.personal'), $r('sys.symbol.person'))
+    }.width('100%').height(52).padding(4)
+  }
+
+  @LocalBuilder
+  chatDock() {
+    if (this.tab === 0 && this.layout.isMainDockVisible(0)) {
+      Column() {
+        this.dockItems()
+      }.id('main-tab-dock').width('100%')
+        .border({ width: { top: 0.5 }, color: $r('app.color.border_subtle') })
+    }
+  }
+
   build() {
     Navigation(this.pathStack) {
       Column() {
       Tabs({ barPosition: BarPosition.End, index: this.tab }) {
         TabContent() { XopcChatView({ requestedId: this.requestedChatId, requestRevision: this.chatRequestRevision,
+          bottomDock: this.chatDock,
           activePage: this.tab === 0 && !this.detailVisible, attentionItems: this.attention.needsUser, onAttentionRefresh: (): void => { this.attention.refresh(); },
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); },
           onOpenConversation: (id: string): void => { this.navigate({ page: 'chat', itemId: id }); } }) }
@@ -126,15 +147,10 @@ export struct XopcHomeView {
       }.scrollable(false).barHeight(0).barMode(BarMode.Fixed).animationDuration(0)
         .onChange((index: number): void => { this.tab = index; })
         .width('100%').layoutWeight(1)
-      if (this.layout.isMainDockVisible(this.tab)) {
+      if (this.tab !== 0 && this.layout.isMainDockVisible(this.tab)) {
         Stack({ alignContent: Alignment.Start }) {
-        Row() {
-          this.tabItem(0, $r('app.string.chat'), $r('sys.symbol.message'))
-          this.tabItem(1, $r('app.string.progress'), $r('sys.symbol.checkmark_circle'))
-          this.tabItem(2, $r('app.string.library'), $r('sys.symbol.square_stack_3d'))
-          this.tabItem(3, $r('app.string.personal'), $r('sys.symbol.person'))
-        }.width('100%').height(52).padding(4)
-        }.id('main-tab-dock').width('92%').height(52).borderRadius(30).backgroundColor($r('app.color.panel'))
+        this.dockItems()
+        }.id('secondary-tab-dock').width('92%').height(52).borderRadius(30).backgroundColor($r('app.color.panel'))
           .border({ width: 0.5, color: $r('app.color.border_subtle') }).margin({ bottom: 8 })
       }
       }.width('100%').height('100%')

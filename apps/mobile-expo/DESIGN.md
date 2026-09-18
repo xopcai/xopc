@@ -35,7 +35,7 @@ The system takes Apple’s current HIG principles of hierarchy, harmony, consist
 - Do not imitate Apple Notes or ChatGPT pixel-for-pixel.
 - Do not use a gradient page background, glass-card grids, neon AI effects, illustration-led empty states, or decorative status colors.
 - Do not make every control a pill, every object a card, or every list item elevated.
-- Use four stable destinations: Chat, Progress, Library, and You. The rounded floating tab dock uses one moving selection capsule; it yields to the keyboard while composing. Do not duplicate global navigation in the conversation drawer.
+- Use four stable destinations: Chat, Progress, Library, and You. On the Chat root, the composer and tabs share one rounded, raised bottom surface; the inner input has no separate shadow. Other destinations retain the floating tab dock. Tabs yield to the keyboard and Chat accessories while composing. Do not duplicate global navigation in the conversation drawer.
 - Do not use AI sparkle imagery or a second brand accent as a substitute for useful product feedback.
 
 ## 2. Product model and information architecture

@@ -1,7 +1,7 @@
 export interface XopcMarkdownCell { id: string; text: string; align: string; }
 export interface XopcMarkdownTableRow { id: string; cells: XopcMarkdownCell[]; header: boolean; }
-export interface XopcMarkdownBlock { id: string; kind: string; text: string; level: number; language?: string; rows?: XopcMarkdownTableRow[]; }
-export interface XopcMarkdownSpan { id: string; kind: string; text: string; href?: string; }
+export interface XopcMarkdownBlock { id: string; kind: string; text: string; level: number; language?: string; rows?: XopcMarkdownTableRow[]; href?: string; }
+export interface XopcMarkdownSpan { id: string; kind: string; text: string; href?: string; start?: number; end?: number; }
 
 export function markdownLink(target: string): string {
   // Links leave the app only after a tap. Never forward Gateway credentials or accept executable schemes.
@@ -61,6 +61,16 @@ export function markdownBlocks(source: string): XopcMarkdownBlock[] {
       while (i + 1 < lines.length && lines[i + 1].trim() && lines[i + 1].includes('|')) { i++; addRow(tableCells(lines[i]), false); }
       block.rows = rows; continue;
     }
+    const pictures = markdownSpans(line).filter((span: XopcMarkdownSpan): boolean => span.kind === 'image');
+    if (pictures.length) {
+      flush(); let cursor = 0;
+      for (const picture of pictures) {
+        const before = line.slice(cursor, picture.start).trim(); if (before) push('paragraph', before);
+        push('image', picture.text).href = picture.href; cursor = picture.end || 0;
+      }
+      const after = line.slice(cursor).trim(); if (after) push('paragraph', after);
+      continue;
+    }
     const heading = line.match(/^(#{1,6})\s+(.+?)\s*#*$/);
     if (heading) { flush(); push('heading', heading[2], heading[1].length); continue; }
     if (/^\s{0,3}(---+|\*\*\*+|___+)\s*$/.test(line)) { flush(); push('rule', ''); continue; }
@@ -94,10 +104,12 @@ export function markdownSpans(source: string): XopcMarkdownSpan[] {
       else push('text', token);
     } else if (token.startsWith('[') || token.startsWith('![') || token.startsWith('<')) {
       const split = token.indexOf('](');
-      const target = token.startsWith('<') ? token.slice(1, -1) : token.slice(split + 2, -1).replace(/\\([()])/g, '$1');
+      const target = (token.startsWith('<') ? token.slice(1, -1) : token.slice(split + 2, -1).replace(/\\([()])/g, '$1')).replace(/\s+"[^"]*"$/, '');
       const href = markdownLink(target);
       const label = token.startsWith('<') ? target : token.slice(token.startsWith('!') ? 2 : 1, split);
-      if (href) push('link', label || href, href); else push('text', token);
+      if (token.startsWith('![') && ((href && target.startsWith('https://')) || /^(media:\/\/|xopc-file:|data:image\/)/.test(target))) {
+        result.push({ id: result.length.toString(), kind: 'image', text: label, href: target, start: match.index, end: match.index + token.length });
+      } else if (href) push('link', label || href, href); else push('text', token);
     } else if (token.startsWith('~~')) push('strike', token.slice(2, -2));
     else if (token.startsWith('**') || token.startsWith('__')) push('bold', token.slice(2, -2));
     else push('italic', token.slice(1, -1));
