@@ -83,6 +83,20 @@ function capabilityAction(capability: CapabilityId, zh: boolean) {
   }
 }
 
+function capabilitySettingsHref(capability: CapabilityId): string {
+  switch (capability) {
+    case 'computer-use':
+      return '/settings/computer-use';
+    case 'vision':
+      return capabilitySettingsPath('models');
+    case 'image-generation':
+      return capabilitySettingsPath('image');
+    case 'stt':
+    case 'tts':
+      return capabilitySettingsPath('voice');
+  }
+}
+
 async function fetchCatalog(): Promise<CatalogPayload> {
   const response = await apiFetch(apiUrl('/api/models/catalog'));
   const body = await response.json().catch(() => null) as {
@@ -233,11 +247,11 @@ export function ModelCatalogStatus() {
               </>
             );
 
-            return needsAttention || capability === 'computer-use' ? (
+            return (
               <Link
                 key={capability}
-                to={action.href}
-                aria-label={`${label}：${action.action}`}
+                to={needsAttention ? action.href : capabilitySettingsHref(capability)}
+                aria-label={needsAttention ? `${label}：${action.action}` : `${zh ? '配置' : 'Configure'} ${label}`}
                 className={cn(
                   'rounded-lg bg-surface-base/45 px-3 py-3 transition-colors',
                   needsAttention ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-surface-hover/30',
@@ -246,10 +260,6 @@ export function ModelCatalogStatus() {
               >
                 {content}
               </Link>
-            ) : (
-              <div key={capability} className="rounded-lg bg-surface-base/45 px-3 py-3">
-                {content}
-              </div>
             );
           })}
         </div>
