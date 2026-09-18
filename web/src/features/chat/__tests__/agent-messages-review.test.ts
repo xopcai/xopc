@@ -41,7 +41,7 @@ describe('normalizeAgentMessages review blocks', () => {
         rawContent: [
           { type: 'thinking', thinking: 'Inspecting the request.' },
           { type: 'tool_use', id: 'call-1', name: 'read_file', input: { path: 'app.ts' }, result: 'ok' },
-          { type: 'text', text: 'Final answer' },
+          { type: 'text', text: 'Final answer', presentation: 'answer' },
         ],
         timestamp: 1,
       },
@@ -50,7 +50,7 @@ describe('normalizeAgentMessages review blocks', () => {
     expect(ui[0]?.content).toMatchObject([
       { type: 'thinking', text: 'Inspecting the request.' },
       { type: 'tool_use', id: 'call-1', name: 'read_file', status: 'done' },
-      { type: 'text', text: 'Final answer' },
+      { type: 'text', text: 'Final answer', presentation: 'answer' },
     ]);
   });
 });

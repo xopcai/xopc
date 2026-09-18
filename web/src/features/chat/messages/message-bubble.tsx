@@ -23,6 +23,7 @@ import {
   getAssistantCopyPlainText,
 } from '@/features/chat/messages/assistant-copy-utils';
 import { ChunkedContent } from '@/features/chat/messages/message-content-renderer';
+import { AssistantStepsBlock } from '@/features/chat/messages/assistant-steps-block';
 import { formatChatMessageTime } from '@/features/chat/messages/message-time';
 import { workflowCardLabels } from '@/features/chat/workflow/workflow-card-labels';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -160,8 +161,11 @@ export const MessageBubble = memo(function MessageBubble({
     () => ({
       thoughts: m.chat.thoughts,
       thoughtsStreaming: m.chat.thoughtsStreaming,
-      viewSteps_one: m.chat.viewSteps_one,
-      viewSteps_other: m.chat.viewSteps_other,
+      workLogTitle: m.chat.workLogTitle,
+      workLogRunning: m.chat.workLogRunning,
+      workLogComplete: m.chat.workLogComplete,
+      workLogPartial: m.chat.workLogPartial,
+      workLogFailed: m.chat.workLogFailed,
       searchedWeb: m.chat.stepSearchedWeb,
       searchedMemory: m.chat.stepSearchedMemory,
       searchedCode: m.chat.stepSearchedCode,
@@ -175,7 +179,6 @@ export const MessageBubble = memo(function MessageBubble({
       openUrl: m.chat.stepOpenUrl,
       fetchUrl: m.chat.stepFetchUrl,
       unknownTool: m.chat.stepUnknownTool,
-      activityAnalysisComplete: m.chat.activityAnalysisComplete,
       rawThinking: m.chat.rawThinking,
       toolError: m.chat.toolError,
       toolActivity: m.chat.toolActivity,
@@ -184,8 +187,11 @@ export const MessageBubble = memo(function MessageBubble({
     [
       m.chat.thoughts,
       m.chat.thoughtsStreaming,
-      m.chat.viewSteps_one,
-      m.chat.viewSteps_other,
+      m.chat.workLogTitle,
+      m.chat.workLogRunning,
+      m.chat.workLogComplete,
+      m.chat.workLogPartial,
+      m.chat.workLogFailed,
       m.chat.stepSearchedWeb,
       m.chat.stepSearchedMemory,
       m.chat.stepSearchedCode,
@@ -199,7 +205,6 @@ export const MessageBubble = memo(function MessageBubble({
       m.chat.stepOpenUrl,
       m.chat.stepFetchUrl,
       m.chat.stepUnknownTool,
-      m.chat.activityAnalysisComplete,
       m.chat.rawThinking,
       m.chat.toolError,
       m.chat.toolActivity,
@@ -209,20 +214,10 @@ export const MessageBubble = memo(function MessageBubble({
 
   const clusterLabels = useMemo(
     () => ({
-      done: m.chat.stepsClusterDone,
       ing: m.chat.stepsClusterIng,
-      join: {
-        join: m.chat.stepsClusterJoin,
-        joinFinal: m.chat.stepsClusterJoinFinal,
-        moreSuffix: m.chat.stepsClusterMoreSuffix,
-      },
     }),
     [
-      m.chat.stepsClusterDone,
       m.chat.stepsClusterIng,
-      m.chat.stepsClusterJoin,
-      m.chat.stepsClusterJoinFinal,
-      m.chat.stepsClusterMoreSuffix,
     ],
   );
 
@@ -236,14 +231,11 @@ export const MessageBubble = memo(function MessageBubble({
         : null,
     [isAssistant, isStreaming, message, reasoningLevel],
   );
-  const displayContent = assistantTurnView?.displayContent ?? message.content ?? [];
-
-  /** User/assistant images: grid via AttachmentRenderer, not stacked inline blocks in the text column. */
+  /** Images use AttachmentRenderer rather than rendering inline in the text column. */
   const displayForFlow = useMemo(
-    () =>
-      assistantTurnView?.flowContent ??
-      (isUser ? displayContent.filter((block) => block.type !== 'image') : displayContent),
-    [assistantTurnView, displayContent, isUser],
+    () => assistantTurnView?.answerContent
+      ?? (message.content ?? []).filter((block) => block.type !== 'image'),
+    [assistantTurnView, message.content],
   );
 
   const attachmentsForBubble = useMemo(() => {
@@ -251,7 +243,7 @@ export const MessageBubble = memo(function MessageBubble({
     return message.attachments;
   }, [assistantTurnView, message.attachments]);
 
-  const hasAssistantActivity = Boolean(assistantTurnView?.activity.blocks.length);
+  const hasAssistantActivity = Boolean(assistantTurnView?.workLog.items.length);
   const progressForMeta =
     reasoningHidden ||
     (isAssistant && hasAssistantActivity)
@@ -573,6 +565,17 @@ export const MessageBubble = memo(function MessageBubble({
                 onOpen={(ref) => openReferencedNote(ref.sourceId)}
               />
             ) : null}
+            {assistantTurnView?.workLog.items.length ? (
+              <AssistantStepsBlock
+                workLog={assistantTurnView.workLog}
+                toolLabels={toolLabels}
+                stepLabels={stepLabels}
+                clusterLabels={clusterLabels}
+                cardLabels={cardLabels}
+                conversationId={conversationId}
+                workflowOptions={{ labels: workflowCardLabels(language) }}
+              />
+            ) : null}
             {(displayForFlow?.length ?? 0) > 0 ? (
               <>
                 <div
@@ -588,19 +591,11 @@ export const MessageBubble = memo(function MessageBubble({
                     content={displayForFlow}
                     isUser={isUser}
                     isAssistantMessageStreaming={isAssistant && isStreaming}
-                    toolLabels={toolLabels}
-                    stepLabels={stepLabels}
-                    clusterLabels={clusterLabels}
-                    cardLabels={cardLabels}
                     imagePreviewLabel={m.chat.attachmentPreviewImage}
                     onImagePreview={openInlineImagePreview}
                     conversationId={conversationId}
                     workspaceConversationId={workspaceConversationId}
                     projectId={projectId}
-                    workflowOptions={{
-                      labels: workflowCardLabels(language),
-                    }}
-                    assistantActivity={assistantTurnView?.activity}
                     progressiveRender={Boolean(message.progressiveRender)}
                     onProgressiveRenderComplete={completeProgressiveRender}
                   />

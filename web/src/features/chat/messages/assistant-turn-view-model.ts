@@ -9,6 +9,7 @@ import type {
   MessageAttachment,
   MessageContent,
   ReasoningLevel,
+  TextContent,
   ThinkingContent,
   ToolUseContent,
 } from '@/features/chat/messages/messages.types';
@@ -32,9 +33,8 @@ export type AssistantTurnLifecycleState =
   | 'partial';
 
 export interface AssistantTurnViewModel {
-  displayContent: MessageContent[];
-  flowContent: MessageContent[];
-  activity: AssistantTurnActivityPresentation;
+  answerContent: MessageContent[];
+  workLog: AssistantTurnWorkLogPresentation;
   answer: {
     started: boolean;
     showStreamingCursor: boolean;
@@ -49,14 +49,14 @@ export interface AssistantTurnViewModel {
   sources: SearchSource[];
 }
 
-export interface AssistantTurnActivityPresentation {
-  blocks: Array<ThinkingContent | ToolUseContent>;
+export type AssistantWorkLogItem = TextContent | ThinkingContent | ToolUseContent;
+
+export interface AssistantTurnWorkLogPresentation {
+  items: AssistantWorkLogItem[];
   active: boolean;
-  failedCount: number;
-  hasTool: boolean;
+  status: 'running' | 'completed' | 'partial' | 'failed';
   expandedByDefault: boolean;
   startedAt?: number;
-  completedAt?: number;
   durationMs?: number;
 }
 
@@ -69,27 +69,30 @@ export function buildAssistantTurnViewModel({
   isStreaming: boolean;
   reasoningLevel: ReasoningLevel;
 }): AssistantTurnViewModel {
-  const displayContent = (message.content ?? []).filter((block) => {
-    if (reasoningLevel !== 'off') return true;
-    if (block.type === 'thinking') return false;
-    return block.type !== 'text'
-      || (block.presentation !== 'pending' && block.presentation !== 'narration');
-  });
-  const flowContent = displayContent.filter((block) => block.type !== 'image');
+  const answerContent = (message.content ?? []).filter((block) => (
+    block.type === 'review'
+    || (block.type === 'text'
+      && block.presentation !== 'pending'
+      && block.presentation !== 'narration')
+  ));
   const allActivityBlocks = filterVisibleSteps(collectTurnActivityBlocks(message.content ?? []));
-  const activityBlocks = reasoningLevel === 'off'
-    ? allActivityBlocks.filter((block): block is ToolUseContent => block.type === 'tool_use')
-    : allActivityBlocks;
-  const answerStarted = hasAssistantAnswerText(flowContent);
+  const workLogItems = (message.content ?? []).filter(
+    (block): block is AssistantWorkLogItem => {
+      if (block.type === 'tool_use') return true;
+      if (reasoningLevel === 'off') return false;
+      if (block.type === 'thinking') return Boolean(block.text?.trim()) || Boolean(block.streaming);
+      return block.type === 'text'
+        && (block.presentation === 'pending' || block.presentation === 'narration')
+        && Boolean(block.text?.trim());
+    },
+  );
+  const answerStarted = hasAssistantAnswerText(answerContent);
   const toolBlocks = allActivityBlocks.filter(
     (block): block is ToolUseContent => block.type === 'tool_use',
   );
   const runningTool = [...toolBlocks].reverse().find(
     (tool) => tool.status === 'running' || tool.activity?.status === 'running',
   );
-  const failedToolCount = toolBlocks.filter(
-    (tool) => tool.status === 'error' || tool.activity?.status === 'failed',
-  ).length;
   const delivery = [...toolBlocks]
     .reverse()
     .map(extractProductDelivery)
@@ -99,11 +102,25 @@ export function buildAssistantTurnViewModel({
       && (candidate.primary?.kind !== 'note'
         || candidate.operation === 'created'
         || candidate.operation === 'updated')) ?? null;
-  const activityActive = isStreaming && allActivityBlocks.length > 0;
   const activityEndedAt = !isStreaming
     ? message.completedAt ?? message.timestamp
     : undefined;
   const timing = getActivityTiming(allActivityBlocks, activityEndedAt);
+  const startedAtCandidates = [message.timestamp, timing.startedAt]
+    .filter((value): value is number => Number.isFinite(value));
+  const workLogStartedAt = startedAtCandidates.length > 0
+    ? Math.min(...startedAtCandidates)
+    : undefined;
+  const workLogDurationMs = workLogStartedAt != null && timing.completedAt != null
+    ? Math.max(0, timing.completedAt - workLogStartedAt)
+    : undefined;
+  const workLogStatus = isStreaming
+    ? 'running'
+    : message.outcome?.status === 'failed'
+      ? 'failed'
+      : message.outcome?.status === 'partial'
+        ? 'partial'
+        : 'completed';
   const imageBlocks = (message.content ?? []).filter(
     (block): block is ImageContent =>
       block.type === 'image' && Boolean(block.source?.data),
@@ -140,22 +157,21 @@ export function buildAssistantTurnViewModel({
   }
 
   return {
-    displayContent,
-    flowContent,
-    activity: {
-      blocks: activityBlocks,
-      active: activityActive,
-      failedCount: failedToolCount,
-      hasTool: toolBlocks.length > 0,
+    answerContent,
+    workLog: {
+      items: workLogItems,
+      active: isStreaming && workLogItems.length > 0,
+      status: workLogStatus,
       expandedByDefault:
         reasoningLevel === 'stream' && isStreaming && !answerStarted,
-      ...timing,
+      startedAt: workLogStartedAt,
+      durationMs: workLogDurationMs,
     },
     answer: {
       started: answerStarted,
       showStreamingCursor:
         isStreaming &&
-        (activityBlocks.length === 0 || state === 'answering'),
+        (workLogItems.length === 0 || state === 'answering'),
     },
     lifecycle: {
       state,

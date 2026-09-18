@@ -15,6 +15,7 @@ export interface WireContentBlock {
   data?: string;
   mimeType?: string;
   id?: string;
+  presentation?: 'pending' | 'narration' | 'answer';
 }
 
 export interface WireMessage {
