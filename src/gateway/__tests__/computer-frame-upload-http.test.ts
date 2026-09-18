@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { serve } from '@hono/node-server';
 import { COMPUTER_FRAME_MAX_BYTES } from '@xopcai/computer-control-contract';
 import sharp from 'sharp';
+import { Agent, fetch as undiciFetch } from 'undici';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 
 import { uploadDesktopFrame } from '../../../electron/computer/frame-upload.js';
@@ -66,9 +67,16 @@ it('uploads a real >1MB screenshot through auth, body limits, image validation a
 }, 15_000);
 it('keeps ordinary and neighboring APIs at 1MB', async () => {
   for (const path of ['/api/config', '/api/endpoint-tools/invocations/test/files-other']) {
-    const res = await fetch(base + path, { method: 'POST', body: png });
-    expect(res.status).toBe(413);
-    await res.arrayBuffer();
+    // These routes reject from Content-Length before consuming the multi-megabyte body.
+    // Isolate their sockets so the early response cannot poison the shared fetch pool.
+    const dispatcher = new Agent({ connections: 1 });
+    try {
+      const res = await undiciFetch(base + path, { method: 'POST', body: png, dispatcher });
+      expect(res.status).toBe(413);
+      await res.arrayBuffer();
+    } finally {
+      await dispatcher.close();
+    }
   }
 });
 it('requires Gateway authentication and the correct endpoint-bound upload grant', async () => {
