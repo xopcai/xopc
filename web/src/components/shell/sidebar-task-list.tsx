@@ -106,7 +106,7 @@ function sessionUpdatedAtMs(session: SessionMetadata): number {
 
 function rowShellClass(isActive: boolean, indented: boolean): string {
   return cn(
-    'group relative flex w-full min-w-0 items-center rounded-lg pr-1 text-left text-sm leading-5 transition-colors duration-200 ease-out',
+    'group relative flex min-h-8 w-full min-w-0 items-center rounded-lg pr-1 text-left text-sm leading-5 transition-colors duration-200 ease-out',
     indented ? 'pl-[1.125rem]' : 'pl-1.5',
     'focus-within:outline-none',
     isActive
@@ -231,7 +231,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
       <Link
         to={`/chat/${encodeURIComponent(session.key)}`}
         className={cn(
-          'min-w-0 flex-1 rounded-lg py-1 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+          'min-w-0 flex-1 self-stretch rounded-lg py-1 pr-12 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
           'flex min-w-0 items-center gap-2',
         )}
         title={`${title} — ${description}`}
@@ -282,7 +282,6 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
         className={cn(
           'pointer-events-none absolute inset-y-0 right-1 z-10 flex items-center opacity-0 transition-opacity',
           'group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100',
-          isActive ? 'bg-surface-active' : 'bg-surface-hover',
           menuOpen && 'pointer-events-auto opacity-100',
         )}
       >
