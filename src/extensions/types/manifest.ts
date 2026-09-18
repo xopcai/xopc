@@ -155,35 +155,18 @@ export type ExtensionUiPermission =
   | 'agent.send'
   | 'agent.subscribe'
   | 'session.read'
-  | 'session.write'
   | 'config.read'
   | 'config.write'
   | 'storage'
   | 'notification'
-  | 'clipboard'
-  | 'theme'
-  | 'workspace.read'
-  | 'workspace.write';
+  | 'theme';
 
 /** All UI contribution points an extension can declare. */
 export interface ExtensionUiContributions {
-  sidebarPanels?: SidebarPanelContribution[];
   settingsPanels?: SettingsPanelContribution[];
   chatWidgets?: ChatWidgetContribution[];
   pages?: PageContribution[];
   commands?: CommandContribution[];
-  statusBarItems?: StatusBarItemContribution[];
-}
-
-/** A panel rendered in the sidebar area. */
-export interface SidebarPanelContribution {
-  id: string;
-  title: string;
-  icon?: string;
-  entrypoint: string;
-  defaultVisible?: boolean;
-  /** When-expression for visibility (see Phase 2). */
-  when?: string;
 }
 
 /** A panel rendered inside the settings page. */
@@ -220,7 +203,6 @@ export interface PageContribution {
   showInNav?: boolean;
   /** Lucide icon name */
   navIcon?: string;
-  when?: string;
 }
 
 /** A command registered in the command palette. */
@@ -231,16 +213,6 @@ export interface CommandContribution {
   opensPanel?: string;
   /** Optional chat slash name (e.g. `/hello`); bound via `api.onCommand`. */
   chatAlias?: string;
-  when?: string;
-}
-
-/** A small widget rendered in the status bar. */
-export interface StatusBarItemContribution {
-  id: string;
-  entrypoint: string;
-  position?: 'left' | 'right';
-  width?: number;
-  when?: string;
 }
 
 export interface ProviderAuthChoice {
@@ -266,9 +238,7 @@ export interface ActivationDeclaration {
   /** When false, extension code loads after gateway ready (sidecar). Default: eager at startup. */
   onStartup?: boolean;
   onProviders?: string[];
-  onCommands?: string[];
   onChannels?: string[];
-  onCapabilities?: Array<'provider' | 'channel' | 'tool' | 'hook'>;
 }
 
 export interface ContractDeclaration {

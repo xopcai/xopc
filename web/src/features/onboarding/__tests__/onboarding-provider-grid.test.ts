@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveOnboardingProviders } from '@/features/onboarding/onboarding-provider-options';
+import { resolveRecommendedOnboardingProvider } from '@/features/onboarding/onboarding-provider-options';
 import type { ProviderMeta } from '@/features/settings/providers-api';
 
 const providers: ProviderMeta[] = [
@@ -8,22 +8,18 @@ const providers: ProviderMeta[] = [
   { id: 'google', name: 'Google AI', category: 'common', supportsOAuth: false, supportsApiKey: true, configured: false, onboardingFeatured: true },
 ];
 
-describe('resolveOnboardingProviders', () => {
+describe('resolveRecommendedOnboardingProvider', () => {
   it('replaces Google with XOPC Cloud in the Electron first-run flow', () => {
-    const resolved = resolveOnboardingProviders(providers, true);
+    const resolved = resolveRecommendedOnboardingProvider(providers, true);
 
-    expect(resolved.map((provider) => provider.id)).toEqual(['xopc-cloud', 'deepseek']);
-    expect(resolved[0]).toMatchObject({ supportsOAuth: true, supportsApiKey: false });
+    expect(resolved).toMatchObject({ id: 'xopc-cloud', supportsOAuth: true, supportsApiKey: false });
   });
 
   it('keeps the web onboarding provider list unchanged', () => {
-    expect(resolveOnboardingProviders(providers, false).map((provider) => provider.id)).toEqual([
-      'deepseek',
-      'google',
-    ]);
+    expect(resolveRecommendedOnboardingProvider(providers, false)?.id).toBe('deepseek');
   });
 
-  it('keeps the first-run provider choice bounded to one compact row', () => {
+  it('uses the first ranked featured provider as the compact recommendation', () => {
     const manyProviders: ProviderMeta[] = [
       'deepseek',
       'openai',
@@ -41,6 +37,6 @@ describe('resolveOnboardingProviders', () => {
       onboardingFeatured: true,
     }));
 
-    expect(resolveOnboardingProviders(manyProviders, false)).toHaveLength(5);
+    expect(resolveRecommendedOnboardingProvider(manyProviders, false)?.id).toBe('deepseek');
   });
 });

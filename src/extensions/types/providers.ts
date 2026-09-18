@@ -189,7 +189,7 @@ export interface ProviderResponse {
 
 export interface ProviderRegistry {
   /** Register a provider */
-  register(provider: ProviderPlugin): void;
+  register(provider: ProviderPlugin): () => void;
   /** Get a provider by ID */
   get(id: string): ProviderPlugin | undefined;
   /** List all providers */

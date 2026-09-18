@@ -49,10 +49,17 @@ import { ExtensionApiImpl, createExtensionLogger, createPathResolver } from './a
 import { validateSpeechProviderContracts } from './speech-provider-contracts.js';
 import { validateMediaUnderstandingProviderContracts } from './media-provider-contracts.js';
 import { createLogger, createServiceLogger } from '../utils/logger.js';
+import { validateExtensionConfig } from './config-validation.js';
+import {
+  checkExtensionApiCompatibility,
+  EXTENSION_API_VERSION,
+  EXTENSION_UI_API_VERSION,
+} from './api-version.js';
 
 //  Security imports
 import {
   checkExtensionPathSafety,
+  checkExtensionDirSafety,
   isExtensionAllowed,
   provenanceTracker,
   logSecurityIssue,
@@ -111,15 +118,8 @@ async function mapWithConcurrency<T>(
 export type { ExtensionLoaderOptions, ExtensionSourceOrigin } from './discover-extensions.js';
 export { areExtensionsGloballyDisabled } from './discover-extensions.js';
 
-// ============================================================================
-// Extension Registry
-// ============================================================================
-
-// `ExtensionRegistryImpl` moved to `./extension-registry-impl.ts` so `api.ts`
-// can use the class without going through loader.ts (which imports back from
-// api.ts and formed a circular cycle). Re-exported here for backward-compat.
-export { ExtensionRegistryImpl } from './extension-registry-impl.js';
 import { ExtensionRegistryImpl } from './extension-registry-impl.js';
+export { ExtensionRegistryImpl } from './extension-registry-impl.js';
 
 // ============================================================================
 // Extension Loader
@@ -133,6 +133,7 @@ export class ExtensionLoader {
   private registry: ExtensionRegistryImpl;
   private options: ExtensionLoaderOptions;
   private extensionInstances: Map<string, ExtensionApi> = new Map();
+  private startedServiceIds = new Set<string>();
   private jiti: ReturnType<typeof createJiti>;
   private _appConfig?: Config;
   private _runtimeContext?: {
@@ -490,6 +491,17 @@ export class ExtensionLoader {
         );
         return null;
       }
+      if (this.securityConfig.checkPermissions) {
+        const directorySafety = checkExtensionDirSafety(extensionPath, extensionPath, source);
+        if (!directorySafety.safe) {
+          const firstIssue = directorySafety.issues[0];
+          if (firstIssue) logSecurityIssue(config.id, firstIssue);
+          const detail = firstIssue?.detail ?? 'Unsafe file in extension directory';
+          this.diagnostics.error(config.id, detail);
+          log.error({ extensionId: config.id, detail }, 'Extension directory safety check failed');
+          return null;
+        }
+      }
 
       // Filesystem safety and publisher trust are independent boundaries. A safely-owned
       // directory must not bypass allowUntrusted=false for non-bundled code.
@@ -557,52 +569,38 @@ export class ExtensionLoader {
         );
         return null;
       }
-
-      // Validate extension config against schema (basic validation)
-      if (manifest.configSchema) {
-        try {
-          const schema = manifest.configSchema as Record<string, unknown>;
-          const extensionConfig = config.config as Record<string, unknown>;
-          
-          // Basic validation: check required fields and types
-          if (schema.type === 'object' && schema.properties) {
-            const props = schema.properties as Record<string, Record<string, unknown>>;
-            const required = (schema.required as string[]) || [];
-            
-            for (const field of required) {
-              if (extensionConfig[field] === undefined) {
-                log.error({ 
-                  extensionId: config.id, 
-                  field 
-                }, 'Extension config validation failed: missing required field');
-                return null;
-              }
-            }
-            
-            for (const [key, value] of Object.entries(extensionConfig)) {
-              const propSchema = props[key];
-              if (propSchema) {
-                if (propSchema.type && !this.validateType(value, propSchema.type as string)) {
-                  log.error({ 
-                    extensionId: config.id, 
-                    field: key,
-                    expected: propSchema.type,
-                    actual: typeof value
-                  }, 'Extension config validation failed: type mismatch');
-                  return null;
-                }
-              }
-            }
-          }
-          
-          log.debug({ extensionId: config.id }, 'Extension config validated');
-        } catch (err) {
-          log.warn({ err, extensionId: config.id }, 'Config schema validation skipped');
+      for (const [engineName, requiredRange, currentVersion] of [
+        ['extensionApi', manifest.engines.extensionApi, EXTENSION_API_VERSION],
+        ['extensionUiApi', manifest.engines.extensionUiApi, EXTENSION_UI_API_VERSION],
+      ] as const) {
+        const result = checkExtensionApiCompatibility(requiredRange, currentVersion, engineName);
+        if (result.parseWarning || !result.compatible) {
+          const reason = result.reason ?? `Incompatible engines.${engineName}`;
+          log.warn({ extensionId: config.id, requiredRange, currentVersion }, reason);
+          this.diagnostics.error(config.id, reason);
+          return null;
         }
       }
 
+      // Validate extension config against the complete JSON Schema.
+      if (manifest.configSchema) {
+        const result = validateExtensionConfig(
+          manifest.configSchema,
+          config.config ?? {},
+        );
+        if (result.valid === false) {
+          log.error(
+            { extensionId: config.id, validationErrors: result.errors },
+            `Extension config validation failed: ${result.reason}`,
+          );
+          this.diagnostics.error(config.id, `Extension config validation failed: ${result.reason}`);
+          return null;
+        }
+        log.debug({ extensionId: config.id }, 'Extension config validated');
+      }
+
       // Create extension API
-      const extensionDir = dirname(extensionPath);
+      const extensionDir = extensionPath;
       const api = this.createExtensionApi(manifest, config, extensionDir);
 
       // Load extension module
@@ -619,8 +617,15 @@ export class ExtensionLoader {
         log.warn({ extensionId: config.id }, 'Failed to claim required slots');
       }
 
-      // Initialize extension
-      await this.initializeExtension(module, api, manifest);
+      // Initialize extension transactionally so a failed activation leaves no registrations behind.
+      try {
+        await this.initializeExtension(module, api, manifest);
+      } catch (error) {
+        (api as ExtensionApiImpl)._cleanup();
+        this.registry.removeExtensionContributions(config.id);
+        this.releaseExtensionSlots(config.id);
+        throw error;
+      }
 
       validateSpeechProviderContracts({
         extensionId: config.id,
@@ -711,6 +716,12 @@ export class ExtensionLoader {
       this.diagnostics.warn(extensionId, `Slot "${slotKey}" already claimed by another extension`);
     }
     return claimed;
+  }
+
+  private releaseExtensionSlots(extensionId: string): void {
+    for (const [key, claim] of this.slotRegistry.getAllClaims()) {
+      if (claim.pluginId === extensionId) this.slotRegistry.release(key, extensionId);
+    }
   }
 
   loadManifest(extensionPath: string): ExtensionManifest | null {
@@ -830,15 +841,20 @@ export class ExtensionLoader {
       // Module is a ExtensionDefinition with register method
       await module.register(api);
     }
+    if (typeof module === 'object' && module.activate) {
+      await module.activate(api);
+    }
   }
 
   async startServices(): Promise<void> {
     const services = Array.from(this.registry.services.values());
 
     for (const service of services) {
+      if (this.startedServiceIds.has(service.id)) continue;
       const serviceLog = createServiceLogger(service.id);
       try {
         await service.start?.();
+        this.startedServiceIds.add(service.id);
         serviceLog.info(`Started service`);
       } catch (error) {
         serviceLog.error({ err: error }, `Failed to start service`);
@@ -850,28 +866,60 @@ export class ExtensionLoader {
     const services = Array.from(this.registry.services.values()).reverse();
 
     for (const service of services) {
-      if (service.stop) {
-        const serviceLog = createServiceLogger(service.id);
-        try {
+      if (!this.startedServiceIds.has(service.id)) continue;
+      const serviceLog = createServiceLogger(service.id);
+      try {
+        if (service.stop) {
           await service.stop();
           serviceLog.info(`Stopped service`);
-        } catch (error) {
-          serviceLog.error({ err: error }, `Failed to stop service`);
         }
+      } catch (error) {
+        serviceLog.error({ err: error }, `Failed to stop service`);
+      } finally {
+        this.startedServiceIds.delete(service.id);
       }
     }
   }
 
-  /**
-   * Basic type validation for config values
-   */
-  private validateType(value: unknown, expectedType: string): boolean {
-    if (expectedType === 'string') return typeof value === 'string';
-    if (expectedType === 'number' || expectedType === 'integer') return typeof value === 'number';
-    if (expectedType === 'boolean') return typeof value === 'boolean';
-    if (expectedType === 'array') return Array.isArray(value);
-    if (expectedType === 'object') return typeof value === 'object' && value !== null && !Array.isArray(value);
+  async unloadExtension(extensionId: string): Promise<boolean> {
+    const api = this.extensionInstances.get(extensionId);
+    const record = this.registry.getExtension(extensionId);
+    if (!api || !record) return false;
+
+    for (const service of this.registry.getServicesForExtension(extensionId).reverse()) {
+      if (!this.startedServiceIds.has(service.id)) continue;
+      try {
+        await service.stop?.();
+      } catch (error) {
+        log.error({ err: error, extensionId, serviceId: service.id }, 'Extension service stop failed');
+      } finally {
+        this.startedServiceIds.delete(service.id);
+      }
+    }
+
+    const module = record.module;
+    try {
+      if (module && typeof module === 'object' && module.deactivate) {
+        await module.deactivate(api);
+      }
+    } catch (error) {
+      log.error({ err: error, extensionId }, 'Extension deactivation failed');
+    } finally {
+      (api as ExtensionApiImpl)._cleanup();
+      this.registry.removeExtensionContributions(extensionId);
+      this.releaseExtensionSlots(extensionId);
+      this.extensionInstances.delete(extensionId);
+      this.cache.invalidate();
+    }
+    this.diagnostics.info(extensionId, 'Unloaded extension');
     return true;
+  }
+
+  async shutdown(): Promise<void> {
+    await this.stopServices();
+    for (const extensionId of [...this.extensionInstances.keys()].reverse()) {
+      await this.unloadExtension(extensionId);
+    }
   }
 }
 

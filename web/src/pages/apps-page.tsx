@@ -361,7 +361,6 @@ function ExtensionDetailDialog({
   const pages = ext.ui?.contributions?.pages ?? [];
   const settingsPanels = ext.ui?.contributions?.settingsPanels ?? [];
   const chatWidgets = ext.ui?.contributions?.chatWidgets ?? [];
-  const sidebarPanels = ext.ui?.contributions?.sidebarPanels ?? [];
   const primaryPage: PageContribution | undefined = pages.find((p) => p.showInNav) ?? pages[0];
   const primarySettingsPanel = settingsPanels[0];
   const openPath = primaryPage ? extensionPagePath(ext.id, primaryPage) : null;
@@ -492,11 +491,6 @@ function ExtensionDetailDialog({
                     template={copy.badgeWidgets}
                     count={chatWidgets.length}
                     hidden={chatWidgets.length === 0}
-                  />
-                  <ContributionBadge
-                    template={copy.badgeSidebar}
-                    count={sidebarPanels.length}
-                    hidden={sidebarPanels.length === 0}
                   />
                 </div>
               </section>

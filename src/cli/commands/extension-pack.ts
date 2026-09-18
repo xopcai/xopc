@@ -77,9 +77,6 @@ function collectContributionPaths(manifest: ExtensionManifest, extRoot: string):
   if (ui?.icon) out.push(join(extRoot, ui.icon));
   const c = ui?.contributions;
   if (!c) return out;
-  for (const p of c.sidebarPanels ?? []) {
-    if (p.entrypoint) out.push(join(extRoot, p.entrypoint));
-  }
   for (const p of c.settingsPanels ?? []) {
     if (p.entrypoint) out.push(join(extRoot, p.entrypoint));
   }
@@ -87,9 +84,6 @@ function collectContributionPaths(manifest: ExtensionManifest, extRoot: string):
     if (p.entrypoint) out.push(join(extRoot, p.entrypoint));
   }
   for (const p of c.pages ?? []) {
-    if (p.entrypoint) out.push(join(extRoot, p.entrypoint));
-  }
-  for (const p of c.statusBarItems ?? []) {
     if (p.entrypoint) out.push(join(extRoot, p.entrypoint));
   }
   return out;

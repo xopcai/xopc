@@ -138,7 +138,7 @@ interface AddProviderDialogProps {
   customConfig: ModelsJsonConfig | null;
   labels: AddProviderDialogMessages;
   language: StoredLanguage;
-  onSaved: () => void;
+  onSaved: (providerId: string) => void;
 }
 
 export function AddProviderDialog({
@@ -168,8 +168,8 @@ export function AddProviderDialog({
     [onOpenChange],
   );
 
-  const handleSaved = useCallback(() => {
-    onSaved();
+  const handleSaved = useCallback((providerId: string) => {
+    onSaved(providerId);
     handleOpenChange(false);
   }, [onSaved, handleOpenChange]);
 
@@ -209,7 +209,7 @@ export function AddProviderDialog({
               labels={labels}
               language={language}
               onBack={() => setStep({ type: 'pick' })}
-              onSaved={handleSaved}
+              onSaved={() => handleSaved(step.providerId)}
             />
           ) : (
             <ConfigureCustomStep
@@ -906,7 +906,7 @@ function ConfigureCustomStep({
   labels: AddProviderDialogMessages;
   language: StoredLanguage;
   onBack: () => void;
-  onSaved: () => void;
+  onSaved: (providerId: string) => void;
 }) {
   const [form, dispatch] = useReducer(customFormReducer, undefined as never, () =>
     customFormFromPreset(initialPresetKey),
@@ -952,7 +952,7 @@ function ConfigureCustomStep({
       };
 
       await saveModelsJson(updatedConfig);
-      onSaved();
+      onSaved(trimmedId);
     } catch (e) {
       dispatch({ type: 'setError', value: e instanceof Error ? e.message : labels.saveError });
     } finally {

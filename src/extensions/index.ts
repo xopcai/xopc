@@ -11,7 +11,8 @@ export * from './types/index.js';
 export { ExtensionApiImpl, createExtensionLogger, createPathResolver } from './api.js';
 
 // Extension Loader and Registry
-export { ExtensionRegistryImpl, ExtensionLoader, normalizeExtensionConfig, resolveExtensionPath, areExtensionsGloballyDisabled } from './loader.js';
+export { ExtensionRegistryImpl } from './extension-registry-impl.js';
+export { ExtensionLoader, normalizeExtensionConfig, resolveExtensionPath, areExtensionsGloballyDisabled } from './loader.js';
 export type { ActivationPlanLoadOptions } from './loader.js';
 export type { ExtensionRegistry } from './types/core.js';
 

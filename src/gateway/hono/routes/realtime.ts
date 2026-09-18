@@ -1,4 +1,4 @@
-import { realtimeClientKindSchema } from '@xopcai/realtime-protocol';
+import { REALTIME_CAPABILITIES, REALTIME_PROTOCOL_VERSION, realtimeClientKindSchema } from '@xopcai/realtime-protocol';
 import type { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -18,7 +18,7 @@ export function registerRealtimeRoutes(authenticated: Hono, deps: AuthenticatedR
     }
     try {
       const principal = getGatewayPrincipal(c);
-      return c.json({ ok: true, payload: deps.service.realtime.tickets.issue(
+      const ticket = deps.service.realtime.tickets.issue(
         parsed.data.clientId,
         parsed.data.clientKind,
         {
@@ -27,7 +27,15 @@ export function registerRealtimeRoutes(authenticated: Hono, deps: AuthenticatedR
           ...(principal.accessSessionId ? { accessSessionId: principal.accessSessionId } : {}),
           scopes: principal.scopes,
         },
-      ) });
+      );
+      return c.json({ ok: true, payload: {
+        ...ticket,
+        realtime: {
+          minVersion: REALTIME_PROTOCOL_VERSION,
+          maxVersion: REALTIME_PROTOCOL_VERSION,
+          capabilities: REALTIME_CAPABILITIES,
+        },
+      } });
     } catch (error) {
       return c.json({
         ok: false,

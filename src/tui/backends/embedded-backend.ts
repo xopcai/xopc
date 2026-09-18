@@ -1,5 +1,5 @@
 import { createConversation } from '../../storage/sqlite/conversation-repository.js';
-import type { ExtensionRegistryImpl } from '../../extensions/loader.js';
+import type { ExtensionRegistryImpl } from '../../extensions/extension-registry-impl.js';
 import { isAbsolute, relative, resolve } from 'node:path';
 import type { AgentService } from '../../agent/service.js';
 import { listAgentEntries, normalizeAgentId } from '../../agent/agent-scope.js';

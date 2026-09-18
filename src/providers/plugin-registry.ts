@@ -19,7 +19,7 @@ export class ProviderPluginRegistry implements ProviderRegistry {
   /**
    * Register a new provider
    */
-  register(provider: ProviderPlugin): void {
+  register(provider: ProviderPlugin): () => void {
     if (this.providers.has(provider.id)) {
       log.warn(`Provider "${provider.id}" already registered, overwriting`);
     }
@@ -35,8 +35,14 @@ export class ProviderPluginRegistry implements ProviderRegistry {
       throw new Error('Provider must implement createStream method');
     }
     
+    const previous = this.providers.get(provider.id);
     this.providers.set(provider.id, provider);
     log.info(`Registered provider: ${provider.name} (${provider.id})`);
+    return () => {
+      if (this.providers.get(provider.id) !== provider) return;
+      if (previous) this.providers.set(provider.id, previous);
+      else this.providers.delete(provider.id);
+    };
   }
 
   /**

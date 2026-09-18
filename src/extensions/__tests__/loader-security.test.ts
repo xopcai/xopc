@@ -1,10 +1,11 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { ExtensionLoader } from '../loader.js';
+import { checkExtensionDirSafety } from '../security.js';
 import type { ResolvedExtensionConfig } from '../types/index.js';
 
 const tempDirs: string[] = [];
@@ -38,6 +39,19 @@ afterEach(() => {
 });
 
 describe('ExtensionLoader security policy', () => {
+  it.skipIf(process.platform === 'win32')('checks nested directory permissions', () => {
+    const root = mkdtempSync(join(tmpdir(), 'xopc-loader-nested-security-'));
+    tempDirs.push(root);
+    const nested = join(root, 'nested');
+    mkdirSync(nested);
+    chmodSync(nested, 0o777);
+
+    const result = checkExtensionDirSafety(root, root, 'global');
+
+    expect(result.safe).toBe(false);
+    expect(result.issues.some((issue) => issue.reason === 'world_writable')).toBe(true);
+  });
+
   it('blocks a safely-owned non-bundled extension unless it is trusted', async () => {
     const extension = createExtension();
     const blockedLoader = new ExtensionLoader({

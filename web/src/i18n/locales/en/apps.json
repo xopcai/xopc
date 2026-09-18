@@ -45,7 +45,6 @@
     "badgePages": "{{count}} page(s)",
     "badgeSettings": "{{count}} settings",
     "badgeWidgets": "{{count}} widget(s)",
-    "badgeSidebar": "{{count}} sidebar",
     "open": "Open",
     "openSettings": "Settings",
     "runStateLive": "Running",

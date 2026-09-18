@@ -127,7 +127,7 @@ export function CapabilitiesSettingsPanel() {
               onAdd={() => setAddDialogOpen(true)}
               onManage={(providerId, isCustom) => setManageTarget({ providerId, isCustom })}
             />
-            <ModelCatalogStatus />
+            {providerData.cards.length > 0 ? <ModelCatalogStatus /> : null}
           </>
         ) : (
           <CapabilitySectionPanel section={capability} />
@@ -141,7 +141,7 @@ export function CapabilitiesSettingsPanel() {
         customConfig={providerData.customConfig}
         labels={c.addProviderDialog}
         language={language}
-        onSaved={handleSaved}
+        onSaved={() => handleSaved()}
       />
 
       {manageTarget ? (

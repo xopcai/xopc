@@ -200,7 +200,7 @@ export class ActivationPlanner {
 
   /**
    * Split activated ids by manifest `activation.onStartup`.
-   * Extensions without the field remain on the startup path (backward compatible).
+   * Extensions without the field load during startup.
    */
   filterActivatedIdsByLoadPhase(
     activatedIds: readonly string[],
