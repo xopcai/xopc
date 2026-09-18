@@ -21,7 +21,6 @@ const METHOD_PERMISSION_MAP: Record<string, string | undefined> = {
   'storage.remove': 'storage',
   'storage.keys': 'storage',
   'ui.notification': 'notification',
-  'ui.navigate': 'theme',
   'theme.get': 'theme',
 };
 
@@ -83,6 +82,7 @@ export class ExtensionMessageRouter {
 
   unregisterIframe(extensionId: string): void {
     const iframe = this.iframes.get(extensionId);
+    this.sendEvent(extensionId, 'panel.dispose');
     if (iframe?.contentWindow) {
       this.byContentWindow.delete(iframe.contentWindow);
     }
@@ -355,7 +355,8 @@ export function registerBuiltinMethods(router: ExtensionMessageRouter): void {
         ? String((params as { path?: string }).path ?? '')
         : '';
     if (path) {
-      window.dispatchEvent(new CustomEvent('extension-navigate', { detail: { path } }));
+      const normalized = path.startsWith('/') ? path : `/${path}`;
+      window.location.hash = `#${normalized}`;
     }
   });
 

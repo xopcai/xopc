@@ -87,9 +87,6 @@ export function createExtensionClient(options?: CreateExtensionClientOptions): E
       async showNotification(options) {
         await transport.request('ui.notification', options);
       },
-      closePanel() {
-        transport.emit('ui.closePanel', undefined);
-      },
       async navigate(path: string) {
         await transport.request('ui.navigate', { path });
       },
@@ -124,18 +121,6 @@ export function createExtensionClient(options?: CreateExtensionClientOptions): E
       });
     },
 
-    onDidChangeVisibility(handler: (visible: boolean) => void) {
-      return transport.on('panel.visibility', (data) => {
-        const v =
-          typeof data === 'object' &&
-          data !== null &&
-          'visible' in data &&
-          typeof (data as { visible: unknown }).visible === 'boolean'
-            ? (data as { visible: boolean }).visible
-            : Boolean(data);
-        handler(v);
-      });
-    },
   };
 
   return client;

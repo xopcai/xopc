@@ -99,9 +99,9 @@ const extension = {
     });
 
     // Register a simple HTTP route
-    api.registerHttpRoute('/hello', async (_req, res) => {
+    api.registerHttpRoute('/hello', async (_req) => {
       const greeting = (api.extensionConfig.greeting as string) || 'Hello';
-      res.json({ message: greeting, extension: 'hello' });
+      return { status: 200, body: { message: greeting, extension: 'hello' } };
     });
 
     // Register a gateway method

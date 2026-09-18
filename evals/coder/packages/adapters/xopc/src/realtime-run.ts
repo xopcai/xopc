@@ -52,7 +52,7 @@ export async function runRealtimeInput(input: {
     createWebSocket: url => new WebSocket(url) as unknown as RealtimeWebSocket,
     issueTicket: async signal => {
       const response = await json('/api/realtime/tickets', { clientId, clientKind: 'web' }, signal);
-      return response.payload.ticket;
+      return response.payload;
     },
     onStateChange: (state, message) => {
       if (state === 'error') fail(new Error(message ?? 'Realtime connection failed'));

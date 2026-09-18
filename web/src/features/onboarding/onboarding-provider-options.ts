@@ -23,10 +23,10 @@ const FEATURED_ORDER = new Map(
   [XOPC_CLOUD_PROVIDER, ...FALLBACK_FEATURED_PROVIDERS].map((provider, index) => [provider.id, index]),
 );
 
-export function resolveOnboardingProviders(
+export function resolveRecommendedOnboardingProvider(
   providerMeta: ProviderMeta[] | undefined,
   desktop: boolean,
-): ProviderMeta[] {
+): ProviderMeta | undefined {
   const featured = providerMeta?.filter((provider) => (
     provider.onboardingFeatured && hasProviderLogo(provider.id)
   ));
@@ -39,6 +39,5 @@ export function resolveOnboardingProviders(
     : source;
   return providers
     .slice()
-    .sort((a, b) => (FEATURED_ORDER.get(a.id) ?? 999) - (FEATURED_ORDER.get(b.id) ?? 999))
-    .slice(0, 5);
+    .sort((a, b) => (FEATURED_ORDER.get(a.id) ?? 999) - (FEATURED_ORDER.get(b.id) ?? 999))[0];
 }

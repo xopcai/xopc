@@ -4,15 +4,19 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
 
-vi.mock('swr', () => ({ default: (key: string) => ({ data: key === 'model-catalog'
-  ? { sources: {}, references: [], sync: { refreshing: false } }
-  : { capabilities: {
+const mockState = vi.hoisted(() => ({
+  capabilities: {
     vision: { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'vision' } },
     'image-generation': { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'image' } },
     stt: { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'stt' } },
     tts: { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'tts' } },
     'computer-use': { status: 'unavailable', selectionSource: 'explicit-config', rejected: [{ provider: 'cloud', model: 'gui' }] },
-  } }, isLoading: false }) }));
+  },
+}));
+
+vi.mock('swr', () => ({ default: (key: string) => ({ data: key === 'model-catalog'
+  ? { sources: {}, references: [], sync: { refreshing: false } }
+  : { capabilities: mockState.capabilities }, isLoading: false }) }));
 vi.mock('../models-hub-cache', () => ({
   MODEL_CATALOG_SWR_KEY: 'model-catalog', CAPABILITY_READINESS_SWR_KEY: 'capability-readiness',
   revalidateModelsHubCaches: vi.fn(),
@@ -27,6 +31,13 @@ afterEach(async () => {
   await act(async () => root?.unmount());
   root = undefined;
   window.electronAPI = previousApi;
+  Object.assign(mockState.capabilities, {
+    vision: { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'vision' } },
+    'image-generation': { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'image' } },
+    stt: { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'stt' } },
+    tts: { status: 'ready', selectionSource: 'explicit-config', primary: { provider: 'cloud', model: 'tts' } },
+    'computer-use': { status: 'unavailable', selectionSource: 'explicit-config', rejected: [{ provider: 'cloud', model: 'gui' }] },
+  });
 });
 
 it.each(['darwin', 'win32', 'linux', undefined])('shows computer setup and its warning only on macOS desktop: %s', async platform => {
@@ -53,4 +64,21 @@ it('links every available capability card to its configuration page', async () =
     expect.stringMatching(/STT/),
     expect.stringMatching(/TTS/),
   ]));
+});
+
+it('presents never-configured optional capabilities without warnings', async () => {
+  window.electronAPI = undefined;
+  Object.assign(mockState.capabilities, {
+    vision: { status: 'unavailable', selectionSource: 'none', rejected: [] },
+    'image-generation': { status: 'unavailable', selectionSource: 'none', rejected: [] },
+    stt: { status: 'unavailable', selectionSource: 'none', rejected: [] },
+    tts: { status: 'ready', selectionSource: 'credentialless-fallback', primary: { provider: 'edge', model: 'edge' } },
+  });
+  const container = document.createElement('div');
+  root = createRoot(container);
+  await act(async () => root!.render(<MemoryRouter><ModelCatalogStatus /></MemoryRouter>));
+
+  expect(container.textContent).toContain('Not configured');
+  expect(container.textContent).not.toContain('Needs attention');
+  expect(container.querySelector('.lucide-triangle-alert')).toBeNull();
 });

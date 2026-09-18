@@ -45,6 +45,7 @@ function indexProvider(provider: SpeechProviderPlugin): string[] {
  */
 export function registerSpeechProvider(provider: SpeechProviderPlugin): () => void {
   const keys = indexProvider(provider);
+  const previous = new Map(keys.map((key) => [key, registry.get(key)]));
   const conflicts: string[] = [];
   for (const key of keys) {
     if (registry.has(key)) {
@@ -64,7 +65,9 @@ export function registerSpeechProvider(provider: SpeechProviderPlugin): () => vo
     for (const key of keys) {
       const current = registry.get(key);
       if (current === provider) {
-        registry.delete(key);
+        const prior = previous.get(key);
+        if (prior) registry.set(key, prior);
+        else registry.delete(key);
       }
     }
   };

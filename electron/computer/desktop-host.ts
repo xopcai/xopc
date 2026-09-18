@@ -240,7 +240,7 @@ export class DesktopEndpointHost {
         if (!this.reenrollmentRequired) this.error = state === 'connected' ? undefined
           : error === GATEWAY_PROTOCOL_INCOMPATIBLE ? getComputerMessages(getElectronShellLanguage()).protocolIncompatible : error;
       },
-      issueTicket: async (signal) => (await request('/api/realtime/tickets', { clientId, clientKind: 'desktop' }, signal)).payload.ticket,
+      issueTicket: async (signal) => (await request('/api/realtime/tickets', { clientId, clientKind: 'desktop' }, signal)).payload,
       getWebSocketUrl: () => base.replace('http:', 'ws:') + '/api/realtime/v1/ws',
       createWebSocket: (url) => new WebSocket(url) as unknown as RealtimeWebSocket,
     });

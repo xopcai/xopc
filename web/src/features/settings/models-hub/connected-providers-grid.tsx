@@ -166,10 +166,12 @@ export function ConnectedProvidersGrid({ labels, data, onAdd, onManage }: Connec
             ? labels.titleCount.replace('{{count}}', String(configuredCards.length))
             : labels.title}
         </h2>
-        <Button type="button" variant="primary" className="gap-1.5" onClick={onAdd}>
-          <Plus className="size-3.5" strokeWidth={2} aria-hidden />
-          {labels.addProvider}
-        </Button>
+        {configuredCards.length > 0 ? (
+          <Button type="button" variant="primary" className="gap-1.5" onClick={onAdd}>
+            <Plus className="size-3.5" strokeWidth={2} aria-hidden />
+            {labels.addProvider}
+          </Button>
+        ) : null}
       </div>
 
       {/* Empty state */}

@@ -28,7 +28,6 @@ import type {
   GatewayMethodHandler,
   HttpRequestHandler,
 } from '../types/core.js';
-import type { FlagConfig, FlagValue, ShortcutConfig } from '../types/registration.js';
 import type {
   ExtensionHookEvent,
   ExtensionHookHandler,
@@ -248,10 +247,6 @@ class MockExtensionApiImpl implements MockExtensionApi {
     /* noop */
   }
 
-  registerProviderPlugin(_plugin: unknown): void {
-    /* noop */
-  }
-
   registerSpeechProvider(_plugin: import('../../voice/tts/speech-provider-types.js').SpeechProviderPlugin): void {
     /* noop */
   }
@@ -266,18 +261,6 @@ class MockExtensionApiImpl implements MockExtensionApi {
     adapter: unknown;
     displayName?: string;
   }): void {
-    /* noop */
-  }
-
-  registerFlag(_name: string, _config: FlagConfig): void {
-    /* noop */
-  }
-
-  getFlag(_name: string): FlagValue {
-    return undefined;
-  }
-
-  registerShortcut(_key: string, _config: ShortcutConfig): void {
     /* noop */
   }
 

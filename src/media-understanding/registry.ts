@@ -44,6 +44,7 @@ export function registerMediaUnderstandingProvider(
   provider: MediaUnderstandingProvider,
 ): () => void {
   const keys = indexProvider(provider);
+  const previous = new Map(keys.map((key) => [key, registry.get(key)]));
   const conflicts = keys.filter((key) => registry.has(key));
   if (conflicts.length > 0) {
     log.warn(
@@ -58,7 +59,9 @@ export function registerMediaUnderstandingProvider(
     for (const key of keys) {
       const current = registry.get(key);
       if (current === provider) {
-        registry.delete(key);
+        const prior = previous.get(key);
+        if (prior) registry.set(key, prior);
+        else registry.delete(key);
       }
     }
   };

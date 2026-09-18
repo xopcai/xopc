@@ -1,12 +1,10 @@
-import { execFile } from 'node:child_process';
 import { realpath } from 'node:fs/promises';
 import { isAbsolute, relative, sep } from 'node:path';
-import { promisify } from 'node:util';
 
+import { runProcess } from '../../process/run-process.js';
 import { credentialMounts } from './commandMounts.js';
 import { validatePath } from '../sandbox/path-policy.js';
 
-const exec = promisify(execFile);
 export type CommandIsolation = { mode: 'host' } | { mode: 'docker'; image: string; network?: boolean; workspaceAccess?: 'read-only' | 'read-write' };
 
 /** Docker is opt-in and never falls back to host execution or pulls an image implicitly. */
@@ -39,7 +37,8 @@ export async function isolatedCommand(input: {
 
 export async function removeCommandContainer(name: string): Promise<void> {
   if (!/^xopc-command-[a-f0-9-]{36}$/.test(name)) throw new Error('Invalid command container name');
-  await exec('docker', ['rm', '--force', name], { timeout: 10_000 }).catch(error => {
-    if (!String(error.stderr).includes('No such container')) throw error;
-  });
+  const result = await runProcess({ program: 'docker', args: ['rm', '--force', name], timeoutMs: 10_000, terminationPolicy: 'tree' });
+  if (result.exitCode !== 0 && !result.stderr.includes('No such container')) {
+    throw new Error(result.stderr || `docker rm exited with code ${String(result.exitCode)}`);
+  }
 }

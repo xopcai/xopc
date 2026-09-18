@@ -2,7 +2,8 @@
  * Post-update extension sync — refresh lockfile-managed npm / store extensions.
  */
 
-import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import semver from 'semver';
 
@@ -17,12 +18,17 @@ import { resolveBundledExtensionsDir, resolveExtensionsDir } from '../config/pat
 import { loadConfig } from '../config/loader.js';
 import type { UpdateChannel } from '../infra/update-channels.js';
 import { createLogger } from '../utils/logger.js';
+import type { InstallResult } from './install.js';
 import {
-  installExtensionFromStoreZip,
-  installFromNpm,
-  type InstallResult,
-} from './install.js';
+  commitStagedExtensionInstall,
+  finalizeStagedExtensionInstall,
+  rollbackStagedExtensionInstall,
+  stageExtensionNpm,
+  stageExtensionStoreZip,
+  type StagedExtensionInstall,
+} from './install-transaction.js';
 import {
+  computeExtensionDirectoryIntegrity,
   getExtensionLockfileManager,
   type ExtensionLockEntry,
 } from './lockfile.js';
@@ -31,6 +37,47 @@ import * as marketplace from './marketplace.js';
 const log = createLogger('ExtensionUpdate');
 
 const MANIFEST = 'xopc.extension.json';
+
+function readJsonObject(path: string): Record<string, unknown> | undefined {
+  try {
+    const value = JSON.parse(readFileSync(path, 'utf-8')) as unknown;
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? value as Record<string, unknown>
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function installedSnapshots(targetDir: string, extensionId: string): {
+  manifest?: Record<string, unknown>;
+  packageJson?: Record<string, unknown>;
+} {
+  const root = join(targetDir, extensionId);
+  return {
+    manifest: readJsonObject(join(root, MANIFEST)),
+    packageJson: readJsonObject(join(root, 'package.json')),
+  };
+}
+
+async function commitStagedWithLock(
+  transaction: StagedExtensionInstall,
+  lock: ReturnType<typeof getExtensionLockfileManager>,
+  writeLock: () => Promise<void>,
+): Promise<void> {
+  const snapshot = await lock.load();
+  let lockWriteStarted = false;
+  try {
+    commitStagedExtensionInstall(transaction, true);
+    lockWriteStarted = true;
+    await writeLock();
+  } catch (error) {
+    rollbackStagedExtensionInstall(transaction);
+    if (lockWriteStarted) await lock.save(snapshot);
+    throw error;
+  }
+  finalizeStagedExtensionInstall(transaction);
+}
 
 export type ExtensionUpdateLogger = {
   info?: (message: string) => void;
@@ -101,12 +148,15 @@ async function upsertNpmExtensionLock(
     version: ver,
     resolved,
     source: 'npm',
+    installedIntegrity: computeExtensionDirectoryIntegrity(join(targetDir, result.extensionId)),
+    ...installedSnapshots(targetDir, result.extensionId),
   });
 }
 
 async function installExtensionFromStoreWithLock(params: {
   storeBase: string;
   packageName: string;
+  expectedExtensionId: string;
   version?: string;
   targetDir: string;
   lock: ReturnType<typeof getExtensionLockfileManager>;
@@ -119,17 +169,28 @@ async function installExtensionFromStoreWithLock(params: {
     );
     const buf = await downloadExtensionStoreZipBuffer(params.storeBase, downloadUrl);
     verifyStoreArtifactSha256(buf, sha256);
-    const result = await installExtensionFromStoreZip(buf, params.targetDir);
-    if (!result.ok || !result.extensionId) {
-      return { ok: false, error: result.error ?? 'install failed' };
+    const transaction = await stageExtensionStoreZip(buf, params.targetDir);
+    if (transaction.extensionId !== params.expectedExtensionId) {
+      rollbackStagedExtensionInstall(transaction);
+      return {
+        ok: false,
+        error: `Expected extension ${params.expectedExtensionId}, received ${transaction.extensionId}`,
+      };
     }
-    await params.lock.upsert(result.extensionId, {
-      name: result.extensionId,
-      version,
-      resolved: params.packageName,
-      source: 'store',
-    });
-    return { ok: true, extensionId: result.extensionId, version };
+    await commitStagedWithLock(transaction, params.lock, () => params.lock.upsert(
+      transaction.extensionId,
+      {
+        name: transaction.extensionId,
+        version,
+        resolved: params.packageName,
+        source: 'store',
+        artifactUrl: downloadUrl,
+        integrity: `sha256-${createHash('sha256').update(buf).digest('base64')}`,
+        installedIntegrity: computeExtensionDirectoryIntegrity(transaction.targetDir),
+        ...installedSnapshots(params.targetDir, transaction.extensionId),
+      },
+    ));
+    return { ok: true, extensionId: transaction.extensionId, version };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
@@ -195,12 +256,10 @@ async function updateSingleExtension(params: {
 
   if (entry.source === 'store') {
     const pkgName = entry.resolved?.trim() || extensionId;
-    if (existsSync(join(targetDir, extensionId))) {
-      rmSync(join(targetDir, extensionId), { recursive: true, force: true });
-    }
     const result = await installExtensionFromStoreWithLock({
       storeBase,
       packageName: pkgName,
+      expectedExtensionId: extensionId,
       targetDir,
       lock,
     });
@@ -245,13 +304,21 @@ async function updateSingleExtension(params: {
     };
   }
 
-  if (existsSync(join(targetDir, extensionId))) {
-    rmSync(join(targetDir, extensionId), { recursive: true, force: true });
-  }
-
-  const installResult = await installFromNpm(spec, targetDir, timeoutMs);
-  if (!installResult.ok) {
-    const message = installResult.error ?? 'npm install failed';
+  let transaction: StagedExtensionInstall;
+  try {
+    transaction = await stageExtensionNpm(spec, targetDir, timeoutMs);
+    if (transaction.extensionId !== extensionId) {
+      rollbackStagedExtensionInstall(transaction);
+      throw new Error(`Expected extension ${extensionId}, received ${transaction.extensionId}`);
+    }
+    await commitStagedWithLock(transaction, lock, () => upsertNpmExtensionLock(
+      lock,
+      targetDir,
+      { ok: true, extensionId: transaction.extensionId, targetDir: transaction.targetDir },
+      spec,
+    ));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     logger.error?.(`Failed to update ${extensionId}: ${message}`);
     return {
       extensionId,
@@ -261,12 +328,9 @@ async function updateSingleExtension(params: {
     };
   }
 
-  await upsertNpmExtensionLock(lock, targetDir, installResult, spec);
   const nextVersion =
-    (installResult.extensionId
-      ? readInstalledExtensionVersion(targetDir, installResult.extensionId)
-      : undefined) ?? entry.version;
-  const resolvedId = installResult.extensionId ?? extensionId;
+    readInstalledExtensionVersion(targetDir, transaction.extensionId) ?? entry.version;
+  const resolvedId = transaction.extensionId;
   const status =
     currentVersion && nextVersion && currentVersion === nextVersion ? 'unchanged' : 'updated';
   return {

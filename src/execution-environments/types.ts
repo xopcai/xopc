@@ -1,6 +1,9 @@
 export const EXECUTION_ENVIRONMENT_KINDS = ['local_checkout', 'managed_worktree'] as const;
 export type ExecutionEnvironmentKind = (typeof EXECUTION_ENVIRONMENT_KINDS)[number];
 
+export const EXECUTION_ENVIRONMENT_OWNERSHIPS = ['registered', 'xopc_created'] as const;
+export type ExecutionEnvironmentOwnership = (typeof EXECUTION_ENVIRONMENT_OWNERSHIPS)[number];
+
 export const EXECUTION_ENVIRONMENT_STATUSES = [
   'requested',
   'provisioning',
@@ -16,6 +19,7 @@ export interface ExecutionEnvironment {
   id: string;
   projectId?: string;
   kind: ExecutionEnvironmentKind;
+  ownership: ExecutionEnvironmentOwnership;
   status: ExecutionEnvironmentStatus;
   rootPath: string;
   repositoryRoot?: string;

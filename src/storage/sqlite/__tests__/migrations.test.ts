@@ -46,9 +46,9 @@ describe('SQLite migrations', () => {
     rmSync(migrationsDir, { recursive: true, force: true });
   });
 
-  it('keeps the retained release window at v165 through v179', () => {
+  it('keeps the retained release window at v165 through v180', () => {
     expect(XOPC_DB_BASELINE_SCHEMA_VERSION).toBe(165);
-    expect(XOPC_DB_SCHEMA_VERSION).toBe(179);
+    expect(XOPC_DB_SCHEMA_VERSION).toBe(180);
 
     const db = openEmptyDb();
     try {
@@ -83,6 +83,29 @@ describe('SQLite migrations', () => {
       expect(preferences).not.toHaveProperty('pausedUntil');
       expect(row.revision).toBe(4);
       expect(applyPendingMigrations(db)).toBe(XOPC_DB_SCHEMA_VERSION);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('derives execution environment ownership during the v180 migration', () => {
+    const db = openEmptyDb();
+    try {
+      installBaseline(db);
+      applyPendingMigrations(db, { targetVersion: 179 });
+      const insert = db.prepare(`INSERT INTO execution_environments (
+        environment_id, kind, status, root_path, version, created_at, updated_at
+      ) VALUES (?, ?, 'ready', ?, 1, 1, 1)`);
+      insert.run('local', 'local_checkout', '/tmp/local');
+      insert.run('managed', 'managed_worktree', '/tmp/managed');
+
+      applyPendingMigrations(db);
+
+      expect(db.prepare('SELECT environment_id, ownership FROM execution_environments ORDER BY environment_id').all())
+        .toEqual([
+          { environment_id: 'local', ownership: 'registered' },
+          { environment_id: 'managed', ownership: 'xopc_created' },
+        ]);
     } finally {
       db.close();
     }

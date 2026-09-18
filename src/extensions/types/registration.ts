@@ -50,27 +50,3 @@ export interface OAuthCredentials {
   refresh?: string;
   expiresAt?: number;
 }
-
-// ============================================================================
-// Flag Registration
-// ============================================================================
-
-export interface FlagConfig {
-  type: 'boolean' | 'string';
-  default?: FlagValue;
-  description: string;
-  aliases?: string[];
-}
-
-export type FlagValue = boolean | string | undefined;
-
-// ============================================================================
-// Shortcut Registration
-// ============================================================================
-
-export interface ShortcutConfig {
-  description: string;
-  handler: ShortcutHandler;
-}
-
-export type ShortcutHandler = (context: unknown) => void | Promise<void>;

@@ -14,7 +14,7 @@ import type {
   MessageSentContext,
 } from './types/hooks.js';
 
-import { ExtensionRegistryImpl as ExtensionRegistry } from './loader.js';
+import { ExtensionRegistryImpl as ExtensionRegistry } from './extension-registry-impl.js';
 import { HOOK_EXECUTION_MODES } from './types/hooks.js';
 
 // ============================================================================

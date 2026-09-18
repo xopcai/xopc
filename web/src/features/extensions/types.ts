@@ -6,7 +6,6 @@ export type PageContribution = {
   entrypoint: string;
   showInNav?: boolean;
   navIcon?: string;
-  when?: string;
 };
 
 /** Settings panel contribution (manifest `ui.contributions.settingsPanels`). */
@@ -39,14 +38,12 @@ export type ExtensionCommandContribution = {
   /** When set, run navigates to `/extensions/{extensionId}` for this extension. */
   opensPanel?: string;
   chatAlias?: string;
-  when?: string;
 };
 
 export type ExtensionUiContributions = {
   pages?: PageContribution[];
   settingsPanels?: SettingsPanelContribution[];
   chatWidgets?: ChatWidgetContribution[];
-  sidebarPanels?: unknown[];
   commands?: ExtensionCommandContribution[];
 };
 

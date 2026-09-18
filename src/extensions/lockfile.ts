@@ -1,12 +1,41 @@
 import { readFile, mkdir } from 'fs/promises';
 import { writeTextAtomic } from '../infra/write-file-atomic.js';
-import { existsSync } from 'fs';
+import { existsSync, lstatSync, readFileSync, readdirSync, readlinkSync } from 'fs';
 import { dirname, join } from 'path';
 import { createHash } from 'crypto';
 import { createLogger } from '../utils/logger.js';
 import { resolveExtensionsLockPath, resolveExtensionsDir } from '../config/paths.js';
 
 const log = createLogger('ExtensionLockfile');
+
+export function computeExtensionDirectoryIntegrity(extensionDir: string): string | undefined {
+  if (!existsSync(extensionDir)) return undefined;
+  const hash = createHash('sha256');
+
+  const walk = (dir: string, prefix = ''): void => {
+    const entries = readdirSync(dir, { withFileTypes: true })
+      .filter((entry) => entry.name !== '.DS_Store')
+      .sort((left, right) => left.name.localeCompare(right.name));
+    for (const entry of entries) {
+      const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const fullPath = join(dir, entry.name);
+      const stat = lstatSync(fullPath);
+      if (stat.isSymbolicLink()) {
+        hash.update(`symlink\0${relativePath}\0${readlinkSync(fullPath)}\0`);
+      } else if (stat.isDirectory()) {
+        hash.update(`dir\0${relativePath}\0`);
+        walk(fullPath, relativePath);
+      } else if (stat.isFile()) {
+        hash.update(`file\0${relativePath}\0${stat.mode & 0o777}\0${stat.size}\0`);
+        hash.update(readFileSync(fullPath));
+        hash.update('\0');
+      }
+    }
+  };
+
+  walk(extensionDir);
+  return `dir-sha256-${hash.digest('base64')}`;
+}
 
 // ============================================
 // Types
@@ -58,9 +87,11 @@ export interface ExtensionsLockfile {
 
 export class ExtensionLockfileManager {
   private readonly lockfilePath: string;
+  private readonly extensionsDir: string;
 
-  constructor(lockfilePath?: string) {
+  constructor(lockfilePath?: string, extensionsDir = resolveExtensionsDir()) {
     this.lockfilePath = lockfilePath || resolveExtensionsLockPath();
+    this.extensionsDir = extensionsDir;
   }
 
   /**
@@ -163,14 +194,19 @@ export class ExtensionLockfileManager {
       return { valid: false, reason: 'Extension not in lockfile' };
     }
 
-    const extDir = join(resolveExtensionsDir(), extensionId);
+    const extDir = join(this.extensionsDir, extensionId);
 
     if (!existsSync(extDir)) {
       return { valid: false, reason: 'Extension directory not found' };
     }
 
-    // TODO: Verify integrity hash if available
-    // This would require reading and hashing the extension files
+    if (!entry.installedIntegrity) {
+      return { valid: false, reason: 'Lockfile has no installed file integrity snapshot' };
+    }
+    const actual = computeExtensionDirectoryIntegrity(extDir);
+    if (actual !== entry.installedIntegrity) {
+      return { valid: false, reason: 'Installed extension files do not match the lockfile' };
+    }
 
     return { valid: true };
   }
@@ -202,7 +238,7 @@ export class ExtensionLockfileManager {
 
     // Validate all extensions exist
     for (const [extensionId] of Object.entries(data.extensions)) {
-      const extDir = join(resolveExtensionsDir(), extensionId);
+      const extDir = join(this.extensionsDir, extensionId);
 
       if (!existsSync(extDir)) {
         log.warn({ extensionId }, 'Extension in lockfile but not installed');
@@ -216,14 +252,6 @@ export class ExtensionLockfileManager {
     return data;
   }
 
-  /**
-   * Generate integrity hash for a file
-   */
-  static async generateIntegrity(filePath: string): Promise<string> {
-    const { readFile } = await import('fs/promises');
-    const content = await readFile(filePath);
-    return 'sha512-' + createHash('sha512').update(content).digest('base64');
-  }
 }
 
 // ============================================

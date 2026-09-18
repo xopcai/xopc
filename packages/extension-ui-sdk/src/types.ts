@@ -95,7 +95,6 @@ export interface ExtensionClient {
       title: string;
       message?: string;
     }): Promise<void>;
-    closePanel(): void;
     navigate(path: string): Promise<void>;
     openProduct(reference: ProductReferenceLocator): Promise<void>;
     /** Chat/tool widget iframe: host sends the tool result via `widget.data` after load. */
@@ -106,6 +105,5 @@ export interface ExtensionClient {
     on(event: string, handler: (data: unknown) => void): () => void;
   };
   onDispose(handler: () => void): () => void;
-  onDidChangeVisibility(handler: (visible: boolean) => void): () => void;
 }
 import type { ProductReferenceLocator } from '@xopcai/gateway-contract';

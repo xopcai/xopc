@@ -54,11 +54,11 @@ function createClient(clientId: string, cursorScopeKey: string): RealtimeClient 
         body: JSON.stringify({ clientId, clientKind: 'mobile' }),
         signal,
       });
-      const body = await response.json().catch(() => null) as { payload?: { ticket?: string }; error?: { message?: string } } | null;
+      const body = await response.json().catch(() => null) as { payload?: { ticket?: string; realtime?: { minVersion: number; maxVersion: number; capabilities: string[] } }; error?: { message?: string } } | null;
       if (!response.ok || !body?.payload?.ticket) {
         throw new Error(body?.error?.message ?? `Realtime ticket failed (${response.status})`);
       }
-      return body.payload.ticket;
+      return { ...body.payload, ticket: body.payload.ticket };
     },
     createWebSocket: (url) => new WebSocket(url) as unknown as RealtimeWebSocket,
     onStateChange: (state, error) => {

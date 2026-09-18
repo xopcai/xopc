@@ -131,7 +131,7 @@ import {
   extensionCustomMessageToTurnText,
   extensionUserMessageContentToText,
 } from './tui-extension-user-message.js';
-import type { ExtensionRegistryImpl } from '../extensions/loader.js';
+import type { ExtensionRegistryImpl } from '../extensions/extension-registry-impl.js';
 import type {
   ExtensionCustomMessage,
   ExtensionSendMessageOptions,

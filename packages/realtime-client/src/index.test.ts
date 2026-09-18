@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
+import { REALTIME_CAPABILITIES, REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 import { ENDPOINT_PROTOCOL_VERSION } from '@xopcai/endpoint-tools-protocol';
 import { RealtimeClient, RealtimeConnectionError, type RealtimeWebSocket } from './index.js';
 
@@ -93,6 +93,40 @@ describe('RealtimeClient', () => {
       payload: { topic: 'run:r1', seq: 1, event: 'run.start', data: {} },
     }) });
     expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ seq: 1 }));
+    client.disconnect();
+  });
+
+  it('only sends capabilities advertised by the ticket issuer', async () => {
+    const oldSocket = new FakeSocket();
+    const oldClient = new RealtimeClient({
+      clientId: 'old-compatible', clientKind: 'web', getWebSocketUrl: () => 'ws://gateway/realtime',
+      issueTicket: async () => ({ ticket: 'x'.repeat(32) }), createWebSocket: () => oldSocket,
+    });
+    oldClient.connect();
+    await vi.waitFor(() => expect(oldSocket.onopen).not.toBeNull());
+    oldSocket.open();
+    expect(JSON.parse(oldSocket.sent[0]!).payload).not.toHaveProperty('capabilities');
+    oldClient.disconnect();
+
+    const socket = new FakeSocket();
+    const onCapabilities = vi.fn();
+    const client = new RealtimeClient({
+      clientId: 'new', clientKind: 'web', getWebSocketUrl: () => 'ws://gateway/realtime',
+      issueTicket: async () => ({
+        ticket: 'x'.repeat(32),
+        realtime: { minVersion: 2, maxVersion: 2, capabilities: [...REALTIME_CAPABILITIES, 'server.unknown'] },
+      }),
+      createWebSocket: () => socket,
+      onCapabilities,
+    });
+    client.connect();
+    await vi.waitFor(() => expect(socket.onopen).not.toBeNull());
+    socket.open();
+    expect(JSON.parse(socket.sent[0]!).payload.capabilities).toEqual(REALTIME_CAPABILITIES);
+    socket.onmessage?.({ data: serverMessage('realtime.ready', {
+      ...readyPayload(), negotiatedCapabilities: [...REALTIME_CAPABILITIES],
+    }) });
+    expect(onCapabilities).toHaveBeenCalledWith(REALTIME_CAPABILITIES);
     client.disconnect();
   });
 

@@ -210,7 +210,6 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
         '/api/auth',
         '/api/registry',
         '/api/extensions',
-        '/api/context',
         '/api/marketplace',
       ]),
     load: async () => {

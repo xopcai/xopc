@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 
 import { ExtensionApiImpl, createExtensionLogger } from '../api.ts';
-import { ExtensionRegistryImpl } from '../loader.ts';
+import { ExtensionRegistryImpl } from '../extension-registry-impl.ts';
 import { commandRegistry } from '../../chat-commands/registry.ts';
 import type { Config } from '../../config/config-surface.ts';
 

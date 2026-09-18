@@ -150,20 +150,12 @@ export function checkExtensionDirSafety(
     
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
-      
-      if (entry.isSymbolicLink()) {
-        const result = checkExtensionPathSafety(fullPath, rootDir, origin);
-        if (!result.safe) {
-          issues.push(result);
-        }
-      } else if (entry.isDirectory()) {
-        walkDir(fullPath);
-      } else if (entry.isFile()) {
-        const result = checkExtensionPathSafety(fullPath, rootDir, origin);
-        if (!result.safe) {
-          issues.push(result);
-        }
+      const result = checkExtensionPathSafety(fullPath, rootDir, origin);
+      if (!result.safe) {
+        issues.push(result);
+        continue;
       }
+      if (entry.isDirectory()) walkDir(fullPath);
     }
   };
 
