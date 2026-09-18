@@ -221,7 +221,7 @@ A successful close includes bounded factual recent actions. It does not authoriz
 bypassing a prior refusal. History is cleared on close. A disconnected endpoint
 must reconnect (or confirm no such session) before the gate can be released.
 
-The [acceptance matrix](design/technical/computer-use-acceptance.md) defines 60
+The [acceptance matrix](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-acceptance.md) defines 60
 real-application tasks and independent outcome checks. The report grader is not
 itself a desktop benchmark runner. Unit fixtures and synthetic hosted grounding
 tests do not certify unattended use or Codex-level success.
@@ -258,7 +258,7 @@ web resources and native helpers. Do not run it while relying on a package in
 `dist/release`. The current local ARM64 directory package is signed but has not
 been Apple-notarized or published as a public installer.
 
-See [the implementation ledger](design/technical/computer-use-implementation-status.md)
+See [the implementation ledger](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-implementation-status.md)
 for actual test evidence and remaining certification gaps, and
-[the architecture RFC](design/technical/computer-use-architecture.md) for the
+[the architecture RFC](https://github.com/xopcai/xopc/blob/main/docs/design/technical/computer-use-architecture.md) for the
 multi-platform, remote execution and quality-evaluation roadmap.
