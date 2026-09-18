@@ -1,11 +1,11 @@
-import { accessSync, chmodSync, constants, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { accessSync, chmodSync, constants, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { load } from 'js-yaml';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { stageComputerDriver } from '../prepare-electron-pack-dir.mjs';
+import { stageComputerDriver, thinMacBinary } from '../prepare-electron-pack-dir.mjs';
 
 const roots: string[] = [];
 function fixture() {
@@ -16,7 +16,31 @@ function fixture() {
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
 
 describe('packaged computer driver', () => {
-  it.each(['arm64', 'x64'])('stages the universal macOS binary and license for %s', arch => {
+  it.each([
+    ['arm64', 'arm64'],
+    ['x64', 'x86_64'],
+  ])('extracts the %s slice with lipo', (arch, expectedSlice) => {
+    const { root } = fixture();
+    const source = join(root, 'universal-driver');
+    const destination = join(root, 'thin-driver');
+    writeFileSync(source, 'universal fixture');
+    const runLipo = (command: string, args: string[]) => {
+      expect(command).toBe('lipo');
+      expect(args).toEqual([source, '-thin', expectedSlice, '-output', destination]);
+      writeFileSync(destination, 'thin fixture');
+      return { status: 0 };
+    };
+
+    thinMacBinary(source, destination, arch, runLipo);
+
+    expect(readFileSync(destination, 'utf8')).toBe('thin fixture');
+    accessSync(destination, constants.X_OK);
+  });
+
+  it.each([
+    ['arm64', 'arm64'],
+    ['x64', 'x64'],
+  ])('stages only the target macOS binary slice and license for %s', (arch, expectedArch) => {
     const { root, pack } = fixture();
     const source = join(root, '.cache/computer-driver/0.28.2/cua-driver');
     mkdirSync(join(source, '..'), { recursive: true });
@@ -24,9 +48,16 @@ describe('packaged computer driver', () => {
     writeFileSync(source, 'driver fixture');
     chmodSync(source, 0o755);
     writeFileSync(join(root, 'electron/resources/computer-driver-LICENSE.txt'), 'license fixture');
-    stageComputerDriver(root, pack, { platform: 'darwin', arch });
+    const thinBinary = (input: string, output: string, targetArch: string) => {
+      expect(input).toBe(source);
+      expect(targetArch).toBe(expectedArch);
+      copyFileSync(input, output);
+      writeFileSync(output, `${readFileSync(output, 'utf8')}:${targetArch}`);
+      chmodSync(output, 0o755);
+    };
+    stageComputerDriver(root, pack, { platform: 'darwin', arch }, thinBinary);
     const staged = join(pack, '_pack-resources/computer-driver');
-    expect(readFileSync(join(staged, 'cua-driver'), 'utf8')).toBe('driver fixture');
+    expect(readFileSync(join(staged, 'cua-driver'), 'utf8')).toBe(`driver fixture:${expectedArch}`);
     accessSync(join(staged, 'cua-driver'), constants.X_OK);
     expect(readFileSync(join(staged, 'computer-driver-LICENSE.txt'), 'utf8')).toBe('license fixture');
   });
