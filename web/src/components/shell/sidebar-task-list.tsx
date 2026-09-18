@@ -197,6 +197,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   const runPresence = useChatRunPresenceStore((state) => state.runs[session.key]);
   const title = sessionTitle(session, defaultUnnamedTitle);
   const isPinned = session.status === 'pinned';
+  const hasRunPresence = agentRunActive || Boolean(runPresence?.unread);
 
   const handlePinToggle = async () => {
     if (pinBusy) return;
@@ -231,8 +232,9 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
       <Link
         to={`/chat/${encodeURIComponent(session.key)}`}
         className={cn(
-          'min-w-0 flex-1 self-stretch rounded-lg py-1 pr-12 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+          'min-w-0 flex-1 self-stretch rounded-lg py-1 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
           'flex min-w-0 items-center gap-2',
+          hasRunPresence ? 'pr-[4.75rem]' : 'pr-12',
         )}
         title={`${title} — ${description}`}
         aria-label={`${title} — ${description}`}
@@ -250,38 +252,39 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
           <span className="block truncate">{title}</span>
           {showDescription ? <span className="block truncate text-xs font-normal text-fg-muted">{description}</span> : null}
         </span>
-        {agentRunActive ? (
-          <span
-            className="pointer-events-none relative flex size-2.5 shrink-0 items-center justify-center"
-            title={sb.taskSessionAgentRunning}
-            aria-label={sb.taskSessionAgentRunning}
-          >
-            <span className="absolute size-full animate-ping rounded-full bg-accent/70" aria-hidden />
-            <span className="relative size-2 rounded-full bg-accent" aria-hidden />
-          </span>
-        ) : runPresence?.unread ? (
-          <span
-            className={cn(
-              'pointer-events-none size-2.5 shrink-0 rounded-full',
-              runPresence.status === 'failed' ? 'bg-red-500' : 'bg-emerald-500',
-            )}
-            title={
-              runPresence.status === 'failed'
-                ? sb.taskSessionAgentFailed
-                : sb.taskSessionAgentCompleted
-            }
-            aria-label={
-              runPresence.status === 'failed'
-                ? sb.taskSessionAgentFailed
-                : sb.taskSessionAgentCompleted
-            }
-          />
-        ) : null}
       </Link>
+      {agentRunActive ? (
+        <span
+          className="pointer-events-none absolute right-2 top-1/2 z-10 flex size-2.5 -translate-y-1/2 items-center justify-center"
+          title={sb.taskSessionAgentRunning}
+          aria-label={sb.taskSessionAgentRunning}
+        >
+          <span className="absolute size-full animate-ping rounded-full bg-accent/70" aria-hidden />
+          <span className="relative size-2 rounded-full bg-accent" aria-hidden />
+        </span>
+      ) : runPresence?.unread ? (
+        <span
+          className={cn(
+            'pointer-events-none absolute right-2 top-1/2 z-10 size-2.5 -translate-y-1/2 rounded-full',
+            runPresence.status === 'failed' ? 'bg-red-500' : 'bg-emerald-500',
+          )}
+          title={
+            runPresence.status === 'failed'
+              ? sb.taskSessionAgentFailed
+              : sb.taskSessionAgentCompleted
+          }
+          aria-label={
+            runPresence.status === 'failed'
+              ? sb.taskSessionAgentFailed
+              : sb.taskSessionAgentCompleted
+          }
+        />
+      ) : null}
       <div
         className={cn(
-          'pointer-events-none absolute inset-y-0 right-1 z-10 flex items-center opacity-0 transition-opacity',
+          'pointer-events-none absolute inset-y-0 z-10 flex items-center opacity-0 transition-opacity',
           'group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100',
+          hasRunPresence ? 'right-7' : 'right-1',
           menuOpen && 'pointer-events-auto opacity-100',
         )}
       >
