@@ -48,7 +48,7 @@ export function OnboardingProviderGrid({
           <span className="min-w-0 flex-1">
             <span className="flex flex-wrap items-center gap-2">
               <span className="text-base font-semibold text-fg">{recommended.name}</span>
-              <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-white">{recommendedLabel}</span>
+              <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-on-accent">{recommendedLabel}</span>
             </span>
             <span className="mt-1 block text-xs leading-5 text-fg-muted">{providerSubtitle(recommended)}</span>
           </span>

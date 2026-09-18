@@ -97,7 +97,7 @@ export function UpdateReminderBar({
           <button
             type="button"
             onClick={electronQuitAndInstall}
-            className="rounded bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90"
+            className="rounded bg-accent px-2.5 py-1 text-xs font-medium text-on-accent hover:bg-accent/90"
           >
             <RefreshCw className="mr-1 inline size-3" />
             {t.restartToUpdate}
@@ -193,7 +193,7 @@ export function UpdateReminderBar({
             onClick={onRestartGateway}
             disabled={restartBusy}
             className={cn(
-              'inline-flex shrink-0 items-center gap-1 rounded bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60',
+              'inline-flex shrink-0 items-center gap-1 rounded bg-accent px-2.5 py-1 text-xs font-medium text-on-accent hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60',
               APP_CHROME_NO_DRAG_CLASS,
             )}
           >
@@ -259,7 +259,7 @@ export function UpdateReminderBar({
             onClick={onNpmUpdateClick}
             disabled={npmUpdateRunning}
             className={cn(
-              'inline-flex shrink-0 items-center gap-1 rounded bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60',
+              'inline-flex shrink-0 items-center gap-1 rounded bg-accent px-2.5 py-1 text-xs font-medium text-on-accent hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60',
               APP_CHROME_NO_DRAG_CLASS,
             )}
           >

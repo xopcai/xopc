@@ -64,7 +64,7 @@ function TimelineRow({
           <span className="flex min-w-0 items-center gap-2">
             <span className="min-w-0 truncate text-sm font-medium text-fg">{turn.preview}</span>
             {active ? (
-              <span className="shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-medium text-white">
+              <span className="shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-medium text-on-accent">
                 {currentLabel}
               </span>
             ) : null}

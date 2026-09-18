@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: xopc
-  text: 让重要的事持续向前。
-  tagline: "一个运行在你电脑上的个人 AI，记得你的目标和上下文，随时从你停下的地方继续。"
+  text: 为超级个体打造的个人 AI。
+  tagline: "记住你的目标与上下文，连接工具采取行动，并随时从上次停下的地方继续。"
   image:
     src: /logo.svg
     alt: xopc
@@ -42,7 +42,7 @@ features:
 2. [连接一个模型](./how-to/configure-first-model.md)。
 3. 告诉 xopc：**“这周我最想推进的一件事是 ____。帮我找到最小但可信的下一步。”**
 
-**让重要的事持续向前。** xopc 把背景、下一步、结果证据和后续跟进留在一起，让重要的事情不会随着一次对话结束而消失。[了解 Task 闭环](./concepts/loops.md)。
+**让你的上下文持续积累。** xopc 把背景、下一步、结果证据和后续跟进留在一起，让重要的事情不会随着一次对话结束而消失。[了解 Task 闭环](./concepts/loops.md)。
 
 ## 找到对应指南
 

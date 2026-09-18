@@ -62,7 +62,7 @@ export function ExtensionPermissionDialog({
             </Dialog.Close>
             <button
               type="button"
-              className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+              className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-on-accent hover:opacity-90"
               onClick={() => {
                 onConfirm();
                 onOpenChange(false);

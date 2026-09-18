@@ -1,6 +1,6 @@
 # Get started with xopc
 
-Keep what matters moving. Start with the desktop app, connect one model, and let xopc help you find the next credible step.
+Personal AI for the one-person company. Start with the desktop app, connect one model, and let xopc remember your context and help you find the next credible step.
 
 ## Choose how to start
 

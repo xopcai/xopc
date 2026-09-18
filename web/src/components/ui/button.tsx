@@ -7,7 +7,7 @@ export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'segmented';
 
 const variantClass: Record<ButtonVariant, string> = {
   primary:
-    'bg-accent text-white shadow-none sm:shadow-surface hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+    'bg-accent text-on-accent shadow-none sm:shadow-surface hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
   secondary:
     'bg-surface-panel text-fg border border-edge shadow-none sm:shadow-surface hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel dark:border-edge',
   ghost:

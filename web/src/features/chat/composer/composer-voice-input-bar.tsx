@@ -86,7 +86,7 @@ export const ComposerVoiceInputBar = memo(function ComposerVoiceInputBar({
           </button>
         ) : null}
         {phase === 'recording' || (failed && finalTranscript) ? (
-          <button type="button" className={cn(iconBtnClass, 'rounded-full bg-accent text-white hover:bg-accent-hover hover:text-white')}
+          <button type="button" className={cn(iconBtnClass, 'rounded-full bg-accent text-on-accent hover:bg-accent-hover hover:text-on-accent')}
             disabled={disabled} aria-label={m.voiceInputConfirm} onClick={onConfirm}>
             <Check className="size-4" aria-hidden />{m.voiceInputConfirm}
           </button>

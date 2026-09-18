@@ -118,7 +118,7 @@ export function NotesHomeComposer({ projects, projectId, onProjectChange, onCrea
         </fieldset>
         <div className="mt-2 flex justify-end sm:absolute sm:bottom-5 sm:right-5 sm:mt-0">
           <button type="submit" disabled={busy || (!pending.current && !canSubmit)}
-            className="inline-flex h-9 items-center gap-2 rounded-lg bg-accent px-4 text-sm font-medium text-white hover:bg-accent-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+            className="inline-flex h-9 items-center gap-2 rounded-lg bg-accent px-4 text-sm font-medium text-on-accent hover:bg-accent-hover focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
             {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <ArrowUp className="size-4" aria-hidden />}
             {busy ? h.creating : error ? h.retry : h.agentCreate}
           </button>

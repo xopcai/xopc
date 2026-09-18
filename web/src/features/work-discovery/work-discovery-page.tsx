@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Clock3, FileText, FolderOpen, Loader2, ShieldCheck, X } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
-import { BrandLogo } from '@/components/shell/brand-logo';
+import { AnimatedLoopLogo } from '@/components/brand/animated-loop-logo';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useDirectoryPicker } from '@/features/fs/use-directory-picker';
@@ -588,7 +588,7 @@ export function WorkDiscoveryPage({
             <button
               key={item.id}
               type="button"
-              className={`rounded-lg px-3 py-2 text-sm font-medium transition ${item.id === run?.id ? 'bg-accent text-white' : 'bg-surface-muted text-fg hover:bg-surface-hover'}`}
+              className={`rounded-lg px-3 py-2 text-sm font-medium transition ${item.id === run?.id ? 'bg-accent text-on-accent' : 'bg-surface-hover text-fg hover:bg-surface-active'}`}
               onClick={() => selectBatchRun(item)}
             >
               {label}
@@ -601,24 +601,23 @@ export function WorkDiscoveryPage({
 
   return (
     <div className={embedded
-      ? 'xopc-work-discovery-experience relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-surface-base'
-      : 'xopc-work-discovery-experience relative flex min-h-full flex-1 flex-col bg-surface-base'}>
-      <div className="xopc-onboarding-ambient pointer-events-none absolute inset-0" aria-hidden />
+      ? 'xopc-work-discovery-experience relative flex h-full min-h-0 flex-1 flex-col overflow-hidden'
+      : 'xopc-work-discovery-experience relative flex min-h-full flex-1 flex-col'}>
       <main key={pageState} className={embedded
-        ? `xopc-work-discovery-stage xopc-onboarding-scroll relative z-10 mx-auto flex h-full min-h-0 w-full ${pageState === 'recognition' ? 'max-w-[58rem]' : 'max-w-[46rem]'} flex-1 flex-col px-5 py-7 sm:px-8 sm:py-9 ${embeddedCandidates ? 'overflow-hidden' : 'overflow-y-auto'}`
-        : `mx-auto flex w-full ${pageState === 'recognition' ? 'max-w-[58rem]' : 'max-w-[40rem]'} flex-1 flex-col px-5 py-10 sm:px-8 sm:py-16`}>
+        ? `app-main-surface xopc-work-discovery-stage xopc-onboarding-scroll relative z-10 mx-auto my-3 flex min-h-0 w-[calc(100%_-_1.5rem)] ${pageState === 'recognition' ? 'max-w-[58rem]' : 'max-w-[46rem]'} flex-1 flex-col rounded-xl bg-surface-panel px-5 py-7 shadow-surface sm:my-4 sm:w-[calc(100%_-_2rem)] sm:px-8 sm:py-9 ${embeddedCandidates ? 'overflow-hidden' : 'overflow-y-auto'}`
+        : `app-main-surface mx-auto my-4 flex w-[calc(100%_-_2rem)] ${pageState === 'recognition' ? 'max-w-[58rem]' : 'max-w-[40rem]'} flex-1 flex-col rounded-xl bg-surface-panel px-5 py-10 shadow-surface sm:px-8 sm:py-16`}>
         {pageState === 'intro' ? (
           <div className={cn('flex items-center justify-center', embedded ? 'mb-7 sm:mb-9' : 'mb-10')}>
             <div className="xopc-discovery-logo relative flex size-16 items-center justify-center">
               <span className="xopc-discovery-logo-glow absolute -inset-5 rounded-full" aria-hidden />
-              <BrandLogo className="relative size-12" />
+              <AnimatedLoopLogo className="relative size-12" />
             </div>
           </div>
         ) : null}
 
         {pageState === 'loading' ? (
           <section className="mx-auto flex min-h-[32rem] w-full max-w-md flex-1 flex-col items-center justify-center text-center" aria-busy aria-label={copy.loading}>
-            <Skeleton className="size-14 rounded-2xl" />
+            <Skeleton className="size-14 rounded-xl" />
             <Skeleton className="mt-7 h-5 w-44 rounded-full" />
             <Skeleton className="mt-3 h-3.5 w-64 max-w-full rounded-full" />
           </section>
@@ -635,7 +634,7 @@ export function WorkDiscoveryPage({
             </div>
             <div className="mx-auto mt-9 w-full max-w-md">
               {localSources.length ? (
-                <div className="mb-5 overflow-hidden rounded-2xl border border-edge bg-surface-panel/75 text-left shadow-surface backdrop-blur-xl">
+                <div className="mb-5 overflow-hidden rounded-xl border border-edge bg-surface-panel text-left shadow-surface">
                   <div className="px-4 py-3.5">
                     <p className="text-sm font-medium text-fg">{copy.localSourcesTitle}</p>
                     <p className="mt-1 text-xs leading-5 text-fg-muted">{copy.localSourcesSubtitle}</p>
@@ -659,7 +658,7 @@ export function WorkDiscoveryPage({
                           <span className="truncate font-medium">{source.displayName}</span>
                           <span className={cn(
                             'flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors',
-                            selected ? 'border-accent bg-accent text-white' : 'border-edge',
+                            selected ? 'border-accent bg-accent text-on-accent' : 'border-edge',
                           )}>
                             {selected ? <Check className="size-3" aria-hidden /> : null}
                           </span>
@@ -671,7 +670,8 @@ export function WorkDiscoveryPage({
               ) : null}
               <Button
                 type="button"
-                className="h-12 w-full gap-2 bg-accent text-white hover:bg-accent-hover"
+                variant="primary"
+                className="h-12 w-full gap-2"
                 onClick={() => void quickScan()}
                 disabled={busy || picker.picking}
               >
@@ -725,7 +725,7 @@ export function WorkDiscoveryPage({
                     className={`flex w-full items-start gap-3 rounded-xl border p-4 text-left transition ${selected ? 'border-accent bg-accent-soft/45' : 'border-edge bg-surface-panel hover:border-edge-strong'}`}
                     onClick={() => toggleCandidate(candidate.rootPath)}
                   >
-                    <span className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border ${selected ? 'border-accent bg-accent text-white' : 'border-edge bg-surface-base text-transparent'}`}>
+                    <span className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border ${selected ? 'border-accent bg-accent text-on-accent' : 'border-edge bg-surface-base text-transparent'}`}>
                       <Check className="size-3.5" />
                     </span>
                     <FolderOpen className="mt-0.5 size-5 shrink-0 text-accent-fg" />
@@ -746,7 +746,7 @@ export function WorkDiscoveryPage({
               })}
             </div>
             <div className={embedded ? 'shrink-0 border-t border-edge-subtle pt-4' : undefined}>
-              <div className={`${embedded ? '' : 'mt-5 '}flex items-start gap-2 rounded-xl bg-surface-muted/70 px-4 py-3 text-xs leading-5 text-fg-muted`}>
+              <div className={`${embedded ? '' : 'mt-5 '}flex items-start gap-2 rounded-xl bg-surface-hover/70 px-4 py-3 text-xs leading-5 text-fg-muted`}>
                 <ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent-fg" />
                 <span>
                   {copy.multiFolderPrivacyNote}{' '}
@@ -759,7 +759,8 @@ export function WorkDiscoveryPage({
               <div className={`${embedded ? 'mt-4' : 'mt-7'} flex flex-col gap-3 sm:flex-row-reverse`}>
                 <Button
                   type="button"
-                  className="h-11 flex-1 bg-accent text-white hover:bg-accent-hover"
+                  variant="primary"
+                  className="h-11 flex-1"
                   disabled={busy || selectedCandidatePaths.size === 0}
                   onClick={() => setPageState('connectors')}
                 >
@@ -783,7 +784,7 @@ export function WorkDiscoveryPage({
               <h1 id="work-discovery-consent-title" className="text-2xl font-semibold tracking-tight text-fg">{copy.selectedTitle}</h1>
               <p className="mt-3 text-[0.95rem] leading-7 text-fg-muted">{copy.selectedSubtitle}</p>
             </div>
-            <div className="mt-8 overflow-hidden rounded-2xl border border-edge bg-surface-panel/75 shadow-surface backdrop-blur-xl">
+            <div className="mt-8 overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-surface">
               <div className="flex items-center gap-3 border-b border-edge-subtle px-4 py-3.5">
                 <FolderOpen className="size-5 shrink-0 text-accent-fg" />
                 <div className="min-w-0 flex-1">
@@ -814,7 +815,7 @@ export function WorkDiscoveryPage({
                     <p className="text-xs font-medium text-fg-muted">{copy.recentAreas}</p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {preview.fingerprint.recentAreas.map((area) => (
-                        <code key={area} className="rounded-md bg-surface-muted px-2 py-1 text-xs text-fg">{area}</code>
+                        <code key={area} className="rounded-md bg-surface-hover px-2 py-1 text-xs text-fg">{area}</code>
                       ))}
                     </div>
                   </div>
@@ -839,7 +840,7 @@ export function WorkDiscoveryPage({
             </div>
             {error ? <p className="mt-4 text-sm text-danger" role="alert">{error}</p> : null}
             <div className="mt-7 flex flex-col gap-3 sm:flex-row-reverse">
-              <Button type="button" className="h-11 flex-1 bg-accent text-white hover:bg-accent-hover" disabled={busy} onClick={() => setPageState('connectors')}>
+              <Button type="button" variant="primary" className="h-11 flex-1" disabled={busy} onClick={() => setPageState('connectors')}>
                 {copy.continueToConnectors}
               </Button>
               <Button type="button" variant="secondary" className="h-11 flex-1" disabled={busy} onClick={picker.pick}>{copy.changeFolder}</Button>
@@ -884,7 +885,7 @@ export function WorkDiscoveryPage({
                 const active = index === activeIndex;
                 return (
                   <div key={stage} className="xopc-understanding-step min-w-0 text-left" data-active={active || undefined} data-complete={complete || undefined}>
-                    <span className={cn('block h-1 rounded-full', active || complete ? 'bg-accent' : 'bg-surface-muted')} />
+                    <span className={cn('block h-1 rounded-full', active || complete ? 'bg-accent' : 'bg-surface-hover')} />
                     <span className={cn('mt-2 block text-[11px] leading-4', active ? 'font-medium text-fg' : 'text-fg-muted')}>{copy.stages[stage]}</span>
                   </div>
                 );
@@ -925,22 +926,22 @@ export function WorkDiscoveryPage({
               <h1 id="work-discovery-recommendation-title" className="mt-2 text-2xl font-semibold tracking-tight text-fg">{copy.primaryRecommendationTitle}</h1>
             </div>
             {batchRunSwitcher}
-            <article className="mt-7 rounded-[1.75rem] border border-edge bg-surface-panel/75 p-5 shadow-surface backdrop-blur-xl sm:p-7">
+            <article className="mt-7 rounded-xl border border-edge bg-surface-panel p-5 shadow-surface sm:p-7">
               <div className="flex items-start gap-3">
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-fg-muted"><ChevronRight className="size-5" /></div>
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-hover text-fg-muted"><ChevronRight className="size-5" /></div>
                 <div className="min-w-0 flex-1">
                   <h2 className="text-lg font-semibold text-fg">{primarySuggestion.title}</h2>
                   <p className="mt-2 text-sm leading-6 text-fg-muted">{primarySuggestion.rationale}</p>
                   <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-2.5 py-1 text-fg-muted"><Clock3 className="size-3.5" />{copy.estimatedMinutes.replace('{{count}}', String(primarySuggestion.estimatedMinutes))}</span>
-                    <span className="rounded-full bg-surface-muted px-2.5 py-1 text-fg-muted">{riskLabel(primarySuggestion.risk)}</span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-hover px-2.5 py-1 text-fg-muted"><Clock3 className="size-3.5" />{copy.estimatedMinutes.replace('{{count}}', String(primarySuggestion.estimatedMinutes))}</span>
+                    <span className="rounded-full bg-surface-hover px-2.5 py-1 text-fg-muted">{riskLabel(primarySuggestion.risk)}</span>
                   </div>
                   <div className="mt-4 rounded-xl bg-surface-base px-4 py-3">
                     <p className="text-xs font-medium text-fg-muted">{copy.expectedTask}</p>
                     <p className="mt-1 text-sm leading-6 text-fg">{primarySuggestion.expectedTask}</p>
                   </div>
                   <div className="mt-5 flex flex-wrap gap-2">
-                    <Button className="h-10 bg-accent px-4 text-white hover:bg-accent-hover" onClick={() => void handleSuggestion(primarySuggestion, false)}>{copy.startRecommendedAction}</Button>
+                    <Button variant="primary" className="h-10 px-4" onClick={() => void handleSuggestion(primarySuggestion, false)}>{copy.startRecommendedAction}</Button>
                     <Button className="h-10 px-4" variant="secondary" onClick={() => void handleSuggestion(primarySuggestion, true)}>{copy.explainFirst}</Button>
                   </div>
                 </div>
@@ -977,7 +978,7 @@ export function WorkDiscoveryPage({
             <h1 id="work-discovery-error-title" className="mt-5 text-2xl font-semibold tracking-tight text-fg">{copy.errorTitle}</h1>
             <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-fg-muted">{run.errorMessage}</p>
             <div className="mx-auto mt-7 flex max-w-md flex-col gap-3 sm:flex-row-reverse">
-              <Button className="h-11 flex-1 bg-accent text-white hover:bg-accent-hover" onClick={() => void retryWorkDiscoveryRun(run.id).then(applyRun)}>{copy.retry}</Button>
+              <Button variant="primary" className="h-11 flex-1" onClick={() => void retryWorkDiscoveryRun(run.id).then(applyRun)}>{copy.retry}</Button>
               <Button variant="secondary" className="h-11 flex-1" onClick={() => { setRun(null); setPreview(null); setPageState('intro'); }}>{copy.chooseDifferent}</Button>
             </div>
             <button type="button" className="mt-6 text-sm text-fg-muted hover:text-fg hover:underline" onClick={() => openConversation(run.conversationId)}>{copy.openConversation}</button>
