@@ -205,14 +205,14 @@ export function RuntimeToolsSettingsPanel() {
       </section>
       </SettingsAdvancedGate>
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="flex flex-col gap-4">
         {RUNTIMES.map((runtime) => {
           const status = statusMap.get(runtime);
           const isReady = status?.state === 'ready';
           const currentProgress = progress[runtime];
           const runtimeConfig = runtime === 'uv' ? draft.uv : draft[runtime];
           return (
-            <section key={runtime} className="flex min-w-0 flex-col gap-4 rounded-xl bg-surface-base/55 p-4">
+            <section key={runtime} className="flex min-w-0 flex-col gap-5 rounded-xl bg-surface-base/55 p-5 sm:p-6">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h2 className="text-base font-semibold text-fg">{t.runtimeNames[runtime]}</h2>
@@ -238,51 +238,55 @@ export function RuntimeToolsSettingsPanel() {
                 </div>
               </div>
 
-              <label className="space-y-1.5 text-xs font-medium text-fg-muted">
-                {t.version}
-                <input
-                  value={runtimeConfig.version ?? ''}
-                  placeholder={status?.requestedVersion}
-                  onChange={(event) => {
-                    const version = event.target.value || undefined;
-                    if (runtime === 'uv') setDraft({ ...draft, uv: { ...draft.uv, version } });
-                    else updateLanguage(runtime, { version });
-                  }}
-                  className="h-10 w-full rounded-lg border border-edge bg-surface-subtle px-3 text-sm text-fg outline-none focus:border-edge-strong"
-                />
-              </label>
+              <div className={runtime === 'uv'
+                ? 'grid gap-4 md:grid-cols-[minmax(16rem,28rem)]'
+                : 'grid gap-4 md:grid-cols-2 xl:grid-cols-3'}>
+                <label className="space-y-1.5 text-xs font-medium text-fg-muted">
+                  {t.version}
+                  <input
+                    value={runtimeConfig.version ?? ''}
+                    placeholder={status?.requestedVersion}
+                    onChange={(event) => {
+                      const version = event.target.value || undefined;
+                      if (runtime === 'uv') setDraft({ ...draft, uv: { ...draft.uv, version } });
+                      else updateLanguage(runtime, { version });
+                    }}
+                    className="h-10 w-full rounded-lg border border-edge bg-surface-subtle px-3 text-sm text-fg outline-none focus:border-edge-strong"
+                  />
+                </label>
 
-              {runtime !== 'uv' ? (
-                <>
-                  <label className="space-y-1.5 text-xs font-medium text-fg-muted">
-                    {t.sourcePolicy}
-                    <Select
-                      value={draft[runtime].preference}
-                      onChange={(event) => updateLanguage(runtime, {
-                        preference: event.target.value as RuntimeToolsConfig['node']['preference'],
-                      })}
-                    >
-                      <SelectOption value="managed-first">{t.preferences.managedFirst}</SelectOption>
-                      <SelectOption value="system-first">{t.preferences.systemFirst}</SelectOption>
-                      <SelectOption value="managed-only">{t.preferences.managedOnly}</SelectOption>
-                      <SelectOption value="system-only">{t.preferences.systemOnly}</SelectOption>
-                    </Select>
-                  </label>
-                  <label className="space-y-1.5 text-xs font-medium text-fg-muted">
-                    {t.provisionPolicy}
-                    <Select
-                      value={draft[runtime].provision}
-                      onChange={(event) => updateLanguage(runtime, {
-                        provision: event.target.value as RuntimeToolsConfig['node']['provision'],
-                      })}
-                    >
-                      <SelectOption value="eager">{t.provisions.eager}</SelectOption>
-                      <SelectOption value="on-demand">{t.provisions.onDemand}</SelectOption>
-                      <SelectOption value="disabled">{t.provisions.disabled}</SelectOption>
-                    </Select>
-                  </label>
-                </>
-              ) : null}
+                {runtime !== 'uv' ? (
+                  <>
+                    <label className="space-y-1.5 text-xs font-medium text-fg-muted">
+                      {t.sourcePolicy}
+                      <Select
+                        value={draft[runtime].preference}
+                        onChange={(event) => updateLanguage(runtime, {
+                          preference: event.target.value as RuntimeToolsConfig['node']['preference'],
+                        })}
+                      >
+                        <SelectOption value="managed-first">{t.preferences.managedFirst}</SelectOption>
+                        <SelectOption value="system-first">{t.preferences.systemFirst}</SelectOption>
+                        <SelectOption value="managed-only">{t.preferences.managedOnly}</SelectOption>
+                        <SelectOption value="system-only">{t.preferences.systemOnly}</SelectOption>
+                      </Select>
+                    </label>
+                    <label className="space-y-1.5 text-xs font-medium text-fg-muted">
+                      {t.provisionPolicy}
+                      <Select
+                        value={draft[runtime].provision}
+                        onChange={(event) => updateLanguage(runtime, {
+                          provision: event.target.value as RuntimeToolsConfig['node']['provision'],
+                        })}
+                      >
+                        <SelectOption value="eager">{t.provisions.eager}</SelectOption>
+                        <SelectOption value="on-demand">{t.provisions.onDemand}</SelectOption>
+                        <SelectOption value="disabled">{t.provisions.disabled}</SelectOption>
+                      </Select>
+                    </label>
+                  </>
+                ) : null}
+              </div>
 
               {currentProgress && running === runtime ? (
                 <div className="rounded-lg bg-accent-soft px-3 py-2 text-xs text-accent-fg">
@@ -293,28 +297,30 @@ export function RuntimeToolsSettingsPanel() {
                 </div>
               ) : null}
 
-              <div className="mt-auto flex gap-2">
-                <Button
-                  variant="primary"
-                  disabled={!draft.enabled || !runtimeConfig.enabled || running !== null}
-                  onClick={() => void operate(runtime, 'install')}
-                >
-                  <Download className="size-4" />{running === runtime ? t.working : t.install}
-                </Button>
-                {status?.repairable ? (
+              <div className="mt-auto flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap gap-2">
                   <Button
+                    variant="primary"
                     disabled={!draft.enabled || !runtimeConfig.enabled || running !== null}
-                    onClick={() => void operate(runtime, 'repair')}
+                    onClick={() => void operate(runtime, 'install')}
                   >
-                    <RotateCcw className="size-4" />{t.repair}
+                    <Download className="size-4" />{running === runtime ? t.working : t.install}
                   </Button>
-                ) : null}
+                  {status?.repairable ? (
+                    <Button
+                      disabled={!draft.enabled || !runtimeConfig.enabled || running !== null}
+                      onClick={() => void operate(runtime, 'repair')}
+                    >
+                      <RotateCcw className="size-4" />{t.repair}
+                    </Button>
+                  ) : null}
+                </div>
+                <SettingsAdvancedGate>
+                  {status?.resolved?.executable ? (
+                    <code className="break-all text-[11px] text-fg-subtle">{status.resolved.executable}</code>
+                  ) : null}
+                </SettingsAdvancedGate>
               </div>
-              <SettingsAdvancedGate>
-                {status?.resolved?.executable ? (
-                  <code className="break-all text-[11px] text-fg-subtle">{status.resolved.executable}</code>
-                ) : null}
-              </SettingsAdvancedGate>
             </section>
           );
         })}
