@@ -1,7 +1,7 @@
 import QRCode from 'qrcode';
 
 const MOBILE_PAIR_QR_OPTIONS = {
-  width: 216,
+  width: 240,
   margin: 4,
   errorCorrectionLevel: 'M' as const,
   color: { dark: '#000000ff', light: '#ffffffff' },

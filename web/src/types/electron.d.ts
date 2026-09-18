@@ -294,6 +294,15 @@ export interface ElectronLocaleAPI {
   onChanged(callback: (language: ElectronUiLanguage) => void): () => void;
 }
 
+export type ElectronThemePreference = "light" | "dark" | "system";
+
+export interface ElectronThemeAPI {
+  getPreference(): Promise<ElectronThemePreference>;
+  setPreference(
+    theme: ElectronThemePreference,
+  ): Promise<{ ok: true; theme: ElectronThemePreference }>;
+}
+
 export interface ElectronCronDisplayWakeAPI {
   setDisplaySleepPrevented(enabled: boolean): Promise<void>;
 }
@@ -601,6 +610,7 @@ export interface ElectronAPI {
   voiceInputHotkey?: ElectronVoiceInputHotkeyAPI;
   menu?: ElectronMenuAPI;
   locale?: ElectronLocaleAPI;
+  theme?: ElectronThemeAPI;
   cron?: ElectronCronDisplayWakeAPI;
   fullscreen?: ElectronFullscreenAPI;
   pet?: ElectronDesktopPetAPI;

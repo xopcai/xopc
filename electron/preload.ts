@@ -434,6 +434,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
         ipcRenderer.removeListener("electron-locale:changed", handler);
     },
   },
+  theme: {
+    getPreference: () =>
+      ipcRenderer.invoke("electron-theme:get") as Promise<"light" | "dark" | "system">,
+    setPreference: (theme: "light" | "dark" | "system") =>
+      ipcRenderer.invoke("electron-theme:set", theme) as Promise<{
+        ok: true;
+        theme: "light" | "dark" | "system";
+      }>,
+  },
   cron: {
     setDisplaySleepPrevented: (enabled: boolean) =>
       ipcRenderer.invoke(

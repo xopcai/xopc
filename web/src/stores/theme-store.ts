@@ -61,6 +61,12 @@ function normalizeColorScheme(value: unknown): ColorScheme {
     : DEFAULT_COLOR_SCHEME;
 }
 
+function syncElectronThemePreference(preference: ThemePreference) {
+  void window.electronAPI?.theme?.setPreference(preference).catch(() => {
+    /* Electron startup theme sync is best-effort. */
+  });
+}
+
 /** Apply light/dark + color scheme on `<html>`. Uses View Transitions when available for a softer cross-fade. */
 function applyDomTheme(mode: 'light' | 'dark', scheme: ColorScheme, useViewTransition: boolean) {
   const root = document.documentElement;
@@ -102,6 +108,7 @@ export function hydrateThemeFromStorage() {
       }
     }
     applyDomTheme(resolveTheme(pref), scheme, false);
+    syncElectronThemePreference(pref);
   } catch {
     applyDomTheme(resolveTheme('system'), 'default', false);
   }
@@ -127,6 +134,7 @@ export const useThemeStore = create(
         const { resolved: prevResolved, colorScheme } = get();
         applyDomTheme(resolved, colorScheme, resolved !== prevResolved);
         set({ preference, resolved });
+        syncElectronThemePreference(preference);
       },
 
       setColorScheme: (scheme) => {
@@ -154,6 +162,7 @@ export function syncThemeAfterHydration() {
   const resolved = resolveTheme(preference);
   applyDomTheme(resolved, colorScheme, false);
   useThemeStore.setState({ resolved });
+  syncElectronThemePreference(preference);
 }
 
 export function subscribeSystemTheme() {
