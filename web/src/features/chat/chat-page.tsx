@@ -29,7 +29,7 @@ import {
   extractUserMessagePlainText,
   messageAttachmentsToWire,
 } from '@/features/chat/messages/user-message-plain-text';
-import { ScrollToBottomButton } from '@/features/chat/scroll/scroll-to-bottom-button';
+import { ScrollToBottomDock } from '@/features/chat/scroll/scroll-to-bottom-button';
 import { useChatScrollViewport } from '@/features/chat/scroll/use-chat-scroll-viewport';
 import { useChatSession } from '@/features/chat/session/use-chat-session';
 import { useChatSessionMetadata } from '@/features/chat/session/use-chat-session-metadata';
@@ -1254,13 +1254,13 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 compactWelcomeLayout ? 'py-2.5' : 'py-2 sm:py-4',
               )}
             >
-              {/* Keep the floating action on the same axis as the wide-screen timeline ticks. */}
+              <ScrollToBottomDock
+                visible={!session.showSessionLoading && !atBottom}
+                onClick={() => scrollToBottom(true)}
+                running={stream.streaming || stream.sending}
+              />
               <div
-                className={cn(
-                  'absolute bottom-full right-0 z-20 mb-2 flex items-center gap-0.5 rounded-full border border-edge-subtle bg-surface-panel/95 p-1 shadow-elevated backdrop-blur-sm empty:hidden',
-                  'xl:translate-x-[4.5rem]',
-                  (session.showSessionLoading || atBottom) && 'xl:hidden',
-                )}
+                className="absolute bottom-full right-0 z-20 mb-2 flex items-center rounded-full border border-edge-subtle bg-surface-panel/95 p-1 shadow-elevated backdrop-blur-sm empty:hidden xl:hidden"
               >
                 {!embedded ? <ChatTimelinePanel
                   items={timeline.items}
@@ -1271,10 +1271,6 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                   currentLabel={m.chat.timelineCurrent}
                   onSelectMessage={handleTimelineSelect}
                 /> : null}
-                <ScrollToBottomButton
-                  visible={!session.showSessionLoading && !atBottom}
-                  onClick={() => scrollToBottom(true)}
-                />
               </div>
               <ClarifyPrompt
                 prompt={clarify.clarifyPrompt}

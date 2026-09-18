@@ -7,23 +7,14 @@
 import { marked } from 'marked';
 
 import type { MessageContent } from '@/features/chat/messages/messages.types';
-import {
-  assistantTextForDisplay,
-  isAssistantNarration,
-} from '@/features/chat/messages/assistant-text-presentation';
 
-/** Markdown source for clipboard: visible text blocks + `[image]` placeholders; skips thinking/tools. */
+/** Markdown source for clipboard: final answer text plus image placeholders. */
 export function getAssistantCopyMarkdown(content: MessageContent[]): string {
   const parts: string[] = [];
-  let narrationIncluded = false;
   for (const b of content) {
-    if (b.type === 'thinking' || b.type === 'tool_use') continue;
     if (b.type === 'text') {
-      if (isAssistantNarration(b)) {
-        if (narrationIncluded) continue;
-        narrationIncluded = true;
-      }
-      parts.push(assistantTextForDisplay(b));
+      if (b.presentation === 'pending' || b.presentation === 'narration') continue;
+      parts.push(b.text);
     } else if (b.type === 'image') {
       parts.push('[image]');
     }
@@ -38,18 +29,13 @@ function markdownToPlainText(md: string): string {
   return doc.body.textContent?.trim() ?? '';
 }
 
-/** Plain text for clipboard: rendered text per block + `[image]` placeholders. */
+/** Plain text for clipboard: rendered final answer text plus image placeholders. */
 export function getAssistantCopyPlainText(content: MessageContent[]): string {
   const parts: string[] = [];
-  let narrationIncluded = false;
   for (const b of content) {
-    if (b.type === 'thinking' || b.type === 'tool_use') continue;
     if (b.type === 'text') {
-      if (isAssistantNarration(b)) {
-        if (narrationIncluded) continue;
-        narrationIncluded = true;
-      }
-      parts.push(markdownToPlainText(assistantTextForDisplay(b)));
+      if (b.presentation === 'pending' || b.presentation === 'narration') continue;
+      parts.push(markdownToPlainText(b.text));
     } else if (b.type === 'image') {
       parts.push('[image]');
     }

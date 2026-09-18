@@ -506,7 +506,7 @@ function mergeAssistantContent(m: WireMessage): MessageContent[] {
     ? 'narration'
     : 'answer';
   for (const block of blocks) {
-    if (block.type === 'text') block.presentation = presentation;
+    if (block.type === 'text' && !block.presentation) block.presentation = presentation;
   }
   return blocks;
 }
@@ -620,7 +620,16 @@ function normalizeContentBlocks(raw: unknown, messageStartedAt?: number): Messag
 
     const t = item.type;
     if (t === 'text' && typeof item.text === 'string') {
-      out.push({ type: 'text', text: item.text });
+      const presentation = item.presentation === 'pending'
+        || item.presentation === 'narration'
+        || item.presentation === 'answer'
+        ? item.presentation
+        : undefined;
+      out.push({
+        type: 'text',
+        text: item.text,
+        ...(presentation ? { presentation } : {}),
+      });
     } else if (t === 'thinking') {
       const th =
         typeof (item as WireContentBlock & { thinking?: string }).thinking === 'string'
