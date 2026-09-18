@@ -272,7 +272,7 @@ export function AppManagementSection({
         ) : null}
 
         {info.pendingUpdate ? (
-          <p className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+          <p className="mb-3 rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
             {m.pendingUpdateBlocked}
           </p>
         ) : null}

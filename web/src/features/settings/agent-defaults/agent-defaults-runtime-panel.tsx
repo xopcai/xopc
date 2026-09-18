@@ -38,7 +38,7 @@ export function AgentDefaultsRuntimePanel({
 
   return (
     <div className="space-y-5">
-      <section className="rounded-2xl border border-edge bg-surface-base p-5">
+      <section className="rounded-xl bg-surface-hover/20 p-5">
         <h2 className="text-base font-semibold text-fg">{zh ? '执行限制' : 'Execution limits'}</h2>
         <p className="mt-1 text-sm text-fg-muted">{zh ? '为所有智能体设置安全上限；留空时使用系统默认值。' : 'Set safe upper bounds for every agent. Empty fields use system defaults.'}</p>
         <div className="mt-5 grid gap-4 md:grid-cols-3">
@@ -48,7 +48,7 @@ export function AgentDefaultsRuntimePanel({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-edge bg-surface-base p-5">
+      <section className="rounded-xl bg-surface-hover/20 p-5">
         <h2 className="text-base font-semibold text-fg">{zh ? '提示词缓存' : 'Prompt cache'}</h2>
         <p className="mt-1 text-sm text-fg-muted">{zh ? '复用稳定的上下文以降低响应延迟和模型费用。' : 'Reuse stable context to reduce latency and model cost.'}</p>
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -57,7 +57,7 @@ export function AgentDefaultsRuntimePanel({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-edge bg-surface-base p-5">
+      <section className="rounded-xl bg-surface-hover/20 p-5">
         <h2 className="text-base font-semibold text-fg">{zh ? '工作流' : 'Workflows'}</h2>
         <p className="mt-1 text-sm text-fg-muted">{zh ? '设置默认工作流，并决定智能体可以调用哪些工作流。' : 'Set a default workflow and control which workflows agents may invoke.'}</p>
         <div className="mt-5 max-w-xl">
@@ -66,13 +66,13 @@ export function AgentDefaultsRuntimePanel({
         </div>
         {workflowsQuery.error ? <p className="mt-3 text-sm text-red-600">{workflowsQuery.error instanceof Error ? workflowsQuery.error.message : String(workflowsQuery.error)}</p> : null}
 
-        <div className="mt-6 border-t border-edge pt-5">
+        <div className="mt-6 rounded-xl bg-surface-base/45 p-4">
           <h3 className="text-sm font-medium text-fg">{zh ? '允许调用的工作流' : 'Allowed workflows'}</h3>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <button type="button" onClick={() => setDraft({ ...draft, workflows: { ...draft.workflows, allowed: undefined } })} className={cn('rounded-xl border p-4 text-left', allWorkflows ? 'border-accent bg-accent/5 ring-1 ring-accent/20' : 'border-edge bg-surface-panel hover:border-edge-strong')}><span className="block text-sm font-medium text-fg">{zh ? '允许全部工作流' : 'Allow every workflow'}</span><span className="mt-1 block text-xs text-fg-muted">{zh ? '新增工作流也会自动可用。' : 'New workflows become available automatically.'}</span></button>
-            <button type="button" onClick={() => setDraft({ ...draft, workflows: { ...draft.workflows, allowed: [] } })} className={cn('rounded-xl border p-4 text-left', !allWorkflows ? 'border-accent bg-accent/5 ring-1 ring-accent/20' : 'border-edge bg-surface-panel hover:border-edge-strong')}><span className="block text-sm font-medium text-fg">{zh ? '只允许选中的工作流' : 'Allow selected workflows only'}</span><span className="mt-1 block text-xs text-fg-muted">{zh ? '未选中的工作流不能被调用。' : 'Unselected workflows cannot be invoked.'}</span></button>
+            <button type="button" onClick={() => setDraft({ ...draft, workflows: { ...draft.workflows, allowed: undefined } })} className={cn('rounded-xl bg-surface-base/55 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', allWorkflows ? 'bg-accent-soft shadow-surface' : 'hover:bg-surface-hover')}><span className="block text-sm font-medium text-fg">{zh ? '允许全部工作流' : 'Allow every workflow'}</span><span className="mt-1 block text-xs text-fg-muted">{zh ? '新增工作流也会自动可用。' : 'New workflows become available automatically.'}</span></button>
+            <button type="button" onClick={() => setDraft({ ...draft, workflows: { ...draft.workflows, allowed: [] } })} className={cn('rounded-xl bg-surface-base/55 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', !allWorkflows ? 'bg-accent-soft shadow-surface' : 'hover:bg-surface-hover')}><span className="block text-sm font-medium text-fg">{zh ? '只允许选中的工作流' : 'Allow selected workflows only'}</span><span className="mt-1 block text-xs text-fg-muted">{zh ? '未选中的工作流不能被调用。' : 'Unselected workflows cannot be invoked.'}</span></button>
           </div>
-          {!allWorkflows ? <div className="mt-3 divide-y divide-edge rounded-xl border border-edge bg-surface-panel">{(workflowsQuery.data ?? []).map((workflow) => <label key={workflow.id} className="flex cursor-pointer items-start gap-3 px-4 py-3 hover:bg-surface-hover/60"><input type="checkbox" checked={draft.workflows.allowed?.includes(workflow.id) ?? false} onChange={(event) => setAllowedWorkflow(workflow.id, event.target.checked)} className="mt-0.5 size-4 accent-[var(--color-accent)]" /><span><span className="block text-sm font-medium text-fg">{workflow.title || workflow.name}</span>{workflow.description ? <span className="mt-1 block text-xs text-fg-muted">{workflow.description}</span> : null}</span></label>)}{(workflowsQuery.data ?? []).length === 0 && !workflowsQuery.isLoading ? <p className="px-4 py-8 text-center text-sm text-fg-muted">{zh ? '还没有工作流。' : 'No workflows yet.'}</p> : null}</div> : null}
+          {!allWorkflows ? <div className="mt-3 flex flex-col gap-1 rounded-xl bg-surface-base/45 p-1 [&>label]:rounded-lg [&>label]:bg-surface-panel/55">{(workflowsQuery.data ?? []).map((workflow) => <label key={workflow.id} className="flex cursor-pointer items-start gap-3 px-4 py-3 hover:bg-surface-hover/60"><input type="checkbox" checked={draft.workflows.allowed?.includes(workflow.id) ?? false} onChange={(event) => setAllowedWorkflow(workflow.id, event.target.checked)} className="mt-0.5 size-4 accent-[var(--color-accent)]" /><span><span className="block text-sm font-medium text-fg">{workflow.title || workflow.name}</span>{workflow.description ? <span className="mt-1 block text-xs text-fg-muted">{workflow.description}</span> : null}</span></label>)}{(workflowsQuery.data ?? []).length === 0 && !workflowsQuery.isLoading ? <p className="px-4 py-8 text-center text-sm text-fg-muted">{zh ? '还没有工作流。' : 'No workflows yet.'}</p> : null}</div> : null}
         </div>
       </section>
     </div>

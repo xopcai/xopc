@@ -85,7 +85,7 @@ export function EndpointToolsManagementSettings() {
       />
 
       {(principals.error || invocations.error) ? (
-        <div className="rounded-xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
+        <div className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-danger">
           {copy.loadError}
         </div>
       ) : null}
@@ -98,14 +98,14 @@ export function EndpointToolsManagementSettings() {
           [copy.online, onlineCount],
           [copy.recentCalls, invocationRows.length],
         ].map(([label, value]) => (
-          <div key={String(label)} className="rounded-xl border border-edge bg-surface-base px-4 py-3">
+          <div key={String(label)} className="rounded-xl bg-surface-hover/20 px-4 py-3">
             <p className="text-xs text-fg-muted">{label}</p>
             <p className="mt-1 text-2xl font-semibold text-fg">{value}</p>
           </div>
         ))}
       </div>
 
-      <section className="rounded-2xl border border-edge bg-surface-base p-4">
+      <section className="rounded-xl bg-surface-hover/20 p-4">
         <h2 className="text-sm font-semibold text-fg">{copy.devicesTitle}</h2>
         <p className="mt-1 text-sm text-fg-muted">{copy.devicesHint}</p>
         <div className="mt-4 space-y-3">
@@ -113,7 +113,7 @@ export function EndpointToolsManagementSettings() {
           {principalRows.map((principal) => {
             const status = principal.revokedAt ? 'revoked' : principal.endpoints.length > 0 ? 'online' : 'offline';
             return (
-              <article key={principal.id} className="rounded-xl border border-edge-subtle bg-surface-panel p-4">
+              <article key={principal.id} className="rounded-xl bg-surface-base/55 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -151,7 +151,7 @@ export function EndpointToolsManagementSettings() {
                       {endpoint.tools.map(({ descriptor }) => (
                         <span
                           key={descriptor.name}
-                          className="rounded-md border border-edge-subtle bg-surface-panel px-2 py-1 text-xs text-fg-muted"
+                          className="rounded-md bg-surface-hover/60 px-2 py-1 text-xs text-fg-muted"
                           title={descriptor.requiredPermissions.join(', ') || copy.noPermissions}
                         >
                           {descriptor.name}
@@ -169,13 +169,13 @@ export function EndpointToolsManagementSettings() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-edge bg-surface-base p-4">
+      <section className="rounded-xl bg-surface-hover/20 p-4">
         <h2 className="text-sm font-semibold text-fg">{copy.callsTitle}</h2>
         <p className="mt-1 text-sm text-fg-muted">{copy.callsHint}</p>
         <div className="mt-4 space-y-2">
           {invocationRows.length === 0 ? <p className="text-sm text-fg-muted">{copy.noCalls}</p> : null}
           {invocationRows.map((invocation) => (
-            <div key={invocation.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2.5">
+            <div key={invocation.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-surface-base/55 px-3 py-2.5">
               <div className="min-w-0">
                 <p className="break-all text-sm font-medium text-fg">{invocation.toolName}</p>
                 <p className="mt-0.5 text-xs text-fg-muted">

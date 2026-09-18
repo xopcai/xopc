@@ -66,16 +66,16 @@ export function VoiceSetup({ section, v, form, pending, apiKeyLabels, sttProvide
   const statusLabel = (configured: boolean, passed: boolean) => !realtime.enabled ? s.disabled : pending ? s.pending : configured ? passed && verified.signature === signature ? s.verified : s.unverified : s.needsSetup;
 
   return (
-    <section className="space-y-5 rounded-xl border border-edge bg-surface-panel p-4 sm:p-5" aria-label={s.service}>
+    <section className="space-y-5 rounded-xl bg-surface-hover/20 p-4 sm:p-5" aria-label={s.service}>
       {section === 'service' ? <>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-edge pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-surface-base/45 p-3">
         <label className="flex items-center gap-2 text-xs text-fg-muted"><input type="checkbox" role="switch" aria-checked={realtime.enabled} className="size-4 accent-accent" checked={realtime.enabled} onChange={(e) => { if (e.target.checked) configure(provider === 'alibaba' ? 'alibaba' : 'xopc-cloud'); else updateRealtime({ enabled: false }); }} />{s.enable}</label>
       </div>
       {error ? <p role="alert" className="text-xs text-red-600 dark:text-red-400">{s.statusError}</p> : null}
       <fieldset className="space-y-3">
         <legend className="text-sm font-medium text-fg">{s.service}</legend>
         <div className="grid gap-3 sm:grid-cols-2">
-          {(['xopc-cloud', 'alibaba'] as const).map((id) => <label key={id} className="flex cursor-pointer items-start gap-3 rounded-lg border border-edge px-3 py-3 text-sm text-fg has-checked:border-accent/60">
+          {(['xopc-cloud', 'alibaba'] as const).map((id) => <label key={id} className="flex cursor-pointer items-start gap-3 rounded-lg bg-surface-base/55 px-3 py-3 text-sm text-fg has-checked:bg-accent-soft">
             <input type="radio" name="realtime-service" value={id} checked={provider === id} onChange={() => configure(id)} className="mt-1 accent-accent" />
             <span><span className="block font-medium">{id === 'xopc-cloud' ? s.hosted : s.ownKey}</span><span className="mt-1 block text-xs text-fg-muted">{id === 'xopc-cloud' ? s.hostedHint : s.ownKeyHint}</span></span>
           </label>)}

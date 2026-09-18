@@ -1,7 +1,4 @@
-/**
- * Settings pages sit on `bg-surface-panel`; grouped blocks use `bg-surface-base`
- * to keep the white content region readable without losing hierarchy.
- */
+/** Quiet section grouping for continuous settings pages. */
 export function settingsFormSectionClassName(): string {
-  return 'rounded-2xl border border-edge-subtle bg-surface-base px-4 py-5 sm:px-5';
+  return 'rounded-xl bg-surface-hover/20 px-4 py-5 sm:px-5';
 }

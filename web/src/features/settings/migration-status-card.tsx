@@ -66,7 +66,7 @@ export function MigrationStatusCard({ messages }: { messages: MigrationStatusMes
 
   if (isLoading) {
     return (
-      <section className="rounded-2xl bg-surface-panel p-4 shadow-surface" aria-busy="true">
+      <section className="rounded-xl bg-surface-hover/20 p-4" aria-busy="true">
         <Skeleton className="h-5 w-40 max-w-full" />
         <Skeleton className="mt-2 h-4 w-64 max-w-full" />
       </section>
@@ -75,7 +75,7 @@ export function MigrationStatusCard({ messages }: { messages: MigrationStatusMes
 
   if (error) {
     return (
-      <section className="rounded-2xl bg-surface-panel p-4 shadow-surface">
+      <section className="rounded-xl bg-surface-hover/20 p-4">
         <h2 className="text-sm font-semibold text-fg">{messages.title}</h2>
         <p className="mt-1 text-sm text-fg-muted">{messages.checkFailed}</p>
       </section>
@@ -88,7 +88,7 @@ export function MigrationStatusCard({ messages }: { messages: MigrationStatusMes
   const needsManualAttention = conflicts.length > 0 || items.some((item) => item.safety !== 'auto');
 
   return (
-    <section className="rounded-2xl bg-surface-panel p-4 shadow-surface">
+    <section className="rounded-xl bg-surface-hover/20 p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-sm font-semibold text-fg">{messages.title}</h2>
@@ -109,7 +109,7 @@ export function MigrationStatusCard({ messages }: { messages: MigrationStatusMes
       {items.length > 0 ? (
         <div className="mt-3 space-y-2">
           {items.map((item) => (
-            <div key={item.id} className="rounded-xl bg-surface-base px-3 py-2">
+            <div key={item.id} className="rounded-xl bg-surface-base/55 px-3 py-2">
               <div className="flex items-center justify-between gap-3">
                 <div className="truncate text-sm font-medium text-fg">{item.title}</div>
                 <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[11px] uppercase tracking-wide text-fg-muted">

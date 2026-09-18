@@ -17,6 +17,7 @@ import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { PageTabs } from '@/components/ui/page-tabs';
+import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { SessionCard, type SessionCardAction } from '@/features/sessions/session-card';
 import { agentAvatarFromOptions, resolveSessionAgentId } from '@/features/sessions/session-agent-resolve';
@@ -113,7 +114,7 @@ function SessionsTabPanel({
       id={`sessions-panel-${id}`}
       role="tabpanel"
       aria-labelledby={`sessions-tab-${id}`}
-      className={plain ? 'contents' : 'rounded-2xl bg-surface-base px-4 py-5 sm:px-5'}
+      className={plain ? 'contents' : 'rounded-xl bg-surface-hover/20 px-4 py-5 sm:px-5'}
     >
       {plain ? (
         children
@@ -537,10 +538,8 @@ export function SessionsPage() {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-surface-panel">
-      <div className="flex w-full flex-col gap-6 px-3 py-6 sm:px-5 xl:px-6">
-        <header className="flex flex-col gap-2">
-          <h1 className="text-lg font-semibold tracking-tight text-fg">{s.title}</h1>
-        </header>
+      <SettingsPageFrame gap="gap-6">
+        <SettingsPageHeader title={s.title} />
 
         <SessionsTabs s={s} activeTab={activeTab} onChange={setActiveTab} />
 
@@ -652,7 +651,7 @@ export function SessionsPage() {
         ) : null}
 
         {error ? (
-          <div className="rounded-lg border border-edge bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-edge dark:bg-red-950/40 dark:text-red-300">
+          <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
             {error}
           </div>
         ) : null}
@@ -752,7 +751,7 @@ export function SessionsPage() {
           </>
         )}
         </SessionsTabPanel>
-      </div>
+      </SettingsPageFrame>
 
       <SessionDetailDrawer
         open={detailOpen}

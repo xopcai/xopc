@@ -16,17 +16,25 @@ type StatusKind = 'active' | 'connecting' | 'off';
 function statusPillClass(kind: StatusKind): string {
   switch (kind) {
     case 'active':
-      return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400';
+      return 'text-emerald-700 dark:text-emerald-400';
     case 'connecting':
-      return 'bg-amber-500/15 text-amber-700 dark:text-amber-400';
+      return 'text-amber-700 dark:text-amber-400';
     default:
-      return 'bg-surface-hover text-fg-muted';
+      return 'text-fg-muted';
   }
 }
 
 function StatusPill({ label, kind }: { label: string; kind: StatusKind }) {
   return (
-    <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', statusPillClass(kind))}>
+    <span className={cn('inline-flex items-center gap-1.5 text-xs font-medium', statusPillClass(kind))}>
+      <span
+        className={cn(
+          'size-1.5 rounded-full bg-fg-subtle/50',
+          kind === 'active' && 'bg-emerald-500',
+          kind === 'connecting' && 'bg-amber-500',
+        )}
+        aria-hidden
+      />
       {label}
     </span>
   );
@@ -109,7 +117,7 @@ export function RemoteAccessStatusStrip({ onOpenTab }: { onOpenTab: (tab: Remote
   ];
 
   return (
-    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+    <div className="grid gap-1 rounded-xl bg-surface-hover/20 p-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       {items.map((item) => {
         const Icon = item.icon;
         return (
@@ -118,12 +126,12 @@ export function RemoteAccessStatusStrip({ onOpenTab }: { onOpenTab: (tab: Remote
             type="button"
             onClick={() => onOpenTab(item.tab)}
             className={cn(
-              'flex items-start gap-3 rounded-xl bg-surface-base px-3 py-2.5 text-left shadow-surface transition-colors',
-              'hover:bg-surface-hover/50',
+              'flex items-start gap-3 rounded-lg bg-surface-base/45 px-2 py-3 text-left transition-colors',
+              'hover:bg-surface-hover/30',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
             )}
           >
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/90 text-fg-muted">
+            <span className="flex size-8 shrink-0 items-center justify-center text-fg-muted">
               <Icon className="size-4" strokeWidth={1.75} aria-hidden />
             </span>
             <span className="min-w-0 flex-1">

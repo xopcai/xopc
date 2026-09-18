@@ -42,7 +42,7 @@ export function ComputerModelSettings({ zh }: { zh: boolean }) {
     <h2 className="text-sm font-semibold text-fg">{t.model}</h2>
     {!defaults.data && !defaults.error ? <Skeleton className="h-52 w-full rounded-xl" /> : defaults.error ?
       <div role="alert" className="text-sm text-danger">{String(defaults.error)}<Button onClick={() => { void defaults.mutate().catch(() => {}); }}>{t.retry}</Button></div> :
-      <div className="space-y-4 rounded-xl border border-edge p-4 sm:p-5">
+      <div className="space-y-4 rounded-xl bg-surface-hover/25 p-4 sm:p-5">
         <p className="text-sm text-fg-muted">{t.modelDescription}</p>
         <p className="text-xs leading-relaxed text-fg-muted">{t.modelScope}</p>
         {registry.isLoading ? <Skeleton className="h-10 w-full rounded-lg" /> : <ModelSelector

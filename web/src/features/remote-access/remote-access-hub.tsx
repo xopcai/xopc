@@ -131,7 +131,7 @@ export function RemoteAccessHub() {
       ) : (
         <>
           {pairingIntent ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent/25 bg-accent-soft px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-accent-soft px-4 py-3">
               <div className="flex min-w-0 items-start gap-3">
                 <Smartphone className="mt-0.5 size-5 shrink-0 text-accent" aria-hidden />
                 <div>
@@ -172,6 +172,7 @@ export function RemoteAccessHub() {
             title={tabLabel(ra, activeTab)}
             hint={activeTab !== 'public' ? intro : undefined}
             showHeading={false}
+            framed={false}
           >
             <RemoteAccessTabPanel tab={activeTab} onOpenTab={setActiveTab} />
           </SettingsTabPanel>

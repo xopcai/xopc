@@ -25,7 +25,6 @@ import { revalidateModelsHubCaches } from './models-hub-cache';
 import { ProviderManageDialog } from './provider-manage-dialog';
 import { ModelCatalogStatus } from './model-catalog-status';
 import { XopcCloudAccountCard } from './xopc-cloud-account-card';
-import { ComputerModelSettings } from '../computer/computer-model-settings';
 
 interface SectionDefinition {
   id: CapabilitySettingsSectionId;
@@ -117,19 +116,18 @@ export function CapabilitiesSettingsPanel() {
         role={isModelSection ? 'tabpanel' : undefined}
         id={`capability-panel-${capability}`}
         aria-labelledby={isModelSection ? `capability-tab-${capability}` : undefined}
-        className="flex min-w-0 flex-col gap-3 rounded-2xl bg-surface-base px-4 py-5 sm:px-5"
+        className="flex min-w-0 flex-col gap-4"
       >
         {capability === 'models' ? (
           <>
             {xopcCloudConfigured ? <XopcCloudAccountCard labels={c.xopcCloudAccount} /> : null}
-            <ModelCatalogStatus />
-            <ComputerModelSettings zh={language === 'zh'} />
             <ConnectedProvidersGrid
               labels={c.connectedProviders}
               data={providerData}
               onAdd={() => setAddDialogOpen(true)}
               onManage={(providerId, isCustom) => setManageTarget({ providerId, isCustom })}
             />
+            <ModelCatalogStatus />
           </>
         ) : (
           <CapabilitySectionPanel section={capability} />

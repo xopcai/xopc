@@ -156,7 +156,7 @@ export function ModelCatalogStatus() {
   };
 
   return (
-    <div className="rounded-2xl border border-edge-subtle bg-surface-panel/40 p-4">
+    <section className="rounded-xl bg-surface-hover/25 p-4 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -179,7 +179,7 @@ export function ModelCatalogStatus() {
         </Button>
       </div>
       {readiness ? (
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-3 grid gap-1 sm:grid-cols-2">
           {(Object.entries(readiness.capabilities) as Array<[
             CapabilityId,
             CapabilityReadinessPayload['capabilities'][CapabilityId],
@@ -218,7 +218,7 @@ export function ModelCatalogStatus() {
                     : unselected ? (zh ? '不继承聊天模型' : 'Does not inherit chat model') : (zh ? '无可用实现' : 'No available implementation')}
                 </p>
                 {needsAttention ? (
-                  <div className="mt-2 border-t border-edge-subtle pt-2">
+                  <div className="mt-2 rounded-lg bg-amber-500/10 p-2">
                     <p className="text-xs leading-5 text-amber-700 dark:text-amber-300">
                       {plan.status === 'degraded'
                         ? (zh ? `当前配置不可用，正在使用备用方案。${action.guidance}` : `The current configuration is unavailable, so a fallback is in use. ${action.guidance}.`)
@@ -239,15 +239,15 @@ export function ModelCatalogStatus() {
                 to={action.href}
                 aria-label={`${label}：${action.action}`}
                 className={cn(
-                  'rounded-xl border px-3 py-2 transition-colors',
-                  needsAttention ? 'border-amber-400/40 bg-amber-500/5 hover:border-amber-400/70' : 'border-edge-subtle bg-surface-panel hover:bg-surface-hover',
+                  'rounded-lg bg-surface-base/45 px-3 py-3 transition-colors',
+                  needsAttention ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-surface-hover/30',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                 )}
               >
                 {content}
               </Link>
             ) : (
-              <div key={capability} className="rounded-xl border border-edge-subtle bg-surface-panel px-3 py-2">
+              <div key={capability} className="rounded-lg bg-surface-base/45 px-3 py-3">
                 {content}
               </div>
             );
@@ -266,6 +266,6 @@ export function ModelCatalogStatus() {
         </div>
       ) : null}
       {failure ? <p className="mt-2 text-sm text-danger">{failure}</p> : null}
-    </div>
+    </section>
   );
 }

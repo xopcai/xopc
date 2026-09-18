@@ -96,7 +96,7 @@ export function DesktopPetSettings() {
     return (
       <SettingsPageFrame gap="gap-4">
         <SettingsPageHeader title={t.title} subtitle={t.subtitle} />
-        <section className="rounded-xl border border-edge bg-surface-base p-4" aria-busy aria-label={t.loading}>
+        <section className="rounded-xl bg-surface-hover/20 p-4" aria-busy aria-label={t.loading}>
           <div className="space-y-3">
             <Skeleton className="h-14 rounded-xl" />
             <Skeleton className="h-14 rounded-xl" />
@@ -226,7 +226,7 @@ export function DesktopPetSettings() {
         }
       />
 
-      <section className="rounded-xl border border-edge bg-surface-base p-4 shadow-surface">
+      <section className="rounded-xl bg-surface-hover/20 p-4">
         <div className="space-y-2">
           <ToggleRow
             title={t.enable}
@@ -244,7 +244,7 @@ export function DesktopPetSettings() {
           />
         </div>
 
-        <div className="mt-5 rounded-xl border border-edge-subtle bg-surface-panel p-3">
+        <div className="mt-5 rounded-xl bg-surface-base/55 p-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-start gap-2">
               <WandSparkles className="mt-0.5 size-4 text-accent-fg" strokeWidth={1.8} />
@@ -267,7 +267,7 @@ export function DesktopPetSettings() {
           </div>
         </div>
 
-        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-edge-subtle bg-surface-panel p-3">
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-surface-base/55 p-3">
           <div>
             <h3 className="text-sm font-semibold text-fg">{t.bondTitle}</h3>
             <p className="text-xs text-fg-muted">{t.bondDesc}</p>
@@ -289,7 +289,7 @@ export function DesktopPetSettings() {
               </span>
             ) : null}
           </div>
-          <div className="divide-y divide-edge-subtle rounded-xl border border-edge bg-surface-base">
+          <div className="flex flex-col gap-1 rounded-xl bg-surface-base/45 p-1 [&>*]:rounded-lg [&>*]:bg-surface-panel/55">
             {state.pets.map((pet) => {
               const selected = pet.id === state.prefs.selectedPetId;
               const displayText = petDisplayText(pet);
@@ -355,7 +355,7 @@ export function DesktopPetSettings() {
             </div>
           </div>
           {state.petIssues.length > 0 ? (
-            <div className="mt-2 rounded-xl border border-danger/30 bg-danger/5 p-3">
+            <div className="mt-2 rounded-xl bg-danger/10 p-3">
               <div className="flex items-center gap-2 text-xs font-semibold text-danger">
                 <AlertCircle className="size-3.5" strokeWidth={1.8} />
                 {t.invalidPets}

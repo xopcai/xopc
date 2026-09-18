@@ -66,7 +66,7 @@ export function AgentDefaultsToolsPanel({
   ];
 
   return (
-    <section className="rounded-2xl border border-edge bg-surface-base p-5">
+    <section className="rounded-xl bg-surface-hover/20 p-5">
       <div>
         <h2 className="text-base font-semibold text-fg">{zh ? '默认工具权限' : 'Default tool permissions'}</h2>
         <p className="mt-1 text-sm text-fg-muted">{zh ? '允许：直接执行；询问：执行前确认；禁用：智能体无法使用。' : 'Allow runs directly, Ask requires confirmation, and Deny makes the tool unavailable.'}</p>
@@ -79,7 +79,7 @@ export function AgentDefaultsToolsPanel({
         <label className="relative block w-full sm:w-72"><span className="sr-only">{zh ? '搜索工具' : 'Search tools'}</span><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={zh ? '搜索工具' : 'Search tools'} className="w-full rounded-lg border border-edge bg-surface-panel py-2 pl-9 pr-3 text-sm text-fg outline-none focus:border-accent" /></label>
       </div>
 
-      <div className="mt-4 max-h-[38rem] divide-y divide-edge overflow-y-auto rounded-xl border border-edge bg-surface-panel">
+      <div className="mt-4 flex max-h-[38rem] flex-col gap-1 overflow-y-auto rounded-xl bg-surface-base/45 p-1 [&>*]:rounded-lg [&>*]:bg-surface-panel/55">
         {visibleTools.map((id) => {
           const policy = draft.tools[id] ?? { mode: 'allow' as const };
           const description = descriptions.get(id);

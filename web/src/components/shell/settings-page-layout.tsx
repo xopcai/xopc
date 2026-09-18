@@ -35,7 +35,7 @@ function settingsNavLinkClass({ isActive }: { isActive: boolean }) {
     'touch-target flex w-full shrink-0 items-center gap-2.5 rounded-xl px-4 py-2 text-sm font-medium leading-6 transition-colors duration-200 ease-out',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
     isActive
-      ? 'bg-accent-soft text-accent-fg'
+      ? 'bg-surface-active text-fg [&_svg]:text-accent-fg'
       : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
   );
 }

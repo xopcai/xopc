@@ -34,10 +34,10 @@ import type {
 import { useSetupChecklist } from './use-setup-checklist';
 
 function statusClass(status: 'pass' | 'warn' | 'fail' | 'skip'): string {
-  if (status === 'pass') return 'border-success/30 bg-success-soft text-success';
-  if (status === 'warn') return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300';
-  if (status === 'fail') return 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300';
-  return 'border-edge bg-surface-hover text-fg-muted';
+  if (status === 'pass') return 'bg-success-soft text-success';
+  if (status === 'warn') return 'bg-amber-500/10 text-amber-700 dark:text-amber-300';
+  if (status === 'fail') return 'bg-red-500/10 text-red-700 dark:text-red-300';
+  return 'bg-surface-hover text-fg-muted';
 }
 
 function statusIcon(status: 'pass' | 'warn' | 'fail' | 'skip') {
@@ -71,7 +71,7 @@ function healthMeta(tier: SetupHealthTier, s: ReturnType<typeof messages>['setup
   if (tier === 'setup') {
     return {
       icon: Circle,
-      className: 'bg-surface-base text-fg shadow-surface',
+      className: 'bg-surface-hover/50 text-fg',
       title: s.health.setupTitle,
       body: s.health.setupBody,
       action: s.health.continueSetup,
@@ -153,7 +153,7 @@ function HealthBanner({
           <button
             type="button"
             className={cn(
-              'inline-flex items-center gap-2 rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm font-medium text-fg',
+              'inline-flex items-center gap-2 rounded-lg bg-surface-base/70 px-3 py-2 text-sm font-medium text-fg',
               'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
               interaction.press,
             )}
@@ -206,14 +206,14 @@ function IssueRow({ issue, fixLabel }: { issue: SetupIssue; fixLabel: string }) 
     return (
       <Link
         to={issue.path}
-        className="flex items-start gap-3 rounded-lg bg-surface-panel/80 p-3 shadow-surface hover:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex items-start gap-3 px-1 py-3 hover:bg-surface-hover/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         {content}
       </Link>
     );
   }
 
-  return <div className="flex items-start gap-3 rounded-lg bg-surface-panel/80 p-3 shadow-surface">{content}</div>;
+  return <div className="flex items-start gap-3 px-1 py-3">{content}</div>;
 }
 
 function ReadinessRow({ item, labels }: { item: ReadinessPipelineItem; labels: Record<string, string> }) {
@@ -221,7 +221,7 @@ function ReadinessRow({ item, labels }: { item: ReadinessPipelineItem; labels: R
   const title = labels[item.id] ?? item.title;
   const content = (
     <>
-      <span className={cn('flex size-7 shrink-0 items-center justify-center rounded-full border', statusClass(item.status))}>
+      <span className={cn('flex size-7 shrink-0 items-center justify-center rounded-full', statusClass(item.status))}>
         <Icon className="size-4" aria-hidden />
       </span>
       <span className="min-w-0 flex-1">
@@ -262,13 +262,13 @@ function DiagnosticSignalRow({ signal, fixLabel }: { signal: SetupDiagnosticSign
     return (
       <Link
         to={signal.path}
-        className="flex min-w-0 items-start gap-2 rounded-lg bg-surface-panel/80 px-3 py-2.5 shadow-surface hover:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex min-w-0 items-start gap-2 px-1 py-3 hover:bg-surface-hover/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         {content}
       </Link>
     );
   }
-  return <div className="flex min-w-0 items-start gap-2 rounded-lg bg-surface-panel/80 px-3 py-2.5 shadow-surface">{content}</div>;
+  return <div className="flex min-w-0 items-start gap-2 px-1 py-3">{content}</div>;
 }
 
 export function SetupStatusPanel() {
@@ -300,7 +300,7 @@ export function SetupStatusPanel() {
       <SettingsPageHeader title={s.title} />
 
       {error ? (
-        <p className="rounded-xl border border-red-300/40 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
+        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300">
           {s.loadError}
         </p>
       ) : null}
@@ -324,13 +324,13 @@ export function SetupStatusPanel() {
               title={s.nextStepsTitle}
             />
             {snapshot.issues.length ? (
-              <div className="mt-4 flex flex-col gap-2">
+              <div className="mt-3 flex flex-col gap-1 [&>*]:rounded-lg [&>*]:bg-surface-base/45 [&>*]:px-3">
                 {snapshot.issues.slice(0, 8).map((issue) => (
                   <IssueRow key={`${issue.source}:${issue.id}`} issue={issue} fixLabel={s.fixIssue} />
                 ))}
               </div>
             ) : (
-              <div className="mt-4 rounded-lg bg-surface-panel/80 shadow-surface">
+              <div className="mt-3 flex flex-col gap-1 [&>*]:bg-surface-base/45">
                 {snapshot.readiness.map((item) => (
                   <ReadinessRow key={item.id} item={item} labels={s.readinessLabels} />
                 ))}
@@ -342,13 +342,13 @@ export function SetupStatusPanel() {
             <SettingsFormSection>
               <SettingsFormSectionHeader icon={Stethoscope} title={s.diagnosticsTitle} />
               {diagnosticAttentionSignals.length ? (
-                <div className="mt-4 grid gap-2 md:grid-cols-2">
+                <div className="mt-3 flex flex-col gap-1 [&>*]:rounded-lg [&>*]:bg-surface-base/45 [&>*]:px-3">
                   {diagnosticAttentionSignals.map((signal) => (
                     <DiagnosticSignalRow key={signal.id} signal={signal} fixLabel={s.fixIssue} />
                   ))}
                 </div>
               ) : (
-                <p className="mt-4 rounded-lg bg-surface-panel/80 p-3 text-sm text-fg-muted shadow-surface">
+                <p className="mt-3 py-2 text-sm text-fg-muted">
                   {snapshot.diagnosticSignals.length ? s.diagnosticsAllClear : s.diagnosticsEmpty}
                 </p>
               )}

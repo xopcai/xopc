@@ -140,7 +140,7 @@ export function TunnelControlCard({
       ) : null}
 
       {showConsentExpired ? (
-        <p className="rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-xs text-fg-muted">
+        <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-fg-muted">
           {t.consentExpiredBanner}
         </p>
       ) : null}
@@ -152,7 +152,7 @@ export function TunnelControlCard({
             <h2 className="text-base font-semibold text-fg">{t.emptyStateTitle}</h2>
             <p className="mt-1 text-sm leading-relaxed text-fg-muted">{t.emptyStateBody}</p>
           </div>
-          <div className="flex items-start gap-2 rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2.5 text-xs text-fg-muted">
+          <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2.5 text-xs text-fg-muted">
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
             <p>{t.riskBannerBody}</p>
           </div>

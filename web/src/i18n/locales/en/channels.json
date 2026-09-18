@@ -614,6 +614,7 @@
     "unsavedHint": "You have unsaved changes.",
     "sectionRegion": "Region",
     "sectionRegionHint": "Controls which zero-config HTML fallback is used when no API provider succeeds (China → Bing; otherwise DuckDuckGo).",
+    "sectionPreferences": "Search preferences",
     "sectionSearch": "Search providers",
     "sectionSearchHint": "Providers are tried in order. Keys are stored in the gateway config file. Leave the list empty to use only the HTML fallback.",
     "sectionBlocklist": "Domain blocklist",

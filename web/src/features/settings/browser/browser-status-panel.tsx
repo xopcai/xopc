@@ -89,7 +89,7 @@ export function BrowserStatusPanel(props: {
   const StateIcon = effectiveState === 'ready' ? CheckCircle2 : effectiveState === 'syncing' ? Loader2 : AlertTriangle;
 
   return (
-    <section className="rounded-xl border border-edge bg-surface-base p-5">
+    <section className="rounded-xl bg-surface-hover/20 p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -164,7 +164,7 @@ function ExtensionSetup(props: {
   const { status, zh, busy, run, onConnectRemote } = props;
   const artifacts = status?.artifacts;
   return (
-    <div className="mt-4 border-t border-edge-subtle pt-4">
+    <div className="mt-4 rounded-xl bg-surface-base/45 p-4">
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <StatusItem label={zh ? '扩展文件' : 'Extension files'} ok={artifacts?.installed === true} value={artifacts?.installed ? (zh ? '已安装' : 'Installed') : (zh ? '未安装或需更新' : 'Install or update required')} />
         <StatusItem label={zh ? '本机自动发现' : 'Local auto-discovery'} ok={artifacts?.nativeHost?.installed === true} value={artifacts?.nativeHost?.installed ? (zh ? '已就绪' : 'Ready') : (artifacts?.nativeHost?.reason ?? (zh ? '需要修复' : 'Repair required'))} />
@@ -199,7 +199,7 @@ function PlaywrightSetup(props: {
 }) {
   const { status, zh, installer } = props;
   return (
-    <div className="mt-4 border-t border-edge-subtle pt-4">
+    <div className="mt-4 rounded-xl bg-surface-base/45 p-4">
       <StatusItem label="Chromium" ok={status?.installed === true} value={status?.installed ? (zh ? '已安装' : 'Installed') : (status?.reason ?? (zh ? '未安装' : 'Not installed'))} />
       {status?.executablePath ? <p className="mt-2 break-all text-xs text-fg-subtle">{status.executablePath}</p> : null}
       {installer.progress ? (

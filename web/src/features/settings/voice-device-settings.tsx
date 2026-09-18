@@ -33,7 +33,7 @@ export function VoiceDeviceSettings({ v }: { v: VoiceSettingsMessages }) {
       if (mounted.current) setError(err instanceof Error ? err.message : String(err));
     } finally { if (mounted.current) setPending(false); }
   };
-  return <section className="space-y-4 rounded-xl border border-edge p-4">
+  return <section className="space-y-4 rounded-xl bg-surface-hover/20 p-4">
     <label className="block space-y-2 text-sm"><span>{v.experience.microphone}</span>
       <Select value={microphoneId} onChange={(e) => setMicrophoneId(e.target.value)}>
         <SelectOption value="">{v.experience.systemDevice}</SelectOption>

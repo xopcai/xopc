@@ -165,6 +165,18 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
 
   if (!query.includeHidden) {
     conditions.push(`s.hidden_from_session_list = 0`);
+    // Deterministic memory-maintenance automations are operational records, not
+    // user conversations. Keep both newly marked and legacy rows out of every
+    // user-facing session query even if older metadata revealed the session.
+    conditions.push(`NOT (
+      s.source_channel = 'automation'
+      AND (
+        COALESCE(CASE WHEN json_valid(s.custom_data_json)
+          THEN json_extract(s.custom_data_json, '$.systemInternal') END, 0) = 1
+        OR COALESCE(CASE WHEN json_valid(s.custom_data_json)
+          THEN json_extract(s.custom_data_json, '$.automationId') END, '') LIKE 'system-memory-%'
+      )
+    )`);
     // Legacy background sessions may have been revealed by their internal user
     // prompt before any assistant/result output was persisted. Keep those
     // shells out of user-facing lists without deleting their run linkage.

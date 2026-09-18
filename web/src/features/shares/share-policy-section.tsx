@@ -145,7 +145,7 @@ function SharePolicyFields({
 }) {
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-edge bg-surface-muted/25 p-4">
+      <div className="rounded-xl bg-surface-base/45 p-4">
         <div className="mb-4">
           <h3 className="text-sm font-semibold text-fg">{t.policyFileSection}</h3>
           <p className="mt-0.5 text-xs text-fg-muted">{t.policyFileSectionHint}</p>
@@ -231,7 +231,7 @@ function SharePolicyFields({
         />
       </div>
 
-      <div className="rounded-xl border border-edge bg-surface-muted/25 p-4">
+      <div className="rounded-xl bg-surface-base/45 p-4">
         <div className="mb-4">
           <h3 className="text-sm font-semibold text-fg">{t.policyNoteSection}</h3>
           <p className="mt-0.5 text-xs text-fg-muted">{t.policyNoteSectionHint}</p>
@@ -269,7 +269,7 @@ function SharePolicyFields({
         </div>
       </div>
 
-      <div className="rounded-xl border border-edge bg-surface-muted/25 p-4">
+      <div className="rounded-xl bg-surface-base/45 p-4">
         <div className="mb-4">
           <h3 className="text-sm font-semibold text-fg">{t.policySiteSection}</h3>
           <p className="mt-0.5 text-xs text-fg-muted">{t.policySiteSectionHint}</p>
@@ -401,7 +401,7 @@ function MimeListField({
   };
 
   return (
-    <div className="space-y-2 border-t border-edge pt-4">
+    <div className="space-y-2 rounded-xl bg-surface-base/45 p-4">
       <div className="text-sm font-medium text-fg">{t.policyInlinePreviewMimes}</div>
       <p className="text-xs text-fg-subtle">{t.policyInlinePreviewMimesHint}</p>
       <div className="flex flex-wrap gap-1.5">

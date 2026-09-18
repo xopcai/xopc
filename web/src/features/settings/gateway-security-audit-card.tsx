@@ -92,7 +92,7 @@ function SecurityAuditBody({ g, audit }: { g: GatewaySettingsMessages; audit: Ga
     <div className="space-y-4">
       <div
         className={cn(
-          'rounded-lg border px-3 py-2.5 text-sm',
+          'rounded-lg px-3 py-2.5 text-sm',
           summary.bannerClass,
         )}
         role="status"
@@ -190,7 +190,7 @@ function statusSummary(
       iconClass: 'text-red-600 dark:text-red-400',
       title: g.securityAuditStatusFail,
       bannerClass:
-        'border-red-200 bg-red-50 text-red-950 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100',
+        'bg-red-50 text-red-950 dark:bg-red-950/40 dark:text-red-100',
     };
   }
 
@@ -200,7 +200,7 @@ function statusSummary(
       iconClass: 'text-amber-600 dark:text-amber-400',
       title: g.securityAuditStatusWarn,
       bannerClass:
-        'border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100',
+        'bg-amber-50 text-amber-950 dark:bg-amber-950/40 dark:text-amber-100',
     };
   }
 
@@ -209,15 +209,15 @@ function statusSummary(
       icon: Info,
       iconClass: 'text-fg-muted',
       title: g.securityAuditStatusSkip,
-      bannerClass: 'border-edge bg-surface-panel/60 text-fg',
+      bannerClass: 'bg-surface-base/55 text-fg',
     };
   }
 
   return {
     icon: ShieldCheck,
     iconClass: 'text-emerald-600 dark:text-emerald-400',
-    title: g.securityAuditStatusPass,
-    bannerClass:
-      'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-100',
+      title: g.securityAuditStatusPass,
+      bannerClass:
+        'bg-emerald-50 text-emerald-950 dark:bg-emerald-950/40 dark:text-emerald-100',
   };
 }

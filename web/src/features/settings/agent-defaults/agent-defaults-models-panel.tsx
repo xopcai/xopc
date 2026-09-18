@@ -72,7 +72,7 @@ function FallbackModels({
       {value.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-2">
           {value.map((model, index) => (
-            <span key={model} className="inline-flex items-center gap-2 rounded-full border border-edge bg-surface-panel py-1 pl-2.5 pr-1 text-xs text-fg">
+            <span key={model} className="inline-flex items-center gap-2 rounded-full bg-surface-base/70 py-1 pl-2.5 pr-1 text-xs text-fg">
               <span className="text-fg-subtle">{index + 1}</span>
               <span>{models.find((candidate) => candidate.id === model)?.name ?? model}</span>
               <button type="button" aria-label={zh ? `移除 ${model}` : `Remove ${model}`} className="rounded-full p-1 text-fg-muted hover:bg-surface-hover hover:text-fg" onClick={() => onChange(value.filter((item) => item !== model))}><X className="size-3" /></button>
@@ -129,7 +129,7 @@ export function AgentDefaultsModelsPanel({
 
   return (
     <div className="space-y-5">
-      <section className="rounded-2xl border border-edge bg-surface-base p-5">
+      <section className="rounded-xl bg-surface-hover/20 p-5">
         <div>
           <h2 className="text-base font-semibold text-fg">{zh ? '默认对话模型' : 'Default conversation model'}</h2>
           <p className="mt-1 text-sm text-fg-muted">{zh ? '大多数对话和没有专用路由的任务都会使用它。' : 'Used for most conversations and every task without a dedicated route.'}</p>
@@ -148,7 +148,7 @@ export function AgentDefaultsModelsPanel({
             onChange={(primary) => setDraft({ ...draft, models: { ...draft.models, chat: { ...draft.models.chat, primary } } })}
           />
         </div>
-        <div className="mt-6 border-t border-edge pt-5">
+        <div className="mt-6 rounded-xl bg-surface-base/45 p-4">
           <FallbackModels
             primary={draft.models.chat.primary}
             value={draft.models.chat.fallbacks}
@@ -161,7 +161,7 @@ export function AgentDefaultsModelsPanel({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-edge bg-surface-base p-5">
+      <section className="rounded-xl bg-surface-hover/20 p-5">
         <h2 className="text-base font-semibold text-fg">{zh ? '图片能力' : 'Image capabilities'}</h2>
         <p className="mt-1 text-sm text-fg-muted">{zh ? '没有图片任务时可以保持关闭。' : 'Leave these off when the agents do not work with images.'}</p>
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
@@ -216,7 +216,7 @@ export function AgentDefaultsModelsPanel({
           </div>
         </div>
         {draft.models.imageGeneration ? (
-          <div className="mt-5 grid gap-4 border-t border-edge pt-5 sm:grid-cols-2">
+          <div className="mt-5 grid gap-4 rounded-xl bg-surface-base/45 p-4 sm:grid-cols-2">
             <label className="block text-xs font-medium text-fg-muted">{zh ? '生成超时（毫秒）' : 'Generation timeout (ms)'}<input type="number" min={1} className={`${inputClass} mt-2`} value={draft.models.imageGeneration.timeoutMs ?? ''} onChange={(event) => setDraft({ ...draft, models: { ...draft.models, imageGeneration: { ...draft.models.imageGeneration!, timeoutMs: event.target.value ? Number(event.target.value) : undefined } } })} /></label>
             <div className="text-xs font-medium text-fg-muted"><span>{zh ? '服务商自动回退' : 'Automatic provider fallback'}</span><div className="mt-1.5 flex rounded-lg bg-surface-panel p-1">{([true, false] as const).map((enabled) => <Button key={String(enabled)} variant={draft.models.imageGeneration?.autoProviderFallback === enabled ? 'secondary' : 'ghost'} className="flex-1 py-1.5 text-xs" onClick={() => setDraft({ ...draft, models: { ...draft.models, imageGeneration: { ...draft.models.imageGeneration!, autoProviderFallback: enabled } } })}>{enabled ? (zh ? '开启' : 'On') : (zh ? '关闭' : 'Off')}</Button>)}</div></div>
           </div>
@@ -225,12 +225,12 @@ export function AgentDefaultsModelsPanel({
 
       <AgentDefaultsVoiceSummary zh={zh} />
 
-      <section className="rounded-2xl border border-edge bg-surface-base p-5">
+      <section className="rounded-xl bg-surface-hover/20 p-5">
         <h2 className="text-base font-semibold text-fg">{zh ? '按任务选择模型' : 'Route by task'}</h2>
         <p className="mt-1 text-sm text-fg-muted">{zh ? '仅在确实需要不同模型时设置；否则保持“使用默认对话模型”。' : 'Set a route only when a task genuinely needs another model; otherwise keep the default.'}</p>
         <div className="mt-5 grid gap-3 lg:grid-cols-2">
           {INTENTS.map((intent) => (
-            <div key={intent} className="rounded-xl border border-edge bg-surface-panel p-4">
+            <div key={intent} className="rounded-xl bg-surface-base/55 p-4">
               <div className="mb-3">
                 <h3 className="text-sm font-medium text-fg">{copy[intent][0]}</h3>
                 <p className="mt-0.5 text-xs text-fg-muted">{copy[intent][1]}</p>

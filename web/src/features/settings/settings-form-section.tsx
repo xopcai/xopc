@@ -21,7 +21,7 @@ export function SettingsFormSection({
 }
 
 const settingsSectionHeaderIconShellClass =
-  'flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-hover/90 text-fg-muted transition-colors dark:bg-surface-hover/70';
+  'mt-0.5 flex size-7 shrink-0 items-center justify-center text-fg-muted transition-colors';
 
 export function SettingsFormSectionHeader({
   icon: Icon,
@@ -65,7 +65,7 @@ export function SettingsFormSectionHeader({
   const showAvatarEditPencil = Boolean(iconInteractive && iconLeading);
 
   return (
-    <div className={cn('mb-5 flex items-start gap-3', className)}>
+    <div className={cn('mb-4 flex items-start gap-2.5', className)}>
       {iconInteractive ? (
         showAvatarEditPencil ? (
           <span className="relative shrink-0">

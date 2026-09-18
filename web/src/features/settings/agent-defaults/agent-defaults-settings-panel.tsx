@@ -79,9 +79,9 @@ function AgentDefaultsEditor({
         </div>
       ) : null}
 
-      <nav className="grid grid-cols-2 gap-2 rounded-2xl border border-edge bg-surface-base p-2 lg:grid-cols-4" aria-label={zh ? '默认配置分区' : 'Default configuration sections'}>
+      <nav className="grid grid-cols-2 gap-1 rounded-xl bg-surface-hover/20 p-1 lg:grid-cols-4" aria-label={zh ? '默认配置分区' : 'Default configuration sections'}>
         {tabs.map(({ id, label, icon: Icon }) => (
-          <button key={id} type="button" aria-pressed={activePanel === id} onClick={() => setActivePanel(id)} className={cn('flex min-w-0 items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-left transition-colors', activePanel === id ? 'bg-surface-panel text-fg shadow-surface ring-1 ring-edge' : 'text-fg-muted hover:bg-surface-hover hover:text-fg')}>
+          <button key={id} type="button" aria-pressed={activePanel === id} onClick={() => setActivePanel(id)} className={cn('flex min-w-0 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', activePanel === id ? 'bg-surface-base text-fg shadow-surface' : 'text-fg-muted hover:bg-surface-hover hover:text-fg')}>
             <Icon className={cn('size-4 shrink-0', activePanel === id ? 'text-accent' : 'text-fg-subtle')} />
             <span className="text-sm font-medium">{label}</span>
           </button>

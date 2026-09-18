@@ -8,6 +8,7 @@ import { LogsListSection } from '@/features/logs/logs-list-section';
 import { LogsNoToken } from '@/features/logs/logs-no-token';
 import { LogsPageHeader } from '@/features/logs/logs-page-header';
 import { LogsStatsPopover } from '@/features/logs/logs-stats-popover';
+import { SettingsPageFrame } from '@/features/settings/settings-page-layout';
 import { useLocaleStore } from '@/stores/locale-store';
 
 export function LogsPage() {
@@ -63,7 +64,7 @@ export function LogsPage() {
   }
 
   return (
-    <div className="flex w-full flex-col gap-6 px-3 py-6 sm:px-5 xl:px-6">
+    <SettingsPageFrame gap="gap-6">
       <LogsPageHeader
         L={L}
         autoRefresh={autoRefresh}
@@ -77,7 +78,7 @@ export function LogsPage() {
 
       {error ? (
         <div
-          className="rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm text-fg dark:border-edge"
+          className="rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger"
           role="alert"
         >
           {error}
@@ -145,6 +146,6 @@ export function LogsPage() {
       />
 
       <LogsFilesDialog L={L} open={filesOpen} onOpenChange={setFilesOpen} files={files} logDir={logDir} />
-    </div>
+    </SettingsPageFrame>
   );
 }

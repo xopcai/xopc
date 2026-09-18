@@ -146,9 +146,9 @@ export function ConnectedProvidersGrid({ labels, data, onAdd, onManage }: Connec
     return (
       <div className="flex flex-col gap-3" aria-busy="true">
         <Skeleton className="h-6 w-48 max-w-full" />
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="flex flex-col gap-1">
           {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-32 rounded-2xl" />
+            <Skeleton key={i} className="h-16 rounded-lg" />
           ))}
         </div>
       </div>
@@ -174,7 +174,7 @@ export function ConnectedProvidersGrid({ labels, data, onAdd, onManage }: Connec
 
       {/* Empty state */}
       {configuredCards.length === 0 ? (
-        <div className="rounded-2xl bg-surface-panel/60 px-6 py-10 text-center shadow-surface">
+        <div className="rounded-xl bg-surface-hover/25 px-6 py-10 text-center">
           <p className="text-sm font-medium text-fg">{labels.empty}</p>
           <p className="mt-1 text-sm text-fg-muted">{labels.emptyHint}</p>
           <Button type="button" variant="primary" className="mt-4 gap-1.5" onClick={onAdd}>
@@ -183,7 +183,7 @@ export function ConnectedProvidersGrid({ labels, data, onAdd, onManage }: Connec
           </Button>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="flex flex-col gap-1 rounded-xl bg-surface-hover/20 p-1">
           {configuredCards.map((card) => (
             <ProviderCard
               key={card.id}
@@ -212,30 +212,28 @@ function ProviderCard({
       type="button"
       onClick={onManage}
       className={cn(
-        'group relative flex flex-col justify-between rounded-2xl bg-surface-base p-4 text-left shadow-surface transition-colors',
-        'hover:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+        'group relative flex min-h-16 w-full flex-col justify-center gap-2 rounded-lg bg-surface-base/45 px-3 py-3 text-left transition-colors sm:flex-row sm:items-center sm:gap-4',
+        'hover:bg-surface-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         interaction.pressCard,
       )}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-semibold text-fg">{card.name}</span>
-          {card.isCustom ? (
-            <span className="shrink-0 rounded bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium text-fg-subtle">
-              {labels.custom}
-            </span>
-          ) : null}
-        </div>
+      <div className="flex min-w-0 flex-1 items-center gap-2">
         <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+        <span className="min-w-0 text-sm font-semibold leading-snug text-fg">{card.name}</span>
+        {card.isCustom ? (
+          <span className="shrink-0 rounded bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium text-fg-subtle">
+            {labels.custom}
+          </span>
+        ) : null}
       </div>
 
-      <div className="mt-2.5 flex items-center justify-between">
-        <span className="text-xs text-fg-subtle">
+      <div className="flex shrink-0 items-center justify-between gap-4 pl-6 sm:justify-end sm:pl-0">
+        <span className="whitespace-nowrap text-xs text-fg-subtle">
           {card.modelCount > 0
             ? labels.modelsCount.replace('{{count}}', String(card.modelCount))
             : labels.noModels}
         </span>
-        <span className="flex items-center gap-1 text-xs font-medium text-accent-fg opacity-0 transition-opacity group-hover:opacity-100">
+        <span className="flex items-center gap-1 text-xs font-medium text-accent-fg">
           <Settings2 className="size-3" aria-hidden />
           {labels.manage}
         </span>

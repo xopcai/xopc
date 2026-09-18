@@ -17,7 +17,6 @@ type MethodCardProps = {
   recommended?: boolean;
   icon: typeof Globe;
   onOpen: () => void;
-  openLabel: string;
   recommendedLabel?: string;
 };
 
@@ -27,7 +26,6 @@ function MethodCard({
   recommended,
   icon: Icon,
   onOpen,
-  openLabel,
   recommendedLabel,
 }: MethodCardProps) {
   return (
@@ -35,32 +33,29 @@ function MethodCard({
       type="button"
       onClick={onOpen}
       className={cn(
-        'group flex w-full flex-col rounded-2xl bg-surface-base p-4 text-left transition-colors',
-        'hover:bg-surface-hover/40',
+        'group flex w-full items-start gap-3 px-3 py-4 text-left transition-colors',
+        'hover:bg-surface-hover/30',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
       )}
     >
-      <div className="flex items-start gap-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-hover/90 text-fg-muted">
-          <Icon className="size-4" strokeWidth={1.75} aria-hidden />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-semibold text-fg">{title}</h3>
-            {recommended && recommendedLabel ? (
-              <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-fg">
-                {recommendedLabel}
-              </span>
-            ) : null}
-          </div>
-          <p className="mt-1 text-sm leading-relaxed text-fg-muted">{description}</p>
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-muted">
+        <Icon className="size-4" strokeWidth={1.75} aria-hidden />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-sm font-semibold text-fg">{title}</h3>
+          {recommended && recommendedLabel ? (
+            <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-fg">
+              {recommendedLabel}
+            </span>
+          ) : null}
         </div>
-        <ChevronRight
-          className="mt-0.5 size-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5"
-          aria-hidden
-        />
+        <p className="mt-1 text-sm leading-relaxed text-fg-muted">{description}</p>
       </div>
-      <span className="mt-3 text-xs font-medium text-accent">{openLabel}</span>
+      <ChevronRight
+        className="mt-2 size-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-fg-muted"
+        aria-hidden
+      />
     </button>
   );
 }
@@ -86,7 +81,7 @@ export function RemoteAccessGuideTab({ onOpenTab }: { onOpenTab: (tab: RemoteAcc
       <RemoteAccessStatusStrip onOpenTab={onOpenTab} />
 
       {conflicts.length > 0 ? (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-fg-muted">
+        <div className="rounded-xl bg-amber-500/10 px-4 py-3 text-sm text-fg-muted">
           <p className="font-medium text-fg">{g.conflictsTitle}</p>
           <p className="mt-1">{g.conflictsHint}</p>
           <ul className="mt-2 list-inside list-disc text-xs">
@@ -99,42 +94,37 @@ export function RemoteAccessGuideTab({ onOpenTab }: { onOpenTab: (tab: RemoteAcc
 
       <div>
         <h2 className="text-sm font-semibold text-fg">{g.pickMethod}</h2>
-        <div className="mt-3 grid gap-3 lg:grid-cols-2">
+        <div className="mt-2 flex max-w-3xl flex-col gap-1 rounded-xl bg-surface-hover/20 p-1 [&>*]:rounded-lg [&>*]:bg-surface-base/45">
           <MethodCard
             icon={Globe}
             title={g.tailscaleCardTitle}
             description={g.tailscaleCardDesc}
             recommended
             recommendedLabel={g.recommended}
-            openLabel={g.configure}
             onOpen={() => onOpenTab('tailscale')}
           />
           <MethodCard
             icon={Network}
             title={g.publicCardTitle}
             description={g.publicCardDesc}
-            openLabel={g.configure}
             onOpen={() => onOpenTab('public')}
           />
           <MethodCard
             icon={Shield}
             title={g.reverseProxyCardTitle}
             description={g.reverseProxyCardDesc}
-            openLabel={g.configure}
             onOpen={() => onOpenTab('reverse-proxy')}
           />
           <MethodCard
             icon={Terminal}
             title={g.sshCardTitle}
             description={g.sshCardDesc}
-            openLabel={g.configure}
             onOpen={() => onOpenTab('ssh')}
           />
           <MethodCard
             icon={Server}
             title={g.lanCardTitle}
             description={g.lanCardDesc}
-            openLabel={g.configure}
             onOpen={() => onOpenTab('lan')}
           />
         </div>
@@ -142,13 +132,11 @@ export function RemoteAccessGuideTab({ onOpenTab }: { onOpenTab: (tab: RemoteAcc
 
       <p className="text-xs leading-relaxed text-fg-subtle">{g.oneAtATimeHint}</p>
 
-      <div className="rounded-xl bg-surface-base px-4 py-3">
+      <div className="max-w-3xl rounded-xl bg-surface-hover/20 px-4 py-4">
         <h3 className="text-sm font-semibold text-fg">{ra.advanced.proxyTitle}</h3>
         <p className="mt-1 text-sm text-fg-muted">{ra.advanced.proxyBody}</p>
         <RemoteAccessDocsLink language={language} label={ra.advanced.proxyDocs} section="advanced" className="mt-2" />
       </div>
-
-      <RemoteAccessDocsLink language={language} label={g.docsLink} />
     </div>
   );
 }
