@@ -1,5 +1,4 @@
-// Block-level renderers used by MessageBubble. Contiguous assistant activity is
-// grouped into disclosures while narration stays in its original turn order.
+// Block-level renderers used by MessageBubble for user content and final answers.
 
 import {
   useCallback,
@@ -13,24 +12,11 @@ import { AlertCircle, Copy, ExternalLink, File, FolderOpen, Loader2, Settings, X
 
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
 import type { WorkspaceFileLinkTarget } from '@/components/markdown/internal-links';
-import {
-  AssistantStepsBlock,
-  type AssistantActivityWorkflowOptions,
-} from '@/features/chat/messages/assistant-steps-block';
 import type {
   ImageContent,
   MessageContent,
   ReviewContent,
-  ThinkingContent,
-  ToolUseContent,
 } from '@/features/chat/messages/messages.types';
-import type { MemoryActivityLabels } from '@/features/chat/messages/memory-activity';
-import type {
-  StepsClusterDoneLabels,
-  StepsClusterIngLabels,
-  StepsClusterJoinLabels,
-} from '@/features/chat/messages/tool-action-cluster';
-import type { ToolCardLabels } from '@/features/chat/tool-results/tool-result-cards';
 import { UserMessageSegments } from '@/features/chat/messages/user-message-segments';
 import { stripUserMessageForDisplay } from '@/features/chat/messages/wire-text-scrub';
 import { ProviderSetupRequiredCard } from '@/features/chat/messages/provider-setup-required-banner';
@@ -51,10 +37,6 @@ import {
   startStreamingRenderMetrics,
 } from '@/components/markdown/streaming-render-metrics';
 import { useProgressiveStreamingMarkdown } from '@/features/chat/messages/use-progressive-streaming-markdown';
-import type { AssistantTurnActivityPresentation } from '@/features/chat/messages/assistant-turn-view-model';
-import type { ToolExecutionLabels } from '@/features/chat/messages/tool-friendly-title';
-import { getActivityTiming } from '@/features/chat/messages/activity-timing';
-import { assistantTextForDisplay } from '@/features/chat/messages/assistant-text-presentation';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
@@ -433,10 +415,8 @@ function renderTextOrImageBlock(
       );
     }
 
-    const visibleText = assistantTextForDisplay(block);
-
     // Intercept upstream "No API key found" messages rendered as assistant text
-    const providerPayload = parseProviderSetupRequired(visibleText ?? '');
+    const providerPayload = parseProviderSetupRequired(block.text ?? '');
     if (providerPayload) {
       return (
         <div key={key} className="min-w-0">
@@ -448,7 +428,7 @@ function renderTextOrImageBlock(
     return (
       <div key={key} className="assistant-markdown-content markdown-content min-w-0">
         <ChatMarkdownView
-          content={visibleText}
+          content={block.text}
           compact
           conversationId={workspaceConversationId ?? conversationId}
           projectId={projectId}
@@ -499,88 +479,26 @@ function renderTextOrImageBlock(
   return null;
 }
 
-function activitySegmentPresentation(
-  blocks: Array<ThinkingContent | ToolUseContent>,
-  parent: AssistantTurnActivityPresentation,
-  isTailSegment: boolean,
-): AssistantTurnActivityPresentation {
-  const tools = blocks.filter(
-    (block): block is ToolUseContent => block.type === 'tool_use',
-  );
-  const active = parent.active && isTailSegment;
-  const failedCount = tools.filter(
-    (tool) => tool.status === 'error' || tool.activity?.status === 'failed',
-  ).length;
-
-  return {
-    blocks,
-    active,
-    failedCount,
-    hasTool: tools.length > 0,
-    expandedByDefault: parent.expandedByDefault && active,
-    ...getActivityTiming(blocks, isTailSegment ? parent.completedAt : undefined),
-  };
-}
-
 export function ChunkedContent({
   content,
   isUser,
   isAssistantMessageStreaming,
-  toolLabels,
-  stepLabels,
-  clusterLabels,
-  cardLabels,
   imagePreviewLabel,
   onImagePreview,
   conversationId,
   workspaceConversationId,
   projectId,
-  workflowOptions,
-  assistantActivity,
   progressiveRender = false,
   onProgressiveRenderComplete,
 }: {
   content: MessageContent[];
   isUser: boolean;
   isAssistantMessageStreaming: boolean;
-  toolLabels: { input: string; output: string; noOutput: string };
-  stepLabels: {
-    thoughts: string;
-    thoughtsStreaming: string;
-    viewSteps_one: string;
-    viewSteps_other: string;
-    searchedWeb: string;
-    searchedMemory: string;
-    searchedCode: string;
-    searched: string;
-    readFile: string;
-    stepDetails: string;
-    runCommand: string;
-    listDirectory: string;
-    writeFile: string;
-    editFile: string;
-    openUrl: string;
-    fetchUrl: string;
-    unknownTool: string;
-    activityAnalysisComplete: string;
-    rawThinking: string;
-    toolError: string;
-    toolActivity: ToolExecutionLabels;
-    memoryActivity: MemoryActivityLabels;
-  };
-  clusterLabels: {
-    done: StepsClusterDoneLabels;
-    ing: StepsClusterIngLabels;
-    join: StepsClusterJoinLabels;
-  };
-  cardLabels: ToolCardLabels;
   imagePreviewLabel: string;
   onImagePreview: ((block: ImageContent, index: number) => void) | undefined;
   conversationId: string | null | undefined;
   workspaceConversationId?: string | null;
   projectId?: string | null;
-  workflowOptions: AssistantActivityWorkflowOptions;
-  assistantActivity?: AssistantTurnActivityPresentation;
   progressiveRender?: boolean;
   onProgressiveRenderComplete?: () => void;
 }) {
@@ -598,54 +516,16 @@ export function ChunkedContent({
     ? Math.max(pendingTextIndex, fallbackStreamingTextIndex)
     : -1;
   const nodes: ReactNode[] = [];
-  const activityBlocks = isUser ? [] : (assistantActivity?.blocks ?? []);
-  const visibleToolIds = new Set(
-    activityBlocks
-      .filter((block): block is ToolUseContent => block.type === 'tool_use')
-      .map((block) => block.id),
-  );
-  const showThinkingActivity = activityBlocks.some((block) => block.type === 'thinking');
-  let activityOrdinal = 0;
-  let remainingActivityBlocks = activityBlocks.length;
   let i = 0;
   let imageOrdinal = 0;
   while (i < renderContent.length) {
     const b = renderContent[i];
 
     if (b.type === 'thinking' || b.type === 'tool_use') {
-      const segment: Array<ThinkingContent | ToolUseContent> = [];
       while (i < renderContent.length) {
         const activityBlock = renderContent[i];
         if (activityBlock.type !== 'thinking' && activityBlock.type !== 'tool_use') break;
-        if (
-          (activityBlock.type === 'tool_use' && visibleToolIds.has(activityBlock.id))
-          || (activityBlock.type === 'thinking'
-            && showThinkingActivity
-            && (Boolean(activityBlock.text?.trim()) || Boolean(activityBlock.streaming)))
-        ) {
-          segment.push(activityBlock);
-        }
         i++;
-      }
-      if (!isUser && assistantActivity && segment.length > 0) {
-        remainingActivityBlocks -= segment.length;
-        nodes.push(
-          <AssistantStepsBlock
-            key={`turn-activity-${activityOrdinal}`}
-            activity={activitySegmentPresentation(
-              segment,
-              assistantActivity,
-              remainingActivityBlocks === 0,
-            )}
-            toolLabels={toolLabels}
-            stepLabels={stepLabels}
-            clusterLabels={clusterLabels}
-            cardLabels={cardLabels}
-            conversationId={conversationId}
-            workflowOptions={workflowOptions}
-          />,
-        );
-        activityOrdinal++;
       }
     } else {
       const imgIdx = b.type === 'image' ? imageOrdinal++ : 0;

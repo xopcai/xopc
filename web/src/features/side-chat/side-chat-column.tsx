@@ -17,7 +17,7 @@ import { MAX_CHAT_ATTACHMENTS, type Attachment } from '@/features/chat/attachmen
 import { MessageList } from '@/features/chat/messages/message-list';
 import { normalizeAgentMessages } from '@/features/chat/messages/agent-messages';
 import type { Message } from '@/features/chat/messages/messages.types';
-import { ScrollToBottomButton } from '@/features/chat/scroll/scroll-to-bottom-button';
+import { ScrollToBottomDock } from '@/features/chat/scroll/scroll-to-bottom-button';
 import { useChatScrollViewport } from '@/features/chat/scroll/use-chat-scroll-viewport';
 import {
   appendTextDelta,
@@ -243,7 +243,7 @@ export function SideChatColumn({ parentConversationId }: { parentConversationId:
         onPointerDown={onResize}
         className="absolute left-0 top-0 z-20 hidden h-full w-2 cursor-col-resize touch-none md:block"
       />
-      <div className="flex h-11 shrink-0 items-center gap-1 overflow-x-auto border-b border-edge px-2">
+      <div data-side-chat-header className="flex h-11 shrink-0 items-center gap-1 overflow-x-auto px-2">
         {tabs.map((tab) => (
           <div key={tab.id} className={cn('flex h-8 shrink-0 items-center rounded-lg pl-3 text-sm', tab.id === activeId ? 'bg-surface-hover text-fg' : 'text-fg-muted')}>
             <button type="button" className="max-w-40 truncate" onClick={() => setActive(tab.id)}>{tab.title === 'Side chat' ? m.title : tab.title}{tab.ended ? ` · ${m.endedLabel}` : ''}</button>
@@ -762,10 +762,11 @@ export function SideChatConversation({
           ) : null}
           {truncated && ended ? <p className="mt-3 text-xs text-fg-muted">{sideChatMessages.partialReading}</p> : null}
         </div>
-        <ScrollToBottomButton
+        <ScrollToBottomDock
           visible={!atBottom}
           onClick={() => scrollToBottom(true)}
-          contained
+          edge="bottom"
+          running={running}
         />
       </div>
       {connectionLost && !ended ? <p role="status" className="shrink-0 px-4 py-2 text-xs text-fg-muted">{sideChatMessages.connectionLost}</p> : null}
@@ -803,7 +804,7 @@ export function SideChatConversation({
             {messages.length && !parentMissing ? <p className="mt-2 text-xs text-fg-muted">{sideChatMessages.replaceHint}</p> : null}
           </div>
         </div>
-      ) : <form onSubmit={(event) => { event.preventDefault(); submitDraft(); }} className="shrink-0 border-t border-edge p-3">
+      ) : <form data-side-chat-composer onSubmit={(event) => { event.preventDefault(); submitDraft(); }} className="shrink-0 p-3">
         <ComposerFrame
           dragging={attachments.isDragging}
           onDragOver={(event) => {

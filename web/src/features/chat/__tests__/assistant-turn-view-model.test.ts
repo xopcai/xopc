@@ -48,12 +48,11 @@ describe('buildAssistantTurnViewModel', () => {
       reasoningLevel: 'off',
     });
 
-    expect(view.displayContent.some((block) => block.type === 'thinking')).toBe(false);
-    expect(view.activity.blocks).toHaveLength(1);
-    expect(view.activity.hasTool).toBe(true);
-    expect(view.activity.failedCount).toBe(1);
-    expect(view.activity.expandedByDefault).toBe(false);
-    expect(view.activity.durationMs).toBe(500);
+    expect(view.workLog.items.some((block) => block.type === 'thinking')).toBe(false);
+    expect(view.workLog.items).toHaveLength(1);
+    expect(view.workLog.status).toBe('completed');
+    expect(view.workLog.expandedByDefault).toBe(false);
+    expect(view.workLog.durationMs).toBe(1_500);
   });
 
   it('retains a structured tool failure without downgrading a completed turn', () => {
@@ -72,7 +71,7 @@ describe('buildAssistantTurnViewModel', () => {
     });
 
     expect(view.lifecycle.state).toBe('completed');
-    expect(view.activity.failedCount).toBe(1);
+    expect(view.workLog.status).toBe('completed');
   });
 
   it('opens live reasoning and moves the cursor to the answer once text starts', () => {
@@ -85,8 +84,8 @@ describe('buildAssistantTurnViewModel', () => {
     });
 
     expect(reasoning.lifecycle.state).toBe('reasoning');
-    expect(reasoning.activity.active).toBe(true);
-    expect(reasoning.activity.expandedByDefault).toBe(true);
+    expect(reasoning.workLog.active).toBe(true);
+    expect(reasoning.workLog.expandedByDefault).toBe(true);
     expect(reasoning.answer.showStreamingCursor).toBe(false);
 
     const answering = buildAssistantTurnViewModel({
@@ -99,7 +98,7 @@ describe('buildAssistantTurnViewModel', () => {
     });
 
     expect(answering.lifecycle.state).toBe('answering');
-    expect(answering.activity.expandedByDefault).toBe(false);
+    expect(answering.workLog.expandedByDefault).toBe(false);
     expect(answering.answer.showStreamingCursor).toBe(true);
   });
 
@@ -120,7 +119,7 @@ describe('buildAssistantTurnViewModel', () => {
 
     expect(view.lifecycle.state).toBe('completed');
     expect(view.lifecycle.activeTool).toBeUndefined();
-    expect(view.activity.active).toBe(false);
+    expect(view.workLog.active).toBe(false);
   });
 
   it('keeps the activity round live between completed tools while the run is streaming', () => {
@@ -138,8 +137,8 @@ describe('buildAssistantTurnViewModel', () => {
     });
 
     expect(view.lifecycle.state).toBe('starting');
-    expect(view.activity.active).toBe(true);
-    expect(view.activity.startedAt).toBe(2_000);
+    expect(view.workLog.active).toBe(true);
+    expect(view.workLog.startedAt).toBe(1_000);
   });
 
   it('freezes completed activity at the observed end of the run', () => {
@@ -159,9 +158,25 @@ describe('buildAssistantTurnViewModel', () => {
       reasoningLevel: 'stream',
     });
 
-    expect(view.activity.active).toBe(false);
-    expect(view.activity.completedAt).toBe(5_000);
-    expect(view.activity.durationMs).toBe(3_000);
+    expect(view.workLog.active).toBe(false);
+    expect(view.workLog.durationMs).toBe(4_000);
+  });
+
+  it('times narration-only work from the assistant message lifecycle', () => {
+    const message = assistantMessage([
+      { type: 'text', text: 'Checking the request.', presentation: 'narration' },
+      { type: 'text', text: 'Done.', presentation: 'answer' },
+    ]);
+    message.completedAt = 4_000;
+
+    const view = buildAssistantTurnViewModel({
+      message,
+      isStreaming: false,
+      reasoningLevel: 'on',
+    });
+
+    expect(view.workLog.startedAt).toBe(1_000);
+    expect(view.workLog.durationMs).toBe(3_000);
   });
 
   it('uses the structured outcome instead of inferring deliverables from write tools', () => {
@@ -219,7 +234,7 @@ describe('buildAssistantTurnViewModel', () => {
     expect(view.outcome?.deliverables).toEqual([]);
     expect(view.outcome?.changeSet?.files).toEqual([{ path: 'report.md', status: 'modified' }]);
     expect(view.lifecycle.state).toBe('partial');
-    expect(view.activity.failedCount).toBe(1);
+    expect(view.workLog.status).toBe('partial');
   });
 
   it('does not render a structured deliverable again as a standalone attachment', () => {

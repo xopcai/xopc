@@ -6,11 +6,12 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChunkedContent } from '@/features/chat/messages/message-content-renderer';
-import { firstNarrationSentence } from '@/features/chat/messages/assistant-text-presentation';
-import type { AssistantTurnActivityPresentation } from '@/features/chat/messages/assistant-turn-view-model';
+import { AssistantStepsBlock } from '@/features/chat/messages/assistant-steps-block';
+import type { AssistantTurnWorkLogPresentation } from '@/features/chat/messages/assistant-turn-view-model';
 import type { MessageContent } from '@/features/chat/messages/messages.types';
 import { messages } from '@/i18n/messages';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
+import { ExtensionProvider } from '@/features/extensions/extension-provider';
 
 const emptyLabels = {
   input: '',
@@ -21,22 +22,24 @@ const emptyLabels = {
 const stepLabels = {
   thoughts: '',
   thoughtsStreaming: '',
-  viewSteps_one: '',
-  viewSteps_other: '',
+  workLogTitle: 'Work log',
+  workLogRunning: 'Working',
+  workLogComplete: 'Worked for',
+  workLogPartial: 'Partially completed in',
+  workLogFailed: 'Failed after',
   searchedWeb: '',
   searchedMemory: '',
   searchedCode: '',
   searched: '',
-  readFile: '',
+  readFile: 'Read file',
   stepDetails: '',
-  runCommand: '',
+  runCommand: 'Run command',
   listDirectory: '',
   writeFile: '',
   editFile: '',
   openUrl: '',
   fetchUrl: '',
   unknownTool: '',
-  activityAnalysisComplete: '',
   rawThinking: '',
   toolError: '',
   toolActivity: messages('en').chat.toolActivity,
@@ -46,9 +49,7 @@ const stepLabels = {
 };
 
 const clusterLabels = {
-  done: new Proxy({}, { get: (_target, key) => String(key) }) as never,
   ing: new Proxy({}, { get: (_target, key) => String(key) }) as never,
-  join: { join: ', ', joinFinal: ' and ', moreSuffix: ' and more' },
 };
 
 const cardLabels = new Proxy({}, {
@@ -79,28 +80,35 @@ describe('streaming assistant Markdown rendering', () => {
     content: MessageContent[],
     streaming: boolean,
     progressiveRender = false,
-    assistantActivity?: AssistantTurnActivityPresentation,
+    workLog?: AssistantTurnWorkLogPresentation,
     workspaceConversationId?: string,
   ) {
     act(() => {
       root.render(
         <MemoryRouter>
-          <ChunkedContent
-            content={content}
-            isUser={false}
-            isAssistantMessageStreaming={streaming}
-            toolLabels={emptyLabels}
-            stepLabels={stepLabels}
-            clusterLabels={clusterLabels}
-            cardLabels={cardLabels}
-            imagePreviewLabel=""
-            onImagePreview={undefined}
-            conversationId="side-chat-id"
-            workspaceConversationId={workspaceConversationId}
-            workflowOptions={{ labels: {} as never }}
-            assistantActivity={assistantActivity}
-            progressiveRender={progressiveRender}
-          />
+          <ExtensionProvider>
+            {workLog ? (
+              <AssistantStepsBlock
+                workLog={workLog}
+                toolLabels={emptyLabels}
+                stepLabels={stepLabels}
+                clusterLabels={clusterLabels}
+                cardLabels={cardLabels}
+                conversationId="side-chat-id"
+                workflowOptions={{ labels: {} as never }}
+              />
+            ) : null}
+            <ChunkedContent
+              content={content}
+              isUser={false}
+              isAssistantMessageStreaming={streaming}
+              imagePreviewLabel=""
+              onImagePreview={undefined}
+              conversationId="side-chat-id"
+              workspaceConversationId={workspaceConversationId}
+              progressiveRender={progressiveRender}
+            />
+          </ExtensionProvider>
         </MemoryRouter>,
       );
     });
@@ -287,83 +295,6 @@ describe('streaming assistant Markdown rendering', () => {
     expect(container.textContent).not.toContain('**');
   });
 
-  it('keeps only the first sentence of process narration', () => {
-    expect(firstNarrationSentence('我先检查项目。然后开始修改。')).toBe('我先检查项目。');
-    expect(firstNarrationSentence('I will inspect the project. Then I will edit it.')).toBe(
-      'I will inspect the project.',
-    );
-    expect(firstNarrationSentence('发现关键情况：项目里已经有你的 `.env`。后面还有内容')).toBe(
-      '发现关键情况：项目里已经有你的 `.env`。',
-    );
-    expect(firstNarrationSentence('检查 v1.2.3 和 example.com。然后继续。')).toBe(
-      '检查 v1.2.3 和 example.com。',
-    );
-    expect(firstNarrationSentence('运行 `foo.bar?x=1` 后继续。然后完成。')).toBe(
-      '运行 `foo.bar?x=1` 后继续。',
-    );
-
-    render([
-      {
-        type: 'text',
-        text: 'I will inspect the project. Then I will produce a long implementation plan.',
-        presentation: 'narration',
-      },
-    ], false);
-
-    expect(container.textContent).toContain('I will inspect the project.');
-    expect(container.textContent).not.toContain('long implementation plan');
-  });
-
-  it('renders dotfile names in process narration without truncating their inline code', () => {
-    render([{
-      type: 'text',
-      text: '发现关键情况：项目里已经有你的 `.env`。后面还有内容。',
-      presentation: 'narration',
-    }], false);
-
-    expect(container.querySelector('code')?.textContent).toBe('.env');
-    expect(container.textContent).toContain('发现关键情况：项目里已经有你的 .env。');
-    expect(container.textContent).not.toContain('后面还有内容');
-  });
-
-  it('does not cut a narration summary through an inline code span', () => {
-    const prefix = '正在检查相关实现，'.repeat(12);
-    const path = '`libs/ts/agent-channels/src/view-models/qa-card.ts`';
-    const summary = firstNarrationSentence(`${prefix}${path}，后续内容不展示`);
-
-    expect(summary).toContain(path);
-    expect(summary.match(/`/g)).toHaveLength(2);
-    expect(summary.endsWith('…')).toBe(true);
-  });
-
-  it('collapses adjacent narration segments into one process update', () => {
-    render([
-      { type: 'text', text: '我先检查项目。', presentation: 'narration' },
-      { type: 'text', text: 'I will now create a long implementation.', presentation: 'narration' },
-      { type: 'text', text: '最终结果。', presentation: 'answer' },
-    ], false);
-
-    expect(container.textContent).toContain('我先检查项目。');
-    expect(container.textContent).not.toContain('long implementation');
-    expect(container.textContent).toContain('最终结果。');
-  });
-
-  it('keeps later narration updates after an activity boundary', () => {
-    render([
-      { type: 'text', text: '我先检查项目。', presentation: 'narration' },
-      { type: 'tool_use', id: 'read-1', name: 'read_file', status: 'done' },
-      { type: 'text', text: '已经定位到相关组件。', presentation: 'narration' },
-      { type: 'text', text: '最终结果。', presentation: 'answer' },
-    ], false);
-
-    const text = container.textContent ?? '';
-    expect(text).toContain('我先检查项目。');
-    expect(text).toContain('已经定位到相关组件。');
-    expect(text).toContain('最终结果。');
-    expect(text.indexOf('我先检查项目。')).toBeLessThan(text.indexOf('已经定位到相关组件。'));
-    expect(text.indexOf('已经定位到相关组件。')).toBeLessThan(text.indexOf('最终结果。'));
-  });
-
   it('renders tool groups at their original positions between narration updates', () => {
     const firstTool = { type: 'tool_use', id: 'read-1', name: 'read_file', status: 'done' } as const;
     const secondTool = { type: 'tool_use', id: 'command-1', name: 'run_command', status: 'done' } as const;
@@ -375,21 +306,23 @@ describe('streaming assistant Markdown rendering', () => {
       { type: 'text', text: '修改完成。', presentation: 'answer' },
     ];
 
-    render(content, false, false, {
-      blocks: [firstTool, secondTool],
+    render(content.filter((block) => block.type === 'text' && block.presentation === 'answer'), false, false, {
+      items: content.filter((block): block is Extract<MessageContent, { type: 'text' | 'tool_use' }> => (
+        block.type === 'tool_use' || (block.type === 'text' && block.presentation === 'narration')
+      )),
       active: false,
-      failedCount: 0,
-      hasTool: true,
+      status: 'completed',
       expandedByDefault: false,
     });
 
     const disclosureButtons = container.querySelectorAll('button[aria-expanded]');
+    expect(disclosureButtons).toHaveLength(1);
+    act(() => (disclosureButtons[0] as HTMLButtonElement | undefined)?.click());
     const text = container.textContent ?? '';
-    expect(disclosureButtons).toHaveLength(2);
-    expect(text.indexOf('开始检查。')).toBeLessThan(text.indexOf('readFile_one'));
-    expect(text.indexOf('readFile_one')).toBeLessThan(text.indexOf('已经找到组件。'));
-    expect(text.indexOf('已经找到组件。')).toBeLessThan(text.indexOf('runCommand_one'));
-    expect(text.indexOf('runCommand_one')).toBeLessThan(text.indexOf('修改完成。'));
+    expect(text.indexOf('开始检查。')).toBeLessThan(text.indexOf('Read file'));
+    expect(text.indexOf('Read file')).toBeLessThan(text.indexOf('已经找到组件。'));
+    expect(text.indexOf('已经找到组件。')).toBeLessThan(text.indexOf('Run command'));
+    expect(text.indexOf('Run command')).toBeLessThan(text.indexOf('修改完成。'));
   });
 
   it('keeps the latest completed tool segment active while the run is still streaming', () => {
@@ -401,13 +334,11 @@ describe('streaming assistant Markdown rendering', () => {
     } as const;
 
     render([completedTool], true, false, {
-      blocks: [completedTool],
+      items: [completedTool],
       active: true,
-      failedCount: 0,
-      hasTool: true,
+      status: 'running',
       expandedByDefault: false,
       startedAt: 1_000,
-      completedAt: 2_000,
       durationMs: 1_000,
     });
 
@@ -425,14 +356,13 @@ describe('streaming assistant Markdown rendering', () => {
     } as const;
 
     render([failedTool], false, false, {
-      blocks: [failedTool],
+      items: [failedTool],
       active: false,
-      failedCount: 1,
-      hasTool: true,
+      status: 'failed',
       expandedByDefault: false,
     });
 
-    expect(container.textContent).toContain('runCommand_one');
+    expect(container.textContent).toContain('Work log');
     expect(container.textContent).not.toContain('Exit 1');
     const disclosure = container.querySelector<HTMLButtonElement>('button[aria-expanded="false"]');
     act(() => disclosure?.click());
@@ -443,7 +373,7 @@ describe('streaming assistant Markdown rendering', () => {
     expect(trace?.querySelector('[class*="text-red"]')).toBeNull();
   });
 
-  it('uses input-aware wording for xopc_use in the collapsed trace', () => {
+  it('uses input-aware wording for xopc_use inside the expanded work log', () => {
     const xopcTool = {
       type: 'tool_use',
       id: 'xopc-1',
@@ -453,13 +383,14 @@ describe('streaming assistant Markdown rendering', () => {
     } as const;
 
     render([xopcTool], false, false, {
-      blocks: [xopcTool],
+      items: [xopcTool],
       active: false,
-      failedCount: 0,
-      hasTool: true,
+      status: 'completed',
       expandedByDefault: false,
     });
 
+    const disclosure = container.querySelector<HTMLButtonElement>('button[aria-expanded="false"]');
+    act(() => disclosure?.click());
     expect(container.textContent).toContain('Updated note');
   });
 
@@ -467,10 +398,9 @@ describe('streaming assistant Markdown rendering', () => {
     const thinking = { type: 'thinking', text: 'Long reasoning', streaming: false } as const;
 
     render([thinking], false, false, {
-      blocks: [thinking],
+      items: [thinking],
       active: false,
-      failedCount: 0,
-      hasTool: false,
+      status: 'completed',
       expandedByDefault: false,
     });
 

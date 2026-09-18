@@ -3,9 +3,7 @@ import { ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 import {
-  buildStepsRoundCompleteSummary,
   buildStepsRoundStreamingSummary,
-  viewStepsLabel,
 } from '@/features/chat/messages/assistant-steps-summary';
 import type {
   ThinkingContent,
@@ -15,7 +13,11 @@ import {
   buildMemoryActivityView,
   type MemoryActivityLabels,
 } from '@/features/chat/messages/memory-activity';
-import type { AssistantTurnActivityPresentation } from '@/features/chat/messages/assistant-turn-view-model';
+import type {
+  AssistantTurnWorkLogPresentation,
+  AssistantWorkLogItem,
+} from '@/features/chat/messages/assistant-turn-view-model';
+import { MarkdownView } from '@/features/chat/markdown/markdown-view';
 import { formatParamsJson, getKeyDetailLine } from '@/features/chat/messages/tool-input-preview';
 import {
   getToolExecutionTitle,
@@ -26,9 +28,7 @@ import {
   classifyTool,
   actionKindRunningLabel,
   type ActionKind,
-  type StepsClusterDoneLabels,
   type StepsClusterIngLabels,
-  type StepsClusterJoinLabels,
 } from '@/features/chat/messages/tool-action-cluster';
 import {
   EditFileCard,
@@ -97,9 +97,9 @@ const StepRoundDurationText = memo(function StepRoundDurationText({
   return <span className={className}>{text}</span>;
 });
 
-/** One turn-level activity disclosure for model summaries and tool execution. */
+/** One turn-level disclosure for narration, reasoning summaries, and tool execution. */
 export function AssistantStepsBlock({
-  activity,
+  workLog,
   toolLabels,
   stepLabels,
   clusterLabels,
@@ -107,13 +107,16 @@ export function AssistantStepsBlock({
   conversationId,
   workflowOptions,
 }: {
-  activity: AssistantTurnActivityPresentation;
+  workLog: AssistantTurnWorkLogPresentation;
   toolLabels: { input: string; output: string; noOutput: string };
   stepLabels: {
     thoughts: string;
     thoughtsStreaming: string;
-    viewSteps_one: string;
-    viewSteps_other: string;
+    workLogTitle: string;
+    workLogRunning: string;
+    workLogComplete: string;
+    workLogPartial: string;
+    workLogFailed: string;
     searchedWeb: string;
     searchedMemory: string;
     searchedCode: string;
@@ -127,31 +130,34 @@ export function AssistantStepsBlock({
     openUrl: string;
     fetchUrl: string;
     unknownTool: string;
-    activityAnalysisComplete: string;
     rawThinking: string;
     toolError: string;
     toolActivity: ToolExecutionLabels;
     memoryActivity: MemoryActivityLabels;
   };
   clusterLabels: {
-    done: StepsClusterDoneLabels;
     ing: StepsClusterIngLabels;
-    join: StepsClusterJoinLabels;
   };
   cardLabels: ToolCardLabels;
   conversationId?: string | null;
   workflowOptions: AssistantActivityWorkflowOptions;
 }) {
   const language = useLocaleStore((s) => s.language);
-  const visibleBlocks = activity.blocks;
-  const stepCount = visibleBlocks.length;
-  const anyActive = activity.active;
-  const stepsDrawerOpen = activity.expandedByDefault && anyActive;
+  const visibleItems = workLog.items;
+  const activityBlocks = useMemo(
+    () => visibleItems.filter(
+      (item): item is ThinkingContent | ToolUseContent => item.type !== 'text',
+    ),
+    [visibleItems],
+  );
+  const stepCount = visibleItems.length;
+  const anyActive = workLog.active;
+  const stepsDrawerOpen = workLog.expandedByDefault && anyActive;
   const [userExpanded, setUserExpanded] = useState<boolean | null>(null);
 
   const expanded = userExpanded ?? stepsDrawerOpen;
-  const effectiveStartedAt = activity.startedAt ?? null;
-  const completedDurationMs = activity.durationMs ?? null;
+  const effectiveStartedAt = workLog.startedAt ?? null;
+  const completedDurationMs = workLog.durationMs ?? null;
   const friendlyTitleLabels = useMemo(() => ({
     searchedWeb: stepLabels.searchedWeb,
     searchedMemory: stepLabels.searchedMemory,
@@ -183,36 +189,14 @@ export function AssistantStepsBlock({
     );
   }, [friendlyTitleLabels, stepLabels.toolActivity]);
 
-  const completedHeader = useMemo(() => {
-    if (anyActive) return '';
-    const detail = buildStepsRoundCompleteSummary(
-      visibleBlocks,
-      clusterLabels.done,
-      clusterLabels.join,
-      language,
-      viewStepsLabel(stepCount, stepLabels),
-      (block) => semanticTitle(block, 'completed'),
-    );
-    return activity.hasTool ? detail : stepLabels.activityAnalysisComplete;
-  }, [
-    anyActive,
-    visibleBlocks,
-    language,
-    stepCount,
-    stepLabels,
-    clusterLabels,
-    activity.hasTool,
-    semanticTitle,
-  ]);
-
   const streamingHeaderText = useMemo(() => {
     if (!anyActive) return null;
     return buildStepsRoundStreamingSummary(
-      visibleBlocks,
+      activityBlocks,
       clusterLabels.ing,
       (block) => semanticTitle(block, 'running'),
     );
-  }, [anyActive, visibleBlocks, clusterLabels, semanticTitle]);
+  }, [anyActive, activityBlocks, clusterLabels, semanticTitle]);
 
   if (stepCount === 0) {
     return null;
@@ -244,7 +228,7 @@ export function AssistantStepsBlock({
   const headerMain = anyActive ? (
     <>
       <span className="[overflow-wrap:anywhere]">
-        {streamingHeaderText ?? viewStepsLabel(stepCount, stepLabels)}
+        {streamingHeaderText ?? stepLabels.workLogRunning}
       </span>
       <StepRoundDurationText
         active={anyActive}
@@ -255,9 +239,15 @@ export function AssistantStepsBlock({
       />
     </>
   ) : (
-    <>
-      <span className="[overflow-wrap:anywhere]">{completedHeader}</span>
-    </>
+    <span className="[overflow-wrap:anywhere]">
+      {completedDurationMs == null
+        ? stepLabels.workLogTitle
+        : workLog.status === 'failed'
+          ? stepLabels.workLogFailed
+          : workLog.status === 'partial'
+            ? stepLabels.workLogPartial
+            : stepLabels.workLogComplete}
+    </span>
   );
 
   const headerDurationRight = !anyActive ? (
@@ -280,7 +270,7 @@ export function AssistantStepsBlock({
       <button
         type="button"
         className={cn(
-          'flex w-fit max-w-full min-w-0 items-start gap-2 rounded-lg px-1 py-1.5 text-left text-sm text-fg-muted',
+          'flex min-h-11 w-fit max-w-full min-w-0 items-center gap-2 rounded-lg px-1 py-1.5 text-left text-sm text-fg-muted',
           interaction.transition,
           'hover:bg-surface-hover/70 hover:text-fg dark:hover:bg-surface-hover/40',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
@@ -295,14 +285,14 @@ export function AssistantStepsBlock({
         </div>
         <span className="flex shrink-0 items-start justify-end">{headerDurationRight}</span>
         <ChevronDown
-          className={cn('mt-0.5 size-4 shrink-0 text-fg-muted transition-transform', expanded && 'rotate-180')}
+          className={cn('size-4 shrink-0 text-fg-muted transition-transform motion-reduce:transition-none', expanded && 'rotate-180')}
           aria-hidden
         />
       </button>
       {expanded ? (
         <div className="mt-1 w-full min-w-0 pb-1 pl-1">
           <AssistantStepsTimeline
-            blocks={visibleBlocks}
+            blocks={visibleItems}
             toolLabels={toolLabels}
             stepLabels={timelineLabels}
             cardLabels={cardLabels}
@@ -325,7 +315,7 @@ export function AssistantStepsTimeline({
   conversationId,
   workflowOptions,
 }: {
-  blocks: Array<ThinkingContent | ToolUseContent>;
+  blocks: AssistantWorkLogItem[];
   toolLabels: { input: string; output: string; noOutput: string };
   stepLabels: {
     thoughts: string;
@@ -380,7 +370,11 @@ export function AssistantStepsTimeline({
       <div className="min-w-0 space-y-2.5 pl-1">
         {blocks.map((b, i) => (
           <StepRow
-            key={b.type === 'tool_use' ? b.id : `thinking-${i}`}
+            key={b.type === 'tool_use'
+              ? b.id
+              : b.type === 'text'
+                ? b.segmentId ?? `narration-${i}`
+                : `thinking-${i}`}
             block={b}
             toolLabels={toolLabels}
             stepLabels={stepLabels}
@@ -471,7 +465,7 @@ function StepRow({
   conversationId,
   workflowOptions,
 }: {
-  block: ThinkingContent | ToolUseContent;
+  block: AssistantWorkLogItem;
   toolLabels: { input: string; output: string; noOutput: string };
   stepLabels: {
     thoughts: string;
@@ -530,6 +524,16 @@ function StepRow({
     if (block.type !== 'tool_use' || block.status === 'running' || block.name !== 'browser_use') return null;
     return parseBrowserApproval(block.details);
   }, [block]);
+
+  if (block.type === 'text') {
+    const text = block.text.trim();
+    if (!text) return null;
+    return (
+      <div className="min-w-0 text-sm leading-relaxed text-fg-muted">
+        <MarkdownView content={text} compact />
+      </div>
+    );
+  }
 
   if (block.type === 'thinking') {
     const streaming = Boolean(block.streaming);

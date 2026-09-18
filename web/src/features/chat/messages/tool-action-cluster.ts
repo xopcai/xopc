@@ -1,6 +1,4 @@
-// Tool-action clustering: classify each tool_use into an ActionKind, count
-// per kind, and turn the result into a single human-readable header line for
-// the collapsed steps drawer (streaming or completed).
+// Tool-action clustering for the live work-log header.
 //
 // Pure module — no React, no i18n loader. Callers pass label bags so this stays
 // trivially testable in both languages.
@@ -10,48 +8,12 @@ import {
   classifyToolDisplay,
   type ToolDisplayKind,
 } from '@/features/chat/messages/tool-friendly-title';
-import {
-  extractCommandPreview,
-  extractPathPreview,
-  extractSearchQuery,
-  extractUrlPreview,
-  getKeyDetailLine,
-} from '@/features/chat/messages/tool-input-preview';
-import type { StoredLanguage } from '@/lib/storage';
 
 export type ActionKind = ToolDisplayKind;
 
 export type ClusterCount = { total: number; running: number };
 
 export type ClusterMap = Map<ActionKind, ClusterCount>;
-
-export type StepsClusterDoneLabels = Record<
-  | 'webSearch_one'
-  | 'webSearch_other'
-  | 'memorySearch_one'
-  | 'memorySearch_other'
-  | 'codeSearch_one'
-  | 'codeSearch_other'
-  | 'search_one'
-  | 'search_other'
-  | 'readFile_one'
-  | 'readFile_other'
-  | 'editFile_one'
-  | 'editFile_other'
-  | 'writeFile_one'
-  | 'writeFile_other'
-  | 'runCommand_one'
-  | 'runCommand_other'
-  | 'listDir_one'
-  | 'listDir_other'
-  | 'openUrl_one'
-  | 'openUrl_other'
-  | 'fetchUrl_one'
-  | 'fetchUrl_other'
-  | 'other_one'
-  | 'other_other',
-  string
->;
 
 export type StepsClusterIngLabels = Record<
   | 'thinking'
@@ -70,16 +32,6 @@ export type StepsClusterIngLabels = Record<
   | 'mixed',
   string
 >;
-
-export type StepsClusterJoinLabels = {
-  join: string;
-  joinFinal: string;
-  moreSuffix: string;
-};
-
-const FIRST_TOOL_DETAIL_MAX = 120;
-const HEADER_LINE_MAX = 240;
-const MAX_CLUSTERS_IN_LINE = 3;
 
 /** Ordered for stable output when summarizing multiple clusters. */
 const KIND_ORDER: ActionKind[] = [
@@ -116,15 +68,6 @@ export function clusterToolUses(
   return out;
 }
 
-function pluralLabel(
-  kind: ActionKind,
-  count: number,
-  labels: StepsClusterDoneLabels,
-): string {
-  const key: keyof StepsClusterDoneLabels = count === 1 ? `${kind}_one` : `${kind}_other`;
-  return labels[key].replace(/\{\{count\}\}/g, String(count));
-}
-
 function ingLabel(kind: ActionKind, labels: StepsClusterIngLabels): string {
   switch (kind) {
     case 'webSearch':
@@ -159,113 +102,6 @@ export function actionKindRunningLabel(
   labels: StepsClusterIngLabels,
 ): string {
   return ingLabel(kind, labels);
-}
-
-function orderKinds(map: ClusterMap): ActionKind[] {
-  const present: ActionKind[] = [];
-  for (const k of KIND_ORDER) {
-    if (map.has(k)) present.push(k);
-  }
-  return present;
-}
-
-function joinPhrases(parts: string[], join: StepsClusterJoinLabels): string {
-  if (parts.length === 0) return '';
-  if (parts.length === 1) return parts[0];
-  if (parts.length === 2) return `${parts[0]}${join.joinFinal}${parts[1]}`;
-  const head = parts.slice(0, -1).join(join.join);
-  return `${head}${join.joinFinal}${parts[parts.length - 1]}`;
-}
-
-function truncate(line: string, max: number): string {
-  return line.length > max ? `${line.slice(0, max)}…` : line;
-}
-
-/**
- * "Single-tool single-call" preview: keep the existing high-density format
- * (e.g. "Searched web: my query"). Returns null if we shouldn't use this path.
- */
-function singleToolDetailLine(
-  block: ToolUseContent,
-  kind: ActionKind,
-  labels: StepsClusterDoneLabels,
-  language: StoredLanguage,
-): string | null {
-  const input = block.input;
-  let detail = '';
-  if (kind === 'memorySearch') {
-    detail = '';
-  } else if (kind === 'webSearch' || kind === 'codeSearch' || kind === 'search') {
-    detail = extractSearchQuery(input).trim();
-  } else if (kind === 'runCommand') {
-    detail = extractCommandPreview(input).trim();
-  } else if (kind === 'readFile' || kind === 'editFile' || kind === 'writeFile') {
-    detail = extractPathPreview(input).trim();
-  } else if (kind === 'fetchUrl' || kind === 'openUrl') {
-    detail = extractUrlPreview(input).trim();
-  } else {
-    detail = getKeyDetailLine(input).trim();
-  }
-  if (!detail) return null;
-  const title = pluralLabel(kind, 1, labels);
-  const colon = language === 'zh' ? '：' : ': ';
-  return truncate(`${title}${colon}${truncate(detail, FIRST_TOOL_DETAIL_MAX)}`, HEADER_LINE_MAX);
-}
-
-/**
- * Completed-round header text. Returns `null` when there are no tool uses
- * (caller should fall back to a thinking-only label or "View N steps").
- */
-export function summarizeClustersCompleted(
-  blocks: ReadonlyArray<ThinkingContent | ToolUseContent>,
-  doneLabels: StepsClusterDoneLabels,
-  joinLabels: StepsClusterJoinLabels,
-  language: StoredLanguage,
-  semanticTitle?: (block: ToolUseContent) => string | null,
-): string | null {
-  const semanticBlocks = new Set<ToolUseContent>();
-  const semanticPhrases: string[] = [];
-  if (semanticTitle) {
-    for (const block of blocks) {
-      if (block.type !== 'tool_use') continue;
-      const title = semanticTitle(block);
-      if (!title) continue;
-      semanticBlocks.add(block);
-      if (!semanticPhrases.includes(title)) semanticPhrases.push(title);
-    }
-  }
-  const ordinaryBlocks = semanticBlocks.size > 0
-    ? blocks.filter((block) => block.type !== 'tool_use' || !semanticBlocks.has(block))
-    : blocks;
-  const map = clusterToolUses(ordinaryBlocks);
-  if (map.size === 0 && semanticPhrases.length === 0) return null;
-
-  // Single-tool, single-call: preserve the rich "title: detail" preview that
-  // power users rely on (e.g. the search query, the file path).
-  const onlyKind = semanticPhrases.length === 0 && map.size === 1 ? [...map.keys()][0] : null;
-  if (onlyKind && map.get(onlyKind)!.total === 1) {
-    const firstTool = blocks.find(
-      (b): b is ToolUseContent => b.type === 'tool_use' && classifyTool(b.name, b.activity) === onlyKind,
-    );
-    if (firstTool) {
-      const line = singleToolDetailLine(firstTool, onlyKind, doneLabels, language);
-      if (line) return line;
-    }
-  }
-
-  // Many clusters, or many calls within one cluster: aggregate-by-kind phrasing.
-  const ordered = orderKinds(map);
-  const phrases = [
-    ...ordered.map((k) => pluralLabel(k, map.get(k)!.total, doneLabels)),
-    ...semanticPhrases,
-  ];
-  const head = phrases.slice(0, MAX_CLUSTERS_IN_LINE);
-  const overflow = phrases.length - head.length;
-  let line = joinPhrases(head, joinLabels);
-  if (overflow > 0) {
-    line = `${line}${joinLabels.moreSuffix}`;
-  }
-  return truncate(line, HEADER_LINE_MAX);
 }
 
 /**
