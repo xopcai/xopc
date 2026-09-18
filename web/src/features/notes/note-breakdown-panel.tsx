@@ -141,7 +141,7 @@ export function NoteBreakdownPanel({
           type="button"
           onClick={onCatalyze}
           disabled={catalyzing}
-          className="w-full rounded-lg bg-accent px-2.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="w-full rounded-lg bg-accent px-2.5 py-1.5 text-xs font-medium text-on-accent transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {catalyzing ? n.processing : catalysisReport ? n.recatalyze : n.catalyzeAction}
         </button>
@@ -267,7 +267,7 @@ export function NoteBreakdownPanel({
                 type="button"
                 onClick={onOpenNewChat}
                 disabled={openingChat}
-                className="rounded-lg bg-accent px-2.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg bg-accent px-2.5 py-1.5 text-xs font-medium text-on-accent transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {n.newThread}
               </button>

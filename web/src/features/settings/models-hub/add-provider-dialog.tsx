@@ -716,7 +716,7 @@ function ConfigureBuiltinStep({
                     href={authUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-accent-hover"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-medium text-on-accent hover:bg-accent-hover"
                   >
                     {providerLabels.openAuthPage}
                     <span className="size-3" aria-hidden>↗</span>

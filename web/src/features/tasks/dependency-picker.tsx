@@ -131,7 +131,7 @@ export function DependencyPicker({ candidates, selectedIds, labels, disabled, bo
                             selected ? 'bg-accent-soft text-accent-fg' : 'text-fg hover:bg-surface-hover',
                           )}
                         >
-                          <span className={cn('flex size-4 shrink-0 items-center justify-center rounded', borderless ? (selected ? 'bg-accent text-white' : 'bg-surface-active') : (selected ? 'border border-accent bg-accent text-white' : 'border border-edge'))}>
+                          <span className={cn('flex size-4 shrink-0 items-center justify-center rounded', borderless ? (selected ? 'bg-accent text-on-accent' : 'bg-surface-active') : (selected ? 'border border-accent bg-accent text-on-accent' : 'border border-edge'))}>
                             {selected ? <Check className="size-3" aria-hidden /> : null}
                           </span>
                           <span className="min-w-0 flex-1 truncate">{task.title}</span>

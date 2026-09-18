@@ -1,6 +1,6 @@
 # Where xopc fits
 
-xopc sits between a personal knowledge system, a long-running work manager, and an agent runtime—but its product is not any one of those parts. It is a local-first personal AI assistant that develops a reviewable understanding of one person and helps that person move important work forward over time.
+xopc is personal AI for the one-person company. It sits between a personal knowledge system, a long-running work manager, and an agent runtime—but its product is not any one of those parts. It develops a reviewable understanding of one person and helps that person move important work forward across conversations, tools, and time.
 
 This page explains product boundaries rather than ranking vendors.
 

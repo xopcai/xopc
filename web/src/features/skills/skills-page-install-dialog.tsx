@@ -115,7 +115,7 @@ export function SkillsPageInstallDialog(p: Props) {
               'transition-colors',
               !pendingFile || uploading
                 ? 'cursor-not-allowed bg-surface-active text-fg-disabled'
-                : 'bg-accent text-white hover:bg-accent-hover',
+                : 'bg-accent text-on-accent hover:bg-accent-hover',
               interaction.focusRingPanel,
             )}
             onClick={() => void onInstallSubmit()}

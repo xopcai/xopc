@@ -266,7 +266,7 @@ export function UnderstandingUpdateReview({
       </div>
 
       {activityRunning ? (
-        <div className="mt-6 flex items-center gap-3 rounded-2xl border border-accent/20 bg-accent-soft/55 px-4 py-3 text-sm text-accent-fg">
+        <div className="mt-6 flex items-center gap-3 rounded-xl border border-accent/20 bg-accent-soft/55 px-4 py-3 text-sm text-accent-fg">
           <Loader2 className="size-4 shrink-0 animate-spin motion-reduce:animate-none" />
           <p>{t.updating}</p>
         </div>
@@ -281,9 +281,9 @@ export function UnderstandingUpdateReview({
             const active = channel.assertions.filter((item) => item.status === 'active').length;
             const pending = channel.assertions.filter((item) => REVIEW_STATUSES.has(item.status)).length;
             return (
-              <article key={channel.key} className="rounded-2xl border border-edge bg-surface-base/55 px-4 py-4">
+              <article key={channel.key} className="rounded-xl border border-edge bg-surface-base/55 px-4 py-4">
                 <div className="flex items-start gap-3">
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-fg-muted"><Icon className="size-4" /></div>
+                  <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-hover text-fg-muted"><Icon className="size-4" /></div>
                   <div className="min-w-0 flex-1">
                     <h4 className="truncate text-sm font-medium text-fg">{channel.label}</h4>
                     {channel.assertions.length ? (
@@ -303,7 +303,7 @@ export function UnderstandingUpdateReview({
               </article>
             );
           })}
-        </div> : <p className="mt-3 rounded-2xl border border-edge bg-surface-base/55 p-4 text-sm text-fg-muted">{t.noChannels}</p>}
+        </div> : <p className="mt-3 rounded-xl border border-edge bg-surface-base/55 p-4 text-sm text-fg-muted">{t.noChannels}</p>}
       </section>
 
       <section className="mt-8" aria-labelledby="understanding-pending-title">
@@ -318,7 +318,7 @@ export function UnderstandingUpdateReview({
               const sourceLabels = (assertion.sources?.length ? assertion.sources : [fallbackSource(assertion)])
                 .map((source) => sourceDisplayName(source, language));
               return (
-                <article key={assertion.id} className="rounded-2xl border border-edge bg-surface-panel p-4 shadow-surface sm:p-5">
+                <article key={assertion.id} className="rounded-xl border border-edge bg-surface-panel p-4 shadow-surface sm:p-5">
                   <div className="flex flex-wrap items-center gap-2 text-[11px]">
                     <span className="rounded-full bg-accent-soft px-2 py-0.5 font-medium text-accent-fg">{t.categories[assertion.kind]}</span>
                     <span className="text-fg-subtle">{t.source}: {sourceLabels.join(' · ')}</span>
@@ -351,7 +351,7 @@ export function UnderstandingUpdateReview({
             ) : null}
           </div>
         ) : (
-          <div className="mt-3 flex items-start gap-3 rounded-2xl border border-edge bg-surface-base/55 p-4">
+          <div className="mt-3 flex items-start gap-3 rounded-xl border border-edge bg-surface-base/55 p-4">
             <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-success" />
             <p className="text-sm leading-6 text-fg-muted">{t.nothingPending}</p>
           </div>

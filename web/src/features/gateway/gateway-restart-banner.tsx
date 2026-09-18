@@ -77,7 +77,7 @@ export function GatewayRestartBanner() {
           <button
             type="button"
             onClick={handleRetry}
-            className="ml-2 rounded bg-accent px-2 py-0.5 text-xs font-medium text-white hover:bg-accent/90"
+            className="ml-2 rounded bg-accent px-2 py-0.5 text-xs font-medium text-on-accent hover:bg-accent/90"
           >
             {t.restartPollRetry}
           </button>

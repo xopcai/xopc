@@ -83,7 +83,7 @@ export function PreviewOpenAlternativesBar({
         <button
           type="button"
           className={cn(
-            'inline-flex items-center gap-1.5 rounded-md border border-accent bg-accent px-3 py-1.5 text-xs font-medium text-white shadow-sm',
+            'inline-flex items-center gap-1.5 rounded-md border border-accent bg-accent px-3 py-1.5 text-xs font-medium text-on-accent shadow-sm',
             interaction.transition,
             interaction.press,
             interaction.focusRingPanel,

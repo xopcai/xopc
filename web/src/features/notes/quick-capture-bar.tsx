@@ -277,7 +277,7 @@ export function QuickCaptureBar({
         className={cn(
           'shrink-0 rounded-lg p-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50',
           text.trim() && !busy && !recording
-            ? 'bg-accent text-white hover:bg-accent-hover'
+            ? 'bg-accent text-on-accent hover:bg-accent-hover'
             : 'text-fg-disabled',
         )}
       >

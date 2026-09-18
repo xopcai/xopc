@@ -170,7 +170,7 @@ export function UnderstandingStatusButton() {
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[60] bg-scrim backdrop-blur-sm data-[state=closed]:animate-out data-[state=open]:animate-in motion-reduce:backdrop-blur-none" />
         <div className="pointer-events-none fixed inset-0 z-[61] flex items-center justify-center p-3 sm:p-6">
-          <Dialog.Content className="xopc-understanding-center pointer-events-auto flex h-[min(42rem,calc(100dvh-1.5rem))] w-[min(44rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-[1.75rem] border border-edge bg-surface-panel shadow-float outline-none sm:h-[min(42rem,calc(100dvh-3rem))] sm:w-[min(44rem,calc(100vw-3rem))]">
+          <Dialog.Content className="xopc-understanding-center pointer-events-auto flex h-[min(42rem,calc(100dvh-1.5rem))] w-[min(44rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float outline-none sm:h-[min(42rem,calc(100dvh-3rem))] sm:w-[min(44rem,calc(100vw-3rem))]">
           <header className="flex h-16 shrink-0 items-center justify-between border-b border-edge-subtle px-5 sm:px-6">
             <div>
               <Dialog.Title className="text-sm font-semibold text-fg">

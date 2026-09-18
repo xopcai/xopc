@@ -6,9 +6,9 @@
 <h1 align="center"><a href="https://xopc.ai">xopc</a></h1>
 
 <p align="center">
-  <strong>Keep what matters moving.</strong><br />
-  A personal AI on your computer that remembers your goals and context—<br />
-  and picks up where you left off.
+  <strong>Personal AI for the one-person company.</strong><br />
+  Remember your goals and context, take action across your tools,<br />
+  and pick up where you left off.
 </p>
 
 <p align="center">
@@ -61,7 +61,7 @@
 - **Reduce the burden, not your agency.** Let xopc carry repeatable execution while you keep intent, judgment, creativity, and final decisions.
 - **Stay in control.** It is local-first, sources are authorized separately, and high-impact actions such as sending or deleting require confirmation.
 
-**Keep what matters moving.** xopc keeps context, the next action, evidence, and follow-up together, so important work does not disappear when a chat ends.
+**Your context, carried forward.** xopc keeps context, the next action, evidence, and follow-up together, so important work does not disappear when a chat ends. Built for one, it helps you operate with more continuity and capability without giving up control.
 
 xopc works from desktop, web, terminal, mobile, Telegram, WeChat, and Feishu/Lark, with your choice of cloud or local models.
 

@@ -72,6 +72,7 @@ xopc 的色彩体系遵循**"灰色是主角，蓝色是信号"**的原则。界
 | 用途 | Light Token | Light Hex | Dark Token | Dark Hex |
 |------|-------------|-----------|------------|----------|
 | 主操作按钮 | `bg-accent` | `#3a6bff` | `dark:bg-accent` | `#3a6bff` |
+| 主操作按钮文字 | `text-on-accent` | `#ffffff` | `dark:text-on-accent` | `#ffffff` |
 | 按钮悬浮态 | `bg-accent-hover` | `#315ce6` | `dark:bg-accent-hover` | `#6f91ff` |
 | 柔和强调背景 | `bg-accent-soft` | `#eef3ff` | `dark:bg-accent-soft` | `rgba(58,107,255,0.2)` |
 | 蓝色文字/链接 | `text-accent-fg` | `#2f5ef6` | `dark:text-accent-fg` | `#adc0ff` |
@@ -138,6 +139,7 @@ Gateway 控制台将所有语义 token 写在 **网关控制台的 `globals.css`
 --color-accent-hover: #315ce6;
 --color-accent-soft: #eef3ff;
 --color-accent-fg: #2f5ef6;
+--color-on-accent: #ffffff;
 --color-scrim: rgb(0 0 0 / 0.36);   /* 模态 / 抽屉遮罩，utility: bg-scrim */
 
 /* 圆角 — 映射到 rounded-*；大型曲线只用于大型表面 */
@@ -172,6 +174,7 @@ Gateway 控制台将所有语义 token 写在 **网关控制台的 `globals.css`
 --color-accent-hover: #6f91ff;
 --color-accent-soft: rgb(58 107 255 / 0.2);
 --color-accent-fg: #adc0ff;
+--color-on-accent: #ffffff;
 --color-scrim: rgb(0 0 0 / 0.52);
 /* 深色下 --shadow-* 减弱或改为轻描边式，与 border-edge 配合 */
 ```
