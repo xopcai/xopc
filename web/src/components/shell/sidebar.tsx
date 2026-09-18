@@ -140,7 +140,7 @@ export function SidebarNav({
           onPointerCancel={onResizePointerEnd}
           onKeyDown={onResizeKeyDown}
         >
-          <span className="h-px w-full bg-edge-subtle transition-colors group-hover:bg-edge group-focus-visible:bg-accent" />
+          <span className="h-px w-full bg-transparent transition-colors group-hover:bg-edge group-focus-visible:bg-accent" />
         </div>
       ) : null}
 
