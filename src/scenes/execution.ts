@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { intersectPermissions, sceneContentHash, type SceneActivation, type ScenePermission, type SceneTemplate } from './contracts.js';
 import { SceneRepository } from './repository.js';
+import { SceneSourceNotReady } from './readiness.js';
 
 export const readOnlyResultSchema = z.strictObject({
   kind: z.enum(['no_change', 'observation', 'artifact', 'decision']),
@@ -60,7 +61,7 @@ export class SceneExecutionService {
     if (new Set(providers.map((provider) => provider.id)).size !== providers.length) throw new Error('Duplicate scene context providers');
   }
 
-  async runNext(worker: string, outerSignal?: AbortSignal): Promise<'idle' | 'completed' | 'discarded' | 'failed'> {
+  async runNext(worker: string, outerSignal?: AbortSignal): Promise<'idle' | 'completed' | 'discarded' | 'failed' | 'deferred'> {
     outerSignal?.throwIfAborted();
     const claim = this.repository.claimNext(worker, this.clock(), 620_000);
     if (!claim) return 'idle';
@@ -109,9 +110,13 @@ export class SceneExecutionService {
       const fingerprint = sceneContentHash(evidence.map(({ freshUntil: _freshUntil, ...item }) => item));
       return { evidence, fingerprint, permissions };
     };
-    const execute = async (): Promise<'completed' | 'discarded'> => {
+    const execute = async (): Promise<'completed' | 'discarded' | 'deferred' | 'failed'> => {
       const snapshot = await readContext();
       if (!this.repository.saveSnapshot(claim, snapshot.fingerprint, snapshot.evidence.map((item) => item.id), this.clock())) return 'discarded';
+      if (snapshot.evidence.length > 0 && !this.repository.reserveModelCall(claim, this.clock())) {
+        const now = this.clock();
+        return this.repository.deferRun(claim, now, 'daily_budget', (Math.floor(now / 86_400_000) + 1) * 86_400_000);
+      }
       const raw = snapshot.evidence.length === 0
         ? { kind: 'no_change', summary: '', evidenceIds: [] }
         : await this.executor.execute({ template, goal: activation.goal, evidence: snapshot.evidence, signal: controller.signal });
@@ -126,6 +131,9 @@ export class SceneExecutionService {
     try {
       return await Promise.race([execute(), aborted]);
     } catch (error) {
+      if (!controller.signal.aborted && error instanceof SceneSourceNotReady) {
+        return this.repository.deferRun(claim, this.clock(), 'source_not_ready', this.clock() + 60_000);
+      }
       this.repository.failRun(claim, this.clock(), controller.signal.aborted ? 'execution_aborted' : error instanceof SceneExecutionRejected ? error.reason : 'execution_failed');
       return 'failed';
     } finally {

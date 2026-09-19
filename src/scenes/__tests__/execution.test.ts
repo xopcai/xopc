@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SceneExecutionService, type SceneContextProvider, type SceneEvidence } from '../execution.js';
 import { SceneRepository } from '../repository.js';
 import { mailFollowUpTemplate } from '../templates.js';
+import { SceneSourceNotReady } from '../readiness.js';
 
 describe('scene read-only execution', () => {
   let db: DatabaseSync;
@@ -123,5 +124,28 @@ describe('scene read-only execution', () => {
     resolve(result);
     await Promise.resolve(); await Promise.resolve();
     expect(db.prepare('SELECT count(*) AS n FROM scene_outcomes').get()?.n).toBe(0);
+  });
+
+  it('defers stale synchronization without calling the model, then recovers', async () => {
+    read.mockRejectedValueOnce(new SceneSourceNotReady());
+    let now = 1001;
+    const runtime = new SceneExecutionService(repository, [{ id: 'mail', read }], { execute }, authorize, () => now);
+    expect(await runtime.runNext('worker')).toBe('deferred');
+    expect(execute).not.toHaveBeenCalled();
+    expect(db.prepare('SELECT count(*) AS n FROM scene_model_reservations').get()?.n).toBe(0);
+    expect(await runtime.runNext('worker')).toBe('idle');
+    now += 60_000;
+    expect(await runtime.runNext('worker')).toBe('completed');
+    expect(execute).toHaveBeenCalledOnce();
+    expect(db.prepare('SELECT attempt FROM scene_runs').get()?.attempt).toBe(1);
+  });
+
+  it('defers an exhausted budget before model invocation', async () => {
+    const reservation = vi.spyOn(repository, 'reserveModelCall').mockReturnValueOnce(false);
+    expect(await service().runNext('worker')).toBe('deferred');
+    expect(execute).not.toHaveBeenCalled();
+    expect(db.prepare('SELECT status, reason, retry_at FROM scene_runs').get())
+      .toMatchObject({ status: 'retry_wait', reason: 'daily_budget', retry_at: 86_400_000 });
+    reservation.mockRestore();
   });
 });

@@ -63,4 +63,49 @@ describe('scene application service', () => {
     expect(db.prepare('SELECT occurred_at FROM scene_events').get()?.occurred_at).toBe(1000);
     expect(db.prepare('SELECT count(*) AS n FROM scene_trigger_intents').get()?.n).toBe(1);
   });
+  it('rechecks current grants before resuming without changing a denied scene', async () => {
+    const activation = await service.start(principal, input, 'request');
+    const paused = await service.transition(principal, activation.id, { expectedRevision: activation.revision, status: 'paused' });
+    authorize.mockResolvedValue({ ...permissions, accountIds: [] });
+    await expect(service.transition(principal, activation.id, { expectedRevision: paused.revision, status: 'active' })).rejects.toThrow('setup');
+    expect(repository.getActivation(principal, activation.id)).toEqual(paused);
+  });
+  it('fences a resume when activation changes while authorization is in flight', async () => {
+    const activation = await service.start(principal, input, 'request');
+    const paused = await service.transition(principal, activation.id, { expectedRevision: activation.revision, status: 'paused' });
+    authorize.mockImplementationOnce(async () => {
+      repository.transitionActivation(principal, activation.id, paused.revision, 'archived');
+      return permissions;
+    });
+    await expect(service.transition(principal, activation.id, { expectedRevision: paused.revision, status: 'active' })).rejects.toThrow('changed');
+    expect(repository.getActivation(principal, activation.id).status).toBe('archived');
+  });
+  it('configuration revokes execution immediately and requires explicit setup again', async () => {
+    const activation = await service.start(principal, input, 'request');
+    const item = repository.createWorkItem(principal, activation.id, { subjectId: 'message:1', accountId: 'personal', dueAt: 2000 }, now);
+    service.check(principal, activation.id, 'check');
+    const claim = repository.claimNext('worker', now)!;
+    const configured = service.configure(principal, activation.id, {
+      expectedRevision: activation.revision, goal: 'Different thread', scope: { kind: 'objects', ids: ['message:2'] }, permissions,
+    });
+    expect(configured.status).toBe('needs_setup');
+    expect(configured.revision).toBe(activation.revision + 1);
+    expect(repository.getRunInput(claim, now)).toBeNull();
+    expect(repository.listWatchingWorkItems(principal)).toEqual([]);
+    await service.transition(principal, activation.id, { expectedRevision: configured.revision, status: 'active' });
+    expect(() => service.updateWorkItem(principal, item.id, { expectedRevision: item.revision + 1, status: 'watching' })).toThrow('scope');
+  });
+  it('allows revocation without requiring the revoked permission to remain available', async () => {
+    const activation = await service.start(principal, input, 'request');
+    authorize.mockResolvedValue({ accountIds: [], contextProviders: [], effectHandlers: [] });
+    const configured = service.configure(principal, activation.id, { expectedRevision: activation.revision,
+      goal: input.goal, scope: input.scope, permissions: { accountIds: [], contextProviders: [], effectHandlers: [] } });
+    expect(configured.status).toBe('needs_setup');
+    await expect(service.transition(principal, activation.id, { expectedRevision: configured.revision, status: 'active' })).rejects.toThrow('setup');
+  });
+  it('does not let configuration changes replace a pinned template', async () => {
+    const activation = await service.start(principal, input, 'request');
+    expect(() => service.configure(principal, activation.id, { expectedRevision: activation.revision, ...input })).toThrow();
+    expect(repository.getActivation(principal, activation.id)).toEqual(activation);
+  });
 });

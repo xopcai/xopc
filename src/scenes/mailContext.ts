@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 
 import type { SceneContextProvider, SceneEvidence } from './execution.js';
+import { SceneSourceNotReady } from './readiness.js';
 
 type MailRow = {
   item_id: string; source_instance_id: string; collection_scope: string; content_hash: string;
@@ -32,7 +33,7 @@ export class SceneMailContextProvider implements SceneContextProvider {
       .get(origin.source_instance_id, origin.collection_scope) as { status: string; started_at: number; finished_at: number | null } | undefined;
     const now = this.clock();
     if (!sync || sync.status !== 'succeeded' || sync.finished_at === null || sync.finished_at < sync.started_at || sync.started_at > now || sync.finished_at > now
-      || sync.started_at + 30 * 60_000 <= now || (input.notBefore !== undefined && sync.started_at < input.notBefore)) throw new Error('Mail synchronization is stale or incomplete');
+      || sync.started_at + 30 * 60_000 <= now || (input.notBefore !== undefined && sync.started_at < input.notBefore)) throw new SceneSourceNotReady();
     const messages = this.db.prepare(`SELECT * FROM knowledge_source_items
       WHERE source_instance_id = ? AND collection_scope = ? AND item_type = 'email' AND deleted_at IS NULL
       AND json_valid(normalized_text) AND json_valid(metadata_json)

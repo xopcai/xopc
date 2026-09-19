@@ -41,6 +41,8 @@ CREATE TABLE scene_work_items (
   status TEXT NOT NULL CHECK(status IN ('watching', 'paused', 'completed')),
   last_triggered_revision INTEGER,
   last_check_reason TEXT,
+  observed_fingerprint TEXT,
+  observation_sequence INTEGER NOT NULL DEFAULT 0,
   UNIQUE(activation_id, account_id, subject_id)
 );
 
@@ -71,6 +73,16 @@ CREATE TABLE scene_trigger_intents (
 );
 CREATE INDEX scene_intents_due ON scene_trigger_intents(status, due_at);
 
+CREATE TABLE scene_schedule_cursors (
+  activation_id TEXT NOT NULL REFERENCES scene_activations(id),
+  trigger_key TEXT NOT NULL,
+  schedule_json TEXT NOT NULL CHECK(json_valid(schedule_json)),
+  revision INTEGER NOT NULL CHECK(revision > 0),
+  next_due_at INTEGER NOT NULL,
+  PRIMARY KEY(activation_id, trigger_key)
+);
+CREATE INDEX scene_schedules_due ON scene_schedule_cursors(next_due_at);
+
 CREATE TABLE scene_runs (
   id TEXT PRIMARY KEY,
   intent_id TEXT NOT NULL UNIQUE REFERENCES scene_trigger_intents(id),
@@ -86,6 +98,15 @@ CREATE TABLE scene_runs (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX scene_runs_lease ON scene_runs(status, lease_until);
+CREATE TABLE scene_model_reservations (
+  run_id TEXT NOT NULL REFERENCES scene_runs(id),
+  lease_epoch INTEGER NOT NULL,
+  owner_id TEXT NOT NULL,
+  activation_id TEXT NOT NULL REFERENCES scene_activations(id),
+  reserved_at INTEGER NOT NULL,
+  PRIMARY KEY(run_id, lease_epoch)
+);
+CREATE INDEX scene_model_budget ON scene_model_reservations(owner_id, reserved_at);
 CREATE UNIQUE INDEX scene_runs_single_active ON scene_runs(activation_id) WHERE status IN ('running', 'retry_wait');
 
 CREATE TABLE scene_context_snapshots (
@@ -111,4 +132,12 @@ CREATE TABLE scene_presentations (
   destination TEXT NOT NULL CHECK(destination = 'inbox'),
   status TEXT NOT NULL CHECK(status IN ('unread', 'read', 'withdrawn')),
   created_at INTEGER NOT NULL
+);
+
+CREATE TABLE scene_feedback (
+  presentation_id TEXT PRIMARY KEY REFERENCES scene_presentations(id),
+  rating TEXT NOT NULL CHECK(rating IN ('useful', 'not_useful')),
+  note TEXT NOT NULL,
+  revision INTEGER NOT NULL CHECK(revision > 0),
+  updated_at INTEGER NOT NULL
 );
