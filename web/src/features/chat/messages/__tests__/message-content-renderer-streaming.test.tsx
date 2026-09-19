@@ -9,6 +9,7 @@ import { ChunkedContent } from '@/features/chat/messages/message-content-rendere
 import { AssistantStepsBlock } from '@/features/chat/messages/assistant-steps-block';
 import type { AssistantTurnWorkLogPresentation } from '@/features/chat/messages/assistant-turn-view-model';
 import type { MessageContent } from '@/features/chat/messages/messages.types';
+import { useDevViewStore } from '@/stores/dev-view-store';
 import { messages } from '@/i18n/messages';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 import { ExtensionProvider } from '@/features/extensions/extension-provider';
@@ -67,12 +68,14 @@ describe('streaming assistant Markdown rendering', () => {
     document.body.append(container);
     root = createRoot(container);
     useWorkspacePreviewStore.getState().setPath(null);
+    useDevViewStore.setState({ showRawToolData: false });
   });
 
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
     useWorkspacePreviewStore.getState().setPath(null);
+    useDevViewStore.setState({ showRawToolData: false });
     vi.useRealTimers();
   });
 
@@ -113,6 +116,77 @@ describe('streaming assistant Markdown rendering', () => {
       );
     });
   }
+
+  it('hides ordinary compact activity after completion and never offers a drawer', () => {
+    const tool = { type: 'tool_use', id: 'r', name: 'read_file', status: 'done', input: { path: 'secret.txt' } } as const;
+    const workLog = { items: [tool], active: true, status: 'running', expandedByDefault: false, compact: true } as const;
+    render([], true, false, { ...workLog, items: [tool] });
+    expect(container.textContent).toContain('mixed');
+    expect(container.textContent).not.toContain('secret.txt');
+    expect(container.querySelector('button[aria-expanded]')).toBeNull();
+    render([], false, false, { ...workLog, items: [tool], active: false, status: 'completed' });
+    expect(container.textContent).toBe('');
+  });
+
+  it('hides thinking rows normally and exposes them only in debug details', () => {
+    const workLog: AssistantTurnWorkLogPresentation = {
+      items: [{ type: 'thinking', text: 'Private reasoning', streaming: true }],
+      active: true, status: 'running', expandedByDefault: true, compact: false,
+    };
+    render([], true, false, workLog);
+    expect(container.textContent).not.toContain('Private reasoning');
+    expect(container.querySelector('button[aria-expanded]')).toBeNull();
+    act(() => useDevViewStore.setState({ showRawToolData: true }));
+    expect(container.querySelector('details')?.textContent).toContain('Private reasoning');
+  });
+
+  it.each([false, true])('respects explicit expansion on completion: %s', (manual) => {
+    const workLog: AssistantTurnWorkLogPresentation = {
+      items: [{ type: 'tool_use', id: 'r', name: 'read_file', status: 'running' }],
+      active: true, status: 'running', expandedByDefault: true, compact: false,
+    };
+    render([], true, false, workLog);
+    expect(container.querySelector('button[aria-expanded="true"]')).not.toBeNull();
+    if (manual) {
+      act(() => container.querySelector<HTMLButtonElement>('button[aria-expanded]')?.click());
+      act(() => container.querySelector<HTMLButtonElement>('button[aria-expanded]')?.click());
+    }
+    render([], false, false, { ...workLog, active: false, status: 'completed', expandedByDefault: false });
+    expect(container.querySelector('button[aria-expanded]')?.getAttribute('aria-expanded')).toBe(String(manual));
+  });
+
+  it.each(['off', 'on', 'stream'] as const)('keeps browser approvals visible in %s mode', (mode) => {
+    const tool = {
+      type: 'tool_use', id: 'approval', name: 'browser_use', status: 'done',
+      details: { kind: 'browser_approval_required', error: { approval: {
+        id: 'approval-1', risk: 'external_effect', summary: 'Confirm publishing the article', expiresAt: '2099-01-01T00:00:00Z',
+      } } },
+    } as const;
+    render([], false, false, {
+      items: [tool], active: false, status: 'completed', expandedByDefault: false, compact: mode === 'off',
+    });
+    expect(container.textContent).toContain('Confirm publishing the article');
+    expect(container.querySelector('.assistant-steps-scroll')).toBeNull();
+  });
+
+  it('keeps errors visible in compact mode without a success title', () => {
+    render([], false, false, {
+      items: [{ type: 'tool_use', id: 'r', name: 'read_file', status: 'error', result: 'Permission denied' }],
+      active: false, status: 'failed', expandedByDefault: false, compact: true,
+    });
+    expect(container.textContent).toContain('Permission denied');
+    expect(container.textContent).not.toContain('Read file');
+    expect(container.querySelector('button[aria-expanded]')).toBeNull();
+  });
+
+  it('keeps file delivery cards visible when normal activity is hidden', () => {
+    render([], false, false, {
+      items: [{ type: 'tool_use', id: 'w', name: 'write_file', status: 'done', input: { path: 'proposal.md', content: 'Proposal' } }],
+      active: false, status: 'completed', expandedByDefault: false, compact: true,
+    });
+    expect(container.textContent).toContain('proposal.md');
+    expect(container.querySelector('button[aria-expanded]')).toBeNull();
+  });
 
   it('opens Sidechat workspace links against the parent conversation', () => {
     render(
@@ -313,6 +387,7 @@ describe('streaming assistant Markdown rendering', () => {
       active: false,
       status: 'completed',
       expandedByDefault: false,
+      compact: false,
     });
 
     const disclosureButtons = container.querySelectorAll('button[aria-expanded]');
@@ -338,6 +413,7 @@ describe('streaming assistant Markdown rendering', () => {
       active: true,
       status: 'running',
       expandedByDefault: false,
+      compact: false,
       startedAt: 1_000,
       durationMs: 1_000,
     });
@@ -346,7 +422,7 @@ describe('streaming assistant Markdown rendering', () => {
     expect(container.textContent).toContain('30');
   });
 
-  it('keeps a failed tool neutral and shows its reason only inside the expanded trace', () => {
+  it('keeps a failed tool reason visible outside the collapsed trace', () => {
     const failedTool = {
       type: 'tool_use',
       id: 'command-1',
@@ -360,10 +436,11 @@ describe('streaming assistant Markdown rendering', () => {
       active: false,
       status: 'failed',
       expandedByDefault: false,
+      compact: false,
     });
 
-    expect(container.textContent).toContain('Work log');
-    expect(container.textContent).not.toContain('Exit 1');
+    expect(container.textContent).toContain('Failed after');
+    expect(container.textContent).toContain('Exit 1');
     const disclosure = container.querySelector<HTMLButtonElement>('button[aria-expanded="false"]');
     act(() => disclosure?.click());
 
@@ -387,6 +464,7 @@ describe('streaming assistant Markdown rendering', () => {
       active: false,
       status: 'completed',
       expandedByDefault: false,
+      compact: false,
     });
 
     const disclosure = container.querySelector<HTMLButtonElement>('button[aria-expanded="false"]');
@@ -395,6 +473,7 @@ describe('streaming assistant Markdown rendering', () => {
   });
 
   it('keeps expanded assistant activity in a bounded scroll region', () => {
+    useDevViewStore.setState({ showRawToolData: true });
     const thinking = { type: 'thinking', text: 'Long reasoning', streaming: false } as const;
 
     render([thinking], false, false, {
@@ -402,6 +481,7 @@ describe('streaming assistant Markdown rendering', () => {
       active: false,
       status: 'completed',
       expandedByDefault: false,
+      compact: false,
     });
 
     const disclosure = container.querySelector<HTMLButtonElement>('button[aria-expanded="false"]');
