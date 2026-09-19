@@ -39,6 +39,7 @@ const ToolExecuteSchema = Type.Object({
   revision: Type.String({ description: 'Exact contract revision returned by xopc_tool_describe.' }),
   arguments: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
   approvalId: Type.Optional(Type.String({ description: 'One-time approval id when execution requested confirmation.' })),
+  readOnly: Type.Optional(Type.Boolean({ description: 'Require a host-curated batchRead contract; never permits unapproved operations.' })),
 });
 
 function textResult(value: unknown, details: Record<string, unknown> = {}): AgentToolResult<Record<string, unknown>> {

@@ -86,6 +86,11 @@ function assertSuite(value: unknown): asserts value is RawSuite {
     if (caseIds.has(evalCase.id)) throw new Error(`Duplicate case id: ${evalCase.id}`);
     caseIds.add(evalCase.id);
     for (const grader of evalCase.graders) {
+      if (grader.type === 'answer_contains' && (!Array.isArray(grader.all) || grader.all.length === 0
+        || grader.all.some(value => typeof value !== 'string' || !value.trim())
+        || (grader.none !== undefined && (!Array.isArray(grader.none) || grader.none.some(value => typeof value !== 'string'))))) {
+        throw new Error(`Case ${evalCase.id} has invalid answer assertions`);
+      }
       if (grader.weight !== undefined && (!Number.isFinite(grader.weight) || grader.weight < 0)) {
         throw new Error(`Case ${evalCase.id} has an invalid grader weight`);
       }
@@ -399,6 +404,7 @@ export class EvalRunner {
           workspace: environment.workspace,
           artifactStore: this.artifactStore,
           store: this.store,
+          finalText: agent.finalText,
         });
         grades.push(grade);
         this.store.recordGrade(runId, grade);

@@ -42,6 +42,7 @@ function descriptorRevision(descriptor: Omit<VersionedExternalToolDescriptor, 'r
       toolRef: descriptor.toolRef,
       description: descriptor.description,
       inputSchema: descriptor.inputSchema,
+      batchRead: descriptor.batchRead === true,
     }))
     .digest('hex')
     .slice(0, 16);
@@ -143,6 +144,7 @@ export class ExternalToolService {
     revision: string;
     arguments?: Record<string, unknown>;
     approvalId?: string;
+    readOnly?: boolean;
     context: ExternalToolExecutionContext;
   }) {
     const provider = this.providerForRef(params.toolRef);
@@ -150,10 +152,14 @@ export class ExternalToolService {
     const descriptor = await provider.describe(params.toolRef);
     if (!descriptor) throw new Error(`External tool is unavailable: ${params.toolRef}`);
     const current = versionDescriptor(descriptor);
+    if (params.readOnly && current.batchRead !== true) throw new Error('This external operation is not approved for batch reads');
     if (current.revision !== params.revision) {
       throw new Error(`Tool contract changed. Describe ${params.toolRef} again before executing it.`);
     }
     const args = params.arguments ?? {};
+    if (params.readOnly && provider.source === 'composio' && (typeof args.xopcAccountId !== 'string' || !args.xopcAccountId)) {
+      throw new Error('Batch connector reads require an explicit xopcAccountId');
+    }
     let validate: ReturnType<typeof this.ajv.compile>;
     try {
       validate = this.ajv.compile(current.inputSchema);

@@ -28,6 +28,7 @@ import {
 import type { MessageBus } from '../../infra/bus/index.js';
 import {
   createReadFileTool,
+  createDataBatchTool,
   createWriteFileTool,
   createApplyPatchTool,
   createListDirTool,
@@ -86,6 +87,7 @@ import { createComputerUseTool } from './computer-use-tool.js';
 import { createReviewWorkspaceTool } from './review-workspace.js';
 import { createLanguageDiagnosticsTool } from './language-diagnostics.js';
 import { createDelegateTool } from './delegate-tool.js';
+import { createDelegationParentPolicy } from './delegation-parent-policy.js';
 import { createWorkflowTool } from './workflow-tool.js';
 import { createWorkflowCatalog } from '../workflow/catalog.js';
 import type { AutomationService } from '../../automations/index.js';
@@ -171,6 +173,8 @@ export interface ToolFactoryDeps {
 }
 
 export interface CreateCoreToolsOptions {
+  getParentTools?: () => AgentTool<any, any>[];
+  createDelegationPolicy?: () => import('../orchestration/agent-turn-policy.js').AgentTurnPolicy;
   /** Workspace root for file/command tools (defaults to factory workspace). */
   workspace?: string;
   /** Canonical `agents/<id>/profile/`: bare SOUL.md / IDENTITY.md resolve here after the workspace. */
@@ -639,6 +643,10 @@ export class AgentToolsFactory {
         ? [
             createDelegateTool({
               workspace,
+              getParentTools: () => options?.getParentTools?.() ?? filterToolsByDisabledSet(core, disabled),
+              createParentPolicy: options?.createDelegationPolicy ?? (() => createDelegationParentPolicy({
+                getConfig: () => this.deps.getConfig?.(), conversationId: currentConversationId(), agentId: resolvedAgentId,
+              })),
               getSubagentModel: () => {
                 const gp = options?.getPrimaryModel ?? this.deps.getPrimaryModel;
                 const m = gp?.();
@@ -649,7 +657,11 @@ export class AgentToolsFactory {
               },
               bus: this.deps.bus,
               getConfig: () => this.deps.getConfig?.(),
-              getCurrentContext: () => this.deps.getCurrentContext?.() ?? null,
+              getCurrentContext: () => {
+                const context = this.deps.getCurrentContext?.();
+                const conversationId = currentConversationId();
+                return conversationId ? { ...context, conversationId } : context ?? null;
+              },
               toolExecutorConfig: this.deps.toolExecutorConfig,
               // Injected so `child-agent-factory.ts` does not need to import
               // `AgentToolsFactory` directly (which would form a cycle).
@@ -669,6 +681,7 @@ export class AgentToolsFactory {
                   agentId: options?.agentId ?? childOpts.agentId,
                   conversationId: childOpts.browserConversationId,
                   disabledTools: new Set([
+                    ...(disabled ?? []),
                     EXTERNAL_TOOL_NAMES.search,
                     EXTERNAL_TOOL_NAMES.describe,
                     EXTERNAL_TOOL_NAMES.execute,
@@ -683,6 +696,21 @@ export class AgentToolsFactory {
       ...optionalTools,
     ];
 
+    if (['read_file', 'grep', 'exec_command', 'knowledge_search', 'knowledge_get', 'web_search', 'web_fetch', 'xopc_tool_execute'].some(name => !disabled?.has(name))) {
+      const dataTools = () => {
+        const config = this.deps.getConfig?.();
+        const policies = config ? (currentConversationId()
+          ? resolveEffectiveAgentConfigForSession(config, currentConversationId())
+          : resolveEffectiveAgentConfigForAgent(config, resolvedAgentId)).config.tools : undefined;
+        if (policies?.data_batch?.mode === 'deny') return [];
+        return filterToolsByDisabledSet(core, disabled).filter(tool => policies?.[tool.name]?.mode !== 'deny');
+      };
+      core.push(createDataBatchTool(workspace, () => new Set(dataTools().map(tool => tool.name)), {
+        getTools: dataTools,
+        canExecute: name => dataTools().some(tool => tool.name === name),
+        allowHostGit: () => getCommandIsolation()?.mode !== 'docker',
+      }));
+    }
     return filterToolsByDisabledSet(core, disabled);
   }
 

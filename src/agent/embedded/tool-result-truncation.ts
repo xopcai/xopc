@@ -4,6 +4,7 @@ import type { TextContent } from '@earendil-works/pi-ai';
 import type { Config } from '../../config/schema.js';
 import { normalizeLowercaseStringOrEmpty } from '../../utils/string-coerce.js';
 import { formatContextLimitTruncationNotice } from './tool-result-context-guard.js';
+import { isDataBatchResult, renderDataBatch } from '../data-acquisition/render.js';
 
 const MAX_TOOL_RESULT_CONTEXT_SHARE = 0.3;
 
@@ -191,6 +192,13 @@ export function truncateToolResultMessage(
   const totalTextChars = getToolResultTextLength(msg);
   if (totalTextChars <= maxChars) {
     return msg;
+  }
+
+  if ((msg as { toolName?: string }).toolName === 'data_batch' && content.length === 1 && content[0]?.type === 'text') {
+    try {
+      const batch: unknown = JSON.parse(content[0].text);
+      if (isDataBatchResult(batch)) return { ...msg, content: [{ type: 'text', text: renderDataBatch(batch, maxChars).text }] } as AgentMessage;
+    } catch { /* Unknown or historical text results use the ordinary truncation path. */ }
   }
 
   const newContent = content.map((block: unknown) => {

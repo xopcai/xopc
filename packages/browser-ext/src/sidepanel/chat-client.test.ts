@@ -25,7 +25,9 @@ import { BrowserChatClient, type BrowserChatSnapshot } from './chat-client';
 type ClientInternals = {
   snapshot: BrowserChatSnapshot;
   turnClaim?: { endpointId: string; token: string };
+  runTopic?: string;
   reloadMessages(): Promise<void>;
+  onRealtimeEvent(topic: string, seq: number, event: string, data: unknown): Promise<void>;
   update(patch: Partial<BrowserChatSnapshot>): void;
 };
 
@@ -93,6 +95,7 @@ describe('BrowserChatClient delivery safety', () => {
       modelConfig: {
         model: 'test/first',
         thinkingLevel: 'high',
+        activityDetail: 'on',
         configVersion: 7,
         fixedModel: true,
       },
@@ -115,6 +118,7 @@ describe('BrowserChatClient delivery safety', () => {
     expect(internals(client).snapshot.modelConfig).toEqual({
       model: 'test/second',
       thinkingLevel: 'low',
+      activityDetail: 'on',
       configVersion: 8,
       fixedModel: true,
     });
@@ -129,7 +133,10 @@ describe('BrowserChatClient delivery safety', () => {
     await expect(client.send('hello')).resolves.toBe('queued');
 
     expect(internals(client).snapshot).toMatchObject({ submitting: false, pendingDelivery: true });
-    expect(internals(client).snapshot.messages.at(-1)).toMatchObject({ role: 'user', text: 'hello' });
+    expect(internals(client).snapshot.messages.at(-1)).toMatchObject({
+      role: 'user',
+      blocks: [{ type: 'text', text: 'hello' }],
+    });
     expect(outbox.has('chat:one')).toBe(true);
     await expect(client.send('send twice')).rejects.toThrow('queued message');
     expect(gatewayFetch).toHaveBeenCalledTimes(2);
@@ -163,7 +170,9 @@ describe('BrowserChatClient delivery safety', () => {
     await expect(client.send('accepted')).resolves.toBe('sent');
 
     expect(internals(client).snapshot).toMatchObject({ submitting: false, pendingDelivery: false });
-    expect(internals(client).snapshot.messages.at(-1)).toMatchObject({ text: 'accepted' });
+    expect(internals(client).snapshot.messages.at(-1)).toMatchObject({
+      blocks: [{ type: 'text', text: 'accepted' }],
+    });
     expect(internals(client).snapshot.error).toContain('Message sent');
     expect(outbox.has('chat:one')).toBe(false);
     expect(gatewayFetch).toHaveBeenCalledTimes(3);
@@ -223,7 +232,7 @@ describe('BrowserChatClient delivery safety', () => {
     expect(internals(client).snapshot.messages).toEqual([{
       id: 'message-with-file',
       role: 'user',
-      text: '',
+      blocks: [],
       attachments: [{ type: 'image', mimeType: 'image/png', name: 'diagram.png', size: 2048 }],
     }]);
     expect(JSON.stringify(internals(client).snapshot.messages)).not.toContain('/private/path');
@@ -268,7 +277,7 @@ describe('composer delivery concurrency', () => {
 describe('composer model and run state', () => {
   it('includes the selected fixed model version in the submitted input', async () => {
     const client = readyClient();
-    internals(client).update({ modelConfig: { model: 'test/one', thinkingLevel: 'high', fixedModel: true, configVersion: 7 } });
+    internals(client).update({ modelConfig: { model: 'test/one', thinkingLevel: 'high', activityDetail: 'on', fixedModel: true, configVersion: 7 } });
     gatewayFetch.mockResolvedValueOnce(response({ ok: true }))
       .mockResolvedValueOnce(response({ payload: { state: { activeRunId: 'run-one', inputs: [] } } }));
     await client.send('hello');
@@ -278,11 +287,41 @@ describe('composer model and run state', () => {
 
   it('clears the previous stream when the next queued run starts', async () => {
     const client = readyClient();
-    internals(client).update({ runId: 'old-run', streamingText: 'old response' });
+    internals(client).update({ runId: 'old-run', streamingMessage: { id: 'old', role: 'assistant', blocks: [{ type: 'text', text: 'old response' }] } });
     internals(client).reloadMessages = vi.fn().mockResolvedValue(undefined);
     gatewayFetch.mockResolvedValueOnce(response({ payload: { activeRunId: 'new-run', inputs: [] } }));
     await client.refreshInputs();
     expect(internals(client).reloadMessages).toHaveBeenCalled();
-    expect(internals(client).snapshot).toMatchObject({ runId: 'new-run', streamingText: '' });
+    expect(internals(client).snapshot).toMatchObject({ runId: 'new-run', streamingMessage: { id: 'stream:new-run', blocks: [] } });
+  });
+
+  it('reduces thinking and tool events into the live assistant message', async () => {
+    const client = readyClient();
+    const state = internals(client);
+    state.runTopic = 'run:run-one';
+    state.update({ runId: 'run-one' });
+
+    await state.onRealtimeEvent('run:run-one', 1, 'thinking_delta', {
+      timestamp: 10,
+      payload: { delta: 'inspect' },
+    });
+    await state.onRealtimeEvent('run:run-one', 2, 'tool_start', {
+      timestamp: 20,
+      payload: { toolCallId: 'call-1', toolName: 'read_file' },
+    });
+    await state.onRealtimeEvent('run:run-one', 3, 'tool_end', {
+      timestamp: 30,
+      payload: { toolCallId: 'call-1', toolName: 'read_file', status: 'success' },
+    });
+    await state.onRealtimeEvent('run:run-one', 4, 'assistant_delta', {
+      timestamp: 40,
+      payload: { messageId: 'answer-1', delta: 'done' },
+    });
+
+    expect(state.snapshot.streamingMessage?.blocks).toMatchObject([
+      { type: 'thinking', text: 'inspect', streaming: false },
+      { type: 'tool', toolCallId: 'call-1', status: 'done' },
+      { type: 'text', text: 'done' },
+    ]);
   });
 });

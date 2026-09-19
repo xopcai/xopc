@@ -27,7 +27,48 @@ import { evictEmbeddedSessionRunner } from '../session-runner.js';
 import { createApplyPatchTool } from '../../tools/apply-patch.js';
 import { createExecCommandTool } from '../../tools/exec-command.js';
 import { createReviewWorkspaceTool } from '../../tools/review-workspace.js';
+import { createReadFileTool } from '../../tools/read.js';
+import { createDataBatchTool } from '../../tools/dataBatch.js';
 import { createAgentTurnPolicy } from '../../orchestration/agent-turn-policy.js';
+
+it('delivers batch evidence through the real session and tool-result guard in two model rounds', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'data-harness-'));
+  const conversationId = crypto.randomUUID();
+  let round = 0;
+  try {
+    await writeFile(join(root, 'a.md'), 'Alice: accessibility review');
+    await writeFile(join(root, 'b.md'), 'Bob: Friday migration');
+    scripted.stream.mockImplementation((_model, context) => {
+      const first = round++ === 0;
+      if (!first) {
+        const toolResult = context.messages.findLast((message: any) => message.role === 'toolResult' && message.toolName === 'data_batch');
+        expect(toolResult.content[0].text).toContain('Alice');
+        expect(toolResult.content[0].text).toContain('Friday');
+        expect(JSON.parse(toolResult.content[0].text).operations).toHaveLength(2);
+      }
+      const message = { role: 'assistant', api: 'openai-completions', provider: 'openai', model: 'gpt-4.1',
+        content: first ? [{ type: 'toolCall', id: 'batch', name: 'data_batch', arguments: { operations: [
+          { id: 'a', kind: 'file_read', path: 'a.md' }, { id: 'b', kind: 'file_read', path: 'b.md' },
+        ] } }] : [{ type: 'text', text: 'Alice reviews accessibility; Bob migrates on Friday.' }],
+        stopReason: first ? 'toolUse' : 'stop', timestamp: Date.now(),
+        usage: { input: 10, output: 10, cacheRead: 0, cacheWrite: 0, totalTokens: 20, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      } as AssistantMessage;
+      const stream = createAssistantMessageEventStream();
+      stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse', message });
+      return stream;
+    });
+    const result = await runXopcEmbeddedTurn({ conversationId, runId: 'data-test', workspaceDir: root,
+      transcriptRuntime: new InMemoryTranscriptRuntime({ runtimeId: conversationId, cwd: root }),
+      userMessage: { role: 'user', content: 'Summarize both notes.', timestamp: Date.now() },
+      systemPrompt: 'Use the notes and cite their decisions.', modelRef: 'openai/gpt-4.1', timeoutMs: 10000,
+      model: { id: 'gpt-4.1', name: 'Test', provider: 'openai', api: 'openai-completions', baseUrl: 'https://example.invalid', reasoning: false, input: ['text'], contextWindow: 128000, maxTokens: 4096, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } },
+      tools: [createReadFileTool(root), createDataBatchTool(root, () => new Set(['read_file']))],
+      turnPolicy: createAgentTurnPolicy({ maxTurns: 3 }),
+    });
+    expect(result).toMatchObject({ ok: true, lastAssistantText: 'Alice reviews accessibility; Bob migrates on Friday.' });
+    expect(round).toBe(2);
+  } finally { evictEmbeddedSessionRunner(conversationId); await rm(root, { recursive: true, force: true }); }
+}, 15000);
 
 it('runs a real AgentSession through edit, early completion, bounded repair and final evidence', async () => {
   const root = await mkdtemp(join(tmpdir(), 'coding-harness-'));

@@ -133,7 +133,13 @@ export interface FileContainsGraderSpec extends GraderPolicy {
   text: string;
 }
 
-export type GraderSpec = CommandGraderSpec | UnchangedGraderSpec | FileContainsGraderSpec;
+export interface AnswerContainsGraderSpec extends GraderPolicy {
+  type: 'answer_contains';
+  all: string[];
+  none?: string[];
+}
+
+export type GraderSpec = CommandGraderSpec | UnchangedGraderSpec | FileContainsGraderSpec | AnswerContainsGraderSpec;
 
 export interface EvalCase {
   id: string;

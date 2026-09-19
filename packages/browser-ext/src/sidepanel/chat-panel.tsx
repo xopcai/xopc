@@ -7,6 +7,8 @@ import { VoiceInput } from './voice-input';
 import { QueuedInput } from './queued-input';
 import { findCommand, loadComposerCommands, matchesCommandQuery, type ComposerCommand } from './composer-commands';
 import { ComposerPreviewDialog, type ComposerPreview } from './composer-preview';
+import { AssistantActivity } from './assistant-activity';
+import { messageText } from './chat-message-model';
 
 import { extensionLocale, t } from '../i18n';
 import {
@@ -67,7 +69,6 @@ const EMPTY: BrowserChatSnapshot = {
   pendingDelivery: false,
   sessions: [],
   messages: [],
-  streamingText: '',
   models: [],
 };
 
@@ -236,7 +237,7 @@ export function ChatPanel({ gatewayId }: { gatewayId: string }) {
 
   useEffect(() => {
     if (followingTail.current) scrollToBottom();
-  }, [scrollToBottom, snapshot.messages, snapshot.streamingText]);
+  }, [scrollToBottom, snapshot.messages, snapshot.streamingMessage]);
 
   useEffect(() => {
     followingTail.current = true;
@@ -574,7 +575,7 @@ export function ChatPanel({ gatewayId }: { gatewayId: string }) {
         {snapshot.sessionLoading ? (
           <div className="message-skeleton" aria-label={t('loadingChat')}><span /><span /><span /></div>
         ) : null}
-        {!snapshot.sessionLoading && !snapshot.messages.length && !snapshot.streamingText ? (
+        {!snapshot.sessionLoading && !snapshot.messages.length && !snapshot.streamingMessage ? (
           <div className="empty-chat">
             <div className="empty-mark"><SparkleIcon /></div>
             <h1>{t('emptyChatTitle')}</h1>
@@ -586,8 +587,9 @@ export function ChatPanel({ gatewayId }: { gatewayId: string }) {
             </div>
           </div>
         ) : null}
-        {snapshot.messages.map((message) => (
-          <article key={message.id} className={`message ${message.role}`}>
+        {snapshot.messages.map((message) => {
+          const text = messageText(message);
+          return <article key={message.id} className={`message ${message.role}`}>
             <div className="message-heading">
               <span className="message-author">{message.role === 'user' ? t('you') : message.role === 'assistant' ? 'xopc' : t('system')}</span>
               {formatMessageTime(message.timestamp) ? <time>{formatMessageTime(message.timestamp)}</time> : null}
@@ -605,22 +607,28 @@ export function ChatPanel({ gatewayId }: { gatewayId: string }) {
                   <span><strong>{attachment.name}</strong>{formatFileSize(attachment.size) ? <small>{formatFileSize(attachment.size)}</small> : null}</span>
                 </span>
               ))}</div> : null}
-              {message.text ? message.role === 'assistant' ? <MarkdownContent>{message.text}</MarkdownContent> : <div className="plain-message-content">{message.text}</div> : null}
+              {message.role === 'assistant' ? (
+                <AssistantActivity message={message} detail={snapshot.modelConfig?.activityDetail ?? 'on'} streaming={false} />
+              ) : null}
+              {text ? message.role === 'assistant' ? <MarkdownContent>{text}</MarkdownContent> : <div className="plain-message-content">{text}</div> : null}
             </div>
-            {message.role === 'assistant' ? (
+            {message.role === 'assistant' && text ? (
               <div className="message-actions">
-                <button type="button" aria-label={t('copyResponse')} title={t('copyResponse')} onClick={() => void copyMessage(message.id, message.text)}>
+                <button type="button" aria-label={t('copyResponse')} title={t('copyResponse')} onClick={() => void copyMessage(message.id, text)}>
                   {copiedMessageId === message.id ? <CheckIcon /> : <CopyIcon />}
                   <span>{copiedMessageId === message.id ? t('copied') : t('copy')}</span>
                 </button>
               </div>
             ) : null}
-          </article>
-        ))}
-        {snapshot.streamingText ? (
+          </article>;
+        })}
+        {snapshot.streamingMessage ? (
           <article className="message assistant streaming">
             <div className="message-heading"><span className="message-author">xopc</span><span className="responding-label">{t('responding')}</span></div>
-            <div className="message-body"><MarkdownContent streaming>{snapshot.streamingText}</MarkdownContent></div>
+            <div className="message-body">
+              <AssistantActivity message={snapshot.streamingMessage} detail={snapshot.modelConfig?.activityDetail ?? 'on'} streaming />
+              {messageText(snapshot.streamingMessage) ? <MarkdownContent streaming>{messageText(snapshot.streamingMessage)}</MarkdownContent> : null}
+            </div>
           </article>
         ) : null}
       </div>
@@ -810,7 +818,7 @@ export function ChatPanel({ gatewayId }: { gatewayId: string }) {
                 const input = event.currentTarget;
                 const walk = historyWalk.current;
                 if (walk || (event.key === 'ArrowUp' && input.selectionStart === 0 && input.selectionEnd === 0)) {
-                  const history = walk ?? { items: snapshot.messages.filter(message => message.role === 'user' && message.text.trim()).map(message => message.text).reverse(), index: -1, draft };
+                  const history = walk ?? { items: snapshot.messages.filter(message => message.role === 'user' && messageText(message).trim()).map(messageText).reverse(), index: -1, draft };
                   const index = event.key === 'ArrowUp' ? Math.min(history.index + 1, history.items.length - 1) : history.index - 1;
                   if (index >= 0 || walk) {
                     event.preventDefault();

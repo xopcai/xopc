@@ -6,6 +6,7 @@ import { ConfigSchema } from '../../../config/schema.js';
 import type { EndpointToolRuntime } from '../../../endpoint-tools/index.js';
 import type { MessageBus } from '../../../infra/bus/index.js';
 import { buildWorkflowChildTools } from '../workflow-child-tools.js';
+import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
 
 vi.mock('../../../storage/sqlite/browser-tab-binding-repository.js', () => ({
   getBrowserTabBinding: () => undefined,
@@ -13,6 +14,7 @@ vi.mock('../../../storage/sqlite/browser-tab-binding-repository.js', () => ({
 
 describe('workflow child browser tools', () => {
   it('uses the parent Session Chrome endpoint through the injected runtime', async () => {
+    const parentConversationId = createConversation({ agentId: 'main', sourceChannel: 'webchat' }).key;
     const endpoint = {
       principalId: 'device-1', endpointId: 'browser:device-1', connectionId: 'connection-1',
       displayName: 'Chrome', kind: 'browser' as const, platform: 'chrome', appVersion: '1.0.0',
@@ -24,7 +26,7 @@ describe('workflow child browser tools', () => {
       receipt: { action: 'navigate', risk: 'read', durationMs: 1, verified: true },
     } }] }));
     const getBinding = vi.fn(() => ({
-      conversationId: 'webchat:parent', endpointId: endpoint.endpointId, boundAt: 1,
+      conversationId: parentConversationId, endpointId: endpoint.endpointId, boundAt: 1,
     }));
     const endpointTools = {
       registry: {
@@ -41,7 +43,7 @@ describe('workflow child browser tools', () => {
       model: { provider: 'openai', id: 'test', input: ['text'] } as never,
       getConfig: () => ConfigSchema.parse({ browser: { enabled: true, driver: { kind: 'extension' } } }),
       endpointTools,
-      browserConversationId: 'webchat:parent',
+      browserConversationId: parentConversationId,
     });
     const browser = tools.find((tool) => tool.name === 'browser_use');
 
@@ -53,7 +55,7 @@ describe('workflow child browser tools', () => {
       undefined as never,
     );
 
-    expect(getBinding).toHaveBeenCalledWith('webchat:parent');
+    expect(getBinding).toHaveBeenCalledWith(parentConversationId);
     expect(invoke).toHaveBeenCalledWith(expect.objectContaining({ endpointId: endpoint.endpointId }));
     expect(result.details).toMatchObject({ ok: true });
   });

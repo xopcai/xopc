@@ -22,3 +22,23 @@ it('delivers scoped rules before edits and only acknowledges them at the next mo
     expect(await loader.forTool('read_file', { path: '../outside/a.ts' })).toBe('');
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+it('loads batch paths and surfaces newly discovered nested search instructions', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'batch-instructions-'));
+  try {
+    await mkdir(join(root, 'notes'));
+    await writeFile(join(root, 'AGENTS.md'), 'root rule');
+    await writeFile(join(root, 'notes/AGENTS.md'), 'Use the documented index before broad searches.');
+    await writeFile(join(root, 'notes/a.md'), 'evidence');
+    const loader = await RepositoryInstructions.open(root);
+    expect(await loader.forTool('data_batch', { operations: [{ id: 's', kind: 'file_search', paths: ['.'], patterns: ['evidence'] }] })).toContain('root rule');
+    loader.acknowledge();
+    const result = [{ type: 'text', text: JSON.stringify({ schemaVersion: 1, operations: [], fragments: [{
+      source: { kind: 'file', resource: join(root, 'notes/a.md') }, text: 'evidence', operationIds: ['s'],
+    }] }) }];
+    expect(await loader.forDataResult(result)).toContain('documented index');
+    loader.acknowledge();
+    expect(await loader.forDataResult(result)).toBe('');
+    expect(await loader.forTool('data_batch', { operations: [{ id: 'r', kind: 'file_read', path: 'notes/a.md' }] })).toBe('');
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

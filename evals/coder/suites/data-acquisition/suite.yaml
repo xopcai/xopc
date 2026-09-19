@@ -1,0 +1,44 @@
+id: data-acquisition
+version: '1.0.0'
+description: Ordinary document tasks, code evidence and simple-task regression. Assertions are evaluator-only.
+cases:
+  - id: meeting-decisions
+    repo: { source: local, path: '${EVAL_FIXTURE_REPO}', commit: HEAD }
+    task: Summarize the owners and decisions in all three notes/*.md files in English. Cite each filename. Do not modify files.
+    budget: { timeoutMs: 120000, maxModelRequests: 12 }
+    graders:
+      - type: answer_contains
+        all: [Alice, Bob, Carol, accessibility, Friday, three, alpha.md, beta.md, gamma.md]
+      - type: unchanged
+        paths: [notes, src]
+    tags: [ordinary, batch]
+  - id: single-document
+    repo: { source: local, path: '${EVAL_FIXTURE_REPO}', commit: HEAD }
+    task: Read only notes/beta.md. Who owns the action and when is it due? Reply briefly in English. Do not modify files.
+    budget: { timeoutMs: 60000, maxModelRequests: 5 }
+    graders:
+      - type: answer_contains
+        all: [Bob, Friday]
+      - type: unchanged
+        paths: [notes, src]
+    tags: [ordinary, single]
+  - id: implementation-vs-registration
+    repo: { source: local, path: '${EVAL_FIXTURE_REPO}', commit: HEAD }
+    task: Inspect src. Is experimental implemented and is it registered? Answer in English, distinguishing implemented from not registered, with file references. Do not modify files.
+    budget: { timeoutMs: 120000, maxModelRequests: 12 }
+    graders:
+      - type: answer_contains
+        all: [experimental.ts, registry.ts, implemented, not registered]
+      - type: unchanged
+        paths: [notes, src]
+    tags: [coding, evidence]
+  - id: no-data-needed
+    repo: { source: local, path: '${EVAL_FIXTURE_REPO}', commit: HEAD }
+    task: Translate '谢谢你的帮助' into English. Reply only with the translation; no tools or file changes are needed.
+    budget: { timeoutMs: 60000, maxModelRequests: 2 }
+    graders:
+      - type: answer_contains
+        all: [Thank, help]
+      - type: unchanged
+        paths: [notes, src]
+    tags: [ordinary, no-tools]

@@ -44,7 +44,7 @@ beforeEach(async () => {
   mocks.screenshot.mockReset();
   mocks.capture.mockReset(); mocks.activeTab.mockReset();
   mocks.store = new ComposerDrafts(vi.fn(), vi.fn().mockResolvedValue(undefined));
-  mocks.snapshot = { connection: 'connected', endpointReady: true, sessionLoading: false, submitting: false, stopping: false, pendingDelivery: false, conversationId: 'a', sessions: [], messages: [], streamingText: '', models: [] };
+  mocks.snapshot = { connection: 'connected', endpointReady: true, sessionLoading: false, submitting: false, stopping: false, pendingDelivery: false, conversationId: 'a', sessions: [], messages: [], models: [] };
   const event = { addListener: vi.fn(), removeListener: vi.fn() };
   vi.stubGlobal('chrome', { i18n: { getMessage: (key: string) => key }, storage: { session: { get: vi.fn().mockResolvedValue({}), remove: vi.fn().mockResolvedValue(undefined) } }, tabs: { onUpdated: event, onRemoved: event, onActivated: event } });
   HTMLElement.prototype.scrollTo = vi.fn();
@@ -115,13 +115,39 @@ describe('browser composer interactions', () => {
   });
 
   it('walks input history and restores the unfinished draft', async () => {
-    await act(async () => { emit({ messages: [{ id: 'old', role: 'user', text: 'previous prompt' }] }); text('unfinished'); });
+    await act(async () => { emit({ messages: [{ id: 'old', role: 'user', blocks: [{ type: 'text', text: 'previous prompt' }] }] }); text('unfinished'); });
     const input = container.querySelector('textarea')!;
     input.setSelectionRange(0, 0);
     await act(async () => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true })));
     expect(input.value).toBe('previous prompt');
     await act(async () => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })));
     expect(input.value).toBe('unfinished');
+  });
+
+  it('renders assistant thinking and tool activity without mixing it into the answer', async () => {
+    await act(async () => emit({
+      modelConfig: { model: 'test/model', thinkingLevel: 'high', activityDetail: 'on', fixedModel: false },
+      messages: [{
+        id: 'assistant-1',
+        role: 'assistant',
+        blocks: [
+          { type: 'thinking', text: 'Inspect the page', streaming: false },
+          { type: 'tool', toolCallId: 'call-1', name: 'browser_use', status: 'done' },
+          { type: 'text', text: 'Final answer' },
+        ],
+      }],
+    }));
+
+    expect(container.querySelector('.assistant-activity')?.textContent).toContain('browser_use');
+    expect(container.querySelector('.activity-thinking')?.textContent).toContain('Inspect the page');
+    expect(container.querySelector('.message.assistant')?.textContent).toContain('Final answer');
+    expect(container.querySelector('.assistant-activity')?.textContent).not.toContain('Final answer');
+
+    await act(async () => emit({
+      modelConfig: { model: 'test/model', thinkingLevel: 'high', activityDetail: 'off', fixedModel: false },
+    }));
+    expect(container.querySelector('.activity-thinking')).toBeNull();
+    expect(container.querySelector('.assistant-activity')?.textContent).toContain('browser_use');
   });
 
   it('attaches a context-menu selection to the restored chat', async () => {

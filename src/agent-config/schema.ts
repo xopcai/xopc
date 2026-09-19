@@ -54,6 +54,8 @@ export const AgentModelsOverrideSchema = z.object({
 export const ToolModeSchema = z.enum(['allow', 'ask', 'deny']);
 export const ToolPolicySchema = z.object({
   mode: ToolModeSchema,
+  /** Host assertion for external tools; remote annotations alone cannot grant read access. */
+  readOnly: z.boolean().optional(),
   maxCallsPerTurn: z.number().int().positive().optional(),
   timeoutMs: z.number().int().positive().optional(),
 }).strict();
