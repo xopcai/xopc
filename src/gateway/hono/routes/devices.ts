@@ -5,9 +5,11 @@ import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 
 import {
-  devicePairingInvitationPayloadSchema,
+  browserPairingInvitationPayloadSchema,
   devicePairingTargetKindSchema,
   formatBrowserPairingInvitation,
+  formatMobilePairingInvitation,
+  MOBILE_PAIRING_INVITATION_VERSION,
 } from '@xopcai/gateway-contract';
 
 import {
@@ -51,19 +53,6 @@ const pairingProbeSchema = z.strictObject({
 const pairingSetupSchema = z.strictObject({
   targetKind: devicePairingTargetKindSchema,
 });
-
-function pairingPayload(input: {
-  version: 3;
-  pairingToken: string;
-  gatewayId: string;
-  gatewayName: string;
-  gatewayPublicKey: string;
-  routes: ReturnType<typeof resolveSecureDeviceRoutes>;
-  targetKind: 'mobile' | 'browser';
-  expiresAt: number;
-}): string {
-  return Buffer.from(JSON.stringify(devicePairingInvitationPayloadSchema.parse(input))).toString('base64url');
-}
 
 export function registerDeviceAuthPublicRoutes(app: Hono, options?: PairingPublicRouteOptions): void {
   app.post('/api/gateway-identity/challenge', bodyLimit({ maxSize: 512 }), async (c) => {
@@ -153,19 +142,27 @@ export function registerDeviceRoutes(authenticated: Hono, deps: AuthenticatedRou
     }
     const setup = createDevicePairingSetup(routes, Date.now(), { targetKind: parsed.data.targetKind });
     const identity = getOrCreateGatewayIdentity();
-    const encoded = pairingPayload({
-      version: 3,
-      pairingToken: setup.token,
-      gatewayId: identity.id,
-      gatewayName: os.hostname(),
-      gatewayPublicKey: getGatewayIdentityPublicKeyRaw(identity),
-      routes,
-      targetKind: setup.targetKind,
-      expiresAt: setup.expiresAt,
-    });
     const invitation = setup.targetKind === 'mobile'
-      ? { universalLink: `https://link.xopc.ai/connect#p=${encoded}` }
-      : { browserInvitation: formatBrowserPairingInvitation(encoded) };
+      ? { universalLink: formatMobilePairingInvitation({
+          version: MOBILE_PAIRING_INVITATION_VERSION,
+          pairingToken: setup.token,
+          gatewayId: identity.id,
+          gatewayPublicKey: getGatewayIdentityPublicKeyRaw(identity),
+          origins: routes.map(route => route.url),
+          expiresAt: setup.expiresAt,
+        }) }
+      : { browserInvitation: formatBrowserPairingInvitation(Buffer.from(JSON.stringify(
+          browserPairingInvitationPayloadSchema.parse({
+            version: 3,
+            pairingToken: setup.token,
+            gatewayId: identity.id,
+            gatewayName: os.hostname(),
+            gatewayPublicKey: getGatewayIdentityPublicKeyRaw(identity),
+            routes,
+            targetKind: setup.targetKind,
+            expiresAt: setup.expiresAt,
+          }),
+        )).toString('base64url')) };
     return c.json({
       ok: true,
       setup: {

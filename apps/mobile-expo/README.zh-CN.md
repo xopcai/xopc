@@ -139,7 +139,7 @@ pnpm -C apps/mobile-expo run build:ios:preview
 
 ## 原生网络安全
 
-App 只接受 HTTPS/WSS gateway 路由。Android 使用 `usesCleartextTraffic: false` 构建；iOS 不包含 ATS 本地网络例外。`app.json` 已声明校验后的 `https://link.xopc.ai/connect` App Link 和对应的 iOS associated domain。修改这些设置后，请运行 `pnpm -C apps/mobile-expo exec expo prebuild --clean` 并重新构建原生 App。
+App 只接受 HTTPS/WSS gateway 路由。Android 使用 `usesCleartextTraffic: false` 构建；iOS 不包含 ATS 本地网络例外。`app.json` 已声明校验后的 `https://link.xopc.ai/c` App Link 和对应的 iOS associated domain。修改这些设置后，请运行 `pnpm -C apps/mobile-expo exec expo prebuild --clean` 并重新构建原生 App。
 
 ## iOS CocoaPods 与代理说明
 

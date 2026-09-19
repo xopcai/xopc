@@ -1,6 +1,6 @@
 import os from 'node:os';
 
-import { devicePairingInvitationPayloadSchema, formatBrowserPairingInvitation } from '@xopcai/gateway-contract';
+import { browserPairingInvitationPayloadSchema, formatBrowserPairingInvitation } from '@xopcai/gateway-contract';
 
 import { loadConfig } from '../config/loader.js';
 import { browserEnrollmentPublicKeyThumbprint } from './enrollment.js';
@@ -73,7 +73,7 @@ export function createBrowserNativeBootstrap(
       },
     });
     const identity = getOrCreateGatewayIdentity();
-    const encoded = Buffer.from(JSON.stringify(devicePairingInvitationPayloadSchema.parse({
+    const encoded = Buffer.from(JSON.stringify(browserPairingInvitationPayloadSchema.parse({
       version: 3,
       pairingToken: setup.token,
       gatewayId: identity.id,

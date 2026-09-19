@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { buildDevicePairingProof, devicePairingDeviceSchema } from '../../../packages/gateway-contract/src/device-pairing';
-import { decodeBase64Url, encodeBase64Url, fixedIntegerBytes, invitationPayload, pairingProof, parseInvitationJson, secureOrigin } from '../entry/src/main/ets/common/protocol';
+import { buildDevicePairingProof, devicePairingDeviceSchema, formatMobilePairingInvitation as formatContractInvitation } from '../../../packages/gateway-contract/src/device-pairing';
+import { decodeBase64Url, encodeBase64Url, fixedIntegerBytes, formatMobilePairingInvitation, pairingProof, readMobilePairingInvitation, secureOrigin } from '../entry/src/main/ets/common/protocol';
 import type { XopcPairingBody } from '../entry/src/main/ets/model/gateway';
 
 describe('HarmonyOS protocol conformance', () => {
@@ -32,18 +32,28 @@ describe('HarmonyOS protocol conformance', () => {
     expect(secureOrigin('https://[::1]:123')).toBe('https://[::1]:123');
   });
 
-  it('accepts only valid unexpired mobile invitations', () => {
+  it('matches the authoritative compact invitation byte-for-byte', () => {
     const valid = {
-      version: 3, targetKind: 'mobile', pairingToken: 'xopc_pair_12345678-1234-1234-1234-123456789012_' + 'a'.repeat(43),
-      gatewayId: '12345678-1234-1234-1234-123456789012', gatewayName: 'Gateway', gatewayPublicKey: Buffer.alloc(32).toString('base64url'),
-      routes: [{ id: 'https', kind: 'custom-https', url: 'https://gateway.example' }], expiresAt: 200,
+      version: 4 as const, pairingToken: 'xopc_pair_12345678-1234-1234-1234-123456789012_' + 'A'.repeat(43),
+      gatewayId: '87654321-4321-4321-8321-210987654321', gatewayPublicKey: Buffer.alloc(32).toString('base64url'),
+      origins: ['https://gateway.example', 'https://fallback.example:8443'], expiresAt: 2_000_000_000_000,
     };
-    expect(parseInvitationJson(JSON.stringify(valid), 100).gatewayName).toBe('Gateway');
-    for (const change of [{ version: 2 }, { targetKind: 'browser' }, { expiresAt: 100 }, { gatewayId: '' }, { routes: [] }, { routes: [valid.routes[0], valid.routes[0]] }, { gatewayPublicKey: 'AB' }]) {
-      expect(() => parseInvitationJson(JSON.stringify({ ...valid, ...change }), 100)).toThrow();
-    }
-    expect(invitationPayload('https://link.xopc.ai/connect#p=abc')).toBe('abc');
-    expect(() => invitationPayload('https://evil.example/connect#p=abc')).toThrow();
+    const link = formatMobilePairingInvitation(valid);
+    expect(link).toBe(formatContractInvitation(valid));
+    expect(readMobilePairingInvitation(link, valid.expiresAt - 1)).toEqual(valid);
+  });
+
+  it('rejects expired, malformed, duplicate-route, and removed mobile invitations', () => {
+    const valid = {
+      version: 4 as const, pairingToken: 'xopc_pair_12345678-1234-1234-1234-123456789012_' + 'A'.repeat(43),
+      gatewayId: '87654321-4321-4321-8321-210987654321', gatewayPublicKey: Buffer.alloc(32).toString('base64url'),
+      origins: ['https://gateway.example'], expiresAt: 2_000_000_000_000,
+    };
+    const link = formatMobilePairingInvitation(valid);
+    expect(() => readMobilePairingInvitation(link, valid.expiresAt)).toThrow();
+    expect(() => readMobilePairingInvitation(`${link}A`, 0)).toThrow();
+    expect(() => formatMobilePairingInvitation({ ...valid, origins: [valid.origins[0], valid.origins[0]] })).toThrow();
+    expect(() => readMobilePairingInvitation('https://link.xopc.ai/connect#p=e30', 0)).toThrow();
   });
 
   it('preserves leading zeros in compact P-256 signatures', () => {

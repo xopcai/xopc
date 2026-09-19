@@ -1,12 +1,10 @@
 export interface XopcRoute { id: string; kind: string; url: string; }
 export interface XopcInvitation {
   version: number;
-  targetKind: string;
   pairingToken: string;
   gatewayId: string;
-  gatewayName: string;
   gatewayPublicKey: string;
-  routes: XopcRoute[];
+  origins: string[];
   expiresAt: number;
 }
 export interface XopcPublicKey { kty: string; crv: string; x: string; y: string; }

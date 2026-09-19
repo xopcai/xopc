@@ -1,10 +1,10 @@
 import {
   buildDevicePairingProof,
-  devicePairingInvitationPayloadSchema,
+  browserPairingInvitationPayloadSchema,
   isRetryableDevicePairingHttpStatus,
   readBrowserPairingInvitation,
   type DevicePairingAction,
-  type DevicePairingInvitationPayload,
+  type BrowserPairingInvitationPayload,
 } from '@xopcai/gateway-contract';
 import { endpointHelloSigningPayload, type EndpointHelloPayload } from '@xopcai/endpoint-tools-protocol';
 
@@ -33,7 +33,7 @@ export type BrowserGatewayProfile = {
   accessTokenExpiresAt: number;
 };
 
-type PairingPayload = DevicePairingInvitationPayload & { targetKind: 'browser' };
+type PairingPayload = BrowserPairingInvitationPayload;
 
 type BrowserPairingJournal = {
   invitation: string;
@@ -143,9 +143,9 @@ function createRefreshToken(): string {
 
 export function parseBrowserPairingInvitation(value: string, allowExpired = false): PairingPayload {
   const encoded = readBrowserPairingInvitation(value);
-  const parsed = devicePairingInvitationPayloadSchema.safeParse(decodeJson<unknown>(encoded));
-  if (!parsed.success || parsed.data.targetKind !== 'browser') throw new Error('Pairing invitation version is not supported');
-  const payload = parsed.data as PairingPayload;
+  const parsed = browserPairingInvitationPayloadSchema.safeParse(decodeJson<unknown>(encoded));
+  if (!parsed.success) throw new Error('Pairing invitation version is not supported');
+  const payload = parsed.data;
   if (!allowExpired && payload.expiresAt <= Date.now()) throw new Error('Pairing invitation has expired');
   return payload;
 }

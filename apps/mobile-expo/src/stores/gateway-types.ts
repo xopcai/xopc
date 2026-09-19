@@ -1,11 +1,6 @@
-export const GATEWAY_SCOPES = [
-  'gateway.status', 'agents.read', 'agents.run', 'sessions.read', 'sessions.write',
-  'workspace.read', 'workspace.write', 'tasks.read', 'tasks.write',
-  'automations.read', 'automations.write', 'notifications.self', 'device.self',
-  'gateway.admin',
-] as const;
+import { GATEWAY_SCOPES, type GatewayScope } from '@xopcai/gateway-contract';
 
-export type GatewayScope = (typeof GATEWAY_SCOPES)[number];
+export { GATEWAY_SCOPES, type GatewayScope };
 export type GatewayRouteKind = 'xopc-secure-link' | 'tailscale' | 'custom-https';
 export type GatewayRoute = { id: string; kind: GatewayRouteKind; url: string };
 export type GatewayProfile = {
