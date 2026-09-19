@@ -4,6 +4,7 @@ import type { ExtensionRegistry } from '../../extensions/types/index.js';
 import type { MemoryManager } from '../memory/manager.js';
 import type { EndpointToolRuntime } from '../../endpoint-tools/index.js';
 import type { ToolExecutorConfig } from '../tools/executor.js';
+import { CliToolProvider } from './cliProvider.js';
 import { ComposioToolProvider } from './composio-provider.js';
 import { ExtensionToolProvider } from './extension-provider.js';
 import { createExternalToolGatewayTools } from './gateway-tools.js';
@@ -30,6 +31,7 @@ export interface DefaultExternalToolGatewayDeps {
 
 export function createDefaultExternalToolGatewayTools(deps: DefaultExternalToolGatewayDeps) {
   const providers: ExternalToolProvider[] = [
+    new CliToolProvider({ getConfig: deps.getConfig, getCurrentContext: deps.getCurrentContext, agentId: deps.agentId }),
     new McpToolProvider({
       workspace: deps.workspace,
       getConfig: deps.getConfig,

@@ -67,22 +67,26 @@ export function preflightWorkflowConnectors(input: {
       continue;
     }
     const definition = getConnectorDefinition(requirement.connectorId);
-    if (definition?.runtime.type !== 'composio' || definition.runtime.role !== 'toolkit') continue;
+    if (definition?.runtime.type !== 'cli' && (definition?.runtime.type !== 'composio' || definition.runtime.role !== 'toolkit')) continue;
 
-    const toolkit = definition.runtime.toolkit;
+    const toolkit = definition.runtime.type === 'composio' ? definition.runtime.toolkit : undefined;
     const installation = getConnectorInstallation(`${requirement.connectorId}-${principalId}`);
+    if (definition.runtime.type === 'cli' && (!installation || !installation.enabled)) {
+      add(requirement, issue(requirement, 'disabled', `${requirement.connectorId} policy is disabled or missing.`));
+      continue;
+    }
     if (installation?.allowedAgentIds.length && !installation.allowedAgentIds.includes(input.agentId)) {
       add(requirement, issue(requirement, 'agent_not_allowed', `${input.agentId} is not allowed to use ${requirement.connectorId}.`));
       continue;
     }
-    const allowedScope = installation?.maxScope ?? getComposioToolkitScope(input.config, toolkit);
+    const allowedScope = installation?.maxScope ?? (toolkit ? getComposioToolkitScope(input.config, toolkit) : 'read');
     const requiredScope = requirement.scope ?? 'read';
     if (SCOPE_ORDER[allowedScope] < SCOPE_ORDER[requiredScope]) {
       add(requirement, issue(requirement, 'scope_too_narrow', `${requirement.connectorId} requires ${requiredScope} scope but allows ${allowedScope}.`));
       continue;
     }
     if (requirement.connectionRequired === false) continue;
-    const connections = listConnectorConnections({ principalId, connectorId: requirement.connectorId });
+    const connections = listConnectorConnections({ principalId, connectorId: requirement.connectorId }).filter(connection => definition.runtime.type !== 'cli' || (connection.provider === 'cli' && connection.metadata.runtimeInstanceId === instance.instanceId));
     const selected = installation && installation.selectedAccountIds !== null
       ? connections.filter((connection) => connection.accountId && installation.selectedAccountIds!.includes(connection.accountId))
       : connections;

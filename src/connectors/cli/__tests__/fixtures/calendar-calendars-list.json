@@ -1,0 +1,174 @@
+{
+  "name": "calendar calendars list",
+  "description": "Query the calendar list",
+  "inputSchema": {
+    "type": "object",
+    "required": [],
+    "properties": {
+      "params": {
+        "type": "object",
+        "properties": {
+          "page_size": {
+            "type": "integer",
+            "description": "The maximum number of calendars to be returned for one request. The actual number of calendars returned may be less than this value, or it may be empty, and you can determine if there are more calendars based on the has_more field in the response body",
+            "flag": "--page-size",
+            "default": 500,
+            "minimum": 50,
+            "maximum": 1000
+          },
+          "page_token": {
+            "type": "string",
+            "description": "Page identifier. It is not filled in the first request, indicating traversal from the beginning; when there will be more groups, the new page_token will be returned at the same time, and the next traversal can use the page_token to get more groups",
+            "flag": "--page-token",
+            "example": "ListCalendarsPageToken_xxx"
+          },
+          "sync_token": {
+            "type": "string",
+            "description": "Incremental synchronization mark, no need to fill in for the first request. When the page query ends (the returned value of page_token is empty), the interface will return the sync_token field. The next call can use this sync_token to incrementally obtain calendar change data",
+            "flag": "--sync-token",
+            "example": "ListCalendarsSyncToken_xxx"
+          }
+        }
+      }
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "calendar_list": {
+        "type": "array",
+        "description": "List of calendar data loaded by pages",
+        "items": {
+          "type": "object",
+          "required": [
+            "calendar_id"
+          ],
+          "properties": {
+            "calendar_id": {
+              "type": "string",
+              "description": "日历OpenId",
+              "example": "feishu.cn_xxxxxxxxxx@group.calendar.feishu.cn"
+            },
+            "color": {
+              "type": "integer",
+              "description": "日历颜色，颜色RGB值的int32表示。客户端展示时会映射到色板上最接近的一种颜色。仅对当前身份生效",
+              "example": -1
+            },
+            "description": {
+              "type": "string",
+              "description": "日历描述",
+              "example": "使用开放接口创建日历"
+            },
+            "is_deleted": {
+              "type": "boolean",
+              "description": "对于当前身份，日历是否已经被标记为删除",
+              "example": false
+            },
+            "is_third_party": {
+              "type": "boolean",
+              "description": "当前日历是否是第三方数据。三方日历及日程只支持读，不支持写入",
+              "example": false
+            },
+            "permissions": {
+              "type": "string",
+              "description": "权限",
+              "enum": [
+                "private",
+                "show_only_free_busy",
+                "public"
+              ],
+              "enumDescriptions": [
+                "私密",
+                "仅展示忙闲信息",
+                "公开，他人可查看日程详情"
+              ],
+              "example": "private"
+            },
+            "role": {
+              "type": "string",
+              "description": "当前身份对于该日历的访问权限",
+              "enum": [
+                "unknown",
+                "free_busy_reader",
+                "reader",
+                "writer",
+                "owner"
+              ],
+              "enumDescriptions": [
+                "未知权限",
+                "游客，只能看到忙碌、空闲信息",
+                "订阅者，可查看所有日程详情",
+                "编辑者，可创建及修改日程",
+                "管理员，可管理日历及共享设置"
+              ],
+              "example": "owner"
+            },
+            "summary": {
+              "type": "string",
+              "description": "日历标题",
+              "example": "测试日历"
+            },
+            "summary_alias": {
+              "type": "string",
+              "description": "日历备注名，修改或添加后仅对当前身份生效",
+              "example": "日历备注名"
+            },
+            "type": {
+              "type": "string",
+              "description": "Calendar type",
+              "enum": [
+                "unknown",
+                "primary",
+                "shared",
+                "google",
+                "resource",
+                "exchange"
+              ],
+              "enumDescriptions": [
+                "未知类型",
+                "用户或应用的主日历",
+                "由用户或应用创建的共享日历",
+                "用户绑定的谷歌日历",
+                "会议室日历",
+                "用户绑定的 Exchange 日历"
+              ],
+              "example": "shared"
+            }
+          }
+        }
+      },
+      "has_more": {
+        "type": "boolean",
+        "description": "Whether there are more items",
+        "example": false
+      },
+      "page_token": {
+        "type": "string",
+        "description": "Page identifier, when has_more is true, a new page_token will also be returned. Otherwise, page_token will not be returned",
+        "example": "ListCalendarsPageToken_xxx"
+      },
+      "sync_token": {
+        "type": "string",
+        "description": "Incremental synchronization mark. When has_more is false, it will synchronously return a new sync_token, and the next request needs to carry the sync_token to incrementally obtain the calendar change data.;Note: The returned sync_token is valid within 90 days",
+        "example": "ListCalendarsSyncToken_xxx"
+      }
+    }
+  },
+  "_meta": {
+    "envelope_version": "1.0",
+    "scopes": [
+      "calendar:calendar:readonly",
+      "calendar:calendar",
+      "calendar:calendar.calendar:readonly",
+      "calendar:calendar:read"
+    ],
+    "required_scopes": [],
+    "access_tokens": [
+      "bot",
+      "user"
+    ],
+    "danger": false,
+    "risk": "read",
+    "doc_url": "https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/calendar-v4/calendar/list"
+  }
+}

@@ -1,3 +1,4 @@
+import { CliConnectorDialog } from './cli-connector-dialog';
 import * as Dialog from '@radix-ui/react-dialog';
 import {
   Content as TooltipContent,
@@ -116,7 +117,7 @@ function CapabilityListItem({
   );
 }
 
-export function InstalledConnectorDetailDialog({
+function StandardInstalledConnectorDetailDialog({
   instance,
   definition,
   onClose,
@@ -511,4 +512,10 @@ export function InstalledConnectorDetailDialog({
       />
     </Dialog.Root>
   );
+}
+
+export function InstalledConnectorDetailDialog(props: Parameters<typeof StandardInstalledConnectorDetailDialog>[0]) {
+  return props.instance.materialized.type === 'cli' && props.definition
+    ? <CliConnectorDialog definition={props.definition} instance={props.instance} onClose={props.onClose} onChanged={props.onChanged} />
+    : <StandardInstalledConnectorDetailDialog {...props} />;
 }

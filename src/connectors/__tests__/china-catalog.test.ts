@@ -9,9 +9,10 @@ import { materializeConnectorMcpServer } from '../materialize.js';
 import { resolveConnectorSecretReferences } from '../secret-store.js';
 
 describe('China connector catalog', () => {
-  it('publishes only executable, pinned MCP connectors', () => {
+  it('publishes pinned CLI and MCP connectors', () => {
     expect(CHINA_CONNECTORS.map((connector) => connector.id)).toEqual([
       'feishu-workspace',
+      'wecom-workspace',
       'dingtalk-workspace',
       'wps-cloud-docs',
       'tencent-meeting',
@@ -48,7 +49,7 @@ describe('China connector catalog', () => {
   });
 
   it('uses bundled brand icons for every catalog entry', () => {
-    expect(CHINA_CONNECTORS.map((connector) => connector.branding?.logoUrl)).toEqual([
+    expect(CHINA_CONNECTORS.filter(connector => connector.branding).map((connector) => connector.branding?.logoUrl)).toEqual([
       '/channel-icons/feishu.svg',
       '/connector-icons/dingtalk-mark.svg',
       '/connector-icons/wps-docs.svg',
@@ -56,7 +57,7 @@ describe('China connector catalog', () => {
       '/connector-icons/wps-calendar.svg',
       '/connector-icons/wps-mail.svg',
     ]);
-    for (const connector of CHINA_CONNECTORS) {
+    for (const connector of CHINA_CONNECTORS.filter(connector => connector.branding)) {
       expect(connector.branding?.source).toBe('builtin');
       const logoUrl = connector.branding?.logoUrl;
       expect(logoUrl).toBeDefined();
@@ -114,29 +115,14 @@ describe('China connector catalog', () => {
     expect(resolved).toEqual({ Authorization: 'Bearer stored-token' });
   });
 
-  it('materializes Feishu without placing credentials in arguments', () => {
-    const connector = getConnectorDefinition('feishu-workspace');
-    expect(connector).toBeDefined();
-    const result = materializeConnectorMcpServer(connector!, {
-      secrets: { appId: 'cli_test', appSecret: 'secret-value' },
-      config: { tools: 'preset.light' },
+  it('uses CLI authorization for Feishu without an MCP fallback', () => {
+    expect(getConnectorDefinition('feishu-workspace')).toMatchObject({
+      kind: 'cli', auth: { mode: 'cli' },
+      runtime: { type: 'cli', adapterId: 'lark', adapterVersion: '1', binaryVersion: '1.0.96' },
     });
-
-    expect(result).toMatchObject({
-      serverId: 'feishu_workspace',
-      server: {
-        command: 'npx',
-        args: ['-y', '@larksuiteoapi/lark-mcp@0.5.1', 'mcp'],
-        env: {
-          APP_ID: { xopcSecretRef: { provider: 'connector-feishu-workspace-appid', fieldKey: 'appId' } },
-          APP_SECRET: {
-            xopcSecretRef: { provider: 'connector-feishu-workspace-appsecret', fieldKey: 'appSecret' },
-          },
-          LARK_TOOLS: 'preset.light',
-        },
-      },
+    expect(getConnectorDefinition('wecom-workspace')).toMatchObject({
+      runtime: { type: 'cli', adapterId: 'wecom', binaryVersion: '1.3.0' },
     });
-    expect(JSON.stringify(result.server.args)).not.toContain('secret-value');
   });
 
   it('materializes DingTalk with an explicit service allowlist', () => {

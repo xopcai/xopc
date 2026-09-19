@@ -1,3 +1,5 @@
+import { describeCliAction, verifyCliConnection } from './cli/runtime.js';
+import { getCliAdapter } from './cli/adapterRegistry.js';
 import { randomUUID } from 'node:crypto';
 import type { Config } from '../config/schema.js';
 import { persistConfigMutation } from '../config/config-mutation.js';
@@ -11,7 +13,7 @@ import { capabilityActions, isToolInputSchema, missingConnectionCapabilities } f
 import { resolveConnectionCandidate } from './connection-candidates.js';
 import { getConnectorDefinition } from './catalog.js';
 import { installConnector } from './install.js';
-import { listConnectorInstances } from './instances.js';
+import { getInstalledConnectorDefinition, listConnectorInstances } from './instances.js';
 import { getConnectorAccount } from '../storage/sqlite/connector-account-repository.js';
 import { canAccessConnectorAccount, currentAccountConnections } from './account-access.js';
 import { createLogger } from '../utils/logger.js';
@@ -74,7 +76,8 @@ export class ConnectionRecoveryService {
     const needs: ConnectionNeedView[] = wait.needs.map(need => {
       const instance = listConnectorInstances(this.deps.getConfig()).find(instance => instance.connectorId === need.connectorId);
       const installation = getConnectorInstallation(`${need.connectorId}-${wait.principalId}`);
-      const requiredScope = Math.max(1, ...need.capabilities.filter(capability => /^[A-Z]+_/.test(capability)).map(capability => SCOPE_ORDER[scopeForComposioAction(capability).scope]));
+      const cli = instance?.materialized.type === 'cli' ? getCliAdapter(instance.materialized.adapterId) : undefined;
+      const requiredScope = Math.max(1, ...need.capabilities.filter(capability => cli || /^[A-Z]+_/.test(capability)).map(capability => SCOPE_ORDER[cli ? cli.curatedActions[capability] ?? 'read' : scopeForComposioAction(capability).scope]));
       const scopeBlocked = requiredScope > SCOPE_ORDER[installation?.maxScope ?? 'read'];
       const all = listConnectorConnections({ principalId: wait.principalId, connectorId: need.connectorId });
       const requested = need.accountId ? all.find(connection => connection.accountId === need.accountId) : undefined;
@@ -143,8 +146,16 @@ export class ConnectionRecoveryService {
     return Promise.all(wait.needs.map(async need => {
       if (views.find(view => view.key === need.key)?.phase !== 'ready') return { ...need, capabilityError: undefined };
       try {
-        if (!listConnectorInstances(this.deps.getConfig()).some(instance => instance.connectorId === need.connectorId && instance.enabled)) throw new Error('Connector setup is unavailable');
-        const definition = getConnectorDefinition(need.connectorId);
+        const instance = listConnectorInstances(this.deps.getConfig()).find(instance => instance.connectorId === need.connectorId && instance.enabled);
+        if (!instance) throw new Error('Connector setup is unavailable');
+        const definition = getInstalledConnectorDefinition(this.deps.getConfig(), instance.instanceId) ?? getConnectorDefinition(need.connectorId);
+        if (definition?.runtime.type === 'cli') {
+          const selected = views.find(view => view.key === need.key);
+          const connection = selected?.connectionId ? getConnectorConnection(selected.connectionId) : undefined;
+          if (!connection || typeof connection.metadata.runtimeInstanceId !== 'string') throw new Error('CLI account is unavailable.');
+          for (const capability of need.capabilities) await describeCliAction(this.deps.getConfig(), connection.metadata.runtimeInstanceId, connection, capability);
+          return { ...need, capabilityError: undefined };
+        }
         if (definition?.runtime.type !== 'composio' || definition.runtime.role !== 'toolkit') throw new Error('Unsupported connector');
         const toolkit = definition.runtime.toolkit;
         const selected = views.find(view => view.key === need.key);
@@ -170,6 +181,24 @@ export class ConnectionRecoveryService {
     }));
   }
 
+  private async syncConnections(wait: ConnectionWait) {
+    const config = this.deps.getConfig();
+    const instances = listConnectorInstances(config);
+    const cliIds = new Set(instances.filter(item => item.materialized.type === 'cli').map(item => item.connectorId));
+    const fresh = wait.needs.some(need => !cliIds.has(need.connectorId))
+      ? await this.adapter.syncConnections({ principalId: wait.principalId }) : [];
+    for (const connection of currentAccountConnections(listConnectorConnections({ principalId: wait.principalId }))) {
+      if (connection.provider !== 'cli' || !wait.needs.some(need => need.connectorId === connection.connectorId)) continue;
+      const policy = getConnectorInstallation(`${connection.connectorId}-${wait.principalId}`);
+      if (!policy || !canAccessConnectorAccount(connection, policy, wait.agentId)) continue;
+      const instanceId = connection.metadata.runtimeInstanceId;
+      if (typeof instanceId !== 'string' || !instances.some(item => item.instanceId === instanceId && item.enabled)) continue;
+      await verifyCliConnection(config, instanceId, connection);
+      fresh.push(connection);
+    }
+    return fresh;
+  }
+
   async preflight(input: SessionInput): Promise<boolean> {
     if (input.kind !== 'connection_resume') return true;
     const wait = input.payload ? getConnectionWait(input.payload.waitId) : undefined;
@@ -177,7 +206,7 @@ export class ConnectionRecoveryService {
       || wait.transcriptId !== readCurrentTranscriptId(getSqliteDatabase(), input.conversationId)) return false;
     if (wait.resolution === 'skipped') return true;
     try {
-      const fresh = await this.adapter.syncConnections({ principalId: wait.principalId });
+      const fresh = await this.syncConnections(wait);
       const verified = new Set(fresh.filter(item => item.status === 'active').map(item => item.id));
       wait.needs = await this.checkCapabilities(wait, verified);
       const checkedNeeds = this.view(wait, verified).needs;
@@ -226,7 +255,13 @@ export class ConnectionRecoveryService {
         const need = wait.needs.find(need => need.key === action.needKey);
         if (!need) throw new Error('Unknown connection requirement.');
         if (this.view(wait).needs.find(item => item.key === need.key)?.phase === 'blocked') throw new Error('Connector policy blocks this connection.');
-        const definition = getConnectorDefinition(need.connectorId);
+        const instance = listConnectorInstances(this.deps.getConfig()).find(item => item.connectorId === need.connectorId);
+        const definition = (instance ? getInstalledConnectorDefinition(this.deps.getConfig(), instance.instanceId) : undefined) ?? getConnectorDefinition(need.connectorId);
+        if (definition?.runtime.type === 'cli') {
+          updateConnectionWait({ ...wait, intent: { objectiveRevision: wait.objectiveRevision, validUntil: Date.now() + INTENT_TTL } }, wait.version);
+          publishConnectionWait(conversationId);
+          return { snapshot: this.snapshot(conversationId), authorizationUrl: `/#/connectors?connector=${encodeURIComponent(need.connectorId)}` };
+        }
         if (definition?.runtime.type !== 'composio' || definition.runtime.role !== 'toolkit') throw new Error('Unsupported connector.');
         // Commit the attempt before leaving the process; late results cannot change a newer wait.
         const attemptId = randomUUID();
@@ -252,7 +287,7 @@ export class ConnectionRecoveryService {
         return { snapshot: this.snapshot(conversationId), authorizationUrl: auth.connectUrl };
       } else {
         // Remote errors remain errors. A failed network check is not a revoked authorization.
-        const fresh = await this.adapter.syncConnections({ principalId: wait.principalId });
+        const fresh = await this.syncConnections(wait);
         const verified = new Set(fresh.filter(item => item.status === 'active').map(item => item.id));
         const latest = getConnectionWait(wait.id);
         if (!latest || latest.version !== wait.version || latest.status !== 'open') throw new Error('WAIT_CHANGED');

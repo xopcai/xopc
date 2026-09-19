@@ -1,3 +1,4 @@
+import { CliConnectorDialog } from './cli-connector-dialog';
 import * as Dialog from '@radix-ui/react-dialog';
 import { CheckCircle2, ExternalLink, Loader2, PackagePlus, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
@@ -61,7 +62,7 @@ function parseConfigValue(type: string, raw: string): unknown {
   return trimmed || undefined;
 }
 
-export function InstallConnectorDialog({
+function StandardInstallConnectorDialog({
   draft,
   onChange,
   onClose,
@@ -509,4 +510,10 @@ export function InstallConnectorDialog({
       </Dialog.Portal>
     </Dialog.Root>
   );
+}
+
+export function InstallConnectorDialog(props: Parameters<typeof StandardInstallConnectorDialog>[0]) {
+  return props.draft.connector.runtime.type === 'cli'
+    ? <CliConnectorDialog definition={props.draft.connector} onClose={props.onClose} onChanged={props.onInstalled} />
+    : <StandardInstallConnectorDialog {...props} />;
 }
