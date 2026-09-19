@@ -160,6 +160,7 @@ export function refreshConnectorAccountCurrent(accountId: string): ConnectorAcco
 
 export function reconcileConnectorAccount(input: {
   connectionId: string;
+  backendId?: string;
   identityKey: string;
   identity: Record<string, unknown>;
 }): ConnectorAccount {
@@ -174,7 +175,7 @@ export function reconcileConnectorAccount(input: {
     const matched = db.prepare(`
       SELECT id FROM connector_accounts
       WHERE principal_id = ? AND connector_id = ? AND identity_key = ? AND backend_id IS ?
-    `).get(connection.principal_id, connection.connector_id, input.identityKey, connection.backend_id) as { id: string } | undefined;
+    `).get(connection.principal_id, connection.connector_id, input.identityKey, input.backendId ?? connection.backend_id) as { id: string } | undefined;
     const targetId = matched?.id ?? connection.account_id;
 
     if (targetId !== connection.account_id) {
@@ -220,9 +221,9 @@ export function reconcileConnectorAccount(input: {
     if (!primary) throw new Error(`Connector account has no authorizations: ${targetId}`);
     db.prepare(`
       UPDATE connector_accounts
-      SET identity_key = ?, identity_json = ?, current_connection_id = ?, updated_at = ?
+      SET identity_key = ?, identity_json = ?, current_connection_id = ?, updated_at = ?, backend_id = ?
       WHERE id = ?
-    `).run(input.identityKey, JSON.stringify(input.identity), primary.id, now, targetId);
+    `).run(input.identityKey, JSON.stringify(input.identity), primary.id, now, input.backendId ?? connection.backend_id, targetId);
     return targetId;
   });
   return getConnectorAccount(accountId)!;

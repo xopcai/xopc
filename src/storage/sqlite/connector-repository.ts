@@ -456,7 +456,9 @@ export function upsertConnectorConnection(
 ): ConnectorConnection {
   const now = new Date().toISOString();
   return runSqliteWriteTransaction((db) => {
-    const accountId = input.accountId ?? `account:${input.id}`;
+    // Identity reconciliation may have moved this authorization since it was read.
+    const current = db.prepare('SELECT account_id FROM connector_connections WHERE id = ?').get(input.id) as { account_id: string | null } | undefined;
+    const accountId = current?.account_id ?? input.accountId ?? `account:${input.id}`;
     db.prepare(`
       INSERT INTO connector_accounts (
         id, connector_id, principal_id, identity_json, current_connection_id, created_at, updated_at

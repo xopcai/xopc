@@ -1,5 +1,5 @@
 import { AlertCircle, CheckCircle2, KeyRound, Loader2, RefreshCw, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -130,61 +130,78 @@ export function ComposioConnectorPanel({
   const [diagnosticsUnavailable, setDiagnosticsUnavailable] = useState(false);
   const [revokeAuthorizationId, setRevokeAuthorizationId] = useState<string | null>(null);
   const [disconnectAccountId, setDisconnectAccountId] = useState<string | null>(null);
+  const [accountsLoaded, setAccountsLoaded] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
+  const loadVersion = useRef(0);
+  const diagnosticsVersion = useRef(0);
   const connectionGroups = useMemo(() => groupComposioConnections(connections), [connections]);
+  const read = useCallback(<T,>(promise: Promise<T>): Promise<T> => new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(zh ? '连接服务响应超时，请重试。' : 'The connection service timed out. Please retry.')), 15_000);
+    promise.then(resolve, reject).finally(() => window.clearTimeout(timer));
+  }), [zh]);
 
   const loadComposio = useCallback(async () => {
     if (!toolkit || instance.materialized.type !== 'composio' || instance.materialized.role === 'credential') return;
     setLoading(true);
     setError(null);
+    const version = ++loadVersion.current;
     try {
-      const [nextConnections, nextScope, nextPolicy, nextHealth, nextLearningJobs, nextAuthState] = await Promise.all([
-        listComposioConnections(),
-        getComposioScope(toolkit),
-        getComposioPolicy(toolkit),
-        getComposioHealth(toolkit),
-        listConnectorLearningJobs(),
-        getComposioToolkitAuthState(toolkit),
+      const results = await Promise.allSettled([
+        read(listComposioConnections()).then(nextConnections => {
+          if (version !== loadVersion.current) return;
+          setConnections(nextConnections.filter(connection => connection.toolkit.toLowerCase() === toolkit.toLowerCase()));
+          setAccountsLoaded(true);
+        }),
+        read(getComposioScope(toolkit)).then(value => { if (version === loadVersion.current) setScope(value); }),
+        read(getComposioPolicy(toolkit)).then(value => {
+          if (version !== loadVersion.current) return;
+          setPolicy(value.policy); setAgents(value.agents);
+        }),
       ]);
-      const [toolsResult, eventsResult] = await Promise.allSettled([
-        listComposioTools(toolkit),
-        listComposioTriggerEvents(20),
-      ]);
-      const relevantConnections = nextConnections.filter(
-        (connection) => connection.toolkit.toLowerCase() === toolkit.toLowerCase(),
-      );
-      setConnections(relevantConnections);
-      setTools(toolsResult.status === 'fulfilled' ? toolsResult.value : []);
-      setEvents(eventsResult.status === 'fulfilled'
-        ? eventsResult.value.filter((event) => !event.toolkit || event.toolkit.toLowerCase() === toolkit.toLowerCase())
-        : []);
-      setDiagnosticsUnavailable(toolsResult.status === 'rejected' || eventsResult.status === 'rejected');
-      setScope(nextScope);
-      setPolicy(nextPolicy.policy);
-      setAgents(nextPolicy.agents);
-      setHealth(nextHealth);
-      setLearningJobs(nextLearningJobs);
-      setAuthState(nextAuthState);
-
-      const accounts = groupComposioConnections(relevantConnections)
-        .map((group) => group.primary)
-        .filter((connection): connection is ComposioConnection & { accountId: string } => Boolean(connection.accountId));
-      const policyResults = await Promise.allSettled(accounts.map(async (connection) => [
-        connection.accountId,
-        await getConnectorSyncPolicy(connection.accountId),
-      ] as const));
-      setSyncPolicies(Object.fromEntries(policyResults.flatMap((result) => (
-        result.status === 'fulfilled' ? [result.value] : []
-      ))));
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : String(loadError));
+      const failure = results.find(result => result.status === 'rejected');
+      if (version === loadVersion.current && failure?.status === 'rejected') setError(String(failure.reason instanceof Error ? failure.reason.message : failure.reason));
     } finally {
-      setLoading(false);
+      if (version === loadVersion.current) setLoading(false);
     }
-  }, [instance.materialized, toolkit]);
+  }, [instance.materialized, toolkit, read]);
 
   useEffect(() => {
     void loadComposio();
+    return () => { loadVersion.current++; };
   }, [loadComposio]);
+
+  const loadDiagnostics = useCallback(async () => {
+    if (!toolkit) return;
+    const version = ++diagnosticsVersion.current;
+    setDiagnosticsLoading(true);
+    setDiagnosticsUnavailable(false);
+    const apply = <T,>(update: (value: T) => void) => (value: T) => { if (version === diagnosticsVersion.current) update(value); };
+    const results = await Promise.allSettled([
+      read(listComposioTools(toolkit)).then(apply(setTools)),
+      read(listComposioTriggerEvents(20)).then(apply(value => setEvents(value.filter(event => !event.toolkit || event.toolkit.toLowerCase() === toolkit.toLowerCase())))),
+      read(getComposioToolkitAuthState(toolkit)).then(apply(setAuthState)),
+      read(getComposioHealth(toolkit)).then(apply(setHealth)),
+    ]);
+    if (version !== diagnosticsVersion.current) return;
+    setDiagnosticsUnavailable(results.some(result => result.status === 'rejected'));
+    setDiagnosticsLoading(false);
+  }, [toolkit, read]);
+
+  useEffect(() => {
+    if (advancedOpen) void loadDiagnostics();
+    return () => { diagnosticsVersion.current++; };
+  }, [advancedOpen, loadDiagnostics]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const accounts = groupComposioConnections(connections).map(group => group.primary).filter(connection => connection.supportsLearning && connection.accountId);
+    if (!accounts.length) return;
+    void read(listConnectorLearningJobs()).then(value => { if (!cancelled) setLearningJobs(value); }).catch(() => {});
+    void Promise.allSettled(accounts.map(async connection => [connection.accountId!, await read(getConnectorSyncPolicy(connection.accountId!))] as const))
+      .then(results => { if (!cancelled) setSyncPolicies(Object.fromEntries(results.flatMap(result => result.status === 'fulfilled' ? [result.value] : []))); });
+    return () => { cancelled = true; };
+  }, [connections, read]);
 
   const authorize = useCallback(async (accountId?: string) => {
     if (!toolkit) return;
@@ -288,14 +305,13 @@ export function ComposioConnectorPanel({
   }, [loadComposio]);
 
   if (!toolkit) return null;
-  if (loading && !health && !connections.length) return <div aria-busy="true" className="space-y-4"><Skeleton className="h-10 w-2/3" /><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /></div>;
   if (instance.materialized.type === 'composio' && instance.materialized.role === 'credential') {
     return <p className="text-sm text-fg-muted">{t.composioApiKeyStored}</p>;
   }
 
   const activeAccountCount = connectionGroups.filter((group) => group.primary.status === 'active').length;
   const authorizeLabel = activeAccountCount > 0 ? t.composioAddAccount : t.composioConnectAccount;
-  const healthy = health?.status === 'connected';
+  const healthy = accountsLoaded && activeAccountCount > 0;
   const requiresAuthConfig = authState?.requiresCustomAuthConfig === true;
   const enabledAuthConfigs = authState?.authConfigs.filter(
     (item) => item.status === 'ENABLED' && item.isEnabledForToolRouter,
@@ -312,11 +328,11 @@ export function ComposioConnectorPanel({
               : 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
           )}>
             {healthy ? <CheckCircle2 className="size-3.5" /> : <AlertCircle className="size-3.5" />}
-            {healthy ? t.connectionReady : health ? t.connectionNeedsSetup : t.connectionChecking}
+            {healthy ? t.connectionReady : accountsLoaded || error ? t.connectionNeedsSetup : t.connectionChecking}
           </span>
-          <p className="mt-2 text-sm text-fg-muted">
+          {accountsLoaded && <p className="mt-2 text-sm text-fg-muted">
             {formatConnectorMessage(t.composioAccountCount, { count: String(connectionGroups.length) })}
-          </p>
+          </p>}
         </div>
         <Button variant="primary" className="shrink-0" disabled={loading} onClick={() => void authorize()}>
           {loading ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
@@ -324,7 +340,9 @@ export function ComposioConnectorPanel({
         </Button>
       </section>
 
-      {error ? <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{error}</p> : null}
+      {error ? <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-danger/20 bg-danger/5 px-3 py-2 text-sm text-danger">
+        <p>{error}</p><Button variant="secondary" disabled={loading} onClick={() => void loadComposio()}>{t.composioRetry}</Button>
+      </div> : null}
       {health && !healthy ? (
         <div className="flex flex-col gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-amber-800 dark:text-amber-200">{healthMessage(health, activeAccountCount, t)}</p>
@@ -426,9 +444,9 @@ export function ComposioConnectorPanel({
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold text-fg">{t.composioConnectedAccounts}</h3>
-            <p className="mt-1 text-xs text-fg-muted">
+            {accountsLoaded && <p className="mt-1 text-xs text-fg-muted">
               {formatConnectorMessage(t.composioAccountCount, { count: String(connectionGroups.length) })}
-            </p>
+            </p>}
           </div>
           <Button variant="ghost" className="h-8 px-2 text-xs" disabled={loading} onClick={() => void loadComposio()}>
             <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
@@ -610,21 +628,25 @@ export function ComposioConnectorPanel({
               );
             })}
           </div>
-        ) : (
+        ) : loading && !accountsLoaded ? (
+          <div aria-busy="true" aria-label={t.connectionChecking} className="space-y-3"><Skeleton className="h-16 w-full" /><Skeleton className="h-16 w-full" /></div>
+        ) : !accountsLoaded ? null : (
           <div className="rounded-xl border border-dashed border-edge px-4 py-8 text-center">
             <p className="text-sm text-fg-muted">{t.composioConnectionsEmpty}</p>
           </div>
         )}
       </section>
 
-      <details className="rounded-xl border border-edge bg-surface-base">
+      <details className="rounded-xl border border-edge bg-surface-base" onToggle={event => setAdvancedOpen(event.currentTarget.open)}>
         <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-fg-muted hover:text-fg">
           {t.composioAdvancedSettings}
         </summary>
         <div className="space-y-5 border-t border-edge-subtle px-4 py-4">
+          {diagnosticsLoading ? <Skeleton aria-label={t.connectionChecking} className="h-16 w-full" /> : null}
           {diagnosticsUnavailable ? (
             <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
               {t.composioDiagnosticsUnavailable}
+              <Button variant="ghost" disabled={diagnosticsLoading} onClick={() => void loadDiagnostics()}>{t.composioRetry}</Button>
             </p>
           ) : null}
           {authState?.mode === 'byok' ? (
