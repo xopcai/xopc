@@ -858,7 +858,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
       </div>
 
       <aside className="flex min-h-[34rem] min-w-0 flex-col bg-surface-panel lg:min-h-0 lg:w-[var(--task-chat-panel-width)] lg:shrink-0">
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 bg-surface-subtle px-4 py-3.5">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 bg-surface-inset px-4 py-3.5">
           <div className="min-w-0">
             <div className="flex items-center gap-2.5">
               {conversationAgentId ? <AgentAvatarDisplay agentId={conversationAgentId} avatar={conversationAgent?.avatar} size={28} className="shrink-0" /> : null}
@@ -945,7 +945,7 @@ export function TaskDetailModal({ taskId, backgroundPath, onClose }: {
           }}
         />
         <Dialog.Content
-          className="task-detail-modal-content fixed top-1/2 z-[90] flex h-[min(54rem,calc(100dvh-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl bg-surface-base shadow-float focus:outline-none"
+          className="xopc-dialog-content task-detail-modal-content fixed top-1/2 z-[90] flex h-[min(54rem,calc(100dvh-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay focus:outline-none"
           data-workspace-panel-open={workspacePanelOpen ? 'true' : 'false'}
           style={{
             '--task-detail-workspace-offset': `${workspacePanelOffset / 2}px`,

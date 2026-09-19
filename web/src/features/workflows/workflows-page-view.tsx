@@ -293,7 +293,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
                     {labels.clearFilters}
                   </Button>
                 ) : null}
-                <div className="ml-auto flex rounded-lg bg-surface-muted p-0.5" role="group" aria-label={labels.layoutAria}>
+                <div className="ml-auto flex rounded-lg bg-surface-inset p-0.5" role="group" aria-label={labels.layoutAria}>
                   <button
                     type="button"
                     className={cn(
@@ -328,7 +328,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
               <section className="overflow-hidden rounded-xl border border-edge-subtle bg-surface-base" aria-labelledby="workflow-runs-heading">
                 <header className="flex items-start justify-between gap-3 border-b border-edge-subtle px-4 py-3">
                   <h2 id="workflow-runs-heading" className="text-sm font-semibold text-fg">{labels.allRuns}</h2>
-                  <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-semibold tabular-nums text-fg-muted">{filteredRuns.length}</span>
+                  <span className="rounded-full bg-surface-inset px-2 py-0.5 text-xs font-semibold tabular-nums text-fg-muted">{filteredRuns.length}</span>
                 </header>
                 {loading && filteredRuns.length === 0 ? (
                   Array.from({ length: 4 }).map((_, index) => <WorkflowRunRowSkeleton key={index} />)

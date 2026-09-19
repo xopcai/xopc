@@ -70,7 +70,7 @@ export function SessionDetailDrawer({
         />
         <Dialog.Content
           className={cn(
-            'xopc-drawer-right fixed right-0 top-0 flex size-full max-w-lg flex-col border-l border-edge bg-surface-panel shadow-popover outline-none',
+            'xopc-drawer-right fixed right-0 top-0 flex size-full max-w-lg flex-col border-l border-edge bg-surface-overlay shadow-popover outline-none',
             SETTINGS_SHELL_CONTENT_Z,
             'dark:border-edge',
           )}

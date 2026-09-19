@@ -16,6 +16,7 @@ import { buildGatewayMediaReadPath, isMediaUri } from './media-uri';
 import { MessageAudioCache } from './message-audio-cache';
 
 const AUTOPLAY_OWNER = 'assistant-audio-autoplay';
+const PLAYBACK_STALL_TIMEOUT_MS = 15_000;
 
 async function waitForCaptureRelease(): Promise<boolean> {
   for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -25,12 +26,16 @@ async function waitForCaptureRelease(): Promise<boolean> {
   return !isAudioCaptureActive();
 }
 
-async function playTrack(item: AssistantAudioAutoplayItem): Promise<AssistantAudioAutoplayResult> {
+export async function playAssistantAudioTrack(
+  item: AssistantAudioAutoplayItem,
+  stallTimeoutMs = PLAYBACK_STALL_TIMEOUT_MS,
+): Promise<AssistantAudioAutoplayResult> {
   if (!await waitForCaptureRelease()) return 'interrupted';
   const cache = isMediaUri(item.uri) ? new MessageAudioCache() : null;
   const playback: { player: AudioPlayer | null } = { player: null };
   let settled = false;
   let listener: { remove(): void } | undefined;
+  let watchdog: ReturnType<typeof setTimeout> | undefined;
 
   try {
     const playbackUri = cache
@@ -43,6 +48,7 @@ async function playTrack(item: AssistantAudioAutoplayItem): Promise<AssistantAud
       const finish = (result: AssistantAudioAutoplayResult, error?: unknown) => {
         if (settled) return;
         settled = true;
+        if (watchdog) clearTimeout(watchdog);
         listener?.remove();
         releaseAudioPlayback(AUTOPLAY_OWNER);
         try { playback.player?.remove(); } catch { /* The player may already be released. */ }
@@ -50,14 +56,27 @@ async function playTrack(item: AssistantAudioAutoplayItem): Promise<AssistantAud
         if (error) reject(error);
         else resolve(result);
       };
+      const armWatchdog = () => {
+        if (watchdog) clearTimeout(watchdog);
+        watchdog = setTimeout(
+          () => finish('completed', new Error('Assistant audio playback stalled')),
+          stallTimeoutMs,
+        );
+      };
 
       try {
         playback.player = createAudioPlayer(playbackUri, { updateInterval: 250 });
+        let lastPosition = -1;
         listener = playback.player.addListener('playbackStatusUpdate', (status) => {
           if (status.error) finish('completed', new Error(status.error));
           else if (status.didJustFinish) finish('completed');
+          else if (status.playing && status.currentTime > lastPosition) {
+            lastPosition = status.currentTime;
+            armWatchdog();
+          }
         });
         claimAudioPlayback(AUTOPLAY_OWNER, () => finish('interrupted'));
+        armWatchdog();
         playback.player.play();
       } catch (error) {
         finish('completed', error);
@@ -66,6 +85,7 @@ async function playTrack(item: AssistantAudioAutoplayItem): Promise<AssistantAud
   } finally {
     cache?.remove();
     if (!settled) {
+      if (watchdog) clearTimeout(watchdog);
       listener?.remove();
       releaseAudioPlayback(AUTOPLAY_OWNER);
       try { playback.player?.remove(); } catch { /* Ignore cleanup races. */ }
@@ -75,7 +95,7 @@ async function playTrack(item: AssistantAudioAutoplayItem): Promise<AssistantAud
 
 const autoplayQueue = new AssistantAudioAutoplayQueue(async (item) => {
   try {
-    return await playTrack(item);
+    return await playAssistantAudioTrack(item);
   } catch (error) {
     console.warn('[AssistantAudioAutoplay] Playback failed', error);
     throw error;

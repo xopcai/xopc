@@ -162,7 +162,7 @@ export function ExtensionIframeHost({
   };
 
   if (!grantResolved) {
-    return <div className={`${className ?? ''} min-h-32 animate-pulse rounded-lg bg-surface-muted`} />;
+    return <div className={`${className ?? ''} min-h-32 animate-pulse rounded-lg bg-surface-inset`} />;
   }
 
   if (!allowed) {

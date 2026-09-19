@@ -33,8 +33,8 @@ export function ImportSelectionDialog({ open, sourceName, inventory, selected, o
     </section>;
   };
   return <Dialog.Root open={open} onOpenChange={value => { if (!value) onClose(); }}><Dialog.Portal>
-    <Dialog.Overlay className={`fixed inset-0 bg-scrim ${SETTINGS_SHELL_OVERLAY_Z}`} />
-    <Dialog.Content className={`fixed left-1/2 top-1/2 flex h-[min(calc(100dvh-2rem),760px)] w-[min(calc(100%-2rem),760px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel outline-none ${SETTINGS_SHELL_CONTENT_Z}`}>
+    <Dialog.Overlay className={`xopc-dialog-overlay fixed inset-0 bg-scrim ${SETTINGS_SHELL_OVERLAY_Z}`} />
+    <Dialog.Content className={`xopc-dialog-content fixed left-1/2 top-1/2 flex h-[min(calc(100dvh-2rem),760px)] w-[min(calc(100%-2rem),760px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay outline-none ${SETTINGS_SHELL_CONTENT_Z}`}>
       <header className="shrink-0 space-y-2 border-b border-edge p-4 sm:p-5"><div className="flex items-center justify-between gap-2">
         <Dialog.Title className="text-lg font-semibold text-fg">{t.chooseTitle.replace('{source}', sourceName)}</Dialog.Title>
         <Dialog.Close asChild><Button variant="ghost" aria-label={t.close} className="h-8 w-8 shrink-0 p-0"><X className="h-4 w-4" /></Button></Dialog.Close>

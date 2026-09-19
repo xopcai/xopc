@@ -16,16 +16,16 @@ function channelSettingsShellContentClass(
 ): string {
   if (presentation === 'drawer') {
     return cn(
-      'xopc-drawer-right fixed right-0 top-0 flex size-full flex-col overflow-hidden border-l border-edge bg-surface-panel shadow-popover outline-none dark:border-edge',
+      'xopc-drawer-right fixed right-0 top-0 flex size-full flex-col overflow-hidden border-l border-edge bg-surface-overlay shadow-popover outline-none dark:border-edge',
       wide ? 'max-w-[36rem]' : 'max-w-xl',
       SETTINGS_SHELL_CONTENT_Z,
     );
   }
   return cn(
-    'fixed left-1/2 top-1/2 flex h-[min(calc(100dvh-2rem),52rem)] w-[min(calc(100%-2rem),32rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden',
+    'xopc-dialog-content fixed left-1/2 top-1/2 flex h-[min(calc(100dvh-2rem),52rem)] w-[min(calc(100%-2rem),32rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden',
     wide && 'h-[min(calc(100dvh-2rem),48rem)] w-[min(calc(100%-2rem),36rem)]',
     SETTINGS_SHELL_CONTENT_Z,
-    'rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none dark:border-edge',
+    'rounded-2xl border border-edge bg-surface-overlay outline-none dark:border-edge',
   );
 }
 

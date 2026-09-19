@@ -337,7 +337,7 @@ export function ProductAutomationFeedback({
           const canSaveInsight = run.status === 'succeeded' && Boolean(run.summary) && Boolean(onSaveInsight) && !insightSaved;
           const saveInsightBusy = busyAction === `${run.id}:saveInsight`;
           return (
-            <li key={run.id} className="rounded-md border border-edge/70 bg-surface-muted/35 px-2.5 py-2">
+            <li key={run.id} className="rounded-md border border-edge/70 bg-surface-inset/35 px-2.5 py-2">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="flex min-w-0 items-center gap-1.5">

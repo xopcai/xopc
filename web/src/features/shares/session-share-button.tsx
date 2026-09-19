@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { ExternalLink, Loader2, MessageSquareShare, RefreshCw, Trash2, X } from 'lucide-react';
+import { ExternalLink, Loader2, MessageSquareShare, RefreshCw, ShieldCheck, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -165,7 +165,7 @@ export function SessionShareButton({ conversationId }: { conversationId: string 
         <Dialog.Content
           className={cn(
             'xopc-dialog-content fixed left-1/2 top-1/2 z-[71] flex h-[min(35rem,calc(100dvh-2rem))] w-[min(34rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col',
-            'overflow-hidden rounded-lg border border-edge bg-surface-panel shadow-popover outline-none',
+            'overflow-hidden rounded-xl border border-edge bg-surface-overlay outline-none',
           )}
         >
           <div className="flex shrink-0 items-start justify-between gap-3 border-b border-edge px-4 py-3">
@@ -174,7 +174,7 @@ export function SessionShareButton({ conversationId }: { conversationId: string 
               <Dialog.Description className="mt-0.5 text-xs text-fg-muted">{result ? t.createdHint : t.hint}</Dialog.Description>
             </div>
             <Dialog.Close asChild>
-              <button type="button" className="rounded-md p-2 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={t.close}>
+              <button type="button" className="touch-target flex size-10 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={t.close}>
                 <X className="size-4" />
               </button>
             </Dialog.Close>
@@ -198,23 +198,26 @@ export function SessionShareButton({ conversationId }: { conversationId: string 
               </div>
             ) : preview ? (
               <div className="space-y-4">
-                <div className="rounded-lg border border-edge-subtle bg-surface-muted/45 px-3 py-3">
+                <div className="rounded-lg border border-edge bg-surface-inset p-3">
                   <p className="truncate text-sm font-medium text-fg">{preview.title}</p>
                   <p className="mt-1 text-xs text-fg-muted">{t.snapshotMessages.replace('{{count}}', String(preview.messageCount))}</p>
                   <p className="mt-1 text-xs text-fg-subtle">{new Date(preview.snapshotAt).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US')}</p>
                 </div>
-                <details className="rounded-lg border border-edge-subtle">
-                  <summary className="cursor-pointer px-3 py-2.5 text-xs font-medium text-fg">{t.reviewContent}</summary>
-                  <div className="max-h-64 space-y-3 overflow-y-auto border-t border-edge-subtle p-3">
+                <details className="rounded-lg border border-edge">
+                  <summary className="touch-target cursor-pointer px-3 py-2.5 text-xs font-medium text-fg transition-colors hover:bg-surface-hover">{t.reviewContent}</summary>
+                  <div className="max-h-64 space-y-3 overflow-y-auto border-t border-edge p-3">
                     {preview.messages.map((message) => (
-                      <div key={message.id} className={cn('rounded-lg px-3 py-2', message.role === 'user' ? 'bg-surface-muted' : 'bg-surface-subtle')}>
+                      <div key={message.id} className="rounded-lg bg-surface-inset px-3 py-2">
                         <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-fg-subtle">{message.role === 'user' ? t.you : t.assistant}</p>
                         <p className="whitespace-pre-wrap break-words text-sm leading-6 text-fg">{message.markdown}</p>
                       </div>
                     ))}
                   </div>
                 </details>
-                <div className="rounded-lg bg-surface-subtle px-3 py-2 text-xs leading-5 text-fg-muted">{t.scope}</div>
+                <div className="flex gap-2 rounded-lg border border-accent/20 bg-accent-soft px-3 py-2.5 text-xs leading-5 text-fg-muted">
+                  <ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent-fg" aria-hidden="true" />
+                  <span>{t.scope}</span>
+                </div>
                 <label className="block space-y-1.5 text-xs font-medium text-fg">
                   <span>{t.delivery}</span>
                   <Select value={delivery} disabled={loading} onChange={(event) => setDelivery(event.target.value as 'hosted' | 'local')}>
@@ -241,7 +244,7 @@ export function SessionShareButton({ conversationId }: { conversationId: string 
                   </p>
                 ) : null}
                 {preview.toolActivities.length ? (
-                  <label className="flex items-start gap-2 rounded-lg border border-edge-subtle px-3 py-2.5 text-sm text-fg">
+                  <label className="flex items-start gap-2 rounded-lg border border-edge bg-surface-inset px-3 py-2.5 text-sm text-fg">
                     <input type="checkbox" checked={includeToolActivities} disabled={loading} onChange={(event) => setIncludeToolActivities(event.target.checked)} className="mt-0.5 size-4 rounded border-edge" />
                     <span>
                       <span className="block font-medium">{t.includeTools.replace('{{count}}', String(preview.toolActivities.length))}</span>
@@ -250,7 +253,7 @@ export function SessionShareButton({ conversationId }: { conversationId: string 
                   </label>
                 ) : null}
                 {preview.attachmentCandidates.length ? (
-                  <fieldset className="rounded-lg border border-edge-subtle px-3 py-2.5">
+                  <fieldset className="rounded-lg border border-edge bg-surface-inset px-3 py-2.5">
                     <legend className="px-1 text-xs font-medium text-fg">{t.attachments}</legend>
                     <p className="mb-2 text-xs text-fg-muted">{t.attachmentDisclosure}</p>
                     <div className="space-y-2">
@@ -294,7 +297,7 @@ export function SessionShareButton({ conversationId }: { conversationId: string 
                 </div>
                 <label className="block space-y-1.5 text-xs font-medium text-fg">
                   <span>{t.description}</span>
-                  <input value={description} disabled={loading} onChange={(event) => setDescription(event.target.value)} className="h-10 w-full rounded-lg border border-edge bg-surface-subtle px-3 text-sm font-normal text-fg outline-none focus:border-edge-strong" />
+                  <input value={description} disabled={loading} onChange={(event) => setDescription(event.target.value)} className="h-10 w-full rounded-lg border border-edge bg-surface-inset px-3 text-sm font-normal text-fg outline-none focus-visible:border-accent/50 focus-visible:ring-2 focus-visible:ring-accent/20" />
                 </label>
                 <p className="text-xs text-amber-700 dark:text-amber-300">{t.publicWarning}</p>
               </div>
@@ -302,7 +305,7 @@ export function SessionShareButton({ conversationId }: { conversationId: string 
             {error ? <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
           </div>
 
-          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-edge px-4 py-3">
+          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-edge bg-surface-overlay px-4 py-3">
             {result ? (
               <>
                 <Button type="button" variant="ghost" disabled={loading} onClick={() => setResult(null)}>{t.newShare}</Button>

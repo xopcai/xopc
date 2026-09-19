@@ -143,14 +143,14 @@ export function TimePicker({
             collisionPadding={12}
             className={cn(
               popoverZ,
-              'w-[18rem] overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-popover outline-none',
+              'w-[18rem] overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-popover outline-none',
             )}
             onOpenAutoFocus={(event) => {
               event.preventDefault();
               requestAnimationFrame(() => hourRefs.current[draftHour]?.focus());
             }}
           >
-            <div className="flex items-center justify-between border-b border-edge-subtle bg-surface-subtle px-3 py-2.5">
+            <div className="flex items-center justify-between border-b border-edge-subtle bg-surface-inset px-3 py-2.5">
               <span className="flex items-center gap-2 text-xs font-medium text-fg-muted">
                 <Clock3 className="size-3.5" aria-hidden="true" />
                 {ariaLabel ?? 'HH:mm'}

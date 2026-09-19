@@ -53,6 +53,25 @@ export function normalizeAgentId(value: string | undefined | null): string {
   );
 }
 
+function hashAgentDisplayName(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36).padStart(7, '0');
+}
+
+/** Derive a folder-safe id, including for display names with no ASCII characters. */
+export function deriveAgentIdFromDisplayName(displayName: string): string {
+  const normalizedName = displayName.trim().normalize('NFKC').toLowerCase();
+  const asciiId = normalizeAgentId(normalizedName);
+  if (asciiId !== DEFAULT_AGENT_ID || normalizedName === DEFAULT_AGENT_ID) {
+    return asciiId;
+  }
+  return normalizedName ? `agent-${hashAgentDisplayName(normalizedName)}` : DEFAULT_AGENT_ID;
+}
+
 export function validateAgentIdForNewAgent(
   explicitId: string | undefined | null,
   displayNameForDerivation: string,
@@ -76,7 +95,7 @@ export function validateAgentIdForNewAgent(
     return { ok: true, agentId: id };
   }
 
-  const agentId = normalizeAgentId(displayNameForDerivation.trim());
+  const agentId = deriveAgentIdFromDisplayName(displayNameForDerivation);
   if (agentId === DEFAULT_AGENT_ID) {
     return {
       ok: false,

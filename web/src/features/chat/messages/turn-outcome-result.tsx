@@ -90,7 +90,7 @@ export function TurnOutcomeResult({
 
   return (
     <section
-      className="overflow-hidden rounded-xl bg-surface-elevated/20"
+      className="overflow-hidden rounded-xl bg-surface-panel/20"
       aria-label={t.heading}
     >
       <div className="flex flex-wrap items-start justify-between gap-3 px-3.5 py-3">
@@ -123,7 +123,7 @@ export function TurnOutcomeResult({
       </div>
 
       {sections.length > 1 ? (
-        <div className="flex min-w-0 overflow-x-auto border-y border-edge-subtle/70 bg-surface-subtle/55 px-2" role="tablist">
+        <div className="flex min-w-0 overflow-x-auto border-y border-edge-subtle/70 bg-surface-inset/55 px-2" role="tablist">
           {sections.map((section) => (
             <button
               key={section}
@@ -248,7 +248,7 @@ export function TurnOutcomeResult({
                 {outcome.changeSet.diffTruncated ? (
                   <p className="mb-2 text-xs text-warning">{t.diffTruncated}</p>
                 ) : null}
-                <pre className="max-h-72 overflow-auto rounded-lg bg-surface-subtle p-3 text-xs leading-5 text-fg-muted">
+                <pre className="max-h-72 overflow-auto rounded-lg bg-surface-inset p-3 text-xs leading-5 text-fg-muted">
                   <code>{outcome.changeSet.diff}</code>
                 </pre>
               </div>

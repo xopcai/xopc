@@ -662,7 +662,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
                 data-global-palette-index={0}
                 className={[
                   'flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-fg-muted',
-                  selectedIndex === 0 ? 'bg-surface-hover' : 'hover:bg-surface-muted',
+                  selectedIndex === 0 ? 'bg-surface-hover' : 'hover:bg-surface-inset',
                 ].join(' ')}
                 onMouseEnter={() => dispatchUi({ type: 'setSelectedIndex', value: 0 })}
                 onClick={() => dispatchUi({ type: 'resetMain' })}
@@ -688,7 +688,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
                       data-global-palette-index={idx}
                       className={[
                         'flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left',
-                        selectedIndex === idx ? 'bg-surface-hover text-fg' : 'text-fg hover:bg-surface-muted',
+                        selectedIndex === idx ? 'bg-surface-hover text-fg' : 'text-fg hover:bg-surface-inset',
                       ].join(' ')}
                       onMouseEnter={() => dispatchUi({ type: 'setSelectedIndex', value: idx })}
                       onClick={() => {
@@ -787,7 +787,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
                     type="button"
                     className={[
                       'flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left',
-                      idx === selectedIndex ? 'bg-surface-hover text-fg' : 'text-fg hover:bg-surface-muted',
+                      idx === selectedIndex ? 'bg-surface-hover text-fg' : 'text-fg hover:bg-surface-inset',
                     ].join(' ')}
                     onMouseEnter={() => dispatchUi({ type: 'setSelectedIndex', value: idx })}
                     onClick={() => h.run()}

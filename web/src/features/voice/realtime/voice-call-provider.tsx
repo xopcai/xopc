@@ -73,7 +73,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }) {
     </div> : null}
     <Dialog.Root open={Boolean(target && expanded)} onOpenChange={(open) => { if (!open) setExpanded(false); }} modal={false}>
       <Dialog.Portal>
-        <Dialog.Content onInteractOutside={(event) => event.preventDefault()} className="fixed bottom-3 right-3 z-[71] flex h-[min(480px,85dvh)] w-[min(380px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel text-fg shadow-float focus:outline-none">
+        <Dialog.Content onInteractOutside={(event) => event.preventDefault()} className="xopc-dialog-content-pane fixed bottom-3 right-3 z-[71] flex h-[min(480px,85dvh)] w-[min(380px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay text-fg shadow-float focus:outline-none">
           <header className="flex shrink-0 items-center justify-between gap-3 border-b border-edge px-4 py-3">
             <div className="min-w-0"><Dialog.Title className="truncate font-medium">{target?.name}</Dialog.Title><Dialog.Description className="text-xs text-fg-muted">{m.callSessionHint}</Dialog.Description></div>
             <div className="flex"><Button variant="ghost" onClick={() => setMore(!more)} aria-label={m.callMore} aria-expanded={more}><Ellipsis className="size-4" /></Button><Button variant="ghost" onClick={() => setExpanded(false)} aria-label={m.callMinimize}><Minimize2 className="size-4" /></Button></div>

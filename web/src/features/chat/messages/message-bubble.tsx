@@ -917,7 +917,7 @@ export const MessageBubble = memo(function MessageBubble({
         ) : null}
 
         {assistantActionsVisible && responseContextOpen && responsePersonalContext.length > 0 ? (
-          <div className="mt-2 w-full max-w-xl rounded-xl border border-edge-subtle bg-surface-elevated p-3">
+          <div className="mt-2 w-full max-w-xl rounded-xl border border-edge-subtle bg-surface-panel p-3">
             <p className="text-sm font-medium text-fg">{m.chat.messageWhyThisAnswer}</p>
             <p className="mt-0.5 text-xs text-fg-muted">{m.chat.messageWhyThisAnswerHint}</p>
             <div className="mt-2 space-y-2">
@@ -936,7 +936,7 @@ export const MessageBubble = memo(function MessageBubble({
         ) : null}
 
         {assistantActionsVisible && responseFeedbackPromptOpen ? (
-          <div className="mt-2 w-full max-w-xl rounded-xl border border-edge-subtle bg-surface-elevated p-3">
+          <div className="mt-2 w-full max-w-xl rounded-xl border border-edge-subtle bg-surface-panel p-3">
             <p className="text-sm font-medium text-fg">{m.chat.messageFeedbackReasonTitle}</p>
             <p className="mt-0.5 text-xs text-fg-muted">{m.chat.messageFeedbackReasonHint}</p>
             <div className="mt-2 flex flex-wrap gap-2">

@@ -155,7 +155,7 @@ function ClarifyPromptBody({
       aria-describedby={metaId}
       onKeyDown={onKeyDownRegion}
       className={cn(
-        'mb-4 rounded-lg border border-edge bg-surface-elevated px-4 py-3 text-sm text-fg shadow-sm outline-none',
+        'mb-4 rounded-lg border border-edge bg-surface-panel px-4 py-3 text-sm text-fg shadow-sm outline-none',
         interaction.focusRingPanel,
       )}
     >

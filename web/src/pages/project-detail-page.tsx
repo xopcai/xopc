@@ -164,7 +164,7 @@ function statusTone(status: string): string {
   if (status === 'active') return 'bg-accent-soft text-accent-fg';
   if (status === 'done') return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
   if (status === 'paused') return 'bg-amber-500/10 text-amber-700 dark:text-amber-300';
-  if (status === 'archived') return 'bg-surface-muted text-fg-subtle';
+  if (status === 'archived') return 'bg-surface-inset text-fg-subtle';
   return 'bg-surface-hover text-fg-muted';
 }
 
@@ -559,7 +559,7 @@ function ProjectSwitcher({
       <Dialog.Root open={createOpen} onOpenChange={(next) => !creating && setCreateOpen(next)}>
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
-          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex h-[min(32rem,calc(100vh-2rem))] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex h-[min(32rem,calc(100vh-2rem))] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-float focus:outline-none">
             <div className="shrink-0 border-b border-edge px-5 py-4">
               <Dialog.Title className="text-base font-semibold text-fg">
                 {createMode === 'directory' ? pm.projectSwitcher.createFromDirectoryTitle : projectsText.createTitle}
@@ -624,7 +624,7 @@ function ProjectSwitcher({
       }}>
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[100] bg-scrim backdrop-blur-[2px]" />
-          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[110] flex w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[110] flex w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-float focus:outline-none">
             <div className="border-b border-edge px-5 py-4">
               <Dialog.Title className="text-base font-semibold text-fg">{projectsText.workspaceMissingTitle}</Dialog.Title>
               <Dialog.Description className="mt-1 text-sm leading-6 text-fg-muted">
@@ -635,7 +635,7 @@ function ProjectSwitcher({
             </div>
             {missingWorkspaceRoot ? (
               <div className="px-5 py-4">
-                <div className="flex items-center gap-2 rounded-lg bg-surface-muted px-3 py-2 text-sm text-fg-muted">
+                <div className="flex items-center gap-2 rounded-lg bg-surface-inset px-3 py-2 text-sm text-fg-muted">
                   <Folder className="size-4 shrink-0 text-fg-subtle" aria-hidden />
                   <span className="min-w-0 truncate">{missingWorkspaceRoot}</span>
                 </div>
@@ -1702,7 +1702,7 @@ export function ProjectDetailPage() {
       <Dialog.Root open={projectFollowOpen} onOpenChange={setProjectFollowOpen}>
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
-          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex h-[min(30rem,calc(100dvh-1.5rem))] w-[min(34rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex h-[min(30rem,calc(100dvh-1.5rem))] w-[min(34rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-float focus:outline-none">
             <div className="flex shrink-0 items-start justify-between gap-4 border-b border-edge px-5 py-4"><div><Dialog.Title className="font-semibold text-fg">{language === 'zh' ? '让助理守住这个项目' : 'Ask the assistant to protect this project'}</Dialog.Title><Dialog.Description className="mt-1 text-sm text-fg-muted">{language === 'zh' ? '助理会理解项目变化，只在需要你知道或决定时回来。' : 'Your assistant will understand project changes and return only when you should know or decide.'}</Dialog.Description></div><Dialog.Close asChild><Button variant="ghost" className="size-9 p-0" aria-label={language === 'zh' ? '关闭' : 'Close'}><X className="size-4" /></Button></Dialog.Close></div>
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5"><label className="text-sm font-medium text-fg">{language === 'zh' ? '你希望助理帮你守住什么？' : 'What should the assistant protect?'}<textarea rows={6} maxLength={12000} className="mt-2 w-full rounded-lg border border-edge bg-surface-base p-3 text-sm text-fg" value={projectFollowInstructions} onChange={event => setProjectFollowInstructions(event.target.value)} /></label><div className="mt-5 rounded-xl bg-surface-hover p-4 text-sm"><p className="font-medium text-fg">{language === 'zh' ? '它会这样工作' : 'How it will work'}</p><p className="mt-2 text-fg-muted">{language === 'zh' ? '当目标、承诺或交付风险出现有意义的变化时，助理会先判断影响、准备建议，再把完整结果放到工作台。' : 'When the goal, commitments, or delivery risk meaningfully changes, the assistant will assess the impact, prepare a recommendation, and bring the complete result to the Workbench.'}</p></div>{projectFollowError && <p role="alert" className="mt-4 text-sm text-danger">{projectFollowError}</p>}</div>
             <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4"><Dialog.Close asChild><Button variant="ghost">{language === 'zh' ? '取消' : 'Cancel'}</Button></Dialog.Close><Button variant="primary" disabled={projectFollowBusy || !projectFollowInstructions.trim()} onClick={() => void startProjectFollow()}>{projectFollowBusy ? (language === 'zh' ? '正在记住…' : 'Remembering…') : (language === 'zh' ? '开始守住' : 'Start protecting')}</Button></div>
@@ -2305,7 +2305,7 @@ export function ProjectDetailPage() {
                           <div className="flex min-w-0 flex-wrap items-center gap-2">
                             <span className="min-w-0 truncate text-sm font-medium text-fg">{typeLabel}</span>
                             {isRelatedOnly ? (
-                              <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-fg-muted">
+                              <span className="rounded-full bg-surface-inset px-2 py-0.5 text-xs font-medium text-fg-muted">
                                 {pm.progress.related}
                               </span>
                             ) : null}
@@ -2378,7 +2378,7 @@ export function ProjectDetailPage() {
                   </Field>
                   <Field label={pm.settings.status}>
                     {projectIsArchived ? (
-                      <div className="grid min-h-10 content-center rounded-md border border-edge bg-surface-muted px-3 text-sm text-fg-muted">
+                      <div className="grid min-h-10 content-center rounded-md border border-edge bg-surface-inset px-3 text-sm text-fg-muted">
                         {pm.settings.statuses.archived}
                       </div>
                     ) : (
@@ -2425,7 +2425,7 @@ export function ProjectDetailPage() {
                   <p className="mt-1 text-xs leading-5 text-fg-subtle">{pm.settings.workspaceIndependentHint}</p>
                 </div>
                 <div className="grid gap-3 rounded-md border border-edge bg-surface-base p-3">
-                  <span className="w-fit rounded-md bg-surface-muted px-2 py-0.5 text-xs font-medium text-fg-muted">
+                  <span className="w-fit rounded-md bg-surface-inset px-2 py-0.5 text-xs font-medium text-fg-muted">
                     {projectFollowsAgentWorkspace ? pm.settings.workspaceModeFollow : pm.settings.workspaceModeFixed}
                   </span>
                   <div className="break-all font-mono text-xs leading-5 text-fg" title={workspaceRootLabel}>
@@ -2516,7 +2516,7 @@ export function ProjectDetailPage() {
       >
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
-          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-5 shadow-float focus:outline-none">
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-overlay p-5 shadow-float focus:outline-none">
             <div className="flex items-start gap-3">
               <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-600 dark:text-red-400">
                 <AlertCircle className="size-5" strokeWidth={1.75} aria-hidden />
@@ -2581,7 +2581,7 @@ export function ProjectDetailPage() {
       >
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
-          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex h-[min(34rem,calc(100vh-2rem))] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex h-[min(34rem,calc(100vh-2rem))] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-float focus:outline-none">
             <div className="shrink-0 border-b border-edge px-5 py-4">
               <Dialog.Title className="text-base font-semibold text-fg">{pm.settings.workspaceMigrationTitle}</Dialog.Title>
               <Dialog.Description className="mt-1 text-sm leading-6 text-fg-muted">
@@ -2634,7 +2634,7 @@ export function ProjectDetailPage() {
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm leading-6 text-amber-800 dark:text-amber-200">
                 {pm.settings.workspaceMigrationImpact}
               </div>
-              <div className="rounded-lg bg-surface-muted px-3 py-2 text-xs leading-5 text-fg-subtle">
+              <div className="rounded-lg bg-surface-inset px-3 py-2 text-xs leading-5 text-fg-subtle">
                 {interpolate(pm.settings.workspaceCurrent, { workspace: workspaceMigrationPreview })}
               </div>
             </div>
@@ -2658,7 +2658,7 @@ export function ProjectDetailPage() {
       }}>
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
-          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-float focus:outline-none">
             <div className="border-b border-edge px-5 py-4">
               <Dialog.Title className="text-base font-semibold text-fg">{pm.settings.workspaceMissingTitle}</Dialog.Title>
               <Dialog.Description className="mt-1 text-sm leading-6 text-fg-muted">
@@ -2669,7 +2669,7 @@ export function ProjectDetailPage() {
             </div>
             {missingWorkspaceRoot ? (
               <div className="px-5 py-4">
-                <div className="flex items-center gap-2 rounded-lg bg-surface-muted px-3 py-2 text-sm text-fg-muted">
+                <div className="flex items-center gap-2 rounded-lg bg-surface-inset px-3 py-2 text-sm text-fg-muted">
                   <Folder className="size-4 shrink-0 text-fg-subtle" aria-hidden />
                   <span className="min-w-0 truncate">{missingWorkspaceRoot}</span>
                 </div>

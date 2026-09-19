@@ -37,6 +37,18 @@ describe('agents admin', () => {
     expect(created?.workspace).toBeUndefined();
   });
 
+  it('creates an agent from a display name with no ASCII characters', () => {
+    const first = prepareCreateAgent(config(), { profile: { name: '数据分析师' } });
+    const second = prepareCreateAgent(config(), { profile: { name: '数据分析师' } });
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+    expect(first.data.agentId).toMatch(/^agent-[a-z0-9]{7}$/);
+    expect(second.data.agentId).toBe(first.data.agentId);
+    expect(first.data.nextConfig.agents.list.at(-1)?.profile?.name).toBe('数据分析师');
+  });
+
   it('updates only explicit agent overrides and can reset them', () => {
     const created = prepareCreateAgent(config(), { profile: { name: 'Coder' } });
     if (!created.ok) throw new Error(created.error);

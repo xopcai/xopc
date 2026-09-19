@@ -32,7 +32,7 @@ export function AgentsEditorModal({
         <Dialog.Content
           ref={setPortalContainer}
           className={cn(
-            'xopc-dialog-content fixed flex flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover',
+            'xopc-dialog-content fixed flex flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-popover',
             SETTINGS_SHELL_CONTENT_Z,
             'inset-3 h-[calc(100dvh-1.5rem)] min-h-0 sm:inset-auto sm:left-1/2 sm:top-1/2',
             'sm:h-[min(88vh,48rem)] sm:w-[min(94vw,62rem)] sm:-translate-x-1/2 sm:-translate-y-1/2',

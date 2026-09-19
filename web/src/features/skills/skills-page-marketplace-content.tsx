@@ -254,7 +254,7 @@ export function SkillsPageMarketplaceContent(p: Props) {
                             {row.description || '—'}
                           </p>
                           {categoryLabel ? (
-                            <span className="w-fit max-w-full truncate rounded-full bg-surface-subtle px-2 py-0.5 text-[10px] font-medium text-fg-muted">
+                            <span className="w-fit max-w-full truncate rounded-full bg-surface-inset px-2 py-0.5 text-[10px] font-medium text-fg-muted">
                               {categoryLabel}
                             </span>
                           ) : null}

@@ -14,8 +14,8 @@ export function MeetingEditDialog({ initial, zh, busy, onClose, onSave }: {
 }) {
   const [draft, setDraft] = useState(initial);
   return <Dialog.Root open onOpenChange={open => { if (!open && !busy) onClose(); }}><Dialog.Portal>
-    <Dialog.Overlay className="fixed inset-0 z-[70] bg-surface-base/80" />
-    <Dialog.Content aria-describedby={undefined} className="fixed left-1/2 top-1/2 z-[71] flex h-[min(32rem,90dvh)] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel">
+    <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[70] bg-scrim backdrop-blur-[2px]" />
+    <Dialog.Content aria-describedby={undefined} className="xopc-dialog-content fixed left-1/2 top-1/2 z-[71] flex h-[min(32rem,90dvh)] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay">
       <header className="border-b border-edge p-4"><Dialog.Title>{zh ? '编辑纪要内容' : 'Edit meeting content'}</Dialog.Title></header>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
         <p className="text-xs text-fg-muted">{zh ? '人工修改会保留，重新整理不会覆盖。已创建任务保持不变。' : 'Your changes survive regeneration. Existing tasks remain unchanged.'}</p>

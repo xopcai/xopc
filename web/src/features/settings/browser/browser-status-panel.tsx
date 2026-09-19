@@ -141,12 +141,12 @@ export function BrowserStatusPanel(props: {
         />
       ) : null}
       {enabled && driverKind === 'cdp' ? (
-        <p className="mt-4 rounded-lg bg-surface-subtle px-3 py-2 text-xs leading-5 text-fg-muted">
+        <p className="mt-4 rounded-lg bg-surface-inset px-3 py-2 text-xs leading-5 text-fg-muted">
           {zh ? '连接测试会验证已保存的 CDP 地址，并复用浏览器中现有的标签页和登录状态。' : 'The connection test verifies the saved CDP endpoint and reuses that browser’s existing tabs and signed-in state.'}
         </p>
       ) : null}
       {enabled && driverKind === 'remote' ? (
-        <p className="mt-4 rounded-lg bg-surface-subtle px-3 py-2 text-xs leading-5 text-fg-muted">
+        <p className="mt-4 rounded-lg bg-surface-inset px-3 py-2 text-xs leading-5 text-fg-muted">
           {zh ? '连接测试会在服务商侧创建一个临时浏览器会话，并在测试结束后立即关闭。' : 'The connection test creates a temporary provider session and closes it immediately after the test.'}
         </p>
       ) : null}
@@ -220,7 +220,7 @@ function PlaywrightSetup(props: {
 }
 
 function StatusItem({ label, ok, value }: { label: string; ok: boolean; value: string }) {
-  return <div className="rounded-lg bg-surface-subtle px-3 py-2"><p className="text-xs text-fg-subtle">{label}</p><p className={`mt-1 flex items-center gap-1.5 text-sm ${ok ? 'text-success' : 'text-fg-muted'}`}><span className={`size-1.5 rounded-full ${ok ? 'bg-success' : 'bg-warning'}`} />{value}</p></div>;
+  return <div className="rounded-lg bg-surface-inset px-3 py-2"><p className="text-xs text-fg-subtle">{label}</p><p className={`mt-1 flex items-center gap-1.5 text-sm ${ok ? 'text-success' : 'text-fg-muted'}`}><span className={`size-1.5 rounded-full ${ok ? 'bg-success' : 'bg-warning'}`} />{value}</p></div>;
 }
 
 function Message({ tone, children }: { tone: 'success' | 'error'; children: React.ReactNode }) {

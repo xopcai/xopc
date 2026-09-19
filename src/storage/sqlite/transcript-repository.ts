@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
+import type { MediaRef } from '../../media/types.js';
 import type { CompactionBoundarySummary } from '../../session/types.js';
 import {
   buildSessionContextForLlm,
@@ -344,6 +345,57 @@ export function loadLlmMessagesForSession(conversationId: string): AgentMessage[
     .all(transcriptId, transcriptId) as TranscriptEntryRow[];
   const activeRows = rows.map(transcriptEntryRowToStoredRow);
   return buildSessionContextForLlm(activeRows);
+}
+
+export function findLatestAssistantTranscriptEntryId(conversationId: string): string | null {
+  const transcriptId = getCurrentTranscriptId(conversationId);
+  if (!transcriptId) return null;
+  const row = getSqliteDatabase()
+    .prepare(
+      `SELECT entry_id
+       FROM transcript_entries
+       WHERE transcript_id = ? AND entry_kind = 'message' AND role = 'assistant'
+       ORDER BY seq DESC
+       LIMIT 1`,
+    )
+    .get(transcriptId) as { entry_id: string } | undefined;
+  return row?.entry_id ?? null;
+}
+
+/** Attach generated media to one exact assistant row without rewriting the transcript. */
+export function appendMediaToAssistantTranscriptEntry(
+  conversationId: string,
+  entryId: string,
+  media: MediaRef,
+): boolean {
+  if (!entryId.trim() || !media.uri?.trim()) return false;
+  return runSqliteWriteTransaction((db) => {
+    const transcriptId = readCurrentTranscriptId(db, conversationId);
+    if (!transcriptId) return false;
+    const row = db
+      .prepare(
+        `SELECT payload_json
+         FROM transcript_entries
+         WHERE transcript_id = ? AND entry_id = ? AND entry_kind = 'message' AND role = 'assistant'`,
+      )
+      .get(transcriptId, entryId) as { payload_json: string } | undefined;
+    if (!row) return false;
+
+    let message: AgentMessage & { media?: MediaRef[] };
+    try {
+      message = JSON.parse(row.payload_json) as AgentMessage & { media?: MediaRef[] };
+    } catch {
+      return false;
+    }
+    const existing = Array.isArray(message.media) ? message.media : [];
+    if (existing.some((item) => item?.uri === media.uri)) return true;
+    const next = { ...message, media: [...existing, media] };
+    const result = db.prepare(
+      `UPDATE transcript_entries SET payload_json = ?
+       WHERE transcript_id = ? AND entry_id = ?`,
+    ).run(JSON.stringify(next), transcriptId, entryId);
+    return result.changes === 1;
+  });
 }
 
 export function replaceTranscriptRows(
