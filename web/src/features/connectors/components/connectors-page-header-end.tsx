@@ -1,10 +1,9 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ChevronDown, Plus, Search, Store, Wrench } from 'lucide-react';
 import { memo } from 'react';
-import { Link } from 'react-router-dom';
-import { useLocaleStore } from '@/stores/locale-store';
 
 import { Button } from '@/components/ui/button';
+import { ConnectorServiceDialog } from '../connector-service-page';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 
@@ -57,10 +56,9 @@ export const ConnectorsPageHeaderEnd = memo(function ConnectorsPageHeaderEnd({
   browseLabel: string;
   customLabel: string;
 }) {
-  const zh = useLocaleStore(state => state.language) === 'zh';
   return (
     <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
-      <Link to="/settings/connector-service" className="text-xs text-fg-muted hover:text-fg">{zh ? '应用连接服务' : 'Connection service'}</Link>
+      <ConnectorServiceDialog />
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <Button type="button" variant="primary" className="shrink-0 gap-2">
