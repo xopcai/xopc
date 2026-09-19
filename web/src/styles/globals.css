@@ -1231,7 +1231,7 @@ html[data-color-scheme="dawn"] {
   --color-surface-base: #edf2f7;
   --color-surface-rail: rgb(240 246 251 / 0.52);
   --color-surface-panel: rgb(255 255 255 / 0.6);
-  --color-surface-overlay: rgb(248 251 254 / 0.96);
+  --color-surface-overlay: #f8fbfe;
   --color-surface-inset: rgb(218 227 236 / 0.72);
   --color-surface-hover: rgb(255 255 255 / 0.48);
   --color-surface-active: rgb(255 255 255 / 0.7);
@@ -1323,7 +1323,7 @@ html.dark[data-color-scheme="dawn"] {
   --color-surface-base: #172433;
   --color-surface-rail: rgb(22 35 48 / 0.68);
   --color-surface-panel: rgb(31 45 59 / 0.68);
-  --color-surface-overlay: rgb(31 45 59 / 0.96);
+  --color-surface-overlay: #1f2d3b;
   --color-surface-inset: rgb(12 23 34 / 0.72);
   --color-surface-hover: rgb(255 255 255 / 0.09);
   --color-surface-active: rgb(255 255 255 / 0.14);

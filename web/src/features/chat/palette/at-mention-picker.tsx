@@ -219,7 +219,7 @@ export const AtMentionPicker = memo(function AtMentionPicker({
 
   const shell = (
     <div
-      className="pointer-events-auto max-h-[min(28rem,60vh)] min-h-[2.5rem] overflow-hidden rounded-lg border border-edge bg-surface-panel shadow-lg dark:bg-surface-panel/95"
+      className="pointer-events-auto max-h-[min(28rem,60vh)] min-h-[2.5rem] overflow-hidden rounded-lg border border-edge bg-surface-overlay shadow-lg"
       style={{
         position: 'fixed',
         left: box.left,
@@ -316,7 +316,7 @@ export const AtMentionPicker = memo(function AtMentionPicker({
       {shiftHint ? <div className="border-t border-edge-subtle px-3 py-1.5 text-[0.65rem] text-fg-muted">{shiftHint}</div> : null}
       {hoverPreview ? (
         <div
-          className="pointer-events-none fixed z-[200] max-h-48 max-w-sm overflow-auto rounded-md border border-edge bg-surface-panel p-2 font-mono text-[0.7rem] text-fg shadow-lg"
+          className="pointer-events-none fixed z-[200] max-h-48 max-w-sm overflow-auto rounded-md border border-edge bg-surface-overlay p-2 font-mono text-[0.7rem] text-fg shadow-lg"
           style={{
             left: Math.min(hoverPreview.x + 12, window.innerWidth - 320),
             top: Math.min(hoverPreview.y + 12, window.innerHeight - 200),

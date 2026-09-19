@@ -348,7 +348,7 @@ export const CommandPalette = memo(function CommandPalette({
   const showHighlight = filterQuery.length > 0;
 
   const sectionHeaderClass =
-    'sticky top-0 z-10 flex items-center justify-between bg-surface-panel px-2.5 py-2 text-[0.65rem] font-medium uppercase leading-none tracking-wide text-fg-muted dark:bg-surface-panel';
+    'sticky top-0 z-10 flex items-center justify-between bg-surface-overlay px-2.5 py-2 text-[0.65rem] font-medium uppercase leading-none tracking-wide text-fg-muted';
 
   const sectionLabels: Record<PaletteItemKind, string> = {
     skill: skillsLabel,
@@ -432,7 +432,7 @@ export const CommandPalette = memo(function CommandPalette({
     <TooltipProvider delayDuration={0} skipDelayDuration={0} disableHoverableContent={false}>
       <div
         ref={panelRef}
-        className="pointer-events-auto max-h-[min(32rem,60vh)] min-h-8 overflow-y-auto rounded-md border border-edge bg-surface-panel text-xs leading-4 shadow-lg dark:bg-surface-panel/95"
+        className="pointer-events-auto max-h-[min(32rem,60vh)] min-h-8 overflow-y-auto rounded-md border border-edge bg-surface-overlay text-xs leading-4 shadow-lg"
         style={{
           position: 'fixed',
           left: box.left,
@@ -564,7 +564,7 @@ const PaletteRow = memo(function PaletteRow({
             align="start"
             sideOffset={8}
             collisionPadding={12}
-            className="!z-[10000] max-h-[min(12rem,40vh)] max-w-sm overflow-y-auto rounded-md border border-edge bg-surface-panel px-2 py-1.5 text-left text-[11px] leading-snug text-fg shadow-lg select-text [max-width:min(20rem,90vw)]"
+            className="!z-[10000] max-h-[min(12rem,40vh)] max-w-sm overflow-y-auto rounded-md border border-edge bg-surface-overlay px-2 py-1.5 text-left text-[11px] leading-snug text-fg shadow-lg select-text [max-width:min(20rem,90vw)]"
             data-slash-palette-tooltip=""
           >
             <span className="whitespace-pre-wrap break-words">{tooltipText}</span>

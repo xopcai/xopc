@@ -15,7 +15,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react';
-import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type UIEvent } from 'react';
+import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type UIEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
@@ -50,6 +50,7 @@ import {
   listSessions,
   pinSession,
   renameSession,
+  saveSidebarLayout,
   unpinSession,
 } from '@/features/sessions/session-api';
 import type { SessionMetadata } from '@/features/sessions/session.types';
@@ -67,6 +68,89 @@ const PAGE_SIZE = 20;
 const PROJECT_LIMIT = 12;
 const PROJECT_PREVIEW_LIMIT = 5;
 const SIDEBAR_STALE_DAYS = 60;
+const SIDEBAR_DRAG_MIME = 'application/x-xopc-sidebar-item';
+
+type SidebarSortSpec = {
+  containerId: string;
+  itemId: string;
+  itemIds: string[];
+  onReorder: (containerId: string, itemIds: string[]) => void;
+};
+
+function moveSidebarItem(itemIds: string[], itemId: string, targetId: string, after: boolean): string[] {
+  const next = itemIds.filter((id) => id !== itemId);
+  const targetIndex = next.indexOf(targetId);
+  if (targetIndex < 0) return itemIds;
+  next.splice(targetIndex + (after ? 1 : 0), 0, itemId);
+  return next;
+}
+
+function orderSidebarItems<T>(items: T[], order: string[] | undefined, idOf: (item: T) => string): T[] {
+  if (!order?.length) return items;
+  const ranks = new Map(order.map((id, index) => [id, index]));
+  return items
+    .map((item, index) => ({ item, index, rank: ranks.get(idOf(item)) }))
+    .sort((a, b) => {
+      if (a.rank !== undefined && b.rank !== undefined) return a.rank - b.rank;
+      if (a.rank !== undefined) return 1;
+      if (b.rank !== undefined) return -1;
+      return a.index - b.index;
+    })
+    .map(({ item }) => item);
+}
+
+function SidebarSortableItem({ spec, children }: { spec?: SidebarSortSpec; children: ReactNode }) {
+  const [dragging, setDragging] = useState(false);
+  const [dropEdge, setDropEdge] = useState<'before' | 'after' | null>(null);
+  if (!spec) return children;
+
+  return (
+    <div
+      draggable
+      className={cn(
+        'relative cursor-grab transition-[opacity,transform] duration-200 ease-out active:cursor-grabbing',
+        dragging && 'opacity-50',
+      )}
+      onDragStart={(event) => {
+        setDragging(true);
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData(SIDEBAR_DRAG_MIME, JSON.stringify({ containerId: spec.containerId, itemId: spec.itemId }));
+      }}
+      onDragEnd={() => {
+        setDragging(false);
+        setDropEdge(null);
+      }}
+      onDragOver={(event) => {
+        event.preventDefault();
+        const rect = event.currentTarget.getBoundingClientRect();
+        setDropEdge(event.clientY >= rect.top + rect.height / 2 ? 'after' : 'before');
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropEdge(null);
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        const rect = event.currentTarget.getBoundingClientRect();
+        const after = event.clientY >= rect.top + rect.height / 2;
+        setDropEdge(null);
+        try {
+          const source = JSON.parse(event.dataTransfer.getData(SIDEBAR_DRAG_MIME)) as { containerId: string; itemId: string };
+          if (source.containerId !== spec.containerId || source.itemId === spec.itemId) return;
+          spec.onReorder(
+            spec.containerId,
+            moveSidebarItem(spec.itemIds, source.itemId, spec.itemId, after),
+          );
+        } catch {
+          // Ignore drags from outside the sidebar.
+        }
+      }}
+    >
+      {dropEdge === 'before' ? <span className="pointer-events-none absolute inset-x-1 top-0 z-30 h-0.5 rounded-full bg-accent" /> : null}
+      {children}
+      {dropEdge === 'after' ? <span className="pointer-events-none absolute inset-x-1 bottom-0 z-30 h-0.5 rounded-full bg-accent" /> : null}
+    </div>
+  );
+}
 
 type ProjectSidebarGroup = {
   project: Project;
@@ -171,6 +255,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   clipboard,
   defaultUnnamedTitle,
   contextLabel,
+  sort,
 }: {
   session: SessionMetadata;
   isActive: boolean;
@@ -185,6 +270,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   sess: ReturnType<typeof messages>['sessions'];
   clipboard: ReturnType<typeof messages>['clipboard'];
   defaultUnnamedTitle: string;
+  sort?: SidebarSortSpec;
 }) {
   const showDescription = useContext(SessionDescriptionContext);
   const identity = resolveSessionIdentity(session);
@@ -228,6 +314,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   };
 
   return (
+    <SidebarSortableItem spec={sort}>
     <div className={rowShellClass(isActive, indented)}>
       <Link
         to={`/chat/${encodeURIComponent(session.key)}`}
@@ -370,6 +457,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
         </Popover.Root>
       </div>
     </div>
+    </SidebarSortableItem>
   );
 });
 
@@ -536,6 +624,8 @@ function SidebarProjectSection({
   clipboard,
   defaultUnnamedTitle,
   excludedConversationIds,
+  projectSort,
+  onReorder,
 }: {
   group: ProjectSidebarGroup;
   isExpanded: boolean;
@@ -558,6 +648,8 @@ function SidebarProjectSection({
   defaultUnnamedTitle: string;
   /** Sessions rendered in the dedicated pinned section stay out of their project list. */
   excludedConversationIds?: ReadonlySet<string>;
+  projectSort?: SidebarSortSpec;
+  onReorder: (containerId: string, itemIds: string[]) => void;
 }) {
   const unpinnedSessions = excludedConversationIds
     ? group.sessions.filter((session) => !excludedConversationIds.has(session.key))
@@ -569,6 +661,7 @@ function SidebarProjectSection({
   const hasActiveSession = unpinnedSessions.some((session) => session.key === activeConversationId);
 
   return (
+    <SidebarSortableItem spec={projectSort}>
     <section className="flex flex-col gap-0.5" aria-label={group.project.name}>
       <div
         className={cn(
@@ -625,6 +718,12 @@ function SidebarProjectSection({
               sess={sess}
               clipboard={clipboard}
               defaultUnnamedTitle={defaultUnnamedTitle}
+              sort={{
+                containerId: `project:${group.project.id}`,
+                itemId: session.key,
+                itemIds: unpinnedSessions.map((item) => item.key),
+                onReorder,
+              }}
             />
           ))}
           {canToggleSessionLimit ? (
@@ -653,6 +752,7 @@ function SidebarProjectSection({
         </div>
       ) : null}
     </section>
+    </SidebarSortableItem>
   );
 }
 
@@ -674,6 +774,8 @@ function SidebarInboxSection({
   clipboard,
   defaultUnnamedTitle,
   excludedConversationIds,
+  onReorder,
+  sortable = true,
 }: {
   sessions: SessionMetadata[];
   hasMore: boolean;
@@ -693,6 +795,8 @@ function SidebarInboxSection({
   defaultUnnamedTitle: string;
   /** Sessions rendered in the dedicated pinned section stay out of the inbox. */
   excludedConversationIds?: ReadonlySet<string>;
+  onReorder: (containerId: string, itemIds: string[]) => void;
+  sortable?: boolean;
 }) {
   const unpinnedSessions = excludedConversationIds
     ? sessions.filter((session) => !excludedConversationIds.has(session.key))
@@ -750,6 +854,12 @@ function SidebarInboxSection({
             sess={sess}
             clipboard={clipboard}
             defaultUnnamedTitle={defaultUnnamedTitle}
+            sort={sortable ? {
+              containerId: 'inbox',
+              itemId: session.key,
+              itemIds: unpinnedSessions.map((item) => item.key),
+              onReorder,
+            } : undefined}
           />
         ))}
         {hasMore ? (
@@ -784,6 +894,7 @@ function SidebarPinnedSection({
   sess,
   clipboard,
   defaultUnnamedTitle,
+  onReorder,
 }: {
   sessions: SessionMetadata[];
   activeConversationId?: string;
@@ -795,6 +906,7 @@ function SidebarPinnedSection({
   sess: ReturnType<typeof messages>['sessions'];
   clipboard: ReturnType<typeof messages>['clipboard'];
   defaultUnnamedTitle: string;
+  onReorder: (containerId: string, itemIds: string[]) => void;
 }) {
   if (sessions.length === 0) return null;
 
@@ -817,6 +929,12 @@ function SidebarPinnedSection({
             sess={sess}
             clipboard={clipboard}
             defaultUnnamedTitle={defaultUnnamedTitle}
+            sort={{
+              containerId: 'pinned',
+              itemId: session.key,
+              itemIds: sessions.map((item) => item.key),
+              onReorder,
+            }}
           />
         ))}
       </div>
@@ -888,6 +1006,8 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
   const [inboxExtraItems, setInboxExtraItems] = useState<SessionMetadata[]>([]);
   const [inboxHasMoreOverride, setInboxHasMoreOverride] = useState<boolean | null>(null);
   const [loadingInboxMore, setLoadingInboxMore] = useState(false);
+  const [pendingOrders, setPendingOrders] = useState<Record<string, string[]>>({});
+  const reorderBusyRef = useRef(new Set<string>());
   const workspacePicker = useDirectoryPicker({
     initialPath: createProjectWorkspace,
     onPicked: setCreateProjectWorkspace,
@@ -942,9 +1062,16 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
         });
       }
     }
-    // Preserve the API's stable project order across pages and session updates.
-    return groups;
-  }, [data, loadingProjectIds, projectSessionOverrides]);
+    const orderedGroups = groups.map((group) => ({
+      ...group,
+      sessions: orderSidebarItems(
+        group.sessions,
+        pendingOrders[`project:${group.project.id}`],
+        (session) => session.key,
+      ),
+    }));
+    return orderSidebarItems(orderedGroups, pendingOrders.projects, (group) => group.project.id);
+  }, [data, loadingProjectIds, pendingOrders, projectSessionOverrides]);
 
   const firstInbox = data?.[0]?.inbox;
   const inboxItems = useMemo(() => {
@@ -956,8 +1083,12 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
       out.push(session);
     }
     out.sort((a, b) => sessionUpdatedAtMs(b) - sessionUpdatedAtMs(a));
-    return out;
-  }, [firstInbox?.items, inboxExtraItems]);
+    return orderSidebarItems(
+      out,
+      pendingOrders.inbox ?? data?.[0]?.layouts.inbox?.itemIds,
+      (session) => session.key,
+    );
+  }, [data, firstInbox?.items, inboxExtraItems, pendingOrders.inbox]);
   const inboxHasMore = inboxHasMoreOverride ?? firstInbox?.hasMore ?? false;
 
   const items = useMemo(() => {
@@ -987,11 +1118,8 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
   const hasGroupedItems = projectGroups.length > 0 || inboxItems.length > 0;
 
   const pinnedSessions = useMemo(
-    () =>
-      items
-        .filter((session) => session.status === 'pinned')
-        .sort((a, b) => sessionUpdatedAtMs(b) - sessionUpdatedAtMs(a)),
-    [items],
+    () => orderSidebarItems(data?.[0]?.pinned ?? [], pendingOrders.pinned, (session) => session.key),
+    [data, pendingOrders.pinned],
   );
   const pinnedConversationIds = useMemo(
     () => new Set(pinnedSessions.map((session) => session.key)),
@@ -1009,6 +1137,33 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
     setInboxHasMoreOverride(null);
     void mutate();
   }, [mutate]);
+
+  const reorderSidebar = useCallback((containerId: string, itemIds: string[]) => {
+    if (reorderBusyRef.current.has(containerId)) return;
+    const expectedRevision = data?.[0]?.layouts[containerId]?.revision ?? 0;
+    setPendingOrders((current) => ({ ...current, [containerId]: itemIds }));
+    reorderBusyRef.current.add(containerId);
+    void (async () => {
+      try {
+        await saveSidebarLayout({ containerId, itemIds, expectedRevision });
+        await mutate();
+      } catch {
+        showComposerNotification(
+          'warning',
+          language === 'zh' ? '未能保存侧栏顺序，已恢复原位置' : 'Could not save sidebar order; the previous order was restored',
+          undefined,
+          { duration: 3500 },
+        );
+      } finally {
+        reorderBusyRef.current.delete(containerId);
+        setPendingOrders((current) => {
+          const next = { ...current };
+          delete next[containerId];
+          return next;
+        });
+      }
+    })();
+  }, [data, language, mutate]);
 
   const onScroll = useCallback(
     (e: UIEvent<HTMLDivElement>) => {
@@ -1178,8 +1333,8 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
       try {
         const result = await listSessions({
           projectId,
-          limit: PAGE_SIZE,
-          offset: group.sessions.length,
+          limit: 5000,
+          offset: 0,
           updatedAfter: sidebarUpdatedAfter,
           includePinned: true,
           includeConversationId: activeConversationId,
@@ -1193,13 +1348,17 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
             seen.add(session.key);
             appended.push(session);
           }
-          appended.sort((a, b) => sessionUpdatedAtMs(b) - sessionUpdatedAtMs(a));
+          const ordered = orderSidebarItems(
+            appended,
+            pendingOrders[`project:${projectId}`] ?? data?.[0]?.layouts[`project:${projectId}`]?.itemIds,
+            (session) => session.key,
+          );
           return {
             ...prev,
             [projectId]: {
-              sessions: appended,
+              sessions: ordered,
               sessionTotal: result.total,
-              hasMore: result.hasMore,
+              hasMore: false,
             },
           };
         });
@@ -1211,7 +1370,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
         });
       }
     })();
-  }, [activeConversationId, expandedProjects, loadingProjectIds, projectGroups, sidebarUpdatedAfter]);
+  }, [activeConversationId, data, expandedProjects, loadingProjectIds, pendingOrders, projectGroups, sidebarUpdatedAfter]);
 
   const toggleProjectCollapsed = useCallback((projectId: string) => {
     setCollapsedProjectIds((prev) => {
@@ -1232,8 +1391,8 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
       try {
         const result = await listSessions({
           unassigned: true,
-          limit: PAGE_SIZE,
-          offset: inboxItems.length,
+          limit: 5000,
+          offset: 0,
           updatedAfter: sidebarUpdatedAfter,
           includePinned: true,
           includeConversationId: activeConversationId,
@@ -1246,14 +1405,18 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
             seen.add(session.key);
             next.push(session);
           }
-          return next;
+          return orderSidebarItems(
+            next,
+            pendingOrders.inbox ?? data?.[0]?.layouts.inbox?.itemIds,
+            (session) => session.key,
+          );
         });
-        setInboxHasMoreOverride(result.hasMore);
+        setInboxHasMoreOverride(false);
       } finally {
         setLoadingInboxMore(false);
       }
     })();
-  }, [activeConversationId, firstInbox?.items, inboxHasMore, inboxItems.length, loadingInboxMore, sidebarUpdatedAfter]);
+  }, [activeConversationId, data, firstInbox?.items, inboxHasMore, loadingInboxMore, pendingOrders.inbox, sidebarUpdatedAfter]);
 
   const createProjectChat = useCallback((project: Project) => {
     navigate(newChatHrefForProject(project.id), {
@@ -1336,6 +1499,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
             sess={sess}
             clipboard={m.clipboard}
             defaultUnnamedTitle={m.chat.newSession}
+            onReorder={reorderSidebar}
           />
         </div>
         <div className="px-2">
@@ -1431,6 +1595,13 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
                           clipboard={m.clipboard}
                           defaultUnnamedTitle={m.chat.newSession}
                           excludedConversationIds={pinnedConversationIds}
+                          projectSort={{
+                            containerId: 'projects',
+                            itemId: group.project.id,
+                            itemIds: projectGroups.map((item) => item.project.id),
+                            onReorder: reorderSidebar,
+                          }}
+                          onReorder={reorderSidebar}
                         />
                       ))
                     : null}
@@ -1458,6 +1629,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
                 clipboard={m.clipboard}
                 defaultUnnamedTitle={m.chat.newSession}
                 excludedConversationIds={pinnedConversationIds}
+                onReorder={reorderSidebar}
               />
               {inboxItems.some((session) => resolveSessionIdentity(session).source === 'system') ? <details className="mt-3" open={inboxItems.some((session) => session.key === activeConversationId && resolveSessionIdentity(session).source === 'system')}>
                 <summary className="cursor-pointer px-2 py-2 text-xs text-fg-muted">{language === 'zh' ? '系统活动' : 'System activity'}</summary>
@@ -1482,6 +1654,8 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
                 clipboard={m.clipboard}
                 defaultUnnamedTitle={m.chat.newSession}
                 excludedConversationIds={pinnedConversationIds}
+                onReorder={reorderSidebar}
+                sortable={false}
               />
               </details> : null}
             </div>
