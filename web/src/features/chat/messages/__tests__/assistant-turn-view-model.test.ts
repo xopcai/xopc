@@ -116,6 +116,7 @@ describe('buildAssistantTurnViewModel', () => {
 
     expect(view.workLog.items.map((block) => block.type)).toEqual(expectedTypes);
     expect(view.workLog.expandedByDefault).toBe(expanded);
+    expect(view.workLog.compact).toBe(level === 'off');
   });
 
   it('promotes the latest object delivery to the turn result surface', () => {

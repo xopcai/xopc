@@ -56,6 +56,7 @@ export interface AssistantTurnWorkLogPresentation {
   active: boolean;
   status: 'running' | 'completed' | 'partial' | 'failed';
   expandedByDefault: boolean;
+  compact: boolean;
   startedAt?: number;
   durationMs?: number;
 }
@@ -162,6 +163,7 @@ export function buildAssistantTurnViewModel({
       items: workLogItems,
       active: isStreaming && workLogItems.length > 0,
       status: workLogStatus,
+      compact: reasoningLevel === 'off',
       expandedByDefault:
         reasoningLevel === 'stream' && isStreaming && !answerStarted,
       startedAt: workLogStartedAt,

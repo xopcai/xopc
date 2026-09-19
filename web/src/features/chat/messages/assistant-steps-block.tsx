@@ -143,19 +143,22 @@ export function AssistantStepsBlock({
   workflowOptions: AssistantActivityWorkflowOptions;
 }) {
   const language = useLocaleStore((s) => s.language);
-  const visibleItems = workLog.items;
+  const showRawToolData = useDevViewStore((s) => s.showRawToolData);
+  const visibleItems = useMemo(() => workLog.items.filter((item) => (
+    item.type !== 'thinking' || showRawToolData
+  )), [workLog.items, showRawToolData]);
   const activityBlocks = useMemo(
-    () => visibleItems.filter(
+    () => workLog.items.filter(
       (item): item is ThinkingContent | ToolUseContent => item.type !== 'text',
     ),
-    [visibleItems],
+    [workLog.items],
   );
   const stepCount = visibleItems.length;
   const anyActive = workLog.active;
   const stepsDrawerOpen = workLog.expandedByDefault && anyActive;
   const [userExpanded, setUserExpanded] = useState<boolean | null>(null);
 
-  const expanded = userExpanded ?? stepsDrawerOpen;
+  const expanded = !workLog.compact && (userExpanded ?? stepsDrawerOpen);
   const effectiveStartedAt = workLog.startedAt ?? null;
   const completedDurationMs = workLog.durationMs ?? null;
   const friendlyTitleLabels = useMemo(() => ({
@@ -178,7 +181,11 @@ export function AssistantStepsBlock({
     state: 'running' | 'completed',
   ): string | null => {
     const kind = classifyTool(block.name, block.activity);
-    if (kind !== 'other' && !hasSpecificToolExecutionTitle(block.name)) return null;
+    if (kind !== 'other' && !hasSpecificToolExecutionTitle(block.name)) {
+      const detail = getKeyDetailLine(block.input);
+      const title = actionKindRunningLabel(kind, clusterLabels.ing);
+      return detail ? `${title.replace(/[…]+$/, '')} · ${detail}` : title;
+    }
     return getToolExecutionTitle(
       block.name,
       block.input,
@@ -187,7 +194,7 @@ export function AssistantStepsBlock({
       friendlyTitleLabels,
       block.activity,
     );
-  }, [friendlyTitleLabels, stepLabels.toolActivity]);
+  }, [friendlyTitleLabels, stepLabels.toolActivity, clusterLabels.ing]);
 
   const streamingHeaderText = useMemo(() => {
     if (!anyActive) return null;
@@ -198,7 +205,7 @@ export function AssistantStepsBlock({
     );
   }, [anyActive, activityBlocks, clusterLabels, semanticTitle]);
 
-  if (stepCount === 0) {
+  if (stepCount === 0 && !anyActive) {
     return null;
   }
 
@@ -240,13 +247,11 @@ export function AssistantStepsBlock({
     </>
   ) : (
     <span className="[overflow-wrap:anywhere]">
-      {completedDurationMs == null
-        ? stepLabels.workLogTitle
-        : workLog.status === 'failed'
-          ? stepLabels.workLogFailed
-          : workLog.status === 'partial'
-            ? stepLabels.workLogPartial
-            : stepLabels.workLogComplete}
+      {workLog.status === 'failed'
+        ? stepLabels.workLogFailed
+        : workLog.status === 'partial'
+          ? stepLabels.workLogPartial
+          : completedDurationMs == null ? stepLabels.workLogTitle : stepLabels.workLogComplete}
     </span>
   );
 
@@ -260,6 +265,9 @@ export function AssistantStepsBlock({
     />
   ) : null;
 
+  const showDisclosure = !workLog.compact && stepCount > 0;
+  const Header = showDisclosure ? 'button' : 'div';
+
   return (
     <div
       className={cn(
@@ -267,16 +275,16 @@ export function AssistantStepsBlock({
         expanded ? 'w-full' : 'w-fit max-w-full',
       )}
     >
-      <button
-        type="button"
+      {anyActive || showDisclosure ? <Header
+        type={showDisclosure ? "button" : undefined}
         className={cn(
           'flex min-h-11 w-fit max-w-full min-w-0 items-center gap-2 rounded-lg px-1 py-1.5 text-left text-sm text-fg-muted',
           interaction.transition,
-          'hover:bg-surface-hover/70 hover:text-fg dark:hover:bg-surface-hover/40',
+          showDisclosure && 'hover:bg-surface-hover/70 hover:text-fg dark:hover:bg-surface-hover/40',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
         )}
-        onClick={() => setUserExpanded((current) => !(current ?? stepsDrawerOpen))}
-        aria-expanded={expanded}
+        onClick={showDisclosure ? () => setUserExpanded((current) => !(current ?? stepsDrawerOpen)) : undefined}
+        aria-expanded={showDisclosure ? expanded : undefined}
       >
         <div className="min-w-0 flex-1">
           <span className="inline-flex max-w-full flex-wrap items-baseline">
@@ -284,11 +292,15 @@ export function AssistantStepsBlock({
           </span>
         </div>
         <span className="flex shrink-0 items-start justify-end">{headerDurationRight}</span>
-        <ChevronDown
+        {showDisclosure ? <ChevronDown
           className={cn('size-4 shrink-0 text-fg-muted transition-transform motion-reduce:transition-none', expanded && 'rotate-180')}
           aria-hidden
-        />
-      </button>
+        /> : null}
+      </Header> : null}
+      {workLog.items.filter((item): item is ToolUseContent => item.type === 'tool_use').map((block) => (
+        <StepRow key={block.id} block={block} toolLabels={toolLabels} stepLabels={timelineLabels}
+          cardLabels={cardLabels} conversationId={conversationId} workflowOptions={workflowOptions} surfaceOnly />
+      ))}
       {expanded ? (
         <div className="mt-1 w-full min-w-0 pb-1 pl-1">
           <AssistantStepsTimeline
@@ -464,7 +476,9 @@ function StepRow({
   cardLabels,
   conversationId,
   workflowOptions,
+  surfaceOnly = false,
 }: {
+  surfaceOnly?: boolean;
   block: AssistantWorkLogItem;
   toolLabels: { input: string; output: string; noOutput: string };
   stepLabels: {
@@ -538,7 +552,7 @@ function StepRow({
   if (block.type === 'thinking') {
     const streaming = Boolean(block.streaming);
     const text = block.text?.trim() ?? '';
-    if (!text && !streaming) return null;
+    if (!showRawToolData || !text) return null;
 
     return (
       <div className="min-w-0">
@@ -564,6 +578,7 @@ function StepRow({
   }
 
   if (isWorkflowToolBlock(block)) {
+    if (!surfaceOnly) return null;
     return (
       <WorkflowCard
         block={block}
@@ -574,7 +589,7 @@ function StepRow({
     );
   }
 
-  const isStreaming = block.status === 'running';
+  const isStreaming = block.status === 'running' || block.activity?.status === 'running';
   const isError = block.status === 'error' || block.activity?.status === 'failed';
   const failureSummary = isError
     ? toolFailureSummary(block, stepLabels.toolError, cardLabels)
@@ -615,7 +630,7 @@ function StepRow({
     unknownTool: stepLabels.unknownTool,
   };
   const statefulTitle = kind === 'other' || hasSpecificToolExecutionTitle(block.name);
-  const title = memoryActivity?.title
+  const title = isError ? stepLabels.toolError : memoryActivity?.title
     ?? (isStreaming && !statefulTitle
       ? actionKindRunningLabel(kind, stepLabels.runningActions)
       : getToolExecutionTitle(
@@ -644,6 +659,19 @@ function StepRow({
               : null
     : null;
 
+  if (surfaceOnly) {
+    return <>
+      {isError ? <div role="status" className="my-1 text-sm text-fg-muted">
+        <p>{stepLabels.toolError}{detailLine ? ` · ${detailLine}` : ''}</p>
+        <p className="text-xs">{failureSummary}</p>
+      </div> : null}
+      {!isStreaming && !isError && (kind === 'writeFile' || kind === 'editFile') ? card : null}
+      {!isStreaming && !isError ? <ToolUseWidgetSlot toolName={block.name} toolResult={block.result} /> : null}
+      {!isStreaming && browserSetup ? <BrowserSetupRequiredCard payload={browserSetup} /> : null}
+      {!isStreaming && browserApproval ? <BrowserApprovalCard approval={browserApproval} /> : null}
+    </>;
+  }
+
   // Raw payloads are a developer inspection surface, never a user-facing fallback renderer.
   const showRawDetails = !isStreaming && showRawToolData;
 
@@ -655,7 +683,7 @@ function StepRow({
             {title}
           </span>
         </div>
-        {card}
+        {(kind !== 'writeFile' && kind !== 'editFile') || isStreaming || isError ? card : null}
         {memoryActivity ? (
           <div className="space-y-1 text-xs text-fg-muted">
             <p>{memoryActivity.purpose}</p>
@@ -712,15 +740,6 @@ function StepRow({
               </div>
             </div>
           </details>
-        ) : null}
-        {!isStreaming && !isError ? (
-          <ToolUseWidgetSlot toolName={block.name} toolResult={block.result} />
-        ) : null}
-        {!isStreaming && browserSetup ? (
-          <BrowserSetupRequiredCard payload={browserSetup} />
-        ) : null}
-        {!isStreaming && browserApproval ? (
-          <BrowserApprovalCard approval={browserApproval} />
         ) : null}
       </div>
     </div>

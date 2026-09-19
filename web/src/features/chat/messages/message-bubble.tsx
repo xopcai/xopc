@@ -508,12 +508,12 @@ export const MessageBubble = memo(function MessageBubble({
                 {formatChatMessageTime(message.timestamp)}
               </time>
             ) : null}
-            {progressForMeta?.message ? (
+            {progressForMeta?.message && !hasAssistantActivity ? (
               <span className="text-fg-subtle" title={progressForMeta.detail ?? ''}>
                 {progressForMeta.message}
               </span>
             ) : null}
-            {isStreaming && !streamingThinking && !progressForMeta?.message ? (
+            {isStreaming && !hasAssistantActivity && !streamingThinking && !progressForMeta?.message ? (
               <span className="text-fg-subtle">{m.chat.thinkingLabel}</span>
             ) : null}
           </div>
@@ -530,12 +530,12 @@ export const MessageBubble = memo(function MessageBubble({
                 {formatChatMessageTime(message.timestamp)}
               </time>
             ) : null}
-            {progressForMeta?.message ? (
+            {progressForMeta?.message && !hasAssistantActivity ? (
               <span className="text-fg-subtle" title={progressForMeta.detail ?? ''}>
                 {progressForMeta.message}
               </span>
             ) : null}
-            {isStreaming && !streamingThinking && !progressForMeta?.message ? (
+            {isStreaming && !hasAssistantActivity && !streamingThinking && !progressForMeta?.message ? (
               <span className="text-fg-subtle">{m.chat.thinkingLabel}</span>
             ) : null}
           </div>

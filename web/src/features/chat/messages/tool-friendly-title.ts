@@ -249,7 +249,14 @@ export function getToolExecutionTitle(
   }
 
   const builtin = BUILTIN_SEMANTICS[id];
-  if (builtin) return labels.builtins[builtin][state];
+  if (builtin) {
+    const title = labels.builtins[builtin][state];
+    const record = asRecord(input);
+    const object = builtin === 'skillView' ? record?.name : undefined;
+    return typeof object === 'string' && object.trim()
+      ? `${title} · ${object.trim().replace(/\s+/g, ' ').slice(0, 100)}`
+      : title;
+  }
 
   const semantic = activity ?? resolveToolActivity(name, state === 'running' ? 'running' : 'completed');
   if (semantic.category !== 'other' || semantic.action !== 'use') {
