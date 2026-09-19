@@ -45,6 +45,12 @@ const descriptor: ExternalToolDescriptor = {
 };
 
 describe('ExternalToolService', () => {
+  it.each(['cli', 'composio'] as const)('requires explicit accounts for %s batch reads', async source => {
+    const contract = { ...descriptor, source, toolRef: `${source}:demo:read`, batchRead: true, inputSchema: { type: 'object', properties: { xopcAccountId: { type: 'string' } } } };
+    const service = new ExternalToolService([provider({ source, descriptor: contract })]);
+    const described = (await service.describe([contract.toolRef])).tools[0]!;
+    await expect(service.execute({ toolRef: contract.toolRef, revision: described!.revision, arguments: {}, readOnly: true, context: { toolCallId: 'batch' } })).rejects.toThrow('explicit xopcAccountId');
+  });
   it('federates, ranks, limits, and isolates unavailable providers', async () => {
     const service = new ExternalToolService([
       provider({ source: 'extension', hits: [descriptor] }),

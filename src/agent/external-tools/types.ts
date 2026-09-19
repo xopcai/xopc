@@ -4,7 +4,7 @@ import type {
 } from '@earendil-works/pi-agent-core';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
-export const EXTERNAL_TOOL_SOURCES = ['mcp', 'composio', 'extension', 'memory', 'endpoint'] as const;
+export const EXTERNAL_TOOL_SOURCES = ['cli', 'mcp', 'composio', 'extension', 'memory', 'endpoint'] as const;
 
 export type ExternalToolSource = (typeof EXTERNAL_TOOL_SOURCES)[number];
 

@@ -1,3 +1,6 @@
+import { getCliAdapter } from './cli/adapterRegistry.js';
+import { installCli } from './cli/installer.js';
+import { stopCliInstance } from './cli/lifecycle.js';
 import type { CredentialResolver } from '../auth/credentials.js';
 import type { Config } from '../config/schema.js';
 import {
@@ -92,6 +95,29 @@ function uninstallRecord(config: Config, instanceId: string): void {
   delete nextInstances[instanceId];
   config.connectors = { ...(config.connectors ?? {}), instances: nextInstances };
 }
+
+registerConnectorRuntimeAdapter({
+  type: 'cli',
+  async install({ config, definition }) {
+    if (definition.runtime.type !== 'cli') throw new Error('Invalid CLI runtime.');
+    const adapter = getCliAdapter(definition.runtime.adapterId);
+    if (definition.runtime.binaryVersion !== adapter.binaryVersion || definition.runtime.adapterVersion !== adapter.version) {
+      throw new Error('CLI version does not match its registered adapter.');
+    }
+    await installCli(adapter);
+    const instance = installRecord(config, definition);
+    if (isXopcDatabaseOpen()) {
+      const id = `${definition.id}-local-owner`;
+      if (!getConnectorInstallation(id)) upsertConnectorInstallation({ id, connectorId: definition.id,
+        principalId: 'local-owner', enabled: true, allowedAgentIds: [], maxScope: 'read', confirmationPolicy: 'writes', selectedAccountIds: null });
+    }
+    return instance;
+  },
+  uninstall({ config, instance }) {
+    stopCliInstance(instance.instanceId, true);
+    uninstallRecord(config, instance.instanceId);
+  },
+});
 
 registerConnectorRuntimeAdapter({
   type: 'mcp',

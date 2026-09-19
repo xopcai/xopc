@@ -6,6 +6,12 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps CLI authorization, accounts and policy routes', () => {
+    for (const path of ['/api/connectors/executions/id/artifact', '/api/connectors/feishu-workspace/executions', '/api/connectors/feishu-workspace/accounts', '/api/connectors/feishu-workspace/authorizations', '/api/connectors/feishu-workspace/policy', '/api/connectors/authorizations/id', '/api/connectors/authorizations/id/cancel', '/api/connectors/authorizations/id/artifact', '/api/connectors/accounts/id']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('connectors');
+    }
+    expect(findAuthenticatedLazyRouteBundle('/api/connectors-other')).toBeUndefined();
+  });
   it('routes manual understanding updates ahead of general user-model routes', () => {
     for (const path of ['/api/user-model/refresh', '/api/user-model/refresh/batch-1', '/api/user-model/refresh/sources/run-1/collection']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('user-model-refresh');

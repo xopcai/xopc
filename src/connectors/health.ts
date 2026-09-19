@@ -1,3 +1,6 @@
+import { currentAccountConnections } from './account-access.js';
+import { listConnectorConnections } from '../storage/sqlite/connector-repository.js';
+import { verifyCliConnection, describeCliAction } from './cli/runtime.js';
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import {
   listBundleMcpServerCapabilitiesForGateway,
@@ -76,6 +79,24 @@ export async function testConnectorInstance(config: Config, serverId: string): P
       prompts: [],
       action: 'Enable the connector before running a health check.',
     };
+  }
+
+  if (instance.materialized.type === 'cli') {
+    const base = { serverId, toolCount: 0, resourceCount: 0, promptCount: 0, tools: [], resources: [], prompts: [] };
+    try {
+      const connections = currentAccountConnections(listConnectorConnections({ principalId: 'local-owner', connectorId: instance.connectorId }))
+        .filter(connection => connection.provider === 'cli' && connection.status === 'active' && connection.metadata.runtimeInstanceId === serverId);
+      if (!connections.length) return { ...base, ok: false, status: 'unauthorized', action: 'Connect an account.' };
+      const tools: ConnectorHealthResult['tools'] = [];
+      for (const connection of connections) {
+        const { adapter } = await verifyCliConnection(config, serverId, connection);
+        for (const id of Object.keys(adapter.curatedActions)) {
+          const action = await describeCliAction(config, serverId, connection, id);
+          if (!tools.some(tool => tool.name === id)) tools.push({ name: id, description: action.description });
+        }
+      }
+      return { ...base, ok: true, status: 'ok', tools, toolCount: tools.length };
+    } catch (error) { return { ...base, ok: false, status: classifyConnectorHealthError(error), error: error instanceof Error ? error.message : String(error) }; }
   }
 
   const workspaceDir = getWorkspacePath(config) || './workspace';

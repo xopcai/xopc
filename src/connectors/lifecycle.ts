@@ -1,3 +1,4 @@
+import { stopCliInstance } from './cli/lifecycle.js';
 import type { Config } from '../config/schema.js';
 import { isManagedConnectorServer } from './materialize.js';
 import type { ConnectorInstance } from './types.js';
@@ -25,5 +26,6 @@ export function setConnectorEnabled(config: Config, instanceId: string, enabled:
   if (!instance) {
     throw new Error(`Connector instance not found: ${instanceId}`);
   }
+  if (!enabled && instance.materialized.type === 'cli') stopCliInstance(instanceId);
   return instance;
 }

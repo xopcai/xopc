@@ -9,6 +9,7 @@ Connectors let an Agent use data or actions from an external service. They may b
 | Built-in or verified connector | The service appears in the Gateway connector catalog |
 | Extension | The integration includes a channel, provider, UI, or local runtime |
 | MCP server | The service provides an MCP endpoint or local server |
+| [Managed CLI](./cli.md) | The service exposes a supported official CLI, such as Feishu or WeCom |
 | Composio | You want its managed app connections and action catalog |
 
 ## Connect safely

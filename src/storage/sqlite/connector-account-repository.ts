@@ -7,6 +7,7 @@ type AccountRow = {
   principal_id: string;
   identity_key: string | null;
   backend_id: string | null;
+  runtime_instance_id: string | null;
   identity_json: string;
   current_connection_id: string | null;
   label: string | null;
@@ -34,6 +35,7 @@ function fromRow(row: AccountRow): ConnectorAccount {
     principalId: row.principal_id,
     identityKey: row.identity_key ?? undefined,
     backendId: row.backend_id ?? undefined,
+    runtimeInstanceId: row.runtime_instance_id ?? undefined,
     identity: parseIdentity(row.identity_json),
     currentConnectionId: row.current_connection_id ?? undefined,
     label: row.label ?? undefined,

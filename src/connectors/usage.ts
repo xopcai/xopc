@@ -5,7 +5,7 @@ import type { ConnectorAuditRecord, ConnectorHealthResult, ConnectorUsageRecord 
 const MAX_AUDIT_RECORDS = 50;
 
 function getManagedConnectorMarker(config: Config, instanceId: string): Record<string, unknown> | undefined {
-  const server = config.mcp?.servers?.[instanceId];
+  const server = config.mcp?.servers?.[instanceId] ?? config.connectors?.instances?.[instanceId];
   if (!isManagedConnectorServer(server)) {
     return undefined;
   }

@@ -18,9 +18,10 @@ export type ConnectorCapability =
   | 'runtime.mcp.sse'
   | 'runtime.mcp.streamableHttp';
 
-export type ConnectorAuthMode = 'none' | 'apiKey' | 'oauth';
+export type ConnectorAuthMode = 'none' | 'apiKey' | 'oauth' | 'cli';
 
 export type ConnectorAuthDefinition =
+  | { mode: 'cli' }
   | { mode: 'none' }
   | { mode: 'apiKey' }
   | { mode: 'oauth'; provider?: string; clientId?: string };
@@ -89,6 +90,7 @@ export type ConnectorConfigField = {
 };
 
 export type ConnectorRuntimeDefinition =
+  | { type: 'cli'; adapterId: string; adapterVersion: string; binaryVersion: string }
   | {
       type: 'mcp';
       serverId: string;
@@ -189,6 +191,7 @@ export type ConnectorAccount = {
   connectorId: string;
   principalId: string;
   identityKey?: string;
+  runtimeInstanceId?: string;
   backendId?: string;
   identity: Record<string, unknown>;
   currentConnectionId?: string;
@@ -296,6 +299,7 @@ export type ConnectorInstance = {
         toolkit: string;
         role: 'credential' | 'toolkit';
       }
+    | { type: 'cli'; id: string; adapterId: string }
     | {
         type: 'memorySource';
         id: string;

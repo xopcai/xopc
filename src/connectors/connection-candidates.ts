@@ -1,4 +1,5 @@
-import { getConnectorDefinition } from './catalog.js';
+import { getCliAdapter } from './cli/adapterRegistry.js';
+import { getConnectorDefinition, listConnectorCatalog } from './catalog.js';
 
 const CANDIDATES = [
   { toolkit: 'outlook', pattern: /outlook/i, capabilities: ['email.search', 'email.read'] },
@@ -9,13 +10,21 @@ const CANDIDATES = [
   { toolkit: 'notion', pattern: /notion/i, capabilities: ['pages.search', 'pages.read'] },
 ];
 export function connectionCandidates(query: string) {
-  return CANDIDATES.filter(item => item.pattern.test(query)).flatMap(item => {
+  const managed = listConnectorCatalog().filter(definition => definition.runtime.type === 'cli' && [definition.id, definition.displayName, ...(definition.tags ?? [])].some(term => term.toLowerCase().includes(query.toLowerCase().trim()) || query.toLowerCase().includes(term.toLowerCase()))).map(definition => {
+    const candidate = resolveConnectionCandidate(definition.id);
+    return { candidateRef: definition.id, label: candidate.label, capabilities: candidate.capabilities };
+  });
+  return [...managed, ...CANDIDATES.filter(item => item.pattern.test(query)).flatMap(item => {
     const connectorId = `composio-${item.toolkit}`;
     const definition = getConnectorDefinition(connectorId);
     return definition ? [{ candidateRef: connectorId, label: definition.displayName, capabilities: item.capabilities }] : [];
-  });
+  })];
 }
 export function resolveConnectionCandidate(ref: string) {
+  const cli = getConnectorDefinition(ref);
+  if (cli?.runtime.type === 'cli') return { key: `${ref}:default`, connectorId: ref, label: cli.displayName,
+    capabilities: Object.entries(getCliAdapter(cli.runtime.adapterId).curatedActions).filter(([, scope]) => scope === 'read').map(([id]) => id) };
+
   const item = CANDIDATES.find(item => `composio-${item.toolkit}` === ref);
   const definition = item ? getConnectorDefinition(ref) : undefined;
   if (!item || !definition) throw new Error('Unknown connection candidate. Search for a supported app first.');

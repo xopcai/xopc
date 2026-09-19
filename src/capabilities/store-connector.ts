@@ -1,3 +1,4 @@
+import { getCliAdapter } from '../connectors/cli/adapterRegistry.js';
 import { createHash } from 'node:crypto';
 import { isIP } from 'node:net';
 
@@ -203,6 +204,25 @@ function readConnectorManifest(
     throw new Error('Connector manifest id does not match the store package name.');
   }
   const runtime = asRecord(manifest.runtime, 'Connector runtime');
+  if (runtime.type === 'cli') {
+    const adapter = getCliAdapter(asString(runtime.adapterId, 'CLI adapter id'));
+    if (runtime.adapterVersion !== adapter.version || runtime.binaryVersion !== adapter.binaryVersion
+      || Object.keys(runtime).some(key => !['type', 'adapterId', 'adapterVersion', 'binaryVersion'].includes(key))) throw new Error('Store CLI runtime must reference an exact registered adapter.');
+    if (asRecord(manifest.auth, 'Connector auth').mode !== 'cli') throw new Error('CLI connectors require managed CLI authorization.');
+    const { setup, keys } = readSetup(manifest.setup);
+    if (keys.size) throw new Error('CLI credentials are managed through authorization.');
+    const category = asString(manifest.category, 'Connector category');
+    if (!['code', 'docs', 'browser', 'data', 'automation', 'custom'].includes(category)) throw new Error('Unsupported connector category.');
+    const capabilities = asStringArray(manifest.capabilities, 'Connector capabilities');
+    if (capabilities.some(value => value !== 'tools')) throw new Error('CLI connectors support tools only.');
+    return {
+      id: packageName, version, displayName: asString(manifest.displayName, 'Connector displayName'),
+      description: asString(manifest.description, 'Connector description'), category: category as ConnectorDefinition['category'],
+      kind: 'cli', source: 'store', capabilities: ['tools'], auth: { mode: 'cli' }, setup,
+      runtime: { type: 'cli', adapterId: adapter.id, adapterVersion: adapter.version, binaryVersion: adapter.binaryVersion },
+      permissions: readPermissions(manifest.permissions, true), provenance: { packageName, sha256 },
+    };
+  }
   if (runtime.type !== 'mcp') {
     throw new Error('Store connectors must use the MCP runtime.');
   }

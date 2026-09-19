@@ -63,7 +63,7 @@ export async function ensureComposioBackend(resolver = new CredentialResolver())
   const backend = addComposioBackend({ mode: key ? 'byok' : 'managed',
     label: key ? 'Composio' : 'XOPC Cloud', credentialRef: storedKey ? 'connector-composio-api-key' : envRef,
     credentialSource: !storedKey && envRef ? 'environment' : 'stored' });
-  getSqliteDatabase().prepare('UPDATE connector_accounts SET backend_id = ? WHERE backend_id IS NULL').run(backend.id);
+  getSqliteDatabase().prepare('UPDATE connector_accounts SET backend_id = ? WHERE backend_id IS NULL AND runtime_instance_id IS NULL').run(backend.id);
   activateComposioBackend(backend.id);
   return getComposioBackend(backend.id)!;
 }
