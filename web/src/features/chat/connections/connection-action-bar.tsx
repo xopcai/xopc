@@ -59,7 +59,7 @@ export function ConnectionActionBar({ conversationId }: { conversationId: string
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Portal>
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim backdrop-blur-[2px]" />
-        <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[60] flex h-[min(90dvh,34rem)] w-[min(94vw,34rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
+        <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[60] flex h-[min(90dvh,34rem)] w-[min(94vw,34rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-popover outline-none">
           <div className="flex shrink-0 items-center justify-between border-b border-edge px-5 py-4">
             <Dialog.Title className="font-medium text-fg">{t.preserved}</Dialog.Title>
             <Dialog.Close aria-label={t.close}><X className="size-4" /></Dialog.Close>

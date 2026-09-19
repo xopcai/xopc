@@ -236,7 +236,6 @@ export class TurnDispatcher {
         maybeEmitWebchatTts(
           {
             config: c.getConfig(),
-            sessionStore: c.sessionStore,
             getLastAssistantPlainText: (conversationId) =>
               c.sessionState.getLastAssistantText(conversationId) ??
               c.agentManager.getLastAssistantContent(conversationId) ??

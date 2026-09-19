@@ -252,7 +252,7 @@ export function AiTextAssistButton({
           />
           <div className="absolute inset-0 z-[80] flex items-center justify-center p-4 pointer-events-none">
             <Dialog.Content
-              className="xopc-dialog-content-pane pointer-events-auto flex h-[min(78vh,38rem)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none"
+              className="xopc-dialog-content-pane pointer-events-auto flex h-[min(78vh,38rem)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-popover outline-none"
               onOpenAutoFocus={(event) => event.preventDefault()}
             >
               <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge px-4 py-3">
@@ -268,7 +268,7 @@ export function AiTextAssistButton({
                 <div className="flex min-h-0 flex-col overflow-hidden">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <div className="min-w-0 text-xs font-medium text-fg-muted">{labels.current}</div>
-                    <div className="flex shrink-0 items-center gap-1 rounded-lg border border-edge bg-surface-muted p-0.5">
+                    <div className="flex shrink-0 items-center gap-1 rounded-lg border border-edge bg-surface-inset p-0.5">
                       <button
                         type="button"
                         className={cn(
@@ -321,7 +321,7 @@ export function AiTextAssistButton({
                       <span>{labels.editedSuggestion}</span>
                       {loading ? <span className="ml-2 font-normal">{labels.loading}</span> : null}
                     </div>
-                    <div className="flex shrink-0 items-center gap-1 rounded-lg border border-edge bg-surface-muted p-0.5">
+                    <div className="flex shrink-0 items-center gap-1 rounded-lg border border-edge bg-surface-inset p-0.5">
                       <button
                         type="button"
                         className={cn(
@@ -358,7 +358,7 @@ export function AiTextAssistButton({
                       )}
                       aria-hidden={!showThinking}
                     >
-                      <div className="flex h-full min-h-0 flex-col rounded-lg border border-edge bg-surface-muted/70">
+                      <div className="flex h-full min-h-0 flex-col rounded-lg border border-edge bg-surface-inset/70">
                         <button
                           type="button"
                           className="flex shrink-0 items-center justify-between gap-2 px-2.5 py-2 text-left text-xs font-medium text-fg-muted hover:text-fg"

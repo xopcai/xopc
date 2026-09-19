@@ -364,7 +364,7 @@ function ExtensionMarketplaceDetailDialog({
       <Dialog.Portal>
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[130] bg-scrim" />
         <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-[131] flex h-[min(44rem,calc(100vh-1.5rem))] w-[min(42rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-elevated"
+          className="xopc-dialog-content fixed left-1/2 top-1/2 z-[131] flex h-[min(44rem,calc(100vh-1.5rem))] w-[min(42rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge px-4 py-3">

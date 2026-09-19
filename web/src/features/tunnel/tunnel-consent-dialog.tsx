@@ -49,8 +49,8 @@ export function TunnelConsentDialog({
         />
         <Dialog.Content
           className={cn(
-            'fixed left-1/2 top-1/2 max-h-[min(90vh,40rem)] w-[min(100%-2rem,32rem)] -translate-x-1/2 -translate-y-1/2',
-            'overflow-y-auto rounded-2xl border border-edge bg-surface-panel p-6 shadow-popover outline-none dark:border-edge',
+            'xopc-dialog-content fixed left-1/2 top-1/2 max-h-[min(90vh,40rem)] w-[min(100%-2rem,32rem)] -translate-x-1/2 -translate-y-1/2',
+            'overflow-y-auto rounded-2xl border border-edge bg-surface-overlay p-6 shadow-popover outline-none dark:border-edge',
             SETTINGS_SHELL_CONTENT_Z,
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}

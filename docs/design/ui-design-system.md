@@ -55,6 +55,8 @@ xopc 的色彩体系遵循**"灰色是主角，蓝色是信号"**的原则。界
 | 全局底层 App Background | `bg-surface-base` / `--color-surface-base` | `#f7f8fa` | `#14171c` |
 | 侧栏 Rail | `bg-surface-rail` / `--color-surface-rail` | `#eef1f5` | `#111318` |
 | 主内容区 / 卡片面板 | `bg-surface-panel` / `--color-surface-panel` | `#ffffff` | `#1b1f26` |
+| 弹窗 / 浮层 | `bg-surface-overlay` / `--color-surface-overlay` | `#ffffff` | `#20252d` |
+| 内嵌表单 / 分组 | `bg-surface-inset` / `--color-surface-inset` | `#f1f3f6` | `#171b21` |
 | 终端画布（不随彩色主题偏色） | `bg-surface-terminal` / `--color-surface-terminal` | `#ffffff` | `#181818` |
 | 悬浮 Hover | `bg-surface-hover` / `--color-surface-hover` | `#e8ecf1` | `#242933` |
 | 次级激活 Active | `bg-surface-active` / `--color-surface-active` | `#dfe5ec` | `#2e3440` |
@@ -317,6 +319,14 @@ Gateway 控制台等工作台界面采用 **左侧导航 + 右侧主内容** 结
   - `shadow-popover`：较大浮层（与 `shadow-elevated` 可按场景二选一，保持全站一致即可）
 - **深色模式**：阴影减弱，常与 `border-edge` 并用；具体数值见 `html.dark` 内 `--shadow-*`。
 - **模态遮罩**：统一 `bg-scrim`（`--color-scrim`），勿再硬编码 `bg-slate-900/40` 等。
+
+### 5.3 弹窗表面
+
+- 标准 Modal 使用 `xopc-dialog-content` + `bg-surface-overlay`；抽屉使用 `xopc-drawer-right`，两者共享最高操作层表面。
+- 弹窗内的输入框、摘要和分组使用 `bg-surface-inset`。不要在弹窗里使用页面画布 `bg-surface-base` 模拟分组。
+- Header 与 Footer 固定，只有 Body 滚动；三者使用同一 overlay 表面，并通过 `border-edge` 分隔。
+- 图片灯箱、全屏预览和非模态悬浮面板是独立展示模式，不套用标准 Modal 的尺寸与边框。
+- 不新增 `surface-muted`、`surface-subtle`、`surface-raised` 等近义 token；新层级必须先更新本节和 `globals.css`。
 
 ---
 

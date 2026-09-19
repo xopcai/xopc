@@ -1,13 +1,16 @@
 import type { Config } from '../../config/schema.js';
 import { persistOutboundTtsAudio } from '../../channels/attachments/outbound-tts-persist.js';
+import { deleteMediaUris } from '../../media/session-references.js';
 import type { MediaRef } from '../../media/types.js';
+import {
+  appendMediaToAssistantTranscriptEntry,
+  findLatestAssistantTranscriptEntryId,
+} from '../../storage/sqlite/index.js';
 import { compressAudio } from '../../voice/tts/audio.js';
 import { speak } from '../../voice/tts/index.js';
 import { mergeTtsConfigFromAppConfig } from '../../voice/tts/merge-config.js';
 import { shouldUseTTS, getChannelOutputFormat } from '../../voice/tts/service.js';
 import { isTTSAvailable } from '../../voice/tts/factory.js';
-import type { SessionStore } from '../../session/index.js';
-import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 export type WebchatTtsResult = {
   type: 'tts_audio';
@@ -18,7 +21,6 @@ export type WebchatTtsResult = {
 
 export type WebchatTtsDeps = {
   config: Config | undefined;
-  sessionStore: SessionStore;
   getLastAssistantPlainText: (conversationId: string) => string;
   log: { warn: (obj: Record<string, unknown>, msg: string) => void };
 };
@@ -67,6 +69,12 @@ export async function maybeEmitWebchatTts(
   if (!text) {
     return null;
   }
+  const assistantEntryId = findLatestAssistantTranscriptEntryId(conversationId);
+  if (!assistantEntryId) {
+    deps.log.warn({ conversationId }, 'Webchat TTS skipped because the assistant transcript is unavailable');
+    return null;
+  }
+  let persisted: MediaRef | undefined;
   try {
     const webOut = getChannelOutputFormat('webchat');
     const fmt = webOut.format as 'opus' | 'mp3' | 'wav';
@@ -87,8 +95,15 @@ export async function maybeEmitWebchatTts(
           : format === 'wav'
             ? 'audio/wav'
             : `audio/${format}`;
-    const persisted = await persistOutboundTtsAudio(buffer, format);
-    await appendMediaToLastAssistant(deps.sessionStore, conversationId, persisted);
+    persisted = await persistOutboundTtsAudio(buffer, format);
+    if (!appendMediaToAssistantTranscriptEntry(conversationId, assistantEntryId, persisted)) {
+      await deleteMediaUris([persisted.uri]);
+      deps.log.warn(
+        { conversationId, assistantEntryId },
+        'Webchat TTS discarded because its assistant transcript changed',
+      );
+      return null;
+    }
     return {
       type: 'tts_audio',
       uri: persisted.uri,
@@ -96,27 +111,8 @@ export async function maybeEmitWebchatTts(
       name: persisted.name,
     };
   } catch (err) {
+    if (persisted) await deleteMediaUris([persisted.uri]);
     deps.log.warn({ err, conversationId }, 'Webchat TTS failed');
     return null;
-  }
-}
-
-export async function appendMediaToLastAssistant(
-  sessionStore: SessionStore,
-  conversationId: string,
-  ref: MediaRef,
-): Promise<void> {
-  const loaded = await sessionStore.load(conversationId);
-  for (let i = loaded.length - 1; i >= 0; i--) {
-    const m = loaded[i] as { role?: string; media?: MediaRef[] };
-    if (m.role === 'assistant') {
-      const prev = m.media ?? [];
-      if (prev.some((x) => x.uri === ref.uri)) {
-        return;
-      }
-      loaded[i] = { ...m, media: [...prev, ref] } as unknown as AgentMessage;
-      await sessionStore.saveMessages(conversationId, loaded);
-      return;
-    }
   }
 }

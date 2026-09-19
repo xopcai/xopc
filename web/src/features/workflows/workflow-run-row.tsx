@@ -85,7 +85,7 @@ export const WorkflowRunRow = memo(function WorkflowRunRow({
                     <span>{interpolate(labels.agentProgress, { done: run.metrics.doneAgentCount, total: run.metrics.agentCount })}</span>
                     <span className="tabular-nums">{progress}%</span>
                   </span>
-                  <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-surface-muted">
+                  <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-surface-inset">
                     <span
                       className="block h-full rounded-full bg-accent transition-[width] duration-200 motion-reduce:transition-none"
                       style={{ width: `${progress}%` }}

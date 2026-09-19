@@ -296,7 +296,7 @@ export function ModelEditDialogContent({
           className={cn(
             'xopc-dialog-content fixed left-1/2 top-1/2 flex h-[min(90vh,720px)] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col',
             SETTINGS_SHELL_CONTENT_Z,
-            'overflow-hidden rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge',
+            'overflow-hidden rounded-xl border border-edge bg-surface-overlay p-4 shadow-popover dark:border-edge',
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >

@@ -132,7 +132,7 @@ export function WorkspacePathPickerDialog({
             // Fixed dialog height — the content area below grows to fill it and
             // scrolls internally when the tree overflows. Caps at viewport so
             // narrow windows still see a usable footer.
-            'flex h-[min(28rem,calc(100vh-3rem))] flex-col overflow-hidden rounded-lg border border-edge bg-surface-panel shadow-popover outline-none',
+            'flex h-[min(28rem,calc(100vh-3rem))] flex-col overflow-hidden rounded-lg border border-edge bg-surface-overlay shadow-popover outline-none',
           )}
         >
           <div className="flex h-11 shrink-0 items-center gap-2 border-b border-edge px-4">

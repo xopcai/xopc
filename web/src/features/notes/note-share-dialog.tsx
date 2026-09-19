@@ -172,7 +172,7 @@ export function NoteShareDialog({ open, onOpenChange, note }: {
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[70] bg-scrim backdrop-blur-[2px]" />
-        <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[71] flex h-[min(42rem,calc(100dvh-2rem))] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-popover outline-none">
+        <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[71] flex h-[min(42rem,calc(100dvh-2rem))] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-popover outline-none">
           <div className="flex shrink-0 items-start justify-between border-b border-edge px-5 py-4">
             <div>
               <Dialog.Title className="flex items-center gap-2 text-base font-semibold text-fg"><Share2 className="size-4" />{t.title}</Dialog.Title>
@@ -182,7 +182,7 @@ export function NoteShareDialog({ open, onOpenChange, note }: {
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-5">
-            <section className="rounded-lg border border-edge-subtle bg-surface-subtle p-4">
+            <section className="rounded-lg border border-edge bg-surface-inset p-4">
               <div className="text-sm font-semibold text-fg">{note.title || t.untitled}</div>
               <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-xs leading-5 text-fg-muted">{note.markdown || t.empty}</p>
               <p className="mt-3 text-xs text-fg-subtle">{t.privateExcluded}</p>

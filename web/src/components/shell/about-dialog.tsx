@@ -132,7 +132,7 @@ export function AboutDialog({
         <Dialog.Content
           className={cn(
             'xopc-dialog-content fixed left-1/2 top-1/2 z-[201] w-[min(100%-2rem,26rem)] -translate-x-1/2 -translate-y-1/2',
-            'rounded-2xl border border-edge bg-surface-panel shadow-popover dark:border-edge',
+            'rounded-2xl border border-edge bg-surface-overlay shadow-popover dark:border-edge',
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >

@@ -133,7 +133,7 @@ function createConfigCommand(ctx: CLIContext): Command {
     .command('get <path>')
     .description('Get a config value by dot path')
     .action(async (path: string) => {
-      const { loadConfig, saveConfig, log } = await loadConfigDeps();
+      const { loadConfig, log } = await loadConfigDeps();
       if (!existsSync(ctx.configPath)) {
         log.error(`Config file not found. ${MISSING_CONFIG_HINT}`);
         process.exit(1);

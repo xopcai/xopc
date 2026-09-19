@@ -148,7 +148,7 @@ export function UpdateReminderBar({
     return (
       <div
         className={cn(
-          'relative flex min-h-10 w-full min-w-0 flex-col items-center justify-center gap-2 border-b border-edge bg-surface-secondary px-10 py-2 text-sm text-fg-muted sm:flex-row sm:gap-4 sm:px-12',
+          'relative flex min-h-10 w-full min-w-0 flex-col items-center justify-center gap-2 border-b border-edge bg-surface-panel px-10 py-2 text-sm text-fg-muted sm:flex-row sm:gap-4 sm:px-12',
           APP_CHROME_DRAG_CLASS,
           compact && 'text-xs',
         )}
@@ -159,7 +159,7 @@ export function UpdateReminderBar({
             {t.reminderDownloading.replace('{{percent}}', String(show.percent))}
           </span>
         </div>
-        <div className="h-1.5 w-full max-w-xs rounded-full bg-surface-tertiary sm:max-w-[12rem]">
+        <div className="h-1.5 w-full max-w-xs rounded-full bg-surface-inset sm:max-w-[12rem]">
           <div
             className="h-full rounded-full bg-accent transition-all"
             style={{ width: `${show.percent}%` }}

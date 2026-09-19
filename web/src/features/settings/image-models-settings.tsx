@@ -347,7 +347,7 @@ export function ImageModelsSettingsPanel() {
                 <span className="flex items-center justify-between gap-2">
                   <span className="flex min-w-0 items-center gap-2">
                     <span className="truncate font-medium text-fg">{provider.label}</span>
-                    {provider.source === 'custom' ? <span className="rounded-full bg-surface-subtle px-2 py-0.5 text-[10px] text-fg-subtle">{text.custom}</span> : null}
+                    {provider.source === 'custom' ? <span className="rounded-full bg-surface-inset px-2 py-0.5 text-[10px] text-fg-subtle">{text.custom}</span> : null}
                   </span>
                   <span
                     aria-hidden={!active}

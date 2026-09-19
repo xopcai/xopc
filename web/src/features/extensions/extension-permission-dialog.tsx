@@ -30,7 +30,7 @@ export function ExtensionPermissionDialog({
       <Dialog.Portal>
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[130] bg-scrim" />
         <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-[131] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-5 shadow-elevated"
+          className="xopc-dialog-content fixed left-1/2 top-1/2 z-[131] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-overlay p-5"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <Dialog.Title className="text-base font-semibold text-fg">
@@ -55,7 +55,7 @@ export function ExtensionPermissionDialog({
             <Dialog.Close asChild>
               <button
                 type="button"
-                className="rounded-lg border border-edge px-3 py-2 text-sm text-fg hover:bg-surface-muted"
+                className="rounded-lg border border-edge px-3 py-2 text-sm text-fg hover:bg-surface-inset"
               >
                 {t.deny}
               </button>

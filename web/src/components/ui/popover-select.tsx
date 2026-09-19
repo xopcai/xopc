@@ -152,7 +152,7 @@ export function PopoverSelect({
           title={title}
           disabled={disabled}
           className={cn(
-            'touch-target box-border flex h-10 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-edge bg-surface-subtle px-3 text-left text-sm font-normal text-fg',
+            'touch-target box-border flex h-10 w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-edge bg-surface-inset px-3 text-left text-sm font-normal text-fg',
             'hover:border-edge-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
             disabled && 'cursor-not-allowed opacity-50 hover:border-edge',
             triggerClassName,
@@ -172,7 +172,7 @@ export function PopoverSelect({
           className={cn(
             popoverZ,
             selectPopoverContentLayoutClass,
-            'w-[var(--radix-popover-trigger-width)] min-w-[16rem] rounded-lg border border-edge bg-surface-panel p-1 shadow-popover outline-none',
+            'w-[var(--radix-popover-trigger-width)] min-w-[16rem] rounded-lg border border-edge bg-surface-overlay p-1 shadow-popover outline-none',
             contentClassName,
           )}
         >
