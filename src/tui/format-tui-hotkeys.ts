@@ -8,6 +8,13 @@ export type KeyTextFormatOptions = {
   capitalize?: boolean;
 };
 
+const KEY_DISPLAY: Readonly<Record<string, string>> = {
+  up: '↑',
+  down: '↓',
+  left: '←',
+  right: '→',
+};
+
 export function formatKeyText(key: string, options: KeyTextFormatOptions = {}): string {
   return key
     .split('/')
@@ -15,8 +22,9 @@ export function formatKeyText(key: string, options: KeyTextFormatOptions = {}): 
       part
         .split('+')
         .map((keyPart) => {
-          const display =
-            process.platform === 'darwin' && keyPart.toLowerCase() === 'alt' ? 'option' : keyPart;
+          const normalized = keyPart.toLowerCase();
+          const display = KEY_DISPLAY[normalized]
+            ?? (process.platform === 'darwin' && normalized === 'alt' ? 'option' : keyPart);
           return options.capitalize ? display.charAt(0).toUpperCase() + display.slice(1) : display;
         })
         .join('+'),

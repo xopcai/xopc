@@ -2,6 +2,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { Container, Markdown, Spacer, Text } from '@earendil-works/pi-tui';
 
 import { markdownTheme, theme } from '../theme.js';
+import type { CellRenderMode, ModeAwareCell } from './cell-render-mode.js';
 
 const OSC133_ZONE_START = '\x1b]133;A\x07';
 const OSC133_ZONE_END = '\x1b]133;B\x07';
@@ -120,12 +121,13 @@ export function createAssistantMessageFromText(text: string): AgentMessage {
   } as AgentMessage;
 }
 
-export class AssistantMessageComponent extends Container {
+export class AssistantMessageComponent extends Container implements ModeAwareCell {
   private readonly contentContainer = new Container();
   private message: AgentMessage | undefined;
   private linkedToolCall = false;
   private hideThinkingBlock = false;
   private hiddenThinkingLabel = 'Thinking...';
+  private renderMode: CellRenderMode = 'compact';
 
   constructor(message?: AgentMessage, options: AssistantMessageOptions = {}) {
     super();
@@ -159,12 +161,21 @@ export class AssistantMessageComponent extends Container {
     this.refresh();
   }
 
+  setRenderMode(mode: CellRenderMode): void {
+    if (this.renderMode === mode) return;
+    this.renderMode = mode;
+    this.refresh();
+  }
+
   override invalidate(): void {
     super.invalidate();
     this.refresh();
   }
 
   override render(width: number): string[] {
+    if (this.renderMode === 'raw') {
+      return new Text(JSON.stringify(this.message ?? {}, null, 2), 0, 0).render(width);
+    }
     const lines = super.render(width);
     if (hasToolCalls(this.message) || this.linkedToolCall || lines.length === 0) return lines;
     lines[0] = OSC133_ZONE_START + lines[0];
@@ -194,7 +205,10 @@ export class AssistantMessageComponent extends Container {
     for (let i = 0; i < blocks.length; i++) {
       const block = blocks[i]!;
       if (block.type === 'text') {
-        const text = compactToolAdjacentText(blockText(block, 'text'), this.linkedToolCall).trim();
+        const sourceText = blockText(block, 'text');
+        const text = (this.renderMode === 'compact'
+          ? compactToolAdjacentText(sourceText, this.linkedToolCall)
+          : sourceText).trim();
         if (!text) continue;
         if (renderedVisible > 0) this.contentContainer.addChild(new Spacer(1));
         this.contentContainer.addChild(
@@ -212,7 +226,7 @@ export class AssistantMessageComponent extends Container {
         const thinking = blockText(block, 'thinking').trim();
         if (!thinking) continue;
         if (renderedVisible > 0) this.contentContainer.addChild(new Spacer(1));
-        const text = this.hideThinkingBlock ? this.hiddenThinkingLabel : thinking;
+        const text = this.renderMode === 'compact' && this.hideThinkingBlock ? this.hiddenThinkingLabel : thinking;
         this.contentContainer.addChild(
           new Markdown(
             text,

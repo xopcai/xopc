@@ -240,6 +240,39 @@ describe('user model routes', () => {
     expect(result.profile).not.toHaveProperty('role');
   });
 
+  it('reviews candidate knowledge with optimistic concurrency', async () => {
+    const candidate = writeKnowledgeItem({
+      kind: 'decision',
+      scope: { type: 'workspace', id: '/workspace' },
+      canonicalKey: 'decision:candidate',
+      content: 'Release on Friday.',
+      status: 'candidate',
+      confidence: 0.8,
+      importance: 0.9,
+      originClass: 'agent',
+    }).item;
+    const review = await app.request(`/api/knowledge-memory/${candidate.id}/review`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'edit_and_approve',
+        expectedStatus: 'candidate',
+        content: 'Release on Monday.',
+      }),
+    });
+    expect(review.status).toBe(200);
+    await expect(review.json()).resolves.toMatchObject({
+      item: { id: candidate.id, status: 'active', content: 'Release on Monday.' },
+    });
+
+    const staleReview = await app.request(`/api/knowledge-memory/${candidate.id}/review`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'archive', expectedStatus: 'candidate' }),
+    });
+    expect(staleReview.status).toBe(409);
+  });
+
   it('bootstraps explicit role, goals, collaboration rules, and relationships idempotently', async () => {
     const payload = {
       profile: { callName: 'Mic', role: 'Founder', timezone: 'Asia/Shanghai', locale: 'zh-CN' },

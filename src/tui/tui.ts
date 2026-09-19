@@ -27,7 +27,6 @@ import { MAX_CHAT_ATTACHMENTS, MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../gate
 import { resolveTuiConversationId, resolveTuiStartupConversationId } from '../routing/resolve-tui-session-key.js';
 import { normalizeAgentId } from '../routing/agent-session-key.js';
 import {
-  countPendingChatInputs,
   type TuiBackend,
   type TuiCompactionResult,
   type TuiComposerHistoryItem,
@@ -38,6 +37,12 @@ import {
   type TuiShareRequest,
   type TuiStartupResources,
 } from './tui-backend.js';
+import {
+  acceptChatInputState,
+  createEmptyChatInputState,
+  findLastEditableChatInput,
+  type TuiChatInputState,
+} from './tui-chat-input-state.js';
 import { EmbeddedBackend } from './backends/embedded-backend.js';
 import { GatewayRealtimeBackend } from './backends/gateway-realtime-backend.js';
 import {
@@ -48,6 +53,8 @@ import {
 } from './tui-agent-events.js';
 import { ChatLog } from './components/chat-log.js';
 import { CustomEditor } from './components/custom-editor.js';
+import { PendingInputPreview } from './components/pending-input-preview.js';
+import { TranscriptOverlay } from './components/transcript-overlay.js';
 import { TuiBottomBar } from './components/tui-bottom-bar.js';
 import { TuiHeader } from './components/tui-header.js';
 import { createTuiCommandHandler, getSlashCommands, type SlashCommandDef } from './tui-commands.js';
@@ -436,6 +443,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     () => state,
     () => opts.thinking,
   );
+  const pendingInputPreview = new PendingInputPreview(() => state.chatInputState, keybindings);
   const chatLog = new ChatLog(keybindings);
   chatLog.setViewportRowsProvider(() => Math.max(8, tui.terminal.rows - 8));
   let startupResources: TuiStartupResources | undefined;
@@ -565,6 +573,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   root.addChild(header);
   root.addChild(chatLog);
   root.addChild(statusContainer);
+  root.addChild(pendingInputPreview);
   root.addChild(editorContainer);
   root.addChild(bottomBar);
   tui.addChild(root);
@@ -1869,19 +1878,34 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const isAgentBusy = () => state.activeRunId != null || state.isCompacting || busyStates.has(state.activityStatus);
 
+  let editingQueuedInput: { id: string; version: number } | undefined;
+
+  const applyChatInputState = (incoming: TuiChatInputState) => {
+    if (incoming.conversationId !== state.currentConversationId) return;
+    const next = acceptChatInputState(state.chatInputState, incoming);
+    if (next === state.chatInputState) return;
+    state.chatInputState = next;
+    if (editingQueuedInput) {
+      const edited = next.inputs.find((input) => input.id === editingQueuedInput?.id);
+      if (!edited || edited.version !== editingQueuedInput.version) editingQueuedInput = undefined;
+    }
+    pendingInputPreview.invalidate();
+    bottomBar.invalidate();
+    tui.requestRender();
+  };
+
   const sendSteeringToActiveRun = (text: string) => {
     touchStreamingActivity();
     tui.requestRender();
     void client
       .submitChatInput({ conversationId: state.currentConversationId, message: text, delivery: 'steer' })
-      .then(({ ok, effectiveDelivery }) => {
+      .then(({ ok, state: inputState }) => {
         if (!ok) {
           if (!editor.getText().trim()) editor.setText(text);
           chatLog.addSystem(theme.dim(formatSteerUnavailableHint(keybindings)));
         } else {
-          chatLog.addUser(text);
-          chatLog.addSystem(theme.dim(effectiveDelivery === 'steer' ? 'Added to this reply.' : 'Queued as the next message.'));
-          void refreshPendingInputCount();
+          if (inputState) applyChatInputState(inputState);
+          else void refreshChatInputState();
         }
         tui.requestRender();
       })
@@ -2303,17 +2327,12 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       // History is an optional convenience; keep the editor responsive when unavailable.
     }
   };
-  const refreshPendingInputCount = async (conversationId = state.currentConversationId) => {
+  const refreshChatInputState = async (conversationId = state.currentConversationId) => {
     try {
-      const inputState = await client.getChatInputState(conversationId);
-      if (state.currentConversationId === conversationId) {
-        state.pendingInputCount = countPendingChatInputs(inputState.inputs);
-      }
+      applyChatInputState(await client.getChatInputState(conversationId));
     } catch {
-      if (state.currentConversationId === conversationId) state.pendingInputCount = 0;
+      // Keep the last revision during transient reconnect failures.
     }
-    bottomBar.invalidate();
-    tui.requestRender();
   };
   const recordChatHistory = (value: string) => {
     const text = value.trim();
@@ -2356,11 +2375,36 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     submit: submitCore,
     enabled: shouldEnableWindowsGitBashPasteFallback(),
   });
-  defaultEditor.onSubmit = submitBurst;
+  const saveEditedQueuedInput = (text: string): boolean => {
+    const target = editingQueuedInput;
+    if (!target) return false;
+    const content = text.trim();
+    if (!content) return true;
+    const conversationId = state.currentConversationId;
+    void client.updateChatInput({ conversationId, inputId: target.id, version: target.version, content })
+      .then(({ ok, state: inputState }) => {
+        if (inputState) applyChatInputState(inputState);
+        if (!ok) throw new Error('Queued input changed; refreshed latest state');
+        editingQueuedInput = undefined;
+        if (state.currentConversationId === conversationId && editor.getText().trim() === content) editor.setText('');
+        recordChatHistory(content);
+        tui.requestRender();
+      })
+      .catch((error: unknown) => {
+        chatLog.addSystem(theme.dim(`Edit failed: ${error instanceof Error ? error.message : String(error)}`));
+        tui.requestRender();
+      });
+    return true;
+  };
+
+  defaultEditor.onSubmit = (text) => {
+    if (!saveEditedQueuedInput(text)) submitBurst(text);
+  };
 
   const handleFollowUp = () => {
     const text = editor.getText().trim();
     if (!text && pendingImageAttachments.length === 0) return;
+    if (saveEditedQueuedInput(text)) return;
     if (isAgentBusy()) {
       if (pendingImageAttachments.length > 0) {
         chatLog.addSystem(
@@ -2373,12 +2417,12 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       }
       const conversationId = state.currentConversationId;
       void client.submitChatInput({ conversationId, message: text, delivery: 'next' })
-        .then(async ({ ok }) => {
+        .then(({ ok, state: inputState }) => {
           if (!ok) throw new Error('Gateway did not accept the message');
           recordChatHistory(text);
           if (state.currentConversationId === conversationId && editor.getText().trim() === text) editor.setText('');
-          chatLog.addSystem(theme.dim('Queued as the next message.'));
-          await refreshPendingInputCount(conversationId);
+          if (inputState) applyChatInputState(inputState);
+          else void refreshChatInputState(conversationId);
         })
         .catch((error: unknown) => {
           const errorMessage = error instanceof Error ? error.message : String(error);
@@ -2392,8 +2436,9 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const setConversationId = (key: string) => {
     state.currentConversationId = resolveConversationId(key);
-    state.pendingInputCount = 0;
-    void refreshPendingInputCount(state.currentConversationId);
+    state.chatInputState = createEmptyChatInputState(state.currentConversationId);
+    editingQueuedInput = undefined;
+    void refreshChatInputState(state.currentConversationId);
     updateAgentFromPicker(key);
   };
 
@@ -2595,6 +2640,61 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     })();
   };
   defaultEditor.onAction('app.message.followUp', handleFollowUp);
+  defaultEditor.onAction('app.message.editQueued', () => {
+    if (editor.getText().length > 0) return false;
+    const target = findLastEditableChatInput(state.chatInputState);
+    if (!target) return false;
+    editingQueuedInput = { id: target.id, version: target.version };
+    editor.setText(target.content);
+    tui.requestRender();
+    return true;
+  });
+  defaultEditor.onAction('app.message.deleteQueued', () => {
+    const target = findLastEditableChatInput(state.chatInputState);
+    if (!target) return false;
+    const conversationId = state.currentConversationId;
+    void client.removeChatInput({ conversationId, inputId: target.id, version: target.version })
+      .then(({ ok, state: inputState }) => {
+        if (inputState) applyChatInputState(inputState);
+        if (!ok) throw new Error('Queued input changed; refreshed latest state');
+        if (editingQueuedInput?.id === target.id) editingQueuedInput = undefined;
+        tui.requestRender();
+      })
+      .catch((error: unknown) => {
+        chatLog.addSystem(theme.dim(`Delete failed: ${error instanceof Error ? error.message : String(error)}`));
+        tui.requestRender();
+      });
+    return true;
+  });
+  const openTranscriptOverlay = (initialMode: 'transcript' | 'raw') => {
+    if (!client.loadHistoryWindow) {
+      chatLog.addSystem('Transcript paging is unavailable for this backend.');
+      tui.requestRender();
+      return;
+    }
+    let close = () => {};
+    const overlay = new TranscriptOverlay({
+      keybindings,
+      initialMode,
+      viewportRows: () => tui.terminal.rows,
+      onClose: () => close(),
+      onRender: () => tui.requestRender(),
+      loadWindow: (rowNumber) => client.loadHistoryWindow!({
+        conversationId: state.currentConversationId,
+        rowNumber,
+        before: 120,
+        after: 0,
+      }),
+    });
+    close = openEditorSelector(overlay, overlay);
+    void overlay.initialize().catch((error: unknown) => {
+      close();
+      chatLog.addSystem(`Transcript failed: ${error instanceof Error ? error.message : String(error)}`);
+      tui.requestRender();
+    });
+  };
+  defaultEditor.onAction('app.transcript.open', () => openTranscriptOverlay('transcript'));
+  defaultEditor.onAction('app.transcript.raw', () => openTranscriptOverlay('raw'));
 
   streamWatchdogId = setInterval(() => {
     const now = Date.now();
@@ -2636,10 +2736,8 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   client.onEvent = (evt: TuiEvent) => {
     const data = (evt.data ?? {}) as Record<string, unknown>;
     if (evt.event === 'session.input-state') {
-      if (data.conversationId === state.currentConversationId && Array.isArray(data.inputs)) {
-        state.pendingInputCount = countPendingChatInputs(data.inputs);
-        bottomBar.invalidate();
-        tui.requestRender();
+      if (data.conversationId === state.currentConversationId && Array.isArray(data.inputs) && typeof data.revision === 'number') {
+        applyChatInputState(data as unknown as TuiChatInputState);
       }
       return;
     }
@@ -2737,10 +2835,9 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       await refreshSessionInfoWithBorder();
       persistCurrentNewSessionContext();
       try {
-        const inputState = await client.getChatInputState(state.currentConversationId);
-        state.pendingInputCount = countPendingChatInputs(inputState.inputs);
+        applyChatInputState(await client.getChatInputState(state.currentConversationId));
       } catch {
-        state.pendingInputCount = 0;
+        // Keep the last accepted revision until the next state event.
       }
       await refreshModelChoices();
       await loadSessionHistory({ merge: true });

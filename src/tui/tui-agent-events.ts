@@ -395,6 +395,40 @@ export function dispatchAgentEvent(
       tui.requestRender();
       break;
     }
+    case 'task_plan_updated': {
+      const items = Array.isArray(p.items) ? p.items : [];
+      const lines = items.flatMap((item) => {
+        if (!item || typeof item !== 'object') return [];
+        const record = item as Record<string, unknown>;
+        const status = typeof record.status === 'string' ? record.status : 'pending';
+        const title = typeof record.title === 'string' ? record.title : '';
+        return title ? [`[${status}] ${title}`] : [];
+      });
+      const planId = typeof p.planId === 'string' ? p.planId : `${runId}:plan`;
+      chatLog.upsertSemanticCell(planId, {
+        kind: 'plan',
+        title: typeof p.explanation === 'string' && p.explanation.trim() ? p.explanation : 'Execution plan',
+        lines,
+        raw: p,
+      });
+      tui.requestRender();
+      break;
+    }
+    case 'clarify_request': {
+      const requestId = typeof p.requestId === 'string' ? p.requestId : `${runId}:question`;
+      const kind = p.kind === 'approval' ? 'approval' : 'question';
+      const choices = Array.isArray(p.choices)
+        ? p.choices.filter((choice): choice is string => typeof choice === 'string')
+        : [];
+      chatLog.upsertSemanticCell(requestId, {
+        kind,
+        title: typeof p.question === 'string' ? p.question : kind === 'approval' ? 'Approval required' : 'Input required',
+        lines: choices.map((choice) => `• ${choice}`),
+        raw: p,
+      });
+      tui.requestRender();
+      break;
+    }
   }
 }
 

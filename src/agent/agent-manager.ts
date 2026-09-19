@@ -305,6 +305,7 @@ export class AgentManager implements AgentInstanceGateway {
   private skillsUpdatedTimer: NodeJS.Timeout | undefined;
   private pendingSkillsUpdatedReason: 'disk' | 'config' | undefined;
   private projectTrustStore = new ProjectTrustStore();
+  private memoryPromptReady = new WeakMap<MemoryManager, Set<string>>();
 
   constructor(config: AgentManagerConfig) {
     this.config = config;
@@ -329,6 +330,18 @@ export class AgentManager implements AgentInstanceGateway {
       getAccessForSession: (conversationId) => resolveUserContextSessionAccess(this.config.config, conversationId),
       getWorkspaceIdForSession: (sk) => this.getResolvedWorkspaceForSession(sk),
       getProjectIdForSession: (sk) => getSessionMetadata(sk)?.projectId,
+      ensureMemoryReady: (conversationId) => this.ensureMemoryReadyForSession(conversationId),
+      searchExternalMemory: async (input) => this.getMemoryManagerForSession(input.conversationId).searchExternal({
+        query: input.query,
+        scope: {
+          userId: 'local-owner',
+          workspaceId: input.workspaceId,
+          conversationId: input.conversationId,
+          ...(input.projectId ? { projectId: input.projectId } : {}),
+        },
+        trustedOnly: true,
+        maxResults: input.maxResults,
+      }),
     });
     this.backgroundReview = new BackgroundReviewCoordinator({
       getConfig: () => this.mergedConfig(),
@@ -507,8 +520,31 @@ export class AgentManager implements AgentInstanceGateway {
     return this.getWorkspaceRuntimeForSession(conversationId).memoryManager;
   }
 
+  async ensureMemoryReadyForSession(conversationId: string): Promise<void> {
+    const cfg = this.config.config;
+    if (!cfg || !isMemorySubsystemEnabled(cfg)) return;
+    const resolvedPath = this.getResolvedWorkspaceForSession(conversationId);
+    const profile = resolveEffectiveAgentProfileForSession(cfg, conversationId);
+    const runtime = this.workspaceRuntimes.getOrCreate(resolvedPath, profile.agentId);
+    await runtime.memoryManager.initializeAll(conversationId, {
+      workspace: resolvedPath,
+      agentWorkspace: resolveAgentProfileDir(cfg, profile.agentId),
+      agentId: profile.agentId,
+      sessionId: conversationId,
+    });
+    let readySessions = this.memoryPromptReady.get(runtime.memoryManager);
+    if (!readySessions) {
+      readySessions = new Set<string>();
+      this.memoryPromptReady.set(runtime.memoryManager, readySessions);
+    }
+    if (readySessions.has(conversationId)) return;
+    readySessions.add(conversationId);
+    const existing = this.agents.get(conversationId);
+    if (existing) this.refreshDynamicContextIfChanged(existing, true);
+  }
+
   /** Build the bounded, policy-filtered context used for this model turn. */
-  prepareUserTurnContext(
+  async prepareUserTurnContext(
     userMessage: AgentMessage,
     conversationId: string,
     turnId: string,
@@ -1106,12 +1142,6 @@ export class AgentManager implements AgentInstanceGateway {
     const rt = this.workspaceRuntimes.getOrCreate(resolvedPath, profile.agentId);
     profile = this.materializeSkillAllowlist(profile, rt);
 
-    if (isMemorySubsystemEnabled(cfg)) {
-      void rt.memoryManager
-        .initializeAll(conversationId, { workspace: resolvedPath, agentId: profile.agentId })
-        .catch((err) => log.warn({ err, conversationId }, 'memory initializeAll failed'));
-    }
-
     const activeProjectContext = this.buildExecutionScopeContext(conversationId);
 
     const profileModelRef = profile.primaryModelRef?.trim() || this.defaultModel;
@@ -1332,7 +1362,7 @@ export class AgentManager implements AgentInstanceGateway {
     const access = resolveUserContextSessionAccess(this.config.config, conversationId);
     return buildExecutionScopeContextForPrompt(conversationId, {
       includeKnowledge: access.knowledge,
-      knowledgeSources: access.knowledgeSources,
+      knowledgePolicy: access.knowledgePolicy,
     });
   }
 
@@ -1543,12 +1573,12 @@ export class AgentManager implements AgentInstanceGateway {
     return result.status === 'answered' && result.answer === 'Allow once';
   }
 
-  private refreshDynamicContextIfChanged(instance: AgentInstance): void {
+  private refreshDynamicContextIfChanged(instance: AgentInstance, force = false): void {
     const nextProjectContext = this.buildExecutionScopeContext(instance.conversationId);
     const interactionStateVersion = this.getInteractionStateVersion(instance.conversationId);
     const userContextAccessVersion = this.getUserContextAccessVersion(instance.conversationId);
 
-    if (nextProjectContext === instance.activeProjectContext
+    if (!force && nextProjectContext === instance.activeProjectContext
       && interactionStateVersion === instance.interactionStateVersion
       && userContextAccessVersion === instance.userContextAccessVersion) {
       return;

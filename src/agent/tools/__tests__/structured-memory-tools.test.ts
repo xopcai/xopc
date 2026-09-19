@@ -121,7 +121,7 @@ describe('structured memory tools', () => {
 
   it('applies deny, confirm, allow, and source policies to knowledge writes', async () => {
     let policy: 'deny' | 'confirm' | 'allow' = 'deny';
-    let sources: Array<'session' | 'workspace' | 'project' | 'connector'> = ['workspace'];
+    let scopes: Array<'global' | 'agent' | 'session' | 'workspace' | 'project'> = ['workspace'];
     const tool = createKnowledgeWriteTool({
       agentId: 'main',
       workspaceId: '/workspace',
@@ -130,7 +130,7 @@ describe('structured memory tools', () => {
       canRead: () => true,
       canWrite: () => true,
       getWritePolicy: () => policy,
-      getSources: () => sources,
+      getReadPolicy: () => ({ scopes, contentSources: ['memory'] }),
     });
     const input = {
       kind: 'decision',
@@ -148,8 +148,8 @@ describe('structured memory tools', () => {
     policy = 'allow';
     expect((await tool.execute('allow', { ...input, canonicalKey: 'decision:active' })).details)
       .toMatchObject({ item: { status: 'active' }, writePolicy: 'allow' });
-    sources = ['session'];
+    scopes = ['session'];
     expect((await tool.execute('source', { ...input, canonicalKey: 'decision:blocked' })).details)
-      .toEqual({ error: 'knowledge_source_disabled', source: 'workspace' });
+      .toEqual({ error: 'knowledge_scope_disabled', scope: 'workspace' });
   });
 });

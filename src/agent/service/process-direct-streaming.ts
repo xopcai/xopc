@@ -11,6 +11,7 @@ import { readAgentMessageContent } from '../memory/agent-message-access.js';
 import {
   isVoiceLikeAttachment,
   mergeVoiceTranscriptsIntoUserText,
+  requestsOriginalVoiceInspection,
 } from '../../channels/attachments/voice-stt-webchat.js';
 import { mergeSttConfigFromAppConfig } from '../../voice/stt/index.js';
 import {
@@ -89,6 +90,7 @@ export interface ProcessDirectStreamingDeps {
     content: string,
     prepared: MediaRef[] | undefined,
     conversationId: string,
+    options?: { suppressMediaPromptUris?: ReadonlySet<string> },
   ) => Promise<TranscriptUserMessage>;
   recordTaskReviewStreamHint?: (
     conversationId: string,
@@ -366,6 +368,9 @@ export async function* runProcessDirectStreaming(
       const voiceMerge = await mergeVoiceTranscriptsIntoUserText(prepared, turnBody, sttCfg);
       mergedUserText = voiceMerge.text;
       inboundVoice = voiceMerge.inboundVoice;
+      const suppressMediaPromptUris = requestsOriginalVoiceInspection(mergedUserText)
+        ? undefined
+        : new Set(voiceMerge.transcribedMediaUris ?? []);
 
       if (inboundVoice) {
         const transcriptParts = [
@@ -452,7 +457,12 @@ export async function* runProcessDirectStreaming(
 
       const skillTurn = deps.agentManager.prepareSkillTurn(conversationId, mergedUserText);
       const textForAgent = skillTurn.text;
-      const userMessage = await deps.buildTranscriptUserMessage(textForAgent, prepared, conversationId);
+      const userMessage = await deps.buildTranscriptUserMessage(
+        textForAgent,
+        prepared,
+        conversationId,
+        { suppressMediaPromptUris },
+      );
       const turnSourceContexts = input.sourceContexts ?? [];
       const sourceContexts = [...turnSourceContexts];
       if (deps.sourceContextResolver) {

@@ -4,7 +4,7 @@ import { dirname } from 'node:path';
 
 import type { Config } from '../../config/schema.js';
 import { ConfigSchema } from '../../config/schema.js';
-import { saveConfig } from '../../config/loader.js';
+import { assertConfigRewriteSafeForRunningGateway, saveConfig } from '../../config/loader.js';
 import { ensureStarterAgentsInitialized } from '../../agent/starter-agents.js';
 import { runBootstrapMigrationsSync } from '../../migrations/runner.js';
 
@@ -139,6 +139,7 @@ export async function initWorkspaceCore(options: InitWorkspaceCoreOptions): Prom
     if (assertChannelPlugins) {
       await saveConfig(nextFinal, configPath);
     } else {
+      assertConfigRewriteSafeForRunningGateway(configPath);
       writeFileSync(configPath, `${JSON.stringify(nextFinal, null, 2)}\n`, 'utf8');
     }
   }

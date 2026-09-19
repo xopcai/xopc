@@ -15,7 +15,7 @@ it('invokes extension shortcuts with TUI context', async () => {
       currentConversationId: 'agent:main:main',
       activeRunId: null as string | null,
       isCompacting: false,
-      pendingInputCount: 0,
+      chatInputState: { conversationId: 'agent:main:main', revision: 0, inputs: [] },
       activityStatus: 'idle' as 'idle' | 'streaming',
       compactionQueue: [] as string[],
       sessionInfo: {
@@ -235,7 +235,10 @@ it('invokes extension shortcuts with TUI context', async () => {
     await vi.waitFor(() => expect(setReasoningLevel).toHaveBeenCalledWith('stream'));
     await vi.waitFor(() => expect(setVerboseLevel).toHaveBeenCalledWith('full'));
     state.activeRunId = 'run-1';
-    state.pendingInputCount = 1;
+    state.chatInputState = {
+      conversationId: 'agent:main:main', revision: 1,
+      inputs: [{ id: '1', content: 'next', requestedDelivery: 'next' as const, effectiveDelivery: 'next' as const, status: 'queued' as const, version: 1 }],
+    };
     abortController.abort();
     expect(runtime.handleShortcut('x')).toBe(true);
     await vi.waitFor(() => expect(seen).toMatchObject({ idle: false, pendingMessages: true }));
@@ -257,7 +260,7 @@ it('invokes extension shortcuts with TUI context', async () => {
       currentConversationId: 'agent:main:main',
       activeRunId: null as string | null,
       isCompacting: false,
-      pendingInputCount: 0,
+      chatInputState: { conversationId: 'agent:main:main', revision: 0, inputs: [] },
       activityStatus: 'idle' as 'idle' | 'streaming',
       compactionQueue: [] as string[],
       sessionInfo: {
@@ -391,7 +394,10 @@ it('invokes extension shortcuts with TUI context', async () => {
     expect(() => reloadContext?.mode).toThrow('This extension ctx is stale');
 
     state.activityStatus = 'streaming';
-    state.pendingInputCount = 1;
+    state.chatInputState = {
+      conversationId: 'agent:main:main', revision: 1,
+      inputs: [{ id: '1', content: 'next', requestedDelivery: 'next' as const, effectiveDelivery: 'next' as const, status: 'queued' as const, version: 1 }],
+    };
     state.sessionInfo.reasoningLevel = 'invalid';
     state.sessionInfo.verboseLevel = 'invalid';
     expect(context?.isIdle()).toBe(false);
@@ -496,7 +502,7 @@ it('invokes extension shortcuts with TUI context', async () => {
       connectionStatus: 'connected',
       activityStatus: 'idle',
       isCompacting: false,
-      pendingInputCount: 0,
+      chatInputState: { conversationId: 'agent:main:main', revision: 0, inputs: [] },
       compactionQueue: [],
       showThinking: true,
       sessionInfo: {},
@@ -579,7 +585,7 @@ it('invokes extension shortcuts with TUI context', async () => {
       connectionStatus: 'connected',
       activityStatus: 'idle',
       isCompacting: false,
-      pendingInputCount: 0,
+      chatInputState: { conversationId: 'agent:main:main', revision: 0, inputs: [] },
       compactionQueue: [],
       showThinking: true,
       sessionInfo: {},

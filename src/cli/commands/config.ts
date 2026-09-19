@@ -1,18 +1,17 @@
 import { Command } from 'commander';
 import { existsSync, readFileSync } from 'fs';
 import { resolveGatewayLocalClientHost } from '../../config/gateway-bind.js';
-import { writeTextAtomic } from '../../infra/write-file-atomic.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 
 const MISSING_CONFIG_HINT = 'Run: xopc setup, xopc onboard, or xopc init';
 
 async function loadConfigDeps() {
-  const [{ loadConfig }, { createLogger }] = await Promise.all([
+  const [{ loadConfig, saveConfig }, { createLogger }] = await Promise.all([
     import('../../config/index.js'),
     import('../../utils/logger.js'),
   ]);
-  return { loadConfig, log: createLogger('ConfigCommand') };
+  return { loadConfig, saveConfig, log: createLogger('ConfigCommand') };
 }
 
 async function runConfigShow(configPath: string): Promise<void> {
@@ -134,7 +133,7 @@ function createConfigCommand(ctx: CLIContext): Command {
     .command('get <path>')
     .description('Get a config value by dot path')
     .action(async (path: string) => {
-      const { loadConfig, log } = await loadConfigDeps();
+      const { loadConfig, saveConfig, log } = await loadConfigDeps();
       if (!existsSync(ctx.configPath)) {
         log.error(`Config file not found. ${MISSING_CONFIG_HINT}`);
         process.exit(1);
@@ -155,7 +154,7 @@ function createConfigCommand(ctx: CLIContext): Command {
     .command('set <path> <value>')
     .description('Set a config value by dot path')
     .action(async (path: string, value: string) => {
-      const { loadConfig, log } = await loadConfigDeps();
+      const { loadConfig, saveConfig, log } = await loadConfigDeps();
       if (!existsSync(ctx.configPath)) {
         log.error(`Config file not found. ${MISSING_CONFIG_HINT}`);
         process.exit(1);
@@ -171,7 +170,7 @@ function createConfigCommand(ctx: CLIContext): Command {
       const config = loadConfig(ctx.configPath);
       setNestedValue(config, path, parsedValue);
 
-      await writeTextAtomic(ctx.configPath, JSON.stringify(config, null, 2));
+      await saveConfig(config, ctx.configPath);
 
       log.info({ path }, `Config updated`);
     });
@@ -180,7 +179,7 @@ function createConfigCommand(ctx: CLIContext): Command {
     .command('unset <path>')
     .description('Remove a config value by dot path')
     .action(async (path: string) => {
-      const { loadConfig, log } = await loadConfigDeps();
+      const { loadConfig, saveConfig, log } = await loadConfigDeps();
       if (!existsSync(ctx.configPath)) {
         log.error(`Config file not found. ${MISSING_CONFIG_HINT}`);
         process.exit(1);
@@ -195,7 +194,7 @@ function createConfigCommand(ctx: CLIContext): Command {
 
       if (target && typeof target === 'object' && lastKey in target) {
         delete target[lastKey];
-        await writeTextAtomic(ctx.configPath, JSON.stringify(config, null, 2));
+        await saveConfig(config, ctx.configPath);
         log.info({ path }, `Config removed`);
       } else {
         log.error({ path }, `Config path not found`);
@@ -226,7 +225,7 @@ function createConfigCommand(ctx: CLIContext): Command {
     .option('--generate', 'Generate a new token')
     .option('--show', 'Show the current token (unmasked)')
     .action(async (options) => {
-      const { loadConfig, log } = await loadConfigDeps();
+      const { loadConfig, saveConfig, log } = await loadConfigDeps();
       if (!existsSync(ctx.configPath)) {
         log.error(`Config file not found. ${MISSING_CONFIG_HINT}`);
         process.exit(1);
@@ -254,7 +253,7 @@ function createConfigCommand(ctx: CLIContext): Command {
           token: newToken,
         };
 
-        await writeTextAtomic(ctx.configPath, JSON.stringify(config, null, 2));
+        await saveConfig(config, ctx.configPath);
         log.info('New gateway token generated');
         console.log(`Token: ${newToken.slice(0, 8)}...${newToken.slice(-8)}`);
         console.log('\nUse "xopc config token --show" to view the full token');

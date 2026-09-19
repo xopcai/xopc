@@ -5,13 +5,17 @@ import { ConfigSchema, type Config } from '../config/schema.js';
 import { createLogger } from '../utils/logger.js';
 import { listRegisteredMigrations } from './registry.js';
 import { conversationRoutingConfigMigration } from './conversation-routing-config.js';
+import { knowledgeMemoryReadPolicyConfigMigration } from './knowledge-memory-read-policy-config.js';
 import type { Migration, MigrationContext, MigrationLedger, MigrationPlanItem } from './types.js';
 
 const log = createLogger('Migrations');
 const MIGRATION_LEDGER_FILENAME = 'migrations.json';
 const CONFIG_BACKUP_COUNT = 10;
 
-export const CORE_MIGRATIONS: readonly Migration[] = [conversationRoutingConfigMigration];
+export const CORE_MIGRATIONS: readonly Migration[] = [
+  conversationRoutingConfigMigration,
+  knowledgeMemoryReadPolicyConfigMigration,
+];
 
 function listAllMigrations(): Migration[] {
   return [...CORE_MIGRATIONS, ...listRegisteredMigrations().map((entry) => entry.migration)];

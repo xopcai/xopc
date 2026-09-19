@@ -531,7 +531,7 @@ export class AgentToolsFactory {
         canRead: () => currentAccess().knowledge,
         canWrite: () => currentAccess().knowledge,
         getWritePolicy: knowledgeWritePolicy,
-        getSources: () => currentAccess().knowledgeSources,
+        getReadPolicy: () => currentAccess().knowledgePolicy,
       }),
       createKnowledgeGetTool({
         agentId: resolvedAgentId,
@@ -541,7 +541,7 @@ export class AgentToolsFactory {
         canRead: () => currentAccess().knowledge,
         canWrite: () => currentAccess().knowledge,
         getWritePolicy: knowledgeWritePolicy,
-        getSources: () => currentAccess().knowledgeSources,
+        getReadPolicy: () => currentAccess().knowledgePolicy,
       }),
       createKnowledgeWriteTool({
         agentId: resolvedAgentId,
@@ -551,7 +551,7 @@ export class AgentToolsFactory {
         canRead: () => currentAccess().knowledge,
         canWrite: () => currentAccess().knowledge,
         getWritePolicy: knowledgeWritePolicy,
-        getSources: () => currentAccess().knowledgeSources,
+        getReadPolicy: () => currentAccess().knowledgePolicy,
       }),
       ...(this.deps.getSessionStore
         ? [

@@ -46,6 +46,9 @@ export function recordExecutionContext(
   for (const item of selected.goals) included.add(`goal:${item.id}`);
   for (const item of selected.priorities) included.add(`priority:${item.id}`);
   for (const item of selected.knowledge) included.add(`knowledge:${item.id}`);
+  for (const item of selected.externalKnowledge) {
+    included.add(`knowledge:external:${item.citation.providerId}:${item.record.id}`);
+  }
   const items: ExecutionContextAudit['items'] = [
     ...context.rules.map((item) => ({
       objectType: 'rule' as const,
@@ -80,18 +83,27 @@ export function recordExecutionContext(
       reasons: ['task_relevant_knowledge'],
       included: included.has(`knowledge:${item.id}`),
     })),
+    ...context.externalKnowledge.map((item) => ({
+      objectType: 'knowledge' as const,
+      objectId: `external:${item.citation.providerId}:${item.record.id}`,
+      score: item.score,
+      reasons: ['external_memory', 'task_relevant_knowledge'],
+      included: included.has(`knowledge:external:${item.citation.providerId}:${item.record.id}`),
+    })),
   ];
   const metrics = {
     rules: context.rules.length,
     assertions: context.assertions.length,
     goals: context.goals.length,
     priorities: context.priorities.length,
-    knowledge: context.knowledge.length,
+    knowledge: context.knowledge.length + context.externalKnowledge.length,
+    externalKnowledge: context.externalKnowledge.length,
     includedRules: selected.rules.length,
     includedAssertions: selected.assertions.length,
     includedGoals: selected.goals.length,
     includedPriorities: selected.priorities.length,
-    includedKnowledge: selected.knowledge.length,
+    includedKnowledge: selected.knowledge.length + selected.externalKnowledge.length,
+    includedExternalKnowledge: selected.externalKnowledge.length,
     renderedChars: input.renderedChars,
   };
   runSqliteWriteTransaction((db) => {

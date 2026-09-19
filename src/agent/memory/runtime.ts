@@ -1,6 +1,10 @@
 import type { UserContextConfig } from '../../user-context/config.js';
+import type {
+  KnowledgeContentSource,
+  KnowledgeReadPolicy,
+  KnowledgeVisibilityScope,
+} from '../../knowledge-memory/domain.js';
 
-export type MemorySource = 'session' | 'workspace' | 'project' | 'connector';
 export type MemoryWriteTarget = 'knowledge';
 export type MemoryWriteDecision = 'allow' | 'confirm' | 'deny';
 
@@ -18,8 +22,8 @@ export interface MemoryWriteCheckResult {
 }
 
 export interface MemoryRuntime {
-  readableSources: MemorySource[];
-  canRead: (source: MemorySource) => boolean;
+  readPolicy: KnowledgeReadPolicy;
+  canRead: (scope: KnowledgeVisibilityScope, source: KnowledgeContentSource) => boolean;
   checkWrite: (candidate: MemoryCandidate) => MemoryWriteCheckResult;
 }
 
@@ -30,11 +34,14 @@ function normalizeConfidence(value: number | undefined): number {
 
 export function buildMemoryRuntime(userContext: UserContextConfig): MemoryRuntime {
   const memory = userContext.knowledgeMemory;
-  const readableSources = !userContext.enabled || !memory.enabled ? [] : [...memory.sources];
-  const sourceSet = new Set<MemorySource>(readableSources);
+  const readPolicy: KnowledgeReadPolicy = !userContext.enabled || !memory.enabled
+    ? { scopes: [], contentSources: [] }
+    : { scopes: memory.readScopes, contentSources: memory.contentSources };
+  const scopes = new Set(readPolicy.scopes);
+  const contentSources = new Set(readPolicy.contentSources);
   return {
-    readableSources,
-    canRead: (source) => sourceSet.has(source),
+    readPolicy,
+    canRead: (scope, source) => scopes.has(scope) && contentSources.has(source),
     checkWrite: (candidate) => {
       if (!userContext.enabled || !memory.enabled) return { decision: 'deny', reason: 'knowledge memory is disabled' };
       if (!candidate.content.trim()) return { decision: 'deny', reason: 'memory content is empty' };

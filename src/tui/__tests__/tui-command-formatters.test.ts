@@ -208,7 +208,14 @@ it('exposes native usage and context commands', () => {
       showThinking: true,
       lastCtrlCAt: 0,
       exitRequested: false,
-      pendingInputCount: 2,
+      chatInputState: {
+        conversationId: 'dac36f29-33b7-4674-8425-ef9a14bf89cd',
+        revision: 1,
+        inputs: [
+          { id: '1', content: 'one', requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', version: 1 },
+          { id: '2', content: 'two', requestedDelivery: 'steer', effectiveDelivery: 'steer', status: 'injecting', version: 1 },
+        ],
+      },
     });
 
     expect(text).toContain('Session Info');

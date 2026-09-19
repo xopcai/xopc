@@ -8,6 +8,7 @@ import { formatContextUsageLabel } from '../tui-context-usage.js';
 import { getGitBranchCached } from '../tui-git-branch.js';
 import { formatActiveRunStatus } from '../tui-run-status-format.js';
 import type { TuiState } from '../tui-types.js';
+import { countPendingChatInputs } from '../tui-chat-input-state.js';
 
 const BUSY_ACTIVITY = new Set([
   'sending',
@@ -155,8 +156,9 @@ export class TuiBottomBar implements Component {
     } else if (state.compactionQueue.length > 0) {
       leftParts.push(`C${state.compactionQueue.length}`);
     }
-    if (state.pendingInputCount > 0) {
-      leftParts.push(`Q${state.pendingInputCount}`);
+    const pendingInputCount = countPendingChatInputs(state.chatInputState?.inputs ?? []);
+    if (pendingInputCount > 0) {
+      leftParts.push(`Q${pendingInputCount}`);
     }
     let statsLeft = leftParts.join(' · ');
 

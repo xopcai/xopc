@@ -19,6 +19,8 @@ export type XopcTuiAppKeybinding =
   | 'app.model.select'
   | 'app.tools.expand'
   | 'app.thinking.toggle'
+  | 'app.transcript.open'
+  | 'app.transcript.raw'
   | 'app.session.resume'
   | 'app.session.tree'
   | 'app.session.fork'
@@ -42,6 +44,8 @@ export type XopcTuiAppKeybinding =
   | 'app.editor.external'
   | 'app.clipboard.pasteImage'
   | 'app.message.followUp'
+  | 'app.message.editQueued'
+  | 'app.message.deleteQueued'
   | 'app.models.save'
   | 'app.models.enableAll'
   | 'app.models.clearAll'
@@ -61,6 +65,8 @@ declare module '@earendil-works/pi-tui' {
     'app.model.select': true;
     'app.tools.expand': true;
     'app.thinking.toggle': true;
+    'app.transcript.open': true;
+    'app.transcript.raw': true;
     'app.session.resume': true;
     'app.session.tree': true;
     'app.session.fork': true;
@@ -84,6 +90,8 @@ declare module '@earendil-works/pi-tui' {
     'app.editor.external': true;
     'app.clipboard.pasteImage': true;
     'app.message.followUp': true;
+    'app.message.editQueued': true;
+    'app.message.deleteQueued': true;
     'app.models.save': true;
     'app.models.enableAll': true;
     'app.models.clearAll': true;
@@ -117,8 +125,16 @@ export const XOPC_TUI_KEYBINDINGS = {
   'app.model.select': { defaultKeys: 'ctrl+l', description: 'Model picker' },
   'app.tools.expand': { defaultKeys: 'ctrl+o', description: 'Toggle tool output' },
   'app.thinking.toggle': {
-    defaultKeys: 'ctrl+t',
+    defaultKeys: [],
     description: 'Toggle thinking block display',
+  },
+  'app.transcript.open': {
+    defaultKeys: 'ctrl+t',
+    description: 'Open transcript view',
+  },
+  'app.transcript.raw': {
+    defaultKeys: 'alt+r',
+    description: 'Open raw transcript view',
   },
   'app.session.resume': {
     defaultKeys: 'ctrl+shift+p',
@@ -209,8 +225,16 @@ export const XOPC_TUI_KEYBINDINGS = {
     description: 'Paste image from clipboard',
   },
   'app.message.followUp': {
-    defaultKeys: 'alt+enter',
+    defaultKeys: 'tab',
     description: 'Queue message while busy (or submit when idle)',
+  },
+  'app.message.editQueued': {
+    defaultKeys: 'up',
+    description: 'Edit the last queued message when the composer is empty',
+  },
+  'app.message.deleteQueued': {
+    defaultKeys: 'ctrl+x',
+    description: 'Delete the last queued message',
   },
   'app.models.save': {
     defaultKeys: 'ctrl+s',
@@ -270,9 +294,13 @@ export const XOPC_TUI_HOTKEY_ORDER: XopcTuiAppKeybinding[] = [
   'app.tree.toggleLabelTimestamp',
   'app.tools.expand',
   'app.thinking.toggle',
+  'app.transcript.open',
+  'app.transcript.raw',
   'app.editor.external',
   'app.clipboard.pasteImage',
   'app.message.followUp',
+  'app.message.editQueued',
+  'app.message.deleteQueued',
   'app.models.save',
   'app.models.enableAll',
   'app.models.clearAll',

@@ -16,6 +16,7 @@ export async function buildDirectUserMessageContent(opts: {
   config: Config;
   agentManager: AgentInstanceGateway;
   modelManager: ModelManager;
+  suppressMediaPromptUris?: ReadonlySet<string>;
 }) {
   const sk = opts.conversationId ?? '';
   const modelRef =
@@ -30,5 +31,6 @@ export async function buildDirectUserMessageContent(opts: {
     modelRef: modelRef || getDefaultModelSync(opts.config),
     config: opts.config,
     agentManager: opts.agentManager,
+    suppressMediaPromptUris: opts.suppressMediaPromptUris,
   });
 }
