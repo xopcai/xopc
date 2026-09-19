@@ -49,6 +49,33 @@ describe('platform voice protocol', () => {
     expect(received).toEqual([{type:'session.update',session:{voice:'vendor-independent'}},{type:'input_text_buffer.append',text:'你好'},{type:'input_text_buffer.commit'},{type:'session.finish'}]);
     await result.release?.();
   });
+  it('pauses platform audio while a slow consumer drains the bounded stream', async () => {
+    const {server:s, url} = await server();
+    const chunk = Buffer.alloc(16 * 1024, 1);
+    const chunkCount = 80;
+    s.on('connection', socket => socket.on('message', raw => {
+      const event = JSON.parse(raw.toString());
+      if (event.type === 'session.update') socket.send(JSON.stringify({type:'session.updated', session:{output_sample_rate:24000}}));
+      if (event.type === 'input_text_buffer.commit') socket.send(JSON.stringify({type:'response.done'}));
+      if (event.type === 'session.finish') {
+        for (let index = 0; index < chunkCount; index++) {
+          socket.send(JSON.stringify({type:'response.audio.delta', delta:chunk.toString('base64')}));
+        }
+        socket.send(JSON.stringify({type:'session.finished'}));
+      }
+    }));
+    const result = await openPlatformTts({baseUrl:url,apiKey:'test',voice:'a',text:'hello',signal:new AbortController().signal,timeoutMs:2000});
+    await new Promise(resolve => setTimeout(resolve, 50));
+    const reader = result.audioStream.getReader();
+    let bytes = 0;
+    while (true) {
+      const item = await reader.read();
+      if (item.done) break;
+      bytes += item.value.byteLength;
+    }
+    expect(bytes).toBe(chunk.byteLength * chunkCount);
+    await result.release?.();
+  });
   it('fails a closed synthesis stream instead of claiming completion', async () => {
     const {server:s,url} = await server();
     s.on('connection', socket => socket.on('message', raw => {

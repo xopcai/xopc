@@ -12,6 +12,18 @@ export const REALTIME_HEARTBEAT_INTERVAL_MS = 15_000;
 export const REALTIME_HEARTBEAT_TIMEOUT_MS = 45_000;
 export const REALTIME_CAPABILITIES = ['realtime.capability-negotiation.v1'] as const;
 export type RealtimeCapability = (typeof REALTIME_CAPABILITIES)[number];
+export const REALTIME_COMPATIBILITY_ERROR_CODES = [
+  'CLIENT_UPDATE_REQUIRED',
+  'GATEWAY_UPDATE_REQUIRED',
+] as const;
+export type RealtimeCompatibilityErrorCode = (typeof REALTIME_COMPATIBILITY_ERROR_CODES)[number];
+
+export function isRealtimeCompatibilityErrorCode(
+  value: unknown,
+): value is RealtimeCompatibilityErrorCode {
+  return typeof value === 'string'
+    && REALTIME_COMPATIBILITY_ERROR_CODES.some((code) => code === value);
+}
 
 export const realtimeClientKindSchema = z.enum([
   'web',

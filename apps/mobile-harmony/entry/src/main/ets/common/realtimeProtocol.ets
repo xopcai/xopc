@@ -1,5 +1,7 @@
 import type { XopcEndpointHello, XopcSubscription } from '../model/realtime';
 
+export const XOPC_REALTIME_PROTOCOL_VERSION: number = 2;
+
 // This order is the Gateway's recursive canonical JSON order. Tools are deliberately disabled until implemented.
 export function endpointProof(hello: XopcEndpointHello): string {
   if (hello.tools.length !== 0) throw new Error('UNSUPPORTED_ENDPOINT_TOOLS');

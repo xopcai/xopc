@@ -5,7 +5,12 @@ interface XopcHttpHeaders { 'Content-Type': string; 'Authorization': string; }
 
 export class XopcHttpError extends Error {
   status: number;
-  constructor(status: number) { super('HTTP_' + status); this.status = status; }
+  body: string;
+  constructor(status: number, body: string = '') {
+    super('HTTP_' + status);
+    this.status = status;
+    this.body = body;
+  }
 }
 
 export class XopcTransport {
@@ -21,7 +26,9 @@ export class XopcTransport {
     if (body) options.extraData = body;
     try {
       const response = await connection.request(secureOrigin(origin) + path, options);
-      if (response.responseCode < 200 || response.responseCode >= 300) throw new XopcHttpError(response.responseCode);
+      if (response.responseCode < 200 || response.responseCode >= 300) {
+        throw new XopcHttpError(response.responseCode, typeof response.result === 'string' ? response.result : '');
+      }
       if (typeof response.result !== 'string') throw new Error('INVALID_HTTP_RESPONSE');
       return response.result;
     } finally { connection.destroy(); }

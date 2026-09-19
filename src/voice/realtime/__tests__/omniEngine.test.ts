@@ -1,4 +1,5 @@
 import { once } from 'node:events';
+import { setTimeout as realDelay } from 'node:timers/promises';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket, { WebSocketServer } from 'ws';
 
@@ -52,6 +53,40 @@ describe('Omni voice engine', () => {
     return callbacks;
   }
 
+  it('reports a stalled upstream instead of waiting forever after successful transcription', async () => {
+    const test = await setup(undefined, false, true);
+    vi.useFakeTimers();
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'u1', transcript: 'Hello' });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('input.transcript.final', expect.anything()));
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('turn.committed', expect.anything()));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(test.send).toHaveBeenCalledWith('session.error', expect.objectContaining({ code: 'OMNI_RESPONSE_START_TIMEOUT', recoverable: false }));
+    expect(test.record).toHaveBeenCalledWith(expect.objectContaining({ role: 'user', text: 'Hello' }));
+    expect(test.sendAudio).not.toHaveBeenCalled();
+  });
+
+  it.each(['reply', 'speech', 'mute', 'close'])('clears the response-start deadline on %s', async (action) => {
+    const test = await setup(undefined, false, true);
+    vi.useFakeTimers();
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'u1', transcript: 'Hello' });
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('turn.committed', expect.anything()));
+    if (action === 'reply') {
+      test.emit({ type: 'response.created', response: { id: 'r1' } });
+      await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.created', { responseId: 'r1' }));
+    } else if (action === 'speech') {
+      test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'u2' });
+      await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('input.speech_started', { utteranceId: 'u2' }));
+    } else if (action === 'mute') {
+      engine.setInputMuted(true);
+      test.emit({ type: 'input_audio_buffer.cleared' });
+      await vi.waitFor(() => expect(test.received.some(event => event.type === 'input_audio_buffer.clear')).toBe(true));
+      await realDelay(20);
+    }
+    else await engine.close();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(test.send.mock.calls.some(([type]) => type === 'session.error')).toBe(false);
+  });
+
   it('negotiates a vendor-neutral managed session and explicitly cancels interrupted generation', async () => {
     const test = await setup(undefined, true, true);
     const update = test.received.find(event => event.type === 'session.update');
@@ -88,6 +123,25 @@ describe('Omni voice engine', () => {
     await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', expect.objectContaining({ responseId: 'complete' })));
     expect(test.send.mock.calls.filter(([type, payload]) => type.startsWith('response.') && payload.responseId === 'premature')).toEqual([]);
     expect(test.record.mock.calls.some(([entry]) => entry.itemId === 'premature')).toBe(false);
+  });
+
+  it('holds a managed reply created before speech stops until the transcript settles', async () => {
+    const test = await setup(undefined, true, true);
+    test.emit({ type: 'input_audio_buffer.speech_started', item_id: 'early' });
+    test.emit({ type: 'response.created', response: { id: 'early-reply' } });
+    test.emit({ type: 'response.audio_transcript.delta', response_id: 'early-reply', delta: 'I can hear you.' });
+    test.emit({ type: 'response.audio.delta', response_id: 'early-reply', delta: Buffer.alloc(24_000, 1).toString('base64') });
+    test.emit({ type: 'response.done', response: { id: 'early-reply', status: 'completed' } });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(test.received.some((event) => event.type === 'response.cancel')).toBe(false);
+    expect(test.send.mock.calls.filter(([type]) => type.startsWith('response.'))).toEqual([]);
+
+    test.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'early' });
+    test.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'early', transcript: 'Can you hear me?' });
+    await vi.waitFor(() => expect(test.sendAudio).toHaveBeenCalledTimes(25));
+    engine.acknowledge('early-reply', 500);
+    await vi.waitFor(() => expect(test.send).toHaveBeenCalledWith('response.done', expect.objectContaining({ responseId: 'early-reply' })));
+    expect(test.record).toHaveBeenCalledWith(expect.objectContaining({ itemId: 'early-reply', text: 'I can hear you.', interrupted: false }));
   });
 
   it.each(['mute', 'close'] as const)('does not leak buffered speech after %s', async (action) => {

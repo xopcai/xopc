@@ -315,6 +315,15 @@ export const en = {
 
   gateway: {
     offlineBanner: 'Your computer may be offline — cannot reach the gateway.',
+    compatibility: {
+      clientTitle: 'Update this app',
+      clientDescription: 'This app is too old for the connected gateway. Update it from where you installed it, then try again.',
+      gatewayTitle: 'Update the gateway',
+      gatewayDescription: 'This app is newer than the connected gateway. Update the gateway on your computer, then try again.',
+      updateApp: 'View update',
+      manageGateway: 'Manage connection',
+      retry: 'Try again',
+    },
     switcher: {
       title: 'Switch space',
       subtitle: 'The current space stays available while the connection is verified',

@@ -52,6 +52,7 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     frames = [];
     vi.spyOn(alibabaTranscriptionProvider, 'openAudioStream').mockImplementation(async (request) => {
       onSttEvent = request.onEvent;
+      request.signal.addEventListener('abort', () => request.onEvent({ type: 'error', error: new Error('Voice request aborted') }), { once: true });
       return { appendAudio: vi.fn(), abort: abortStt, commit: vi.fn(async () => {}), close: vi.fn(async () => {}) };
     });
     const config = ConfigSchema.parse({
@@ -149,6 +150,7 @@ describe('VoiceRealtimeRuntime playback over WebSocket', () => {
     const closed = once(socket, 'close');
     finish();
     await closed;
+    expect(events.some((event) => event.type === 'session.error')).toBe(false);
     expect(runtime.hasConversation('agent:main:webchat:default:direct:voice')).toBe(false);
     await expect(runtime.createSession({ purpose: 'conversation', mode: 'assistant', conversationId: 'agent:main:webchat:default:direct:voice', supportedProtocolVersions: [3], mediaPreferences: ['websocket-pcm'] }, 'user-1')).resolves.toHaveProperty('ticket');
   });

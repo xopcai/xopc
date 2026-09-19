@@ -1,6 +1,8 @@
 {
   "workflows": {
     "title": "工作流",
+    "runDetailsTitle": "运行详情",
+    "backToRuns": "返回运行记录",
     "runsSubtitle": "处理异常、跟踪进度并使用运行结果。",
     "librarySubtitle": "选择、创建和管理可复用工作流。",
     "needToken": "请先使用 token 连接网关，才能浏览工作流并监控运行。",

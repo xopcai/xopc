@@ -32,7 +32,12 @@ async function fixture(mode: 'success' | 'gap' | 'pending' | 'error' = 'success'
       registered = endpointPrincipalRegistrationSchema.parse(body);
       return res.end('{"ok":true}');
     }
-    if (url === '/api/realtime/tickets') return res.end(JSON.stringify({ payload: { ticket: 'x'.repeat(40) } }));
+    if (url === '/api/realtime/tickets') {
+      expect(body.protocolVersion).toBe(2);
+      return res.end(JSON.stringify({
+        payload: { ticket: 'x'.repeat(40), realtime: { minVersion: 2, maxVersion: 2, capabilities: [] } },
+      }));
+    }
     if (url.endsWith('/inputs')) {
       if (!signatureValid || !endpointTurnClaimSchema.safeParse(body.origin).success || body.origin?.token !== turnToken) { res.statusCode = 401; return res.end('{}'); }
       return res.end(JSON.stringify({ payload: { state: { activeRunId: 'xopc-run', activeInputId: 'input', inputs: [{ id: 'input', clientMessageId: body.clientMessageId, runId: 'xopc-run' }] } } }));

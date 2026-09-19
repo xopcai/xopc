@@ -2,6 +2,7 @@ import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 
 import { endpointHelloSigningPayload, type EndpointHelloPayload, type EndpointTurnClaim } from '@xopcai/endpoint-tools-protocol';
 import { RealtimeClient, type RealtimeTicket, type RealtimeWebSocket } from '@xopcai/realtime-client';
+import { REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 
 export async function runRealtimeInput(input: {
   baseUrl: string;
@@ -51,7 +52,11 @@ export async function runRealtimeInput(input: {
     getWebSocketUrl: () => wsUrl.href,
     createWebSocket: url => new WebSocket(url) as unknown as RealtimeWebSocket,
     issueTicket: async signal => {
-      const response = await json<RealtimeTicket>('/api/realtime/tickets', { clientId, clientKind: 'web' }, signal);
+      const response = await json<RealtimeTicket>('/api/realtime/tickets', {
+        clientId,
+        clientKind: 'web',
+        protocolVersion: REALTIME_PROTOCOL_VERSION,
+      }, signal);
       return response.payload;
     },
     onStateChange: (state, message) => {

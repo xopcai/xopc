@@ -32,7 +32,10 @@ function connect(url: string, token: string, signal: AbortSignal, onEvent: (even
   socket.on('unexpected-response', (_request, response) => { response.resume(); fail(new Error(`Platform voice rejected connection (${response.statusCode})`)); });
   socket.on('error', fail);
   socket.on('close', () => fail(new Error('Platform voice disconnected before completion')));
-  return { socket, close, fail, send: (value: object | Uint8Array) => {
+  return { socket, close, fail,
+    pause: () => { if (!ended && socket.readyState === WebSocket.OPEN) socket.pause(); },
+    resume: () => { if (!ended && socket.readyState === WebSocket.OPEN) socket.resume(); },
+    send: (value: object | Uint8Array) => {
     if (ended || socket.readyState !== WebSocket.OPEN) throw new Error('Platform voice is not connected');
     if (socket.bufferedAmount > MAX_BUFFERED_BYTES) throw new Error('Platform voice backpressure limit exceeded');
     socket.send(value instanceof Uint8Array ? value : JSON.stringify(value));
@@ -100,7 +103,11 @@ export async function openPlatformTts(request: {
   let resolveReady!: () => void, rejectReady!: (error: Error) => void;
   let ready = false, ended = false, finishSent = false;
   const readyPromise = new Promise<void>((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
-  const stream = new ReadableStream<Uint8Array>({ start(value) { controller = value; }, cancel() { ended = true; clearTimeout(timer); connection.close(); } }, { highWaterMark: MAX_BUFFERED_BYTES, size: chunk => chunk.byteLength });
+  const stream = new ReadableStream<Uint8Array>({
+    start(value) { controller = value; },
+    pull(value) { if ((value.desiredSize ?? 0) > 0) connection.resume(); },
+    cancel() { ended = true; clearTimeout(timer); connection.close(); },
+  }, { highWaterMark: MAX_BUFFERED_BYTES, size: chunk => chunk.byteLength });
   const connection = connect(request.baseUrl, request.apiKey, request.signal, event => {
     if (event.type === 'session.updated' && !ready) {
       if (event.session?.output_sample_rate !== 24000) throw new Error('Unsupported TTS audio format');
@@ -113,8 +120,9 @@ export async function openPlatformTts(request: {
     } else if (event.type === 'response.audio.delta') {
       if (!ready || typeof event.delta !== 'string' || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(event.delta)) throw new Error('Invalid platform audio');
       const bytes = Buffer.from(event.delta, 'base64');
-      if (bytes.length % 2 || (controller.desiredSize ?? 0) < bytes.length) throw new Error('Platform TTS audio buffer exceeded');
+      if (bytes.length % 2 || bytes.length > MAX_BUFFERED_BYTES) throw new Error('Invalid platform audio');
       controller.enqueue(bytes);
+      if ((controller.desiredSize ?? 0) <= 0) connection.pause();
     } else if (event.type === 'session.finished') {
       ended = true; clearTimeout(timer); controller.close(); connection.close();
     }

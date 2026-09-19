@@ -138,10 +138,8 @@
       "name": "connection_revoked",
       "value": "Device authorization expired or was revoked. Pair again in Settings."
     },
-    {
-      "name": "protocol_incompatible",
-      "value": "Gateway protocol is incompatible. Update the Gateway or this app."
-    },
+    { "name": "client_update_required", "value": "This app is too old for the connected Gateway. Update it from where you installed it, then retry." },
+    { "name": "gateway_update_required", "value": "This app is newer than the connected Gateway. Update the Gateway on your computer, then retry." },
     {
       "name": "play_recording",
       "value": "Play recording"

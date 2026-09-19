@@ -1,0 +1,13 @@
+{
+  "plan_id": "mobile-gateway-version-compatibility",
+  "title": "移动端与 Gateway 版本兼容",
+  "status": "completed",
+  "tech_spec_status": "confirmed",
+  "created_at": "2026-09-19T00:00:00Z",
+  "tech_spec_confirmed_at": "2026-09-19T00:00:00Z",
+  "complexity": "medium",
+  "modules": ["gateway", "realtime-client", "mobile-expo", "mobile-harmony"],
+  "platforms": ["Gateway", "Android", "iOS", "HarmonyOS"],
+  "current_phase": 6,
+  "total_phases": 6
+}

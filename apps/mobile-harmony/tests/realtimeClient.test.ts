@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({ create: vi.fn(), request: vi.fn() }));
 vi.mock('@kit.NetworkKit', () => ({ webSocket: { createWebSocket: mocks.create } }));
 vi.mock('@kit.BasicServicesKit', () => ({}));
 vi.mock('@kit.PerformanceAnalysisKit', () => ({ hilog: { warn: vi.fn(), info: vi.fn() } }));
+vi.mock('../entry/src/main/ets/common/appInfo.ets', () => ({ xopcAppVersion: () => '0.1.0-test' }));
 vi.mock('../entry/src/main/ets/service/deviceCrypto.ets', () => ({ XopcDeviceCrypto: class {
   uuid() { return randomUUID(); } async publicKeyDer() { return 'public-key'; } async sign() { return 'signature'; }
 } }));
@@ -13,7 +14,7 @@ vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySess
   activeOrigin: () => 'https://gateway.example', verifyRoute: async () => {},
 } }));
 vi.mock('../entry/src/main/ets/service/transport.ets', () => ({ XopcHttpError: class extends Error {
-  constructor(public status: number) { super('HTTP_' + status); }
+  constructor(public status: number, public body: string = '') { super('HTTP_' + status); }
 } }));
 import { XopcRealtimeClient } from '../entry/src/main/ets/service/realtimeClient.ets';
 import { XopcHttpError } from '../entry/src/main/ets/service/transport.ets';
@@ -34,7 +35,9 @@ describe('Harmony realtime lifecycle', () => {
   beforeEach(() => {
     vi.useFakeTimers(); vi.clearAllMocks(); sockets = [];
     mocks.create.mockImplementation(() => { const socket = new FakeSocket(); sockets.push(socket); return socket; });
-    mocks.request.mockImplementation(async (path: string) => path.endsWith('/tickets') ? JSON.stringify({ payload: { ticket: 'ticket' } }) : '{}');
+    mocks.request.mockImplementation(async (path: string) => path.endsWith('/tickets')
+      ? JSON.stringify({ payload: { ticket: 'ticket', realtime: { minVersion: 2, maxVersion: 2, capabilities: [] } } })
+      : '{}');
     client = new XopcRealtimeClient();
   });
   afterEach(() => { client.stop(); vi.useRealTimers(); });
@@ -42,7 +45,11 @@ describe('Harmony realtime lifecycle', () => {
   it('authenticates with v2 hello and reconnects with the last sequence without duplicate events', async () => {
     client.subscribe('run:r1'); const socket = await connect(); const events = vi.fn(); client.onEvent = events;
     expect(socket.connect).toHaveBeenCalledWith('wss://gateway.example/api/realtime/v1/ws');
+    expect(JSON.parse(mocks.request.mock.calls.find(([path]) => path.endsWith('/tickets'))![2])).toEqual({
+      clientId: 'harmonyos:device-1', clientKind: 'mobile', protocolVersion: 2,
+    });
     expect(socket.frames()[0]).toMatchObject({ protocolVersion: 2, kind: 'realtime.hello', payload: { clientKind: 'mobile', ticket: 'ticket', subscriptions: [{ topic: 'run:r1', afterSeq: 0 }] } });
+    expect(socket.frames()[0].payload.endpoint.appVersion).toBe('0.1.0-test');
     const event = { topic: 'run:r1', seq: 1, event: 'assistant_delta', data: { text: 'a' } };
     socket.frame('realtime.event', event); socket.frame('realtime.event', event); expect(events).toHaveBeenCalledOnce();
     socket.listeners.get('close')?.(null, { code: 1006 }); await vi.advanceTimersByTimeAsync(1500);
@@ -67,13 +74,25 @@ describe('Harmony realtime lifecycle', () => {
     socket.frame('realtime.event', { topic: 'gateway', seq: 2, event: 'config.reload', data: {} });
     expect(events).toHaveBeenCalledOnce();
   });
-  it('stops retrying revoked authentication and incompatible endpoint contracts', async () => {
+  it('stops retrying revoked authentication and directional compatibility failures', async () => {
     const states = vi.fn(); client.onState = states;
     mocks.request.mockRejectedValueOnce(new XopcHttpError(403));
     client.start(); await vi.advanceTimersByTimeAsync(60000);
     expect(states).toHaveBeenLastCalledWith('unauthorized'); expect(mocks.request).toHaveBeenCalledOnce();
+    mocks.request.mockRejectedValueOnce(new XopcHttpError(426, JSON.stringify({ error: { code: 'CLIENT_UPDATE_REQUIRED' } })));
+    client.start(); await vi.advanceTimersByTimeAsync(60000);
+    expect(states).toHaveBeenLastCalledWith('client_update_required');
     const socket = await connect(); socket.listeners.get('close')?.(null, { code: 4409 });
-    await vi.advanceTimersByTimeAsync(60000); expect(states).toHaveBeenLastCalledWith('protocol_incompatible'); expect(sockets).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(60000); expect(states).toHaveBeenLastCalledWith('gateway_update_required'); expect(sockets).toHaveLength(1);
+  });
+  it('rejects an incompatible successful ticket before opening a socket', async () => {
+    const states = vi.fn(); client.onState = states;
+    mocks.request.mockImplementation(async (path: string) => path.endsWith('/tickets')
+      ? JSON.stringify({ payload: { ticket: 'ticket', realtime: { minVersion: 3, maxVersion: 3, capabilities: [] } } })
+      : '{}');
+    client.start(); await vi.advanceTimersByTimeAsync(60000);
+    expect(states).toHaveBeenLastCalledWith('client_update_required');
+    expect(sockets).toHaveLength(0);
   });
   it('releases timers and listeners on background stop', async () => {
     const socket = await connect(); client.stop(); const requests = mocks.request.mock.calls.length;
