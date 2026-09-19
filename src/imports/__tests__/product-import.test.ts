@@ -50,6 +50,12 @@ it('rejects empty, unknown, duplicate, cross-owner and missing-parent selections
   await expect(importSelection(createRuntimeImportService('other'), { inventoryId: inventory.id, candidateIds: [project.id], requestId: randomUUID() }, 'other')).rejects.toMatchObject({ code: 'not_found' });
   expect(new ProjectService().list().items).toEqual([]);
 });
+it('rejects connection summaries from the import execution path', async () => {
+  write(join(home, '.claude.json'), JSON.stringify({ mcpServers: { docs: { command: 'node', args: ['server.js'] } } }));
+  const inventory = await scan();
+  const connection = inventory.candidates.find(item => item.kind === 'connection')!;
+  await expect(run(inventory, [connection.id])).rejects.toMatchObject({ code: 'invalid_selection' });
+});
 it('preflights all selected content before any project is created', async () => {
   const path = join(home, 'project'); write(join(path, 'CLAUDE.md'), 'Original');
   write(join(home, '.claude.json'), JSON.stringify({ projects: { [path]: {} } }));

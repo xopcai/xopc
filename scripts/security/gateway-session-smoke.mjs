@@ -63,7 +63,7 @@ try {
   assert.equal((await call('/api/browser-session', { headers: authenticated })).status, 200);
   assert.equal((await call('/api/browser-session', { method: 'DELETE', headers: { Cookie: cookie } })).status, 403);
   const ticket = async () => {
-    const response = await call('/api/realtime/tickets', { method: 'POST', headers: { ...authenticated, 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId: 'smoke', clientKind: 'web' }) });
+    const response = await call('/api/realtime/tickets', { method: 'POST', headers: { ...authenticated, 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId: 'smoke', clientKind: 'web', protocolVersion: 2 }) });
     assert.equal(response.status, 200);
     return (await response.json()).payload.ticket;
   };

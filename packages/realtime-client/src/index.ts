@@ -38,7 +38,7 @@ export interface RealtimeClientOptions {
   clientKind: RealtimeClientKind;
   createMessageId?: () => string;
   getWebSocketUrl: () => string;
-  issueTicket: (signal?: AbortSignal) => Promise<string | RealtimeTicket>;
+  issueTicket: (signal?: AbortSignal) => Promise<RealtimeTicket>;
   createWebSocket: (url: string) => RealtimeWebSocket;
   maxReconnectAttempts?: number;
   connectionTimeoutMs?: number;
@@ -51,7 +51,7 @@ export interface RealtimeClientOptions {
 
 export interface RealtimeTicket {
   ticket: string;
-  realtime?: {
+  realtime: {
     minVersion: number;
     maxVersion: number;
     capabilities: readonly string[];
@@ -210,13 +210,15 @@ export class RealtimeClient {
         this.options.issueTicket(ticketAbort.signal),
         this.endpointBinding?.createHello(),
       ]);
-      const ticket = typeof issuedTicket === 'string' ? issuedTicket : issuedTicket.ticket;
-      const capabilities = typeof issuedTicket === 'string'
-        || !issuedTicket.realtime
-        || REALTIME_PROTOCOL_VERSION < issuedTicket.realtime.minVersion
-        || REALTIME_PROTOCOL_VERSION > issuedTicket.realtime.maxVersion
-        ? undefined
-        : REALTIME_CAPABILITIES.filter(capability => issuedTicket.realtime!.capabilities.includes(capability));
+      const ticket = issuedTicket.ticket;
+      if (REALTIME_PROTOCOL_VERSION < issuedTicket.realtime.minVersion) {
+        throw new RealtimeConnectionError('CLIENT_UPDATE_REQUIRED', false);
+      }
+      if (REALTIME_PROTOCOL_VERSION > issuedTicket.realtime.maxVersion) {
+        throw new RealtimeConnectionError('GATEWAY_UPDATE_REQUIRED', false);
+      }
+      const capabilities = REALTIME_CAPABILITIES.filter(capability =>
+        issuedTicket.realtime.capabilities.includes(capability));
       if (closed || !this.shouldReconnect || generation !== this.generation) return;
       this.offeredCapabilities = new Set(capabilities ?? []);
       socket = this.options.createWebSocket(this.options.getWebSocketUrl());

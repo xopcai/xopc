@@ -27,7 +27,7 @@ async function verifyRealtimeWebSocket(rootUrl, gatewayToken) {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${gatewayToken}`,
     },
-    body: JSON.stringify({ clientId, clientKind: 'mobile' }),
+    body: JSON.stringify({ clientId, clientKind: 'mobile', protocolVersion: 2 }),
   });
   const ticketBody = await ticketResponse.json().catch(() => null);
   if (!ticketResponse.ok || !ticketBody?.payload?.ticket) {

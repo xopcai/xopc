@@ -4,11 +4,12 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { XopcDeviceCrypto } from './deviceCrypto';
 import { gatewaySession } from './gatewaySession';
 import { XopcHttpError } from './transport';
-import { endpointProof, XopcCursors } from '../common/realtimeProtocol';
+import { xopcAppVersion } from '../common/appInfo';
+import { endpointProof, XopcCursors, XOPC_REALTIME_PROTOCOL_VERSION } from '../common/realtimeProtocol';
 import {
   XopcEndpointHello, XopcEndpointRegistration, XopcTicketRequest, XopcTicket, XopcPayload,
   XopcHello, XopcFrame, XopcTurnClaim, XopcReady, XopcEvent, XopcGap, XopcRealtimeError,
-  XopcSubscriptions, XopcTopics, XopcSubscribed
+  XopcSubscriptions, XopcTopics, XopcSubscribed, XopcErrorEnvelope
 } from '../model/realtime';
 
 class XopcEmptyPayload {}
@@ -98,12 +99,24 @@ export class XopcRealtimeClient {
       };
       await gatewaySession.request('/api/endpoint-tools/principals', 'POST', JSON.stringify(registration));
       const clientId = 'harmonyos:' + profile.deviceId;
-      const ticketRequest: XopcTicketRequest = { clientId, clientKind: 'mobile' };
+      const ticketRequest: XopcTicketRequest = {
+        clientId,
+        clientKind: 'mobile',
+        protocolVersion: XOPC_REALTIME_PROTOCOL_VERSION
+      };
       const response = JSON.parse(await gatewaySession.request('/api/realtime/tickets', 'POST', JSON.stringify(ticketRequest))) as XopcPayload<XopcTicket>;
-      if (!response.payload?.ticket) throw new Error('INVALID_REALTIME_TICKET');
+      if (!response.payload?.ticket || !response.payload.realtime) throw new Error('INVALID_REALTIME_TICKET');
+      if (XOPC_REALTIME_PROTOCOL_VERSION < response.payload.realtime.minVersion) {
+        this.fail('client_update_required');
+        return;
+      }
+      if (XOPC_REALTIME_PROTOCOL_VERSION > response.payload.realtime.maxVersion) {
+        this.fail('gateway_update_required');
+        return;
+      }
       const endpoint: XopcEndpointHello = {
         principalId: profile.deviceId, endpointId: clientId, connectionInstanceId: this.crypto.uuid(),
-        displayName: registration.displayName, kind: 'mobile', platform: 'harmonyos', appVersion: '0.1.0',
+        displayName: registration.displayName, kind: 'mobile', platform: 'harmonyos', appVersion: xopcAppVersion(),
         availability: 'foreground', nonce: this.crypto.uuid(), signedAt: Date.now(), signature: '', tools: []
       };
       endpoint.signature = await this.crypto.sign(endpointProof(endpoint));
@@ -132,7 +145,9 @@ export class XopcRealtimeClient {
       socket.on('close', (_error: BusinessError, value: webSocket.CloseResult): void => {
         if (generation !== this.generation) return;
         hilog.info(0x0000, 'XopcRealtime', 'Socket closed: %{public}d', value.code);
-        if (value.code === 4409 || value.code === 4403) this.fail(value.code === 4409 ? 'protocol_incompatible' : 'unauthorized');
+        if (value.code === 4409 || value.code === 4403) {
+          this.fail(value.code === 4409 ? 'gateway_update_required' : 'unauthorized');
+        }
         else this.retry(generation);
       });
       socket.on('error', (error: BusinessError): void => {
@@ -149,6 +164,9 @@ export class XopcRealtimeClient {
       hilog.warn(0x0000, 'XopcRealtime', 'Connection setup failed: HTTP %{public}d', error instanceof XopcHttpError ? error.status : 0);
       if ((error instanceof XopcHttpError && (error.status === 401 || error.status === 403))
         || (error as Error).message === 'DEVICE_AUTH_DENIED') this.fail('unauthorized');
+      else if (error instanceof XopcHttpError && error.status === 426) {
+        this.fail(this.compatibilityState(error.body));
+      }
       else this.retry(generation);
     }
   }
@@ -158,13 +176,13 @@ export class XopcRealtimeClient {
   private send(kind: string, payload: Object): void {
     if (!this.socket) return;
     const generation = this.generation;
-    const frame: XopcFrame<Object> = { protocolVersion: 2, messageId: this.crypto.uuid(), kind, sentAt: Date.now(), payload };
+    const frame: XopcFrame<Object> = { protocolVersion: XOPC_REALTIME_PROTOCOL_VERSION, messageId: this.crypto.uuid(), kind, sentAt: Date.now(), payload };
     this.socket.send(JSON.stringify(frame)).catch((_error: Error): void => { this.retry(generation); });
   }
 
   private receive(raw: string): void {
     const frame = JSON.parse(raw) as XopcFrame<Object>;
-    if (frame.protocolVersion !== 2 || !frame.payload) throw new Error('INVALID_REALTIME_FRAME');
+    if (frame.protocolVersion !== XOPC_REALTIME_PROTOCOL_VERSION || !frame.payload) throw new Error('INVALID_REALTIME_FRAME');
     this.lastReceived = Date.now();
     if (frame.kind === 'realtime.ready') {
       const payload = frame.payload as XopcReady;
@@ -194,6 +212,15 @@ export class XopcRealtimeClient {
     } else if (frame.kind === 'realtime.error') {
       this.fail('error:' + (frame.payload as XopcRealtimeError).code);
     }
+  }
+
+  private compatibilityState(body: string): string {
+    try {
+      const envelope = JSON.parse(body) as XopcErrorEnvelope;
+      if (envelope.error?.code === 'CLIENT_UPDATE_REQUIRED') return 'client_update_required';
+      if (envelope.error?.code === 'GATEWAY_UPDATE_REQUIRED') return 'gateway_update_required';
+    } catch (_) {}
+    return 'gateway_update_required';
   }
 }
 

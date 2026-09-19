@@ -43,7 +43,24 @@ export async function scanProduct(service: ImportService, source: ImportSource, 
     const relevant = { ...scan, candidates: scan.candidates.filter(c => c.scope === (parent ? 'project' : 'user')) };
     const skills = service.describeSkills(relevant, { root: targetRoot, projectId: parent?.projectId });
     for (const candidate of relevant.candidates) {
-      if (candidate.kind === 'mcp') { inventory.notices.push(`${candidate.name}: reconnect this tool in Connections.`); continue; }
+      if (candidate.kind === 'mcp') {
+        inventory.candidates.push({
+          id: candidate.id,
+          kind: 'connection',
+          parentId: parent?.id,
+          name: candidate.name,
+          description: candidate.description,
+          displayPath: candidate.location,
+          location: candidate.location,
+          scope: candidate.scope,
+          status: candidate.compatibility === 'needs_setup' ? 'requires_setup' : 'blocked',
+          reason: candidate.findings.join('; ') || undefined,
+          suggested: false,
+          candidate,
+          scanId: scan.id,
+        });
+        continue;
+      }
       const item: StoredInventoryItem = { id: candidate.id, kind: candidate.kind === 'rule' ? 'context' : 'skill', parentId: parent?.id,
         name: candidate.name, description: candidate.description, displayPath: candidate.location, location: candidate.location,
         scope: candidate.scope, status: candidate.compatibility === 'compatible' ? 'ready' : 'blocked', suggested: false,
@@ -101,6 +118,7 @@ export function previewInventoryItem(service: ImportService, owner: string, inve
   if (!item) throw new ImportError('not_found', 'Item not found', 404);
   if (item.status === 'blocked') return { text: item.reason ?? '', truncated: false };
   const text = item.kind === 'context' ? item.candidate?.content ?? '' : item.kind === 'skill'
-    ? Buffer.from(service.readSnapshot(item.scanId!, item.id).find(f => f.path === 'SKILL.md')!.data, 'base64').toString('utf8') : item.displayPath;
+    ? Buffer.from(service.readSnapshot(item.scanId!, item.id).find(f => f.path === 'SKILL.md')!.data, 'base64').toString('utf8')
+    : item.kind === 'connection' ? JSON.stringify(item.candidate?.mcp ?? {}, null, 2) : item.displayPath;
   return { text: text.slice(0, 20_000), truncated: text.length > 20_000 };
 }

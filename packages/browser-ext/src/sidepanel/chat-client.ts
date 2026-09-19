@@ -3,6 +3,7 @@ import {
   type RealtimeConnectionState,
   type RealtimeWebSocket,
 } from '@xopcai/realtime-client';
+import { REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 import type { BrowserPageContextInput, BrowserTabBinding, BrowserTabBindingMode } from '@xopcai/gateway-contract';
 
 import { t } from '../i18n';
@@ -290,10 +291,10 @@ export class BrowserChatClient {
         const response = await gatewayFetch('/api/realtime/tickets', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientId: id, clientKind: 'browser_extension' }),
+          body: JSON.stringify({ clientId: id, clientKind: 'browser_extension', protocolVersion: REALTIME_PROTOCOL_VERSION }),
           signal,
         });
-        const body = await json<{ payload: { ticket: string; realtime?: { minVersion: number; maxVersion: number; capabilities: string[] } } }>(response);
+        const body = await json<{ payload: { ticket: string; realtime: { minVersion: number; maxVersion: number; capabilities: string[] } } }>(response);
         return body.payload;
       },
       createWebSocket: (url) => new WebSocket(url) as unknown as RealtimeWebSocket,

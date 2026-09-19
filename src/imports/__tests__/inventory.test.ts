@@ -33,3 +33,14 @@ it('scans 101 historical directories without creating projects or knowledge', as
   expect(previewInventoryItem(service, 'owner', inventory.id, skill.id).text).toContain('Make reports');
   expect(() => previewInventoryItem(service, 'other', inventory.id, skill.id)).toThrow('not found');
 }, 30_000); // Scans and persists a real 101-directory inventory on shared CI disks.
+
+it('returns sanitized MCP connections as setup-only inventory items', async () => {
+  writeFileSync(join(home, '.claude.json'), JSON.stringify({ mcpServers: { docs: { command: 'node', args: ['server.js'], env: { API_KEY: 'secret' } } } }));
+  const service = createRuntimeImportService('owner');
+  const inventory = await scanProduct(service, 'claude-code', 'owner');
+  const connection = inventory.candidates.find(item => item.kind === 'connection')!;
+  expect(connection).toMatchObject({ name: 'docs', status: 'requires_setup', suggested: false });
+  const preview = previewInventoryItem(service, 'owner', inventory.id, connection.id).text;
+  expect(preview).toContain('server.js');
+  expect(preview).not.toContain('secret');
+});

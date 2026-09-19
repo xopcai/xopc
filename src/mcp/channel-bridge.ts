@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 
 import { RealtimeClient, type RealtimeWebSocket } from '@xopcai/realtime-client';
-import type { RealtimeEventPayload } from '@xopcai/realtime-protocol';
+import { REALTIME_PROTOCOL_VERSION, type RealtimeEventPayload } from '@xopcai/realtime-protocol';
 
 import type { Config } from '../config/schema.js';
 import { loadConfig } from '../config/loader.js';
@@ -87,11 +87,12 @@ export class XopcChannelBridge {
         }>('/api/realtime/tickets', {
           clientId: this.realtimeClientId,
           clientKind: 'mcp',
+          protocolVersion: REALTIME_PROTOCOL_VERSION,
         });
-        if (!response.payload?.ticket) {
+        if (!response.payload?.ticket || !response.payload.realtime) {
           throw new Error(response.error?.message ?? 'Realtime ticket response is invalid');
         }
-        return { ...response.payload, ticket: response.payload.ticket };
+        return { ticket: response.payload.ticket, realtime: response.payload.realtime };
       },
       createWebSocket: (url) => new WebSocket(url) as unknown as RealtimeWebSocket,
       onEvent: (event) => this.handleRealtimeEvent(event),

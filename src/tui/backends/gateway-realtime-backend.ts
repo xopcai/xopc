@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 
 import { RealtimeClient, type RealtimeWebSocket } from '@xopcai/realtime-client';
-import type { RealtimeEventPayload } from '@xopcai/realtime-protocol';
+import { REALTIME_PROTOCOL_VERSION, type RealtimeEventPayload } from '@xopcai/realtime-protocol';
 
 import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
 import { parseModelRef } from '../../agent/models/selection.js';
@@ -1125,16 +1125,16 @@ export class GatewayRealtimeBackend implements TuiBackend {
       issueTicket: async () => {
         const response = await gatewayFetch(this.baseUrl, '/api/realtime/tickets', this.credential, {
           method: 'POST',
-          body: JSON.stringify({ clientId: this.clientId, clientKind: 'tui' }),
+          body: JSON.stringify({ clientId: this.clientId, clientKind: 'tui', protocolVersion: REALTIME_PROTOCOL_VERSION }),
         });
         const body = await response.json().catch(() => null) as {
           payload?: { ticket?: string; realtime?: { minVersion: number; maxVersion: number; capabilities: string[] } };
           error?: { message?: string };
         } | null;
-        if (!response.ok || !body?.payload?.ticket) {
+        if (!response.ok || !body?.payload?.ticket || !body.payload.realtime) {
           throw new Error(body?.error?.message ?? `Realtime ticket failed (${response.status})`);
         }
-        return { ...body.payload, ticket: body.payload.ticket };
+        return { ticket: body.payload.ticket, realtime: body.payload.realtime };
       },
       createWebSocket: (url) => new WebSocket(url) as unknown as RealtimeWebSocket,
       onStateChange: (state, error) => {

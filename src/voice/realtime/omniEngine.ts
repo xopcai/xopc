@@ -14,10 +14,12 @@ const MAX_QUEUED_AUDIO_BYTES = 24_000 * 2 * 60;
 // About two seconds of 16 kHz PCM, including one maximum-size client frame.
 const MAX_PENDING_INPUT_BYTES = 64 * 1024;
 const UPLOAD_TIMEOUT_MS = 10_000;
+const RESPONSE_START_TIMEOUT_MS = 30_000;
 const FAILURE_MESSAGES: Record<string, string> = {
   OMNI_UPLOAD_TIMEOUT: 'The connection to the voice service stopped uploading audio. Check the network to your configured endpoint and reconnect.',
   OMNI_INPUT_RESET_TIMEOUT: 'The voice service did not acknowledge clearing microphone input. Reconnect to continue.',
   OMNI_START_TIMEOUT: 'The voice service did not become ready in time.',
+  OMNI_RESPONSE_START_TIMEOUT: 'Your speech was transcribed, but the voice model did not start a reply within 30 seconds. Reconnect or select another realtime voice model.',
   OMNI_CONNECTION_FAILED: 'Could not connect to the voice service. Check network and service availability.',
   OMNI_CONNECTION_REJECTED: 'The voice service rejected the connection. Check account access, quota and route configuration.',
   OMNI_CONNECTION_CLOSED: 'The voice service closed the connection.',
@@ -85,6 +87,7 @@ export function createOmniVoiceEngine(options: {
   let uploadingBytes = 0;
   let uploadTimer: ReturnType<typeof setTimeout> | undefined;
   let turnSettled = false;
+  let responseStartTimer: ReturnType<typeof setTimeout> | undefined;
   const speaking = new Set<string>();
   const turn = new TurnCoordinator(options.silenceDurationMs, (_text, decision, turnId) => {
     if (closed || failed || muted || inputBlocked) return;
@@ -92,6 +95,10 @@ export function createOmniVoiceEngine(options: {
     options.send('turn.committed', { turnId });
     turnSettled = true;
     if (active) publish(active);
+    else {
+      clearTimeout(responseStartTimer);
+      responseStartTimer = setTimeout(() => fail('OMNI_RESPONSE_START_TIMEOUT'), RESPONSE_START_TIMEOUT_MS);
+    }
   });
   function publish(response: ResponseState) {
     if (response.published || active !== response) return;
@@ -181,6 +188,7 @@ export function createOmniVoiceEngine(options: {
   function fail(code: string, details: { closeCode?: number; upstreamStatus?: number } = {}) {
     if (closed || failed) return;
     failed = true;
+    clearTimeout(responseStartTimer);
     turn.reset();
     log.warn({ sessionId: options.callId, platformRequestId, responseId: active?.id, code,
       provider: options.route.route.provider, upstreamHost: new URL(options.route.url).hostname,
@@ -191,6 +199,7 @@ export function createOmniVoiceEngine(options: {
     void options.onClose('omni_error', true);
   }
   function discardInput() {
+    clearTimeout(responseStartTimer);
     turn.reset();
     speaking.clear();
     turnSettled = false;
@@ -252,6 +261,7 @@ export function createOmniVoiceEngine(options: {
               if (recorded.has(String(event.item_id)) || pendingInputs.has(String(event.item_id))) return;
               inputBlocked = false;
               pendingInputs.add(String(event.item_id));
+              clearTimeout(responseStartTimer);
               turnSettled = false;
               speaking.add(String(event.item_id));
               turn.start(String(event.item_id));
@@ -276,7 +286,8 @@ export function createOmniVoiceEngine(options: {
               discardInput();
               options.send('session.error', { code: 'INPUT_DROPPED', message: 'Could not transcribe this voice turn. Please repeat it.', recoverable: true });
             } else if (event.type === 'response.created') {
-              if (muted || inputBlocked || speaking.size > 0) {
+              clearTimeout(responseStartTimer);
+              if (muted || inputBlocked) {
                 cancellationPending = true;
                 send('response.cancel');
                 return;
@@ -356,6 +367,7 @@ export function createOmniVoiceEngine(options: {
     close() {
       if (closed) return writes;
       closed = true; cancel('session_closed'); clearTimeout(timer); clearTimeout(clearTimer); clearTimeout(uploadTimer);
+      clearTimeout(responseStartTimer);
       turn.reset(); speaking.clear();
       inputQueue = []; queuedInputBytes = 0;
       rejectStart?.(new Error('Omni connection closed')); rejectStart = undefined;

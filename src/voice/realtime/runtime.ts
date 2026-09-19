@@ -458,9 +458,9 @@ export class VoiceRealtimeRuntime {
       unsubscribeMemory?.(); unsubscribeSession?.();
       clearTimeout(startTimer);
       clearInterval(lifecycleTimer);
-      abortController.abort(reason);
       try { await engine?.close(); }
       catch (err) { log.error({ err, sessionId: claim?.sessionId }, 'Voice cleanup failed'); }
+      finally { abortController.abort(reason); }
       if (notify) send('session.closed', { reason });
       detachPrincipal();
       if (claim) this.releaseConversationReservation(claim);

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { REALTIME_CAPABILITIES, REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 import { ENDPOINT_PROTOCOL_VERSION } from '@xopcai/endpoint-tools-protocol';
-import { RealtimeClient, RealtimeConnectionError, type RealtimeWebSocket } from './index.js';
+import { RealtimeClient, RealtimeConnectionError, type RealtimeTicket, type RealtimeWebSocket } from './index.js';
 
 class FakeSocket implements RealtimeWebSocket {
   readyState = 0;
@@ -40,10 +40,22 @@ function readyPayload() {
   };
 }
 
+function issuedTicket(overrides: Partial<RealtimeTicket['realtime']> = {}): RealtimeTicket {
+  return {
+    ticket: 'x'.repeat(32),
+    realtime: {
+      minVersion: REALTIME_PROTOCOL_VERSION,
+      maxVersion: REALTIME_PROTOCOL_VERSION,
+      capabilities: REALTIME_CAPABILITIES,
+      ...overrides,
+    },
+  };
+}
+
 describe('RealtimeClient', () => {
   it('opens only one connection when connect is called repeatedly', async () => {
-    let resolveTicket: ((ticket: string) => void) | undefined;
-    const issueTicket = vi.fn(() => new Promise<string>((resolve) => {
+    let resolveTicket: ((ticket: RealtimeTicket) => void) | undefined;
+    const issueTicket = vi.fn(() => new Promise<RealtimeTicket>((resolve) => {
       resolveTicket = resolve;
     }));
     const createWebSocket = vi.fn(() => new FakeSocket());
@@ -57,7 +69,7 @@ describe('RealtimeClient', () => {
 
     client.connect();
     client.connect();
-    resolveTicket?.('x'.repeat(32));
+    resolveTicket?.(issuedTicket());
 
     await vi.waitFor(() => expect(createWebSocket).toHaveBeenCalledOnce());
     expect(issueTicket).toHaveBeenCalledOnce();
@@ -72,7 +84,7 @@ describe('RealtimeClient', () => {
       clientKind: 'web',
       createMessageId: () => '00000000-0000-4000-8000-000000000001',
       getWebSocketUrl: () => 'ws://gateway/realtime',
-      issueTicket: async () => 'x'.repeat(32),
+      issueTicket: async () => issuedTicket(),
       createWebSocket: () => socket,
       onEvent,
     });
@@ -100,7 +112,7 @@ describe('RealtimeClient', () => {
     const oldSocket = new FakeSocket();
     const oldClient = new RealtimeClient({
       clientId: 'old-compatible', clientKind: 'web', getWebSocketUrl: () => 'ws://gateway/realtime',
-      issueTicket: async () => ({ ticket: 'x'.repeat(32) }), createWebSocket: () => oldSocket,
+      issueTicket: async () => issuedTicket({ capabilities: [] }), createWebSocket: () => oldSocket,
     });
     oldClient.connect();
     await vi.waitFor(() => expect(oldSocket.onopen).not.toBeNull());
@@ -138,7 +150,7 @@ describe('RealtimeClient', () => {
       clientId: 'c1',
       clientKind: 'web',
       getWebSocketUrl: () => 'ws://gateway/realtime',
-      issueTicket: async () => 'x'.repeat(32),
+      issueTicket: async () => issuedTicket(),
       createWebSocket: () => socket,
     });
     client.setEndpoint({
@@ -196,7 +208,7 @@ describe('RealtimeClient', () => {
       clientId: 'c1',
       clientKind: 'web',
       getWebSocketUrl: () => 'ws://gateway/realtime',
-      issueTicket: async () => 'x'.repeat(32),
+      issueTicket: async () => issuedTicket(),
       createWebSocket: () => {
         const socket = new FakeSocket();
         sockets.push(socket);
@@ -234,7 +246,7 @@ describe('RealtimeClient', () => {
       clientKind: 'web',
       createMessageId: () => crypto.randomUUID(),
       getWebSocketUrl: () => 'ws://gateway/realtime',
-      issueTicket: async () => 'x'.repeat(32),
+      issueTicket: async () => issuedTicket(),
       createWebSocket: () => {
         const socket = new FakeSocket();
         sockets.push(socket);
@@ -271,7 +283,7 @@ describe('RealtimeClient', () => {
       clientId: 'c1',
       clientKind: 'web',
       getWebSocketUrl: () => 'ws://gateway/realtime',
-      issueTicket: async () => 'x'.repeat(32),
+      issueTicket: async () => issuedTicket(),
       createWebSocket: () => {
         const socket = new FakeSocket();
         sockets.push(socket);
@@ -310,6 +322,34 @@ describe('RealtimeClient', () => {
     } finally { client.disconnect(); vi.useRealTimers(); }
   });
 
+  it('rejects directional ticket ranges before creating a socket', async () => {
+    vi.useFakeTimers();
+    try {
+      for (const scenario of [
+        { range: { minVersion: REALTIME_PROTOCOL_VERSION + 1 }, error: 'CLIENT_UPDATE_REQUIRED' },
+        { range: { maxVersion: REALTIME_PROTOCOL_VERSION - 1 }, error: 'GATEWAY_UPDATE_REQUIRED' },
+      ]) {
+        const createWebSocket = vi.fn(() => new FakeSocket());
+        const onStateChange = vi.fn();
+        const client = new RealtimeClient({
+          clientId: scenario.error,
+          clientKind: 'mobile',
+          getWebSocketUrl: () => 'ws://gateway/realtime',
+          issueTicket: async () => issuedTicket(scenario.range),
+          createWebSocket,
+          onStateChange,
+        });
+        client.connect();
+        await vi.advanceTimersByTimeAsync(60_000);
+        expect(createWebSocket).not.toHaveBeenCalled();
+        expect(onStateChange).toHaveBeenLastCalledWith('error', scenario.error);
+        client.disconnect();
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('closes a half-open socket when server heartbeats stop', async () => {
     vi.useFakeTimers();
     const socket = new FakeSocket();
@@ -318,7 +358,7 @@ describe('RealtimeClient', () => {
       clientKind: 'mobile',
       createMessageId: () => crypto.randomUUID(),
       getWebSocketUrl: () => 'ws://gateway/realtime',
-      issueTicket: async () => 'x'.repeat(32),
+      issueTicket: async () => issuedTicket(),
       createWebSocket: () => socket,
     });
     client.connect();
@@ -343,7 +383,7 @@ describe('RealtimeClient', () => {
       getWebSocketUrl: () => 'ws://gateway/realtime',
       issueTicket: async (signal) => {
         ticketSignal = signal;
-        return new Promise<string>(() => {});
+        return new Promise<RealtimeTicket>(() => {});
       },
       createWebSocket: () => new FakeSocket(),
       connectionTimeoutMs: 2_000,
@@ -359,13 +399,13 @@ describe('RealtimeClient', () => {
 
   it('ignores a ticket that resolves after the connection deadline', async () => {
     vi.useFakeTimers();
-    let resolveTicket: ((ticket: string) => void) | undefined;
+    let resolveTicket: ((ticket: RealtimeTicket) => void) | undefined;
     const createWebSocket = vi.fn(() => new FakeSocket());
     const client = new RealtimeClient({
       clientId: 'c1',
       clientKind: 'web',
       getWebSocketUrl: () => 'ws://gateway/realtime',
-      issueTicket: () => new Promise<string>((resolve) => {
+      issueTicket: () => new Promise<RealtimeTicket>((resolve) => {
         resolveTicket = resolve;
       }),
       createWebSocket,
@@ -375,7 +415,7 @@ describe('RealtimeClient', () => {
     client.connect();
 
     await vi.advanceTimersByTimeAsync(2_000);
-    resolveTicket?.('x'.repeat(32));
+    resolveTicket?.(issuedTicket());
     await Promise.resolve();
 
     expect(createWebSocket).not.toHaveBeenCalled();
@@ -392,7 +432,7 @@ describe('RealtimeClient', () => {
       clientKind: 'web',
       createMessageId: () => crypto.randomUUID(),
       getWebSocketUrl: () => 'ws://gateway/realtime',
-      issueTicket: async () => 'x'.repeat(32),
+      issueTicket: async () => issuedTicket(),
       createWebSocket: () => socket,
       onGap: () => new Promise<void>((resolve) => {
         finishReconciliation = resolve;
@@ -429,7 +469,7 @@ describe('RealtimeClient', () => {
       clientKind: 'web',
       createMessageId: () => crypto.randomUUID(),
       getWebSocketUrl: () => 'ws://gateway/realtime',
-      issueTicket: async () => 'x'.repeat(32),
+      issueTicket: async () => issuedTicket(),
       createWebSocket: () => socket,
       onEvent,
     });

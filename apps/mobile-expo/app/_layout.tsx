@@ -16,9 +16,11 @@ import { themedStackScreenOptions } from '@/lib/stack-screen-theme';
 import { createPaperTheme, getColors } from '@/theme';
 import { GatewayConnectLandingContext } from '@/features/gateway/gateway-connect-context';
 import { GatewayConnectLandingModal } from '@/features/gateway/GatewayConnectLandingModal';
+import { GatewayCompatibilityGate } from '@/features/gateway/GatewayCompatibilityGate';
+import { useGatewayCompatibility } from '@/features/gateway/gateway-compatibility';
 import { useDevicePairingFlow } from '@/features/gateway/pair-gateway';
 import { useGatewayConnectionWatch } from '@/features/gateway/use-gateway-connection-watch';
-import { useGatewayRealtime } from '@/features/gateway/use-gateway-realtime';
+import { requestMobileRealtimeReconnect, useGatewayRealtime } from '@/features/gateway/use-gateway-realtime';
 import { refreshNetworkSnapshotWithDeadline } from '@/features/gateway/network-info';
 import { queryClient } from '@/query/query-client';
 import { useGatewayConfigured } from '@/query/sessions';
@@ -49,6 +51,7 @@ export default function RootLayout() {
   const hydrateGateway = useGatewayStore((s) => s.hydrateFromStorage);
   const configured = useGatewayConfigured();
   const unauthorized = useGatewayStore((s) => s.unauthorized);
+  const compatibilityIssue = useGatewayCompatibility((s) => s.issue);
   const [userDismissedConnect, setUserDismissedConnect] = useState(false);
   const [manualConnectOpen, setManualConnectOpen] = useState(false);
   const pairingActive = useDevicePairingFlow(s => s.progress !== null || s.error !== null);
@@ -190,6 +193,13 @@ export default function RootLayout() {
               <GlobalReadAloudPlayer />
               <VoiceCallSurface />
               <DataSharingConsentDialog />
+              <GatewayCompatibilityGate
+                issue={compatibilityIssue}
+                visible={configured && !connectLandingVisible}
+                onRetry={requestMobileRealtimeReconnect}
+                onUpdateApp={() => { void Linking.openURL('https://xopcai.github.io/xopc'); }}
+                onManageGateway={openGatewayConnectLanding}
+              />
               <GatewayConnectLandingModal
                 visible={connectLandingVisible}
                 onRequestClose={onConnectLandingClose}

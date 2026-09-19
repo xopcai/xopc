@@ -4,12 +4,14 @@ xopc uses one authenticated WebSocket connection per client for persistent serve
 
 ## Connection
 
-1. The client creates a short-lived, single-use ticket with `POST /api/realtime/tickets` using the normal Bearer token.
+1. The client creates a short-lived, single-use ticket with `POST /api/realtime/tickets` using the normal Bearer token and its required `protocolVersion`.
 2. The client opens `WS /api/realtime/v1/ws` and sends `realtime.hello` as its first frame.
 3. The hello carries the ticket, client identity, requested topics and optional signed endpoint identity.
 4. The gateway replies with `realtime.ready`; endpoint-capable clients also receive the endpoint turn token there.
 
 Bearer tokens are never placed in the WebSocket URL. The server enforces a hello deadline, frame size, connection and subscription limits, heartbeat timeout, and bounded outbound queues.
+
+The gateway supports one realtime protocol version at a time. An older client receives HTTP 426 with `CLIENT_UPDATE_REQUIRED`; a newer client receives HTTP 426 with `GATEWAY_UPDATE_REQUIRED`. Both errors are terminal until the indicated component is updated. Ticket responses always include the gateway's supported version range, and clients reject an incompatible response before opening a socket. There is no missing-version fallback or multi-version compatibility branch.
 
 ## Topics
 

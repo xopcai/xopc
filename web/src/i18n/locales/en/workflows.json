@@ -1,6 +1,8 @@
 {
   "workflows": {
     "title": "Workflows",
+    "runDetailsTitle": "Run details",
+    "backToRuns": "Back to workflow runs",
     "runsSubtitle": "Resolve failures, follow progress, and use run results.",
     "librarySubtitle": "Choose, create, and manage reusable workflows.",
     "needToken": "Connect to the gateway with a token to browse workflows and monitor runs.",
