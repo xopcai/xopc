@@ -67,13 +67,29 @@ describe('SQLite migrations', () => {
       expect(db.prepare('SELECT account_id, installation_id FROM connector_connections').get())
         .toEqual({ account_id: 'account', installation_id: 'limited' });
       expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-      expect(applyPendingMigrations(db)).toBe(182);
+      expect(applyPendingMigrations(db)).toBe(183);
     } finally { db.close(); }
   });
 
-  it('keeps the retained release window at v165 through v182', () => {
+  it('repairs unambiguous account backend ownership without changing account policies', () => {
+    const db = openEmptyDb();
+    try {
+      installBaseline(db); applyPendingMigrations(db, { targetVersion: 182 });
+      db.exec(`INSERT INTO connector_backends(id,mode,label,created_at) VALUES ('backend','managed','Cloud','now');
+        INSERT INTO connector_accounts(id,connector_id,principal_id,identity_json,created_at,updated_at,enabled,allowed_agent_ids_json)
+        VALUES ('account','composio-gmail','owner','{}','now','now',0,'["work"]');
+        INSERT INTO connector_connections(id,account_id,connector_id,provider,principal_id,provider_connection_id,metadata_json,created_at,updated_at)
+        VALUES ('auth','account','composio-gmail','composio','owner','ca','{"backendId":"backend"}','now','now');`);
+      applyPendingMigrations(db);
+      expect(db.prepare('SELECT backend_id, enabled, allowed_agent_ids_json FROM connector_accounts').get())
+        .toEqual({ backend_id: 'backend', enabled: 0, allowed_agent_ids_json: '["work"]' });
+      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally { db.close(); }
+  });
+
+  it('keeps the retained release window at v165 through v183', () => {
     expect(XOPC_DB_BASELINE_SCHEMA_VERSION).toBe(165);
-    expect(XOPC_DB_SCHEMA_VERSION).toBe(182);
+    expect(XOPC_DB_SCHEMA_VERSION).toBe(183);
 
     const db = openEmptyDb();
     try {

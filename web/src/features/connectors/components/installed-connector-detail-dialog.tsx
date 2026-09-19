@@ -232,7 +232,8 @@ export function InstalledConnectorDetailDialog({
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
         <Dialog.Content
           className={cn(
-            'xopc-dialog-content fixed left-1/2 top-1/2 z-[60] flex h-[min(100vh-2rem,44rem)] w-[min(100%-2rem,min(92vw,54rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden',
+            'xopc-dialog-content fixed left-1/2 top-1/2 z-[60] flex -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden',
+            isComposio ? 'h-[min(100dvh-2rem,36rem)] w-[min(100%-2rem,40rem)]' : 'h-[min(100dvh-2rem,44rem)] w-[min(100%-2rem,min(92vw,54rem))]',
             'rounded-2xl border border-edge bg-surface-overlay shadow-float outline-none dark:border-edge',
           )}
         >
@@ -443,8 +444,8 @@ export function InstalledConnectorDetailDialog({
               </div>
             ) : null}
 
-            <details className="mt-5 rounded-xl border border-danger/20 bg-danger/5">
-              <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-danger">{t.dangerZone}</summary>
+            <details className="mt-5 rounded-xl border border-edge">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-fg-muted hover:text-danger">{t.dangerZone}</summary>
               <div className="flex flex-col gap-3 border-t border-danger/15 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs leading-5 text-fg-muted">{t.removeConnectorHint}</p>
                 <Button

@@ -35,9 +35,10 @@ export function InstalledConnectorRow({
       type="button"
       className={cn(
         'flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-surface-hover/60',
+        'rounded-none first:rounded-t-[calc(var(--radius-xl)-1px)] last:rounded-b-[calc(var(--radius-xl)-1px)]',
         interaction.transition,
-        interaction.focusRingPanel,
-        highlighted && 'bg-accent-soft ring-2 ring-inset ring-accent/40',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+        highlighted && 'bg-accent-soft',
       )}
       onClick={() => onOpenDetails(instance)}
     >

@@ -22,14 +22,21 @@ try {
   const page = await browser.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  for (const width of [1280, 375]) for (const mode of ['light', 'dark']) for (const stage of ['gmail', 'airtable', 'service']) {
+  for (const width of [1280, 375]) for (const mode of ['light', 'dark']) for (const stage of ['gmail', 'airtable', 'service', 'detail', 'detail-loading', 'detail-error']) {
     await page.setViewportSize({ width, height: 812 });
     await page.goto(`${server.resolvedUrls.local[0]}connectors-visual.html?toolkit=${stage}&mode=${mode}&stage=${stage}`, { waitUntil: 'networkidle' });
     const container = page.locator(stage === 'service' ? 'main' : '[role="dialog"]');
     await container.waitFor();
     const bounds = await container.boundingBox();
     assert(bounds && bounds.x >= 0 && bounds.x + bounds.width <= width + 1, 'Content must fit viewport');
-    if (stage !== 'service') {
+    if (stage.startsWith('detail')) {
+      assert(bounds.height <= 577, 'Account management dialog must remain bounded');
+      const danger = container.locator('details').filter({ has: page.locator('summary', { hasText: '移除连接器' }) });
+      assert.equal(await danger.getAttribute('open'), null);
+      if (stage === 'detail') await container.getByText('work@example.com').first().waitFor();
+      if (stage === 'detail-loading') assert(await container.locator('[aria-busy="true"]').isVisible());
+      if (stage === 'detail-error') assert(await container.locator('[role="alert"]').isVisible());
+    } else if (stage !== 'service') {
       assert(bounds.height < 550, 'Simple connection dialog must remain compact');
       if (stage === 'gmail') assert.equal(await container.locator('input[type="checkbox"]').isChecked(), false);
     } else {
@@ -40,7 +47,7 @@ try {
     await page.screenshot({ path: path.join(output, `${stage}-${mode}-${width}.png`), fullPage: true });
   }
   assert.deepEqual(errors, []);
-  console.log(`12 connector UI cases passed. Screenshots: ${output}`);
+  console.log(`24 connector UI cases passed. Screenshots: ${output}`);
 } finally {
   await browser?.close();
   await server.close();

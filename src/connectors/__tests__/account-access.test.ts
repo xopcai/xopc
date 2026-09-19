@@ -53,4 +53,16 @@ describe('stable connector account policy', () => {
     expect(getConnectorAccount(second.accountId!)?.backendId).toBe(b.id);
     expect(currentAccountConnections([first, second])).toHaveLength(2);
   });
+
+  it('does not resurrect a deleted account when a stale sync completes after identity reconciliation', () => {
+    const first = connection('first');
+    reconcileConnectorAccount({ connectionId: first.id, identityKey: 'email:owner', identity: first.identity, backendId: 'backend' });
+    updateConnectorAccount(first.accountId!, { allowedAgentIds: ['work'], enabled: false });
+    const stale = connection('second');
+    reconcileConnectorAccount({ connectionId: stale.id, identityKey: 'email:owner', identity: stale.identity, backendId: 'backend' });
+    const updated = upsertConnectorConnection({ ...stale, metadata: { backendId: 'backend' } });
+    expect(updated.accountId).toBe(first.accountId);
+    expect(getConnectorAccount(stale.accountId!)).toBeUndefined();
+    expect(getConnectorAccount(updated.accountId!)).toMatchObject({ backendId: 'backend', enabled: false, allowedAgentIds: ['work'] });
+  });
 });
