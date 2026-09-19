@@ -241,6 +241,20 @@ describe('ComposioSessionsAdapter', () => {
     ]);
   });
 
+  it('recognizes an existing authorization when its account backend is missing', async () => {
+    client.backendId = 'managed-backend';
+    const original = upsertConnectorConnection({ id: 'old-local-id', connectorId: 'composio-gmail', provider: 'composio',
+      principalId: 'owner', providerConnectionId: 'ca_existing', identity: { email: 'owner@example.test' },
+      status: 'active', isDefault: false, metadata: { toolkit: 'gmail', backendId: client.backendId } });
+    client.connectedAccounts.list = vi.fn(async () => ({ items: [{ id: 'ca_existing', status: 'ACTIVE', toolkit: { slug: 'gmail' }, connectionData: { email: 'owner@example.test' } }] }));
+    const adapter = new ComposioSessionsAdapter({ clientFactory: async () => client });
+    const result = await adapter.syncConnections({ principalId: 'owner', backendId: client.backendId });
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ id: original.id, accountId: original.accountId });
+    expect(listConnectorAccounts({ principalId: 'owner' })[0]).toMatchObject({ backendId: client.backendId });
+    await expect(adapter.syncConnections({ principalId: 'owner', backendId: client.backendId })).resolves.toHaveLength(1);
+  });
+
   it('does not execute writes before confirmation and audits both decisions', async () => {
     const connection = upsertConnectorConnection({ id: 'write-account', connectorId: 'composio-gmail', provider: 'composio',
       principalId: 'owner', providerConnectionId: 'ca_write', status: 'active', identity: {}, isDefault: false,

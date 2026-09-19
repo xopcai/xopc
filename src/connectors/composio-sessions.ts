@@ -384,7 +384,7 @@ export class ComposioSessionsAdapter {
     const client = await this.createClient(context.backendId);
     const providerPrincipalId = createComposioPrincipalId(context.principalId, context.installationScope);
     const stored = listStoredConnectorConnections({ principalId: context.principalId }).filter(connection =>
-      getConnectorAccount(connection.accountId!)?.backendId === client.backendId);
+      (connection.metadata.backendId ?? getConnectorAccount(connection.accountId!)?.backendId) === client.backendId);
     const userIds = [...new Set([providerPrincipalId, ...stored.flatMap(connection =>
       typeof connection.metadata.providerPrincipalId === 'string' ? [connection.metadata.providerPrincipalId] : [])])];
     const rows = await this.listAllAccounts(client, userIds);
@@ -401,7 +401,7 @@ export class ComposioSessionsAdapter {
       const connectorId = `composio-${toolkit}`;
       const existing = listStoredConnectorConnections({ principalId: context.principalId, connectorId })
         .find((connection) => connection.providerConnectionId === providerConnectionId
-          && getConnectorAccount(connection.accountId!)?.backendId === client.backendId);
+          && (connection.metadata.backendId ?? getConnectorAccount(connection.accountId!)?.backendId) === client.backendId);
       const identity = row.connectionData && typeof row.connectionData === 'object' && !Array.isArray(row.connectionData)
         ? row.connectionData as Record<string, unknown>
         : {};
@@ -423,7 +423,7 @@ export class ComposioSessionsAdapter {
           providerPrincipalId: existing?.metadata.providerPrincipalId ?? readString(row, ['userId', 'user_id']) ?? providerPrincipalId,
           ...(client.backendId ? { backendId: client.backendId } : {}) },
       });
-      if (client.backendId && connection.accountId) {
+      if (client.backendId && connection.accountId && !connectorIdentityKey(toolkit, connection.identity)) {
         getSqliteDatabase().prepare('UPDATE connector_accounts SET backend_id = ? WHERE id = ?').run(client.backendId, connection.accountId);
       }
       let identityKey = connectorIdentityKey(toolkit, connection.identity);
@@ -445,6 +445,7 @@ export class ComposioSessionsAdapter {
       if (identityKey) {
         reconcileConnectorAccount({
           connectionId: connection.id,
+          backendId: client.backendId,
           identityKey,
           identity: connection.identity,
         });

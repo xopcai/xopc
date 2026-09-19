@@ -1,4 +1,5 @@
 import type { Hono } from 'hono';
+import { createLogger } from '../../../utils/logger.js';
 
 import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
 import { updateConnectorAccount } from '../../../storage/sqlite/connector-account-repository.js';
@@ -72,6 +73,7 @@ function defaultConnectorSyncInterval(connectorId: string): number {
 }
 
 export function registerConnectorRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
+  const log = createLogger('Connectors:Routes');
   const { service, strictRateLimitMiddleware } = deps;
 
   authenticated.get('/api/connectors/catalog', (c) => {
@@ -183,7 +185,13 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
         .find(item => item.id === attempt.connection_id);
       return c.json({ ok: true, payload: { attempt: { id: attempt.id, status: attempt.status,
         authorizationUrl: attempt.authorization_url, expiresAt: attempt.expires_at, accountId: connection?.accountId } } });
-    } catch { return c.json({ ok: false, error: 'The connection service is temporarily unavailable. Retry checking this authorization.' }, 503); }
+    } catch (err) {
+      log.warn({ err, phase: 'authorization_status', backendId: attempt.backend_id, connectorId: attempt.connector_id }, 'Could not synchronize authorization status');
+      const localConflict = /constraint failed/i.test(errorMessage(err));
+      return c.json({ ok: false, error: localConflict
+        ? 'Local connection records could not be synchronized. Update and restart the gateway; do not delete or reauthorize your accounts.'
+        : 'The connection service is temporarily unavailable. Retry checking this authorization.' }, localConflict ? 500 : 503);
+    }
   });
 
   authenticated.delete('/api/connectors/composio/accounts/:id', strictRateLimitMiddleware, async (c) => {
