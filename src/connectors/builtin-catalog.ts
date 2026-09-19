@@ -1,14 +1,9 @@
 import type { ConnectorDefinition } from './types.js';
 
-const BUILTIN_CONNECTOR_BACKGROUNDS: Record<string, string> = {
-  filesystem: '#FFF7E6',
-};
-
 function builtinBranding(id: string): NonNullable<ConnectorDefinition['branding']> {
   return {
     logoUrl: `/connector-icons/${id}.svg`,
     source: 'builtin',
-    backgroundColor: BUILTIN_CONNECTOR_BACKGROUNDS[id] ?? '#FFFFFF',
   };
 }
 

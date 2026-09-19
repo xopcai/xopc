@@ -8,7 +8,10 @@ import {
 } from '../storage/sqlite/index.js';
 import { assertComposioAccessConfigured } from './composio-sessions.js';
 import { listConnectorInstances } from './instances.js';
-import { isManagedConnectorServer, materializeConnectorMcpServer } from './materialize.js';
+import {
+  isManagedConnectorServer,
+  materializeConnectorMcpServer,
+} from './materialize.js';
 import { saveConnectorSecrets } from './secret-store.js';
 import { appendConnectorAuditRecord } from './usage.js';
 import type {
@@ -199,28 +202,26 @@ registerConnectorRuntimeAdapter({
   },
 });
 
-for (const type of ['channel', 'nativeTool', 'memorySource'] as const) {
-  registerConnectorRuntimeAdapter({
-    type,
-    async install({ config, definition, input }) {
-      return installRecord(config, definition, {}, { config: input.config ?? {} });
-    },
-    uninstall({ config, instance }) {
-      uninstallRecord(config, instance.instanceId);
-    },
-    update({ config, definition, input, instanceId }) {
-      const record = config.connectors?.instances?.[instanceId];
-      const marker = record?.xopcConnector;
-      if (!marker || typeof marker !== 'object' || Array.isArray(marker)) {
-        throw new Error(`Connector instance not found: ${instanceId}`);
-      }
-      const markerRecord = marker as Record<string, unknown>;
-      if (markerRecord.managed !== true) throw new Error(`Connector instance not found: ${instanceId}`);
-      record.xopcConnector = { ...markerRecord, config: input.config ?? {} };
-      return installedInstance(config, instanceId, definition.id);
-    },
-  });
-}
+registerConnectorRuntimeAdapter({
+  type: 'memorySource',
+  async install({ config, definition, input }) {
+    return installRecord(config, definition, {}, { config: input.config ?? {} });
+  },
+  uninstall({ config, instance }) {
+    uninstallRecord(config, instance.instanceId);
+  },
+  update({ config, definition, input, instanceId }) {
+    const record = config.connectors?.instances?.[instanceId];
+    const marker = record?.xopcConnector;
+    if (!marker || typeof marker !== 'object' || Array.isArray(marker)) {
+      throw new Error(`Connector instance not found: ${instanceId}`);
+    }
+    const markerRecord = marker as Record<string, unknown>;
+    if (markerRecord.managed !== true) throw new Error(`Connector instance not found: ${instanceId}`);
+    record.xopcConnector = { ...markerRecord, config: input.config ?? {} };
+    return installedInstance(config, instanceId, definition.id);
+  },
+});
 
 export function getConnectorRuntimeAdapter(type: ConnectorRuntimeDefinition['type']): ConnectorRuntimeAdapter {
   const adapter = adapters.get(type);

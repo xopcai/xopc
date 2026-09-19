@@ -26,6 +26,12 @@ export type ConnectorSecretField = {
   required: boolean;
 };
 
+export type ConnectorSetupLink = {
+  label: string;
+  href: string;
+  external?: boolean;
+};
+
 export type ConnectorConfigField = {
   key: string;
   label: string;
@@ -55,7 +61,6 @@ export type ConnectorDefinition = {
   branding?: {
     logoUrl?: string;
     source?: 'builtin' | 'composio-catalog' | 'registry' | 'extension' | 'custom';
-    backgroundColor?: string;
     fetchedAt?: string;
   };
   verificationLevel?: 'verified' | 'beta' | 'experimental';
@@ -66,6 +71,7 @@ export type ConnectorDefinition = {
   setup: {
     secrets?: ConnectorSecretField[];
     config?: ConnectorConfigField[];
+    links?: ConnectorSetupLink[];
   };
   runtime:
     | {
@@ -79,12 +85,8 @@ export type ConnectorDefinition = {
         role: 'credential' | 'toolkit';
       }
     | {
-        type: 'channel' | 'nativeTool' | 'memorySource';
-        id?: string;
-        channelId?: string;
-        pluginId?: string;
-        toolsetId?: string;
-        sourceKind?: string;
+        type: 'memorySource';
+        sourceKind: string;
       };
   integrationStrategy?: {
     lane: 'native' | 'mcp' | 'composio';
@@ -168,7 +170,7 @@ export type ConnectorInstance = {
         role: 'credential' | 'toolkit';
       }
     | {
-        type: 'channel' | 'nativeTool' | 'memorySource';
+        type: 'memorySource';
         id: string;
       };
   usage: {

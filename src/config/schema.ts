@@ -1116,6 +1116,8 @@ const ConnectorSecretReferenceSchema = z.object({
   xopcSecretRef: z.object({
     provider: z.string().min(1),
     fieldKey: z.string().min(1),
+    prefix: z.string().optional(),
+    suffix: z.string().optional(),
   }),
 });
 
