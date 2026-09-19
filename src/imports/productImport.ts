@@ -14,22 +14,24 @@ import type { ImportService } from './importService.js';
 import { detectImportSources } from './sources.js';
 import { ImportError, type ImportSelection, type StoredInventory, type StoredInventoryItem, type ProductImportResult, type ImportRunItem } from './types.js';
 
+type ImportableInventoryItem = StoredInventoryItem & { kind: ImportRunItem['kind'] };
+
 export function listImportSources(owner: string) {
   const runs = new ImportSelectionRepository(owner).list('run');
   return detectImportSources().map(source => ({ ...source, lastImport: runs.find(r => r.source === source.id) }));
 }
 function stale(): never { throw new ImportError('inventory_stale', 'Selected content or its destination changed. Refresh the list before importing.', 409); }
-function selectedItems(inventory: StoredInventory, ids: string[]) {
+function selectedItems(inventory: StoredInventory, ids: string[]): ImportableInventoryItem[] {
   if (!ids.length || new Set(ids).size !== ids.length) throw new ImportError('invalid_selection', 'Select at least one item; duplicate selections are not allowed');
   const items = ids.map(id => {
     const item = inventory.candidates.find(c => c.id === id);
-    if (!item || item.status === 'blocked' || (item.status === 'existing' && item.kind !== 'project')) throw new ImportError('invalid_selection', 'Select available items from this list');
+    if (!item || item.kind === 'connection' || item.status === 'blocked' || item.status === 'requires_setup' || (item.status === 'existing' && item.kind !== 'project')) throw new ImportError('invalid_selection', 'Select available items from this list');
     if (item.parentId && !ids.includes(item.parentId)) throw new ImportError('missing_parent', 'Select the project entry along with its contents');
-    return item;
+    return item as ImportableInventoryItem;
   });
   return items.sort((a, b) => Number(b.kind === 'project') - Number(a.kind === 'project'));
 }
-async function preflight(service: ImportService, inventory: StoredInventory, items: StoredInventoryItem[], retry?: ProductImportResult) {
+async function preflight(service: ImportService, inventory: StoredInventory, items: ImportableInventoryItem[], retry?: ProductImportResult) {
   const projects = new ProjectService();
   const names = new Set<string>();
   for (const item of items) {
@@ -49,7 +51,7 @@ async function preflight(service: ImportService, inventory: StoredInventory, ite
         if (digest(readRegularFile(item.location, 128 * 1024).toString('utf8').trim()) !== candidate.hash) stale();
         const projectId = parent ? projects.findByWorkspaceRoot(parent.location)?.id : undefined;
         if ((!parent || projectId) && existingContext(candidate, projectId)) stale();
-      } else {
+      } else if (item.kind === 'skill') {
         if (parent && !service.isWorkspaceTrusted(parent.location)) stale();
         if (fileHash(readTree(item.location)) !== candidate.hash) stale();
         service.readSnapshot(item.scanId!, candidate.id);
@@ -60,7 +62,7 @@ async function preflight(service: ImportService, inventory: StoredInventory, ite
         const existing = targetInventory(item.targetRoot!);
         const reserved = service.reservedNames({ root: item.targetRoot!, projectId: parent?.projectId });
         if ([...existing.flatMap(e => [e.name, e.directory]), ...reserved].some(n => n.toLowerCase() === item.targetName!.toLowerCase())) stale();
-      }
+      } else throw new ImportError('invalid_selection', 'Connections must be configured separately');
     } catch (error) {
       if (error instanceof ImportError && error.code === 'inventory_stale') throw error;
       stale();
@@ -101,7 +103,7 @@ async function execute(service: ImportService, repo: ImportSelectionRepository, 
           entry.status = status === 'created' ? 'imported' : 'existing';
           persist();
         });
-      } else {
+      } else if (item.kind === 'skill') {
         const key = `${run.id}:${item.id}`;
         let job = service.jobByKey(key);
         if (!job) {
@@ -124,7 +126,7 @@ async function execute(service: ImportService, repo: ImportSelectionRepository, 
         if (!['active', 'skipped'].includes(published.status)) throw new ImportError('publish_failed', published.error ?? 'Could not publish the skill. Retry this item.');
         entry.targetId = join(item.targetRoot!, item.targetName!);
         entry.status = published.status === 'active' ? 'imported' : 'existing';
-      }
+      } else throw new ImportError('invalid_selection', 'Connections must be configured separately');
     } catch (error) {
       entry.status = 'failed';
       delete entry.targetId;

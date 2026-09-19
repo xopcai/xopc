@@ -7,6 +7,7 @@ import { EndpointToolHostController, EndpointToolRegistry } from '@xopcai/endpoi
 import { createDesktopEndpointToolDefinitions } from '@xopcai/endpoint-tools-client/desktop-tools';
 import { endpointHelloSigningPayload, type EndpointHelloPayload, type EndpointTurnClaim } from '@xopcai/endpoint-tools-protocol';
 import { RealtimeClient, RealtimeConnectionError, type RealtimeWebSocket } from '@xopcai/realtime-client';
+import { REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 import { COMPUTER_DESCRIPTOR, ComputerCommandSchema } from '@xopcai/computer-control-contract';
 import { ComputerBroker, type ComputerApproval } from '../../src/computer/broker.js';
 import { CuaComputerDriver } from './cua-driver.js';
@@ -240,7 +241,11 @@ export class DesktopEndpointHost {
         if (!this.reenrollmentRequired) this.error = state === 'connected' ? undefined
           : error === GATEWAY_PROTOCOL_INCOMPATIBLE ? getComputerMessages(getElectronShellLanguage()).protocolIncompatible : error;
       },
-      issueTicket: async (signal) => (await request('/api/realtime/tickets', { clientId, clientKind: 'desktop' }, signal)).payload,
+      issueTicket: async (signal) => (await request('/api/realtime/tickets', {
+        clientId,
+        clientKind: 'desktop',
+        protocolVersion: REALTIME_PROTOCOL_VERSION,
+      }, signal)).payload,
       getWebSocketUrl: () => base.replace('http:', 'ws:') + '/api/realtime/v1/ws',
       createWebSocket: (url) => new WebSocket(url) as unknown as RealtimeWebSocket,
     });

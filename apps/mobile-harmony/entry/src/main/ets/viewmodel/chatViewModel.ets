@@ -79,6 +79,8 @@ export class XopcChatViewModel {
     XopcChatViewModel.owner = undefined;
   }
 
+  reconnect(): void { realtimeClient.start(); }
+
   private async restoreMain(): Promise<void> {
     this.loading = true;
     const selection = this.selection;

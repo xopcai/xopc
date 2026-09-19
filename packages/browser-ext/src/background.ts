@@ -9,6 +9,7 @@ import {
 } from '@xopcai/endpoint-tools-client';
 import type { EndpointToolDescriptor } from '@xopcai/endpoint-tools-protocol';
 import { RealtimeClient, type RealtimeWebSocket } from '@xopcai/realtime-client';
+import { REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 
 import { executeBrowserCommand } from './controller';
 import { t } from './i18n';
@@ -94,12 +95,12 @@ async function connect(generation: number): Promise<void> {
       const response = await gatewayFetch('/api/realtime/tickets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: id, clientKind: 'browser_extension' }),
+        body: JSON.stringify({ clientId: id, clientKind: 'browser_extension', protocolVersion: REALTIME_PROTOCOL_VERSION }),
         signal,
       });
       const body = await response.json() as { payload?: { ticket?: string; realtime?: { minVersion: number; maxVersion: number; capabilities: string[] } } };
-      if (!response.ok || !body.payload?.ticket) throw new Error(`Realtime ticket failed (${response.status})`);
-      return { ...body.payload, ticket: body.payload.ticket };
+      if (!response.ok || !body.payload?.ticket || !body.payload.realtime) throw new Error(`Realtime ticket failed (${response.status})`);
+      return { ticket: body.payload.ticket, realtime: body.payload.realtime };
     },
     createWebSocket: (url) => new WebSocket(url) as unknown as RealtimeWebSocket,
     onStateChange: (state, error) => {

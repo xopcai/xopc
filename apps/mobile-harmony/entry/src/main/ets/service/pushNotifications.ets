@@ -5,6 +5,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { gatewaySession } from './gatewaySession';
 import { XopcSecureStore } from './secureStore';
 import { appSettings } from './settings';
+import { xopcAppVersion } from '../common/appInfo';
 
 interface PushRegistration { platform: string; pushToken: string; permissions: string; locale: string; appVersion: string; }
 
@@ -59,7 +60,7 @@ export class XopcPushNotifications {
       if (generation !== this.generation || gatewaySession.currentProfile()?.deviceId !== profile.deviceId) return;
       if (!token) throw new Error('PUSH_TOKEN_UNAVAILABLE');
       const body: PushRegistration = { platform: 'harmonyos', pushToken: token,
-        permissions: granted ? 'granted' : 'denied', locale: appSettings.effectiveLanguage().startsWith('zh') ? 'zh' : 'en', appVersion: '0.1.0' };
+        permissions: granted ? 'granted' : 'denied', locale: appSettings.effectiveLanguage().startsWith('zh') ? 'zh' : 'en', appVersion: xopcAppVersion() };
       await gatewaySession.request('/api/devices/me/push', 'PUT', JSON.stringify(body));
       if (generation !== this.generation) return;
       if (persist) await this.store.write('push.' + profile.deviceId, 'enabled');

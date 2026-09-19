@@ -5,7 +5,7 @@ import {
   type RealtimeWebSocket,
 } from '@xopcai/realtime-client';
 import type { ClientEndpointMessage } from '@xopcai/endpoint-tools-protocol';
-import type { RealtimeEventPayload } from '@xopcai/realtime-protocol';
+import { REALTIME_PROTOCOL_VERSION, type RealtimeEventPayload } from '@xopcai/realtime-protocol';
 
 import { dispatchGatewayRealtimeEvent } from '@/features/gateway/dispatch-realtime-event';
 import { apiUrl } from '@/lib/url';
@@ -54,14 +54,14 @@ export function startGatewayRealtime(): () => void {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ clientId: id, clientKind: kind }),
+        body: JSON.stringify({ clientId: id, clientKind: kind, protocolVersion: REALTIME_PROTOCOL_VERSION }),
         signal,
       });
       const body = await response.json().catch(() => null) as { payload?: { ticket?: string; realtime?: { minVersion: number; maxVersion: number; capabilities: string[] } }; error?: { message?: string } } | null;
-      if (!response.ok || !body?.payload?.ticket) {
+      if (!response.ok || !body?.payload?.ticket || !body.payload.realtime) {
         throw new Error(body?.error?.message ?? `Realtime ticket failed (${response.status})`);
       }
-      return { ...body.payload, ticket: body.payload.ticket };
+      return { ticket: body.payload.ticket, realtime: body.payload.realtime };
     },
     createWebSocket: (url) => new WebSocket(url) as unknown as RealtimeWebSocket,
     onStateChange: (state: RealtimeConnectionState, error?: string) => {

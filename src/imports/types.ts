@@ -65,10 +65,10 @@ export class ImportError extends Error {
   }
 }
 
-export type InventoryStatus = 'ready' | 'existing' | 'conflict' | 'blocked';
+export type InventoryStatus = 'ready' | 'existing' | 'conflict' | 'requires_setup' | 'blocked';
 export interface InventoryItem {
   id: string;
-  kind: 'skill' | 'context' | 'project';
+  kind: 'skill' | 'context' | 'project' | 'connection';
   parentId?: string;
   name: string;
   description: string;
@@ -107,7 +107,7 @@ export interface ImportSelection {
 }
 export interface ImportRunItem {
   candidateId: string;
-  kind: InventoryItem['kind'];
+  kind: Exclude<InventoryItem['kind'], 'connection'>;
   name: string;
   status: 'pending' | 'imported' | 'existing' | 'failed';
   targetId?: string;

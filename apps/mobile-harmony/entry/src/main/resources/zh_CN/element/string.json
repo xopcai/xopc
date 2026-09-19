@@ -138,10 +138,8 @@
       "name": "connection_revoked",
       "value": "设备授权已失效或被撤销，请在设置中重新配对。"
     },
-    {
-      "name": "protocol_incompatible",
-      "value": "Gateway 协议不兼容，请更新 Gateway 或此应用。"
-    },
+    { "name": "client_update_required", "value": "当前移动端版本过旧，无法连接此网关。请从原安装渠道升级后重试。" },
+    { "name": "gateway_update_required", "value": "当前移动端版本高于网关支持范围。请在电脑上升级网关后重试。" },
     {
       "name": "play_recording",
       "value": "试听录音"

@@ -1,6 +1,14 @@
 {
-  "active": "harmonyos-mobile-parity",
+  "active": "mobile-gateway-version-compatibility",
   "requirements": {
+    "mobile-gateway-version-compatibility": {
+      "description": "实现 Android、iOS、HarmonyOS 与 Gateway 的最小版本兼容判断、定向升级提示和非重试错误处理",
+      "current_phase": "complete",
+      "completed_phases": ["analyse", "plan", "coding", "verify"],
+      "invalidated_phases": [],
+      "platforms": ["gateway", "android", "ios", "harmony"],
+      "project_root": "/Users/micjoyce/develop/github/xopc"
+    },
     "harmonyos-mobile-parity": {
       "description": "新增纯血鸿蒙移动端，对齐现有 Expo 移动端核心功能，并规划测试、灰度与发布",
       "current_phase": "coding",

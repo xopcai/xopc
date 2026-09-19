@@ -493,9 +493,14 @@ export function WorkflowEditorPage() {
 export function WorkflowRunPage() {
   const { runId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const language = useLocaleStore((state) => state.language);
+  const labels = messages(language).workflows;
   const localeTag = language === 'zh' ? 'zh-CN' : 'en-US';
+  const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
+  const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
   const { ownerAgentId } = useWorkflowOwnerAgent();
+  const projectId = searchParams.get('projectId')?.trim() || undefined;
   const live = useWorkflowRunLive(runId, { ownerAgentId });
   const [activeTab, setActiveTab] = useState<WorkflowRunPanelTab>('process');
   const wasActiveRef = useRef(true);
@@ -511,9 +516,39 @@ export function WorkflowRunPage() {
     wasActiveRef.current = isActive;
   }, [isActive]);
 
+  const runsParams = new URLSearchParams({ tab: 'runs' });
+  if (ownerAgentId) runsParams.set('agentId', ownerAgentId);
+  if (projectId) runsParams.set('projectId', projectId);
+  const runsHref = `/workflows?${runsParams.toString()}`;
+
+  useLayoutEffect(() => {
+    setPageHeader({
+      startExtra: (
+        <Link
+          to={runsHref}
+          className="inline-flex size-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg"
+          aria-label={labels.backToRuns}
+        >
+          <ArrowLeft className="size-4" aria-hidden />
+        </Link>
+      ),
+      main: (
+        <div className="min-w-0">
+          <h1 className="truncate text-base font-semibold tracking-tight text-fg">{labels.runDetailsTitle}</h1>
+          {live.view ? <p className="truncate text-xs text-fg-muted">{live.view.run.title}</p> : null}
+        </div>
+      ),
+      end: null,
+    });
+    return () => clearPageHeader();
+  }, [clearPageHeader, labels.backToRuns, labels.runDetailsTitle, live.view, runsHref, setPageHeader]);
+
   const openNewRun = useCallback((nextRunId: string) => {
-    navigate(`/workflows/runs/${nextRunId}${ownerAgentId ? `?agentId=${encodeURIComponent(ownerAgentId)}` : ''}`);
-  }, [navigate, ownerAgentId]);
+    const nextParams = new URLSearchParams();
+    if (ownerAgentId) nextParams.set('agentId', ownerAgentId);
+    if (projectId) nextParams.set('projectId', projectId);
+    navigate(`/workflows/runs/${nextRunId}${nextParams.size ? `?${nextParams.toString()}` : ''}`);
+  }, [navigate, ownerAgentId, projectId]);
 
   const retry = useCallback(async () => {
     if (!runId) return;

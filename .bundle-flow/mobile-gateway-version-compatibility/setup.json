@@ -1,0 +1,9 @@
+{
+  "repositories": {
+    "common": { "path": "/Users/micjoyce/develop/github/xopc", "status": "ready" },
+    "gateway": { "path": "/Users/micjoyce/develop/github/xopc", "status": "ready" },
+    "android": { "path": "/Users/micjoyce/develop/github/xopc/apps/mobile-expo", "status": "ready" },
+    "ios": { "path": "/Users/micjoyce/develop/github/xopc/apps/mobile-expo", "status": "ready" },
+    "harmony": { "path": "/Users/micjoyce/develop/github/xopc/apps/mobile-harmony", "status": "ready" }
+  }
+}

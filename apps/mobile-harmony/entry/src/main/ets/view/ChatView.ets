@@ -741,10 +741,16 @@ export struct XopcChatView {
         }
       }.width('100%').padding({ left: 20, right: 20, top: 8, bottom: 6 })
       if (this.chat.connection !== 'connected') {
-        Text(this.chat.connection === 'unauthorized' ? $r('app.string.connection_revoked')
-          : this.chat.connection === 'protocol_incompatible' ? $r('app.string.protocol_incompatible')
-          : this.chat.connection.startsWith('error:') ? this.chat.connection : $r('app.string.reconnecting'))
-          .fontSize(12).fontColor($r('app.color.secondary')).padding(8)
+        Row({ space: 8 }) {
+          Text(this.chat.connection === 'unauthorized' ? $r('app.string.connection_revoked')
+            : this.chat.connection === 'client_update_required' ? $r('app.string.client_update_required')
+            : this.chat.connection === 'gateway_update_required' ? $r('app.string.gateway_update_required')
+            : this.chat.connection.startsWith('error:') ? this.chat.connection : $r('app.string.reconnecting'))
+            .fontSize(12).fontColor($r('app.color.secondary')).layoutWeight(1)
+          if (this.chat.connection === 'client_update_required' || this.chat.connection === 'gateway_update_required') {
+            Button($r('app.string.refresh')).height(36).onClick((): void => { this.chat.reconnect(); })
+          }
+        }.width('100%').padding(8).alignItems(VerticalAlign.Center)
       }
       if (this.chat.error) {
         Row({ space: 8 }) {

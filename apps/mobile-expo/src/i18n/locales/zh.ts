@@ -317,6 +317,15 @@ export const zh: MessageBundle = {
 
   gateway: {
     offlineBanner: '暂时连不上你的电脑，请检查电脑和网络状态。',
+    compatibility: {
+      clientTitle: '请升级移动端',
+      clientDescription: '当前移动端版本过旧，无法连接此网关。请从原安装渠道升级后重试。',
+      gatewayTitle: '请升级网关',
+      gatewayDescription: '当前移动端版本高于网关支持范围。请在电脑上升级网关后重试。',
+      updateApp: '查看更新',
+      manageGateway: '管理连接',
+      retry: '重试',
+    },
     switcher: {
       title: '切换工作区',
       subtitle: '确认连接成功后再切换，不会打断当前工作',

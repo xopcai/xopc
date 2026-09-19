@@ -6,11 +6,12 @@ import { AppState } from 'react-native';
 
 import {
   RealtimeClient,
+  RealtimeConnectionError,
   type RealtimeEndpointBinding,
   type RealtimeWebSocket,
 } from '@xopcai/realtime-client';
 import type { ClientEndpointMessage } from '@xopcai/endpoint-tools-protocol';
-import type { RealtimeEventPayload } from '@xopcai/realtime-protocol';
+import { REALTIME_PROTOCOL_VERSION, type RealtimeEventPayload } from '@xopcai/realtime-protocol';
 
 import { useGatewayConfigured } from '../../query/sessions';
 import { queryClient } from '../../query/query-client';
@@ -18,6 +19,7 @@ import { useGatewayStore } from '../../stores/gateway-store';
 
 import { recordConnectionEvent } from './connection-log';
 import { emitGatewayEvent } from './gateway-event-bus';
+import { readGatewayCompatibilityIssue, useGatewayCompatibility } from './gateway-compatibility';
 import { RealtimeTopicCursorStore } from './realtime-topic-cursors';
 
 type TopicListener = {
@@ -51,21 +53,29 @@ function createClient(clientId: string, cursorScopeKey: string): RealtimeClient 
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ clientId, clientKind: 'mobile' }),
+        body: JSON.stringify({ clientId, clientKind: 'mobile', protocolVersion: REALTIME_PROTOCOL_VERSION }),
         signal,
       });
-      const body = await response.json().catch(() => null) as { payload?: { ticket?: string; realtime?: { minVersion: number; maxVersion: number; capabilities: string[] } }; error?: { message?: string } } | null;
-      if (!response.ok || !body?.payload?.ticket) {
+      const body = await response.json().catch(() => null) as { payload?: { ticket?: string; realtime?: { minVersion: number; maxVersion: number; capabilities: string[] } }; error?: { code?: unknown; message?: string } } | null;
+      const compatibilityIssue = readGatewayCompatibilityIssue(body?.error?.code);
+      if (compatibilityIssue) {
+        useGatewayCompatibility.getState().setIssue(compatibilityIssue);
+        throw new RealtimeConnectionError(compatibilityIssue, false);
+      }
+      if (!response.ok || !body?.payload?.ticket || !body.payload.realtime) {
         throw new Error(body?.error?.message ?? `Realtime ticket failed (${response.status})`);
       }
-      return { ...body.payload, ticket: body.payload.ticket };
+      return { ticket: body.payload.ticket, realtime: body.payload.realtime };
     },
     createWebSocket: (url) => new WebSocket(url) as unknown as RealtimeWebSocket,
     onStateChange: (state, error) => {
       if (state === 'connected') {
+        useGatewayCompatibility.getState().clearIssue();
         recordConnectionEvent({ kind: 'realtime', ok: true, message: 'realtime connected' });
         emitGatewayEvent('gateway.realtime-connected', undefined);
       } else if (state === 'error') {
+        const compatibilityIssue = readGatewayCompatibilityIssue(error);
+        if (compatibilityIssue) useGatewayCompatibility.getState().setIssue(compatibilityIssue);
         recordConnectionEvent({ kind: 'realtime', ok: false, message: error ?? 'realtime failed' });
       }
     },
@@ -101,6 +111,7 @@ function acquireSharedConnection(connectionKey: string, cursorScopeKey: string, 
     && topicCursors.isActiveScope(cursorScopeKey)
   ) return;
   sharedClient?.disconnect();
+  useGatewayCompatibility.getState().clearIssue();
   topicCursors.activateScope(cursorScopeKey);
   sharedClient = createClient(clientId, cursorScopeKey);
   if (endpointBinding) sharedClient.setEndpoint(endpointBinding);

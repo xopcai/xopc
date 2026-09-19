@@ -8,6 +8,7 @@ import { getGatewayPrincipal } from '../../security/gateway-principal.js';
 const ticketRequestSchema = z.strictObject({
   clientId: z.string().min(1).max(160),
   clientKind: realtimeClientKindSchema,
+  protocolVersion: z.number().int().positive(),
 });
 
 export function registerRealtimeRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -15,6 +16,21 @@ export function registerRealtimeRoutes(authenticated: Hono, deps: AuthenticatedR
     const parsed = ticketRequestSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) {
       return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid realtime ticket request' } }, 400);
+    }
+    if (parsed.data.protocolVersion !== REALTIME_PROTOCOL_VERSION) {
+      const clientIsOlder = parsed.data.protocolVersion < REALTIME_PROTOCOL_VERSION;
+      return c.json({
+        ok: false,
+        error: {
+          code: clientIsOlder ? 'CLIENT_UPDATE_REQUIRED' : 'GATEWAY_UPDATE_REQUIRED',
+          message: clientIsOlder
+            ? 'Update the client to connect to this Gateway.'
+            : 'Update the Gateway to connect this client.',
+          retryable: false,
+          clientProtocolVersion: parsed.data.protocolVersion,
+          gatewayProtocolVersion: REALTIME_PROTOCOL_VERSION,
+        },
+      }, 426);
     }
     try {
       const principal = getGatewayPrincipal(c);
