@@ -95,7 +95,7 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
       'settingsAgentDefaults',
     ],
   },
-  { id: 'integrations', tabs: ['settingsComputerUse', 'settingsAgentBrowser'] },
+  { id: 'integrations', tabs: ['settingsAgentBrowser', 'settingsComputerUse'] },
   {
     id: 'connection',
     tabs: ['settingsDevices', 'settingsTunnel', 'settingsShares'],
