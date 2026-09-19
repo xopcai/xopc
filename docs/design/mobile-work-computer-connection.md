@@ -212,7 +212,7 @@ readiness 建议扩展为 `protocolVersions`、`routes[]`、`routeState`、`next
 
 ### 6.2 需电脑确认的配对协议（拟新增 v3）
 
-手机沿用 `link.xopc.ai/connect#p=...` Universal Link 和 HTTPS/WSS 约束；浏览器使用独立版本的不透明剪贴板邀请，不请求该域名。两种载体封装同一个 v3 配对协议。
+手机使用 `link.xopc.ai/c#...` Universal Link 承载紧凑二进制邀请，并继续遵守 HTTPS/WSS 约束；浏览器使用独立版本的不透明剪贴板邀请，不请求该域名。两种载体共用后续签名配对流程，但使用各自的邀请编码。
 
 ```mermaid
 sequenceDiagram

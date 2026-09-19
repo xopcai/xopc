@@ -1,4 +1,4 @@
-import { buildDevicePairingProof } from '@xopcai/gateway-contract';
+import { buildDevicePairingProof, readMobilePairingInvitation } from '@xopcai/gateway-contract';
 import crypto from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -57,7 +57,7 @@ describe('device pairing routes', () => {
     expect(blocked.headers.get('Retry-After')).toBeTruthy();
   });
 
-  it('creates a device-targeted v3 Universal Link', async () => {
+  it('creates a compact mobile Universal Link', async () => {
     const readinessResponse = await app.request('/api/device-pairing/readiness');
     expect(await readinessResponse.json()).toMatchObject({
       ok: true,
@@ -73,15 +73,9 @@ describe('device pairing routes', () => {
     const setupBody = await setupResponse.json() as {
       setup: { universalLink: string; routes: Array<{ url: string }> };
     };
-    const encoded = new URL(setupBody.setup.universalLink).hash.slice('#p='.length);
-    const pairing = JSON.parse(Buffer.from(encoded, 'base64url').toString()) as {
-      pairingToken: string;
-      gatewayId: string;
-      gatewayPublicKey: string;
-      targetKind: string;
-      version: number;
-    };
-    expect(pairing).toMatchObject({ version: 3, targetKind: 'mobile' });
+    const pairing = readMobilePairingInvitation(setupBody.setup.universalLink);
+    expect(pairing).toMatchObject({ version: 4, origins: ['https://gateway.example.com'] });
+    expect(setupBody.setup.universalLink.length).toBeLessThan(300);
     expect(setupBody.setup.routes).toContainEqual(expect.objectContaining({ url: 'https://gateway.example.com' }));
 
     const probeResponse = await app.request('/api/device-pairing/probe', {
@@ -118,8 +112,8 @@ describe('device pairing routes', () => {
   });
   it.each(['ios', 'android', 'harmonyos'])('requires a desktop decision before issuing a v3 %s device and signs its status', async (platform) => {
     const setup = await (await app.request('/api/device-pairing/setups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetKind: 'mobile' }) })).json();
-    const pairing = JSON.parse(Buffer.from(new URL(setup.setup.universalLink).hash.slice(3), 'base64url').toString());
-    expect(pairing.version).toBe(3);
+    const pairing = readMobilePairingInvitation(setup.setup.universalLink);
+    expect(pairing.version).toBe(4);
     const keys = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
     const requestId = crypto.randomUUID();
     async function send(action: 'request' | 'status' | 'complete', extra: Record<string, unknown> = {}) {

@@ -3,7 +3,7 @@
     "details": [
       {
         "appIDs": ["73R6WF52UJ.ai.xopc.xopc"],
-        "components": [{ "/": "/connect" }]
+        "components": [{ "/": "/c" }]
       }
     ]
   }

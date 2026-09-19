@@ -1,54 +1,18 @@
-export const GATEWAY_SCOPES = [
-  'voice.configure',
-  'gateway.status',
-  'agents.read',
-  'agents.run',
-  'sessions.read',
-  'sessions.write',
-  'workspace.read',
-  'workspace.write',
-  'tasks.read',
-  'tasks.write',
-  'automations.read',
-  'automations.write',
-  'notifications.self',
-  'device.self',
-  'gateway.admin',
-] as const;
+import {
+  DEFAULT_BROWSER_EXTENSION_SCOPES,
+  DEFAULT_MOBILE_SCOPES,
+  GATEWAY_SCOPES,
+  isGatewayScope,
+  type GatewayScope,
+} from '@xopcai/gateway-contract';
 
-export type GatewayScope = typeof GATEWAY_SCOPES[number];
-
-const KNOWN_GATEWAY_SCOPES = new Set<string>(GATEWAY_SCOPES);
-
-export const DEFAULT_MOBILE_SCOPES: readonly GatewayScope[] = [
-  'voice.configure',
-  'gateway.status',
-  'agents.read',
-  'agents.run',
-  'sessions.read',
-  'sessions.write',
-  'workspace.read',
-  'workspace.write',
-  'tasks.read',
-  'tasks.write',
-  'automations.read',
-  'automations.write',
-  'notifications.self',
-  'device.self',
-];
-
-export const DEFAULT_BROWSER_EXTENSION_SCOPES: readonly GatewayScope[] = [
-  'gateway.status',
-  'agents.read',
-  'agents.run',
-  'sessions.read',
-  'sessions.write',
-  'device.self',
-];
-
-export function isGatewayScope(value: unknown): value is GatewayScope {
-  return typeof value === 'string' && KNOWN_GATEWAY_SCOPES.has(value);
-}
+export {
+  DEFAULT_BROWSER_EXTENSION_SCOPES,
+  DEFAULT_MOBILE_SCOPES,
+  GATEWAY_SCOPES,
+  isGatewayScope,
+  type GatewayScope,
+};
 
 export function parseGatewayScopes(value: string): GatewayScope[] {
   const parsed = JSON.parse(value) as unknown;

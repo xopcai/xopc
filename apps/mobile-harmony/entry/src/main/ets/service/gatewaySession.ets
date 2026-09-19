@@ -1,9 +1,9 @@
 import { XopcDeviceCrypto } from './deviceCrypto';
-import { XopcSecureStore, fromUtf8, utf8 } from './secureStore';
+import { XopcSecureStore } from './secureStore';
 import { XopcTransport, XopcHttpError } from './transport';
 import { XopcTransferAuth } from '../model/files';
 import { XopcGatewayProfiles, gatewayCredentialKey } from './gatewayProfiles';
-import { decodeBase64Url, encodeBase64Url, invitationPayload, pairingProof, parseInvitationJson, validateRoutes } from '../common/protocol';
+import { decodeBase64Url, formatMobilePairingInvitation, pairingProof, readMobilePairingInvitation, validateRoutes } from '../common/protocol';
 import {
   XopcInvitation, XopcPairingBody, XopcPairingJournal, XopcPairingResponse, XopcProfile,
   XopcSignedEnvelope, XopcProbeBody, XopcProbeProof, XopcRefreshAttempt, XopcRefreshBody,
@@ -41,7 +41,7 @@ export class XopcGatewaySession {
     this.assertGeneration(generation);
     if (pending) {
       const journal = JSON.parse(pending) as XopcPairingJournal;
-      return this.pair('https://link.xopc.ai/connect#p=' + encodeBase64Url(utf8(JSON.stringify(journal.invitation))), progress);
+      return this.pair(formatMobilePairingInvitation(journal.invitation), progress);
     }
     return this.profile;
   }
@@ -107,9 +107,8 @@ export class XopcGatewaySession {
     if (this.refreshTask) { try { await this.refreshTask; } catch (_) {} }
     this.assertGeneration(generation);
     const saved = await this.store.read('pairing');
-    const json = fromUtf8(decodeBase64Url(invitationPayload(link)));
     // A completed request can be recovered after the invitation expiry, using only its durable journal.
-    const invitation = parseInvitationJson(json, saved ? 0 : Date.now());
+    const invitation = readMobilePairingInvitation(link, saved ? 0 : Date.now());
     const existing = this.profiles.list().find((item: XopcProfile): boolean => item.gatewayId === invitation.gatewayId);
     const pin = await this.store.read(gatewayCredentialKey(invitation.gatewayId, 'identity'));
     if ((existing && existing.gatewayPublicKey !== invitation.gatewayPublicKey) || (pin && pin !== invitation.gatewayPublicKey)) {
@@ -169,13 +168,13 @@ export class XopcGatewaySession {
   private async probe(invitation: XopcInvitation): Promise<string> {
     const pairingId = invitation.pairingToken.slice(10).split('_')[0];
     const body: XopcProbeBody = { pairingId };
-    for (const route of invitation.routes) {
+    for (const origin of invitation.origins) {
       try {
-        const envelope = JSON.parse(await this.transport.request(route.url, '/api/device-pairing/probe', 'POST', JSON.stringify(body))) as XopcSignedEnvelope;
+        const envelope = JSON.parse(await this.transport.request(origin, '/api/device-pairing/probe', 'POST', JSON.stringify(body))) as XopcSignedEnvelope;
         const proof = JSON.parse(await this.crypto.verify(invitation.gatewayPublicKey, envelope)) as XopcProbeProof;
         if (proof.gatewayId !== invitation.gatewayId || proof.pairingId !== pairingId || !Number.isFinite(proof.issuedAt)
           || Math.abs(Date.now() - proof.issuedAt) > 300000) throw new Error('GATEWAY_IDENTITY_MISMATCH');
-        return route.url;
+        return origin;
       } catch (error) { if (error instanceof XopcHttpError && error.status < 500 && ![404, 408, 425, 429].includes(error.status)) throw error; }
     }
     throw new Error('NO_VERIFIED_ROUTE');

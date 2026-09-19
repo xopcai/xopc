@@ -25,9 +25,11 @@ const keys = crypto.generateKeyPairSync('ed25519');
 const requireReactNative = createRequire(import.meta.resolve('react-native/package.json'));
 const { AbortController: NativeAbortController } = requireReactNative('abort-controller/dist/abort-controller');
 const gatewayPublicKey = keys.publicKey.export({ format: 'jwk' }).x!;
-const pairing: ParsedGatewayQr = { version: 3, targetKind: 'mobile', gatewayId: 'computer-a', gatewayName: 'Work Mac', gatewayPublicKey,
+const gatewayName = 'Work Mac';
+const routes = [{ id: 'r', kind: 'custom-https' as const, url: 'https://computer.example' }];
+const pairing: ParsedGatewayQr = { version: 4, gatewayId: 'computer-a', gatewayPublicKey,
   pairingToken: 'xopc_pair_123_secret', expiresAt: Date.now() + 600000,
-  routes: [{ id: 'r', kind: 'custom-https', url: 'https://computer.example' }] };
+  origins: routes.map(route => route.url) };
 function response(payload: unknown, tamper = false) {
   const signedPayload = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const signature = crypto.sign(null, Buffer.from(signedPayload), keys.privateKey).toString('base64url');
@@ -48,9 +50,9 @@ describe('mobile approved pairing', () => {
       expect(crypto.verify('sha256', Buffer.from(buildDevicePairingProof(action as 'request', body)), {
         key: crypto.createPublicKey({ key: publicKey!, format: 'jwk' }), dsaEncoding: 'ieee-p1363',
       }, Buffer.from(body.signature, 'base64url'))).toBe(true);
-      return response({ gateway: { id: pairing.gatewayId, name: pairing.gatewayName }, nonce: body.nonce,
+      return response({ gateway: { id: pairing.gatewayId, name: gatewayName }, nonce: body.nonce,
         request: { requestId: body.requestId, status: action === 'request' ? 'pending' : action === 'status' ? 'approved' : 'completed', confirmationCode: '123456', deviceId: 'phone', expiresAt: pairing.expiresAt },
-        routes: pairing.routes, scopes: ['sessions.read', 'sessions.write'] });
+        routes, scopes: ['sessions.read', 'sessions.write'] });
     }));
     const result = pairWithGateway(pairing);
     await vi.advanceTimersByTimeAsync(0);
@@ -71,15 +73,16 @@ describe('mobile approved pairing', () => {
   });
   it('tries the next route when the first route has the wrong Gateway identity', async () => {
     const fallback = { id: 'fallback', kind: 'xopc-secure-link' as const, url: 'https://fallback.example' };
-    const qr = { ...pairing, routes: [...pairing.routes, fallback] };
+    const qr = { ...pairing, origins: [...pairing.origins, fallback.url] };
+    const responseRoutes = [...routes, fallback];
     const fetch = vi.fn(async (url: string, init: RequestInit) => {
       const body = JSON.parse(String(init.body));
-      if (url === `${pairing.routes[0]!.url}/api/device-pairing/probe`) {
+      if (url === `${pairing.origins[0]}/api/device-pairing/probe`) {
         return response({ gatewayId: qr.gatewayId, pairingId: '123', issuedAt: Date.now() }, true);
       }
       if (url.endsWith('/probe')) return response({ gatewayId: qr.gatewayId, pairingId: '123', issuedAt: Date.now() });
-      return response({ gateway: { id: qr.gatewayId, name: qr.gatewayName }, nonce: body.nonce,
-        request: { requestId: body.requestId, status: 'completed', deviceId: 'phone' }, routes: qr.routes, scopes: ['sessions.read'] });
+      return response({ gateway: { id: qr.gatewayId, name: gatewayName }, nonce: body.nonce,
+        request: { requestId: body.requestId, status: 'completed', deviceId: 'phone' }, routes: responseRoutes, scopes: ['sessions.read'] });
     });
     vi.stubGlobal('fetch', fetch);
 
@@ -102,27 +105,29 @@ describe('mobile approved pairing', () => {
       throw new Error('Aborted');
     });
     vi.stubGlobal('fetch', fetch);
-    const qr = { ...pairing, routes: [...pairing.routes, { id: 'fallback', kind: 'xopc-secure-link' as const, url: 'https://fallback.example' }] };
+    const qr = { ...pairing, origins: [...pairing.origins, 'https://fallback.example'] };
     await expect(pairWithGateway(qr, controller.signal)).rejects.toThrow('PAIRING_PAUSED');
     expect(fetch).toHaveBeenCalledOnce();
     expect(readPendingDevicePairing()).toBeNull();
     expect(useDevicePairingFlow.getState().error).toBeNull();
   });
   it('tries the next secure route after a pairing request connection failure', async () => {
-    const qr = { ...pairing, routes: [...pairing.routes, { id: 'fallback', kind: 'xopc-secure-link' as const, url: 'https://fallback.example' }] };
+    const fallback = { id: 'fallback', kind: 'xopc-secure-link' as const, url: 'https://fallback.example' };
+    const qr = { ...pairing, origins: [...pairing.origins, fallback.url] };
+    const responseRoutes = [...routes, fallback];
     const fetch = vi.fn(async (url: string, init: RequestInit) => {
       const body = JSON.parse(String(init.body));
       if (url.endsWith('/probe')) return response({ gatewayId: qr.gatewayId, pairingId: '123', issuedAt: Date.now() });
-      if (url.startsWith(qr.routes[0]!.url)) throw new Error('Network request failed');
-      return response({ gateway: { id: qr.gatewayId, name: qr.gatewayName }, nonce: body.nonce,
-        request: { requestId: body.requestId, status: 'completed', deviceId: 'phone' }, routes: qr.routes, scopes: ['sessions.read'] });
+      if (url.startsWith(qr.origins[0])) throw new Error('Network request failed');
+      return response({ gateway: { id: qr.gatewayId, name: gatewayName }, nonce: body.nonce,
+        request: { requestId: body.requestId, status: 'completed', deviceId: 'phone' }, routes: responseRoutes, scopes: ['sessions.read'] });
     });
     vi.stubGlobal('fetch', fetch);
     const profile = await pairWithGateway(qr);
     expect(profile.activeRouteId).toBe('fallback');
     expect(fetch.mock.calls.map(([url]) => url)).toEqual([
-      `${qr.routes[0]!.url}/api/device-pairing/probe`,
-      `${qr.routes[0]!.url}/api/device-pairing/requests`,
+      `${qr.origins[0]}/api/device-pairing/probe`,
+      `${qr.origins[0]}/api/device-pairing/requests`,
       'https://fallback.example/api/device-pairing/requests',
       expect.stringMatching(/^https:\/\/fallback\.example\/api\/device-pairing\/requests\/[^/]+\/complete$/),
     ]);
@@ -134,8 +139,8 @@ describe('mobile approved pairing', () => {
       const body = JSON.parse(String(init.body));
       const action = url.endsWith('/requests') ? 'request' : url.split('/').pop()!; actions.push(action);
       if (action === 'probe') return response({ gatewayId: pairing.gatewayId, pairingId: '123', issuedAt: Date.now() });
-      return response({ gateway: { id: pairing.gatewayId, name: pairing.gatewayName }, nonce: body.nonce,
-        request: { requestId: body.requestId, status: 'completed', deviceId: 'phone' }, routes: pairing.routes, scopes: ['sessions.read'] });
+      return response({ gateway: { id: pairing.gatewayId, name: gatewayName }, nonce: body.nonce,
+        request: { requestId: body.requestId, status: 'completed', deviceId: 'phone' }, routes, scopes: ['sessions.read'] });
     }));
     state.refresh.mockRejectedValueOnce(new Error('Network request failed'));
     await expect(pairWithGateway(pairing)).rejects.toThrow('Network request failed');

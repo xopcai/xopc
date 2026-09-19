@@ -51,7 +51,7 @@
             {
               "scheme": "https",
               "host": "link.xopc.ai",
-              "pathPrefix": "/connect"
+              "pathPrefix": "/c"
             }
           ],
           "category": [
