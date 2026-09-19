@@ -1,5 +1,6 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
+import { withDataToolPermissions } from '../tools/dataBatch.js';
 
 const APPLY_PATCH_BEGIN_MARKER = '*** Begin Patch';
 const APPLY_PATCH_END_MARKER = '*** End Patch';
@@ -145,12 +146,12 @@ export function xopcToolsToDefinitions(tools: AgentTool[]): ToolDefinition[] {
           }
         }
 
-        return (tool as { execute: (...a: never[]) => unknown }).execute(
+        return withDataToolPermissions(new Set(tools.map(item => item.name)), () => (tool as { execute: (...a: never[]) => unknown }).execute(
           toolCallId as never,
           params as never,
           signal as never,
           onUpdate as never,
-        ) as never;
+        )) as never;
       },
     };
     return def as unknown as ToolDefinition;

@@ -1404,6 +1404,8 @@ export class AgentManager implements AgentInstanceGateway {
       conversationId,
       disabledTools: profile.tools.denied,
       getPrimaryModel: () => (agent?.state.model as Model<Api> | undefined) ?? model,
+      getParentTools: () => agent?.state.tools ?? [],
+      createDelegationPolicy: () => this.createAgentTurnPolicy(conversationId),
       getMemoryManager: () => rt.memoryManager,
       getSkillManager: () => rt.skillManager,
     });
@@ -1449,11 +1451,12 @@ export class AgentManager implements AgentInstanceGateway {
     conversationId: string,
     profile: EffectiveAgentProfile,
   ): AgentTurnPolicy {
+    const currentProfile = () => resolveEffectiveAgentProfileForSession(this.config.config!, conversationId);
     return buildAgentTurnPolicy({
       maxTurns: profile.config.runtime.maxTurns,
       maxToolFailures: profile.config.runtime.maxToolFailuresPerTurn,
       resolveToolLimit: (toolName, args) => {
-        const policy = this.resolveToolPolicy(profile, toolName, args);
+        const policy = this.resolveToolPolicy(currentProfile(), toolName, args);
         const maxCalls = policy?.maxCallsPerTurn;
         return policy && maxCalls ? { id: policy.id, maxCalls } : undefined;
       },
@@ -1474,8 +1477,9 @@ export class AgentManager implements AgentInstanceGateway {
             return { block: true, terminate: true, reason: decision.reason ?? 'Blocked by collaboration rule.' };
           }
         }
-        const policy = this.resolveToolPolicy(profile, toolName, args);
+        const policy = this.resolveToolPolicy(currentProfile(), toolName, args);
         const detail = JSON.stringify(args ?? {});
+        if (policy?.mode === 'deny') return { block: true, reason: `${policy.id} is denied by tool policy.` };
         if (policy?.mode === 'ask') {
           const approved = await this.requestToolConfirmation(
             conversationId,
@@ -1541,6 +1545,8 @@ export class AgentManager implements AgentInstanceGateway {
     toolName: string,
     args: unknown,
   ): ({ id: string; mode: 'allow' | 'ask' | 'deny'; maxCallsPerTurn?: number; timeoutMs?: number }) | undefined {
+    const gatewayPolicy = profile.config.tools[toolName];
+    if (gatewayPolicy && gatewayPolicy.mode !== 'allow') return { id: toolName, ...gatewayPolicy };
     if (toolName !== 'xopc_tool_execute') {
       const policy = profile.config.tools[toolName];
       return policy ? { id: toolName, ...policy } : undefined;
@@ -1549,10 +1555,13 @@ export class AgentManager implements AgentInstanceGateway {
       ? (args as { toolRef: string }).toolRef
       : '';
     const parsed = parseExternalToolRef(toolRef, 'mcp');
-    if (!parsed) return undefined;
+    if (!parsed) {
+      const externalPolicy = profile.config.tools[toolRef];
+      return externalPolicy ? { id: toolRef, ...externalPolicy } : gatewayPolicy ? { id: toolName, ...gatewayPolicy } : undefined;
+    }
     const id = mcpToolPolicyId(parsed.namespace, parsed.toolName);
     const policy = profile.config.tools[id];
-    return policy ? { id, ...policy } : undefined;
+    return policy ? { id, ...policy } : gatewayPolicy ? { id: toolName, ...gatewayPolicy } : undefined;
   }
 
   private async requestToolConfirmation(conversationId: string, toolName: string, detail: string): Promise<boolean> {

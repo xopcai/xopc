@@ -54,6 +54,7 @@ export function createKnowledgeSearchTool(options: KnowledgeToolOptions): AgentT
     label: 'Knowledge Search',
     description: 'Search project, workspace, and session knowledge for prior decisions, facts, lessons, and commitments.',
     parameters: SearchSchema,
+    supportsParallel: true,
     async execute(_toolCallId, raw): Promise<AgentToolResult<{}>> {
       if (!options.canRead()) {
         return { content: [{ type: 'text', text: 'Knowledge memory is disabled for this session.' }], details: { error: 'knowledge_memory_disabled' } };
@@ -84,6 +85,7 @@ export function createKnowledgeGetTool(options: KnowledgeToolOptions): AgentTool
     label: 'Knowledge Get',
     description: 'Read one knowledge item returned by knowledge_search.',
     parameters: GetSchema,
+    supportsParallel: true,
     async execute(_toolCallId, raw): Promise<AgentToolResult<{}>> {
       if (!options.canRead()) {
         return { content: [{ type: 'text', text: 'Knowledge memory is disabled for this session.' }], details: { error: 'knowledge_memory_disabled' } };
@@ -91,8 +93,8 @@ export function createKnowledgeGetTool(options: KnowledgeToolOptions): AgentTool
       const id = (raw as { id: string }).id;
       const item = getKnowledgeItem(id);
       return item && isKnowledgeCurrent(item) && visibleItem(options, item) && knowledgeItemAllowed(item, options.getReadPolicy())
-        ? { content: [{ type: 'text', text: JSON.stringify(item, null, 2) }], details: { item } }
-        : { content: [{ type: 'text', text: `Knowledge item not found: ${id}` }], details: { id } };
+        ? { content: [{ type: 'text', text: JSON.stringify(item, null, 2) }], details: { item, complete: true } }
+        : { content: [{ type: 'text', text: `Knowledge item not found: ${id}` }], details: { id, error: 'knowledge_not_found' } };
     },
   } as AgentTool;
 }

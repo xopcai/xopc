@@ -11,6 +11,8 @@ import { McpToolProvider } from './mcp-provider.js';
 import { MemoryToolProvider } from './memory-provider.js';
 import { EndpointToolProvider } from './endpoint-provider.js';
 import type { ExternalToolProvider, ExternalToolTurnContext } from './types.js';
+import { resolveEffectiveAgentConfigForAgent, resolveEffectiveAgentConfigForSession } from '../../config/agent-profile.js';
+import { withExternalReadPolicy } from './read-policy.js';
 
 export interface DefaultExternalToolGatewayDeps {
   workspace: string;
@@ -63,7 +65,14 @@ export function createDefaultExternalToolGatewayTools(deps: DefaultExternalToolG
       getCurrentContext: deps.getCurrentContext,
     }));
   }
-  return createExternalToolGatewayTools(providers, deps.getCurrentContext);
+  return createExternalToolGatewayTools(providers.map(provider => withExternalReadPolicy(provider, toolRef => {
+    const config = deps.getConfig();
+    if (!config) return undefined;
+    const conversationId = deps.getCurrentContext()?.conversationId;
+    const profile = conversationId ? resolveEffectiveAgentConfigForSession(config, conversationId)
+      : deps.agentId ? resolveEffectiveAgentConfigForAgent(config, deps.agentId) : resolveEffectiveAgentConfigForSession(config, undefined);
+    return profile.config.tools[toolRef];
+  })), deps.getCurrentContext);
 }
 
 export { ExternalToolService } from './service.js';

@@ -8,6 +8,13 @@ import { ArtifactStore, EvalStore } from '@agent-evals/storage';
 import { afterEach, describe, expect, it } from 'vitest';
 
 describe('unchanged grader', () => {
+  it('grades final answers without requiring the agent to write an artifact', async () => {
+    const context = { finalText: 'Owner: ALICE. Status: partial.', runId: 'r' } as any;
+    expect((await runGrader({ type: 'answer_contains', all: ['alice', 'partial'], none: ['complete'] }, 0, context)).passed).toBe(true);
+    expect((await runGrader({ type: 'answer_contains', all: ['bob'] }, 0, context)).passed).toBe(false);
+    expect((await runGrader({ type: 'answer_contains', all: ['alice'], none: ['partial'] }, 0, context)).passed).toBe(false);
+    expect((await runGrader({ type: 'answer_contains', all: ['alice'] }, 0, { ...context, finalText: undefined })).passed).toBe(false);
+  });
   const roots: string[] = [];
 
   afterEach(() => {

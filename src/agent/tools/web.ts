@@ -5,7 +5,7 @@ import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { Config } from '../../config/schema.js';
 import { SearchProviderRegistry } from './search/registry.js';
 import { resolveWebSearchConfig } from './search/resolve-config.js';
-import { checkUrlSafety, checkWebsiteBlocklist } from './url-safety.js';
+import { fetchPublicText } from './fetch-text.js';
 
 // =============================================================================
 // Web Search Tool
@@ -35,12 +35,13 @@ export function createWebSearchTool(getConfig: () => Config | undefined): AgentT
       'Search the web. Uses configured search APIs when set; otherwise falls back to a built-in HTML search (region-aware).',
     parameters: WebSearchSchema,
     label: '🔍 Web Search',
+    supportsParallel: true,
 
     async execute(
       _toolCallId: string,
       params: any,
       signal?: AbortSignal,
-    ): Promise<AgentToolResult<{ results: unknown[]; provider?: string }>> {
+    ): Promise<AgentToolResult<{ results: unknown[]; provider?: string; error?: string }>> {
       const p = params as WebSearchParams;
       const cfg = resolveWebSearchConfig(getConfig()?.tools?.web);
       const registry = new SearchProviderRegistry(cfg);
@@ -69,7 +70,7 @@ export function createWebSearchTool(getConfig: () => Config | undefined): AgentT
               text: `Search error: ${error instanceof Error ? error.message : String(error)}`,
             },
           ],
-          details: { results: [] },
+          details: { results: [], error: error instanceof Error ? error.message : String(error) },
         };
       }
     },
@@ -79,8 +80,6 @@ export function createWebSearchTool(getConfig: () => Config | undefined): AgentT
 // =============================================================================
 // Web Fetch Tool
 // =============================================================================
-const MAX_FETCH_CHARS = 6_000_000;
-
 const WebFetchSchema = Type.Object({
   url: Type.String({ description: 'The URL to fetch' }),
   maxChars: Type.Optional(Type.Number({ description: 'Maximum characters to return (default: 10000)' })),
@@ -115,6 +114,7 @@ export function createWebFetchTool(getConfig: () => Config | undefined): AgentTo
     description: 'Fetch and extract readable content from a URL (HTML via Readability; plain text as-is).',
     parameters: WebFetchSchema,
     label: '🌐 Web Fetch',
+    supportsParallel: true,
 
     async execute(
       _toolCallId: string,
@@ -124,43 +124,17 @@ export function createWebFetchTool(getConfig: () => Config | undefined): AgentTo
       try {
         const p = params as WebFetchParams;
 
-        // SSRF protection
-        const safety = checkUrlSafety(p.url);
-        if (!safety.safe) {
-          return {
-            content: [{ type: 'text', text: `Blocked: ${safety.reason}` }],
-            details: {},
-          };
-        }
-
-        // Website blocklist check
-        const blocked = checkWebsiteBlocklist(p.url, getConfig()?.tools?.web?.blocklist);
-        if (blocked) {
-          return {
-            content: [{ type: 'text', text: `Blocked: ${blocked.message}` }],
-            details: {},
-          };
-        }
-
-        const response = await fetch(p.url, { signal });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const html = await response.text();
-        if (html.length > MAX_FETCH_CHARS) {
-          throw new Error('Response too large');
-        }
+        const fetched = await fetchPublicText(p.url, getConfig()?.tools?.web?.blocklist, signal);
+        const html = fetched.text;
         const maxChars = p.maxChars || 10000;
-        const contentType = response.headers.get('content-type') ?? '';
+        const contentType = fetched.contentType;
         const looksHtml =
           /html|xml/i.test(contentType) || /^[\s\n]*</.test(html.slice(0, Math.min(500, html.length)));
 
         let text: string;
         if (looksHtml) {
           try {
-            text = await extractReadableText(html, p.url);
+            text = await extractReadableText(html, fetched.url);
             if (!text || text.length < 40) {
               text = stripHtmlFallback(html);
             }
@@ -171,13 +145,14 @@ export function createWebFetchTool(getConfig: () => Config | undefined): AgentTo
           text = html.trim();
         }
 
-        if (text.length > maxChars) {
+        const truncated = text.length > maxChars;
+        if (truncated) {
           text = text.substring(0, maxChars) + '\n\n[truncated...]';
         }
 
         return {
           content: [{ type: 'text', text }],
-          details: {},
+          details: { truncated, complete: !truncated, url: fetched.url },
         };
       } catch (error) {
         return {
@@ -187,7 +162,7 @@ export function createWebFetchTool(getConfig: () => Config | undefined): AgentTo
               text: `Fetch error: ${error instanceof Error ? error.message : String(error)}`,
             },
           ],
-          details: {},
+          details: { error: error instanceof Error ? error.message : String(error) },
         };
       }
     },

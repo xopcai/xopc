@@ -14,6 +14,7 @@ export interface GradeContext {
   workspace: string;
   artifactStore: ArtifactStore;
   store: EvalStore;
+  finalText?: string;
 }
 
 function finish(
@@ -58,6 +59,13 @@ export async function runGrader(
   context: GradeContext,
 ): Promise<GradeResult> {
   const startedAt = Date.now();
+
+  if (spec.type === 'answer_contains') {
+    const text = (context.finalText ?? '').normalize('NFKC').toLowerCase();
+    const contains = (value: string) => text.includes(value.normalize('NFKC').toLowerCase());
+    const passed = text.length > 0 && spec.all.every(contains) && !(spec.none ?? []).some(contains);
+    return finish(graderIndex, spec, passed, passed ? 'Required answer evidence is present' : 'Answer evidence is missing or contradicts the fixture', [], startedAt);
+  }
 
   if (spec.type === 'command') {
     const hiddenRoot = resolve(context.workspace, '.xopc-eval-hidden');

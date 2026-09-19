@@ -1,7 +1,9 @@
 import { execFile } from 'node:child_process';
 import { readFile, realpath, stat } from 'node:fs/promises';
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
+import { validateDataBatch } from '../data-acquisition/schema.js';
+import { isDataBatchResult } from '../data-acquisition/render.js';
 
 const exec = promisify(execFile);
 function inside(root: string, path: string): boolean {
@@ -32,6 +34,21 @@ export class RepositoryInstructions {
   }
 
   async forTool(name: string, input: unknown): Promise<string> {
+    if (name === 'data_batch') {
+      validateDataBatch(input);
+      const sections: string[] = [];
+      for (const operation of input.operations) {
+        const paths = operation.kind === 'file_read' || operation.kind === 'git_read' ? [operation.path]
+          : operation.kind === 'file_search' ? operation.paths : operation.kind === 'git_recent' ? operation.paths ?? ['.'] : [];
+        for (const path of paths) {
+          let directory = false;
+          try { directory = (await stat(resolve(this.workspace, path))).isDirectory(); } catch { /* Tool reports missing paths. */ }
+          const section = await this.load(path, directory);
+          if (section && !sections.includes(section)) sections.push(section);
+        }
+      }
+      return sections.join('\n\n');
+    }
     const args = input && typeof input === 'object' ? input as Record<string, unknown> : {};
     if (name === 'apply_patch') {
       const paths = [...String(args.patch ?? '').matchAll(/^\*\*\* (?:Add File|Update File|Delete File|Move to): (.+)$/gm)].map(match => match[1]!.trim());
@@ -42,8 +59,28 @@ export class RepositoryInstructions {
     return '';
   }
 
+  async forDataResult(content: Array<{ type: string; text?: string }>): Promise<string> {
+    const sections = new Set<string>();
+    for (const block of content) {
+      if (block.type !== 'text' || !block.text) continue;
+      let result: unknown;
+      try { result = JSON.parse(block.text); } catch { continue; }
+      if (!isDataBatchResult(result)) continue;
+      for (const fragment of result.fragments) {
+        if (fragment.source.kind !== 'file') continue;
+        const section = await this.load(fragment.source.resource, false);
+        if (section) sections.add(section);
+      }
+    }
+    return [...sections].join('\n\n');
+  }
+
   async load(path: string, directory: boolean): Promise<string> {
-    const target = resolve(this.workspace, path);
+    let target = resolve(this.workspace, path);
+    try { target = await realpath(target); }
+    catch {
+      try { target = resolve(await realpath(dirname(target)), basename(target)); } catch { /* New paths use the lexical scope. */ }
+    }
     if (!inside(this.root, target)) return '';
     const leaf = directory ? target : dirname(target);
     const directories: string[] = [];

@@ -1,8 +1,26 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+vi.mock('undici', async importOriginal => ({
+  ...await importOriginal<typeof import('undici')>(),
+  fetch: (...args: Parameters<typeof globalThis.fetch>) => globalThis.fetch(...args),
+}));
 
 import { createWebFetchTool } from '../web.js';
 
 describe('createWebFetchTool', () => {
+  it('rejects redirects to internal addresses before fetching the target', async () => {
+    const fetch = vi.fn(async () => new Response(null, { status: 302, headers: { location: 'http://127.0.0.1/private' } }));
+    vi.stubGlobal('fetch', fetch);
+    const result = await createWebFetchTool(() => undefined).execute('redirect', { url: 'https://example.com' });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(result.details).toMatchObject({ error: expect.stringContaining('Blocked') });
+  });
+
+  it('rejects oversized bodies while streaming and reports truncation explicitly', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('x'.repeat(6_000_001))));
+    expect((await createWebFetchTool(() => undefined).execute('large', { url: 'https://example.com' })).details).toMatchObject({ error: 'Response too large' });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('a'.repeat(200), { headers: { 'content-type': 'text/plain' } })));
+    expect((await createWebFetchTool(() => undefined).execute('small', { url: 'https://example.com', maxChars: 100 })).details).toMatchObject({ truncated: true, complete: false });
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
   });

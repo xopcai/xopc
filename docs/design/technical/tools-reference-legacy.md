@@ -354,7 +354,7 @@ To disable browser automation globally, set `agents.defaults.tools.browser_use.m
 
 ### `delegate_task`
 
-Runs a **sub-agent** with a fresh context (no parent transcript) and returns a **text summary** only. Parameters include `goal`, optional `context`, optional `toolset` (subset of allowed tools), optional `maxIterations` (default 30). Sub-agents cannot use nested `delegate_task`, `clarify`, outbound messaging, memory tools, `todo`, `automation`, or skill management.
+Runs a sub-agent with a fresh context (no parent transcript). Default `research` inherits available parent read tools, including Web, knowledge, Skills and host-approved external reads. `capabilities` and `toolset` narrow access; `implement` isolates writes and commands in a managed worktree. Results include a summary and granted/rejected tool details. Nested delegation, external writes, installation and persistent jobs remain unavailable. See [current delegation policies](coder-harness-operations.md#委派与恢复).
 
 Availability is controlled by the effective Agent tool policy.
 

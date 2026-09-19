@@ -4,6 +4,7 @@ import type {
   BeforeToolCallResult,
   ShouldStopAfterTurnContext,
 } from '@earendil-works/pi-agent-core';
+import { dataOperationCalls } from '../data-acquisition/schema.js';
 
 export interface AgentTurnPolicy {
   reset(): void;
@@ -42,19 +43,24 @@ export function createAgentTurnPolicy(options: AgentTurnPolicyOptions): AgentTur
     },
 
     async beforeToolCall(context, signal) {
-      const limit = options.resolveToolLimit?.(context.toolCall.name, context.args);
-      if (limit) {
-        const count = (toolCalls.get(limit.id) ?? 0) + 1;
-        toolCalls.set(limit.id, count);
-        if (count > limit.maxCalls) {
-          return {
-            block: true,
-            terminate: true,
-            reason: `${limit.id} exceeded its per-turn call limit.`,
-          };
+      const contexts = context.toolCall.name === 'data_batch'
+        ? [context, ...dataOperationCalls(context.args).map((call, index) => ({
+            ...context, args: call.args,
+            toolCall: { ...context.toolCall, id: `${context.toolCall.id}:${index}`, name: call.name, arguments: call.args },
+          }))]
+        : [context];
+      for (const item of contexts) {
+        signal?.throwIfAborted();
+        const limit = options.resolveToolLimit?.(item.toolCall.name, item.args);
+        if (limit) {
+          const count = (toolCalls.get(limit.id) ?? 0) + 1;
+          toolCalls.set(limit.id, count);
+          if (count > limit.maxCalls) return { block: true, terminate: true, reason: `${limit.id} exceeded its per-turn call limit.` };
         }
+        const decision = await options.authorizeToolCall?.(item, signal);
+        if (decision?.block) return decision;
       }
-      return options.authorizeToolCall?.(context, signal);
+      return undefined;
     },
 
     async afterToolCall(context) {

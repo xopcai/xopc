@@ -1,5 +1,6 @@
 const CORE_TOOL_ORDER = [
   'read_file',
+  'data_batch',
   'write_file',
   'apply_patch',
   'grep',
@@ -42,6 +43,7 @@ const CORE_TOOL_ORDER = [
 
 const CORE_TOOL_SUMMARIES: Record<string, string> = {
   read_file: 'Read targeted file contents before editing',
+  data_batch: 'Read or search independent data items together; keep dependent queries separate and check partial results',
   write_file: 'Create new files or intentional complete rewrites; prefer apply_patch for code changes',
   apply_patch: 'Apply source edits with patches that begin exactly with *** Begin Patch and end exactly with *** End Patch',
   grep: 'Search file contents for literals, errors, config values, and docs',
@@ -146,7 +148,7 @@ export function buildToolingSection(params: {
   const orchestrationLines: string[] = [];
   if (hasDelegate) {
     orchestrationLines.push(
-      '- Sub-agent delegation → use `delegate_task(goal, context?, toolset?)` for focused parallel work; results return to you automatically.',
+      '- Sub-agent delegation → use `delegate_task(goal, context?, mode?, capabilities?, toolset?)`. Default research inherits available read capabilities; pass necessary context explicitly. Use implement for isolated worktree changes. Check rejectedTools and partial results before relying on the answer.',
     );
   }
   if (hasWorkflow) {

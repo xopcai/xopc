@@ -165,4 +165,19 @@ describe('ExternalToolService', () => {
     await expect(service.describe([])).rejects.toThrow('Describe between 1 and 3');
     await expect(service.describe(['a', 'b', 'c', 'd'])).rejects.toThrow('Describe between 1 and 3');
   });
+
+  it('requires a host-curated read contract and changes revision when that policy changes', async () => {
+    const contract = { ...descriptor };
+    const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'read' }], details: {} }));
+    const service = new ExternalToolService([provider({ source: 'extension', descriptor: contract, execute })]);
+    const first = (await service.describe([contract.toolRef])).tools[0]!;
+    await expect(service.execute({ toolRef: contract.toolRef, revision: first.revision, arguments: { value: 1 }, readOnly: true, context: { toolCallId: 'batch' } })).rejects.toThrow('not approved');
+    expect(execute).not.toHaveBeenCalled();
+    contract.batchRead = true;
+    const second = (await service.describe([contract.toolRef])).tools[0]!;
+    expect(second.revision).not.toBe(first.revision);
+    await expect(service.execute({ toolRef: contract.toolRef, revision: first.revision, arguments: { value: 1 }, readOnly: true, context: { toolCallId: 'batch' } })).rejects.toThrow('contract changed');
+    await service.execute({ toolRef: contract.toolRef, revision: second.revision, arguments: { value: 1 }, readOnly: true, context: { toolCallId: 'batch' } });
+    expect(execute).toHaveBeenCalledOnce();
+  });
 });

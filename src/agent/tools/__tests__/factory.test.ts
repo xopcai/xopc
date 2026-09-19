@@ -15,6 +15,15 @@ import { runWithEmbeddedExecutionSession } from '../../embedded/execution-contex
 import { AgentToolsFactory } from '../factory.js';
 
 describe('AgentToolsFactory', () => {
+  it('offers batching to ordinary agents while preserving individual tool denials', async () => {
+    const factory = new AgentToolsFactory({ workspace: '/tmp', bus: {} as MessageBus, getCurrentContext: () => null });
+    expect(factory.createCoreTools().map(tool => tool.name)).toContain('data_batch');
+    expect(factory.createCoreTools({ disabledTools: new Set(['data_batch']) }).map(tool => tool.name)).not.toContain('data_batch');
+    expect(factory.createCoreTools({ disabledTools: new Set(['read_file', 'grep', 'exec_command', 'knowledge_search', 'knowledge_get', 'web_search', 'web_fetch', 'xopc_tool_execute']) }).map(tool => tool.name)).not.toContain('data_batch');
+    const batch = factory.createCoreTools({ disabledTools: new Set(['read_file']) }).find(tool => tool.name === 'data_batch')!;
+    const result = await batch.execute('denied', { operations: [{ id: 'r', kind: 'file_read', path: 'x' }] });
+    expect(result.details).toMatchObject({ sourceRequests: 0, status: 'failed' });
+  });
   it('routes heartbeat notifications through final-result delivery even with explicit destinations', async () => {
     const conversationId = createConversation({ agentId: 'main', sourceChannel: 'heartbeat', sessionType: 'heartbeat' }).key;
     const publishOutbound = vi.fn();

@@ -13,7 +13,19 @@ import {
 } from './auth';
 import type { BrowserAttachment } from './attachments';
 import { deleteBrowserOutbox, readBrowserOutbox, writeBrowserOutbox } from './chat-outbox';
+import {
+  normalizeChatMessages,
+  type BrowserChatAttachment,
+  type BrowserChatMessage,
+} from './chat-message-model';
+import {
+  createStreamingMessage,
+  finalizeStreamingMessage,
+  reduceRunEvent,
+} from './chat-stream-reducer';
 import { activeTabId, currentTabDescriptor, TAB_BINDING_PREFIX } from './page-context';
+
+export type { BrowserChatAttachment, BrowserChatMessage } from './chat-message-model';
 
 const CLIENT_ID_KEY = 'xopc.browser.client-id';
 const ACTIVE_CHAT_KEY = 'xopc.browser.active-chat';
@@ -25,22 +37,6 @@ export type BrowserChatSession = {
   transcriptId?: string;
   title: string;
   updatedAt: string;
-};
-
-export type BrowserChatMessage = {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  text: string;
-  timestamp?: number;
-  attachments?: BrowserChatAttachment[];
-  sourceContexts?: Array<{ kind: 'note' | 'browser_page'; title: string; url?: string; truncated?: boolean }>;
-};
-
-export type BrowserChatAttachment = {
-  type: 'image' | 'file';
-  mimeType?: string;
-  name: string;
-  size?: number;
 };
 
 export type BrowserClarification = {
@@ -69,6 +65,7 @@ export type BrowserConfiguredModel = {
 export type BrowserSessionModelConfig = {
   model: string;
   thinkingLevel: string;
+  activityDetail: 'off' | 'on' | 'stream';
   configVersion?: number;
   fixedModel: boolean;
 };
@@ -85,7 +82,7 @@ export type BrowserChatSnapshot = {
   conversationId?: string;
   transcriptId?: string;
   messages: BrowserChatMessage[];
-  streamingText: string;
+  streamingMessage?: BrowserChatMessage;
   runId?: string;
   clarification?: BrowserClarification;
   tabBinding?: BrowserTabBinding;
@@ -143,63 +140,12 @@ function isRetryableDeliveryError(cause: unknown): boolean {
     || cause.status >= 500;
 }
 
-function textContent(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (!Array.isArray(value)) return '';
-  return value.flatMap((block) => {
-    if (!block || typeof block !== 'object') return [];
-    const row = block as Record<string, unknown>;
-    return row.type === 'text' && typeof row.text === 'string' ? [row.text] : [];
-  }).join('');
-}
-
-function mapMessage(value: unknown, index: number): BrowserChatMessage | undefined {
-  if (!value || typeof value !== 'object') return undefined;
-  const row = value as Record<string, unknown>;
-  if (row.role !== 'user' && row.role !== 'assistant' && row.role !== 'system') return undefined;
-  const text = textContent(row.content);
-  const attachments = Array.isArray(row.media)
-    ? row.media.flatMap((value): BrowserChatAttachment[] => {
-        if (!value || typeof value !== 'object') return [];
-        const media = value as Record<string, unknown>;
-        const mimeType = typeof media.mimeType === 'string' ? media.mimeType : undefined;
-        const name = typeof media.name === 'string' && media.name.trim()
-          ? media.name.trim()
-          : t('attachment');
-        return [{
-          type: media.type === 'image' || media.type === 'photo' || mimeType?.startsWith('image/')
-            ? 'image'
-            : 'file',
-          name,
-          ...(mimeType ? { mimeType } : {}),
-          ...(typeof media.size === 'number' && Number.isFinite(media.size) ? { size: media.size } : {}),
-        }];
-      })
-    : [];
-  if (!text && !attachments.length) return undefined;
-  return {
-    id: typeof row.id === 'string' ? row.id : `${row.role}-${index}`,
-    role: row.role,
-    text,
-    ...(typeof row.timestamp === 'number' ? { timestamp: row.timestamp } : {}),
-    ...(attachments.length ? { attachments } : {}),
-    ...(row.metadata && typeof row.metadata === 'object'
-      && Array.isArray((row.metadata as Record<string, unknown>).sourceContexts)
-      ? {
-          sourceContexts: ((row.metadata as Record<string, unknown>).sourceContexts as unknown[]).flatMap((value) => {
-            if (!value || typeof value !== 'object') return [];
-            const source = value as Record<string, unknown>;
-            if ((source.kind !== 'note' && source.kind !== 'browser_page') || typeof source.title !== 'string') return [];
-            return [{
-              kind: source.kind,
-              title: source.title,
-              ...(typeof source.url === 'string' ? { url: source.url } : {}),
-              ...(source.truncated === true ? { truncated: true } : {}),
-            }];
-          }),
-        }
-      : {}),
-  };
+function activityDetail(config: Record<string, unknown>, fallback: 'off' | 'on' | 'stream' = 'on'): 'off' | 'on' | 'stream' {
+  const detail = config.activityDetail && typeof config.activityDetail === 'object'
+    ? config.activityDetail as Record<string, unknown>
+    : undefined;
+  const value = detail?.effective ?? config.reasoningLevel;
+  return value === 'off' || value === 'on' || value === 'stream' ? value : fallback;
 }
 
 function mapClarification(value: unknown, conversationId: string): BrowserClarification | undefined {
@@ -262,7 +208,6 @@ export class BrowserChatClient {
     pendingDelivery: false,
     sessions: [],
     messages: [],
-    streamingText: '',
     models: [],
   };
 
@@ -449,7 +394,7 @@ export class BrowserChatClient {
       conversationId,
       transcriptId: this.snapshot.sessions.find((candidate) => candidate.key === conversationId)?.transcriptId,
       messages: [],
-      streamingText: '',
+      streamingMessage: undefined,
       runId: undefined,
       stopping: false,
       sessionLoading: true,
@@ -542,7 +487,7 @@ export class BrowserChatClient {
         messages: this.snapshot.runId ? this.snapshot.messages : [...this.snapshot.messages, {
           id: clientMessageId,
           role: 'user',
-          text,
+          blocks: text ? [{ type: 'text', text }] : [],
           ...(attachments.length ? {
             attachments: attachments.map((attachment) => ({
               type: attachment.type,
@@ -552,7 +497,7 @@ export class BrowserChatClient {
             })),
           } : {}),
         }],
-        ...(this.snapshot.runId ? {} : { streamingText: '' }),
+        ...(this.snapshot.runId ? {} : { streamingMessage: undefined }),
         error: undefined,
       });
       const response = await json<{ payload: { state: { activeRunId?: string; inputs?: Array<{ clientMessageId?: string; runId?: string }> } } }>(
@@ -668,7 +613,7 @@ export class BrowserChatClient {
       else {
         if (this.runTopic) this.realtime?.unsubscribe(this.runTopic);
         this.runTopic = undefined;
-        this.update({ runId: undefined, streamingText: '', stopping: false });
+        this.update({ runId: undefined, streamingMessage: undefined, stopping: false });
       }
     }
   }
@@ -812,7 +757,7 @@ export class BrowserChatClient {
     const stored = await chrome.storage.session.get(`${CURSOR_PREFIX}${runId}`);
     if (this.snapshot.conversationId !== conversationId || this.runTopic !== topic) return;
     const cursor = typeof stored[`${CURSOR_PREFIX}${runId}`] === 'number' ? stored[`${CURSOR_PREFIX}${runId}`] : undefined;
-    this.update({ runId, streamingText: '' });
+    this.update({ runId, streamingMessage: createStreamingMessage(runId) });
     this.realtime?.subscribe(topic, cursor);
   }
 
@@ -834,14 +779,27 @@ export class BrowserChatClient {
     }
     if (topic !== this.runTopic) return;
     const runId = topic.slice('run:'.length);
-    await chrome.storage.session.set({ [`${CURSOR_PREFIX}${runId}`]: seq });
-    const payload = data && typeof data === 'object'
-      ? (data as { payload?: Record<string, unknown> }).payload ?? {}
+    const envelope = data && typeof data === 'object'
+      ? data as { payload?: Record<string, unknown>; timestamp?: unknown }
       : {};
-    if (event === 'assistant_delta' && typeof payload.delta === 'string') {
-      this.update({ streamingText: `${this.snapshot.streamingText}${payload.delta}` });
+    const payload = envelope.payload && typeof envelope.payload === 'object'
+      ? envelope.payload
+      : {};
+    if (event !== 'run_end' && event !== 'error') {
+      this.update({ streamingMessage: reduceRunEvent(this.snapshot.streamingMessage, {
+        event,
+        payload,
+        runId,
+        timestamp: typeof envelope.timestamp === 'number' ? envelope.timestamp : Date.now(),
+      }) });
     }
+    await chrome.storage.session.set({ [`${CURSOR_PREFIX}${runId}`]: seq });
     if (event === 'run_end' || event === 'error') {
+      if (this.snapshot.streamingMessage) {
+        this.update({
+          streamingMessage: finalizeStreamingMessage(this.snapshot.streamingMessage, event === 'error'),
+        });
+      }
       this.realtime?.unsubscribe(topic);
       this.runTopic = undefined;
       await chrome.storage.session.remove(`${CURSOR_PREFIX}${runId}`);
@@ -849,7 +807,7 @@ export class BrowserChatClient {
         await this.reloadMessages();
       } finally {
         if (topic === this.runTopic || this.snapshot.runId === runId) {
-          this.update({ runId: undefined, streamingText: '', stopping: false });
+          this.update({ runId: undefined, streamingMessage: undefined, stopping: false });
         }
       }
     }
@@ -861,10 +819,7 @@ export class BrowserChatClient {
     const result = await json<{
       payload: { messages?: unknown[] };
     }>(await gatewayFetch(`/api/sessions/${encodeURIComponent(conversationId)}/messages?limit=200`));
-    const messages = (result.payload.messages ?? []).flatMap((value, index) => {
-      const message = mapMessage(value, index);
-      return message ? [message] : [];
-    });
+    const messages = normalizeChatMessages(result.payload.messages ?? []);
     if (this.snapshot.conversationId !== conversationId) return;
     const session = this.snapshot.sessions.find((candidate) => candidate.key === conversationId);
     this.update({ messages, transcriptId: session?.transcriptId });
@@ -910,6 +865,7 @@ export class BrowserChatClient {
     this.update({ modelConfig: {
       model: config.model,
       thinkingLevel: config.thinkingLevel,
+      activityDetail: activityDetail(config),
       ...(typeof config.configVersion === 'number' ? { configVersion: config.configVersion } : {}),
       fixedModel: config.fixedModel === true,
     } });
@@ -935,6 +891,7 @@ export class BrowserChatClient {
     this.update({ modelConfig: {
       model: config.model,
       thinkingLevel: config.thinkingLevel,
+      activityDetail: activityDetail(config, current.activityDetail),
       ...(typeof config.configVersion === 'number' ? { configVersion: config.configVersion } : {}),
       fixedModel: config.fixedModel === true,
     } });
@@ -996,7 +953,7 @@ export class BrowserChatClient {
           await this.reloadMessages();
         } finally {
           if (this.snapshot.conversationId === conversationId) {
-            this.update({ runId: undefined, streamingText: '', stopping: false });
+            this.update({ runId: undefined, streamingMessage: undefined, stopping: false });
           }
         }
         return;
