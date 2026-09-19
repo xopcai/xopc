@@ -43,6 +43,22 @@ const ttsSchema = z.object({
   defaultVoice: z.string().optional(),
 }).strict();
 
+const searchSchema = z.object({
+  schemaVersion: z.literal(1),
+  endpoint: z.string().startsWith('/'),
+  auth: z.object({ scope: z.literal('models:invoke') }).strict(),
+  maxResults: z.number().int().positive().max(50),
+  defaults: z.object({
+    count: z.number().int().positive().max(50),
+    safeSearch: z.literal('moderate'),
+  }).strict(),
+  capabilities: z.object({
+    freshness: z.boolean(),
+    language: z.boolean(),
+    region: z.boolean(),
+  }).strict(),
+}).strict();
+
 const catalogModelSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -86,6 +102,7 @@ const persistedCatalogSchema = z.object({
     z.enum(['vision', 'image-generation', 'stt', 'tts']),
     z.string(),
   ).optional(),
+  search: searchSchema.optional(),
   models: z.array(catalogModelSchema),
 }).strict();
 
@@ -105,6 +122,7 @@ export class ModelCatalogPersistence {
         etag: parsed.data.catalogVersion,
         recommendedModel: parsed.data.recommendedModel,
         recommended: parsed.data.recommended,
+        search: parsed.data.search,
         lastSuccessAt: parsed.data.fetchedAt,
         models: parsed.data.models as CatalogModel[],
       };
@@ -126,6 +144,7 @@ export class ModelCatalogPersistence {
       api: source.api,
       recommendedModel: source.recommendedModel,
       recommended: source.recommended,
+      search: source.search,
       models: source.models,
     });
     const serialized = `${JSON.stringify(payload, null, 2)}\n`;

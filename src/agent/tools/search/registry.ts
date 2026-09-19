@@ -6,6 +6,7 @@ import { BingApiProvider } from './providers/bing-api.js';
 import { BingHtmlProvider } from './providers/bing-html.js';
 import { DuckDuckGoHtmlProvider } from './providers/duckduckgo-html.js';
 import { SearXNGProvider } from './providers/searxng.js';
+import { XopcCloudSearchProvider } from './providers/xopc-cloud.js';
 
 const log = createLogger('Agent:WebSearch');
 
@@ -13,8 +14,8 @@ export class SearchProviderRegistry {
   private readonly providers: SearchProvider[];
   private readonly fallbackProvider: SearchProvider;
 
-  constructor(config: ResolvedWebSearchConfig) {
-    this.providers = this.buildProviders(config);
+  constructor(config: ResolvedWebSearchConfig, options: { cloudProvider?: SearchProvider } = {}) {
+    this.providers = this.buildProviders(config, options.cloudProvider);
     this.fallbackProvider =
       config.region === 'cn' ? new BingHtmlProvider() : new DuckDuckGoHtmlProvider();
     log.debug(
@@ -23,8 +24,15 @@ export class SearchProviderRegistry {
     );
   }
 
-  private buildProviders(config: ResolvedWebSearchConfig): SearchProvider[] {
+  private buildProviders(
+    config: ResolvedWebSearchConfig,
+    cloudProvider?: SearchProvider,
+  ): SearchProvider[] {
     const list: SearchProvider[] = [];
+
+    if (config.providers.length === 0) {
+      list.push(cloudProvider ?? new XopcCloudSearchProvider({ region: config.region }));
+    }
 
     for (const p of config.providers) {
       if (p.disabled) continue;

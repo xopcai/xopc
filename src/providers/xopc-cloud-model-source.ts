@@ -85,6 +85,7 @@ export class XopcCloudModelSource {
       xopc?: {
         schemaVersion?: unknown;
         defaults?: unknown;
+        search?: unknown;
       };
       error?: { message?: unknown; code?: unknown };
     } | null;
@@ -169,6 +170,7 @@ export class XopcCloudModelSource {
         return [model.id, catalogModel] as const;
       })).values()];
     const recommended = parseRecommendations(body.xopc?.defaults, models);
+    const search = parseSearchCapability(body.xopc?.search);
     return {
       status: 'fetched',
       source: {
@@ -178,11 +180,51 @@ export class XopcCloudModelSource {
         etag: response.headers.get('x-xopc-model-catalog-version'),
         recommendedModel: models.find(model => !model.computerUse)?.id ?? null,
         ...(Object.keys(recommended).length > 0 ? { recommended } : {}),
+        ...(search ? { search } : {}),
         lastSuccessAt: Date.now(),
       },
       models,
     };
   }
+}
+
+function parseSearchCapability(value: unknown): CatalogSource['search'] | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  const auth = raw.auth;
+  const defaults = raw.defaults;
+  const capabilities = raw.capabilities;
+  if (
+    raw.schemaVersion !== 1
+    || typeof raw.endpoint !== 'string'
+    || !raw.endpoint.startsWith('/')
+    || !auth || typeof auth !== 'object' || Array.isArray(auth)
+    || (auth as Record<string, unknown>).scope !== 'models:invoke'
+    || !Number.isSafeInteger(raw.maxResults) || Number(raw.maxResults) < 1 || Number(raw.maxResults) > 50
+    || !defaults || typeof defaults !== 'object' || Array.isArray(defaults)
+    || !Number.isSafeInteger((defaults as Record<string, unknown>).count)
+    || Number((defaults as Record<string, unknown>).count) < 1
+    || (defaults as Record<string, unknown>).safeSearch !== 'moderate'
+    || !capabilities || typeof capabilities !== 'object' || Array.isArray(capabilities)
+  ) return undefined;
+  const declaredCapabilities = capabilities as Record<string, unknown>;
+  if (
+    typeof declaredCapabilities.freshness !== 'boolean'
+    || typeof declaredCapabilities.language !== 'boolean'
+    || typeof declaredCapabilities.region !== 'boolean'
+  ) return undefined;
+  return {
+    schemaVersion: 1,
+    endpoint: raw.endpoint,
+    auth: { scope: 'models:invoke' },
+    maxResults: Number(raw.maxResults),
+    defaults: { count: Number((defaults as Record<string, unknown>).count), safeSearch: 'moderate' },
+    capabilities: {
+      freshness: declaredCapabilities.freshness,
+      language: declaredCapabilities.language,
+      region: declaredCapabilities.region,
+    },
+  };
 }
 
 function parseRecommendations(
