@@ -209,6 +209,35 @@ describe('attachment-pipeline', () => {
     expect(message.content).toContain('Use the read_media tool');
   });
 
+  it('keeps transcribed voice media without exposing a read_media hint to the LLM', async () => {
+    const uri = await seedMedia(Buffer.from('voice'), 'voice.m4a');
+
+    const message = await buildTranscriptUserMessage({
+      text: '转写后的内容',
+      prepared: [{
+        id: 'voice-1',
+        bucket: 'inbound',
+        type: 'voice',
+        mimeType: 'audio/mp4',
+        name: 'voice.m4a',
+        size: 5,
+        uri,
+        path: '/tmp/voice.m4a',
+      }],
+      conversationId: 'agent:main:webchat:1',
+      modelRef: 'openai/gpt-4o',
+      config: undefined,
+      agentManager,
+      suppressMediaPromptUris: new Set([uri]),
+    });
+
+    expect(message.media).toHaveLength(1);
+    expect(message.MediaPaths).toEqual(['/tmp/voice.m4a']);
+    expect(message.content).toBe('转写后的内容');
+    expect(message.content).not.toContain('xopc-media-uri:');
+    expect(message.content).not.toContain('read_media');
+  });
+
   it('transformUserMessageForPersistence uses matching pending transcript row', () => {
     const pending = {
       role: 'user' as const,

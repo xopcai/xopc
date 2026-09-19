@@ -37,6 +37,7 @@ import {
   isReadStyleTool,
 } from '../tool-summary.js';
 import { truncateToVisualLines, truncateToVisualLinesMiddle } from './visual-truncate.js';
+import type { CellRenderMode, ModeAwareCell } from './cell-render-mode.js';
 
 const COLLAPSED_RESULT_VISUAL_LINES = 4;
 const EXPANDED_RESULT_VISUAL_LINES = 80;
@@ -55,6 +56,12 @@ function sanitize(text: string): string {
 
 function trimTrailingBlankDisplayLines(text: string): string {
   return text.replace(/(?:\r?\n[ \t]*)+$/g, '');
+}
+
+function semanticToolLabel(toolName: string): string | undefined {
+  if (toolName === 'web_search' || toolName === 'web_fetch' || toolName === 'web_extract') return 'WEB';
+  if (toolName.startsWith('mcp:') || toolName.includes('__')) return 'MCP';
+  return undefined;
 }
 
 export function getToolResultDisplayText(
@@ -86,7 +93,7 @@ function isTuiComponent(value: unknown): value is Component {
   );
 }
 
-export class ToolExecutionComponent extends Container {
+export class ToolExecutionComponent extends Container implements ModeAwareCell {
   private contentContainer: Container;
   private contentText: Text;
   private collapsedOutputComponent: ReturnType<typeof createVisualTailComponent> | null = null;
@@ -119,6 +126,7 @@ export class ToolExecutionComponent extends Container {
   private executionStarted = false;
   private startedAt = Date.now();
   private completedAt: number | undefined;
+  private renderMode: CellRenderMode = 'compact';
 
   constructor(toolName: string, toolCallId: string, args: unknown, options: ToolExecutionOptions = {}) {
     super();
@@ -160,6 +168,28 @@ export class ToolExecutionComponent extends Container {
   setExpanded(expanded: boolean): void {
     this.expanded = expanded;
     this.refresh();
+  }
+
+  setRenderMode(mode: CellRenderMode): void {
+    if (this.renderMode === mode) return;
+    this.renderMode = mode;
+    this.refresh();
+  }
+
+  override render(width: number): string[] {
+    if (this.renderMode === 'raw') {
+      return new Text(JSON.stringify({
+        type: 'tool',
+        toolName: this.toolName,
+        toolCallId: this.toolCallId,
+        args: this.args,
+        result: this.resultContent ?? this.resultText,
+        details: this.resultDetails,
+        isError: this.isError,
+        isPartial: this.isPartial,
+      }, null, 2), 0, 0).render(width);
+    }
+    return super.render(width);
   }
 
   updateResult(result: AgentToolResult<any> | unknown, isPartial = false, isError = false): void {
@@ -331,7 +361,7 @@ export class ToolExecutionComponent extends Container {
       argsComplete: this.argsComplete,
       isError: this.isError,
       isPartial: this.isPartial,
-      expanded: this.expanded,
+      expanded: this.renderMode === 'transcript' || this.expanded,
       showImages: this.showImages,
     };
   }
@@ -340,7 +370,7 @@ export class ToolExecutionComponent extends Container {
     const argsStr = formatArgsSummary(this.args, this.toolName);
     const titleParts = [
       theme.dim(this.toolStatusLabel()),
-      theme.toolTitle(theme.bold(displayToolName(this.toolName))),
+      theme.toolTitle(theme.bold([semanticToolLabel(this.toolName), displayToolName(this.toolName)].filter(Boolean).join(' · '))),
     ];
     if (argsStr) {
       titleParts.push(theme.dim(`(${argsStr})`));
@@ -366,11 +396,11 @@ export class ToolExecutionComponent extends Container {
       const useDiff =
         isDiffFriendlyTool(this.toolName) &&
         looksLikeUnifiedDiff(output);
-      if (this.expanded && useDiff) {
+      if ((this.renderMode === 'transcript' || this.expanded) && useDiff) {
         text += renderPatchSummary(output) ?? renderUnifiedDiff(output);
-      } else if (this.expanded && isExecStyleTool(this.toolName)) {
+      } else if ((this.renderMode === 'transcript' || this.expanded) && isExecStyleTool(this.toolName)) {
         this.refreshExpandedOutput(theme.toolOutput(formatExecExpandedOutput(output, this.resultDetails)));
-      } else if (this.expanded) {
+      } else if (this.renderMode === 'transcript' || this.expanded) {
         this.refreshExpandedOutput(theme.toolOutput(output));
       } else if (useDiff) {
         text += theme.dim('preview');
@@ -396,7 +426,7 @@ export class ToolExecutionComponent extends Container {
     const argsStr = formatArgsSummary(this.args, this.toolName);
     const titleParts = [
       theme.dim(this.toolStatusLabel()),
-      theme.toolTitle(theme.bold(displayToolName(this.toolName))),
+      theme.toolTitle(theme.bold([semanticToolLabel(this.toolName), displayToolName(this.toolName)].filter(Boolean).join(' · '))),
     ];
     if (argsStr) {
       titleParts.push(theme.dim(`(${argsStr})`));
@@ -417,11 +447,11 @@ export class ToolExecutionComponent extends Container {
       const useDiff =
         isDiffFriendlyTool(this.toolName) &&
         looksLikeUnifiedDiff(output);
-      if (this.expanded && useDiff) {
+      if ((this.renderMode === 'transcript' || this.expanded) && useDiff) {
         text += `\n${renderPatchSummary(output) ?? renderUnifiedDiff(output)}`;
-      } else if (this.expanded && isExecStyleTool(this.toolName)) {
+      } else if ((this.renderMode === 'transcript' || this.expanded) && isExecStyleTool(this.toolName)) {
         this.refreshExpandedOutput(theme.toolOutput(formatExecExpandedOutput(output, this.resultDetails)));
-      } else if (this.expanded) {
+      } else if (this.renderMode === 'transcript' || this.expanded) {
         this.refreshExpandedOutput(theme.toolOutput(output));
       } else if (useDiff) {
         const suffix = output.split('\n').length > COLLAPSED_RESULT_VISUAL_LINES
@@ -485,7 +515,7 @@ export class ToolExecutionComponent extends Container {
   }
 
   private shouldRenderDetailsPreview(): boolean {
-    return this.expanded && this.resultDetails !== undefined && !isExecStyleTool(this.toolName);
+    return (this.renderMode === 'transcript' || this.expanded) && this.resultDetails !== undefined && !isExecStyleTool(this.toolName);
   }
 
   private getDisplayResultText(): string {

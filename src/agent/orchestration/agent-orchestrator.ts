@@ -125,6 +125,7 @@ export class AgentOrchestrator {
           ? context.metadata.channelSystemPrompt.trim()
           : '';
       if (channelSystemPrompt) {
+        await this.agentManager.ensureMemoryReadyForSession?.(conversationId);
         this.agentManager.getOrCreateAgent(conversationId);
         this.agentManager.applyTurnChannelSystemPrompt(conversationId, channelSystemPrompt);
       }
@@ -157,7 +158,7 @@ export class AgentOrchestrator {
         conversationId,
         turnId,
       );
-      const userMessageForModel = userContext.modelMessage;
+      const userMessageForModel = userMessage;
 
       const llmTurn = await hydrateUserTurnForLlm({
         message: userMessage,
@@ -170,6 +171,7 @@ export class AgentOrchestrator {
             conversationId,
             runId: turnId,
             userMessage: userMessageForModel,
+            dynamicSystemContext: userContext.dynamicSystemContext,
             llmImages: llmTurn.images,
             sessionStore: this.sessionStore,
             agentManager: this.agentManager,

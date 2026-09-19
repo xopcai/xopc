@@ -28,11 +28,14 @@ export const AudioMessageBlock = memo(function AudioMessageBlock({
   audio,
   conversationId,
   align = 'start',
+  variant = 'attachment',
 }: {
   audio: AudioContent;
   conversationId?: string | null;
   /** User bubbles pass `end` so the bar hugs the right edge like web chat. */
   align?: 'start' | 'end';
+  /** Voice messages are compact chat controls; attachments retain file-player details. */
+  variant?: 'attachment' | 'voice';
 }) {
   const { colors } = useTheme();
   const m = useMessages();
@@ -179,6 +182,39 @@ export const AudioMessageBlock = memo(function AudioMessageBlock({
   const muted = colors.text.secondary;
   const accent = colors.accent.primary;
 
+  if (variant === 'voice') {
+    const durationSeconds = Math.max(1, Math.round(durationMillis / 1000));
+    const voiceWidth = Math.min(VOICE_MESSAGE_MAX_WIDTH, VOICE_MESSAGE_MIN_WIDTH + Math.min(durationSeconds, 60) * 2);
+
+    return (
+      <Pressable
+        style={({ pressed }) => [
+          styles.voiceMessage,
+          align === 'end' ? styles.cardAlignEnd : styles.cardAlignStart,
+          { width: voiceWidth },
+          pressed && styles.voiceMessagePressed,
+        ]}
+        onPress={toggle}
+        accessibilityRole="button"
+        accessibilityLabel={playing ? m.chat.audioPause : m.chat.audioPlay}
+        accessibilityHint={error ?? undefined}
+        accessibilityState={{ busy: loading }}
+      >
+        {align === 'end' ? (
+          <Text style={[styles.voiceDuration, { color: text }]}>{durationSeconds}″</Text>
+        ) : null}
+        <Icon
+          source={error ? 'alert-circle-outline' : loading ? 'clock-outline' : playing ? 'pause' : 'volume-high'}
+          size={24}
+          color={error ? colors.semantic.errorBold : text}
+        />
+        {align === 'start' ? (
+          <Text style={[styles.voiceDuration, { color: text }]}>{durationSeconds}″</Text>
+        ) : null}
+      </Pressable>
+    );
+  }
+
   return (
     <View
       style={[
@@ -211,6 +247,8 @@ export const AudioMessageBlock = memo(function AudioMessageBlock({
 /** Match web `VoiceMessageBar` shell width (min 160px, max 17rem ≈ 272px). */
 const VOICE_BAR_MIN_WIDTH = 220;
 const VOICE_BAR_MAX_WIDTH = 272;
+const VOICE_MESSAGE_MIN_WIDTH = 92;
+const VOICE_MESSAGE_MAX_WIDTH = 212;
 
 const styles = StyleSheet.create({
   card: {
@@ -229,6 +267,23 @@ const styles = StyleSheet.create({
   },
   cardAlignEnd: {
     alignSelf: 'flex-end',
+  },
+  voiceMessage: {
+    minHeight: 44,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  voiceMessagePressed: {
+    opacity: 0.64,
+  },
+  voiceDuration: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
   },
   playButton: {
     width: 36,

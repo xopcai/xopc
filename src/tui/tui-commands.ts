@@ -188,7 +188,7 @@ export function formatTuiHelpText(
   const thinkingToggle = keyLabel(keybindings, 'app.thinking.toggle', 'Ctrl+T');
   const editorExternal = keyLabel(keybindings, 'app.editor.external', 'Ctrl+G');
   const suspend = keyLabel(keybindings, 'app.suspend', 'Ctrl+Z');
-  const followUp = keyLabel(keybindings, 'app.message.followUp', 'Alt+Enter');
+  const followUp = keyLabel(keybindings, 'app.message.followUp', 'Tab');
   const pasteImage = keyLabel(keybindings, 'app.clipboard.pasteImage', 'Ctrl+V / Alt+V');
   const clearInput = keyLabel(keybindings, 'app.clear', 'Ctrl+C');
   const exit = keyLabel(keybindings, 'app.exit', 'Ctrl+D');

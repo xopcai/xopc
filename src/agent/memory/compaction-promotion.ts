@@ -11,7 +11,7 @@ import type {
 import type { TranscriptSourceEntry } from '../../storage/sqlite/transcript-repository.js';
 import {
   listKnowledgeItems,
-  setKnowledgeStatus,
+  transitionKnowledgeStatus,
   writeKnowledgeItem,
   type KnowledgeKind,
   type KnowledgeOriginClass,
@@ -224,7 +224,12 @@ export function promoteCompactionLedger(
         ? listKnowledgeItems({ limit: 2_000 }).find((entry) => entry.canonicalKey === `durable:${item.kind}:${stableId('fact', item.text)}`)
         : undefined;
       if (existingDurable?.sourceConversationId === input.conversationId) {
-        setKnowledgeStatus(existingDurable.id, 'archived');
+        transitionKnowledgeStatus({
+          id: existingDurable.id,
+          status: 'archived',
+          actor: 'runtime',
+          reason: 'The source session no longer supports this durable memory.',
+        });
       }
       result.rejectedRecordIds.push(episode.item.id);
       continue;

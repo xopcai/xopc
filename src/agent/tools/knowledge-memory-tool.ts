@@ -3,10 +3,10 @@ import { Type } from '@sinclair/typebox';
 
 import {
   getKnowledgeItem,
-  knowledgeSourceAllowed,
+  knowledgeItemAllowed,
   searchKnowledgeItems,
   writeKnowledgeItem,
-  type KnowledgeSource,
+  type KnowledgeReadPolicy,
 } from '../../knowledge-memory/index.js';
 
 export interface KnowledgeToolOptions {
@@ -17,7 +17,7 @@ export interface KnowledgeToolOptions {
   canRead: () => boolean;
   canWrite: () => boolean;
   getWritePolicy: () => 'deny' | 'confirm' | 'allow';
-  getSources: () => readonly KnowledgeSource[];
+  getReadPolicy: () => KnowledgeReadPolicy;
 }
 
 const SearchSchema = Type.Object({
@@ -61,7 +61,7 @@ export function createKnowledgeSearchTool(options: KnowledgeToolOptions): AgentT
       const results = searchKnowledgeItems({
         query: input.query,
         context: visibility(options),
-        sources: options.getSources(),
+        policy: options.getReadPolicy(),
         limit: input.maxResults ?? 12,
       });
       return { content: [{ type: 'text', text: JSON.stringify({ results }, null, 2) }], details: { results } };
@@ -89,7 +89,7 @@ export function createKnowledgeGetTool(options: KnowledgeToolOptions): AgentTool
       }
       const id = (raw as { id: string }).id;
       const item = getKnowledgeItem(id);
-      return item && visibleItem(options, item) && knowledgeSourceAllowed(item, options.getSources())
+      return item && visibleItem(options, item) && knowledgeItemAllowed(item, options.getReadPolicy())
         ? { content: [{ type: 'text', text: JSON.stringify(item, null, 2) }], details: { item } }
         : { content: [{ type: 'text', text: `Knowledge item not found: ${id}` }], details: { id } };
     },
@@ -114,8 +114,12 @@ export function createKnowledgeWriteTool(options: KnowledgeToolOptions): AgentTo
         kind: Parameters<typeof writeKnowledgeItem>[0]['kind']; content: string;
         canonicalKey: string; scope: 'workspace' | 'project' | 'session'; importance?: number;
       };
-      if (!options.getSources().includes(input.scope)) {
-        return { content: [{ type: 'text', text: `Knowledge source is disabled: ${input.scope}` }], details: { error: 'knowledge_source_disabled', source: input.scope } };
+      if (!options.getReadPolicy().scopes.includes(input.scope)
+        || !options.getReadPolicy().contentSources.includes('memory')) {
+        return {
+          content: [{ type: 'text', text: `Knowledge memory writes are disabled for scope: ${input.scope}` }],
+          details: { error: 'knowledge_scope_disabled', scope: input.scope },
+        };
       }
       const sessionId = options.getSessionId();
       if (input.scope === 'session' && !sessionId) throw new Error('A current session is required for session knowledge.');

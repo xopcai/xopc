@@ -1,4 +1,5 @@
 import type { GatewayCredential } from '../gateway/credential.js';
+import { createEmptyChatInputState, type TuiChatInputState } from './tui-chat-input-state.js';
 
 /** TUI configuration options passed from CLI. */
 export interface TuiOptions {
@@ -104,7 +105,7 @@ export interface TuiState {
   /** Last Ctrl+C timestamp for double-press exit (see `resolveCtrlCAction`). */
   lastCtrlCAt: number;
   exitRequested: boolean;
-  pendingInputCount: number;
+  chatInputState: TuiChatInputState;
   /** Ctrl+P cycle filter; `null` = all models from catalog. */
   scopedModelRefs: string[] | null;
   /** Last Escape timestamp for double-press actions. */
@@ -142,7 +143,7 @@ export function createInitialState(conversationId: string): TuiState {
     showThinking: false,
     lastCtrlCAt: 0,
     exitRequested: false,
-    pendingInputCount: 0,
+    chatInputState: createEmptyChatInputState(conversationId),
     scopedModelRefs: null,
     lastEscapeAt: 0,
     progressMessage: null,

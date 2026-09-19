@@ -19,6 +19,7 @@ import type {
 import { getAllModels, getApiKey as getProviderApiKey } from '../../providers/index.js';
 import type { ChatLog } from '../components/chat-log.js';
 import type { TuiState } from '../tui-types.js';
+import { countPendingChatInputs } from '../tui-chat-input-state.js';
 import { computeContextUsagePercent } from '../tui-context-usage.js';
 import { theme } from '../theme.js';
 
@@ -138,7 +139,7 @@ export function isTuiIdle(state: Partial<TuiState>): boolean {
 
 export function hasPendingTuiMessages(state: Partial<TuiState>): boolean {
   return (
-    (state.pendingInputCount ?? 0) > 0 || (state.compactionQueue?.length ?? 0) > 0
+    countPendingChatInputs(state.chatInputState?.inputs ?? []) > 0 || (state.compactionQueue?.length ?? 0) > 0
   );
 }
 

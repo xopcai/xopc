@@ -13,7 +13,7 @@ import type { XopcTuiAppKeybinding } from '../xopc-tui-keybindings.js';
  */
 export class CustomEditor extends Editor {
   private readonly keybindings: KeybindingsManager;
-  readonly actionHandlers = new Map<XopcTuiAppKeybinding, () => void>();
+  readonly actionHandlers = new Map<XopcTuiAppKeybinding, () => boolean | void>();
 
   onEscape?: () => void;
   onCtrlD?: () => void;
@@ -26,7 +26,7 @@ export class CustomEditor extends Editor {
     this.keybindings = keybindings;
   }
 
-  onAction(action: XopcTuiAppKeybinding, handler: () => void): void {
+  onAction(action: XopcTuiAppKeybinding, handler: () => boolean | void): void {
     this.actionHandlers.set(action, handler);
   }
 
@@ -74,9 +74,15 @@ export class CustomEditor extends Editor {
     for (const [action, handler] of this.actionHandlers) {
       if (action === 'app.interrupt' || action === 'app.exit') continue;
       if (this.keybindings.matches(data, action)) {
+        if (action === 'app.message.followUp' && this.isShowingAutocomplete()) {
+          super.handleInput(data);
+          return;
+        }
         const wrapped =
           action === 'app.clear' ? (this.onCtrlC ?? handler) : handler;
-        wrapped();
+        if (wrapped() === false) {
+          super.handleInput(data);
+        }
         return;
       }
     }

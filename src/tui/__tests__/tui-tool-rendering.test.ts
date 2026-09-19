@@ -69,6 +69,14 @@ describe('tui tool renderers', () => {
     expect(chatLog.getLastAssistantText()).toBe('');
   });
 
+  it('moves streaming cells from active to committed state', () => {
+    const chatLog = new ChatLog();
+    chatLog.startAssistant(assistantMessage([{ type: 'text', text: 'draft' }]), 'run-life');
+    expect(chatLog.getCellLifecycleCounts()).toEqual({ active: 1, committed: 0 });
+    chatLog.finalizeAssistant(assistantMessage([{ type: 'text', text: 'done' }]), 'run-life');
+    expect(chatLog.getCellLifecycleCounts()).toEqual({ active: 0, committed: 1 });
+  });
+
   it('coalesces consecutive transient status messages', () => {
     const chatLog = new ChatLog();
     chatLog.addStatus('first status');
@@ -148,6 +156,46 @@ describe('tui tool renderers', () => {
     expect(rendered).toContain('Planning...');
     expect(rendered).toContain('answer');
     expect(rendered).not.toContain('private plan');
+  });
+
+  it('supports compact, transcript, and raw cell rendering', () => {
+    const chatLog = new ChatLog();
+    chatLog.setShowThinking(false);
+    chatLog.finalizeAssistant(assistantMessage([
+      { type: 'thinking', thinking: 'full reasoning' },
+      { type: 'text', text: 'answer' },
+    ]), 'run-mode');
+
+    expect(stripAnsi(chatLog.render(100).join('\n'))).not.toContain('full reasoning');
+    chatLog.setRenderMode('transcript');
+    expect(stripAnsi(chatLog.render(100).join('\n'))).toContain('full reasoning');
+    chatLog.setRenderMode('raw');
+    const raw = stripAnsi(chatLog.render(100).join('\n'));
+    expect(raw).toContain('"role": "assistant"');
+    expect(raw).toContain('"thinking": "full reasoning"');
+  });
+
+  it('keeps committed cells beyond the former hard component limit', () => {
+    const chatLog = new ChatLog();
+    for (let index = 0; index < 200; index++) chatLog.addUser(`message-${index}`);
+    const rendered = stripAnsi(chatLog.render(100).join('\n'));
+    expect(rendered).toContain('message-0');
+    expect(rendered).toContain('message-199');
+  });
+
+  it('updates semantic plan cells in place', () => {
+    const chatLog = new ChatLog();
+    chatLog.upsertSemanticCell('plan-1', { kind: 'plan', title: 'Plan', lines: ['[pending] first'] });
+    chatLog.upsertSemanticCell('plan-1', { kind: 'plan', title: 'Plan', lines: ['[completed] first'] });
+    const rendered = stripAnsi(chatLog.render(100).join('\n'));
+    expect(rendered).toContain('PLAN · Plan');
+    expect(rendered).toContain('[completed] first');
+    expect(rendered).not.toContain('[pending] first');
+  });
+
+  it('labels web and MCP tool cells semantically', () => {
+    expect(stripAnsi(tool('web_search', { query: 'xopc' }).render(100).join('\n'))).toContain('WEB ·');
+    expect(stripAnsi(tool('notion__search', { query: 'xopc' }).render(100).join('\n'))).toContain('MCP ·');
   });
 
   it('invokes extension renderer for matching tool names', () => {

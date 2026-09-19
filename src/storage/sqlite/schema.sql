@@ -2320,6 +2320,19 @@ CREATE VIRTUAL TABLE knowledge_items_fts USING fts5(
   tokenize='unicode61'
 );
 
+CREATE TABLE knowledge_item_status_events (
+  event_id TEXT PRIMARY KEY,
+  knowledge_id TEXT NOT NULL REFERENCES knowledge_items(knowledge_id) ON DELETE CASCADE,
+  from_status TEXT,
+  to_status TEXT NOT NULL,
+  actor_type TEXT NOT NULL CHECK(actor_type IN ('user', 'agent', 'runtime', 'maintenance', 'migration')),
+  reason TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX idx_knowledge_item_status_events_item
+  ON knowledge_item_status_events(knowledge_id, created_at DESC);
+
 CREATE TABLE memory_maintenance_runs (
   run_id TEXT PRIMARY KEY,
   principal_id TEXT NOT NULL,

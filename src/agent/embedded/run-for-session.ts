@@ -21,6 +21,7 @@ import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profi
 import { resolvePromptCachePolicy } from '../../providers/prompt-cache-plan.js';
 import { AgentRunSupervisor } from '../orchestration/agent-run-supervisor.js';
 import { projectTurnOutcome } from '../../session/turn-outcome-projector.js';
+import { appendDynamicPromptSection } from '../prompt/cache-boundary.js';
 
 const log = createLogger('EmbeddedTurnForSession');
 
@@ -28,6 +29,7 @@ export type RunEmbeddedForSessionParams = {
   conversationId: string;
   runId?: string;
   userMessage: AgentMessage;
+  dynamicSystemContext?: string;
   llmImages?: import('@earendil-works/pi-ai').ImageContent[];
   sessionStore: SessionStore;
   agentManager: AgentInstanceGateway;
@@ -99,6 +101,9 @@ export async function runEmbeddedTurnForSession(
     await params.beforeTurn?.();
     if (supervisor.signal.aborted) return { ok: false, errorMessage: 'aborted' };
 
+    await agentManager.ensureMemoryReadyForSession?.(conversationId);
+    if (supervisor.signal.aborted) return { ok: false, errorMessage: 'aborted' };
+
     const agent = (agentManager as any).getOrCreateAgent(conversationId) as {
       state: {
         tools: RunXopcEmbeddedTurnParams['tools'];
@@ -144,7 +149,9 @@ export async function runEmbeddedTurnForSession(
     agentManager.setModelForSession(conversationId, modelRef);
     const tools = agent.state.tools;
     const turnPolicy = agentManager.createAgentTurnPolicy(conversationId);
-    const systemPrompt = [agent.state.systemPrompt ?? '', params.presentation === 'voice' ? voicePresentationPrompt : ''].filter(Boolean).join('\n\n');
+    const baseSystemPrompt = [agent.state.systemPrompt ?? '', params.presentation === 'voice' ? voicePresentationPrompt : '']
+      .filter(Boolean).join('\n\n');
+    const systemPrompt = appendDynamicPromptSection(baseSystemPrompt, params.dynamicSystemContext ?? '');
     const thinkingLevel = (params.thinkingOverride as ThinkingLevel | undefined) ?? agent.state.thinkingLevel;
     const workspaceDir = agentManager.getResolvedWorkspaceForSession(conversationId);
     const promptCachePolicy = resolvePromptCachePolicy(

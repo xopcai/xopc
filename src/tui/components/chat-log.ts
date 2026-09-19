@@ -14,8 +14,8 @@ import { AssistantMessageComponent } from './assistant-message.js';
 import { ToolExecutionComponent, type ToolExecutionOptions } from './tool-execution.js';
 import { UserMessageComponent } from './user-message.js';
 import type { TuiBranchSummary, TuiCompactionResult } from '../tui-backend.js';
-
-const MAX_COMPONENTS = 180;
+import type { CellRenderMode, ModeAwareCell } from './cell-render-mode.js';
+import { SemanticCellComponent, type SemanticCellData } from './semantic-cell.js';
 
 type ExpandableBlock = { setExpanded(expanded: boolean): void };
 export type ChatLogEntryMeta = {
@@ -47,11 +47,12 @@ export class ChatLog extends Container {
   private branchBlocks: BranchSummaryComponent[] = [];
   private branchMessageBlocks: BranchMessageSummaryComponent[] = [];
   private customBlocks: CustomMessageComponent[] = [];
+  private semanticCells = new Map<string, SemanticCellComponent>();
   private customMessageRenderers = new Map<string, TuiMessageRenderer>();
   private assistantMessages: AssistantMessageComponent[] = [];
-  private streamingRuns = new Map<string, AssistantMessageComponent>();
+  private activeAssistantByRun = new Map<string, AssistantMessageComponent>();
   /** After finalizeAssistant, late tool execution events can still arrive; keep the bubble to link tools. */
-  private assistantAnchorByRunId = new Map<string, AssistantMessageComponent>();
+  private committedAssistantByRun = new Map<string, AssistantMessageComponent>();
   private runsWithTools = new Set<string>();
   private toolsExpanded = false;
   private showThinking = true;
@@ -64,6 +65,9 @@ export class ChatLog extends Container {
   private entryRecords: ChatLogEntryRecord[] = [];
   private viewportRowsProvider: (() => number) | undefined;
   private historyViewDisplayIndex: number | null = null;
+  private renderMode: CellRenderMode = 'compact';
+  private readonly activeCells = new Set<Component>();
+  private readonly committedCells = new Set<Component>();
 
   constructor(private readonly keybindings?: KeybindingsManager) {
     super();
@@ -72,50 +76,13 @@ export class ChatLog extends Container {
     }
   }
 
-  private pruneOverflow(): void {
-    while (this.children.length > MAX_COMPONENTS) {
-      const oldest = this.children[0];
-      if (!oldest) return;
-      this.removeChild(oldest);
-      this.dropReferences(oldest);
-    }
-  }
-
-  private dropReferences(component: Component): void {
-    for (const [id, tool] of this.toolById.entries()) {
-      if (tool === component) this.toolById.delete(id);
-    }
-    for (const [runId, msg] of this.streamingRuns.entries()) {
-      if (msg === component) this.streamingRuns.delete(runId);
-    }
-    for (const [runId, msg] of this.assistantAnchorByRunId.entries()) {
-      if (msg === component) this.assistantAnchorByRunId.delete(runId);
-    }
-    this.bashBlocks = this.bashBlocks.filter((entry) => entry !== component);
-    this.compactionBlocks = this.compactionBlocks.filter((entry) => entry !== component);
-    this.branchBlocks = this.branchBlocks.filter((entry) => entry !== component);
-    this.branchMessageBlocks = this.branchMessageBlocks.filter((entry) => entry !== component);
-    this.customBlocks = this.customBlocks.filter((entry) => entry !== component);
-    this.assistantMessages = this.assistantMessages.filter((entry) => entry !== component);
-    if (this.lastStatusEntry === component) {
-      this.lastStatusEntry = null;
-      this.lastStatusText = null;
-    }
-    for (const [runId, status] of this.workflowStatusByRunId.entries()) {
-      if (status.entry === component) this.workflowStatusByRunId.delete(runId);
-    }
-    this.entryRecords = this.entryRecords.filter((entry) => entry.component !== component);
-    if (!this.findEntryRecord(this.historyViewDisplayIndex)) {
-      this.historyViewDisplayIndex = null;
-    }
-  }
-
-  private append(component: Component, meta?: ChatLogEntryMeta): void {
+  private append(component: Component, meta?: ChatLogEntryMeta, lifecycle: 'active' | 'committed' = 'committed'): void {
     this.addChild(component);
+    (lifecycle === 'active' ? this.activeCells : this.committedCells).add(component);
     if (meta) {
       this.entryRecords.push({ component, ...meta });
     }
-    this.pruneOverflow();
+    this.applyRenderMode(component);
   }
 
   clearAll(): void {
@@ -126,9 +93,10 @@ export class ChatLog extends Container {
     this.branchBlocks = [];
     this.branchMessageBlocks = [];
     this.customBlocks = [];
+    this.semanticCells.clear();
     this.assistantMessages = [];
-    this.streamingRuns.clear();
-    this.assistantAnchorByRunId.clear();
+    this.activeAssistantByRun.clear();
+    this.committedAssistantByRun.clear();
     this.runsWithTools.clear();
     this.lastAssistantText = '';
     this.lastStatusEntry = null;
@@ -136,6 +104,8 @@ export class ChatLog extends Container {
     this.workflowStatusByRunId.clear();
     this.entryRecords = [];
     this.historyViewDisplayIndex = null;
+    this.activeCells.clear();
+    this.committedCells.clear();
   }
 
   private createAssistantMessage(message?: AgentMessage): AssistantMessageComponent {
@@ -203,7 +173,7 @@ export class ChatLog extends Container {
   }
 
   addBranchMessageSummary(summary: BranchMessageSummary): void {
-    this.assistantAnchorByRunId.clear();
+    this.committedAssistantByRun.clear();
     const component = new BranchMessageSummaryComponent(summary, this.keybindings);
     component.setExpanded(this.toolsExpanded);
     this.branchMessageBlocks.push(component);
@@ -211,13 +181,25 @@ export class ChatLog extends Container {
   }
 
   addCustomMessage(summary: CustomMessageSummary): void {
-    this.assistantAnchorByRunId.clear();
+    this.committedAssistantByRun.clear();
     const component = new CustomMessageComponent(
       summary,
       this.customMessageRenderers.get(summary.customType),
     );
     component.setExpanded(this.toolsExpanded);
     this.customBlocks.push(component);
+    this.append(component);
+  }
+
+  upsertSemanticCell(id: string, data: SemanticCellData): void {
+    const existing = this.semanticCells.get(id);
+    if (existing) {
+      existing.update(data);
+      existing.invalidate();
+      return;
+    }
+    const component = new SemanticCellComponent(data);
+    this.semanticCells.set(id, component);
     this.append(component);
   }
 
@@ -235,7 +217,7 @@ export class ChatLog extends Container {
   }
 
   addUser(text: string | unknown[], meta?: ChatLogEntryMeta): void {
-    this.assistantAnchorByRunId.clear();
+    this.committedAssistantByRun.clear();
     this.append(new UserMessageComponent(text), meta);
   }
 
@@ -245,7 +227,7 @@ export class ChatLog extends Container {
     ui: import('@earendil-works/pi-tui').TUI,
     excludeFromContext: boolean,
   ): BashExecutionComponent {
-    this.assistantAnchorByRunId.clear();
+    this.committedAssistantByRun.clear();
     const component = new BashExecutionComponent(command, ui, excludeFromContext, this.keybindings);
     component.setExpanded(this.toolsExpanded);
     this.bashBlocks.push(component);
@@ -255,7 +237,7 @@ export class ChatLog extends Container {
 
   /** Replay a completed shell execution from persisted transcript history. */
   addBashSummary(summary: BashSummary): void {
-    this.assistantAnchorByRunId.clear();
+    this.committedAssistantByRun.clear();
     const component = new BashSummaryComponent(summary, this.keybindings);
     component.setExpanded(this.toolsExpanded);
     this.bashBlocks.push(component);
@@ -265,7 +247,7 @@ export class ChatLog extends Container {
   startAssistant(message: AgentMessage, runId: string): void {
     const text = assistantPlainText(message);
     if (text.trim()) this.lastAssistantText = text;
-    const existing = this.streamingRuns.get(runId);
+    const existing = this.activeAssistantByRun.get(runId);
     if (existing) {
       existing.updateContent(message);
       existing.setHasToolCalls(this.runsWithTools.has(runId));
@@ -273,14 +255,14 @@ export class ChatLog extends Container {
     }
     const component = this.createAssistantMessage(message);
     component.setHasToolCalls(this.runsWithTools.has(runId));
-    this.streamingRuns.set(runId, component);
-    this.append(component);
+    this.activeAssistantByRun.set(runId, component);
+    this.append(component, undefined, 'active');
   }
 
   updateAssistant(message: AgentMessage, runId: string): void {
     const text = assistantPlainText(message);
     if (text.trim()) this.lastAssistantText = text;
-    const existing = this.streamingRuns.get(runId);
+    const existing = this.activeAssistantByRun.get(runId);
     if (!existing) {
       this.startAssistant(message, runId);
       return;
@@ -292,27 +274,29 @@ export class ChatLog extends Container {
   finalizeAssistant(message: AgentMessage, runId: string, meta?: ChatLogEntryMeta): void {
     const text = assistantPlainText(message);
     if (text.trim()) this.lastAssistantText = text;
-    const existing = this.streamingRuns.get(runId);
+    const existing = this.activeAssistantByRun.get(runId);
     if (existing) {
       existing.updateContent(message);
       existing.setHasToolCalls(this.runsWithTools.has(runId));
-      this.streamingRuns.delete(runId);
-      this.assistantAnchorByRunId.set(runId, existing);
+      this.activeAssistantByRun.delete(runId);
+      this.committedAssistantByRun.set(runId, existing);
+      this.commitCell(existing);
       return;
     }
     const finalMessage = this.createAssistantMessage(message);
     finalMessage.setHasToolCalls(this.runsWithTools.has(runId));
     this.append(finalMessage, meta);
     if (text.trim()) {
-      this.assistantAnchorByRunId.set(runId, finalMessage);
+      this.committedAssistantByRun.set(runId, finalMessage);
     }
   }
 
   dropAssistant(runId: string): void {
-    const existing = this.streamingRuns.get(runId);
+    const existing = this.activeAssistantByRun.get(runId);
     if (!existing) return;
     this.removeChild(existing);
-    this.streamingRuns.delete(runId);
+    this.activeAssistantByRun.delete(runId);
+    this.activeCells.delete(existing);
   }
 
   startTool(toolCallId: string, toolName: string, args: unknown, runId: string): void {
@@ -328,9 +312,9 @@ export class ChatLog extends Container {
     component.setExpanded(this.toolsExpanded);
     this.toolById.set(toolCallId, component);
 
-    const assistant = this.streamingRuns.get(runId) ?? this.assistantAnchorByRunId.get(runId);
+    const assistant = this.activeAssistantByRun.get(runId) ?? this.committedAssistantByRun.get(runId);
     assistant?.setHasToolCalls(true);
-    this.append(component);
+    this.append(component, undefined, 'active');
   }
 
   markToolExecutionStarted(toolCallId: string): void {
@@ -349,6 +333,7 @@ export class ChatLog extends Container {
     const existing = this.toolById.get(toolCallId);
     if (!existing) return;
     existing.updateResult(result, isPartial, isError);
+    if (!isPartial) this.commitCell(existing);
   }
 
   updateToolDetails(toolCallId: string, details: unknown): void {
@@ -404,6 +389,30 @@ export class ChatLog extends Container {
     for (const tool of this.toolById.values()) {
       tool.setImageOptions(this.toolImageOptions);
     }
+  }
+
+  setRenderMode(mode: CellRenderMode): void {
+    if (this.renderMode === mode) return;
+    this.renderMode = mode;
+    for (const child of this.children) this.applyRenderMode(child);
+    this.invalidate();
+  }
+
+  getRenderMode(): CellRenderMode {
+    return this.renderMode;
+  }
+
+  private applyRenderMode(component: Component): void {
+    (component as Component & Partial<ModeAwareCell>).setRenderMode?.(this.renderMode);
+  }
+
+  getCellLifecycleCounts(): { active: number; committed: number } {
+    return { active: this.activeCells.size, committed: this.committedCells.size };
+  }
+
+  private commitCell(component: Component): void {
+    if (!this.activeCells.delete(component)) return;
+    this.committedCells.add(component);
   }
 
   getLastAssistantText(): string {

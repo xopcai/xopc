@@ -1,9 +1,10 @@
 import type {
   KnowledgeItem,
-  KnowledgeSource,
+  KnowledgeReadPolicy,
   KnowledgeVisibilityContext,
 } from '../../knowledge-memory/index.js';
 import type { UserAssertion } from '../../user-model/domain.js';
+import type { MemorySearchResult } from '../memory/types.js';
 
 export type RuleEnforcementLevel = 'prompt' | 'planner' | 'tool_gate';
 
@@ -50,6 +51,7 @@ export interface ExecutionContext {
   goals: ExecutionGoal[];
   priorities: ExecutionPriority[];
   knowledge: KnowledgeItem[];
+  externalKnowledge: MemorySearchResult[];
 }
 
 export interface ExecutionContextRequest extends KnowledgeVisibilityContext {
@@ -59,5 +61,5 @@ export interface ExecutionContextRequest extends KnowledgeVisibilityContext {
   maxKnowledge?: number;
   includeUserModel?: boolean;
   includeKnowledge?: boolean;
-  knowledgeSources?: readonly KnowledgeSource[];
+  knowledgePolicy?: KnowledgeReadPolicy;
 }

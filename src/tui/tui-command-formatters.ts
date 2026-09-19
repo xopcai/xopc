@@ -17,6 +17,7 @@ import type {
 } from './tui-backend.js';
 import { computeContextUsagePercent, formatContextUsageLabel } from './tui-context-usage.js';
 import type { TuiState } from './tui-types.js';
+import { countPendingChatInputs } from './tui-chat-input-state.js';
 import { formatSessionPickerDescription } from './tui-session-format.js';
 import { formatTuiTranscriptTreeEntryDisplayText } from './tui-transcript-tree.js';
 import { createWorkflowCatalog, type CatalogEntry } from '../agent/workflow/catalog.js';
@@ -625,7 +626,7 @@ export function formatTuiSessionInfo(state: TuiState, stats?: TuiSessionStats): 
     `Context: ${contextLabel}`,
     `Tools: ${state.toolsExpanded ? 'expanded' : 'collapsed'}`,
     `Thinking Display: ${state.showThinking ? 'on' : 'off'}`,
-    `Pending Inputs: ${state.pendingInputCount}`,
+    `Pending Inputs: ${countPendingChatInputs(state.chatInputState?.inputs ?? [])}`,
     ...formatTuiSessionStatsBlock(stats),
   ].join('\n');
 }

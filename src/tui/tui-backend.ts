@@ -4,6 +4,10 @@ import type { ExportFormat } from '../session/types.js';
 import type { ReviewContext } from '../review/review-git.js';
 
 import type { SessionInfo, TuiEventSource } from './tui-types.js';
+import type { TuiChatInputDelivery, TuiChatInputState } from './tui-chat-input-state.js';
+
+export type { TuiChatInput, TuiChatInputDelivery, TuiChatInputState, TuiChatInputStatus } from './tui-chat-input-state.js';
+export { countPendingChatInputs } from './tui-chat-input-state.js';
 
 /** Options for sending a chat message. */
 export interface ChatSendOptions {
@@ -138,20 +142,6 @@ export interface TuiStartupResources {
   connectors: string[];
 }
 
-export interface TuiChatInputState {
-  conversationId: string;
-  revision: number;
-  inputs: Array<{ id: string; status: string }>;
-}
-
-export function countPendingChatInputs(inputs: readonly unknown[]): number {
-  return inputs.filter((input) => {
-    if (!input || typeof input !== 'object') return false;
-    const status = (input as { status?: unknown }).status;
-    return status === 'queued' || status === 'interrupted';
-  }).length;
-}
-
 export interface TuiWorkspaceFileSearchEntry {
   name: string;
   path: string;
@@ -243,8 +233,23 @@ export interface TuiBackend {
   abortChat(opts: { conversationId: string; runId: string }): Promise<{ ok: boolean }>;
 
   /** Inject steering text into an active run (tool-boundary delivery). */
-  submitChatInput(opts: { conversationId: string; message: string; delivery: 'next' | 'steer' }): Promise<{ ok: boolean; effectiveDelivery?: 'next' | 'steer' }>;
+  submitChatInput(opts: { conversationId: string; message: string; delivery: TuiChatInputDelivery }): Promise<{
+    ok: boolean;
+    effectiveDelivery?: TuiChatInputDelivery;
+    state?: TuiChatInputState;
+  }>;
   getChatInputState(conversationId: string): Promise<TuiChatInputState>;
+  updateChatInput(opts: {
+    conversationId: string;
+    inputId: string;
+    version: number;
+    content: string;
+  }): Promise<{ ok: boolean; state?: TuiChatInputState }>;
+  removeChatInput(opts: {
+    conversationId: string;
+    inputId: string;
+    version: number;
+  }): Promise<{ ok: boolean; state?: TuiChatInputState }>;
 
   /** Start a workflow run directly, without routing through the LLM. */
   startWorkflowRun?(opts: TuiWorkflowRunStartRequest): Promise<TuiWorkflowRunStartResult>;

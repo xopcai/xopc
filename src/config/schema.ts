@@ -1273,8 +1273,10 @@ export const ConfigSchema = z.object({
     knowledgeMemory: {
       enabled: true,
       writePolicy: 'confirm',
-      sources: ['session', 'workspace'],
+      readScopes: ['global', 'agent', 'workspace', 'project', 'session'],
+      contentSources: ['memory', 'local_import'],
       searchStrategy: 'fanout',
+      searchTimeoutMs: 2_000,
       writeStrategy: 'local-first',
       allowExternalWrites: false,
     },

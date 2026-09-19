@@ -196,8 +196,19 @@ export function setRuleStatus(id: string, status: CollaborationRule['status']): 
   });
 }
 
-export function setKnowledgeStatus(id: string, status: AssertionStatus): Promise<unknown> {
-  return fetchJson(apiUrl(`/api/knowledge-memory/${encodeURIComponent(id)}/status`), {
-    method: 'PATCH', body: JSON.stringify({ status }),
+export type KnowledgeReviewAction = 'approve' | 'edit_and_approve' | 'reject' | 'archive';
+
+export function reviewKnowledgeItem(
+  item: Pick<KnowledgeItem, 'id' | 'status'>,
+  action: KnowledgeReviewAction,
+  content?: string,
+): Promise<unknown> {
+  return fetchJson(apiUrl(`/api/knowledge-memory/${encodeURIComponent(item.id)}/review`), {
+    method: 'POST',
+    body: JSON.stringify({
+      action,
+      expectedStatus: item.status,
+      ...(content === undefined ? {} : { content }),
+    }),
   });
 }

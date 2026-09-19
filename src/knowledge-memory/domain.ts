@@ -10,9 +10,17 @@ export type KnowledgeKind =
   | 'episode'
   | 'note';
 export type KnowledgeStatus = 'candidate' | 'active' | 'needs_review' | 'stale' | 'archived' | 'rejected';
+export type KnowledgeReviewAction = 'approve' | 'edit_and_approve' | 'reject' | 'archive';
+export type KnowledgeStatusActor = 'user' | 'agent' | 'runtime' | 'maintenance' | 'migration';
 export type KnowledgeOriginClass = 'owner' | 'agent' | 'system' | 'untrusted';
 export type KnowledgeRecordClass = 'memory' | 'source_index';
-export type KnowledgeSource = 'session' | 'workspace' | 'project' | 'connector';
+export type KnowledgeVisibilityScope = UserModelScope['type'];
+export type KnowledgeContentSource = 'memory' | 'local_import' | 'connector';
+
+export interface KnowledgeReadPolicy {
+  scopes: readonly KnowledgeVisibilityScope[];
+  contentSources: readonly KnowledgeContentSource[];
+}
 
 export interface KnowledgeItem {
   id: string;
@@ -44,4 +52,14 @@ export interface KnowledgeVisibilityContext {
   workspaceId: string;
   projectId?: string;
   conversationId: string;
+}
+
+export interface KnowledgeStatusEvent {
+  id: string;
+  knowledgeId: string;
+  fromStatus?: KnowledgeStatus;
+  toStatus: KnowledgeStatus;
+  actor: KnowledgeStatusActor;
+  reason: string;
+  createdAt: number;
 }

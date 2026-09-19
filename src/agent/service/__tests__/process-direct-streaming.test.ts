@@ -1,6 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ resume: vi.fn(), run: vi.fn(), pending: vi.fn(), clearPending: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  resume: vi.fn(),
+  run: vi.fn(),
+  pending: vi.fn(),
+  clearPending: vi.fn(),
+  voiceMerge: vi.fn(),
+  voiceInspection: vi.fn(),
+  isVoice: vi.fn(),
+}));
 vi.mock('../../../storage/sqlite/connection-wait-repository.js', () => ({ getConnectionResumeInput: mocks.resume }));
 vi.mock('../../../session/index.js', () => ({
   resolveConfiguredActivityDetailDefault: () => 'stream',
@@ -16,8 +24,9 @@ vi.mock('../../inbound/attachment-pipeline.js', () => ({
   clearPendingTranscriptUserMessage: mocks.clearPending,
 }));
 vi.mock('../../../channels/attachments/voice-stt-webchat.js', () => ({
-  isVoiceLikeAttachment: () => false,
-  mergeVoiceTranscriptsIntoUserText: async (_attachments: unknown, text: string) => ({ text, inboundVoice: false }),
+  isVoiceLikeAttachment: mocks.isVoice,
+  mergeVoiceTranscriptsIntoUserText: mocks.voiceMerge,
+  requestsOriginalVoiceInspection: mocks.voiceInspection,
 }));
 vi.mock('../../../voice/stt/index.js', () => ({ mergeSttConfigFromAppConfig: () => ({}) }));
 
@@ -25,6 +34,7 @@ import { runProcessDirectStreaming, type ProcessDirectStreamingDeps } from '../p
 
 function setup() {
   const title = vi.fn();
+  const buildTranscriptUserMessage = vi.fn(async (content: string) => ({ role: 'user', content, timestamp: 1 }));
   const deps = {
     log: { warn: vi.fn(), info: vi.fn() },
     resolveSessionEndpoint: async () => ({ channel: 'webchat', chatId: 'chat' }),
@@ -32,7 +42,7 @@ function setup() {
     registerWebchatStreamPublisher: vi.fn(), unregisterWebchatStreamPublisher: vi.fn(),
     endDirectRequestContext: vi.fn(), getConfig: () => undefined,
     prepareInboundAttachments: async () => undefined,
-    buildTranscriptUserMessage: async (content: string) => ({ role: 'user', content, timestamp: 1 }),
+    buildTranscriptUserMessage,
     agentManager: {
       prepareSkillTurn: (_key: string, text: string) => ({ text, activatedCapabilityNames: [] }),
       withSkillCapabilities: (_key: string, _names: string[], run: () => unknown) => run(),
@@ -40,13 +50,21 @@ function setup() {
     maybeEmitWebchatTts: async () => null,
     enqueueProvisionalSessionTitle: title,
   } as unknown as ProcessDirectStreamingDeps;
-  return { deps, title };
+  return { deps, title, buildTranscriptUserMessage };
 }
 
 describe('direct stream input visibility', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.resume.mockReturnValue(undefined);
+    mocks.isVoice.mockReturnValue(false);
+    mocks.voiceInspection.mockReturnValue(false);
+    mocks.voiceMerge.mockImplementation(async (_attachments: unknown, text: string) => ({
+      text,
+      inboundVoice: false,
+      voiceTranscripts: [],
+      transcribedMediaUris: [],
+    }));
     mocks.run.mockImplementation(async (_deps, input) => {
       input.onEvent({ type: 'message_end', message: { role: 'assistant', content: 'Resumed' } });
       return { ok: true, lastAssistantText: 'Resumed' };
@@ -79,6 +97,35 @@ describe('direct stream input visibility', () => {
     expect(title).toHaveBeenCalledWith('agent:main:main', 'Check Gmail');
     expect(mocks.pending).toHaveBeenCalledOnce();
     expect(mocks.clearPending).toHaveBeenCalledOnce();
+  });
+
+  it('suppresses read_media prompts for successfully transcribed voice while retaining its media', async () => {
+    const uri = 'media://inbound/voice.m4a';
+    const media = [{
+      id: 'voice-1', bucket: 'inbound', type: 'voice', mimeType: 'audio/mp4',
+      uri, name: 'voice.m4a', size: 3, path: '/tmp/voice.m4a',
+    }];
+    mocks.isVoice.mockReturnValue(true);
+    mocks.voiceMerge.mockResolvedValue({
+      text: '转写后的内容',
+      inboundVoice: true,
+      voiceTranscripts: ['转写后的内容'],
+      transcribedMediaUris: [uri],
+    });
+    const { deps, buildTranscriptUserMessage } = setup();
+    deps.prepareInboundAttachments = vi.fn(async () => media);
+
+    for await (const _event of runProcessDirectStreaming(deps, {
+      content: '', conversationId: 'agent:main:voice', runId: 'voice-run',
+      origin: { type: 'system', source: 'internal' },
+      attachments: media,
+    })) { /* drain */ }
+
+    const options = buildTranscriptUserMessage.mock.calls[0]?.[3] as {
+      suppressMediaPromptUris?: ReadonlySet<string>;
+    };
+    expect(options.suppressMediaPromptUris?.has(uri)).toBe(true);
+    expect(buildTranscriptUserMessage.mock.calls[0]?.[1]).toEqual(media);
   });
 
   it('exposes a session-bound note as visible and persisted turn context', async () => {

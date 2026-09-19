@@ -47,9 +47,27 @@ function resolveLockDir(): string {
 }
 
 // Generate lock file path based on config path
-function resolveLockPath(configPath: string): string {
+export function resolveGatewayLockPath(configPath: string): string {
   const hash = createHash("sha256").update(configPath).digest("hex").slice(0, 8);
   return path.join(resolveLockDir(), `gateway.${hash}.lock`);
+}
+
+export function isGatewayConfigLockedByAnotherProcessSync(
+  configPath: string,
+  currentPid = process.pid,
+): boolean {
+  const lockPath = resolveGatewayLockPath(configPath);
+  try {
+    const parsed = JSON.parse(fsSync.readFileSync(lockPath, 'utf8')) as Partial<LockPayload>;
+    if (typeof parsed.pid !== 'number' || parsed.pid === currentPid || parsed.configPath !== configPath) {
+      return false;
+    }
+    if (!isPidAlive(parsed.pid)) return false;
+    if (process.platform !== 'linux' || !Number.isFinite(parsed.startTime)) return true;
+    return readLinuxStartTime(parsed.pid) === parsed.startTime;
+  } catch {
+    return false;
+  }
 }
 
 // Check if port is available
@@ -156,7 +174,7 @@ export async function acquireGatewayLock(
   const staleMs = opts.staleMs ?? DEFAULT_STALE_MS;
   const port = opts.port;
 
-  const lockPath = resolveLockPath(configPath);
+  const lockPath = resolveGatewayLockPath(configPath);
   await fs.mkdir(path.dirname(lockPath), { recursive: true });
 
   const startedAt = Date.now();

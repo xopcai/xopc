@@ -201,6 +201,7 @@ export class InboundLoop {
       await this.cfg.sessionContextManager.runWith(sessionContext, async () => {
         // `subscribeToSession` requires an Agent instance; without this the first inbound never
         // registers `message_update` streaming (second turn behaved differently).
+        await this.cfg.agentManager.ensureMemoryReadyForSession?.(sessionContext.conversationId);
         this.cfg.agentManager.getOrCreateAgent(sessionContext.conversationId);
         this.cfg.setupSessionEventHandling(sessionContext.conversationId);
 

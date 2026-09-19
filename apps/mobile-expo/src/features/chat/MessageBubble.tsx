@@ -328,6 +328,14 @@ export const MessageBubble = memo(function MessageBubble({
     return attachments.filter(attachment => attachment.type !== 'voice'
       && attachment.type !== 'audio' && !attachment.mimeType?.startsWith('audio/'));
   }, [message.attachments, userAudio.length]);
+  const isVoiceOnly = isUser
+    && userAudio.length > 0
+    && !userText.trim()
+    && userAttachments.length === 0
+    && !message.contextRefs?.length;
+  const userBubbleColor = isDark
+    ? chatColors.userBubbleBgDark
+    : chatColors.userBubbleBg;
 
   const displayContent = useMemo(
     () => (isAssistant
@@ -573,13 +581,18 @@ export const MessageBubble = memo(function MessageBubble({
           <View
             style={[
               chatLayout.userBubble,
+              isVoiceOnly && styles.userVoiceBubble,
               {
-                backgroundColor: isDark
-                  ? chatColors.userBubbleBgDark
-                  : chatColors.userBubbleBg,
+                backgroundColor: userBubbleColor,
               },
             ]}
           >
+            {isVoiceOnly ? (
+              <View
+                pointerEvents="none"
+                style={[styles.userVoiceTail, { borderLeftColor: userBubbleColor }]}
+              />
+            ) : null}
             {message.contextRefs?.length ? (
               <View style={styles.noteReferenceList} accessibilityLabel={m.chat.references.title}>
                 {message.contextRefs.map((ref) => (
@@ -624,6 +637,7 @@ export const MessageBubble = memo(function MessageBubble({
                     audio={block}
                     conversationId={conversationId}
                     align="end"
+                    variant="voice"
                   />
                 ))}
               </View>
@@ -719,6 +733,24 @@ const styles = StyleSheet.create({
   userVoiceStack: {
     alignItems: 'flex-end',
     gap: 8,
+  },
+  userVoiceBubble: {
+    minHeight: 48,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  userVoiceTail: {
+    position: 'absolute',
+    right: -6,
+    top: 14,
+    width: 0,
+    height: 0,
+    borderTopWidth: 6,
+    borderBottomWidth: 6,
+    borderLeftWidth: 7,
+    borderTopColor: 'transparent',
+    borderBottomColor: 'transparent',
   },
   metaRow: {
     flexDirection: 'row',
