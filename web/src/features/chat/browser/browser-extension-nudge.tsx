@@ -52,7 +52,7 @@ export function BrowserExtensionNudge({ enabled }: { enabled: boolean }) {
       className="flex flex-col gap-3 rounded-2xl border border-edge bg-surface-base px-4 py-3 transition-opacity duration-200 motion-reduce:transition-none sm:flex-row sm:items-center sm:px-5"
     >
       <div className="flex min-w-0 flex-1 items-start gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-surface-subtle text-fg" aria-hidden>
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-surface-inset text-fg" aria-hidden>
           <Puzzle className="size-5" strokeWidth={1.75} />
         </span>
         <div className="min-w-0 flex-1">

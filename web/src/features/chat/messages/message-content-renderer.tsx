@@ -66,16 +66,16 @@ function ReviewBlock({ review }: { review: ReviewContent }) {
       ? 'border-red-500/30 bg-red-500/5 text-red-700 dark:text-red-300'
       : review.overallCorrectness === 'patch is correct'
         ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300'
-        : 'border-edge bg-surface-muted text-fg-secondary';
+        : 'border-edge bg-surface-inset text-fg-secondary';
   return (
-    <div className="min-w-0 rounded-lg border border-edge bg-surface-subtle p-3">
+    <div className="min-w-0 rounded-lg border border-edge bg-surface-inset p-3">
       <div className="flex flex-wrap items-center gap-2">
         {isRunning ? <Loader2 className="size-4 animate-spin text-accent" aria-hidden /> : null}
         <div className="text-sm font-semibold text-fg-primary">
           {isRunning ? 'Reviewing changes' : 'Code review finished'}
         </div>
         {isRunning ? (
-          <div className="rounded-md border border-edge bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-fg-secondary">
+          <div className="rounded-md border border-edge bg-surface-inset px-1.5 py-0.5 text-[11px] font-medium text-fg-secondary">
             {isPreparing ? 'Collecting changes' : 'Review assistant'}
           </div>
         ) : (
@@ -116,7 +116,7 @@ function ReviewBlock({ review }: { review: ReviewContent }) {
             return (
               <div key={`${finding.title}-${index}`} className="rounded-md border border-edge bg-surface p-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded border border-edge bg-surface-muted px-1.5 py-0.5 text-[11px] font-semibold text-fg-secondary">
+                  <span className="rounded border border-edge bg-surface-inset px-1.5 py-0.5 text-[11px] font-semibold text-fg-secondary">
                     P{finding.priority}
                   </span>
                   <span className="min-w-0 text-sm font-medium text-fg-primary">{finding.title}</span>

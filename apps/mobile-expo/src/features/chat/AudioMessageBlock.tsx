@@ -166,7 +166,8 @@ export const AudioMessageBlock = memo(function AudioMessageBlock({
         claimAudioPlayback(playbackOwnerId, () => player.pause());
         player.play();
       }
-    } catch {
+    } catch (cause) {
+      console.warn('[AudioMessageBlock] Playback failed', cause);
       releaseAudioPlayback(playbackOwnerId);
       setError(m.chat.audioPlaybackFailed);
       setPlaying(false);

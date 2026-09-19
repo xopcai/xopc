@@ -38,7 +38,7 @@ export function LogsFiltersDialog({
         />
         <Dialog.Content
           className={cn(
-            'xopc-dialog-content fixed left-1/2 top-1/2 flex max-h-[min(32rem,90vh)] w-[min(100%-2rem,22rem)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border border-edge bg-surface-panel shadow-popover outline-none',
+            'xopc-dialog-content fixed left-1/2 top-1/2 flex max-h-[min(32rem,90vh)] w-[min(100%-2rem,22rem)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border border-edge bg-surface-overlay shadow-popover outline-none',
             SETTINGS_SHELL_CONTENT_Z,
             'dark:border-edge',
           )}

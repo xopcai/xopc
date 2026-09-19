@@ -109,7 +109,7 @@ export function DatePicker({
           collisionPadding={12}
           className={cn(
             popoverZ,
-            'w-[19rem] rounded-2xl bg-surface-panel p-3 shadow-float outline-none',
+            'w-[19rem] rounded-2xl border border-edge bg-surface-overlay p-3 shadow-float outline-none',
           )}
         >
           <div className="flex h-10 items-center justify-between gap-2 px-1">
@@ -182,7 +182,7 @@ export function DatePicker({
               {language === 'zh' ? '今天' : 'Today'}
             </button>
           </div>
-          <Popover.Arrow className="fill-surface-panel" />
+          <Popover.Arrow className="fill-surface-overlay" />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

@@ -39,7 +39,7 @@ export function ConnectorRuntimeSettingsDialog({
         <Dialog.Content
           className={cn(
             'xopc-dialog-content fixed left-1/2 top-1/2 z-[60] flex h-[min(32rem,calc(100vh-2rem))] w-[min(100%-2rem,38rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden',
-            'rounded-2xl border border-edge bg-surface-panel shadow-float dark:border-edge',
+            'rounded-2xl border border-edge bg-surface-overlay shadow-float dark:border-edge',
           )}
         >
           <div className="flex shrink-0 items-start justify-between gap-3 border-b border-edge-subtle px-6 py-5">

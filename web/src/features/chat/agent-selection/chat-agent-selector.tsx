@@ -142,7 +142,7 @@ export function ChatAgentSelector({
               onChange={(e) => setQuery(e.target.value)}
               placeholder={searchPlaceholder}
               className={cn(
-                'w-full rounded-md border border-edge bg-surface-elevated px-2.5 py-1.5 text-sm text-fg placeholder:text-fg-muted',
+                'w-full rounded-md border border-edge bg-surface-panel px-2.5 py-1.5 text-sm text-fg placeholder:text-fg-muted',
                 formControlBorderFocusClass,
               )}
               aria-label={searchPlaceholder}

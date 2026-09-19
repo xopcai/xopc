@@ -128,7 +128,7 @@ export function SupportReportDialog({
         <Dialog.Content
           className={cn(
             'xopc-dialog-content fixed left-1/2 top-1/2 z-[221] flex h-[min(42rem,calc(100vh-2rem))] w-[min(42rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden',
-            'rounded-2xl border border-edge bg-surface-panel shadow-popover dark:border-edge',
+            'rounded-2xl border border-edge bg-surface-overlay shadow-popover dark:border-edge',
           )}
         >
           <header className="flex shrink-0 items-start justify-between gap-4 border-b border-edge px-5 py-4">

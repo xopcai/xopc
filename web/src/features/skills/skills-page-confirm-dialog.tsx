@@ -27,7 +27,7 @@ export function SkillsPageConfirmDialog({
     >
       <Dialog.Portal>
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
-        <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[60] w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge">
+        <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[60] w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-overlay p-4 shadow-popover dark:border-edge">
           <Dialog.Title className="text-base font-semibold text-fg">{sk.deleteTitle}</Dialog.Title>
           <p className="mt-2 text-sm text-fg-muted">
             {confirmId ? interpolate(sk.deleteMessage, { id: confirmId }) : ''}

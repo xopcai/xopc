@@ -304,7 +304,7 @@ export function SharePreviewPage() {
               {' · '}{t.expiresAt}{' '}{new Date(noteView.expiresAt).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US')}
             </div>
             {noteView.description ? (
-              <p className="mt-5 rounded-lg bg-surface-subtle px-4 py-3 text-sm leading-6 text-fg-muted">{noteView.description}</p>
+              <p className="mt-5 rounded-lg bg-surface-inset px-4 py-3 text-sm leading-6 text-fg-muted">{noteView.description}</p>
             ) : null}
             <MarkdownView content={blockRemoteMarkdownImages(noteView.markdown, t.remoteImageBlocked)} className="mt-8" />
             <footer className="mt-10 border-t border-edge-subtle pt-4 text-center text-xs text-fg-subtle">{t.sharedVia}</footer>
@@ -323,7 +323,7 @@ export function SharePreviewPage() {
               {sessionView.messages.map((message) => (
                 <section key={message.id} className={message.role === 'user' ? 'ml-auto max-w-[85%]' : 'mr-auto max-w-full'}>
                   <div className="mb-1 text-xs font-medium text-fg-subtle">{message.role === 'user' ? t.you : t.assistant}</div>
-                  <div className={message.role === 'user' ? 'rounded-2xl bg-surface-subtle px-4 py-3' : 'px-1 py-1'}>
+                  <div className={message.role === 'user' ? 'rounded-2xl bg-surface-inset px-4 py-3' : 'px-1 py-1'}>
                     <MarkdownView content={blockRemoteMarkdownImages(message.markdown, t.remoteImageBlocked)} />
                     {sessionView.attachments.filter((attachment) => message.attachmentIds.includes(attachment.id)).map((attachment) => (
                       <SharedSessionAttachment key={attachment.id} attachment={attachment} />

@@ -38,7 +38,7 @@ export function AssistantTurnTasks({
 
       {view.sources.length > 0 ? (
         <section
-          className="rounded-lg bg-surface-elevated/10 px-3 py-2.5"
+          className="rounded-lg bg-surface-panel/10 px-3 py-2.5"
           aria-label={sourcesLabel}
         >
           <SearchSourceList sources={view.sources} className="" />

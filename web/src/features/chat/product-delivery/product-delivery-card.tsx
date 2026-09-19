@@ -126,7 +126,7 @@ export function ProductDeliveryCard({
     return (
       <section
         className={cn(
-          'mt-2 overflow-hidden rounded-lg border bg-surface-raised',
+          'mt-2 overflow-hidden rounded-lg border bg-surface-inset',
           isFailure ? 'border-red-300/70 dark:border-red-500/35' : 'border-edge',
         )}
         aria-label={`${OPERATION_LABELS[delivery.operation][language]} ${KIND_LABELS[reference.kind][language]}`}
@@ -175,7 +175,7 @@ export function ProductDeliveryCard({
         'mt-2 overflow-hidden rounded-xl',
         isFailure
           ? 'border border-red-300/70 bg-danger-soft/30 dark:border-red-500/35'
-          : 'bg-surface-elevated/20',
+          : 'bg-surface-panel/20',
       )}
       aria-label={`${OPERATION_LABELS[delivery.operation][language]} ${KIND_LABELS[reference.kind][language]}`}
     >

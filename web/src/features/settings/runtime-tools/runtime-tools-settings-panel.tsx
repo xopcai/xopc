@@ -251,7 +251,7 @@ export function RuntimeToolsSettingsPanel() {
                       if (runtime === 'uv') setDraft({ ...draft, uv: { ...draft.uv, version } });
                       else updateLanguage(runtime, { version });
                     }}
-                    className="h-10 w-full rounded-lg border border-edge bg-surface-subtle px-3 text-sm text-fg outline-none focus:border-edge-strong"
+                    className="h-10 w-full rounded-lg border border-edge bg-surface-inset px-3 text-sm text-fg outline-none focus:border-edge-strong"
                   />
                 </label>
 

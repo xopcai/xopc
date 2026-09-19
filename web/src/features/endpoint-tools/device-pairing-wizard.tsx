@@ -83,8 +83,8 @@ function DeviceKindChooser({ onChoose, onChooseLocalBrowser, onClose }: {
   const language = useLocaleStore(s => s.language);
   const copy = messages(language).endpointToolsSettings.deviceAccess;
   return <Dialog.Portal>
-    <Dialog.Overlay className={cn('fixed inset-0 bg-scrim backdrop-blur-[1px]', SETTINGS_SHELL_OVERLAY_Z)} />
-    <Dialog.Content className={cn('fixed left-1/2 top-1/2 flex h-[min(28rem,calc(100dvh-2rem))] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-popover', SETTINGS_SHELL_CONTENT_Z)}>
+    <Dialog.Overlay className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim backdrop-blur-[1px]', SETTINGS_SHELL_OVERLAY_Z)} />
+    <Dialog.Content className={cn('xopc-dialog-content fixed left-1/2 top-1/2 flex h-[min(28rem,calc(100dvh-2rem))] w-[min(40rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay', SETTINGS_SHELL_CONTENT_Z)}>
       <header className="flex shrink-0 items-center justify-between border-b border-edge-subtle px-6 py-3">
         <span className="text-lg font-semibold tracking-tight text-fg">xopc</span>
         <button type="button" className="flex size-10 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover" aria-label={copy.cancel} onClick={onClose}><X className="size-4" /></button>
@@ -216,8 +216,8 @@ function DevicePairingWizardContent({ targetKind, onClose, onPaired }: {
     finally { if (mounted.current) setBusy(false); }
   };
   return <Dialog.Portal>
-    <Dialog.Overlay className={cn('fixed inset-0 bg-scrim backdrop-blur-[1px]', SETTINGS_SHELL_OVERLAY_Z)} />
-    <Dialog.Content className={cn('fixed left-1/2 top-1/2 flex h-[min(600px,calc(100dvh-48px))] w-[min(560px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-popover', SETTINGS_SHELL_CONTENT_Z)}>
+    <Dialog.Overlay className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim backdrop-blur-[1px]', SETTINGS_SHELL_OVERLAY_Z)} />
+    <Dialog.Content className={cn('xopc-dialog-content fixed left-1/2 top-1/2 flex h-[min(600px,calc(100dvh-48px))] w-[min(560px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay', SETTINGS_SHELL_CONTENT_Z)}>
       <header className="flex shrink-0 items-center justify-between border-b border-edge-subtle px-6 py-3">
         <span className="text-lg font-semibold tracking-tight text-fg">xopc</span>
         <button type="button" className="flex size-10 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover" aria-label={f.cancel} onClick={onClose}><X className="size-4" /></button>

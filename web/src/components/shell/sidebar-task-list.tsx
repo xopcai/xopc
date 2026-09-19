@@ -1511,7 +1511,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
       >
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
-          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex h-[min(30rem,calc(100vh-2rem))] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] flex h-[min(30rem,calc(100vh-2rem))] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-float focus:outline-none">
             <div className="shrink-0 border-b border-edge px-5 py-4">
               <Dialog.Title className="text-base font-semibold text-fg">{projectsText.createTitle}</Dialog.Title>
               <Dialog.Description className="mt-1 text-sm text-fg-muted">
@@ -1595,7 +1595,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
       <Dialog.Root open={renameKey !== null} onOpenChange={(o) => !o && setRenameKey(null)}>
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
-          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[60] w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge">
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[60] w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-overlay p-4 shadow-popover dark:border-edge">
             <Dialog.Title className="text-base font-semibold text-fg">{sb.taskRenameTitle}</Dialog.Title>
             <label className="mt-3 block text-xs font-medium text-fg-subtle" htmlFor="sidebar-rename-input">
               {sb.taskRenamePlaceholder}
@@ -1633,7 +1633,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
       <Dialog.Root open={deleteKey !== null} onOpenChange={(o) => !o && setDeleteKey(null)}>
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
-          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[60] w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge">
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[60] w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-overlay p-4 shadow-popover dark:border-edge">
             <Dialog.Title className="text-base font-semibold text-fg">{sess.deleteSessionTitle}</Dialog.Title>
             <p className="mt-2 text-sm text-fg-muted">
               {deleteKey
@@ -1665,7 +1665,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
       <Dialog.Root open={renameProjectId !== null} onOpenChange={(o) => !o && setRenameProjectId(null)}>
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
-          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[60] w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge">
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[60] w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-overlay p-4 shadow-popover dark:border-edge">
             <Dialog.Title className="text-base font-semibold text-fg">{sb.projectRenameTitle}</Dialog.Title>
             <label className="mt-3 block text-xs font-medium text-fg-subtle" htmlFor="sidebar-project-rename-input">
               {sb.projectRenamePlaceholder}
@@ -1708,7 +1708,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
       <Dialog.Root open={removeProjectId !== null} onOpenChange={(o) => !o && setRemoveProjectId(null)}>
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
-          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[60] w-[min(100%-2rem,26rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge">
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[60] w-[min(100%-2rem,26rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-overlay p-4 shadow-popover dark:border-edge">
             <Dialog.Title className="text-base font-semibold text-fg">{sb.projectRemoveTitle}</Dialog.Title>
             <p className="mt-2 text-sm leading-relaxed text-fg-muted">
               {removeProjectTarget

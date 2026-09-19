@@ -43,11 +43,11 @@ export type BuiltinNavDef = {
  */
 export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
   { id: 'builtin:home', to: '/', Icon: Home },
-  { id: 'builtin:projects', to: '/projects', Icon: FolderKanban },
-  { id: 'builtin:notes', to: '/notes', Icon: StickyNote },
-  { id: 'builtin:automations', to: '/automations', Icon: Zap },
   { id: 'builtin:skills', to: '/skills', Icon: Layers },
   { id: 'builtin:connectors', to: '/connectors', Icon: Cable },
+  { id: 'builtin:automations', to: '/automations', Icon: Zap },
+  { id: 'builtin:projects', to: '/projects', Icon: FolderKanban },
+  { id: 'builtin:notes', to: '/notes', Icon: StickyNote },
   { id: 'builtin:agents', to: '/agents', Icon: Users },
   { id: 'builtin:channels', to: '/channels', Icon: Plug },
   { id: 'builtin:workflows', to: '/workflows', Icon: GitBranch },
@@ -60,14 +60,16 @@ export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
 /** Product-level destinations shown by default; advanced capabilities live under More. */
 export const PRIMARY_NAV_IDS = [
   'builtin:home',
+  'builtin:skills',
+  'builtin:connectors',
+  'builtin:automations',
   'builtin:projects',
-  'builtin:notes',
 ] as const satisfies readonly BuiltinNavId[];
 
 /** Adjustable shortcut-row bounds, excluding "New chat" and "More". */
 export const MIN_VISIBLE_NAV_ITEMS = 2;
 export const DEFAULT_VISIBLE_NAV_ITEMS = PRIMARY_NAV_IDS.length;
-export const MAX_VISIBLE_NAV_ITEMS = 4;
+export const MAX_VISIBLE_NAV_ITEMS = 5;
 
 export type ReconciledNav = {
   visible: NavItem[];

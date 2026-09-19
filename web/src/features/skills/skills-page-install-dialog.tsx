@@ -55,7 +55,7 @@ export function SkillsPageInstallDialog(p: Props) {
         <Dialog.Content
           className={cn(
             'xopc-dialog-content fixed left-1/2 top-1/2 z-[60] max-h-[min(100vh-2rem,44rem)] w-[min(100%-2rem,min(92vw,48rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto',
-            'rounded-2xl border border-edge bg-surface-panel p-6 shadow-float dark:border-edge',
+            'rounded-2xl border border-edge bg-surface-overlay p-6 shadow-float dark:border-edge',
           )}
         >
           <div className="flex items-start justify-between gap-3">

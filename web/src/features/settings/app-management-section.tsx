@@ -386,9 +386,9 @@ export function AppManagementSection({
           />
           <Dialog.Content
             className={cn(
-              'fixed left-1/2 top-1/2 w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2',
+              'xopc-dialog-content fixed left-1/2 top-1/2 w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2',
               SETTINGS_SHELL_CONTENT_Z,
-              'rounded-2xl border border-edge bg-surface-panel p-6 shadow-popover outline-none dark:border-edge',
+              'rounded-2xl border border-edge bg-surface-overlay p-6 shadow-popover outline-none dark:border-edge',
             )}
             onOpenAutoFocus={(e) => e.preventDefault()}
           >
@@ -474,9 +474,9 @@ export function AppManagementSection({
             />
             <Dialog.Content
               className={cn(
-                'fixed left-1/2 top-1/2 w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2',
+                'xopc-dialog-content fixed left-1/2 top-1/2 w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2',
                 SETTINGS_SHELL_CONTENT_Z,
-                'rounded-2xl border border-edge bg-surface-panel p-6 shadow-popover outline-none dark:border-edge',
+                'rounded-2xl border border-edge bg-surface-overlay p-6 shadow-popover outline-none dark:border-edge',
               )}
               onOpenAutoFocus={(e) => e.preventDefault()}
             >

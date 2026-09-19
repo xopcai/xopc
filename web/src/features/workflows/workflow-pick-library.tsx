@@ -56,12 +56,12 @@ function WorkflowLibraryCard({
           <div className="flex flex-wrap items-center gap-1.5">
             <span className={cn(
               'rounded-full px-2 py-0.5 text-[10px] font-medium',
-              isUser ? 'bg-accent-soft text-accent-fg' : 'bg-surface-muted text-fg-muted',
+              isUser ? 'bg-accent-soft text-accent-fg' : 'bg-surface-inset text-fg-muted',
             )}>
               {isUser ? labels.badgeUser : labels.badgeBuiltin}
             </span>
             {definition.inputSchema ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-surface-muted px-2 py-0.5 text-[10px] text-fg-subtle">
+              <span className="inline-flex items-center gap-1 rounded-full bg-surface-inset px-2 py-0.5 text-[10px] text-fg-subtle">
                 <Braces className="size-2.5" aria-hidden />
                 {labels.inputSchemaBadge}
               </span>
@@ -201,7 +201,7 @@ export function WorkflowPickLibrary({
               <p className="mt-1 text-xs text-fg-muted">{interpolate(labels.workflowCount, { count: filtered.length })}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex rounded-lg bg-surface-muted p-0.5" role="group" aria-label={labels.sourceFilterAria}>
+              <div className="flex rounded-lg bg-surface-inset p-0.5" role="group" aria-label={labels.sourceFilterAria}>
                 {WORKFLOW_SOURCE_FILTERS.map((source) => (
                   <button
                     key={source}

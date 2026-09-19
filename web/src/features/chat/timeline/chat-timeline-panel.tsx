@@ -161,7 +161,7 @@ export function ChatTimelinePanel({
         <Dialog.Content
           className={cn(
             'xopc-dialog-content-pane fixed inset-x-2 bottom-[max(.5rem,env(safe-area-inset-bottom))] z-[90] flex h-[min(72dvh,34rem)] flex-col overflow-hidden',
-            'rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none',
+            'rounded-2xl border border-edge bg-surface-overlay shadow-popover outline-none',
             'sm:left-auto sm:right-3 sm:w-[min(24rem,calc(100vw-1.5rem))]',
             'md:bottom-[max(1rem,env(safe-area-inset-bottom))] md:right-4 md:h-[min(calc(100dvh-6rem),40rem)]',
             'xl:hidden',

@@ -101,7 +101,7 @@ export function MermaidPreviewDialog({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[90] bg-scrim/90 backdrop-blur-sm" />
         <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-[91] flex h-[min(92dvh,64rem)] w-[min(96vw,96rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float outline-none"
+          className="xopc-dialog-content fixed left-1/2 top-1/2 z-[91] flex h-[min(92dvh,64rem)] w-[min(96vw,96rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-overlay outline-none"
         >
           <div className="flex shrink-0 items-center gap-2 border-b border-edge px-3 py-2">
             <Dialog.Title className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">

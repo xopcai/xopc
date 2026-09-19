@@ -29,6 +29,8 @@ import {
   setSessionConfig,
   appendTranscriptEntry,
   appendCompactionBoundaryIfUnchanged,
+  appendMediaToAssistantTranscriptEntry,
+  findLatestAssistantTranscriptEntryId,
   loadCompactionSourceSnapshot,
   paginateTranscriptMessages,
   searchSessionTranscript,
@@ -344,6 +346,42 @@ describe('sqlite repositories', () => {
 
     const rows = loadTranscriptRowsForSession(CONVERSATION_ID);
     expect(rows).toEqual([userMessage('replacement')]);
+  });
+
+  it('attaches media to one assistant entry without rewriting neighboring rows', () => {
+    ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: 'main' });
+    appendTranscriptEntry(CONVERSATION_ID, userMessage('question'));
+    const first = appendTranscriptEntry(CONVERSATION_ID, assistantMessage('first answer'));
+    const second = appendTranscriptEntry(CONVERSATION_ID, assistantMessage('second answer'));
+    const media = {
+      id: 'reply.mp3',
+      bucket: 'tts' as const,
+      type: 'voice' as const,
+      mimeType: 'audio/mpeg',
+      name: 'reply.mp3',
+      size: 6,
+      uri: 'media://tts/reply.mp3' as const,
+      path: '/tmp/reply.mp3',
+    };
+
+    expect(findLatestAssistantTranscriptEntryId(CONVERSATION_ID)).toBe(second.entry_id);
+    expect(appendMediaToAssistantTranscriptEntry(CONVERSATION_ID, first.entry_id, media)).toBe(true);
+    expect(appendMediaToAssistantTranscriptEntry(CONVERSATION_ID, first.entry_id, media)).toBe(true);
+
+    const rows = loadTranscriptRowsForSession(CONVERSATION_ID) as Array<AgentMessage & { media?: unknown[] }>;
+    expect(rows[1]).toMatchObject({ role: 'assistant', content: 'first answer', media: [media] });
+    expect(rows[2]).toEqual(assistantMessage('second answer'));
+  });
+
+  it('refuses to mutate an assistant entry after the session transcript resets', () => {
+    ensureSessionRecord(CONVERSATION_ID, CWD, { agentId: 'main' });
+    const assistant = appendTranscriptEntry(CONVERSATION_ID, assistantMessage('old answer'));
+    resetSessionRecord(CONVERSATION_ID, CWD);
+
+    expect(appendMediaToAssistantTranscriptEntry(CONVERSATION_ID, assistant.entry_id, {
+      id: 'reply.mp3', bucket: 'tts', type: 'voice', mimeType: 'audio/mpeg', name: 'reply.mp3',
+      size: 6, uri: 'media://tts/reply.mp3', path: '/tmp/reply.mp3',
+    })).toBe(false);
   });
 
   it('resets session with new session id while keeping session key', () => {

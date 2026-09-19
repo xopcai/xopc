@@ -19,7 +19,7 @@ function InputField({ name, input, value, yes, no, onChange }: {
     return <label className="block text-sm text-fg"><span className="mb-1.5 block font-medium">{label}{input.required ? ' *' : ''}</span><PopoverSelect value={typeof value === 'boolean' ? String(value) : ''} options={[{ value: 'true', label: yes }, { value: 'false', label: no }]} placeholder={label} onChange={(next) => onChange(next === 'true')} /></label>;
   }
   const numeric = input.type === 'number';
-  return <label className="block text-sm text-fg"><span className="mb-1.5 block font-medium">{label}{input.required ? ' *' : ''}</span><input type={numeric ? 'number' : 'text'} value={value === undefined ? '' : String(value)} onChange={(event) => onChange(numeric ? (event.target.value === '' ? undefined : Number(event.target.value)) : event.target.value)} className="h-10 w-full rounded-lg border border-edge bg-surface-subtle px-3 text-sm text-fg outline-none focus:border-accent" /></label>;
+  return <label className="block text-sm text-fg"><span className="mb-1.5 block font-medium">{label}{input.required ? ' *' : ''}</span><input type={numeric ? 'number' : 'text'} value={value === undefined ? '' : String(value)} onChange={(event) => onChange(numeric ? (event.target.value === '' ? undefined : Number(event.target.value)) : event.target.value)} className="h-10 w-full rounded-lg border border-edge bg-surface-inset px-3 text-sm text-fg outline-none focus:border-accent" /></label>;
 }
 
 export function BrowserAutomationInputFields({ automation, values, language, onChange }: {

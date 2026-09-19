@@ -52,7 +52,7 @@ export function DeviceAccessSection() {
     <div className="mt-5 divide-y divide-edge-subtle">
       {devices.isLoading ? <><Skeleton className="h-16" /><Skeleton className="h-16" /></> : active.length === 0 ? <p className="text-sm text-fg-muted">{copy.empty}</p> : active.map(device => <div key={device.id} className="flex items-center justify-between gap-3 py-4">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-subtle text-fg-muted">{device.platform === 'chrome' ? <PanelRight className="size-4" /> : <Smartphone className="size-4" />}</span>
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-inset text-fg-muted">{device.platform === 'chrome' ? <PanelRight className="size-4" /> : <Smartphone className="size-4" />}</span>
           <div className="min-w-0"><p className="truncate text-sm font-medium text-fg">{device.displayName}</p><p className="mt-1 text-xs text-fg-muted">{device.platform === 'chrome' ? copy.browserTitle : copy.mobileTitle} · {copy.lastSeen}: {device.lastSeenAt ? new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short' }).format(device.lastSeenAt) : copy.never}</p></div>
         </div>
         <Button variant="ghost" onClick={() => setCandidate(device)}><ShieldOff className="size-4" />{copy.revoke}</Button>

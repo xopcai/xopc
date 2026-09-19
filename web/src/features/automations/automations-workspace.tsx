@@ -1025,7 +1025,7 @@ export function AutomationsWorkspace({
       >
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim backdrop-blur-[1px]" />
-          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-66 flex h-[min(760px,calc(100vh-2rem))] w-[min(100%-2rem,48rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-66 flex h-[min(760px,calc(100vh-2rem))] w-[min(100%-2rem,48rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-popover outline-none">
             <div className="flex items-center justify-between gap-3 border-b border-edge px-5 py-4">
               <Dialog.Title className="text-base font-semibold text-fg">
                 {createMode === 'draft'
@@ -1153,7 +1153,7 @@ export function AutomationsWorkspace({
       >
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim backdrop-blur-[1px]" />
-          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-66 flex h-[min(85vh,40rem)] w-[min(100%-2rem,32rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-66 flex h-[min(85vh,40rem)] w-[min(100%-2rem,32rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-popover outline-none">
             <div className="flex items-center justify-between gap-3 border-b border-edge px-4 py-3">
               <Dialog.Title className="truncate text-base font-semibold text-fg">
                 {selectedRun?.automationName ?? labels.dashboard.result}
@@ -1529,7 +1529,7 @@ function JsonDetails({
   const preview = isLong ? `${json.split('\n').slice(0, 10).join('\n').trimEnd()}...` : json;
 
   return (
-    <div className="mt-2 rounded-md border border-edge/70 bg-surface-muted/35">
+    <div className="mt-2 rounded-md border border-edge/70 bg-surface-inset/35">
       {isLong ? (
         <button
           type="button"
@@ -1650,7 +1650,7 @@ function RunDiagnosticsPanel({
           ) : null}
         </div>
         <div className={cn(
-          'mt-3 max-h-80 overflow-y-auto rounded-lg border border-edge/70 bg-surface-muted/25 p-3',
+          'mt-3 max-h-80 overflow-y-auto rounded-lg border border-edge/70 bg-surface-inset/25 p-3',
           run.error && 'border-red-500/25 bg-red-500/5',
         )}>
           {result ? (
@@ -1743,7 +1743,7 @@ function RunDiagnosticsPanel({
                       {formatDate(event.createdAtMs, labels, language)} · {event.type}
                     </div>
                     {event.data && typeof event.data === 'object' ? (
-                      <details className="group/event mt-2 rounded-md border border-edge/70 bg-surface-muted/35">
+                      <details className="group/event mt-2 rounded-md border border-edge/70 bg-surface-inset/35">
                         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-2.5 py-2 text-xs font-medium text-fg-muted outline-none hover:text-fg">
                           {labels.details.eventData}
                           <ChevronDown className="size-3.5 transition-transform group-open/event:rotate-180" />
@@ -2564,7 +2564,7 @@ function AutomationForm({
             <input className={inputClass} inputMode="numeric" value={form.disableAfterFailures} onChange={(e) => update({ disableAfterFailures: e.target.value })} />
           </Field>
         </div>
-        <div className="rounded-lg border border-edge bg-surface-muted/40 px-3 py-2.5">
+        <div className="rounded-lg border border-edge bg-surface-inset/40 px-3 py-2.5">
           <p className="text-xs font-medium text-fg">{labels.form.effectivePolicy}</p>
           <p className="mt-1 text-xs text-fg-muted">
             {labels.form.executionDeadline}: {form.timeoutSeconds || '—'}s

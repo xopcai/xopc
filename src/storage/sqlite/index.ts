@@ -244,7 +244,9 @@ export {
 } from './session-repository.js';
 export {
   appendCompactionBoundaryIfUnchanged,
+  appendMediaToAssistantTranscriptEntry,
   appendTranscriptEntry,
+  findLatestAssistantTranscriptEntryId,
   listCompactionBoundaries,
   loadLlmMessagesForSession,
   loadTranscriptHistoryRowsForSession,

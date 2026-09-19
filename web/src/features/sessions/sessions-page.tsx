@@ -793,7 +793,7 @@ export function SessionsPage() {
           />
           <Dialog.Content
             className={cn(
-              'xopc-dialog-content fixed left-1/2 top-1/2 w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge',
+              'xopc-dialog-content fixed left-1/2 top-1/2 w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-overlay p-4 shadow-popover dark:border-edge',
               SETTINGS_SHELL_CONTENT_Z,
             )}
           >

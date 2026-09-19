@@ -493,7 +493,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn({ elevated = false 
             </div>
 
             {fileSearchOpen ? (
-              <div className="shrink-0 border-b border-edge bg-surface-muted/40 px-3 py-2">
+              <div className="shrink-0 border-b border-edge bg-surface-inset/40 px-3 py-2">
                 <div className="flex h-9 items-center gap-2 rounded-md border border-edge bg-surface-panel px-2 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20">
                   <Search className="size-4 shrink-0 text-fg-subtle" strokeWidth={1.75} aria-hidden />
                   <input

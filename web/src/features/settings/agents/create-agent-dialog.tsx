@@ -36,7 +36,7 @@ export function CreateAgentDialog({
         <Dialog.Overlay className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)} />
         <Dialog.Content className={cn(
           'xopc-dialog-content fixed left-1/2 top-1/2 w-[min(92vw,32rem)] -translate-x-1/2 -translate-y-1/2',
-          'overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover',
+          'overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-popover',
           SETTINGS_SHELL_CONTENT_Z,
         )}>
           <header className="flex items-start justify-between gap-4 border-b border-edge px-5 py-4">

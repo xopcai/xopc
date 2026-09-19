@@ -7,6 +7,21 @@ import {
 } from '../webchat-tts.js';
 import { speak } from '../../../voice/tts/index.js';
 
+const persistence = vi.hoisted(() => ({
+  append: vi.fn(() => true),
+  findLatest: vi.fn(() => 'assistant-entry-1'),
+  removeUnused: vi.fn(async () => {}),
+}));
+
+vi.mock('../../../storage/sqlite/index.js', () => ({
+  appendMediaToAssistantTranscriptEntry: persistence.append,
+  findLatestAssistantTranscriptEntryId: persistence.findLatest,
+}));
+
+vi.mock('../../../media/session-references.js', () => ({
+  deleteMediaUris: persistence.removeUnused,
+}));
+
 vi.mock('../../../voice/tts/factory.js', () => ({
   isTTSAvailable: vi.fn(() => true),
 }));
@@ -39,19 +54,11 @@ vi.mock('../../../channels/attachments/outbound-tts-persist.js', () => ({
 describe('maybeEmitWebchatTts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    persistence.append.mockReturnValue(true);
+    persistence.findLatest.mockReturnValue('assistant-entry-1');
   });
 
   it('uses the webchat cached assistant plain text when generating TTS', async () => {
-    const savedMessages: unknown[] = [];
-    const sessionStore = {
-      load: vi.fn(async () => [
-        { role: 'user', content: [{ type: 'text', text: 'hi' }] },
-        { role: 'assistant', content: [{ type: 'text', text: 'hello from cache' }] },
-      ]),
-      saveMessages: vi.fn(async (_conversationId: string, messages: unknown[]) => {
-        savedMessages.push(...messages);
-      }),
-    };
     const getLastAssistantPlainText = vi.fn(() => 'hello from cache');
 
     const result = await maybeEmitWebchatTts(
@@ -66,7 +73,6 @@ describe('maybeEmitWebchatTts', () => {
             },
           },
         } as unknown as Config,
-        sessionStore: sessionStore as never,
         getLastAssistantPlainText,
         log: { warn: vi.fn() },
       },
@@ -86,28 +92,74 @@ describe('maybeEmitWebchatTts', () => {
       expect.objectContaining({ enabled: true, provider: 'edge', trigger: 'always' }),
       expect.objectContaining({ tts: { format: 'mp3' } }),
     );
-    expect(sessionStore.saveMessages).toHaveBeenCalledOnce();
-    expect(savedMessages.at(-1)).toMatchObject({
-      role: 'assistant',
-      media: [
-        expect.objectContaining({
-          type: 'voice',
-          uri: 'media://tts/reply---uuid.mp3',
-        }),
-      ],
-    });
+    expect(persistence.append).toHaveBeenCalledWith(
+      'agent:main:main',
+      'assistant-entry-1',
+      expect.objectContaining({ type: 'voice', uri: 'media://tts/reply---uuid.mp3' }),
+    );
   });
 
   it('keeps automatic replies silent when TTS config is absent', async () => {
     const result = await maybeEmitWebchatTts(
       {
         config: { messages: undefined } as unknown as Config,
-        sessionStore: { load: vi.fn(), saveMessages: vi.fn() } as never,
         getLastAssistantPlainText: vi.fn(() => 'should stay text only'),
         log: { warn: vi.fn() },
       },
       'agent:main:silent',
       true,
+    );
+
+    expect(result).toBeNull();
+    expect(speak).not.toHaveBeenCalled();
+  });
+
+  it('discards generated audio when the target assistant transcript changed', async () => {
+    persistence.append.mockReturnValue(false);
+
+    const result = await maybeEmitWebchatTts(
+      {
+        config: {
+          messages: {
+            tts: {
+              enabled: true,
+              provider: 'edge',
+              trigger: 'always',
+              providers: { edge: { enabled: true } },
+            },
+          },
+        } as unknown as Config,
+        getLastAssistantPlainText: vi.fn(() => 'reply'),
+        log: { warn: vi.fn() },
+      },
+      'agent:main:changed',
+      false,
+    );
+
+    expect(result).toBeNull();
+    expect(persistence.removeUnused).toHaveBeenCalledWith(['media://tts/reply---uuid.mp3']);
+  });
+
+  it('does not generate audio before an assistant transcript row exists', async () => {
+    persistence.findLatest.mockReturnValue(null);
+
+    const result = await maybeEmitWebchatTts(
+      {
+        config: {
+          messages: {
+            tts: {
+              enabled: true,
+              provider: 'edge',
+              trigger: 'always',
+              providers: { edge: { enabled: true } },
+            },
+          },
+        } as unknown as Config,
+        getLastAssistantPlainText: vi.fn(() => 'reply'),
+        log: { warn: vi.fn() },
+      },
+      'agent:main:missing',
+      false,
     );
 
     expect(result).toBeNull();

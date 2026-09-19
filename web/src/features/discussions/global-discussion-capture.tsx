@@ -427,7 +427,7 @@ export function GlobalDiscussionCaptureHost() {
 
       <div className="grid gap-3 px-4 py-4">
         <p className="font-mono text-3xl tabular-nums text-fg">{formatDuration(recorder.elapsedMs)}</p>
-        <section className="max-h-40 overflow-y-auto rounded-lg border border-edge bg-surface-subtle p-3">
+        <section className="max-h-40 overflow-y-auto rounded-lg border border-edge bg-surface-inset p-3">
           <div className="mb-2 flex items-center justify-between gap-3 text-xs font-medium text-fg-muted">
             <span>{copy.liveTranscript}</span>
             {pendingSegmentCount > 0 ? (

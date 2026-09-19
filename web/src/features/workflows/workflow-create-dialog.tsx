@@ -932,7 +932,7 @@ function NodeInspector({ node, copy, updateNode, onDelete }: { node: WorkflowGra
   );
 }
 
-const fieldClass = 'mt-1 block h-10 w-full rounded-lg border border-edge bg-surface-subtle px-3 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-edge-strong';
+const fieldClass = 'mt-1 block h-10 w-full rounded-lg border border-edge bg-surface-inset px-3 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-edge-strong';
 
 function toFlowNode(node: WorkflowGraphNode, selected = false, diffState?: FlowNodeData['diffState']): StudioNode { return { id: node.id, type: 'workflow', position: node.position, selected, data: { workflowNode: node, diffState } }; }
 function toFlowEdge(edge: WorkflowGraph['edges'][number]): Edge { return { id: edge.id, source: edge.source, target: edge.target, sourceHandle: edge.sourcePort === 'true' || edge.sourcePort === 'false' ? edge.sourcePort : undefined, markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: 'var(--color-fg-subtle)', strokeWidth: 1.5 } }; }
