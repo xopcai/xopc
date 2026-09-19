@@ -6,7 +6,6 @@ import {
   isXopcDatabaseOpen,
   upsertConnectorInstallation,
 } from '../storage/sqlite/index.js';
-import { saveComposioApiKey } from './composio.js';
 import { assertComposioAccessConfigured } from './composio-sessions.js';
 import { listConnectorInstances } from './instances.js';
 import { isManagedConnectorServer, materializeConnectorMcpServer } from './materialize.js';
@@ -152,7 +151,7 @@ registerConnectorRuntimeAdapter({
   type: 'composio',
   async install({ config, definition, input, resolver }) {
     if (definition.runtime.type !== 'composio') throw new Error(`Invalid Composio connector definition: ${definition.id}`);
-    if (definition.runtime.role === 'credential') await saveComposioApiKey(input, resolver);
+    if (definition.runtime.role !== 'toolkit') throw new Error('Configure Composio in connection service settings.');
     if (definition.runtime.role === 'toolkit') await assertComposioAccessConfigured(resolver);
     const instance = installRecord(
       config,
@@ -171,7 +170,7 @@ registerConnectorRuntimeAdapter({
         allowedAgentIds: existing?.allowedAgentIds ?? [],
         maxScope: 'read',
         confirmationPolicy: existing?.confirmationPolicy ?? 'writes',
-        selectedConnectionIds: existing?.selectedConnectionIds ?? [],
+        selectedAccountIds: existing?.selectedAccountIds ?? null,
         createdAt: existing?.createdAt,
       });
     }

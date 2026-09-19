@@ -15,7 +15,6 @@ function compareConnections(left: ComposioConnection, right: ComposioConnection)
   if (left.status === 'active' && right.status !== 'active') return -1;
   if (left.status !== 'active' && right.status === 'active') return 1;
   if (left.isCurrentAuthorization !== right.isCurrentAuthorization) return left.isCurrentAuthorization ? -1 : 1;
-  if (left.isDefault !== right.isDefault) return left.isDefault ? -1 : 1;
   return connectionTime(right) - connectionTime(left);
 }
 

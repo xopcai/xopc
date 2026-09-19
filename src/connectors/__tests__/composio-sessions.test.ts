@@ -98,6 +98,17 @@ describe('ComposioSessionsAdapter', () => {
     expect(first).not.toBe(createComposioPrincipalId('other@example.com', stateDir));
   });
 
+  it('retrieves every account page and rejects repeating cursors', async () => {
+    const list = vi.mocked(client.connectedAccounts.list);
+    list.mockResolvedValueOnce({ items: [{ id: 'page-one', toolkit: { slug: 'gmail' }, status: 'ACTIVE', connectionData: { email: 'one@example.test' } }], nextCursor: 'next' })
+      .mockResolvedValueOnce({ items: [{ id: 'page-two', toolkit: { slug: 'gmail' }, status: 'ACTIVE', connectionData: { email: 'two@example.test' } }] });
+    const adapter = new ComposioSessionsAdapter({ clientFactory: async () => client });
+    expect(await adapter.syncConnections({ principalId: 'local-owner' })).toHaveLength(2);
+    expect(list).toHaveBeenLastCalledWith(expect.objectContaining({ cursor: 'next' }));
+    list.mockResolvedValue({ items: [], nextCursor: 'loop' });
+    await expect(adapter.syncConnections({ principalId: 'local-owner' })).rejects.toThrow('complete connected account list');
+  });
+
   it('keeps BYOK priority when XOPC Cloud OAuth is also available', async () => {
     const resolveApiKey = vi.fn(async (provider: string) => {
       if (provider === 'connector-composio-api-key') return 'user-composio-key';
@@ -231,6 +242,9 @@ describe('ComposioSessionsAdapter', () => {
   });
 
   it('does not execute writes before confirmation and audits both decisions', async () => {
+    const connection = upsertConnectorConnection({ id: 'write-account', connectorId: 'composio-gmail', provider: 'composio',
+      principalId: 'owner', providerConnectionId: 'ca_write', status: 'active', identity: {}, isDefault: false,
+      metadata: { providerPrincipalId: 'provider-owner' } });
     const installation = upsertConnectorInstallation({
       id: 'install-1',
       connectorId: 'composio-gmail',
@@ -239,7 +253,7 @@ describe('ComposioSessionsAdapter', () => {
       allowedAgentIds: ['main'],
       maxScope: 'write',
       confirmationPolicy: 'writes',
-      selectedConnectionIds: [],
+      selectedAccountIds: null,
     });
     const adapter = new ComposioSessionsAdapter({ clientFactory: async () => client });
     const action = {
@@ -256,6 +270,7 @@ describe('ComposioSessionsAdapter', () => {
       installation,
       action,
       agentId: 'main',
+      connection,
     })).resolves.toMatchObject({ decision: 'confirmation_required' });
     expect(session.execute).not.toHaveBeenCalled();
 
@@ -265,8 +280,9 @@ describe('ComposioSessionsAdapter', () => {
       action,
       agentId: 'main',
       confirmed: true,
+      connection,
     })).resolves.toMatchObject({ decision: 'allowed' });
-    expect(session.execute).toHaveBeenCalledWith('GMAIL_SEND_EMAIL', {}, undefined);
+    expect(session.execute).toHaveBeenCalledWith('GMAIL_SEND_EMAIL', {}, { account: 'ca_write' });
     expect(listConnectorExecutionAudit({ principalId: 'owner' }).map((row) => row.decision)).toEqual([
       'allowed',
       'confirmation_required',
@@ -282,7 +298,7 @@ describe('ComposioSessionsAdapter', () => {
       allowedAgentIds: ['main'],
       maxScope: 'read',
       confirmationPolicy: 'never',
-      selectedConnectionIds: [],
+      selectedAccountIds: null,
     });
     const connection = upsertConnectorConnection({
       id: 'gmail-work',

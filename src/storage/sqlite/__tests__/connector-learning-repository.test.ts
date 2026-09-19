@@ -33,7 +33,7 @@ describe('connector learning repository', () => {
       allowedAgentIds: ['main'],
       maxScope: 'read',
       confirmationPolicy: 'writes',
-      selectedConnectionIds: [],
+      selectedAccountIds: null,
     });
     upsertConnectorConnection({
       id: 'gmail-work',

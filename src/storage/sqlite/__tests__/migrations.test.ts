@@ -46,9 +46,34 @@ describe('SQLite migrations', () => {
     rmSync(migrationsDir, { recursive: true, force: true });
   });
 
-  it('keeps the retained release window at v165 through v181', () => {
+  it('migrates connection allowlists once and preserves account and authorization references', () => {
+    const db = openEmptyDb();
+    try {
+      installBaseline(db); applyPendingMigrations(db, { targetVersion: 181 });
+      db.exec(`INSERT INTO connector_installations(id,connector_id,principal_id,enabled,allowed_agent_ids_json,max_scope,confirmation_policy,selected_connection_ids_json,created_at,updated_at)
+        VALUES ('limited','composio-gmail','owner',1,'[]','read','writes','["auth"]','now','now'),
+               ('all','composio-gmail','other',1,'[]','read','writes','[]','now','now');
+        INSERT INTO connector_accounts(id,connector_id,principal_id,identity_json,created_at,updated_at)
+        VALUES ('account','composio-gmail','owner','{}','now','now');
+        INSERT INTO connector_connections(id,account_id,installation_id,connector_id,provider,principal_id,provider_connection_id,alias,created_at,updated_at)
+        VALUES ('auth','account','limited','composio-gmail','composio','owner','ca','Work','now','now');`);
+      applyPendingMigrations(db);
+      expect(db.prepare('SELECT selected_account_ids_json FROM connector_installations WHERE id = ?').get('limited'))
+        .toEqual({ selected_account_ids_json: '["account"]' });
+      expect(db.prepare('SELECT selected_account_ids_json FROM connector_installations WHERE id = ?').get('all'))
+        .toEqual({ selected_account_ids_json: 'null' });
+      expect(db.prepare('SELECT label, enabled, allowed_agent_ids_json FROM connector_accounts').get())
+        .toEqual({ label: 'Work', enabled: 1, allowed_agent_ids_json: null });
+      expect(db.prepare('SELECT account_id, installation_id FROM connector_connections').get())
+        .toEqual({ account_id: 'account', installation_id: 'limited' });
+      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+      expect(applyPendingMigrations(db)).toBe(182);
+    } finally { db.close(); }
+  });
+
+  it('keeps the retained release window at v165 through v182', () => {
     expect(XOPC_DB_BASELINE_SCHEMA_VERSION).toBe(165);
-    expect(XOPC_DB_SCHEMA_VERSION).toBe(181);
+    expect(XOPC_DB_SCHEMA_VERSION).toBe(182);
 
     const db = openEmptyDb();
     try {

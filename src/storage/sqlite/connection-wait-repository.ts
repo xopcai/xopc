@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { getConnectorAccount } from './connector-account-repository.js';
+import { getConnectorConnection } from './connector-repository.js';
 import { EventEmitter } from 'node:events';
 import type { ConnectionCheckpoint, ConnectionNeed, ConnectionWait } from '@xopcai/gateway-contract';
 
@@ -7,6 +9,7 @@ import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 import { isXopcDatabaseOpen } from './connection.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 import { readCurrentTranscriptId } from './session-instance-repository.js';
+import { getSessionMetadata } from './session-repository.js';
 import { bumpSessionInputRevision, getSessionInputById, getSessionInputState, insertSessionInput, setSessionInputStatus, type SessionInput } from './session-input-repository.js';
 
 const log = createLogger('Connectors:Wait');
@@ -143,9 +146,56 @@ export function consumeConnectionResume(input: SessionInput): boolean {
 
 export function connectionBindings(conversationId: string): ConnectionNeed[] {
   if (!isXopcDatabaseOpen()) return [];
+  let metadata = getSessionMetadata(conversationId);
+  if (metadata?.sessionType === 'workflow-subagent' && metadata.parentConversationId) metadata = getSessionMetadata(metadata.parentConversationId);
+  const workflowAccounts = metadata?.sessionType === 'workflow-run' ? metadata.customData?.connectorAccounts : undefined;
+  if (workflowAccounts && typeof workflowAccounts === 'object' && !Array.isArray(workflowAccounts)) {
+    return Object.entries(workflowAccounts).flatMap(([connectorId, ids]) => Array.isArray(ids) ? ids.flatMap(id => {
+      if (typeof id !== 'string') return [];
+      const account = getConnectorAccount(id);
+      return [{ key: `${connectorId}:${id}`, connectorId, accountId: id, connectionId: account?.currentConnectionId,
+        label: account?.label ?? connectorId, capabilities: [] }];
+    }) : []);
+  }
   const state = getSessionInputState(conversationId);
   const input = state.activeInputId ? getSessionInputById(conversationId, state.activeInputId) : undefined;
-  return input?.payload ? getConnectionWait(input.payload.waitId)?.needs ?? [] : [];
+  if (!input) return [];
+  const wait = input.payload ? getConnectionWait(input.payload.waitId) : undefined;
+  const stored = getSqliteDatabase().prepare(`SELECT connector_id, account_id FROM connector_objective_accounts
+    WHERE conversation_id = ? AND transcript_id = ? AND objective_id = ?`).all(
+    conversationId, readCurrentTranscriptId(getSqliteDatabase(), conversationId) ?? '', wait?.objectiveId ?? input.id,
+  ) as Array<{ connector_id: string; account_id: string }>;
+  const needs: ConnectionNeed[] = wait?.needs ?? stored.map(row => ({
+    key: `${row.connector_id}:${row.account_id}`, connectorId: row.connector_id,
+    accountId: row.account_id, label: getConnectorAccount(row.account_id)?.label ?? row.connector_id, capabilities: [],
+  }));
+  return needs.map(need => {
+    const accountId = need.accountId ?? (need.connectionId ? getConnectorConnection(need.connectionId)?.accountId : undefined);
+    const account = accountId ? getConnectorAccount(accountId) : undefined;
+    return { ...need, accountId, connectionId: account?.currentConnectionId ?? need.connectionId };
+  });
+}
+
+/** Changes to the objective or transcript invalidate an outstanding action approval. */
+export function connectorObjectiveScope(conversationId: string): string | undefined {
+  const state = getSessionInputState(conversationId);
+  const input = state.activeInputId ? getSessionInputById(conversationId, state.activeInputId) : undefined;
+  if (!input) return undefined;
+  const active = getActiveConnectionWait(conversationId);
+  const wait = input.payload ? getConnectionWait(input.payload.waitId) : active?.originInputId === input.id ? active : undefined;
+  return JSON.stringify([readCurrentTranscriptId(getSqliteDatabase(), conversationId), wait?.objectiveId ?? input.id, wait?.objectiveRevision ?? 0]);
+}
+
+export function bindObjectiveAccount(conversationId: string, connectorId: string, accountId: string): void {
+  const db = getSqliteDatabase();
+  const state = getSessionInputState(conversationId);
+  const input = state.activeInputId ? getSessionInputById(conversationId, state.activeInputId) : undefined;
+  if (!input) return;
+  const wait = input.payload ? getConnectionWait(input.payload.waitId) : undefined;
+  db.prepare(`INSERT OR IGNORE INTO connector_objective_accounts
+    (conversation_id, transcript_id, objective_id, connector_id, account_id) VALUES (?, ?, ?, ?, ?)`).run(
+    conversationId, readCurrentTranscriptId(db, conversationId) ?? '', wait?.objectiveId ?? input.id, connectorId, accountId,
+  );
 }
 export function connectionBinding(conversationId: string, connectorId: string): string | undefined {
   const matches = connectionBindings(conversationId).filter(need => need.connectorId === connectorId);

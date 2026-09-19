@@ -44,7 +44,7 @@ describe('workflow connector preflight', () => {
       allowedAgentIds: ['main'],
       maxScope: 'read',
       confirmationPolicy: 'writes',
-      selectedConnectionIds: [],
+      selectedAccountIds: null,
     });
   });
 
@@ -78,6 +78,24 @@ describe('workflow connector preflight', () => {
     expect(preflightWorkflowConnectors({ definition, config, agentId: 'other' })).toMatchObject({
       ok: false,
       issues: [{ code: 'agent_not_allowed' }],
+    });
+  });
+
+  it('requires explicit stable accounts for unattended multi-account execution', () => {
+    const records = ['work', 'personal'].map(id => upsertConnectorConnection({
+      id, installationId: 'composio-gmail-local-owner', connectorId: 'composio-gmail', provider: 'composio',
+      principalId: 'local-owner', providerConnectionId: id, identity: {}, status: 'active', isDefault: false, metadata: {},
+    }));
+    expect(preflightWorkflowConnectors({ definition, config, agentId: 'main' })).toMatchObject({
+      ok: false, issues: [{ code: 'account_selection_required' }],
+    });
+    const selected = { ...definition, connectors: [{ connectorId: 'composio-gmail', accountIds: [records[0].accountId!] }] };
+    expect(preflightWorkflowConnectors({ definition: selected, config, agentId: 'main' })).toMatchObject({
+      ok: true, accounts: { 'composio-gmail': [records[0].accountId] },
+    });
+    upsertConnectorConnection({ ...records[0], status: 'revoked' });
+    expect(preflightWorkflowConnectors({ definition: selected, config, agentId: 'main' })).toMatchObject({
+      ok: false, accounts: {}, issues: [{ code: 'connection_missing' }],
     });
   });
 });

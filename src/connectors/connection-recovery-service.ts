@@ -6,13 +6,14 @@ import { readCurrentTranscriptId } from '../storage/sqlite/session-repository.js
 import type { SessionInput } from '../storage/sqlite/session-input-repository.js';
 import { getSessionInputState } from '../storage/sqlite/session-input-repository.js';
 import { cancelConnectionObjective, getActiveConnectionWait, getConnectionWait, publishConnectionWait, queueConnectionResolution, updateConnectionWait, listConnectionWaitsToCheck } from '../storage/sqlite/connection-wait-repository.js';
-import { getConnectorInstallation, listConnectorConnections, upsertConnectorInstallation } from '../storage/sqlite/connector-repository.js';
+import { getConnectorConnection, getConnectorInstallation, listConnectorConnections, upsertConnectorInstallation } from '../storage/sqlite/connector-repository.js';
 import { capabilityActions, isToolInputSchema, missingConnectionCapabilities } from './connection-capabilities.js';
 import { resolveConnectionCandidate } from './connection-candidates.js';
 import { getConnectorDefinition } from './catalog.js';
 import { installConnector } from './install.js';
 import { listConnectorInstances } from './instances.js';
 import { getConnectorAccount } from '../storage/sqlite/connector-account-repository.js';
+import { canAccessConnectorAccount, currentAccountConnections } from './account-access.js';
 import { createLogger } from '../utils/logger.js';
 import { getConfiguredComposioAuthConfigs, scopeForComposioAction, isComposioActionAllowedByCatalog } from './composio.js';
 import { ComposioSessionsAdapter } from './composio-sessions.js';
@@ -75,13 +76,17 @@ export class ConnectionRecoveryService {
       const installation = getConnectorInstallation(`${need.connectorId}-${wait.principalId}`);
       const requiredScope = Math.max(1, ...need.capabilities.filter(capability => /^[A-Z]+_/.test(capability)).map(capability => SCOPE_ORDER[scopeForComposioAction(capability).scope]));
       const scopeBlocked = requiredScope > SCOPE_ORDER[installation?.maxScope ?? 'read'];
-      const blocked = scopeBlocked || instance?.enabled === false || installation?.enabled === false
-        || Boolean(installation?.allowedAgentIds.length && !installation.allowedAgentIds.includes(wait.agentId));
       const all = listConnectorConnections({ principalId: wait.principalId, connectorId: need.connectorId });
+      const requested = need.accountId ? all.find(connection => connection.accountId === need.accountId) : undefined;
+      const blocked = scopeBlocked || instance?.enabled === false || installation?.enabled === false
+        || installation?.selectedAccountIds?.length === 0
+        || Boolean(installation && requested && !canAccessConnectorAccount(requested, installation, wait.agentId))
+        || Boolean(installation?.allowedAgentIds.length && !installation.allowedAgentIds.includes(wait.agentId));
       const eligible = all.filter(connection => connection.status === 'active'
+        && (!installation || canAccessConnectorAccount(connection, installation, wait.agentId))
         && (!verifiedIds || verifiedIds.has(connection.id))
         && (!need.accountId || connection.accountId === need.accountId)
-        && (!installation?.selectedConnectionIds.length || installation.selectedConnectionIds.includes(connection.id)));
+        && (installation?.selectedAccountIds == null || Boolean(connection.accountId && installation.selectedAccountIds.includes(connection.accountId))));
       const byAccount = new Map<string, (typeof eligible)[number]>();
       for (const connection of eligible) {
         const key = connection.accountId ?? connection.id;
@@ -94,7 +99,8 @@ export class ConnectionRecoveryService {
       }
       const active = [...byAccount.values()];
       const selected = !verifiedIds && need.unavailable ? undefined : need.attempt ? active.find(connection => connection.providerConnectionId === need.attempt?.connectionId)
-        : need.connectionId ? active.find(connection => connection.id === need.connectionId)
+        : need.accountId ? active.find(connection => connection.accountId === need.accountId)
+          : need.connectionId ? active.find(connection => connection.id === need.connectionId)
           : active.length === 1 && !need.accountSelector ? active[0] : undefined;
       const phase = blocked || (selected && need.capabilityError) ? 'blocked' : selected ? 'ready'
         : active.length > 1 || (need.accountSelector && active.length > 0 && !need.connectionId) ? 'choose_account'
@@ -102,9 +108,9 @@ export class ConnectionRecoveryService {
             : need.unavailable || all.some(connection => ['expired', 'revoked', 'failed'].includes(connection.status)) ? 'reconnect' : 'connect';
       const alternatives = ['composio-gmail', 'composio-outlook'].includes(need.connectorId)
         ? ['composio-gmail', 'composio-outlook'].filter(id => id !== need.connectorId).map(id => ({ candidateRef: id, label: getConnectorDefinition(id)?.displayName ?? id })) : [];
-      return { ...need, alternatives, connectionId: selected?.id ?? need.connectionId, phase,
-        accounts: active.map(connection => ({ id: connection.id,
-          label: connection.alias ?? String(connection.identity.email ?? connection.identity.name ?? connection.id) })),
+      return { ...need, alternatives, accountId: selected?.accountId ?? need.accountId, connectionId: selected?.id ?? need.connectionId, phase,
+        accounts: active.map(connection => ({ id: connection.accountId!,
+          label: [getConnectorAccount(connection.accountId!)?.label, connection.identity.email ?? connection.identity.name ?? connection.accountId].filter(Boolean).join(' · ') })),
         ...(need.capabilityError && selected ? { reason: need.capabilityError } : {}),
         ...(blocked ? { reason: scopeBlocked ? 'This action needs broader permissions. Review connector permissions in settings.' : 'This app is disabled or unavailable to the current agent. Review connector settings.' } : {}),
       };
@@ -128,7 +134,7 @@ export class ConnectionRecoveryService {
     if (!instance) await persistConfigMutation({ config, mutate: () => installConnector(config, connectorId, {}), save: () => this.deps.saveConfig(config) });
     if (!installation) upsertConnectorInstallation({
       id: installationId, connectorId, principalId: wait.principalId, enabled: true,
-      allowedAgentIds: [], maxScope: 'read', confirmationPolicy: 'writes', selectedConnectionIds: [],
+      allowedAgentIds: [], maxScope: 'read', confirmationPolicy: 'writes', selectedAccountIds: null,
     });
   }
 
@@ -141,8 +147,13 @@ export class ConnectionRecoveryService {
         const definition = getConnectorDefinition(need.connectorId);
         if (definition?.runtime.type !== 'composio' || definition.runtime.role !== 'toolkit') throw new Error('Unsupported connector');
         const toolkit = definition.runtime.toolkit;
+        const selected = views.find(view => view.key === need.key);
+        const connection = selected?.connectionId ? getConnectorConnection(selected.connectionId) : undefined;
         const session = await this.adapter.createSession({ principalId: wait.principalId, toolkits: [toolkit],
-          authConfigs: getConfiguredComposioAuthConfigs(this.deps.getConfig(), [toolkit]) });
+          backendId: selected?.accountId ? getConnectorAccount(selected.accountId)?.backendId : undefined,
+          ...(typeof connection?.metadata.providerPrincipalId === 'string' ? { providerPrincipalId: connection.metadata.providerPrincipalId } : {}),
+          ...(connection ? { connectedAccounts: { [toolkit]: [connection.providerConnectionId] } } : {}),
+          authConfigs: typeof connection?.metadata.authConfigId === 'string' ? { [toolkit]: connection.metadata.authConfigId } : undefined });
         const result = await session.search({ query: `${toolkit} ${need.capabilities.join(' ')} ${capabilityActions(need).flat().join(' ')}`, toolkits: [toolkit] });
         const schemas = result && typeof result === 'object' ? (result as Record<string, unknown>).toolSchemas : undefined;
         const actions = new Set(Object.entries(schemas && typeof schemas === 'object' ? schemas : {})
@@ -228,6 +239,8 @@ export class ConnectionRecoveryService {
         await this.ensureInstallation(wait, need.connectorId);
         const installationId = `${need.connectorId}-${wait.principalId}`;
         const auth = await this.adapter.authorize({ principalId: wait.principalId, toolkit: definition.runtime.toolkit,
+          expectedAccountId: need.accountId,
+          backendId: need.accountId ? getConnectorAccount(need.accountId)?.backendId : undefined,
           installationId, authConfigId: getConfiguredComposioAuthConfigs(config, [definition.runtime.toolkit])?.[definition.runtime.toolkit] });
         const latest = getConnectionWait(wait.id);
         if (!latest || latest.version !== wait.version || latest.status !== 'open') throw new Error('WAIT_CHANGED');
@@ -244,15 +257,16 @@ export class ConnectionRecoveryService {
         const latest = getConnectionWait(wait.id);
         if (!latest || latest.version !== wait.version || latest.status !== 'open') throw new Error('WAIT_CHANGED');
         let needs: ConnectionWait['needs'] = wait.needs.map(need => {
-          const authorized = fresh.find(item => item.providerConnectionId === need.attempt?.connectionId && item.status === 'active');
+          const authorized = fresh.find(item => item.providerConnectionId === need.attempt?.connectionId && item.status === 'active'
+            && item.connectorId === need.connectorId && (!need.accountId || item.accountId === need.accountId));
           return authorized ? { ...need, unavailable: false, ...(need.accountSelector && !need.accountId ? {} : { connectionId: authorized.id, accountId: authorized.accountId }), attempt: undefined }
             : { ...need, unavailable: !fresh.some(item => item.connectorId === need.connectorId && item.status === 'active'
               && (!need.connectionId || item.id === need.connectionId) && (!need.accountId || item.accountId === need.accountId)) };
         });
         if (action.action === 'select_account') {
           const need = needs.find(item => item.key === action.needKey);
-          const connection = fresh.find(item => item.id === action.accountId && item.connectorId === need?.connectorId && item.status === 'active');
-          if (!need || !connection || !this.view(wait, verified).needs.find(item => item.key === need.key)?.accounts.some(item => item.id === connection.id)) throw new Error('Account is unavailable.');
+          const connection = currentAccountConnections(fresh).find(item => item.accountId === action.accountId && item.connectorId === need?.connectorId);
+          if (!need || !connection || !this.view(wait, verified).needs.find(item => item.key === need.key)?.accounts.some(item => item.id === connection.accountId)) throw new Error('Account is unavailable.');
           needs = needs.map(item => item.key === need.key ? { ...item, connectionId: connection.id, accountId: connection.accountId, unavailable: false, attempt: undefined } : item);
         }
         for (const selected of this.view({ ...wait, needs }, verified).needs) {

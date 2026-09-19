@@ -11,7 +11,7 @@ const installation: ConnectorInstallationPolicy = {
   allowedAgentIds: ['main'],
   maxScope: 'write',
   confirmationPolicy: 'writes',
-  selectedConnectionIds: ['connection-1'],
+  selectedAccountIds: ['connection-1'],
   createdAt: '2026-07-19T00:00:00.000Z',
   updatedAt: '2026-07-19T00:00:00.000Z',
 };
@@ -22,7 +22,7 @@ describe('evaluateConnectorExecutionPolicy', () => {
       installation,
       action: { scope: 'write', curated: true },
       agentId: 'main',
-      connectionId: 'connection-1',
+      accountId: 'connection-1',
     }).decision).toBe('confirmation_required');
   });
 
@@ -31,7 +31,7 @@ describe('evaluateConnectorExecutionPolicy', () => {
       installation,
       action: { scope: 'write', curated: true },
       agentId: 'main',
-      connectionId: 'connection-1',
+      accountId: 'connection-1',
       confirmed: true,
     }).decision).toBe('allowed');
   });
@@ -41,25 +41,25 @@ describe('evaluateConnectorExecutionPolicy', () => {
       installation,
       action: { scope: 'read', curated: true },
       agentId: 'other',
-      connectionId: 'connection-1',
+      accountId: 'connection-1',
     }).decision).toBe('denied');
     expect(evaluateConnectorExecutionPolicy({
       installation,
       action: { scope: 'read', curated: true },
       agentId: 'main',
-      connectionId: 'connection-2',
+      accountId: 'connection-2',
     }).decision).toBe('denied');
     expect(evaluateConnectorExecutionPolicy({
       installation,
       action: { scope: 'admin', curated: true },
       agentId: 'main',
-      connectionId: 'connection-1',
+      accountId: 'connection-1',
     }).decision).toBe('denied');
     expect(evaluateConnectorExecutionPolicy({
       installation,
       action: { scope: 'read', curated: false },
       agentId: 'main',
-      connectionId: 'connection-1',
+      accountId: 'connection-1',
     }).decision).toBe('denied');
   });
 });

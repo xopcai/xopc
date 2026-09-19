@@ -24,6 +24,7 @@ export interface PrepareWorkflowRunSessionParams {
   parentConversationId?: string;
   projectId?: string;
   triggerSource?: string;
+  connectorAccounts?: Record<string, string[]>;
 }
 
 export interface PrepareWorkflowRunSessionResult {
@@ -74,6 +75,7 @@ export class WorkflowSessionBridge {
         workflowRunId: params.runId,
         workflowDefinitionId: params.definitionId,
         workflowGoal: params.goal,
+        connectorAccounts: params.connectorAccounts ?? {},
         deferVisibilityUntilOutput: true,
         ...(params.triggerSource ? { triggerSource: params.triggerSource } : {}),
         ...(params.parentConversationId ? { parentConversationId: params.parentConversationId } : {}),

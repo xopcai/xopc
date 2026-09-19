@@ -78,9 +78,10 @@ export function applyComposioConnectionLifecycleEvent(payload: unknown): string 
   if (normalized.type !== 'composio.connected_account.expired' && normalized.type !== 'composio.connected_account.deleted') return undefined;
   const providerConnectionId = readString(normalized.data.id ?? normalized.data.nanoid ?? normalized.data.connected_account_id);
   if (!providerConnectionId) return undefined;
-  const connection = listConnectorConnections().find((candidate) => (
+  const candidates = listConnectorConnections().filter((candidate) => (
     candidate.provider === 'composio' && candidate.providerConnectionId === providerConnectionId
   ));
+  const connection = candidates.length === 1 ? candidates[0] : undefined;
   if (!connection) return undefined;
   upsertConnectorConnection({
     ...connection,

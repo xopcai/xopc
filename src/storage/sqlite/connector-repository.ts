@@ -18,7 +18,7 @@ type InstallationRow = {
   allowed_agent_ids_json: string;
   max_scope: ConnectorInstallationPolicy['maxScope'];
   confirmation_policy: ConnectorInstallationPolicy['confirmationPolicy'];
-  selected_connection_ids_json: string;
+  selected_account_ids_json: string;
   created_at: string;
   updated_at: string;
 };
@@ -81,6 +81,7 @@ type CatalogRow = {
 
 type ApprovalRow = {
   id: string;
+  wait_id: string | null;
   principal_id: string;
   connector_id: string;
   connection_id: string | null;
@@ -134,7 +135,7 @@ function installationFromRow(row: InstallationRow): ConnectorInstallationPolicy 
     allowedAgentIds: parseStringArray(row.allowed_agent_ids_json),
     maxScope: row.max_scope,
     confirmationPolicy: row.confirmation_policy,
-    selectedConnectionIds: parseStringArray(row.selected_connection_ids_json),
+    selectedAccountIds: row.selected_account_ids_json === 'null' ? null : parseStringArray(row.selected_account_ids_json),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -213,6 +214,7 @@ function catalogFromRow(row: CatalogRow): CachedConnectorCatalogEntry | undefine
 function approvalFromRow(row: ApprovalRow): ConnectorApprovalRecord {
   return {
     id: row.id,
+    waitId: row.wait_id ?? undefined,
     principalId: row.principal_id,
     connectorId: row.connector_id,
     connectionId: row.connection_id ?? undefined,
@@ -244,8 +246,8 @@ export function createConnectorApproval(
       INSERT INTO connector_approvals (
         id, principal_id, connector_id, connection_id, agent_id, conversation_id, action_id,
         scope, arguments_hash, arguments_preview_json, status, expires_at, created_at,
-        decided_at, consumed_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        decided_at, consumed_at, wait_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       record.id,
       record.principalId,
@@ -262,6 +264,7 @@ export function createConnectorApproval(
       record.createdAt,
       record.decidedAt ?? null,
       record.consumedAt ?? null,
+      record.waitId ?? null,
     );
   });
   return record;
@@ -405,7 +408,7 @@ export function upsertConnectorInstallation(
     db.prepare(`
       INSERT INTO connector_installations (
         id, connector_id, principal_id, enabled, allowed_agent_ids_json, max_scope,
-        confirmation_policy, selected_connection_ids_json, created_at, updated_at
+        confirmation_policy, selected_account_ids_json, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         connector_id = excluded.connector_id,
@@ -414,7 +417,7 @@ export function upsertConnectorInstallation(
         allowed_agent_ids_json = excluded.allowed_agent_ids_json,
         max_scope = excluded.max_scope,
         confirmation_policy = excluded.confirmation_policy,
-        selected_connection_ids_json = excluded.selected_connection_ids_json,
+        selected_account_ids_json = excluded.selected_account_ids_json,
         updated_at = excluded.updated_at
     `).run(
       input.id,
@@ -424,7 +427,7 @@ export function upsertConnectorInstallation(
       JSON.stringify(input.allowedAgentIds),
       input.maxScope,
       input.confirmationPolicy,
-      JSON.stringify(input.selectedConnectionIds),
+      JSON.stringify(input.selectedAccountIds),
       input.createdAt ?? now,
       input.updatedAt ?? now,
     );

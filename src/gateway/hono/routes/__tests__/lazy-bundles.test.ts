@@ -6,6 +6,12 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('maps connector account management without swallowing nearby paths', () => {
+    for (const path of ['/api/connectors/composio/accounts/account-1', '/api/connectors/composio/setup-status', '/api/connectors/composio/authorizations/attempt-1', '/api/connectors/composio/backends/backend-1']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('connectors');
+    }
+    expect(findAuthenticatedLazyRouteBundle('/api/connectors-other')).toBeUndefined();
+  });
   it('maps the compatibility preflight without intercepting endpoint core routes', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/endpoint-tools/compatibility')?.id).toBe('endpoint-compatibility');
     for (const path of ['/api/endpoint-tools/principals', '/api/endpoint-tools/compatibility-other']) {

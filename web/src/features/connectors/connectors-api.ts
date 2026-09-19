@@ -223,6 +223,7 @@ export type ConnectorInstallInput = {
 };
 
 export type ConnectorAuthorizationStartResult = {
+  attemptId?: string;
   connectorId: string;
   provider: string;
   authorizationUrl?: string;
@@ -231,13 +232,16 @@ export type ConnectorAuthorizationStartResult = {
 };
 
 export type ComposioConnection = {
+  supportsLearning?: boolean;
+  backendLabel?: string;
   id: string;
   accountId?: string;
+  accountEnabled?: boolean;
+  allowedAgentIds?: string[] | null;
   providerConnectionId: string;
   toolkit: string;
   status: string;
   alias?: string;
-  isDefault: boolean;
   isCurrentAuthorization: boolean;
   accountEmail?: string;
   workspace?: string;
@@ -282,7 +286,7 @@ export type ComposioInstallationPolicy = {
   allowedAgentIds: string[];
   maxScope: ComposioScope;
   confirmationPolicy: 'never' | 'writes' | 'always';
-  selectedConnectionIds: string[];
+  selectedAccountIds: string[] | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -310,6 +314,7 @@ export type ComposioAuthConfigOption = {
 };
 
 export type ComposioToolkitAuthState = {
+  mode?: 'managed' | 'byok';
   toolkit: string;
   managedAuthAvailable: boolean;
   requiresCustomAuthConfig: boolean;
@@ -442,10 +447,10 @@ export async function fetchConnectorInstances(): Promise<ConnectorInstance[]> {
   return requirePayload(response, 'Could not load installed connectors.').instances;
 }
 
-export async function startConnectorAuthorization(connectorId: string): Promise<ConnectorAuthorizationStartResult> {
+export async function startConnectorAuthorization(connectorId: string, accountId?: string): Promise<ConnectorAuthorizationStartResult> {
   const response = await fetchJson<ApiEnvelope<{ authorization: ConnectorAuthorizationStartResult }>>(
     apiUrl(`/api/connectors/${encodeURIComponent(connectorId)}/auth/start`),
-    { method: 'POST' },
+    { method: 'POST', body: JSON.stringify({ accountId }) },
   );
   return requirePayload(response, 'Could not start connector authorization.').authorization;
 }
@@ -470,6 +475,8 @@ export async function waitForConnectorAuthorization(
 export type ComposioSetupStatus = {
   configured: boolean;
   mode: 'managed' | 'byok';
+  backendId?: string;
+  backends?: Array<{ id: string; label: string; mode: 'managed' | 'byok'; credentialSource: 'stored' | 'environment'; verifiedAt?: string }>;
   reason?: 'signin_required' | 'reauthorization_required' | 'service_unavailable';
 };
 
@@ -480,12 +487,24 @@ export async function getComposioSetupStatus(): Promise<ComposioSetupStatus> {
   return requirePayload(response, 'Could not check the connection service.');
 }
 
-export async function configureComposio(apiKey: string): Promise<void> {
+export async function configureComposio(apiKey: string, replaceBackendId?: string): Promise<void> {
   const response = await fetchJson<ApiEnvelope<{ configured: boolean }>>(
     apiUrl('/api/connectors/composio/setup'),
-    { method: 'POST', body: JSON.stringify({ apiKey }) },
+    { method: 'POST', body: JSON.stringify({ apiKey, replaceBackendId }) },
   );
   requirePayload(response, 'Could not enable the connection service.');
+}
+
+export async function selectComposioBackend(input: { mode: 'managed' } | { backendId: string }): Promise<void> {
+  await fetchJson(apiUrl('/api/connectors/composio/setup'), { method: 'POST', body: JSON.stringify(input) });
+}
+
+export async function removeComposioBackend(id: string): Promise<void> {
+  await fetchJson(apiUrl(`/api/connectors/composio/backends/${encodeURIComponent(id)}`), { method: 'DELETE' });
+}
+
+export async function disconnectComposioAccount(id: string): Promise<void> {
+  await fetchJson(apiUrl(`/api/connectors/composio/accounts/${encodeURIComponent(id)}`), { method: 'DELETE' });
 }
 
 export async function installConnector(
@@ -561,9 +580,21 @@ export async function waitForActiveComposioConnection(
   toolkit: string,
   providerConnectionId?: string,
   timeoutMs = 120_000,
+  attemptId?: string,
 ): Promise<ComposioConnection> {
   const deadline = Date.now() + timeoutMs;
+  let delay = 1_500;
   while (Date.now() < deadline) {
+    if (attemptId) {
+      const attempt = await getComposioAuthorization(attemptId);
+      if (attempt.status === 'failed') throw new Error('Authorization failed or a different account was authorized. The original account was not changed.');
+      if (attempt.status === 'expired') throw new Error('Authorization expired. Start a new connection.');
+      if (attempt.status !== 'succeeded') {
+        await new Promise(resolve => window.setTimeout(resolve, delay));
+        delay = Math.min(5_000, delay * 1.5);
+        continue;
+      }
+    }
     const connection = (await listComposioConnections().catch(() => []))
       .find((item) => (
         item.toolkit.toLowerCase() === toolkit.toLowerCase()
@@ -576,15 +607,32 @@ export async function waitForActiveComposioConnection(
   throw new Error('Connection authorization timed out.');
 }
 
+export async function getComposioAuthorization(id: string): Promise<{
+  id: string; status: 'awaiting_user' | 'succeeded' | 'failed' | 'expired'; authorizationUrl?: string; accountId?: string;
+}> {
+  const response = await fetchJson<ApiEnvelope<{ attempt: {
+    id: string; status: 'awaiting_user' | 'succeeded' | 'failed' | 'expired'; authorizationUrl?: string; accountId?: string;
+  } }>>(apiUrl(`/api/connectors/composio/authorizations/${encodeURIComponent(id)}`));
+  return requirePayload(response, 'Could not check authorization.').attempt;
+}
+
 export async function updateComposioConnection(
   id: string,
-  patch: { alias?: string; isDefault?: boolean },
+  patch: { alias?: string },
 ): Promise<ComposioConnection> {
   const response = await fetchJson<ApiEnvelope<{ connection: ComposioConnection }>>(
     apiUrl(`/api/connectors/composio/connections/${encodeURIComponent(id)}`),
     { method: 'PATCH', body: JSON.stringify(patch) },
   );
   return requirePayload(response, 'Could not update Composio connection.').connection;
+}
+
+export async function updateComposioAccount(id: string, patch: {
+  label?: string; enabled?: boolean; allowedAgentIds?: string[] | null;
+}): Promise<void> {
+  await fetchJson(apiUrl(`/api/connectors/composio/accounts/${encodeURIComponent(id)}`), {
+    method: 'PATCH', body: JSON.stringify(patch),
+  });
 }
 
 export async function getComposioHealth(toolkit: string): Promise<ComposioConnectorHealth> {
@@ -627,7 +675,7 @@ export async function getComposioPolicy(toolkit: string): Promise<{ policy: Comp
 
 export async function updateComposioPolicy(
   toolkit: string,
-  patch: Partial<Pick<ComposioInstallationPolicy, 'allowedAgentIds' | 'confirmationPolicy' | 'selectedConnectionIds'>>,
+  patch: Partial<Pick<ComposioInstallationPolicy, 'allowedAgentIds' | 'confirmationPolicy' | 'selectedAccountIds'>>,
 ): Promise<ComposioInstallationPolicy> {
   const response = await fetchJson<ApiEnvelope<{ policy: ComposioInstallationPolicy }>>(
     apiUrl(`/api/connectors/composio/${encodeURIComponent(toolkit)}/policy`),

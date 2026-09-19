@@ -9,7 +9,6 @@ function connection(id: string, patch: Partial<ComposioConnection> = {}): Compos
     providerConnectionId: `ca_${id}`,
     toolkit: 'slack',
     status: 'active',
-    isDefault: false,
     isCurrentAuthorization: false,
     ...patch,
   };

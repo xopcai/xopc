@@ -139,6 +139,9 @@ function validateManifest(value: unknown, errors: WorkflowDefinitionValidationIs
   if (value.connectors !== undefined && (!Array.isArray(value.connectors) || value.connectors.some((connector) => (
     !isRecord(connector)
     || typeof connector.connectorId !== 'string'
+    || (connector.accountIds !== undefined && (!Array.isArray(connector.accountIds)
+      || connector.accountIds.length === 0 || connector.accountIds.some(id => typeof id !== 'string' || !id.trim())
+      || new Set(connector.accountIds).size !== connector.accountIds.length))
     || (connector.scope !== undefined && !['read', 'write', 'admin'].includes(String(connector.scope)))
     || (connector.connectionRequired !== undefined && typeof connector.connectionRequired !== 'boolean')
     || (connector.optional !== undefined && typeof connector.optional !== 'boolean')
