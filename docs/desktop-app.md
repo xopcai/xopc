@@ -46,7 +46,7 @@ Help me clarify the outcome and identify the smallest credible next step.
 
 Some releases also show experimental **Connect recent work** onboarding. This flow analyzes only folders you select, uses a bounded read-only scope, and shows evidence for its next-step suggestions. On macOS it may separately request access to Apple Notes, Calendar, and Reminders. Each permission is optional; you can skip the flow and begin with conversation.
 
-Review proposed facts and time-bounded priorities under **User model**. Confirm what is accurate and useful; correct, reject, or archive the rest. See [User model and memory](./user-understanding.md).
+Open **You** to inspect automatically maintained understanding, edit it, or delete it. See [User model and memory](./user-understanding.md).
 
 ## Find common features
 

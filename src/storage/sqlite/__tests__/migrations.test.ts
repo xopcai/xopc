@@ -67,7 +67,7 @@ describe('SQLite migrations', () => {
       expect(db.prepare('SELECT account_id, installation_id FROM connector_connections').get())
         .toEqual({ account_id: 'account', installation_id: 'limited' });
       expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-      expect(applyPendingMigrations(db)).toBe(183);
+      expect(applyPendingMigrations(db)).toBe(XOPC_DB_SCHEMA_VERSION);
     } finally { db.close(); }
   });
 
@@ -87,9 +87,9 @@ describe('SQLite migrations', () => {
     } finally { db.close(); }
   });
 
-  it('keeps the retained release window at v165 through v183', () => {
+  it('migrates the retained v165 baseline to the current registered version', () => {
     expect(XOPC_DB_BASELINE_SCHEMA_VERSION).toBe(165);
-    expect(XOPC_DB_SCHEMA_VERSION).toBe(183);
+    expect(XOPC_DB_SCHEMA_VERSION).toBeGreaterThan(XOPC_DB_BASELINE_SCHEMA_VERSION);
 
     const db = openEmptyDb();
     try {
@@ -106,6 +106,23 @@ describe('SQLite migrations', () => {
     } finally {
       db.close();
     }
+  });
+
+  it('adds memory suppression and replaces approval notifications once', () => {
+    const db = openEmptyDb();
+    try {
+      installBaseline(db);
+      applyPendingMigrations(db, { targetVersion: 183 });
+      db.prepare(`INSERT INTO notification_events
+        (event_id, dedupe_key, event_type, target_json, priority, title_en, title_zh, created_at)
+        VALUES ('memory', 'work_discovery.review_ready:one', 'work_discovery.review_ready', '{}', 'normal', 'Review', '确认', 1)`).run();
+      applyPendingMigrations(db);
+      expect(db.prepare('SELECT event_type, title_en FROM notification_events WHERE event_id = ?').get('memory'))
+        .toEqual({ event_type: 'work_discovery.completed', title_en: 'Understanding updated' });
+      db.prepare('INSERT INTO memory_suppressions VALUES (?, ?)').run('hash', 1);
+      applyPendingMigrations(db);
+      expect(db.prepare('SELECT COUNT(*) AS n FROM memory_suppressions').get()).toEqual({ n: 1 });
+    } finally { db.close(); }
   });
 
   it('migrates proactive pause controls once without retaining old fields', () => {

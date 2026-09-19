@@ -21,6 +21,7 @@ import {
   createUnderstandingSourceRun,
   getUnderstandingSourceGrant,
   listUnderstandingSourceRuns,
+  listUnderstandingSourceGrants,
   upsertUnderstandingSourceGrant,
   updateUnderstandingSourceGrantCheckpoint,
   updateUnderstandingSourceRun,
@@ -60,7 +61,10 @@ function ensureUnderstandingSourceRun(
   toolkit: string,
   displayName: string,
 ): UnderstandingSourceRun {
-  const grant = upsertUnderstandingSourceGrant({
+  const existing = listUnderstandingSourceGrants({ includeRevoked: true })
+    .find((grant) => grant.sourceKey === `connector-account:${job.accountId}`);
+  if (existing?.status === 'revoked') throw new Error('Source authorization was revoked.');
+  const grant = existing ?? upsertUnderstandingSourceGrant({
     sourceKey: `connector-account:${job.accountId}`,
     adapterId: `connector:${job.connectorId}`,
     category: connectorSourceCategory(toolkit),
@@ -134,6 +138,13 @@ export function startConnectorLearningCoordinator(options: {
     if (!connection) return null;
     if (!connection.accountId) throw new Error(`Connector account is missing for connection ${connection.id}.`);
     if (!getConnectorAccount(connection.accountId)?.enabled) return null;
+    if (listUnderstandingSourceGrants({ includeRevoked: true })
+      .some((grant) => grant.sourceKey === `connector-account:${connection.accountId}` && grant.status === 'revoked')) return null;
+    if (request.reason === 'manual') {
+      const active = listConnectorLearningJobs({ accountId: connection.accountId, limit: 100 })
+        .find((job) => job.status === 'running' || (job.status === 'queued' && (!job.nextRunAt || Date.parse(job.nextRunAt) <= Date.now())));
+      if (active) return active;
+    }
     const syncPolicy = getConnectorSyncPolicyForConnection(connection.id);
     if (request.reason !== 'manual' && syncPolicy?.scanEnabled !== true) return null;
     const definition = getConnectorDefinition(connection.connectorId);
@@ -272,6 +283,7 @@ export function startConnectorLearningCoordinator(options: {
       knowledgeCount: 0,
       status: 'completed',
     };
+    const sourceGrantPolicy = getUnderstandingSourceGrant(sourceRun.grantId)?.processingPolicy;
     try {
       semantic = await deriveConnectedSourceUnderstanding({
         config: options.getConfig(),
@@ -279,6 +291,14 @@ export function startConnectorLearningCoordinator(options: {
         sourceInstanceId: job.sourceInstanceId,
         sourceRunId: sourceRun.id,
         processingPolicy: getUnderstandingSourceGrant(sourceRun.grantId)?.processingPolicy ?? 'local_only',
+        assertAuthorized: () => {
+          const grant = getUnderstandingSourceGrant(sourceRun.grantId);
+          if (grant?.status !== 'active' || !getConnectorAccount(job.accountId)?.enabled
+            || grant.processingPolicy !== sourceGrantPolicy || !learningEnabled(options.getConfig())
+            || listConnectorLearningJobs({ accountId: job.accountId, limit: 100 }).find((item) => item.id === job.id)?.status !== 'running') {
+            throw new Error('Source authorization changed during analysis.');
+          }
+        },
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -347,7 +367,7 @@ export function startConnectorLearningCoordinator(options: {
           await execute(job);
         } catch (err) {
           const errorMessage = err instanceof Error ? err.message : String(err);
-          const exhausted = job.attemptCount >= 5;
+          const exhausted = job.attemptCount >= 5 || job.idempotencyKey.startsWith('understanding-refresh:');
           const failed = updateConnectorLearningJob(job.id, {
             status: exhausted ? 'paused' : 'failed',
             error: learningFailureCode(err),
@@ -359,8 +379,9 @@ export function startConnectorLearningCoordinator(options: {
           publish(failed);
           const definition = getConnectorDefinition(job.connectorId);
           if (definition?.runtime.type === 'composio' && definition.runtime.role === 'toolkit') {
-            const sourceRun = ensureUnderstandingSourceRun(job, definition.runtime.toolkit, definition.displayName);
-            updateUnderstandingSourceRun(sourceRun.id, {
+            const grant = listUnderstandingSourceGrants({ includeRevoked: true }).find((item) => item.sourceKey === `connector-account:${job.accountId}`);
+            const sourceRun = grant && listUnderstandingSourceRuns(grant.id, 100).find((item) => item.metadata.connectorLearningJobId === job.id);
+            if (sourceRun) updateUnderstandingSourceRun(sourceRun.id, {
               status: 'failed', errorMessage: learningFailureCode(err), completed: true,
             });
           }

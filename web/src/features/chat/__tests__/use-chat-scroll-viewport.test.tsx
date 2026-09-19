@@ -134,6 +134,34 @@ describe('useChatScrollViewport', () => {
     expect(viewport?.atBottom).toBe(true);
   });
 
+  it('compensates a history prepend once and keeps the viewport away from the tail', () => {
+    act(() => root.render(<Harness />));
+    const el = container.firstElementChild as HTMLDivElement;
+    let height = 1600;
+    let top = 80;
+    Object.defineProperties(el, {
+      clientHeight: { get: () => 600 },
+      scrollHeight: { get: () => height },
+      scrollTop: {
+        get: () => top,
+        set: (value: number) => { top = Math.max(0, Math.min(value, height - 600)); },
+      },
+    });
+    act(() => el.dispatchEvent(new Event('scroll')));
+    act(() => root.render(<Harness messages={[...chatMessages]} />));
+    height += 800;
+    const prepended: Message[] = [
+      { role: 'user', timestamp: 0, content: [{ type: 'text', text: 'Older question' }] },
+      ...chatMessages,
+    ];
+    act(() => root.render(<Harness messages={prepended} />));
+    expect(top).toBe(880);
+    act(() => observers.get(el.firstElementChild!)?.());
+    act(() => root.render(<Harness messages={prepended} />));
+    expect(top).toBe(880);
+    expect(viewport?.atBottom).toBe(false);
+  });
+
   it('shows the button only after moving beyond the bottom threshold', () => {
     act(() => root.render(<Harness />));
     const el = container.firstElementChild as HTMLDivElement;

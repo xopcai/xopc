@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto';
-
 import type { Hono } from 'hono';
 
 import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
@@ -123,25 +121,6 @@ export function registerContextSourceRoutes(authenticated: Hono, deps: Authentic
       return c.json({ result: await readConnectedContent({
         sourceItemIds, agentId: resolveDefaultAgentId(deps.service.currentConfig),
       }) });
-    } catch (error) {
-      return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);
-    }
-  });
-
-  authenticated.post('/api/context-sources/grants/:grantId/refresh', limited, async (c) => {
-    const grant = getUnderstandingSourceGrant(c.req.param('grantId'));
-    if (!grant || grant.status !== 'active') return c.json({ error: 'Active context source not found' }, 404);
-    try {
-      if (grant.adapterId === 'local-work-folders') {
-        const result = await service.refreshDirectorySourceIfChanged({ id: grant.id, idempotencyKey: randomUUID() });
-        return c.json({ result }, result.changed ? 202 : 200);
-      }
-      const accountId = typeof grant.config.accountId === 'string' ? grant.config.accountId : '';
-      const connectionId = accountId ? getConnectorAccount(accountId)?.currentConnectionId : undefined;
-      const job = connectionId
-        ? deps.service.requestConnectorLearning(connectionId, { mode: 'incremental', reason: 'manual' })
-        : null;
-      return job ? c.json({ job }, 202) : c.json({ error: 'Context source cannot be refreshed here' }, 409);
     } catch (error) {
       return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);
     }

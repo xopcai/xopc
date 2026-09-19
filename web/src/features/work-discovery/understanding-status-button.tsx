@@ -6,22 +6,20 @@ import useSWR from 'swr';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   correctAssertion,
   fetchUserModel,
-  setAssertionStatus,
+  deleteAssertion,
   type UserAssertion,
   type UserModelResponse,
 } from '@/features/user-model/user-model-api';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
-import {
-  fetchWorkDiscoveryRun,
-  updateWorkDiscoveryProfile,
-  type WorkDiscoveryProfileCandidate,
-} from './api';
 import { useUnderstandingActivityStore } from './understanding-activity-store';
+import { UnderstandingRefreshButton } from './understanding-refresh-controls';
+import { useUnderstandingRefreshStore } from './understanding-refresh-store';
 import { UnderstandingUpdateReview } from './understanding-update-review';
 
 export function UnderstandingStatusButton() {
@@ -35,31 +33,14 @@ export function UnderstandingStatusButton() {
     onUserModelPage ? '/api/user-model' : null,
     fetchUserModel,
   );
+  const refreshError = useUnderstandingRefreshStore((state) => state.error);
+  const refreshRunning = useUnderstandingRefreshStore((state) => state.sources.some((run) => run.status === 'running' || run.status === 'queued'));
   const zh = language === 'zh';
-  const pendingCount = userModel?.assertions.filter((item) => (
-    item.scope.type === 'global'
-    && ['candidate', 'needs_review', 'conflicted', 'stale'].includes(item.status)
-  )).length ?? 0;
-
   useEffect(() => {
     if (!onUserModelPage) return;
     const params = new URLSearchParams(search);
     if (params.get('workDiscovery') !== 'review') return;
-    const runId = params.get('run');
-    let cancelled = false;
-    void (async () => {
-      if (runId && useUnderstandingActivityStore.getState().directoryRun?.id !== runId) {
-        try {
-          const run = await fetchWorkDiscoveryRun(runId);
-          if (cancelled) return;
-          useUnderstandingActivityStore.getState().updateDirectoryRun(run);
-        } catch {
-          return;
-        }
-      }
-      if (!cancelled) useUnderstandingActivityStore.getState().setDrawerOpen(true);
-    })();
-    return () => { cancelled = true; };
+    useUnderstandingActivityStore.getState().setDrawerOpen(true);
   }, [onUserModelPage, search]);
 
   useEffect(() => {
@@ -68,66 +49,18 @@ export function UnderstandingStatusButton() {
 
   if (!onUserModelPage) return null;
 
-  const running = state.status === 'running';
-
-  const reviewRunMemory = async (
-    candidate: WorkDiscoveryProfileCandidate,
-    status: 'accepted' | 'edited' | 'rejected',
-    statement?: string,
-  ) => {
-    const currentRun = useUnderstandingActivityStore.getState().directoryRun;
-    const runCandidate = currentRun?.result?.profileCandidates?.find((item) => (
-      item.id === candidate.id
-      || Boolean(item.assertionId && item.assertionId === candidate.assertionId)
-    ));
-    const sourceCandidate = state.memories.find((item) => (
-      item.id === candidate.id
-      || Boolean(item.assertionId && item.assertionId === candidate.assertionId)
-    ));
-    if (!runCandidate && !sourceCandidate?.assertionId) return false;
-    setReviewing(true);
-    setReviewError(null);
-    try {
-      if (currentRun && runCandidate) {
-        const next = await updateWorkDiscoveryProfile(currentRun.id, [{
-          id: runCandidate.id,
-          status,
-          ...(statement ? { statement } : {}),
-        }]);
-        useUnderstandingActivityStore.getState().updateDirectoryRun(next);
-      }
-      if (sourceCandidate?.assertionId) {
-        await useUnderstandingActivityStore.getState().reviewMemory(
-          sourceCandidate.assertionId,
-          status === 'accepted',
-          statement,
-        );
-      }
-      await mutateUserModel();
-      return true;
-    } catch (cause) {
-      setReviewError(cause instanceof Error ? cause.message : String(cause));
-      return false;
-    } finally {
-      setReviewing(false);
-    }
-  };
+  const running = state.status === 'running' || refreshRunning;
 
   const reviewGlobalAssertion = async (
     assertion: UserAssertion,
-    decision: 'accepted' | 'edited' | 'rejected',
+    decision: 'edited' | 'deleted',
     statement?: string,
   ) => {
-    const candidate = [
-      ...(useUnderstandingActivityStore.getState().directoryRun?.result?.profileCandidates ?? []),
-      ...useUnderstandingActivityStore.getState().memories,
-    ].find((item) => item.assertionId === assertion.id);
-    if (candidate) return reviewRunMemory(candidate, decision, statement);
     setReviewing(true);
     setReviewError(null);
     try {
       if (decision === 'edited' && statement) await correctAssertion(assertion.id, statement);
-      else await setAssertionStatus(assertion.id, decision === 'accepted' ? 'active' : 'rejected');
+      else if (decision === 'deleted') await deleteAssertion(assertion.id);
       await mutateUserModel();
       return true;
     } catch (cause) {
@@ -139,7 +72,7 @@ export function UnderstandingStatusButton() {
   };
 
   const setReviewOpen = (open: boolean) => {
-    if (!open && userModel && pendingCount === 0 && state.status !== 'running') {
+    if (!open && userModel && state.status !== 'running') {
       state.finish();
       return;
     }
@@ -164,7 +97,6 @@ export function UnderstandingStatusButton() {
           aria-label={zh ? '查看 xopc 对你的理解' : 'Review what xopc understands'}
         >
           {running ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> : <Sparkles className="size-4 text-accent-fg" />}
-          {pendingCount ? <span className="absolute right-0.5 top-0.5 size-2 rounded-full bg-accent ring-2 ring-surface-panel" /> : null}
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
@@ -179,11 +111,10 @@ export function UnderstandingStatusButton() {
               <Dialog.Description className="mt-0.5 text-xs text-fg-muted">
                 {running
                   ? (zh ? '关闭窗口也会在后台继续' : 'You can close this window; work continues in the background')
-                  : pendingCount
-                    ? (zh ? `${pendingCount} 条全局理解待确认` : `${pendingCount} global item(s) to review`)
-                    : (zh ? '查看理解来自哪些渠道' : 'See which channels shaped it')}
+                  : (zh ? '自动更新，可随时修改或删除' : 'Updated automatically. Edit or delete anytime')}
               </Dialog.Description>
             </div>
+            <UnderstandingRefreshButton disabled={!userModel?.sources?.length} />
             <Dialog.Close asChild><Button variant="ghost" className="size-8 rounded-xl p-0" aria-label={zh ? '关闭' : 'Close'}><X className="size-4" /></Button></Dialog.Close>
           </header>
 
@@ -195,13 +126,13 @@ export function UnderstandingStatusButton() {
                 activityRunning={running}
                 language={language}
                 busy={reviewing}
-                error={reviewError}
+                error={reviewError ?? refreshError ?? null}
                 onReviewAssertion={reviewGlobalAssertion}
                 onCompleted={closeReview}
               />
             ) : (
-              <section className="flex min-h-full items-center justify-center" aria-label={zh ? '正在加载用户理解' : 'Loading user understanding'}>
-                <Loader2 className="size-5 animate-spin text-fg-muted motion-reduce:animate-none" />
+              <section className="space-y-4" aria-label={zh ? '正在加载用户理解' : 'Loading user understanding'}>
+                <Skeleton className="h-8 w-2/3" /><Skeleton className="h-32 w-full" /><Skeleton className="h-32 w-full" />
               </section>
             )}
           </div>

@@ -24,9 +24,7 @@ import {
   selectWorkDiscoverySuggestion,
   startWorkDiscoveryRun,
   submitWorkDiscoveryRecognitionFeedback,
-  updateWorkDiscoveryProfile,
   type WorkDiscoveryCandidate,
-  type WorkDiscoveryProfileCandidate,
   type WorkDiscoveryPreview,
   type WorkDiscoveryProcessingTarget,
   type WorkDiscoveryRun,
@@ -92,8 +90,6 @@ export function WorkDiscoveryPage({
   const [selectedSourceIds, setSelectedSourceIds] = useState<Set<string>>(() => new Set());
   const [connectedSignals, setConnectedSignals] = useState<UnderstandingSignal[]>([]);
   const stopBatchRef = useRef(false);
-  const understandingMemories = useUnderstandingActivityStore((state) => state.memories);
-  const understandingActivityStatus = useUnderstandingActivityStore((state) => state.status);
 
   const signalKindByCategory: Partial<Record<ElectronUnderstandingSourceDefinition['category'], UnderstandingSignalKind>> = {
     recent_documents: 'recent',
@@ -301,7 +297,6 @@ export function WorkDiscoveryPage({
     }
   };
 
-
   const selectFolder = useCallback(async (rootPath: string) => {
     setBusy(true);
     setError(null);
@@ -481,38 +476,6 @@ export function WorkDiscoveryPage({
       ? `${language === 'zh' ? '先帮我评估这个方向，不要修改文件：' : 'First assess this direction without changing files:'}\n\n${suggestion.actionPrompt}`
       : suggestion.actionPrompt;
     openConversation(run.conversationId, draft);
-  };
-
-  const reviewMemory = async (
-    candidate: WorkDiscoveryProfileCandidate,
-    status: 'accepted' | 'edited' | 'rejected',
-    statement?: string,
-  ) => {
-    if (!run) return false;
-    setBusy(true);
-    setError(null);
-    try {
-      const runCandidate = run.result?.profileCandidates?.find((item) => (
-        item.id === candidate.id || Boolean(item.assertionId && item.assertionId === candidate.assertionId)
-      ));
-      const sourceCandidate = understandingMemories.find((item) => (
-        item.id === candidate.id || Boolean(item.assertionId && item.assertionId === candidate.assertionId)
-      ));
-      if (runCandidate) {
-        const next = await updateWorkDiscoveryProfile(run.id, [{ id: runCandidate.id, status, ...(statement ? { statement } : {}) }]);
-        setRun(next);
-        replaceBatchRun(next);
-      }
-      if (sourceCandidate?.assertionId) {
-        await useUnderstandingActivityStore.getState().reviewMemory(sourceCandidate.assertionId, status === 'accepted', statement);
-      }
-      return true;
-    } catch (cause) {
-      setError(errorText(cause));
-      return false;
-    } finally {
-      setBusy(false);
-    }
   };
 
   const completeUnderstandingReveal = async (
@@ -908,12 +871,9 @@ export function WorkDiscoveryPage({
           <UnderstandingReveal
             key={run.id}
             run={run}
-            sourceMemories={understandingMemories}
-            activityRunning={understandingActivityStatus === 'running'}
             language={language}
             busy={busy}
             error={error}
-            onReviewMemory={reviewMemory}
             onFinish={completeUnderstandingReveal}
             onStartConversation={startConversationFromUnderstanding}
           />

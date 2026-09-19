@@ -166,7 +166,7 @@ export function getUnderstandingSourceRun(id: string): UnderstandingSourceRun | 
 
 export function listUnderstandingSourceRuns(grantId: string, limit = 20): UnderstandingSourceRun[] {
   return (getSqliteDatabase().prepare(
-    'SELECT * FROM understanding_source_runs WHERE grant_id = ? ORDER BY started_at DESC LIMIT ?',
+    'SELECT * FROM understanding_source_runs WHERE grant_id = ? ORDER BY started_at DESC, rowid DESC LIMIT ?',
   ).all(grantId, Math.max(1, Math.min(100, limit))) as unknown as RunRow[]).map(runFromRow);
 }
 

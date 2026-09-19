@@ -29,7 +29,9 @@ describe('store-backed chat display', () => {
         messages: slice?.messages ?? [],
         streamingMsg: null,
       }),
-    ).toEqual(messages);
+    ).toBe(slice.messages);
+    expect(slice.messages).toMatchObject(messages);
+    expect(slice.messages[0].renderKey).toBeTruthy();
   });
 
   it('renders a continued assistant run in the existing live bubble', () => {

@@ -279,6 +279,8 @@ export const ChatComposer = memo(function ChatComposer({
 
   const editor = useComposerEditor({
     disabled,
+    agentId: currentAgentId,
+    conversationId,
     autoFocusKey: conversationId,
     welcomeDraftSeed,
     onExternalTextReplace,

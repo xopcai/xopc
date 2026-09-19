@@ -18,7 +18,7 @@ export function skillWireTokenRe(): RegExp {
 export const SKILL_WIRE_TRAILING_PLAIN_RE = new RegExp(`(\\/skill:${SKILL_ID_IN_WIRE})$`);
 
 /** EOW: last `/skill:id` plus trailing spaces */
-export const SKILL_WIRE_TRAILING_EOW_WS_RE = new RegExp(`(\\/skill:${SKILL_ID_IN_WIRE})([ \\t\\f\\v]*)$`);
+export const SKILL_WIRE_TRAILING_EOW_WS_RE = new RegExp(`(\\/skill:${SKILL_ID_IN_WIRE})([ \\t\\f\\v\\u00a0]*)$`);
 
 const SKILL_ID_STANDALONE_RE = new RegExp(`^${SKILL_ID_IN_WIRE}$`);
 

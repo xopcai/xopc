@@ -75,5 +75,5 @@ export function recordExplicitRelationshipFollowUp(input: {
     createdBy: 'user',
     evidenceId: evidence.id,
     evidenceConfidence: 1,
-  }, now).assertion;
+  }, now, { restoreDeleted: true }).assertion ?? null;
 }

@@ -1,53 +1,40 @@
 # Understanding and memory
 
-xopc keeps a reviewable user model and a separate knowledge memory. This separation prevents project details, temporary activity, and model guesses from silently becoming permanent claims about the user.
+xopc automatically maintains useful user understanding and scoped work memory. Ordinary memories do not require individual approval. Open **You** to inspect recent updates, see their sources, edit them, or delete them.
 
-Open **You** in the Gateway console to see the Agent's current understanding in three views:
+## What is remembered
 
-- **Your portrait** presents explicit profile fields such as call name, role, pronouns, language, and time zone as directly editable UI. These fields are not mixed into the understanding feed.
-- **Shared understanding** groups preferences and rhythm, relationships, current context, and derived insights. Every item can be confirmed, corrected, or retired.
-- **Work memory** presents distilled project facts, decisions, lessons, commitments, and open questions. Raw mail, calendar, and document records remain in the source index for retrieval and provenance instead of appearing as memory cards.
+- Explicit ordinary facts and preferences are saved directly.
+- Observations and inferences remain distinguishable from statements made by you. Only sufficiently supported, ordinary, low- or medium-consequence assumptions can influence personalization.
+- Project facts, decisions, lessons, and open questions stay in work memory with their original scope. Raw source records remain in the source index.
+- Short-lived context has a validity or review window. Uncertain or outdated information is quietly withheld instead of becoming a task for you to approve.
+- Automatic memory does not authorize actions. Inferred collaboration rules remain disabled until explicitly enabled. Sensitive inferences are not admitted to the user model.
 
-The interface describes provenance, confidence, and time horizon in plain language. Storage status names and raw scoring remain implementation details.
+The ordinary `writePolicy` supports `allow` (default) and `deny`. On upgrade, the previous ordinary `confirm` policy is migrated once to `allow`; `deny` and sensitive-write settings are preserved. There is no runtime fallback for the old ordinary confirmation policy.
 
-## Five kinds of context
+## Editing and deletion
 
-| Domain | Purpose | Typical lifetime |
-| --- | --- | --- |
-| User assertions | Identity, preferences, routines, relationships, capabilities, and current state | Stable, slowly changing, dynamic, or event-bound |
-| Goals | Desired outcomes and success criteria | Until achieved, paused, or abandoned |
-| Priority windows | What matters now, with explicit start, end, urgency, and review time | Hours to weeks |
-| Collaboration rules | Explicit communication, execution, boundary, routine, and proactive rules | Until disabled or replaced |
-| Knowledge memory | Project facts, decisions, task lessons, commitments, questions, episodes, and notes | Scope- and retention-dependent |
+Edit an understanding or work-memory item in **You**. Explicit edits take priority over subsequent source refreshes. You can also tell the assistant to correct or forget an existing user understanding in conversation.
 
-Each assertion records authority, confidence, importance, actionability, volatility, sensitivity, applicability, validity time, and review time. Confidence describes whether a claim is likely true; importance describes the cost of omitting it. They are intentionally independent.
+Deleting an understanding removes its revision chain, linked evidence associations, search entries, and matching maintenance/context audit entries. Cached discovery candidates are removed without deleting the rest of the discovery result. Deleting work memory also removes linked compaction-derived records. Minimal hashed suppression keys prevent the same slot, canonical key, or normalized text from being automatically recreated. They contain no original memory text. An explicit new remember command can restore a deleted user understanding.
 
-## Evidence and correction
+Deletion operates on the structured memory store. It does not erase original conversations, source files, connector records, backups, or text already delivered in an answer. Semantic paraphrases with different identities are not guaranteed to match a suppression fingerprint; manage the source or use a temporary conversation when information must not be learned again.
 
-Direct user statements have the highest authority. Authorized observations may propose candidates. System inference stays distinguishable from user-confirmed facts, and untrusted external content cannot become an authoritative user claim.
+## Automatic upkeep
 
-Corrections create a new assertion that supersedes the old one while keeping the audit history. Conflicting current claims move to review; the runtime abstains when it cannot resolve them safely.
+The existing system automations maintain memory without model-driven full-history rewrites:
 
-## Time and maintenance
+- Hourly maintenance retires expired or overdue assertions and knowledge and closes expired priority windows.
+- Daily reconciliation checks contradictions and promotes eligible candidates with independent owner evidence. Identical content and repeated source-item identities do not count as separate evidence. Runtime-generated evidence cannot promote an assertion.
+- Fresh supporting source observations can renew an inferred understanding's review window. Reading or recalling a memory never increases its confidence or resets its age.
+- Weekly maintenance archives stale work memory after the retention period.
 
-Maintenance is enabled by default and registered as deterministic system automations:
+Daily and weekly defaults are 03:00 and Sunday 04:00 in the configured maintenance time zone (otherwise the host time zone). Jobs are bounded, idempotent, and auditable.
 
-- an hourly temporal sweep marks expired assertions and knowledge stale and closes expired priority windows;
-- a daily reconciliation checks review dates, contradictions, evidence thresholds, and missing search-index rows;
-- a weekly knowledge job archives stale knowledge after the configured retention period.
+## Use in a conversation
 
-Defaults are 03:00 daily and Sunday at 04:00 weekly in the configured maintenance time zone, or the host time zone when none is set. Runs are idempotent, bounded, recorded in SQLite, and do not use a model to make hidden semantic changes.
+Every turn selects a bounded set of relevant context after scope, validity, sensitivity, and authority checks. Automatically activated inferences are still labeled as working assumptions, never as user-confirmed facts. Current instructions take precedence. Due memories are excluded immediately, even before the maintenance job runs.
 
-## Context sent to an Agent
+Relevant sources and context-selection audits remain inspectable. Helpful/irrelevant feedback affects retrieval priority, not factual confidence.
 
-Every turn builds a bounded execution context from current rules, relevant assertions, active goals and priorities, and task-relevant knowledge. Scope, validity, sensitivity, disclosure policy, authority, relevance, importance, urgency, and token budget all affect selection. The full user model is never attached to every prompt.
-
-Each selection is audited by turn so the console can explain which items influenced an answer. Helpful or irrelevant feedback is stored against that execution-context run.
-
-## Sources and privacy
-
-Conversations, selected work folders, and configured connectors are independent sources. Revoking one stops future reads from that source. Sensitive writes use their own policy, and local-only source content is not sent to a remote extraction model.
-
-Do not store passwords, API keys, recovery codes, payment details, or regulated records as user-model facts. Local storage also does not guarantee local processing: context selected for a request may be sent to the configured model provider unless its processing policy requires local handling.
-
-The user model is stored with the rest of xopc's structured local state. Backup and deletion are covered in [Data and file locations](./workspace.md).
+Conversations, work folders, and connectors retain separate access controls. Local-only processing policy and temporary conversations continue to apply. Backup and state locations are described in [Data and file locations](./workspace.md).

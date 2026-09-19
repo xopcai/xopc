@@ -144,7 +144,7 @@ describe('compaction ledger promotion', () => {
     expect(getKnowledgeItem(interactive.durableRecordIds[0]!)?.status).toBe('active');
   });
 
-  it('stages durable knowledge for confirmation and performs no writes when denied', () => {
+  it('activates trusted durable knowledge automatically and performs no writes when denied', () => {
     seedConversationFixtures();
     const input = {
       conversationId: "6d9217fe-77c7-411d-8cc9-92aabe81a2d0",
@@ -156,12 +156,12 @@ describe('compaction ledger promotion', () => {
         source('assistant-clean', 2, { role: 'assistant', content: 'Decision recorded.', turnId: 'turn-clean' } as never),
       ],
     };
-    const confirmed = promoteCompactionLedger({
+    const automatic = promoteCompactionLedger({
       ...input,
-      transcriptId: 'session-confirm',
-      writePolicy: 'confirm',
+      transcriptId: 'session-auto',
+      writePolicy: 'allow',
     });
-    expect(getKnowledgeItem(confirmed.durableRecordIds[0]!)?.status).toBe('candidate');
+    expect(getKnowledgeItem(automatic.durableRecordIds[0]!)?.status).toBe('active');
 
     const denied = promoteCompactionLedger({
       ...input,

@@ -53,13 +53,13 @@ const executionBase = {
   extractionRunId: 'run-1',
   extractorId: 'turn-semantics',
   scopeContext: {
-    sessionId: 'session-1',
+    conversationId: 'session-1',
     agentId: 'main',
     workspaceId: '/workspace',
     projectId: 'project-1',
   },
   policy: {
-    write: 'confirm' as const,
+    write: 'allow' as const,
     sensitiveWrite: 'confirm' as const,
     processing: 'local_only' as const,
   },
@@ -144,4 +144,29 @@ describe('user model capture admission', () => {
     expect(listCollaborationRules()).toHaveLength(1);
     expect(second).toMatchObject({ created: 0, deduplicated: 2 });
   });
+  it('automatically admits explicit ordinary statements but never enables inferred execution rules', () => {
+    const result = executeUserModelInterpretation({
+      ...executionBase,
+      policy: { ...executionBase.policy, write: 'allow' },
+      interpretation: interpretation({
+        intent: 'user_assertion',
+        collaborationRules: [{ category: 'execution', priority: 10, scope: { type: 'global' },
+          conditions: {}, statement: 'Send email automatically.', evidenceRefs: [source.ref] }],
+      }),
+    });
+    expect(result.createdAssertions[0]?.status).toBe('active');
+    expect(result.createdRules[0]?.status).toBe('disabled');
+  });
+
+  it('does not capture sensitive inferences even when automatic writes are allowed', () => {
+    const result = executeUserModelInterpretation({
+      ...executionBase,
+      policy: { ...executionBase.policy, write: 'allow' },
+      interpretation: interpretation({ candidates: [{ ...interpretation().candidates[0]!,
+        authority: 'system_inferred', sensitivity: 'personal' }] }),
+    });
+    expect(result.created).toBe(0);
+    expect(result.rejected).toBe(1);
+  });
+
 });

@@ -53,7 +53,7 @@ xopc maintains structured, governed understanding rather than treating every pie
 - commitments that still need attention;
 - recent pressures, blockers, and current focus.
 
-Each item has a lifecycle. It may be proposed, confirmed, corrected, rejected, marked stale, or deleted. Direct statements and explicit rules take priority over inference. See [User understanding](./user-understanding.md).
+Ordinary understanding is maintained automatically and can be inspected, corrected, or deleted. Uncertain and stale items are quietly withheld rather than queued for user approval. Direct statements and explicit rules take priority over inference. See [User understanding](./user-understanding.md).
 
 ### Hold messy, long-running work
 
@@ -114,7 +114,7 @@ The current product includes the foundations of this experience:
 | Product need | Current foundation |
 | --- | --- |
 | Local ownership | Desktop app, self-hosted Gateway, local state, bring-your-own keys, cloud and local models |
-| Reviewable understanding | Proposed and active understandings, explicit collaboration rules, confirmation and correction, stale/conflict review |
+| Automatic understanding | Source-backed personalization, explicit collaboration rules, user edits and deletion, quiet stale/conflict handling |
 | Visible work discovery | Bounded, read-only analysis of explicitly selected folders with evidence-backed next steps; optional native context on macOS |
 | Durable work | Conversations, Tasks, Projects, Notes, workspaces, evidence, and run history |
 | Execution and follow-up | Tools, Skills, Workflows, Automations, and proactive suggestion infrastructure |

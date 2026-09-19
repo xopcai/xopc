@@ -1,19 +1,17 @@
 import { create } from 'zustand';
 
 import type { ElectronUnderstandingSourceCollectionResult } from '@/types/electron';
-import { correctAssertion } from '@/features/user-model/user-model-api';
 
 import {
   fetchWorkDiscoveryRun,
   importUnderstandingSources,
-  reviewSourceAssertions,
   type WorkDiscoveryProfileCandidate,
   type WorkDiscoveryProcessingPolicy,
   type WorkDiscoveryRun,
   type WorkUnderstandingThread,
 } from './api';
 
-type ActivityStatus = 'idle' | 'running' | 'review_ready' | 'completed' | 'partial';
+type ActivityStatus = 'idle' | 'running' | 'completed' | 'partial';
 type SourceStatus = 'idle' | 'running' | 'completed' | 'partial' | 'denied' | 'failed' | 'skipped';
 
 type UnderstandingActivityState = {
@@ -34,7 +32,6 @@ type UnderstandingActivityState = {
     selectedSources: string[],
     processingPolicy: WorkDiscoveryProcessingPolicy,
   ) => Promise<void>;
-  reviewMemory: (assertionId: string, accepted: boolean, statement?: string) => Promise<void>;
 };
 
 function selectedMap(sourceIds: string[], status: SourceStatus): Record<string, SourceStatus> {
@@ -86,14 +83,11 @@ export const useUnderstandingActivityStore = create<UnderstandingActivityState>(
       ? 'completed' : run.status === 'failed' || run.status === 'canceled' ? 'failed' : 'running';
     const sourcesDone = Object.values(get().sources).every((status) => status !== 'running' && status !== 'idle');
     const sourceFailed = Object.values(get().sources).some((status) => status === 'denied' || status === 'failed' || status === 'partial');
-    const hasPendingMemory = get().memories.some((memory) => memory.status === 'pending');
     set({
       directoryStatus,
       directoryRun: run,
       status: directoryStatus === 'completed' && sourcesDone
-        ? !run.feedback?.recognitionDecision || hasPendingMemory
-          ? 'review_ready'
-          : sourceFailed ? 'partial' : 'completed'
+        ? sourceFailed ? 'partial' : 'completed'
         : directoryStatus === 'failed' && sourcesDone ? 'partial' : 'running',
     });
   },
@@ -131,8 +125,7 @@ export const useUnderstandingActivityStore = create<UnderstandingActivityState>(
         sources, itemCounts, memories, threads: understanding.workThreads,
         ...(analysisErrors.length ? { error: analysisErrors.join('; ') } : {}),
         status: !directoryDone ? 'running'
-          : memories.some((memory) => memory.status === 'pending') ? 'review_ready'
-            : hasFailure ? 'partial' : 'completed',
+          : hasFailure ? 'partial' : 'completed',
       });
     } catch (error) {
       set((state) => ({
@@ -144,23 +137,5 @@ export const useUnderstandingActivityStore = create<UnderstandingActivityState>(
       }));
     }
   },
-  reviewMemory: async (assertionId, accepted, statement) => {
-    try {
-      if (statement) await correctAssertion(assertionId, statement);
-      else await reviewSourceAssertions([{ assertionId, status: accepted ? 'accepted' : 'rejected' }]);
-      set((state) => {
-        const memories = state.memories.map((memory) => memory.assertionId === assertionId
-          ? { ...memory, ...(statement ? { statement } : {}), status: statement ? 'edited' as const : accepted ? 'accepted' as const : 'rejected' as const } : memory);
-        return {
-          memories,
-          status: memories.some((memory) => memory.status === 'pending') ? 'review_ready'
-            : Object.values(state.sources).some((source) => source === 'denied' || source === 'failed' || source === 'partial') ? 'partial' : 'completed',
-          error: undefined,
-        };
-      });
-    } catch (error) {
-      set({ error: error instanceof Error ? error.message : String(error) });
-      throw error;
-    }
-  },
+
 }));

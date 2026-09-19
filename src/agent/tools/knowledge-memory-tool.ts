@@ -3,6 +3,7 @@ import { Type } from '@sinclair/typebox';
 
 import {
   getKnowledgeItem,
+  isKnowledgeCurrent,
   knowledgeItemAllowed,
   searchKnowledgeItems,
   writeKnowledgeItem,
@@ -16,7 +17,7 @@ export interface KnowledgeToolOptions {
   getProjectId?: () => string | undefined;
   canRead: () => boolean;
   canWrite: () => boolean;
-  getWritePolicy: () => 'deny' | 'confirm' | 'allow';
+  getWritePolicy: () => 'deny' | 'allow';
   getReadPolicy: () => KnowledgeReadPolicy;
 }
 
@@ -89,7 +90,7 @@ export function createKnowledgeGetTool(options: KnowledgeToolOptions): AgentTool
       }
       const id = (raw as { id: string }).id;
       const item = getKnowledgeItem(id);
-      return item && visibleItem(options, item) && knowledgeItemAllowed(item, options.getReadPolicy())
+      return item && isKnowledgeCurrent(item) && visibleItem(options, item) && knowledgeItemAllowed(item, options.getReadPolicy())
         ? { content: [{ type: 'text', text: JSON.stringify(item, null, 2) }], details: { item } }
         : { content: [{ type: 'text', text: `Knowledge item not found: ${id}` }], details: { id } };
     },
@@ -134,7 +135,7 @@ export function createKnowledgeWriteTool(options: KnowledgeToolOptions): AgentTo
             : { type: 'session', id: sessionId! },
         content: input.content,
         canonicalKey: input.canonicalKey,
-        status: writePolicy === 'allow' ? 'active' : 'candidate',
+        status: 'active',
         confidence: 0.7,
         importance: input.importance ?? 0.5,
         originClass: 'agent',

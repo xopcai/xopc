@@ -11,25 +11,27 @@ import {
   Loader2,
   Mail,
   MessageCircle,
-  Pencil,
   StickyNote,
   UserRound,
-  X,
   type LucideIcon,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import type { UserAssertion, UserModelResponse } from '@/features/user-model/user-model-api';
+import { groupUnderstandingByDate, UnderstandingRow } from '@/features/user-model/understanding-row';
 import { cn } from '@/lib/cn';
 
-type AssertionDecision = 'accepted' | 'edited' | 'rejected';
+import { UnderstandingRefreshButton, UnderstandingRefreshProgress } from './understanding-refresh-controls';
+
+type AssertionDecision = 'edited' | 'deleted';
 type AssertionSource = NonNullable<UserAssertion['sources']>[number];
 type SourceKind = AssertionSource['kind'];
 type SourceCategory = AssertionSource['category'];
 
 type ChannelView = {
   key: string;
+  grantId?: string;
   kind: SourceKind;
   category?: SourceCategory;
   label: string;
@@ -52,7 +54,6 @@ type UnderstandingUpdateReviewProps = {
   onCompleted: () => void;
 };
 
-const REVIEW_STATUSES = new Set<UserAssertion['status']>(['candidate', 'needs_review', 'conflicted', 'stale']);
 
 const copy = {
   zh: {
@@ -60,20 +61,14 @@ const copy = {
     title: 'xopc 如何形成对你的理解',
     subtitle: '这里汇总跨项目、跨对话形成的认识，并说明它们来自哪些渠道。项目事实不会混入你的个人画像。',
     channels: '理解渠道',
-    channelHint: '每个渠道只贡献有依据的候选内容。',
+    channelHint: '查看来源及其最近更新。',
     noChannels: '尚未通过任何渠道形成可展示的全局理解。',
     activeCount: '{{count}} 条已在使用',
-    pendingCount: '{{count}} 条待确认',
-    noUnderstanding: '尚未从这个渠道形成可使用的全局理解',
-    pending: '需要你确认',
-    pendingHint: '确认后才会用于其他项目和之后的对话。',
-    nothingPending: '目前没有需要确认的全局理解。',
-    source: '来源',
-    remember: '确认',
-    discard: '不是这样',
-    edit: '修正',
-    save: '保存修正',
-    cancel: '取消',
+    pendingCount: '{{count}} 条暂不使用',
+    noUnderstanding: '暂无来自此渠道的全局理解',
+    pending: '最近更新',
+    pendingHint: '自动整理并按需使用，你可以随时修改或删除。',
+    nothingPending: '尚未形成全局理解。',
     showAll: '查看全部 {{count}} 条',
     showLess: '收起',
     done: '完成',
@@ -86,30 +81,20 @@ const copy = {
       local_source: '本机来源',
       inference: '综合整理',
     },
-    categories: {
-      identity: '关于你是谁', preference: '偏好', value: '价值取向', routine: '工作习惯',
-      capability: '能力与职责', relationship: '协作关系', current_state: '当前状态', derived_insight: '综合判断',
-    },
   },
   en: {
     eyebrow: 'Global user understanding',
     title: 'How xopc forms its understanding of you',
     subtitle: 'This brings together understanding formed across projects and conversations, with the channel behind each item. Project facts stay out of your personal portrait.',
     channels: 'Understanding channels',
-    channelHint: 'Each channel contributes only evidence-backed candidates.',
+    channelHint: 'View sources and their latest updates.',
     noChannels: 'No channel has formed displayable global understanding yet.',
     activeCount: '{{count}} in use',
-    pendingCount: '{{count}} to review',
+    pendingCount: '{{count}} not in use',
     noUnderstanding: 'No usable global understanding has formed from this channel yet',
-    pending: 'Needs your confirmation',
-    pendingHint: 'Only confirmed items may be used across projects and future conversations.',
-    nothingPending: 'There is no global understanding to review right now.',
-    source: 'Source',
-    remember: 'Confirm',
-    discard: 'Not true',
-    edit: 'Correct',
-    save: 'Save correction',
-    cancel: 'Cancel',
+    pending: 'Recent updates',
+    pendingHint: 'Organized automatically and used when relevant. Edit or delete anytime.',
+    nothingPending: 'No understanding has formed yet.',
     showAll: 'View all {{count}}',
     showLess: 'Show less',
     done: 'Done',
@@ -121,10 +106,6 @@ const copy = {
       work_folder: 'Work folders',
       local_source: 'On-device sources',
       inference: 'Synthesized understanding',
-    },
-    categories: {
-      identity: 'Who you are', preference: 'Preference', value: 'Values', routine: 'Routine',
-      capability: 'Capabilities and responsibilities', relationship: 'Collaboration', current_state: 'Current state', derived_insight: 'Synthesis',
     },
   },
 } as const;
@@ -204,8 +185,8 @@ export function UnderstandingUpdateReview({
     () => assertions.filter((item) => item.scope.type === 'global' && item.status !== 'archived' && item.status !== 'rejected'),
     [assertions],
   );
-  const pendingAssertions = useMemo(
-    () => globalAssertions.filter((item) => REVIEW_STATUSES.has(item.status)),
+  const recentAssertions = useMemo(
+    () => [...globalAssertions].sort((a, b) => b.recordedAt - a.recordedAt),
     [globalAssertions],
   );
   const channels = useMemo<ChannelView[]>(() => {
@@ -217,6 +198,7 @@ export function UnderstandingUpdateReview({
       const key = configuredSourceKey(source);
       channelMap.set(key, {
         key,
+        grantId: source.id,
         kind: source.kind,
         category: source.category,
         label: source.kind === 'work_folder'
@@ -255,7 +237,7 @@ export function UnderstandingUpdateReview({
     const completed = await onReviewAssertion(assertion, decision, statement);
     if (completed) setEditingId(null);
   };
-  const visiblePending = showAll ? pendingAssertions : pendingAssertions.slice(0, 5);
+  const visibleRecent = showAll ? recentAssertions : recentAssertions.slice(0, 5);
 
   return (
     <section className="mx-auto w-full max-w-[42rem] pb-2" aria-live="polite">
@@ -272,26 +254,71 @@ export function UnderstandingUpdateReview({
         </div>
       ) : null}
 
-      <section className="mt-8" aria-labelledby="understanding-channels-title">
-        <h3 id="understanding-channels-title" className="text-sm font-semibold text-fg">{t.channels}</h3>
+
+      <section className="mt-8" aria-labelledby="understanding-updates-title">
+        <h3 id="understanding-updates-title" className="text-sm font-semibold text-fg">
+          {t.pending}{recentAssertions.length ? ` · ${recentAssertions.length}` : ''}
+        </h3>
+        <p className="mt-1 text-xs leading-5 text-fg-muted">{t.pendingHint}</p>
+        {recentAssertions.length ? (
+          <div className="mt-3">
+            {groupUnderstandingByDate(visibleRecent, language).map(({ label, items }) => (
+              <div key={label}>
+                <h4 className="border-b border-edge-subtle px-4 pb-2 pt-3 text-xs font-medium text-fg-muted">{label}</h4>
+                <div>{items.map((assertion) => (
+                  <UnderstandingRow
+                    key={assertion.id}
+                    item={assertion}
+                    language={language}
+                    busy={busy}
+                    editing={editingId === assertion.id}
+                    draft={draft}
+                    onDraftChange={setDraft}
+                    onEdit={() => { setEditingId(assertion.id); setDraft(assertion.statement); }}
+                    onCancel={() => setEditingId(null)}
+                    onCorrect={() => void review(assertion, 'edited', draft.trim())}
+                    onDelete={() => void review(assertion, 'deleted')}
+                  />
+                ))}</div>
+              </div>
+            ))}
+            {recentAssertions.length > 5 ? (
+              <button type="button" className="mx-auto flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-accent-fg hover:underline" onClick={() => setShowAll((value) => !value)}>
+                {showAll ? t.showLess : t.showAll.replace('{{count}}', String(recentAssertions.length))}
+                <ChevronDown className={cn('size-3.5 transition-transform', showAll && 'rotate-180')} />
+              </button>
+            ) : null}
+          </div>
+        ) : (
+          <div className="mt-3 flex items-start gap-3 rounded-xl border border-edge bg-surface-base/55 p-4">
+            <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-success" />
+            <p className="text-sm leading-6 text-fg-muted">{t.nothingPending}</p>
+          </div>
+        )}
+      </section>
+
+      <details className="mt-6 border-t border-edge pt-4">
+        <summary className="w-fit cursor-pointer rounded-md py-2 text-sm font-medium text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{t.channels} · {channels.length}</summary>
         <p className="mt-1 text-xs leading-5 text-fg-muted">{t.channelHint}</p>
         {channels.length ? <div className="mt-3 space-y-3">
           {channels.map((channel) => {
             const Icon = channel.category ? CATEGORY_ICONS[channel.category] ?? SOURCE_ICONS[channel.kind] : SOURCE_ICONS[channel.kind];
-            const active = channel.assertions.filter((item) => item.status === 'active').length;
-            const pending = channel.assertions.filter((item) => REVIEW_STATUSES.has(item.status)).length;
+            const active = channel.assertions.filter((item) => item.usable).length;
+            const pending = channel.assertions.filter((item) => !item.usable).length;
             return (
               <article key={channel.key} className="rounded-xl border border-edge bg-surface-base/55 px-4 py-4">
                 <div className="flex items-start gap-3">
                   <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-surface-hover text-fg-muted"><Icon className="size-4" /></div>
                   <div className="min-w-0 flex-1">
                     <h4 className="truncate text-sm font-medium text-fg">{channel.label}</h4>
+                    {channel.grantId ? <UnderstandingRefreshProgress sourceId={channel.grantId} lastCollectedAt={channel.lastObservedAt} /> : null}
                     {channel.assertions.length ? (
                       <p className="mt-1 text-xs text-fg-muted">
                         {[active ? t.activeCount.replace('{{count}}', String(active)) : '', pending ? t.pendingCount.replace('{{count}}', String(pending)) : ''].filter(Boolean).join(' · ')}
                       </p>
                     ) : <p className="mt-1 text-xs text-fg-muted">{t.noUnderstanding}</p>}
                   </div>
+                  {channel.grantId ? <UnderstandingRefreshButton sourceId={channel.grantId} /> : null}
                 </div>
                 {channel.assertions.length ? (
                   <ul className="ml-12 mt-3 space-y-2 border-t border-edge-subtle pt-3 text-xs leading-5 text-fg-muted">
@@ -304,59 +331,8 @@ export function UnderstandingUpdateReview({
             );
           })}
         </div> : <p className="mt-3 rounded-xl border border-edge bg-surface-base/55 p-4 text-sm text-fg-muted">{t.noChannels}</p>}
-      </section>
+      </details>
 
-      <section className="mt-8" aria-labelledby="understanding-pending-title">
-        <h3 id="understanding-pending-title" className="text-sm font-semibold text-fg">
-          {t.pending}{pendingAssertions.length ? ` · ${pendingAssertions.length}` : ''}
-        </h3>
-        <p className="mt-1 text-xs leading-5 text-fg-muted">{t.pendingHint}</p>
-        {pendingAssertions.length ? (
-          <div className="mt-3 space-y-3">
-            {visiblePending.map((assertion) => {
-              const editing = editingId === assertion.id;
-              const sourceLabels = (assertion.sources?.length ? assertion.sources : [fallbackSource(assertion)])
-                .map((source) => sourceDisplayName(source, language));
-              return (
-                <article key={assertion.id} className="rounded-xl border border-edge bg-surface-panel p-4 shadow-surface sm:p-5">
-                  <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                    <span className="rounded-full bg-accent-soft px-2 py-0.5 font-medium text-accent-fg">{t.categories[assertion.kind]}</span>
-                    <span className="text-fg-subtle">{t.source}: {sourceLabels.join(' · ')}</span>
-                  </div>
-                  {editing ? (
-                    <textarea autoFocus value={draft} onChange={(event) => setDraft(event.target.value)} className="mt-3 min-h-24 w-full resize-y rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm leading-6 text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent/15" />
-                  ) : <p className="mt-3 text-[0.95rem] font-medium leading-7 text-fg">{assertion.statement}</p>}
-                  {editing ? (
-                    <div className="mt-4 flex justify-end gap-2">
-                      <Button variant="ghost" disabled={busy} onClick={() => setEditingId(null)}>{t.cancel}</Button>
-                      <Button variant="primary" disabled={busy || !draft.trim()} onClick={() => void review(assertion, 'edited', draft.trim())}>
-                        {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}{t.save}
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="mt-4 flex flex-wrap justify-end gap-2">
-                      <Button variant="ghost" disabled={busy} onClick={() => { setEditingId(assertion.id); setDraft(assertion.statement); }}><Pencil className="size-3.5" />{t.edit}</Button>
-                      <Button variant="secondary" disabled={busy} onClick={() => void review(assertion, 'rejected')}><X className="size-3.5" />{t.discard}</Button>
-                      <Button variant="primary" disabled={busy} onClick={() => void review(assertion, 'accepted')}>{busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}{t.remember}</Button>
-                    </div>
-                  )}
-                </article>
-              );
-            })}
-            {pendingAssertions.length > 5 ? (
-              <button type="button" className="mx-auto flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-accent-fg hover:underline" onClick={() => setShowAll((value) => !value)}>
-                {showAll ? t.showLess : t.showAll.replace('{{count}}', String(pendingAssertions.length))}
-                <ChevronDown className={cn('size-3.5 transition-transform', showAll && 'rotate-180')} />
-              </button>
-            ) : null}
-          </div>
-        ) : (
-          <div className="mt-3 flex items-start gap-3 rounded-xl border border-edge bg-surface-base/55 p-4">
-            <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-success" />
-            <p className="text-sm leading-6 text-fg-muted">{t.nothingPending}</p>
-          </div>
-        )}
-      </section>
 
       <div className="mt-6 flex justify-end">
         <Button variant="primary" disabled={busy} onClick={onCompleted}><Check className="size-4" />{t.done}</Button>

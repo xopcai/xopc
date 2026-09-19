@@ -81,7 +81,7 @@ export function applyUserProfilePatch(input: UserProfilePatch, now = Date.now())
       observedAt: now,
       createdBy: 'user',
       ...(current ? { correctionOfAssertionId: current.id } : {}),
-    }, now);
+    }, now, { restoreDeleted: true });
   }
   return getUserProfileSnapshot();
 }

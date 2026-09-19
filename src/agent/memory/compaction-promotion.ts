@@ -50,7 +50,7 @@ export interface PromoteCompactionLedgerInput {
   handover: CompactionHandover;
   audit: CompactionAudit;
   sourceEntries: readonly TranscriptSourceEntry[];
-  writePolicy: 'deny' | 'confirm' | 'allow';
+  writePolicy: 'deny' | 'allow';
 }
 
 export interface PromoteCompactionLedgerResult {
@@ -196,7 +196,7 @@ export function promoteCompactionLedger(
       canonicalKey: `compaction:${input.transcriptId}:${item.id}`,
       confidence: input.audit.status === 'passed' ? 0.82 : 0.65,
       status: active
-        ? (input.writePolicy === 'allow' && originClass !== 'untrusted' ? 'active' : 'candidate')
+        ? (originClass !== 'untrusted' && !classified.derivedFromRecalledContext ? 'active' : 'candidate')
         : 'archived',
       importance: importanceFor(item),
       originClass,
@@ -211,6 +211,7 @@ export function promoteCompactionLedger(
         handoverKind: item.kind,
       },
     });
+    if (!episode.item) continue;
     result.episodicRecordIds.push(episode.item.id);
 
     const promotable = active
@@ -244,7 +245,7 @@ export function promoteCompactionLedger(
       content: item.text,
       canonicalKey: `durable:${item.kind}:${stableId('fact', item.text)}`,
       confidence: 0.82,
-      status: input.writePolicy === 'allow' ? 'active' : 'candidate',
+      status: 'active',
       importance: importanceFor(item),
       originClass: 'agent',
       sourceConversationId: input.conversationId,
@@ -257,7 +258,7 @@ export function promoteCompactionLedger(
         observedAt: classified.observedAt,
       },
     });
-    result.durableRecordIds.push(durable.item.id);
+    if (durable.item) result.durableRecordIds.push(durable.item.id);
   }
 
   return result;

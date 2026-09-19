@@ -117,7 +117,7 @@ export class ConnectedKnowledgePipeline {
         });
         completeKnowledgeSourceItemSynthesis({ itemId: item.id, workerId: this.workerId, status: 'completed' });
         result.completed += 1;
-        result.recordIds.push(written.item.id);
+        if (written.item) result.recordIds.push(written.item.id);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         completeKnowledgeSourceItemSynthesis({

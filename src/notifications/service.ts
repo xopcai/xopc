@@ -55,7 +55,7 @@ function preferenceAllows(type: ProductNotificationType, preferences: Notificati
     case 'automation.completed': return preferences.automationCompleted;
     case 'automation.failed': return preferences.automationFailed;
     case 'proactive.insight': return preferences.proactiveInsight;
-    case 'work_discovery.review_ready':
+    case 'work_discovery.completed':
     case 'work_discovery.failed':
       return true;
   }

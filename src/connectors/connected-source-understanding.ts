@@ -93,6 +93,7 @@ export async function deriveConnectedSourceUnderstanding(input: {
   sourceRunId: string;
   processingPolicy: 'local_only' | 'remote_allowed';
   analyze?: typeof analyzeUnderstandingSources;
+  assertAuthorized?: () => void;
 }): Promise<{
   created: number;
   knowledgeCount: number;
@@ -119,6 +120,7 @@ export async function deriveConnectedSourceUnderstanding(input: {
   }
   try {
     const analysis = await (input.analyze ?? analyzeUnderstandingSources)({ config: input.config, items });
+    input.assertAuthorized?.();
     const byRef = new Map(items.map((item) => [item.evidenceRef, item]));
     let created = 0;
     for (const candidate of analysis.profileCandidates.filter(isPortraitCandidate)) {

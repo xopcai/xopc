@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 
+import { UnderstandingRefreshCoordinator } from './understanding-refresh-coordinator';
+
 import { fetchWorkDiscoveryOnboarding, fetchWorkDiscoveryRun } from './api';
 import { useUnderstandingActivityStore } from './understanding-activity-store';
 
@@ -61,5 +63,5 @@ export function UnderstandingActivityCoordinator() {
     };
   }, []);
 
-  return null;
+  return <UnderstandingRefreshCoordinator />;
 }

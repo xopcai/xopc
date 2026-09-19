@@ -58,7 +58,7 @@ function isValidTimeZone(value: string): boolean {
 export const UserModelConfigSchema = z
   .object({
     enabled: z.boolean().default(true),
-    writePolicy: WritePolicySchema.default('confirm'),
+    writePolicy: z.enum(['deny', 'allow']).default('allow'),
     sensitiveWritePolicy: WritePolicySchema.default('confirm'),
     processingPolicy: z.enum(['local_only', 'remote_allowed']).default('remote_allowed'),
     extraction: z.object({
@@ -95,7 +95,7 @@ export const UserModelConfigSchema = z
   .strict()
   .default({
     enabled: true,
-    writePolicy: 'confirm',
+    writePolicy: 'allow',
     sensitiveWritePolicy: 'confirm',
     processingPolicy: 'remote_allowed',
     extraction: {
@@ -115,31 +115,10 @@ export const UserModelConfigSchema = z
     },
   });
 
-export function normalizeKnowledgeMemoryConfigInput(input: unknown): unknown {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return input;
-  const memory = input as Record<string, unknown>;
-  if (!Array.isArray(memory.sources)) return input;
-  const oldSources = memory.sources.filter((source): source is string => typeof source === 'string');
-  const visibilityScopes = new Set(['session', 'workspace', 'project']);
-  const normalized = { ...memory };
-  if (!Array.isArray(normalized.readScopes)) {
-    normalized.readScopes = oldSources.filter((source) => visibilityScopes.has(source));
-  }
-  if (!Array.isArray(normalized.contentSources)) {
-    normalized.contentSources = [
-      ...(oldSources.some((source) => visibilityScopes.has(source)) ? ['memory'] : []),
-      ...(oldSources.includes('workspace') ? ['local_import'] : []),
-      ...(oldSources.includes('connector') ? ['connector'] : []),
-    ];
-  }
-  delete normalized.sources;
-  return normalized;
-}
-
 export const KnowledgeMemoryConfigSchema = z
-  .preprocess(normalizeKnowledgeMemoryConfigInput, z.object({
+  .object({
     enabled: z.boolean().default(true),
-    writePolicy: WritePolicySchema.default('confirm'),
+    writePolicy: z.enum(['deny', 'allow']).default('allow'),
     readScopes: z.array(z.enum(['global', 'agent', 'workspace', 'project', 'session']))
       .default(['global', 'agent', 'workspace', 'project', 'session']),
     contentSources: z.array(z.enum(['memory', 'local_import', 'connector']))
@@ -154,10 +133,10 @@ export const KnowledgeMemoryConfigSchema = z
     allowExternalWrites: z.boolean().default(false),
     allowedProviderIds: z.array(z.string().min(1)).optional(),
     autoWriteKinds: z.array(z.string().min(1)).optional(),
-  }).strict())
+  }).strict()
   .default({
     enabled: true,
-    writePolicy: 'confirm',
+    writePolicy: 'allow',
     readScopes: ['global', 'agent', 'workspace', 'project', 'session'],
     contentSources: ['memory', 'local_import'],
     searchStrategy: 'fanout',

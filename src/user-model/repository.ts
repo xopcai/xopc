@@ -13,6 +13,7 @@ import {
   type ReconciliationResult,
   type UserAssertion,
 } from './domain.js';
+import { memoryFingerprint, isMemorySuppressed, suppressMemory, restoreMemory, clearMemoryAudit } from '../user-context/memory-suppression.js';
 import { defaultReviewAt, requiresBoundedValidity } from './temporal.js';
 
 type SlotRow = {
@@ -262,9 +263,15 @@ function authorityRank(authority: UserAssertion['authority']): number {
   return ({ external_untrusted: 0, system_inferred: 1, user_observed: 2, user_explicit: 3 })[authority];
 }
 
-export function reconcileAssertion(candidate: AssertionCandidate, now = Date.now()): ReconciliationResult {
+export function reconcileAssertion(candidate: AssertionCandidate, now = Date.now(), options: { restoreDeleted?: boolean } = {}): ReconciliationResult {
   validateCandidate(candidate);
   return runSqliteWriteTransaction((db) => {
+    if (candidate.authority !== 'user_explicit' && candidate.sensitivity !== 'normal') {
+      return { action: 'suppressed' };
+    }
+    const keys = assertionFingerprints(candidate);
+    if (options.restoreDeleted && candidate.authority === 'user_explicit') restoreMemory(db, keys);
+    if (isMemorySuppressed(db, keys)) return { action: 'suppressed' };
     const slot = findOrCreateSlot(db, candidate, now);
     const existing = listReconcilableAssertions(db, slot.id);
 
@@ -275,11 +282,18 @@ export function reconcileAssertion(candidate: AssertionCandidate, now = Date.now
       const target = existing.find((item) => item.id === candidate.correctionOfAssertionId);
       if (!target) throw new Error('Correction target does not belong to the resolved assertion slot.');
       if (target.normalizedValue === candidate.normalizedValue.trim()) {
+        db.prepare("UPDATE user_assertions SET statement = ?, authority = 'user_explicit', confidence = 1, status = 'active', observed_at = ?, review_at = ? WHERE assertion_id = ?")
+          .run(candidate.statement.trim(), candidate.observedAt, defaultReviewAt(candidate.volatility, candidate.observedAt) ?? null, target.id);
+        db.prepare('UPDATE user_assertions_fts SET statement = ? WHERE assertion_id = ?').run(candidate.statement.trim(), target.id);
         attachEvidence(db, target.id, candidate, now);
-        return { action: 'deduplicated', assertion: target };
+        return { action: 'deduplicated', assertion: getUserAssertion(target.id)! };
+      }
+      if (slot.cardinality === 'multiple') {
+        suppressMemory(db, assertionFingerprints({ ...target, ...slot }), now);
       }
       const assertion = insertAssertion(db, slot.id, candidate, 'active', now, target.id);
-      closeValidity(db, target, candidate.validFrom ?? candidate.observedAt, now);
+      closeValidity(db, target, candidate.observedAt, now);
+      updateStatus(db, target, 'archived', 'Replaced by user correction.', now);
       return { action: 'superseded', assertion, previousAssertion: getUserAssertion(target.id)! };
     }
 
@@ -289,8 +303,15 @@ export function reconcileAssertion(candidate: AssertionCandidate, now = Date.now
     const duplicate = overlapping.find((item) =>
       item.normalizedValue === candidate.normalizedValue.trim());
     if (duplicate) {
+      refreshSupportingObservation(db, duplicate, candidate, now);
+      if (candidate.authority === 'user_explicit' && (duplicate.authority !== 'user_explicit'
+        || candidate.observedAt > duplicate.observedAt)) {
+        db.prepare("UPDATE user_assertions SET authority = 'user_explicit', confidence = ?, status = ?, observed_at = ?, review_at = ? WHERE assertion_id = ?")
+          .run(candidate.confidence, initialStatus(candidate), candidate.observedAt,
+            candidate.reviewAt ?? defaultReviewAt(candidate.volatility, candidate.observedAt) ?? null, duplicate.id);
+      }
       attachEvidence(db, duplicate.id, candidate, now);
-      return { action: 'deduplicated', assertion: duplicate };
+      return { action: 'deduplicated', assertion: getUserAssertion(duplicate.id)! };
     }
 
     const status = initialStatus(candidate);
@@ -503,11 +524,83 @@ export function setAssertionStatus(
 ): UserAssertion {
   const current = getUserAssertion(assertionId);
   if (!current) throw new Error(`User assertion not found: ${assertionId}`);
-  if (current.status === status) return current;
+  if (current.status === status && !(status === 'active' && input.actor === 'user' && current.authority !== 'user_explicit')) return current;
   const now = input.now ?? Date.now();
   runSqliteWriteTransaction((db) => {
     db.prepare('UPDATE user_assertions SET status = ? WHERE assertion_id = ?').run(status, assertionId);
+    if ((status === 'rejected' || status === 'archived') && input.actor === 'user') {
+      const slot = getAssertionSlot(current.slotId)!;
+      suppressMemory(db, assertionFingerprints({ ...current, ...slot }), now);
+    }
+    if (status === 'active' && input.actor === 'user') {
+      db.prepare("UPDATE user_assertions SET authority = 'user_explicit', confidence = 1 WHERE assertion_id = ?").run(assertionId);
+    }
     recordStatusEvent(db, assertionId, current.status, status, input.actor, input.reason, now);
   });
   return getUserAssertion(assertionId)!;
+}
+
+function assertionFingerprints(candidate: Pick<AssertionCandidate, 'principalId' | 'subject' | 'scope' | 'predicate' | 'cardinality' | 'normalizedValue' | 'statement'>): string[] {
+  const principal = candidate.principalId ?? USER_MODEL_PRINCIPAL_ID;
+  const scope = [principal, candidate.scope.type, candidate.scope.id ?? ''];
+  return [
+    memoryFingerprint(['assertion-slot', ...scope, candidate.subject.type, candidate.subject.id,
+      candidate.predicate, candidate.cardinality === 'single' ? '' : candidate.normalizedValue]),
+    memoryFingerprint(['assertion-content', ...scope, candidate.statement]),
+  ];
+}
+
+export function deleteUserAssertion(id: string, now = Date.now()): boolean {
+  return runSqliteWriteTransaction((db) => {
+    const current = getUserAssertion(id);
+    if (!current) return false;
+    const slot = getAssertionSlot(current.slotId)!;
+    const rows = db.prepare(`WITH RECURSIVE versions(id) AS (
+      SELECT ? UNION SELECT a.assertion_id FROM user_assertions a JOIN versions v
+      ON a.supersedes_assertion_id = v.id OR a.assertion_id = (
+        SELECT supersedes_assertion_id FROM user_assertions WHERE assertion_id = v.id)
+    ) SELECT * FROM user_assertions WHERE assertion_id IN (SELECT id FROM versions)
+      OR (? = 'single' AND slot_id = ?)`)
+      .all(id, slot.cardinality, slot.id) as AssertionRow[];
+    const evidenceIds = new Set(rows.flatMap((row) => (db.prepare(
+      'SELECT evidence_id FROM user_assertion_evidence WHERE assertion_id = ?',
+    ).all(row.assertion_id) as Array<{ evidence_id: string }>).map((evidence) => evidence.evidence_id)));
+    for (const row of rows) {
+      const assertion = assertionFromRow(row);
+      suppressMemory(db, assertionFingerprints({ ...assertion, ...slot, principalId: slot.principalId }), now);
+      clearMemoryAudit(db, 'assertion', assertion.id);
+      db.prepare('DELETE FROM user_assertions_fts WHERE assertion_id = ?').run(assertion.id);
+      db.prepare(`UPDATE work_discovery_runs SET result_json = json_set(result_json, '$.profileCandidates',
+        json((SELECT COALESCE(json_group_array(json(value)), '[]')
+          FROM json_each(result_json, '$.profileCandidates')
+          WHERE COALESCE(json_extract(value, '$.assertionId'), '') != ?)))
+        WHERE EXISTS (SELECT 1 FROM json_each(result_json, '$.profileCandidates')
+          WHERE json_extract(value, '$.assertionId') = ?)`).run(assertion.id, assertion.id);
+
+    }
+    for (const row of rows) db.prepare('DELETE FROM user_assertions WHERE assertion_id = ?').run(row.assertion_id);
+    for (const evidenceId of evidenceIds) {
+      db.prepare(`UPDATE context_evidence SET redacted_excerpt = NULL WHERE evidence_id = ?
+        AND NOT EXISTS (SELECT 1 FROM user_assertion_evidence WHERE evidence_id = ?)`).run(evidenceId, evidenceId);
+    }
+    db.prepare(`DELETE FROM user_assertion_slots WHERE slot_id = ?
+      AND NOT EXISTS (SELECT 1 FROM user_assertions WHERE slot_id = ?)`).run(slot.id, slot.id);
+    return true;
+  });
+}
+
+function refreshSupportingObservation(db: DatabaseSync, current: UserAssertion, candidate: AssertionCandidate, now: number): void {
+  if (!candidate.evidenceId || current.authority === 'user_explicit'
+    || !['active', 'candidate', 'stale'].includes(current.status)) return;
+  const evidence = db.prepare(`SELECT observed_at FROM context_evidence WHERE evidence_id = ?
+    AND trust_level = 'owner' AND source_type IN ('conversation', 'user', 'connector')`)
+    .get(candidate.evidenceId) as { observed_at: number } | undefined;
+  if (!evidence || evidence.observed_at <= current.observedAt || evidence.observed_at > now
+    || candidate.confidence < 0.7) return;
+  const reviewAt = defaultReviewAt(current.volatility, evidence.observed_at);
+  db.prepare(`UPDATE user_assertions SET observed_at = ?, review_at = ? WHERE assertion_id = ?`)
+    .run(evidence.observed_at, reviewAt ?? null, current.id);
+  if (current.status === 'stale' && (current.validTo === undefined || current.validTo >= now)) {
+    updateStatus(db, current, 'candidate', 'Fresh source evidence supports this understanding.', now);
+  }
 }

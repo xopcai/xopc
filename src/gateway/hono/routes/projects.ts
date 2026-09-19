@@ -442,6 +442,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
       originClass: 'system',
       replaceExisting: true,
     });
+    if (!record.item) return c.json({ ok: false, error: 'This memory was deleted and automatic recreation is disabled.' }, 409);
     return c.json({ ok: true, knowledge: record.item }, 201);
   });
 
@@ -726,6 +727,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
       originClass: 'agent',
       replaceExisting: true,
     });
+    if (!record.item) return c.json({ ok: false, error: 'This memory was deleted and automatic recreation is disabled.' }, 409);
     return c.json({ ok: true, knowledge: record.item }, 201);
   });
 
