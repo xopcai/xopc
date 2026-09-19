@@ -16,7 +16,7 @@ const params = new URLSearchParams(window.location.search);
 const stage: VisualStage = params.get('stage') === 'work' ? 'work' : 'setup';
 const mode: VisualMode = params.get('mode') === 'dark' ? 'dark' : 'light';
 const requestedTheme = params.get('theme');
-const theme: ColorScheme = requestedTheme === 'emerald' || requestedTheme === 'clay' || requestedTheme === 'dawn'
+const theme: ColorScheme = requestedTheme === 'emerald' || requestedTheme === 'clay' || requestedTheme === 'dawn' || requestedTheme === 'porcelain'
   ? requestedTheme
   : 'default';
 
