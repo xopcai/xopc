@@ -47,7 +47,10 @@ describe('resolveUserContextSessionAccess', () => {
       userModel: true,
       knowledge: true,
       crossSessionHistory: true,
-      knowledgeSources: ['session', 'workspace'],
+      knowledgePolicy: {
+        scopes: ['global', 'agent', 'workspace', 'project', 'session'],
+        contentSources: ['memory', 'local_import'],
+      },
     });
   });
 
@@ -61,7 +64,7 @@ describe('resolveUserContextSessionAccess', () => {
       userModel: false,
       knowledge: false,
       crossSessionHistory: false,
-      knowledgeSources: [],
+      knowledgePolicy: { scopes: [], contentSources: [] },
     });
   });
 

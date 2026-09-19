@@ -810,7 +810,8 @@ export class SessionStore {
           audit: result.audit,
           sourceEntries: expectedSnapshot.entries,
           writePolicy: access.knowledge
-            && this.options.config.userContext.knowledgeMemory.sources.includes('session')
+            && access.knowledgePolicy.scopes.includes('session')
+            && access.knowledgePolicy.contentSources.includes('memory')
             ? this.options.config.userContext.knowledgeMemory.writePolicy
             : 'deny',
         });

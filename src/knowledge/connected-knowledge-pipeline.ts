@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import {
   listKnowledgeItems,
-  setKnowledgeStatus,
+  transitionKnowledgeStatus,
   writeKnowledgeItem,
 } from '../knowledge-memory/index.js';
 import {
@@ -80,7 +80,12 @@ export class ConnectedKnowledgePipeline {
         const existing = listKnowledgeItems({ recordClass: 'source_index', limit: 2_000 })
           .find((entry) => entry.canonicalKey === `source-item:${item.sourceInstanceId}:${item.externalId}`);
         if (item.deletedAt) {
-          if (existing) setKnowledgeStatus(existing.id, 'archived');
+          if (existing) transitionKnowledgeStatus({
+            id: existing.id,
+            status: 'archived',
+            actor: 'runtime',
+            reason: 'Connected source item was deleted.',
+          });
           completeKnowledgeSourceItemSynthesis({ itemId: item.id, workerId: this.workerId, status: 'ignored' });
           result.ignored += 1;
           continue;
@@ -140,7 +145,12 @@ export class ConnectedKnowledgePipeline {
     const expiredIds = new Set(expired.map((item) => item.id));
     for (const item of listKnowledgeItems({ recordClass: 'source_index', limit: 2_000 })) {
       if (typeof item.source.sourceItemId === 'string' && expiredIds.has(item.source.sourceItemId)) {
-        if (setKnowledgeStatus(item.id, 'archived')) derivedDeleted += 1;
+        if (transitionKnowledgeStatus({
+          id: item.id,
+          status: 'archived',
+          actor: 'maintenance',
+          reason: 'Connected source retention window expired.',
+        })) derivedDeleted += 1;
       }
     }
     const rawDeleted = pruneBoundedKnowledgeSourceItems(sourceInstanceId, olderThanMs);

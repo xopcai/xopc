@@ -290,7 +290,11 @@ export class GatewayRealtimeBackend implements TuiBackend {
     }
   }
 
-  async submitChatInput(opts: { conversationId: string; message: string; delivery: 'next' | 'steer' }): Promise<{ ok: boolean; effectiveDelivery?: 'next' | 'steer' }> {
+  async submitChatInput(opts: { conversationId: string; message: string; delivery: 'next' | 'steer' }): Promise<{
+    ok: boolean;
+    effectiveDelivery?: 'next' | 'steer';
+    state?: TuiChatInputState;
+  }> {
     this.observedConversationId = opts.conversationId;
     try {
       const res = await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(opts.conversationId)}/inputs`, this.credential, {
@@ -302,8 +306,15 @@ export class GatewayRealtimeBackend implements TuiBackend {
         }),
       });
       if (!res.ok) return { ok: false };
-      const json = (await res.json()) as { ok?: boolean; payload?: { effectiveDelivery?: 'next' | 'steer' } };
-      return { ok: json.ok === true, effectiveDelivery: json.payload?.effectiveDelivery };
+      const json = (await res.json()) as {
+        ok?: boolean;
+        payload?: { effectiveDelivery?: 'next' | 'steer'; state?: TuiChatInputState };
+      };
+      return {
+        ok: json.ok === true,
+        effectiveDelivery: json.payload?.effectiveDelivery,
+        state: json.payload?.state,
+      };
     } catch {
       return { ok: false };
     }
@@ -314,6 +325,37 @@ export class GatewayRealtimeBackend implements TuiBackend {
     if (!res.ok) throw new Error(`Input state failed (${res.status})`);
     const json = await res.json() as { payload: TuiChatInputState };
     return json.payload;
+  }
+
+  async updateChatInput(opts: {
+    conversationId: string;
+    inputId: string;
+    version: number;
+    content: string;
+  }): Promise<{ ok: boolean; state?: TuiChatInputState }> {
+    const res = await gatewayFetch(
+      this.baseUrl,
+      `/api/sessions/${encodeURIComponent(opts.conversationId)}/inputs/${encodeURIComponent(opts.inputId)}`,
+      this.credential,
+      { method: 'PATCH', body: JSON.stringify({ version: opts.version, content: opts.content }) },
+    );
+    const json = await res.json().catch(() => ({})) as { ok?: boolean; payload?: TuiChatInputState };
+    return { ok: res.ok && json.ok === true, state: json.payload };
+  }
+
+  async removeChatInput(opts: {
+    conversationId: string;
+    inputId: string;
+    version: number;
+  }): Promise<{ ok: boolean; state?: TuiChatInputState }> {
+    const res = await gatewayFetch(
+      this.baseUrl,
+      `/api/sessions/${encodeURIComponent(opts.conversationId)}/inputs/${encodeURIComponent(opts.inputId)}?version=${opts.version}`,
+      this.credential,
+      { method: 'DELETE' },
+    );
+    const json = await res.json().catch(() => ({})) as { ok?: boolean; payload?: TuiChatInputState };
+    return { ok: res.ok && json.ok === true, state: json.payload };
   }
 
   // ── REST helpers ──

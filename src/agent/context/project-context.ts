@@ -6,10 +6,10 @@ import {
 import type { Project } from '../../projects/types.js';
 import { ProjectStore } from '../../projects/project-store.js';
 import {
-  knowledgeSourceAllowed,
+  knowledgeItemAllowed,
   listKnowledgeItems,
   searchKnowledgeItems,
-  type KnowledgeSource,
+  type KnowledgeReadPolicy,
 } from '../../knowledge-memory/index.js';
 import { sanitizeForPromptLiteral } from '../prompt/sanitize-for-prompt.js';
 import { TaskRepository } from '../../tasks/task-repository.js';
@@ -65,7 +65,7 @@ export function buildActiveProjectContextForPrompt(
   options: {
     knowledgeQuery?: string;
     includeKnowledge?: boolean;
-    knowledgeSources?: readonly KnowledgeSource[];
+    knowledgePolicy?: KnowledgeReadPolicy;
   } = {},
 ): string | undefined {
   const project = getProjectForSession(conversationId);
@@ -95,14 +95,14 @@ export function buildActiveProjectContextForPrompt(
               conversationId: conversationId,
             },
             trustedOnly: true,
-            sources: options.knowledgeSources,
+            policy: options.knowledgePolicy,
             limit: MAX_RELEVANT_KNOWLEDGE,
           })
         : [],
       recent: listKnowledgeItems({ statuses: ['active'], scope: { type: 'project', id: project.id }, limit: 500 })
         .filter((item) => item.originClass !== 'untrusted')
-        .filter((item) => !options.knowledgeSources
-          || knowledgeSourceAllowed(item, options.knowledgeSources))
+        .filter((item) => !options.knowledgePolicy
+          || knowledgeItemAllowed(item, options.knowledgePolicy))
         .slice(0, MAX_RECENT_KNOWLEDGE),
     }),
     localApp: localApp ? {

@@ -1,6 +1,7 @@
-import { Box, Container, Markdown } from '@earendil-works/pi-tui';
+import { Box, Container, Markdown, Text } from '@earendil-works/pi-tui';
 
 import { markdownTheme, theme } from '../theme.js';
+import type { CellRenderMode, ModeAwareCell } from './cell-render-mode.js';
 
 const OSC133_ZONE_START = '\x1b]133;A\x07';
 const OSC133_ZONE_END = '\x1b]133;B\x07';
@@ -39,11 +40,14 @@ export function normalizeUserContent(content: string | unknown[]): string {
   return parts.filter(Boolean).join('\n\n');
 }
 
-export class UserMessageComponent extends Container {
+export class UserMessageComponent extends Container implements ModeAwareCell {
   private body: Markdown;
+  private content: string | unknown[];
+  private renderMode: CellRenderMode = 'compact';
 
   constructor(text: string | unknown[]) {
     super();
+    this.content = text;
     this.body = new Markdown(
       normalizeUserContent(text),
       1,
@@ -60,10 +64,18 @@ export class UserMessageComponent extends Container {
   }
 
   setText(text: string | unknown[]): void {
+    this.content = text;
     this.body.setText(normalizeUserContent(text));
   }
 
+  setRenderMode(mode: CellRenderMode): void {
+    this.renderMode = mode;
+  }
+
   override render(width: number): string[] {
+    if (this.renderMode === 'raw') {
+      return new Text(JSON.stringify({ role: 'user', content: this.content }, null, 2), 0, 0).render(width);
+    }
     const lines = super.render(width);
     if (lines.length === 0) return lines;
     lines[0] = OSC133_ZONE_START + lines[0];

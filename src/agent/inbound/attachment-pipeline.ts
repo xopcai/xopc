@@ -112,9 +112,13 @@ async function readImageBase64FromRef(ref: MediaRef): Promise<{ data: string; mi
   };
 }
 
-function appendMediaAttachedLines(textParts: string[], media: MediaRef[]): void {
+function appendMediaAttachedLines(
+  textParts: string[],
+  media: MediaRef[],
+  suppressMediaPromptUris?: ReadonlySet<string>,
+): void {
   for (const ref of media) {
-    if (!isImageInboundAttachment(ref)) {
+    if (!isImageInboundAttachment(ref) && !suppressMediaPromptUris?.has(ref.uri)) {
       textParts.push(
         [
           `[media attached: ${ref.name} (${ref.mimeType}, ${ref.size} bytes)]`,
@@ -153,6 +157,8 @@ export async function buildTranscriptUserMessage(opts: {
   modelRef: string;
   config: Config | undefined;
   agentManager: AgentInstanceGateway;
+  /** Keep these attachments in transcript metadata without exposing read_media hints to the LLM. */
+  suppressMediaPromptUris?: ReadonlySet<string>;
 }): Promise<TranscriptUserMessage> {
   const expandedText = await expandUserText(opts.text, opts.conversationId, opts.agentManager);
   const prepared = opts.prepared ?? [];
@@ -165,7 +171,11 @@ export async function buildTranscriptUserMessage(opts: {
 
   const strategy = resolveImageHandlingStrategy(opts.modelRef);
 
-  appendMediaAttachedLines(textParts, prepared.filter((m) => !isImageInboundAttachment(m)));
+  appendMediaAttachedLines(
+    textParts,
+    prepared.filter((m) => !isImageInboundAttachment(m)),
+    opts.suppressMediaPromptUris,
+  );
 
   if (imageRefs.length > 0 && strategy !== 'native') {
     const images = await Promise.all(imageRefs.map((ref) => readImageBase64FromRef(ref)));

@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { acquireGatewayLock, GatewayLockError } from '../lock.js';
+import {
+  acquireGatewayLock,
+  GatewayLockError,
+  isGatewayConfigLockedByAnotherProcessSync,
+} from '../lock.js';
 import { existsSync, unlinkSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -8,6 +12,15 @@ const TEST_CONFIG_PATH = join(homedir(), '.xopc', 'test-config.json');
 const LOCKS_DIR = join(homedir(), '.xopc', 'locks');
 
 describe('GatewayLock', () => {
+  it('detects a live lock owned by another process identity', async () => {
+    const lock = await acquireGatewayLock(TEST_CONFIG_PATH, { timeoutMs: 1000 });
+    try {
+      expect(isGatewayConfigLockedByAnotherProcessSync(TEST_CONFIG_PATH)).toBe(false);
+      expect(isGatewayConfigLockedByAnotherProcessSync(TEST_CONFIG_PATH, process.pid + 1)).toBe(true);
+    } finally {
+      await lock.release();
+    }
+  });
   beforeEach(() => {
     // Clean up any existing test locks
     if (!existsSync(LOCKS_DIR)) {

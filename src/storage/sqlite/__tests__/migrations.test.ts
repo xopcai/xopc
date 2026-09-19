@@ -46,9 +46,9 @@ describe('SQLite migrations', () => {
     rmSync(migrationsDir, { recursive: true, force: true });
   });
 
-  it('keeps the retained release window at v165 through v180', () => {
+  it('keeps the retained release window at v165 through v181', () => {
     expect(XOPC_DB_BASELINE_SCHEMA_VERSION).toBe(165);
-    expect(XOPC_DB_SCHEMA_VERSION).toBe(180);
+    expect(XOPC_DB_SCHEMA_VERSION).toBe(181);
 
     const db = openEmptyDb();
     try {
@@ -60,6 +60,8 @@ describe('SQLite migrations', () => {
         .toEqual({ name: 'capability_imports' });
       expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'conversation_routes'").get())
         .toEqual({ name: 'conversation_routes' });
+      expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'knowledge_item_status_events'").get())
+        .toEqual({ name: 'knowledge_item_status_events' });
     } finally {
       db.close();
     }

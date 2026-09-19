@@ -7,9 +7,11 @@ import {
 } from '../../storage/sqlite/index.js';
 import {
   getKnowledgeItem,
+  listKnowledgeStatusEvents,
   listKnowledgeItems,
+  reviewKnowledgeItem,
   searchKnowledgeItems,
-  setKnowledgeStatus,
+  transitionKnowledgeStatus,
   writeKnowledgeItem,
 } from '../index.js';
 
@@ -17,7 +19,7 @@ const context = {
   agentId: 'main',
   workspaceId: '/workspace',
   projectId: 'project-1',
-  sessionId: 'session-1',
+  conversationId: 'session-1',
 };
 
 describe('knowledge repository', () => {
@@ -59,7 +61,9 @@ describe('knowledge repository', () => {
       canonicalKey: 'source:file:profile', content: 'Original source content',
       confidence: 0.8, importance: 0.5, originClass: 'untrusted', status: 'active', now: 100,
     });
-    setKnowledgeStatus(first.item.id, 'archived', 200);
+    transitionKnowledgeStatus({
+      id: first.item.id, status: 'archived', actor: 'runtime', reason: 'Source disappeared.', now: 200,
+    });
 
     const restored = writeKnowledgeItem({
       kind: 'workspace_fact', scope: { type: 'workspace', id: '/workspace' },
@@ -70,6 +74,38 @@ describe('knowledge repository', () => {
 
     expect(restored).toMatchObject({ created: false, item: { id: first.item.id, status: 'active' } });
     expect(getKnowledgeItem(first.item.id)?.content).toBe('Restored source content');
+  });
+
+  it('reviews candidates atomically and records an audit event', () => {
+    const candidate = writeKnowledgeItem({
+      kind: 'decision', scope: { type: 'workspace', id: '/workspace' },
+      canonicalKey: 'decision:review', content: 'Ship on Friday.',
+      confidence: 0.7, importance: 0.8, originClass: 'agent', status: 'candidate', now: 100,
+    }).item;
+
+    const reviewed = reviewKnowledgeItem({
+      id: candidate.id,
+      action: 'edit_and_approve',
+      actor: 'user',
+      reason: 'Corrected and confirmed by the user.',
+      expectedStatus: 'candidate',
+      content: 'Ship on Monday.',
+      now: 200,
+    });
+
+    expect(reviewed).toMatchObject({ status: 'active', content: 'Ship on Monday.', updatedAt: 200 });
+    expect(searchKnowledgeItems({ query: 'Monday', context })).toHaveLength(1);
+    expect(searchKnowledgeItems({ query: 'Friday', context })).toEqual([]);
+    expect(listKnowledgeStatusEvents(candidate.id)).toEqual([
+      expect.objectContaining({ toStatus: 'candidate', actor: 'agent', createdAt: 100 }),
+      expect.objectContaining({
+        fromStatus: 'candidate',
+        toStatus: 'active',
+        actor: 'user',
+        reason: 'Corrected and confirmed by the user.',
+        createdAt: 200,
+      }),
+    ]);
   });
 
   it('keeps source index records separate from user-facing work memory', () => {
@@ -93,7 +129,12 @@ describe('knowledge repository', () => {
     expect(searchKnowledgeItems({ query: 'Build failed', context, trustedOnly: true })).toEqual([]);
   });
 
-  it('limits retrieval to configured knowledge sources', () => {
+  it('applies visibility scope and content source policies independently', () => {
+    writeKnowledgeItem({
+      kind: 'workspace_fact', scope: { type: 'agent', id: 'main' },
+      canonicalKey: 'agent:atlas', content: 'Atlas agent release plan',
+      confidence: 1, importance: 1, originClass: 'owner', status: 'active',
+    });
     writeKnowledgeItem({
       kind: 'project_fact', scope: { type: 'project', id: 'project-1' },
       canonicalKey: 'project:atlas', content: 'Atlas project release plan',
@@ -104,8 +145,39 @@ describe('knowledge repository', () => {
       canonicalKey: 'workspace:atlas', content: 'Atlas workspace release plan',
       confidence: 1, importance: 1, originClass: 'owner', status: 'active',
     });
+    writeKnowledgeItem({
+      kind: 'workspace_fact', scope: { type: 'workspace', id: '/workspace' },
+      canonicalKey: 'import:atlas', content: 'Atlas imported release plan',
+      recordClass: 'source_index', source: { kind: 'product_import' },
+      confidence: 1, importance: 1, originClass: 'owner', status: 'active',
+    });
+    writeKnowledgeItem({
+      kind: 'workspace_fact', scope: { type: 'workspace', id: '/workspace' },
+      canonicalKey: 'connector:atlas', content: 'Atlas connected release plan',
+      recordClass: 'source_index', source: { kind: 'gmail' },
+      confidence: 1, importance: 1, originClass: 'owner', status: 'active',
+    });
 
-    expect(searchKnowledgeItems({ query: 'Atlas release', context, sources: ['project'] })
+    expect(searchKnowledgeItems({
+      query: 'Atlas release',
+      context,
+      policy: { scopes: ['project'], contentSources: ['memory'] },
+    })
       .map((item) => item.canonicalKey)).toEqual(['project:atlas']);
+    expect(searchKnowledgeItems({
+      query: 'Atlas release',
+      context,
+      policy: { scopes: ['agent'], contentSources: ['memory'] },
+    }).map((item) => item.canonicalKey)).toEqual(['agent:atlas']);
+    expect(searchKnowledgeItems({
+      query: 'Atlas release',
+      context,
+      policy: { scopes: ['workspace'], contentSources: ['local_import'] },
+    }).map((item) => item.canonicalKey)).toEqual(['import:atlas']);
+    expect(searchKnowledgeItems({
+      query: 'Atlas release',
+      context,
+      policy: { scopes: ['workspace'], contentSources: ['connector'] },
+    }).map((item) => item.canonicalKey)).toEqual(['connector:atlas']);
   });
 });

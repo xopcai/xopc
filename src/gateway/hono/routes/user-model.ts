@@ -5,9 +5,10 @@ import type { Hono } from 'hono';
 import { getExecutionContextAudit, recordExecutionContextFeedback } from '../../../agent/context/audit.js';
 import {
   getKnowledgeItem,
+  KnowledgeReviewConflictError,
   listKnowledgeItems,
+  reviewKnowledgeItem,
   searchKnowledgeItems,
-  setKnowledgeStatus,
 } from '../../../knowledge-memory/index.js';
 import { listMemoryMaintenanceRuns } from '../../../memory-maintenance/index.js';
 import { listUnderstandingSourceGrants } from '../../../user-context/sources/repository.js';
@@ -89,6 +90,7 @@ const ASSERTION_STATUSES = new Set<AssertionStatus>([
   'candidate', 'active', 'needs_review', 'conflicted', 'stale', 'archived', 'rejected',
 ]);
 const GOAL_STATUSES = new Set<UserGoalStatus>(['proposed', 'active', 'paused', 'achieved', 'abandoned']);
+const KNOWLEDGE_REVIEW_ACTIONS = new Set(['approve', 'edit_and_approve', 'reject', 'archive']);
 const KNOWLEDGE_STATUSES = new Set(['candidate', 'active', 'needs_review', 'stale', 'archived', 'rejected']);
 const RULE_CATEGORIES = new Set<CollaborationRule['category']>([
   'communication', 'execution', 'boundary', 'routine', 'proactive',
@@ -406,12 +408,35 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
     const item = getKnowledgeItem(c.req.param('id'));
     return item ? c.json({ item }) : c.json({ error: 'Knowledge item not found' }, 404);
   });
-  authenticated.patch('/api/knowledge-memory/:id/status', write, async (c) => {
+  authenticated.post('/api/knowledge-memory/:id/review', write, async (c) => {
     const input = await body(c);
-    const status = String(input?.status ?? '');
-    if (!KNOWLEDGE_STATUSES.has(status)) return c.json({ error: 'Invalid knowledge status' }, 400);
-    const item = setKnowledgeStatus(c.req.param('id'), status as Parameters<typeof setKnowledgeStatus>[1]);
-    return item ? c.json({ item }) : c.json({ error: 'Knowledge item not found' }, 404);
+    const action = String(input?.action ?? '');
+    if (!KNOWLEDGE_REVIEW_ACTIONS.has(action)) return c.json({ error: 'Invalid knowledge review action' }, 400);
+    if (input?.expectedStatus !== undefined && !KNOWLEDGE_STATUSES.has(String(input.expectedStatus))) {
+      return c.json({ error: 'Invalid expected knowledge status' }, 400);
+    }
+    if (input?.content !== undefined && action !== 'edit_and_approve') {
+      return c.json({ error: 'Content can only be changed while editing and approving knowledge' }, 400);
+    }
+    try {
+      const item = reviewKnowledgeItem({
+        id: c.req.param('id'),
+        action: action as Parameters<typeof reviewKnowledgeItem>[0]['action'],
+        actor: 'user',
+        reason: typeof input?.reason === 'string' && input.reason.trim()
+          ? input.reason : `Knowledge ${action} by user.`,
+        ...(typeof input?.expectedStatus === 'string'
+          ? { expectedStatus: input.expectedStatus as Parameters<typeof reviewKnowledgeItem>[0]['expectedStatus'] }
+          : {}),
+        ...(typeof input?.content === 'string' ? { content: input.content } : {}),
+      });
+      return item ? c.json({ item }) : c.json({ error: 'Knowledge item not found' }, 404);
+    } catch (error) {
+      return c.json(
+        { error: errorMessage(error) },
+        error instanceof KnowledgeReviewConflictError ? 409 : 400,
+      );
+    }
   });
 
   authenticated.get('/api/memory-maintenance/runs', (c) => c.json({

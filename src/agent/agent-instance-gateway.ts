@@ -45,6 +45,8 @@ export interface AgentInstanceGateway {
   getAgent(conversationId: string): Agent | undefined;
   /** Returns true when an agent instance existed for `conversationId` and was removed. */
   removeAgent(conversationId: string): boolean;
+  /** Finish loading and initialize memory providers before agent construction or recall. */
+  ensureMemoryReadyForSession?(conversationId: string): Promise<void>;
 
   /** Create isolated policy state for one user-visible agent run. */
   createAgentTurnPolicy(conversationId: string): AgentTurnPolicy;

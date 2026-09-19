@@ -31,6 +31,7 @@ function resolveMemoryManagerOptions(
   const providerRouting = config.userContext.knowledgeMemory;
   return {
     searchStrategy: providerRouting.searchStrategy,
+    searchTimeoutMs: providerRouting.searchTimeoutMs,
     writeStrategy: providerRouting.writeStrategy,
     writePolicy: {
       allowExternalWrites: providerRouting.allowExternalWrites,

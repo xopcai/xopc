@@ -7,11 +7,27 @@ import { config } from 'dotenv';
 import { createLogger } from '../utils/logger.js';
 import { assertChannelPluginConfigs } from './validate-channel-configs.js';
 import { setActivePlatformDiscovery } from '../platform/resolution.js';
+import { isGatewayConfigLockedByAnotherProcessSync } from '../gateway/lock.js';
 
 const log = createLogger('ConfigLoader');
 
 /** Number of backup files to keep */
 const CONFIG_BACKUP_COUNT = 10;
+
+export function assertConfigRewriteSafeForRunningGateway(path: string): void {
+  if (!existsSync(path) || !isGatewayConfigLockedByAnotherProcessSync(path)) return;
+  try {
+    const raw = JSON.parse(readFileSync(path, 'utf8')) as {
+      userContext?: { knowledgeMemory?: { sources?: unknown } };
+    };
+    if (!Array.isArray(raw.userContext?.knowledgeMemory?.sources)) return;
+  } catch {
+    return;
+  }
+  throw new Error(
+    'Configuration update deferred: restart the running gateway before rewriting the legacy memory policy.',
+  );
+}
 
 function activateConfig(configValue: Config): Config {
   setActivePlatformDiscovery(configValue.platform.mode === 'connected' ? configValue.platform.discovery : undefined);
@@ -89,6 +105,7 @@ export function loadConfig(configPath?: string): Config {
  */
 export async function saveConfig(config: Config, configPath?: string): Promise<void> {
   const path = configPath || process.env.XOPC_CONFIG_PATH || resolveConfigPath();
+  assertConfigRewriteSafeForRunningGateway(path);
 
   const dir = dirname(path);
   if (!existsSync(dir)) {

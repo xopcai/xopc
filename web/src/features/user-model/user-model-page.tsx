@@ -37,8 +37,8 @@ import {
   correctAssertion,
   detectBrowserTimezone,
   fetchUserModel,
+  reviewKnowledgeItem,
   setAssertionStatus,
-  setKnowledgeStatus,
   setRuleStatus,
   updateUserProfile,
   type AssertionStatus,
@@ -592,20 +592,45 @@ function KnowledgeRow({
   busy,
   expanded,
   onToggle,
-  onArchive,
+  editing,
+  draft,
+  onDraftChange,
+  onEdit,
+  onCancel,
+  onReview,
 }: {
   item: KnowledgeItem;
   language: Language;
   busy: boolean;
   expanded: boolean;
   onToggle: () => void;
-  onArchive: () => void;
+  editing: boolean;
+  draft: string;
+  onDraftChange: (value: string) => void;
+  onEdit: () => void;
+  onCancel: () => void;
+  onReview: (action: 'approve' | 'edit_and_approve' | 'reject' | 'archive', content?: string) => void;
 }) {
   const t = copy[language];
   const date = formatDate(item.updatedAt ?? item.createdAt, language);
   const canExpand = item.content.length > 96 || item.content.includes('\n');
+  const needsReview = item.status === 'candidate' || item.status === 'needs_review' || item.status === 'stale';
   return (
     <article className="group border-t border-edge-subtle px-5 py-4 first:border-t-0 sm:px-6">
+      {editing ? (
+        <div className="space-y-3">
+          <textarea
+            value={draft}
+            onChange={(event) => onDraftChange(event.target.value)}
+            className="min-h-24 w-full resize-y rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm leading-6 text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
+            autoFocus
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" className="h-8" onClick={onCancel}>{t.cancel}</Button>
+            <Button variant="primary" className="h-8" disabled={!draft.trim() || busy} onClick={() => onReview('edit_and_approve', draft.trim())}>{t.save}</Button>
+          </div>
+        </div>
+      ) : (
       <div className="flex items-start gap-3">
         <BookOpen className="mt-1 size-4 shrink-0 text-fg-subtle" />
         <div className="min-w-0 flex-1">
@@ -622,11 +647,26 @@ function KnowledgeRow({
               <ChevronDown className={`size-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
             </Button>
           ) : null}
-          <Button variant="ghost" className="size-8 shrink-0 p-0" disabled={busy} onClick={onArchive} aria-label={t.archive} title={t.archive}>
-            <Archive className="size-3.5" />
-          </Button>
+          {needsReview ? (
+            <>
+              <Button variant="secondary" className="h-8 gap-1.5 px-2.5" disabled={busy} onClick={() => onReview('approve')}>
+                <Check className="size-3.5" />{t.confirm}
+              </Button>
+              <Button variant="ghost" className="size-8 shrink-0 p-0" disabled={busy} onClick={onEdit} aria-label={t.correct} title={t.correct}>
+                <Pencil className="size-3.5" />
+              </Button>
+              <Button variant="ghost" className="size-8 shrink-0 p-0" disabled={busy} onClick={() => onReview('reject')} aria-label={t.notTrue} title={t.notTrue}>
+                <X className="size-3.5" />
+              </Button>
+            </>
+          ) : (
+            <Button variant="ghost" className="size-8 shrink-0 p-0" disabled={busy} onClick={() => onReview('archive')} aria-label={t.archive} title={t.archive}>
+              <Archive className="size-3.5" />
+            </Button>
+          )}
         </div>
       </div>
+      )}
     </article>
   );
 }
@@ -992,7 +1032,16 @@ export function UserModelPage() {
                         busy={busy === item.id}
                         expanded={expandedKnowledgeId === item.id}
                         onToggle={() => setExpandedKnowledgeId((current) => current === item.id ? undefined : item.id)}
-                        onArchive={() => void act(item.id, () => setKnowledgeStatus(item.id, 'archived'))}
+                        editing={editingId === `knowledge:${item.id}`}
+                        draft={draft}
+                        onDraftChange={setDraft}
+                        onEdit={() => { setEditingId(`knowledge:${item.id}`); setDraft(item.content); }}
+                        onCancel={() => { setEditingId(undefined); setDraft(''); }}
+                        onReview={(action, content) => void act(item.id, async () => {
+                          await reviewKnowledgeItem(item, action, content);
+                          setEditingId(undefined);
+                          setDraft('');
+                        })}
                       />
                     ))}</div>
                   </section>

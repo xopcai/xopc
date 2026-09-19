@@ -40,4 +40,15 @@ describe('memory-config', () => {
     expect(ConfigSchema.safeParse({ userContext: { contextPlanning: { compaction: true } } }).success)
       .toBe(false);
   });
+
+  it('normalizes the removed combined memory sources field without exposing it at runtime', () => {
+    const parsed = ConfigSchema.parse({
+      userContext: { knowledgeMemory: { sources: ['session', 'workspace'] } },
+    });
+    expect(parsed.userContext.knowledgeMemory).toMatchObject({
+      readScopes: ['session', 'workspace'],
+      contentSources: ['memory', 'local_import'],
+    });
+    expect(parsed.userContext.knowledgeMemory).not.toHaveProperty('sources');
+  });
 });

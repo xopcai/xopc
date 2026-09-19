@@ -1,8 +1,9 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
+import type { KnowledgeContentSource, KnowledgeVisibilityScope } from '../../knowledge-memory/domain.js';
 import { retrievalQueryAuditValue } from '../../retrieval/audit.js';
 import { createLogger } from '../../utils/logger.js';
-import type { MemoryRuntime, MemorySource } from './runtime.js';
+import type { MemoryRuntime } from './runtime.js';
 import type { MemoryProvider, MemoryProviderInitOptions } from './provider.js';
 import type {
   MemoryDeleteRequest,
@@ -36,6 +37,7 @@ export interface MemoryManagerOptions extends MemoryRoutingOptions {
   loadProviders?: () => Promise<MemoryProvider[]>;
   writePolicy?: MemoryWritePolicy;
   memoryRuntime?: MemoryRuntime;
+  searchTimeoutMs?: number;
 }
 
 export interface MemoryWritePolicy {
@@ -52,7 +54,10 @@ export class MemoryManager {
   private readonly writePolicy: Required<Pick<MemoryWritePolicy, 'allowExternalWrites'>> &
     Omit<MemoryWritePolicy, 'allowExternalWrites'>;
   private pluginProvidersLoaded = false;
+  private pluginProvidersPromise?: Promise<void>;
+  private readonly sessionInitializations = new Map<string, Promise<void>>();
   private readonly memoryRuntime?: MemoryRuntime;
+  private readonly searchTimeoutMs: number;
   private readonly sessionContexts = new Map<string, MemoryProviderInitOptions>();
 
   constructor(options: MemoryManagerOptions = {}) {
@@ -63,6 +68,7 @@ export class MemoryManager {
     };
     this.loadProviders = options.loadProviders;
     this.memoryRuntime = options.memoryRuntime;
+    this.searchTimeoutMs = options.searchTimeoutMs ?? 2_000;
     this.writePolicy = {
       allowExternalWrites: options.writePolicy?.allowExternalWrites ?? false,
       allowedProviderIds: options.writePolicy?.allowedProviderIds,
@@ -204,24 +210,43 @@ export class MemoryManager {
   }
 
   async search(request: MemorySearchRequest): Promise<MemorySearchResult[]> {
-    const providers = this.providersForSearch();
-    const results: MemorySearchResult[] = [];
+    return this.searchProviders(this.providersForSearch(), request);
+  }
 
-    for (const p of providers) {
-      if (!p.capabilities.search || !p.search) continue;
+  async searchExternal(request: MemorySearchRequest): Promise<MemorySearchResult[]> {
+    return this.searchProviders(
+      this.providersForSearch().filter((provider) => !provider.capabilities.local),
+      request,
+    );
+  }
+
+  private async searchProviders(
+    providers: MemoryProvider[],
+    request: MemorySearchRequest,
+  ): Promise<MemorySearchResult[]> {
+    const searchProvider = async (p: MemoryProvider): Promise<MemorySearchResult[]> => {
+      if (!p.capabilities.search || !p.search) return [];
       const started = Date.now();
       try {
-        const providerResults = await p.search(request);
+        let timeout: ReturnType<typeof setTimeout> | undefined;
+        const providerResults = await Promise.race([
+          p.search(request),
+          new Promise<never>((_resolve, reject) => {
+            timeout = setTimeout(
+              () => reject(new Error(`Memory search timed out after ${this.searchTimeoutMs}ms`)),
+              this.searchTimeoutMs,
+            );
+          }),
+        ]).finally(() => {
+          if (timeout) clearTimeout(timeout);
+        });
         this.trace('search', p.id, request, {
           resultCount: providerResults.length,
           selectedRecordIds: providerResults.map((result) => result.record.id),
           durationMs: Date.now() - started,
           conversationId: request.scope?.conversationId,
         });
-        results.push(...providerResults);
-        if (providerResults.length > 0 && this.routing.searchStrategy !== 'fanout') {
-          break;
-        }
+        return providerResults;
       } catch (err) {
         this.trace('search', p.id, request, {
           error: err instanceof Error ? err.message : String(err),
@@ -229,6 +254,18 @@ export class MemoryManager {
           conversationId: request.scope?.conversationId,
         });
         log.warn({ err, id: p.id }, 'memory search failed');
+        return [];
+      }
+    };
+    const searchable = providers.filter((provider) => provider.capabilities.search && provider.search);
+    const results: MemorySearchResult[] = [];
+    if (this.routing.searchStrategy === 'fanout') {
+      results.push(...(await Promise.all(searchable.map(searchProvider))).flat());
+    } else {
+      for (const provider of searchable) {
+        const providerResults = await searchProvider(provider);
+        results.push(...providerResults);
+        if (providerResults.length > 0) break;
       }
     }
 
@@ -315,12 +352,15 @@ export class MemoryManager {
   }
 
   private canReadRecord(record: MemoryRecord, scope?: MemorySearchRequest['scope']): boolean {
-    if (record.providerId !== 'local') return true;
-    if (this.memoryRuntime && !this.memoryRuntime.canRead(memorySourceForRecord(record))) return false;
+    if (this.memoryRuntime) {
+      const { scope, source } = memoryAccessForRecord(record);
+      if (!this.memoryRuntime.canRead(scope, source)) return false;
+    }
     if (record.scope.userId && scope?.userId && record.scope.userId !== scope.userId) return false;
-    if (record.scope.conversationId && record.scope.conversationId !== scope?.conversationId) return false;
-    if (record.scope.projectId && record.scope.projectId !== scope?.projectId) return false;
-    if (record.scope.workspaceId && record.scope.workspaceId !== scope?.workspaceId) return false;
+    if (record.scope.conversationId && scope?.conversationId
+      && record.scope.conversationId !== scope.conversationId) return false;
+    if (record.scope.projectId && scope?.projectId && record.scope.projectId !== scope.projectId) return false;
+    if (record.scope.workspaceId && scope?.workspaceId && record.scope.workspaceId !== scope.workspaceId) return false;
     return true;
   }
 
@@ -345,37 +385,50 @@ export class MemoryManager {
 
   async initializeAll(sessionId: string, options?: MemoryProviderInitOptions): Promise<void> {
     if (options) this.sessionContexts.set(sessionId, { ...options });
-    await this.loadPluginProvidersOnce();
-    for (const p of this.providers) {
-      try {
-        await p.initialize(sessionId, options);
-      } catch (err) {
-        log.warn({ err, id: p.id }, 'initialize failed');
+    const existing = this.sessionInitializations.get(sessionId);
+    if (existing) return existing;
+    const initialization = (async () => {
+      await this.loadPluginProvidersOnce();
+      for (const p of this.providers) {
+        try {
+          await p.initialize(sessionId, options);
+        } catch (err) {
+          log.warn({ err, id: p.id, sessionId }, 'Memory provider initialization failed');
+        }
       }
-    }
+    })();
+    this.sessionInitializations.set(sessionId, initialization);
+    return initialization;
   }
 
   private async loadPluginProvidersOnce(): Promise<void> {
     if (this.pluginProvidersLoaded || !this.loadProviders) return;
-    this.pluginProvidersLoaded = true;
-    try {
-      const providers = await this.loadProviders();
-      const existingIds = new Set(this.providers.map((p) => p.id));
-      for (const provider of providers) {
-        if (existingIds.has(provider.id)) {
-          log.warn({ id: provider.id }, 'Skipped duplicate memory provider');
-          continue;
+    if (!this.pluginProvidersPromise) {
+      this.pluginProvidersPromise = (async () => {
+        try {
+          const providers = await this.loadProviders!();
+          const existingIds = new Set(this.providers.map((p) => p.id));
+          for (const provider of providers) {
+            if (existingIds.has(provider.id)) {
+              log.warn({ id: provider.id }, 'Skipped duplicate memory provider');
+              continue;
+            }
+            this.addProvider(provider);
+            existingIds.add(provider.id);
+          }
+        } catch (err) {
+          log.warn({ err }, 'Memory provider plugin loading failed');
+        } finally {
+          this.pluginProvidersLoaded = true;
         }
-        this.addProvider(provider);
-        existingIds.add(provider.id);
-      }
-    } catch (err) {
-      log.warn({ err }, 'Memory provider plugin loading failed');
+      })();
     }
+    await this.pluginProvidersPromise;
   }
 
   async shutdownAll(): Promise<void> {
     this.sessionContexts.clear();
+    this.sessionInitializations.clear();
     for (const p of [...this.providers].reverse()) {
       try {
         await p.shutdown();
@@ -545,11 +598,21 @@ export class MemoryManager {
   }
 }
 
-function memorySourceForRecord(record: MemoryRecord): MemorySource {
-  if (record.source.provider !== 'builtin') return 'connector';
-  if (record.scope.conversationId) return 'session';
-  if (record.scope.projectId) return 'project';
-  return 'workspace';
+function memoryAccessForRecord(record: MemoryRecord): {
+  scope: KnowledgeVisibilityScope;
+  source: KnowledgeContentSource;
+} {
+  const scope: KnowledgeVisibilityScope = record.scope.conversationId
+    ? 'session'
+    : record.scope.projectId
+      ? 'project'
+      : record.scope.workspaceId
+        ? 'workspace'
+        : 'global';
+  return {
+    scope,
+    source: record.source.provider === 'builtin' ? 'memory' : 'connector',
+  };
 }
 
 function writeTargetForRecord(_request: MemoryWriteRequest): 'knowledge' {

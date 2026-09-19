@@ -7,7 +7,9 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
+import { createConversation } from '../../../storage/sqlite/conversation-repository.js';
 import { createUserGoal, reconcileAssertion, type AssertionCandidate } from '../../../user-model/index.js';
+import { ConfigSchema } from '../../../config/schema.js';
 import {
   getExecutionContextAudit,
   recordExecutionContext,
@@ -19,6 +21,7 @@ import {
   fitExecutionContextToChars,
   renderExecutionContext,
 } from '../execution-context.js';
+import { ExecutionContextCoordinator } from '../coordinator.js';
 
 const request = {
   query: 'prepare the release response',
@@ -199,6 +202,83 @@ describe('execution context', () => {
     expect(fitted.rendered).toMatch(/^<user-context>/);
     expect(fitted.rendered).toMatch(/<\/user-context>$/);
     expect(fitted.rendered.length).toBeLessThanOrEqual(1_000);
+  });
+
+  it('returns recalled memory as dynamic system context without rewriting the user message', async () => {
+    const conversationId = '00000000-0000-4000-8000-000000000001';
+    createConversation({ agentId: 'main' }, '/workspace', conversationId);
+    const message = {
+      role: 'user' as const,
+      content: [{ type: 'text' as const, text: 'Prepare the release' }],
+      timestamp: 1_000,
+    };
+    const coordinator = new ExecutionContextCoordinator({
+      getConfig: () => ConfigSchema.parse({
+        userContext: { knowledgeMemory: { contentSources: ['memory', 'connector'] } },
+      }),
+      getAccessForSession: () => ({
+        userModel: true,
+        knowledge: true,
+        knowledgePolicy: {
+          scopes: ['global', 'agent', 'workspace', 'project', 'session'],
+          contentSources: ['memory', 'connector'],
+        },
+      }),
+      getWorkspaceIdForSession: () => '/workspace',
+      getProjectIdForSession: () => 'project-1',
+      ensureMemoryReady: async () => {},
+      searchExternalMemory: async () => [{
+        record: {
+          id: 'remote-1', providerId: 'remote', kind: 'workspace_fact',
+          scope: { userId: 'local-owner', workspaceId: '/workspace' },
+          provenance: {
+            sourceAgentId: 'main', originClass: 'owner', sessionKind: 'interactive',
+            observedAt: new Date(0).toISOString(), derivedFromRecalledContext: false,
+          },
+          content: 'Release requires a green deployment.', source: { provider: 'remote' },
+          explicitness: 'explicit', durability: 'durable', importance: 0.8,
+          disclosurePolicy: 'referenceable', createdAt: new Date(0).toISOString(),
+          updatedAt: new Date(0).toISOString(),
+        },
+        score: 0.9,
+        snippet: 'Release requires a green deployment.',
+        citation: { providerId: 'remote', recordId: 'remote-1', title: 'Remote memory' },
+      }],
+    });
+
+    const plan = await coordinator.prepare(message, conversationId, 'turn-external');
+
+    expect(plan.dynamicSystemContext).toContain('Release requires a green deployment.');
+    expect(plan.dynamicSystemContext).toContain('<user-context>');
+    expect(getExecutionContextAudit('turn-external')).toMatchObject({
+      metrics: { externalKnowledge: 1, includedExternalKnowledge: 1 },
+      items: [expect.objectContaining({
+        objectId: 'external:remote:remote-1',
+        reasons: ['external_memory', 'task_relevant_knowledge'],
+      })],
+    });
+  });
+
+  it('round-robins context categories so rules cannot starve knowledge', () => {
+    writeKnowledgeItem({
+      kind: 'decision', scope: { type: 'project', id: 'project-1' },
+      canonicalKey: 'release:fair-budget', content: 'Release requires green deployment.',
+      confidence: 1, importance: 1, originClass: 'owner', now: 200,
+    });
+    const context = buildExecutionContext({ ...request, query: 'release green deployment' });
+    context.rules = Array.from({ length: 20 }, (_, index) => ({
+      id: `rule-${index}`,
+      statement: `Rule ${index}: ${'be precise '.repeat(8)}`,
+      priority: index,
+      enforcementLevel: 'prompt' as const,
+      conditions: {},
+    }));
+
+    const fitted = fitExecutionContextToChars(context, 700);
+
+    expect(fitted.context.rules.length).toBeGreaterThan(0);
+    expect(fitted.context.knowledge).toHaveLength(1);
+    expect(fitted.rendered.length).toBeLessThanOrEqual(700);
   });
 
   it('enforces explicit tool-gate rules structurally', () => {

@@ -204,7 +204,7 @@ export function buildExecutionContext(request: ExecutionContextRequest): Executi
         context: request,
         asOf,
         trustedOnly: true,
-        sources: request.knowledgeSources,
+        policy: request.knowledgePolicy,
         limit: Math.min(100, maxKnowledge * 2),
       })
       .map((item) => ({
@@ -225,6 +225,7 @@ export function buildExecutionContext(request: ExecutionContextRequest): Executi
     goals: includeUserModel ? loadGoals(request, asOf) : [],
     priorities: includeUserModel ? loadPriorities(request, asOf) : [],
     knowledge,
+    externalKnowledge: [],
   };
 }
 
@@ -261,6 +262,12 @@ export function renderExecutionContext(context: ExecutionContext): string {
   if (context.knowledge.length) {
     sections.push(`Relevant knowledge:\n${context.knowledge.map((item) => `- ${item.content}`).join('\n')}`);
   }
+  if (context.externalKnowledge.length) {
+    sections.push(`Relevant external memory:\n${context.externalKnowledge.map((item) => {
+      const citation = item.citation.title ?? item.citation.path ?? item.citation.uri;
+      return `- ${item.snippet || item.record.content}${citation ? ` [${citation}]` : ''}`;
+    }).join('\n')}`);
+  }
   return sections.join('\n\n');
 }
 
@@ -275,27 +282,26 @@ export function fitExecutionContextToChars(
     goals: [],
     priorities: [],
     knowledge: [],
+    externalKnowledge: [],
   };
   const fits = () => buildUserContextBlock(renderExecutionContext(selected)).length <= maxChars;
-  for (const item of context.rules) {
-    selected.rules.push(item);
-    if (!fits()) selected.rules.pop();
-  }
-  for (const item of context.assertions) {
-    selected.assertions.push(item);
-    if (!fits()) selected.assertions.pop();
-  }
-  for (const item of context.goals) {
-    selected.goals.push(item);
-    if (!fits()) selected.goals.pop();
-  }
-  for (const item of context.priorities) {
-    selected.priorities.push(item);
-    if (!fits()) selected.priorities.pop();
-  }
-  for (const item of context.knowledge) {
-    selected.knowledge.push(item);
-    if (!fits()) selected.knowledge.pop();
+  const categories = [
+    { source: context.rules, target: selected.rules },
+    { source: context.assertions, target: selected.assertions },
+    { source: context.goals, target: selected.goals },
+    { source: context.priorities, target: selected.priorities },
+    { source: context.knowledge, target: selected.knowledge },
+    { source: context.externalKnowledge, target: selected.externalKnowledge },
+  ] as Array<{ source: unknown[]; target: unknown[] }>;
+  const positions = categories.map(() => 0);
+  while (categories.some((category, index) => positions[index]! < category.source.length)) {
+    for (const [index, category] of categories.entries()) {
+      const item = category.source[positions[index]!];
+      if (item === undefined) continue;
+      positions[index] = positions[index]! + 1;
+      category.target.push(item);
+      if (!fits()) category.target.pop();
+    }
   }
   return {
     context: selected,

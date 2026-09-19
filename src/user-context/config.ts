@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { ResponseLanguageSchema } from '../i18n/response-language.js';
+import type { KnowledgeReadPolicy } from '../knowledge-memory/domain.js';
 
 export const DEFAULT_CONTEXT_COMPACTION_POLICY = {
   enabled: true,
@@ -114,27 +115,53 @@ export const UserModelConfigSchema = z
     },
   });
 
+export function normalizeKnowledgeMemoryConfigInput(input: unknown): unknown {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return input;
+  const memory = input as Record<string, unknown>;
+  if (!Array.isArray(memory.sources)) return input;
+  const oldSources = memory.sources.filter((source): source is string => typeof source === 'string');
+  const visibilityScopes = new Set(['session', 'workspace', 'project']);
+  const normalized = { ...memory };
+  if (!Array.isArray(normalized.readScopes)) {
+    normalized.readScopes = oldSources.filter((source) => visibilityScopes.has(source));
+  }
+  if (!Array.isArray(normalized.contentSources)) {
+    normalized.contentSources = [
+      ...(oldSources.some((source) => visibilityScopes.has(source)) ? ['memory'] : []),
+      ...(oldSources.includes('workspace') ? ['local_import'] : []),
+      ...(oldSources.includes('connector') ? ['connector'] : []),
+    ];
+  }
+  delete normalized.sources;
+  return normalized;
+}
+
 export const KnowledgeMemoryConfigSchema = z
-  .object({
+  .preprocess(normalizeKnowledgeMemoryConfigInput, z.object({
     enabled: z.boolean().default(true),
     writePolicy: WritePolicySchema.default('confirm'),
-    sources: z.array(z.enum(['session', 'workspace', 'project', 'connector'])).default(['session', 'workspace']),
+    readScopes: z.array(z.enum(['global', 'agent', 'workspace', 'project', 'session']))
+      .default(['global', 'agent', 'workspace', 'project', 'session']),
+    contentSources: z.array(z.enum(['memory', 'local_import', 'connector']))
+      .default(['memory', 'local_import']),
     searchStrategy: z
       .enum(['local-first', 'external-first', 'fanout', 'local-only', 'external-only'])
       .default('fanout'),
+    searchTimeoutMs: z.number().int().min(100).max(30_000).default(2_000),
     writeStrategy: z
       .enum(['local-first', 'external-first', 'write-through', 'local-only', 'external-only'])
       .default('local-first'),
     allowExternalWrites: z.boolean().default(false),
     allowedProviderIds: z.array(z.string().min(1)).optional(),
     autoWriteKinds: z.array(z.string().min(1)).optional(),
-  })
-  .strict()
+  }).strict())
   .default({
     enabled: true,
     writePolicy: 'confirm',
-    sources: ['session', 'workspace'],
+    readScopes: ['global', 'agent', 'workspace', 'project', 'session'],
+    contentSources: ['memory', 'local_import'],
     searchStrategy: 'fanout',
+    searchTimeoutMs: 2_000,
     writeStrategy: 'local-first',
     allowExternalWrites: false,
   });
@@ -182,3 +209,10 @@ export type UserContextConfig = z.infer<typeof UserContextConfigSchema>;
 export type UserModelConfig = z.infer<typeof UserModelConfigSchema>;
 export type KnowledgeMemoryConfig = z.infer<typeof KnowledgeMemoryConfigSchema>;
 export type ContextPlanningConfig = z.infer<typeof ContextPlanningConfigSchema>;
+
+export function resolveKnowledgeReadPolicy(config: KnowledgeMemoryConfig): KnowledgeReadPolicy {
+  return {
+    scopes: config.readScopes,
+    contentSources: config.contentSources,
+  };
+}

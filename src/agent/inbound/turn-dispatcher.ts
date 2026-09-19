@@ -207,7 +207,7 @@ export class TurnDispatcher {
       sessionConfigStore: c.sessionConfigStore,
       commandHandler: c.commandHandler,
       prepareInboundAttachments: c.prepareInboundAttachments,
-      buildTranscriptUserMessage: async (text, prepared, sk) =>
+      buildTranscriptUserMessage: async (text, prepared, sk, options) =>
         buildDirectUserMessageContent({
           content: text,
           attachments: prepared,
@@ -215,6 +215,7 @@ export class TurnDispatcher {
           config: c.requireConfig(),
           agentManager: c.agentManager,
           modelManager: c.modelManager,
+          suppressMediaPromptUris: options?.suppressMediaPromptUris,
         }),
       recordTaskReviewStreamHint: (sk, o) =>
         c.sessionState.recordTaskReviewStreamHint(sk, o),

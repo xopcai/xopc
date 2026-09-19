@@ -37,9 +37,10 @@ it('imports only 2 explicitly selected projects out of 100, and no unselected do
   expect(new ProjectService().list().items).toHaveLength(2);
   expect(listKnowledgeItems()).toHaveLength(1);
   const context = { agentId: 'main', workspaceId: '', sessionId: 'test' };
-  expect(searchKnowledgeItems({ query: 'lunar', context, sources: ['workspace'] })).toEqual([]);
+  const policy = { scopes: ['global', 'project'] as const, contentSources: ['local_import'] as const };
+  expect(searchKnowledgeItems({ query: 'lunar', context, policy })).toEqual([]);
   const projectId = result.items.find(i => i.candidateId === selected[0].id)!.targetId;
-  expect(searchKnowledgeItems({ query: 'lunar', context: { ...context, projectId }, sources: ['workspace'] })).toHaveLength(1);
+  expect(searchKnowledgeItems({ query: 'lunar', context: { ...context, projectId }, policy })).toHaveLength(1);
 });
 it('rejects empty, unknown, duplicate, cross-owner and missing-parent selections', async () => {
   const path = join(home, 'project'); write(join(path, 'CLAUDE.md'), 'Context');

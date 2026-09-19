@@ -47,6 +47,7 @@ import type {
   TuiWorkflowRunStartRequest,
   TuiWorkflowRunStartResult,
   TuiStartupProjectResult,
+  TuiChatInputState,
 } from '../tui-backend.js';
 import type { SessionInfo } from '../tui-types.js';
 import { sessionMetadataToTuiItem } from '../tui-session-format.js';
@@ -57,6 +58,7 @@ import { collectTuiStartupResources } from '../tui-startup-resources.js';
 import { fuzzySearchWorkspaceFiles } from '../../gateway/workspace-file-search.js';
 import { inferSuggestedProjectDefaultAgentId, ProjectService } from '../../projects/index.js';
 import { getXopcCloudCatalogCoordinator } from '../../providers/xopc-cloud-catalog-coordinator.js';
+import { commitDeliveredChatInput } from '../tui-chat-input-state.js';
 
 const log = createLogger('TUI:Embedded');
 
@@ -78,6 +80,19 @@ function isPathSameOrInside(parentDir: string, childDir: string): boolean {
   return rel === '' || (!!rel && !rel.startsWith('..') && !isAbsolute(rel));
 }
 
+function deliveredUserMessageText(event: { type: string; [key: string]: unknown }): string | undefined {
+  if (event.type !== 'message_start' || !event.message || typeof event.message !== 'object') return undefined;
+  const message = event.message as { role?: unknown; content?: unknown };
+  if (message.role !== 'user') return undefined;
+  if (typeof message.content === 'string') return message.content;
+  if (!Array.isArray(message.content)) return undefined;
+  return message.content
+    .map((block) => block && typeof block === 'object' && (block as { type?: unknown }).type === 'text'
+      ? String((block as { text?: unknown }).text ?? '')
+      : '')
+    .join('');
+}
+
 /**
  * TUI backend that runs the agent in-process (no gateway required).
  *
@@ -95,6 +110,7 @@ export class EmbeddedBackend implements TuiBackend {
   private workflowRunService: WorkflowRunService | null = null;
   private running = false;
   private chatAbort: AbortController | null = null;
+  private readonly chatInputStates = new Map<string, TuiChatInputState>();
 
   onEvent?: (evt: TuiEvent) => void;
   onConnected?: () => void;
@@ -385,6 +401,7 @@ export class EmbeddedBackend implements TuiBackend {
 
     // Run the stream in background so the TUI event loop stays responsive.
     void (async () => {
+      let initialUserMessageObserved = false;
       try {
         // Prepend envelope timestamp so the model knows the current date/time,
         // matching the behavior of channel pipelines (Telegram, Weixin, etc.).
@@ -404,6 +421,14 @@ export class EmbeddedBackend implements TuiBackend {
 
         for await (const event of stream) {
           if (signal.aborted) break;
+          const deliveredInput = deliveredUserMessageText(event);
+          if (deliveredInput !== undefined) {
+            if (initialUserMessageObserved) {
+              this.consumePendingChatInput(opts.conversationId, deliveredInput);
+            } else {
+              initialUserMessageObserved = true;
+            }
+          }
           for (const mapped of mapper.map(event)) {
             this.onEvent?.({ event: mapped.type, data: mapped, source: 'embedded' });
           }
@@ -438,27 +463,112 @@ export class EmbeddedBackend implements TuiBackend {
     return { ok: false };
   }
 
-  async submitChatInput(opts: { conversationId: string; message: string; delivery: 'next' | 'steer' }): Promise<{ ok: boolean; effectiveDelivery?: 'next' | 'steer' }> {
+  async submitChatInput(opts: { conversationId: string; message: string; delivery: 'next' | 'steer' }): Promise<{
+    ok: boolean;
+    effectiveDelivery?: 'next' | 'steer';
+    state?: TuiChatInputState;
+  }> {
     if (!this.agent) return { ok: false };
     if (opts.delivery === 'steer') {
       const ok = await this.agent.turnDispatcher.steerWebchatSession(opts.conversationId, opts.message);
-      return { ok, effectiveDelivery: ok ? 'steer' : undefined };
+      if (!ok) return { ok: false };
+      const state = this.appendPendingChatInput(opts.conversationId, opts.message, 'steer');
+      return { ok: true, effectiveDelivery: 'steer', state };
     }
     const { getEmbeddedRunByConversationId } = await import('../../agent/embedded/runs.js');
     const handle = getEmbeddedRunByConversationId(opts.conversationId);
     if (!handle) return { ok: false };
     await handle.session.followUp(opts.message);
-    return { ok: true, effectiveDelivery: 'next' };
+    const state = this.appendPendingChatInput(opts.conversationId, opts.message, 'next');
+    return { ok: true, effectiveDelivery: 'next', state };
   }
 
-  async getChatInputState(conversationId: string) {
+  async getChatInputState(conversationId: string): Promise<TuiChatInputState> {
+    return this.chatInputStates.get(conversationId) ?? { conversationId, revision: 0, inputs: [] };
+  }
+
+  async updateChatInput(opts: {
+    conversationId: string;
+    inputId: string;
+    version: number;
+    content: string;
+  }): Promise<{ ok: boolean; state?: TuiChatInputState }> {
+    const current = await this.getChatInputState(opts.conversationId);
+    const target = current.inputs.find((input) => input.id === opts.inputId);
+    if (!target || target.version !== opts.version || target.status !== 'queued') return { ok: false, state: current };
+    const state: TuiChatInputState = {
+      ...current,
+      revision: current.revision + 1,
+      inputs: current.inputs.map((input) => input.id === target.id
+        ? { ...input, content: opts.content, version: input.version + 1 }
+        : input),
+    };
+    if (!await this.replaceEmbeddedQueue(opts.conversationId, state)) return { ok: false, state: current };
+    this.publishChatInputState(state);
+    return { ok: true, state };
+  }
+
+  async removeChatInput(opts: {
+    conversationId: string;
+    inputId: string;
+    version: number;
+  }): Promise<{ ok: boolean; state?: TuiChatInputState }> {
+    const current = await this.getChatInputState(opts.conversationId);
+    const target = current.inputs.find((input) => input.id === opts.inputId);
+    if (!target || target.version !== opts.version || (target.status !== 'queued' && target.status !== 'interrupted')) {
+      return { ok: false, state: current };
+    }
+    const state: TuiChatInputState = {
+      ...current,
+      revision: current.revision + 1,
+      inputs: current.inputs.filter((input) => input.id !== target.id),
+    };
+    if (!await this.replaceEmbeddedQueue(opts.conversationId, state)) return { ok: false, state: current };
+    this.publishChatInputState(state);
+    return { ok: true, state };
+  }
+
+  private appendPendingChatInput(conversationId: string, content: string, delivery: 'next' | 'steer'): TuiChatInputState {
+    const current = this.chatInputStates.get(conversationId) ?? { conversationId, revision: 0, inputs: [] };
+    const state: TuiChatInputState = {
+      ...current,
+      revision: current.revision + 1,
+      inputs: [...current.inputs, {
+        id: crypto.randomUUID(),
+        content,
+        requestedDelivery: delivery,
+        effectiveDelivery: delivery,
+        status: delivery === 'steer' ? 'injecting' : 'queued',
+        version: 1,
+        position: current.inputs.length,
+      }],
+    };
+    this.publishChatInputState(state);
+    return state;
+  }
+
+  private consumePendingChatInput(conversationId: string, content: string): void {
+    const current = this.chatInputStates.get(conversationId);
+    if (!current?.inputs.length) return;
+    const next = commitDeliveredChatInput(current, content);
+    if (next !== current) this.publishChatInputState(next);
+  }
+
+  private publishChatInputState(state: TuiChatInputState): void {
+    this.chatInputStates.set(state.conversationId, state);
+    this.onEvent?.({ event: 'session.input-state', data: state, source: 'embedded' });
+  }
+
+  private async replaceEmbeddedQueue(conversationId: string, state: TuiChatInputState): Promise<boolean> {
     const { getEmbeddedRunByConversationId } = await import('../../agent/embedded/runs.js');
     const handle = getEmbeddedRunByConversationId(conversationId);
-    return {
-      conversationId,
-      revision: 0,
-      inputs: Array.from({ length: handle?.session.pendingMessageCount ?? 0 }, (_, index) => ({ id: String(index), status: 'queued' })),
-    };
+    if (!handle) return false;
+    handle.session.clearQueue();
+    for (const input of state.inputs) {
+      if (input.status === 'injecting') await handle.session.steer(input.content);
+      else await handle.session.followUp(input.content);
+    }
+    return true;
   }
 
   async loadHistory(opts: {

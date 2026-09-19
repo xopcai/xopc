@@ -83,7 +83,11 @@ describe('TuiBottomBar', () => {
   it('renders pending input count', () => {
     const state = createInitialState('agent:main:main');
     state.connectionStatus = 'connected';
-    state.pendingInputCount = 1;
+    state.chatInputState = {
+      conversationId: state.currentConversationId,
+      revision: 1,
+      inputs: [{ id: 'input-1', content: 'next', requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', version: 1 }],
+    };
     const bar = new TuiBottomBar(() => state, () => 'medium');
 
     expect(bar.render(120).join('\n')).toContain('Q1');
@@ -117,7 +121,11 @@ describe('TuiBottomBar', () => {
   it('does not render server-owned input contents in the footer', () => {
     const state = createInitialState('agent:main:main');
     state.connectionStatus = 'connected';
-    state.pendingInputCount = 1;
+    state.chatInputState = {
+      conversationId: state.currentConversationId,
+      revision: 1,
+      inputs: [{ id: 'input-1', content: 'secret follow-up', requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', version: 1 }],
+    };
     const bar = new TuiBottomBar(() => state, () => 'medium');
 
     const rendered = bar.render(120).join('\n');

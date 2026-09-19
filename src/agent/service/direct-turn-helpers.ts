@@ -184,7 +184,7 @@ export async function runDirectAgentTurn(
   );
   const sourceContexts = input.sourceContexts ?? [];
   const sourceEnrichedMessage = injectSourceContextsIntoUserMessage(
-    userContext.modelMessage,
+    input.userMessage,
     sourceContexts,
   );
   const userMessageForModel = prependAgentContext(
@@ -206,6 +206,7 @@ export async function runDirectAgentTurn(
     conversationId: input.conversationId,
     runId: turnId,
     userMessage: userMessageForModel,
+    dynamicSystemContext: userContext.dynamicSystemContext,
     llmImages,
     presentation: input.presentation,
     sessionStore: deps.sessionStore,

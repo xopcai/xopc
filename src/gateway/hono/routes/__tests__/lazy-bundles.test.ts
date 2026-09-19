@@ -64,6 +64,11 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/capabilities/connectors')?.id).toBe('capabilities');
   });
 
+  it('maps knowledge review routes without swallowing neighboring paths', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/knowledge-memory/item-1/review')?.id).toBe('user-model');
+    expect(findAuthenticatedLazyRouteBundle('/api/knowledge-memory-other/item-1/review')).toBeUndefined();
+  });
+
   it('uses distinct bundles for voice models vs voice settings', () => {
     for (const path of ['/api/voice/catalog', '/api/voice/catalog/refresh', '/api/voice/selection']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('voice');
     expect(findAuthenticatedLazyRouteBundle('/api/voice/models')?.id).toBe('agents');

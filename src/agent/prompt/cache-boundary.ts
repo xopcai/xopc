@@ -57,3 +57,17 @@ export function appendStablePromptSection(systemPrompt: string, section: string)
     ? `${stablePrefix}${PROMPT_CACHE_BOUNDARY}${split.dynamicSuffix}`
     : `${stablePrefix}${PROMPT_CACHE_BOUNDARY}`;
 }
+
+/** Add per-turn context after the cache boundary so the stable prefix remains reusable. */
+export function appendDynamicPromptSection(systemPrompt: string, section: string): string {
+  const normalizedSection = normalizePromptSection(section);
+  if (!normalizedSection) return systemPrompt;
+
+  const split = splitPromptCacheBoundary(systemPrompt);
+  if (!split) {
+    const stable = normalizePromptSection(systemPrompt);
+    return `${stable}${PROMPT_CACHE_BOUNDARY}${normalizedSection}`;
+  }
+  const dynamicSuffix = [split.dynamicSuffix, normalizedSection].filter(Boolean).join('\n\n');
+  return `${split.stablePrefix}${PROMPT_CACHE_BOUNDARY}${dynamicSuffix}`;
+}
