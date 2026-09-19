@@ -4,7 +4,7 @@ import { persist } from 'zustand/middleware';
 export type ThemePreference = 'light' | 'dark' | 'system';
 
 /** Visual color scheme — orthogonal to light/dark mode. */
-export type ColorScheme = 'default' | 'emerald' | 'clay' | 'dawn';
+export type ColorScheme = 'default' | 'emerald' | 'clay' | 'dawn' | 'porcelain';
 
 const DEFAULT_COLOR_SCHEME: ColorScheme = 'default';
 
@@ -14,12 +14,14 @@ const THEME_META_COLOR: Record<'light' | 'dark', Record<ColorScheme, string>> = 
     emerald: '#f0fdf4',
     clay: '#fffaf0',
     dawn: '#accdec',
+    porcelain: '#f6f0e7',
   },
   dark: {
     default: '#14171c',
     emerald: '#000000',
     clay: '#0a1a1a',
     dawn: '#172433',
+    porcelain: '#211c19',
   },
 };
 
@@ -56,7 +58,8 @@ function normalizeColorScheme(value: unknown): ColorScheme {
   return value === 'default' ||
     value === 'emerald' ||
     value === 'clay' ||
-    value === 'dawn'
+    value === 'dawn' ||
+    value === 'porcelain'
     ? value
     : DEFAULT_COLOR_SCHEME;
 }
