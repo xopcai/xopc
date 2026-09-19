@@ -37,7 +37,7 @@ describe('connected source ingestion', () => {
       allowedAgentIds: ['main'],
       maxScope: 'read',
       confirmationPolicy: 'writes',
-      selectedConnectionIds: [],
+      selectedAccountIds: null,
     });
     upsertConnectorConnection({
       id: 'gmail-work',
@@ -245,7 +245,7 @@ describe('connected source ingestion', () => {
       allowedAgentIds: ['main'],
       maxScope: 'read',
       confirmationPolicy: 'writes',
-      selectedConnectionIds: [],
+      selectedAccountIds: null,
     });
     upsertConnectorConnection({
       id: 'github-work',
@@ -292,7 +292,7 @@ describe('connected source ingestion', () => {
       allowedAgentIds: ['main'],
       maxScope: 'read',
       confirmationPolicy: 'writes',
-      selectedConnectionIds: [],
+      selectedAccountIds: null,
     });
     upsertConnectorConnection({
       id: 'github-work',
@@ -339,7 +339,7 @@ describe('connected source ingestion', () => {
       allowedAgentIds: ['main'],
       maxScope: 'read',
       confirmationPolicy: 'writes',
-      selectedConnectionIds: [],
+      selectedAccountIds: null,
     });
     upsertConnectorConnection({
       id: 'calendar-work',
@@ -398,7 +398,7 @@ describe('connected source ingestion', () => {
       allowedAgentIds: ['main'],
       maxScope: 'read',
       confirmationPolicy: 'writes',
-      selectedConnectionIds: [],
+      selectedAccountIds: null,
     });
     upsertConnectorConnection({
       id: 'linear-work',

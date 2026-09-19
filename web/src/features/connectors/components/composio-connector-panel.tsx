@@ -1,16 +1,19 @@
-import { AlertCircle, CheckCircle2, KeyRound, Loader2, RefreshCw, Star, Trash2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, KeyRound, Loader2, RefreshCw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import type { ConnectorsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { isElectron } from '@/lib/electron-env';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
+import { useLocaleStore } from '@/stores/locale-store';
 
 import {
   getComposioHealth,
+  getComposioAuthorization,
   getComposioPolicy,
   getComposioScope,
   getComposioToolkitAuthState,
@@ -25,6 +28,8 @@ import {
   startAccountLearning,
   startConnectorAuthorization,
   updateComposioConnection,
+  updateComposioAccount,
+  disconnectComposioAccount,
   updateComposioPolicy,
   updateConnectorConfig,
   updateConnectorSyncPolicy,
@@ -109,6 +114,7 @@ export function ComposioConnectorPanel({
   onChanged?: () => Promise<void>;
 }) {
   const toolkit = toolkitFrom(instance);
+  const zh = useLocaleStore(state => state.language) === 'zh';
   const [connections, setConnections] = useState<ComposioConnection[]>([]);
   const [tools, setTools] = useState<ComposioTool[]>([]);
   const [events, setEvents] = useState<ComposioTriggerEvent[]>([]);
@@ -123,6 +129,7 @@ export function ComposioConnectorPanel({
   const [error, setError] = useState<string | null>(null);
   const [diagnosticsUnavailable, setDiagnosticsUnavailable] = useState(false);
   const [revokeAuthorizationId, setRevokeAuthorizationId] = useState<string | null>(null);
+  const [disconnectAccountId, setDisconnectAccountId] = useState<string | null>(null);
   const connectionGroups = useMemo(() => groupComposioConnections(connections), [connections]);
 
   const loadComposio = useCallback(async () => {
@@ -179,24 +186,29 @@ export function ComposioConnectorPanel({
     void loadComposio();
   }, [loadComposio]);
 
-  const authorize = useCallback(async () => {
+  const authorize = useCallback(async (accountId?: string) => {
     if (!toolkit) return;
+    const authWindow = !isElectron() ? window.open('about:blank', '_blank') : null;
+    if (authWindow) authWindow.opener = null;
     setLoading(true);
     setError(null);
     try {
-      const result = await startConnectorAuthorization(instance.connectorId);
+      if (!isElectron() && !authWindow) throw new Error('Allow popups to open the authorization page.');
+      const result = await startConnectorAuthorization(instance.connectorId, accountId);
       if (!result.authorizationUrl) throw new Error('The authorization provider did not return an authorization URL.');
       if (isElectron()) {
         const openResult = await window.electronAPI?.shell?.openExternalUrl(result.authorizationUrl);
         if (!openResult?.ok) throw new Error(openResult?.error ?? 'Could not open the system browser.');
       } else {
-        window.open(result.authorizationUrl, '_blank', 'noopener,noreferrer');
+        authWindow!.location.href = result.authorizationUrl;
       }
-      await waitForActiveComposioConnection(toolkit, result.connectionId);
+      const connected = await waitForActiveComposioConnection(toolkit, result.connectionId, 120_000, result.attemptId);
+      if (accountId && connected.accountId !== accountId) throw new Error('A different account was authorized. The original account and its task bindings were not changed.');
       await Promise.all([onChanged?.(), loadComposio()]);
     } catch (authorizeError) {
       setError(authorizeError instanceof Error ? authorizeError.message : String(authorizeError));
     } finally {
+      authWindow?.close();
       setLoading(false);
     }
   }, [instance.connectorId, loadComposio, onChanged, toolkit]);
@@ -215,6 +227,20 @@ export function ComposioConnectorPanel({
       setLoading(false);
     }
   }, [instance.config, instance.instanceId, loadComposio, onChanged]);
+
+  const resumeAuthorization = async (connection: ComposioConnection) => {
+    const tab = !isElectron() ? window.open('about:blank', '_blank') : null;
+    if (tab) tab.opener = null;
+    setError(null);
+    try {
+      const attempt = await getComposioAuthorization(connection.id);
+      if (attempt.authorizationUrl) {
+        if (isElectron()) await window.electronAPI?.shell?.openExternalUrl(attempt.authorizationUrl);
+        else if (tab) tab.location.href = attempt.authorizationUrl;
+        else throw new Error('Allow popups to reopen authorization.');
+      } else { tab?.close(); await loadComposio(); }
+    } catch (cause) { tab?.close(); setError(cause instanceof Error ? cause.message : String(cause)); }
+  };
 
   const updateScope = useCallback(async (nextScope: ComposioScope) => {
     if (!toolkit) return;
@@ -262,6 +288,7 @@ export function ComposioConnectorPanel({
   }, [loadComposio]);
 
   if (!toolkit) return null;
+  if (loading && !health && !connections.length) return <div aria-busy="true" className="space-y-4"><Skeleton className="h-10 w-2/3" /><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /></div>;
   if (instance.materialized.type === 'composio' && instance.materialized.role === 'credential') {
     return <p className="text-sm text-fg-muted">{t.composioApiKeyStored}</p>;
   }
@@ -329,6 +356,8 @@ export function ComposioConnectorPanel({
               {scope === 'admin' ? <SelectOption value="admin">{t.composioAccessAdminCurrent}</SelectOption> : null}
             </Select>
           </div>
+          <details>
+          <summary className="cursor-pointer px-4 py-3 text-sm text-fg-muted">{t.composioAdvancedSettings}</summary>
           <div className="grid gap-3 border-b border-edge-subtle px-4 py-4 sm:grid-cols-[minmax(0,1fr)_15rem] sm:items-center">
             <p className="text-sm font-medium text-fg">{t.composioConfirmationPolicy}</p>
             <Select
@@ -378,6 +407,18 @@ export function ComposioConnectorPanel({
               })}
             </div>
           </div>
+          <fieldset className="space-y-2 border-t border-edge-subtle p-4 text-xs text-fg-muted">
+            <legend>{zh ? '可用账号范围' : 'Available accounts'}</legend>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={policy.selectedAccountIds === null} disabled={loading}
+              onChange={event => void patchPolicy({ selectedAccountIds: event.currentTarget.checked ? null : [] })} />
+              {zh ? '所有账号（包括以后新增）' : 'All accounts, including new ones'}</label>
+            {policy.selectedAccountIds !== null && connectionGroups.map(({ primary: connection }) => connection.accountId && <label key={connection.accountId} className="flex items-center gap-2">
+              <input type="checkbox" disabled={loading} checked={policy.selectedAccountIds!.includes(connection.accountId)} onChange={event => void patchPolicy({ selectedAccountIds: event.currentTarget.checked
+                ? [...policy.selectedAccountIds!, connection.accountId!] : policy.selectedAccountIds!.filter(id => id !== connection.accountId) })} />
+              {connection.alias ?? connection.accountEmail ?? connection.accountId}</label>)}
+            {policy.selectedAccountIds?.length === 0 && <p>{zh ? '未选择账号，Agent 无法使用此应用。' : 'No accounts selected. Agents cannot use this app.'}</p>}
+          </fieldset>
+          </details>
         </section>
       ) : null}
 
@@ -406,19 +447,18 @@ export function ComposioConnectorPanel({
                 ?? connection.username ?? t.composioUnnamedAuthorization;
               return (
                 <article key={group.key} className="px-4 py-4">
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col items-start justify-between gap-3 sm:flex-row">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="truncate text-sm font-medium text-fg">{displayName}</p>
-                        {connection.isDefault ? (
-                          <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[11px] text-fg-muted">{t.composioDefaultAccount}</span>
-                        ) : null}
                       </div>
+                      <p className="mt-1 break-all text-xs text-fg-muted">{connection.accountEmail ?? connection.username ?? connection.workspace ?? connection.accountId}</p>
+                      {connection.backendLabel && <p className="mt-1 text-xs text-fg-subtle">{connection.backendLabel}</p>}
                       <p className={cn(
                         'mt-1 text-xs',
                         connection.status === 'active' ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300',
                       )}>
-                        {connectionStatusLabel(connection.status, t)}
+                        {connection.accountEnabled === false ? (zh ? '已暂停' : 'Paused') : connectionStatusLabel(connection.status, t)}
                       </p>
                       {learning ? (
                         <p className={cn('mt-1 text-xs', learning.status === 'failed' ? 'text-red-600' : 'text-fg-subtle')}>
@@ -429,7 +469,18 @@ export function ComposioConnectorPanel({
                         </p>
                       ) : null}
                     </div>
-                    {connection.status === 'active' ? (
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                    {connection.status === 'pending' && <Button variant="secondary" className="h-8 px-2.5 text-xs"
+                      onClick={() => void resumeAuthorization(connection)}>{zh ? '继续授权' : 'Continue authorization'}</Button>}
+                    {connection.accountId && <Button variant="ghost" className="h-8 px-2.5 text-xs text-danger" disabled={loading}
+                      onClick={() => setDisconnectAccountId(connection.accountId!)}>{zh ? '断开' : 'Disconnect'}</Button>}
+                    {connection.accountId && connection.status !== 'active' && <Button variant="secondary" className="h-8 px-2.5 text-xs"
+                      disabled={loading} onClick={() => void authorize(connection.accountId)}>{t.composioReconnectAccount}</Button>}
+                    {connection.accountId && <Button variant="secondary" className="h-8 px-2.5 text-xs" disabled={loading}
+                      onClick={() => void mutateConnection(() => updateComposioAccount(connection.accountId!, { enabled: connection.accountEnabled === false }))}>
+                      {connection.accountEnabled === false ? (zh ? '启用' : 'Enable') : (zh ? '暂停' : 'Pause')}
+                    </Button>}
+                    {connection.supportsLearning && connection.status === 'active' && connection.accountEnabled !== false ? (
                       <Button
                         variant="secondary"
                         className="h-8 shrink-0 px-2.5 text-xs"
@@ -444,12 +495,28 @@ export function ComposioConnectorPanel({
                         {t.composioSyncNow}
                       </Button>
                     ) : null}
+                    </div>
                   </div>
 
                   <details className="mt-3 text-xs text-fg-muted">
                     <summary className="w-fit cursor-pointer font-medium hover:text-fg">{t.composioAccountSettings}</summary>
                     <div className="mt-3 space-y-4 rounded-lg bg-surface-panel p-3">
-                      {syncPolicy ? (
+                      {connection.accountId && <fieldset className="space-y-2">
+                        <legend className="mb-2 font-medium">{t.composioAllowedAgents}</legend>
+                        <label className="flex items-center gap-2"><input type="checkbox" disabled={loading}
+                          checked={connection.allowedAgentIds == null}
+                          onChange={event => void mutateConnection(() => updateComposioAccount(connection.accountId!, { allowedAgentIds: event.currentTarget.checked ? null : [] }))} />
+                          {t.composioAllowedAgentsAllOption}</label>
+                        {connection.allowedAgentIds != null && agents.map(agent => <label key={agent.id} className="flex items-center gap-2">
+                          <input type="checkbox" disabled={loading} checked={connection.allowedAgentIds!.includes(agent.id)}
+                            onChange={event => {
+                              const selected = event.currentTarget.checked;
+                              void mutateConnection(() => updateComposioAccount(connection.accountId!, { allowedAgentIds: selected
+                                ? [...connection.allowedAgentIds!, agent.id] : connection.allowedAgentIds!.filter(id => id !== agent.id) }));
+                            }} />{agent.name}</label>)}
+                        {connection.allowedAgentIds?.length === 0 && <p>{zh ? '未选择 Agent：任何 Agent 都不能使用此账号。' : 'No agents selected: this account is unavailable to all agents.'}</p>}
+                      </fieldset>}
+                      {connection.supportsLearning && syncPolicy ? (
                         <div className="grid gap-3 sm:grid-cols-2">
                           <label className="flex items-center gap-2">
                             <input
@@ -530,18 +597,6 @@ export function ComposioConnectorPanel({
                         <Button
                           variant="ghost"
                           className="size-8 p-0"
-                          title={t.composioMakeDefault}
-                          disabled={loading || connection.isDefault || connection.status !== 'active'}
-                          onClick={() => void mutateConnection(async () => {
-                            await updateComposioConnection(connection.id, { isDefault: true });
-                            await updateComposioPolicy(toolkit, { selectedConnectionIds: [connection.id] });
-                          })}
-                        >
-                          <Star className={cn('size-4', connection.isDefault && 'fill-current')} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          className="size-8 p-0"
                           title={t.refresh}
                           disabled={loading}
                           onClick={() => void mutateConnection(() => refreshComposioConnection(connection.id))}
@@ -572,7 +627,7 @@ export function ComposioConnectorPanel({
               {t.composioDiagnosticsUnavailable}
             </p>
           ) : null}
-          {authState ? (
+          {authState?.mode === 'byok' ? (
             <section>
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
@@ -630,6 +685,14 @@ export function ComposioConnectorPanel({
         </div>
       </details>
 
+      <ConfirmDialog
+        open={disconnectAccountId !== null}
+        title={zh ? '断开账号' : 'Disconnect account'}
+        description={zh ? '停止此账号的工具使用和学习，并撤销其全部授权。已保存的数据不会删除。' : 'Stop tool access and learning for this account and revoke all its authorizations. Saved data will not be deleted.'}
+        confirmLabel={zh ? '断开' : 'Disconnect'} cancelLabel={t.modalCancel} destructive
+        onConfirm={() => { const id = disconnectAccountId; setDisconnectAccountId(null); if (id) void mutateConnection(() => disconnectComposioAccount(id)); }}
+        onCancel={() => setDisconnectAccountId(null)}
+      />
       <ConfirmDialog
         open={revokeAuthorizationId !== null}
         title={t.composioRevoke}

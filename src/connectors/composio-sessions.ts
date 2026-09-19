@@ -1,10 +1,12 @@
 import { createHash } from 'node:crypto';
-import { resolve } from 'node:path';
 
 import type { ToolRouterCreateSessionConfig } from '@composio/core';
 
 import { CredentialResolver } from '../auth/credentials.js';
-import { resolveStateDir } from '../config/paths-state.js';
+import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
+import { getConnectorAccount } from '../storage/sqlite/connector-account-repository.js';
+import { ensureComposioBackend, getComposioBackend, listComposioBackends, resolveBackendKey } from './composio-backends.js';
+import { saveAuthorizationAttempt } from './authorization-attempts.js';
 import {
   appendConnectorExecutionAudit,
   getConnectorConnection,
@@ -21,6 +23,7 @@ import type {
   ComposioToolkitAuthState,
 } from './composio-session-types.js';
 import { evaluateConnectorExecutionPolicy } from './policy.js';
+import { canAccessConnectorAccount } from './account-access.js';
 import type {
   ConnectorActionMetadata,
   ConnectorConnection,
@@ -28,20 +31,21 @@ import type {
 } from './types.js';
 
 const log = createLogger('Connectors:ComposioSessions');
-const COMPOSIO_API_KEY_PROVIDER = 'connector-composio-api-key';
-
 export async function resolveComposioApiKey(resolver = new CredentialResolver()): Promise<string | null> {
-  const stored = await resolver.resolveApiKey(COMPOSIO_API_KEY_PROVIDER).catch(() => undefined);
-  return stored?.trim() || process.env.XOPC_COMPOSIO_API_KEY?.trim() || process.env.COMPOSIO_API_KEY?.trim() || null;
+  return resolveBackendKey(await ensureComposioBackend(resolver), resolver);
 }
 
 export async function assertComposioAccessConfigured(resolver = new CredentialResolver()): Promise<'byok' | 'managed'> {
-  if (await resolveComposioApiKey(resolver)) return 'byok';
+  const backend = await ensureComposioBackend(resolver);
+  if (backend.mode === 'byok') {
+    if (await resolveBackendKey(backend, resolver)) return 'byok';
+    throw new Error('This Composio project needs its API key. Open connection service settings.');
+  }
   const cloudAccessToken = await resolver.resolveApiKey('xopc-cloud').catch(() => null);
   if (cloudAccessToken?.trim()) return 'managed';
   throw new Error(
     'Composio API key is not configured and XOPC Cloud is not signed in. '
-    + 'Install the "Composio API Key" connector first or sign in to XOPC Cloud.',
+    + 'Open connection service settings or sign in to XOPC Cloud.',
   );
 }
 
@@ -55,6 +59,7 @@ export type ComposioToolkitCatalogItem = {
 };
 
 export type ComposioAuthorizeResult = {
+  attemptId: string;
   toolkit: string;
   connectionId: string;
   connectUrl?: string;
@@ -69,6 +74,7 @@ export type {
 } from './composio-session-types.js';
 
 export type ComposioSessionContext = {
+  backendId?: string;
   principalId: string;
   installationScope?: string;
   providerPrincipalId?: string;
@@ -78,14 +84,14 @@ export type ComposioSessionContext = {
   callbackUrl?: string;
 };
 
-type ClientFactory = () => Promise<ComposioSessionsClient>;
+type ClientFactory = (backendId?: string) => Promise<ComposioSessionsClient>;
 
 function stableHash(value: string): string {
   return createHash('sha256').update(value).digest('hex').slice(0, 24);
 }
 
 function defaultInstallationScope(): string {
-  return resolve(resolveStateDir());
+  return (getSqliteDatabase().prepare('SELECT installation_id FROM connector_runtime_identity WHERE id = 1').get() as { installation_id: string }).installation_id;
 }
 
 /** Convert local identities to stable opaque Composio user IDs without disclosing user data. */
@@ -153,22 +159,32 @@ function missingAuthConfigMessage(error: unknown, toolkit: string, authConfigId?
 
 export class ComposioSessionsAdapter {
   private readonly createClient: ClientFactory;
+  private readonly injectedClient: boolean;
+  private readonly resolver: CredentialResolver;
 
   constructor(options: {
     resolver?: CredentialResolver;
     clientFactory?: ClientFactory;
     fileDownloadDir?: string;
+    apiKey?: string;
   } = {}) {
+    this.resolver = options.resolver ?? new CredentialResolver();
+    this.injectedClient = Boolean(options.clientFactory || options.apiKey);
     if (options.clientFactory) {
       this.createClient = options.clientFactory;
       return;
     }
-    const resolver = options.resolver ?? new CredentialResolver();
-    this.createClient = async () => {
-      const apiKey = await resolveComposioApiKey(resolver);
-      if (!apiKey) {
+    const resolver = this.resolver;
+    this.createClient = async (backendId) => {
+      const backend = options.apiKey ? undefined : backendId ? getComposioBackend(backendId) : await ensureComposioBackend(resolver);
+      if (backendId && !backend) throw new Error('Connection service is unavailable.');
+      const apiKey = options.apiKey ?? (backend ? await resolveBackendKey(backend, resolver) : null);
+      if (backend?.mode === 'byok' && !apiKey) throw new Error('This Composio project needs its API key.');
+      if (backend?.mode === 'managed') {
         const { ManagedComposioClient } = await import('./composio-managed-client.js');
-        return new ManagedComposioClient();
+        const client: ComposioSessionsClient = new ManagedComposioClient();
+        client.backendId = backend.id;
+        return client;
       }
       let Composio: typeof import('@composio/core').Composio;
       try {
@@ -181,7 +197,7 @@ export class ComposioSessionsAdapter {
         );
       }
       const client = new Composio({
-        apiKey,
+        apiKey: apiKey!,
         baseURL: process.env.XOPC_COMPOSIO_BASE_URL?.trim() || undefined,
         allowTracking: false,
         dangerouslyAllowAutoUploadDownloadFiles: Boolean(options.fileDownloadDir),
@@ -190,12 +206,13 @@ export class ComposioSessionsAdapter {
         host: 'xopc',
       }) as unknown as ComposioSessionsClient;
       client.mode = 'byok';
+      client.backendId = backend?.id;
       return client;
     };
   }
 
   async createSession(context: ComposioSessionContext): Promise<ComposioSessionLike> {
-    const client = await this.createClient();
+    const client = await this.createClient(context.backendId);
     const config: ToolRouterCreateSessionConfig = {
       manageConnections: {
         enable: true,
@@ -273,13 +290,16 @@ export class ComposioSessionsAdapter {
   }
 
   async authorize(
-    context: ComposioSessionContext & { toolkit: string; authConfigId?: string; installationId?: string; alias?: string },
+    context: ComposioSessionContext & { toolkit: string; authConfigId?: string; installationId?: string; alias?: string; expectedAccountId?: string },
   ): Promise<ComposioAuthorizeResult> {
+    const client = await this.createClient(context.backendId);
+    const backendId = client.backendId;
     const providerPrincipalId = createComposioPrincipalId(context.principalId, context.installationScope);
     let session: ComposioSessionLike;
     try {
       session = await this.createSession({
         ...context,
+        backendId,
         providerPrincipalId,
         toolkits: [context.toolkit],
         ...(context.authConfigId ? { authConfigs: { [context.toolkit]: context.authConfigId } } : {}),
@@ -294,8 +314,8 @@ export class ComposioSessionsAdapter {
       alias: context.alias,
     });
     const connectorId = `composio-${context.toolkit}`;
-    upsertConnectorConnection({
-      id: `composio-${request.id}`,
+    const pending = upsertConnectorConnection({
+      id: `composio-${backendId ? `${backendId}-` : ''}${request.id}`,
       installationId: context.installationId && getConnectorInstallation(context.installationId)
         ? context.installationId
         : undefined,
@@ -306,14 +326,18 @@ export class ComposioSessionsAdapter {
       alias: context.alias,
       identity: {},
       status: connectionStatus(request.status),
-      isDefault: listStoredConnectorConnections({ principalId: context.principalId, connectorId }).length === 0,
+      isDefault: false,
       metadata: {
         toolkit: context.toolkit,
         providerPrincipalId,
         ...(context.authConfigId ? { authConfigId: context.authConfigId } : {}),
+        ...(backendId ? { backendId } : {}),
       },
     });
+    if (backendId && pending.accountId) getSqliteDatabase().prepare('UPDATE connector_accounts SET backend_id = ? WHERE id = ?').run(backendId, pending.accountId);
     return {
+      attemptId: saveAuthorizationAttempt({ connectionId: pending.id, principalId: context.principalId,
+        connectorId, backendId, expectedAccountId: context.expectedAccountId, url: request.redirectUrl ?? undefined }),
       toolkit: context.toolkit,
       connectionId: request.id,
       connectUrl: request.redirectUrl ?? undefined,
@@ -321,12 +345,51 @@ export class ComposioSessionsAdapter {
     };
   }
 
-  async syncConnections(context: Pick<ComposioSessionContext, 'principalId' | 'installationScope'>): Promise<ConnectorConnection[]> {
+  /** Verify a replacement credential without changing local authorizations. */
+  async verifyConnections(connections: ConnectorConnection[]): Promise<void> {
     const client = await this.createClient();
+    const users = [...new Set(connections.map(connection => connection.metadata.providerPrincipalId))];
+    for (const userId of users) {
+      if (typeof userId !== 'string' || !userId) throw new Error('Refresh existing account identities before replacing this key.');
+      const rows = await this.listAllAccounts(client, [userId]);
+      const ids = new Set(rows.flatMap(row => row && typeof row === 'object'
+        ? [readString(row as Record<string, unknown>, ['id', 'connected_account_id'])] : []));
+      if (connections.some(connection => connection.metadata.providerPrincipalId === userId && !ids.has(connection.providerConnectionId))) {
+        throw new Error('This key cannot access the existing accounts. Add it as a new project instead.');
+      }
+    }
+  }
+
+  private async listAllAccounts(client: ComposioSessionsClient, userIds: string[]): Promise<unknown[]> {
+    const rows: unknown[] = [];
+    const cursors = new Set<string>();
+    let cursor: string | undefined;
+    do {
+      const payload = await client.connectedAccounts.list({ userIds, ...(cursor ? { cursor } : {}) });
+      rows.push(...readArray(payload));
+      cursor = payload && typeof payload === 'object' ? readString(payload as Record<string, unknown>, ['nextCursor', 'next_cursor']) : undefined;
+      if (cursor && (cursors.has(cursor) || cursors.size >= 100)) throw new Error('Unable to retrieve the complete connected account list. Retry syncing.');
+      if (cursor) cursors.add(cursor);
+    } while (cursor);
+    return rows;
+  }
+
+  async syncConnections(context: Pick<ComposioSessionContext, 'principalId' | 'installationScope' | 'backendId'>): Promise<ConnectorConnection[]> {
+    if (!this.injectedClient && !context.backendId) {
+      await ensureComposioBackend(this.resolver);
+      const results = await Promise.allSettled(listComposioBackends().map(backend => this.syncConnections({ ...context, backendId: backend.id })));
+      if (results.every(result => result.status === 'rejected')) throw (results[0] as PromiseRejectedResult).reason;
+      return results.flatMap(result => result.status === 'fulfilled' ? result.value : []);
+    }
+    const client = await this.createClient(context.backendId);
     const providerPrincipalId = createComposioPrincipalId(context.principalId, context.installationScope);
-    const payload = await client.connectedAccounts.list({ userIds: [providerPrincipalId] });
+    const stored = listStoredConnectorConnections({ principalId: context.principalId }).filter(connection =>
+      getConnectorAccount(connection.accountId!)?.backendId === client.backendId);
+    const userIds = [...new Set([providerPrincipalId, ...stored.flatMap(connection =>
+      typeof connection.metadata.providerPrincipalId === 'string' ? [connection.metadata.providerPrincipalId] : [])])];
+    const rows = await this.listAllAccounts(client, userIds);
     const synced: ConnectorConnection[] = [];
-    for (const item of readArray(payload)) {
+    for (const item of rows) {
       if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
       const row = item as Record<string, unknown>;
       const toolkitRecord = row.toolkit && typeof row.toolkit === 'object' && !Array.isArray(row.toolkit)
@@ -337,12 +400,13 @@ export class ComposioSessionsAdapter {
       if (!providerConnectionId || !toolkit) continue;
       const connectorId = `composio-${toolkit}`;
       const existing = listStoredConnectorConnections({ principalId: context.principalId, connectorId })
-        .find((connection) => connection.providerConnectionId === providerConnectionId);
+        .find((connection) => connection.providerConnectionId === providerConnectionId
+          && getConnectorAccount(connection.accountId!)?.backendId === client.backendId);
       const identity = row.connectionData && typeof row.connectionData === 'object' && !Array.isArray(row.connectionData)
         ? row.connectionData as Record<string, unknown>
         : {};
       const connection = upsertConnectorConnection({
-        id: existing?.id ?? `composio-${providerConnectionId}`,
+        id: existing?.id ?? `composio-${client.backendId ? `${client.backendId}-` : ''}${providerConnectionId}`,
         accountId: existing?.accountId,
         installationId: existing?.installationId,
         connectorId,
@@ -355,9 +419,29 @@ export class ComposioSessionsAdapter {
         isDefault: existing?.isDefault ?? false,
         connectedAt: readString(row, ['createdAt', 'created_at']),
         lastError: readString(row, ['lastError', 'last_error']),
-        metadata: { ...existing?.metadata, toolkit, providerPrincipalId },
+        metadata: { ...existing?.metadata, toolkit,
+          providerPrincipalId: existing?.metadata.providerPrincipalId ?? readString(row, ['userId', 'user_id']) ?? providerPrincipalId,
+          ...(client.backendId ? { backendId: client.backendId } : {}) },
       });
-      const identityKey = connectorIdentityKey(toolkit, connection.identity);
+      if (client.backendId && connection.accountId) {
+        getSqliteDatabase().prepare('UPDATE connector_accounts SET backend_id = ? WHERE id = ?').run(client.backendId, connection.accountId);
+      }
+      let identityKey = connectorIdentityKey(toolkit, connection.identity);
+      const probe = ({ gmail: 'GMAIL_GET_PROFILE', googledrive: 'GOOGLEDRIVE_GET_ABOUT',
+        github: 'GITHUB_GET_THE_AUTHENTICATED_USER', slack: 'SLACK_TEST_AUTH' } as Record<string, string>)[toolkit];
+      if (!identityKey && probe && connection.status === 'active'
+        && Date.now() - Number(connection.metadata.identityCheckedAt ?? 0) > 300_000) {
+        try {
+          const identitySession = await this.createSession({ ...context, backendId: client.backendId, toolkits: [toolkit],
+            authConfigs: typeof connection.metadata.authConfigId === 'string' ? { [toolkit]: connection.metadata.authConfigId } : undefined,
+            providerPrincipalId: String(connection.metadata.providerPrincipalId), connectedAccounts: { [toolkit]: [providerConnectionId] } });
+          const profile = await identitySession.execute(probe, {}, { account: providerConnectionId });
+          connection.identity = mergeConnectorIdentity(toolkit, connection.identity, profile && typeof profile === 'object' ? profile as Record<string, unknown> : {});
+          identityKey = connectorIdentityKey(toolkit, connection.identity);
+        } catch { /* Identity failure never turns a valid authorization into a revoked one. */ }
+        connection.metadata.identityCheckedAt = Date.now();
+        upsertConnectorConnection(connection);
+      }
       if (identityKey) {
         reconcileConnectorAccount({
           connectionId: connection.id,
@@ -371,7 +455,9 @@ export class ComposioSessionsAdapter {
   }
 
   async revokeConnection(connection: ConnectorConnection): Promise<void> {
-    const client = await this.createClient();
+    const backendId = getConnectorAccount(connection.accountId!)?.backendId;
+    if (!this.injectedClient && !backendId) throw new Error('Refresh account status to verify its connection service first.');
+    const client = await this.createClient(backendId);
     await client.connectedAccounts.delete(connection.providerConnectionId);
     upsertConnectorConnection({
       ...connection,
@@ -382,9 +468,11 @@ export class ComposioSessionsAdapter {
   }
 
   async refreshConnection(connection: ConnectorConnection): Promise<ConnectorConnection> {
-    const client = await this.createClient();
+    const backendId = getConnectorAccount(connection.accountId!)?.backendId;
+    if (!this.injectedClient && !backendId) throw new Error('Refresh account status to verify its connection service first.');
+    const client = await this.createClient(backendId);
     await client.connectedAccounts.refresh(connection.providerConnectionId);
-    const synced = await this.syncConnections({ principalId: connection.principalId });
+    const synced = await this.syncConnections({ principalId: connection.principalId, backendId });
     return synced.find((candidate) => candidate.id === connection.id)
       ?? synced.find((candidate) => candidate.providerConnectionId === connection.providerConnectionId)
       ?? connection;
@@ -400,11 +488,14 @@ export class ComposioSessionsAdapter {
     conversationId?: string;
     confirmed?: boolean;
   }): Promise<{ decision: 'allowed'; result: unknown } | { decision: 'denied' | 'confirmation_required'; reason: string }> {
+    if (!input.connection || input.connection.status !== 'active' || !canAccessConnectorAccount(input.connection, input.installation, input.agentId)) {
+      return { decision: 'denied', reason: 'Account is unavailable to this agent.' };
+    }
     const evaluation = evaluateConnectorExecutionPolicy({
       installation: input.installation,
       action: input.action,
       agentId: input.agentId,
-      connectionId: input.connection?.id,
+      accountId: input.connection?.accountId,
       confirmed: input.confirmed,
     });
     if (evaluation.decision !== 'allowed') {
@@ -425,6 +516,9 @@ export class ComposioSessionsAdapter {
 
     const startedAt = Date.now();
     try {
+      if (!this.injectedClient && input.connection && !getConnectorAccount(input.connection.accountId!)?.backendId) {
+        throw new Error('The account connection service has not been verified. Refresh account status first.');
+      }
       const toolkit = input.action.toolkit;
       const connectedAccounts = toolkit && input.connection
         ? { [toolkit]: [input.connection.providerConnectionId] }
@@ -436,10 +530,11 @@ export class ComposioSessionsAdapter {
       }
       const session = await this.createSession({
         ...input.context,
+        backendId: input.connection?.accountId ? getConnectorAccount(input.connection.accountId)?.backendId : input.context.backendId,
         connectedAccounts,
         ...(toolkit && typeof connectionAuthConfigId === 'string' && connectionAuthConfigId.trim()
           ? { authConfigs: { [toolkit]: connectionAuthConfigId.trim() } }
-          : {}),
+          : { authConfigs: undefined }),
         ...(typeof providerPrincipalId === 'string' ? { providerPrincipalId } : {}),
       });
       const result = await session.execute(

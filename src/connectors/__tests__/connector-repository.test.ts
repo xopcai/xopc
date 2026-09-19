@@ -56,7 +56,7 @@ describe('connector repository', () => {
       allowedAgentIds: ['main'],
       maxScope: 'write',
       confirmationPolicy: 'writes',
-      selectedConnectionIds: [],
+      selectedAccountIds: null,
     });
     expect(installation).toMatchObject({ connectorId: 'composio-gmail', maxScope: 'write' });
     expect(listConnectorInstallations('owner')).toHaveLength(1);

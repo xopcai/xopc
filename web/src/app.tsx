@@ -64,6 +64,7 @@ const ImportsPage = lazy(() => import('@/features/imports/imports-page').then(m 
 const SkillsPage = lazy(() => loadSkillsPage().then((m) => ({ default: m.SkillsPage })));
 const UserModelPage = lazy(() => loadUserModelPage().then((m) => ({ default: m.UserModelPage })));
 const ConnectorsPage = lazy(() => loadConnectorsPage().then((m) => ({ default: m.ConnectorsPage })));
+const ConnectorServicePage = lazy(() => import('./features/connectors/connector-service-page').then(m => ({ default: m.ConnectorServicePage })));
 const LogsPage = lazy(() => loadLogsPage().then((m) => ({ default: m.LogsPage })));
 const SettingsPage = lazy(() => loadSettingsPage().then((m) => ({ default: m.SettingsPage })));
 const CapabilitiesSettingsPanel = lazy(() =>
@@ -363,6 +364,10 @@ const router = createHashRouter([
             <ConnectorsPage />
           </Suspense>
         ),
+      },
+      {
+        path: 'settings/connector-service',
+        element: <Suspense fallback={<SecondaryRouteFallback />}><ConnectorServicePage /></Suspense>,
       },
       {
         path: 'channels',

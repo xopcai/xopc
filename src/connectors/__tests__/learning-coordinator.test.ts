@@ -61,7 +61,7 @@ describe('connector learning coordinator', () => {
       allowedAgentIds: ['main'],
       maxScope: 'read',
       confirmationPolicy: 'writes',
-      selectedConnectionIds: [],
+      selectedAccountIds: null,
     });
     upsertConnectorConnection({
       id: 'gmail-work',
@@ -85,6 +85,7 @@ describe('connector learning coordinator', () => {
   });
 
   it('automatically bootstraps an eligible connection and schedules the next incremental run', async () => {
+    upsertConnectorSyncPolicy({ accountId: 'account:gmail-work', scanEnabled: true });
     const config = ConfigSchema.parse({});
     const coordinator = startConnectorLearningCoordinator({
       getConfig: () => config,
@@ -191,6 +192,7 @@ describe('connector learning coordinator', () => {
   });
 
   it('stores a safe failure code instead of the provider response body', async () => {
+    upsertConnectorSyncPolicy({ accountId: 'account:gmail-work', scanEnabled: true });
     ingestComposioConnectedSource.mockRejectedValueOnce(new Error(
       '400 {"error":{"message":"Could not find connected account(s)","slug":"ToolRouterV2_InvalidConnectedAccountIds"}}',
     ));

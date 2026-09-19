@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { openXopcDatabase, closeXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 
 import * as bundleMcpGateway from '../../agent/mcp/bundle-mcp-gateway.js';
 import type { CredentialResolver } from '../../auth/credentials.js';
@@ -12,7 +13,6 @@ import { installConnector, installConnectorDefinition, uninstallConnector, updat
 import { previewConnectorDefinition } from '../health.js';
 import { setConnectorEnabled } from '../lifecycle.js';
 import { listConnectorInstances } from '../instances.js';
-import { createConnectorSetupSecretRequest, submitConnectorSetupSecret } from '../setup-secrets.js';
 import {
   canUseComposioAction,
   getConfiguredComposioAuthConfigs,
@@ -21,7 +21,9 @@ import {
   setComposioToolkitScope,
 } from '../composio.js';
 
+beforeEach(() => { resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: ':memory:' }); });
 afterEach(() => {
+  closeXopcDatabase(); resetXopcDatabaseSingletonForTest();
   vi.useRealTimers();
   vi.restoreAllMocks();
   delete process.env.XOPC_COMPOSIO_API_KEY;
@@ -210,17 +212,8 @@ describe('connector install and instances', () => {
     expect(listConnectorInstances(config)).toEqual([]);
   });
 
-  it('stores connector setup secret refs without exposing raw values to config', async () => {
-    const request = createConnectorSetupSecretRequest({ key: 'COMPOSIO_API_KEY' });
-    expect(request.ref).toMatch(/^secret:\/\//);
-    expect(submitConnectorSetupSecret(request.ref, 'brave_secret')).toBe(true);
-    const config = { mcp: { servers: {} } } as Config;
-    const resolver = { saveApiKey: vi.fn() } as unknown as CredentialResolver;
-
-    await installConnector(config, 'composio-api-key', { secrets: { COMPOSIO_API_KEY: request.ref } }, resolver);
-
-    expect(resolver.saveApiKey).toHaveBeenCalledWith('connector-composio-api-key', 'brave_secret', { profileName: 'default' });
-    expect(JSON.stringify(config)).not.toContain('brave_secret');
+  it('does not expose the retired credential connector in the application catalog', () => {
+    expect(listConnectorCatalog().some(item => item.id === 'composio-api-key')).toBe(false);
   });
 
   it('installs a non-MCP Composio connector instance with scoped action gates', async () => {
@@ -264,7 +257,7 @@ describe('connector install and instances', () => {
     const resolver = { resolveApiKey: vi.fn().mockResolvedValue(null) } as unknown as CredentialResolver;
 
     await expect(installConnector(config, 'composio-gmail', {}, resolver))
-      .rejects.toThrow('Install the "Composio API Key" connector first');
+      .rejects.toThrow('Open connection service settings');
     expect(config.connectors?.instances).toBeUndefined();
   });
 
@@ -282,12 +275,12 @@ describe('connector install and instances', () => {
     expect(resolver.resolveApiKey).toHaveBeenCalledWith('xopc-cloud');
   });
 
-  it('requires a non-empty key when installing the Composio credential connector', async () => {
+  it('rejects installing the retired credential connector', async () => {
     const config = {} as Config;
     const resolver = { saveApiKey: vi.fn() } as unknown as CredentialResolver;
 
     await expect(installConnector(config, 'composio-api-key', {}, resolver))
-      .rejects.toThrow('Composio API key is required');
+      .rejects.toThrow('Unknown connector');
     expect(config.connectors?.instances).toBeUndefined();
   });
 

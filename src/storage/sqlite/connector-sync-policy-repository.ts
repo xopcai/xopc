@@ -106,7 +106,7 @@ export function upsertConnectorSyncPolicy(input: {
         updated_at = excluded.updated_at`,
     ).run(
       input.accountId,
-      (input.scanEnabled ?? current?.scanEnabled ?? true) ? 1 : 0,
+      (input.scanEnabled ?? current?.scanEnabled ?? false) ? 1 : 0,
       (input.proactiveEnabled ?? current?.proactiveEnabled ?? false) ? 1 : 0,
       intervalMinutes,
       JSON.stringify(allowedScenarioKeys),

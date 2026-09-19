@@ -31,7 +31,7 @@ export function evaluateConnectorExecutionPolicy(input: {
   installation: ConnectorInstallationPolicy;
   action: Pick<ConnectorActionMetadata, 'scope' | 'curated'>;
   agentId?: string;
-  connectionId?: string;
+  accountId?: string;
   confirmed?: boolean;
 }): ConnectorPolicyEvaluation {
   const { installation, action } = input;
@@ -45,8 +45,8 @@ export function evaluateConnectorExecutionPolicy(input: {
     return { decision: 'denied', reason: 'Agent is not allowed to use this connector.' };
   }
   if (
-    installation.selectedConnectionIds.length > 0 &&
-    (!input.connectionId || !installation.selectedConnectionIds.includes(input.connectionId))
+    installation.selectedAccountIds !== null &&
+    (!input.accountId || !installation.selectedAccountIds.includes(input.accountId))
   ) {
     return { decision: 'denied', reason: 'Connection is not allowed by this connector policy.' };
   }

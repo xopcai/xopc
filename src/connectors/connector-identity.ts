@@ -1,5 +1,11 @@
 import type { ConnectorConnection } from './types.js';
 
+/** Only verified display fields may enter model context or account summaries. */
+export function connectorIdentitySummary(identity: Record<string, unknown>): Record<string, string> {
+  return Object.fromEntries(['email', 'username', 'displayName', 'workspace', 'workspaceId', 'userId', 'enterpriseId', 'botUserId']
+    .flatMap(key => typeof identity[key] === 'string' && identity[key].trim() ? [[key, identity[key].slice(0, 320)]] : []));
+}
+
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   return value as Record<string, unknown>;
@@ -82,9 +88,9 @@ export function mergeConnectorIdentity(
 ): Record<string, unknown> {
   const normalizedToolkit = toolkit.trim().toLowerCase();
   if (!['gmail', 'googledrive', 'github', 'slack'].includes(normalizedToolkit)) {
-    return { ...current, ...incoming };
+    return connectorIdentitySummary({ ...current, ...incoming });
   }
   const normalized = Object.fromEntries(Object.entries(normalizeConnectorIdentity(normalizedToolkit, incoming))
     .filter(([, value]) => value !== undefined && value !== null && value !== ''));
-  return { ...current, ...incoming, ...normalized };
+  return connectorIdentitySummary({ ...current, ...incoming, ...normalized });
 }

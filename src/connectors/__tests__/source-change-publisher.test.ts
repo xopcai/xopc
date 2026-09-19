@@ -70,7 +70,7 @@ describe('connected source change publisher', () => {
   }
 
   it('publishes one durable event per actual source change without raw content', async () => {
-    upsertConnectorSyncPolicy({ accountId: 'account:connection-1', proactiveEnabled: true });
+    upsertConnectorSyncPolicy({ accountId: 'account:connection-1', scanEnabled: true, proactiveEnabled: true });
     upsertKnowledgeSourceItems([sourceItem('hash-1')], Date.parse('2026-08-15T01:00:00.000Z'));
     upsertKnowledgeSourceItems([sourceItem('hash-1')], Date.parse('2026-08-15T01:01:00.000Z'));
     upsertKnowledgeSourceItems([sourceItem('hash-2')], Date.parse('2026-08-15T01:02:00.000Z'));

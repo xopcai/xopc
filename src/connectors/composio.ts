@@ -1,8 +1,11 @@
 import { CredentialResolver } from '../auth/credentials.js';
+import { randomUUID } from 'node:crypto';
+import { activateComposioBackend, addComposioBackend, ensureComposioBackend, getComposioBackend, listComposioBackends, markComposioBackendVerified, resolveBackendKey } from './composio-backends.js';
 import type { Config } from '../config/schema.js';
 import {
   getConnectorAccount,
   refreshConnectorAccountCurrent,
+  updateConnectorAccount,
 } from '../storage/sqlite/connector-account-repository.js';
 import {
   getConnectorConnection,
@@ -18,12 +21,13 @@ import {
   connectorDefinitionFromComposioToolkit,
 } from './composio-catalog.js';
 import { connectorIdentityKey } from './connector-identity.js';
+import { canAccessConnectorAccount, currentAccountConnections } from './account-access.js';
+import { getConnectorLearningPlan } from './learning-recipes.js';
 import {
   ComposioSessionsAdapter,
   assertComposioAccessConfigured,
   type ComposioToolkitAuthState,
 } from './composio-sessions.js';
-import { consumeConnectorSetupSecretRef } from './setup-secrets.js';
 import type {
   ConnectorConfirmationPolicy,
   ConnectorConnection,
@@ -32,13 +36,16 @@ import type {
 } from './types.js';
 
 export type ComposioConnection = {
+  supportsLearning: boolean;
+  backendLabel?: string;
   id: string;
   accountId?: string;
+  accountEnabled: boolean;
+  allowedAgentIds: string[] | null;
   providerConnectionId: string;
   toolkit: string;
   status: string;
   alias?: string;
-  isDefault: boolean;
   isCurrentAuthorization: boolean;
   accountEmail?: string;
   workspace?: string;
@@ -54,13 +61,16 @@ function toComposioConnection(connection: ConnectorConnection): ComposioConnecti
   const toolkit = toolkitFromConnectionMetadata(connection);
   const account = connection.accountId ? getConnectorAccount(connection.accountId) : undefined;
   return {
+    supportsLearning: Boolean(getConnectorLearningPlan(toolkit)),
     id: connection.id,
     accountId: connection.accountId,
+    backendLabel: account?.backendId ? getComposioBackend(account.backendId)?.label : undefined,
+    accountEnabled: account?.enabled ?? false,
+    allowedAgentIds: account?.allowedAgentIds ?? null,
     providerConnectionId: connection.providerConnectionId,
     toolkit,
     status: connection.status,
-    alias: connection.alias,
-    isDefault: connection.isDefault,
+    alias: account?.label ?? connection.alias,
     isCurrentAuthorization: account?.currentConnectionId === connection.id,
     accountEmail: typeof connection.identity.email === 'string' ? connection.identity.email : undefined,
     workspace: typeof connection.identity.workspace === 'string' ? connection.identity.workspace : undefined,
@@ -95,7 +105,6 @@ export type ComposioConnectorHealth = {
   errorCode?: 'missing_credential' | 'unauthorized' | 'forbidden' | 'network' | 'timeout' | 'provider_error';
 };
 
-const COMPOSIO_API_KEY_PROVIDER = 'connector-composio-api-key';
 const COMPOSIO_SCOPE_ORDER: Record<ComposioScope, number> = { read: 1, write: 2, admin: 3 };
 const COMPOSIO_AGENT_READY = new Set<string>(COMPOSIO_AGENT_READY_TOOLKITS);
 const STRICT_CURATED_TOOLKITS = new Set<string>(['github']);
@@ -316,28 +325,6 @@ export function canUseComposioAction(config: Config | undefined, slug: string): 
 }
 
 export const COMPOSIO_CONNECTORS: readonly ConnectorDefinition[] = [
-  {
-    id: 'composio-api-key',
-    version: '1.0.0',
-    displayName: 'Composio API Key',
-    description: 'Store a Composio API key for direct-mode toolkit connectors.',
-    category: 'automation',
-    kind: 'composio',
-    source: 'builtin',
-    branding: {
-      logoUrl: '/connector-icons/composio.svg',
-      source: 'composio-catalog',
-    },
-    verificationLevel: 'verified',
-    capabilities: ['auth.apiKey', 'tools', 'events', 'workflows'],
-    tags: ['composio', 'oauth', 'integrations'],
-    auth: { mode: 'apiKey' },
-    setup: {
-      secrets: [{ key: 'COMPOSIO_API_KEY', label: 'Composio API key', required: true }],
-    },
-    runtime: { type: 'composio', toolkit: 'composio', role: 'credential' },
-    integrationStrategy: { lane: 'composio', workload: 'long_tail', preferred: true },
-  },
   ...COMPOSIO_AGENT_READY_TOOLKITS.map((toolkit) => {
     const definition = connectorDefinitionFromComposioToolkit({
       slug: toolkit,
@@ -349,46 +336,55 @@ export const COMPOSIO_CONNECTORS: readonly ConnectorDefinition[] = [
   }),
 ];
 
-export async function saveComposioApiKey(input: { secrets?: Record<string, unknown> }, resolver = new CredentialResolver()): Promise<void> {
-  const raw = input.secrets?.COMPOSIO_API_KEY;
-  const resolved = typeof raw === 'string' && raw.trim().startsWith('secret://')
-    ? consumeConnectorSetupSecretRef(raw)
-    : raw;
-  if (typeof resolved !== 'string' || !resolved.trim()) {
-    throw new Error('Composio API key is required.');
-  }
-  await resolver.saveApiKey(COMPOSIO_API_KEY_PROVIDER, resolved.trim(), { profileName: 'default' });
-}
-
-export async function configureComposioApiKey(apiKey: string, resolver = new CredentialResolver()): Promise<void> {
+export async function configureComposioApiKey(apiKey: string, resolver = new CredentialResolver(), replaceBackendId?: string): Promise<void> {
   const normalized = apiKey.trim();
   if (!normalized) throw new Error('Composio API key is required.');
   if (normalized.length > 4096) throw new Error('Composio API key is too long.');
-  const validationResolver = {
-    resolveApiKey: async () => normalized,
-  } as unknown as CredentialResolver;
-  await new ComposioSessionsAdapter({ resolver: validationResolver }).listToolkitCatalog({
+  const adapter = new ComposioSessionsAdapter({ apiKey: normalized });
+  await adapter.listToolkitCatalog({
     principalId: LOCAL_OWNER_PRINCIPAL,
   });
-  await resolver.saveApiKey(COMPOSIO_API_KEY_PROVIDER, normalized, { profileName: 'default' });
+  await ensureComposioBackend(resolver);
+  if (replaceBackendId) {
+    const backend = getComposioBackend(replaceBackendId);
+    if (!backend || backend.mode !== 'byok' || !backend.credential_ref) throw new Error('Unknown Composio project.');
+    if (backend.credential_source === 'environment') throw new Error('Update this key in the gateway environment, or add a locally stored project.');
+    await adapter.verifyConnections(listStoredConnectorConnections({ principalId: LOCAL_OWNER_PRINCIPAL })
+      .filter(connection => getConnectorAccount(connection.accountId!)?.backendId === backend.id && connection.status !== 'revoked'));
+    await resolver.saveApiKey(backend.credential_ref, normalized, { profileName: 'default' });
+    markComposioBackendVerified(backend.id);
+    return;
+  }
+  for (const backend of listComposioBackends()) {
+    if (backend.mode === 'byok' && await resolveBackendKey(backend, resolver) === normalized) {
+      activateComposioBackend(backend.id); return;
+    }
+  }
+  const id = randomUUID();
+  const credentialRef = `connector-composio-${id}`;
+  await resolver.saveApiKey(credentialRef, normalized, { profileName: 'default' });
+  addComposioBackend({ id, mode: 'byok', label: `Composio · ${id.slice(0, 6)}`, credentialRef });
+  markComposioBackendVerified(id);
+  activateComposioBackend(id);
 }
 
 export async function listComposioConnections(resolver = new CredentialResolver()): Promise<ComposioConnection[]> {
   const adapter = new ComposioSessionsAdapter({ resolver });
-  await adapter.syncConnections({ principalId: LOCAL_OWNER_PRINCIPAL });
+  const verified = new Set((await adapter.syncConnections({ principalId: LOCAL_OWNER_PRINCIPAL })).map(connection => connection.id));
   const connections = listStoredConnectorConnections({ principalId: LOCAL_OWNER_PRINCIPAL })
     .filter((connection) => connection.provider === 'composio');
   for (const accountId of new Set(connections.flatMap((connection) => connection.accountId ? [connection.accountId] : []))) {
     refreshConnectorAccountCurrent(accountId);
   }
   return connections
-    .map(toComposioConnection);
+    .map(connection => toComposioConnection(verified.has(connection.id) || connection.status !== 'active'
+      ? connection : { ...connection, status: 'unknown' }));
 }
 
 export async function inspectComposioConnectorHealth(toolkit: string, resolver = new CredentialResolver()): Promise<ComposioConnectorHealth> {
   const normalizedToolkit = normalizeToolkit(toolkit);
   try {
-    await assertComposioAccessConfigured(resolver);
+    if (!listStoredConnectorConnections({ principalId: LOCAL_OWNER_PRINCIPAL }).length) await assertComposioAccessConfigured(resolver);
     const all = await listComposioConnections(resolver);
     const connections = all.filter((connection) => connection.toolkit.toLowerCase() === normalizedToolkit);
     const byAccount = new Map<string, ComposioConnection[]>();
@@ -453,8 +449,10 @@ export async function inspectComposioConnectorHealth(toolkit: string, resolver =
 export async function getComposioToolkitAuthState(
   toolkit: string,
   resolver = new CredentialResolver(),
-): Promise<ComposioToolkitAuthState> {
-  return new ComposioSessionsAdapter({ resolver }).getToolkitAuthState(normalizeToolkit(toolkit));
+): Promise<ComposioToolkitAuthState & { mode: 'managed' | 'byok' }> {
+  const backend = await ensureComposioBackend(resolver);
+  const state = await new ComposioSessionsAdapter({ resolver }).getToolkitAuthState(normalizeToolkit(toolkit));
+  return { ...state, mode: backend.mode };
 }
 
 function classifyComposioHealthError(error: unknown): {
@@ -493,7 +491,7 @@ export function getComposioInstallationPolicy(config: Config | undefined, toolki
     allowedAgentIds: existing?.allowedAgentIds ?? [],
     maxScope: getComposioToolkitScope(config, normalizedToolkit),
     confirmationPolicy: existing?.confirmationPolicy ?? 'writes',
-    selectedConnectionIds: existing?.selectedConnectionIds ?? [],
+    selectedAccountIds: existing?.selectedAccountIds ?? null,
     createdAt: existing?.createdAt,
   });
 }
@@ -501,29 +499,29 @@ export function getComposioInstallationPolicy(config: Config | undefined, toolki
 export function updateComposioInstallationPolicy(
   config: Config | undefined,
   toolkit: string,
-  patch: { allowedAgentIds?: string[]; confirmationPolicy?: ConnectorConfirmationPolicy; selectedConnectionIds?: string[] },
+  patch: { allowedAgentIds?: string[]; confirmationPolicy?: ConnectorConfirmationPolicy; selectedAccountIds?: string[] | null },
 ): ConnectorInstallationPolicy {
   const current = getComposioInstallationPolicy(config, toolkit);
   return upsertConnectorInstallation({
     ...current,
     allowedAgentIds: patch.allowedAgentIds ?? current.allowedAgentIds,
     confirmationPolicy: patch.confirmationPolicy ?? current.confirmationPolicy,
-    selectedConnectionIds: patch.selectedConnectionIds ?? current.selectedConnectionIds,
+    selectedAccountIds: patch.selectedAccountIds === undefined ? current.selectedAccountIds : patch.selectedAccountIds,
   });
 }
 
 export function updateComposioConnection(
   id: string,
-  patch: { alias?: string; isDefault?: boolean },
+  patch: { alias?: string },
 ): ComposioConnection {
   const connection = getConnectorConnection(id);
   if (!connection || connection.provider !== 'composio' || connection.principalId !== LOCAL_OWNER_PRINCIPAL) {
     throw new Error('Composio connection not found.');
   }
+  if (connection.accountId && patch.alias !== undefined) updateConnectorAccount(connection.accountId, { label: patch.alias });
   upsertConnectorConnection({
     ...connection,
     alias: patch.alias === undefined ? connection.alias : patch.alias.trim() || undefined,
-    isDefault: patch.isDefault ?? connection.isDefault,
   });
   const updated = getConnectorConnection(id)!;
   return toComposioConnection(updated);
@@ -551,7 +549,7 @@ export async function startComposioAuthorize(
   toolkit: string,
   resolver = new CredentialResolver(),
   authConfigId?: string,
-): Promise<{ toolkit: string; connectUrl: string; connectionId?: string }> {
+): Promise<{ toolkit: string; connectUrl: string; connectionId?: string; attemptId: string }> {
   const normalizedToolkit = normalizeToolkit(toolkit);
   const authorization = await new ComposioSessionsAdapter({ resolver }).authorize({
     principalId: LOCAL_OWNER_PRINCIPAL,
@@ -564,6 +562,7 @@ export async function startComposioAuthorize(
   }
   return {
     toolkit: authorization.toolkit,
+    attemptId: authorization.attemptId,
     connectUrl: authorization.connectUrl,
     connectionId: authorization.connectionId,
   };
@@ -611,30 +610,22 @@ export async function listComposioTools(toolkit: string, config?: Config, resolv
   });
 }
 
-export async function executeComposioTool(params: { slug: string; arguments?: unknown; config?: Config }, resolver = new CredentialResolver()): Promise<unknown> {
+export async function executeComposioTool(params: { slug: string; accountId?: string; arguments?: unknown; config?: Config }, resolver = new CredentialResolver()): Promise<unknown> {
   const allowed = canUseComposioAction(params.config, params.slug);
   if (allowed.ok === false) {
     throw new Error(allowed.reason);
   }
   if (!allowed.toolkit) throw new Error(`Unknown Composio toolkit for action: ${params.slug}`);
   const connectorId = `composio-${allowed.toolkit}`;
-  const installation = upsertConnectorInstallation({
-    id: `${connectorId}-${LOCAL_OWNER_PRINCIPAL}`,
-    connectorId,
-    principalId: LOCAL_OWNER_PRINCIPAL,
-    enabled: true,
-    allowedAgentIds: [],
-    maxScope: getComposioToolkitScope(params.config, allowed.toolkit),
-    confirmationPolicy: 'writes',
-    selectedConnectionIds: [],
-  });
-  const connection = listStoredConnectorConnections({
-    principalId: LOCAL_OWNER_PRINCIPAL,
-    connectorId,
-  }).find((candidate) => candidate.status === 'active' && candidate.isDefault)
-    ?? listStoredConnectorConnections({ principalId: LOCAL_OWNER_PRINCIPAL, connectorId })
-      .find((candidate) => candidate.status === 'active');
-  const result = await new ComposioSessionsAdapter({ resolver }).executeWithPolicy({
+  const installation = getConnectorInstallation(`${connectorId}-${LOCAL_OWNER_PRINCIPAL}`);
+  if (!installation) throw new Error('Connector policy is unavailable.');
+  const adapter = new ComposioSessionsAdapter({ resolver });
+  const fresh = await adapter.syncConnections({ principalId: LOCAL_OWNER_PRINCIPAL });
+  const connections = currentAccountConnections(fresh.filter(candidate => canAccessConnectorAccount(candidate, installation)));
+  const connection = params.accountId ? connections.find(candidate => candidate.accountId === params.accountId)
+    : connections.length === 1 ? connections[0] : undefined;
+  if (!connection) throw new Error('Select an available account explicitly.');
+  const result = await adapter.executeWithPolicy({
     context: {
       principalId: LOCAL_OWNER_PRINCIPAL,
       toolkits: [allowed.toolkit],
@@ -653,7 +644,7 @@ export async function executeComposioTool(params: { slug: string; arguments?: un
     args: params.arguments && typeof params.arguments === 'object' && !Array.isArray(params.arguments)
       ? params.arguments as Record<string, unknown>
       : {},
-    confirmed: true,
+    confirmed: false,
   });
   if (result.decision !== 'allowed') throw new Error(result.reason);
   return result.result;

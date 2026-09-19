@@ -234,6 +234,7 @@ export class WorkflowRunService {
       agentId: params.agentId,
       definitionId: params.definitionId,
       definitionTitle: definition.title,
+      connectorAccounts: connectorPreflight.accounts,
       triggerSource: params.source.kind,
       goal,
       parentConversationId: params.parentConversationId,
@@ -435,8 +436,11 @@ export class WorkflowRunService {
         httpStatus: 400,
       };
     }
+    const replayConnectors = preflightWorkflowConnectors({ definition, config: this.options.service.currentConfig, agentId: params.agentId });
+    if (!replayConnectors.ok) return { ok: false, code: 'connector_preflight_failed', message: replayConnectors.issues.map(issue => issue.message).join(' '), httpStatus: 409, details: replayConnectors };
     const { conversationId } = await this.options.sessionBridge.prepareRunSession({
       runId: replayRunId,
+      connectorAccounts: replayConnectors.accounts,
       agentId: params.agentId,
       definitionId: existing.run.definitionId,
       definitionTitle: `${definition.title} replay`,
