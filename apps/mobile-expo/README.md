@@ -139,7 +139,7 @@ pnpm -C apps/mobile-expo run build:ios:preview
 
 ## Native Network Security
 
-The app accepts HTTPS/WSS gateway routes only. Android is built with `usesCleartextTraffic: false`; iOS has no ATS local-network exception. `app.json` declares the verified `https://link.xopc.ai/connect` App Link and the matching iOS associated domain. After changing these settings, run `pnpm -C apps/mobile-expo exec expo prebuild --clean` and rebuild the native app.
+The app accepts HTTPS/WSS gateway routes only. Android is built with `usesCleartextTraffic: false`; iOS has no ATS local-network exception. `app.json` declares the verified `https://link.xopc.ai/c` App Link and the matching iOS associated domain. After changing these settings, run `pnpm -C apps/mobile-expo exec expo prebuild --clean` and rebuild the native app.
 
 ## iOS CocoaPods and Proxy Notes
 

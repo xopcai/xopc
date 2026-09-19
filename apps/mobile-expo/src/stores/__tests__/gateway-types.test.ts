@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { DEFAULT_MOBILE_SCOPES } from '@xopcai/gateway-contract';
+
 import { parseGatewayProfile } from '../gateway-types';
 
 describe('gateway profile contract', () => {
@@ -16,6 +18,7 @@ describe('gateway profile contract', () => {
 
   it('accepts only the device-bound HTTPS profile shape', () => {
     expect(parseGatewayProfile(profile)).toEqual(profile);
+    expect(parseGatewayProfile({ ...profile, scopes: [...DEFAULT_MOBILE_SCOPES] })).not.toBeNull();
     expect(parseGatewayProfile({ ...profile, routes: [{ ...profile.routes[0], url: 'http://192.168.1.2' }] })).toBeNull();
     expect(parseGatewayProfile({ id: 'legacy', baseUrl: 'https://gateway.example.com', token: 'secret' })).toBeNull();
   });

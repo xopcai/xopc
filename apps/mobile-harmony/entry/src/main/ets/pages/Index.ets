@@ -3,7 +3,7 @@ import { XopcGatewayProfilesView } from '../view/GatewayProfilesView';
 import { XopcHomeView } from '../view/HomeView';
 import { scanBarcode, scanCore } from '@kit.ScanKit';
 import { BusinessError } from '@kit.BasicServicesKit';
-import { invitationPayload } from '../common/protocol';
+import { readMobilePairingInvitation } from '../common/protocol';
 import { XopcSettingsView } from '../view/SettingsView';
 import { layoutState } from '../service/layoutState';
 
@@ -61,7 +61,7 @@ struct XopcIndex {
           if (error) reject(error); else resolve(value);
         });
       });
-      invitationPayload(result.originalValue);
+      readMobilePairingInvitation(result.originalValue, Date.now());
       this.invitation = result.originalValue;
       // Pairing credentials must not appear in logs or toasts.
       await this.connection.connect(this.invitation);

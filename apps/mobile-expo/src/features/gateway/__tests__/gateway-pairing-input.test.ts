@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { formatMobilePairingInvitation, MOBILE_PAIRING_INVITATION_VERSION } from '@xopcai/gateway-contract';
 
 const native = vi.hoisted(() => ({ clipboard: vi.fn(), pick: vi.fn(), scan: vi.fn() }));
 vi.mock('expo-clipboard', () => ({ getStringAsync: native.clipboard }));
@@ -9,14 +10,14 @@ import { readGatewayPairingInput } from '../gateway-pairing-input';
 
 function link(overrides: Record<string, unknown> = {}): string {
   const payload = {
-    version: 3, targetKind: 'mobile',
-    pairingToken: `xopc_pair_00000000-0000-4000-8000-000000000000_${'a'.repeat(43)}`,
-    gatewayId: '00000000-0000-4000-8000-000000000000', gatewayName: 'Work',
-    gatewayPublicKey: 'b'.repeat(43), expiresAt: Date.now() + 60_000,
-    routes: [{ id: 'https', kind: 'custom-https', url: 'https://computer.example' }],
+    version: MOBILE_PAIRING_INVITATION_VERSION,
+    pairingToken: `xopc_pair_00000000-0000-4000-8000-000000000000_${'A'.repeat(43)}`,
+    gatewayId: '00000000-0000-4000-8000-000000000000',
+    gatewayPublicKey: 'A'.repeat(43), expiresAt: Date.now() + 60_000,
+    origins: ['https://computer.example'],
     ...overrides,
   };
-  return `https://link.xopc.ai/connect#p=${Buffer.from(JSON.stringify(payload)).toString('base64url')}`;
+  return formatMobilePairingInvitation(payload as Parameters<typeof formatMobilePairingInvitation>[0]);
 }
 
 describe('gateway pairing input', () => {
@@ -28,7 +29,7 @@ describe('gateway pairing input', () => {
 
   it('reads a copied pairing link including surrounding whitespace', async () => {
     native.clipboard.mockResolvedValue(` \n${link()}\n`);
-    await expect(readGatewayPairingInput('clipboard')).resolves.toMatchObject({ version: 3, gatewayId: '00000000-0000-4000-8000-000000000000' });
+    await expect(readGatewayPairingInput('clipboard')).resolves.toMatchObject({ version: 4, gatewayId: '00000000-0000-4000-8000-000000000000' });
     expect(native.pick).not.toHaveBeenCalled();
     expect(native.scan).not.toHaveBeenCalled();
   });
@@ -57,10 +58,10 @@ describe('gateway pairing input', () => {
     expect(native.scan).not.toHaveBeenCalled();
   });
 
-  it.each(['empty', 'unrelated', 'expired', 'insecure'])('rejects an image with %s QR content', async (kind) => {
+  it.each(['empty', 'unrelated', 'expired', 'malformed'])('rejects an image with %s QR content', async (kind) => {
     const data = kind === 'unrelated' ? 'https://example.com'
       : kind === 'expired' ? link({ expiresAt: Date.now() - 1 })
-        : link({ routes: [{ id: 'lan', kind: 'custom-https', url: 'http://192.168.1.2' }] });
+        : 'https://link.xopc.ai/c#BA';
     native.scan.mockResolvedValue(kind === 'empty' ? [] : [{ data }]);
     await expect(readGatewayPairingInput('image')).rejects.toMatchObject({ key: 'imageQrNotFound' });
   });

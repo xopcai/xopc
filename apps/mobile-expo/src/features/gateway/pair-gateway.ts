@@ -79,7 +79,7 @@ async function signedRequest(journal: PairingJournal, action: DevicePairingActio
   const path = action === 'request' ? '/api/device-pairing/requests' : `/api/device-pairing/requests/${journal.requestId}/${action}`;
   let response: Awaited<ReturnType<typeof post>> | undefined;
   let lastRouteError: unknown;
-  const origins = [...new Set([journal.origin, ...journal.pairing.routes.map(route => route.url)])];
+  const origins = [...new Set([journal.origin, ...journal.pairing.origins])];
   for (const origin of origins) {
     try { response = await post(origin, path, { ...body, signature }, signal); journal.origin = origin; break; }
     catch (error) {
@@ -94,7 +94,7 @@ async function signedRequest(journal: PairingJournal, action: DevicePairingActio
   }
   const result = decodeBase64UrlJson<{
     request: DevicePairingStatus; gateway: { id: string; name: string }; nonce: string;
-    routes?: ParsedGatewayQr['routes']; scopes?: string[];
+    routes?: GatewayProfile['routes']; scopes?: string[];
   }>(response.signedPayload);
   if (result.gateway.id !== journal.pairing.gatewayId || result.nonce !== body.nonce || result.request.requestId !== journal.requestId) {
     throw new Error('PAIRING_IDENTITY_MISMATCH');
@@ -106,10 +106,10 @@ async function signedRequest(journal: PairingJournal, action: DevicePairingActio
 async function reachableOrigin(pairing: ParsedGatewayQr, signal?: AbortSignal): Promise<string> {
   const pairingId = pairing.pairingToken.slice('xopc_pair_'.length).split('_')[0];
   let lastRouteError: unknown;
-  for (const route of pairing.routes) {
+  for (const origin of pairing.origins) {
     throwIfPairingPaused(signal);
     try {
-      const response = await post(route.url, '/api/device-pairing/probe', { pairingId }, signal);
+      const response = await post(origin, '/api/device-pairing/probe', { pairingId }, signal);
       if (!response.signedPayload || !response.signature || !verifyGatewayPayload(pairing.gatewayPublicKey, response.signedPayload, response.signature)) {
         throw new Error('PAIRING_IDENTITY_MISMATCH');
       }
@@ -117,7 +117,7 @@ async function reachableOrigin(pairing: ParsedGatewayQr, signal?: AbortSignal): 
       if (proof.gatewayId !== pairing.gatewayId || proof.pairingId !== pairingId || Math.abs(Date.now() - proof.issuedAt) > 300_000) {
         throw new Error('PAIRING_IDENTITY_MISMATCH');
       }
-      return route.url;
+      return origin;
     } catch (error) {
       throwIfPairingPaused(signal);
       if (error instanceof PairingHttpError && !isRetryableDevicePairingHttpStatus(error.status)) throw error;
@@ -151,7 +151,8 @@ export async function pairWithGateway(pairing: ParsedGatewayQr, signal?: AbortSi
   const parentSignal = signal;
   signal = controller.signal;
   running = (async () => {
-    useDevicePairingFlow.setState({ progress: { stage: 'connecting', name: pairing.gatewayName } });
+    const gatewayLabel = new URL(pairing.origins[0]).hostname;
+    useDevicePairingFlow.setState({ progress: { stage: 'connecting', name: gatewayLabel } });
     let journal = readDeviceAuthJournal<PairingJournal>(JOURNAL);
     if (journal && journal.pairing.pairingToken !== pairing.pairingToken) throw new Error('PAIRING_ALREADY_PENDING');
     if (!journal) {
@@ -167,7 +168,7 @@ export async function pairWithGateway(pairing: ParsedGatewayQr, signal?: AbortSi
     if (!journal.profile) {
       let result = await signedRequest(journal, 'request', signal);
       while (result.request.status === 'pending') {
-        useDevicePairingFlow.setState({ progress: { stage: 'approval', name: pairing.gatewayName,
+        useDevicePairingFlow.setState({ progress: { stage: 'approval', name: result.gateway.name,
           confirmationCode: result.request.confirmationCode, expiresAt: result.request.expiresAt } });
         await waitForPoll(signal);
         result = await signedRequest(journal, 'status', signal);
@@ -176,7 +177,7 @@ export async function pairWithGateway(pairing: ParsedGatewayQr, signal?: AbortSi
         clearDeviceAuthJournal(JOURNAL);
         throw new Error(`PAIRING_${result.request.status.toUpperCase()}`);
       }
-      useDevicePairingFlow.setState({ progress: { stage: 'completing', name: pairing.gatewayName } });
+      useDevicePairingFlow.setState({ progress: { stage: 'completing', name: result.gateway.name } });
       result = await signedRequest(journal, 'complete', signal);
       const profile = parseGatewayProfile({ gatewayId: pairing.gatewayId, name: result.gateway.name,
         gatewayPublicKey: pairing.gatewayPublicKey, deviceId: result.request.deviceId, scopes: result.scopes,
