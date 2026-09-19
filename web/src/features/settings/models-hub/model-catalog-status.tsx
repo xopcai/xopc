@@ -64,8 +64,8 @@ function capabilityAction(capability: CapabilityId, zh: boolean) {
     case 'computer-use':
       return {
         href: '/settings/computer-use',
-        guidance: zh ? '选择兼容的电脑操作模型；本机权限需单独授权' : 'Select a compatible computer model; local access requires separate approval',
-        action: zh ? '配置电脑操作' : 'Configure computer use',
+        guidance: zh ? '选择兼容的电脑控制模型；本机权限需单独授权' : 'Select a compatible computer model; local access requires separate approval',
+        action: zh ? '配置电脑控制' : 'Configure computer use',
       };
     case 'vision':
       return {
@@ -219,7 +219,7 @@ export function ModelCatalogStatus() {
                 ? (zh ? '图片理解' : 'Vision')
                 : capability === 'image-generation'
                   ? (zh ? '图片生成' : 'Image generation')
-                  : capability === 'computer-use' ? (zh ? '电脑操作模型' : 'Computer use model') : capability.toUpperCase();
+                  : capability === 'computer-use' ? (zh ? '电脑控制模型' : 'Computer use model') : capability.toUpperCase();
               const automatic = plan.selectionSource !== 'explicit-config';
               const displayStatus = deriveCapabilityDisplayStatus(plan);
               const needsAttention = displayStatus === 'degraded' || displayStatus === 'misconfigured';

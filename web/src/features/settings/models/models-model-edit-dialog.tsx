@@ -71,7 +71,7 @@ function ModelEditForm({
       next.set('maxTokens', m.mustBePositive);
     }
     if (form.computerUse && !form.input?.includes('image')) {
-      next.set('computerUse', zh ? '电脑操作模型必须支持图片输入' : 'Computer Use requires image input');
+      next.set('computerUse', zh ? '电脑控制模型必须支持图片输入' : 'Computer Use requires image input');
     }
     setErrors(next);
     return next.size === 0;
@@ -250,9 +250,9 @@ function ModelEditForm({
           </div>
 
       <details className="mt-4 rounded-lg border border-edge p-3 text-sm text-fg">
-        <summary className="cursor-pointer">{zh ? '高级：电脑操作协议' : 'Advanced: Computer Use protocol'}</summary>
+        <summary className="cursor-pointer">{zh ? '高级：电脑控制协议' : 'Advanced: Computer Use protocol'}</summary>
         <div className="mt-3 space-y-2">
-          <Select aria-label={zh ? '电脑操作协议' : 'Computer Use protocol'} value={form.computerUse?.profile ?? ''}
+          <Select aria-label={zh ? '电脑控制协议' : 'Computer Use protocol'} value={form.computerUse?.profile ?? ''}
             onChange={event => update('computerUse', event.target.value ? { profile: event.target.value as NonNullable<CustomModel['computerUse']>['profile'] } : undefined)}>
             <SelectOption value="">{zh ? '未声明' : 'Not declared'}</SelectOption>
             <SelectOption value="gui-plus-2026-02-26">GUI-Plus (2026-02-26)</SelectOption>

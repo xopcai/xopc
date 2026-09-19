@@ -455,7 +455,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                 </h1>
                 <p className="mt-3 max-w-md text-sm leading-6 text-fg-muted">
                   {language === 'zh'
-                    ? '聊天模型已经可用。图片生成、语音和电脑操作等能力可以稍后按需配置。'
+                    ? '聊天模型已经可用。图片生成、语音和电脑控制等能力可以稍后按需配置。'
                     : 'Your chat model is ready. Image, voice, and computer-use capabilities can be configured later.'}
                 </p>
                 {state.connectedModelRef ? (
