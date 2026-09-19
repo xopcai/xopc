@@ -63,6 +63,14 @@ export interface CatalogSource {
   etag: string | null;
   recommendedModel: string | null;
   recommended?: Partial<Record<'vision' | 'image-generation' | 'stt' | 'tts', string>>;
+  search?: {
+    schemaVersion: 1;
+    endpoint: string;
+    auth: { scope: 'models:invoke' };
+    maxResults: number;
+    defaults: { count: number; safeSearch: 'moderate' };
+    capabilities: { freshness: boolean; language: boolean; region: boolean };
+  };
   lastSuccessAt: number;
   models: CatalogModel[];
 }

@@ -601,7 +601,7 @@
   },
   "webSearchSettings": {
     "title": "Web search",
-    "subtitle": "Configure region and search providers for the web_search tool. Without API keys, a built-in HTML fallback is used.",
+    "subtitle": "Configure region and search providers for the web_search tool. When connected, XOPC Cloud works without a separate search API key.",
     "docsLink": "Gateway documentation",
     "needToken": "Save a gateway token to edit web search settings.",
     "loading": "Loading…",
@@ -616,7 +616,7 @@
     "sectionRegionHint": "Controls which zero-config HTML fallback is used when no API provider succeeds (China → Bing; otherwise DuckDuckGo).",
     "sectionPreferences": "Search preferences",
     "sectionSearch": "Search providers",
-    "sectionSearchHint": "Providers are tried in order. Keys are stored in the gateway config file. Leave the list empty to use only the HTML fallback.",
+    "sectionSearchHint": "Providers are tried in order. Leave the list empty to use XOPC Cloud automatically when connected, then the built-in HTML fallback.",
     "sectionBlocklist": "Domain blocklist",
     "sectionBlocklistHint": "When enabled, web_search and web_extract skip URLs whose host matches these domains (exact or suffix match).",
     "blocklistEnabled": "Enable domain blocklist",
