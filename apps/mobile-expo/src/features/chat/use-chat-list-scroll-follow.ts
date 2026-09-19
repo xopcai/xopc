@@ -121,15 +121,11 @@ export function useChatListScrollFollow({
       setShowScrollToBottom(false);
       onAtBottomChange?.(true);
     } else if (messages.length > previous.length && lastKey !== previous.lastKey) {
-      if (last?.role === 'user' || last?.role === 'user-with-attachments') {
-        // A newly sent prompt always returns the conversation to the live edge.
-        setPinned(true);
-      }
-      // Assistant rows follow only while already pinned; history readers stay undisturbed.
+      // Sending and receiving preserve the reader's current follow preference.
       scheduleFollow(true);
     }
     previousRef.current = { conversationId, lastKey, length: messages.length };
-  }, [conversationId, messages, getMessageKey, cancelFollow, onAtBottomChange, setPinned, scheduleFollow]);
+  }, [conversationId, messages, getMessageKey, cancelFollow, onAtBottomChange, scheduleFollow]);
 
   useEffect(() => cancelFollow, [cancelFollow]);
 

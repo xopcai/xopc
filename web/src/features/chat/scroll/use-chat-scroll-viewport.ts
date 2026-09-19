@@ -26,7 +26,6 @@ export interface UseChatScrollViewportArgs {
   hasToken: boolean;
   showSessionLoading: boolean;
   conversationId: string | null;
-  sending: boolean;
   chatMessages: Message[];
   hasMore: boolean;
   loadingMore: boolean;
@@ -46,8 +45,8 @@ export interface UseChatScrollViewportResult {
  * Cursor-style chat scroll: one container, one “following tail” flag, one scrollToEnd path.
  *
  * - **Following**: content growth (streaming, new rows) keeps the tail in view.
- * - **Not following**: user scrolled up — never programmatic scroll until they return or send.
- * - **Force to end**: send message, session open/switch, scroll-to-bottom button.
+ * - **Not following**: user scrolled up — never programmatic scroll until they return.
+ * - **Force to end**: session open/switch, scroll-to-bottom button.
  *
  * Virtual list scroll hacks are intentionally avoided — `MessageList` is a plain column.
  */
@@ -55,7 +54,6 @@ export function useChatScrollViewport({
   hasToken,
   showSessionLoading,
   conversationId,
-  sending,
   chatMessages,
   hasMore,
   loadingMore,
@@ -69,7 +67,6 @@ export function useChatScrollViewport({
   const [atBottom, setAtBottom] = useState(true);
 
   const prevLoadingRef = useRef(true);
-  const prevSendingRef = useRef(false);
   const prevMessageCountRef = useRef(0);
 
   const listScrollMetricsRef = useRef<{
@@ -116,10 +113,9 @@ export function useChatScrollViewport({
     scrollToEnd();
     const el = scrollRef.current;
     if (!el) return;
-    const near = isNearChatBottom(el);
-    setAtBottom(near);
-    if (near) setFollowing(true);
-  }, [scrollToEnd, setFollowing]);
+    // Resizing the composer or keyboard must not re-enable following for history readers.
+    setAtBottom(isNearChatBottom(el));
+  }, [scrollToEnd]);
 
   const registerListContentRef = useCallback(
     (el: HTMLDivElement | null) => {
@@ -184,14 +180,6 @@ export function useChatScrollViewport({
     setFollowing(true);
     scrollToEnd({ force: true });
   }, [conversationId, hasToken, showSessionLoading, setFollowing, scrollToEnd]);
-
-  const sendingStarted = hasToken && sending && !prevSendingRef.current && !showSessionLoading;
-  useLayoutEffect(() => {
-    prevSendingRef.current = sending;
-    if (!sendingStarted) return;
-    setFollowing(true);
-    scrollToEnd({ force: true });
-  }, [sendingStarted, sending, setFollowing, scrollToEnd]);
 
   useLayoutEffect(() => {
     if (showSessionLoading) return;

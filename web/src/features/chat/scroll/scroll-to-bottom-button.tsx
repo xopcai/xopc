@@ -33,7 +33,7 @@ export const ScrollToBottomDock = memo(function ScrollToBottomDock({
       <button
         type="button"
         className={cn(
-          'group pointer-events-auto flex size-8 shrink-0 items-center justify-center rounded-full border border-edge-subtle bg-surface-panel text-fg-muted shadow-surface',
+          'group relative pointer-events-auto flex size-11 sm:size-8 shrink-0 items-center justify-center rounded-full border border-edge-subtle bg-surface-panel text-fg-muted shadow-surface',
           'hover:bg-surface-hover hover:text-fg',
           interaction.transition,
           interaction.press,
@@ -48,25 +48,19 @@ export const ScrollToBottomDock = memo(function ScrollToBottomDock({
         title={m.chat.scrollToBottom}
         aria-label={m.chat.scrollToBottom}
       >
+        <ArrowDown
+          data-scroll-to-bottom-arrow
+          className="size-4 transition-transform duration-150 ease-out group-hover:translate-y-0.5 motion-reduce:transition-none"
+          strokeWidth={1.8}
+          aria-hidden
+        />
         {running ? (
-          <span className="flex items-center gap-1" aria-hidden>
-            {[-0.4, -0.2, 0].map((delay) => (
-              <span
-                key={delay}
-                data-scroll-to-bottom-running-dot
-                className="size-1 rounded-full bg-current animate-pulse motion-reduce:animate-none"
-                style={{ animationDelay: `${delay}s`, animationDuration: '1.2s' }}
-              />
-            ))}
-          </span>
-        ) : (
-          <ArrowDown
-            data-scroll-to-bottom-arrow
-            className="size-4 transition-transform duration-150 ease-out group-hover:translate-y-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-y-0"
-            strokeWidth={1.8}
+          <span
+            data-scroll-to-bottom-running-dot
+            className="absolute right-0 top-0 size-2 rounded-full bg-accent animate-pulse motion-reduce:animate-none"
             aria-hidden
           />
-        )}
+        ) : null}
       </button>
     </div>
   );
