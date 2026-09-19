@@ -1,5 +1,6 @@
 import {
   buildSidebarChatListPath,
+  buildSidebarLayoutPath,
   buildSessionActionPath,
   buildSessionDetailPath,
   buildSessionListQueryString,
@@ -72,6 +73,23 @@ export async function fetchSidebarChatList(query?: {
   return parseSidebarChatListResponse(
     await fetchJson<unknown>(apiUrl(buildSidebarChatListPath(query))),
   ) as SidebarChatListResponse;
+}
+
+export async function saveSidebarLayout(input: {
+  containerId: string;
+  itemIds: string[];
+  expectedRevision: number;
+}): Promise<{ containerId: string; itemIds: string[]; revision: number }> {
+  const result = await fetchJson<{
+    ok: boolean;
+    error?: string;
+    layout?: { containerId: string; itemIds: string[]; revision: number };
+  }>(apiUrl(buildSidebarLayoutPath(input.containerId)), {
+    method: 'PUT',
+    body: JSON.stringify({ itemIds: input.itemIds, expectedRevision: input.expectedRevision }),
+  });
+  if (!result.ok || !result.layout) throw new Error(result.error ?? 'Failed to save sidebar order');
+  return result.layout;
 }
 
 export async function getSessionStats(): Promise<SessionStats> {

@@ -243,6 +243,13 @@ export {
   updateSessionStats,
 } from './session-repository.js';
 export {
+  getSidebarLayout,
+  replaceSidebarLayout,
+  sortBySidebarLayout,
+  SidebarLayoutConflictError,
+  type SidebarLayout,
+} from './sidebar-layout-repository.js';
+export {
   appendCompactionBoundaryIfUnchanged,
   appendMediaToAssistantTranscriptEntry,
   appendTranscriptEntry,
