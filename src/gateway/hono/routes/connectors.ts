@@ -1,6 +1,9 @@
 import type { Hono } from 'hono';
 
 import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
+import { updateConnectorAccount } from '../../../storage/sqlite/connector-account-repository.js';
+import { getAuthorizationAttempt } from '../../../connectors/authorization-attempts.js';
+import { resumeApprovedConnectorAction } from '../../../connectors/approval-resume.js';
 import { getMcpOAuthManager } from '../../../agent/mcp/oauth/mcp-oauth-manager.js';
 import { ConfigPersistenceError, persistConfigMutation } from '../../../config/config-mutation.js';
 import type { Config } from '../../../config/schema.js';
@@ -24,7 +27,8 @@ import {
   updateComposioInstallationPolicy,
   type ComposioScope,
 } from '../../../connectors/composio.js';
-import { resolveComposioApiKey } from '../../../connectors/composio-sessions.js';
+import { ComposioSessionsAdapter, resolveComposioApiKey } from '../../../connectors/composio-sessions.js';
+import { activateComposioBackend, addComposioBackend, ensureComposioBackend, getComposioBackend, listComposioBackends, removeComposioBackend } from '../../../connectors/composio-backends.js';
 import { inspectManagedComposioStatus } from '../../../connectors/composio-managed-client.js';
 import { appendComposioTriggerEvent, listComposioTriggerEvents } from '../../../connectors/composio-triggers.js';
 import { previewConnectorDefinition, testConnectorInstance } from '../../../connectors/health.js';
@@ -149,8 +153,51 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     }
   });
 
+  authenticated.patch('/api/connectors/composio/accounts/:id', strictRateLimitMiddleware, async (c) => {
+    const account = getConnectorAccount(c.req.param('id'));
+    if (!account || account.principalId !== 'local-owner') return c.json({ ok: false, error: 'Account not found.' }, 404);
+    const body = await c.req.json().catch(() => null);
+    if (!body || typeof body !== 'object' || Array.isArray(body)
+      || (body.label !== undefined && (typeof body.label !== 'string' || body.label.length > 120))
+      || (body.enabled !== undefined && typeof body.enabled !== 'boolean')
+      || (body.allowedAgentIds !== undefined && body.allowedAgentIds !== null
+        && (!Array.isArray(body.allowedAgentIds) || body.allowedAgentIds.some((id: unknown) => typeof id !== 'string')))) {
+      return c.json({ ok: false, error: 'Invalid account settings.' }, 400);
+    }
+    return c.json({ ok: true, payload: { account: updateConnectorAccount(account.id, body) } });
+  });
+
   authenticated.get('/api/connectors/learning', (c) => {
     return c.json({ ok: true, payload: { jobs: listConnectorLearningJobs({ limit: 100 }) } });
+  });
+
+  authenticated.get('/api/connectors/composio/authorizations/:id', async (c) => {
+    let attempt = getAuthorizationAttempt(c.req.param('id'), 'local-owner');
+    if (!attempt) return c.json({ ok: false, error: 'Authorization attempt not found.' }, 404);
+    try {
+      if (attempt.status === 'awaiting_user') {
+        await new ComposioSessionsAdapter().syncConnections({ principalId: 'local-owner', backendId: attempt.backend_id ?? undefined });
+        attempt = getAuthorizationAttempt(attempt.id, 'local-owner')!;
+      }
+      const connection = listConnectorConnections({ principalId: 'local-owner', connectorId: attempt.connector_id })
+        .find(item => item.id === attempt.connection_id);
+      return c.json({ ok: true, payload: { attempt: { id: attempt.id, status: attempt.status,
+        authorizationUrl: attempt.authorization_url, expiresAt: attempt.expires_at, accountId: connection?.accountId } } });
+    } catch { return c.json({ ok: false, error: 'The connection service is temporarily unavailable. Retry checking this authorization.' }, 503); }
+  });
+
+  authenticated.delete('/api/connectors/composio/accounts/:id', strictRateLimitMiddleware, async (c) => {
+    const account = getConnectorAccount(c.req.param('id'));
+    if (!account || account.principalId !== 'local-owner') return c.json({ ok: false, error: 'Account not found.' }, 404);
+    updateConnectorAccount(account.id, { enabled: false });
+    try {
+      for (const connection of listConnectorConnections({ principalId: account.principalId, connectorId: account.connectorId })) {
+        if (connection.accountId === account.id && connection.status !== 'revoked') await revokeComposioConnection(connection.id);
+      }
+      return c.json({ ok: true, payload: { disconnected: true } });
+    } catch (error) {
+      return c.json({ ok: false, error: `Account paused; some authorizations could not be revoked. Retry disconnecting. ${errorMessage(error)}` }, 400);
+    }
   });
 
   authenticated.get('/api/connectors/composio/accounts/:id/sync-policy', (c) => {
@@ -160,7 +207,7 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     }
     const policy = getConnectorSyncPolicy(account.id) ?? {
       accountId: account.id,
-      scanEnabled: true,
+      scanEnabled: false,
       proactiveEnabled: false,
       intervalMinutes: defaultConnectorSyncInterval(account.connectorId),
       allowedScenarioKeys: [],
@@ -265,7 +312,6 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     try {
       const connection = updateComposioConnection(c.req.param('id'), {
         alias: typeof row.alias === 'string' ? row.alias : undefined,
-        isDefault: typeof row.isDefault === 'boolean' ? row.isDefault : undefined,
       });
       return c.json({ ok: true, payload: { connection } });
     } catch (error) {
@@ -382,7 +428,8 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     try {
       const slug = c.req.param('slug');
       const args = body && typeof body === 'object' && !Array.isArray(body) ? body.arguments : undefined;
-      return c.json({ ok: true, payload: { result: await executeComposioTool({ slug, arguments: args, config: service.currentConfig as Config }) } });
+      return c.json({ ok: true, payload: { result: await executeComposioTool({ slug, arguments: args,
+        accountId: typeof body?.accountId === 'string' ? body.accountId : undefined, config: service.currentConfig as Config }) } });
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 400);
     }
@@ -489,13 +536,21 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     const allowedAgentIds = Array.isArray(row.allowedAgentIds)
       ? [...new Set(row.allowedAgentIds.filter((value): value is string => typeof value === 'string').map((value) => value.trim()).filter(Boolean))]
       : undefined;
-    const selectedConnectionIds = Array.isArray(row.selectedConnectionIds)
-      ? [...new Set(row.selectedConnectionIds.filter((value): value is string => typeof value === 'string').map((value) => value.trim()).filter(Boolean))]
+    if (row.selectedAccountIds !== undefined && row.selectedAccountIds !== null && !Array.isArray(row.selectedAccountIds)) {
+      return c.json({ ok: false, error: 'selectedAccountIds must be null or an array of account IDs.' }, 400);
+    }
+    const selectedAccountIds = row.selectedAccountIds === null ? null : Array.isArray(row.selectedAccountIds)
+      ? [...new Set(row.selectedAccountIds.filter((value): value is string => typeof value === 'string').map((value) => value.trim()).filter(Boolean))]
       : undefined;
+    if (Array.isArray(row.selectedAccountIds) && (selectedAccountIds?.length !== row.selectedAccountIds.length
+      || selectedAccountIds.some(id => {
+        const account = getConnectorAccount(id);
+        return !account || account.principalId !== 'local-owner' || account.connectorId !== `composio-${c.req.param('toolkit')}`;
+      }))) return c.json({ ok: false, error: 'Select accounts belonging to this application.' }, 400);
     try {
       const policy = updateComposioInstallationPolicy(service.currentConfig as Config, c.req.param('toolkit'), {
         allowedAgentIds,
-        selectedConnectionIds,
+        selectedAccountIds,
         confirmationPolicy,
       });
       return c.json({ ok: true, payload: { policy } });
@@ -523,7 +578,8 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     if (!approval || approval.status !== decision) {
       return c.json({ ok: false, error: `Connector approval is ${approval?.status ?? 'unavailable'}.`, payload: { approval } }, 409);
     }
-    return c.json({ ok: true, payload: { approval } });
+    const resumed = await resumeApprovedConnectorAction(approval, service.connectionRecovery);
+    return c.json({ ok: true, payload: { approval, resumed } });
   });
 
   authenticated.post('/api/connectors/:id/auth/start', strictRateLimitMiddleware, async (c) => {
@@ -537,7 +593,25 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
       return c.json({ ok: false, error: `Unknown connector: ${connectorOrInstanceId}` }, 404);
     }
     try {
-      const authorization = await startConnectorAuthorization(connector, config, instance?.instanceId);
+      const body = await c.req.json().catch(() => ({}));
+      let authorization;
+      if (typeof body?.accountId === 'string') {
+        const account = getConnectorAccount(body.accountId);
+        if (!account || account.principalId !== 'local-owner' || account.connectorId !== connector.id
+          || !account.backendId || connector.runtime.type !== 'composio') {
+          return c.json({ ok: false, error: 'Account connection service is unavailable. Refresh accounts first.' }, 400);
+        }
+        const current = listConnectorConnections({ principalId: 'local-owner', connectorId: connector.id })
+          .find(connection => connection.id === account.currentConnectionId);
+        const result = await new ComposioSessionsAdapter().authorize({ principalId: 'local-owner',
+          expectedAccountId: account.id,
+          toolkit: connector.runtime.toolkit, backendId: account.backendId,
+          authConfigId: typeof current?.metadata.authConfigId === 'string' ? current.metadata.authConfigId : undefined });
+        authorization = { connectorId: connector.id, provider: 'composio', status: 'pending',
+          authorizationUrl: result.connectUrl, connectionId: result.connectionId, attemptId: result.attemptId };
+      } else {
+        authorization = await startConnectorAuthorization(connector, config, instance?.instanceId);
+      }
       return c.json({ ok: true, payload: { authorization } });
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 400);
@@ -545,11 +619,20 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
   });
 
   authenticated.get('/api/connectors/composio/setup-status', async (c) => {
-    const byok = Boolean(await resolveComposioApiKey());
-    const status = byok
-      ? { configured: true, mode: 'byok' as const }
+    const backend = await ensureComposioBackend();
+    const status = backend.mode === 'byok'
+      ? { configured: Boolean(await resolveComposioApiKey()), mode: 'byok' as const }
       : await inspectManagedComposioStatus();
-    return c.json({ ok: true, payload: status });
+    return c.json({ ok: true, payload: { ...status, backendId: backend.id,
+      backends: listComposioBackends().map(({ id, label, mode, credential_source, verified_at }) => ({ id, label, mode, credentialSource: credential_source, verifiedAt: verified_at })),
+    } });
+  });
+
+  authenticated.delete('/api/connectors/composio/backends/:id', strictRateLimitMiddleware, async (c) => {
+    try {
+      await removeComposioBackend(c.req.param('id'));
+      return c.json({ ok: true, payload: { removed: true } });
+    } catch (error) { return c.json({ ok: false, error: errorMessage(error) }, 400); }
   });
 
   authenticated.post('/api/connectors/composio/setup', strictRateLimitMiddleware, async (c) => {
@@ -558,7 +641,22 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
       ? String((body as Record<string, unknown>).apiKey ?? '')
       : '';
     try {
-      await configureComposioApiKey(apiKey);
+      if (!body || typeof body !== 'object' || Array.isArray(body)) return c.json({ ok: false, error: 'Invalid setup request.' }, 400);
+      if (body.mode === 'managed') {
+        const status = await inspectManagedComposioStatus();
+        if (!status.configured) return c.json({ ok: false, error: status.reason ?? 'Cloud unavailable.' }, 400);
+        const backend = listComposioBackends().find(item => item.mode === 'managed')
+          ?? addComposioBackend({ mode: 'managed', label: 'XOPC Cloud' });
+        activateComposioBackend(backend.id);
+        return c.json({ ok: true, payload: { configured: true, mode: 'managed' } });
+      }
+      if (typeof body.backendId === 'string') {
+        if (!getComposioBackend(body.backendId)) return c.json({ ok: false, error: 'Unknown connection service.' }, 404);
+        await new ComposioSessionsAdapter().listToolkitCatalog({ principalId: 'local-owner', backendId: body.backendId });
+        activateComposioBackend(body.backendId);
+        return c.json({ ok: true, payload: { configured: true } });
+      }
+      await configureComposioApiKey(apiKey, undefined, typeof body.replaceBackendId === 'string' ? body.replaceBackendId : undefined);
       return c.json({ ok: true, payload: { configured: true, mode: 'byok' } });
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 400);

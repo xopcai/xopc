@@ -8,7 +8,7 @@ import {
 } from '../storage/sqlite/index.js';
 import { createLogger } from '../utils/logger.js';
 import { ManagedComposioClient } from './composio-managed-client.js';
-import { resolveComposioApiKey } from './composio-sessions.js';
+import { ensureComposioBackend, listComposioBackends } from './composio-backends.js';
 import {
   appendComposioTriggerEvent,
   applyComposioConnectionLifecycleEvent,
@@ -75,7 +75,10 @@ export class ManagedComposioEventPoller {
 
   private async runSync(): Promise<void> {
     const config = this.input.getConfig();
-    const hasByok = this.input.hasByok ?? (async () => Boolean(await resolveComposioApiKey()));
+    const hasByok = this.input.hasByok ?? (async () => {
+      await ensureComposioBackend();
+      return !listComposioBackends().some(backend => backend.mode === 'managed');
+    });
     if (!hasInstalledComposioToolkit(config) || await hasByok()) return;
     const client = this.input.client ?? new ManagedComposioClient();
     try {

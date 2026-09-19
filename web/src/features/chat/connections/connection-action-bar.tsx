@@ -76,7 +76,7 @@ export function ConnectionActionBar({ conversationId }: { conversationId: string
                   : need.phase === 'authorizing' ? <button type="button" disabled={busy} className={secondary} onClick={() => void act('check')}>{t.check}</button>
                     : need.phase !== 'blocked' && need.phase !== 'choose_account' ? <button type="button" disabled={busy || queued} className={primary} onClick={() => void act('connect', need.key)}>{need.phase === 'reconnect' ? t.reconnect : t.connect}</button> : null}
               </div>
-              {need.accounts.length > 0 && <PopoverSelect value={need.connectionId ?? ''} options={need.accounts.map(account => ({ value: account.id, label: account.label }))}
+              {need.accounts.length > 0 && <PopoverSelect value={need.accountId ?? ''} options={need.accounts.map(account => ({ value: account.id, label: account.label }))}
                 placeholder={t.account} ariaLabel={`${need.label}: ${t.account}`} allowEmpty={false} disabled={busy || queued} onChange={id => void act('select_account', need.key, id)} />}
               {need.alternatives?.length ? <div className="space-y-2">
                 <PopoverSelect value={replacement?.needKey === need.key ? replacement.candidateRef : ''}

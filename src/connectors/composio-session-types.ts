@@ -43,12 +43,13 @@ export type ComposioSessionLike = {
 };
 
 export type ComposioSessionsClient = {
+  backendId?: string;
   mode?: 'managed' | 'byok';
   sessions: {
     create(userId: string, config?: ToolRouterCreateSessionConfig): Promise<ComposioSessionLike>;
   };
   connectedAccounts: {
-    list(query?: { userIds?: string[]; toolkitSlugs?: string[] }): Promise<unknown>;
+    list(query?: { userIds?: string[]; toolkitSlugs?: string[]; cursor?: string }): Promise<unknown>;
     delete(id: string): Promise<unknown>;
     refresh(id: string): Promise<unknown>;
   };

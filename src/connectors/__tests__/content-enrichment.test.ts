@@ -33,7 +33,7 @@ describe('connected content enrichment', () => {
       allowedAgentIds: ['main'],
       maxScope: 'read',
       confirmationPolicy: 'writes',
-      selectedConnectionIds: [],
+      selectedAccountIds: null,
     });
     upsertConnectorConnection({
       id: 'drive-work',

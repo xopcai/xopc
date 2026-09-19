@@ -12,7 +12,9 @@ import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest 
 import { ensureSessionRecord, resetSessionRecord } from '../../storage/sqlite/session-repository.js';
 import { claimNextSessionInput, finishSessionInputRun, getSessionInputById, getSessionInputState, insertSessionInput, recoverSessionInputState } from '../../storage/sqlite/session-input-repository.js';
 import { cancelConnectionObjective, consumeConnectionResume, getActiveConnectionWait, getConnectionWait, invalidateConnectionResumeIntent, queueConnectionResolution, requireSessionConnection, updateConnectionWait } from '../../storage/sqlite/connection-wait-repository.js';
-import { listConnectorConnections, upsertConnectorConnection, upsertConnectorInstallation } from '../../storage/sqlite/connector-repository.js';
+import { decideConnectorApproval, listConnectorApprovals, getConnectorInstallation, listConnectorConnections, upsertConnectorActionMetadata, upsertConnectorConnection, upsertConnectorInstallation } from '../../storage/sqlite/connector-repository.js';
+import { updateConnectorAccount } from '../../storage/sqlite/connector-account-repository.js';
+import { resumeApprovedConnectorAction } from '../approval-resume.js';
 import { ConnectionRecoveryService, type ConnectionAction } from '../connection-recovery-service.js';
 import { resolveConnectionCandidate } from '../connection-candidates.js';
 import type { ComposioSessionsAdapter } from '../composio-sessions.js';
@@ -42,7 +44,7 @@ describe('durable connection recovery', () => {
       runtime: { type: 'composio', role: 'toolkit', toolkit: 'gmail' },
     };
     upsertConnectorInstallation({ id: 'composio-gmail-local-owner', connectorId: 'composio-gmail', principalId: 'local-owner',
-      enabled: true, allowedAgentIds: [], maxScope: 'read', confirmationPolicy: 'writes', selectedConnectionIds: [] });
+      enabled: true, allowedAgentIds: [], maxScope: 'read', confirmationPolicy: 'writes', selectedAccountIds: null });
     insertSessionInput({ id: 'origin', conversationId, clientMessageId: 'origin', requestedDelivery: 'next', effectiveDelivery: 'next', status: 'queued', content: 'Summarize my unread Gmail messages from last week.', origin });
     claimNextSessionInput(conversationId, 'run-original');
     syncConnections.mockImplementation(async () => listConnectorConnections({ principalId: 'local-owner' }));
@@ -61,6 +63,53 @@ describe('durable connection recovery', () => {
     return upsertConnectorConnection({ id, connectorId: need.connectorId, provider: 'composio', principalId: 'local-owner',
       providerConnectionId: id === 'connection-1' ? 'provider-1' : id, identity: { email: `${id}@example.test` }, status: 'active', isDefault: false, metadata: {} });
   }
+
+  it('binds approval to the account and resumes the same objective without accepting changed arguments', async () => {
+    const account = activeConnection();
+    upsertConnectorInstallation({ ...getConnectorInstallation('composio-gmail-local-owner')!, maxScope: 'write' });
+    upsertConnectorActionMetadata({ connectorId: need.connectorId, actionId: 'GMAIL_SEND_EMAIL', toolkit: 'gmail', scope: 'write', curated: true,
+      inputSchema: { type: 'object', properties: { body: { type: 'string' } } }, cachedAt: new Date().toISOString() });
+    searchCapabilities.mockResolvedValue({ toolSchemas: { GMAIL_SEND_EMAIL: { inputSchema: { type: 'object' } } } });
+    const execute = vi.fn(async (input: { confirmed?: boolean }) => input.confirmed
+      ? { decision: 'allowed', result: { sent: true } } : { decision: 'confirmation_required', reason: 'Approve sending.' });
+    const provider = new ComposioToolProvider({ getConfig: () => config, getCurrentContext: () => ({ conversationId, channel: 'webchat', chatId: conversationId }),
+      adapter: { syncConnections, executeWithPolicy: execute } as unknown as ComposioSessionsAdapter });
+    const ref = 'composio:composio-gmail-local-owner:GMAIL_SEND_EMAIL';
+    await provider.execute(ref, { body: 'Hello' }, undefined, { toolCallId: 'request' });
+    const approval = listConnectorApprovals({ status: 'pending' })[0]!;
+    expect(approval.waitId).toBe(getActiveConnectionWait(conversationId)?.id);
+    expect(approval.argumentsPreview).toMatchObject({ account: { id: account.accountId }, arguments: { body: 'Hello' } });
+    const approved = decideConnectorApproval(approval.id, 'approved')!;
+    expect(await resumeApprovedConnectorAction(approved, recovery)).toBe(true);
+    finishSessionInputRun(conversationId, 'run-original', 'completed');
+    const resumed = claimNextSessionInput(conversationId, 'approved-run')!;
+    consumeConnectionResume(resumed);
+    const changed = await provider.execute(ref, { body: 'Different' }, approval.id, { toolCallId: 'changed' });
+    expect(JSON.stringify(changed)).toContain('not approved');
+    expect(execute).toHaveBeenCalledTimes(1);
+    const result = await provider.execute(ref, { body: 'Hello' }, approval.id, { toolCallId: 'approved' });
+    expect(JSON.stringify(result)).toContain('sent');
+    expect(execute).toHaveBeenLastCalledWith(expect.objectContaining({ confirmed: true, connection: expect.objectContaining({ accountId: account.accountId }) }));
+    await provider.execute(ref, { body: 'Hello' }, approval.id, { toolCallId: 'replay' });
+    expect(execute).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not expose restricted identities to agent descriptors or let explicit IDs bypass account policy', async () => {
+    const a = activeConnection(); const b = activeConnection('secret-account');
+    updateConnectorAccount(b.accountId!, { allowedAgentIds: [] });
+    upsertConnectorActionMetadata({ connectorId: need.connectorId, actionId: 'GMAIL_FETCH_EMAILS', toolkit: 'gmail', scope: 'read', curated: true,
+      inputSchema: { type: 'object' }, cachedAt: new Date().toISOString() });
+    const execute = vi.fn();
+    const provider = new ComposioToolProvider({ getConfig: () => config, getCurrentContext: () => ({ conversationId, channel: 'webchat', chatId: conversationId }),
+      adapter: { syncConnections, executeWithPolicy: execute } as unknown as ComposioSessionsAdapter });
+    const ref = 'composio:composio-gmail-local-owner:GMAIL_FETCH_EMAILS';
+    const description = JSON.stringify(await provider.describe(ref));
+    expect(description).toContain(a.accountId);
+    expect(description).not.toContain('secret-account');
+    await provider.execute(ref, { xopcAccountId: b.accountId }, undefined, { toolCallId: 'denied' });
+    expect(execute).not.toHaveBeenCalled();
+    expect(recovery.snapshot(conversationId).wait?.needs[0].accounts).toHaveLength(0);
+  });
   function action(action: ConnectionAction['action'], extra: Partial<ConnectionAction> = {}): ConnectionAction {
     const wait = getActiveConnectionWait(conversationId)!;
     return { action, waitId: wait.id, expectedTranscriptId: wait.transcriptId, expectedVersion: wait.version, idempotencyKey: crypto.randomUUID(), ...extra };
@@ -68,7 +117,7 @@ describe('durable connection recovery', () => {
 
   it('does not advertise schema-less Slack tools and preserves usable contracts across searches', async () => {
     upsertConnectorInstallation({ id: 'composio-slack-local-owner', connectorId: 'composio-slack', principalId: 'local-owner',
-      enabled: true, allowedAgentIds: [], maxScope: 'read', confirmationPolicy: 'writes', selectedConnectionIds: [] });
+      enabled: true, allowedAgentIds: [], maxScope: 'read', confirmationPolicy: 'writes', selectedAccountIds: null });
     const search = vi.fn().mockResolvedValue({ toolSchemas: {
       SLACK_SEARCH_ALL: { description: 'Search messages' },
       SLACK_TEST_AUTH: { inputSchema: { type: 'object', properties: {} } },
@@ -85,7 +134,7 @@ describe('durable connection recovery', () => {
 
   it('isolates toolkit discovery failures so Twitter cannot block YouTube', async () => {
     upsertConnectorInstallation({ id: 'composio-gmail-local-owner', connectorId: 'composio-gmail', principalId: 'local-owner',
-      enabled: false, allowedAgentIds: [], maxScope: 'read', confirmationPolicy: 'writes', selectedConnectionIds: [] });
+      enabled: false, allowedAgentIds: [], maxScope: 'read', confirmationPolicy: 'writes', selectedAccountIds: null });
     config.connectors!.instances = {
       'composio-twitter': {
         xopcConnector: { managed: true, connectorId: 'composio-twitter', enabled: true },
@@ -98,7 +147,7 @@ describe('durable connection recovery', () => {
     };
     for (const toolkit of ['twitter', 'youtube']) {
       upsertConnectorInstallation({ id: `composio-${toolkit}-local-owner`, connectorId: `composio-${toolkit}`, principalId: 'local-owner',
-        enabled: true, allowedAgentIds: [], maxScope: 'read', confirmationPolicy: 'writes', selectedConnectionIds: [] });
+        enabled: true, allowedAgentIds: [], maxScope: 'read', confirmationPolicy: 'writes', selectedAccountIds: null });
     }
     const createSession = vi.fn(async (context: { toolkits?: string[] }) => {
       const toolkit = context.toolkits?.[0];
@@ -152,7 +201,7 @@ describe('durable connection recovery', () => {
     config.connectors.instances = {};
     requireWait(); activeConnection('connection-1'); activeConnection('connection-2');
     expect(recovery.snapshot(conversationId).wait?.needs[0].phase).toBe('choose_account');
-    const selected = await recovery.act(conversationId, action('select_account', { needKey: need.key, accountId: 'connection-2' }));
+    const selected = await recovery.act(conversationId, action('select_account', { needKey: need.key, accountId: 'account:connection-2' }));
     expect(selected.snapshot.wait?.phase).toBe('ready');
     expect(selected.snapshot.wait?.needs[0].connectionId).toBe('connection-2');
     expect(Object.keys(config.connectors.instances)).toContain('composio-gmail');
@@ -188,7 +237,7 @@ describe('durable connection recovery', () => {
     requireWait();
     await recovery.act(conversationId, action('connect', { needKey: need.key }));
     activeConnection('existing');
-    const selected = await recovery.act(conversationId, action('select_account', { needKey: need.key, accountId: 'existing' }));
+    const selected = await recovery.act(conversationId, action('select_account', { needKey: need.key, accountId: 'account:existing' }));
     expect(selected.snapshot.wait?.phase).toBe('queued');
     expect(getActiveConnectionWait(conversationId)?.needs[0].attempt).toBeUndefined();
     expect(getActiveConnectionWait(conversationId)?.needs[0].connectionId).toBe('existing');
@@ -281,7 +330,7 @@ describe('durable connection recovery', () => {
     expect(recovery.snapshot(conversationId).wait?.needs[0].phase).toBe('choose_account');
     await recovery.act(conversationId, action('continue'));
     expect(drain).not.toHaveBeenCalled();
-    await recovery.act(conversationId, action('select_account', { needKey: need.key, accountId: 'connection-2' }));
+    await recovery.act(conversationId, action('select_account', { needKey: need.key, accountId: 'account:connection-2' }));
     expect(getActiveConnectionWait(conversationId)?.needs[0].connectionId).toBe('connection-2');
   });
   it('requires review of a delayed objective before resuming', async () => {
@@ -347,7 +396,7 @@ describe('durable connection recovery', () => {
   it('does not turn an installation policy denial into an OAuth retry', async () => {
     requireWait();
     upsertConnectorInstallation({ id: 'composio-gmail-local-owner', connectorId: 'composio-gmail', principalId: 'local-owner', enabled: false,
-      allowedAgentIds: [], maxScope: 'read', confirmationPolicy: 'writes', selectedConnectionIds: [] });
+      allowedAgentIds: [], maxScope: 'read', confirmationPolicy: 'writes', selectedAccountIds: null });
     await expect(recovery.act(conversationId, action('connect', { needKey: need.key }))).rejects.toThrow('policy');
     expect(authorize).not.toHaveBeenCalled();
   });

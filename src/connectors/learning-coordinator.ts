@@ -133,8 +133,9 @@ export function startConnectorLearningCoordinator(options: {
     const connection = listConnectorConnections().find((item) => item.id === connectionId && item.status === 'active');
     if (!connection) return null;
     if (!connection.accountId) throw new Error(`Connector account is missing for connection ${connection.id}.`);
+    if (!getConnectorAccount(connection.accountId)?.enabled) return null;
     const syncPolicy = getConnectorSyncPolicyForConnection(connection.id);
-    if (request.reason !== 'manual' && syncPolicy?.scanEnabled === false) return null;
+    if (request.reason !== 'manual' && syncPolicy?.scanEnabled !== true) return null;
     const definition = getConnectorDefinition(connection.connectorId);
     if (definition?.runtime.type !== 'composio' || definition.runtime.role !== 'toolkit') return null;
     if (!getConnectorLearningPlan(definition.runtime.toolkit)) return null;
@@ -323,7 +324,7 @@ export function startConnectorLearningCoordinator(options: {
       log.info({ jobId: job.id, sourceInstanceId: job.sourceInstanceId, ...retention }, 'Connected source retention pruned');
     }
     const syncPolicy = getConnectorSyncPolicyForConnection(job.connectionId);
-    if (syncPolicy?.scanEnabled === false) return;
+    if (syncPolicy?.scanEnabled !== true) return;
     const intervalMinutes = syncPolicy?.intervalMinutes ?? plan.intervalMinutes;
     const nextRunAt = Date.now() + intervalMinutes * 60_000;
     const account = getConnectorAccount(job.accountId);

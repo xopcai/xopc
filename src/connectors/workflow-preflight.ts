@@ -5,6 +5,7 @@ import { getComposioToolkitScope } from './composio.js';
 import { getConnectorDefinition } from './catalog.js';
 import { listConnectorInstances } from './instances.js';
 import type { ConnectorScope } from './types.js';
+import { canAccessConnectorAccount, currentAccountConnections } from './account-access.js';
 
 export type ConnectorPreflightIssueCode =
   | 'not_installed'
@@ -12,6 +13,7 @@ export type ConnectorPreflightIssueCode =
   | 'agent_not_allowed'
   | 'scope_too_narrow'
   | 'connection_missing'
+  | 'account_selection_required'
   | 'reauthorization_required';
 
 export type ConnectorPreflightIssue = {
@@ -23,6 +25,7 @@ export type ConnectorPreflightIssue = {
 
 export type ConnectorPreflightResult = {
   ok: boolean;
+  accounts: Record<string, string[]>;
   issues: ConnectorPreflightIssue[];
   optionalIssues: ConnectorPreflightIssue[];
 };
@@ -47,6 +50,7 @@ export function preflightWorkflowConnectors(input: {
   const principalId = input.principalId ?? 'local-owner';
   const instances = listConnectorInstances(input.config);
   const issues: ConnectorPreflightIssue[] = [];
+  const accounts: Record<string, string[]> = {};
   const optionalIssues: ConnectorPreflightIssue[] = [];
   const add = (requirement: WorkflowConnectorRequirement, value: ConnectorPreflightIssue): void => {
     (requirement.optional ? optionalIssues : issues).push(value);
@@ -79,10 +83,22 @@ export function preflightWorkflowConnectors(input: {
     }
     if (requirement.connectionRequired === false) continue;
     const connections = listConnectorConnections({ principalId, connectorId: requirement.connectorId });
-    const selected = installation?.selectedConnectionIds.length
-      ? connections.filter((connection) => installation.selectedConnectionIds.includes(connection.id))
+    const selected = installation && installation.selectedAccountIds !== null
+      ? connections.filter((connection) => connection.accountId && installation.selectedAccountIds!.includes(connection.accountId))
       : connections;
-    if (selected.some((connection) => connection.status === 'active')) continue;
+    const active = currentAccountConnections(selected.filter(connection => installation
+      && canAccessConnectorAccount(connection, installation, input.agentId)));
+    if (requirement.accountIds) {
+      if (!requirement.accountIds.length || requirement.accountIds.some(id => !active.some(connection => connection.accountId === id))) {
+        add(requirement, issue(requirement, 'connection_missing', `${requirement.connectorId} has an unavailable selected account. Reconnect or update its permissions; no other account will be substituted.`));
+      } else accounts[requirement.connectorId] = [...requirement.accountIds];
+      continue;
+    }
+    if (active.length > 1) {
+      add(requirement, issue(requirement, 'account_selection_required', `${requirement.connectorId} has multiple available accounts. Select the intended account before unattended execution.`));
+      continue;
+    }
+    if (active.length === 1) { accounts[requirement.connectorId] = [active[0].accountId!]; continue; }
     const needsAuthorization = selected.some((connection) => connection.status === 'expired' || connection.status === 'failed');
     add(requirement, issue(
       requirement,
@@ -92,5 +108,5 @@ export function preflightWorkflowConnectors(input: {
         : `${requirement.connectorId} has no active account connection.`,
     ));
   }
-  return { ok: issues.length === 0, issues, optionalIssues };
+  return { ok: issues.length === 0, accounts, issues, optionalIssues };
 }

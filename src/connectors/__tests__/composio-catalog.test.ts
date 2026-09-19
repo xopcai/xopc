@@ -40,7 +40,7 @@ describe('Composio agent-ready catalog', () => {
   it('uses local logos for core productivity connectors', () => {
     const logoById = new Map(COMPOSIO_CONNECTORS.map((definition) => [definition.id, definition.branding?.logoUrl]));
 
-    expect(logoById.get('composio-api-key')).toBe('/connector-icons/composio.svg');
+    expect(logoById.has('composio-api-key')).toBe(false);
     expect(logoById.get('composio-airtable')).toBe('/connector-icons/airtable.svg');
     expect(logoById.get('composio-clickup')).toBe('/connector-icons/clickup.svg');
     expect(logoById.get('composio-gmail')).toBe('/connector-icons/gmail.svg');
@@ -122,7 +122,7 @@ describe('Composio agent-ready catalog', () => {
   });
 
   it('gives every built-in Composio connector a logo', () => {
-    expect(COMPOSIO_CONNECTORS).toHaveLength(COMPOSIO_AGENT_READY_TOOLKITS.length + 1);
+    expect(COMPOSIO_CONNECTORS).toHaveLength(COMPOSIO_AGENT_READY_TOOLKITS.length);
     for (const definition of COMPOSIO_CONNECTORS) {
       expect(definition.source).toBe('builtin');
       expect(definition.branding?.logoUrl).toMatch(/^\/connector-icons\/[^/]+\.svg$/);

@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { connectorIdentityKey, mergeConnectorIdentity, normalizeConnectorIdentity } from '../connector-identity.js';
+import { connectorIdentityKey, connectorIdentitySummary, mergeConnectorIdentity, normalizeConnectorIdentity } from '../connector-identity.js';
 
 describe('connector identity', () => {
+  it('never exposes provider credentials or arbitrary metadata as account identity', () => {
+    const raw = { email: 'owner@example.test', access_token: 'secret', refresh_token: 'secret', nested: { password: 'secret' } };
+    expect(connectorIdentitySummary(raw)).toEqual({ email: raw.email });
+    expect(mergeConnectorIdentity('gmail', {}, raw)).toEqual({ email: raw.email });
+  });
   it('normalizes Slack auth.test output and creates a stable strong key', () => {
     const identity = normalizeConnectorIdentity('slack', {
       data: { team_id: 'T123', team: 'Acme', user_id: 'U123', user: 'Mic' },

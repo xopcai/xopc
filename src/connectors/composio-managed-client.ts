@@ -132,7 +132,9 @@ export class ManagedComposioClient implements ComposioSessionsClient {
         return { toolSchemas: Object.assign({}, ...results.map((result) => result.toolSchemas ?? {})) };
       },
       execute: async (toolSlug: string, args: JsonRecord = {}, options) => {
-        const selected = options?.account ?? connectedAccounts[toolkit()]?.[0];
+        const candidates = connectedAccounts[toolkit()] ?? [];
+        const selected = options?.account ?? (candidates.length === 1 ? candidates[0] : undefined);
+        if (!selected) throw new Error('Select one account explicitly before executing a connected app tool.');
         const response = await this.request<{ result: unknown }>({
           path: '/connectors/composio/execute',
           method: 'POST',

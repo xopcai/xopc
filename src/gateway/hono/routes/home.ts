@@ -1,4 +1,5 @@
 import type { Hono } from 'hono';
+import { resumeApprovedConnectorAction } from '../../../connectors/approval-resume.js';
 
 import { listGatewayAgents } from '../../agents-admin.js';
 import {
@@ -27,7 +28,8 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
       if (approval.status !== (decision === 'approve' ? 'approved' : 'denied')) {
         return c.json({ ok: false, error: `Approval is ${approval.status}` }, 409);
       }
-      return c.json({ ok: true, status: approval.status });
+      const resumed = await resumeApprovedConnectorAction(approval, service.connectionRecovery);
+      return c.json({ ok: true, status: approval.status, resumed });
     }
     return c.json({ ok: false, error: 'Unsupported decision kind' }, 400);
   });

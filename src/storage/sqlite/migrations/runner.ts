@@ -22,7 +22,7 @@ const log = createLogger('Sqlite:Migrations');
 export const XOPC_DB_BASELINE_SCHEMA_VERSION = 165;
 
 /** Latest schema version this release supports (increment when adding migrations). */
-export const XOPC_DB_SCHEMA_VERSION = 181;
+export const XOPC_DB_SCHEMA_VERSION = 182;
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 
@@ -63,17 +63,17 @@ function migrationByTarget(
 function applySingleMigration(db: DatabaseSync, migration: SqlMigration): ConversationMigrationSummary | undefined {
   log.info({ targetVersion: migration.targetVersion, file: migration.filename }, 'Applying SQLite migration');
   // Rebuild the referenced parent table without firing ON DELETE CASCADE.
-  const rebuildDevices = migration.targetVersion === 179;
+  const rebuildParentTable = migration.targetVersion === 179 || migration.targetVersion === 182;
   const foreignKeysEnabled = Number(db.prepare('PRAGMA foreign_keys').get()?.foreign_keys) === 1;
-  if (rebuildDevices) db.exec('PRAGMA foreign_keys = OFF');
+  if (rebuildParentTable) db.exec('PRAGMA foreign_keys = OFF');
   let transactionStarted = false;
   try {
     db.exec('BEGIN IMMEDIATE');
     transactionStarted = true;
     db.exec(migration.sql);
     const summary = migration.targetVersion === 178 ? migrateConversationUuids(db) : undefined;
-    if (rebuildDevices && db.prepare('PRAGMA foreign_key_check').all().length > 0) {
-      throw new Error('Device platform migration would violate foreign key integrity');
+    if (rebuildParentTable && db.prepare('PRAGMA foreign_key_check').all().length > 0) {
+      throw new Error('Parent table migration would violate foreign key integrity');
     }
     setSchemaVersion(db, migration.targetVersion);
     db.exec('COMMIT');
@@ -90,7 +90,7 @@ function applySingleMigration(db: DatabaseSync, migration: SqlMigration): Conver
       { cause: error },
     );
   } finally {
-    if (rebuildDevices && foreignKeysEnabled) db.exec('PRAGMA foreign_keys = ON');
+    if (rebuildParentTable && foreignKeysEnabled) db.exec('PRAGMA foreign_keys = ON');
   }
 }
 

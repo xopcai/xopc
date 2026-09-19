@@ -151,7 +151,7 @@ export type ConnectorInstallationPolicy = {
   allowedAgentIds: string[];
   maxScope: ConnectorScope;
   confirmationPolicy: ConnectorConfirmationPolicy;
-  selectedConnectionIds: string[];
+  selectedAccountIds: string[] | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -190,8 +190,12 @@ export type ConnectorAccount = {
   connectorId: string;
   principalId: string;
   identityKey?: string;
+  backendId?: string;
   identity: Record<string, unknown>;
   currentConnectionId?: string;
+  label?: string;
+  enabled: boolean;
+  allowedAgentIds: string[] | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -230,6 +234,7 @@ export type ConnectorApprovalStatus = 'pending' | 'approved' | 'denied' | 'expir
 
 export type ConnectorApprovalRecord = {
   id: string;
+  waitId?: string;
   principalId: string;
   connectorId: string;
   connectionId?: string;

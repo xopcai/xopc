@@ -130,6 +130,7 @@ export interface WorkflowDefinitionManifest {
 
 export interface WorkflowConnectorRequirement {
   connectorId: string;
+  accountIds?: string[];
   scope?: 'read' | 'write' | 'admin';
   connectionRequired?: boolean;
   optional?: boolean;

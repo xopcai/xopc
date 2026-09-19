@@ -23,6 +23,7 @@ import { decodeConnectedSourceCursor, encodeConnectedSourceCursor } from './conn
 import { getConnectorInstance } from './instances.js';
 import { normalizeConnectedSourceResult } from './connected-source-normalizers.js';
 import { sanitizeConnectedSourceValue } from './connected-source-sanitization.js';
+import { canAccessConnectorAccount, currentAccountConnections } from './account-access.js';
 
 const log = createLogger('ConnectedSourceIngestion');
 
@@ -349,11 +350,11 @@ export async function ingestComposioConnectedSource(input: {
   if (installation.allowedAgentIds.length && !installation.allowedAgentIds.includes(input.agentId)) {
     throw new Error('This agent is not allowed to sync from the connector.');
   }
-  const activeConnections = listConnectorConnections({ principalId: 'local-owner', connectorId })
-    .filter((connection) => connection.status === 'active');
+  const activeConnections = currentAccountConnections(listConnectorConnections({ principalId: 'local-owner', connectorId })
+    .filter((connection) => canAccessConnectorAccount(connection, installation, input.agentId)));
   const connection = input.connectionId
     ? activeConnections.find((candidate) => candidate.id === input.connectionId)
-    : activeConnections.find((candidate) => candidate.isDefault) ?? activeConnections[0];
+    : activeConnections.length === 1 ? activeConnections[0] : undefined;
   if (!connection) throw new Error('No active connector account is available for connected source ingestion.');
   if (!connection.accountId) throw new Error('The connector authorization is not assigned to an account.');
   const adapter = input.adapter ?? new ComposioSessionsAdapter();

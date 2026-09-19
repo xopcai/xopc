@@ -6,8 +6,12 @@ type AccountRow = {
   connector_id: string;
   principal_id: string;
   identity_key: string | null;
+  backend_id: string | null;
   identity_json: string;
   current_connection_id: string | null;
+  label: string | null;
+  enabled: number;
+  allowed_agent_ids_json: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -29,8 +33,12 @@ function fromRow(row: AccountRow): ConnectorAccount {
     connectorId: row.connector_id,
     principalId: row.principal_id,
     identityKey: row.identity_key ?? undefined,
+    backendId: row.backend_id ?? undefined,
     identity: parseIdentity(row.identity_json),
     currentConnectionId: row.current_connection_id ?? undefined,
+    label: row.label ?? undefined,
+    enabled: row.enabled === 1,
+    allowedAgentIds: row.allowed_agent_ids_json === null ? null : JSON.parse(row.allowed_agent_ids_json),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -101,6 +109,23 @@ export function getConnectorAccount(id: string): ConnectorAccount | undefined {
   return row ? fromRow(row) : undefined;
 }
 
+export function updateConnectorAccount(id: string, patch: {
+  label?: string; enabled?: boolean; allowedAgentIds?: string[] | null;
+}): ConnectorAccount {
+  const account = getConnectorAccount(id);
+  if (!account) throw new Error('Connector account not found.');
+  getSqliteDatabase().prepare(`UPDATE connector_accounts
+    SET label = ?, enabled = ?, allowed_agent_ids_json = ?, updated_at = ? WHERE id = ?`).run(
+    patch.label === undefined ? account.label ?? null : patch.label.trim() || null,
+    (patch.enabled ?? account.enabled) ? 1 : 0,
+    patch.allowedAgentIds === undefined
+      ? account.allowedAgentIds === null ? null : JSON.stringify(account.allowedAgentIds)
+      : patch.allowedAgentIds === null ? null : JSON.stringify([...new Set(patch.allowedAgentIds)]),
+    new Date().toISOString(), id,
+  );
+  return getConnectorAccount(id)!;
+}
+
 export function listConnectorAccounts(options: { principalId?: string; connectorId?: string } = {}): ConnectorAccount[] {
   const clauses: string[] = [];
   const values: string[] = [];
@@ -141,17 +166,35 @@ export function reconcileConnectorAccount(input: {
   const now = new Date().toISOString();
   const accountId = runSqliteWriteTransaction((db) => {
     const connection = db.prepare(
-      'SELECT account_id, connector_id, principal_id FROM connector_connections WHERE id = ?',
-    ).get(input.connectionId) as { account_id: string; connector_id: string; principal_id: string } | undefined;
+      `SELECT c.account_id, c.connector_id, c.principal_id, a.backend_id FROM connector_connections c
+       JOIN connector_accounts a ON a.id = c.account_id WHERE c.id = ?`,
+    ).get(input.connectionId) as { account_id: string; connector_id: string; principal_id: string; backend_id: string | null } | undefined;
     if (!connection?.account_id) throw new Error(`Connector connection not found: ${input.connectionId}`);
 
     const matched = db.prepare(`
       SELECT id FROM connector_accounts
-      WHERE principal_id = ? AND connector_id = ? AND identity_key = ?
-    `).get(connection.principal_id, connection.connector_id, input.identityKey) as { id: string } | undefined;
+      WHERE principal_id = ? AND connector_id = ? AND identity_key = ? AND backend_id IS ?
+    `).get(connection.principal_id, connection.connector_id, input.identityKey, connection.backend_id) as { id: string } | undefined;
     const targetId = matched?.id ?? connection.account_id;
 
     if (targetId !== connection.account_id) {
+      db.prepare(`UPDATE connector_installations SET selected_account_ids_json = (
+        SELECT json_group_array(DISTINCT CASE WHEN value = ? THEN ? ELSE value END)
+        FROM json_each(connector_installations.selected_account_ids_json))
+        WHERE json_type(selected_account_ids_json) = 'array'
+        AND EXISTS (SELECT 1 FROM json_each(selected_account_ids_json) WHERE value = ?)`)
+        .run(connection.account_id, targetId, connection.account_id);
+      db.prepare(`INSERT OR IGNORE INTO connector_objective_accounts
+        SELECT conversation_id, transcript_id, objective_id, connector_id, ?
+        FROM connector_objective_accounts WHERE account_id = ?`).run(targetId, connection.account_id);
+      // Reauthorization must not relax an existing account restriction.
+      const source = getConnectorAccount(connection.account_id)!;
+      const target = getConnectorAccount(targetId)!;
+      const agents = source.allowedAgentIds === null ? target.allowedAgentIds
+        : target.allowedAgentIds === null ? source.allowedAgentIds
+          : target.allowedAgentIds.filter(id => source.allowedAgentIds!.includes(id));
+      db.prepare(`UPDATE connector_accounts SET enabled = ?, allowed_agent_ids_json = ?, label = COALESCE(label, ?) WHERE id = ?`)
+        .run(source.enabled && target.enabled ? 1 : 0, agents === null ? null : JSON.stringify(agents), source.label ?? null, targetId);
       mergeAccountSourceData(db, connection.connector_id, connection.account_id, targetId);
       const targetPolicy = db.prepare('SELECT 1 FROM connector_sync_policies WHERE account_id = ?').get(targetId);
       if (targetPolicy) {

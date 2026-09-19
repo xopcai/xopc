@@ -12,6 +12,7 @@ export type ConnectorAuthStartResult = {
   status: string;
   authorizationUrl?: string;
   connectionId?: string;
+  attemptId?: string;
 };
 
 export async function startConnectorAuthorization(
@@ -63,5 +64,6 @@ export async function startConnectorAuthorization(
     status: 'pending',
     authorizationUrl: authorization.connectUrl,
     connectionId: authorization.connectionId,
+    attemptId: authorization.attemptId,
   };
 }
