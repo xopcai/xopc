@@ -420,9 +420,6 @@ html.dark {
 @media (min-width: 768px) {
   .app-main-surface {
     border-top-left-radius: 0.75rem;
-    box-shadow:
-      inset 1px 1px 0
-        color-mix(in srgb, var(--color-edge-subtle) 72%, transparent);
   }
 }
 
@@ -1306,9 +1303,7 @@ html[data-color-scheme="dawn"] [role="dialog"] {
 
 html[data-color-scheme="dawn"] .app-main-surface {
   border-color: rgb(255 255 255 / 0.48);
-  box-shadow:
-    inset 1px 1px 0 rgb(255 255 255 / 0.68),
-    0 18px 56px rgb(63 91 119 / 0.12);
+  box-shadow: 0 18px 56px rgb(63 91 119 / 0.12);
 }
 
 /*
