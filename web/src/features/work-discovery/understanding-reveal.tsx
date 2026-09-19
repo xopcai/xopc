@@ -1,37 +1,29 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Check, ChevronDown, GitBranch, Loader2, Pencil, Sparkles } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ChevronDown, GitBranch, Sparkles } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 
-import type { WorkDiscoveryProfileCandidate, WorkDiscoveryRun } from './api';
+import type { WorkDiscoveryRun } from './api';
 import { understandingConversationStarter } from './understanding-conversation-starter';
 
-type RevealStep = 'summary' | 'memory';
 type RecognitionDecision = 'confirmed' | 'corrected';
 
 type UnderstandingRevealProps = {
   run: WorkDiscoveryRun;
-  sourceMemories: WorkDiscoveryProfileCandidate[];
-  activityRunning: boolean;
   language: 'en' | 'zh';
   busy: boolean;
   error: string | null;
-  onReviewMemory: (
-    candidate: WorkDiscoveryProfileCandidate,
-    status: 'accepted' | 'edited' | 'rejected',
-    statement?: string,
-  ) => Promise<boolean>;
   onFinish: (decision: RecognitionDecision, correction?: string) => Promise<boolean>;
   onStartConversation: (starter: string, decision: RecognitionDecision) => Promise<boolean>;
 };
 
 const copy = {
   zh: {
-    eyebrow: '请确认',
+    eyebrow: '当前理解',
     summaryTitle: '我理解的是这样',
-    summaryQuestion: '这准确吗？',
-    matches: '准确',
+    summaryQuestion: '可以继续，也可以随时修改。',
+    matches: '准确，继续',
     adjust: '修改',
     why: '查看依据',
     evidenceHint: '这些内容只用于本次判断。',
@@ -45,26 +37,13 @@ const copy = {
     starterHint: '可以修改后直接开始对话。',
     startConversation: '进入对话',
     cancel: '取消',
-    memoryEyebrow: '长期理解',
-    memoryTitle: '以后也记得这一点？',
-    remember: '记住',
-    sessionOnly: '不记住',
-    edit: '修改',
-    saveEdit: '保存并记住',
-    source: '查看依据',
-    focusEyebrow: '当前关注',
-    focusTitle: '要持续关注吗？',
-    focusHint: '只用于排序和提醒，不会自动执行。',
-    activateFocus: '加入关注',
-    notNow: '暂时不用',
-    trustNote: '这由你决定，之后也可以随时修改。',
-    sourcesFinishing: '其他来源还在处理，完成后继续。',
+
   },
   en: {
-    eyebrow: 'Confirm',
+    eyebrow: 'Current understanding',
     summaryTitle: 'Here’s how I understand it',
-    summaryQuestion: 'Is this right?',
-    matches: 'Accurate',
+    summaryQuestion: 'Continue, or adjust this anytime.',
+    matches: 'Accurate, continue',
     adjust: 'Edit',
     why: 'View sources',
     evidenceHint: 'These sources are only used for this assessment.',
@@ -78,33 +57,15 @@ const copy = {
     starterHint: 'Edit this if needed, then start the conversation.',
     startConversation: 'Start conversation',
     cancel: 'Cancel',
-    memoryEyebrow: 'Lasting understanding',
-    memoryTitle: 'Remember this for next time?',
-    remember: 'Remember',
-    sessionOnly: 'Do not remember',
-    edit: 'Edit',
-    saveEdit: 'Save and remember',
-    source: 'View sources',
-    focusEyebrow: 'Current focus',
-    focusTitle: 'Keep this in focus?',
-    focusHint: 'This only affects sorting and reminders. It never acts automatically.',
-    activateFocus: 'Add to focus',
-    notNow: 'Not now',
-    trustNote: 'This is your choice, and you can change it anytime.',
-    sourcesFinishing: 'Other sources are still processing. Review will continue when ready.',
+
   },
 } as const;
 
-const confidenceRank = { high: 3, medium: 2, low: 1 } as const;
-
 export function UnderstandingReveal({
   run,
-  sourceMemories,
-  activityRunning,
   language,
   busy,
   error,
-  onReviewMemory,
   onFinish,
   onStartConversation,
 }: UnderstandingRevealProps) {
@@ -114,42 +75,19 @@ export function UnderstandingReveal({
     () => understandingConversationStarter(run, language),
     [language, run],
   );
-  const [step, setStep] = useState<RevealStep>('summary');
-  const [decision, setDecision] = useState<RecognitionDecision>('confirmed');
   const [correctionOpen, setCorrectionOpen] = useState(lowConfidence);
   const [correction, setCorrection] = useState(lowConfidence ? suggestedStarter : '');
   const [summaryConfirmed, setSummaryConfirmed] = useState(false);
   const [conversationStarting, setConversationStarting] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
-  const [editingMemory, setEditingMemory] = useState(false);
-  const [memoryDraft, setMemoryDraft] = useState('');
-
-  const memoryCandidate = useMemo(() => {
-    const unique = new Map<string, WorkDiscoveryProfileCandidate>();
-    for (const candidate of [...(run.result?.profileCandidates ?? []), ...sourceMemories]) {
-      if (candidate.status === 'pending') unique.set(candidate.assertionId ?? candidate.id, candidate);
-    }
-    return [...unique.values()].sort((a, b) => confidenceRank[b.confidence] - confidenceRank[a.confidence])[0];
-  }, [run.result?.profileCandidates, sourceMemories]);
   const workThreads = run.result?.workThreads?.slice(0, 3) ?? [];
   const primarySuggestion = run.result?.suggestions.find((suggestion) => suggestion.id === run.result?.primarySuggestionId)
     ?? run.result?.suggestions[0];
 
-  useEffect(() => {
-    setEditingMemory(false);
-    setMemoryDraft(memoryCandidate?.statement ?? '');
-  }, [memoryCandidate?.id, memoryCandidate?.statement]);
-
-  const finish = (nextDecision = decision, correctedIntent = correction.trim()) => (
-    onFinish(nextDecision, nextDecision === 'corrected' ? correctedIntent : undefined)
-  );
-
   const advanceAfterSummary = async (nextDecision: RecognitionDecision) => {
-    setDecision(nextDecision);
     setSummaryConfirmed(true);
-    if (activityRunning) return;
-    if (memoryCandidate) setStep('memory');
-    else await finish(nextDecision, correction.trim());
+    const finished = await onFinish(nextDecision, nextDecision === 'corrected' ? correction.trim() : undefined);
+    if (!finished) setSummaryConfirmed(false);
   };
 
   const startConversationFromInput = async () => {
@@ -160,22 +98,8 @@ export function UnderstandingReveal({
     if (!opened) setConversationStarting(false);
   };
 
-  useEffect(() => {
-    if (!summaryConfirmed || activityRunning || step !== 'summary') return;
-    if (memoryCandidate) setStep('memory');
-    else void finish();
-  }, [activityRunning, memoryCandidate, step, summaryConfirmed]);
-
-  const reviewMemory = async (status: 'accepted' | 'edited' | 'rejected', statement?: string) => {
-    if (!memoryCandidate) return;
-    const completed = await onReviewMemory(memoryCandidate, status, statement);
-    if (!completed) return;
-    await finish();
-  };
-
   return (
     <section className="xopc-understanding-reveal flex min-h-full flex-1 flex-col" aria-live="polite">
-      {step === 'summary' ? (
         <div className="xopc-reveal-scene mx-auto flex w-full max-w-[40rem] flex-1 flex-col justify-center py-6 text-center sm:py-10">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-fg">{t.eyebrow}</p>
           <h1 className="mx-auto mt-4 max-w-[34rem] text-3xl font-semibold tracking-[-0.035em] text-fg sm:text-[2.25rem]">{t.summaryTitle}</h1>
@@ -220,30 +144,8 @@ export function UnderstandingReveal({
               </div>
             </div>
           )}
-          {summaryConfirmed && activityRunning ? <p className="mx-auto mt-5 flex items-center gap-2 text-xs text-fg-muted"><Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" />{t.sourcesFinishing}</p> : null}
           {error ? <p className="mt-5 text-sm text-danger" role="alert">{error}</p> : null}
         </div>
-      ) : null}
-
-      {step === 'memory' && memoryCandidate ? (
-        <div className="xopc-reveal-scene mx-auto flex w-full max-w-[38rem] flex-1 flex-col justify-center py-10 text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-fg">{t.memoryEyebrow}</p>
-          <h1 className="mt-4 text-3xl font-semibold tracking-[-0.035em] text-fg">{t.memoryTitle}</h1>
-          <article className="xopc-understanding-review-card mt-7 rounded-xl border border-edge bg-surface-panel p-6 text-left shadow-surface sm:p-8">
-            <div className="flex items-start gap-4">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-fg"><Sparkles className="size-5" /></div>
-              <div className="min-w-0 flex-1">
-                {editingMemory ? <textarea autoFocus value={memoryDraft} onChange={(event) => setMemoryDraft(event.target.value)} className="min-h-28 w-full resize-y rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-base leading-7 text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent/15" /> : <p className="text-lg font-medium leading-8 text-fg">{memoryCandidate.statement}</p>}
-                {memoryCandidate.evidence.length ? <details className="group mt-5 border-t border-edge-subtle pt-4"><summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-medium text-fg-muted marker:content-none">{t.source}<ChevronDown className="size-3.5 transition-transform group-open:rotate-180" /></summary><ul className="mt-3 space-y-2 text-xs leading-5 text-fg-muted">{memoryCandidate.evidence.slice(0, 3).map((item) => <li key={item} className="flex gap-2"><span className="mt-2 size-1 shrink-0 rounded-full bg-accent/70" />{item}</li>)}</ul></details> : null}
-              </div>
-            </div>
-            {editingMemory ? <div className="mt-6 flex flex-col gap-3 sm:flex-row-reverse"><Button variant="primary" disabled={busy || !memoryDraft.trim()} onClick={() => void reviewMemory('edited', memoryDraft.trim())}>{busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}{t.saveEdit}</Button><Button variant="ghost" disabled={busy} onClick={() => setEditingMemory(false)}>{t.cancel}</Button></div> : <div className="mt-7 flex flex-col gap-3 sm:flex-row-reverse"><Button variant="primary" disabled={busy} onClick={() => void reviewMemory('accepted')}>{busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}{t.remember}</Button><Button variant="secondary" disabled={busy} onClick={() => void reviewMemory('rejected')}>{t.sessionOnly}</Button><Button variant="ghost" disabled={busy} onClick={() => setEditingMemory(true)}><Pencil className="size-4" />{t.edit}</Button></div>}
-          </article>
-          <p className="mt-5 text-xs leading-5 text-fg-muted">{t.trustNote}</p>
-          {error ? <p className="mt-4 text-sm text-danger" role="alert">{error}</p> : null}
-        </div>
-      ) : null}
-
     </section>
   );
 }

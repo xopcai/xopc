@@ -7,12 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useLocaleStore } from '@/stores/locale-store';
 
-const { fetchUserModel } = vi.hoisted(() => ({ fetchUserModel: vi.fn() }));
+const { fetchUserModel, deleteAssertion } = vi.hoisted(() => ({ fetchUserModel: vi.fn(), deleteAssertion: vi.fn() }));
 
 vi.mock('@/features/user-model/user-model-api', () => ({
   fetchUserModel,
   correctAssertion: vi.fn(),
-  setAssertionStatus: vi.fn(),
+  deleteAssertion,
 }));
 
 import type { WorkDiscoveryRun } from '../api';
@@ -99,7 +99,7 @@ describe('UnderstandingStatusButton', () => {
       },
     });
     useUnderstandingActivityStore.setState({
-      status: 'review_ready',
+      status: 'completed',
       drawerOpen: false,
       directoryStatus: 'completed',
       directoryRun: completedRun,
@@ -177,4 +177,27 @@ describe('UnderstandingStatusButton', () => {
 
     expect(document.body.textContent).toContain('How xopc forms its understanding of you');
   });
+  it('offers edit and deletion without a confirmation queue', async () => {
+    await act(async () => root.render(
+      <MemoryRouter initialEntries={['/user-model?workDiscovery=review']}>
+        <UnderstandingStatusButton />
+      </MemoryRouter>,
+    ));
+    expect(document.body.textContent).toContain('Recent updates');
+    expect(document.body.textContent).not.toContain('Needs your confirmation');
+    expect(Array.from(document.body.querySelectorAll('button')).some((button) => button.textContent === 'Remember')).toBe(false);
+    const menu = document.querySelector<HTMLButtonElement>('[aria-label="Edit or delete this item"]');
+    expect(menu).not.toBeNull();
+    await act(async () => menu?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+    const remove = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find((item) => item.textContent === 'Delete');
+    expect(remove).toBeDefined();
+    await act(async () => remove?.click());
+    expect(deleteAssertion).not.toHaveBeenCalled();
+    const dialog = Array.from(document.querySelectorAll('[role="dialog"]')).find((item) => item.textContent?.includes('Delete this item?'));
+    expect(dialog?.textContent).toContain('Builds developer tools.');
+    const confirm = Array.from(dialog?.querySelectorAll('button') ?? []).find((button) => button.textContent === 'Delete');
+    await act(async () => confirm?.click());
+    expect(deleteAssertion).toHaveBeenCalledWith('assertion-1');
+  });
+
 });

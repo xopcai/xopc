@@ -4,9 +4,6 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { Config } from '../../config/schema.js';
-import { ProjectService } from '../../projects/project-service.js';
-import type { SessionIndex } from '../../session/manager.js';
 import {
   closeXopcDatabase,
   createContextEvidence,
@@ -14,7 +11,7 @@ import {
   requireXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
-import { getUserAssertion, listUserAssertionSources, reconcileAssertion } from '../../user-model/index.js';
+import { listUserAssertionSources, reconcileAssertion } from '../../user-model/index.js';
 import {
   findActiveWorkDiscoverySourceRefresh,
   recordWorkDiscoverySourceRefresh,
@@ -24,7 +21,6 @@ import {
   getWorkDiscoveryRun,
   setWorkDiscoveryFeedback,
 } from '../repository.js';
-import { WorkDiscoveryService } from '../service.js';
 import {
   listWorkDiscoveryDirectorySources,
   revokeWorkDiscoveryDirectorySource,
@@ -139,28 +135,7 @@ describe('work discovery repository', () => {
       category: 'files',
       observedAt: 1,
     }]);
-    const service = new WorkDiscoveryService({
-      projects: new ProjectService(),
-      sessions: {} as SessionIndex,
-      getConfig: () => ({}) as Config,
-      emit: () => {},
-    });
 
-    const updated = service.updateProfileCandidates({
-      runId: 'run-2',
-      decisions: [{ id: 'candidate-1', status: 'edited', statement: 'I primarily build TypeScript products.' }],
-    });
-
-    expect(updated?.result?.profileCandidates?.[0]).toMatchObject({
-      status: 'edited',
-      statement: 'I primarily build TypeScript products.',
-    });
-    const updatedAssertion = getUserAssertion(updated!.result!.profileCandidates![0]!.assertionId!);
-    expect(updatedAssertion).toMatchObject({
-      status: 'active',
-      statement: 'I primarily build TypeScript products.',
-      supersedesAssertionId: assertion.id,
-    });
   });
 
   it('persists and revokes read-only directory sources', () => {

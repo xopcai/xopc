@@ -7,6 +7,7 @@ import {
 } from '../../storage/sqlite/index.js';
 import {
   getKnowledgeItem,
+  deleteKnowledgeItem,
   listKnowledgeStatusEvents,
   listKnowledgeItems,
   reviewKnowledgeItem,
@@ -180,4 +181,18 @@ describe('knowledge repository', () => {
       policy: { scopes: ['workspace'], contentSources: ['connector'] },
     }).map((item) => item.canonicalKey)).toEqual(['connector:atlas']);
   });
+  it('protects user edits from source refresh and deletes linked derived memories', () => {
+    const input = { kind: 'project_fact' as const, scope: { type: 'project' as const, id: 'project-1' },
+      canonicalKey: 'fact', content: 'Atlas uses pnpm', confidence: 0.8, importance: 0.5, originClass: 'agent' as const };
+    const original = writeKnowledgeItem(input).item;
+    reviewKnowledgeItem({ id: original.id, action: 'edit_and_approve', actor: 'user', reason: 'Correction', content: 'Atlas uses bun' });
+    expect(writeKnowledgeItem({ ...input, replaceExisting: true }).item.content).toBe('Atlas uses bun');
+    const derived = writeKnowledgeItem({ ...input, canonicalKey: 'derived', content: 'Use bun for Atlas',
+      source: { episodeKnowledgeId: original.id } }).item;
+    expect(deleteKnowledgeItem(original.id)).toBe(true);
+    expect(getKnowledgeItem(derived.id)).toBeUndefined();
+    expect(writeKnowledgeItem(input).item).toBeUndefined();
+    expect(searchKnowledgeItems({ query: 'Atlas', context })).toEqual([]);
+  });
+
 });

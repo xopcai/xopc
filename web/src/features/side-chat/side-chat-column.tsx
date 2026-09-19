@@ -378,6 +378,7 @@ export function SideChatConversation({
     onAttachmentsChange: setDraftAttachments,
   });
   const editor = useComposerEditor({
+    conversationId: sideChatId,
     disabled: Boolean(ended) || connectionLost,
     initialValue: draftText,
     onValueChange: setDraftText,

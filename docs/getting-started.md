@@ -41,7 +41,7 @@ Help me clarify the outcome and choose the smallest credible next step.
 Do not remember anything long-term unless I can review it.
 ```
 
-When the user model is enabled, proposed facts can be reviewed under **User model**. Confirm only what is accurate and useful; correct, reject, or archive the rest. See [User model and memory](./user-understanding.md).
+When the user model is enabled, ordinary understanding is maintained automatically. Open **You** to inspect, edit, or delete it. See [User model and memory](./user-understanding.md).
 
 Some desktop releases also offer experimental **Connect recent work** onboarding. It analyzes only folders you select, within a bounded read-only scope, and shows evidence-backed next steps. On macOS it may separately request access to Apple Notes, Calendar, and Reminders. Skip it if you prefer to begin with conversation.
 

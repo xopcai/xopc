@@ -11,6 +11,7 @@ export type UserAssertion = {
   kind: 'identity' | 'preference' | 'value' | 'routine' | 'capability' | 'relationship' | 'current_state' | 'derived_insight';
   status: AssertionStatus;
   authority: 'user_explicit' | 'user_observed' | 'system_inferred' | 'external_untrusted';
+  usable?: boolean;
   confidence: number;
   declaredImportance?: number;
   inferredImportance: number;
@@ -211,4 +212,12 @@ export function reviewKnowledgeItem(
       ...(content === undefined ? {} : { content }),
     }),
   });
+}
+
+export function deleteAssertion(id: string): Promise<unknown> {
+  return fetchJson(apiUrl(`/api/user-model/assertions/${encodeURIComponent(id)}`), { method: 'DELETE' });
+}
+
+export function deleteKnowledge(id: string): Promise<unknown> {
+  return fetchJson(apiUrl(`/api/knowledge-memory/${encodeURIComponent(id)}`), { method: 'DELETE' });
 }

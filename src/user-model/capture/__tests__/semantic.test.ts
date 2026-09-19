@@ -45,7 +45,7 @@ describe('user model semantic capture', () => {
   it('grounds evidence and keeps importance separate from confidence', () => {
     const parsed = parseUserModelInterpretation(response(), evidence);
     expect(parsed?.candidates[0]).toMatchObject({
-      authority: 'user_observed',
+      authority: 'user_explicit',
       confidence: 0.95,
       declaredImportance: 0.8,
       scope: { type: 'global' },

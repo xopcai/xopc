@@ -1,5 +1,7 @@
 import { memo, useMemo } from 'react';
 
+import { useSkillLabel } from '@/features/chat/palette/use-skill-label';
+
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
 import {
   parseMessageSegments,
@@ -19,7 +21,7 @@ function segmentSignature(p: MessageSegment): string {
   return `c:${p.name}`;
 }
 
-export const UserMessageSegments = memo(function UserMessageSegments({ text }: { text: string }) {
+export const UserMessageSegments = memo(function UserMessageSegments({ text, conversationId }: { text: string; conversationId?: string | null }) {
   const parts = useMemo(() => parseMessageSegments(text), [text]);
   const partsWithKeys = useMemo(() => {
     // Disambiguate identical segments (e.g. same skill referenced twice) with a running counter,
@@ -32,6 +34,7 @@ export const UserMessageSegments = memo(function UserMessageSegments({ text }: {
       return { part: p, key: `${sig}#${String(occurrence)}` };
     });
   }, [parts]);
+  const skillLabel = useSkillLabel(undefined, conversationId, parts.some((p) => p.kind === 'skill'));
   const hasPill = parts.some((p) => p.kind !== 'text');
 
   if (!hasPill) {
@@ -46,8 +49,8 @@ export const UserMessageSegments = memo(function UserMessageSegments({ text }: {
     <span className="inline-flex max-w-full flex-wrap items-baseline gap-x-1.5 gap-y-1 [text-align:inherit]">
       {partsWithKeys.map(({ part: p, key }) =>
         p.kind === 'skill' ? (
-          <span key={key} className="chat-skill-pill max-w-full shrink-0" data-skill={p.name}>
-            /{p.name}
+          <span key={key} className="chat-skill-pill max-w-full shrink-0" data-skill={p.name} title={`/${p.name}`}>
+            /{skillLabel(p.name)}
           </span>
         ) : p.kind === 'command' ? (
           <span

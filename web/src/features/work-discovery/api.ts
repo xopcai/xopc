@@ -245,15 +245,6 @@ sourceCheckpoints?: Record<string, { fingerprint: string; collectedAt: number }>
   );
 }
 
-export async function reviewSourceAssertions(
-  decisions: Array<{ assertionId: string; status: 'accepted' | 'rejected' }>,
-): Promise<void> {
-  await Promise.all(decisions.map((decision) => fetchJson(
-    apiUrl(`/api/user-model/assertions/${encodeURIComponent(decision.assertionId)}/status`),
-    { method: 'PATCH', body: JSON.stringify({ status: decision.status === 'accepted' ? 'active' : 'rejected' }) },
-  )));
-}
-
 export async function startWorkDiscoveryRun(rootPath: string): Promise<WorkDiscoveryRun> {
   const response = await fetchJson<{ run: WorkDiscoveryRun }>(apiUrl('/api/work-discovery/runs'), {
     method: 'POST',
@@ -272,19 +263,6 @@ export async function startQuickWorkDiscoveryRun(
   const response = await fetchJson<{ run: WorkDiscoveryRun }>(apiUrl('/api/work-discovery/quick-runs'), {
     method: 'POST',
     body: JSON.stringify({ idempotencyKey: crypto.randomUUID(), processingPolicy }),
-  });
-  return response.run;
-}
-
-export async function updateWorkDiscoveryProfile(
-  runId: string,
-  decisions: Array<{ id: string; status: 'accepted' | 'edited' | 'rejected'; statement?: string }>,
-): Promise<WorkDiscoveryRun> {
-  const response = await fetchJson<{ run: WorkDiscoveryRun }>(apiUrl(
-    `/api/work-discovery/runs/${encodeURIComponent(runId)}/profile`,
-  ), {
-    method: 'POST',
-    body: JSON.stringify({ decisions }),
   });
   return response.run;
 }

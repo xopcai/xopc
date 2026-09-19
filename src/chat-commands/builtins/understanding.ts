@@ -49,7 +49,7 @@ const rememberCommand: CommandDefinition = {
       disclosurePolicy: 'referenceable',
       observedAt: Date.now(),
       createdBy: 'user',
-    });
+    }, Date.now(), { restoreDeleted: true });
     const scopeLabel = sessionOnly ? 'this conversation' : 'all conversations';
     return {
       content: result.action === 'created'

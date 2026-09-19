@@ -135,7 +135,7 @@ function comparable(value: string): string {
 }
 
 function effectiveAuthority(intent: UserModelCaptureIntent, authority: AssertionAuthority): AssertionAuthority {
-  if (intent === 'remember' || intent === 'correct' || intent === 'confirm') return authority;
+  if (intent === 'remember' || intent === 'correct' || intent === 'confirm' || intent === 'user_assertion') return authority;
   return authority === 'user_explicit' ? 'user_observed' : authority;
 }
 

@@ -360,6 +360,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'user-model-refresh',
+    match: (pathname) => pathname === '/api/user-model/refresh' || pathname.startsWith('/api/user-model/refresh/'),
+    load: async () => {
+      const { registerUserModelRefreshRoutes } = await import('./user-model-refresh.js');
+      return { register: registerUserModelRefreshRoutes };
+    },
+  },
+  {
     id: 'user-model',
     match: (path) => startsWithAny(path, [
       '/api/user-model', '/api/knowledge-memory', '/api/memory-maintenance', '/api/turns',

@@ -173,7 +173,7 @@ function workDiscoveryPlan(
     || event.status !== (completed ? 'completed' : 'failed')
   ) return null;
   const type: ProductNotificationType = completed
-    ? 'work_discovery.review_ready'
+    ? 'work_discovery.completed'
     : 'work_discovery.failed';
   return {
     dedupeKey: `${type}:${event.runId}`,
@@ -182,10 +182,10 @@ function workDiscoveryPlan(
       target: { kind: 'work_discovery', runId: event.runId, conversationId: event.conversationId },
       priority: completed ? 'normal' : 'high',
       title: completed
-        ? { en: 'Understanding ready for review', zh: '用户理解已可确认' }
+        ? { en: 'Understanding updated', zh: '用户理解已更新' }
         : { en: 'Understanding needs attention', zh: '用户理解需要处理' },
       body: completed
-        ? { en: 'Review what xopc learned about your work.', zh: '查看并确认 xopc 对你工作的理解。' }
+        ? { en: 'See what xopc learned. You can edit or delete it anytime.', zh: '理解已自动整理，可随时查看、修改或删除。' }
         : { en: 'Open user understanding to review or retry.', zh: '打开用户理解，查看详情或重试。' },
       payload: { runId: event.runId },
     },

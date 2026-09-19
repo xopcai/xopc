@@ -141,30 +141,6 @@ export function registerWorkDiscoveryRoutes(authenticated: Hono, deps: Authentic
     }
   });
 
-  authenticated.post('/api/work-discovery/runs/:runId/profile', limited, async (c) => {
-    const body = await c.req.json().catch(() => null);
-    const rawDecisions = body && typeof body === 'object' && Array.isArray((body as Record<string, unknown>).decisions)
-      ? (body as { decisions: unknown[] }).decisions
-      : [];
-    const decisions = rawDecisions.flatMap((value) => {
-      if (!value || typeof value !== 'object') return [];
-      const item = value as Record<string, unknown>;
-      const id = typeof item.id === 'string' ? item.id.trim() : '';
-      const status: 'accepted' | 'edited' | 'rejected' | undefined = item.status === 'accepted' || item.status === 'edited' || item.status === 'rejected'
-        ? item.status
-        : undefined;
-      if (!id || !status) return [];
-      return [{
-        id,
-        status,
-        ...(typeof item.statement === 'string' ? { statement: item.statement } : {}),
-      }];
-    }).slice(0, 10);
-    if (!decisions.length) return c.json({ ok: false, error: 'At least one valid decision is required' }, 400);
-    const run = service.updateProfileCandidates({ runId: c.req.param('runId'), decisions });
-    return run ? c.json({ ok: true, run }) : c.json({ ok: false, error: 'Profile candidates not found' }, 404);
-  });
-
   authenticated.post('/api/work-discovery/runs/:runId/suggestions/:suggestionId/select', (c) => {
     const run = service.selectSuggestion(c.req.param('runId'), c.req.param('suggestionId'));
     return run ? c.json({ ok: true }) : c.json({ ok: false, error: 'Suggestion not found' }, 404);

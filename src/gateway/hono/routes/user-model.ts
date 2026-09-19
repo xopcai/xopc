@@ -5,6 +5,7 @@ import type { Hono } from 'hono';
 import { getExecutionContextAudit, recordExecutionContextFeedback } from '../../../agent/context/audit.js';
 import {
   getKnowledgeItem,
+  deleteKnowledgeItem,
   KnowledgeReviewConflictError,
   listKnowledgeItems,
   reviewKnowledgeItem,
@@ -26,6 +27,8 @@ import {
   bootstrapUserModel,
   getAssertionSlot,
   getUserAssertion,
+  deleteUserAssertion,
+  canUseAssertion,
   listPriorityWindows,
   listUserAssertionSources,
   listUserAssertions,
@@ -109,6 +112,7 @@ function assertionView(
     subject: slot.subject,
     scope: slot.scope,
     sources,
+    usable: canUseAssertion(assertion),
   };
 }
 
@@ -249,10 +253,15 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
         ...(typeof input.correctionOfAssertionId === 'string'
           ? { correctionOfAssertionId: input.correctionOfAssertionId } : {}),
       };
-      return c.json(reconcileAssertion(candidate), 201);
+      return c.json(reconcileAssertion(candidate, Date.now(), { restoreDeleted: true }), 201);
     } catch (error) {
       return c.json({ error: errorMessage(error) }, 400);
     }
+  });
+
+  authenticated.delete('/api/user-model/assertions/:id', write, (c) => {
+    return deleteUserAssertion(c.req.param('id'))
+      ? c.json({ ok: true }) : c.json({ error: 'Assertion not found' }, 404);
   });
 
   authenticated.patch('/api/user-model/assertions/:id/status', write, async (c) => {
@@ -298,7 +307,6 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
         ...(current.validFrom === undefined ? {} : { validFrom: current.validFrom }),
         ...(current.validTo === undefined ? {} : { validTo: current.validTo }),
         observedAt: Date.now(),
-        ...(current.reviewAt === undefined ? {} : { reviewAt: current.reviewAt }),
         createdBy: 'user',
         correctionOfAssertionId: current.id,
       }));
@@ -408,6 +416,11 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
     const item = getKnowledgeItem(c.req.param('id'));
     return item ? c.json({ item }) : c.json({ error: 'Knowledge item not found' }, 404);
   });
+  authenticated.delete('/api/knowledge-memory/:id', write, (c) => {
+    return deleteKnowledgeItem(c.req.param('id'))
+      ? c.json({ ok: true }) : c.json({ error: 'Knowledge item not found' }, 404);
+  });
+
   authenticated.post('/api/knowledge-memory/:id/review', write, async (c) => {
     const input = await body(c);
     const action = String(input?.action ?? '');

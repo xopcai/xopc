@@ -120,7 +120,7 @@ describe('NotificationService', () => {
     await vi.waitFor(() => expect(notificationDeliveryMetrics()).toMatchObject({ accepted: 1 }));
     expect(published).toEqual([
       expect.objectContaining({
-        type: 'work_discovery.review_ready',
+        type: 'work_discovery.completed',
         target: {
           kind: 'work_discovery',
           runId: 'run-understanding',

@@ -136,9 +136,9 @@ describe('notificationPlanFromGatewayEvent', () => {
       conversationId: 'agent:main:webchat:one',
       status: 'completed',
     })).toMatchObject({
-      dedupeKey: 'work_discovery.review_ready:run-understanding',
+      dedupeKey: 'work_discovery.completed:run-understanding',
       notification: {
-        type: 'work_discovery.review_ready',
+        type: 'work_discovery.completed',
         target: {
           kind: 'work_discovery',
           runId: 'run-understanding',

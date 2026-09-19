@@ -47,12 +47,9 @@ describe('UnderstandingReveal', () => {
       root.render(
         <UnderstandingReveal
           run={run}
-          sourceMemories={[]}
-          activityRunning={false}
           language="en"
           busy={false}
           error={null}
-          onReviewMemory={async () => true}
           onFinish={onFinish}
           onStartConversation={onStartConversation}
         />,
@@ -88,12 +85,9 @@ describe('UnderstandingReveal', () => {
       root.render(
         <UnderstandingReveal
           run={{ ...run, result: { ...run.result!, lowConfidence: true, conversationStarter: 'Explain the current work.' } }}
-          sourceMemories={[]}
-          activityRunning={false}
           language="en"
           busy={false}
           error={null}
-          onReviewMemory={async () => true}
           onFinish={async () => true}
           onStartConversation={onStartConversation}
         />,

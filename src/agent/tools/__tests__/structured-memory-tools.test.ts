@@ -119,8 +119,8 @@ describe('structured memory tools', () => {
     expect(result.details).toEqual({ error: 'user_evidence_mismatch' });
   });
 
-  it('applies deny, confirm, allow, and source policies to knowledge writes', async () => {
-    let policy: 'deny' | 'confirm' | 'allow' = 'deny';
+  it('applies deny, allow, and source policies to knowledge writes', async () => {
+    let policy: 'deny' | 'allow' = 'deny';
     let scopes: Array<'global' | 'agent' | 'session' | 'workspace' | 'project'> = ['workspace'];
     const tool = createKnowledgeWriteTool({
       agentId: 'main',
@@ -140,11 +140,6 @@ describe('structured memory tools', () => {
     } as const;
 
     expect((await tool.execute('deny', input)).details).toEqual({ error: 'knowledge_write_denied' });
-    policy = 'confirm';
-    expect((await tool.execute('confirm', input)).details).toMatchObject({
-      item: { status: 'candidate' },
-      writePolicy: 'confirm',
-    });
     policy = 'allow';
     expect((await tool.execute('allow', { ...input, canonicalKey: 'decision:active' })).details)
       .toMatchObject({ item: { status: 'active' }, writePolicy: 'allow' });

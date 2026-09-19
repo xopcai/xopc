@@ -4,6 +4,9 @@ import type { CommandEntry } from '@/features/chat/palette/command-palette.types
 import { formatFilePathForWire } from '@/features/chat/palette/file-wire-pattern';
 import {
   applyWireToEditor,
+  getWireCaretOffset,
+  handleComposerBackspace,
+  updateComposerSkillLabels,
   listSkillNamesInWire,
   normalizeOrphanComposerDom,
   removeSkillTokenAtOrBeforeCaret,
@@ -171,5 +174,82 @@ describe('normalizeOrphanComposerDom', () => {
     root.appendChild(document.createTextNode(' hi '));
     expect(normalizeOrphanComposerDom(root)).toBe(' hi ');
     expect(root.childNodes.length).toBe(1);
+  });
+});
+
+
+describe('composer selection and atomic deletion', () => {
+  function editor(wire: string, caret = wire.length) {
+    const root = document.createElement('div');
+    document.body.replaceChildren(root);
+    applyWireToEditor(root, wire, caret);
+    return root;
+  }
+
+  it.each(['/skill:summarize ', '/skill:summarize', '/skill:summarize\u00a0'])(
+    'reads the caret without changing DOM or selection, then deletes %j once', (wire) => {
+      const root = editor(wire);
+      const html = root.innerHTML;
+      const selection = window.getSelection()!;
+      const node = selection.anchorNode;
+      const offset = selection.anchorOffset;
+      for (let i = 0; i < 3; i++) expect(getWireCaretOffset(root)).toBe(wire.length);
+      expect(root.innerHTML).toBe(html);
+      expect(selection.anchorNode).toBe(node);
+      expect(selection.anchorOffset).toBe(offset);
+      expect(selection.isCollapsed).toBe(true);
+      expect(handleComposerBackspace(root)).toBe(true);
+      expect(serializeEditorToWire(root)).toBe('');
+    },
+  );
+
+  it('deletes consecutive pills one at a time', () => {
+    const root = editor('/skill:one /skill:two ');
+    expect(handleComposerBackspace(root)).toBe(true);
+    expect(serializeEditorToWire(root)).toBe('/skill:one ');
+    expect(handleComposerBackspace(root)).toBe(true);
+    expect(serializeEditorToWire(root)).toBe('');
+  });
+
+  it('preserves following CJK text when deleting an adjacent pill', () => {
+    const root = editor('/skill:one 中文', '/skill:one'.length);
+    expect(getWireCaretOffset(root)).toBe('/skill:one'.length);
+    expect(handleComposerBackspace(root)).toBe(true);
+    expect(serializeEditorToWire(root)).toBe(' 中文');
+  });
+
+  it.each(['/skill:one 正文', '/skill:one\n', '/skill:one 文字\n下一行'])(
+    'does not delete a pill across text or a newline: %j', (wire) => {
+      const root = editor(wire);
+      expect(handleComposerBackspace(root)).toBe(false);
+      expect(serializeEditorToWire(root)).toBe(wire);
+    },
+  );
+
+  it('preserves noncollapsed selections while reading their start', () => {
+    const root = editor('hello');
+    const selection = window.getSelection()!;
+    const range = document.createRange();
+    range.setStart(root.firstChild!, 1);
+    range.setEnd(root.firstChild!, 4);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    expect(getWireCaretOffset(root)).toBe(1);
+    expect(selection.toString()).toBe('ell');
+    expect(handleComposerBackspace(root)).toBe(false);
+  });
+
+  it('updates labels without changing draft or caret and retains labels on reconstruction', () => {
+    const root = editor('/skill:summarize 你好');
+    const selection = window.getSelection()!;
+    const node = selection.anchorNode;
+    const offset = selection.anchorOffset;
+    updateComposerSkillLabels(root, () => '内容摘要');
+    expect(root.querySelector('[data-skill]')?.textContent).toBe('/内容摘要');
+    expect(serializeEditorToWire(root)).toBe('/skill:summarize 你好');
+    expect(selection.anchorNode).toBe(node);
+    expect(selection.anchorOffset).toBe(offset);
+    applyWireToEditor(root, '/skill:summarize ');
+    expect(root.querySelector('[data-skill]')?.textContent).toBe('/内容摘要');
   });
 });

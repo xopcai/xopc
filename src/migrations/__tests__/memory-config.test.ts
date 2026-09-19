@@ -58,7 +58,8 @@ it('defers the breaking config rewrite while another gateway process owns the co
 
     expect(runBootstrapMigrationsSync(path).changed).toBe(false);
     expect(readFileSync(path, 'utf8')).toBe(original);
-    await expect(saveConfig(ConfigSchema.parse(JSON.parse(original)), path))
+    expect(() => ConfigSchema.parse(JSON.parse(original))).toThrow();
+    await expect(saveConfig(ConfigSchema.parse({}), path))
       .rejects.toThrow('restart the running gateway');
 
     rmSync(lockPath, { force: true });
@@ -67,4 +68,21 @@ it('defers the breaking config rewrite while another gateway process owns the co
     child.kill();
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+it('migrates ordinary confirmation once without changing disabled or sensitive policies', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'xopc-memory-config-'));
+  try {
+    const path = join(dir, 'xopc.json');
+    writeFileSync(path, JSON.stringify({ userContext: {
+      userModel: { writePolicy: 'confirm', sensitiveWritePolicy: 'deny' },
+      knowledgeMemory: { writePolicy: 'deny' },
+    } }));
+    expect(runBootstrapMigrationsSync(path).changed).toBe(true);
+    const config = ConfigSchema.parse(JSON.parse(readFileSync(path, 'utf8')));
+    expect(config.userContext.userModel.writePolicy).toBe('allow');
+    expect(config.userContext.userModel.sensitiveWritePolicy).toBe('deny');
+    expect(config.userContext.knowledgeMemory.writePolicy).toBe('deny');
+    expect(runBootstrapMigrationsSync(path).changed).toBe(false);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

@@ -6,6 +6,23 @@ import {
 } from '../lazy-bundles.js';
 
 describe('lazy route bundles', () => {
+  it('routes manual understanding updates ahead of general user-model routes', () => {
+    for (const path of ['/api/user-model/refresh', '/api/user-model/refresh/batch-1', '/api/user-model/refresh/sources/run-1/collection']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('user-model-refresh');
+    }
+    for (const path of ['/api/user-model/assertions', '/api/user-model/refresh-other']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('user-model');
+    }
+  });
+
+  it('maps memory editing and deletion without intercepting neighboring paths', () => {
+    for (const path of ['/api/user-model/assertions/id', '/api/knowledge-memory/id', '/api/knowledge-memory/id/review']) {
+      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('user-model');
+    }
+    for (const path of ['/api/user-model-other', '/api/knowledge-memory-other']) {
+      expect(findAuthenticatedLazyRouteBundle(path)).toBeUndefined();
+    }
+  });
   it('maps connector account management without swallowing nearby paths', () => {
     for (const path of ['/api/connectors/composio/accounts/account-1', '/api/connectors/composio/setup-status', '/api/connectors/composio/authorizations/attempt-1', '/api/connectors/composio/backends/backend-1']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('connectors');

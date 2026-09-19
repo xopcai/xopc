@@ -47,7 +47,9 @@ Rules:
 - Set selfContained=false and list unresolvedReferences for unresolved pronouns or references.
 - Omit temporary reactions and one-off task instructions.
 - Never include passwords, credentials, regulated identifiers, or speculative diagnoses.
-- In transcript mode, use system_inferred unless a quoted user message is itself an explicit memory command.
+- Use user_explicit only for a fact or preference the user directly states, user_observed for repeated behavior, and system_inferred for synthesis. No separate remember command is required for an ordinary direct statement.
+- A project-specific choice stays scoped to that project. Do not generalize it into a global preference.
+- Existing memory, assistant output, repeated summaries, and lack of objection are not new supporting evidence.
 - If evidence is insufficient, return candidates=[] and explain abstentionReason.
 ${targets}`;
 }

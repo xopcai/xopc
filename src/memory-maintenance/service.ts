@@ -38,7 +38,7 @@ export interface RunMemoryMaintenanceInput {
   evidenceThreshold?: number;
 }
 
-const ALGORITHM_VERSION = 'user-model-maintenance-v1';
+const ALGORITHM_VERSION = 'user-model-maintenance-v2';
 
 function emptyMetrics(): MemoryMaintenanceMetrics {
   return {
@@ -87,42 +87,28 @@ function addDecision(
 function transitionAssertions(
   db: DatabaseSync,
   runId: string,
+  principalId: string,
   now: number,
   limit: number,
   metrics: MemoryMaintenanceMetrics,
 ): void {
-  const expired = db.prepare(`SELECT assertion_id, status, valid_to FROM user_assertions
-    WHERE status = 'active' AND valid_to IS NOT NULL AND valid_to < ? LIMIT ?`)
-    .all(now, limit) as Array<{ assertion_id: string; status: string; valid_to: number }>;
-  metrics.scanned += expired.length;
-  for (const row of expired) {
-    db.prepare("UPDATE user_assertions SET status = 'stale' WHERE assertion_id = ? AND status = 'active'")
-      .run(row.assertion_id);
+  const rows = db.prepare(`SELECT a.assertion_id, a.status FROM user_assertions a
+    JOIN user_assertion_slots s ON s.slot_id = a.slot_id
+    WHERE s.principal_id = ? AND a.status IN ('active', 'candidate', 'needs_review')
+      AND ((a.valid_to IS NOT NULL AND a.valid_to < ?)
+        OR (a.review_at IS NOT NULL AND a.review_at <= ?))
+    ORDER BY COALESCE(a.valid_to, a.review_at), a.assertion_id LIMIT ?`)
+    .all(principalId, now, now, limit) as Array<{ assertion_id: string; status: string }>;
+  metrics.scanned += rows.length;
+  for (const row of rows) {
+    db.prepare("UPDATE user_assertions SET status = 'stale' WHERE assertion_id = ?").run(row.assertion_id);
     db.prepare(`INSERT INTO user_assertion_status_events (
       event_id, assertion_id, from_status, to_status, actor_type, reason, source_run_id, created_at
-    ) VALUES (?, ?, 'active', 'stale', 'maintenance', 'Validity interval ended.', ?, ?)`)
-      .run(randomUUID(), row.assertion_id, runId, now);
-    addDecision(db, runId, 'assertion', row.assertion_id, 'stale', 'validity_ended', row,
+    ) VALUES (?, ?, ?, 'stale', 'maintenance', 'No current supporting evidence at review time.', ?, ?)`)
+      .run(randomUUID(), row.assertion_id, row.status, runId, now);
+    addDecision(db, runId, 'assertion', row.assertion_id, 'stale', 'validity_or_review_ended', row,
       { status: 'stale' }, now);
     metrics.stale += 1;
-  }
-
-  const reviewDue = db.prepare(`SELECT assertion_id, status, review_at FROM user_assertions
-    WHERE status = 'active' AND review_at IS NOT NULL AND review_at <= ? LIMIT ?`)
-    .all(now, Math.max(0, limit - expired.length)) as Array<{
-      assertion_id: string; status: string; review_at: number;
-    }>;
-  metrics.scanned += reviewDue.length;
-  for (const row of reviewDue) {
-    db.prepare("UPDATE user_assertions SET status = 'needs_review' WHERE assertion_id = ? AND status = 'active'")
-      .run(row.assertion_id);
-    db.prepare(`INSERT INTO user_assertion_status_events (
-      event_id, assertion_id, from_status, to_status, actor_type, reason, source_run_id, created_at
-    ) VALUES (?, ?, 'active', 'needs_review', 'maintenance', 'Scheduled review became due.', ?, ?)`)
-      .run(randomUUID(), row.assertion_id, runId, now);
-    addDecision(db, runId, 'assertion', row.assertion_id, 'needs_review', 'review_due', row,
-      { status: 'needs_review' }, now);
-    metrics.needsReview += 1;
   }
 }
 
@@ -156,7 +142,7 @@ function transitionKnowledge(
   metrics: MemoryMaintenanceMetrics,
 ): void {
   const expired = db.prepare(`SELECT knowledge_id, status, expires_at FROM knowledge_items
-    WHERE principal_id = ? AND status = 'active' AND expires_at IS NOT NULL AND expires_at < ? LIMIT ?`)
+    WHERE principal_id = ? AND status IN ('active', 'candidate') AND expires_at IS NOT NULL AND expires_at < ? LIMIT ?`)
     .all(principalId, now, limit) as Array<{ knowledge_id: string; status: string; expires_at: number }>;
   metrics.scanned += expired.length;
   for (const row of expired) {
@@ -168,17 +154,17 @@ function transitionKnowledge(
   }
 
   const reviewDue = db.prepare(`SELECT knowledge_id, status, review_at FROM knowledge_items
-    WHERE principal_id = ? AND status = 'active' AND review_at IS NOT NULL AND review_at <= ? LIMIT ?`)
+    WHERE principal_id = ? AND status IN ('active', 'candidate', 'needs_review') AND review_at IS NOT NULL AND review_at <= ? LIMIT ?`)
     .all(principalId, now, Math.max(0, limit - expired.length)) as Array<{
       knowledge_id: string; status: string; review_at: number;
     }>;
   metrics.scanned += reviewDue.length;
   for (const row of reviewDue) {
-    db.prepare("UPDATE knowledge_items SET status = 'needs_review', updated_at = ? WHERE knowledge_id = ?")
+    db.prepare("UPDATE knowledge_items SET status = 'stale', updated_at = ? WHERE knowledge_id = ?")
       .run(now, row.knowledge_id);
-    addDecision(db, runId, 'knowledge', row.knowledge_id, 'needs_review', 'review_due', row,
-      { status: 'needs_review' }, now);
-    metrics.needsReview += 1;
+    addDecision(db, runId, 'knowledge', row.knowledge_id, 'stale', 'review_due', row,
+      { status: 'stale' }, now);
+    metrics.stale += 1;
   }
 }
 
@@ -195,7 +181,10 @@ function reconcileEvidence(
     FROM user_assertions a
     JOIN user_assertion_slots s ON s.slot_id = a.slot_id
     JOIN user_assertion_evidence ae ON ae.assertion_id = a.assertion_id AND ae.relation = 'contradicts'
-    WHERE s.principal_id = ? AND a.status = 'active' LIMIT ?`)
+    JOIN context_evidence e ON e.evidence_id = ae.evidence_id
+    WHERE s.principal_id = ? AND a.status = 'active'
+      AND e.trust_level = 'owner' AND e.source_type IN ('conversation', 'user')
+      AND e.observed_at > a.observed_at AND ae.confidence >= 0.7 LIMIT ?`)
     .all(principalId, limit) as Array<{ assertion_id: string; status: string }>;
   metrics.scanned += contradicted.length;
   for (const row of contradicted) {
@@ -210,17 +199,32 @@ function reconcileEvidence(
     metrics.needsReview += 1;
   }
 
-  const candidates = db.prepare(`SELECT a.assertion_id, a.status, COUNT(DISTINCT
-      e.source_type || ':' || COALESCE(e.source_instance_id, '') || ':' || e.source_ref
-    ) AS evidence_count
+  const candidates = db.prepare(`SELECT a.assertion_id, a.status,
+      MIN(COUNT(DISTINCT COALESCE(e.content_hash, e.source_ref)),
+        COUNT(DISTINCT e.source_type || ':' || COALESCE(e.source_instance_id, '') || ':' ||
+          COALESCE(e.source_item_id, e.source_ref))) AS evidence_count
     FROM user_assertions a
     JOIN user_assertion_slots s ON s.slot_id = a.slot_id
     JOIN user_assertion_evidence ae ON ae.assertion_id = a.assertion_id AND ae.relation = 'supports'
     JOIN context_evidence e ON e.evidence_id = ae.evidence_id AND e.trust_level = 'owner'
     WHERE s.principal_id = ? AND a.status = 'candidate'
       AND a.authority IN ('user_observed', 'system_inferred')
-    GROUP BY a.assertion_id HAVING evidence_count >= ? LIMIT ?`)
-    .all(principalId, evidenceThreshold, limit) as Array<{
+      AND a.confidence >= 0.7 AND ae.confidence >= 0.7
+      AND a.sensitivity = 'normal' AND a.consequence IN ('low', 'medium')
+      AND a.disclosure_policy != 'ask_before_reference'
+      AND e.source_type IN ('conversation', 'user', 'connector')
+      AND (a.valid_from IS NULL OR a.valid_from <= ?)
+      AND (a.valid_to IS NULL OR a.valid_to >= ?)
+      AND (a.review_at IS NULL OR a.review_at > ?)
+      AND NOT EXISTS (SELECT 1 FROM user_assertion_evidence bad
+        WHERE bad.assertion_id = a.assertion_id AND bad.relation = 'contradicts')
+      AND (s.cardinality = 'multiple' OR NOT EXISTS (
+        SELECT 1 FROM user_assertions other WHERE other.slot_id = a.slot_id
+          AND other.assertion_id != a.assertion_id AND other.status IN ('active', 'conflicted')
+          AND other.normalized_value != a.normalized_value
+          AND (other.valid_to IS NULL OR other.valid_to >= ?)))
+    GROUP BY a.assertion_id HAVING evidence_count >= ? ORDER BY a.recorded_at LIMIT ?`)
+    .all(principalId, now, now, now, now, evidenceThreshold, limit) as Array<{
       assertion_id: string; status: string; evidence_count: number;
     }>;
   metrics.scanned += candidates.length;
@@ -233,6 +237,27 @@ function reconcileEvidence(
       .run(randomUUID(), row.assertion_id, runId, now);
     addDecision(db, runId, 'assertion', row.assertion_id, 'activated', 'owner_evidence_threshold', row,
       { status: 'active' }, now);
+    metrics.activated += 1;
+  }
+}
+
+function activateKnowledge(db: DatabaseSync, runId: string, principalId: string, now: number, limit: number, metrics: MemoryMaintenanceMetrics): void {
+  const rows = db.prepare(`SELECT knowledge_id FROM knowledge_items
+    WHERE principal_id = ? AND record_class = 'memory' AND status = 'candidate'
+      AND origin_class IN ('owner', 'agent', 'system') AND confidence >= 0.7
+      AND derived_from_recalled_context = 0
+      AND (valid_from IS NULL OR valid_from <= ?) AND (valid_to IS NULL OR valid_to >= ?)
+      AND (expires_at IS NULL OR expires_at >= ?) AND (review_at IS NULL OR review_at > ?)
+    ORDER BY created_at, knowledge_id LIMIT ?`).all(principalId, now, now, now, now, limit) as Array<{ knowledge_id: string }>;
+  metrics.scanned += rows.length;
+  for (const row of rows) {
+    db.prepare("UPDATE knowledge_items SET status = 'active', updated_at = ? WHERE knowledge_id = ?").run(now, row.knowledge_id);
+    db.prepare(`INSERT INTO knowledge_item_status_events
+      (event_id, knowledge_id, from_status, to_status, actor_type, reason, created_at)
+      VALUES (?, ?, 'candidate', 'active', 'maintenance', 'Eligible scoped memory activated automatically.', ?)`)
+      .run(randomUUID(), row.knowledge_id, now);
+    addDecision(db, runId, 'knowledge', row.knowledge_id, 'activated', 'eligible_scoped_memory',
+      { status: 'candidate' }, { status: 'active' }, now);
     metrics.activated += 1;
   }
 }
@@ -330,11 +355,12 @@ export function runMemoryMaintenance(input: RunMemoryMaintenanceInput): MemoryMa
   });
   try {
     runSqliteWriteTransaction((db) => {
-      transitionAssertions(db, runId, now, limit, metrics);
+      transitionAssertions(db, runId, principalId, now, limit, metrics);
       transitionPriorities(db, runId, principalId, now, limit, metrics);
       transitionKnowledge(db, runId, principalId, now, limit, metrics);
       if (input.jobType === 'daily_reconciliation' || input.jobType === 'manual_repair') {
         reconcileEvidence(db, runId, principalId, now, limit, evidenceThreshold, metrics);
+        activateKnowledge(db, runId, principalId, now, limit, metrics);
         repairIndexes(db, runId, now, metrics);
       }
       if (input.jobType === 'weekly_knowledge' || input.jobType === 'manual_repair') {

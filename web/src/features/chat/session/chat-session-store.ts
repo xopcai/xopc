@@ -154,14 +154,24 @@ function createEmptySessionSlice(historyStatus: SessionHistoryStatus): ChatSessi
   };
 }
 
+let nextMessageRenderKey = 0;
+
+function cloneSessionMessage(message: Message): Message {
+  const next = cloneMessageForRender(message);
+  next.renderKey ??= `chat-row:${++nextMessageRenderKey}`;
+  return next;
+}
+
 function cloneMessages(messages: Message[]): Message[] {
-  return messages.map((m) => cloneMessageForRender(m));
+  return messages.map(cloneSessionMessage);
 }
 
 function messagesEqualForRender(left: Message, right: Message): boolean {
   if (left === right) return true;
   if (left.role !== right.role || left.timestamp !== right.timestamp) return false;
-  return JSON.stringify(left) === JSON.stringify(right);
+  if (right.renderKey !== undefined && left.renderKey !== right.renderKey) return false;
+  // Server snapshots do not carry the client-only row identity.
+  return JSON.stringify({ ...left, renderKey: undefined }) === JSON.stringify({ ...right, renderKey: undefined });
 }
 
 /** Keep row identities stable when a background history refresh returns unchanged data. */
@@ -173,12 +183,14 @@ function reconcileMessages(current: Message[], incoming: Message[]): Message[] {
       return existing;
     }
     changed = true;
-    const nextMessage = cloneMessageForRender(message);
+    const nextMessage = cloneSessionMessage(message);
     if (
-      existing?.role === 'assistant'
-      && message.role === 'assistant'
-      && existing.renderKey
-      && assistantTurnVisuallyEquivalent(existing, message)
+      existing?.renderKey
+      && existing.role === message.role
+      && (
+        (!message.renderKey && existing.timestamp === message.timestamp && existing.turnId === message.turnId)
+        || (message.role === 'assistant' && assistantTurnVisuallyEquivalent(existing, message))
+      )
     ) {
       nextMessage.renderKey = existing.renderKey;
     }
@@ -191,7 +203,7 @@ function appendFinalAssistantMessage(current: Message[], message: Message): Mess
   const finalMessage = cloneMessageForRender(message);
   const last = current[current.length - 1];
   if (last?.role !== 'assistant') {
-    return [...current, finalMessage];
+    return [...current, cloneSessionMessage(finalMessage)];
   }
   const mergedTail = mergeConsecutiveAssistantMessages([last, finalMessage]);
   return [...current.slice(0, -1), ...mergedTail];
@@ -231,7 +243,7 @@ function cloneSlice(slice: ChatSessionSlice): ChatSessionSlice {
     historyStatus: slice.historyStatus,
     messages: cloneMessages(slice.messages),
     hasMore: slice.hasMore,
-    streamingMsg: slice.streamingMsg ? cloneMessageForRender(slice.streamingMsg) : null,
+    streamingMsg: slice.streamingMsg ? cloneSessionMessage(slice.streamingMsg) : null,
     progress: slice.progress,
     taskPlan: slice.taskPlan
       ? { ...slice.taskPlan, items: slice.taskPlan.items.map((item) => ({ ...item })) }

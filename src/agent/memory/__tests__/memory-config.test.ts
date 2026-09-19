@@ -41,14 +41,14 @@ describe('memory-config', () => {
       .toBe(false);
   });
 
-  it('normalizes the removed combined memory sources field without exposing it at runtime', () => {
-    const parsed = ConfigSchema.parse({
+  it('requires historical memory fields to be migrated before runtime parsing', () => {
+    expect(ConfigSchema.safeParse({
       userContext: { knowledgeMemory: { sources: ['session', 'workspace'] } },
-    });
-    expect(parsed.userContext.knowledgeMemory).toMatchObject({
-      readScopes: ['session', 'workspace'],
-      contentSources: ['memory', 'local_import'],
-    });
-    expect(parsed.userContext.knowledgeMemory).not.toHaveProperty('sources');
+    }).success).toBe(false);
+    expect(ConfigSchema.safeParse({
+      userContext: { userModel: { writePolicy: 'confirm' } },
+    }).success).toBe(false);
+    expect(ConfigSchema.parse({}).userContext.userModel.writePolicy).toBe('allow');
+    expect(ConfigSchema.parse(undefined).userContext.knowledgeMemory.writePolicy).toBe('allow');
   });
 });

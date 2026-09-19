@@ -30,7 +30,7 @@ export const ProductNotificationTypeSchema = z.enum([
   'automation.completed',
   'automation.failed',
   'proactive.insight',
-  'work_discovery.review_ready',
+  'work_discovery.completed',
   'work_discovery.failed',
 ]);
 
