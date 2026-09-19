@@ -8,9 +8,9 @@ vi.mock('react-native-keyboard-controller', () => ({
 vi.mock('react-native-reanimated', () => ({ useSharedValue: (value: unknown) => ({ value }) }));
 vi.mock('react-native-worklets', () => ({ scheduleOnRN: (callback: () => void) => callback() }));
 
-const lifecycle = vi.hoisted(() => ({ setState: vi.fn(), cleanups: [] as Array<() => void> }));
+const lifecycle = vi.hoisted(() => ({ setState: vi.fn(), cleanups: [] as Array<() => void>, refs: [] as Array<{ current: unknown }>, refIndex: 0 }));
 vi.mock('react', () => ({
-  useRef: (current: unknown) => ({ current }),
+  useRef: (current: unknown) => lifecycle.refs[lifecycle.refIndex++] ??= { current },
   useState: (initial: unknown) => [initial, lifecycle.setState],
   useCallback: (callback: unknown) => callback,
   useLayoutEffect: (effect: () => void) => effect(),
@@ -37,20 +37,26 @@ function setup({ loadingOlder = false }: { loadingOlder?: boolean } = {}) {
   const scrollToOffset = vi.fn();
   const onAtBottomChange = vi.fn();
   const listRef = { current: { scrollToEnd, scrollToOffset } } as unknown as Parameters<typeof useChatListScrollFollow>[0]['listRef'];
-  const handlers = useChatListScrollFollow({
-    listRef,
-    messages: [{ id: 'answer', role: 'assistant', content: [] }],
-    loadingOlder,
-    conversationId: 'session',
-    onAtBottomChange,
-    getMessageKey: messageKey,
-  });
+  const render = (messages: Parameters<typeof useChatListScrollFollow>[0]['messages']) => {
+    lifecycle.refIndex = 0;
+    return useChatListScrollFollow({
+      listRef,
+      messages,
+      loadingOlder,
+      conversationId: 'session',
+      onAtBottomChange,
+      getMessageKey: messageKey,
+    });
+  };
+  const handlers = render([{ id: 'answer', role: 'assistant', content: [] }]);
   vi.runAllTimers();
   scrollToEnd.mockClear();
-  return { ...handlers, scrollToEnd, scrollToOffset, onAtBottomChange };
+  return { ...handlers, render, scrollToEnd, scrollToOffset, onAtBottomChange };
 }
 
 beforeEach(() => {
+  lifecycle.refs = [];
+  lifecycle.refIndex = 0;
   keyboard.height.value = 0;
   keyboard.progress.value = 0;
   lifecycle.setState.mockClear();
@@ -252,4 +258,36 @@ it('does not replay deferred follow after the user starts reading history', () =
   vi.runAllTimers();
   expect(chat.scrollToEnd).not.toHaveBeenCalled();
   expect(chat.scrollToOffset).not.toHaveBeenCalled();
+});
+
+
+it.each(['user', 'user-with-attachments'] as const)('preserves history after sending a %s message with the keyboard open', (role) => {
+  const chat = setup();
+  chat.onScrollBeginDrag(scroll(300));
+  chat.onScrollEndDrag(scroll(250));
+  keyboard.height.value = -300;
+  keyboard.progress.value = 1;
+  const next = chat.render([
+    { id: 'answer', role: 'assistant', content: [] },
+    { id: 'prompt', role, content: [] },
+  ]);
+  next.onContentSizeChange(400, 1200);
+  next.onLayout({ nativeEvent: { layout: { height: 450 } } } as Parameters<typeof next.onLayout>[0]);
+  vi.runAllTimers();
+  expect(chat.scrollToEnd).not.toHaveBeenCalled();
+  expect(chat.scrollToOffset).not.toHaveBeenCalled();
+  expect(chat.onAtBottomChange).toHaveBeenLastCalledWith(false);
+  next.scrollToBottom();
+  expect(chat.scrollToOffset).toHaveBeenCalledExactlyOnceWith({ offset: 1050, animated: false });
+});
+
+it('continues following a sent prompt when already at the bottom', () => {
+  const chat = setup();
+  chat.onScroll(scroll(500));
+  chat.render([
+    { id: 'answer', role: 'assistant', content: [] },
+    { id: 'prompt', role: 'user', content: [] },
+  ]);
+  vi.runAllTimers();
+  expect(chat.scrollToEnd).toHaveBeenCalledExactlyOnceWith({ animated: false });
 });

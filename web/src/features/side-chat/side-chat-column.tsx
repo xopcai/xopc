@@ -1,5 +1,5 @@
 import { ChevronRight, MessageSquarePlus, MessageSquareText, Plus, X } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -395,7 +395,6 @@ export function SideChatConversation({
     hasToken: true,
     showSessionLoading: false,
     conversationId: sideChatId,
-    sending: running,
     chatMessages: messages,
     hasMore: false,
     loadingMore: false,
@@ -538,17 +537,6 @@ export function SideChatConversation({
       setError(sideChatErrorMessage(cause, sideChatMessages));
     } finally { setRecreating(false); }
   };
-
-  const clarifyVisible = Boolean(clarify);
-  const previousClarifyVisibleRef = useRef(clarifyVisible);
-  useLayoutEffect(() => {
-    const previous = previousClarifyVisibleRef.current;
-    previousClarifyVisibleRef.current = clarifyVisible;
-    if (ended || previous === clarifyVisible) return;
-    scrollToBottom(false);
-    const frame = requestAnimationFrame(() => scrollToBottom(false));
-    return () => cancelAnimationFrame(frame);
-  }, [clarifyVisible, scrollToBottom, ended]);
 
   const mutateAssistant = useCallback((change: (message: Message) => void) => {
     messageRevisionRef.current += 1;

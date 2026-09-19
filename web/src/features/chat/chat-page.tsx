@@ -333,26 +333,11 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     hasToken: auth.hasToken,
     showSessionLoading: session.showSessionLoading,
     conversationId: session.conversationId,
-    sending: stream.sending,
     chatMessages: msgSlice.items,
     hasMore: session.hasMore,
     loadingMore: session.loadingMore,
     loadMoreMessages: session.loadMoreMessages,
   });
-  const clarifyPromptVisible = Boolean(clarify.clarifyPrompt);
-  const prevClarifyPromptVisibleRef = useRef(clarifyPromptVisible);
-
-  useLayoutEffect(() => {
-    const prev = prevClarifyPromptVisibleRef.current;
-    prevClarifyPromptVisibleRef.current = clarifyPromptVisible;
-    if (prev === clarifyPromptVisible) return;
-    if (session.showSessionLoading || session.sessionRoutePending) return;
-
-    scrollToBottom(false);
-    const raf = requestAnimationFrame(() => scrollToBottom(false));
-    return () => cancelAnimationFrame(raf);
-  }, [clarifyPromptVisible, scrollToBottom, session.showSessionLoading, session.sessionRoutePending]);
-
   const [activeMessageIndex, setActiveMessageIndex] = useState(0);
   const timelineRafRef = useRef<number | null>(null);
   const pendingTimelineDisplayIndexRef = useRef<number | null>(null);
