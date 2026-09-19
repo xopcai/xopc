@@ -23,12 +23,11 @@ describe('worktree safety', () => {
     roots.push(root);
     const original = join(root, 'original');
     const link = join(root, 'link');
-    await mkdir(original);
+    const replacement = join(root, 'replacement');
+    await Promise.all([mkdir(original), mkdir(replacement)]);
     const identity = await readDirectoryIdentity(original);
     await symlink(original, link, 'dir');
     await expect(readDirectoryIdentity(link)).rejects.toThrow(/symlinked/);
-    await rm(original, { recursive: true });
-    await mkdir(original);
-    expect(sameDirectoryIdentity(identity!, await readDirectoryIdentity(original))).toBe(false);
+    expect(sameDirectoryIdentity(identity!, await readDirectoryIdentity(replacement))).toBe(false);
   });
 });
