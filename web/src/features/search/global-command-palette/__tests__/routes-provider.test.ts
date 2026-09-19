@@ -11,7 +11,7 @@ describe('buildRouteSeeds', () => {
     window.electronAPI = { platform: 'darwin' } as Window['electronAPI'];
     const computer = buildRouteSeeds('zh').find(s => s.path === '/settings/computer-use');
     expect(computer).toBeDefined();
-    expect(computer?.keywords).toContain('电脑操作');
+    expect(computer?.keywords).toContain('电脑控制');
   });
   it.each(['win32', 'linux', undefined])('keeps computer model search available on %s', (platform) => {
     window.electronAPI = platform ? { platform } as Window['electronAPI'] : undefined;

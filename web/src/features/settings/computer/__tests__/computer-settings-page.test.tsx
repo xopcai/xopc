@@ -31,7 +31,7 @@ async function renderPanel(zh = true) {
 }
 
 it.each([
-  { language: 'zh' as const, badge: '实验性', notice: '识别和操作可能出错', label: '电脑操作' },
+  { language: 'zh' as const, badge: '实验性', notice: '识别和操作可能出错', label: '电脑控制' },
   { language: 'en' as const, badge: 'Experimental', notice: 'perform incorrect actions', label: 'Computer use' },
 ])('labels computer use as experimental in $language without changing settings', async ({ language, badge, notice, label }) => {
   window.electronAPI = undefined;

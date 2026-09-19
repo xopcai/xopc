@@ -535,7 +535,7 @@ function ManageBuiltinProvider({
             <span className="text-sm font-medium text-fg">
               {labels.modelsLabel} ({providerModels.length})
             </span>
-            <label className="mb-2 flex items-center gap-2 text-xs text-fg-muted"><input type="checkbox" className="ui-checkbox" checked={computerOnly} onChange={event => setComputerOnly(event.target.checked)} />{language === 'zh' ? '仅电脑操作模型' : 'Computer Use only'}</label>
+            <label className="mb-2 flex items-center gap-2 text-xs text-fg-muted"><input type="checkbox" className="ui-checkbox" checked={computerOnly} onChange={event => setComputerOnly(event.target.checked)} />{language === 'zh' ? '仅电脑控制模型' : 'Computer Use only'}</label>
             <div className="max-h-40 overflow-y-auto rounded-lg border border-edge-subtle bg-surface-panel/40 p-2">
               <div className="flex flex-wrap gap-1.5">
                 {providerModels.filter(model => !computerOnly || model.computerUse).map((model) => (
@@ -823,7 +823,7 @@ function ManageCustomProvider({
               {ms.addModel}
             </Button>
           </div>
-          <label className="mb-2 flex items-center gap-2 text-xs text-fg-muted"><input type="checkbox" className="ui-checkbox" checked={computerOnly} onChange={event => setComputerOnly(event.target.checked)} />{language === 'zh' ? '仅电脑操作模型' : 'Computer Use only'}</label>
+          <label className="mb-2 flex items-center gap-2 text-xs text-fg-muted"><input type="checkbox" className="ui-checkbox" checked={computerOnly} onChange={event => setComputerOnly(event.target.checked)} />{language === 'zh' ? '仅电脑控制模型' : 'Computer Use only'}</label>
           {models.filter(model => !computerOnly || model.computerUse).length === 0 ? (
             <p className="text-xs text-fg-muted">{ms.modelsEmpty}</p>
           ) : (
