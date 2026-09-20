@@ -146,7 +146,9 @@ describe('streaming assistant Markdown rendering', () => {
       active: true, status: 'running', expandedByDefault: true, compact: false,
     };
     render([], true, false, workLog);
-    expect(container.querySelector('button[aria-expanded="true"]')).not.toBeNull();
+    const disclosure = container.querySelector<HTMLButtonElement>('button[aria-expanded="true"]');
+    expect(disclosure).not.toBeNull();
+    expect(disclosure?.className).not.toContain('hover:');
     if (manual) {
       act(() => container.querySelector<HTMLButtonElement>('button[aria-expanded]')?.click());
       act(() => container.querySelector<HTMLButtonElement>('button[aria-expanded]')?.click());
@@ -169,14 +171,16 @@ describe('streaming assistant Markdown rendering', () => {
     expect(container.querySelector('.assistant-steps-scroll')).toBeNull();
   });
 
-  it('keeps errors visible in compact mode without a success title', () => {
+  it('keeps tool errors inside the normal work-log disclosure', () => {
     render([], false, false, {
       items: [{ type: 'tool_use', id: 'r', name: 'read_file', status: 'error', result: 'Permission denied' }],
-      active: false, status: 'failed', expandedByDefault: false, compact: true,
+      active: false, status: 'failed', expandedByDefault: false, compact: false,
     });
+    expect(container.textContent).not.toContain('Permission denied');
+    const disclosure = container.querySelector<HTMLButtonElement>('button[aria-expanded]');
+    expect(disclosure).not.toBeNull();
+    act(() => disclosure?.click());
     expect(container.textContent).toContain('Permission denied');
-    expect(container.textContent).not.toContain('Read file');
-    expect(container.querySelector('button[aria-expanded]')).toBeNull();
   });
 
   it('keeps file delivery cards visible when normal activity is hidden', () => {
@@ -422,7 +426,7 @@ describe('streaming assistant Markdown rendering', () => {
     expect(container.textContent).toContain('30');
   });
 
-  it('keeps a failed tool reason visible outside the collapsed trace', () => {
+  it('keeps a failed tool reason inside the collapsed trace', () => {
     const failedTool = {
       type: 'tool_use',
       id: 'command-1',
@@ -440,7 +444,7 @@ describe('streaming assistant Markdown rendering', () => {
     });
 
     expect(container.textContent).toContain('Failed after');
-    expect(container.textContent).toContain('Exit 1');
+    expect(container.textContent).not.toContain('Exit 1');
     const disclosure = container.querySelector<HTMLButtonElement>('button[aria-expanded="false"]');
     act(() => disclosure?.click());
 
