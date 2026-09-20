@@ -54,13 +54,12 @@ describe('useChatScrollViewport', () => {
     vi.unstubAllGlobals();
   });
 
-  function Harness() {
+  function Harness({ messages = chatMessages }: { messages?: Message[] }) {
     viewport = useChatScrollViewport({
       hasToken: true,
       showSessionLoading: false,
       conversationId: 'session-1',
-      sending: false,
-      chatMessages,
+      chatMessages: messages,
       hasMore: false,
       loadingMore: false,
       loadMoreMessages: () => {},
@@ -173,6 +172,68 @@ describe('useChatScrollViewport', () => {
     const resizedElement = change === 'content collapse' ? el.firstElementChild! : el;
     act(() => observers.get(resizedElement)?.());
     expect(viewport?.atBottom).toBe(true);
+  });
+
+  it('preserves history through sending, streamed replies, and composer or keyboard resizing', () => {
+    act(() => root.render(<Harness />));
+    const el = container.firstElementChild as HTMLDivElement;
+    let height = 1600;
+    let viewportHeight = 600;
+    let top = 500;
+    Object.defineProperties(el, {
+      clientHeight: { get: () => viewportHeight },
+      scrollHeight: { get: () => height },
+      scrollTop: {
+        get: () => top,
+        set: (value: number) => { top = Math.max(0, Math.min(value, height - viewportHeight)); },
+      },
+    });
+    act(() => el.dispatchEvent(new Event('scroll')));
+    const sent: Message[] = [...chatMessages, {
+      role: 'user', content: [{ type: 'text', text: 'Follow-up while reading' }], timestamp: 2,
+    }];
+    act(() => root.render(<Harness messages={sent} />));
+    expect(top).toBe(500);
+    for (const size of [300, 260, 600]) {
+      viewportHeight = size;
+      act(() => observers.get(el)?.());
+      expect(top).toBe(500);
+      expect(viewport?.atBottom).toBe(false);
+    }
+    act(() => root.render(<Harness messages={[...sent, {
+      role: 'assistant', content: [{ type: 'text', text: 'Reply' }], timestamp: 3,
+    }]} />));
+    height = 2000;
+    act(() => observers.get(el.firstElementChild!)?.());
+    expect(top).toBe(500);
+    act(() => viewport?.scrollToBottom(false));
+    expect(top).toBe(1400);
+    height = 2100;
+    act(() => observers.get(el.firstElementChild!)?.());
+    expect(top).toBe(1500);
+  });
+
+  it('does not resume following when keyboard dismissal temporarily exposes the bottom', () => {
+    act(() => root.render(<Harness />));
+    const el = container.firstElementChild as HTMLDivElement;
+    let viewportHeight = 300;
+    let height = 1000;
+    let top = 400;
+    Object.defineProperties(el, {
+      clientHeight: { get: () => viewportHeight },
+      scrollHeight: { get: () => height },
+      scrollTop: { get: () => top, set: (value: number) => { top = value; } },
+    });
+    act(() => el.dispatchEvent(new Event('scroll')));
+    viewportHeight = 600;
+    act(() => observers.get(el)?.());
+    expect(viewport?.atBottom).toBe(true);
+    viewportHeight = 300;
+    act(() => observers.get(el)?.());
+    height = 1100;
+    act(() => observers.get(el.firstElementChild!)?.());
+    expect(top).toBe(400);
+    expect(viewport?.atBottom).toBe(false);
   });
 
 });

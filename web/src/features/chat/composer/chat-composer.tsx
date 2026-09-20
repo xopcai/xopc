@@ -298,7 +298,7 @@ export const ChatComposer = memo(function ChatComposer({
       { replace: true },
     );
     if (!file) return;
-    void att.processFiles([file]).then(() => editor.editorRef.current?.focus());
+    void att.processFiles([file]).then(() => editor.editorRef.current?.focus({ preventScroll: true }));
   }, [attachmentHandoffId, att.processFiles, editor.editorRef, conversationId, setSearchParams]);
 
   const { onUserTextCommitted, onWireInputClearWalk, tryInputHistoryArrow } =
@@ -416,7 +416,7 @@ export const ChatComposer = memo(function ChatComposer({
         return;
       }
       if (voicePhase === 'idle' || voicePhase === 'error') {
-        editor.editorRef.current?.focus();
+        editor.editorRef.current?.focus({ preventScroll: true });
         void startVoiceInput();
       }
     };
@@ -425,7 +425,7 @@ export const ChatComposer = memo(function ChatComposer({
       if ((target && target !== 'chat') || !voiceActive) return;
       event.preventDefault();
       cancelVoiceCapture();
-      editor.editorRef.current?.focus();
+      editor.editorRef.current?.focus({ preventScroll: true });
     };
 
     window.addEventListener(VOICE_INPUT_TOGGLE_EVENT, toggleVoiceInput);

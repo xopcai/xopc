@@ -20,7 +20,7 @@ describe('ScrollToBottomDock', () => {
       expect(dock.classList.contains('-top-2')).toBe(true);
       expect(dock.classList.contains('-translate-y-full')).toBe(true);
       expect(dock.classList.contains('opacity-100')).toBe(true);
-      expect(button.classList.contains('size-8')).toBe(true);
+      expect(button.classList.contains('size-11')).toBe(true);
       expect(dock.querySelectorAll('span')).toHaveLength(0);
       expect(dock.querySelector('[data-scroll-to-bottom-arrow]')).not.toBeNull();
       expect(button.getAttribute('aria-label')).toBeTruthy();
@@ -28,8 +28,8 @@ describe('ScrollToBottomDock', () => {
       expect(onClick).toHaveBeenCalledOnce();
 
       await act(async () => root.render(<ScrollToBottomDock visible running onClick={onClick} />));
-      expect(container.querySelectorAll('[data-scroll-to-bottom-running-dot]')).toHaveLength(3);
-      expect(container.querySelector('[data-scroll-to-bottom-arrow]')).toBeNull();
+      expect(container.querySelectorAll('[data-scroll-to-bottom-running-dot]')).toHaveLength(1);
+      expect(container.querySelector('[data-scroll-to-bottom-arrow]')).not.toBeNull();
       await act(async () => container.querySelector('button')?.click());
       expect(onClick).toHaveBeenCalledTimes(2);
 

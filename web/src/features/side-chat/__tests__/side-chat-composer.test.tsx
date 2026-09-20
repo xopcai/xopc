@@ -251,12 +251,8 @@ describe('SideChatConversation composer', () => {
     expect(container.querySelector('[data-testid="message-thread"]')?.textContent).toContain('hello');
   });
 
-  it('does not follow streaming content after the user scrolls toward older messages', async () => {
+  it('preserves history while typing, sending, and receiving streamed content', async () => {
     await renderConversation();
-    const textarea = await typeDraft('hello');
-    await act(async () => {
-      textarea?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-    });
 
     const viewport = container.querySelector('[data-side-chat-scroll-viewport]') as HTMLDivElement;
     let scrollHeight = 1_000;
@@ -277,6 +273,13 @@ describe('SideChatConversation composer', () => {
       scrollTop = 300;
       viewport.dispatchEvent(new Event('scroll', { bubbles: true }));
     });
+    const textarea = await typeDraft('hello');
+    expect(scrollTop).toBe(300);
+    await act(async () => {
+      textarea?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    });
+    expect(sendSideChatInput).toHaveBeenCalledOnce();
+    expect(scrollTop).toBe(300);
     scrollHeight = 1_100;
     act(() => resizeCallback?.([], resizeObserver!));
 
