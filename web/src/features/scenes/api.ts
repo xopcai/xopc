@@ -17,7 +17,7 @@ export const sceneWrite = <T,>(path: string, method: 'POST' | 'PATCH', body?: un
 export function sceneErrorText(error: unknown, zh: boolean): string {
   const status = (error as { status?: number } | undefined)?.status;
   if (status === 401) return zh ? '登录已失效，请重新登录后查看场景。' : 'Your session expired. Sign in again to view scenes.';
-  if (status === 503) return zh ? '场景服务尚未启用。完成数据切换后可使用。' : 'Scenes are not enabled yet. Complete the data cutover to use them.';
+  if (status === 503) return zh ? '当前版本仅包含场景基础设施，尚未开放使用。现有功能不受影响，无需修改配置或迁移数据。' : 'This version includes scene foundations only; scenes are not available yet. Existing features are unaffected. No configuration changes or data migration are needed.';
   if (status === 409) return zh ? '内容已被更新，请刷新后重新确认。' : 'This content changed. Refresh and review it before trying again.';
   if (status === 422) return zh ? '设置或授权不完整，请检查数据来源和范围。' : 'Setup or permission is incomplete. Check the source and scope.';
   if (status === 404) return zh ? '找不到这个场景或结果，请返回场景列表。' : 'Scene or result not found. Return to the scenes list.';

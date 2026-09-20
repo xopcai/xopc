@@ -156,7 +156,17 @@ try {
   assert.equal(await page.getByRole('button', { name: '重新设置跟进时间' }).count(), 0);
   await page.screenshot({ path: join(screenshots, 'mail-mobile.png'), fullPage: true });
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ passed: true, screenshots, checks: ['start response loss retry', 'notes conflict preservation', 'schedule', 'manual run', 'feedback', 'read', 'pause', 'mail picker', 'deadline', 'mail draft', 'end follow-up', 'mobile bounds'] }));
+  await page.route('**/api/scenes/**', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'scene_runtime_not_installed' }) }));
+  const smokeUrl = page.url().split('#')[0];
+  for (const path of ['/scenes', '/scenes/new/mail-follow-up', '/scenes/unavailable-activation']) {
+    await page.goto('about:blank');
+    await page.goto(`${smokeUrl}#${path}`);
+    await page.getByRole('heading', { name: '场景尚未开放' }).first().waitFor();
+    assert.equal(await page.getByRole('button', { name: '重新加载' }).count(), 0);
+    assert.equal(await page.getByRole('button', { name: '开启场景', exact: true }).count(), 0);
+    assert.ok(await page.getByRole('link', { name: '返回对话' }).count());
+  }
+  console.log(JSON.stringify({ passed: true, screenshots, checks: ['start response loss retry', 'notes conflict preservation', 'schedule', 'manual run', 'feedback', 'read', 'pause', 'mail picker', 'deadline', 'mail draft', 'end follow-up', 'mobile bounds', 'disabled list/create/detail entry points'] }));
 } finally {
   await browser?.close(); await server?.close();
   http.closeAllConnections();

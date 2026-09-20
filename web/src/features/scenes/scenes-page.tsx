@@ -34,6 +34,11 @@ function Loading() {
 
 function Failure({ error, retry }: { error: unknown; retry?: () => void }) {
   const zh = useLocaleStore((state) => state.language) === 'zh';
+  if ((error as { status?: number } | undefined)?.status === 503) return <section className={`${panelClass} space-y-3`}>
+    <h1 className="text-xl font-semibold text-fg">{zh ? '场景尚未开放' : 'Scenes are not available yet'}</h1>
+    <p className="text-sm text-fg-muted">{sceneErrorText(error, zh)}</p>
+    <Button asChild><Link to="/chat">{zh ? '返回对话' : 'Back to chat'}</Link></Button>
+  </section>;
   return <div role="alert" className="space-y-3 rounded-xl border border-edge p-4"><p className="text-sm text-danger">{sceneErrorText(error, zh)}</p>
     {retry && <Button onClick={retry}><RefreshCw size={16} aria-hidden="true" />{zh ? '重新加载' : 'Reload'}</Button>}</div>;
 }

@@ -162,6 +162,13 @@ Review 和故障注入：转换中断、配置 rename 失败、数据库提交�
 
 已从 PR 历史移除不属于场景功能的 Integration Plugin 重构，保持 `origin/main` 的 Connector 实现、API、页面和数据库升级链原样。场景邮件读取直接使用 main 的 `connector_connections`、`connector_accounts` 和 `connector_installations`，没有双模型兼容或回退。校验当前连接、主体/Connector 归属、启用状态、安装选中账号、连接到期及 workspace；场景尚无 Agent 身份，Agent 受限账号拒绝读取。邮件选择与执行共用这些限制。测试和浏览器 fixture 同步使用 main 的模型。
 
+### 基础设施合并前修复（2026-09-20）
+
+- 将会话元数据读取抽到 `session-read-repository.ts`，供会话生命周期和连接恢复共同使用，消除两个 repository 的循环依赖；不使用动态导入或兼容回退。
+- 本地 dependency-cruiser 零违规，相关 18 个测试文件 / 183 项测试、类型检查、定向 lint、Node/Web 构建通过。构建产物 Gateway 启动基准两次成功，约 3.3 秒 / 2.4 秒。
+- 场景未启用时，列表、创建、详情入口均明确展示“场景尚未开放”，不提供开启/反复重试操作，也不要求用户修改配置或迁移数据；浏览器 smoke 覆盖这些入口。
+- 本次合并定位为基础设施阶段，不是完整场景产品发布；不启用生产 runtime、不注册场景生产迁移、不删除旧主动链路。生产切换仍须按下列依赖顺序实施。
+
 ## 后续依赖顺序
 
 1. 完成 T0 的逐表转换、配置转换与恢复演练；将未知或权限不明确实例显式转入 needs_setup。
