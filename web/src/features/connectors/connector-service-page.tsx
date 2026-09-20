@@ -1,3 +1,5 @@
+import * as Dialog from '@radix-ui/react-dialog';
+import { X } from 'lucide-react';
 import { useState } from 'react';
 import useSWR from 'swr';
 import { Link } from 'react-router-dom';
@@ -14,6 +16,53 @@ export function ConnectorServicePage() {
   const language = useLocaleStore(state => state.language);
   const t = messages(language).connectorsSettings;
   const zh = language === 'zh';
+  return <main className="mx-auto w-full max-w-2xl space-y-6 p-6">
+    <Link to="/connectors" className="text-sm text-accent-fg">{t.title}</Link>
+    <h1 className="text-xl font-semibold">{zh ? '应用连接服务' : 'App connection service'}</h1>
+    <p className="text-sm text-fg-muted"><ConnectorServiceDescription /></p>
+    <ConnectorServiceForm />
+  </main>;
+}
+
+function ConnectorServiceDescription() {
+  const zh = useLocaleStore(state => state.language) === 'zh';
+  return <>{zh ? '此设置决定新账号通过哪个服务连接。已有账号继续使用其原来的连接服务。' : 'Choose the service for new accounts. Existing accounts keep their original service.'}</>;
+}
+
+export function ConnectorServiceDialog() {
+  const language = useLocaleStore(state => state.language);
+  const t = messages(language).connectorsSettings;
+  const zh = language === 'zh';
+  return <Dialog.Root>
+    <Dialog.Trigger asChild>
+      <button type="button" className="touch-target rounded-lg text-xs text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+        {zh ? '应用连接服务' : 'Connection service'}
+      </button>
+    </Dialog.Trigger>
+    <Dialog.Portal>
+      <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
+      <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[60] flex h-[min(100dvh-2rem,42rem)] w-[min(100%-2rem,42rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-float">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-edge-subtle px-6 py-5">
+          <div className="min-w-0">
+            <Dialog.Title className="text-base font-semibold text-fg">{zh ? '应用连接服务' : 'App connection service'}</Dialog.Title>
+            <Dialog.Description className="mt-1 text-sm text-fg-muted"><ConnectorServiceDescription /></Dialog.Description>
+          </div>
+          <Dialog.Close asChild>
+            <Button variant="ghost" className="shrink-0 p-1.5" aria-label={t.modalClose}><X className="size-5" aria-hidden /></Button>
+          </Dialog.Close>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          <ConnectorServiceForm />
+        </div>
+      </Dialog.Content>
+    </Dialog.Portal>
+  </Dialog.Root>;
+}
+
+function ConnectorServiceForm() {
+  const language = useLocaleStore(state => state.language);
+  const t = messages(language).connectorsSettings;
+  const zh = language === 'zh';
   const { data, error, mutate } = useSWR('connector-service', getComposioSetupStatus);
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);
@@ -25,10 +74,7 @@ export function ConnectorServicePage() {
     catch (cause) { setFailure(cause instanceof Error ? cause.message : String(cause)); }
     finally { setBusy(false); }
   }
-  return <main className="mx-auto w-full max-w-2xl space-y-6 p-6">
-    <Link to="/connectors" className="text-sm text-accent-fg">{t.title}</Link>
-    <h1 className="text-xl font-semibold">{zh ? '应用连接服务' : 'App connection service'}</h1>
-    <p className="text-sm text-fg-muted">{zh ? '此设置决定新账号通过哪个服务连接。已有账号继续使用其原来的连接服务。' : 'Choose the service for new accounts. Existing accounts keep their original service.'}</p>
+  return <div className="space-y-6">
     {!data && !error ? <Skeleton className="h-40 w-full" /> : null}
     {data ? <>
       <section className="space-y-3 rounded-xl border border-edge p-4">
@@ -67,5 +113,5 @@ export function ConnectorServicePage() {
       description={zh ? '移除此服务及其本地保存的密钥，不修改环境变量。需要先切换服务并断开该项目的账号，已有数据不会删除。' : 'Remove this service and its saved key, without changing environment variables. Switch services and disconnect this project’s accounts first. Existing data is retained.'}
       confirmLabel={zh ? '移除' : 'Remove'} cancelLabel={t.modalCancel} destructive
       onCancel={() => setRemoveId(undefined)} onConfirm={() => { const id = removeId; setRemoveId(undefined); if (id) void run(() => removeComposioBackend(id)); }} />
-  </main>;
+  </div>;
 }
