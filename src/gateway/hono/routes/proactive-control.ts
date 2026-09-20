@@ -5,7 +5,7 @@ import { ZodError } from 'zod';
 import { recordProactivePresence } from '../../../proactive/policy/presence.js';
 import { digestCards } from '../../../proactive/inbox/digest.js';
 import { proactiveMetrics } from '../../../proactive/metrics.js';
-import { prepareBrowserPush, registerBrowserPush, unregisterBrowserPush, testBrowserPush, acknowledgeBrowserProbe, listBrowserProbes } from '../../../notifications/web-push.js';
+import { prepareBrowserPush, registerBrowserPush, unregisterBrowserPush, testBrowserPush, acknowledgeBrowserProbe, listBrowserProbes } from '../../../proactive/notifications/browser.js';
 import { cardChanges, getCard, performCardAction } from '../../../proactive/inbox/cards.js';
 import { proactivePreferences, ProactiveConflict, updateProactivePreferences } from '../../../proactive/policy/service.js';
 import { updateControlledSubscription } from '../../../proactive/scenarios/control.js';

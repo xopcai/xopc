@@ -29,6 +29,15 @@ describe('lazy route bundles', () => {
       expect(findAuthenticatedLazyRouteBundle(path)).toBeUndefined();
     }
   });
+
+  it('maps scene resource families without capturing similarly named routes', () => {
+    for (const path of ['/api/scenes/templates', '/api/scenes/templates/mail/versions/1.0.0', '/api/scenes/preflight', '/api/scenes/sources/mail',
+      '/api/scenes/activations', '/api/scenes/activations/id', '/api/scenes/activations/id/checks', '/api/scenes/activations/id/runs',
+      '/api/scenes/activations/id/notes', '/api/scenes/activations/id/work-items', '/api/scenes/activations/id/schedules',
+      '/api/scenes/activations/id/schedules/weekly', '/api/scenes/work-items/id', '/api/scenes/outcomes', '/api/scenes/presentations/id',
+      '/api/scenes/presentations/id/feedback', '/api/scenes/metrics', '/api/scenes/activations/id/imported-context', '/api/scenes/digests/id']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('scenes');
+    for (const path of ['/api/scenes-other', '/api/scene', '/api/inbox/other']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('scenes');
+  });
   it('maps connector account management without swallowing nearby paths', () => {
     for (const path of ['/api/connectors/composio/accounts/account-1', '/api/connectors/composio/setup-status', '/api/connectors/composio/authorizations/attempt-1', '/api/connectors/composio/backends/backend-1']) {
       expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('connectors');

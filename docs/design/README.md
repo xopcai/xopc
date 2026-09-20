@@ -14,6 +14,9 @@ See [Documentation information architecture](./documentation-information-archite
 
 Active proposed designs:
 
+- [Scenes product north star and evolution plan](./scenes-product-north-star.md)
+- [Scenes technical design and direct cutover plan](./scenes-technical-design.md)
+- [Scenes implementation progress and review log](./scenes-implementation-progress.md)
 - [Realtime voice product requirements](./realtime-voice-prd.md)
 - [Realtime voice technical design](./realtime-voice-technical-design.md)
 - [Realtime voice WebSocket protocol](./realtime-voice-websocket-protocol.md)

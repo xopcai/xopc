@@ -1,8 +1,6 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import type { DatabaseSync } from 'node:sqlite';
+
+import { readSqliteAsset } from './sql-assets.js';
 
 import {
   applyPendingMigrations,
@@ -27,16 +25,10 @@ export {
   XOPC_DB_SCHEMA_VERSION,
 } from './migrations/runner.js';
 
-const SCHEMA_DIR = dirname(fileURLToPath(import.meta.url));
-
-function readSchemaSql(): string {
-  return readFileSync(join(SCHEMA_DIR, 'schema.sql'), 'utf8');
-}
-
 function bootstrapFreshDatabase(db: DatabaseSync): void {
   db.exec('BEGIN IMMEDIATE');
   try {
-    db.exec(readSchemaSql());
+    db.exec(readSqliteAsset('schema.sql'));
     setSchemaVersion(db, XOPC_DB_BASELINE_SCHEMA_VERSION);
     db.exec('COMMIT');
   } catch (error) {

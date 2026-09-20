@@ -84,8 +84,9 @@ try {
   const { queueDigest, flushDueDigests } = await import('../src/proactive/inbox/digest.js');
   const { getInboxItem } = await import('../src/proactive/inbox/repository.js');
   const { NotificationService } = await import('../src/notifications/service.js');
+  const { createProactiveNotificationDelivery } = await import('../src/proactive/notifications/delivery.js');
   queueDigest(getInboxItem(card.id)!, 'daily', new Date(Date.now() - 60000));
-  const notificationService = new NotificationService({ publish: () => {} });
+  const notificationService = new NotificationService({ domainDelivery: createProactiveNotificationDelivery(), publish: () => {} });
   const [digest] = flushDueDigests((plan) => notificationService.persistPlan(plan));
   assert(digest?.target.kind === 'proactive_digest');
   assert.equal((await request(`/api/proactive/digests/${digest.target.digestId}`)).cards.length, 1);

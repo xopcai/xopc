@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { createHashRouter, Navigate, RouterProvider, useLocation } from 'react-router-dom';
+import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom';
 
 import { AppShell } from '@/components/shell/app-shell';
 import { RouteErrorFallback } from '@/components/errors/app-error-boundary';
@@ -51,6 +51,7 @@ const SessionsPage = lazy(() => loadSessionsPage().then((m) => ({ default: m.Ses
 const AutomationsPage = lazy(() => loadAutomationsPage().then((m) => ({ default: m.AutomationsPage })));
 const BrowserAutomationsPage = lazy(() => loadBrowserAutomationsPage().then((m) => ({ default: m.BrowserAutomationsPage })));
 const ProactivePage = lazy(() => import('@/features/proactive/proactive-page').then((m) => ({ default: m.ProactivePage })));
+const ScenesPage = lazy(() => import('@/features/scenes/scenes-page').then((m) => ({ default: m.ScenesPage })));
 const HomePage = lazy(() => loadHomePage().then((m) => ({ default: m.HomePage })));
 const TaskDetailPage = lazy(() => loadTaskDetailPage().then((m) => ({ default: m.TaskDetailPage })));
 const ProjectsPage = lazy(() => loadProjectsPage().then((m) => ({ default: m.ProjectsPage })));
@@ -119,20 +120,6 @@ function SecondaryRouteFallback() {
   );
 }
 
-function LegacyProactiveRedirect() {
-  const location = useLocation();
-  const source = new URLSearchParams(location.search);
-  const target = new URLSearchParams();
-  const tab = source.get('tab');
-  if (tab === 'services') target.set('view', 'new');
-  else if (tab === 'settings') target.set('view', 'settings');
-  for (const key of ['item', 'digest', 'project', 'probe', 'subscription']) {
-    const value = source.get(key);
-    if (value) target.set(key === 'subscription' ? 'delegation' : key, value);
-  }
-  const query = target.toString();
-  return <Navigate to={`/assistant-work${query ? `?${query}` : ''}`} replace />;
-}
 
 
 function SettingsRouteFallback() {
@@ -213,7 +200,9 @@ const router = createHashRouter([
         path: 'assistant-work',
         element: <Suspense fallback={<SecondaryRouteFallback />}><ProactivePage /></Suspense>,
       },
-      { path: 'proactive', element: <LegacyProactiveRedirect /> },
+      ...['scenes', 'scenes/inbox', 'scenes/new/:templateKey', 'scenes/:activationId'].map((path) => ({
+        path, element: <Suspense fallback={<SecondaryRouteFallback />}><ScenesPage /></Suspense>,
+      })),
       {
         path: 'automations',
         element: (

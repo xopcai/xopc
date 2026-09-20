@@ -9,6 +9,8 @@ import { cpSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { copySqliteAssets } from './sqlite-assets.mjs';
+
 import { ELECTRON_GATEWAY_EXTERNALS } from './electron-runtime-externals.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -86,38 +88,7 @@ console.log(`[build-electron-server] Wrote ${voiceRuntimeOutfile}${minify ? ' (m
 
 console.log(`[build-electron-server] Wrote ${outfile}${minify ? ' (minified)' : ''}`);
 
-// schema.ts reads schema.sql next to the running module. The esbuild bundle is a single file under
-// out/server/, so copy the DDL beside index.js for packaged Electron (import.meta.url → out/server/).
-const schemaCandidates = [
-  join(root, 'dist/src/storage/sqlite/schema.sql'),
-  join(root, 'src/storage/sqlite/schema.sql'),
-];
-const schemaSrc = schemaCandidates.find((p) => existsSync(p));
-const schemaDest = join(root, 'out/server/schema.sql');
-if (schemaSrc) {
-  mkdirSync(dirname(schemaDest), { recursive: true });
-  cpSync(schemaSrc, schemaDest);
-  console.log(`[build-electron-server] Copied SQLite schema to ${schemaDest}`);
-} else {
-  console.error(
-    `[build-electron-server] Missing schema.sql (tried:\n` +
-      schemaCandidates.map((p) => `  - ${p}`).join('\n') +
-      `\n). Run \`pnpm run build\` first.\n`,
-  );
-  process.exit(1);
-}
-
-const migrationsCandidates = [
-  join(root, 'dist/src/storage/sqlite/migrations'),
-  join(root, 'src/storage/sqlite/migrations'),
-];
-const migrationsSrc = migrationsCandidates.find((p) => existsSync(p));
-const migrationsDest = join(root, 'out/server/migrations');
-if (migrationsSrc) {
-  mkdirSync(dirname(migrationsDest), { recursive: true });
-  cpSync(migrationsSrc, migrationsDest, { recursive: true });
-  console.log(`[build-electron-server] Copied SQLite migrations to ${migrationsDest}`);
-}
+copySqliteAssets(join(root, 'src/storage/sqlite'), join(root, 'out/server'), { clean: true });
 
 // workspace-seed.ts resolves bundled templates next to the running module (`__dirname/workspace-templates`).
 // The esbuild bundle is a single file under out/server/, so copy templates beside index.js for packaged Electron.

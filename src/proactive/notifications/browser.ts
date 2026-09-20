@@ -4,19 +4,9 @@ import { notificationTargetRoute, ProductNotificationSchema, type ProductNotific
 import webPush from 'web-push';
 import { z } from 'zod';
 
-import { proactiveNotificationWorkspace, recheckNotificationDelivery } from './proactive-policy.js';
-import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
-
-export function allowedPushEndpoint(value: string): boolean {
-  try {
-    const url = new URL(value);
-    const host = url.hostname;
-    return url.protocol === 'https:' && !url.username && !url.password && (!url.port || url.port === '443')
-      && (host === 'fcm.googleapis.com' || host === 'updates.push.services.mozilla.com'
-        || host.endsWith('.push.services.mozilla.com') || host === 'web.push.apple.com'
-        || host.endsWith('.notify.windows.com'));
-  } catch { return false; }
-}
+import { proactiveNotificationWorkspace, recheckNotificationDelivery } from './policy.js';
+import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
+import { allowedPushEndpoint } from '../../notifications/browser-endpoint.js';
 const BrowserPushSchema = z.object({
   subscription: z.object({
     endpoint: z.string().max(4096).refine(allowedPushEndpoint, 'Unsupported push service'),

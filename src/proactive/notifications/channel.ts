@@ -1,10 +1,10 @@
 import { notificationTargetRoute } from '@xopcai/gateway-contract';
 import type { ProductNotification, ProactivePreferences } from '@xopcai/gateway-contract';
 
-import { proactivePreferences } from '../proactive/policy/service.js';
-import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
-import { recheckNotificationDelivery } from './proactive-policy.js';
-import { getNotificationEvent } from './store.js';
+import { proactivePreferences } from '../policy/service.js';
+import { getSqliteDatabase, runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
+import { recheckNotificationDelivery } from './policy.js';
+import { getNotificationEvent } from '../../notifications/store.js';
 
 type Target = NonNullable<ProactivePreferences['telegram']>;
 export type ProactiveChannelSender = (target: Target, text: string) => Promise<{ messageId: string }>;

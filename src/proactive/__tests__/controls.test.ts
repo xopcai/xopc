@@ -4,10 +4,12 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createProactiveNotificationDelivery } from '../notifications/delivery.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { ProjectService } from '../../projects/index.js';
-import { allowedPushEndpoint, prepareBrowserPush, registerBrowserPush, drainBrowserPush } from '../../notifications/web-push.js';
+import { prepareBrowserPush, registerBrowserPush, drainBrowserPush } from '../notifications/browser.js';
+import { allowedPushEndpoint } from '../../notifications/browser-endpoint.js';
 import { NotificationService } from '../../notifications/service.js';
 import { ProactiveScenarioService } from '../scenarios/service.js';
 import { createControlledSubscription, updateControlledSubscription } from '../scenarios/control.js';
@@ -117,8 +119,8 @@ describe('proactive user controls', () => {
     const { card, sub } = await createCard();
     updateControlledSubscription('default', sub.id, { expectedRevision: 1, delivery: 'important' });
     updateProactivePreferences('default', { expectedRevision: 0, quietStartHour: 0, quietEndHour: 0 });
-    const notifications = new NotificationService({ publish: vi.fn() });
-    vi.spyOn(notifications, 'persistGatewayEvent').mockImplementation(() => { throw new Error('disk full'); });
+    const notifications = new NotificationService({ domainDelivery: createProactiveNotificationDelivery(), publish: vi.fn() });
+    vi.spyOn(notifications, 'persistPlan').mockImplementation(() => { throw new Error('disk full'); });
     expect(() => deliverProactiveCard(getInboxItem(card.id)!, notifications, vi.fn())).toThrow('disk full');
     expect(getSqliteDatabase().prepare('SELECT COUNT(*) AS n FROM proactive_notification_budget').get()).toMatchObject({ n: 0 });
   });
@@ -141,7 +143,7 @@ describe('proactive user controls', () => {
     updateControlledSubscription('default', result.sub.id, { expectedRevision: 1, delivery: 'important' });
     updateProactivePreferences('default', { expectedRevision: 0, quietStartHour: 0, quietEndHour: 0 });
     prepareBrowserPush(); registerBrowserPush('default', browserSubscription());
-    deliverProactiveCard(getInboxItem(result.card.id)!, new NotificationService({ publish: vi.fn() }), vi.fn());
+    deliverProactiveCard(getInboxItem(result.card.id)!, new NotificationService({ domainDelivery: createProactiveNotificationDelivery(), publish: vi.fn() }), vi.fn());
     return result;
   }
   it('only accepts known HTTPS push services and binds subscriptions to their workspace', () => {

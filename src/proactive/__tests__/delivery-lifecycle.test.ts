@@ -4,15 +4,16 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createProactiveNotificationDelivery } from '../notifications/delivery.js';
 import { syncedSource } from './source-fixture.js';
 
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest, upsertConnectorConnection, upsertConnectorSyncPolicy, upsertKnowledgeSourceItems } from '../../storage/sqlite/index.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { ProjectService } from '../../projects/index.js';
 import { NotificationService } from '../../notifications/service.js';
-import { recheckNotificationDelivery } from '../../notifications/proactive-policy.js';
-import { drainChannelNotifications } from '../../notifications/proactive-channel.js';
-import { prepareBrowserPush, registerBrowserPush, drainBrowserPush, testBrowserPush, acknowledgeBrowserProbe, listBrowserProbes } from '../../notifications/web-push.js';
+import { recheckNotificationDelivery } from '../notifications/policy.js';
+import { drainChannelNotifications } from '../notifications/channel.js';
+import { prepareBrowserPush, registerBrowserPush, drainBrowserPush, testBrowserPush, acknowledgeBrowserProbe, listBrowserProbes } from '../notifications/browser.js';
 import { createControlledSubscription, updateControlledSubscription } from '../scenarios/control.js';
 import { ProactiveScenarioService } from '../scenarios/service.js';
 import { ProactiveEventService } from '../service.js';
@@ -32,7 +33,7 @@ import { proactiveMetrics } from '../metrics.js';
 describe('proactive delivery and lifecycle', () => {
   let dir: string;
   const events = () => new ProactiveEventService(() => new ProactiveScenarioService().routes());
-  const notifications = () => new NotificationService({ publish: vi.fn() });
+  const notifications = () => new NotificationService({ domainDelivery: createProactiveNotificationDelivery(), publish: vi.fn() });
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-09-12T12:00:00Z'));
     dir = mkdtempSync(join(tmpdir(), 'xopc-proactive-p2-'));

@@ -79,6 +79,7 @@ import type { ClarificationStreamEvent } from './ephemeral-clarification-waiter.
 import { registerClarificationChannelRuntime } from './clarify-runtime.js';
 import { PACKAGE_VERSION } from '../package-version.js';
 import { NotificationService } from '../notifications/service.js';
+import { createProactiveNotificationDelivery } from '../proactive/notifications/delivery.js';
 import { ProjectService, resolveProjectAgentId } from '../projects/index.js';
 import { LocalAppService } from '../local-apps/index.js';
 import {
@@ -756,13 +757,13 @@ export class GatewayService {
     if (!this.notificationService) {
       this.notificationService = new NotificationService({
         publish: (type, payload) => this.realtime.broker.publish('gateway', type, payload),
-        sendChannel: async (target, text) => {
+        domainDelivery: createProactiveNotificationDelivery(async (target, text) => {
           const outbound = this.channelManager.getPlugin('telegram')?.outbound;
           if (!outbound?.sendText || !this.channelManager.getRunningChannels().includes('telegram')) throw new Error('Telegram is not connected');
           const result = await outbound.sendText({ cfg: this.config, to: target.chatId, accountId: target.accountId, text });
           if (!result.success) throw new Error('Telegram delivery failed');
           return { messageId: result.messageId };
-        },
+        }),
       });
     }
     return this.notificationService;

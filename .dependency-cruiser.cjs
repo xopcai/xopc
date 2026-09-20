@@ -13,6 +13,27 @@
 module.exports = {
   forbidden: [
     {
+      name: 'scene-data-migration-is-independent-of-current-domains',
+      severity: 'error',
+      comment: 'One-time conversion pins its historical and target formats; future runtime changes must not change old upgrades.',
+      from: { path: '^src/storage/sqlite/migrations/scenes/' },
+      to: { path: '^src/(scenes/|proactive/|notifications/|gateway/)' },
+    },
+    {
+      name: 'notification-infrastructure-has-no-domain-runtime',
+      severity: 'error',
+      comment: 'Notification transport receives domain policy from its host, never loads business runtimes or migrations.',
+      from: { path: '^src/notifications/' },
+      to: { path: '^src/(scenes/|proactive/|gateway/heartbeat/|storage/sqlite/migrations/)' },
+    },
+    {
+      name: 'scene-runtime-has-no-historical-runtime',
+      severity: 'error',
+      comment: 'Historical readers and schema installation belong only to storage migrations.',
+      from: { path: '^src/scenes/' },
+      to: { path: '^src/(proactive/|gateway/heartbeat/|storage/sqlite/migrations/)' },
+    },
+    {
       name: 'no-circular',
       severity: 'error',
       comment:

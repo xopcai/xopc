@@ -7,7 +7,7 @@ import { insightCorrelation } from './lifecycle.js';
 import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { insightSourcesAuthorized, insightSourcesChanged, insightSourcesFresh } from '../execution/authorization.js';
 import type { NotificationService } from '../../notifications/service.js';
-import { notificationPlanFromGatewayEvent } from '../../notifications/planner.js';
+import { proactivePlan } from '../notifications/planner.js';
 import { runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 import { reserveProactiveNotification } from '../policy/service.js';
 import { getInboxItem } from './repository.js';
@@ -28,7 +28,7 @@ export function deliverProactiveCard(item: InboxItem, notifications: Notificatio
       queueDigest(current, 'daily', nextDigestTime(policy.preferences, new Date()));
       return null;
     }
-    const plan = notificationPlanFromGatewayEvent('proactive.inbox.created', current);
+    const plan = proactivePlan(current);
     if (!plan) return null;
     if (policy.level === 'quiet') return null;
     if (policy.level !== 'active' && ['low', 'medium'].includes(current.insight.urgency) && !current.insight.decision) return null;
@@ -44,7 +44,7 @@ export function deliverProactiveCard(item: InboxItem, notifications: Notificatio
     const decision = reserveProactiveNotification(current.subscriptionId!, key);
     if (decision instanceof Date) return { retryAt: decision.toISOString() };
     if (decision === 'suppressed') return null;
-    const result = notifications.persistGatewayEvent('proactive.inbox.created', current);
+    const result = notifications.persistPlan(plan);
     db.prepare('INSERT INTO proactive_delivery_decisions VALUES (?, ?, ?, ?)').run(key, policy.workspaceId, 'immediate', new Date().toISOString());
     return result;
   });

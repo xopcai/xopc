@@ -38,6 +38,14 @@ describe('product notification presentation', () => {
     expect(parseProductNotification({ ...event, target: { kind: 'chat', conversationId: '' } })).toBeNull();
   });
 
+  it('opens imported scene results without replaying system notifications', () => {
+    const imported = { ...event, type: 'scene.result' as const,
+      target: { kind: 'scene_result' as const, activationId: 'scene/one', presentationId: 'card one' }, payload: { imported: true } };
+    expect(parseProductNotification(imported)).toEqual(imported);
+    expect(presentProductNotification(imported, 'en')).toMatchObject({ source: 'scene', systemAllowed: false,
+      route: '/scenes/scene%2Fone?result=card%20one' });
+  });
+
   it('presents failed work discovery as an understanding alert', () => {
     expect(presentProductNotification({
       ...event,

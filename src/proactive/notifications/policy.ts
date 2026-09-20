@@ -1,10 +1,10 @@
 import type { ProductNotification } from '@xopcai/gateway-contract';
 
-import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
-import { digestCards } from '../proactive/inbox/digest.js';
-import { recheckProactiveNotification } from '../proactive/inbox/notification-policy.js';
-import { proactivePreferences, proactiveChecksAllowed, quietHoursEnd } from '../proactive/policy/service.js';
-import { viewingProactiveCard } from '../proactive/policy/presence.js';
+import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
+import { digestCards } from '../inbox/digest.js';
+import { recheckProactiveNotification } from '../inbox/notification-policy.js';
+import { proactivePreferences, proactiveChecksAllowed, quietHoursEnd } from '../policy/service.js';
+import { viewingProactiveCard } from '../policy/presence.js';
 
 export function proactiveNotificationWorkspace(notification: Pick<ProductNotification, 'target'>): string | null {
   const target = notification.target;

@@ -1,12 +1,11 @@
-import { backupBeforeConversationCutover } from './conversation-backup.js';
-import { chmodSync, existsSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { writeFileSync } from 'node:fs';
 
 import type { DatabaseSync } from 'node:sqlite';
 
 import { createLogger } from '../../../utils/logger.js';
 import { readSchemaVersion, setSchemaVersion } from '../schema-version.js';
+import { resolveSqliteAssetPath } from '../sql-assets.js';
+import { backupBeforeConversationCutover } from './conversation-backup.js';
 import { migrateConversationUuids, type ConversationMigrationSummary } from './conversation-uuid.js';
 import { discoverSqlMigrations } from './discover.js';
 import {
@@ -24,17 +23,6 @@ export const XOPC_DB_BASELINE_SCHEMA_VERSION = 165;
 /** Latest schema version this release supports (increment when adding migrations). */
 export const XOPC_DB_SCHEMA_VERSION = 187;
 
-const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
-
-function backupBeforeTaskCutover(db: DatabaseSync, databasePath: string): string {
-  db.exec('PRAGMA wal_checkpoint(FULL)');
-  const backupPath = `${databasePath}.pre-v100-${Date.now()}.bak`;
-  const quotedPath = backupPath.replaceAll("'", "''");
-  db.exec(`VACUUM INTO '${quotedPath}'`);
-  chmodSync(backupPath, 0o600);
-  return backupPath;
-}
-
 function writeMigrationReport(backupPath: string, report: Record<string, unknown>): void {
   const reportPath = `${backupPath}.report.json`;
   writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, { mode: 0o600 });
@@ -44,13 +32,7 @@ export function resolveMigrationsDir(override?: string): string {
   if (override) {
     return override;
   }
-  // Packaged Electron gateway bundle: `out/server/index.js` + `out/server/migrations/`.
-  const siblingDir = join(MODULE_DIR, 'migrations');
-  if (existsSync(siblingDir)) {
-    return siblingDir;
-  }
-  // Dev / dist: SQL files live next to `migrations/runner.js`.
-  return MODULE_DIR;
+  return resolveSqliteAssetPath('migrations');
 }
 
 function migrationByTarget(
@@ -118,7 +100,6 @@ export function applyPendingMigrations(
   }
 
   const migrations = discoverSqlMigrations(resolveMigrationsDir(options.migrationsDir));
-  let cutoverBackupPath: string | undefined;
   let conversationSummary: ConversationMigrationSummary | undefined;
   const fromVersion = currentVersion;
   const conversationBackup = currentVersion < 178 && targetVersion >= 178 && options.databasePath && options.databasePath !== ':memory:'
@@ -130,35 +111,13 @@ export function applyPendingMigrations(
     if (!migration) {
       throw new DatabaseSchemaMigrationGapError(currentVersion, targetVersion, nextVersion);
     }
-    if (nextVersion === 100 && options.databasePath && options.databasePath !== ':memory:') {
-      cutoverBackupPath = backupBeforeTaskCutover(db, options.databasePath);
-    }
     try {
       conversationSummary = applySingleMigration(db, migration) ?? conversationSummary;
     } catch (error) {
-      if (cutoverBackupPath && nextVersion === 100) {
-        writeMigrationReport(cutoverBackupPath, {
-          fromVersion: currentVersion,
-          targetVersion: nextVersion,
-          status: 'failed',
-          rollback: 'transaction',
-          error: error instanceof Error ? error.message : String(error),
-          occurredAt: new Date().toISOString(),
-        });
-      }
       if (conversationBackup) writeMigrationReport(conversationBackup, { fromVersion, targetVersion, failedVersion: nextVersion, status: 'failed', error: error instanceof Error ? error.message : String(error) });
       throw error;
     }
     currentVersion = nextVersion;
-    if (cutoverBackupPath && currentVersion === 100) {
-      writeMigrationReport(cutoverBackupPath, {
-        fromVersion: 99,
-        targetVersion: 100,
-        status: 'succeeded',
-        backupPath: cutoverBackupPath,
-        occurredAt: new Date().toISOString(),
-      });
-    }
   }
 
   if (conversationBackup) writeMigrationReport(conversationBackup, { fromVersion, targetVersion, status: 'succeeded', backupPath: conversationBackup, summary: conversationSummary });
