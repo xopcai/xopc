@@ -58,6 +58,12 @@ describe('getToolExecutionTitle', () => {
     expect(title('zh', 'xopc_use', JSON.stringify({ mode: 'automation', command: 'run' }), 'completed')).toBe('运行了自动化');
   });
 
+  it('names the actual skill without inventing a purpose', () => {
+    expect(title('zh', 'skill_view', { name: 'proposal-writing' }, 'running')).toBe('正在查看技能说明… · proposal-writing');
+    expect(title('zh', 'skill_view', '{"name":"proposal-writing"}', 'completed')).toBe('已查看技能说明 · proposal-writing');
+    expect(title('zh', 'skill_view', {}, 'completed')).toBe('已查看技能说明');
+  });
+
   it('uses dedicated wording for built-in tools', () => {
     expect(title('en', 'image_generate', {}, 'running')).toBe('Generating image…');
     expect(title('zh', 'delegate_task', {}, 'completed')).toBe('委派了任务');

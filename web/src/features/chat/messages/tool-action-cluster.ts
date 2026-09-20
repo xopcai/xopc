@@ -62,7 +62,7 @@ export function clusterToolUses(
     const kind = classifyTool(b.name, b.activity);
     const cur = out.get(kind) ?? { total: 0, running: 0 };
     cur.total += 1;
-    if (b.status === 'running') cur.running += 1;
+    if ((b.status === 'running' || b.activity?.status === 'running')) cur.running += 1;
     out.set(kind, cur);
   }
   return out;
@@ -126,7 +126,7 @@ export function summarizeClustersStreaming(
 
   if (runningKinds.length === 1) {
     const runningTool = [...blocks].reverse().find(
-      (block): block is ToolUseContent => block.type === 'tool_use' && block.status === 'running',
+      (block): block is ToolUseContent => block.type === 'tool_use' && (block.status === 'running' || block.activity?.status === 'running'),
     );
     const semantic = runningTool ? semanticTitle?.(runningTool) : null;
     if (semantic) return semantic;
