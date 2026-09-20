@@ -26,7 +26,7 @@ describe('manual live evaluation', () => {
     expect(config.agents.defaults.models.chat).toEqual({ primary: input.CODER_EVAL_MODEL, fallbacks: [] });
     expect(config.agents.defaults.runtime).toMatchObject({ maxTurns: 40, timeoutMs: 300000 });
     expect(config.gateway.auth).toMatchObject({ mode: 'token', token: 'local-token' });
-    expect(config.gateway.heartbeat.enabled).toBe(false);
+    expect(config.gateway.heartbeat).toBeUndefined();
     expect(config.userContext.enabled).toBe(false);
     expect(config.userContext.userModel.enabled).toBe(true);
     expect(config.userContext.contextPlanning.enabled).toBe(true);
