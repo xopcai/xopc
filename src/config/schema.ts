@@ -1253,7 +1253,7 @@ export const ConfigSchema = z.object({
     preferences: { responseLanguage: 'auto' },
     userModel: {
       enabled: true,
-      writePolicy: 'confirm',
+      writePolicy: 'allow',
       sensitiveWritePolicy: 'confirm',
       processingPolicy: 'remote_allowed',
       extraction: {
@@ -1274,7 +1274,7 @@ export const ConfigSchema = z.object({
     },
     knowledgeMemory: {
       enabled: true,
-      writePolicy: 'confirm',
+      writePolicy: 'allow',
       readScopes: ['global', 'agent', 'workspace', 'project', 'session'],
       contentSources: ['memory', 'local_import'],
       searchStrategy: 'fanout',

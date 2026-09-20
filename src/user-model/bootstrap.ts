@@ -47,8 +47,8 @@ function addExplicitAssertions(
       disclosurePolicy: 'referenceable',
       observedAt: now,
       createdBy: 'user',
-    }, now);
-    if (result.action !== 'deduplicated') created += 1;
+    }, now, { restoreDeleted: true });
+    if (result.assertion && result.action !== 'deduplicated') created += 1;
   }
   return created;
 }

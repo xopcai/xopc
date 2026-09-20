@@ -4,8 +4,9 @@ import { Type } from '@sinclair/typebox';
 import { retrievalLexicalSimilarity } from '../../retrieval/textFeatures.js';
 import {
   getAssertionSlot,
+  deleteUserAssertion,
   getUserAssertion,
-  isWorkingAssumption,
+  canUseAssertion,
   listUserAssertions,
   reconcileAssertion,
   setAssertionStatus,
@@ -50,14 +51,6 @@ function visible(options: UserContextToolOptions, slotId: string): boolean {
     || (scope?.type === 'session' && scope.id === options.getSessionId());
 }
 
-function referenceable(assertion: NonNullable<ReturnType<typeof getUserAssertion>>): boolean {
-  return (assertion.status === 'active' || isWorkingAssumption(assertion))
-    && assertion.authority !== 'external_untrusted'
-    && assertion.sensitivity !== 'secret'
-    && assertion.sensitivity !== 'regulated'
-    && assertion.disclosurePolicy !== 'ask_before_reference';
-}
-
 export function createUserContextSearchTool(options: UserContextToolOptions): AgentTool {
   return {
     name: 'user_context_search',
@@ -71,7 +64,7 @@ export function createUserContextSearchTool(options: UserContextToolOptions): Ag
       const input = raw as { query: string; maxResults?: number };
       const results = listUserAssertions({ statuses: ['active', 'candidate'], limit: 1_000 })
         .filter((assertion) => visible(options, assertion.slotId))
-        .filter(referenceable)
+        .filter((item) => canUseAssertion(item))
         .map((assertion) => ({
           assertion,
           score: retrievalLexicalSimilarity(input.query, `${assertion.statement} ${assertion.normalizedValue}`),
@@ -104,7 +97,7 @@ export function createUserContextGetTool(options: UserContextToolOptions): Agent
       }
       const id = (raw as { id: string }).id;
       const assertion = getUserAssertion(id);
-      if (!assertion || !visible(options, assertion.slotId) || !referenceable(assertion)) {
+      if (!assertion || !visible(options, assertion.slotId) || !canUseAssertion(assertion)) {
         return { content: [{ type: 'text', text: `User assertion not found: ${id}` }], details: { id } };
       }
       const result = { assertion, slot: getAssertionSlot(assertion.slotId) };
@@ -179,6 +172,10 @@ export function createUserContextUpdateTool(options: UserContextToolOptions): Ag
           return { content: [{ type: 'text', text: JSON.stringify(receipt, null, 2) }], details: receipt };
         }
 
+        if (input.action === 'forget') {
+          deleteUserAssertion(current.id);
+          return { content: [{ type: 'text', text: 'Memory deleted.' }], details: { action: 'forget', id: current.id } };
+        }
         const status = ({
           confirm: 'active', reject: 'rejected', forget: 'archived', review: 'needs_review',
         } as const)[input.action];

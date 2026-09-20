@@ -8,6 +8,7 @@ import {
 import { createUserGoal, listUserGoals } from '../goals.js';
 import {
   getUserAssertion,
+  deleteUserAssertion,
   linkAssertionEvidence,
   reconcileAssertion,
   setAssertionStatus,
@@ -16,7 +17,7 @@ import type { AssertionStatus, UserModelScopeType } from '../domain.js';
 import type { CaptureEvidence, UserModelInterpretation } from './semantic.js';
 
 export interface UserModelCapturePolicy {
-  write: 'deny' | 'confirm' | 'allow';
+  write: 'deny' | 'allow';
   sensitiveWrite: 'deny' | 'confirm' | 'allow';
   processing: 'local_only' | 'remote_allowed';
 }
@@ -89,7 +90,7 @@ export function executeUserModelInterpretation(input: {
 
   if (input.interpretation.intent === 'forget') {
     for (const target of targets) {
-      setAssertionStatus(target.id, 'rejected', { actor: 'user', reason: 'Explicit user forget request.' });
+      deleteUserAssertion(target.id);
       result.outputs.push({
         candidateKey: target.id,
         assertionId: target.id,
@@ -160,23 +161,22 @@ export function executeUserModelInterpretation(input: {
     evidenceIds.set(ref, evidence.id);
   }
 
+  const latestUserRef = input.evidence.filter((item) => item.role === 'user')
+    .sort((a, b) => b.createdAt - a.createdAt)[0]?.ref;
   const explicitCommand = input.interpretation.intent === 'remember'
     || input.interpretation.intent === 'correct';
   for (const source of input.interpretation.candidates) {
     result.proposed += 1;
     const key = candidateKey(source.predicate, source.scope.type, source.scope.id);
-    const sensitive = source.sensitivity === 'secret' || source.sensitivity === 'regulated';
+    const sensitive = source.sensitivity !== 'normal';
     if (input.policy.write === 'deny'
-      || (sensitive && input.policy.sensitiveWrite === 'deny')
+      || (sensitive && (source.authority !== 'user_explicit' || input.policy.sensitiveWrite === 'deny'))
       || !scopeAllowed(source.scope.type, source.scope.id, input.scopeContext)) {
       result.rejected += 1;
       result.outputs.push({ candidateKey: key, outcome: 'rejected' });
       continue;
     }
-    const requiresConfirmation = !explicitCommand && (
-      input.policy.write === 'confirm'
-      || (sensitive && input.policy.sensitiveWrite === 'confirm')
-    );
+    const requiresConfirmation = !explicitCommand && sensitive && input.policy.sensitiveWrite === 'confirm';
     const refs = source.evidenceRefs.flatMap((ref) => evidenceIds.get(ref) ?? []);
     const applied = reconcileAssertion({
       ...source,
@@ -185,7 +185,12 @@ export function executeUserModelInterpretation(input: {
         : source.authority,
       createdBy: source.authority === 'user_explicit' ? 'user' : 'runtime',
       ...(refs[0] ? { evidenceId: refs[0], evidenceConfidence: source.confidence } : {}),
-    });
+    }, Date.now(), { restoreDeleted: explicitCommand && source.evidenceRefs.includes(latestUserRef) });
+    if (applied.action === 'suppressed') {
+      result.rejected += 1;
+      result.outputs.push({ candidateKey: key, outcome: 'rejected' });
+      continue;
+    }
     for (const evidenceId of refs.slice(1)) {
       linkAssertionEvidence(applied.assertion.id, evidenceId, 'supports', source.confidence);
     }
@@ -218,7 +223,7 @@ export function executeUserModelInterpretation(input: {
       result.outputs.push({ candidateKey: key, outcome: 'deduplicated' });
       continue;
     }
-    const active = explicitCommand || input.policy.write === 'allow';
+    const active = explicitCommand;
     const goal = createUserGoal({
       title: source.title,
       desiredOutcome: source.desiredOutcome,
@@ -254,7 +259,7 @@ export function executeUserModelInterpretation(input: {
       result.outputs.push({ candidateKey: key, outcome: 'deduplicated' });
       continue;
     }
-    const active = explicitCommand || input.policy.write === 'allow';
+    const active = explicitCommand;
     const rule = createCollaborationRule({
       category: source.category,
       priority: source.priority,

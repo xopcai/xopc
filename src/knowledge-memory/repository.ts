@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { DatabaseSync } from 'node:sqlite';
 
+import { memoryFingerprint, isMemorySuppressed, suppressMemory, restoreMemory, clearMemoryAudit } from '../user-context/memory-suppression.js';
 import { buildFts5SearchQuery } from '../storage/sqlite/fts.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { USER_MODEL_PRINCIPAL_ID, validateScope, type UserModelScope } from '../user-model/domain.js';
@@ -66,6 +67,7 @@ export interface WriteKnowledgeInput {
   derivedFromRecalledContext?: boolean;
   source?: Record<string, unknown>;
   replaceExisting?: boolean;
+  restoreDeleted?: boolean;
   now?: number;
 }
 
@@ -130,7 +132,7 @@ function insertStatusEvent(
   );
 }
 
-export function writeKnowledgeItem(input: WriteKnowledgeInput): { item: KnowledgeItem; created: boolean } {
+export function writeKnowledgeItem(input: WriteKnowledgeInput): { item: KnowledgeItem; created: boolean } | { item?: undefined; created: false; suppressed: true } {
   validateScope(input.scope);
   bounded(input.confidence, 'confidence');
   bounded(input.importance, 'importance');
@@ -141,7 +143,12 @@ export function writeKnowledgeItem(input: WriteKnowledgeInput): { item: Knowledg
   }
   const principalId = input.principalId ?? USER_MODEL_PRINCIPAL_ID;
   const now = input.now ?? Date.now();
+  const admittedStatus = input.status ?? (input.originClass === 'owner' || (input.originClass !== 'untrusted'
+    && input.confidence >= 0.7 && !input.derivedFromRecalledContext) ? 'active' : 'candidate');
   return runSqliteWriteTransaction((db) => {
+    const keys = knowledgeFingerprints(input);
+    if (input.restoreDeleted && input.originClass === 'owner') restoreMemory(db, keys);
+    if (isMemorySuppressed(db, keys)) return { created: false, suppressed: true };
     const existingStatuses = input.replaceExisting
       ? ['candidate', 'active', 'needs_review', 'stale', 'archived']
       : ['candidate', 'active', 'needs_review', 'stale'];
@@ -150,9 +157,9 @@ export function writeKnowledgeItem(input: WriteKnowledgeInput): { item: Knowledg
       AND status IN (${existingStatuses.map(() => '?').join(', ')})`)
       .get(principalId, input.canonicalKey.trim(), input.scope.type, input.scope.id ?? null,
         ...existingStatuses) as KnowledgeRow | undefined;
-    if (existing && !input.replaceExisting) return { item: fromRow(existing), created: false };
+    if (existing && (!input.replaceExisting || (existing.origin_class === 'owner' && input.originClass !== 'owner'))) return { item: fromRow(existing), created: false };
     if (existing) {
-      const nextStatus = input.status ?? (input.originClass === 'owner' ? 'active' : 'candidate');
+      const nextStatus = admittedStatus;
       db.prepare(`UPDATE knowledge_items SET kind = ?, content = ?, record_class = ?, status = ?, confidence = ?,
         importance = ?, valid_from = ?, valid_to = ?, expires_at = ?, review_at = ?,
         origin_class = ?, source_agent_id = ?, source_conversation_id = ?, source_turn_id = ?,
@@ -181,7 +188,7 @@ export function writeKnowledgeItem(input: WriteKnowledgeInput): { item: Knowledg
     }
 
     const id = randomUUID();
-    const status = input.status ?? (input.originClass === 'owner' ? 'active' : 'candidate');
+    const status = admittedStatus;
     db.prepare(`INSERT INTO knowledge_items (
       knowledge_id, principal_id, kind, scope_type, scope_id, content, canonical_key, record_class,
       status, confidence, importance, valid_from, valid_to, expires_at, review_at,
@@ -268,12 +275,16 @@ export function transitionKnowledgeStatus(input: {
         `Knowledge status changed from ${input.expectedStatus} to ${current.status}.`,
       );
     }
-    db.prepare(`UPDATE knowledge_items SET status = ?, content = COALESCE(?, content), updated_at = ?
-      WHERE knowledge_id = ?`).run(input.status, content ?? null, now, input.id);
+    db.prepare(`UPDATE knowledge_items SET status = ?, content = COALESCE(?, content),
+      origin_class = CASE WHEN ? THEN 'owner' ELSE origin_class END, updated_at = ?
+      WHERE knowledge_id = ?`).run(input.status, content ?? null, input.actor === 'user' && input.status === 'active' ? 1 : 0, now, input.id);
     if (content !== undefined) {
       db.prepare('DELETE FROM knowledge_items_fts WHERE knowledge_id = ?').run(input.id);
       db.prepare('INSERT INTO knowledge_items_fts(content, knowledge_id) VALUES (?, ?)')
         .run(content, input.id);
+    }
+    if (input.actor === 'user' && (input.status === 'rejected' || input.status === 'archived')) {
+      suppressMemory(db, knowledgeFingerprints(fromRow(current)), now);
     }
     insertStatusEvent(db, {
       knowledgeId: input.id,
@@ -293,7 +304,7 @@ const REVIEW_TRANSITIONS: Record<KnowledgeReviewAction, {
   requiresContent?: boolean;
 }> = {
   approve: { from: ['candidate', 'needs_review', 'stale'], to: 'active' },
-  edit_and_approve: { from: ['candidate', 'needs_review', 'stale'], to: 'active', requiresContent: true },
+  edit_and_approve: { from: ['candidate', 'needs_review', 'stale', 'active'], to: 'active', requiresContent: true },
   reject: { from: ['candidate', 'needs_review', 'stale'], to: 'rejected' },
   archive: { from: ['candidate', 'needs_review', 'stale', 'active'], to: 'archived' },
 };
@@ -410,12 +421,13 @@ export function searchKnowledgeItems(input: {
       AND (k.valid_from IS NULL OR k.valid_from <= ?)
       AND (k.valid_to IS NULL OR k.valid_to >= ?)
       AND (k.expires_at IS NULL OR k.expires_at >= ?)
+      AND (k.review_at IS NULL OR k.review_at > ?)
       ${input.recordClass ? 'AND k.record_class = ?' : ''}
       ${input.trustedOnly ? "AND k.origin_class != 'untrusted'" : ''}
       AND ${contentSource}
       AND ${visible.sql}
     ORDER BY rank ASC, k.importance DESC, k.updated_at DESC LIMIT ?`)
-    .all(fts, principalId, asOf, asOf, asOf,
+    .all(fts, principalId, asOf, asOf, asOf, asOf,
       ...(input.recordClass ? [input.recordClass] : []), ...visible.values, limit) as KnowledgeRow[];
   return rows.map(fromRow);
 }
@@ -431,4 +443,40 @@ export function knowledgeItemAllowed(
 ): boolean {
   return policy.scopes.includes(item.scope.type)
     && policy.contentSources.includes(classifyKnowledgeContentSource(item));
+}
+
+function knowledgeFingerprints(input: Pick<WriteKnowledgeInput, 'principalId' | 'scope' | 'canonicalKey' | 'content'>): string[] {
+  const principal = input.principalId ?? USER_MODEL_PRINCIPAL_ID;
+  return [
+    memoryFingerprint(['knowledge-key', principal, input.scope.type, input.scope.id ?? '', input.canonicalKey]),
+    memoryFingerprint(['knowledge-content', principal, input.scope.type, input.scope.id ?? '', input.content]),
+  ];
+}
+
+export function deleteKnowledgeItem(id: string, now = Date.now()): boolean {
+  return runSqliteWriteTransaction((db) => {
+    const rows = db.prepare(`WITH RECURSIVE deleted(id) AS (
+      SELECT knowledge_id FROM knowledge_items WHERE knowledge_id = ?
+      UNION SELECT k.knowledge_id FROM knowledge_items k JOIN deleted d
+        ON json_extract(k.source_json, '$.episodeKnowledgeId') = d.id
+        OR k.knowledge_id = (SELECT json_extract(source_json, '$.episodeKnowledgeId')
+          FROM knowledge_items WHERE knowledge_id = d.id)
+    ) SELECT * FROM knowledge_items WHERE knowledge_id IN (SELECT id FROM deleted)`).all(id) as KnowledgeRow[];
+    for (const row of rows) {
+      const item = fromRow(row);
+      suppressMemory(db, knowledgeFingerprints(item), now);
+      clearMemoryAudit(db, 'knowledge', item.id);
+      db.prepare('DELETE FROM knowledge_items_fts WHERE knowledge_id = ?').run(item.id);
+      db.prepare('DELETE FROM knowledge_items WHERE knowledge_id = ?').run(item.id);
+    }
+    return rows.length > 0;
+  });
+}
+
+export function isKnowledgeCurrent(item: KnowledgeItem, asOf = Date.now()): boolean {
+  return item.status === 'active'
+    && (item.validFrom === undefined || item.validFrom <= asOf)
+    && (item.validTo === undefined || item.validTo >= asOf)
+    && (item.expiresAt === undefined || item.expiresAt >= asOf)
+    && (item.reviewAt === undefined || item.reviewAt > asOf);
 }

@@ -8,6 +8,9 @@ import {
 } from '../../storage/sqlite/index.js';
 import {
   calculateExecutionValue,
+  deleteUserAssertion,
+  getUserAssertion,
+  setAssertionStatus,
   getAssertionSlot,
   listSlotAssertions,
   reconcileAssertion,
@@ -142,4 +145,45 @@ describe('user model foundation', () => {
     });
     expect(critical).toBeGreaterThan(incidental);
   });
+  it('deletes the correction chain and prevents automatic reconstruction', () => {
+    const first = reconcileAssertion(candidate(), 2_000).assertion;
+    const corrected = reconcileAssertion(candidate({ normalizedValue: 'detailed', value: 'detailed',
+      statement: 'Detailed answers.', correctionOfAssertionId: first.id, observedAt: 3_000 }), 3_000).assertion;
+    expect(deleteUserAssertion(corrected.id, 4_000)).toBe(true);
+    expect(getUserAssertion(first.id)).toBeUndefined();
+    expect(getUserAssertion(corrected.id)).toBeUndefined();
+    expect(reconcileAssertion(candidate({ authority: 'system_inferred' }), 5_000).action).toBe('suppressed');
+    expect(getSqliteDatabase().prepare('SELECT COUNT(*) AS n FROM user_assertions_fts').get()).toMatchObject({ n: 0 });
+    expect(reconcileAssertion(candidate(), 6_000, { restoreDeleted: true }).action).toBe('created');
+  });
+
+  it('records explicit confirmation independently of automatic activation', () => {
+    const item = reconcileAssertion(candidate({ authority: 'system_inferred' }), 2_000).assertion;
+    setAssertionStatus(item.id, 'active', { actor: 'maintenance', reason: 'Evidence threshold.' });
+    expect(getUserAssertion(item.id)?.authority).toBe('system_inferred');
+    setAssertionStatus(item.id, 'active', { actor: 'user', reason: 'Explicit confirmation.' });
+    expect(getUserAssertion(item.id)?.authority).toBe('user_explicit');
+  });
+
+  it('does not recreate an understanding the user stopped using', () => {
+    const item = reconcileAssertion(candidate(), 2_000).assertion;
+    setAssertionStatus(item.id, 'rejected', { actor: 'user', reason: 'Not true.' });
+    expect(reconcileAssertion(candidate({ authority: 'system_inferred' }), 3_000).action).toBe('suppressed');
+  });
+
+  it('does not recreate an old value after a correction in a multiple-value slot', () => {
+    const old = candidate({ cardinality: 'multiple', authority: 'system_inferred' });
+    const item = reconcileAssertion(old, 2_000).assertion;
+    reconcileAssertion({ ...old, authority: 'user_explicit', normalizedValue: 'detailed', value: 'detailed',
+      statement: 'Detailed responses.', correctionOfAssertionId: item.id, observedAt: 3_000 }, 3_000);
+    expect(reconcileAssertion(old, 4_000).action).toBe('suppressed');
+  });
+
+  it('keeps deletion scoped to the project where the understanding was formed', () => {
+    const first = reconcileAssertion(candidate({ scope: { type: 'project', id: 'one' } })).assertion;
+    deleteUserAssertion(first.id);
+    expect(reconcileAssertion(candidate({ scope: { type: 'project', id: 'one' } })).action).toBe('suppressed');
+    expect(reconcileAssertion(candidate({ scope: { type: 'project', id: 'two' } })).action).toBe('created');
+  });
+
 });

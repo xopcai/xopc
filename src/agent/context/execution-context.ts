@@ -8,7 +8,7 @@ import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import { listCollaborationRules } from '../../storage/sqlite/collaboration-rule-repository.js';
 import { calculateExecutionValue } from '../../user-model/importance.js';
 import { listUserAssertions } from '../../user-model/repository.js';
-import { isWorkingAssumption } from '../../user-model/usage-policy.js';
+import { canUseAssertion } from '../../user-model/usage-policy.js';
 import type { UserAssertion, UserModelScope } from '../../user-model/domain.js';
 import { buildUserContextBlock } from '../memory/context-fence.js';
 import { getExecutionContextFeedbackScores } from './audit.js';
@@ -97,7 +97,7 @@ function rankAssertion(
   ].filter(Boolean);
   return {
     assertion,
-    usage: assertion.status === 'active' ? 'confirmed' : 'working_assumption',
+    usage: assertion.authority === 'user_explicit' ? 'confirmed' : 'working_assumption',
     score: assertion.status === 'candidate' ? score - 0.05 : score,
     reasons,
   };
@@ -178,12 +178,7 @@ export function buildExecutionContext(request: ExecutionContextRequest): Executi
   const rankedAssertions = includeUserModel ? listUserAssertions({ statuses: ['active', 'candidate'], limit: 1_000 })
     .filter((item) => scopeVisible(getAssertionScope(item.slotId), request))
     .filter((item) => applicabilityVisible(item.applicability, request))
-    .filter((item) => (item.validFrom === undefined || item.validFrom <= asOf)
-      && (item.validTo === undefined || item.validTo >= asOf))
-    .filter((item) => item.authority !== 'external_untrusted')
-    .filter((item) => item.sensitivity !== 'secret' && item.sensitivity !== 'regulated'
-      && item.disclosurePolicy !== 'ask_before_reference')
-    .filter((item) => item.status === 'active' || isWorkingAssumption(item))
+    .filter((item) => canUseAssertion(item, asOf))
     .map((item) => rankAssertion(
       item,
       request.query,
@@ -246,7 +241,7 @@ export function renderExecutionContext(context: ExecutionContext): string {
     sections.push(`Confirmed user context:\n${confirmedAssertions.map((item) => `- ${item.assertion.statement}`).join('\n')}`);
   }
   if (workingAssumptions.length) {
-    sections.push(`Working assumptions (may be wrong; adapt quietly, never present them as confirmed facts, and accept corrections immediately):\n${workingAssumptions.map((item) => `- ${item.assertion.statement} (confidence ${item.assertion.confidence.toFixed(2)})`).join('\n')}`);
+    sections.push(`Working assumptions (may be wrong; never authorize actions; current user instructions take precedence; adapt quietly, never present them as confirmed facts, and accept corrections immediately):\n${workingAssumptions.map((item) => `- ${item.assertion.statement} (confidence ${item.assertion.confidence.toFixed(2)})`).join('\n')}`);
   }
   const confirmedGoals = context.goals.filter((goal) => goal.usage === 'confirmed');
   const assumedGoals = context.goals.filter((goal) => goal.usage === 'working_assumption');

@@ -15,16 +15,14 @@ import {
   patchSessionMetadata,
   type SessionMetadataSeed,
 } from '../storage/sqlite/index.js';
+import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { createContextEvidence } from '../storage/sqlite/context-evidence-repository.js';
 import { writeKnowledgeItem } from '../knowledge-memory/index.js';
 import {
-  getAssertionSlot,
-  getUserAssertion,
   createPriorityWindow,
   createUserGoal,
   linkAssertionEvidence,
   reconcileAssertion,
-  setAssertionStatus,
   type UserAssertion,
   type UserModelScope,
 } from '../user-model/index.js';
@@ -32,6 +30,7 @@ import { clusterActivityTopics } from '../user-context/sources/activity-clusteri
 import {
   createUnderstandingSourceRun,
   getUnderstandingSourceRun,
+  getUnderstandingSourceGrant,
   upsertUnderstandingSourceGrant,
   updateUnderstandingSourceRun,
   updateUnderstandingSourceGrantCheckpoint,
@@ -204,7 +203,7 @@ function persistUnderstandingCandidate(
   candidate: WorkDiscoveryProfileCandidate,
   scope: UserModelScope,
   sourceRef: string,
-): UserAssertion {
+): UserAssertion | undefined {
   const evidence = createContextEvidence({
     sourceType: 'runtime', sourceRef: `${sourceRef}:${candidate.id}`,
     redactedExcerpt: candidate.evidence.join(' · ').slice(0, 600), trustLevel: 'trusted', observedAt: Date.now(),
@@ -233,48 +232,6 @@ function persistUnderstandingCandidate(
     createdBy: 'runtime',
     evidenceId: evidence.id,
     evidenceConfidence: candidate.confidence === 'high' ? 0.9 : 0.7,
-  }).assertion;
-}
-
-function decideAssertion(input: {
-  assertionId: string;
-  status: 'accepted' | 'edited' | 'rejected';
-  statement?: string;
-}, _expectedSourcePrefix: string): UserAssertion | undefined {
-  const current = getUserAssertion(input.assertionId);
-  if (!current || current.status === 'archived') return undefined;
-  if (input.status === 'rejected') {
-    return setAssertionStatus(current.id, 'rejected', { actor: 'user', reason: 'Rejected in work discovery review.' });
-  }
-  const statement = input.status === 'edited' ? input.statement?.trim().slice(0, 500) : undefined;
-  if (input.status === 'edited' && !statement) return undefined;
-  if (!statement) return setAssertionStatus(current.id, 'active', {
-    actor: 'user', reason: 'Accepted in work discovery review.',
-  });
-  const slot = getAssertionSlot(current.slotId);
-  if (!slot) return undefined;
-  return reconcileAssertion({
-    subject: slot.subject,
-    predicate: slot.predicate,
-    cardinality: slot.cardinality,
-    scope: slot.scope,
-    kind: current.kind,
-    value: statement,
-    normalizedValue: statement.toLocaleLowerCase(),
-    statement,
-    authority: 'user_explicit',
-    confidence: 1,
-    declaredImportance: current.declaredImportance ?? 0.7,
-    inferredImportance: current.inferredImportance,
-    consequence: current.consequence,
-    actionability: current.actionability,
-    volatility: current.volatility,
-    sensitivity: current.sensitivity,
-    disclosurePolicy: current.disclosurePolicy,
-    applicability: current.applicability,
-    observedAt: Date.now(),
-    createdBy: 'user',
-    correctionOfAssertionId: current.id,
   }).assertion;
 }
 
@@ -556,8 +513,21 @@ export class WorkDiscoveryService {
     signal?: AbortSignal,
     runId?: string,
     rawCheckpoints?: Record<string, unknown>,
+    refresh?: { grantId: string },
   ) {
     const items = normalizeUnderstandingSourceItems(rawItems);
+    const assertRefreshAuthorized = () => {
+      signal?.throwIfAborted();
+      if (!refresh) return;
+      const config = this.options.getConfig();
+      if (!config.userContext.enabled || !config.userContext.userModel.enabled) throw new Error('User understanding is disabled.');
+      const grant = getUnderstandingSourceGrant(refresh.grantId);
+      if (!grant || grant.status !== 'active' || grant.processingPolicy !== processingPolicy
+        || items.some((item) => item.sourceId !== grant.adapterId)) {
+        throw new Error('Source authorization changed during update.');
+      }
+    };
+    assertRefreshAuthorized();
     if (!items.length) throw new Error('No readable understanding source items were provided');
     const target = this.getModelProcessingTarget();
     const agentId = getDefaultAgentId(this.options.getConfig());
@@ -590,7 +560,7 @@ export class WorkDiscoveryService {
       const platform = sourceId.startsWith('apple-') ? 'darwin'
         : sourceId.startsWith('windows-') ? 'win32'
           : sourceId.startsWith('linux-') ? 'linux' : 'all';
-      let grant = upsertUnderstandingSourceGrant({
+      let grant = refresh ? getUnderstandingSourceGrant(refresh.grantId)! : upsertUnderstandingSourceGrant({
         sourceKey: `understanding-source:${sourceId}`,
         adapterId: sourceId,
         category,
@@ -601,7 +571,7 @@ export class WorkDiscoveryService {
         processingPolicy: effectiveProcessingPolicy,
         config: { readOnly: true },
       });
-      if (grant.processingPolicy !== effectiveProcessingPolicy) {
+      if (!refresh && grant.processingPolicy !== effectiveProcessingPolicy) {
         grant = updateUnderstandingSourceGrantPolicies(grant.id, {
           processingPolicy: effectiveProcessingPolicy,
         }) ?? grant;
@@ -609,7 +579,7 @@ export class WorkDiscoveryService {
       sourceGrants.set(sourceId, grant);
       const checkpoint = checkpoints.get(sourceId);
       const previousFingerprint = typeof grant.checkpoint.fingerprint === 'string' ? grant.checkpoint.fingerprint : undefined;
-      const unchanged = Boolean(checkpoint && previousFingerprint === checkpoint.fingerprint);
+      const unchanged = !refresh && Boolean(checkpoint && previousFingerprint === checkpoint.fingerprint);
       const kind = !previousFingerprint ? 'bootstrap' : unchanged ? 'fingerprint' : 'incremental';
       const sourceRun = createUnderstandingSourceRun({
         grantId: grant.id,
@@ -668,6 +638,10 @@ export class WorkDiscoveryService {
           workThreadCandidates: [],
           sourceStatuses: [...changedSourceIds].map((sourceId) => ({ sourceId, status: 'completed' as const })),
         };
+      assertRefreshAuthorized();
+      if (refresh && analysis.sourceStatuses.some((source) => source.status !== 'completed')) {
+        throw new Error('Source analysis did not complete. Please retry.');
+      }
       const statusBySource = new Map(analysis.sourceStatuses.map((item) => [item.sourceId, item]));
       for (const [sourceId, sourceRunId] of sourceRuns) {
         if (!changedSourceIds.has(sourceId)) continue;
@@ -704,114 +678,121 @@ export class WorkDiscoveryService {
       }
       throw error;
     }
-    const rawContents = analysisItems.flatMap((item) => item.text ? [item.text] : []);
-    const activityTopics = clusterActivityTopics(analysisItems);
-    const safeProfileCandidates = analysis.profileCandidates
-      .filter((candidate) => !hasLongVerbatimOverlap(candidate.statement, rawContents));
-    const safeWorkThreadCandidates = analysis.workThreadCandidates.filter((candidate) =>
-      !hasLongVerbatimOverlap(candidate.title, rawContents)
-      && !hasLongVerbatimOverlap(candidate.summary, rawContents));
-    const profileCandidates = safeProfileCandidates.map((candidate) => {
-      const assertion = persistUnderstandingCandidate(candidate, { type: 'global' }, 'understanding-source:onboarding');
-      const evidenceSourceIds = new Set((candidate.evidenceRefs ?? []).map((ref) => ref.split('://', 1)[0]).filter(Boolean));
-      for (const sourceId of evidenceSourceIds) {
-        const sourceRunId = sourceRuns.get(sourceId);
-        if (!sourceRunId) continue;
-        const sourceRun = getUnderstandingSourceRun(sourceRunId);
-        if (!sourceRun) continue;
-        const evidence = createContextEvidence({
-          sourceType: 'runtime',
-          sourceRef: `understanding-source-grant:${sourceRun.grantId}:${candidate.id}`,
-          redactedExcerpt: candidate.evidence.join(' · ').slice(0, 600),
-          trustLevel: 'trusted',
-          observedAt: Date.now(),
-        });
-        linkAssertionEvidence(assertion.id, evidence.id, 'supports', assertion.confidence);
-      }
+    return runSqliteWriteTransaction(() => {
+      const rawContents = analysisItems.flatMap((item) => item.text ? [item.text] : []);
+      const activityTopics = clusterActivityTopics(analysisItems);
+      const safeProfileCandidates = analysis.profileCandidates
+        .filter((candidate) => !hasLongVerbatimOverlap(candidate.statement, rawContents));
+      const safeWorkThreadCandidates = analysis.workThreadCandidates.filter((candidate) =>
+        !hasLongVerbatimOverlap(candidate.title, rawContents)
+        && !hasLongVerbatimOverlap(candidate.summary, rawContents));
+      const profileCandidates = safeProfileCandidates.flatMap((candidate) => {
+        const assertion = persistUnderstandingCandidate(candidate, { type: 'global' }, 'understanding-source:onboarding');
+        if (!assertion) return [];
+        const evidenceSourceIds = new Set((candidate.evidenceRefs ?? []).map((ref) => ref.split('://', 1)[0]).filter(Boolean));
+        for (const sourceId of evidenceSourceIds) {
+          const sourceRunId = sourceRuns.get(sourceId);
+          if (!sourceRunId) continue;
+          const sourceRun = getUnderstandingSourceRun(sourceRunId);
+          if (!sourceRun) continue;
+          const evidence = createContextEvidence({
+            sourceType: 'runtime',
+            sourceRef: `understanding-source-grant:${sourceRun.grantId}:${candidate.id}`,
+            redactedExcerpt: candidate.evidence.join(' · ').slice(0, 600),
+            trustLevel: 'trusted',
+            observedAt: Date.now(),
+          });
+          linkAssertionEvidence(assertion.id, evidence.id, 'supports', assertion.confidence);
+        }
+        return {
+          ...candidate,
+          status: assertion.status === 'rejected' ? 'rejected' as const : 'pending' as const,
+          assertionId: assertion.id,
+        };
+      });
+      const investigation = linkedRun ? getWorkUnderstandingInvestigationForRun(linkedRun.id) : null;
+      const contextEvidence = investigation
+        ? safeWorkThreadCandidates.map((candidate) => {
+          const topicHash = createHash('sha256').update(candidate.topicKey).digest('hex').slice(0, 16);
+          return appendWorkUnderstandingEvidence({
+            investigationId: investigation.id,
+            projectId: linkedRun!.projectId,
+            sourceType: 'understanding_source',
+            sourceRef: `understanding-source://thread/${topicHash}`,
+            observation: candidate.summary,
+            contentHash: createHash('sha256').update(JSON.stringify(candidate.evidenceRefs)).digest('hex'),
+            sensitivity: 'normal',
+          });
+        })
+        : [];
+      const workThreads = linkedRun && contextEvidence.length
+        ? persistWorkThreadsFromDiscovery({
+          projectId: linkedRun.projectId,
+          result: {
+            projectSummary: 'Connected source context',
+            currentState: 'Work streams inferred from sources the user explicitly connected.',
+            uncertainties: [],
+            suggestions: [],
+            workThreadCandidates: safeWorkThreadCandidates.map((candidate, index) => ({
+              ...candidate,
+              evidenceRefs: contextEvidence[index] ? [contextEvidence[index].sourceRef] : [],
+            })),
+          },
+          snapshot: {
+            root: { displayName: 'Connected Sources', projectKind: 'general', markerReasons: ['explicitly_connected_understanding_sources'] },
+            structure: { sampledPaths: [], metadataOnlyFiles: [], omittedPathCount: 0 },
+            documents: [],
+            limits: { policyVersion: WORK_DISCOVERY_SCAN_POLICY_VERSION, fileCount: 0, contentBytes: 0, truncated: false },
+          },
+          evidence: contextEvidence,
+        })
+        : [];
+      const activityEvidence = new Set(activityTopics.flatMap((topic) => topic.evidenceRefs));
+      const activityKnowledge = activityTopics.map((topic) => persistWorkKnowledge({
+        canonicalKey: topic.canonicalKey,
+        title: topic.title,
+        summary: topic.summary,
+        horizon: topic.horizon,
+        confidence: topic.confidence,
+        scope: { type: 'agent', id: agentId },
+        evidenceRefs: topic.evidenceRefs,
+      }));
+      const modelKnowledge = safeWorkThreadCandidates
+        .filter((candidate) => !candidate.evidenceRefs.some((ref) => activityEvidence.has(ref)))
+        .map((candidate) => persistWorkKnowledge({
+        canonicalKey: `source-knowledge:${candidate.topicKey}`,
+        title: candidate.title,
+        summary: candidate.summary,
+        horizon: candidate.horizon,
+        confidence: candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.55,
+        scope: { type: 'agent', id: agentId },
+        evidenceRefs: candidate.evidenceRefs,
+      }));
+      const knowledgeCandidates = [...activityKnowledge, ...modelKnowledge].filter((item) => item !== undefined);
+      log.info({
+        runId,
+        itemCount: items.length,
+        candidateCount: profileCandidates.length,
+        knowledgeCount: knowledgeCandidates.length,
+        incompleteSourceCount: analysis.sourceStatuses.filter((item) => item.status !== 'completed').length,
+      }, 'Understanding sources analyzed');
       return {
-        ...candidate,
-        status: assertion.status === 'rejected' ? 'rejected' as const : 'pending' as const,
-        assertionId: assertion.id,
+        profileCandidates,
+        workThreads,
+        knowledgeCandidates,
+        sourceStatuses: analysis.sourceStatuses,
       };
     });
-    const investigation = linkedRun ? getWorkUnderstandingInvestigationForRun(linkedRun.id) : null;
-    const contextEvidence = investigation
-      ? safeWorkThreadCandidates.map((candidate) => {
-        const topicHash = createHash('sha256').update(candidate.topicKey).digest('hex').slice(0, 16);
-        return appendWorkUnderstandingEvidence({
-          investigationId: investigation.id,
-          projectId: linkedRun!.projectId,
-          sourceType: 'understanding_source',
-          sourceRef: `understanding-source://thread/${topicHash}`,
-          observation: candidate.summary,
-          contentHash: createHash('sha256').update(JSON.stringify(candidate.evidenceRefs)).digest('hex'),
-          sensitivity: 'normal',
-        });
-      })
-      : [];
-    const workThreads = linkedRun && contextEvidence.length
-      ? persistWorkThreadsFromDiscovery({
-        projectId: linkedRun.projectId,
-        result: {
-          projectSummary: 'Connected source context',
-          currentState: 'Work streams inferred from sources the user explicitly connected.',
-          uncertainties: [],
-          suggestions: [],
-          workThreadCandidates: safeWorkThreadCandidates.map((candidate, index) => ({
-            ...candidate,
-            evidenceRefs: contextEvidence[index] ? [contextEvidence[index].sourceRef] : [],
-          })),
-        },
-        snapshot: {
-          root: { displayName: 'Connected Sources', projectKind: 'general', markerReasons: ['explicitly_connected_understanding_sources'] },
-          structure: { sampledPaths: [], metadataOnlyFiles: [], omittedPathCount: 0 },
-          documents: [],
-          limits: { policyVersion: WORK_DISCOVERY_SCAN_POLICY_VERSION, fileCount: 0, contentBytes: 0, truncated: false },
-        },
-        evidence: contextEvidence,
-      })
-      : [];
-    const activityEvidence = new Set(activityTopics.flatMap((topic) => topic.evidenceRefs));
-    const activityKnowledge = activityTopics.map((topic) => persistWorkKnowledge({
-      canonicalKey: topic.canonicalKey,
-      title: topic.title,
-      summary: topic.summary,
-      horizon: topic.horizon,
-      confidence: topic.confidence,
-      scope: { type: 'agent', id: agentId },
-      evidenceRefs: topic.evidenceRefs,
-    }));
-    const modelKnowledge = safeWorkThreadCandidates
-      .filter((candidate) => !candidate.evidenceRefs.some((ref) => activityEvidence.has(ref)))
-      .map((candidate) => persistWorkKnowledge({
-      canonicalKey: `source-knowledge:${candidate.topicKey}`,
-      title: candidate.title,
-      summary: candidate.summary,
-      horizon: candidate.horizon,
-      confidence: candidate.confidence === 'high' ? 0.9 : candidate.confidence === 'medium' ? 0.72 : 0.55,
-      scope: { type: 'agent', id: agentId },
-      evidenceRefs: candidate.evidenceRefs,
-    }));
-    const knowledgeCandidates = [...activityKnowledge, ...modelKnowledge];
-    log.info({
-      runId,
-      itemCount: items.length,
-      candidateCount: profileCandidates.length,
-      knowledgeCount: knowledgeCandidates.length,
-      incompleteSourceCount: analysis.sourceStatuses.filter((item) => item.status !== 'completed').length,
-    }, 'Understanding sources analyzed');
-    return {
-      profileCandidates,
-      workThreads,
-      knowledgeCandidates,
-      sourceStatuses: analysis.sourceStatuses,
-    };
   }
 
   async rescanDirectorySource(input: { id: string; idempotencyKey: string }) {
     const source = getWorkDiscoveryDirectorySource(input.id);
     if (!source || source.status !== 'active') throw new Error('Approved work folder not found');
     const preview = await previewWorkDiscoveryRoot(source.rootPath);
+    if (getUnderstandingSourceGrant(source.id)?.status !== 'active'
+      || getUnderstandingSourceGrant(source.id)?.processingPolicy !== source.processingPolicy) {
+      throw new Error('Work folder authorization was revoked.');
+    }
     upsertWorkDiscoveryDirectorySource({
       rootPath: preview.canonicalRootPath,
       displayName: preview.displayName,
@@ -1053,6 +1034,11 @@ export class WorkDiscoveryService {
         },
         ...(discoveredProjects?.length ? { discoveredProjects } : {}),
       };
+      signal.throwIfAborted();
+      if (approvedSource && (getUnderstandingSourceGrant(approvedSource.id)?.status !== 'active'
+        || getUnderstandingSourceGrant(approvedSource.id)?.processingPolicy !== approvedSource.processingPolicy)) {
+        throw new Error('Work folder authorization was revoked during analysis.');
+      }
       const workThreads = persistWorkThreadsFromDiscovery({
         projectId: run.projectId,
         result: baseResult,
@@ -1104,6 +1090,10 @@ export class WorkDiscoveryService {
       if (approvedSource) {
         try {
           const preview = await previewWorkDiscoveryRoot(run.rootPath);
+          signal.throwIfAborted();
+          if (getUnderstandingSourceGrant(approvedSource.id)?.status !== 'active') {
+            throw new Error('Work folder authorization was revoked.');
+          }
           upsertWorkDiscoveryDirectorySource({
             rootPath: preview.canonicalRootPath,
             displayName: preview.displayName,
@@ -1179,40 +1169,15 @@ export class WorkDiscoveryService {
 
   private persistProfileCandidates(run: WorkDiscoveryRun, result: NonNullable<WorkDiscoveryRun['result']>) {
     if (!result.profileCandidates?.length) return result;
-    const profileCandidates = result.profileCandidates.map((candidate) => {
+    const profileCandidates = result.profileCandidates.flatMap((candidate) => {
       const assertion = persistUnderstandingCandidate(
         candidate,
         { type: 'global' },
         `work-discovery:${run.id}`,
       );
-      return { ...candidate, assertionId: assertion.id };
+      return assertion ? [{ ...candidate, assertionId: assertion.id }] : [];
     });
     return { ...result, profileCandidates };
-  }
-
-  updateProfileCandidates(input: {
-    runId: string;
-    decisions: Array<{ id: string; status: 'accepted' | 'edited' | 'rejected'; statement?: string }>;
-  }): WorkDiscoveryRun | null {
-    const run = getWorkDiscoveryRun(input.runId);
-    if (!run?.result?.profileCandidates?.length) return null;
-    const decisions = new Map(input.decisions.map((decision) => [decision.id, decision]));
-    const profileCandidates = run.result.profileCandidates.map((candidate) => {
-      const decision = decisions.get(candidate.id);
-      if (!decision || !candidate.assertionId) return candidate;
-      const updated = decideAssertion(
-        { assertionId: candidate.assertionId, ...decision },
-        `work-discovery:${run.id}:`,
-      );
-      if (!updated) return candidate;
-      return {
-        ...candidate,
-        assertionId: updated.id,
-        statement: updated.statement,
-        status: decision.status,
-      };
-    });
-    return updateWorkDiscoveryRun(run.id, { result: { ...run.result, profileCandidates } });
   }
 
   cancelRun(id: string): WorkDiscoveryRun | null {

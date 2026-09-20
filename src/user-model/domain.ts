@@ -111,11 +111,11 @@ export interface AssertionCandidate {
 
 export type ReconciliationAction = 'created' | 'deduplicated' | 'superseded' | 'conflicted';
 
-export interface ReconciliationResult {
+export type ReconciliationResult = {
   action: ReconciliationAction;
   assertion: UserAssertion;
   previousAssertion?: UserAssertion;
-}
+} | { action: 'suppressed'; assertion?: undefined; previousAssertion?: undefined };
 
 export function validateScope(scope: UserModelScope): void {
   const id = scope.id?.trim();

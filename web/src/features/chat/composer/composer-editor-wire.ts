@@ -176,20 +176,27 @@ export function getWireCaretOffset(root: HTMLElement): number {
   if (!sel || sel.rangeCount === 0) return serializeEditorToWire(root).length;
 
   const range = sel.getRangeAt(0);
-  const marker = document.createTextNode(CARET_PROBE);
-  try {
-    range.insertNode(marker);
-  } catch {
-    return serializeEditorToWire(root).length;
+  if (!root.contains(range.startContainer)) return serializeEditorToWire(root).length;
+
+  // Clone the prefix instead of inserting a probe into the live selection.
+  const prefix = document.createRange();
+  prefix.selectNodeContents(root);
+  prefix.setEnd(range.startContainer, range.startOffset);
+  const container = document.createElement('div');
+  container.appendChild(prefix.cloneContents());
+  return serializeEditorToWire(container).length;
+}
+
+export type SkillLabelResolver = (name: string) => string;
+const skillLabelResolvers = new WeakMap<HTMLElement, SkillLabelResolver>();
+
+export function updateComposerSkillLabels(root: HTMLElement, resolve: SkillLabelResolver): void {
+  skillLabelResolvers.set(root, resolve);
+  for (const pill of root.querySelectorAll<HTMLElement>('[data-skill]')) {
+    const label = `/${resolve(pill.dataset.skill ?? '')}`;
+    if (pill.textContent !== label) pill.textContent = label;
+    pill.title = `/${pill.dataset.skill}`;
   }
-
-  const parts: string[] = [];
-  serializeRootChildren(root, parts);
-  const raw = joinComposerWireParts(parts);
-  marker.parentNode?.removeChild(marker);
-
-  const idx = raw.indexOf(CARET_PROBE);
-  return idx >= 0 ? idx : raw.replaceAll(CARET_PROBE, '').length;
 }
 
 function appendSkillPill(root: HTMLElement, name: string): void {
@@ -197,7 +204,8 @@ function appendSkillPill(root: HTMLElement, name: string): void {
   span.contentEditable = 'false';
   span.dataset.skill = name;
   span.className = 'chat-skill-pill';
-  span.textContent = `/${name}`;
+  span.textContent = `/${skillLabelResolvers.get(root)?.(name) ?? name}`;
+  span.title = `/${name}`;
   root.appendChild(span);
   root.appendChild(document.createTextNode(ZWSP));
 }

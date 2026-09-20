@@ -7,7 +7,8 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
-import { reconcileAssertion, type AssertionCandidate } from '../../user-model/index.js';
+import { getUserAssertion, reconcileAssertion, type AssertionCandidate } from '../../user-model/index.js';
+import { getKnowledgeItem, writeKnowledgeItem } from '../../knowledge-memory/index.js';
 import { runMemoryMaintenance } from '../service.js';
 
 function candidate(overrides: Partial<AssertionCandidate> = {}): AssertionCandidate {
@@ -134,4 +135,53 @@ describe('memory maintenance', () => {
     expect(getSqliteDatabase().prepare('SELECT status FROM user_assertions WHERE assertion_id = ?')
       .get(assertion.id)).toMatchObject({ status: 'candidate' });
   });
+  it('quietly retires overdue candidates instead of creating review tasks', () => {
+    const item = reconcileAssertion(candidate({ authority: 'system_inferred', reviewAt: 200 }), 150).assertion;
+    const result = runMemoryMaintenance({ jobType: 'daily_reconciliation', now: 300 });
+    expect(result.metrics.needsReview).toBe(0);
+    expect(getUserAssertion(item.id)?.status).toBe('stale');
+  });
+
+  it('does not count copied content or repeated source items as independent evidence', () => {
+    const item = reconcileAssertion(candidate({ authority: 'system_inferred' }), 150).assertion;
+    for (const sourceRef of ['original', 'summary']) {
+      const evidence = createContextEvidence({ sourceType: 'connector', sourceRef,
+        sourceItemId: 'same-mail', contentHash: 'same-content', trustLevel: 'owner', observedAt: 100 });
+      getSqliteDatabase().prepare(`INSERT INTO user_assertion_evidence
+        (assertion_id, evidence_id, relation, confidence, created_at) VALUES (?, ?, 'supports', 1, 150)`)
+        .run(item.id, evidence.id);
+    }
+    expect(runMemoryMaintenance({ jobType: 'daily_reconciliation', now: 300 }).metrics.activated).toBe(0);
+  });
+
+  it('never promotes sensitive or high-consequence inferences', () => {
+    for (const overrides of [{ sensitivity: 'personal' as const }, { consequence: 'critical' as const }]) {
+      const item = reconcileAssertion(candidate({ predicate: `test.${Object.keys(overrides)[0]}`,
+        authority: 'system_inferred' }), 150).assertion;
+      getSqliteDatabase().prepare('UPDATE user_assertions SET sensitivity = ?, consequence = ? WHERE assertion_id = ?')
+        .run(overrides.sensitivity ?? 'normal', overrides.consequence ?? 'low', item.id);
+      for (const sourceRef of ['one', 'two']) {
+        const evidence = createContextEvidence({ sourceType: 'conversation', sourceRef, trustLevel: 'owner', observedAt: 100 });
+        getSqliteDatabase().prepare(`INSERT INTO user_assertion_evidence
+          (assertion_id, evidence_id, relation, confidence, created_at) VALUES (?, ?, 'supports', 1, 150)`)
+          .run(item.id, evidence.id);
+      }
+    }
+    expect(runMemoryMaintenance({ jobType: 'daily_reconciliation', now: 300 }).metrics.activated).toBe(0);
+  });
+
+  it('activates existing ordinary work memory without promoting recalled or untrusted content', () => {
+    const make = (key: string, overrides = {}) => writeKnowledgeItem({
+      kind: 'decision', scope: { type: 'project', id: 'one' }, content: `Atlas ${key}`, canonicalKey: key,
+      confidence: 0.8, importance: 0.5, originClass: 'agent', status: 'candidate', ...overrides,
+    }).item;
+    const safe = make('safe');
+    const recalled = make('recalled', { derivedFromRecalledContext: true });
+    const untrusted = make('untrusted', { originClass: 'untrusted' });
+    runMemoryMaintenance({ jobType: 'daily_reconciliation', now: Date.now() });
+    expect(getKnowledgeItem(safe.id)?.status).toBe('active');
+    expect(getKnowledgeItem(recalled.id)?.status).toBe('candidate');
+    expect(getKnowledgeItem(untrusted.id)?.status).toBe('candidate');
+  });
+
 });

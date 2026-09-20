@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from 'react';
 
-import { applyWireToEditor, getWireCaretOffset } from '@/features/chat/composer/composer-editor-wire';
+import { applyWireToEditor, getWireCaretOffset, updateComposerSkillLabels } from '@/features/chat/composer/composer-editor-wire';
 import type { ResetEditorOptions } from '@/features/chat/composer/composer.types';
 import { FILL_CHAT_COMPOSER_EVENT, type FillChatComposerDetail } from '@/features/chat/composer/fill-composer-dispatch';
+
+import { useSkillLabel } from '@/features/chat/palette/use-skill-label';
 
 const TEXTAREA_MAX_HEIGHT_PX = 128;
 
@@ -12,6 +14,8 @@ export function syncComposerPlaceholderClass(el: HTMLElement, wire: string): voi
 
 export interface UseComposerEditorOptions {
   disabled: boolean;
+  agentId?: string;
+  conversationId?: string | null;
   /** Initial value for composer instances whose draft is owned by a parent store. */
   initialValue?: string;
   /** Mirrors draft changes to an optional parent store. */
@@ -55,6 +59,8 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
     shouldSyncSelectionRef,
   } = options;
 
+  const resolveSkillLabel = useSkillLabel(options.agentId, options.conversationId);
+
   const [value, setValue] = useState(initialValue);
   const [cursor, setCursor] = useState(initialValue.length);
   const [isComposing, setIsComposing] = useState(false);
@@ -79,6 +85,13 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, TEXTAREA_MAX_HEIGHT_PX)}px`;
   }, []);
+
+  useLayoutEffect(() => {
+    const el = editorRef.current;
+    if (!el || isComposing) return;
+    updateComposerSkillLabels(el, resolveSkillLabel);
+    adjustHeight();
+  }, [resolveSkillLabel, isComposing, adjustHeight]);
 
   useLayoutEffect(() => {
     if (initializedEditorRef.current) return;

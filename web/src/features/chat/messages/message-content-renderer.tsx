@@ -410,7 +410,7 @@ function renderTextOrImageBlock(
       const displayText = stripUserMessageForDisplay(block.text ?? '');
       return (
         <div key={key} className="min-w-0">
-          <UserMessageSegments text={displayText} />
+          <UserMessageSegments text={displayText} conversationId={conversationId} />
         </div>
       );
     }

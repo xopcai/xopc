@@ -1,4 +1,4 @@
-import { memo, useRef, type MutableRefObject } from 'react';
+import { memo, useEffect, useRef, type MutableRefObject } from 'react';
 
 import {
   getWireCaretOffset,
@@ -64,6 +64,17 @@ export const ChatComposerInput = memo(function ChatComposerInput({
   chatMessages: { clipboardFileTypeUnsupported: string };
 }) {
   const isComposingRef = useRef(false);
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el || disabled) return;
+    const beforeInput = (event: InputEvent) => {
+      if (event.inputType !== 'deleteContentBackward' || !event.cancelable
+        || event.isComposing || isComposingRef.current) return;
+      if (handleComposerBackspace(el)) event.preventDefault();
+    };
+    el.addEventListener('beforeinput', beforeInput);
+    return () => el.removeEventListener('beforeinput', beforeInput);
+  }, [disabled, editorRef]);
   return (
     <div
       ref={editorRef}
@@ -119,7 +130,7 @@ export const ChatComposerInput = memo(function ChatComposerInput({
         const k = kbdRef.current;
 
         // 1. Pill-aware Backspace (handles single-char deletes that should swallow whole tokens).
-        if (e.key === 'Backspace' && !k.isComposing && editorRef.current) {
+        if (e.key === 'Backspace' && !k.isComposing && !isComposingRef.current && !e.nativeEvent.isComposing && editorRef.current) {
           if (handleComposerBackspace(editorRef.current)) {
             e.preventDefault();
             return;

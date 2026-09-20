@@ -1,6 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import {
-  Archive,
   BookOpen,
   Brain,
   BriefcaseBusiness,
@@ -14,7 +13,6 @@ import {
   Loader2,
   MapPin,
   MessageCircle,
-  Pencil,
   RefreshCw,
   Search,
   Sparkles,
@@ -33,15 +31,17 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { UnderstandingStatusButton } from '@/features/work-discovery/understanding-status-button';
 
+import { MemoryActions } from './memory-actions';
+import { groupUnderstandingByDate, UnderstandingRow } from './understanding-row';
 import {
   correctAssertion,
+  deleteAssertion,
+  deleteKnowledge,
   detectBrowserTimezone,
   fetchUserModel,
   reviewKnowledgeItem,
-  setAssertionStatus,
   setRuleStatus,
   updateUserProfile,
-  type AssertionStatus,
   type CollaborationRule,
   type KnowledgeItem,
   type PriorityWindow,
@@ -81,11 +81,8 @@ const copy = {
     explicitHint: 'Facts and preferences you stated directly',
     learned: 'Learned together',
     learnedHint: 'Patterns formed from our work',
-    pending: 'To confirm together',
-    pendingHint: 'Items that need your judgment',
-    confirmTogether: 'Confirm together',
-    confirmHint: 'These may affect future behavior. Confirm them, correct the wording, or tell me not to use them.',
-    nothingToConfirm: 'Nothing needs your confirmation right now.',
+    pending: 'Not in use',
+    pendingHint: 'Reviewed automatically as evidence changes',
     importantNow: 'What matters now',
     noPriority: 'No current priority has been set.',
     otherGoals: 'Other active outcomes',
@@ -93,7 +90,7 @@ const copy = {
     howWeWorkHint: 'Your standing instructions for how I should communicate and act.',
     noRules: 'No collaboration preferences yet.',
     recent: 'Recently formed understanding',
-    recentHint: 'The most useful current facts, with their origin and time horizon.',
+    recentHint: 'Recent understanding from our work. You can edit any item.',
     seeAll: 'See all',
     workMemory: 'What I remember from the work',
     workMemoryHint: 'Project facts, decisions, lessons, and open questions stay separate from facts about you.',
@@ -111,9 +108,6 @@ const copy = {
     insights: 'My current read',
     emptyGroup: 'No understanding has formed here yet.',
     correct: 'Correct',
-    stopUsing: 'Stop using',
-    confirm: 'Confirm',
-    notTrue: 'Not true',
     save: 'Save correction',
     cancel: 'Cancel',
     correctionPlaceholder: 'Write the accurate version…',
@@ -122,7 +116,6 @@ const copy = {
     memoryLibraryHint: 'Only distilled facts, decisions, lessons, commitments, and open questions appear here. Source records stay with their connector.',
     noKnowledge: 'No work memory has formed yet.',
     noKnowledgeMatch: 'No work memory matches this search.',
-    archive: 'Archive',
     showMore: 'Show more',
     expand: 'Show details',
     collapse: 'Hide details',
@@ -159,11 +152,8 @@ const copy = {
     explicitHint: '你明确表达的事实与偏好',
     learned: '协作中学到的',
     learnedHint: '从实际协作中形成的认识',
-    pending: '等待一起确认',
-    pendingHint: '需要由你判断的内容',
-    confirmTogether: '一起确认',
-    confirmHint: '这些理解可能影响之后的行为。你可以确认、修正，或告诉我以后不要使用。',
-    nothingToConfirm: '目前没有需要你确认的理解。',
+    pending: '暂不使用',
+    pendingHint: '随新证据自动复核',
     importantNow: '此刻重要',
     noPriority: '还没有设置当前优先事项。',
     otherGoals: '其他进行中的目标',
@@ -171,7 +161,7 @@ const copy = {
     howWeWorkHint: '你对沟通方式和执行行为的长期约定。',
     noRules: '还没有形成协作偏好。',
     recent: '最近形成的理解',
-    recentHint: '最值得使用的当前认识，同时说明它来自哪里、适用多久。',
+    recentHint: '最近在协作中形成的认识，你可以随时修改。',
     seeAll: '查看全部',
     workMemory: '我在工作中记住的',
     workMemoryHint: '项目事实、决定、经验和待解问题，与“关于你”的理解分别管理。',
@@ -189,9 +179,6 @@ const copy = {
     insights: '我形成的判断',
     emptyGroup: '这里还没有形成理解。',
     correct: '修正',
-    stopUsing: '不再使用',
-    confirm: '确认',
-    notTrue: '不是这样',
     save: '保存修正',
     cancel: '取消',
     correctionPlaceholder: '写下更准确的说法…',
@@ -200,7 +187,6 @@ const copy = {
     memoryLibraryHint: '这里只显示提炼后的事实、决定、经验、承诺和待解问题；邮件、日历与文档原文保留在对应来源中。',
     noKnowledge: '还没有形成工作记忆。',
     noKnowledgeMatch: '没有符合搜索条件的工作记忆。',
-    archive: '归档',
     showMore: '显示更多',
     expand: '查看详情',
     collapse: '收起详情',
@@ -213,7 +199,6 @@ const copy = {
   },
 } as const;
 
-const reviewStatuses: AssertionStatus[] = ['candidate', 'needs_review', 'conflicted', 'stale'];
 
 const profilePredicates = new Set([
   'identity.call_name',
@@ -271,44 +256,9 @@ function initials(name: string): string {
   return Array.from(name.trim()).slice(0, 2).join('').toLocaleUpperCase();
 }
 
-function authorityLabel(item: UserAssertion, language: Language): string {
-  const labels = language === 'zh'
-    ? {
-        user_explicit: '你告诉我的',
-        user_observed: '从协作中观察到',
-        system_inferred: '我形成的判断',
-        external_untrusted: '来自连接的信息',
-      }
-    : {
-        user_explicit: 'You told me',
-        user_observed: 'Observed while working together',
-        system_inferred: 'My current read',
-        external_untrusted: 'From connected information',
-      };
-  return labels[item.authority];
-}
-
-function timeHorizon(item: UserAssertion, language: Language): string {
-  if (item.validTo) {
-    const date = formatDate(item.validTo, language);
-    return language === 'zh' ? `适用至 ${date}` : `Applies until ${date}`;
-  }
-  const labels = language === 'zh'
-    ? { stable: '长期有效', slow: '会随时间复核', dynamic: '近期状态', event: '特定阶段' }
-    : { stable: 'Long-term', slow: 'Reviewed over time', dynamic: 'Current context', event: 'Specific period' };
-  return labels[item.volatility];
-}
-
 function validUntil(value: number, language: Language): string {
   const date = formatDate(value, language);
   return language === 'zh' ? `当前安排至 ${date}` : `Current plan through ${date}`;
-}
-
-function confidenceLabel(item: UserAssertion, language: Language): string | null {
-  if (item.authority === 'user_explicit') return null;
-  if (item.confidence >= 0.85) return language === 'zh' ? '把握较高' : 'High confidence';
-  if (item.confidence >= 0.65) return language === 'zh' ? '把握中等' : 'Medium confidence';
-  return language === 'zh' ? '仍需确认' : 'Needs confirmation';
 }
 
 function scopeLabel(scope: UserAssertion['scope'], language: Language): string {
@@ -371,7 +321,7 @@ function Section({
 
 function Empty({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
-    <div className="flex min-h-32 flex-col items-center justify-center gap-2 px-5 py-8 text-center text-sm text-fg-muted">
+    <div className="flex items-center gap-3 px-5 py-5 text-sm text-fg-muted">
       <span className="text-fg-subtle">{icon}</span>
       <p>{children}</p>
     </div>
@@ -476,90 +426,6 @@ function ProfileDialog({
   );
 }
 
-function UnderstandingCard({
-  item,
-  language,
-  busy,
-  editing,
-  draft,
-  onDraftChange,
-  onEdit,
-  onCancel,
-  onAction,
-  onCorrect,
-}: {
-  item: UserAssertion;
-  language: Language;
-  busy: boolean;
-  editing: boolean;
-  draft: string;
-  onDraftChange: (value: string) => void;
-  onEdit: () => void;
-  onCancel: () => void;
-  onAction: (status: AssertionStatus) => void;
-  onCorrect: () => void;
-}) {
-  const t = copy[language];
-  const needsReview = reviewStatuses.includes(item.status);
-  const confidence = confidenceLabel(item, language);
-
-  return (
-    <article className={`rounded-xl border p-4 ${needsReview ? 'border-edge-strong bg-surface-base' : 'border-edge bg-surface-panel'}`}>
-      {editing ? (
-        <div className="space-y-3">
-          <label className="sr-only" htmlFor={`assertion-${item.id}`}>{t.correctionPlaceholder}</label>
-          <textarea
-            id={`assertion-${item.id}`}
-            value={draft}
-            onChange={(event) => onDraftChange(event.target.value)}
-            placeholder={t.correctionPlaceholder}
-            className="min-h-24 w-full resize-y rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm leading-6 text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
-            autoFocus
-          />
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" className="h-8" onClick={onCancel}>{t.cancel}</Button>
-            <Button variant="primary" className="h-8" disabled={!draft.trim() || busy} onClick={onCorrect}>{t.save}</Button>
-          </div>
-        </div>
-      ) : (
-        <>
-          <p className="text-sm leading-6 text-fg">{item.statement}</p>
-          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-fg-subtle">
-            <span className="inline-flex items-center gap-1.5"><MessageCircle className="size-3.5" />{authorityLabel(item, language)}</span>
-            <span className="inline-flex items-center gap-1.5"><Clock3 className="size-3.5" />{timeHorizon(item, language)}</span>
-            {item.scope.type !== 'global' ? <span>{scopeLabel(item.scope, language)}</span> : null}
-            {confidence ? <span>{confidence}</span> : null}
-          </div>
-          <div className="mt-4 flex flex-wrap justify-end gap-1.5">
-            {needsReview ? (
-              <>
-                <Button variant="secondary" className="h-8 gap-1.5 px-2.5" disabled={busy} onClick={() => onAction('active')}>
-                  <Check className="size-3.5" />{t.confirm}
-                </Button>
-                <Button variant="ghost" className="h-8 gap-1.5 px-2.5" disabled={busy} onClick={onEdit}>
-                  <Pencil className="size-3.5" />{t.correct}
-                </Button>
-                <Button variant="ghost" className="h-8 gap-1.5 px-2.5" disabled={busy} onClick={() => onAction('rejected')}>
-                  <X className="size-3.5" />{t.notTrue}
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="ghost" className="h-8 gap-1.5 px-2.5" disabled={busy} onClick={onEdit}>
-                  <Pencil className="size-3.5" />{t.correct}
-                </Button>
-                <Button variant="ghost" className="h-8 gap-1.5 px-2.5" disabled={busy} onClick={() => onAction('archived')}>
-                  <Archive className="size-3.5" />{t.stopUsing}
-                </Button>
-              </>
-            )}
-          </div>
-        </>
-      )}
-    </article>
-  );
-}
-
 function RuleRow({
   rule,
   language,
@@ -598,6 +464,7 @@ function KnowledgeRow({
   onEdit,
   onCancel,
   onReview,
+  onDelete,
 }: {
   item: KnowledgeItem;
   language: Language;
@@ -609,21 +476,22 @@ function KnowledgeRow({
   onDraftChange: (value: string) => void;
   onEdit: () => void;
   onCancel: () => void;
-  onReview: (action: 'approve' | 'edit_and_approve' | 'reject' | 'archive', content?: string) => void;
+  onReview: (action: 'edit_and_approve', content?: string) => void;
+  onDelete: () => void;
 }) {
   const t = copy[language];
   const date = formatDate(item.updatedAt ?? item.createdAt, language);
   const canExpand = item.content.length > 96 || item.content.includes('\n');
-  const needsReview = item.status === 'candidate' || item.status === 'needs_review' || item.status === 'stale';
   return (
     <article className="group border-t border-edge-subtle px-5 py-4 first:border-t-0 sm:px-6">
       {editing ? (
         <div className="space-y-3">
           <textarea
+            aria-label={t.correctionPlaceholder}
+            disabled={busy}
             value={draft}
             onChange={(event) => onDraftChange(event.target.value)}
             className="min-h-24 w-full resize-y rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm leading-6 text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
-            autoFocus
           />
           <div className="flex justify-end gap-2">
             <Button variant="ghost" className="h-8" onClick={onCancel}>{t.cancel}</Button>
@@ -634,7 +502,7 @@ function KnowledgeRow({
       <div className="flex items-start gap-3">
         <BookOpen className="mt-1 size-4 shrink-0 text-fg-subtle" />
         <div className="min-w-0 flex-1">
-          <p className={`whitespace-pre-wrap text-sm leading-6 text-fg ${expanded ? '' : 'line-clamp-2'}`}>{item.content}</p>
+          <p className={`whitespace-pre-wrap break-words text-base leading-7 text-fg ${expanded ? '' : 'line-clamp-2'}`}>{item.content}</p>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-subtle">
             <span>{scopeLabel(item.scope, language)}</span>
             {date ? <span>{date}</span> : null}
@@ -642,28 +510,11 @@ function KnowledgeRow({
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {canExpand ? (
-            <Button variant="ghost" className="h-8 gap-1 px-2" onClick={onToggle}>
-              <span className="hidden sm:inline">{expanded ? t.collapse : t.expand}</span>
+            <Button variant="ghost" className="size-11 p-0" aria-expanded={expanded} aria-label={expanded ? t.collapse : t.expand} onClick={onToggle}>
               <ChevronDown className={`size-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
             </Button>
           ) : null}
-          {needsReview ? (
-            <>
-              <Button variant="secondary" className="h-8 gap-1.5 px-2.5" disabled={busy} onClick={() => onReview('approve')}>
-                <Check className="size-3.5" />{t.confirm}
-              </Button>
-              <Button variant="ghost" className="size-8 shrink-0 p-0" disabled={busy} onClick={onEdit} aria-label={t.correct} title={t.correct}>
-                <Pencil className="size-3.5" />
-              </Button>
-              <Button variant="ghost" className="size-8 shrink-0 p-0" disabled={busy} onClick={() => onReview('reject')} aria-label={t.notTrue} title={t.notTrue}>
-                <X className="size-3.5" />
-              </Button>
-            </>
-          ) : (
-            <Button variant="ghost" className="size-8 shrink-0 p-0" disabled={busy} onClick={() => onReview('archive')} aria-label={t.archive} title={t.archive}>
-              <Archive className="size-3.5" />
-            </Button>
-          )}
+          <MemoryActions language={language} busy={busy} statement={item.content} onEdit={onEdit} onDelete={onDelete} />
         </div>
       </div>
       )}
@@ -680,6 +531,7 @@ export function UserModelPage() {
   const [view, setView] = useState<View>('overview');
   const [busy, setBusy] = useState<string>();
   const [actionError, setActionError] = useState<string>();
+  const [actionMessage, setActionMessage] = useState('');
   const [editingId, setEditingId] = useState<string>();
   const [draft, setDraft] = useState('');
   const [query, setQuery] = useState('');
@@ -699,18 +551,16 @@ export function UserModelPage() {
   const act = async (id: string, operation: () => Promise<unknown>) => {
     setBusy(id);
     setActionError(undefined);
+    setActionMessage('');
     try {
       await operation();
       await mutate();
+      setActionMessage(language === 'zh' ? '已更新' : 'Updated');
     } catch {
       setActionError(t.actionFailed);
     } finally {
       setBusy(undefined);
     }
-  };
-
-  const changeAssertion = (item: UserAssertion, status: AssertionStatus) => {
-    void act(item.id, () => setAssertionStatus(item.id, status));
   };
 
   const saveCorrection = (item: UserAssertion) => {
@@ -724,6 +574,7 @@ export function UserModelPage() {
   const saveProfile = async (profile: UserProfile) => {
     setBusy('profile');
     setActionError(undefined);
+    setActionMessage('');
     try {
       await updateUserProfile(profile);
       await mutate();
@@ -737,7 +588,7 @@ export function UserModelPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto w-full max-w-6xl space-y-5 p-4 sm:p-6 lg:py-8">
+      <div className="mx-auto w-full max-w-7xl space-y-5 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
         <Skeleton className="h-10 w-72 rounded-xl" />
         <Skeleton className="h-72 rounded-xl" />
         <div className="grid gap-5 lg:grid-cols-2"><Skeleton className="h-80 rounded-xl" /><Skeleton className="h-80 rounded-xl" /></div>
@@ -756,8 +607,6 @@ export function UserModelPage() {
   }
 
   const allAssertions = [...data.assertions].sort((a, b) => {
-    const reviewDifference = Number(reviewStatuses.includes(b.status)) - Number(reviewStatuses.includes(a.status));
-    if (reviewDifference) return reviewDifference;
     const importanceA = a.declaredImportance ?? a.inferredImportance;
     const importanceB = b.declaredImportance ?? b.inferredImportance;
     return importanceB - importanceA || b.recordedAt - a.recordedAt;
@@ -767,8 +616,8 @@ export function UserModelPage() {
   ));
   const profile = profileFromResponse(data);
   const displayName = profile.callName || (language === 'zh' ? '你' : 'You');
-  const pendingAssertions = assertions.filter((item) => reviewStatuses.includes(item.status));
-  const activeAssertions = assertions.filter((item) => item.status === 'active');
+  const inactiveAssertions = assertions.filter((item) => !item.usable);
+  const activeAssertions = assertions.filter((item) => item.usable);
   const explicitCount = activeAssertions.filter((item) => item.authority === 'user_explicit').length;
   const learnedCount = activeAssertions.length - explicitCount;
   const activePriorities = data.priorities.filter((item) => item.status === 'active' && item.validTo > Date.now());
@@ -780,7 +629,7 @@ export function UserModelPage() {
   const activeGoals = data.goals.filter((goal) => goal.status === 'active' || goal.status === 'paused');
   const otherGoals = activeGoals.filter((goal) => primaryPriority?.targetType !== 'goal' || goal.id !== primaryPriority.targetId);
   const collaborationRules = data.rules.filter((rule) => rule.status !== 'archived');
-  const recentAssertions = [...activeAssertions].sort((a, b) => b.recordedAt - a.recordedAt);
+  const recentAssertions = [...assertions].sort((a, b) => b.recordedAt - a.recordedAt);
   const visibleKnowledge = data.knowledge.filter((item) => item.status !== 'archived' && item.status !== 'rejected');
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const searchedKnowledge = visibleKnowledge.filter((item) => !normalizedQuery
@@ -806,18 +655,18 @@ export function UserModelPage() {
     }))
     .filter((group) => group.items.length > 0);
 
-  const assertionCard = (item: UserAssertion) => (
-    <UnderstandingCard
+  const assertionRow = (item: UserAssertion) => (
+    <UnderstandingRow
       key={item.id}
       item={item}
       language={language}
-      busy={busy === item.id}
+      busy={Boolean(busy)}
       editing={editingId === item.id}
       draft={editingId === item.id ? draft : ''}
       onDraftChange={setDraft}
       onEdit={() => { setEditingId(item.id); setDraft(item.statement); }}
       onCancel={() => { setEditingId(undefined); setDraft(''); }}
-      onAction={(status) => changeAssertion(item, status)}
+      onDelete={() => void act(item.id, () => deleteAssertion(item.id))}
       onCorrect={() => saveCorrection(item)}
     />
   );
@@ -832,7 +681,7 @@ export function UserModelPage() {
       : t.maintenanceFailed;
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-5 p-4 sm:p-6 lg:py-8">
+    <div className="mx-auto w-full max-w-7xl space-y-5 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
       <PageTabs
         items={[
           { id: 'overview', label: t.overview, icon: Sparkles },
@@ -846,8 +695,9 @@ export function UserModelPage() {
         panelIdPrefix="understanding-panel"
       />
 
+      <p role="status" className="sr-only">{actionMessage}</p>
       {actionError ? (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-danger bg-danger-soft px-4 py-3 text-sm text-danger">
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-danger bg-danger-soft px-4 py-3 text-sm text-danger">
           <span>{actionError}</span>
           <button type="button" onClick={() => setActionError(undefined)} aria-label={t.cancel}><X className="size-4" /></button>
         </div>
@@ -856,19 +706,19 @@ export function UserModelPage() {
       {view === 'overview' ? (
         <div id="understanding-panel-overview" role="tabpanel" aria-labelledby="understanding-tab-overview" className="space-y-5">
           <section className="overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-surface">
-            <div className="grid gap-8 px-5 py-7 sm:px-8 sm:py-9 lg:grid-cols-[minmax(0,1fr)_21rem] lg:gap-10">
+            <div className="grid gap-8 px-5 py-7 sm:px-8 sm:py-9 lg:grid-cols-[minmax(0,1fr)_16rem] lg:gap-6">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.16em] text-accent-fg">
                   <Sparkles className="size-3.5" />
                   <span>{t.portraitEyebrow}</span>
                 </div>
-                <div className="mt-6 flex items-center gap-4">
+                <div className="mt-6 flex flex-wrap items-center gap-4">
                   <div className="flex size-16 shrink-0 items-center justify-center rounded-2xl border border-edge bg-surface-active text-lg font-semibold text-fg sm:size-20 sm:text-xl">
                     {initials(displayName)}
                   </div>
                   <div className="min-w-0 flex-1">
                     <h2 className="truncate text-2xl font-semibold tracking-tight text-fg sm:text-3xl">{displayName}</h2>
-                    <p className="mt-1 truncate text-sm text-fg-muted">{profile.role || t.notProvided}</p>
+                    <p className="mt-1 break-words text-sm text-fg-muted">{profile.role || t.notProvided}</p>
                   </div>
                   <Button className="shrink-0" onClick={() => setProfileOpen(true)}><UserRoundPen className="size-4" />{t.editProfile}</Button>
                 </div>
@@ -914,7 +764,7 @@ export function UserModelPage() {
               {[
                 { icon: MessageCircle, label: t.explicit, hint: t.explicitHint, count: explicitCount },
                 { icon: Brain, label: t.learned, hint: t.learnedHint, count: learnedCount },
-                { icon: Check, label: t.pending, hint: t.pendingHint, count: pendingAssertions.length },
+                { icon: Check, label: t.pending, hint: t.pendingHint, count: inactiveAssertions.length },
               ].map(({ icon: Icon, label, hint, count }, index) => (
                 <div key={label} className={`flex gap-3 px-5 py-4 sm:px-6 ${index ? 'border-t border-edge-subtle sm:border-l sm:border-t-0' : ''}`}>
                   <Icon className="mt-0.5 size-4 shrink-0 text-fg-subtle" />
@@ -924,11 +774,20 @@ export function UserModelPage() {
             </div>
           </section>
 
-          {pendingAssertions.length ? (
-            <Section title={t.confirmTogether} hint={t.confirmHint}>
-              <div className="grid gap-3 p-4 lg:grid-cols-2">{pendingAssertions.map(assertionCard)}</div>
-            </Section>
-          ) : null}
+          <Section
+            title={t.recent}
+            hint={t.recentHint}
+            action={<Button variant="ghost" className="h-8 shrink-0" onClick={() => setView('understanding')}>{t.seeAll}</Button>}
+          >
+            {recentAssertions.length
+              ? <div>{groupUnderstandingByDate(recentAssertions.slice(0, 5), language).map(({ label, items }) => (
+                  <div key={label}>
+                    <h3 className="border-b border-edge-subtle px-5 pb-2 pt-4 text-xs font-medium text-fg-muted">{label}</h3>
+                    <div>{items.map(assertionRow)}</div>
+                  </div>
+                ))}</div>
+              : <Empty icon={<Brain className="size-5" />}>{t.emptyGroup}</Empty>}
+          </Section>
 
           <Section title={t.howWeWork} hint={t.howWeWorkHint}>
             {collaborationRules.length ? collaborationRules.map((rule) => (
@@ -940,16 +799,6 @@ export function UserModelPage() {
                 onToggle={() => void act(rule.id, () => setRuleStatus(rule.id, rule.status === 'active' ? 'disabled' : 'active'))}
               />
             )) : <Empty icon={<Handshake className="size-5" />}>{t.noRules}</Empty>}
-          </Section>
-
-          <Section
-            title={t.recent}
-            hint={t.recentHint}
-            action={<Button variant="ghost" className="h-8 shrink-0" onClick={() => setView('understanding')}>{t.seeAll}</Button>}
-          >
-            {recentAssertions.length
-              ? <div className="grid gap-3 p-4 lg:grid-cols-2">{recentAssertions.slice(0, 6).map(assertionCard)}</div>
-              : <Empty icon={<Brain className="size-5" />}>{t.emptyGroup}</Empty>}
           </Section>
 
           <Section
@@ -986,7 +835,7 @@ export function UserModelPage() {
           </div>
           {visibleAssertionGroups.length ? visibleAssertionGroups.map(({ key, title, icon: Icon, items }) => (
             <Section key={key} title={title} action={<Icon className="size-4 text-fg-subtle" />}>
-              <div className="grid gap-3 p-4 lg:grid-cols-2">{items.map(assertionCard)}</div>
+              <div>{items.map(assertionRow)}</div>
             </Section>
           )) : (
             <div className="rounded-xl border border-edge bg-surface-panel shadow-surface">
@@ -1029,7 +878,7 @@ export function UserModelPage() {
                         key={item.id}
                         item={item}
                         language={language}
-                        busy={busy === item.id}
+                        busy={Boolean(busy)}
                         expanded={expandedKnowledgeId === item.id}
                         onToggle={() => setExpandedKnowledgeId((current) => current === item.id ? undefined : item.id)}
                         editing={editingId === `knowledge:${item.id}`}
@@ -1037,7 +886,8 @@ export function UserModelPage() {
                         onDraftChange={setDraft}
                         onEdit={() => { setEditingId(`knowledge:${item.id}`); setDraft(item.content); }}
                         onCancel={() => { setEditingId(undefined); setDraft(''); }}
-                        onReview={(action, content) => void act(item.id, async () => {
+                        onDelete={() => void act(item.id, () => deleteKnowledge(item.id))}
+                    onReview={(action, content) => void act(item.id, async () => {
                           await reviewKnowledgeItem(item, action, content);
                           setEditingId(undefined);
                           setDraft('');

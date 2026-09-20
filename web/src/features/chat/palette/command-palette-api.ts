@@ -1,5 +1,6 @@
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import { useGatewayStore } from '@/stores/gateway-store';
 import type { SkillLocalizations } from '@xopcai/composer-core/skill-localization';
 
 import { getSkills } from '@/features/skills/skill-list-api';
@@ -77,7 +78,8 @@ export interface WorkspaceTrustState {
 }
 
 function chatSkillsCacheKey(agentId: string | undefined, conversationId: string | null | undefined): string {
-  return `${agentId?.trim() || 'main'}\u0000${conversationId?.trim() || ''}`;
+  const gateway = useGatewayStore.getState();
+  return `${agentId?.trim() || 'main'}\u0000${JSON.stringify([gateway.baseUrl, gateway.conversationId, conversationId?.trim() || ''])}`;
 }
 
 export async function fetchCommandsCached(forceRefresh = false): Promise<CommandEntry[]> {

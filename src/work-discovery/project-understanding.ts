@@ -22,5 +22,6 @@ export function saveProjectUnderstandingOverview(input: {
     originClass: input.correctedByUser ? 'owner' : 'agent',
     source: { provider: 'project-understanding', evidenceRefs: input.evidenceRefs ?? [] },
     replaceExisting: true,
+    restoreDeleted: input.correctedByUser,
   }).item;
 }

@@ -4,15 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../api', () => ({
   fetchWorkDiscoveryRun: vi.fn(),
   importUnderstandingSources: vi.fn().mockRejectedValue(new Error('Analysis failed')),
-  reviewSourceAssertions: vi.fn(),
-}));
-
-vi.mock('../../user-model/user-model-api', () => ({
-  correctAssertion: vi.fn(),
 }));
 
 import type { ElectronAPI } from '@/types/electron';
-import { correctAssertion } from '@/features/user-model/user-model-api';
 
 import { useUnderstandingActivityStore } from '../understanding-activity-store';
 
@@ -57,31 +51,7 @@ describe('understanding activity store', () => {
     });
   });
 
-  it('edits and activates a source-derived memory in one review decision', async () => {
-    useUnderstandingActivityStore.setState({
-      status: 'review_ready',
-      memories: [{
-        id: 'candidate-1',
-        assertionId: 'assertion-1',
-        category: 'preference',
-        factKey: 'preference:original-wording',
-        statement: 'Original wording',
-        confidence: 'high',
-        evidence: ['Observed in project notes'],
-        status: 'pending',
-      }],
-    });
-
-    await useUnderstandingActivityStore.getState().reviewMemory('assertion-1', true, 'Edited wording');
-
-    expect(correctAssertion).toHaveBeenCalledWith('assertion-1', 'Edited wording');
-    expect(useUnderstandingActivityStore.getState().memories[0]).toMatchObject({
-      statement: 'Edited wording',
-      status: 'edited',
-    });
-  });
-
-  it('keeps a completed directory run ready for review until the user confirms it', () => {
+  it('completes directory understanding without a memory approval queue', () => {
     useUnderstandingActivityStore.getState().updateDirectoryRun({
       id: 'run-1',
       rootPath: '/workspace',
@@ -97,7 +67,7 @@ describe('understanding activity store', () => {
     });
 
     expect(useUnderstandingActivityStore.getState()).toMatchObject({
-      status: 'review_ready',
+      status: 'completed',
       directoryStatus: 'completed',
       directoryRun: { id: 'run-1' },
     });
