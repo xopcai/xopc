@@ -117,7 +117,7 @@ export function CliConnectorDialog({ definition, instance: initialInstance, onCl
         </div> : null}
         {health ? <p className="text-sm text-fg-muted">{health}</p> : null}
         {accounts?.accounts.map(account => <div key={account.id} className="space-y-2 rounded-lg border border-edge p-3">
-          <p className="text-sm font-medium">{account.label ?? account.id}</p><p className="break-all text-xs text-fg-muted">{String(account.identity.openId ?? account.identity.botId ?? account.id)}</p>
+          <p className="text-sm font-medium">{account.label ?? account.id}</p><p className="break-all text-xs text-fg-muted">{String(account.identity.openId ?? account.identity.botId ?? account.identity.userId ?? account.id)}</p>
           <p className="text-xs text-fg-muted">{account.enabled && account.status === 'active' ? (zh ? '已连接' : 'Connected') : (zh ? '已断开' : 'Disconnected')}</p>
           <div className="flex gap-2"><Button variant="secondary" disabled={busy || Boolean(pending) || instance?.enabled === false} onClick={() => void connect(account.id)}>{zh ? '重新连接' : 'Reconnect'}</Button>
           <Button variant="ghost" disabled={busy || Boolean(pending) || !account.enabled} onClick={() => void disconnect(account.id)}>{zh ? '断开本地连接' : 'Disconnect locally'}</Button></div>
