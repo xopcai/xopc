@@ -1376,6 +1376,107 @@ html.dark[data-color-scheme="dawn"] {
   --app-chrome-sidebar-bg: var(--app-chrome-bg);
 }
 
+/* Warm Porcelain — opaque reading surfaces with oatmeal and rose edge light. */
+html[data-color-scheme="porcelain"] {
+  --color-surface-base: #f6f0e7;
+  --color-surface-rail: #f1eae1;
+  --color-surface-panel: #fffcf7;
+  --color-surface-overlay: #fffcf7;
+  --color-surface-inset: #f1eae1;
+  --color-surface-hover: #efe5dc;
+  --color-surface-active: #e8d9cf;
+
+  --color-fg: #352e2a;
+  --color-fg-muted: #665b54;
+  --color-fg-subtle: #776b63;
+  --color-fg-disabled: #a79a90;
+
+  --color-edge-subtle: #eee6dd;
+  --color-edge: #e4dcd3;
+  --color-edge-strong: #d5c6ba;
+
+  --color-accent: #985d4d;
+  --color-accent-hover: #874f41;
+  --color-accent-active: #754337;
+  --color-accent-soft: #e8d9cf;
+  --color-accent-fg: #874f41;
+  --color-on-accent: #fffcf7;
+  --color-loop-indigo: #98777d;
+  --color-momentum-cyan: #526d80;
+  --color-checkbox-accent: #985d4d;
+
+  --color-success: #4f6b56;
+  --color-success-soft: #eaf0e8;
+  --color-warning: #87601e;
+  --color-warning-soft: #f7eedb;
+  --color-danger: #a34444;
+  --color-danger-soft: #f7e8e5;
+  --color-scrim: rgb(53 46 42 / 0.36);
+
+  --shadow-surface: 0 1px 2px rgb(53 46 42 / 0.04);
+  --shadow-elevated: 0 4px 16px rgb(53 46 42 / 0.06);
+  --shadow-float: 0 12px 32px rgb(53 46 42 / 0.1);
+  --shadow-popover: 0 8px 28px rgb(53 46 42 / 0.1);
+
+  --app-chrome-bg:
+    radial-gradient(ellipse at 0% 0%, #e9d8c8, transparent 68%),
+    radial-gradient(ellipse at 100% 100%, #e6d3d0, transparent 60%),
+    linear-gradient(#f6f0e7, #f6f0e7);
+  --app-chrome-sidebar-bg: var(--app-chrome-bg);
+}
+
+html[data-color-scheme="porcelain"] .bg-accent:active:not(:disabled) {
+  background-color: var(--color-accent-active);
+}
+
+/* Warm charcoal and lifted clay surfaces preserve the palette in system dark mode. */
+html.dark[data-color-scheme="porcelain"] {
+  --color-surface-base: #211c19;
+  --color-surface-rail: #1d1916;
+  --color-surface-panel: #2b2420;
+  --color-surface-overlay: #342b26;
+  --color-surface-inset: #241e1a;
+  --color-surface-hover: #3b3029;
+  --color-surface-active: #493a32;
+
+  --color-fg: #f3eae1;
+  --color-fg-muted: #c5b5a8;
+  --color-fg-subtle: #af9e91;
+  --color-fg-disabled: #7e7065;
+
+  --color-edge-subtle: #382f29;
+  --color-edge: #4a3e35;
+  --color-edge-strong: #6a5749;
+
+  --color-accent: #d4a08c;
+  --color-accent-hover: #e2b39f;
+  --color-accent-active: #c18d79;
+  --color-accent-soft: #493a32;
+  --color-accent-fg: #e2b39f;
+  --color-on-accent: #211c19;
+  --color-loop-indigo: #c5a4ab;
+  --color-momentum-cyan: #a1b9ca;
+  --color-checkbox-accent: #985d4d;
+
+  --color-success: #a3c0a5;
+  --color-success-soft: #29372c;
+  --color-warning: #dcbc7d;
+  --color-warning-soft: #3c3222;
+  --color-danger: #e8a19a;
+  --color-danger-soft: #432b29;
+  --color-scrim: rgb(15 12 10 / 0.6);
+
+  --shadow-surface: 0 0 0 1px rgb(243 234 225 / 0.05);
+  --shadow-elevated: 0 8px 24px rgb(0 0 0 / 0.22);
+  --shadow-float: 0 16px 40px rgb(0 0 0 / 0.3);
+  --shadow-popover: 0 12px 32px rgb(0 0 0 / 0.3);
+
+  --app-chrome-bg:
+    radial-gradient(ellipse at 0% 0%, #382b23, transparent 68%),
+    radial-gradient(ellipse at 100% 100%, #37282c, transparent 60%),
+    linear-gradient(#211c19, #211c19);
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

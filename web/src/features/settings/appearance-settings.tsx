@@ -74,6 +74,22 @@ const SCHEME_PREVIEW: Record<
       muted: '#2a3a3a',
     },
   },
+  porcelain: {
+    light: {
+      canvas: '#f6f0e7',
+      panel: '#fffcf7',
+      accent: '#985d4d',
+      fg: '#352e2a',
+      muted: '#e8d9cf',
+    },
+    dark: {
+      canvas: '#211c19',
+      panel: '#2b2420',
+      accent: '#d4a08c',
+      fg: '#f3eae1',
+      muted: '#493a32',
+    },
+  },
   dawn: {
     light: {
       canvas: '#accdec',
@@ -137,9 +153,11 @@ const COLOR_SCHEME_OPTIONS: {
     | 'colorSchemeDefault'
     | 'colorSchemeLightGreen'
     | 'colorSchemeClay'
-    | 'colorSchemeDawn';
+    | 'colorSchemeDawn'
+    | 'colorSchemePorcelain';
 }[] = [
   { value: 'default', labelKey: 'colorSchemeDefault' },
+  { value: 'porcelain', labelKey: 'colorSchemePorcelain' },
   { value: 'dawn', labelKey: 'colorSchemeDawn' },
   { value: 'emerald', labelKey: 'colorSchemeLightGreen' },
   { value: 'clay', labelKey: 'colorSchemeClay' },
@@ -157,7 +175,7 @@ function ColorSchemeSelector() {
       <div className="min-w-0">
         <div className="text-sm font-medium text-fg">{a.colorSchemeTitle}</div>
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
         {COLOR_SCHEME_OPTIONS.map(({ value, labelKey }) => {
           const isSelected = colorScheme === value;
           return (
