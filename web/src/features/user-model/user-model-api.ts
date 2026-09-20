@@ -191,6 +191,17 @@ export function setGoalStatus(id: string, status: UserGoal['status']): Promise<u
   });
 }
 
+export function updatePriority(id: string, input: {
+  title?: string;
+  desiredOutcome?: string;
+  validTo?: number;
+  status?: PriorityWindow['status'];
+}): Promise<unknown> {
+  return fetchJson(apiUrl(`/api/user-model/priorities/${encodeURIComponent(id)}`), {
+    method: 'PATCH', body: JSON.stringify(input),
+  });
+}
+
 export function setRuleStatus(id: string, status: CollaborationRule['status']): Promise<unknown> {
   return fetchJson(apiUrl(`/api/user-model/rules/${encodeURIComponent(id)}/status`), {
     method: 'PATCH', body: JSON.stringify({ status }),
