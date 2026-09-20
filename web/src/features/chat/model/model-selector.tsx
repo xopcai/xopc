@@ -19,8 +19,8 @@ import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { settingsShellPopoverZClass } from '@/lib/settings-shell-layer.utils';
 import {
+  useResolvedPopoverPortalContainer,
   useSettingsShellPopoverLayer,
-  useSettingsShellPopoverPortalContainer,
 } from '@/lib/settings-shell-layer-context';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -136,8 +136,9 @@ export function ModelSelector({
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [triggerElement, setTriggerElement] = useState<HTMLButtonElement | null>(null);
   const settingsShellLayer = useSettingsShellPopoverLayer();
-  const portalContainer = useSettingsShellPopoverPortalContainer();
+  const portalContainer = useResolvedPopoverPortalContainer(triggerElement);
   const settingsShellPopoverZ = settingsShellPopoverZClass(settingsShellLayer, portalContainer !== null);
   const footerLink = settingsFooterLink ?? (showProviderSettingsFooter
     ? { label: m.modelProviderSettingsLink, path: '/settings/capabilities/models' }
@@ -177,6 +178,7 @@ export function ModelSelector({
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
         <button
+          ref={setTriggerElement}
           type="button"
           aria-label={ariaLabel}
           disabled={disabled || isLoading}

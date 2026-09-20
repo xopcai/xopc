@@ -123,7 +123,7 @@ export function SidebarFooter({
           <Popover.Content
             className={cn(
               'z-50 w-max max-w-[min(calc(100vw-1rem),28rem)] overflow-visible',
-              'rounded-xl border border-edge bg-surface-panel p-2 shadow-popover dark:border-edge',
+              'rounded-xl border border-edge bg-surface-overlay p-2 shadow-popover dark:border-edge',
             )}
             side="top"
             align={collapsed ? 'center' : 'end'}

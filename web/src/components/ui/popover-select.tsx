@@ -6,8 +6,8 @@ import { cn } from '@/lib/cn';
 import { Skeleton } from '@/components/ui/skeleton';
 import { settingsShellPopoverZClass } from '@/lib/settings-shell-layer.utils';
 import {
+  useResolvedPopoverPortalContainer,
   useSettingsShellPopoverLayer,
-  useSettingsShellPopoverPortalContainer,
 } from '@/lib/settings-shell-layer-context';
 
 export type PopoverSelectOption = {
@@ -134,8 +134,9 @@ export function PopoverSelect({
   selectedLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [triggerElement, setTriggerElement] = useState<HTMLButtonElement | null>(null);
   const settingsShellLayer = useSettingsShellPopoverLayer();
-  const portalContainer = useSettingsShellPopoverPortalContainer();
+  const portalContainer = useResolvedPopoverPortalContainer(triggerElement);
   const popoverZ = settingsShellPopoverZClass(settingsShellLayer, portalContainer !== null);
   const selected = options.find((option) => option.value === value);
   const label = selectedLabel ?? selected?.label ?? (value ? `${value} · unavailable` : placeholder);
@@ -145,6 +146,7 @@ export function PopoverSelect({
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
         <button
+          ref={setTriggerElement}
           id={id}
           type="button"
           aria-label={ariaLabel}

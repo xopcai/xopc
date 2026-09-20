@@ -93,4 +93,37 @@ describe('PopoverSelect', () => {
       'max-h-[min(20rem,var(--radix-popover-content-available-height))]',
     );
   });
+
+  it('portals its scroll region inside the nearest modal container', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <div role="dialog">
+          <PopoverSelect
+            value="option-0"
+            options={Array.from({ length: 20 }, (_, index) => ({
+              value: `option-${index}`,
+              label: `Option ${index}`,
+            }))}
+            placeholder="Choose an option"
+            onChange={() => {}}
+          />
+        </div>,
+      );
+    });
+    mounted.push({ container, unmount: () => root.unmount() });
+
+    await act(async () => {
+      container.querySelector('button')?.click();
+      await Promise.resolve();
+    });
+
+    const dialog = container.querySelector<HTMLElement>('[role="dialog"]');
+    const scrollRegion = dialog?.querySelector<HTMLElement>('[data-select-scroll-region]');
+    expect(scrollRegion).not.toBeNull();
+    expect(scrollRegion?.className).toContain('overflow-y-auto');
+  });
 });

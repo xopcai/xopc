@@ -5,7 +5,7 @@ const { fetchJson } = vi.hoisted(() => ({ fetchJson: vi.fn() }));
 vi.mock('@/lib/fetch', () => ({ fetchJson }));
 vi.mock('@/lib/url', () => ({ apiUrl: (path: string) => path }));
 
-import { fetchUserProfile, updatePriority } from '../user-model-api';
+import { createPriority, fetchUserProfile, updatePriority } from '../user-model-api';
 
 describe('user-model-api', () => {
   beforeEach(() => fetchJson.mockReset());
@@ -53,5 +53,26 @@ describe('user-model-api', () => {
         validTo: 42,
       }),
     });
+  });
+
+  it('creates a primary current focus through the priorities endpoint', async () => {
+    fetchJson.mockResolvedValue({ priority: { id: 'priority-1' } });
+    const now = vi.spyOn(Date, 'now').mockReturnValue(100);
+
+    await createPriority({ title: 'Ship the release', validTo: 200 });
+
+    expect(fetchJson).toHaveBeenCalledWith('/api/user-model/priorities', {
+      method: 'POST',
+      body: JSON.stringify({
+        targetType: 'topic',
+        targetId: 'Ship the release',
+        rank: 'primary',
+        urgency: 1,
+        scope: { type: 'global' },
+        validFrom: 100,
+        validTo: 200,
+      }),
+    });
+    now.mockRestore();
   });
 });

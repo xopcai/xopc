@@ -5,8 +5,8 @@ import { useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import { cn } from '@/lib/cn';
 import { settingsShellPopoverZClass } from '@/lib/settings-shell-layer.utils';
 import {
+  useResolvedPopoverPortalContainer,
   useSettingsShellPopoverLayer,
-  useSettingsShellPopoverPortalContainer,
 } from '@/lib/settings-shell-layer-context';
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
@@ -61,12 +61,13 @@ export function TimePicker({
   const parsedValue = parseTime(value);
   const fallback = parsedValue ?? currentTime();
   const [open, setOpen] = useState(false);
+  const [triggerElement, setTriggerElement] = useState<HTMLButtonElement | null>(null);
   const [draftHour, setDraftHour] = useState(fallback.hour);
   const [draftMinute, setDraftMinute] = useState(fallback.minute);
   const hourRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const minuteRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const settingsShellLayer = useSettingsShellPopoverLayer();
-  const portalContainer = useSettingsShellPopoverPortalContainer();
+  const portalContainer = useResolvedPopoverPortalContainer(triggerElement);
   const popoverZ = settingsShellPopoverZClass(settingsShellLayer, portalContainer !== null);
   const normalizedStep = Math.max(1, Math.min(60, Math.round(minuteStep)));
   const minutes = Array.from({ length: Math.ceil(60 / normalizedStep) }, (_, index) => index * normalizedStep)
@@ -114,6 +115,7 @@ export function TimePicker({
       >
         <Popover.Trigger asChild>
           <button
+            ref={setTriggerElement}
             id={id}
             type="button"
             disabled={disabled}
