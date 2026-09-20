@@ -1,4 +1,4 @@
-import { closeSync, constants, fstatSync, ftruncateSync, lstatSync, mkdirSync, openSync, readdirSync, readSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { closeSync, constants, fstatSync, ftruncateSync, lstatSync, mkdirSync, openSync, readdirSync, read, readSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
 import { evaluateFilePolicy } from './exec-policy.js';
@@ -58,6 +58,35 @@ export function readWorkspaceFile(workspace: string, path: string, maxBytes = 10
       if (total > maxBytes) throw new Error(`File too large: maximum ${maxBytes} bytes`);
       chunks.push(chunk.subarray(0, count));
     }
+    return Buffer.concat(chunks);
+  } finally { closeSync(fd); }
+}
+
+/** Use the same checked inode as synchronous access, yielding between bounded reads. */
+export async function readWorkspaceFileAsync(workspace: string, path: string, signal?: AbortSignal, maxBytes = 10 * 1024 * 1024): Promise<Buffer> {
+  signal?.throwIfAborted();
+  const fd = openChecked(workspace, path, false);
+  try {
+    const before = fstatSync(fd);
+    if (before.size > maxBytes) throw new Error(`File too large: maximum ${maxBytes} bytes`);
+    const chunks: Buffer[] = [];
+    let total = 0;
+    for (;;) {
+      signal?.throwIfAborted();
+      const chunk = Buffer.alloc(Math.min(64 * 1024, maxBytes - total + 1));
+      const count = await new Promise<number>((resolveRead, reject) => {
+        read(fd, chunk, 0, chunk.length, null, (error, bytes) => error ? reject(error) : resolveRead(bytes));
+      });
+      signal?.throwIfAborted();
+      if (count === 0) break;
+      total += count;
+      if (total > maxBytes) throw new Error(`File too large: maximum ${maxBytes} bytes`);
+      chunks.push(chunk.subarray(0, count));
+    }
+    const after = fstatSync(fd);
+    const current = statSync(checkedFilePath(workspace, path, 'read'));
+    if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs
+      || current.ino !== after.ino || current.dev !== after.dev) throw new Error('File changed during read; retry');
     return Buffer.concat(chunks);
   } finally { closeSync(fd); }
 }

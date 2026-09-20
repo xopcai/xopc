@@ -27,10 +27,11 @@ import {
   type DelegateChildHandleOptions,
 } from '../child-agent-factory.js';
 import {
-  DEFAULT_DELEGATE_TOOLS,
   DELEGATE_BLOCKED_TOOLS,
 } from '../tools/delegate-tool.js';
 import type { ToolExecutorConfig } from '../tools/executor.js';
+import { resolveDelegationTools, protectDelegatedTool, DELEGATION_TOOL_CAPABILITIES } from '../tools/delegation-policy.js';
+import { createDelegationParentPolicy } from '../tools/delegation-parent-policy.js';
 
 import {
   createStructuredOutputTool,
@@ -91,8 +92,16 @@ export class DelegateSubagentRunner implements SubagentRunner {
       agentId: this.deps.agentId,
       getConfig: this.deps.getConfig,
       toolExecutorConfig: this.deps.toolExecutorConfig,
+      authorizeToolCall: createDelegationParentPolicy({ getConfig: this.deps.getConfig,
+        conversationId: opts.sessionMetadata?.parentConversationId, agentId: this.deps.agentId }).beforeToolCall,
       buildChildTools: (childOpts) => {
-        const base = this.deps.buildChildTools({ ...childOpts, agentId: this.deps.agentId ?? childOpts.agentId });
+        const candidates = this.deps.buildChildTools({ ...childOpts, agentId: this.deps.agentId ?? childOpts.agentId });
+        const access = resolveDelegationTools(candidates.map(tool => tool.name), 'custom',
+          opts.allowedToolNames, ['local_read', 'web_read', 'knowledge_read', 'skills_read', 'external_read',
+            ...(opts.allowedToolNames?.includes('browser_use') ? ['browser' as const] : [])]);
+        if (access.rejected.length) throw new Error(`Workflow delegation rejected tools: ${JSON.stringify(access.rejected)}. Use delegate_task implement for isolated writes and commands.`);
+        const granted = new Set(access.granted);
+        const base = candidates.filter(tool => granted.has(tool.name)).map(protectDelegatedTool);
         if (!wantStructured || !opts.schema) return base;
         // Replace any existing tool with the same name so the per-run capture wins.
         const filtered = base.filter((t) => t.name !== STRUCTURED_OUTPUT_TOOL_NAME);
@@ -191,7 +200,8 @@ export function resolveAllowedToolNames(
   requested: string[] | undefined,
   wantStructured: boolean,
 ): string[] {
-  const base = requested ?? [...DEFAULT_DELEGATE_TOOLS];
+  const base = requested ?? Object.keys(DELEGATION_TOOL_CAPABILITIES).filter(name =>
+    !['local_write', 'command', 'browser'].includes(DELEGATION_TOOL_CAPABILITIES[name]!));
   const filtered = base
     .map((s) => String(s).trim())
     .filter((s) => s.length > 0)

@@ -127,7 +127,7 @@ Use the tool's stable policy id in the global defaults, or place the same overri
 
 Policy ids are not model-visible tools. List each tool from a server that should be denied; there is no separate server policy hierarchy.
 
-Delegate sub-agents cannot use MCP tools.
+Delegate sub-agents can use parent-accessible MCP tools when the host tool policy explicitly declares `readOnly: true`; remote read-only hints do not grant access. See [delegation policies](coder-harness-operations.md#委派与恢复).
 
 ---
 
@@ -240,7 +240,7 @@ Config changes under `mcp` trigger hot reload (see [Configuration rules](./confi
 - **Secrets** — prefer `${ENV_VAR}` in `headers` / `env` instead of literals in config files under version control.
 - **HTTP** — only `http://` and `https://` URLs are accepted.
 - **Hooks** — `before_tool_call` extensions receive `isMcpTool` and `mcpServerId` for custom policy.
-- **Delegate** — sub-agent runs cannot invoke MCP tools.
+- **Delegate** — sub-agent MCP execution requires inherited parent access and a host-approved read-only contract.
 
 ---
 

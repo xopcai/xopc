@@ -41,6 +41,7 @@ export interface DelegateChildProgressHooks {
 }
 
 export interface DelegateChildHandleOptions {
+  authorizeToolCall?: import('./orchestration/agent-turn-policy.js').AgentTurnPolicyOptions['authorizeToolCall'];
   workspace: string;
   goal: string;
   context?: string;
@@ -95,17 +96,25 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
       const tools = options.buildChildTools({ workspace: options.workspace, bus: options.bus,
         model: options.model, agentId: options.agentId, getConfig: options.getConfig,
         toolExecutorConfig: options.toolExecutorConfig,
-        browserConversationId: options.requesterConversationId ?? conversationId,
+        browserConversationId: options.requesterConversationId ?? options.conversationId,
       }).filter(tool => allow.has(tool.name));
       const limit = Math.min(60, Math.max(1, Math.floor(options.maxIterations)));
       let toolIterations = 0, exhausted = false, tokens = 0;
+      let terminationReason: string | undefined;
       const policy = createAgentTurnPolicy({ maxTurns: limit + 1, maxToolFailures: 5,
-        authorizeToolCall: async () => {
+        authorizeToolCall: async (context, signal) => {
+          const { toolCall } = context;
+          if (!allow.has(toolCall.name)) return { block: true, reason: 'Tool is outside the delegated capability set.' };
           if (toolIterations >= limit || tokens >= 100_000) {
             exhausted = true;
             return { block: true, terminate: true, reason: 'Sub-agent budget exhausted.' };
           }
-          toolIterations++;
+          if (toolCall.name !== 'data_batch') toolIterations++;
+          const decision = await options.authorizeToolCall?.(context, signal);
+          if (decision?.block) {
+            if (decision.terminate) { exhausted = true; terminationReason = decision.reason; }
+            return decision;
+          }
           return undefined;
         },
       });
@@ -146,7 +155,8 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
         const verification = runtime.openSessionManager(options.workspace).getBranch().findLast(entry => entry.type === 'custom' && entry.customType === 'coding_verification');
         const proof = verification?.type === 'custom' ? verification.data as Awaited<ReturnType<RunVerification['summary']>> : undefined;
         const unverified = options.verifyChanges && proof?.changed && (!proof.evidence.some(item => item.kind === 'check' && item.status === 'passed') || proof.evidence.some(item => item.status !== 'passed'));
-        return { summary: result.lastAssistantText || result.errorMessage || (exhausted ? 'Sub-agent budget exhausted.' : '(no final response)'),
+        return { summary: [result.lastAssistantText || result.errorMessage, terminationReason].filter(Boolean).join('\n\n')
+          || (exhausted ? 'Sub-agent budget exhausted.' : '(no final response)'),
           toolIterations, messages: await runtime.loadMessages(),
           status: controller.signal.aborted ? 'cancelled' as const : !result.ok ? 'failed' as const : exhausted || unverified ? 'partial' as const : 'success' as const,
           ...(verification?.type === 'custom' ? { verification: verification.data as Awaited<ReturnType<RunVerification['summary']>> } : {}),

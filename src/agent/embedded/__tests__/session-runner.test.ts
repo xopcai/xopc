@@ -21,6 +21,7 @@ describe('EmbeddedSessionRunner fingerprint', () => {
       workspaceDir: '/tmp/ws',
       modelRef: 'openai/gpt-4o',
       toolNames: ['read', 'write'],
+      toolContracts: ['read-v1', 'write-v1'],
       systemPrompt: 'You are helpful.',
       thinkingLevel: 'medium',
       credentialRevision: 'current-credential',
@@ -36,6 +37,7 @@ describe('EmbeddedSessionRunner fingerprint', () => {
     expect(c).not.toBe(a);
     expect(d).not.toBe(a);
     expect(e).not.toBe(a);
+    expect(buildEmbeddedRunnerFingerprint({ ...base, toolContracts: ['read-v2', 'write-v1'] })).not.toBe(a);
   });
 
   it('is stable for identical inputs regardless of tool order', () => {
@@ -44,11 +46,12 @@ describe('EmbeddedSessionRunner fingerprint', () => {
       workspaceDir: '/tmp/ws',
       modelRef: 'openai/gpt-4o',
       toolNames: ['b', 'a'],
+      toolContracts: ['b-v1', 'a-v1'],
       systemPrompt: 'Prompt',
       thinkingLevel: 'low',
       credentialRevision: 'current-credential',
     };
-    const inputB = { ...inputA, toolNames: ['a', 'b'] };
+    const inputB = { ...inputA, toolNames: ['a', 'b'], toolContracts: ['a-v1', 'b-v1'] };
     expect(buildEmbeddedRunnerFingerprint(inputA)).toBe(buildEmbeddedRunnerFingerprint(inputB));
   });
 

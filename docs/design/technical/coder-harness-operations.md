@@ -59,11 +59,21 @@ Git 命令没有专门的拦截或告警；与 Git 拼接的通用危险 shell �
 
 ## 委派与恢复
 
-`delegate_task` 提供三个模式：
+`delegate_task` 根据父代理当前有效工具、能力上限以及本次请求的交集授予能力：
 
-- `inspect`：默认模式，只允许读取和检索。
+- `research`：默认模式，继承父代理已有的本地、Web、知识库、Skills 和已确认只读的外部工具。不要求 Git 仓库。
+- `read` / `inspect`：仅本地读取和检索。
 - `review`：独立检查真实源码与差异，返回定位明确的发现；工作区在 review 期间变化会使结果过期。
 - `implement`：要求已绑定项目且起始 Git 工作区干净；创建独立 managed worktree。结果保留在该环境中，由父任务审查、集成，再验证父工作区，不自动合并。
+- `custom`：通过 `capabilities` 显式选择读取能力或浏览器交互。写文件和命令执行仍须使用 `implement`。
+
+`capabilities` 为 `local_read`、`web_read`、`knowledge_read`、`skills_read`、`external_read`、`local_write`、`command`、`browser` 的子集；`toolset` 进一步按名称收窄。浏览器必须显式授予 `browser` 能力。新工具在宿主能力注册表中分类一次即可复用各模式，未知工具不自动开放。返回 `grantedTools`、`rejectedTools`，说明不可用或被能力上限拒绝的工具。
+
+子任务使用父代理已经配置好的读取工具，保留账号、知识库和 Skills 范围；实现任务的文件和命令工具重新绑定至 worktree。运行时复用父回合的授权与调用计数，父代理的 deny、ask 和调用限制不能通过重复创建子任务绕过。子任务只接收 goal/context，不自动复制父会话历史；需要相关背景时应在 context 中传入。
+
+外部执行强制只读，忽略子模型传入的 `readOnly: false` 和 approvalId。宿主已有的 `batchRead` 契约可直接使用；其他 MCP/扩展/连接器操作可由用户在对应工具策略中声明 `readOnly: true`，例如 `agents.defaults.tools["mcp:docs:search"] = { "mode": "allow", "readOnly": true }`。远端 `readOnlyHint` 不授予能力。设置 `readOnly: false` 可显式撤回只读声明；工具契约变化需要重新 describe。该配置是宿主对具体操作的信任声明，不会把实际写操作转换成只读。
+
+Workflow 子任务也遵循能力过滤及父代理 deny/ask 策略，默认研究读取；显式 browser_use 可启用浏览器。原先直接在共享目录中执行写入或命令的 workflow toolset 现在会明确失败，需改用独立 worktree 的 implement 委派。无人交互的 workflow 无法满足 ask 策略时会报告需要父代理授权。
 
 子任务最多 60 次工具调用、5 分钟，并在报告的累计 token 使用达到 100k 后停止后续请求。已经发出的模型请求可能越过 token 阈值。子任务不能继续委派、发外部消息或创建后台任务。源码与验证沿用主任务的 embedded harness；持久 workflow 子会话沿用 SQLite 追加写入，删除了原有整段 `saveMessages` 重写路径。
 

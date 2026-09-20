@@ -351,7 +351,7 @@ npx playwright-core install chromium
 
 ### `delegate_task`
 
-子智能体**独立上下文**（无父会话 transcript），仅返回**文字摘要**。含 `goal`、`context`、`toolset`、`maxIterations`（默认 30）等。子智能体不能嵌套 `delegate_task`，也不能用 `clarify`、外发消息、记忆、`todo`、`automation`、Skills 管理类工具。
+子智能体使用独立上下文（无父会话 transcript）。默认 `research` 继承父代理已有的 Web、知识库、Skills 及宿主确认只读的外部工具；`capabilities` 和 `toolset` 可进一步收窄。写入和命令通过 `implement` 在独立 worktree 执行。结果包含摘要及工具授予/拒绝原因；仍禁止嵌套委派、外部写入、安装和持久任务。参见[当前委派策略](../coder-harness-operations.md#委派与恢复)。
 
 可用性由最终生效的 Agent 工具策略控制。
 

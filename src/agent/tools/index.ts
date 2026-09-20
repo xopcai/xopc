@@ -13,6 +13,7 @@ export {
   type ToolLockMode,
 } from './concurrency.js';
 export { createReadFileTool, type CreateReadFileToolOptions } from './read.js';
+export { createDataBatchTool } from './dataBatch.js';
 export { createWriteFileTool, writeFileTool } from './write.js';
 export { createListDirTool, listDirTool } from './list-dir.js';
 export {

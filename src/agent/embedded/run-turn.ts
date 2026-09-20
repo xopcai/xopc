@@ -45,6 +45,8 @@ import { resolvePromptCachePolicy } from '../../providers/prompt-cache-plan.js';
 import { markTurnToolResult } from '../memory/turn-provenance.js';
 import { RepositoryInstructions } from '../coding/repository-instructions.js';
 import { RunVerification } from '../coding/run-verification.js';
+import { withDelegationScope } from '../orchestration/delegation-scope.js';
+import { runWithEmbeddedExecutionSession } from './execution-context.js';
 
 const log = createLogger('EmbeddedRun');
 const LOG_PREVIEW_MAX_CHARS = 300;
@@ -392,9 +394,12 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     session.agent.afterToolCall = async (context) => {
       connectionStopped ||= isConnectionSuspended(conversationId, runId);
       clarificationStopped ||= isClarificationSuspended(conversationId, runId);
-      const scoped = context.toolCall.name === 'read_file' ? await instructions.forTool(context.toolCall.name, context.args) : '';
+      const scoped = context.toolCall.name === 'read_file' ? await instructions.forTool(context.toolCall.name, context.args)
+        : context.toolCall.name === 'data_batch' ? await instructions.forDataResult(context.result.content) : '';
       const checked = await verification.afterTool(context);
-      if (scoped) checked.result.content.unshift({ type: 'text', text: scoped });
+      if (scoped && context.toolCall.name === 'data_batch') {
+        checked.result = { content: [{ type: 'text', text: `${scoped}\n\nNew directory instructions were discovered. Apply them before retrying the affected data queries; this result is not evidence of a complete search.` }], details: { status: 'retry_required' } };
+      } else if (scoped) checked.result.content.unshift({ type: 'text', text: scoped });
       await params.turnPolicy?.afterToolCall({ ...context, ...checked });
       return checked;
     };
@@ -421,7 +426,10 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     try {
       await runAgentTurnWithTimeout(
         session.agent,
-        async () => {
+        () => withDelegationScope({ tools,
+          authorizeToolCall: params.turnPolicy ? (context, signal) => runWithEmbeddedExecutionSession(conversationId,
+            () => params.turnPolicy!.beforeToolCall(context, signal), runId) : undefined,
+        }, async () => {
           const connectionResume = getConnectionResumeInput(conversationId, runId);
           const clarificationResume = getClarificationResumeInput(conversationId, runId);
           if (connectionResume) {
@@ -462,7 +470,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
             }, { triggerTurn: true });
             await session.agent.waitForIdle();
           }
-        },
+        }),
         timeoutMs,
       );
 

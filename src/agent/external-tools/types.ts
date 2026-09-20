@@ -19,6 +19,8 @@ export interface ExternalToolSearchHit {
 export interface ExternalToolDescriptor extends ExternalToolSearchHit {
   description: string;
   inputSchema: Record<string, unknown>;
+  /** Host-curated contract; never copied from remote readOnlyHint annotations. */
+  batchRead?: boolean;
 }
 
 export interface VersionedExternalToolDescriptor extends ExternalToolDescriptor {

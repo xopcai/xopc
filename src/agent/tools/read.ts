@@ -2,7 +2,8 @@
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { stat } from 'fs/promises';
-import { checkedFilePath, readWorkspaceFile } from '../sandbox/fileAccess.js';
+import { checkedFilePath, readWorkspaceFileAsync } from '../sandbox/fileAccess.js';
+import { dataScheduler } from '../data-acquisition/scheduler.js';
 import { checkFileSafety } from '../prompt/safety.js';
 import { truncateHead, formatSize, DEFAULT_MAX_BYTES } from './truncate.js';
 import {
@@ -47,9 +48,9 @@ export function createReadFileTool(
     async execute(
       _toolCallId: string,
       params: any,
-      _signal?: AbortSignal,
+      signal?: AbortSignal,
     ): Promise<AgentToolResult<{}>> {
-      return executeReadFile(workspace, options?.profileMarkdownRoot, params as ReadFileParams);
+      return dataScheduler.run(workspace, signal, () => executeReadFile(workspace, options?.profileMarkdownRoot, params as ReadFileParams, signal));
     },
   } as any;
 }
@@ -58,6 +59,7 @@ async function executeReadFile(
   workspace: string,
   profileMarkdownRoot: string | undefined,
   params: ReadFileParams,
+  signal?: AbortSignal,
 ): Promise<AgentToolResult<{}>> {
   try {
     const safety = checkFileSafety('read', params.path);
@@ -94,7 +96,7 @@ async function executeReadFile(
       return { content: [{ type: 'text', text: `🚫 File too large: ${formatSize(stats.size)}` }], details: { status: 'failed' } };
     }
 
-    const content = readWorkspaceFile(activeRoot, normalized, MAX_FILE_SIZE).toString('utf8');
+    const content = (await readWorkspaceFileAsync(activeRoot, normalized, signal, MAX_FILE_SIZE)).toString('utf8');
     const offset = Math.max(1, params.offset ?? 1);
     const lines = content.split('\n');
     if (offset > lines.length) throw new Error(`Offset ${offset} exceeds ${lines.length} lines`);
@@ -112,6 +114,7 @@ async function executeReadFile(
 
     return { content: [{ type: 'text', text: outputText }], details: { path: normalized, offset, totalLines: lines.length, truncated: truncation.truncated } };
   } catch (error) {
+    signal?.throwIfAborted();
     return { content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : String(error)}` }], details: { status: 'failed' } };
   }
 }

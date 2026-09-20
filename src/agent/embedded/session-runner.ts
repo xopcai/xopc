@@ -32,6 +32,7 @@ export type EmbeddedRunnerFingerprintInput = {
   workspaceDir: string;
   modelRef: string;
   toolNames: readonly string[];
+  toolContracts: readonly string[];
   systemPrompt: string;
   thinkingLevel: string;
   credentialRevision: string;
@@ -49,6 +50,7 @@ export function buildEmbeddedRunnerFingerprint(input: EmbeddedRunnerFingerprintI
     input.workspaceDir,
     input.modelRef,
     tools,
+    [...input.toolContracts].sort().join('\0'),
     input.systemPrompt,
     input.thinkingLevel,
     input.credentialRevision,
@@ -178,6 +180,7 @@ export class EmbeddedSessionRunnerPool {
       workspaceDir: params.workspaceDir,
       modelRef: params.modelRef,
       toolNames: params.tools.map((t) => t.name),
+      toolContracts: params.tools.map(tool => JSON.stringify([tool.name, tool.parameters])),
       systemPrompt: params.systemPrompt,
       thinkingLevel: params.thinkingLevel ?? 'medium',
       credentialRevision: providerCredentialRevision(params.model.provider),
@@ -305,6 +308,7 @@ export class EmbeddedSessionRunnerPool {
       workspaceDir,
       modelRef: params.modelRef,
       toolNames,
+      toolContracts: tools.map(tool => JSON.stringify([tool.name, tool.parameters])),
       systemPrompt,
       thinkingLevel: thinkingLevel ?? 'medium',
       credentialRevision: providerCredentialRevision(model.provider),

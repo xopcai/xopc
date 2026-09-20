@@ -181,6 +181,22 @@ svg { display: block; }
 .message.user .message-body { border: 1px solid var(--edge); border-radius: 15px 15px 4px 15px; padding: 10px 13px; background: var(--surface-panel); box-shadow: 0 1px 2px rgb(17 17 17 / 3%); }
 .message.system .message-body { border-left: 2px solid var(--edge-strong); padding-left: 11px; color: var(--fg-muted); font-size: 12px; }
 .plain-message-content { white-space: pre-wrap; }
+.assistant-activity { margin: 0 0 10px; border: 1px solid var(--edge); border-radius: 10px; background: color-mix(in srgb, var(--surface-hover) 55%, transparent); color: var(--fg-muted); font-size: 11px; }
+.assistant-activity > summary { min-height: 34px; display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; padding: 7px 10px; font-weight: 620; }
+.assistant-activity > summary::-webkit-details-marker { display: none; }
+.assistant-activity > summary::after { content: "⌄"; margin-left: auto; color: var(--fg-subtle); transition: transform 120ms ease; }
+.assistant-activity[open] > summary::after { transform: rotate(180deg); }
+.activity-status, .tool-status-mark { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 999px; background: var(--fg-subtle); }
+.activity-status.running, .activity-tool.running .tool-status-mark { background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+.activity-list { display: grid; gap: 8px; border-top: 1px solid var(--edge); padding: 9px 10px 10px; }
+.activity-thinking { min-width: 0; }
+.activity-thinking strong { display: block; margin-bottom: 3px; color: var(--fg-subtle); font-size: 10px; font-weight: 620; }
+.activity-thinking p { max-height: 160px; margin: 0; overflow-y: auto; white-space: pre-wrap; color: var(--fg-muted); font-size: 11px; line-height: 1.5; }
+.activity-tool { min-width: 0; display: flex; align-items: center; gap: 7px; }
+.activity-tool.done .tool-status-mark { background: var(--success); }
+.activity-tool.error .tool-status-mark { background: var(--danger); }
+.tool-name { min-width: 0; flex: 1; overflow: hidden; color: var(--fg-muted); font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; white-space: nowrap; text-overflow: ellipsis; }
+.activity-tool small { flex: 0 0 auto; color: var(--fg-subtle); font-size: 9px; }
 .message-sources { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
 .source-badge { min-width: 0; max-width: 100%; display: inline-flex; align-items: center; gap: 5px; border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--edge)); border-radius: 999px; padding: 4px 8px; color: var(--accent-fg); background: var(--accent-soft); font-size: 10px; }
 .source-badge svg { width: 12px; height: 12px; flex: 0 0 auto; }

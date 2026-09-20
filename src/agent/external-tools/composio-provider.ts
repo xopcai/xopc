@@ -43,6 +43,11 @@ import type {
 
 const CONNECTION_ARGUMENT = 'xopcAccountId';
 const log = createLogger('ComposioToolProvider');
+const BATCH_READ_ACTIONS = new Set([
+  'GMAIL_GET_PROFILE', 'GMAIL_GET_EMAIL', 'GMAIL_LIST_LABELS',
+  'GOOGLEDRIVE_GET_ABOUT', 'GOOGLEDRIVE_GET_FILE_METADATA',
+  'GITHUB_GET_THE_AUTHENTICATED_USER', 'GITHUB_GET_A_REPOSITORY', 'GITHUB_GET_REPOSITORY',
+]);
 
 type CurrentContext = { channel: string; chatId: string; conversationId: string } | null;
 
@@ -294,6 +299,7 @@ export class ComposioToolProvider implements ExternalToolProvider {
       summary,
       description: `${summary} Available accounts: ${JSON.stringify(accounts)}. Use xopcAccountId to select one; never guess when the user's intent is ambiguous.`,
       inputSchema: actionInputSchema(action),
+      batchRead: accounts.length > 0 && action.scope === 'read' && action.curated && BATCH_READ_ACTIONS.has(action.actionId),
     };
   }
 
