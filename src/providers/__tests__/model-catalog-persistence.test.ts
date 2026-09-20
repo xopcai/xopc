@@ -16,6 +16,14 @@ function fixture(): CatalogSource {
     api: 'openai-completions',
     etag: 'catalog-1',
     recommendedModel: 'chat-1',
+    search: {
+      schemaVersion: 1,
+      endpoint: '/search',
+      auth: { scope: 'models:invoke' },
+      maxResults: 10,
+      defaults: { count: 5, safeSearch: 'moderate' },
+      capabilities: { freshness: true, language: true, region: true },
+    },
     lastSuccessAt: 123,
     models: [{
       id: 'chat-1', name: 'Chat 1', displayNames: { 'zh-CN': '标准', en: 'Standard' }, availability: 'available', kind: 'language',

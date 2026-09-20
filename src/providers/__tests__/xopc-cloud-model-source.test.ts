@@ -59,6 +59,14 @@ describe('XopcCloudModelSource', () => {
         xopc: {
           schemaVersion: 2,
           defaults: { 'image-generation': 'model-b', stt: 'stt-a', tts: 'tts-a', vision: 'missing' },
+          search: {
+            schemaVersion: 1,
+            endpoint: '/search',
+            auth: { scope: 'models:invoke' },
+            maxResults: 10,
+            defaults: { count: 5, safeSearch: 'moderate' },
+            capabilities: { freshness: true, language: true, region: true },
+          },
         },
         data: [
           {
@@ -110,6 +118,12 @@ describe('XopcCloudModelSource', () => {
         baseUrl: 'https://router.test/v1',
         etag: 'catalog-2',
         recommended: { 'image-generation': 'model-b', stt: 'stt-a', tts: 'tts-a' },
+        search: {
+          schemaVersion: 1,
+          endpoint: '/search',
+          auth: { scope: 'models:invoke' },
+          maxResults: 10,
+        },
       },
       models: [
         {

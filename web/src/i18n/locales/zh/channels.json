@@ -601,7 +601,7 @@
   },
   "webSearchSettings": {
     "title": "网络搜索",
-    "subtitle": "为 web_search 工具配置地区与搜索提供方。未配置 API 时将使用内置 HTML 兜底。",
+    "subtitle": "为 web_search 工具配置地区与搜索提供方。登录 XOPC Cloud 后，无需单独配置搜索 API 密钥。",
     "docsLink": "网关文档",
     "needToken": "请先保存网关访问令牌后再编辑网络搜索。",
     "loading": "加载中…",
@@ -616,7 +616,7 @@
     "sectionRegionHint": "在无可用 API 时，用于选择内置 HTML 兜底（国内优先必应，否则 DuckDuckGo）。",
     "sectionPreferences": "搜索偏好",
     "sectionSearch": "搜索提供方",
-    "sectionSearchHint": "按列表顺序依次尝试。密钥写在网关配置文件中。列表为空则仅使用 HTML 兜底。",
+    "sectionSearchHint": "按列表顺序依次尝试。列表为空时，已登录则自动使用 XOPC Cloud，失败后继续使用内置 HTML 兜底。",
     "sectionBlocklist": "域名黑名单",
     "sectionBlocklistHint": "启用后，web_search 与 web_extract 会跳过主机名匹配下列域名的 URL（精确或后缀匹配）。",
     "blocklistEnabled": "启用域名黑名单",

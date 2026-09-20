@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SearchProviderRegistry } from '../registry.js';
+import type { SearchProvider } from '../types.js';
 
 describe('SearchProviderRegistry', () => {
   const originalFetch = globalThis.fetch;
@@ -39,5 +40,28 @@ describe('SearchProviderRegistry', () => {
       providers: [{ type: 'tavily', apiKey: 'tvly-test-key' }],
     });
     expect(reg.hasConfiguredApiProvider()).toBe(true);
+  });
+
+  it('uses cloud automatically only when no provider was configured manually', async () => {
+    const cloud: SearchProvider = {
+      name: 'xopc-cloud',
+      isAvailable: () => true,
+      search: vi.fn(async () => [{ title: 'Cloud', url: 'https://xopc.ai', description: 'Result' }]),
+    };
+    const automatic = new SearchProviderRegistry({
+      region: 'global',
+      maxResults: 5,
+      providers: [],
+    }, { cloudProvider: cloud });
+    await expect(automatic.search('query', 3)).resolves.toMatchObject({ provider: 'xopc-cloud' });
+    expect(cloud.search).toHaveBeenCalledOnce();
+
+    const explicit = new SearchProviderRegistry({
+      region: 'global',
+      maxResults: 5,
+      providers: [{ type: 'tavily', apiKey: 'manual-key' }],
+    }, { cloudProvider: cloud });
+    await explicit.search('query', 3);
+    expect(cloud.search).toHaveBeenCalledOnce();
   });
 });
