@@ -4,6 +4,7 @@ import type { ConnectorDefinition, ConnectorInstallInput, ManagedConnectorMarker
 
 const SERVER_ID_PATTERN = /^[a-z][a-z0-9_-]{0,63}$/;
 const TEMPLATE_PATTERN = /^\{\{(secrets|config)\.([A-Za-z0-9_.-]+)\}\}$/;
+const EMBEDDED_SECRET_PATTERN = /\{\{secrets\.([A-Za-z0-9_.-]+)\}\}/g;
 
 export function assertValidConnectorServerId(serverId: string): void {
   if (!SERVER_ID_PATTERN.test(serverId)) {
@@ -29,12 +30,26 @@ function resolveTemplateValue(value: unknown, definition: ConnectorDefinition, i
   }
   const match = TEMPLATE_PATTERN.exec(value.trim());
   if (!match) {
-    return value;
+    const matches = [...value.matchAll(EMBEDDED_SECRET_PATTERN)];
+    if (matches.length === 0) return value;
+    if (matches.length > 1) throw new Error('Connector template values may contain at most one embedded secret.');
+    const embedded = matches[0];
+    const token = embedded[0];
+    const fieldKey = embedded[1];
+    const offset = embedded.index ?? 0;
+    return createConnectorSecretReference(definition.id, fieldKey, {
+      prefix: value.slice(0, offset),
+      suffix: value.slice(offset + token.length),
+    });
   }
   return readInputValue(definition, input, match[1] as 'secrets' | 'config', match[2]);
 }
 
-function materializeTemplate(value: unknown, definition: ConnectorDefinition, input: ConnectorInstallInput): unknown {
+function materializeTemplate(
+  value: unknown,
+  definition: ConnectorDefinition,
+  input: ConnectorInstallInput,
+): unknown {
   const resolved = resolveTemplateValue(value, definition, input);
   if (Array.isArray(resolved)) {
     return resolved.map((item) => materializeTemplate(item, definition, input));

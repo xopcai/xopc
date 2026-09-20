@@ -12,11 +12,17 @@ export function connectorSecretProviderId(connectorId: string, fieldKey: string)
   return `connector-${normalizedConnectorId}-${normalizedFieldKey}`;
 }
 
-export function createConnectorSecretReference(connectorId: string, fieldKey: string): ConnectorSecretReference {
+export function createConnectorSecretReference(
+  connectorId: string,
+  fieldKey: string,
+  affixes: { prefix?: string; suffix?: string } = {},
+): ConnectorSecretReference {
   return {
     xopcSecretRef: {
       provider: connectorSecretProviderId(connectorId, fieldKey),
       fieldKey,
+      ...(affixes.prefix ? { prefix: affixes.prefix } : {}),
+      ...(affixes.suffix ? { suffix: affixes.suffix } : {}),
     },
   };
 }
@@ -59,7 +65,8 @@ async function resolveSecretReference(
   resolver: CredentialResolver,
 ): Promise<string | undefined> {
   const value = await resolver.resolveApiKey(reference.xopcSecretRef.provider);
-  return value ?? undefined;
+  if (!value) return undefined;
+  return `${reference.xopcSecretRef.prefix ?? ''}${value}${reference.xopcSecretRef.suffix ?? ''}`;
 }
 
 export async function resolveConnectorSecretReferences(

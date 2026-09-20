@@ -45,8 +45,6 @@ function connectorInstanceFromRecord(instanceId: string, record: Record<string, 
   const runtimeType = runtime.type;
   if (
     runtimeType !== 'composio' &&
-    runtimeType !== 'channel' &&
-    runtimeType !== 'nativeTool' &&
     runtimeType !== 'memorySource'
   ) return [];
   if (
@@ -73,11 +71,7 @@ function connectorInstanceFromRecord(instanceId: string, record: Record<string, 
           toolkit: runtime.toolkit as string,
           role: runtime.role as 'credential' | 'toolkit',
         }
-      : runtimeType === 'channel'
-        ? { type: 'channel', id: instanceId }
-        : runtimeType === 'nativeTool'
-          ? { type: 'nativeTool', id: instanceId }
-          : { type: 'memorySource', id: instanceId },
+      : { type: 'memorySource', id: instanceId },
     usage: getConnectorUsageFromMarker(marker),
     audit: getConnectorAuditFromMarker(marker),
   }];

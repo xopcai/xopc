@@ -6,9 +6,9 @@ import { cn } from '@/lib/cn';
 import type { ConnectorDefinition } from '../connectors-api';
 
 const sizeClasses = {
-  sm: { frame: 'size-9 rounded-lg', image: 'size-6', fallback: 'size-4' },
-  md: { frame: 'size-10 rounded-xl', image: 'size-7', fallback: 'size-5' },
-  lg: { frame: 'size-12 rounded-xl', image: 'size-8', fallback: 'size-5' },
+  sm: { frame: 'size-9 rounded-lg', image: 'size-7', fallback: 'size-4' },
+  md: { frame: 'size-10 rounded-xl', image: 'size-8', fallback: 'size-5' },
+  lg: { frame: 'size-12 rounded-xl', image: 'size-10', fallback: 'size-5' },
 } as const;
 
 export function ConnectorLogo({
@@ -31,11 +31,10 @@ export function ConnectorLogo({
   return (
     <span
       className={cn(
-        'flex shrink-0 items-center justify-center overflow-hidden border border-edge bg-surface-base',
+        'flex shrink-0 items-center justify-center overflow-hidden border border-edge bg-white',
         classes.frame,
         className,
       )}
-      style={connector?.branding?.backgroundColor ? { backgroundColor: connector.branding.backgroundColor } : undefined}
       title={connector?.displayName}
     >
       {logoUrl && !logoFailed ? (

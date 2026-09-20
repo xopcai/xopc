@@ -1,4 +1,4 @@
-export type ConnectorKind = 'mcp' | 'cli' | 'http' | 'channel' | 'browser' | 'extension' | 'builtin' | 'composio' | 'nativeTool' | 'memorySource';
+export type ConnectorKind = 'mcp' | 'cli' | 'http' | 'browser' | 'extension' | 'builtin' | 'composio' | 'memorySource';
 
 export type ConnectorCategory = 'code' | 'docs' | 'browser' | 'data' | 'automation' | 'custom';
 
@@ -34,7 +34,6 @@ export type ConnectorBenefit = 'understand' | 'act' | 'reach';
 export type ConnectorBranding = {
   logoUrl?: string;
   source?: 'builtin' | 'composio-catalog' | 'registry' | 'extension' | 'custom';
-  backgroundColor?: string;
   fetchedAt?: string;
 };
 
@@ -61,6 +60,8 @@ export type ConnectorSecretReference = {
   xopcSecretRef: {
     provider: string;
     fieldKey: string;
+    prefix?: string;
+    suffix?: string;
   };
 };
 
@@ -69,6 +70,12 @@ export type ConnectorSecretField = {
   label: string;
   description?: string;
   required: boolean;
+};
+
+export type ConnectorSetupLink = {
+  label: string;
+  href: string;
+  external?: boolean;
 };
 
 export type ConnectorConfigField = {
@@ -93,18 +100,9 @@ export type ConnectorRuntimeDefinition =
       };
     }
   | {
-      type: 'channel';
-      channelId: string;
-      pluginId: string;
-    }
-  | {
       type: 'composio';
       toolkit: string;
       role: 'credential' | 'toolkit';
-    }
-  | {
-      type: 'nativeTool';
-      toolsetId: string;
     }
   | {
       type: 'memorySource';
@@ -133,6 +131,7 @@ export type ConnectorDefinition = {
   setup: {
     secrets?: ConnectorSecretField[];
     config?: ConnectorConfigField[];
+    links?: ConnectorSetupLink[];
   };
   runtime: ConnectorRuntimeDefinition;
   permissions?: ConnectorPermissions;
@@ -298,7 +297,7 @@ export type ConnectorInstance = {
         role: 'credential' | 'toolkit';
       }
     | {
-        type: 'channel' | 'nativeTool' | 'memorySource';
+        type: 'memorySource';
         id: string;
       };
   usage: ConnectorUsageRecord;

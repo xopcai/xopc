@@ -28,11 +28,7 @@ function runtimeLabel(connector: ConnectorDefinition, t: ConnectorsSettingsMessa
   }
   const id = connector.runtime.type === 'composio'
     ? connector.runtime.toolkit
-    : connector.runtime.type === 'channel'
-      ? connector.runtime.channelId
-      : connector.runtime.type === 'nativeTool'
-        ? connector.runtime.toolsetId
-        : connector.runtime.sourceKind;
+    : connector.runtime.sourceKind;
   return formatConnectorMessage(t.connectorRuntimeGeneric, { runtime: connector.runtime.type, id: id ?? connector.runtime.type });
 }
 

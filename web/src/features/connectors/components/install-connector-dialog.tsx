@@ -385,6 +385,26 @@ export function InstallConnectorDialog({
             </section>
           ) : null}
 
+          {(connector.setup.links ?? []).length > 0 ? (
+            <div className="flex flex-wrap gap-2 rounded-xl border border-edge bg-surface-base p-3">
+              {(connector.setup.links ?? []).map((link) => {
+                const external = link.external !== false && /^https:\/\//i.test(link.href);
+                return (
+                  <a
+                    key={`${link.label}:${link.href}`}
+                    href={external ? link.href : `#${link.href}`}
+                    target={external ? '_blank' : undefined}
+                    rel={external ? 'noopener noreferrer' : undefined}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-accent-fg hover:underline"
+                  >
+                    {link.label}
+                    {external ? <ExternalLink className="size-3.5" aria-hidden /> : null}
+                  </a>
+                );
+              })}
+            </div>
+          ) : null}
+
           {(connector.setup.secrets ?? []).map((field) => (
             <label key={field.key} className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-fg">{field.label}</span>
