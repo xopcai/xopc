@@ -1,4 +1,3 @@
-import { ProactiveToday } from '@/features/proactive/proactive-today';
 import * as Dialog from '@radix-ui/react-dialog';
 import type { HomeAction, HomeWorkbenchItem } from '@xopcai/gateway-contract';
 import { CalendarClock, ChevronRight, CircleAlert, Plus, X } from 'lucide-react';
@@ -14,9 +13,7 @@ import {
   useState,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
-import useSWR from 'swr';
 
-import { proactiveGet, type ProactiveOverview } from '@/features/proactive/api';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -298,12 +295,7 @@ export function HomePage() {
     submit: copy.newWork,
   };
 
-  const proactive = useSWR<ProactiveOverview>('/api/proactive/overview', proactiveGet, { refreshInterval: 15000 });
-  const hasPreparedWork = Boolean(proactive.data?.scenes.some(scene => scene.status === 'prepared'));
-  const hasAssistantUpdates = Boolean(proactive.data?.scenes.some(scene => scene.status === 'changed'));
-  const hasFollowingWork = Boolean(proactive.data?.scenes.some(scene => scene.status === 'following'));
-  const hasProactiveWork = Boolean(proactive.data?.scenes.length);
-  const isIdle = Boolean(home && home.needsUser.length === 0 && home.backgroundCount === 0 && proactive.data && !hasProactiveWork);
+  const isIdle = Boolean(home && home.needsUser.length === 0 && home.backgroundCount === 0);
   const composerVisible = isIdle || conversationOpen;
 
   useEffect(() => {
@@ -399,26 +391,14 @@ export function HomePage() {
     return () => clearPageHeader();
   }, [clearPageHeader, headerEnd, setPageHeader, t.title]);
 
-  const needsUserCount = (home?.needsUser.length ?? 0) + (proactive.data?.scenes.filter(scene => scene.status === 'needs_decision').length ?? 0);
+
+  const needsUserCount = home?.needsUser.length ?? 0;
   const backgroundCount = home?.backgroundCount ?? 0;
-  const headline = needsUserCount > 0
-    ? interpolate(t.home.attentionTitle, { count: needsUserCount })
-    : hasPreparedWork ? (language === 'zh' ? '助理准备好了这些' : 'Your assistant prepared these')
-      : hasAssistantUpdates ? (language === 'zh' ? '有一些值得知道的变化' : 'A few changes are worth knowing')
-        : backgroundCount > 0
-      ? t.home.clearTitle
-      : hasFollowingWork ? (language === 'zh' ? '助理在跟进你交代的事' : 'Your assistant is following through')
-        : proactive.data ? t.home.idleTitle : (language === 'zh' ? '今天的工作' : 'Your work today');
+  const headline = needsUserCount > 0 ? interpolate(t.home.attentionTitle, { count: needsUserCount })
+    : backgroundCount > 0 ? t.home.clearTitle : t.home.idleTitle;
   const intro = needsUserCount > 0
-    ? backgroundCount > 0
-      ? interpolate(t.home.attentionIntroWithBackground, { count: backgroundCount })
-      : t.home.attentionIntro
-    : hasPreparedWork ? (language === 'zh' ? '成果已经整理好，可以直接查看或继续办理。' : 'The results are ready to review or continue.')
-      : hasAssistantUpdates ? (language === 'zh' ? '这里是可能影响你当前工作的最新变化。' : 'These changes may affect your current work.')
-        : backgroundCount > 0
-      ? interpolate(t.home.clearIntro, { count: backgroundCount })
-      : hasFollowingWork ? (language === 'zh' ? '助理记着这些事项，有实质进展时会带回来。' : 'Your assistant remembers these items and will bring back useful progress.')
-        : proactive.data ? t.home.idleIntro : (language === 'zh' ? '正在核对已交代的事项。' : 'Checking your delegated work.');
+    ? backgroundCount > 0 ? interpolate(t.home.attentionIntroWithBackground, { count: backgroundCount }) : t.home.attentionIntro
+    : backgroundCount > 0 ? interpolate(t.home.clearIntro, { count: backgroundCount }) : t.home.idleIntro;
 
   return (
     <main className="mx-auto flex w-full max-w-[920px] flex-1 flex-col px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
@@ -545,7 +525,6 @@ export function HomePage() {
             </section>
           ) : null}
 
-          <section className={isIdle ? 'mt-6 sm:mt-8' : 'mt-10'}><ProactiveToday compact /></section>
 
           {home.background.length > 0 ? (
             <section className="mt-10" aria-labelledby="home-background-title">

@@ -2,7 +2,6 @@
   "chat": {
     "contentLinks": {
       "open": "在 xopc 中打开",
-      "unavailable": "链接不可用",
       "failed": "无法打开这个链接，请重试。",
       "destinations": {
         "chat": "打开会话",

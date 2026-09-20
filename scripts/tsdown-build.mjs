@@ -4,6 +4,8 @@ import { cpSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { copySqliteAssets } from './sqlite-assets.mjs';
+
 const logLevel = process.env.XOPC_BUILD_VERBOSE === '1' ? 'info' : 'warn';
 const extraArgs = process.argv.slice(2);
 
@@ -26,19 +28,7 @@ if (code !== 0) {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
 
-// SQLite schema DDL files (loaded at runtime via readFileSync next to compiled schema.js)
-const schemaSrc = join(root, 'src/storage/sqlite');
-const schemaDist = join(root, 'dist/src/storage/sqlite');
-cpSync(join(schemaSrc, 'schema.sql'), join(schemaDist, 'schema.sql'));
-const migrationsSrc = join(schemaSrc, 'migrations');
-const migrationsDist = join(schemaDist, 'migrations');
-if (existsSync(migrationsSrc)) {
-  mkdirSync(migrationsDist, { recursive: true });
-  for (const dirent of readdirSync(migrationsSrc, { withFileTypes: true })) {
-    if (!dirent.isFile() || !dirent.name.endsWith('.sql')) continue;
-    cpSync(join(migrationsSrc, dirent.name), join(migrationsDist, dirent.name));
-  }
-}
+copySqliteAssets(join(root, 'src/storage/sqlite'), join(root, 'dist/src/storage/sqlite'));
 
 const srcTpl = join(root, 'src/agent/context/workspace-templates');
 const distTpl = join(root, 'dist/src/agent/context/workspace-templates');

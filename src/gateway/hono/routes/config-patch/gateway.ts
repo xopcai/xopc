@@ -1,7 +1,7 @@
 /**
  * `PATCH /api/config` — `body.gateway.*` section.
  *
- * Covers heartbeat, bind/customBindHost/port, tailscale, auth (mode + token +
+ * Covers bind/customBindHost/port, tailscale, auth (mode + token +
  * password + rateLimit + trustedProxy), trustedProxies, allowRealIpFallback,
  * dangerouslyAllowHostHeaderOriginFallback, security, share, siteShare, publicUrl, webchat,
  * corsOrigins and channelConnectDefer{Mode,Ids,SkipIds}.
@@ -10,7 +10,7 @@
  * specific `message`. The dispatcher converts these into `c.json(...)`.
  *
  * Initial-state branches use the same literal defaults the inline code did
- * (loopback + port 18790 + 1800s heartbeat + empty CORS) so
+ * (loopback + port 18790 + empty CORS) so
  * a brand-new install gets a working gateway after the first PATCH.
  */
 import type { Config, GatewayBindMode } from '../../../../config/schema.js';
@@ -31,7 +31,6 @@ function ensureGateway(config: Config): NonNullable<Config['gateway']> {
     config.gateway = {
       bind: 'loopback',
       port: 18790,
-      heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
       corsOrigins: [],
     };
   }
@@ -60,65 +59,6 @@ export function applyGatewayPatch(config: Config, body: any): PatchResult {
     };
   }
 
-  if (body.gateway?.heartbeat !== undefined && typeof body.gateway.heartbeat === 'object') {
-    const gw = ensureGateway(config);
-    if (!gw.heartbeat) {
-      gw.heartbeat = { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false };
-    }
-    const h = gw.heartbeat;
-    const p = body.gateway.heartbeat as Record<string, unknown>;
-    if (p.enabled !== undefined) h.enabled = Boolean(p.enabled);
-    if (p.intervalMs !== undefined && typeof p.intervalMs === 'number' && Number.isFinite(p.intervalMs)) {
-      h.intervalMs = p.intervalMs;
-    }
-    if (p.includeSystemPromptSection !== undefined) {
-      h.includeSystemPromptSection = Boolean(p.includeSystemPromptSection);
-    }
-    if (p.target !== undefined) {
-      if (p.target === null || p.target === '') delete (h as { target?: string }).target;
-      else (h as { target?: string }).target = String(p.target);
-    }
-    if (p.targetChatId !== undefined) {
-      if (p.targetChatId === null || p.targetChatId === '') delete (h as { targetChatId?: string }).targetChatId;
-      else (h as { targetChatId?: string }).targetChatId = String(p.targetChatId);
-    }
-    if (p.prompt !== undefined) {
-      if (p.prompt === null || p.prompt === '') delete (h as { prompt?: string }).prompt;
-      else (h as { prompt?: string }).prompt = String(p.prompt);
-    }
-    if (p.ackMaxChars !== undefined) {
-      if (p.ackMaxChars === null || p.ackMaxChars === '') delete (h as { ackMaxChars?: number }).ackMaxChars;
-      else if (typeof p.ackMaxChars === 'number' && Number.isFinite(p.ackMaxChars)) {
-        (h as { ackMaxChars?: number }).ackMaxChars = p.ackMaxChars;
-      }
-    }
-    if (p.isolatedSession !== undefined) {
-      if (p.isolatedSession === null || p.isolatedSession === false) {
-        delete (h as { isolatedSession?: boolean }).isolatedSession;
-      } else {
-        (h as { isolatedSession?: boolean }).isolatedSession = Boolean(p.isolatedSession);
-      }
-    }
-    if (p.activeHours !== undefined) {
-      if (p.activeHours === null) {
-        delete (h as { activeHours?: unknown }).activeHours;
-      } else if (typeof p.activeHours === 'object' && p.activeHours !== null) {
-        const ah = p.activeHours as Record<string, unknown>;
-        const start = typeof ah.start === 'string' ? ah.start : '';
-        const end = typeof ah.end === 'string' ? ah.end : '';
-        if (start && end) {
-          (h as { activeHours?: { start: string; end: string; timezone?: string } }).activeHours = {
-            start,
-            end,
-            ...(typeof ah.timezone === 'string' && ah.timezone.trim() ? { timezone: ah.timezone } : {}),
-          };
-        } else {
-          delete (h as { activeHours?: unknown }).activeHours;
-        }
-      }
-    }
-  }
-
   if (body.gateway?.bind !== undefined) {
     const bindModes = new Set(['auto', 'loopback', 'lan', 'tailnet', 'custom']);
     const bind = body.gateway.bind;
@@ -129,7 +69,6 @@ export function applyGatewayPatch(config: Config, body: any): PatchResult {
       config.gateway = {
         bind: bind as GatewayBindMode,
         port: 18790,
-        heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
         corsOrigins: [],
       };
     } else {
@@ -166,7 +105,6 @@ export function applyGatewayPatch(config: Config, body: any): PatchResult {
       config.gateway = {
         bind: 'loopback',
         port: Math.floor(body.gateway.port),
-        heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
         corsOrigins: [],
       };
     } else {
@@ -181,7 +119,6 @@ export function applyGatewayPatch(config: Config, body: any): PatchResult {
         bind: 'loopback',
         port: 18790,
         auth: { mode: 'token' },
-        heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
         corsOrigins: [],
       };
     }

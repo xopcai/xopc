@@ -3,7 +3,6 @@ import { getSessionMetadata } from '../storage/sqlite/session-repository.js';
 import { resolveAgentMainConversationId } from '../routing/agent-session-key.js';
 import { createBackgroundTask } from '../infra/background-task.js';
 import { buildTaskAgentContext } from '../agent/source-context/task-context.js';
-import { deliverProactiveCard } from '../proactive/inbox/delivery.js';
 import crypto from 'node:crypto';
 import { WorkDiscoveryService } from '../work-discovery/service.js';
 
@@ -45,7 +44,6 @@ import { WorkflowSessionBridge } from '../workflows/service/workflow-session-bri
 import { ExtensionLoader, areExtensionsGloballyDisabled, buildExtensionMetadataSnapshot } from '../extensions/index.js';
 import type { ManifestRegistryEntry } from '../extensions/manifest-registry.js';
 import type { ResolvedExtensionConfig } from '../extensions/types/index.js';
-import { HeartbeatService, heartbeatRunnerConfigFromConfig } from './heartbeat/index.js';
 import { SessionIndex } from '../session/index.js';
 import { EphemeralSideChatManager, SideChatRunService } from './side-chat/index.js';
 import { onSessionTranscriptUpdate } from '../session/transcript-events.js';
@@ -90,17 +88,6 @@ import { TaskConversationRepository } from '../tasks/task-conversation-repositor
 import { TaskRunDispatcher } from '../tasks/task-run-dispatcher.js';
 import { TaskSignalService } from '../tasks/task-signal-service.js';
 import { createRuntimeBrowserAutomationService, type BrowserAutomationService } from '../browser/automations/index.js';
-import {
-  ReadonlyProactiveAgentExecutor,
-  listInsights,
-  mapProductEventToProactive,
-  ProactiveEventService,
-  ProactiveInboxService,
-  ProactiveInboxWorker,
-  ProactiveScenarioService,
-  ProactiveTemporalWorker,
-  ProactiveWorker,
-} from '../proactive/index.js';
 
 import { disposeAllSessionMcpRuntimes } from '../agent/mcp/bundle-mcp-tools.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
@@ -133,7 +120,9 @@ import {
   startConnectorLearningCoordinator,
   type ConnectorLearningCoordinator,
 } from '../connectors/learning-coordinator.js';
-import { ConnectedSourceChangePublisher } from '../connectors/source-change-publisher.js';
+import { GatewaySceneHost } from './scenes/host.js';
+import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
+import type { SceneAccess } from '../scenes/httpServices.js';
 import { ManagedComposioEventPoller } from '../connectors/composio-managed-events.js';
 import {
   applyAutomaticVoiceLanguage,
@@ -166,7 +155,7 @@ export class GatewayService {
   private notesService: NotesService;
   private extensionLoader: ExtensionLoader | null = null;
   private extensionMetadataSnapshot: import('../extensions/extension-metadata-snapshot.js').ExtensionMetadataSnapshot | null = null;
-  private heartbeatService: HeartbeatService | null = null;
+  private sceneHost: GatewaySceneHost | null = null;
   private sessionIndex: SessionIndex;
   private running = false;
   private startTime = Date.now();
@@ -286,7 +275,6 @@ export class GatewayService {
   private notificationService: NotificationService | null = null;
   private connectorSupervisor: ConnectorSupervisor | null = null;
   private connectorLearningCoordinator: ConnectorLearningCoordinator | null = null;
-  private connectedSourceChangePublisher: ConnectedSourceChangePublisher | null = null;
   private connectedKnowledgeCoordinator: ConnectedKnowledgeCoordinator | null = null;
   private stopAutomationProductEventBridge: (() => void) | null = null;
   private stopSessionTranscriptAutomationEvents: (() => void) | null = null;
@@ -336,27 +324,16 @@ export class GatewayService {
   /** Local user-created apps, their coder projects, previews, and installs. */
   readonly localApps: LocalAppService;
 
-  /** Unified durable event spine for proactive scenarios. */
-  readonly proactiveScenarios = new ProactiveScenarioService();
-  readonly proactive = new ProactiveEventService(() => this.proactiveScenarios.routes());
-  readonly proactiveInbox = new ProactiveInboxService();
-  readonly proactiveInsights = listInsights;
-  readonly proactiveWorker: ProactiveWorker;
-  readonly proactiveTemporalWorker: ProactiveTemporalWorker;
-  readonly proactiveInboxWorker: ProactiveInboxWorker;
+  get sceneAccess(): SceneAccess | undefined {
+    return this.sceneHost ? { services: this.sceneHost.http,
+      principal: { ownerId: 'local-owner', workspaceId: this.workspacePath } } : undefined;
+  }
 
   constructor(private serviceConfig: GatewayServiceConfig = {}) {
     this.bus = new MessageBus();
     this.configPath = serviceConfig.configPath || resolveConfigPath();
     runBootstrapMigrationsSync(this.configPath);
     this.config = loadConfig(this.configPath);
-    this.proactiveWorker = new ProactiveWorker(new ReadonlyProactiveAgentExecutor(() => this.config));
-    this.proactiveTemporalWorker = new ProactiveTemporalWorker(this.proactive);
-    this.proactiveInboxWorker = new ProactiveInboxWorker({
-      deliver: async ({ inboxItem }) => {
-        return deliverProactiveCard(inboxItem, this.createNotificationService(), (type, payload) => this.realtime.broker.publish('gateway', type, payload));
-      },
-    });
     let bootstrapConfigChanged = initializeVoiceDefaults(
       this.config,
       inferProductLanguageFromEnvironment(),
@@ -438,11 +415,11 @@ export class GatewayService {
       config: this.config,
     });
 
-    this.automationService = new AutomationService(this.proactive, this.workspacePath);
+    this.automationService = new AutomationService();
 
     this.notesService = new NotesService(new NotesStore());
 
-    this.projects = new ProjectService(undefined, this.proactive, this.workspacePath);
+    this.projects = new ProjectService();
     const emitDiscussion = (capture: import('../discussions/index.js').DiscussionCapture) => {
       this.emit('discussion.updated', capture);
     };
@@ -597,7 +574,6 @@ export class GatewayService {
       setConfig: (next) => { this.config = next; },
       getAgentService: () => this.ensureAgentService(),
       getChannelManager: () => this.channelManager,
-      getHeartbeatService: () => this.heartbeatService,
       getExtensionLoader: () => this.extensionLoader,
       reconcileMemoryMaintenanceAutomations: () => this.reconcileMemoryMaintenanceAutomations(),
       getChannelsStatus: () => this.getChannelsStatus(),
@@ -644,6 +620,7 @@ export class GatewayService {
       extensionRegistry: this.extensionLoader?.getRegistry(),
       endpointTools: this.endpointTools,
       getAutomationService: () => this.automationService,
+      getSceneAccess: () => this.sceneAccess,
       getBrowserAutomationService: () => this.browserAutomations,
       emitBrowserEvent: (type, payload) => this.emit(type, payload),
       getNotesService: () => this.notesService,
@@ -713,20 +690,6 @@ export class GatewayService {
     return this._agentService;
   }
 
-  private ensureHeartbeatService(): HeartbeatService {
-    if (this.heartbeatService) {
-      return this.heartbeatService;
-    }
-    this.heartbeatService = new HeartbeatService({
-      agentService: this.ensureAgentService(),
-      messageBus: this.bus,
-      sessionStore: this.sessionIndex.getStore(),
-      getConfig: () => this.config,
-      getWorkspace: () => this.workspacePath,
-    });
-    return this.heartbeatService;
-  }
-
   // ── Webchat agent runner (delegated to GatewayAgentRunner) ────────────
 
   private createTaskRunDispatcher(): TaskRunDispatcher {
@@ -756,13 +719,6 @@ export class GatewayService {
     if (!this.notificationService) {
       this.notificationService = new NotificationService({
         publish: (type, payload) => this.realtime.broker.publish('gateway', type, payload),
-        sendChannel: async (target, text) => {
-          const outbound = this.channelManager.getPlugin('telegram')?.outbound;
-          if (!outbound?.sendText || !this.channelManager.getRunningChannels().includes('telegram')) throw new Error('Telegram is not connected');
-          const result = await outbound.sendText({ cfg: this.config, to: target.chatId, accountId: target.accountId, text });
-          if (!result.success) throw new Error('Telegram delivery failed');
-          return { messageId: result.messageId };
-        },
       });
     }
     return this.notificationService;
@@ -1056,6 +1012,20 @@ export class GatewayService {
   }
 
   async start(): Promise<void> {
+    try {
+      await this.startRuntime();
+    } catch (err) {
+      await this.stop().catch((cleanupError) => log.error({ err: cleanupError }, 'Gateway startup cleanup failed'));
+      await this.sceneHost?.stop();
+      this.sceneHost = null;
+      this.stopRealtimeLogBridge?.();
+      this.stopRealtimeLogBridge = null;
+      setPairingBroadcastSink(null);
+      throw err;
+    }
+  }
+
+  private async startRuntime(): Promise<void> {
     if (this.running) return;
 
     this.stopRealtimeLogBridge = subscribeToLogs((entry) => {
@@ -1075,9 +1045,11 @@ export class GatewayService {
     this.running = true;
     this.taskRunDispatchTimer = setInterval(() => this.dispatchTaskRuns(), 1_000);
     this.taskRunDispatchTimer.unref?.();
-    this.proactiveWorker.start();
-    this.proactiveTemporalWorker.start();
-    this.proactiveInboxWorker.start();
+    this.sceneHost = new GatewaySceneHost(getSqliteDatabase(), {
+      principal: { ownerId: 'local-owner', workspaceId: this.workspacePath },
+      config: () => this.config,
+      publish: (type, notification) => this.realtime.broker.publish('gateway', type, notification),
+    });
     this.startupTrace = createGatewayStartupTrace();
     this.readiness.markStarting(this.startTime);
     const trace = this.startupTrace;
@@ -1255,7 +1227,6 @@ export class GatewayService {
     this.discussionSealer.start();
     this.discussionWorker.start();
 
-    this.ensureHeartbeatService().start(heartbeatRunnerConfigFromConfig(this.config));
 
     this.connectorSupervisor = startConnectorSupervisor({
       getConfig: () => this.config,
@@ -1273,8 +1244,6 @@ export class GatewayService {
       setLearningPaused: (connectionId, paused) => { this.setConnectorLearningPaused(connectionId, paused); },
     });
     this.managedComposioEventPoller.start();
-    this.connectedSourceChangePublisher = new ConnectedSourceChangePublisher(this.proactive);
-    this.connectedSourceChangePublisher.start();
     this.connectedKnowledgeCoordinator = startConnectedKnowledgeCoordinator({
       resolvePipelineOptions: () => ({
         agentId: resolveDefaultAgentId(this.config),
@@ -1329,6 +1298,7 @@ export class GatewayService {
       trace.mark('service.started-awaiting-http');
     }
 
+    this.sceneHost.start();
     log.debug('Gateway service started');
   }
 
@@ -1455,15 +1425,14 @@ export class GatewayService {
     this.readiness.markStarting();
     this.endpointTools.close();
     await this.sideChats.disposeAll();
+    await this.sceneHost?.stop();
+    this.sceneHost = null;
     this.realtime.close();
     this.voiceRealtime.close();
 
-    await this.proactiveWorker.stop();
     await this.discussionWorker.stop();
     await this.discussionSealer.stop();
     await this.discussionLiveWorker.stop();
-    this.proactiveTemporalWorker.stop();
-    await this.proactiveInboxWorker.stop();
     this.notificationService?.stop();
     if (this.taskRunDispatchTimer) {
       clearInterval(this.taskRunDispatchTimer);
@@ -1483,16 +1452,12 @@ export class GatewayService {
 
     await this.configCoordinator.stopHotReloader();
 
-    // Stop heartbeat service
-    this.heartbeatService?.stop();
     this.connectorSupervisor?.stop();
     this.connectorSupervisor = null;
     this.connectorLearningCoordinator?.stop();
     this.connectorLearningCoordinator = null;
     this.managedComposioEventPoller?.stop();
     this.managedComposioEventPoller = undefined;
-    this.connectedSourceChangePublisher?.stop();
-    this.connectedSourceChangePublisher = null;
     this.connectedKnowledgeCoordinator?.stop();
     this.connectedKnowledgeCoordinator = null;
 
@@ -1558,10 +1523,6 @@ export class GatewayService {
   }
 
   // ── Config persistence / hot reload (delegated to GatewayConfigCoordinator) ──
-
-  reloadHeartbeatFromCurrentConfig(): void {
-    this.configCoordinator.reloadHeartbeatFromCurrentConfig();
-  }
 
   reloadConfig(): Promise<{ reloaded: boolean; error?: string }> {
     return this.configCoordinator.reloadConfig();
@@ -1691,15 +1652,6 @@ export class GatewayService {
       if (a.order !== b.order) return a.order - b.order;
       return a.id.localeCompare(b.id);
     });
-  }
-
-  heartbeatStatus() { return this.heartbeatService?.status() ?? null; }
-
-  /**
-   * Request an immediate heartbeat run (coalesced like interval/cron wakes).
-   */
-  requestHeartbeatNow(opts?: { reason?: string }): void {
-    this.heartbeatService?.requestNow({ reason: opts?.reason ?? 'manual' });
   }
 
   requestConnectorLearning(
@@ -1958,22 +1910,6 @@ export class GatewayService {
     this.stopAutomationProductEventBridge = onAutomationProductEvent((event) => {
       if (event.type.startsWith('task.')) {
         this.emit(event.type, event.payload);
-      }
-      const proactiveEvent = mapProductEventToProactive({
-        event,
-        workspaceId: this.currentWorkspacePath,
-        defaultAgentId: resolveDefaultAgentId(this.config),
-      });
-      if (proactiveEvent) {
-        try {
-          this.proactive.publish(proactiveEvent);
-        } catch (err) {
-          const em = err instanceof Error ? err.message : String(err);
-          log.warn(
-            { err, eventType: event.type, source: event.source },
-            `Proactive product event publication failed: ${em}`,
-          );
-        }
       }
       void this.automationService.triggerEvent(event).catch((err) => {
         const em = err instanceof Error ? err.message : String(err);

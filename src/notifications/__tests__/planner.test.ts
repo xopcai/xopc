@@ -115,20 +115,6 @@ describe('notificationPlanFromGatewayEvent', () => {
     });
   });
 
-  it('maps the real proactive inbox DTO to an insight notification', () => {
-    expect(notificationPlanFromGatewayEvent('proactive.inbox.created', {
-      id: 'inbox-1',
-      insightId: 'insight-1',
-      insight: { title: 'Delivery risk', summary: 'A blocker needs attention.', urgency: 'high', attentionKind: 'information' },
-    })).toMatchObject({
-      dedupeKey: 'proactive.insight:inbox-1',
-      notification: {
-        type: 'proactive.insight',
-        target: { kind: 'insight', inboxItemId: 'inbox-1' },
-        payload: { inboxItemId: 'inbox-1', insightId: 'insight-1' },
-      },
-    });
-  });
 
   it('maps work discovery completion and failure to review notifications', () => {
     expect(notificationPlanFromGatewayEvent('work-discovery.completed', {
@@ -157,20 +143,6 @@ describe('notificationPlanFromGatewayEvent', () => {
     });
   });
 
-  it('keeps routine information in Home while still pushing decisions', () => {
-    expect(notificationPlanFromGatewayEvent('proactive.inbox.created', {
-      id: 'info-1', insightId: 'insight-info',
-      insight: { title: 'Routine insight', urgency: 'medium', attentionKind: 'information' },
-    })).toBeNull();
-    expect(notificationPlanFromGatewayEvent('proactive.inbox.created', {
-      id: 'decision-1', insightId: 'insight-decision',
-      insight: { title: 'Choose an owner', urgency: 'medium', attentionKind: 'decision' },
-    })).toMatchObject({ notification: { priority: 'high' } });
-    expect(notificationPlanFromGatewayEvent('proactive.inbox.created', {
-      id: 'receipt-1', insightId: 'insight-receipt',
-      insight: { title: 'Action completed', urgency: 'high', attentionKind: 'receipt' },
-    })).toBeNull();
-  });
 
   it('ignores unrelated and malformed events', () => {
     expect(notificationPlanFromGatewayEvent('session.updated', {})).toBeNull();

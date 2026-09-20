@@ -8,7 +8,6 @@ export * from './task-contract-planner.js';
 export * from './task-context-assembler.js';
 export * from './task-run-coordinator.js';
 export * from './project-operating-view-service.js';
-export * from './project-monitoring-service.js';
 export * from './task-value-metrics-service.js';
 export * from './task-application-service.js';
 export * from './task-change-events.js';

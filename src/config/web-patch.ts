@@ -97,7 +97,6 @@ export function mergeGatewaySkillsMarketplacePatch(
       bind: 'loopback',
       port: 18790,
       auth: { mode: 'token' },
-      heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
       corsOrigins: [],
     };
   }

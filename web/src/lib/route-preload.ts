@@ -36,7 +36,6 @@ export const loadCapabilitiesSettingsPanel = () => import('@/features/settings/m
 export const loadGatewaySettingsPanel = () => import('@/features/settings/gateway-settings');
 export const loadRuntimeToolsSettingsPanel = () =>
   import('@/features/settings/runtime-tools/runtime-tools-settings-panel');
-export const loadHeartbeatSettingsPanel = () => import('@/features/settings/heartbeat-settings');
 export const loadRemoteAccessHub = () => import('@/features/remote-access/remote-access-hub');
 export const loadSharesSettingsPanel = () => import('@/features/shares/shares-settings');
 export const loadAgentDefaultsSettingsPanel = () =>
@@ -75,7 +74,6 @@ function preloadSettingsSection(path: string) {
   if (section === 'gateway') return preload(loadGatewaySettingsPanel);
   if (section === 'runtimes') return preload(loadRuntimeToolsSettingsPanel);
   if (section === 'devices') return preload(loadEndpointToolsManagementSettings);
-  if (section === 'heartbeat') return preload(loadHeartbeatSettingsPanel);
   if (section === 'tunnel' || section === 'remote-access') return preload(loadRemoteAccessHub);
   if (section === 'shares') return preload(loadSharesSettingsPanel);
   if (section === 'agent-defaults') return preload(loadAgentDefaultsSettingsPanel);

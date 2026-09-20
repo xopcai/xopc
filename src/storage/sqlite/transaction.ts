@@ -149,3 +149,23 @@ export function runSqliteWriteTransaction<T>(fn: (db: DatabaseSync) => T): T {
 export function getSqliteDatabase(): DatabaseSync {
   return getXopcDatabase().db;
 }
+
+/** Compose with domain-owned transactions on an explicitly supplied connection. */
+export function runSqliteSavepoint<T>(db: DatabaseSync, operation: () => T): T {
+  const name = nextSavepointName();
+  const depth = getTransactionDepth(db);
+  db.exec(`SAVEPOINT ${name}`);
+  setTransactionDepth(db, depth + 1);
+  try {
+    const result = operation();
+    assertSyncTransactionResult(result);
+    db.exec(`RELEASE ${name}`);
+    return result;
+  } catch (error) {
+    db.exec(`ROLLBACK TO ${name}`);
+    db.exec(`RELEASE ${name}`);
+    throw error;
+  } finally {
+    setTransactionDepth(db, depth);
+  }
+}

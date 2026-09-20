@@ -347,4 +347,23 @@ describe('ComposioSessionsAdapter', () => {
     expect(client.sessions.create).toHaveBeenCalledWith('xopc_provider_owner', expect.any(Object));
     expect(session.execute).toHaveBeenCalledWith('GMAIL_FETCH_EMAILS', {}, { account: 'ca_work' });
   });
+
+  it.each(['session', 'request'])('discards a read aborted during %s without a late audit write', async (phase) => {
+    const installation = upsertConnectorInstallation({ id: 'read-install', connectorId: 'composio-gmail', principalId: 'owner',
+      enabled: true, allowedAgentIds: [], maxScope: 'read', confirmationPolicy: 'never', selectedAccountIds: null });
+    const connection = upsertConnectorConnection({ id: 'read-account', installationId: installation.id, connectorId: installation.connectorId,
+      provider: 'composio', principalId: 'owner', providerConnectionId: 'ca_work', identity: {}, status: 'active', isDefault: true,
+      metadata: { toolkit: 'gmail', providerPrincipalId: 'xopc_provider_owner' } });
+    const controller = new AbortController();
+    const abort = async () => { controller.abort(new Error('Gateway stopped')); return session; };
+    if (phase === 'session') vi.mocked(client.sessions.create).mockImplementationOnce(abort);
+    else vi.mocked(session.execute).mockImplementationOnce(async () => { await abort(); return { successful: true }; });
+    const adapter = new ComposioSessionsAdapter({ clientFactory: async () => client });
+    await expect(adapter.executeWithPolicy({ signal: controller.signal, context: { principalId: 'owner' }, installation, connection,
+      action: { connectorId: installation.connectorId, toolkit: 'gmail', actionId: 'GMAIL_FETCH_MESSAGE_BY_THREAD_ID',
+        scope: 'read', curated: true, cachedAt: new Date().toISOString() }, args: { user_id: 'me', thread_id: 'abc' },
+    })).rejects.toThrow('Gateway stopped');
+    expect(listConnectorExecutionAudit()).toEqual([]);
+    if (phase === 'session') expect(session.execute).not.toHaveBeenCalled();
+  });
 });

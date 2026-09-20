@@ -115,6 +115,9 @@ importers:
       linkedom:
         specifier: 0.18.13
         version: 0.18.13
+      luxon:
+        specifier: 3.7.2
+        version: 3.7.2
       markdown-it:
         specifier: ^14.2.0
         version: 14.2.0
@@ -185,6 +188,9 @@ importers:
       '@types/jsdom':
         specifier: ^28.0.3
         version: 28.0.3
+      '@types/luxon':
+        specifier: ^3.7.5
+        version: 3.7.5
       '@types/markdown-it':
         specifier: ^14.1.2
         version: 14.1.2
@@ -5425,6 +5431,9 @@ packages:
 
   '@types/linkify-it@5.0.0':
     resolution: {integrity: sha512-sVDA58zAw4eWAffKOaQH5/5j3XeayukzDk+ewSsnv3p4yJEZHCCzMDiZM8e0OUrRvmpGZ85jf4yDHkHsgBNr9Q==}
+
+  '@types/luxon@3.7.5':
+    resolution: {integrity: sha512-jJ41Q4z6ZVO260MNDdHfW7+7a5iMiX8Mr6ZJHcmgrvhZha6dz5704o/lF2kKl6URjH6ivEL97w9xS/MgpJEphg==}
 
   '@types/markdown-it@13.0.9':
     resolution: {integrity: sha512-1XPwR0+MgXLWfTn9gCsZ55AHOKW1WN+P9vr0PaQh5aerR9LLQXUbjfEAFhjmEmyoYFWAyuN2Mqkn40MZ4ukjBw==}
@@ -15487,6 +15496,8 @@ snapshots:
   '@types/linkify-it@3.0.5': {}
 
   '@types/linkify-it@5.0.0': {}
+
+  '@types/luxon@3.7.5': {}
 
   '@types/markdown-it@13.0.9':
     dependencies:

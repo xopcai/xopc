@@ -480,6 +480,7 @@ export class ComposioSessionsAdapter {
   }
 
   async executeWithPolicy(input: {
+    signal?: AbortSignal;
     context: ComposioSessionContext;
     installation: ConnectorInstallationPolicy;
     connection?: ConnectorConnection;
@@ -489,6 +490,7 @@ export class ComposioSessionsAdapter {
     conversationId?: string;
     confirmed?: boolean;
   }): Promise<{ decision: 'allowed'; result: unknown } | { decision: 'denied' | 'confirmation_required'; reason: string }> {
+    input.signal?.throwIfAborted();
     if (!input.connection || input.connection.status !== 'active' || !canAccessConnectorAccount(input.connection, input.installation, input.agentId)) {
       return { decision: 'denied', reason: 'Account is unavailable to this agent.' };
     }
@@ -538,11 +540,13 @@ export class ComposioSessionsAdapter {
           : { authConfigs: undefined }),
         ...(typeof providerPrincipalId === 'string' ? { providerPrincipalId } : {}),
       });
+      input.signal?.throwIfAborted();
       const result = await session.execute(
         input.action.actionId,
         input.args ?? {},
         input.connection ? { account: input.connection.providerConnectionId } : undefined,
       );
+      input.signal?.throwIfAborted();
       appendConnectorExecutionAudit({
         installationId: input.installation.id,
         connectionId: input.connection?.id,
@@ -558,6 +562,7 @@ export class ComposioSessionsAdapter {
       });
       return { decision: 'allowed', result };
     } catch (err) {
+      input.signal?.throwIfAborted();
       const errorCode = err && typeof err === 'object' && 'code' in err ? String((err as { code?: unknown }).code) : undefined;
       appendConnectorExecutionAudit({
         installationId: input.installation.id,

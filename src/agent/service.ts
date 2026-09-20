@@ -289,6 +289,7 @@ export class AgentService {
       verboseLevel: config.verboseLevel,
       gatewayClarify: config.gatewayClarify,
       getAutomationService: config.getAutomationService,
+      getSceneAccess: config.getSceneAccess,
       getBrowserAutomationService: config.getBrowserAutomationService,
       emitBrowserEvent: config.emitBrowserEvent,
       getNotesService: config.getNotesService,

@@ -52,7 +52,6 @@ import { useUiExtensions } from '@/features/extensions/extension-provider';
 import { useChatWidgetMatch } from '@/features/extensions/use-chat-widget-match';
 import { routeWheelThroughVerticalScrollChain } from '@/features/chat/scroll/wheel-scroll-chain';
 import { cn } from '@/lib/cn';
-import { interaction } from '@/lib/interaction';
 import type { StoredLanguage } from '@/lib/storage';
 import { useLocaleStore } from '@/stores/locale-store';
 import { WorkflowCard, type WorkflowCardLabels } from '@/features/chat/workflow/workflow-card';
@@ -279,8 +278,6 @@ export function AssistantStepsBlock({
         type={showDisclosure ? "button" : undefined}
         className={cn(
           'flex min-h-11 w-fit max-w-full min-w-0 items-center gap-2 rounded-lg px-1 py-1.5 text-left text-sm text-fg-muted',
-          interaction.transition,
-          showDisclosure && 'hover:bg-surface-hover/70 hover:text-fg dark:hover:bg-surface-hover/40',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
         )}
         onClick={showDisclosure ? () => setUserExpanded((current) => !(current ?? stepsDrawerOpen)) : undefined}
@@ -661,10 +658,6 @@ function StepRow({
 
   if (surfaceOnly) {
     return <>
-      {isError ? <div role="status" className="my-1 text-sm text-fg-muted">
-        <p>{stepLabels.toolError}{detailLine ? ` · ${detailLine}` : ''}</p>
-        <p className="text-xs">{failureSummary}</p>
-      </div> : null}
       {!isStreaming && !isError && (kind === 'writeFile' || kind === 'editFile') ? card : null}
       {!isStreaming && !isError ? <ToolUseWidgetSlot toolName={block.name} toolResult={block.result} /> : null}
       {!isStreaming && browserSetup ? <BrowserSetupRequiredCard payload={browserSetup} /> : null}

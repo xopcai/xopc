@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
@@ -25,7 +25,6 @@ import { AttachmentFileError, pickAttachmentFromSource, type AttachmentPickSourc
 import type { ComposerAttachment } from '../chat/composer.types';
 import { deleteNote, fetchNotes, updateNote, type NoteIndexEntry } from '../../query/notes';
 import { queryKeys } from '../../query/keys';
-import { decideAgentJudgment, fetchAgentJudgments, transitionAgentJudgment, type AgentJudgment } from '../../query/judgments';
 import { useGatewayConfigured } from '../../query/sessions';
 import { invalidateAttentionFeed } from '../../query/workspace-sync';
 import { captureWorkspaceText, captureWorkspaceVoice } from '../../sync/workspace-sync';
@@ -97,19 +96,6 @@ export function InboxScreen() {
     getNextPageParam: (lastPage) => lastPage.hasMore ? lastPage.offset + lastPage.limit : undefined,
     enabled: configured,
   });
-  const judgmentsQuery = useQuery({ queryKey: queryKeys.judgments, queryFn: fetchAgentJudgments, enabled: configured });
-  const judgmentMutation = useMutation({
-    mutationFn: async (input: { itemId: string; choice?: string; action?: 'snoozed' | 'resolved' }) => {
-      if (input.choice) return decideAgentJudgment(input.itemId, input.choice);
-      return transitionAgentJudgment(input.itemId, input.action!);
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.judgments });
-      invalidateAttentionFeed(queryClient);
-    },
-    onError: (error) => setSnackMsg(error instanceof Error ? error.message : pm.actionFailed),
-  });
-
   const items = useMemo(
     () => (inboxQuery.data?.pages.flatMap((page) => page.items) ?? [])
       .filter((item) => !pendingDeleteIds.has(item.id)),
@@ -436,23 +422,11 @@ export function InboxScreen() {
               refreshing={inboxQuery.isFetching && !inboxQuery.isLoading && !inboxQuery.isFetchingNextPage}
               onRefresh={() => {
                 void inboxQuery.refetch();
-                void judgmentsQuery.refetch();
               }}
             />
           }
           ListFooterComponent={inboxQuery.isFetchingNextPage ? <View style={styles.footerLoader}><Text style={{ color: colors.text.tertiary }}>{m.common.loading}</Text></View> : null}
           ListHeaderComponent={<>
-            {(judgmentsQuery.data?.length ?? 0) > 0 ? <View style={styles.judgmentSection}>
-              <Text style={[styles.judgmentSectionTitle, { color: colors.text.primary }]}>{im.needsDecision}</Text>
-              {judgmentsQuery.data!.map((judgment) => <AgentJudgmentCard
-                key={judgment.id}
-                item={judgment}
-                highlighted={params.item === judgment.id}
-                busy={judgmentMutation.isPending && judgmentMutation.variables?.itemId === judgment.id}
-                onChoice={(choice) => judgmentMutation.mutate({ itemId: judgment.id, choice })}
-                onAction={(action) => judgmentMutation.mutate({ itemId: judgment.id, action })}
-              />)}
-            </View> : null}
             <WorkspaceSyncStatusCard onChanged={invalidateInbox} onToast={setSnackMsg} />
           </>}
           ListEmptyComponent={
@@ -525,26 +499,6 @@ export function InboxScreen() {
   );
 }
 
-function AgentJudgmentCard({ item, highlighted, busy, onChoice, onAction }: {
-  item: AgentJudgment;
-  highlighted: boolean;
-  busy: boolean;
-  onChoice: (choice: string) => void;
-  onAction: (action: 'snoozed' | 'resolved') => void;
-}) {
-  const { colors } = useTheme();
-  const im = useMessages().inboxPage;
-  return <View style={[styles.judgmentCard, { backgroundColor: colors.surface.panel, borderColor: highlighted ? colors.accent.primary : colors.border.subtle }]}>
-    <View style={styles.judgmentTitleRow}><Icon source="creation-outline" size={20} color={colors.accent.primary} /><Text style={[styles.judgmentTitle, { color: colors.text.primary }]}>{item.insight.title}</Text></View>
-    <Text style={[styles.judgmentSummary, { color: colors.text.secondary }]}>{item.insight.summary}</Text>
-    {item.insight.workDone && item.insight.workDone !== item.insight.summary ? <><Text style={[styles.judgmentLabel, { color: colors.text.tertiary }]}>{im.aiChecked}</Text><Text style={[styles.judgmentSummary, { color: colors.text.secondary }]}>{item.insight.workDone}</Text></> : null}
-    <Text style={[styles.judgmentLabel, { color: colors.text.tertiary }]}>{im.recommendation}</Text>
-    <Text style={[styles.judgmentSummary, { color: colors.text.primary }]}>{item.insight.recommendation}</Text>
-    {item.insight.decision ? <View style={styles.judgmentOptions}><Text style={[styles.judgmentQuestion, { color: colors.text.primary }]}>{item.insight.decision.question}</Text>{item.insight.decision.options.map((option) => <Pressable key={option.id} disabled={busy} onPress={() => onChoice(option.id)} style={[styles.judgmentOption, { backgroundColor: colors.accent.soft }]}><Text style={{ color: colors.accent.primary }}>{option.label}</Text><Text style={[styles.judgmentConsequence, { color: colors.text.secondary }]}>{option.consequence}</Text></Pressable>)}</View> : null}
-    <View style={styles.judgmentActions}><Pressable style={styles.judgmentTextAction} disabled={busy} onPress={() => onAction('snoozed')}><Text style={{ color: colors.text.secondary }}>{im.tomorrow}</Text></Pressable><Pressable style={styles.judgmentTextAction} disabled={busy} onPress={() => onAction('resolved')}><Text style={{ color: colors.text.secondary }}>{im.dismiss}</Text></Pressable></View>
-  </View>;
-}
-
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   bottomBar: {
@@ -553,19 +507,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xs,
   },
   listContent: { paddingTop: spacing.sm, paddingBottom: spacing.lg, gap: 0 },
-  judgmentSection: { marginBottom: spacing.md, gap: spacing.sm },
-  judgmentSectionTitle: { ...typography.heading, marginHorizontal: spacing.content },
-  judgmentCard: { marginHorizontal: spacing.content, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.lg, padding: spacing.md, gap: spacing.xs },
-  judgmentTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  judgmentTitle: { ...typography.body, fontWeight: '700', flex: 1 },
-  judgmentSummary: { ...typography.label, lineHeight: 19 },
-  judgmentLabel: { ...typography.caption, marginTop: spacing.xs },
-  judgmentQuestion: { ...typography.body, fontWeight: '600' },
-  judgmentOptions: { gap: spacing.xs, marginTop: spacing.sm },
-  judgmentOption: { borderRadius: radii.md, padding: spacing.sm, gap: 2 },
-  judgmentConsequence: { ...typography.caption },
-  judgmentActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.lg, marginTop: spacing.sm },
-  judgmentTextAction: { minHeight: 44, justifyContent: 'center' },
   itemCard: {
     marginHorizontal: spacing.content,
     height: INBOX_ITEM_HEIGHT,

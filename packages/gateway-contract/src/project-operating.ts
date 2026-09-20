@@ -9,7 +9,6 @@ import {
   TaskResolutionSchema,
   TaskRunReceiptSchema,
 } from './tasks.js';
-import { ProjectMonitoringPolicySchema } from './project-monitoring.js';
 
 export const ProjectSummarySchema = z.object({
   id: z.string(),
@@ -85,7 +84,6 @@ export const ProjectOperatingViewSchema = z.object({
     summary: z.string(),
     recommendedAction: z.string().optional(),
   }),
-  monitoring: ProjectMonitoringPolicySchema,
 });
 
 export type ProjectOperatingView = z.infer<typeof ProjectOperatingViewSchema>;

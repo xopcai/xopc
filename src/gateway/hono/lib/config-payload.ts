@@ -198,17 +198,6 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
           exemptLoopback: config.gateway?.auth?.rateLimit?.exemptLoopback !== false,
         },
       },
-      heartbeat: {
-        enabled: config.gateway?.heartbeat?.enabled,
-        intervalMs: config.gateway?.heartbeat?.intervalMs,
-        includeSystemPromptSection: config.gateway?.heartbeat?.includeSystemPromptSection === true,
-        target: config.gateway?.heartbeat?.target,
-        targetChatId: config.gateway?.heartbeat?.targetChatId,
-        prompt: config.gateway?.heartbeat?.prompt,
-        ackMaxChars: config.gateway?.heartbeat?.ackMaxChars,
-        isolatedSession: config.gateway?.heartbeat?.isolatedSession,
-        activeHours: config.gateway?.heartbeat?.activeHours,
-      },
       webchat: {
         activityDetailDefault: config.gateway?.webchat?.activityDetailDefault ?? 'on',
       },

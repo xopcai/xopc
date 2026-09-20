@@ -14,10 +14,8 @@ describe('China connector catalog', () => {
       'feishu-workspace',
       'wecom-workspace',
       'dingtalk-workspace',
-      'wps-cloud-docs',
+      'wps365-workspace',
       'tencent-meeting',
-      'wps-calendar',
-      'wps-mail',
     ]);
     for (const connector of CHINA_CONNECTORS.filter((item) => item.runtime.type === 'mcp')) {
       expect(connector).toMatchObject({
@@ -54,8 +52,6 @@ describe('China connector catalog', () => {
       '/connector-icons/dingtalk-mark.svg',
       '/connector-icons/wps-docs.svg',
       '/connector-icons/tencent-meeting-mark.svg',
-      '/connector-icons/wps-calendar.svg',
-      '/connector-icons/wps-mail.svg',
     ]);
     for (const connector of CHINA_CONNECTORS.filter(connector => connector.branding)) {
       expect(connector.branding?.source).toBe('builtin');
@@ -66,25 +62,8 @@ describe('China connector catalog', () => {
   });
 
   it('materializes authenticated official remote MCP servers', () => {
-    const wps = getConnectorDefinition('wps-cloud-docs');
     const meeting = getConnectorDefinition('tencent-meeting');
-    expect(wps).toBeDefined();
     expect(meeting).toBeDefined();
-
-    const wpsServer = materializeConnectorMcpServer(wps!, { secrets: { accessToken: 'wps-secret-value' } }).server;
-    expect(wpsServer).toMatchObject({
-      url: 'https://openapi.wps.cn/mcp/v2/kso-yundoc/message',
-      transport: 'streamable-http',
-      headers: {
-        Authorization: {
-          xopcSecretRef: {
-            provider: 'connector-wps-cloud-docs-accesstoken',
-            fieldKey: 'accessToken',
-            prefix: 'Bearer ',
-          },
-        },
-      },
-    });
 
     const meetingServer = materializeConnectorMcpServer(meeting!, { secrets: { token: 'meeting-secret-value' } }).server;
     expect(meetingServer).toMatchObject({
@@ -95,8 +74,7 @@ describe('China connector catalog', () => {
         },
       },
     });
-    expect(JSON.stringify([wpsServer, meetingServer])).not.toContain('wps-secret-value');
-    expect(JSON.stringify([wpsServer, meetingServer])).not.toContain('meeting-secret-value');
+    expect(JSON.stringify(meetingServer)).not.toContain('meeting-secret-value');
   });
 
   it('adds authentication schemes only after resolving stored secrets', async () => {
@@ -104,7 +82,7 @@ describe('China connector catalog', () => {
       {
         Authorization: {
           xopcSecretRef: {
-            provider: 'connector-wps-cloud-docs-accesstoken',
+            provider: 'test-bearer-token',
             fieldKey: 'accessToken',
             prefix: 'Bearer ',
           },
@@ -123,6 +101,14 @@ describe('China connector catalog', () => {
     expect(getConnectorDefinition('wecom-workspace')).toMatchObject({
       runtime: { type: 'cli', adapterId: 'wecom', binaryVersion: '1.3.0' },
     });
+  });
+
+  it('replaces WPS MCP entries with one managed read-only CLI connector', () => {
+    expect(getConnectorDefinition('wps365-workspace')).toMatchObject({
+      kind: 'cli', auth: { mode: 'cli' }, verificationLevel: 'beta',
+      runtime: { type: 'cli', adapterId: 'wps365', binaryVersion: '0.3.6' },
+    });
+    for (const id of ['wps-cloud-docs', 'wps-calendar', 'wps-mail']) expect(getConnectorDefinition(id)).toBeUndefined();
   });
 
   it('materializes DingTalk with an explicit service allowlist', () => {

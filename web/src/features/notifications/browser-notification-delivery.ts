@@ -1,4 +1,3 @@
-import { browserPushRegistered } from '@/features/proactive/browser-push-state';
 import type { ProductNotificationPresentation } from '@/features/notifications/product-notification';
 import { getBrowserNotificationPreferences } from '@/features/notifications/browser-notification-preferences';
 import {
@@ -23,7 +22,6 @@ async function notificationRegistration(): Promise<ServiceWorkerRegistration> {
 
 export async function deliverBrowserNotification(notification: ProductNotificationPresentation): Promise<boolean> {
   if (!browserNotificationsSupported()) return false;
-  if (notification.source === 'insight' && browserPushRegistered()) return false;
   const decision = decideNotification({
     notification,
     preferences: getBrowserNotificationPreferences(),

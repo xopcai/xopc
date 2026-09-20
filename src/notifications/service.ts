@@ -1,9 +1,3 @@
-import { proactiveNotificationWorkspace, recheckNotificationDelivery } from './proactive-policy.js';
-import { proactivePreferences } from '../proactive/policy/service.js';
-import { flushDueDigests } from '../proactive/inbox/digest.js';
-import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
-import { drainChannelNotifications, enqueueChannelNotification, type ProactiveChannelSender } from './proactive-channel.js';
-import { drainBrowserPush, enqueueBrowserPush } from './web-push.js';
 import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { localizeNotification, type ProductNotificationType } from '@xopcai/gateway-contract';
 
@@ -27,6 +21,7 @@ import {
   type NotificationDelivery,
 } from './store.js';
 import type { NotificationPreferences } from './types.js';
+import type { NotificationDomainDelivery } from './domain-delivery.js';
 import { sendHarmonyPush } from './harmony-push.js';
 import { getOrCreateGatewayIdentity } from '../storage/sqlite/gateway-identity-repository.js';
 
@@ -44,21 +39,17 @@ type ExpoResult = {
   details?: { error?: string };
 };
 
+const STANDARD_PREFERENCES: Partial<Record<ProductNotificationType, keyof NotificationPreferences | true>> = {
+  'chat.completed': 'chatCompleted', 'chat.failed': 'chatFailed',
+  'task.needs_input': 'taskNeedsInput', 'task.blocked': 'taskBlocked',
+  'task.failed': 'taskFailed', 'task.completed': 'taskCompleted',
+  'automation.completed': 'automationCompleted', 'automation.failed': 'automationFailed',
+  'work_discovery.completed': true, 'work_discovery.failed': true,
+};
+
 function preferenceAllows(type: ProductNotificationType, preferences: NotificationPreferences): boolean {
-  switch (type) {
-    case 'chat.completed': return preferences.chatCompleted;
-    case 'chat.failed': return preferences.chatFailed;
-    case 'task.needs_input': return preferences.taskNeedsInput;
-    case 'task.blocked': return preferences.taskBlocked;
-    case 'task.failed': return preferences.taskFailed;
-    case 'task.completed': return preferences.taskCompleted;
-    case 'automation.completed': return preferences.automationCompleted;
-    case 'automation.failed': return preferences.automationFailed;
-    case 'proactive.insight': return preferences.proactiveInsight;
-    case 'work_discovery.completed':
-    case 'work_discovery.failed':
-      return true;
-  }
+  const key = STANDARD_PREFERENCES[type];
+  return key === true || (key !== undefined && preferences[key]);
 }
 
 function retryAt(attempts: number, now: number): number {
@@ -77,7 +68,7 @@ export class NotificationService {
   constructor(private readonly options: {
     publish: (type: string, payload: unknown) => void;
     fetch?: typeof fetch;
-    sendChannel?: ProactiveChannelSender;
+    domainDelivery?: NotificationDomainDelivery;
     sendHarmony?: typeof sendHarmonyPush;
   }) {}
 
@@ -106,33 +97,24 @@ export class NotificationService {
 
   /** Throws on persistence failure so durable producers can retry the handoff. */
   persistGatewayEvent(type: string, payload: unknown) {
-    const plan = notificationPlanFromGatewayEvent(type, payload);
+    const plan = notificationPlanFromGatewayEvent(type, payload) ?? this.options.domainDelivery?.planEvent(type, payload);
     if (!plan) return null;
     return this.persistPlan(plan);
   }
 
   persistPlan(plan: NotificationPlan) {
-    let devices = listDeliverableNotificationDevices()
-      .filter((device) => preferenceAllows(plan.notification.type, device.preferences));
-    const workspace = proactiveNotificationWorkspace(plan.notification);
-    let browserIds: string[] | undefined;
-    let selectedChannel = 'all';
-    if (workspace) {
-      const preferences = proactivePreferences(workspace);
-      const browsers = getSqliteDatabase().prepare('SELECT id FROM proactive_web_push_subscriptions WHERE workspace_id = ? ORDER BY created_at DESC, id').all(workspace) as Array<{ id: string }>;
-      selectedChannel = preferences.preferredChannel === 'auto' ? (browsers.length ? 'browser' : devices.length ? 'mobile' : 'browser') : preferences.preferredChannel;
-      if (!['all', 'mobile'].includes(selectedChannel)) devices = [];
-      else if (preferences.preferredChannel === 'auto') devices = devices.slice(0, 1);
-      browserIds = ['all', 'browser'].includes(selectedChannel) ? browsers.map((row) => row.id) : [];
-      if (preferences.preferredChannel === 'auto') browserIds = browserIds.slice(0, 1);
-      plan = { ...plan, notification: { ...plan.notification, payload: { ...plan.notification.payload, deliveryChannel: selectedChannel, deliveryMode: preferences.preferredChannel } } };
+    const domain = this.options.domainDelivery?.owns(plan.notification.type) ? this.options.domainDelivery : undefined;
+    if (!domain && !Object.hasOwn(STANDARD_PREFERENCES, plan.notification.type)) {
+      throw new Error('Notification domain delivery is not installed');
     }
+    const devices = listDeliverableNotificationDevices()
+      .filter((device) => domain ? domain.allowsDevice(device.preferences) : preferenceAllows(plan.notification.type, device.preferences));
     const result = runSqliteWriteTransaction(() => {
-      const created = createNotificationEvent({ ...plan, deviceIds: devices.map((device) => device.id) });
-      if (created.created) {
-        enqueueBrowserPush(created.notification, browserIds);
-        if (workspace && selectedChannel === 'telegram') enqueueChannelNotification(created.notification, workspace);
-      }
+      const selection = domain?.prepare(plan, devices);
+      const created = createNotificationEvent({
+        ...(selection?.plan ?? plan), deviceIds: selection?.deviceIds ?? devices.map((device) => device.id),
+      });
+      if (created.created) selection?.enqueue(created.notification);
       return created;
     });
     return result.created ? result.notification : null;
@@ -148,11 +130,10 @@ export class NotificationService {
         pruneNotificationEvents(now - 30 * 24 * 60 * 60 * 1_000);
         this.lastMaintenanceAt = now;
       }
-      for (const notification of flushDueDigests((plan) => this.persistPlan(plan))) this.options.publish('notification.created', notification);
+      for (const notification of this.options.domainDelivery?.flush((plan) => this.persistPlan(plan)) ?? []) this.options.publish('notification.created', notification);
       await this.deliverPending();
       await this.checkReceipts();
-      await drainBrowserPush();
-      if (this.options.sendChannel) await drainChannelNotifications(this.options.sendChannel);
+      await this.options.domainDelivery?.drain();
     } catch (err) {
       log.warn({ err }, 'Notification delivery pass failed');
     } finally {
@@ -166,20 +147,26 @@ export class NotificationService {
   }
 
   private async send(delivery: NotificationDelivery): Promise<void> {
-    if (delivery.event.type === 'proactive.insight') {
-      const policy = recheckNotificationDelivery(delivery.event, 'mobile');
-      if (policy === 'cancel') { markNotificationDeliveryDead(delivery.event.id, delivery.deviceId, 'Proactive policy changed'); return; }
+    const domain = this.options.domainDelivery?.owns(delivery.event.type) ? this.options.domainDelivery : undefined;
+    if (!domain && !Object.hasOwn(STANDARD_PREFERENCES, delivery.event.type)) {
+      markNotificationDeliveryDead(delivery.event.id, delivery.deviceId, 'Notification domain delivery is not installed');
+      return;
+    }
+    if (domain) {
+      const policy = domain.recheckMobile(delivery.event);
+      if (policy === 'cancel') { markNotificationDeliveryDead(delivery.event.id, delivery.deviceId, 'Notification policy changed'); return; }
       if (policy instanceof Date) { deferNotificationDelivery(delivery.event.id, delivery.deviceId, policy.getTime()); return; }
     }
     const fetchImpl = this.options.fetch ?? fetch;
     const localized = localizeNotification(delivery.event, delivery.locale);
+    const preview = domain?.mobilePreview(delivery.event, delivery.locale) ?? { title: localized.localizedTitle, body: localized.localizedBody };
     try {
       if (delivery.platform === 'harmonyos') {
         const ticket = await (this.options.sendHarmony ?? sendHarmonyPush)({
           pushToken: delivery.pushToken, eventId: delivery.event.id,
           gatewayId: getOrCreateGatewayIdentity().id, target: delivery.event.target,
-          title: delivery.event.type === 'proactive.insight' ? (delivery.locale === 'zh' ? '有一项工作需要查看' : 'A work update is ready') : localized.localizedTitle,
-          body: delivery.event.type === 'proactive.insight' ? (delivery.locale === 'zh' ? '打开 xopc 查看详情。' : 'Open xopc to review it.') : localized.localizedBody,
+          title: preview.title,
+          body: preview.body,
         }, fetchImpl);
         // Provider acceptance is not a device delivery receipt. V3 has no Expo receipt to poll.
         markNotificationDeliveryAccepted(delivery.event.id, delivery.deviceId, ticket, Number.MAX_SAFE_INTEGER);
@@ -191,8 +178,8 @@ export class NotificationService {
         signal: AbortSignal.timeout(10_000),
         body: JSON.stringify({
           to: delivery.pushToken,
-          title: delivery.event.type === 'proactive.insight' ? (delivery.locale.startsWith('zh') ? '有一项工作需要查看' : 'A work update is ready') : localized.localizedTitle,
-          body: delivery.event.type === 'proactive.insight' ? (delivery.locale.startsWith('zh') ? '打开 xopc 查看详情。' : 'Open xopc to review it.') : localized.localizedBody,
+          title: preview.title,
+          body: preview.body,
           sound: delivery.event.priority === 'high' ? 'default' : undefined,
           priority: delivery.event.priority,
           data: {

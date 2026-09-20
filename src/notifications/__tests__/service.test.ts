@@ -12,7 +12,11 @@ import {
 } from '../../storage/sqlite/index.js';
 import { getNotificationDevice, registerNotificationDevice } from '../device-store.js';
 import { NotificationService } from '../service.js';
+import type { NotificationDomainDelivery } from '../domain-delivery.js';
+import type { NotificationPlan } from '../planner.js';
+import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
 import {
+  createNotificationEvent,
   notificationDeliveryMetrics,
   rescheduleNotificationDelivery,
 } from '../store.js';
@@ -25,6 +29,13 @@ const chatEvent = {
   completedAtMs: 1,
   source: 'webchat',
   target: { kind: 'chat', conversationId: 'session-1' },
+};
+
+const domainPlan: NotificationPlan = {
+  dedupeKey: 'scene-result', notification: {
+    type: 'scene.result', target: { kind: 'scene_result', activationId: 'activation', presentationId: 'presentation' },
+    priority: 'normal', title: { en: 'Private title', zh: '私人标题' }, payload: {},
+  },
 };
 
 describe('NotificationService', () => {
@@ -51,6 +62,52 @@ describe('NotificationService', () => {
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  it('delivers ordinary notifications without any Proactive or Heartbeat tables', async () => {
+    const db = getSqliteDatabase();
+    db.exec('PRAGMA foreign_keys = OFF');
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND (name GLOB 'proactive_*' OR name = 'heartbeat_checks')").all();
+    for (const row of tables) db.exec(`DROP TABLE "${String(row.name).replaceAll('"', '""')}"`);
+    db.exec('PRAGMA foreign_keys = ON');
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: { status: 'ok', id: 'ticket' } })));
+    const service = new NotificationService({ publish: vi.fn(), fetch: fetchMock });
+    service.persistGatewayEvent('agent.run.ended', chatEvent);
+    await service.drain();
+    expect(notificationDeliveryMetrics()).toMatchObject({ accepted: 1 });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('rejects uninstalled domain publication and does not send an already queued domain event', async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    const service = new NotificationService({ publish: vi.fn(), fetch: fetchMock });
+    expect(() => service.persistPlan(domainPlan)).toThrow('domain delivery is not installed');
+    createNotificationEvent({ ...domainPlan, deviceIds: ['device-1'] });
+    await service.drain();
+    expect(notificationDeliveryMetrics()).toMatchObject({ dead: 1 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('enqueues domain work atomically once and applies injected mobile policy and private preview', async () => {
+    const enqueue = vi.fn();
+    const domain: NotificationDomainDelivery = {
+      owns: (type) => type === 'scene.result', allowsDevice: () => true, planEvent: () => null,
+      prepare: (plan, devices) => ({ plan, deviceIds: devices.map((device) => device.id), enqueue }),
+      flush: () => [], drain: async () => {}, recheckMobile: () => 'send',
+      mobilePreview: () => ({ title: 'Result ready', body: 'Open the app.' }),
+    };
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ data: { status: 'ok', id: 'ticket' } })));
+    const service = new NotificationService({ publish: vi.fn(), fetch: fetchMock, domainDelivery: domain });
+    enqueue.mockImplementationOnce(() => { throw new Error('ledger unavailable'); });
+    expect(() => service.persistPlan(domainPlan)).toThrow('ledger unavailable');
+    expect(getSqliteDatabase().prepare('SELECT count(*) AS n FROM notification_events').get()?.n).toBe(0);
+    enqueue.mockClear();
+    expect(service.persistPlan(domainPlan)).not.toBeNull();
+    expect(service.persistPlan(domainPlan)).toBeNull();
+    expect(enqueue).toHaveBeenCalledOnce();
+    await service.drain();
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toMatchObject({ title: 'Result ready', body: 'Open the app.' });
+    expect(notificationDeliveryMetrics()).toMatchObject({ accepted: 1 });
   });
 
   it('persists, publishes, sends, and confirms an Expo delivery', async () => {
