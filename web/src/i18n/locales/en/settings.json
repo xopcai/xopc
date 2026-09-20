@@ -1280,6 +1280,7 @@
     "connectorRuntimeTitle": "Runtime",
     "connectorRuntimeMcp": "MCP server {{serverId}}",
     "connectorRuntimeGeneric": "{{runtime}} runtime {{id}}",
+    "connectorAuthCli": "Account authorization",
     "connectorAuthNone": "No auth required",
     "connectorAuthApiKey": "API key",
     "connectorAuthOAuth": "OAuth",

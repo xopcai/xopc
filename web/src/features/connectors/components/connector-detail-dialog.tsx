@@ -28,11 +28,12 @@ function runtimeLabel(connector: ConnectorDefinition, t: ConnectorsSettingsMessa
   }
   const id = connector.runtime.type === 'composio'
     ? connector.runtime.toolkit
-    : connector.runtime.sourceKind;
+    : connector.runtime.type === 'cli' ? connector.runtime.adapterId : connector.runtime.sourceKind;
   return formatConnectorMessage(t.connectorRuntimeGeneric, { runtime: connector.runtime.type, id: id ?? connector.runtime.type });
 }
 
 function authLabel(connector: ConnectorDefinition, t: ConnectorsSettingsMessages): string {
+  if (connector.auth.mode === 'cli') return t.connectorAuthCli;
   if (connector.auth.mode === 'oauth') return t.connectorAuthOAuth;
   if (connector.auth.mode === 'apiKey') return t.connectorAuthApiKey;
   return t.connectorAuthNone;

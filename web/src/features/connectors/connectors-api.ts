@@ -65,6 +65,7 @@ export type ConnectorDefinition = {
   };
   verificationLevel?: 'verified' | 'beta' | 'experimental';
   auth:
+    | { mode: 'cli' }
     | { mode: 'none' }
     | { mode: 'apiKey' }
     | { mode: 'oauth'; provider?: string; clientId?: string };
@@ -74,6 +75,7 @@ export type ConnectorDefinition = {
     links?: ConnectorSetupLink[];
   };
   runtime:
+    | { type: 'cli'; adapterId: string; adapterVersion: string; binaryVersion: string }
     | {
         type: 'mcp';
         serverId: string;
@@ -159,6 +161,7 @@ export type ConnectorInstance = {
   secretStatus: Record<string, boolean>;
   config?: Record<string, unknown>;
   materialized:
+    | { type: 'cli'; id: string; adapterId: string }
     | {
         type: 'mcp';
         serverId: string;

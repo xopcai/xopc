@@ -5,7 +5,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
 import { PopoverSelect } from '@/components/ui/popover-select';
-import { RefreshButton } from '@/components/ui/refresh-button';
 import { ConnectorCard } from '@/features/connectors/components/connector-card';
 import { connectorIsInstalled, CONNECTOR_SKELETON_KEYS } from '@/features/connectors/components/connector-card-data';
 import { ConnectorCardSkeleton } from '@/features/connectors/components/connector-card-skeletons';
@@ -419,13 +418,16 @@ export function ConnectorsPage() {
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
   const headerEnd = useMemo(() => (
     <ConnectorsPageHeaderEnd
+      onRefresh={tab === 'connected' && hasToken ? load : undefined}
+      refreshing={state.loading}
+      refreshLabel={cs.refreshConnections}
       onBrowseCatalog={() => selectTab('discover')}
       onAddCustomServer={openAddCustomServer}
       addLabel={cs.addConnection}
       browseLabel={cs.addFromCatalog}
       customLabel={cs.addCustomServerAdvanced}
     />
-  ), [cs, openAddCustomServer, selectTab]);
+  ), [cs, hasToken, load, openAddCustomServer, selectTab, state.loading, tab]);
 
   useLayoutEffect(() => {
     setPageHeader({
@@ -557,23 +559,14 @@ export function ConnectorsPage() {
 
           {tab === 'connected' && hasToken ? (
             <div className="flex flex-col gap-6">
-              <div className="flex items-center gap-2">
-                {installedCount > 5 || connectedSearchQuery ? (
-                  <ConnectorSearchField
-                    value={connectedSearchQuery}
-                    onChange={setConnectedSearchQuery}
-                    placeholder={cs.connectedSearchPlaceholder}
-                    className="max-w-xl"
-                  />
-                ) : <div className="flex-1" />}
-                <RefreshButton
-                  className="size-9 shrink-0 p-0"
-                  loading={state.loading}
-                  label={cs.refreshConnections}
-                  title={cs.refreshConnections}
-                  onClick={load}
+              {installedCount > 5 || connectedSearchQuery ? (
+                <ConnectorSearchField
+                  value={connectedSearchQuery}
+                  onChange={setConnectedSearchQuery}
+                  placeholder={cs.connectedSearchPlaceholder}
+                  className="max-w-xl"
                 />
-              </div>
+              ) : null}
 
               {state.loading ? (
                 <div className="grid gap-3" aria-busy="true" aria-label={cs.loading}>

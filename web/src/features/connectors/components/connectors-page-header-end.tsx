@@ -3,6 +3,7 @@ import { ChevronDown, Plus, Search, Store, Wrench } from 'lucide-react';
 import { memo } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { RefreshButton } from '@/components/ui/refresh-button';
 import { ConnectorServiceDialog } from '../connector-service-page';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -44,12 +45,18 @@ export const ConnectorSearchField = memo(function ConnectorSearchField({
 });
 
 export const ConnectorsPageHeaderEnd = memo(function ConnectorsPageHeaderEnd({
+  onRefresh,
+  refreshing,
+  refreshLabel,
   onBrowseCatalog,
   onAddCustomServer,
   addLabel,
   browseLabel,
   customLabel,
 }: {
+  onRefresh?: () => void;
+  refreshing: boolean;
+  refreshLabel: string;
   onBrowseCatalog: () => void;
   onAddCustomServer: () => void;
   addLabel: string;
@@ -58,6 +65,15 @@ export const ConnectorsPageHeaderEnd = memo(function ConnectorsPageHeaderEnd({
 }) {
   return (
     <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+      {onRefresh ? (
+        <RefreshButton
+          className="size-9 shrink-0 p-0"
+          loading={refreshing}
+          label={refreshLabel}
+          title={refreshLabel}
+          onClick={onRefresh}
+        />
+      ) : null}
       <ConnectorServiceDialog />
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>

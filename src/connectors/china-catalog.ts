@@ -1,69 +1,28 @@
 import type { ConnectorDefinition } from './types.js';
 
-const FEISHU_MCP_VERSION = '0.5.1';
 const DINGTALK_MCP_VERSION = '1.1.21';
 
 export const CHINA_CONNECTORS: readonly ConnectorDefinition[] = [
   {
-    id: 'feishu-workspace',
-    version: FEISHU_MCP_VERSION,
-    displayName: '飞书办公',
-    description: '连接飞书文档、知识库、日历、消息和多维表格。',
-    category: 'docs',
-    kind: 'mcp',
-    source: 'builtin',
-    capabilities: ['tools', 'runtime.mcp.stdio', 'auth.apiKey'],
-    benefits: ['understand', 'act'],
-    tags: ['中国', '飞书', '文档', '知识库', '日历', '多维表格'],
+    id: 'feishu-workspace', version: '1.0.96', displayName: '飞书办公',
+    description: '连接飞书账号，搜索和读取文档、查询日程和联系人，并按权限创建日程。',
+    category: 'docs', kind: 'cli', source: 'builtin', capabilities: ['tools'],
+    benefits: ['understand', 'act'], tags: ['中国', 'Feishu', 'Lark', '飞书', '日历', '文档', '文件', '联系人'],
     branding: { logoUrl: '/channel-icons/feishu.svg', source: 'builtin' },
-    verificationLevel: 'verified',
-    auth: { mode: 'apiKey' },
-    setup: {
-      links: [
-        { label: '前往飞书开放平台创建应用', href: 'https://open.feishu.cn/app', external: true },
-      ],
-      secrets: [
-        { key: 'appId', label: 'App ID', description: '在飞书开放平台的应用凭证页复制。', required: true },
-        { key: 'appSecret', label: 'App Secret', description: '与 App ID 同一凭证页，仅保存在本机凭据存储。', required: true },
-      ],
-      config: [
-        {
-          key: 'tools',
-          label: '启用工具',
-          type: 'string',
-          required: true,
-          defaultValue: 'preset.light',
-          description: '飞书 MCP 工具预设或逗号分隔的工具列表。',
-        },
-      ],
-    },
-    runtime: {
-      type: 'mcp',
-      serverId: 'feishu_workspace',
-      localPackage: {
-        registry: 'npm',
-        name: '@larksuiteoapi/lark-mcp',
-        version: FEISHU_MCP_VERSION,
-      },
-      serverTemplate: {
-        command: 'npx',
-        args: ['-y', `@larksuiteoapi/lark-mcp@${FEISHU_MCP_VERSION}`, 'mcp'],
-        env: {
-          APP_ID: '{{secrets.appId}}',
-          APP_SECRET: '{{secrets.appSecret}}',
-          LARK_TOOLS: '{{config.tools}}',
-          LARK_DOMAIN: 'https://open.feishu.cn',
-          LARK_TOKEN_MODE: 'auto',
-        },
-      },
-    },
-    permissions: {
-      data: ['documents', 'communications', 'calendar'],
-      networkDomains: ['open.feishu.cn'],
-      localExec: true,
-      filesystem: [],
-    },
-    integrationStrategy: { lane: 'mcp', workload: 'core', preferred: true },
+    verificationLevel: 'beta', auth: { mode: 'cli' }, setup: {},
+    runtime: { type: 'cli', adapterId: 'lark', adapterVersion: '1', binaryVersion: '1.0.96' },
+    permissions: { localExec: true, data: ['calendar', 'documents', 'contacts'], networkDomains: ['open.feishu.cn'] },
+    integrationStrategy: { lane: 'native', workload: 'core', preferred: true },
+  },
+  {
+    id: 'wecom-workspace', version: '1.3.0', displayName: '企业微信办公',
+    description: '扫码连接企业微信，搜索和读取文档、查询联系人和待办，并按权限创建待办。',
+    category: 'docs', kind: 'cli', source: 'builtin', capabilities: ['tools'],
+    benefits: ['understand', 'act'], tags: ['中国', 'WeCom', '企业微信', '文档', '联系人', '待办'],
+    verificationLevel: 'beta', auth: { mode: 'cli' }, setup: {},
+    runtime: { type: 'cli', adapterId: 'wecom', adapterVersion: '1', binaryVersion: '1.3.0' },
+    permissions: { localExec: true, data: ['documents', 'contacts', 'tasks'], networkDomains: ['qyapi.weixin.qq.com'] },
+    integrationStrategy: { lane: 'native', workload: 'core', preferred: true },
   },
   {
     id: 'dingtalk-workspace',

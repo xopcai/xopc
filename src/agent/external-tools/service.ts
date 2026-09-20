@@ -157,7 +157,7 @@ export class ExternalToolService {
       throw new Error(`Tool contract changed. Describe ${params.toolRef} again before executing it.`);
     }
     const args = params.arguments ?? {};
-    if (params.readOnly && provider.source === 'composio' && (typeof args.xopcAccountId !== 'string' || !args.xopcAccountId)) {
+    if (params.readOnly && (provider.source === 'composio' || provider.source === 'cli') && (typeof args.xopcAccountId !== 'string' || !args.xopcAccountId)) {
       throw new Error('Batch connector reads require an explicit xopcAccountId');
     }
     let validate: ReturnType<typeof this.ajv.compile>;

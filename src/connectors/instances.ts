@@ -44,6 +44,7 @@ function connectorInstanceFromRecord(instanceId: string, record: Record<string, 
     : {};
   const runtimeType = runtime.type;
   if (
+    runtimeType !== 'cli' &&
     runtimeType !== 'composio' &&
     runtimeType !== 'memorySource'
   ) return [];
@@ -71,6 +72,7 @@ function connectorInstanceFromRecord(instanceId: string, record: Record<string, 
           toolkit: runtime.toolkit as string,
           role: runtime.role as 'credential' | 'toolkit',
         }
+      : runtimeType === 'cli' ? { type: 'cli', id: instanceId, adapterId: String(runtime.adapterId) }
       : { type: 'memorySource', id: instanceId },
     usage: getConnectorUsageFromMarker(marker),
     audit: getConnectorAuditFromMarker(marker),

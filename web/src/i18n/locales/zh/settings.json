@@ -1280,6 +1280,7 @@
     "connectorRuntimeTitle": "运行时",
     "connectorRuntimeMcp": "MCP 服务器 {{serverId}}",
     "connectorRuntimeGeneric": "{{runtime}} 运行时 {{id}}",
+    "connectorAuthCli": "账号授权",
     "connectorAuthNone": "无需认证",
     "connectorAuthApiKey": "API key",
     "connectorAuthOAuth": "OAuth",

@@ -1,3 +1,4 @@
+import { registerCliConnectorRoutes } from './cli-connectors.js';
 import type { Hono } from 'hono';
 import { createLogger } from '../../../utils/logger.js';
 
@@ -49,6 +50,7 @@ import {
 import {
   decideConnectorApproval,
   getConnectorAccount,
+  listConnectorAccounts,
   getConnectorSyncPolicy,
   getConnectorApproval,
   listConnectorConnections,
@@ -73,6 +75,7 @@ function defaultConnectorSyncInterval(connectorId: string): number {
 }
 
 export function registerConnectorRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
+  registerCliConnectorRoutes(authenticated, deps);
   const log = createLogger('Connectors:Routes');
   const { service, strictRateLimitMiddleware } = deps;
 
@@ -92,6 +95,10 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
   authenticated.get('/api/connectors/installed', async (c) => {
     const config = service.currentConfig as Config;
     const instances = await Promise.all(listConnectorInstances(config).map(async (instance) => {
+      if (instance.enabled && instance.materialized.type === 'cli') {
+        const connected = listConnectorAccounts({ principalId: 'local-owner', connectorId: instance.connectorId }).some(account => account.enabled && account.currentConnectionId && listConnectorConnections({ principalId: 'local-owner', connectorId: instance.connectorId }).some(connection => connection.id === account.currentConnectionId && connection.status === 'active' && connection.provider === 'cli' && connection.metadata.runtimeInstanceId === instance.instanceId));
+        return { ...instance, status: connected ? 'connected' as const : 'installed' as const, authStatus: connected ? 'connected' as const : 'missing' as const, connectionStatus: connected ? 'connected' as const : 'disconnected' as const };
+      }
       if (!instance.enabled || instance.materialized.type !== 'mcp') return instance;
       const server = config.mcp?.servers?.[instance.materialized.serverId];
       if (!server) return instance;
@@ -700,11 +707,11 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     if (!instance) {
       return c.json({ ok: false, error: `Connector instance not found: ${instanceId}` }, 404);
     }
-    if (instance.materialized.type !== 'mcp') {
+    if (instance.materialized.type !== 'mcp' && instance.materialized.type !== 'cli') {
       return c.json({ ok: false, error: `Connector type "${instance.materialized.type}" does not support MCP health checks.` }, 400);
     }
     try {
-      const result = await testConnectorInstance(config, instance.materialized.serverId);
+      const result = await testConnectorInstance(config, instance.materialized.type === 'mcp' ? instance.materialized.serverId : instance.instanceId);
       await persistConfigMutation({
         config,
         mutate: () => recordConnectorHealthUsage(config, instance.instanceId, result),

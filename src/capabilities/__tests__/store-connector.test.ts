@@ -80,6 +80,15 @@ function mockStore(archive: Buffer, sha256 = createHash('sha256').update(archive
 afterEach(() => vi.restoreAllMocks());
 
 describe('store connector install plans', () => {
+  it('accepts a pinned registered CLI adapter and rejects command injection', async () => {
+    const cli = { ...manifest, capabilities: ['tools'], auth: { mode: 'cli' }, permissions: { ...manifest.permissions, localExec: true }, runtime: { type: 'cli', adapterId: 'lark', adapterVersion: '1', binaryVersion: '1.0.96' } } as unknown as typeof manifest;
+    mockStore(archiveForManifest(cli), undefined, cli);
+    expect(await getStoreConnectorInstallPlan(config(), 'demo-connector')).toMatchObject({ definition: { runtime: { type: 'cli', adapterId: 'lark' } } });
+    vi.restoreAllMocks();
+    const unsafe = { ...cli, runtime: { ...cli.runtime, command: 'sh' } };
+    mockStore(archiveForManifest(unsafe), undefined, unsafe);
+    await expect(getStoreConnectorInstallPlan(config(), 'demo-connector')).rejects.toThrow('exact registered adapter');
+  });
   it('verifies the artifact checksum and returns only a remote MCP definition', async () => {
     const archive = archiveForManifest();
     mockStore(archive);
