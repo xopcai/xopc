@@ -117,6 +117,29 @@ export function setUserGoalStatus(id: string, status: UserGoalStatus, now = Date
   return result.changes ? listUserGoals().find((goal) => goal.id === id) : undefined;
 }
 
+export function updateUserGoal(
+  id: string,
+  input: { title: string; desiredOutcome: string; targetAt?: number },
+  now = Date.now(),
+): UserGoal | undefined {
+  const current = listUserGoals().find((goal) => goal.id === id);
+  if (!current) return undefined;
+  const title = input.title.trim();
+  const desiredOutcome = input.desiredOutcome.trim();
+  if (!title || !desiredOutcome) throw new Error('Goal title and desired outcome are required.');
+  const revisionId = randomUUID();
+  runSqliteWriteTransaction((db) => {
+    db.prepare(`INSERT INTO user_goal_revisions (
+      revision_id, goal_id, title, desired_outcome, created_by, change_reason, created_at
+    ) VALUES (?, ?, ?, ?, 'user', 'Goal edited by user.', ?)`).run(
+      revisionId, id, title, desiredOutcome, now,
+    );
+    db.prepare(`UPDATE user_goals SET current_revision_id = ?, target_at = ?, updated_at = ?
+      WHERE goal_id = ?`).run(revisionId, input.targetAt ?? current.targetAt ?? null, now, id);
+  });
+  return listUserGoals().find((goal) => goal.id === id);
+}
+
 export function listPriorityWindows(principalId = USER_MODEL_PRINCIPAL_ID): UserPriorityWindow[] {
   const rows = getSqliteDatabase().prepare(`SELECT * FROM user_priority_windows
     WHERE principal_id = ? ORDER BY valid_from DESC`).all(principalId) as Array<Record<string, unknown>>;
@@ -167,4 +190,22 @@ export function createPriorityWindow(input: {
     input.validFrom, input.validTo, input.reviewAt ?? input.validTo, now, now,
   );
   return listPriorityWindows().find((item) => item.id === id)!;
+}
+
+export function updatePriorityWindow(
+  id: string,
+  input: { targetId?: string; validTo?: number; status?: UserPriorityWindow['status'] },
+  now = Date.now(),
+): UserPriorityWindow | undefined {
+  const current = listPriorityWindows().find((item) => item.id === id);
+  if (!current) return undefined;
+  const targetId = input.targetId?.trim() || current.targetId;
+  const validTo = input.validTo ?? current.validTo;
+  if (!targetId) throw new Error('Priority target id is required.');
+  if (validTo < current.validFrom) throw new Error('Priority validTo must be after validFrom.');
+  const status = input.status ?? current.status;
+  const result = getSqliteDatabase().prepare(`UPDATE user_priority_windows
+    SET target_id = ?, valid_to = ?, review_at = MIN(review_at, ?), status = ?, updated_at = ?
+    WHERE priority_id = ?`).run(targetId, validTo, validTo, status, now, id);
+  return result.changes ? listPriorityWindows().find((item) => item.id === id) : undefined;
 }

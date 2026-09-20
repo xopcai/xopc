@@ -3,8 +3,10 @@ import {
   BookOpen,
   Brain,
   BriefcaseBusiness,
+  CalendarDays,
   Check,
   ChevronDown,
+  ChevronRight,
   Clock3,
   Compass,
   Database,
@@ -13,6 +15,7 @@ import {
   Loader2,
   MapPin,
   MessageCircle,
+  Pencil,
   RefreshCw,
   Search,
   Sparkles,
@@ -21,6 +24,7 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -42,6 +46,7 @@ import {
   reviewKnowledgeItem,
   setRuleStatus,
   updateUserProfile,
+  updatePriority,
   type CollaborationRule,
   type KnowledgeItem,
   type PriorityWindow,
@@ -53,6 +58,13 @@ import {
 
 type Language = 'en' | 'zh';
 type View = 'overview' | 'understanding' | 'knowledge';
+type UnderstandingFilter = 'all' | 'explicit' | 'learned' | 'pending';
+type KnowledgeKindFilter = 'all' | KnowledgeItem['kind'];
+
+function viewFromSearchParams(searchParams: URLSearchParams): View {
+  const value = searchParams.get('tab');
+  return value === 'understanding' || value === 'knowledge' ? value : 'overview';
+}
 
 const copy = {
   en: {
@@ -83,7 +95,21 @@ const copy = {
     learnedHint: 'Patterns formed from our work',
     pending: 'Not in use',
     pendingHint: 'Reviewed automatically as evidence changes',
+    allUnderstanding: 'All understanding',
+    understandingFilterHint: 'Filter this view by how each item was formed or whether it is currently in use.',
     importantNow: 'What matters now',
+    prioritySourceGoal: 'From a goal you confirmed',
+    prioritySourceWork: 'From your current work',
+    editPriority: 'Edit focus',
+    priorityTitle: 'Current focus',
+    priorityTitlePlaceholder: 'What matters most right now?',
+    priorityOutcome: 'What a good outcome looks like',
+    priorityOutcomePlaceholder: 'Describe the result you want…',
+    priorityUntil: 'Focus through',
+    savePriority: 'Save focus',
+    endPriority: 'End focus',
+    endingPriority: 'Ending…',
+    priorityHint: 'This is used to keep xopc aligned with what deserves attention now.',
     noPriority: 'No current priority has been set.',
     otherGoals: 'Other active outcomes',
     howWeWork: 'How we work together',
@@ -113,6 +139,7 @@ const copy = {
     correctionPlaceholder: 'Write the accurate version…',
     searchPlaceholder: 'Search work memory…',
     allMemory: 'All work memory',
+    memoryFilterHint: 'Filter by memory type',
     memoryLibraryHint: 'Only distilled facts, decisions, lessons, commitments, and open questions appear here. Source records stay with their connector.',
     noKnowledge: 'No work memory has formed yet.',
     noKnowledgeMatch: 'No work memory matches this search.',
@@ -154,7 +181,21 @@ const copy = {
     learnedHint: '从实际协作中形成的认识',
     pending: '暂不使用',
     pendingHint: '随新证据自动复核',
+    allUnderstanding: '全部理解',
+    understandingFilterHint: '按内容来源和当前是否使用筛选这份理解。',
     importantNow: '此刻重要',
+    prioritySourceGoal: '来自你确认的当前目标',
+    prioritySourceWork: '来自当前工作上下文',
+    editPriority: '编辑',
+    priorityTitle: '当前关注',
+    priorityTitlePlaceholder: '现在最重要的是什么？',
+    priorityOutcome: '期待结果',
+    priorityOutcomePlaceholder: '描述你希望达成的结果…',
+    priorityUntil: '关注至',
+    savePriority: '保存关注',
+    endPriority: '结束关注',
+    endingPriority: '正在结束…',
+    priorityHint: '这项内容会帮助 xopc 在协作中优先关注当前最重要的事情。',
     noPriority: '还没有设置当前优先事项。',
     otherGoals: '其他进行中的目标',
     howWeWork: '我们怎样协作',
@@ -184,6 +225,7 @@ const copy = {
     correctionPlaceholder: '写下更准确的说法…',
     searchPlaceholder: '搜索工作记忆…',
     allMemory: '全部工作记忆',
+    memoryFilterHint: '按记忆类型筛选',
     memoryLibraryHint: '这里只显示提炼后的事实、决定、经验、承诺和待解问题；邮件、日历与文档原文保留在对应来源中。',
     noKnowledge: '还没有形成工作记忆。',
     noKnowledgeMatch: '没有符合搜索条件的工作记忆。',
@@ -261,6 +303,19 @@ function validUntil(value: number, language: Language): string {
   return language === 'zh' ? `当前安排至 ${date}` : `Current plan through ${date}`;
 }
 
+function dateInputValue(value: number): string {
+  const date = new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function endOfLocalDay(value: string): number {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day, 23, 59, 59, 999).getTime();
+}
+
 function scopeLabel(scope: UserAssertion['scope'], language: Language): string {
   const labels = language === 'zh'
     ? { global: '所有协作', agent: '当前智能体', workspace: '当前工作区', project: '当前项目', session: '当前会话' }
@@ -306,15 +361,15 @@ function Section({
   className?: string;
 }) {
   return (
-    <section className={`rounded-xl border border-edge bg-surface-panel shadow-surface ${className}`}>
-      <header className="flex items-start justify-between gap-4 border-b border-edge-subtle px-5 py-4">
+    <section className={className}>
+      <header className="flex items-end justify-between gap-4 px-1 pb-3">
         <div>
-          <h2 className="text-sm font-semibold text-fg">{title}</h2>
-          {hint ? <p className="mt-1 max-w-2xl text-sm leading-5 text-fg-muted">{hint}</p> : null}
+          <h2 className="text-base font-semibold tracking-tight text-fg">{title}</h2>
+          {hint ? <p className="mt-1 max-w-2xl text-sm leading-6 text-fg-muted">{hint}</p> : null}
         </div>
         {action}
       </header>
-      {children}
+      <div className="overflow-hidden rounded-2xl bg-surface-panel">{children}</div>
     </section>
   );
 }
@@ -426,6 +481,114 @@ function ProfileDialog({
   );
 }
 
+function PriorityDialog({
+  open,
+  priority,
+  title,
+  outcome,
+  language,
+  saving,
+  onOpenChange,
+  onSave,
+  onEnd,
+}: {
+  open: boolean;
+  priority: PriorityWindow;
+  title: string;
+  outcome?: string;
+  language: Language;
+  saving: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSave: (input: { title: string; desiredOutcome?: string; validTo: number }) => void;
+  onEnd: () => void;
+}) {
+  const t = copy[language];
+  const [draftTitle, setDraftTitle] = useState(title);
+  const [draftOutcome, setDraftOutcome] = useState(outcome ?? '');
+  const [draftValidTo, setDraftValidTo] = useState(() => dateInputValue(priority.validTo));
+
+  useEffect(() => {
+    if (!open) return;
+    setDraftTitle(title);
+    setDraftOutcome(outcome ?? '');
+    setDraftValidTo(dateInputValue(priority.validTo));
+  }, [open, outcome, priority.validTo, title]);
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    onSave({
+      title: draftTitle.trim(),
+      ...(priority.targetType === 'goal' ? { desiredOutcome: draftOutcome.trim() } : {}),
+      validTo: endOfLocalDay(draftValidTo),
+    });
+  };
+  const valid = Boolean(draftTitle.trim() && draftValidTo
+    && (priority.targetType !== 'goal' || draftOutcome.trim()));
+
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+        <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] h-[min(34rem,calc(100vh-2rem))] w-[min(38rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-popover outline-none">
+          <form className="flex h-full min-h-0 flex-col" onSubmit={submit}>
+            <header className="flex shrink-0 items-start justify-between gap-4 border-b border-edge px-5 py-4 sm:px-6">
+              <div>
+                <Dialog.Title className="font-semibold text-fg">{t.editPriority}</Dialog.Title>
+                <Dialog.Description className="mt-1 text-xs leading-5 text-fg-muted">{t.priorityHint}</Dialog.Description>
+              </div>
+              <Dialog.Close asChild><Button variant="ghost" className="size-8 shrink-0 p-0" aria-label={t.cancel}><X className="size-4" /></Button></Dialog.Close>
+            </header>
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5 sm:p-6">
+              <label className="grid gap-1.5 text-sm">
+                <span className="font-medium text-fg">{t.priorityTitle}</span>
+                <input
+                  autoFocus
+                  value={draftTitle}
+                  onChange={(event) => setDraftTitle(event.target.value)}
+                  placeholder={t.priorityTitlePlaceholder}
+                  className="h-10 w-full rounded-xl border border-edge bg-surface-base px-3 text-sm text-fg outline-none transition placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
+                />
+              </label>
+              {priority.targetType === 'goal' ? (
+                <label className="grid gap-1.5 text-sm">
+                  <span className="font-medium text-fg">{t.priorityOutcome}</span>
+                  <textarea
+                    value={draftOutcome}
+                    onChange={(event) => setDraftOutcome(event.target.value)}
+                    placeholder={t.priorityOutcomePlaceholder}
+                    className="min-h-28 w-full resize-y rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm leading-6 text-fg outline-none transition placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
+                  />
+                </label>
+              ) : null}
+              <label className="grid gap-1.5 text-sm">
+                <span className="font-medium text-fg">{t.priorityUntil}</span>
+                <input
+                  type="date"
+                  min={dateInputValue(priority.validFrom)}
+                  value={draftValidTo}
+                  onChange={(event) => setDraftValidTo(event.target.value)}
+                  className="h-10 w-full rounded-xl border border-edge bg-surface-base px-3 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
+                />
+              </label>
+            </div>
+            <footer className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-edge px-5 py-3 sm:px-6">
+              <Button variant="ghost" className="text-danger hover:text-danger" disabled={saving} onClick={onEnd}>
+                {saving ? <Loader2 className="size-4 animate-spin" /> : null}{saving ? t.endingPriority : t.endPriority}
+              </Button>
+              <div className="flex gap-2">
+                <Dialog.Close asChild><Button disabled={saving}>{t.cancel}</Button></Dialog.Close>
+                <Button type="submit" variant="primary" disabled={!valid || saving}>
+                  {saving ? <Loader2 className="size-4 animate-spin" /> : null}{t.savePriority}
+                </Button>
+              </div>
+            </footer>
+          </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
 function RuleRow({
   rule,
   language,
@@ -527,8 +690,9 @@ export function UserModelPage() {
   const t = copy[language];
   const setPageHeader = usePageHeaderStore((state) => state.setPageHeader);
   const clearPageHeader = usePageHeaderStore((state) => state.clearPageHeader);
-  const { data, error, isLoading, mutate } = useSWR<UserModelResponse>('/api/user-model', fetchUserModel);
-  const [view, setView] = useState<View>('overview');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { data, error, isLoading, isValidating, mutate } = useSWR<UserModelResponse>('/api/user-model', fetchUserModel);
+  const view = viewFromSearchParams(searchParams);
   const [busy, setBusy] = useState<string>();
   const [actionError, setActionError] = useState<string>();
   const [actionMessage, setActionMessage] = useState('');
@@ -538,15 +702,36 @@ export function UserModelPage() {
   const [knowledgeLimit, setKnowledgeLimit] = useState(24);
   const [expandedKnowledgeId, setExpandedKnowledgeId] = useState<string>();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [priorityOpen, setPriorityOpen] = useState(false);
+  const [understandingFilter, setUnderstandingFilter] = useState<UnderstandingFilter>('all');
+  const [knowledgeKindFilter, setKnowledgeKindFilter] = useState<KnowledgeKindFilter>('all');
+
+  const setView = (nextView: View) => {
+    if (nextView === view) return;
+    setSearchParams((previous) => {
+      const next = new URLSearchParams(previous);
+      if (nextView === 'overview') next.delete('tab');
+      else next.set('tab', nextView);
+      return next;
+    });
+  };
 
   useEffect(() => {
     setPageHeader({
       startExtra: null,
       main: <div><h1 className="text-base font-semibold text-fg">{t.pageTitle}</h1><p className="hidden text-xs text-fg-muted sm:block">{t.pageSubtitle}</p></div>,
-      end: <UnderstandingStatusButton />,
+      end: (
+        <div className="flex items-center gap-2">
+          <UnderstandingStatusButton />
+          <Button variant="secondary" className="h-9" disabled={isValidating} onClick={() => void mutate()}>
+            {isValidating ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="size-4" aria-hidden="true" />}
+            <span className="hidden sm:inline">{t.refresh}</span>
+          </Button>
+        </div>
+      ),
     });
     return clearPageHeader;
-  }, [clearPageHeader, setPageHeader, t]);
+  }, [clearPageHeader, isValidating, mutate, setPageHeader, t]);
 
   const act = async (id: string, operation: () => Promise<unknown>) => {
     setBusy(id);
@@ -579,6 +764,41 @@ export function UserModelPage() {
       await updateUserProfile(profile);
       await mutate();
       setProfileOpen(false);
+    } catch {
+      setActionError(t.actionFailed);
+    } finally {
+      setBusy(undefined);
+    }
+  };
+
+  const savePriority = async (
+    priority: PriorityWindow,
+    input: { title: string; desiredOutcome?: string; validTo: number },
+  ) => {
+    setBusy(`priority:${priority.id}`);
+    setActionError(undefined);
+    setActionMessage('');
+    try {
+      await updatePriority(priority.id, input);
+      await mutate();
+      setPriorityOpen(false);
+      setActionMessage(language === 'zh' ? '当前关注已更新' : 'Current focus updated');
+    } catch {
+      setActionError(t.actionFailed);
+    } finally {
+      setBusy(undefined);
+    }
+  };
+
+  const endPriority = async (priority: PriorityWindow) => {
+    setBusy(`priority:${priority.id}`);
+    setActionError(undefined);
+    setActionMessage('');
+    try {
+      await updatePriority(priority.id, { status: 'completed' });
+      await mutate();
+      setPriorityOpen(false);
+      setActionMessage(language === 'zh' ? '当前关注已结束' : 'Current focus ended');
     } catch {
       setActionError(t.actionFailed);
     } finally {
@@ -620,6 +840,12 @@ export function UserModelPage() {
   const activeAssertions = assertions.filter((item) => item.usable);
   const explicitCount = activeAssertions.filter((item) => item.authority === 'user_explicit').length;
   const learnedCount = activeAssertions.length - explicitCount;
+  const filteredAssertions = assertions.filter((item) => {
+    if (understandingFilter === 'explicit') return item.usable && item.authority === 'user_explicit';
+    if (understandingFilter === 'learned') return item.usable && item.authority !== 'user_explicit';
+    if (understandingFilter === 'pending') return !item.usable;
+    return true;
+  });
   const activePriorities = data.priorities.filter((item) => item.status === 'active' && item.validTo > Date.now());
   const primaryPriority = activePriorities.find((item) => item.rank === 'primary') ?? activePriorities[0];
   const primaryTitle = goalTitle(primaryPriority, data.goals, language);
@@ -632,20 +858,31 @@ export function UserModelPage() {
   const recentAssertions = [...assertions].sort((a, b) => b.recordedAt - a.recordedAt);
   const visibleKnowledge = data.knowledge.filter((item) => item.status !== 'archived' && item.status !== 'rejected');
   const normalizedQuery = query.trim().toLocaleLowerCase();
-  const searchedKnowledge = visibleKnowledge.filter((item) => !normalizedQuery
+  const kindFilteredKnowledge = visibleKnowledge.filter((item) => (
+    knowledgeKindFilter === 'all' || item.kind === knowledgeKindFilter
+  ));
+  const searchedKnowledge = kindFilteredKnowledge.filter((item) => !normalizedQuery
     || item.content.toLocaleLowerCase().includes(normalizedQuery)
     || knowledgeKindLabel(item.kind, language).toLocaleLowerCase().includes(normalizedQuery));
   const groupedAssertions = [
-    { key: 'identity', title: t.identity, icon: UserRound, items: assertions.filter((item) => item.kind === 'identity') },
-    { key: 'preferences', title: t.preferences, icon: Compass, items: assertions.filter((item) => ['preference', 'value', 'routine', 'capability'].includes(item.kind)) },
-    { key: 'relationships', title: t.relationships, icon: Handshake, items: assertions.filter((item) => item.kind === 'relationship') },
-    { key: 'current', title: t.currentState, icon: Clock3, items: assertions.filter((item) => item.kind === 'current_state') },
-    { key: 'insights', title: t.insights, icon: Sparkles, items: assertions.filter((item) => item.kind === 'derived_insight') },
+    { key: 'identity', title: t.identity, icon: UserRound, items: filteredAssertions.filter((item) => item.kind === 'identity') },
+    { key: 'preferences', title: t.preferences, icon: Compass, items: filteredAssertions.filter((item) => ['preference', 'value', 'routine', 'capability'].includes(item.kind)) },
+    { key: 'relationships', title: t.relationships, icon: Handshake, items: filteredAssertions.filter((item) => item.kind === 'relationship') },
+    { key: 'current', title: t.currentState, icon: Clock3, items: filteredAssertions.filter((item) => item.kind === 'current_state') },
+    { key: 'insights', title: t.insights, icon: Sparkles, items: filteredAssertions.filter((item) => item.kind === 'derived_insight') },
   ];
   const visibleAssertionGroups = groupedAssertions.filter((group) => group.items.length > 0);
   const memoryCounts = knowledgeKindOrder
     .map((kind) => ({ kind, count: visibleKnowledge.filter((item) => item.kind === kind).length }))
     .filter((entry) => entry.count > 0);
+  const overviewMemoryCounts = memoryCounts.slice(0, 4);
+  const memoryGridClass = overviewMemoryCounts.length === 1
+    ? 'grid-cols-1'
+    : overviewMemoryCounts.length === 2
+      ? 'sm:grid-cols-2'
+      : overviewMemoryCounts.length === 3
+        ? 'sm:grid-cols-3'
+        : 'sm:grid-cols-2 lg:grid-cols-4';
   const limitedKnowledge = searchedKnowledge.slice(0, knowledgeLimit);
   const knowledgeGroups = knowledgeKindOrder
     .map((kind) => ({
@@ -654,6 +891,24 @@ export function UserModelPage() {
       totalCount: searchedKnowledge.filter((item) => item.kind === kind).length,
     }))
     .filter((group) => group.items.length > 0);
+  const understandingFilterOptions: Array<{ id: UnderstandingFilter; label: string; count: number }> = [
+    { id: 'all', label: t.allUnderstanding, count: assertions.length },
+    { id: 'explicit', label: t.explicit, count: explicitCount },
+    { id: 'learned', label: t.learned, count: learnedCount },
+    { id: 'pending', label: t.pending, count: inactiveAssertions.length },
+  ];
+
+  const openUnderstanding = (filter: UnderstandingFilter) => {
+    setUnderstandingFilter(filter);
+    setView('understanding');
+  };
+
+  const openKnowledge = (kind: KnowledgeKindFilter) => {
+    setKnowledgeKindFilter(kind);
+    setQuery('');
+    setKnowledgeLimit(24);
+    setView('knowledge');
+  };
 
   const assertionRow = (item: UserAssertion) => (
     <UnderstandingRow
@@ -681,7 +936,7 @@ export function UserModelPage() {
       : t.maintenanceFailed;
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-5 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
+    <div className="mx-auto w-full max-w-6xl space-y-8 px-4 py-7 sm:px-6 lg:px-8 lg:py-10">
       <PageTabs
         items={[
           { id: 'overview', label: t.overview, icon: Sparkles },
@@ -693,6 +948,10 @@ export function UserModelPage() {
         ariaLabel={t.pageTitle}
         tabIdPrefix="understanding-tab"
         panelIdPrefix="understanding-panel"
+        className="border-b border-edge-subtle pb-0"
+        buttonClassName="rounded-none px-1.5 pb-3 pt-2 sm:px-3"
+        selectedClassName="bg-transparent text-fg after:absolute after:inset-x-1 after:bottom-0 after:h-0.5 after:rounded-full after:bg-accent after:content-['']"
+        unselectedClassName="text-fg-muted hover:bg-transparent hover:text-fg"
       />
 
       <p role="status" className="sr-only">{actionMessage}</p>
@@ -704,47 +963,59 @@ export function UserModelPage() {
       ) : null}
 
       {view === 'overview' ? (
-        <div id="understanding-panel-overview" role="tabpanel" aria-labelledby="understanding-tab-overview" className="space-y-5">
-          <section className="overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-surface">
-            <div className="grid gap-8 px-5 py-7 sm:px-8 sm:py-9 lg:grid-cols-[minmax(0,1fr)_16rem] lg:gap-6">
-              <div className="min-w-0">
+        <div id="understanding-panel-overview" role="tabpanel" aria-labelledby="understanding-tab-overview" className="space-y-10">
+          <section data-testid="overview-hero" className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)] lg:gap-12">
+            <div className="min-w-0 px-1 py-2">
                 <div className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.16em] text-accent-fg">
-                  <Sparkles className="size-3.5" />
+                  <Sparkles className="size-3.5" aria-hidden="true" />
                   <span>{t.portraitEyebrow}</span>
                 </div>
-                <div className="mt-6 flex flex-wrap items-center gap-4">
-                  <div className="flex size-16 shrink-0 items-center justify-center rounded-2xl border border-edge bg-surface-active text-lg font-semibold text-fg sm:size-20 sm:text-xl">
+                <div className="mt-5 flex flex-wrap items-center gap-5">
+                  <div className="flex size-20 shrink-0 items-center justify-center rounded-[1.4rem] bg-surface-active text-xl font-semibold text-fg">
                     {initials(displayName)}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h2 className="truncate text-2xl font-semibold tracking-tight text-fg sm:text-3xl">{displayName}</h2>
+                    <h2 className="truncate text-3xl font-semibold tracking-tight text-fg">{displayName}</h2>
                     <p className="mt-1 break-words text-sm text-fg-muted">{profile.role || t.notProvided}</p>
                   </div>
-                  <Button className="shrink-0" onClick={() => setProfileOpen(true)}><UserRoundPen className="size-4" />{t.editProfile}</Button>
+                  <Button variant="ghost" className="shrink-0" onClick={() => setProfileOpen(true)}><UserRoundPen className="size-4" aria-hidden="true" />{t.editProfile}</Button>
                 </div>
-                <p className="mt-6 max-w-2xl text-sm leading-6 text-fg-muted">{t.portraitIntro}</p>
-                <div className="mt-6 overflow-hidden rounded-xl border border-edge bg-edge-subtle">
-                  <div className="grid gap-px sm:grid-cols-3">
-                    {[
-                      { icon: Languages, label: t.locale, value: profile.locale ? localeLabel(profile.locale, language) : t.notProvided },
-                      { icon: MapPin, label: t.timezone, value: profile.timezone || t.notProvided },
-                      { icon: UserRound, label: t.pronouns, value: profile.pronouns || t.notProvided },
-                    ].map(({ icon: Icon, label, value }) => (
-                      <div key={label} className="bg-surface-panel px-4 py-3.5">
-                        <p className="flex items-center gap-1.5 text-xs text-fg-subtle"><Icon className="size-3.5" />{label}</p>
-                        <p className="mt-1.5 truncate text-sm font-medium text-fg">{value}</p>
-                      </div>
-                    ))}
+                <p className="mt-5 max-w-2xl text-sm leading-6 text-fg-muted">{t.portraitIntro}</p>
+              <dl className="mt-7 grid gap-x-8 gap-y-5 sm:grid-cols-3">
+                {[
+                  { icon: Languages, label: t.locale, value: profile.locale ? localeLabel(profile.locale, language) : t.notProvided },
+                  { icon: MapPin, label: t.timezone, value: profile.timezone || t.notProvided },
+                  { icon: UserRound, label: t.pronouns, value: profile.pronouns || t.notProvided },
+                ].map(({ icon: Icon, label, value }) => (
+                  <div key={label} className="min-w-0">
+                    <dt className="flex items-center gap-1.5 text-xs text-fg-subtle"><Icon className="size-3.5" aria-hidden="true" />{label}</dt>
+                    <dd className="mt-1.5 truncate text-sm font-medium text-fg">{value}</dd>
                   </div>
+                ))}
+                </dl>
+            </div>
+            <aside data-testid="priority-panel" className="flex min-h-64 flex-col rounded-[1.4rem] bg-surface-panel p-6 shadow-surface">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold tracking-wide text-fg-subtle">{t.importantNow}</p>
+                    {primaryPriority ? (
+                      <p className="mt-1.5 flex items-center gap-1.5 text-xs text-fg-muted">
+                        <BriefcaseBusiness className="size-3.5" aria-hidden="true" />
+                        {primaryPriority.targetType === 'goal' ? t.prioritySourceGoal : t.prioritySourceWork}
+                      </p>
+                    ) : null}
+                  </div>
+                  {primaryPriority && primaryTitle ? (
+                    <Button variant="ghost" className="h-8 shrink-0 px-2.5" onClick={() => setPriorityOpen(true)}>
+                      <Pencil className="size-3.5" aria-hidden="true" />{t.editPriority}
+                    </Button>
+                  ) : null}
                 </div>
-              </div>
-              <div className="flex min-h-52 flex-col rounded-xl border border-edge bg-surface-base p-5 sm:p-6">
-                <p className="text-xs font-semibold tracking-wide text-fg-subtle">{t.importantNow}</p>
                 {primaryTitle ? (
                   <>
-                    <p className="mt-4 text-xl font-semibold leading-7 tracking-tight text-fg">{primaryTitle}</p>
+                    <p className="mt-3 text-lg font-semibold leading-7 tracking-tight text-fg">{primaryTitle}</p>
                     {primaryGoal?.desiredOutcome ? <p className="mt-2 text-sm leading-6 text-fg-muted">{primaryGoal.desiredOutcome}</p> : null}
-                    {primaryPriority ? <p className="mt-4 text-xs text-fg-subtle">{validUntil(primaryPriority.validTo, language)}</p> : null}
+                    {primaryPriority ? <p className="mt-auto flex items-center gap-1.5 pt-4 text-xs text-fg-subtle"><CalendarDays className="size-3.5" aria-hidden="true" />{validUntil(primaryPriority.validTo, language)}</p> : null}
                   </>
                 ) : (
                   <div className="flex flex-1 flex-col items-center justify-center gap-2 py-6 text-center text-sm text-fg-muted">
@@ -753,53 +1024,62 @@ export function UserModelPage() {
                   </div>
                 )}
                 {otherGoals.length ? (
-                  <div className="mt-5 border-t border-edge pt-4">
+                  <div className="mt-5 border-t border-edge-subtle pt-4">
                     <p className="text-xs text-fg-subtle">{t.otherGoals}</p>
                     <div className="mt-2 space-y-2">{otherGoals.slice(0, 3).map((goal) => <p key={goal.id} className="text-sm text-fg">{goal.title}</p>)}</div>
                   </div>
                 ) : null}
-              </div>
-            </div>
-            <div className="grid border-t border-edge-subtle sm:grid-cols-3">
-              {[
-                { icon: MessageCircle, label: t.explicit, hint: t.explicitHint, count: explicitCount },
-                { icon: Brain, label: t.learned, hint: t.learnedHint, count: learnedCount },
-                { icon: Check, label: t.pending, hint: t.pendingHint, count: inactiveAssertions.length },
-              ].map(({ icon: Icon, label, hint, count }, index) => (
-                <div key={label} className={`flex gap-3 px-5 py-4 sm:px-6 ${index ? 'border-t border-edge-subtle sm:border-l sm:border-t-0' : ''}`}>
-                  <Icon className="mt-0.5 size-4 shrink-0 text-fg-subtle" />
-                  <div><p className="text-sm font-medium text-fg"><span className="mr-1.5 text-lg tabular-nums">{count}</span>{label}</p><p className="mt-0.5 text-xs text-fg-subtle">{hint}</p></div>
-                </div>
-              ))}
-            </div>
+            </aside>
           </section>
 
-          <Section
-            title={t.recent}
-            hint={t.recentHint}
-            action={<Button variant="ghost" className="h-8 shrink-0" onClick={() => setView('understanding')}>{t.seeAll}</Button>}
-          >
-            {recentAssertions.length
-              ? <div>{groupUnderstandingByDate(recentAssertions.slice(0, 5), language).map(({ label, items }) => (
-                  <div key={label}>
-                    <h3 className="border-b border-edge-subtle px-5 pb-2 pt-4 text-xs font-medium text-fg-muted">{label}</h3>
-                    <div>{items.map(assertionRow)}</div>
-                  </div>
-                ))}</div>
-              : <Empty icon={<Brain className="size-5" />}>{t.emptyGroup}</Empty>}
-          </Section>
+          <section aria-label={t.understanding} className="grid gap-2 sm:grid-cols-3">
+            {[
+              { icon: MessageCircle, label: t.explicit, hint: t.explicitHint, count: explicitCount },
+              { icon: Brain, label: t.learned, hint: t.learnedHint, count: learnedCount },
+              { icon: Check, label: t.pending, hint: t.pendingHint, count: inactiveAssertions.length },
+            ].map(({ icon: Icon, label, hint, count }, index) => (
+                <button
+                  key={label}
+                  type="button"
+                  className="group flex min-h-24 w-full cursor-pointer items-start gap-3 rounded-2xl px-4 py-4 text-left transition-colors hover:bg-surface-panel focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:px-5"
+                  onClick={() => openUnderstanding(index === 0 ? 'explicit' : index === 1 ? 'learned' : 'pending')}
+                  aria-label={`${label}: ${count}`}
+                >
+                  <Icon className="mt-0.5 size-4 shrink-0 text-fg-subtle" aria-hidden="true" />
+                  <div className="min-w-0 flex-1"><p className="text-sm font-medium text-fg"><span className="mr-1.5 text-lg tabular-nums">{count}</span>{label}</p><p className="mt-0.5 text-xs text-fg-subtle">{hint}</p></div>
+                  <ChevronRight className="mt-1 size-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-fg-muted motion-reduce:transform-none" aria-hidden="true" />
+                </button>
+            ))}
+          </section>
 
-          <Section title={t.howWeWork} hint={t.howWeWorkHint}>
-            {collaborationRules.length ? collaborationRules.map((rule) => (
-              <RuleRow
-                key={rule.id}
-                rule={rule}
-                language={language}
-                busy={busy === rule.id}
-                onToggle={() => void act(rule.id, () => setRuleStatus(rule.id, rule.status === 'active' ? 'disabled' : 'active'))}
-              />
-            )) : <Empty icon={<Handshake className="size-5" />}>{t.noRules}</Empty>}
-          </Section>
+          <div className="grid items-start gap-10 lg:grid-cols-2 lg:gap-8">
+            <Section
+              title={t.recent}
+              hint={t.recentHint}
+              action={<Button variant="ghost" className="h-8 shrink-0" onClick={() => setView('understanding')}>{t.seeAll}</Button>}
+            >
+              {recentAssertions.length
+                ? <div>{groupUnderstandingByDate(recentAssertions.slice(0, 3), language).map(({ label, items }) => (
+                    <div key={label}>
+                      <h3 className="px-5 pb-1 pt-4 text-xs font-medium text-fg-muted">{label}</h3>
+                      <div>{items.map(assertionRow)}</div>
+                    </div>
+                  ))}</div>
+                : <Empty icon={<Brain className="size-5" />}>{t.emptyGroup}</Empty>}
+            </Section>
+
+            <Section title={t.howWeWork} hint={t.howWeWorkHint}>
+              {collaborationRules.length ? collaborationRules.slice(0, 3).map((rule) => (
+                <RuleRow
+                  key={rule.id}
+                  rule={rule}
+                  language={language}
+                  busy={busy === rule.id}
+                  onToggle={() => void act(rule.id, () => setRuleStatus(rule.id, rule.status === 'active' ? 'disabled' : 'active'))}
+                />
+              )) : <Empty icon={<Handshake className="size-5" />}>{t.noRules}</Empty>}
+            </Section>
+          </div>
 
           <Section
             title={t.workMemory}
@@ -807,38 +1087,56 @@ export function UserModelPage() {
             action={<Button variant="ghost" className="h-8 shrink-0" onClick={() => setView('knowledge')}>{t.seeAll}</Button>}
           >
             {memoryCounts.length ? (
-              <div className="grid gap-px bg-edge-subtle sm:grid-cols-2 lg:grid-cols-4">
-                {memoryCounts.slice(0, 4).map(({ kind, count }) => (
-                  <div key={kind} className="bg-surface-panel px-5 py-4">
-                    <p className="text-2xl font-semibold tabular-nums text-fg">{count}</p>
-                    <p className="mt-1 text-sm text-fg-muted">{knowledgeKindLabel(kind, language)}</p>
-                  </div>
+              <div data-testid="memory-summary-grid" className={`grid gap-3 bg-surface-base ${memoryGridClass}`}>
+                {overviewMemoryCounts.map(({ kind, count }) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    className="group flex min-h-28 cursor-pointer items-start justify-between rounded-2xl bg-surface-panel px-5 py-5 text-left transition-colors hover:bg-surface-hover focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    onClick={() => openKnowledge(kind)}
+                    aria-label={`${knowledgeKindLabel(kind, language)}: ${count}`}
+                  >
+                    <span><span className="block text-2xl font-semibold tabular-nums text-fg">{count}</span><span className="mt-1 block text-sm text-fg-muted">{knowledgeKindLabel(kind, language)}</span></span>
+                    <ChevronRight className="mt-1 size-4 shrink-0 text-fg-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-fg-muted motion-reduce:transform-none" aria-hidden="true" />
+                  </button>
                 ))}
               </div>
             ) : <Empty icon={<Database className="size-5" />}>{t.noKnowledge}</Empty>}
           </Section>
 
-          <footer className="flex items-center justify-between gap-4 px-1 pb-2 text-xs text-fg-subtle">
-            <span className="inline-flex items-center gap-2"><RefreshCw className="size-3.5" />{maintenanceText}</span>
-            <Button variant="ghost" className="h-8 gap-1.5 px-2.5" onClick={() => void mutate()}><RefreshCw className="size-3.5" />{t.refresh}</Button>
+          <footer className="flex items-center gap-4 px-1 pb-2 text-xs text-fg-subtle">
+            <span className="inline-flex items-center gap-2"><RefreshCw className="size-3.5" aria-hidden="true" />{maintenanceText}</span>
           </footer>
         </div>
       ) : null}
 
       {view === 'understanding' ? (
-        <div id="understanding-panel-understanding" role="tabpanel" aria-labelledby="understanding-tab-understanding" className="space-y-5">
-          <div className="rounded-xl border border-edge bg-surface-panel px-5 py-5 shadow-surface sm:px-6">
+        <div id="understanding-panel-understanding" role="tabpanel" aria-labelledby="understanding-tab-understanding" className="space-y-10">
+          <div className="px-1 pt-1">
             <div className="flex items-start gap-3">
-              <Brain className="mt-0.5 size-5 shrink-0 text-accent-fg" />
+              <Brain className="mt-0.5 size-5 shrink-0 text-accent-fg" aria-hidden="true" />
               <div><h2 className="font-semibold text-fg">{t.aboutYouTitle}</h2><p className="mt-1 max-w-3xl text-sm leading-6 text-fg-muted">{t.aboutYouHint}</p></div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label={t.understandingFilterHint}>
+              {understandingFilterOptions.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={understandingFilter === option.id}
+                  className={`touch-target inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${understandingFilter === option.id ? 'bg-surface-active text-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg'}`}
+                  onClick={() => setUnderstandingFilter(option.id)}
+                >
+                  {option.label}<span className="tabular-nums text-fg-subtle">{option.count}</span>
+                </button>
+              ))}
             </div>
           </div>
           {visibleAssertionGroups.length ? visibleAssertionGroups.map(({ key, title, icon: Icon, items }) => (
-            <Section key={key} title={title} action={<Icon className="size-4 text-fg-subtle" />}>
+            <Section key={key} title={title} action={<Icon className="size-4 text-fg-subtle" aria-hidden="true" />}>
               <div>{items.map(assertionRow)}</div>
             </Section>
           )) : (
-            <div className="rounded-xl border border-edge bg-surface-panel shadow-surface">
+            <div className="rounded-2xl bg-surface-panel">
               <Empty icon={<Brain className="size-5" />}>{t.emptyGroup}</Empty>
             </div>
           )}
@@ -846,30 +1144,53 @@ export function UserModelPage() {
       ) : null}
 
       {view === 'knowledge' ? (
-        <div id="understanding-panel-knowledge" role="tabpanel" aria-labelledby="understanding-tab-knowledge" className="space-y-4">
-          <div className="flex flex-col gap-3 rounded-xl border border-edge bg-surface-panel p-4 shadow-surface sm:flex-row sm:items-center sm:justify-between">
-            <div className="max-w-2xl">
-              <h2 className="font-semibold text-fg">{t.allMemory}</h2>
-              <p className="mt-1 text-sm leading-6 text-fg-muted">{visibleKnowledge.length} {t.items} · {t.memoryLibraryHint}</p>
+        <div id="understanding-panel-knowledge" role="tabpanel" aria-labelledby="understanding-tab-knowledge" className="space-y-8">
+          <div className="px-1 pt-1">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="max-w-2xl">
+                <h2 className="font-semibold text-fg">{knowledgeKindFilter === 'all' ? t.allMemory : knowledgeKindLabel(knowledgeKindFilter, language)}</h2>
+                <p className="mt-1 text-sm leading-6 text-fg-muted">{kindFilteredKnowledge.length} {t.items} · {t.memoryLibraryHint}</p>
+              </div>
+              <label className="relative block sm:w-80">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" />
+                <span className="sr-only">{t.searchPlaceholder}</span>
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(event) => { setQuery(event.target.value); setKnowledgeLimit(24); }}
+                  placeholder={t.searchPlaceholder}
+                  className="h-10 w-full rounded-xl border border-edge bg-surface-base pl-9 pr-3 text-sm text-fg outline-none transition placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
+                />
+              </label>
             </div>
-            <label className="relative block sm:w-80">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" />
-              <span className="sr-only">{t.searchPlaceholder}</span>
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => { setQuery(event.target.value); setKnowledgeLimit(24); }}
-                placeholder={t.searchPlaceholder}
-                className="h-10 w-full rounded-xl border border-edge bg-surface-base pl-9 pr-3 text-sm text-fg outline-none transition placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
-              />
-            </label>
+            <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label={t.memoryFilterHint}>
+              <button
+                type="button"
+                aria-pressed={knowledgeKindFilter === 'all'}
+                className={`touch-target inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${knowledgeKindFilter === 'all' ? 'bg-surface-active text-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg'}`}
+                onClick={() => setKnowledgeKindFilter('all')}
+              >
+                {t.allMemory}<span className="tabular-nums text-fg-subtle">{visibleKnowledge.length}</span>
+              </button>
+              {memoryCounts.map(({ kind, count }) => (
+                <button
+                  key={kind}
+                  type="button"
+                  aria-pressed={knowledgeKindFilter === kind}
+                  className={`touch-target inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${knowledgeKindFilter === kind ? 'bg-surface-active text-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg'}`}
+                  onClick={() => setKnowledgeKindFilter(kind)}
+                >
+                  {knowledgeKindLabel(kind, language)}<span className="tabular-nums text-fg-subtle">{count}</span>
+                </button>
+              ))}
+            </div>
           </div>
           {searchedKnowledge.length ? (
             <>
-              <div className="space-y-4">
+              <div className="space-y-8">
                 {knowledgeGroups.map(({ kind, items, totalCount }) => (
-                  <section key={kind} className="overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-surface">
-                    <header className="flex items-center justify-between border-b border-edge-subtle px-5 py-3 sm:px-6">
+                  <section key={kind} className="overflow-hidden rounded-2xl bg-surface-panel">
+                    <header className="flex items-center justify-between px-5 pb-1 pt-4 sm:px-6">
                       <h3 className="text-sm font-semibold text-fg">{knowledgeKindLabel(kind, language)}</h3>
                       <span className="text-xs tabular-nums text-fg-subtle">{totalCount}</span>
                     </header>
@@ -902,7 +1223,7 @@ export function UserModelPage() {
               ) : null}
             </>
           ) : (
-            <div className="rounded-xl border border-edge bg-surface-panel shadow-surface">
+            <div className="rounded-2xl bg-surface-panel">
               <Empty icon={<Search className="size-5" />}>{query.trim() ? t.noKnowledgeMatch : t.noKnowledge}</Empty>
             </div>
           )}
@@ -916,6 +1237,19 @@ export function UserModelPage() {
         onOpenChange={setProfileOpen}
         onSave={(next) => void saveProfile(next)}
       />
+      {primaryPriority && primaryTitle ? (
+        <PriorityDialog
+          open={priorityOpen}
+          priority={primaryPriority}
+          title={primaryTitle}
+          outcome={primaryGoal?.desiredOutcome}
+          language={language}
+          saving={busy === `priority:${primaryPriority.id}`}
+          onOpenChange={setPriorityOpen}
+          onSave={(input) => void savePriority(primaryPriority, input)}
+          onEnd={() => void endPriority(primaryPriority)}
+        />
+      ) : null}
     </div>
   );
 }

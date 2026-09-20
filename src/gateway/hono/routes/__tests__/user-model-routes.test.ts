@@ -94,6 +94,27 @@ describe('user model routes', () => {
       }),
     });
     expect(priorityResponse.status).toBe(201);
+    const priority = await priorityResponse.json() as { priority: { id: string } };
+
+    const revisedValidTo = now + 2 * 86_400_000;
+    const priorityUpdate = await app.request(`/api/user-model/priorities/${priority.priority.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Ship a better user model',
+        desiredOutcome: 'Agents receive accurate, editable context.',
+        validTo: revisedValidTo,
+      }),
+    });
+    expect(priorityUpdate.status).toBe(200);
+    await expect(priorityUpdate.json()).resolves.toMatchObject({
+      goal: {
+        id: goal.goal.id,
+        title: 'Ship a better user model',
+        desiredOutcome: 'Agents receive accurate, editable context.',
+      },
+      priority: { id: priority.priority.id, validTo: revisedValidTo, status: 'active' },
+    });
 
     runMemoryMaintenance({
       jobType: 'temporal_sweep', idempotencyKey: 'route-test:sweep', now,
@@ -113,10 +134,46 @@ describe('user model routes', () => {
         statement: 'Prefer concise answers.',
       }],
       counts: { activeAssertions: 1, activeGoals: 1, activePriorities: 1 },
+      goals: [{ title: 'Ship a better user model' }],
       knowledge: [],
       maintenance: {
         lastRun: { jobType: 'temporal_sweep', status: 'completed', startedAt: now, finishedAt: now },
       },
+    });
+  });
+
+  it('lets the user end a current priority without deleting its goal', async () => {
+    const goalResponse = await app.request('/api/user-model/goals', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Finish the release', desiredOutcome: 'The release is live.', scope: { type: 'global' },
+      }),
+    });
+    const goal = await goalResponse.json() as { goal: { id: string } };
+    const now = Date.now();
+    const priorityResponse = await app.request('/api/user-model/priorities', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        targetType: 'goal', targetId: goal.goal.id, rank: 'primary', urgency: 0.9,
+        scope: { type: 'global' }, validFrom: now, validTo: now + 86_400_000,
+      }),
+    });
+    const priority = await priorityResponse.json() as { priority: { id: string } };
+
+    const ended = await app.request(`/api/user-model/priorities/${priority.priority.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'completed' }),
+    });
+    expect(ended.status).toBe(200);
+    await expect(ended.json()).resolves.toMatchObject({ priority: { status: 'completed' } });
+
+    const summary = await app.request('/api/user-model');
+    await expect(summary.json()).resolves.toMatchObject({
+      goals: [{ id: goal.goal.id, status: 'active' }],
+      counts: { activeGoals: 1, activePriorities: 0 },
     });
   });
 
