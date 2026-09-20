@@ -5,7 +5,6 @@ import type {
 } from '@xopcai/gateway-contract';
 
 import type { ProjectService } from '../projects/index.js';
-import { ProjectMonitoringService } from './project-monitoring-service.js';
 import { TaskDependencyService } from './task-dependency-service.js';
 import { TaskReadModelProjector } from './task-read-model-projector.js';
 import { TaskRepository } from './task-repository.js';
@@ -41,7 +40,6 @@ export function summarizeProjectOperatingView(view: ProjectOperatingView): Proje
 export class ProjectOperatingViewService {
   readonly #tasks = new TaskRepository();
   readonly #runs = new TaskRunRepository();
-  readonly #monitoring = new ProjectMonitoringService();
   readonly #projector = new TaskReadModelProjector();
   readonly #dependencies = new TaskDependencyService();
 
@@ -115,7 +113,6 @@ export class ProjectOperatingViewService {
           ?? cards.find((card) => card.phase === 'ready' && card.allowedCommands.includes('start'))?.title
           ?? cards.find((card) => card.phase === 'backlog' && card.operationalState === 'idle')?.title,
       },
-      monitoring: this.#monitoring.get(project.id),
     };
   }
 }

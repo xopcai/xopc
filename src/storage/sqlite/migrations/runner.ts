@@ -1,13 +1,13 @@
-import { backupBeforeConversationCutover } from './conversation-backup.js';
-import { chmodSync, existsSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { writeFileSync } from 'node:fs';
 
 import type { DatabaseSync } from 'node:sqlite';
 
 import { createLogger } from '../../../utils/logger.js';
 import { readSchemaVersion, setSchemaVersion } from '../schema-version.js';
+import { resolveSqliteAssetPath } from '../sql-assets.js';
+import { backupBeforeConversationCutover } from './conversation-backup.js';
 import { migrateConversationUuids, type ConversationMigrationSummary } from './conversation-uuid.js';
+import { discardExperimentalSceneData, resetExperimentalScenes } from './scene-reset.js';
 import { discoverSqlMigrations } from './discover.js';
 import {
   DatabaseSchemaMigrationGapError,
@@ -22,18 +22,7 @@ const log = createLogger('Sqlite:Migrations');
 export const XOPC_DB_BASELINE_SCHEMA_VERSION = 165;
 
 /** Latest schema version this release supports (increment when adding migrations). */
-export const XOPC_DB_SCHEMA_VERSION = 187;
-
-const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
-
-function backupBeforeTaskCutover(db: DatabaseSync, databasePath: string): string {
-  db.exec('PRAGMA wal_checkpoint(FULL)');
-  const backupPath = `${databasePath}.pre-v100-${Date.now()}.bak`;
-  const quotedPath = backupPath.replaceAll("'", "''");
-  db.exec(`VACUUM INTO '${quotedPath}'`);
-  chmodSync(backupPath, 0o600);
-  return backupPath;
-}
+export const XOPC_DB_SCHEMA_VERSION = 189;
 
 function writeMigrationReport(backupPath: string, report: Record<string, unknown>): void {
   const reportPath = `${backupPath}.report.json`;
@@ -44,13 +33,7 @@ export function resolveMigrationsDir(override?: string): string {
   if (override) {
     return override;
   }
-  // Packaged Electron gateway bundle: `out/server/index.js` + `out/server/migrations/`.
-  const siblingDir = join(MODULE_DIR, 'migrations');
-  if (existsSync(siblingDir)) {
-    return siblingDir;
-  }
-  // Dev / dist: SQL files live next to `migrations/runner.js`.
-  return MODULE_DIR;
+  return resolveSqliteAssetPath('migrations');
 }
 
 function migrationByTarget(
@@ -60,20 +43,22 @@ function migrationByTarget(
   return migrations.find((migration) => migration.targetVersion === targetVersion);
 }
 
-function applySingleMigration(db: DatabaseSync, migration: SqlMigration): ConversationMigrationSummary | undefined {
+function applySingleMigration(db: DatabaseSync, migration: SqlMigration, discardOldScenes = false): ConversationMigrationSummary | undefined {
   log.info({ targetVersion: migration.targetVersion, file: migration.filename }, 'Applying SQLite migration');
-  // Rebuild the referenced parent table without firing ON DELETE CASCADE.
-  const rebuildParentTable = migration.targetVersion === 179 || migration.targetVersion === 182;
+  // Schema rebuilds and the experimental scene reset validate all FKs before commit.
+  const requiresForeignKeyPause = discardOldScenes || migration.targetVersion === 179 || migration.targetVersion === 182 || migration.targetVersion === 188;
   const foreignKeysEnabled = Number(db.prepare('PRAGMA foreign_keys').get()?.foreign_keys) === 1;
-  if (rebuildParentTable) db.exec('PRAGMA foreign_keys = OFF');
+  if (requiresForeignKeyPause) db.exec('PRAGMA foreign_keys = OFF');
   let transactionStarted = false;
   try {
     db.exec('BEGIN IMMEDIATE');
     transactionStarted = true;
+    if (discardOldScenes) discardExperimentalSceneData(db);
     db.exec(migration.sql);
+    if (migration.targetVersion === 188) resetExperimentalScenes(db);
     const summary = migration.targetVersion === 178 ? migrateConversationUuids(db) : undefined;
-    if (rebuildParentTable && db.prepare('PRAGMA foreign_key_check').all().length > 0) {
-      throw new Error('Parent table migration would violate foreign key integrity');
+    if (requiresForeignKeyPause && db.prepare('PRAGMA foreign_key_check').all().length > 0) {
+      throw new Error('Schema migration would violate foreign key integrity');
     }
     setSchemaVersion(db, migration.targetVersion);
     db.exec('COMMIT');
@@ -90,7 +75,7 @@ function applySingleMigration(db: DatabaseSync, migration: SqlMigration): Conver
       { cause: error },
     );
   } finally {
-    if (rebuildParentTable && foreignKeysEnabled) db.exec('PRAGMA foreign_keys = ON');
+    if (requiresForeignKeyPause && foreignKeysEnabled) db.exec('PRAGMA foreign_keys = ON');
   }
 }
 
@@ -118,7 +103,6 @@ export function applyPendingMigrations(
   }
 
   const migrations = discoverSqlMigrations(resolveMigrationsDir(options.migrationsDir));
-  let cutoverBackupPath: string | undefined;
   let conversationSummary: ConversationMigrationSummary | undefined;
   const fromVersion = currentVersion;
   const conversationBackup = currentVersion < 178 && targetVersion >= 178 && options.databasePath && options.databasePath !== ':memory:'
@@ -130,35 +114,15 @@ export function applyPendingMigrations(
     if (!migration) {
       throw new DatabaseSchemaMigrationGapError(currentVersion, targetVersion, nextVersion);
     }
-    if (nextVersion === 100 && options.databasePath && options.databasePath !== ':memory:') {
-      cutoverBackupPath = backupBeforeTaskCutover(db, options.databasePath);
-    }
     try {
-      conversationSummary = applySingleMigration(db, migration) ?? conversationSummary;
+      // Older scene migrations parse experimental JSON that no longer needs preserving.
+      const discardOldScenes = !options.migrationsDir && targetVersion >= 188 && fromVersion < 178 && currentVersion === fromVersion;
+      conversationSummary = applySingleMigration(db, migration, discardOldScenes) ?? conversationSummary;
     } catch (error) {
-      if (cutoverBackupPath && nextVersion === 100) {
-        writeMigrationReport(cutoverBackupPath, {
-          fromVersion: currentVersion,
-          targetVersion: nextVersion,
-          status: 'failed',
-          rollback: 'transaction',
-          error: error instanceof Error ? error.message : String(error),
-          occurredAt: new Date().toISOString(),
-        });
-      }
       if (conversationBackup) writeMigrationReport(conversationBackup, { fromVersion, targetVersion, failedVersion: nextVersion, status: 'failed', error: error instanceof Error ? error.message : String(error) });
       throw error;
     }
     currentVersion = nextVersion;
-    if (cutoverBackupPath && currentVersion === 100) {
-      writeMigrationReport(cutoverBackupPath, {
-        fromVersion: 99,
-        targetVersion: 100,
-        status: 'succeeded',
-        backupPath: cutoverBackupPath,
-        occurredAt: new Date().toISOString(),
-      });
-    }
   }
 
   if (conversationBackup) writeMigrationReport(conversationBackup, { fromVersion, targetVersion, status: 'succeeded', backupPath: conversationBackup, summary: conversationSummary });

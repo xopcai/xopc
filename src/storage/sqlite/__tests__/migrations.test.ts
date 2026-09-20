@@ -132,7 +132,7 @@ describe('SQLite migrations', () => {
       applyPendingMigrations(db, { targetVersion: 175 });
       db.prepare('INSERT INTO proactive_preferences(workspace_id, preferences_json, revision) VALUES (?, ?, ?)')
         .run('paused', JSON.stringify({ level: 'off', pausedUntil: '2026-09-17T00:00:00Z' }), 4);
-      applyPendingMigrations(db);
+      applyPendingMigrations(db, { targetVersion: 177 });
       const row = db.prepare('SELECT preferences_json, revision FROM proactive_preferences').get()!;
       const preferences = JSON.parse(String(row.preferences_json));
       expect(preferences).toMatchObject({
@@ -177,7 +177,7 @@ describe('SQLite migrations', () => {
       ensureXopcDatabaseSchema(db);
       expect(readSchemaVersion(db)).toBe(XOPC_DB_SCHEMA_VERSION);
       expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-      expect(db.prepare('SELECT count(*) AS count FROM proactive_scenarios').get()).toEqual({ count: 6 });
+      expect(db.prepare("SELECT name FROM sqlite_master WHERE name GLOB 'proactive_*'").all()).toEqual([]);
     } finally {
       db.close();
     }

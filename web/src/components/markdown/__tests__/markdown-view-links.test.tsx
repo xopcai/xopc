@@ -75,14 +75,12 @@ describe('MarkdownView links', () => {
     expect(anchors[1]?.title).toBe('打开会话');
   });
 
-  it('shows unavailable targets without a clickable affordance', () => {
+  it('renders unavailable targets as plain text without availability noise', () => {
     useLocaleStore.setState({ language: 'zh' });
-    const container = renderMarkdown('[无效](xopc://open?kind=session) [危险](javascript:alert%281%29)');
-    expect(container.querySelectorAll('a[href]')).toHaveLength(0);
-    for (const anchor of container.querySelectorAll('a')) {
-      expect(anchor.getAttribute('aria-disabled')).toBe('true');
-      expect(anchor.dataset.xopcLinkHint).toBe('链接不可用');
-    }
+    const container = renderMarkdown('[无效](xopc://open?kind=session) micjoyce90@gmail.com [危险](javascript:alert%281%29)');
+    expect(container.querySelectorAll('a')).toHaveLength(0);
+    expect(container.textContent).toContain('无效 micjoyce90@gmail.com 危险');
+    expect(container.textContent).not.toContain('链接不可用');
   });
 
   it('preserves native modified-click navigation', () => {

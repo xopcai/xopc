@@ -21,7 +21,7 @@ const ToolSearchSchema = Type.Object({
   query: Type.String({ description: 'Describe the capability or task you need.' }),
   sources: Type.Optional(Type.Array(Type.Union(EXTERNAL_TOOL_SOURCES.map((source) => Type.Literal(source))), {
     maxItems: EXTERNAL_TOOL_SOURCES.length,
-    description: 'Omit to search all sources (recommended). Set only to intentionally restrict providers. Feishu/Lark and WeCom connectors use cli.',
+    description: 'Omit to search all sources (recommended). Set only to intentionally restrict providers. Feishu/Lark, WeCom and WPS 365 connectors use cli.',
   })),
   limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
 });
@@ -54,7 +54,7 @@ export function createExternalToolGatewayTools(providers: ExternalToolProvider[]
   const searchTool: AgentTool<typeof ToolSearchSchema, Record<string, unknown>> = {
     name: EXTERNAL_TOOL_NAMES.search,
     label: '🔎 External Tool Search',
-    description: `Search external tools from these sources: ${EXTERNAL_TOOL_SOURCES.join(', ')}. CLI connectors include Feishu/Lark and WeCom. Omit sources unless intentionally restricting the search; do not guess a source list. Use concise English capability keywords, e.g. "wecom doc.search". Returns compact references only; call xopc_tool_describe before execution. If a source-filtered search finds no relevant tools, retry without sources before concluding a capability is unavailable or requesting a connection.`,
+    description: `Search external tools from these sources: ${EXTERNAL_TOOL_SOURCES.join(', ')}. CLI connectors include Feishu/Lark, WeCom and WPS 365. Omit sources unless intentionally restricting the search; do not guess a source list. Use concise English capability keywords, e.g. "wecom doc.search". Returns compact references only; call xopc_tool_describe before execution. If a source-filtered search finds no relevant tools, retry without sources before concluding a capability is unavailable or requesting a connection.`,
     parameters: ToolSearchSchema,
     async execute(_toolCallId, params) {
       const selectedSources = new Set<string>(params.sources ?? []);
@@ -62,7 +62,7 @@ export function createExternalToolGatewayTools(providers: ExternalToolProvider[]
       return textResult({ ...await service.search(params),
         ...(excludedSources.length ? { searchScope: {
           excludedSources,
-          instruction: 'This search excluded these sources. Results from other apps do not establish that the requested app is unavailable. Retry without sources before declaring a capability unavailable or requesting authorization. Feishu/Lark and WeCom connectors use cli.',
+          instruction: 'This search excluded these sources. Results from other apps do not establish that the requested app is unavailable. Retry without sources before declaring a capability unavailable or requesting authorization. Feishu/Lark, WeCom and WPS 365 connectors use cli.',
         } } : {}),
         connectionCandidates: connectionCandidates(params.query), selectedConnections: getContext?.()?.conversationId ? connectionBindings(getContext()!.conversationId) : [], waitingObjective: getContext?.()?.conversationId ? getActiveConnectionWait(getContext()!.conversationId)?.summary : undefined });
     },

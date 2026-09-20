@@ -1,9 +1,6 @@
 import {
   modelPreferenceForAgent,
-  ProjectMonitoringPolicySchema,
   ProjectOperatingViewSchema,
-  type ProjectMonitoringPolicy,
-  type ProjectMonitoringUpdate,
   type ProjectOperatingView,
   FileResourceResponseSchema,
   FileResourcesResponseSchema,
@@ -17,14 +14,6 @@ import { apiUrl } from '@/lib/url';
 export type ProjectStatus = 'planned' | 'active' | 'paused' | 'completed' | 'cancelled' | 'archived';
 export type ProjectHealth = 'unknown' | 'on_track' | 'at_risk' | 'off_track';
 export type ProjectExecutionMode = 'local_checkout' | 'managed_worktree';
-
-export async function updateProjectMonitoring(projectId: string, update: ProjectMonitoringUpdate): Promise<ProjectMonitoringPolicy> {
-  const response = await fetchJson<{ ok: true; policy: unknown }>(apiUrl(`/api/projects/${encodeURIComponent(projectId)}/monitoring`), {
-    method: 'PATCH',
-    body: JSON.stringify(update),
-  });
-  return ProjectMonitoringPolicySchema.parse(response.policy);
-}
 
 export type ProjectMilestone = {
   id: string;

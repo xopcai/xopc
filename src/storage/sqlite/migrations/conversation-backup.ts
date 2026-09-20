@@ -69,10 +69,15 @@ function databaseOwners(databasePath: string): string[] {
   return [...new Set(owners.trim().split(/\s+/).filter(pid => pid && pid !== String(process.pid)))];
 }
 
-/** The old release does not participate in an application lock, so check open handles. */
-export function backupBeforeConversationCutover(db: DatabaseSync, databasePath: string): string {
+/** Offline migrations must reject processes that still hold the database open. */
+export function assertDatabaseOffline(databasePath: string): void {
   const otherOwners = databaseOwners(databasePath);
   if (otherOwners.length) throw new Error(`Stop other xopc database processes before upgrading: ${otherOwners.join(', ')}`);
+}
+
+/** The old release does not participate in an application lock, so check open handles. */
+export function backupBeforeConversationCutover(db: DatabaseSync, databasePath: string): string {
+  assertDatabaseOffline(databasePath);
 
   const backupPath = `${databasePath}.pre-v178-${Date.now()}.bak`;
   db.exec(`VACUUM INTO '${backupPath.replaceAll("'", "''")}'`);

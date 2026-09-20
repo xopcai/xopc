@@ -223,9 +223,7 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     const policy = getConnectorSyncPolicy(account.id) ?? {
       accountId: account.id,
       scanEnabled: false,
-      proactiveEnabled: false,
       intervalMinutes: defaultConnectorSyncInterval(account.connectorId),
-      allowedScenarioKeys: [],
       revision: 0,
       updatedAt: account.updatedAt,
     };
@@ -244,34 +242,16 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     if (row.scanEnabled !== undefined && typeof row.scanEnabled !== 'boolean') {
       return c.json({ ok: false, error: 'scanEnabled must be a boolean.' }, 400);
     }
-    if (row.proactiveEnabled !== undefined && typeof row.proactiveEnabled !== 'boolean') {
-      return c.json({ ok: false, error: 'proactiveEnabled must be a boolean.' }, 400);
-    }
     if (row.intervalMinutes !== undefined
       && (!Number.isInteger(row.intervalMinutes) || Number(row.intervalMinutes) < 5 || Number(row.intervalMinutes) > 1_440)) {
       return c.json({ ok: false, error: 'intervalMinutes must be an integer from 5 to 1440.' }, 400);
-    }
-    const allowedScenarioKeys = row.allowedScenarioKeys === undefined
-      ? undefined
-      : Array.isArray(row.allowedScenarioKeys)
-        ? [...new Set(row.allowedScenarioKeys.filter((value): value is string => typeof value === 'string')
-          .map((value) => value.trim()).filter(Boolean))]
-        : null;
-    if (allowedScenarioKeys === null) {
-      return c.json({ ok: false, error: 'allowedScenarioKeys must be an array of strings.' }, 400);
-    }
-    const knownScenarioKeys = new Set(service.proactiveScenarios.list().map((scenario) => scenario.key));
-    if (allowedScenarioKeys?.some((key) => !knownScenarioKeys.has(key))) {
-      return c.json({ ok: false, error: 'allowedScenarioKeys contains an unknown scenario.' }, 400);
     }
     const previous = getConnectorSyncPolicy(account.id);
     const policy = upsertConnectorSyncPolicy({
       accountId: account.id,
       defaultIntervalMinutes: defaultConnectorSyncInterval(account.connectorId),
       ...(typeof row.scanEnabled === 'boolean' ? { scanEnabled: row.scanEnabled } : {}),
-      ...(typeof row.proactiveEnabled === 'boolean' ? { proactiveEnabled: row.proactiveEnabled } : {}),
       ...(typeof row.intervalMinutes === 'number' ? { intervalMinutes: row.intervalMinutes } : {}),
-      ...(allowedScenarioKeys ? { allowedScenarioKeys } : {}),
     });
     const connectionId = account.currentConnectionId;
     if (connectionId && !policy.scanEnabled) {

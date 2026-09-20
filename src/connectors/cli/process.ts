@@ -4,6 +4,7 @@ import { isAbsolute, join, relative, sep } from 'node:path';
 import { resolveStateDir } from '../../config/paths-state.js';
 import { spawnProcess } from '../../process/run-process.js';
 import type { ProcessHandle } from '../../process/process-spec.js';
+import { prepareCliAssets } from './assets.js';
 import type { CliAdapter } from './types.js';
 
 const running = new Map<string, Set<ProcessHandle>>();
@@ -23,6 +24,10 @@ export function cliEnvironment(adapter: CliAdapter, contextPath: string): NodeJS
   const env: NodeJS.ProcessEnv = {};
   for (const name of ['PATH', 'SystemRoot', 'WINDIR', 'TMPDIR', 'TEMP', 'TMP', 'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY', 'LANG']) {
     if (process.env[name]) env[name] = process.env[name];
+  }
+  for (const [name, value] of Object.entries(adapter.environment ?? {})) {
+    if (!/^[A-Z][A-Z0-9_]*$/.test(name) || ['HOME', 'USERPROFILE', 'PATH', 'NODE_OPTIONS', 'LD_PRELOAD', 'DYLD_INSERT_LIBRARIES', adapter.configEnvironment, adapter.dataEnvironment].includes(name)) throw new Error('Reserved CLI environment variable.');
+    env[name] = value;
   }
   env[adapter.configEnvironment] = join(contextPath, 'config');
   if (adapter.dataEnvironment) env[adapter.dataEnvironment] = join(contextPath, 'data');
@@ -49,6 +54,7 @@ export async function startCliProcess(options: {
   for (const folder of ['', 'config', 'data', 'home', 'files']) {
     await mkdir(join(contextPath, folder), { recursive: true, mode: 0o700 });
   }
+  await prepareCliAssets(options.adapter, join(contextPath, 'config'));
   options.signal?.throwIfAborted();
   options.beforeSpawn?.();
   const handle = spawnProcess({

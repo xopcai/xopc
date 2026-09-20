@@ -4,7 +4,6 @@ import { dirname, join } from 'node:path';
 import { ConfigSchema, type Config } from '../config/schema.js';
 import { createLogger } from '../utils/logger.js';
 import { listRegisteredMigrations } from './registry.js';
-import { conversationRoutingConfigMigration } from './conversation-routing-config.js';
 import { memoryConfigMigration } from './memory-config.js';
 import type { Migration, MigrationContext, MigrationLedger, MigrationPlanItem } from './types.js';
 
@@ -13,7 +12,6 @@ const MIGRATION_LEDGER_FILENAME = 'migrations.json';
 const CONFIG_BACKUP_COUNT = 10;
 
 export const CORE_MIGRATIONS: readonly Migration[] = [
-  conversationRoutingConfigMigration,
   memoryConfigMigration,
 ];
 
@@ -184,8 +182,6 @@ export function applyMigrations(
 export function runBootstrapMigrationsSync(configPath: string, options: { stateDir?: string } = {}): MigrationApplyResult {
   if (!existsSync(configPath)) return { items: [], changed: false };
   const result = applyMigrations(configPath, { ...options, mode: 'auto-safe' });
-  const failedCutover = result.items.find(item => item.id === conversationRoutingConfigMigration.id && item.status === 'error');
-  if (failedCutover) throw new Error(failedCutover.message);
   if (result.changed) {
     log.info({ configPath, count: result.items.filter((item) => item.status === 'applied').length }, 'Applied bootstrap migrations');
   }

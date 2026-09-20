@@ -10,7 +10,7 @@
  *     (QR-login follow-ups that bypass the watcher)
  *   - `ConfigHotReloader` (fs.watch → debounced per-section dispatch)
  *   - Section reload handlers (models / agents / channels /
- *     heartbeat / tools / mcp / extensions)
+ *     tools / mcp / extensions)
  *   - `scheduleChannelPluginsAfterPersist` (coalesces rapid saves so
  *     Telegram/Weixin do not stop/start repeatedly)
  *
@@ -27,7 +27,6 @@ import type { Config } from '../../config/schema.js';
 import type { Config as SurfaceConfig } from '../../config/config-surface.js';
 import type { AgentService } from '../../agent/service.js';
 import type { ChannelManager } from '../../channels/manager.js';
-import type { HeartbeatService } from '../heartbeat/index.js';
 import type { ExtensionLoader } from '../../extensions/loader.js';
 import type { MessageBus } from '../../infra/bus/index.js';
 import { ConfigHotReloader } from '../../config/reload.js';
@@ -52,7 +51,6 @@ export interface GatewayConfigCoordinatorOptions {
   setConfig: (next: Config) => void;
   getAgentService: () => AgentService;
   getChannelManager: () => ChannelManager;
-  getHeartbeatService: () => HeartbeatService | null;
   getExtensionLoader: () => ExtensionLoader | null;
   /** Sync deterministic user-model maintenance automations after config changes. */
   reconcileMemoryMaintenanceAutomations: () => Promise<void>;
@@ -85,7 +83,6 @@ export class GatewayConfigCoordinator {
         onAgentDefaultsReload: (newConfig) => this.handleAgentDefaultsReload(newConfig),
         onChannelsReload: (newConfig) => this.handleChannelsReload(newConfig),
         onCronReload: (newConfig) => this.handleAutomationReload(newConfig),
-        onHeartbeatReload: (newConfig) => this.handleHeartbeatReload(newConfig),
         onToolsReload: (newConfig) => this.handleToolsReload(newConfig),
         onMcpReload: (newConfig) => this.handleMcpReload(newConfig),
         onExtensionsReload: async (newConfig, changedPaths) => {
@@ -244,15 +241,6 @@ export class GatewayConfigCoordinator {
     log.debug('Channels config reloaded');
   }
 
-  /**
-   * Apply `gateway.heartbeat` from current config after PATCH /api/config (and
-   * when hot reload is off). File watcher uses `handleHeartbeatReload` with
-   * the same effect when paths match.
-   */
-  reloadHeartbeatFromCurrentConfig(): void {
-    this.handleHeartbeatReload(this.opts.getConfig());
-  }
-
   // ── Internals ──────────────────────────────────────────────────────────
 
   private handleModelsReload(newConfig: Config): void {
@@ -307,14 +295,6 @@ export class GatewayConfigCoordinator {
     this.opts.setConfig(newConfig);
     this.opts.emit('config.reload', { section: 'automations' });
     log.debug('Automation-related config reloaded');
-  }
-
-  private handleHeartbeatReload(newConfig: Config): void {
-    log.debug('Reloading heartbeat config...');
-    this.opts.setConfig(newConfig);
-    this.opts.getHeartbeatService()?.updateConfig(newConfig);
-    this.opts.emit('config.reload', { section: 'heartbeat' });
-    log.debug('Heartbeat config reloaded');
   }
 
   private handleToolsReload(newConfig: Config): void {

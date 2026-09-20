@@ -30,6 +30,8 @@ export type CliAdapter = {
   executable: string;
   distributions: Record<string, CliDistribution>;
   configEnvironment: string;
+  environment?: Readonly<Record<string, string>>;
+  configAssets?: ReadonlyArray<{ path: string; content: string; sha256: string }>;
   dataEnvironment?: string;
   curatedActions: Record<string, ConnectorScope>;
   staticActions?: Record<string, CliAction>;

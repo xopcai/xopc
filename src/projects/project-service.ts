@@ -1,9 +1,6 @@
-import { createHash } from 'node:crypto';
-
 import { changedFieldsFromPatch, emitActivity, systemActivityActor, systemActivitySource } from '../activity/emitter.js';
 import { getSessionMetadata } from '../storage/sqlite/index.js';
 import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
-import type { ProactiveSignalPublisher } from '../proactive/events/publisher.js';
 import { ProjectStore } from './project-store.js';
 import { inferProjectExecutionMode } from './project-kind.js';
 import { bindSessionToProject, listProjectConversationIds, unbindSessionFromProject } from './session-bind.js';
@@ -31,8 +28,6 @@ export type ProjectSuggestion = {
 export class ProjectService {
   constructor(
     private readonly store = new ProjectStore(),
-    private readonly signals?: ProactiveSignalPublisher,
-    private readonly workspaceId = 'default',
   ) {}
 
   private listAllProjects(): Project[] {
@@ -190,13 +185,6 @@ export class ProjectService {
           ...(type === 'project.status_changed' ? { from: before?.status, to: project.status } : {}),
           ...(type === 'project.workspace_changed' ? { from: before?.workspaceRoot, to: project.workspaceRoot } : {}) },
         scopes: [{ scopeKind: 'project', scopeId: project.id, reason: 'object_owner' }], nowMs: project.updatedAt,
-      });
-      this.signals?.publish({
-        type: 'project.updated.v1', schemaVersion: 1,
-        source: { kind: 'projects', id: 'local' }, subject: { kind: 'project', id: project.id }, actor: { kind: 'system' },
-        scope: { workspaceId: this.workspaceId, projectId: project.id }, occurredAt: new Date(project.updatedAt).toISOString(),
-        dedupeKey: `project:${project.id}:${project.updatedAt}:${createHash('sha256').update(JSON.stringify(patch)).digest('hex')}`,
-        sensitivity: 'personal', payload: { before, after: project, changes },
       });
       return project;
     });

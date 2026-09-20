@@ -1,7 +1,6 @@
 import { patchChatModelConfig } from './chat-model-config.js';
 import type { Hono } from 'hono';
 import {
-  ProjectMonitoringUpdateSchema,
   TaskBoardPositionRequestSchema,
   TaskCommandRequestSchema,
   TaskContextInputSchema,
@@ -14,7 +13,6 @@ import {
 } from '@xopcai/gateway-contract';
 
 import { runSqliteWriteTransaction } from '../../../storage/sqlite/transaction.js';
-import { ProjectMonitoringService } from '../../../tasks/project-monitoring-service.js';
 import { resolveProjectAgentId } from '../../../projects/project-agent.js';
 import { TaskApplicationService } from '../../../tasks/task-application-service.js';
 import { TaskContextRepository } from '../../../tasks/task-context-repository.js';
@@ -40,7 +38,6 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
   const taskRateLimit = deps.taskRateLimitMiddleware ?? deps.strictRateLimitMiddleware;
   const application = new TaskApplicationService();
   const operatingViews = new ProjectOperatingViewService(deps.service.projects);
-  const monitoring = new ProjectMonitoringService(deps.service.currentWorkspacePath);
   const metrics = new TaskValueMetricsService();
   const tasks = new TaskRepository();
   const runs = new TaskRunRepository();
@@ -472,32 +469,5 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
       : c.json({ ok: false, error: 'Project not found' }, 404);
   });
 
-  authenticated.get('/api/projects/:projectId/monitoring', (c) => {
-    const projectId = c.req.param('projectId');
-    if (!deps.service.projects.get(projectId)) return c.json({ ok: false, error: 'Project not found' }, 404);
-    return c.json({ ok: true, policy: monitoring.get(projectId) });
-  });
 
-  authenticated.patch('/api/projects/:projectId/monitoring', taskRateLimit, async (c) => {
-    const projectId = c.req.param('projectId');
-    if (!deps.service.projects.get(projectId)) return c.json({ ok: false, error: 'Project not found' }, 404);
-    const parsed = ProjectMonitoringUpdateSchema.safeParse(await c.req.json().catch(() => ({})));
-    if (!parsed.success) return c.json({ ok: false, error: 'Invalid monitoring policy' }, 400);
-    const current = monitoring.get(projectId);
-    try {
-      const policy = monitoring.configure({
-        projectId,
-        mode: parsed.data.mode ?? current.mode,
-        quietHours: parsed.data.quietHours === null
-          ? undefined
-          : parsed.data.quietHours ?? current.quietHours,
-        allowedActions: parsed.data.allowedActions ?? current.allowedActions,
-        confidenceThreshold: parsed.data.confidenceThreshold ?? current.confidenceThreshold,
-        scenarios: parsed.data.scenarios ?? (current.configured ? current.scenarios : undefined),
-      });
-      return c.json({ ok: true, policy });
-    } catch (error) {
-      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
-    }
-  });
 }

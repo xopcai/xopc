@@ -1,3 +1,4 @@
+import type { SceneAccess } from '../scenes/httpServices.js';
 /**
  * Agent Manager - Manages Agent instances per session
  *
@@ -189,6 +190,7 @@ export interface AgentManagerConfig {
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
   /** Gateway: exposes AutomationService for the `automation` tool. */
   getAutomationService?: () => AutomationService | undefined;
+  getSceneAccess?: () => SceneAccess | undefined;
   getBrowserAutomationService?: () => import('../browser/automations/index.js').BrowserAutomationService | undefined;
   emitBrowserEvent?: (type: string, payload: unknown) => void;
   /** Gateway: exposes first-class xopc product objects for the `xopc_use` tool. */
@@ -470,6 +472,7 @@ export class AgentManager implements AgentInstanceGateway {
       getSessionStore: this.config.getSessionStore,
       gatewayClarify: this.config.gatewayClarify,
       getAutomationService: this.config.getAutomationService,
+      getSceneAccess: this.config.getSceneAccess,
       getBrowserAutomationService: this.config.getBrowserAutomationService,
       emitBrowserEvent: this.config.emitBrowserEvent,
       getNotesService: this.config.getNotesService,

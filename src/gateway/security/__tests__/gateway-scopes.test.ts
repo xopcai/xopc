@@ -31,13 +31,11 @@ describe('gateway scopes', () => {
     expect(requiredGatewayScope('PATCH', '/api/tasks/a')).toBe('tasks.write');
   });
 
-  it('separates proactive settings and browser notification permission', () => {
-    expect(requiredGatewayScope('GET', '/api/inbox/judgments/id/workflow')).toBe('automations.read');
-    expect(requiredGatewayScope('POST', '/api/inbox/judgments/id/prepare')).toBe('automations.write');
-    expect(requiredGatewayScope('GET', '/api/proactive/preferences')).toBe('tasks.read');
-    expect(requiredGatewayScope('PATCH', '/api/proactive/subscriptions/id')).toBe('tasks.write');
-    expect(requiredGatewayScope('POST', '/api/proactive/web-push/prepare')).toBe('notifications.self');
-    expect(requiredGatewayScope('POST', '/api/inbox/judgments/id/actions')).toBe('tasks.write');
+  it('restricts the first scene release to local administrators', () => {
+    for (const path of ['/api/scenes/activations', '/api/scenes/preferences', '/api/scenes/browser/subscriptions']) {
+      expect(requiredGatewayScope('GET', path)).toBe('gateway.admin');
+      expect(requiredGatewayScope('POST', path)).toBe('gateway.admin');
+    }
   });
 
   it('fails closed for unclassified routes', () => {

@@ -548,18 +548,6 @@ export function ComposioConnectorPanel({
                             />
                             {t.connectorScheduledScan}
                           </label>
-                          <label className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={syncPolicy.proactiveEnabled}
-                              disabled={loading || !syncPolicy.scanEnabled}
-                              onChange={(event) => void mutateConnection(() => updateConnectorSyncPolicy(
-                                connection.accountId!,
-                                { proactiveEnabled: event.currentTarget.checked },
-                              ))}
-                            />
-                            {t.connectorProactiveUse}
-                          </label>
                           {syncPolicy.scanEnabled ? (
                             <label className="sm:col-span-2">
                               {t.connectorScanInterval}

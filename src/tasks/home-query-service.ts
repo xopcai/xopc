@@ -14,7 +14,6 @@ import {
 } from '../automations/index.js';
 import type { AutomationService } from '../automations/service/automation-service.js';
 import type { Config } from '../config/schema.js';
-import type { ProactiveInboxService } from '../proactive/inbox/service.js';
 import type { ProjectService } from '../projects/project-service.js';
 import {
   isHomeAttentionAcknowledged,
@@ -52,7 +51,6 @@ interface HomeGatewayPort {
   readonly currentConfig: Config;
   readonly automationServiceInstance: AutomationService;
   readonly projects: ProjectService;
-  readonly proactiveInbox: ProactiveInboxService;
   readonly sessions: {
     listActiveRuns(): Array<{ conversationId: string; runId: string }>;
     getSession(key: string): Promise<{
@@ -433,40 +431,7 @@ export class HomeQueryService {
       .sort((left, right) => right.createdAtMs - left.createdAtMs)
       .filter((run, index, all) => all.findIndex((candidate) => candidate.automationId === run.automationId) === index);
     const automationsById = new Map(automations.map((automation) => [automation.id, automation]));
-    const proactiveJudgments = this.service.proactiveInbox.list({ limit: 20 })
-      .filter((item) => item.status === 'unread' || item.status === 'read');
     const decisionCandidates: HomeDecision[] = [
-      ...proactiveJudgments.map((item): HomeDecision => ({
-        id: `agent-judgment:${item.id}`,
-        kind: 'agent_judgment',
-        title: item.insight.title,
-        detail: item.insight.summary,
-        reason: item.insight.disposition === 'request_approval'
-          ? 'approval_required'
-          : item.insight.attentionKind === 'decision' ? 'decision_needed' : 'insight_available',
-        urgency: item.insight.urgency === 'critical' || item.insight.urgency === 'high' ? 'now' : 'soon',
-        href: `/assistant-work?item=${encodeURIComponent(item.id)}`,
-        updatedAt: Date.parse(item.updatedAt),
-        judgment: {
-          inboxItemId: item.id,
-          whyNow: item.insight.whyNow,
-          impact: item.insight.impact,
-          workDone: item.insight.workDone,
-          recommendation: item.insight.recommendation,
-          confidence: item.insight.confidence,
-          valueScore: item.insight.valueScore,
-          evidenceIds: item.insight.evidenceIds,
-          attentionKind: item.insight.attentionKind,
-          disposition: item.insight.disposition,
-          dispositionReason: item.insight.dispositionReason,
-          ...(item.insight.actionStatus ? { actionStatus: item.insight.actionStatus } : {}),
-          ...(item.insight.proposedAction ? { proposedActionTitle: item.insight.proposedAction.input.title } : {}),
-          ...(item.insight.actionError ? { actionError: item.insight.actionError } : {}),
-          ...(item.insight.decision && (!item.insight.proposedAction || item.insight.actionStatus === 'approval_required')
-            ? { decision: item.insight.decision }
-            : {}),
-        },
-      })),
       ...activeTasks
         .map((task) => decisionFromTask(
           this.#projector.project(task),

@@ -66,3 +66,21 @@ it.each([true, false])('requires a verified identity after partial consent (veri
     }
   }
 });
+
+it('commits WPS only after delegated user verification and exposes its read tools', async () => {
+  const definition = getConnectorDefinition('wps365-workspace')!;
+  const wpsConfig = { connectors: { instances: { [definition.id]: { runtime: definition.runtime,
+    xopcConnector: { managed: true, connectorId: definition.id, definition, enabled: true } } } } } as unknown as Config;
+  const replies = [output(0, {}), output(0, {}), output(0, { code: 0, data: { id: 'user', company_id: 'company', user_name: 'WPS User' } })];
+  vi.mocked(startCliProcess).mockImplementation(async () => ({
+    completion: Promise.resolve(replies.shift()!),
+  } as Awaited<ReturnType<typeof startCliProcess>>));
+  const attempt = startCliAuthorization(wpsConfig, definition.id);
+  await vi.waitFor(() => expect(readCliAuthorization(attempt.id)?.phase).toBe('succeeded'));
+  expect(startCliProcess).toHaveBeenLastCalledWith(expect.objectContaining({ args: ['user', 'me', '--token-type', 'delegated', '--output', 'json'] }));
+  const provider = new CliToolProvider({ getConfig: () => wpsConfig, getCurrentContext: () => null });
+  const hits = await provider.search('WPS documents');
+  expect(hits).toHaveLength(14);
+  const described = await provider.describe(hits.find(hit => hit.title === 'drive.file.list')!.toolRef);
+  expect(described).toMatchObject({ source: 'cli', batchRead: true });
+});
