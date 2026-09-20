@@ -90,7 +90,6 @@ export function resolveAppLink(raw: string, currentHref = window.location.href):
 
 export type AppLinkLabels = {
   open: string;
-  unavailable: string;
   destinations: Record<string, string>;
 };
 
@@ -104,13 +103,10 @@ export function decorateAppLinks(
     const intent = resolveAppLink(anchor.getAttribute('href') ?? '');
     anchor.dataset.xopcLinkKind = intent.kind;
     if (intent.kind === 'blocked') {
-      anchor.removeAttribute('href');
-      anchor.removeAttribute('target');
-      anchor.setAttribute('aria-disabled', 'true');
-      if (labels) {
-        anchor.title = labels.unavailable;
-        anchor.dataset.xopcLinkHint = labels.unavailable;
-      }
+      // Unsupported targets (including auto-linked email addresses) are content,
+      // not actionable UI. Keep their visible text without exposing an internal
+      // availability state in the assistant response.
+      anchor.replaceWith(...Array.from(anchor.childNodes));
       continue;
     }
     if (intent.kind === 'internal-route') {

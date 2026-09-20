@@ -1,8 +1,9 @@
 import { larkAdapter } from './adapters/lark.js';
+import { wps365Adapter } from './adapters/wps365.js';
 import { wecomAdapter } from './adapters/wecom.js';
 import type { CliAdapter } from './types.js';
 
-const adapters = new Map<string, CliAdapter>([larkAdapter, wecomAdapter].map(adapter => [adapter.id, adapter]));
+const adapters = new Map<string, CliAdapter>([larkAdapter, wecomAdapter, wps365Adapter].map(adapter => [adapter.id, adapter]));
 
 export function getCliAdapter(id: string): CliAdapter {
   const adapter = adapters.get(id);

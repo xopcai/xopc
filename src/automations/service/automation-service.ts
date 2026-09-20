@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
 import { createLogger } from '../../utils/logger.js';
-import type { ProactiveSignalPublisher } from '../../proactive/events/publisher.js';
 import { runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 import {
   computeNextAutomationRunAtMs,
@@ -78,10 +77,6 @@ export class AutomationService {
   private readonly heartbeatTimers = new Map<string, TimerHandle>();
   private readonly leaseOwner = `automation-service:${process.pid}:${randomUUID()}`;
 
-  constructor(
-    private readonly signals?: ProactiveSignalPublisher,
-    private readonly workspaceId = 'default',
-  ) {}
 
   setDeps(deps: AutomationDeps): void {
     this.deps = { ...this.deps, ...deps };
@@ -601,18 +596,6 @@ export class AutomationService {
         saveAutomationRun(run);
         this.appendRunEvent(run, 'run.completed', `Automation run ${status}`, { status, durationMs: run.durationMs, error });
         this.finishAutomationRun(automation.id, status, error, endedAtMs);
-        if (status === 'failed' || status === 'timeout') {
-          this.signals?.publish({
-            type: 'automation.run_failed.v1', schemaVersion: 1,
-            source: { kind: 'automations', id: automation.id }, subject: { kind: 'automation_run', id: run.id },
-            actor: { kind: 'system' }, scope: {
-              workspaceId: this.workspaceId,
-              ...(automation.projectId ? { projectId: automation.projectId } : {}),
-            },
-            occurredAt: new Date(endedAtMs).toISOString(), dedupeKey: `automation_run:${run.id}:failed`,
-            sensitivity: 'personal', payload: { automationId: automation.id, status, error, summary: run.summary, durationMs: run.durationMs },
-          });
-        }
       });
       try {
         this.deps.onRunCompleted?.(run);

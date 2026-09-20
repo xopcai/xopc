@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
+import type { DatabaseSync } from 'node:sqlite';
 
 import {
   ProductNotificationSchema,
   type ProductNotification,
 } from '@xopcai/gateway-contract';
 
-import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
+import { getSqliteDatabase, runSqliteWriteTransaction, runSqliteSavepoint } from '../storage/sqlite/transaction.js';
 import type { NotificationDevicePlatform } from './types.js';
 
 type NotificationEventRow = {
@@ -79,10 +80,10 @@ export function createNotificationEvent(input: {
   notification: Omit<ProductNotification, 'id' | 'createdAt' | 'schemaVersion'>;
   deviceIds: string[];
   createdAt?: number;
-}): { notification: ProductNotification; created: boolean } {
+}, db: DatabaseSync = getSqliteDatabase()): { notification: ProductNotification; created: boolean } {
   const id = randomUUID();
   const createdAt = input.createdAt ?? Date.now();
-  const created = runSqliteWriteTransaction((db) => {
+  return runSqliteSavepoint(db, () => {
     const inserted = db.prepare(
       `INSERT OR IGNORE INTO notification_events (
         event_id, dedupe_key, event_type, target_json, priority,
@@ -109,12 +110,10 @@ export function createNotificationEvent(input: {
       );
       for (const deviceId of input.deviceIds) enqueue.run(id, deviceId, createdAt, createdAt);
     }
-    return inserted;
+    const row = db.prepare('SELECT * FROM notification_events WHERE dedupe_key = ?')
+      .get(input.dedupeKey) as NotificationEventRow;
+    return { notification: eventFromRow(row), created: inserted };
   });
-  const row = getSqliteDatabase().prepare(
-    'SELECT * FROM notification_events WHERE dedupe_key = ?',
-  ).get(input.dedupeKey) as NotificationEventRow;
-  return { notification: eventFromRow(row), created };
 }
 
 export function listNotificationEvents(options: {

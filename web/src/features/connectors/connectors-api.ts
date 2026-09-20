@@ -274,9 +274,7 @@ export type ConnectorLearningJob = {
 export type ConnectorSyncPolicy = {
   accountId: string;
   scanEnabled: boolean;
-  proactiveEnabled: boolean;
   intervalMinutes?: number;
-  allowedScenarioKeys: string[];
   revision: number;
   updatedAt: string;
 };
@@ -735,7 +733,7 @@ export async function getConnectorSyncPolicy(accountId: string): Promise<Connect
 
 export async function updateConnectorSyncPolicy(
   accountId: string,
-  patch: Partial<Pick<ConnectorSyncPolicy, 'scanEnabled' | 'proactiveEnabled' | 'intervalMinutes' | 'allowedScenarioKeys'>>,
+  patch: Partial<Pick<ConnectorSyncPolicy, 'scanEnabled' | 'intervalMinutes'>>,
 ): Promise<ConnectorSyncPolicy> {
   const response = await fetchJson<ApiEnvelope<{ policy: ConnectorSyncPolicy }>>(
     apiUrl(`/api/connectors/composio/accounts/${encodeURIComponent(accountId)}/sync-policy`),

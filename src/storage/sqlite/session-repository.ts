@@ -16,30 +16,10 @@ import {
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 import { SESSION_PURPOSE_SQL, SESSION_SOURCE_SQL } from './session-identity-sql.js';
 
-const SESSION_COLUMNS = `
-  s.conversation_id, s.agent_id, s.active_transcript_id, s.status, s.name, s.tags_json,
-  s.created_at, s.updated_at, s.last_accessed_at, s.session_started_at, s.last_interaction_at,
-  s.source_channel, s.source_chat_id, s.session_type, s.hidden_from_session_list,
-  s.parent_conversation_id, s.workflow_run_id, s.workflow_definition_id, s.workflow_agent_id, s.workflow_agent_label,
-  s.project_id, s.routing_json, s.custom_data_json,
-  s.message_count, s.estimated_tokens, s.compacted_count,
-  s.last_flushed_at, s.flush_count,
-  s.thinking_level, s.verbose_level,
-  t.cwd AS cwd
-`;
-
 import { buildFts5SearchQuery } from './fts.js';
+import { getSessionMetadata, readSessionRow, SESSION_COLUMNS, SESSION_FROM_JOIN } from './session-read-repository.js';
 
-const SESSION_FROM_JOIN = `
-  FROM sessions s
-  LEFT JOIN transcripts t ON t.transcript_id = s.active_transcript_id
-`;
-
-const SELECT_SESSION = `SELECT ${SESSION_COLUMNS} ${SESSION_FROM_JOIN} WHERE s.conversation_id = ?`;
-
-function readSessionRow(db: DatabaseSync, conversationId: string): SessionRow | undefined {
-  return db.prepare(SELECT_SESSION).get(conversationId) as SessionRow | undefined;
-}
+export { getSessionMetadata } from './session-read-repository.js';
 
 function insertSessionAndTranscript(
   db: DatabaseSync,
@@ -144,15 +124,6 @@ export function ensureSessionRecord(
 }
 
 export { readCurrentTranscriptId } from './session-instance-repository.js';
-
-export function getSessionMetadata(conversationId: string): SessionMetadata | null {
-  const db = getSqliteDatabase();
-  const row = readSessionRow(db, conversationId);
-  if (!row) {
-    return null;
-  }
-  return sessionRowToMetadata(conversationId, row);
-}
 
 export function getCurrentTranscriptId(conversationId: string): string | null {
   return readCurrentTranscriptId(getSqliteDatabase(), conversationId);

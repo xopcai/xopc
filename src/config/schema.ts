@@ -546,7 +546,8 @@ export const GatewayConfigSchema = z.object({
   tailscale: GatewayTailscaleSchema.optional(),
   tls: GatewayTlsSchema.optional(),
   auth: GatewayAuthSchema.optional(),
-  heartbeat: HeartbeatConfigSchema.optional(),
+  // Retired assistant polling configuration must never block startup or restart old work.
+  heartbeat: z.preprocess(() => undefined, HeartbeatConfigSchema.optional()),
   webchat: GatewayWebchatConfigSchema.optional(),
   corsOrigins: z.array(z.string()).optional(),
   /**
@@ -714,11 +715,6 @@ export const GatewayConfigSchema = z.object({
   port: 18790,
   auth: {
     mode: 'token',
-  },
-  heartbeat: {
-    enabled: true,
-    intervalMs: 1_800_000,
-    includeSystemPromptSection: false,
   },
   webchat: {
     activityDetailDefault: 'on',
@@ -1338,11 +1334,6 @@ export const ConfigSchema = z.object({
     port: 18790,
     auth: {
       mode: 'token',
-    },
-    heartbeat: {
-      enabled: true,
-      intervalMs: 1_800_000,
-      includeSystemPromptSection: false,
     },
     webchat: {
       activityDetailDefault: 'on' as const,

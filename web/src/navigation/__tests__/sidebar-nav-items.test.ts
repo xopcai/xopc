@@ -37,7 +37,7 @@ describe('reconcileNavOrder', () => {
       expect.objectContaining({ id: 'builtin:automations', to: '/automations' }),
       expect.objectContaining({ id: 'builtin:projects', to: '/projects' }),
     ]);
-    expect(BUILTIN_NAV_DEFS.at(-1)).toEqual(expect.objectContaining({ id: 'builtin:proactive', to: '/assistant-work' }));
+    expect(BUILTIN_NAV_DEFS.at(-1)).toEqual(expect.objectContaining({ id: 'builtin:scenes', to: '/scenes' }));
   });
 
   it('keeps the intended default built-in navigation order', () => {
@@ -54,7 +54,7 @@ describe('reconcileNavOrder', () => {
       'builtin:browserAutomations',
       'builtin:localApps',
       'builtin:extensions',
-      'builtin:proactive',
+      'builtin:scenes',
     ]);
   });
 
@@ -84,7 +84,7 @@ describe('reconcileNavOrder', () => {
       item('builtin:automations'),
       item('builtin:projects'),
       item('builtin:notes'),
-      item('builtin:proactive'),
+      item('builtin:scenes'),
     ];
     const out = reconcileNavOrder(available, []);
     expect(out.visible.map((i) => i.id)).toEqual([
@@ -94,7 +94,7 @@ describe('reconcileNavOrder', () => {
       'builtin:automations',
       'builtin:projects',
     ]);
-    expect(out.overflow.map((i) => i.id)).toEqual(['builtin:notes', 'builtin:proactive']);
+    expect(out.overflow.map((i) => i.id)).toEqual(['builtin:notes', 'builtin:scenes']);
   });
 
   it('appends new items that are not yet in the stored order', () => {

@@ -129,7 +129,6 @@ export function registerPublicGatewayRoutes(app: Hono, service: GatewayService):
         'DELETE /api/providers/:providerId/key',
         'PATCH /api/config',
         'POST /api/config/reload',
-        'POST /api/heartbeat/trigger',
         '...  /api/automations/*',
         '...  /api/automation-runs/*',
         'GET/PATCH /api/sessions/:key/agent-config',
