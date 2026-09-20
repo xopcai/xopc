@@ -15,14 +15,20 @@ import type { SessionMetadataSeed } from '../../../storage/sqlite/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { createGatewayRouteLogger, logRouteError } from '../lib/route-logger.js';
 import { messagesToClientHistory } from '../../../session/client-history.js';
-import type { SessionType } from '../../../session/types.js';
+import { SessionStatus, type SessionType } from '../../../session/types.js';
 import { deleteMediaUrisNoLongerReferenced } from '../../../media/session-references.js';
 import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
 import type { StartupUnavailableGatewayMethod } from '../../startup-readiness.js';
 import { evictEmbeddedSessionRunner } from '../../../agent/embedded/session-runner.js';
 import { SessionEnvironmentService } from '../../../execution-environments/session-environment-service.js';
-import type { ProjectExecutionMode } from '../../../projects/types.js';
+import type { Project, ProjectExecutionMode } from '../../../projects/types.js';
 import { deleteBrowserTabBinding } from '../../../storage/sqlite/browser-tab-binding-repository.js';
+import {
+  getSidebarLayout,
+  replaceSidebarLayout,
+  SidebarLayoutConflictError,
+  sortBySidebarLayout,
+} from '../../../storage/sqlite/sidebar-layout-repository.js';
 
 const log = createGatewayRouteLogger('Sessions');
 
@@ -59,6 +65,25 @@ function parsePositiveInt(value: string | undefined, fallback: number, max: numb
 function parseOffset(value: string | undefined): number {
   const parsed = value ? Number.parseInt(value, 10) : 0;
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+}
+
+function listAllSidebarProjects(
+  service: AuthenticatedRouteDeps['service'],
+  options: { updatedAfter?: number; includePinned?: boolean; includeConversationId?: string } = {},
+): Project[] {
+  const items: Project[] = [];
+  let offset = 0;
+  while (true) {
+    const page = service.projects.listWithSidebarSessions({
+      status: 'active',
+      limit: 50,
+      offset,
+      ...options,
+    });
+    items.push(...page.items);
+    if (!page.hasMore || page.items.length === 0) return items;
+    offset += page.items.length;
+  }
 }
 
 function isHistoryCursor(value: string): boolean {
@@ -125,19 +150,26 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     const updatedAfter = Date.now() - staleDays * 24 * 60 * 60 * 1000;
     const includeConversationId = c.req.query('includeConversationId')?.trim() || undefined;
 
-    const projects = service.projects.listWithSidebarSessions({
-      status: 'active',
-      limit: projectLimit,
-      offset: projectOffset,
+    const allProjectItems = listAllSidebarProjects(service, {
       updatedAfter,
       includePinned: true,
       includeConversationId,
     });
+    const projectLayout = getSidebarLayout('projects');
+    const orderedProjects = sortBySidebarLayout(allProjectItems, projectLayout, (project) => project.id);
+    const projects = {
+      items: orderedProjects.slice(projectOffset, projectOffset + projectLimit),
+      total: orderedProjects.length,
+      limit: projectLimit,
+      offset: projectOffset,
+      hasMore: projectOffset + projectLimit < orderedProjects.length,
+    };
     const projectItems = await Promise.all(
       projects.items.map(async (project) => {
-        const sessions = await service.sessions.listSessions({
+        const sessionLayout = getSidebarLayout(`project:${project.id}`);
+        const allSessions = await service.sessions.listSessions({
           projectId: project.id,
-          limit: sessionPreviewLimit,
+          limit: 5000,
           offset: 0,
           updatedAfter,
           includePinned: true,
@@ -145,24 +177,50 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
           sortBy: 'updatedAt',
           sortOrder: 'desc',
         });
+        const orderedSessions = sortBySidebarLayout(allSessions.items, sessionLayout, (session) => session.key);
+        const sessions = orderedSessions.slice(0, sessionPreviewLimit);
         return {
           project,
-          sessions: sessions.items,
-          sessionTotal: sessions.total,
-          sessionHasMore: sessions.hasMore,
+          sessions,
+          sessionTotal: allSessions.total,
+          sessionHasMore: sessionPreviewLimit < allSessions.total,
         };
       }),
     );
-    const inbox = await service.sessions.listSessions({
+    const inboxLayout = getSidebarLayout('inbox');
+    const allInbox = await service.sessions.listSessions({
       unassigned: true,
-      limit: inboxLimit,
-      offset: inboxOffset,
+      limit: 5000,
+      offset: 0,
       updatedAfter,
       includePinned: true,
       includeConversationId,
       sortBy: 'updatedAt',
       sortOrder: 'desc',
     });
+    const orderedInbox = sortBySidebarLayout(allInbox.items, inboxLayout, (session) => session.key);
+    const inbox = {
+      ...allInbox,
+      items: orderedInbox.slice(inboxOffset, inboxOffset + inboxLimit),
+      limit: inboxLimit,
+      offset: inboxOffset,
+      hasMore: inboxOffset + inboxLimit < allInbox.total,
+    };
+    const pinnedLayout = getSidebarLayout('pinned');
+    const pinnedResult = await service.sessions.listSessions({
+      status: SessionStatus.PINNED,
+      limit: 5000,
+      offset: 0,
+      sortBy: 'updatedAt',
+      sortOrder: 'desc',
+    });
+    const pinned = sortBySidebarLayout(pinnedResult.items, pinnedLayout, (session) => session.key);
+    const layouts = Object.fromEntries([
+      projectLayout,
+      inboxLayout,
+      pinnedLayout,
+      ...projects.items.map((project) => getSidebarLayout(`project:${project.id}`)),
+    ].map((layout) => [layout.containerId, { itemIds: layout.itemIds, revision: layout.revision }]));
 
     return c.json({
       ok: true,
@@ -174,7 +232,77 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
         hasMore: projects.hasMore,
       },
       inbox,
+      pinned,
+      layouts,
     });
+  });
+
+  authenticated.put('/api/sidebar/layouts/:containerId', async (c) => {
+    const blocked = ensureGatewayReadyForSessions(c, service, 'sessions.list');
+    if (blocked) return blocked;
+    const containerId = decodeURIComponent(c.req.param('containerId'));
+    if (containerId !== 'projects' && containerId !== 'pinned' && containerId !== 'inbox' && !containerId.startsWith('project:')) {
+      return c.json({ ok: false, error: 'Invalid sidebar container' }, 400);
+    }
+    const body = await c.req.json().catch(() => ({})) as { itemIds?: unknown; expectedRevision?: unknown };
+    if (!Array.isArray(body.itemIds) || body.itemIds.length > 5000 || body.itemIds.some((id) => typeof id !== 'string' || !id.trim())) {
+      return c.json({ ok: false, error: 'itemIds must be an array of non-empty strings' }, 400);
+    }
+    if (!Number.isInteger(body.expectedRevision) || (body.expectedRevision as number) < 0) {
+      return c.json({ ok: false, error: 'expectedRevision must be a non-negative integer' }, 400);
+    }
+    const itemIds = [...new Set(body.itemIds as string[])];
+    if (itemIds.length !== body.itemIds.length) {
+      return c.json({ ok: false, error: 'itemIds must be unique' }, 400);
+    }
+
+    let completeItemIds: string[] = itemIds;
+    if (containerId === 'projects') {
+      if (itemIds.some((id) => !service.projects.get(id))) {
+        return c.json({ ok: false, error: 'Project not found' }, 404);
+      }
+      const allIds = listAllSidebarProjects(service).map((project) => project.id);
+      completeItemIds = [...itemIds, ...allIds.filter((id) => !itemIds.includes(id))];
+    } else {
+      const projectId = containerId.startsWith('project:') ? containerId.slice('project:'.length) : undefined;
+      if (projectId && !service.projects.get(projectId)) {
+        return c.json({ ok: false, error: 'Project not found' }, 404);
+      }
+      const sessions = await Promise.all(itemIds.map((id) => service.sessions.getSession(id)));
+      const invalid = sessions.some((session) => {
+        if (!session || session.status === 'archived') return true;
+        if (containerId === 'pinned') return session.status !== 'pinned';
+        if (session.status === 'pinned') return true;
+        if (containerId === 'inbox') return Boolean(session.projectId);
+        return session.projectId !== projectId;
+      });
+      if (invalid) return c.json({ ok: false, error: 'Sidebar item does not belong to the container' }, 409);
+      const all = await service.sessions.listSessions({
+        ...(containerId === 'pinned'
+          ? { status: SessionStatus.PINNED }
+          : containerId === 'inbox'
+            ? { unassigned: true, excludeArchived: true }
+            : { projectId, excludeArchived: true }),
+        limit: 5000,
+        offset: 0,
+        sortBy: 'updatedAt',
+        sortOrder: 'desc',
+      });
+      const eligibleIds = all.items
+        .filter((session) => containerId === 'pinned' || session.status !== SessionStatus.PINNED)
+        .map((session) => session.key);
+      completeItemIds = [...itemIds, ...eligibleIds.filter((id) => !itemIds.includes(id))];
+    }
+
+    try {
+      const layout = replaceSidebarLayout(containerId, completeItemIds, body.expectedRevision as number);
+      return c.json({ ok: true, layout });
+    } catch (error) {
+      if (error instanceof SidebarLayoutConflictError) {
+        return c.json({ ok: false, error: error.message, layout: error.current }, 409);
+      }
+      throw error;
+    }
   });
 
   // POST /api/sessions - Create a new session. Empty-shell reuse is a client concern.

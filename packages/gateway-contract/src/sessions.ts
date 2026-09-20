@@ -244,6 +244,8 @@ export interface SidebarChatListResponse<TProject = unknown> {
   ok: true;
   projects: PaginatedResult<SidebarChatListProject<TProject>>;
   inbox: PaginatedResult<SessionMetadata>;
+  pinned: SessionMetadata[];
+  layouts: Record<string, { itemIds: string[]; revision: number }>;
 }
 
 export interface SessionMessagePage {
@@ -467,6 +469,11 @@ export const sidebarChatListResponseSchema = z
       hasMore: z.boolean(),
     }),
     inbox: sessionsListResponseSchema,
+    pinned: z.array(z.unknown()).default([]),
+    layouts: z.record(z.string(), z.object({
+      itemIds: z.array(z.string()),
+      revision: z.number().int().nonnegative(),
+    })).default({}),
   })
   .passthrough();
 
@@ -634,6 +641,10 @@ export function buildSidebarChatListPath(query?: {
   if (query?.includeConversationId) params.set('includeConversationId', query.includeConversationId);
   const qs = params.toString();
   return `/api/sidebar/chat-list${qs ? `?${qs}` : ''}`;
+}
+
+export function buildSidebarLayoutPath(containerId: string): string {
+  return `/api/sidebar/layouts/${encodeURIComponent(containerId)}`;
 }
 
 export function buildSessionActionPath(

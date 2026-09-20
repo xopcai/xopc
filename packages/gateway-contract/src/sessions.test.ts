@@ -10,6 +10,7 @@ import {
   buildSessionResolvePath,
   buildSessionStatsPath,
   buildSidebarChatListPath,
+  buildSidebarLayoutPath,
   extractCreatedConversationId,
   normalizeSessionActiveRunResponse,
   parseSessionActionResponse,
@@ -91,6 +92,7 @@ describe('sessions contract', () => {
     expect(buildSidebarChatListPath({ projectLimit: 10, inboxOffset: 20, includeConversationId: key })).toBe(
       '/api/sidebar/chat-list?projectLimit=10&inboxOffset=20&includeConversationId=c0f12290-5df2-4203-8bfd-5d5f34467d20',
     );
+    expect(buildSidebarLayoutPath('project:alpha/beta')).toBe('/api/sidebar/layouts/project%3Aalpha%2Fbeta');
     expect(buildSessionActionPath(key, 'delete')).toBe(
       '/api/sessions/c0f12290-5df2-4203-8bfd-5d5f34467d20',
     );
