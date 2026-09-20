@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NotificationDispatcher, type DispatchPolicy, type DispatchReceipt } from '../dispatch.js';
-import { installNotificationLedgerSchema } from '../../storage/sqlite/migrations/scenes/schema.js';
+import { installNotificationLedgerSchema } from '../../storage/sqlite/scenes-schema.js';
 
 describe('durable notification dispatcher', () => {
   let db: DatabaseSync;

@@ -1,3 +1,5 @@
+import { BrowserSubscriptionService } from '../../../../notifications/browserSubscriptions.js';
+import { ScenePreferenceService } from '../../../../scenes/preferences.js';
 import type { AddressInfo } from 'node:net';
 import { DatabaseSync } from 'node:sqlite';
 
@@ -10,7 +12,7 @@ import { SceneInboxService } from '../../../../scenes/inbox.js';
 import { SceneMetrics } from '../../../../scenes/metrics.js';
 import { SceneMailContextProvider } from '../../../../scenes/mailContext.js';
 import { SceneRepository } from '../../../../scenes/repository.js';
-import { installSceneCutoverSchema } from '../../../../storage/sqlite/migrations/scenes/schema.js';
+import { installSceneStorage } from '../../../../storage/sqlite/scenes-schema.js';
 import { SceneApplicationService } from '../../../../scenes/service.js';
 import { familyPlanTemplate, mailFollowUpTemplate } from '../../../../scenes/templates.js';
 import { SceneUserNotesProvider } from '../../../../scenes/userNotes.js';
@@ -36,7 +38,7 @@ describe('scene APIs through authenticated Gateway HTTP and lazy dispatch', () =
     resetLazyRouteBundlesForTests();
     db = new DatabaseSync(':memory:');
     db.exec('PRAGMA foreign_keys = ON');
-    installSceneCutoverSchema(db);
+    installSceneStorage(db);
 
     repository = new SceneRepository(db);
     repository.installTemplate(familyPlanTemplate);
@@ -49,7 +51,7 @@ describe('scene APIs through authenticated Gateway HTTP and lazy dispatch', () =
     const pass = async (_c, next) => { await next(); };
     deps = { service: { currentWorkspacePath: 'workspace' } as never, strictRateLimitMiddleware: pass,
       chatRateLimitMiddleware: pass, xopcCloudPollRateLimitMiddleware: pass,
-      scenes: { repository, application, inbox: new SceneInboxService(db), mail: new SceneMailContextProvider(db), metrics: new SceneMetrics(db) } };
+      scenes: { repository, application, inbox: new SceneInboxService(db), mail: new SceneMailContextProvider(db), browser: new BrowserSubscriptionService(db), preferences: new ScenePreferenceService(db), metrics: new SceneMetrics(db) } };
     const app = new Hono();
     app.use(auth({ getResolvedAuth: () => ({ mode: 'token', token: 'scenes-http-test', allowTailscale: false }) }));
     app.use(gatewayScopes());
@@ -61,6 +63,18 @@ describe('scene APIs through authenticated Gateway HTTP and lazy dispatch', () =
     await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     db.close();
     resetLazyRouteBundlesForTests();
+  });
+
+  it('controls checking independently of reminders and validates push subscriptions through auth', async () => {
+    expect((await request('/preferences', 'GET', undefined, false)).status).toBe(401);
+    expect((await request('/preferences', 'PATCH', { expectedRevision: 0, notificationsMuted: true })).status).toBe(200);
+    expect(await (await request('/preferences')).json()).toMatchObject({ notificationsMuted: true, checksPaused: false, revision: 1 });
+    expect((await request('/preferences', 'PATCH', { expectedRevision: 0, checksPaused: true })).status).toBe(409);
+    expect((await request('/preferences', 'PATCH', { expectedRevision: 1, ownerId: 'other' })).status).toBe(400);
+    expect((await request('/presence', 'POST', { clientId: 'tab', surface: 'web', presentationId: 'other', visible: true })).status).toBe(404);
+    expect((await request('/browser/prepare', 'POST')).status).toBe(200);
+    expect((await request('/browser/subscriptions', 'POST', { endpoint: 'https://localhost/private' })).status).toBe(400);
+    expect((await request('/diagnostics')).status).toBe(200);
   });
 
   it('requires authentication before loading the scene bundle', async () => {
@@ -166,28 +180,8 @@ describe('scene APIs through authenticated Gateway HTTP and lazy dispatch', () =
       const activation = repository.createActivation(principal, input);
       expect((await request(`/activations/${activation.id}`)).status).toBe(404);
       expect((await request(`/activations/${activation.id}/runs`)).status).toBe(404);
-      expect((await request(`/activations/${activation.id}/imported-context`)).status).toBe(404);
       expect((await request(`/activations/${activation.id}/notes`, 'PATCH', { expectedRevision: 0, content: 'Injected' })).status).toBe(404);
     }
-  });
-
-  it('serves private imported instructions in revision order through the authenticated lazy route', async () => {
-    const activation = repository.createActivation({ ownerId: 'local-owner', workspaceId: 'workspace' }, input);
-    for (const revision of [1, 3, 2]) db.prepare('INSERT INTO scene_instruction_revisions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(`instruction-${revision}`, activation.id, revision, 'retired', 1, `Private revision ${revision}`, 'hash', Date.now(), null);
-    db.prepare(`INSERT INTO scene_checklist_imports(activation_id, content, prompt, config_present, enabled)
-      VALUES (?, 'Private checklist', 'Private prompt', 1, 1)`).run(activation.id);
-    const path = `/activations/${activation.id}/imported-context`;
-    expect((await request(path, 'GET', undefined, false)).status).toBe(401);
-    const first = await request(`${path}?limit=2`);
-    expect(first.status).toBe(200);
-    expect(await first.json()).toMatchObject({ nextRevision: 2, instructions: [
-      { revision: 3, content: 'Private revision 3' }, { revision: 2, content: 'Private revision 2' },
-    ], checklist: { content: 'Private checklist', prompt: 'Private prompt', wasEnabled: true } });
-    expect(await (await request(`${path}?limit=2&beforeRevision=2`)).json()).toMatchObject({ nextRevision: null, instructions: [{ revision: 1 }] });
-    expect((await request(`${path}?ownerId=other`)).status).toBe(400);
-    expect((await request(`${path}?beforeRevision=-1`)).status).toBe(400);
-    expect((await request(`${path}?limit=51`)).status).toBe(400);
   });
 
   it('paginates checks newest first with stable ties and rejects a cursor from another activation', async () => {

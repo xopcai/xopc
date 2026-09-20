@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { SceneInboxService } from '../inbox.js';
 import { SceneRepository } from '../repository.js';
-import { installSceneCutoverSchema } from '../../storage/sqlite/migrations/scenes/schema.js';
+import { installSceneStorage } from '../../storage/sqlite/scenes-schema.js';
 import { mailFollowUpTemplate } from '../templates.js';
 
 describe('scene result lifecycle', () => {
@@ -24,7 +24,7 @@ describe('scene result lifecycle', () => {
   beforeEach(() => {
     db = new DatabaseSync(':memory:');
     db.exec('PRAGMA foreign_keys = ON');
-    installSceneCutoverSchema(db);
+    installSceneStorage(db);
 
     repository = new SceneRepository(db);
     inbox = new SceneInboxService(db, () => 1200);

@@ -7,6 +7,7 @@ import { readSchemaVersion, setSchemaVersion } from '../schema-version.js';
 import { resolveSqliteAssetPath } from '../sql-assets.js';
 import { backupBeforeConversationCutover } from './conversation-backup.js';
 import { migrateConversationUuids, type ConversationMigrationSummary } from './conversation-uuid.js';
+import { discardExperimentalSceneData, resetExperimentalScenes } from './scene-reset.js';
 import { discoverSqlMigrations } from './discover.js';
 import {
   DatabaseSchemaMigrationGapError,
@@ -21,7 +22,7 @@ const log = createLogger('Sqlite:Migrations');
 export const XOPC_DB_BASELINE_SCHEMA_VERSION = 165;
 
 /** Latest schema version this release supports (increment when adding migrations). */
-export const XOPC_DB_SCHEMA_VERSION = 187;
+export const XOPC_DB_SCHEMA_VERSION = 189;
 
 function writeMigrationReport(backupPath: string, report: Record<string, unknown>): void {
   const reportPath = `${backupPath}.report.json`;
@@ -42,20 +43,22 @@ function migrationByTarget(
   return migrations.find((migration) => migration.targetVersion === targetVersion);
 }
 
-function applySingleMigration(db: DatabaseSync, migration: SqlMigration): ConversationMigrationSummary | undefined {
+function applySingleMigration(db: DatabaseSync, migration: SqlMigration, discardOldScenes = false): ConversationMigrationSummary | undefined {
   log.info({ targetVersion: migration.targetVersion, file: migration.filename }, 'Applying SQLite migration');
-  // Rebuild the referenced parent table without firing ON DELETE CASCADE.
-  const rebuildParentTable = migration.targetVersion === 179 || migration.targetVersion === 182;
+  // Schema rebuilds and the experimental scene reset validate all FKs before commit.
+  const requiresForeignKeyPause = discardOldScenes || migration.targetVersion === 179 || migration.targetVersion === 182 || migration.targetVersion === 188;
   const foreignKeysEnabled = Number(db.prepare('PRAGMA foreign_keys').get()?.foreign_keys) === 1;
-  if (rebuildParentTable) db.exec('PRAGMA foreign_keys = OFF');
+  if (requiresForeignKeyPause) db.exec('PRAGMA foreign_keys = OFF');
   let transactionStarted = false;
   try {
     db.exec('BEGIN IMMEDIATE');
     transactionStarted = true;
+    if (discardOldScenes) discardExperimentalSceneData(db);
     db.exec(migration.sql);
+    if (migration.targetVersion === 188) resetExperimentalScenes(db);
     const summary = migration.targetVersion === 178 ? migrateConversationUuids(db) : undefined;
-    if (rebuildParentTable && db.prepare('PRAGMA foreign_key_check').all().length > 0) {
-      throw new Error('Parent table migration would violate foreign key integrity');
+    if (requiresForeignKeyPause && db.prepare('PRAGMA foreign_key_check').all().length > 0) {
+      throw new Error('Schema migration would violate foreign key integrity');
     }
     setSchemaVersion(db, migration.targetVersion);
     db.exec('COMMIT');
@@ -72,7 +75,7 @@ function applySingleMigration(db: DatabaseSync, migration: SqlMigration): Conver
       { cause: error },
     );
   } finally {
-    if (rebuildParentTable && foreignKeysEnabled) db.exec('PRAGMA foreign_keys = ON');
+    if (requiresForeignKeyPause && foreignKeysEnabled) db.exec('PRAGMA foreign_keys = ON');
   }
 }
 
@@ -112,7 +115,9 @@ export function applyPendingMigrations(
       throw new DatabaseSchemaMigrationGapError(currentVersion, targetVersion, nextVersion);
     }
     try {
-      conversationSummary = applySingleMigration(db, migration) ?? conversationSummary;
+      // Older scene migrations parse experimental JSON that no longer needs preserving.
+      const discardOldScenes = !options.migrationsDir && targetVersion >= 188 && fromVersion < 178 && currentVersion === fromVersion;
+      conversationSummary = applySingleMigration(db, migration, discardOldScenes) ?? conversationSummary;
     } catch (error) {
       if (conversationBackup) writeMigrationReport(conversationBackup, { fromVersion, targetVersion, failedVersion: nextVersion, status: 'failed', error: error instanceof Error ? error.message : String(error) });
       throw error;

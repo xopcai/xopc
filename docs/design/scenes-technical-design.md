@@ -17,7 +17,7 @@
 
 ## 2. 当前基线与替换边界
 
-以下是当前仓库实现的设计输入，不代表目标协议已经存在。
+以下是实施前仓库的设计输入；其中旧实现已删除，当前状态见实施记录。
 
 | 现有能力 | 当前位置 | 决定 |
 | --- | --- | --- |
@@ -25,8 +25,8 @@
 | 事件、聚合、运行、上下文校验 | `src/proactive/events/`、`routing/`、`execution/` | 提取可靠性逻辑进入新领域，不保留旧执行入口 |
 | 时间扫描与邮件跟进 | `src/proactive/temporal/`、`follow-ups.ts` | 转为统一时机及 WorkItem，不保留第二个扫描器 |
 | Inbox、摘要、投递、反馈 | `src/proactive/inbox/` | 场景语义迁入结果层；通用投递移出场景领域 |
-| 项目任务创建 | `src/proactive/actions/service.ts` | 作为首个注册 Effect Handler，继续调用 TaskApplicationService |
-| 周期巡查与 HEARTBEAT.md | `src/gateway/heartbeat/service.ts` | 转为内置日常巡查模板及一次性导入，不再读取文件驱动运行 |
+| 项目任务创建 | `src/proactive/actions/service.ts` | 后续若开放外部动作再实现；首发不承诺场景自动创建任务 |
+| 周期巡查与 HEARTBEAT.md | `src/gateway/heartbeat/service.ts` | 删除旧巡查，首发不导入历史文件，也不承诺日常巡查模板 |
 | 自动化计划、Agent/Workflow 执行 | `src/automations/`、`src/workflows/` | 保留独立用户自动化；提取纯计划计算等基础件，场景不是隐藏 Automation |
 | 用户工具与页面 | `xopc_use` 的 proactive 模式、`/assistant-work`、Heartbeat 设置 | 替换为 scene 模式、场景入口和详情，不保留跳转别名 |
 
@@ -147,7 +147,7 @@ presentation:
 
 ## 6. SQLite 持久化与事务
 
-表结构、资源读取与迁移统一归属 `src/storage/sqlite/`。场景与通知运行时不创建表，不保留独立 schema 加载器。一次性转换、配置 journal、历史格式校验及恢复放在 `migrations/scenes/`；固定迁移目标格式，禁止调用随业务演进的 Repository 或当前模板。Node 与 Electron 从本次源码复制同一 SQL 树，使用统一资源定位，不从旧构建兜底取 SQL。
+表结构、资源读取与迁移统一归属 `src/storage/sqlite/`。场景与通知运行时不创建表，不保留独立 schema 加载器。当前 SQL 放在 `schemas/`；普通版本升级清空未使用的旧实验数据并初始化新表，不导入旧历史、不建立快照或配置 journal。Node 与 Electron 从本次源码复制同一 SQL 树，使用统一资源定位，不从旧构建兜底取 SQL。
 
 通用通知通过宿主注入领域投递策略，不导入场景或旧 Proactive。旧领域的通知实现必须与旧运行时整体删除；不得留在通用通知目录成为隐式依赖。具体复查及落实情况见[架构复查](./scenes-architecture-review.md)。
 
@@ -262,36 +262,24 @@ HTTP 409 表示 revision/plan 冲突，403 表示无权限，422 表示配置不
 
 ### 11.1 原则
 
-没有运行时向后兼容。一次性数据转换属于发布操作，不是兼容层；转换后的程序只理解新模型。不能把旧记录塞进 opaque legacy JSON 后依赖旧代码长期读取。
+没有运行时向后兼容。旧 Proactive／助理 Heartbeat 尚未被用户使用，已明确取消历史保留要求。删除实验数据，不构造历史 Activation、Run、Outcome 或私人说明。
 
-历史数据库 migration 链是升级工具，不是运行时兼容 API，默认保留；干净安装 schema 只含目标表。如决定连历史升级能力一起取消，必须另行确定用户数据导出/重建方案，不能在此方案中默默清空数据库。
+### 11.2 数据与配置清理
 
-### 11.2 一次性转换映射
-
-| 旧数据 | 新归属与处理 |
-| --- | --- |
-| scenarios / versions / prompt revisions | 内置 TemplateVersion + Activation 私人 instruction override；不把私有 Prompt 发布为模板 |
-| subscriptions / subscription settings | Activation、scope、policy；明确账号绑定，无法确定则 needs_setup |
-| signal batches / events / schedules | 已完成事件历史与相关键；未来时机重新计算，不重放历史事件 |
-| runs / snapshots / insights | 规范化历史 Run/Outcome/证据，保持可追溯 ID 映射 |
-| inbox / decisions / feedback / card changes | Outcome、Presentation、Feedback；保留已读/撤回和用户选择 |
-| follow_ups | 邮件 Activation 下 WorkItem，保留对象身份和截止时间 |
-| action / delivery outbox / channel deliveries | Effect/通知账本，保留幂等键、成功和 unknown 状态 |
-| preferences / presence / digests / budgets | 场景偏好或通用注意力治理；保留当天已花预算 |
-| web push keys / subscriptions / deliveries / probes | 通用通知表；保留 VAPID 密钥与有效订阅，不要求用户无故重新授权 |
-| heartbeat config / checks / HEARTBEAT.md | 日常巡查 Activation 与历史记录；文本仅导入为私人说明，不推断额外工具许可 |
-
-空 HEARTBEAT.md 不激活场景；非空但依赖不明确的清单进入 needs_setup。用户维护的文件不自动删除，只是不再被运行时读取；仓库内旧模板、文件编辑 API 和使用说明删除或替换。
+- 使用普通 SQLite 版本升级，在同一事务内清理旧实验数据、初始化当前表、更新版本；失败回滚，重启重试。
+- 已升级安装不重复清理，新场景数据跨重启保留。
+- 旧场景通知及其回执／投递记录一并清理，不能重放；无关通知保留。
+- 废弃 Heartbeat 配置在 schema 解析时忽略，错误类型也不阻塞启动；正常保存时移除。用户清单文件不扫描、不导入、不删除。
+- 不清空整库，不影响聊天、项目、连接器和账号等其他功能；其他已发布功能的 migration 链继续保留。
+- 删除转换器、映射、对账、快照、journal、恢复命令、导入专用表与历史 UI，不保留备用路径。
 
 ### 11.3 发布顺序
 
-1. 运行只读 preflight，列出各表数量、未结束运行、未知外部动作、无法转换配置和客户端升级要求；提供备份及变更报告。
-2. 停止旧 workers 和相关写入，排空已知任务；过期/中断推理标记 interrupted，不自动重放有副作用的任务。外部发送无法确认则记录 unknown。
-3. 使用 SQLite 一致性备份机制保存数据库及所需配置快照，不直接拷贝活动 WAL 主文件冒充完整备份。
-4. 在数据库事务内转换、校验 ID 关联、记录数量和关键状态，删除旧表；失败整笔回滚。配置转换通过临时文件原子替换，migration journal 记录跨 DB/配置的阶段，重启可继续，转换完成前禁止 workers 启动。
-5. 新配置 schema 拒绝旧字段；历史配置转换只在启动前升级工具里执行。转换后关闭升级入口的自动重复执行。
-6. 启动新运行时；只接收新事件并按补偿规则计算后续时机，校验旧接口不可用及没有旧定时器。
-7. 首个新 Effect 执行前可离线还原备份；之后不允许自动降级并重放旧 outbox。必须先对账外部回执，再决定恢复方案，通常前向修复。
+1. 在 workers 启动前执行普通数据库升级；事务失败不启动依赖新表的 worker。
+2. 正式宿主、事件生产者、工具和客户端成套替换，删除旧执行器。
+3. 删除旧表结构必须与最后一个运行时调用者的删除同批进行；当前过渡代码仅清空旧数据，避免正式 Gateway 缺表崩溃。
+4. 验证新装、旧数据与旧配置、失败重试、重复启动，以及更新后的打包产品启动。
+5. 启动新运行时，只接纳新委托与新事件；不恢复旧权限或旧发送任务。
 
 ### 11.4 必删清单与完成证据
 
@@ -299,7 +287,7 @@ HTTP 409 表示 revision/plan 冲突，403 表示无权限，422 表示配置不
 - 删除助理巡查 HeartbeatService、独立 timer/wake/delivery worker、其 Gateway wiring 与专有配置。
 - 删除 `/api/proactive/*`、`/api/internal/proactive/*`、旧 judgments 协议、Heartbeat trigger/文件编辑专有接口和 lazy-bundle matcher。
 - 删除旧页面、`/proactive` 跳转、`/assistant-work` 旧入口、Heartbeat 设置和旧 Agent 工具模式；所有客户端同步改动。
-- 删除 `proactive_*` 和助理巡查专有旧表在新 schema 中的定义、seed 与运行时引用；通知通用表按新命名迁移。
+- 删除 `proactive_*` 和助理巡查专有旧表在新 schema 中的定义、seed 与运行时引用；通知通用表使用独立当前结构。
 - 删除“先走旧实现”“新模型回退旧格式”的 feature flag、双写、条件 import 和兼容参数。
 - 旧设计文档可以保留为明确标注的历史决策材料，但不能继续作为实施依据；用户文档不得保留失效操作指南。
 
@@ -309,14 +297,14 @@ HTTP 409 表示 revision/plan 冲突，403 表示无权限，422 表示配置不
 
 | 阶段 | 交付 | 门槛 |
 | --- | --- | --- |
-| T0 契约与转换演练 | 冻结字段、状态机、权限矩阵、数据映射，准备脱敏升级 fixture | 老数据能转换且不扩大权限；明确无法转换的实例 |
+| T0 契约与初始化验收 | 冻结字段、状态机、权限矩阵，准备旧状态清理 fixture | 旧实验数据丢弃，旧配置不阻塞启动，新数据重启保留 |
 | T1 单场景纵向新链路 | 邮件跟进：事件→WorkItem→受控 Agent→结果→Inbox；最小 Web 管理与可观测性 | 重启/重复事件/已回复/撤权均正确；新链路只用测试或隔离数据 |
-| T2 首发候选与完整切换 | 会议准备、项目风险、日常巡查、家庭安排试点；统一通知、首个低风险 Effect；新 API/UI；删除 legacy | 转换、渠道对账、全客户端、可靠性测试全部通过，首次正式发布 |
+| T2 首发候选与完整切换 | 会议准备、项目风险、日常巡查、家庭安排试点；统一通知、首个低风险 Effect；新 API/UI；删除 legacy | 初始化、渠道验收、全客户端、可靠性测试全部通过，首次正式发布 |
 | T3 模板产品化 | 官方目录、模板导入导出、固定版本、升级审查、所需 Workflow executor | 不理解 Prompt 的用户能开启并获取真实帮助 |
 | T4 受控开放 | 创作者工具、签名、评测与经验证的扩展点 | 不可绕过宿主权限，不携带私密实例数据 |
 | T5 授权内个性化 | 推荐及有限参数调整，长期目标回顾 | 减少负担而非增加消息和确认数量 |
 
-T1/T2 是同一新实现的研发增量，不通过线上 legacy adapter 临时交付。若首发范围过大，可减少首发模板数量，但不能以保留旧引擎作为减量方案；未支持的旧实例明确暂停并保留已转换历史。
+T1/T2 是同一新实现的研发增量，不通过线上 legacy adapter 临时交付。若首发范围过大，可减少首发模板数量，但不能以保留旧引擎作为减量方案；旧实验实例直接丢弃。
 
 不在首发建设：通用可视化 DAG 编辑器、第三方执行代码、跨用户家庭共享权限系统、无限自主目标追求、自动替人经营关系、跨设备分布式调度。长期需要时按第二个真实场景驱动抽取。
 
@@ -333,7 +321,7 @@ T1/T2 是同一新实现的研发增量，不通过线上 legacy adapter 临时�
 | 结果 | 同一邮件更新、引用删除、来源查询失败：更新/撤回/标记未知，不伪造新事实 |
 | 动作 | 重复批准、改收件人、审批过期、执行超时、回执丢失：不重复执行且 unknown 可解释 |
 | 通知 | quiet hours、静音、预算、摘要、渠道超时：无变化静默，不重复发送 |
-| 数据转换 | 全量旧表 fixture、部分配置失败、重复启动、FK/数量/关键状态：原子且可恢复 |
+| 数据初始化 | 旧实验数据／配置不阻塞启动、事务失败重试、重复启动不清空新数据、无关数据保留 |
 | HTTP/UI | 真实鉴权+lazy bundle、跨主体访问、旧 API 404、客户端深链接：入口一致 |
 | 生活试点 | 无项目/Task 也能运行，阶段完成不终止长期委托，允许休息/跳过 |
 
@@ -341,7 +329,7 @@ T1/T2 是同一新实现的研发增量，不通过线上 legacy adapter 临时�
 
 ### 13.2 运行观测
 
-结构化日志统一记录 activationId、intentId、runId、effectId、correlationId、phase 和有限原因码，不记录敏感正文/凭据。看板覆盖事件延迟、待执行深度、租约过期、Run 成本、Effect unknown、通知重复率和转换失败。
+结构化日志统一记录 activationId、intentId、runId、effectId、correlationId、phase 和有限原因码，不记录敏感正文/凭据。看板覆盖事件延迟、待执行深度、租约过期、Run 成本、Effect unknown、通知重复率和初始化失败。
 
 每次不执行/不通知都有可查询理由，例如 empty_input、no_relevant_change、stale_source、needs_permission、paused、budget_exceeded、quiet_hours；不用模型自由文本代替状态码。
 
@@ -351,7 +339,7 @@ T1/T2 是同一新实现的研发增量，不通过线上 legacy adapter 临时�
 
 采用信号与已验证价值分开：打开、点赞、导出本身不是充分证据。首发通过访谈/明确反馈验证准备成果是否实际使用、动作是否真正完成、判断和返工成本是否降低；敏感生活内容不进入默认遥测。
 
-上线门槛是用户能说清楚“它持续替我管哪件事、做到哪里、给了什么帮助、怎么停”，且数据转换、权限和幂等测试全部通过。具体转化率与 WSVR 目标在试点建立基线后制定，不凭空承诺百分比。
+上线门槛是用户能说清楚“它持续替我管哪件事、做到哪里、给了什么帮助、怎么停”，且初始化、权限和幂等测试全部通过。具体转化率与 WSVR 目标在试点建立基线后制定，不凭空承诺百分比。
 
 ## 14. 实施启动检查表
 
@@ -359,7 +347,7 @@ T1/T2 是同一新实现的研发增量，不通过线上 legacy adapter 临时�
 - [ ] 完成旧 API/客户端/表/后台 worker 的穷尽引用清单。
 - [ ] 审核当前 Connector 多账号权限接口，落实到 ExecutionEnvelope。
 - [ ] 确定首个 Effect 的自动授权边界；未批准的写能力默认关闭。
-- [ ] 实现并演练一次性转换、失败恢复及外部动作对账。
+- [ ] 实现并演练旧实验数据清理、旧配置忽略和重复启动。
 - [ ] 冻结 schema/API 合约，再开始 T1 纵向实现。
 
-实际删除和生产数据转换在 T2 同批切换中完成，验收以本方案的必删清单为准。研发阶段的隔离 schema 和测试不表示生产链路已经完成切换。
+旧运行时及其表结构在 T2 同批删除，验收以本方案的必删清单为准。研发阶段的隔离 schema 和测试不表示生产链路已经完成切换。

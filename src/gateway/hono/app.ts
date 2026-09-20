@@ -378,7 +378,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     taskRateLimitMiddleware,
     xopcCloudPollRateLimitMiddleware,
     channelRateLimitMiddleware,
-    scenes: config.scenes,
+    scenes: config.scenes ?? service.sceneAccess?.services,
   });
 
   const prewarm = prewarmStaticUiCache();

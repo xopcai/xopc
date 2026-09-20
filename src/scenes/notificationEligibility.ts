@@ -28,6 +28,8 @@ export function sceneNotificationEligibility(db: DatabaseSync, result: Notificat
     if (row.snoozed_until === null) return { action: 'cancel', reason: 'invalid_snooze' };
     if (Number(row.snoozed_until) > now) return { action: 'defer', until: Number(row.snoozed_until) };
   } else if (row.status !== 'unread') return { action: 'cancel', reason: 'result_unavailable' };
+  const health = db.prepare('SELECT reason, retry_at FROM scene_source_health WHERE activation_id = ?').get(row.activation_id);
+  if (health?.reason) return { action: 'defer', until: Math.max(now + 60_000, Number(health.retry_at ?? 0)) };
   return { action: 'eligible', activationId: String(row.activation_id), presentationId: String(row.id),
     revision: Number(row.notification_revision), kind: String(row.kind) };
 }

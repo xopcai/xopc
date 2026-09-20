@@ -101,10 +101,6 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
     tabs: ['settingsDevices', 'settingsTunnel', 'settingsShares'],
   },
   {
-    id: 'automation',
-    tabs: ['settingsHeartbeat'],
-  },
-  {
     id: 'system',
     tabs: ['settingsGateway', 'settingsRuntimes', 'settingsImports', 'sessions', 'logs'],
   },

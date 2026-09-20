@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import webPush from 'web-push';
+import { mkdtempSync, rmSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,7 +15,6 @@ import { SceneMailContextProvider } from '../../../scenes/mailContext.js';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest, upsertKnowledgeSourceItems } from '../../../storage/sqlite/index.js';
 import { upsertConnectorInstallation, upsertConnectorConnection } from '../../../storage/sqlite/connector-repository.js';
 import { startKnowledgeSyncRun, finishKnowledgeSyncRun } from '../../../storage/sqlite/knowledge-repository.js';
-import { runSceneCutover } from '../../../storage/sqlite/migrations/scenes/cutover.js';
 import { getSqliteDatabase } from '../../../storage/sqlite/transaction.js';
 import { createBrowserSession } from '../../../storage/sqlite/browser-session-repository.js';
 import { auth } from '../../hono/middleware/auth.js';
@@ -24,7 +24,7 @@ import { registerAuthenticatedLazyRouteFallback, resetLazyRouteBundlesForTests }
 import { GatewaySceneHost } from '../host.js';
 import { GatewaySceneMailContext } from '../mailContext.js';
 
-describe('Gateway scene host on a converted production database', () => {
+describe('Gateway scene host on a normally initialized database', () => {
   let directory: string;
   let db: DatabaseSync;
   let host: GatewaySceneHost;
@@ -65,9 +65,6 @@ describe('Gateway scene host on a converted production database', () => {
       metadata: { workspaceId: directory, connectionId: connection.id }, sensitivity: 'personal', retentionClass: 'bounded',
       synthesisPipeline: 'connected_knowledge', synthesisStatus: 'pending' }]).items[0].id;
     sync();
-    const configPath = join(directory, 'config.json'); writeFileSync(configPath, '{}');
-    expect(makeHost).toThrow('conversion');
-    await runSceneCutover({ db, configPath, backupRoot: directory, owners: [principal()], mailAccounts: [], checklists: [] });
     host = makeHost();
     resetLazyRouteBundlesForTests();
     const pass = async (_c, next) => { await next(); };
@@ -176,6 +173,29 @@ describe('Gateway scene host on a converted production database', () => {
     await expect(host.tick()).rejects.toThrow('stopped');
   });
 
+  it.each(['send', 'revoked', 'viewing'])('rechecks durable browser delivery before %s', async (mode) => {
+    const send = vi.spyOn(webPush, 'sendNotification').mockResolvedValue({ statusCode: 201, body: '', headers: {} });
+    try {
+      host.http.browser.prepare();
+      host.http.browser.register(principal(), { endpoint: 'https://fcm.googleapis.com/send/host-test', expirationTime: null, language: 'en',
+        keys: { auth: Buffer.alloc(16, 1).toString('base64url'), p256dh: Buffer.alloc(65, 2).toString('base64url') } });
+      const activation = await host.http.application.start(principal(), input(), 'browser');
+      host.http.application.check(principal(), activation.id, 'browser-check'); await host.tick();
+      const presentation = host.http.repository.listInbox(principal())[0];
+      expect(db.prepare('SELECT status FROM notification_dispatches').get()?.status).toBe('pending');
+      if (mode === 'revoked') db.exec('UPDATE connector_accounts SET enabled = 0');
+      if (mode === 'viewing') host.http.preferences.recordPresence(principal(), { clientId: 'tab', surface: 'web', presentationId: presentation.id, visible: true }, now);
+      host.start();
+      await vi.waitFor(() => expect(db.prepare('SELECT status FROM notification_dispatches').get()?.status).toBe(mode === 'send' ? 'accepted' : 'cancelled'));
+      expect(send).toHaveBeenCalledTimes(mode === 'send' ? 1 : 0);
+      if (mode === 'send') expect(JSON.parse(send.mock.calls[0][1] as string).route).toContain(`/scenes/${activation.id}?result=${presentation.id}`);
+      await host.stop();
+      host = makeHost(); host.start();
+      await new Promise(resolve => setTimeout(resolve, 120));
+      expect(send).toHaveBeenCalledTimes(mode === 'send' ? 1 : 0);
+    } finally { await host.stop(); send.mockRestore(); }
+  });
+
   it('honors pause and quiet hours while retaining a result for the page', async () => {
     const preferences = new ScenePreferenceService(db);
     preferences.update(principal(), { expectedRevision: 0, timezone: 'UTC', quietStartHour: 0, quietEndHour: 8 });
@@ -233,18 +253,52 @@ describe('Gateway scene host on a converted production database', () => {
     const message = (id = 'message', content = 'New live reply') => ({ id, threadId: 'thread', internalDate: String(now),
       labelIds: ['INBOX'], payload: { mimeType: 'text/plain', body: { data: Buffer.from(content).toString('base64url') } } });
     const response = (messages = [message()], nextPageToken?: string) => ({ decision: 'allowed',
-      result: { successful: true, data: { messages, ...(nextPageToken ? { nextPageToken } : {}) } } });
+      result: { data: { messages, ...(nextPageToken ? { nextPageToken } : {}) }, error: null } });
     beforeEach(async () => {
       await host.stop();
       fetchThread.mockReset().mockImplementation(async () => response());
       host = new GatewaySceneHost(db, { principal: principal(), config: () => ({} as Config), executor: { execute }, publish,
         mail: new GatewaySceneMailContext(db, () => now, { executeWithPolicy: fetchThread }), clock: () => now, intervalMs: 100 });
-      db.exec('DELETE FROM knowledge_sync_runs');
+      db.exec('DELETE FROM knowledge_sync_runs; DELETE FROM knowledge_source_items');
+      db.prepare('INSERT INTO scene_mail_sources VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .run(sourceId, principal().ownerId, directory, accountId, 'thread', 'Subject', 'Sender', now);
     });
     const check = async () => {
       const activation = await host.http.application.start(principal(), input(), 'live');
       host.http.application.check(principal(), activation.id, 'check'); await host.tick();
     };
+
+    it('searches and delegates a fresh mailbox without knowledge learning', async () => {
+      db.exec('DELETE FROM scene_mail_sources');
+      const discovery = host.http.mailDiscovery!;
+      expect(discovery.listAccounts(principal())).toHaveLength(1);
+      const sources = await discovery.searchSources(principal(), { accountId, query: 'review' }, new AbortController().signal);
+      expect(sources).toHaveLength(1);
+      sourceId = sources[0].id;
+      expect(db.prepare('SELECT count(*) AS n FROM knowledge_source_items').get()?.n).toBe(0);
+      expect(fetchThread.mock.calls[0][0]).toMatchObject({ action: { actionId: 'GMAIL_FETCH_EMAILS', scope: 'read' } });
+      await check();
+      expect(execute).toHaveBeenCalledOnce();
+      const activation = host.http.repository.listActivations(principal())[0];
+      db.exec("UPDATE connector_accounts SET enabled = 0");
+      expect(host.http.mail.authorizedAccounts(activation)).toEqual([]);
+      await expect(discovery.searchSources(principal(), { accountId, query: 'review' }, new AbortController().signal)).rejects.toThrow('not available');
+    });
+
+    it('accepts explicit success and rejects provider failure even when data is present', async () => {
+      db.exec('DELETE FROM scene_mail_sources');
+      fetchThread.mockResolvedValueOnce({ decision: 'allowed', result: { ...response().result, successful: true } });
+      await expect(host.http.mailDiscovery!.searchSources(principal(), { accountId, query: 'review' }, new AbortController().signal)).resolves.toHaveLength(1);
+      fetchThread.mockResolvedValueOnce({ decision: 'allowed', result: { ...response().result, successful: false } });
+      await expect(host.http.mailDiscovery!.searchSources(principal(), { accountId, query: 'review' }, new AbortController().signal)).rejects.toThrow();
+    });
+
+    it('does not retain search metadata when access is revoked in flight', async () => {
+      db.exec('DELETE FROM scene_mail_sources');
+      fetchThread.mockImplementationOnce(async () => { db.exec('UPDATE connector_accounts SET enabled = 0'); return response(); });
+      await expect(host.http.mailDiscovery!.searchSources(principal(), { accountId, query: 'review' }, new AbortController().signal)).rejects.toThrow('authorization changed');
+      expect(db.prepare('SELECT count(*) AS n FROM scene_mail_sources').get()?.n).toBe(0);
+    });
 
     it('reads the delegated account and thread twice without mailbox sync, learning or mail writes', async () => {
       await check();
@@ -255,7 +309,7 @@ describe('Gateway scene host on a converted production database', () => {
       expect(publish).toHaveBeenCalledOnce();
       expect(db.prepare('SELECT count(*) AS n FROM knowledge_sync_runs').get()?.n).toBe(0);
       expect(db.prepare('SELECT count(*) AS n FROM connector_learning_jobs').get()?.n).toBe(0);
-      expect(db.prepare('SELECT count(*) AS n FROM knowledge_source_items').get()?.n).toBe(1);
+      expect(db.prepare('SELECT count(*) AS n FROM knowledge_source_items').get()?.n).toBe(0);
     });
 
     it('reads every bounded page and excludes drafts from model context', async () => {

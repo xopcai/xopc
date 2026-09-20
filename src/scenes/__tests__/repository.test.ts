@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { SceneRepository } from '../repository.js';
-import { installSceneCutoverSchema } from '../../storage/sqlite/migrations/scenes/schema.js';
+import { installSceneStorage } from '../../storage/sqlite/scenes-schema.js';
 import { sceneNotificationEligibility } from '../notificationEligibility.js';
 import { createSceneNotificationOutbox } from '../notificationPublication.js';
 import { ScenePreferenceService } from '../preferences.js';
@@ -32,7 +32,7 @@ describe('durable scene repository', () => {
     directory = mkdtempSync(join(tmpdir(), 'xopc-scenes-test-'));
     db = new DatabaseSync(join(directory, 'scenes.db'));
     db.exec('PRAGMA foreign_keys = ON');
-    installSceneCutoverSchema(db);
+    installSceneStorage(db);
 
     repository = new SceneRepository(db);
     repository.installTemplate(manifest);
@@ -169,8 +169,8 @@ describe('durable scene repository', () => {
     ('suppresses only current, same-owner viewing presence: %s %s', (owner, expiresAt, expectedPublications) => {
       accept(); repository.finishReadOnlyRun(repository.claimNext('worker', 1000)!, outcome, 1001);
       const subjectId = String(db.prepare('SELECT id FROM scene_presentations').get()!.id);
-      db.prepare('INSERT INTO notification_presence VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-        .run(owner, principal.workspaceId, 'client', 'web', expiresAt, subjectId, 1, null);
+      db.prepare('INSERT INTO notification_presence VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(owner, principal.workspaceId, 'client', 'web', expiresAt, subjectId, 1);
       let published = 0;
       createSceneNotificationOutbox(db, () => { published++; return { action: 'settle' }; }, () => 1001).drainOne();
       expect(published).toBe(expectedPublications);

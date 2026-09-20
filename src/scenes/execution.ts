@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-import { intersectPermissions, sceneContentHash, type SceneActivation, type ScenePermission, type SceneTemplate } from './contracts.js';
+import { intersectPermissions, sceneContentHash, type SceneModelUsage, type SceneActivation, type ScenePermission, type SceneTemplate } from './contracts.js';
 import { SceneRepository } from './repository.js';
-import { SceneSourceNotReady } from './readiness.js';
+import { sceneSourceFailureReason, SceneSourceNotReady } from './readiness.js';
 
 export const readOnlyResultSchema = z.strictObject({
   kind: z.enum(['no_change', 'observation', 'artifact', 'decision']),
@@ -31,7 +31,7 @@ export interface SceneContextProvider {
 }
 
 export interface SceneReadOnlyExecutor {
-  execute(input: { template: SceneTemplate; goal: string; evidence: SceneEvidence[]; signal: AbortSignal }): Promise<unknown>;
+  execute(input: { template: SceneTemplate; goal: string; evidence: SceneEvidence[]; signal: AbortSignal; onUsage?: (usage: SceneModelUsage) => void }): Promise<unknown>;
 }
 
 class SceneExecutionRejected extends Error {
@@ -69,10 +69,6 @@ export class SceneExecutionService {
     if (!runInput) return 'discarded';
     const { activation, subjectId, accountId, notBefore } = runInput;
     const template = this.repository.getTemplate(activation.templateKey, activation.templateVersion);
-    if (template.availability === 'history_only') {
-      this.repository.failRun(claim, this.clock(), 'template_unavailable');
-      return 'failed';
-    }
     if (!this.repository.renewLease(claim, this.clock(), template.execution.limits.timeoutSeconds * 1000 + 5000)) return 'discarded';
     const controller = new AbortController();
     const abort = () => controller.abort(outerSignal?.reason);
@@ -92,17 +88,30 @@ export class SceneExecutionService {
     };
     const readContext = async () => {
       assertCurrent();
-      const granted = await this.authorize(activation);
+      let granted: ScenePermission;
+      try { granted = await this.authorize(activation); }
+      catch (error) {
+        if (template.contextProviders.includes('mail')) this.repository.recordSourceHealth(activation, sceneSourceFailureReason(error), this.clock(), this.clock() + 60_000);
+        throw error;
+      }
       assertCurrent();
       const permissions = intersectPermissions(granted, activation.permissions, {
         accountIds: accountId === undefined ? activation.permissions.accountIds : [accountId], contextProviders: template.contextProviders, effectHandlers: [],
       });
       const evidence: SceneEvidence[] = [];
       for (const providerId of template.contextProviders) {
-        if (!permissions.contextProviders.includes(providerId)) throw new SceneExecutionRejected('needs_permission');
+        if (!permissions.contextProviders.includes(providerId)) {
+          if (providerId === 'mail') this.repository.recordSourceHealth(activation, 'needs_permission', this.clock(), this.clock() + 60_000);
+          throw new SceneExecutionRejected('needs_permission');
+        }
         const provider = this.providers.find((item) => item.id === providerId);
         if (!provider) throw new SceneExecutionRejected('provider_unavailable');
-        const items = await provider.read({ activation, subjectId, permissions, notBefore, signal: controller.signal });
+        let items: SceneEvidence[];
+        try { items = await provider.read({ activation, subjectId, permissions, notBefore, signal: controller.signal }); }
+        catch (error) {
+          if (providerId === 'mail' && !outerSignal?.aborted) this.repository.recordSourceHealth(activation, sceneSourceFailureReason(error), this.clock(), this.clock() + 60_000);
+          throw error;
+        }
         assertCurrent();
         if (providerId === 'mail' && items.some((item) => item.accountId === undefined)) throw new SceneExecutionRejected('missing_account_identity');
         if (items.some((item) => !evidenceAllowed(item, activation, permissions, this.clock()))) throw new SceneExecutionRejected('unauthorized_or_stale_evidence');
@@ -112,20 +121,29 @@ export class SceneExecutionService {
       if (new Set(evidence.map((item) => item.id)).size !== evidence.length) throw new SceneExecutionRejected('duplicate_evidence');
       evidence.sort((left, right) => left.id.localeCompare(right.id));
       const fingerprint = sceneContentHash(evidence.map(({ freshUntil: _freshUntil, ...item }) => item));
+      if (template.contextProviders.includes('mail')) this.repository.recordSourceHealth(activation, null, this.clock());
       return { evidence, fingerprint, permissions };
     };
     const execute = async (): Promise<'completed' | 'discarded' | 'deferred' | 'failed'> => {
       const snapshot = await readContext();
       if (!this.repository.saveSnapshot(claim, snapshot.fingerprint, snapshot.evidence.map((item) => item.id), this.clock())) return 'discarded';
+      if (this.repository.reuseUnchangedResult(claim, snapshot.fingerprint, this.clock(), true)) {
+        const current = await readContext();
+        assertCurrent();
+        if (current.fingerprint !== snapshot.fingerprint || sceneContentHash(current.permissions) !== sceneContentHash(snapshot.permissions)) throw new SceneExecutionRejected('source_changed');
+        if (this.repository.reuseUnchangedResult(claim, snapshot.fingerprint, this.clock())) return 'completed';
+      }
       if (snapshot.evidence.length > 0 && !this.repository.reserveModelCall(claim, this.clock())) {
         const now = this.clock();
         return this.repository.deferRun(claim, now, 'daily_budget', (Math.floor(now / 86_400_000) + 1) * 86_400_000);
       }
       const raw = snapshot.evidence.length === 0
         ? { kind: 'no_change', summary: '', evidenceIds: [] }
-        : await this.executor.execute({ template, goal: activation.goal, evidence: snapshot.evidence, signal: controller.signal });
+        : await this.executor.execute({ template, goal: activation.goal, evidence: snapshot.evidence, signal: controller.signal,
+          onUsage: usage => { assertCurrent(); this.repository.recordModelUsage(claim, usage, this.clock()); } });
       assertCurrent();
       const result = readOnlyResultSchema.parse(raw);
+      if (!template.allowedOutcomeKinds.includes(result.kind)) throw new SceneExecutionRejected('invalid_model_result');
       if (result.evidenceIds.some((id) => !snapshot.evidence.some((item) => item.id === id))) throw new SceneExecutionRejected('unknown_evidence');
       const current = await readContext();
       assertCurrent();
@@ -138,7 +156,7 @@ export class SceneExecutionService {
       if (!controller.signal.aborted && error instanceof SceneSourceNotReady) {
         return this.repository.deferRun(claim, this.clock(), 'source_not_ready', this.clock() + 60_000);
       }
-      this.repository.failRun(claim, this.clock(), controller.signal.aborted ? 'execution_aborted' : error instanceof SceneExecutionRejected ? error.reason : 'execution_failed');
+      this.repository.failRun(claim, this.clock(), controller.signal.aborted ? 'execution_aborted' : error instanceof SceneExecutionRejected ? error.reason : error instanceof z.ZodError || error instanceof SyntaxError ? 'invalid_model_result' : 'execution_failed');
       return 'failed';
     } finally {
       clearTimeout(timeout);

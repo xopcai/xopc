@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { installNotificationLedgerSchema } from '../../storage/sqlite/migrations/scenes/schema.js';
+import { installNotificationLedgerSchema } from '../../storage/sqlite/scenes-schema.js';
 import { NotificationResultOutbox } from '../resultOutbox.js';
 import { NotificationDispatcher } from '../dispatch.js';
 

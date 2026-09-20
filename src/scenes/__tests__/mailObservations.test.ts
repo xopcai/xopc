@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SceneMailObservationService } from '../mailObservations.js';
 import { SceneRepository } from '../repository.js';
 import { ScenePreferenceService } from '../preferences.js';
-import { installSceneCutoverSchema } from '../../storage/sqlite/migrations/scenes/schema.js';
+import { installSceneStorage } from '../../storage/sqlite/scenes-schema.js';
 import { mailFollowUpTemplate } from '../templates.js';
 import { SceneExecutionService } from '../execution.js';
 
@@ -23,7 +23,7 @@ describe('mail change observations', () => {
     read.mockReset().mockResolvedValue([evidence]);
     db = new DatabaseSync(':memory:');
     db.exec('PRAGMA foreign_keys = ON');
-    installSceneCutoverSchema(db);
+    installSceneStorage(db);
 
     repository = new SceneRepository(db);
     repository.installTemplate(mailFollowUpTemplate);
@@ -35,6 +35,20 @@ describe('mail change observations', () => {
     service = new SceneMailObservationService(repository, { id: 'mail', read }, async () => permissions, () => 2000);
   });
   afterEach(() => db.close());
+
+  it('advances past an unresponsive thread and rejects its late evidence', async () => {
+    vi.useFakeTimers();
+    let finish!: (value: typeof evidence[]) => void;
+    read.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const progress = vi.fn();
+    const pending = service.scan(new AbortController().signal, '', progress);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(await pending).toMatchObject({ unavailable: 1 });
+    expect(progress).toHaveBeenCalledWith(itemId);
+    finish([evidence]); await Promise.resolve();
+    expect(db.prepare('SELECT observed_fingerprint FROM scene_work_items WHERE id = ?').get(itemId)?.observed_fingerprint).toBeNull();
+    vi.useRealTimers();
+  });
 
   it('establishes a silent baseline and emits once per later change', async () => {
     expect((await scan()).changed).toBe(0);

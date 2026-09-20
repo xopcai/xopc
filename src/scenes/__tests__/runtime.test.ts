@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SceneExecutionService } from '../execution.js';
 import { SceneRepository } from '../repository.js';
-import { installSceneCutoverSchema } from '../../storage/sqlite/migrations/scenes/schema.js';
+import { installSceneStorage } from '../../storage/sqlite/scenes-schema.js';
 import { SceneRuntime } from '../runtime.js';
 import { SceneApplicationService } from '../service.js';
 import { familyPlanTemplate } from '../templates.js';
@@ -25,7 +25,7 @@ describe('single-Gateway scene runtime', () => {
     now = Date.parse('2026-09-20T09:59:00Z');
     db = new DatabaseSync(':memory:');
     db.exec('PRAGMA foreign_keys = ON');
-    installSceneCutoverSchema(db);
+    installSceneStorage(db);
 
     repository = new SceneRepository(db);
     repository.installTemplate(familyPlanTemplate);

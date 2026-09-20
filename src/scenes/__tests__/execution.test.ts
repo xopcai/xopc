@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SceneExecutionService, type SceneContextProvider, type SceneEvidence } from '../execution.js';
 import { SceneRepository } from '../repository.js';
-import { installSceneCutoverSchema } from '../../storage/sqlite/migrations/scenes/schema.js';
+import { installSceneStorage } from '../../storage/sqlite/scenes-schema.js';
 import { mailFollowUpTemplate } from '../templates.js';
 import { SceneSourceNotReady } from '../readiness.js';
 
@@ -21,13 +21,20 @@ describe('scene read-only execution', () => {
   const execute = vi.fn(async () => result);
   const service = () => new SceneExecutionService(repository, [{ id: 'mail', read }], { execute }, authorize, () => 1001);
 
+  it('rejects an outcome kind outside the template with an actionable reason', async () => {
+    execute.mockResolvedValueOnce({ ...result, kind: 'observation' });
+    await service().runNext('worker');
+    expect(db.prepare('SELECT status, reason FROM scene_runs').get()).toMatchObject({ status: 'failed', reason: 'invalid_model_result' });
+    expect(db.prepare('SELECT count(*) AS n FROM scene_outcomes').get()?.n).toBe(0);
+  });
+
   beforeEach(() => {
     read.mockReset().mockResolvedValue([evidence]);
     authorize.mockReset().mockResolvedValue(permissions);
     execute.mockReset().mockResolvedValue(result);
     db = new DatabaseSync(':memory:');
     db.exec('PRAGMA foreign_keys = ON');
-    installSceneCutoverSchema(db);
+    installSceneStorage(db);
 
     repository = new SceneRepository(db);
     repository.installTemplate(mailFollowUpTemplate);

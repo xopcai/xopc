@@ -31,7 +31,6 @@ export const sceneTemplateSchema = z.strictObject({
   title: z.string().trim().min(1).max(120),
   description: z.string().trim().min(1).max(2000),
   goalMode: z.enum(['finite', 'ongoing']),
-  availability: z.enum(['available', 'history_only']).optional(),
   contextProviders: uniqueIds,
   triggers: z.array(z.discriminatedUnion('type', [
     z.strictObject({ id: identifier, type: z.literal('manual') }),
@@ -74,6 +73,7 @@ export type ActivationInput = z.infer<typeof activationInputSchema>;
 export interface SceneActivation extends ActivationInput, ScenePrincipal {
   id: string;
   status: ActivationStatus;
+  setupMissing?: string[];
   revision: number;
 }
 
@@ -119,3 +119,5 @@ export function canTransitionActivation(from: ActivationStatus, to: ActivationSt
   };
   return transitions[from].includes(to);
 }
+
+export type SceneModelUsage = { provider: string; model: string; inputTokens: number; outputTokens: number; totalTokens: number; estimatedCost: number };

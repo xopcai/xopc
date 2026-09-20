@@ -10,7 +10,7 @@ type Schedule = { weekdays: number[]; hour: number; minute: number; timeZone: st
 type Cursor = { triggerKey: string; revision: number; nextDueAt: number; schedule: Schedule };
 const field = 'min-h-11 w-full rounded-md border border-edge bg-surface-panel px-3 py-2 text-sm text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent';
 
-export function ScheduleEditor({ activation, zh, onDirty }: { activation: SceneActivation; zh: boolean; onDirty: (dirty: boolean) => void }) {
+export function ScheduleEditor({ activation, zh, onDirty, onChanged }: { activation: SceneActivation; zh: boolean; onDirty: (dirty: boolean) => void; onChanged?: () => void }) {
   const path = `/activations/${activation.id}/schedules`;
   const schedules = useSWR<{ schedules: Cursor[] }>(path, sceneGet);
   const template = useSWR<{ template: SceneTemplate }>(`/templates/${activation.templateKey}/versions/${activation.templateVersion}`, sceneGet);
@@ -31,7 +31,7 @@ export function ScheduleEditor({ activation, zh, onDirty }: { activation: SceneA
       setError(undefined);
       try {
         await sceneWrite(`${path}/${encodeURIComponent(trigger.id)}`, 'PATCH', { expectedRevision: editing.cursor?.revision ?? 0, schedule });
-        setEditing(null); onDirty(false); await schedules.mutate();
+        setEditing(null); onDirty(false); await schedules.mutate(); onChanged?.();
       } catch (reason) { setError(reason); throw reason; }
     }} /> : <Button disabled={activation.status !== 'active'} onClick={() => { setError(undefined); setEditing({ cursor }); onDirty(true); }}>{cursor ? (zh ? '修改时间' : 'Edit schedule') : (zh ? '设置时间' : 'Set schedule')}</Button>}
     <p className="text-xs text-fg-muted">{zh ? '没有值得关注的新变化时保持安静。暂停场景会停止定时检查。' : 'Stays quiet when there is no useful change. Pause the scene to stop scheduled checks.'}</p>

@@ -1,3 +1,4 @@
+import type { SceneModelUsage } from './contracts.js';
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 
@@ -46,7 +47,7 @@ export class SceneConflictError extends Error {}
 export class SceneNotFoundError extends Error {}
 export class SceneInputError extends Error {}
 
-/** The caller supplies the database; production wiring is installed at cutover only. */
+/** The caller supplies the database; storage is initialized by the normal database upgrade. */
 export class SceneRepository {
   constructor(private readonly db: DatabaseSync) {}
 
@@ -85,8 +86,7 @@ export class SceneRepository {
 
   listTemplates(): SceneTemplate[] {
     return (this.db.prepare('SELECT manifest_json FROM scene_template_versions ORDER BY template_key, version').all() as Row[])
-      .map((row) => sceneTemplateSchema.parse(JSON.parse(String(row.manifest_json))))
-      .filter((template) => template.availability !== 'history_only');
+      .map((row) => sceneTemplateSchema.parse(JSON.parse(String(row.manifest_json))));
   }
 
   listRuns(principal: ScenePrincipal, activationId: string, limit = 50, afterId = '') {
@@ -94,31 +94,10 @@ export class SceneRepository {
     if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error('Invalid scene list limit');
     const cursor = afterId ? this.db.prepare('SELECT created_at FROM scene_runs WHERE id = ? AND activation_id = ?').get(afterId, activationId) : undefined;
     if (afterId && !cursor) throw new SceneNotFoundError('Scene run cursor not found');
-    return this.db.prepare(`SELECT id, activation_id AS activationId, origin, status, attempt, reason, created_at AS createdAt, retry_at AS retryAt
+    return this.db.prepare(`SELECT id, activation_id AS activationId, status, attempt, reason, created_at AS createdAt, retry_at AS retryAt
       FROM scene_runs WHERE activation_id = ? AND (? IS NULL OR created_at < ? OR (created_at = ? AND id < ?))
       ORDER BY created_at DESC, id DESC LIMIT ?`).all(activationId, cursor?.created_at ?? null,
       cursor?.created_at ?? null, cursor?.created_at ?? null, afterId, limit);
-  }
-
-  /** Private imported instructions are readable only through their owning activation. */
-  readImportedContext(principal: ScenePrincipal, activationId: string, limit = 20, beforeRevision?: number) {
-    this.getActivation(principal, activationId);
-    if (!Number.isInteger(limit) || limit < 1 || limit > 50 || (beforeRevision !== undefined
-      && (!Number.isSafeInteger(beforeRevision) || beforeRevision < 1))) throw new SceneInputError('Invalid instruction history page');
-    const rows = this.db.prepare(`SELECT id, revision, status, content, created_at FROM scene_instruction_revisions
-      WHERE activation_id = ? AND (? IS NULL OR revision < ?) ORDER BY revision DESC LIMIT ?`)
-      .all(activationId, beforeRevision ?? null, beforeRevision ?? null, limit + 1);
-    const checklist = this.db.prepare('SELECT content, prompt, enabled FROM scene_checklist_imports WHERE activation_id = ?').get(activationId);
-    const details = this.db.prepare('SELECT active_instruction_id FROM scene_activation_details WHERE activation_id = ?').get(activationId);
-    return {
-      instructions: rows.slice(0, limit).map((row) => ({ id: String(row.id), revision: Number(row.revision),
-        status: String(row.status), content: String(row.content), createdAt: Number(row.created_at),
-        wasActive: row.id === details?.active_instruction_id })),
-      nextRevision: rows.length > limit ? Number(rows[limit - 1].revision) : null,
-      checklist: checklist ? { content: checklist.content === null ? null : String(checklist.content),
-        prompt: checklist.prompt === null ? null : String(checklist.prompt),
-        wasEnabled: checklist.enabled === null ? null : Boolean(checklist.enabled) } : null,
-    };
   }
 
   createActivation(principal: ScenePrincipal, value: unknown, requestId?: string): SceneActivation {
@@ -159,12 +138,56 @@ export class SceneRepository {
     const row = this.db.prepare('SELECT * FROM scene_activations WHERE id = ? AND owner_id = ? AND workspace_id = ?')
       .get(id, principal.ownerId, principal.workspaceId) as Row | undefined;
     if (!row) throw new SceneNotFoundError('Scene activation not found');
+    const providers = this.getTemplate(String(row.template_key), String(row.template_version)).contextProviders;
+    const setupMissing: string[] = [];
+    if (providers.includes('user_notes')) {
+      const notes = this.db.prepare('SELECT content, valid_until FROM scene_notes WHERE activation_id = ?').get(id);
+      if (!notes || !String(notes.content).trim() || (notes.valid_until !== null && Number(notes.valid_until) <= Date.now())) setupMissing.push('notes');
+      if (!this.db.prepare('SELECT 1 FROM scene_schedule_cursors WHERE activation_id = ?').get(id)) setupMissing.push('schedule');
+    }
+    if (providers.includes('mail') && !this.db.prepare("SELECT 1 FROM scene_work_items WHERE activation_id = ? AND status = 'watching'").get(id)) setupMissing.push('deadline');
     return {
+      setupMissing,
       id: String(row.id), ...principal,
       templateKey: String(row.template_key), templateVersion: String(row.template_version), goal: String(row.goal),
       scope: JSON.parse(String(row.scope_json)), permissions: JSON.parse(String(row.permissions_json)),
       status: row.status as ActivationStatus, revision: Number(row.revision),
     };
+  }
+
+  recordSourceHealth(activation: SceneActivation, reason: string | null, now: number, retryAt: number | null = null) {
+    const current = this.db.prepare("SELECT 1 FROM scene_activations WHERE id = ? AND revision = ? AND status = 'active'").get(activation.id, activation.revision);
+    if (!current) return;
+    this.db.prepare(`INSERT INTO scene_source_health VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(activation_id) DO UPDATE SET last_attempt_at = excluded.last_attempt_at,
+      last_success_at = COALESCE(excluded.last_success_at, scene_source_health.last_success_at),
+      reason = excluded.reason, consecutive_failures = CASE WHEN excluded.reason IS NULL THEN 0 ELSE scene_source_health.consecutive_failures + 1 END,
+      retry_at = excluded.retry_at`).run(activation.id, now, reason === null ? now : null, reason, reason === null ? 0 : 1, retryAt);
+  }
+
+  getSourceHealth(activationId: string) {
+    return this.db.prepare(`SELECT last_attempt_at AS lastAttemptAt, last_success_at AS lastSuccessAt,
+      reason, consecutive_failures AS consecutiveFailures, retry_at AS retryAt FROM scene_source_health WHERE activation_id = ?`).get(activationId) ?? null;
+  }
+
+  reuseUnchangedResult(claim: SceneRunClaim, hash: string, now: number, inspectOnly = false): boolean {
+    return this.transaction(() => {
+      if (!this.isCurrentClaim(claim, now)) return false;
+      const previous = this.db.prepare(`SELECT p.id FROM scene_presentations p
+        JOIN scene_outcomes o ON o.id = p.outcome_id JOIN scene_runs r ON r.id = o.run_id
+        JOIN scene_context_snapshots s ON s.run_id = r.id AND s.lease_epoch = r.lease_epoch
+        JOIN scene_trigger_intents i ON i.id = r.intent_id JOIN scene_events e ON e.id = i.event_id
+        JOIN scene_trigger_intents ci ON ci.id = ? JOIN scene_events ce ON ce.id = ci.event_id
+        WHERE r.activation_id = ? AND r.activation_revision = ? AND s.content_hash = ?
+        AND ce.event_type IN ('manual.check', 'scene.manual.check') AND e.subject_id = ce.subject_id AND e.account_id IS ce.account_id
+        AND p.status <> 'withdrawn' AND p.withdrawn_at IS NULL AND (p.expires_at IS NULL OR p.expires_at > ?)
+        LIMIT 1`).get(claim.intentId, claim.activationId, claim.activationRevision, hash, now);
+      if (!previous) return false;
+      if (inspectOnly) return true;
+      this.db.prepare("UPDATE scene_runs SET status = 'skipped', reason = 'unchanged_result', lease_owner = NULL, lease_until = NULL WHERE id = ?").run(claim.id);
+      this.db.prepare("UPDATE scene_trigger_intents SET status = 'resolved' WHERE id = ?").run(claim.intentId);
+      return true;
+    });
   }
 
   /** Configuration edits require a fresh preflight before any execution resumes. */
@@ -254,6 +277,12 @@ export class SceneRepository {
   }
 
   /** Internal worker scan; identity comes from persisted ownership, never an event payload. */
+  recordModelUsage(claim: SceneRunClaim, usage: SceneModelUsage, now: number): void {
+    if (!this.isCurrentClaim(claim, now)) return;
+    this.db.prepare(`INSERT OR IGNORE INTO scene_model_usage VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(claim.id, claim.leaseEpoch, usage.provider, usage.model, usage.inputTokens, usage.outputTokens, usage.totalTokens, usage.estimatedCost, now);
+  }
+
   listMailObservationItems(afterId = '', now = Date.now()): Array<{ principal: ScenePrincipal; item: SceneWorkItem }> {
     const rows = this.db.prepare(`SELECT w.*, a.owner_id, a.workspace_id FROM scene_work_items w
       JOIN scene_activations a ON a.id = w.activation_id
@@ -368,9 +397,6 @@ export class SceneRepository {
       const activation = this.getActivation(principal, id);
       if (activation.revision !== revision || !canTransitionActivation(activation.status, status)) {
         throw new SceneConflictError('Scene activation changed or transition is invalid');
-      }
-      if (status === 'active' && this.getTemplate(activation.templateKey, activation.templateVersion).availability === 'history_only') {
-        throw new SceneInputError('Historical scene capabilities are unavailable');
       }
       this.db.prepare('UPDATE scene_activations SET status = ?, revision = revision + 1 WHERE id = ?').run(status, id);
       this.db.prepare("UPDATE scene_trigger_intents SET status = 'cancelled' WHERE activation_id = ? AND status IN ('pending', 'claimed')").run(id);
@@ -621,7 +647,7 @@ export class SceneRepository {
     });
   }
 
-  listInbox(principal: ScenePrincipal, limit = 50, afterId = '', activationId: string | null = null): Array<{ id: string; activationId: string; outcomeId: string; content: unknown; status: string }> {
+  listInbox(principal: ScenePrincipal, limit = 50, afterId = '', activationId: string | null = null) {
     this.assertPrincipal(principal);
     const now = Date.now();
     if (activationId !== null) this.getActivation(principal, activationId);
@@ -641,12 +667,12 @@ export class SceneRepository {
       AND (? IS NULL OR p.created_at < ? OR (p.created_at = ? AND p.id < ?))
       ORDER BY p.created_at DESC, p.id DESC LIMIT ?`)
       .all(principal.ownerId, principal.workspaceId, activationId, activationId, now, now, cursor?.created_at ?? null, cursor?.created_at ?? null, cursor?.created_at ?? null, afterId, limit) as Row[];
-    return rows.map((row) => ({ id: String(row.id), activationId: String(row.activation_id), outcomeId: String(row.outcome_id), content: JSON.parse(String(row.content_json)), status: String(row.status) }));
+    return rows.map((row) => this.getPresentation(principal, String(row.id)));
   }
 
   getPresentation(principal: ScenePrincipal, id: string) {
     this.assertPrincipal(principal);
-    const row = this.db.prepare(`SELECT p.*, o.id AS outcome_id, o.content_json, r.activation_id
+    const row = this.db.prepare(`SELECT p.*, o.id AS outcome_id, o.content_json, r.activation_id, r.intent_id
       FROM scene_presentations p JOIN scene_outcomes o ON o.id = p.outcome_id
       JOIN scene_runs r ON r.id = o.run_id JOIN scene_activations a ON a.id = r.activation_id
       WHERE p.id = ? AND a.owner_id = ? AND a.workspace_id = ? AND p.withdrawn_at IS NULL AND p.status <> 'withdrawn'`)
@@ -656,7 +682,15 @@ export class SceneRepository {
     const actionable = (row.status === 'unread' || row.status === 'read'
       || (row.status === 'snoozed' && row.snoozed_until !== null && Number(row.snoozed_until) <= now))
       && (row.expires_at === null || Number(row.expires_at) > now);
-    return { id: String(row.id), activationId: String(row.activation_id), outcomeId: String(row.outcome_id),
+    const source = this.db.prepare(`SELECT m.subject, m.sender, m.thread_id FROM scene_trigger_intents i
+      JOIN scene_events e ON e.id = i.event_id JOIN scene_mail_sources m ON m.id = e.subject_id
+      AND m.owner_id = e.owner_id AND m.workspace_id = e.workspace_id AND m.account_id = e.account_id WHERE i.id = ?`).get(row.intent_id);
+    const providers = this.getActivation(principal, String(row.activation_id)).permissions.contextProviders;
+    const sources = source ? [{ kind: 'mail', title: String(source.subject), sender: String(source.sender),
+      href: `https://mail.google.com/mail/#all/${encodeURIComponent(String(source.thread_id))}` }]
+      : providers.includes('user_notes') ? [{ kind: 'notes', title: '', sender: '', href: `#/scenes/${row.activation_id}` }] : [];
+    return { createdAt: Number(row.created_at), sources, sourceHealth: this.getSourceHealth(String(row.activation_id)),
+      id: String(row.id), activationId: String(row.activation_id), outcomeId: String(row.outcome_id),
       content: JSON.parse(String(row.content_json)) as unknown, status: String(row.status), readOnly: !actionable };
   }
 

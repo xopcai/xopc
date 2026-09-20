@@ -31,11 +31,11 @@ describe('lazy route bundles', () => {
   });
 
   it('maps scene resource families without capturing similarly named routes', () => {
-    for (const path of ['/api/scenes/templates', '/api/scenes/templates/mail/versions/1.0.0', '/api/scenes/preflight', '/api/scenes/sources/mail',
+    for (const path of ['/api/scenes/diagnostics', '/api/scenes/preferences', '/api/scenes/presence', '/api/scenes/browser/prepare', '/api/scenes/browser/subscriptions', '/api/scenes/browser/subscriptions/id', '/api/scenes/sources/mail/accounts', '/api/scenes/sources/mail/search', '/api/scenes/templates', '/api/scenes/templates/mail/versions/1.0.0', '/api/scenes/preflight', '/api/scenes/sources/mail',
       '/api/scenes/activations', '/api/scenes/activations/id', '/api/scenes/activations/id/checks', '/api/scenes/activations/id/runs',
       '/api/scenes/activations/id/notes', '/api/scenes/activations/id/work-items', '/api/scenes/activations/id/schedules',
       '/api/scenes/activations/id/schedules/weekly', '/api/scenes/work-items/id', '/api/scenes/outcomes', '/api/scenes/presentations/id',
-      '/api/scenes/presentations/id/feedback', '/api/scenes/metrics', '/api/scenes/activations/id/imported-context', '/api/scenes/digests/id']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('scenes');
+      '/api/scenes/presentations/id/feedback', '/api/scenes/metrics', '/api/scenes/digests/id']) expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('scenes');
     for (const path of ['/api/scenes-other', '/api/scene', '/api/inbox/other']) expect(findAuthenticatedLazyRouteBundle(path)?.id).not.toBe('scenes');
   });
   it('maps connector account management without swallowing nearby paths', () => {
@@ -73,9 +73,9 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/browser-sessions')).toBeUndefined();
     expect(findAuthenticatedLazyRouteBundle('/api/browser/tab-bindings')?.id).not.toBe('browser-session');
   });
-  it('maps proactive controls and card families without swallowing neighboring inbox routes', () => {
+  it('does not load retired proactive endpoints', () => {
     for (const path of ['/api/proactive/metrics', '/api/proactive/presence', '/api/proactive/digests/id', '/api/proactive/follow-ups', '/api/proactive/follow-ups/sources', '/api/proactive/follow-ups/id', '/api/proactive/overview', '/api/proactive/delegations', '/api/proactive/subscriptions/id/check', '/api/proactive/web-push/probes', '/api/proactive/web-push/probes/id/opened', '/api/proactive/web-push/subscriptions/id/test', '/api/proactive/preferences', '/api/inbox/judgments', '/api/inbox/judgments/changes', '/api/inbox/judgments/card/actions', '/api/internal/proactive/health']) {
-      expect(findAuthenticatedLazyRouteBundle(path)?.id).toBe('proactive');
+      expect(findAuthenticatedLazyRouteBundle(path)).toBeUndefined();
     }
     expect(findAuthenticatedLazyRouteBundle('/api/inbox/other')).toBeUndefined();
     expect(findAuthenticatedLazyRouteBundle('/api/proactive-other')).toBeUndefined();

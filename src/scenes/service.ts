@@ -6,7 +6,9 @@ import type { SceneContextProvider } from './execution.js';
 import { SceneRepository } from './repository.js';
 import { sceneScheduleSchema } from './schedule.js';
 
-export class SceneSetupError extends Error {}
+export class SceneSetupError extends Error {
+  constructor(readonly missing: string[]) { super(`Scene setup is incomplete: ${missing.join(', ')}`); }
+}
 
 /** User-facing operations share one authorization boundary, independent of the UI. */
 export class SceneApplicationService {
@@ -15,6 +17,7 @@ export class SceneApplicationService {
     private readonly providers: readonly SceneContextProvider[],
     private readonly authorize: (activation: SceneActivation) => Promise<ScenePermission>,
     private readonly clock: () => number = Date.now,
+    private readonly modelReadiness: () => string[] = () => [],
   ) {}
 
   async preflight(principal: ScenePrincipal, value: unknown): Promise<{ ready: boolean; missing: string[] }> {
@@ -27,9 +30,9 @@ export class SceneApplicationService {
     const template = validateTemplate(this.repository.getTemplate(input.templateKey, input.templateVersion), {
       contextProviders: this.providers.map((provider) => provider.id), effectHandlers: [],
     });
-    if (template.availability === 'history_only') return { ready: false, missing: ['template_unavailable'] };
     const permissions = intersectPermissions(input.permissions, await this.authorize(activation));
     const missing = template.contextProviders.filter((provider) => !permissions.contextProviders.includes(provider)).map((id) => `context:${id}`);
+    missing.push(...this.modelReadiness());
     missing.push(...input.permissions.accountIds.filter((id) => !permissions.accountIds.includes(id)).map((id) => `account:${id}`));
     if (input.permissions.effectHandlers.length > 0) missing.push('read_only_execution');
     if (input.permissions.contextProviders.some((id) => !template.contextProviders.includes(id))) missing.push('unrequested_context');
@@ -41,7 +44,7 @@ export class SceneApplicationService {
   async start(principal: ScenePrincipal, value: unknown, requestId: string): Promise<SceneActivation> {
     if (!requestId.trim()) throw new Error('Scene request identity is required');
     const preflight = await this.preflight(principal, value);
-    if (!preflight.ready) throw new SceneSetupError(`Scene setup is incomplete: ${preflight.missing.join(', ')}`);
+    if (!preflight.ready) throw new SceneSetupError(preflight.missing);
     const activation = this.repository.createActivation(principal, value, requestId);
     if (activation.status !== 'needs_setup') return activation;
     return this.repository.transitionActivation(principal, activation.id, activation.revision, 'active', this.clock());
@@ -61,7 +64,7 @@ export class SceneApplicationService {
     const activation = this.repository.getActivation(principal, id);
     if (input.status === 'active') {
       const result = await this.checkReadiness(activation);
-      if (!result.ready) throw new SceneSetupError(`Scene setup is incomplete: ${result.missing.join(', ')}`);
+      if (!result.ready) throw new SceneSetupError(result.missing);
     }
     return this.repository.transitionActivation(principal, id, input.expectedRevision, input.status, this.clock());
   }

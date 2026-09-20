@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import type { TaskPriority, ProjectMonitoringPolicy, ProjectMonitoringUpdate, ProjectTaskCard, ProjectTaskDependencyEdge, TaskPhase } from '@xopcai/gateway-contract';
+import type { TaskPriority, ProjectTaskCard, ProjectTaskDependencyEdge, TaskPhase } from '@xopcai/gateway-contract';
 import { AlertCircle, ArrowRight, CalendarClock, CheckCircle2, Circle, CircleCheck, CircleDot, GitBranch, Hourglass, LayoutGrid, ListChecks, Paperclip, UserRound } from 'lucide-react';
 import { type FormEvent, type PointerEvent, type Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -24,7 +24,6 @@ import {
   type TaskBoardAction,
 } from './task-board-model';
 import { TaskDependencyGraph, type TaskDependencyGraphCopy } from './task-dependency-graph';
-import { ProjectMonitoringControl, type ProjectMonitoringCopy } from './project-monitoring-control';
 
 type BoardCopy = {
   title: string;
@@ -63,7 +62,6 @@ type BoardCopy = {
   operationalStates: Record<ProjectTaskCard['operationalState'], string>;
   views: { board: string; graph: string };
   graph: Omit<TaskDependencyGraphCopy, 'phases'>;
-  monitoring: ProjectMonitoringCopy;
 };
 
 export type CreateProjectTaskInput = {
@@ -267,17 +265,15 @@ function TaskCard({ task, returnTo, copy, busy, onAction, onDragStart, onDropBef
   );
 }
 
-export function ProjectTaskBoard({ tasks, dependencyEdges, monitoring, returnTo, copy, onAction, onReorder, onUndoMove, onDependenciesChange, onMonitoringChange, onCreate, actionBusyId, ref }: {
+export function ProjectTaskBoard({ tasks, dependencyEdges, returnTo, copy, onAction, onReorder, onUndoMove, onDependenciesChange, onCreate, actionBusyId, ref }: {
   tasks: ProjectTaskCard[];
   dependencyEdges: ProjectTaskDependencyEdge[];
-  monitoring: ProjectMonitoringPolicy;
   returnTo: string;
   copy: BoardCopy;
   onAction: (task: ProjectTaskCard, action: TaskBoardAction) => Promise<boolean>;
   onReorder: (taskId: string, beforeTaskId: string | null) => Promise<boolean>;
   onUndoMove: (taskId: string, phase: TaskPhase, beforeTaskId: string | null) => Promise<boolean>;
   onDependenciesChange: (taskId: string, dependencyTaskIds: string[]) => Promise<void>;
-  onMonitoringChange: (update: ProjectMonitoringUpdate) => Promise<void>;
   onCreate: (input: CreateProjectTaskInput) => Promise<void>;
   actionBusyId?: string | null;
   ref?: Ref<ProjectTaskBoardHandle>;
@@ -410,7 +406,6 @@ export function ProjectTaskBoard({ tasks, dependencyEdges, monitoring, returnTo,
           <p className="mt-1 text-sm leading-6 text-fg-muted">{copy.description}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <ProjectMonitoringControl policy={monitoring} copy={copy.monitoring} onSave={onMonitoringChange} />
           <div className="flex rounded-lg border border-edge bg-surface-panel p-0.5">
           <button type="button" aria-pressed={viewMode === 'board'} onClick={() => setViewMode('board')} className={cn('inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium', viewMode === 'board' ? 'bg-surface-hover text-fg' : 'text-fg-muted hover:text-fg')}>
             <LayoutGrid className="size-3.5" aria-hidden />

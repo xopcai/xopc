@@ -16,7 +16,7 @@ export function registerSceneRoutes(authenticated: Hono, deps: AuthenticatedRout
   app.onError((error, c) => {
     if (error instanceof SceneNotFoundError) return c.json({ error: 'scene_not_found' }, 404);
     if (error instanceof SceneConflictError) return c.json({ error: 'scene_changed', message: error.message }, 409);
-    if (error instanceof SceneSetupError) return c.json({ error: 'scene_needs_setup', message: error.message }, 422);
+    if (error instanceof SceneSetupError) return c.json({ error: 'scene_needs_setup', message: error.message, missing: error.missing }, 422);
     if (error instanceof z.ZodError || error instanceof SyntaxError || error instanceof SceneInputError) return c.json({ error: 'invalid_scene_input' }, 400);
     log.error({ err: error, phase: 'scene_request' }, 'Scene request failed');
     return c.json({ error: 'scene_request_failed' }, 500);
@@ -29,10 +29,31 @@ export function registerSceneRoutes(authenticated: Hono, deps: AuthenticatedRout
     ownerId: getGatewayPrincipal(c).scopes.includes('gateway.admin') ? 'local-owner' : getGatewayPrincipal(c).principalId,
     workspaceId: deps.service.currentWorkspacePath,
   });
+  app.post('/browser/prepare', deps.strictRateLimitMiddleware, (c) => c.json(deps.scenes!.browser.prepare()));
+  app.post('/browser/subscriptions', deps.strictRateLimitMiddleware, async (c) =>
+    c.json(deps.scenes!.browser.register(principal(c), await c.req.json()), 201));
+  app.delete('/browser/subscriptions/:id', deps.strictRateLimitMiddleware, (c) => {
+    deps.scenes!.browser.remove(principal(c), c.req.param('id'));
+    return c.json({ ok: true });
+  });
+  app.get('/preferences', (c) => c.json(deps.scenes!.preferences.get(principal(c))));
+  app.patch('/preferences', deps.strictRateLimitMiddleware, async (c) =>
+    c.json(deps.scenes!.preferences.update(principal(c), await c.req.json())));
+  app.post('/presence', deps.strictRateLimitMiddleware, async (c) => {
+    deps.scenes!.preferences.recordPresence(principal(c), await c.req.json());
+    return c.json({ ok: true });
+  });
   app.get('/templates', (c) => c.json({ templates: deps.scenes!.repository.listTemplates() }));
+  app.get('/diagnostics', (c) => c.json(deps.scenes!.metrics.diagnostics(principal(c))));
   app.get('/metrics', (c) => {
     const { days } = z.strictObject({ days: z.coerce.number().int().min(1).max(90).default(7) }).parse(c.req.query());
     return c.json(deps.scenes!.metrics.forUser(principal(c), days));
+  });
+  app.get('/sources/mail/accounts', (c) => c.json({ accounts: deps.scenes!.mailDiscovery?.listAccounts(principal(c)) ?? [] }));
+  app.post('/sources/mail/search', deps.strictRateLimitMiddleware, async (c) => {
+    if (!deps.scenes!.mailDiscovery) return c.json({ error: 'mail_search_unavailable' }, 503);
+    const signal = AbortSignal.any([c.req.raw.signal, AbortSignal.timeout(15_000)]);
+    return c.json({ sources: await deps.scenes!.mailDiscovery.searchSources(principal(c), await c.req.json(), signal) });
   });
   app.get('/sources/mail', (c) => {
     const { limit, afterId } = pageSchema.parse(c.req.query());
@@ -51,11 +72,6 @@ export function registerSceneRoutes(authenticated: Hono, deps: AuthenticatedRout
     return c.json({ activation: await deps.scenes!.application.start(principal(c), await c.req.json(), requestId) }, 201);
   });
   app.get('/activations/:id', (c) => c.json({ activation: deps.scenes!.repository.getActivation(principal(c), c.req.param('id')) }));
-  app.get('/activations/:id/imported-context', (c) => {
-    const { limit, beforeRevision } = z.strictObject({ limit: z.coerce.number().int().min(1).max(50).default(20),
-      beforeRevision: z.coerce.number().int().positive().optional() }).parse(c.req.query());
-    return c.json(deps.scenes!.repository.readImportedContext(principal(c), c.req.param('id'), limit, beforeRevision));
-  });
   app.patch('/activations/:id', deps.strictRateLimitMiddleware, async (c) => {
     const body = await c.req.json();
     const stateOnly = typeof body === 'object' && body !== null && Object.hasOwn(body, 'status');

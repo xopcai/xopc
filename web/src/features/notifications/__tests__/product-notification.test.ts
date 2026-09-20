@@ -38,11 +38,11 @@ describe('product notification presentation', () => {
     expect(parseProductNotification({ ...event, target: { kind: 'chat', conversationId: '' } })).toBeNull();
   });
 
-  it('opens imported scene results without replaying system notifications', () => {
-    const imported = { ...event, type: 'scene.result' as const,
-      target: { kind: 'scene_result' as const, activationId: 'scene/one', presentationId: 'card one' }, payload: { imported: true } };
-    expect(parseProductNotification(imported)).toEqual(imported);
-    expect(presentProductNotification(imported, 'en')).toMatchObject({ source: 'scene', systemAllowed: false,
+  it('opens scene page results without duplicating system notifications', () => {
+    const scene = { ...event, type: 'scene.result' as const,
+      target: { kind: 'scene_result' as const, activationId: 'scene/one', presentationId: 'card one' }, payload: { deliveryChannel: 'in_app' } };
+    expect(parseProductNotification(scene)).toEqual(scene);
+    expect(presentProductNotification(scene, 'en')).toMatchObject({ source: 'scene', systemAllowed: false,
       route: '/scenes/scene%2Fone?result=card%20one' });
   });
 

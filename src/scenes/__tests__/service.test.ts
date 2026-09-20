@@ -3,7 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SceneRepository } from '../repository.js';
-import { installSceneCutoverSchema } from '../../storage/sqlite/migrations/scenes/schema.js';
+import { installSceneStorage } from '../../storage/sqlite/scenes-schema.js';
 import { SceneApplicationService } from '../service.js';
 import { mailFollowUpTemplate } from '../templates.js';
 
@@ -22,7 +22,7 @@ describe('scene application service', () => {
     authorize.mockReset().mockResolvedValue(permissions);
     db = new DatabaseSync(':memory:');
     db.exec('PRAGMA foreign_keys = ON');
-    installSceneCutoverSchema(db);
+    installSceneStorage(db);
 
     repository = new SceneRepository(db);
     repository.installTemplate(mailFollowUpTemplate);

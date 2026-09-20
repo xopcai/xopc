@@ -1,9 +1,11 @@
+import { BrowserSubscriptionService } from '../../notifications/browserSubscriptions.js';
+import { ScenePreferenceService } from '../../scenes/preferences.js';
 import type { DatabaseSync } from 'node:sqlite';
 
 import type { ProductNotification } from '@xopcai/gateway-contract';
 
 import type { Config } from '../../config/schema.js';
-import { getDefaultModelSync, resolveModel } from '../../providers/index.js';
+import { getDefaultModelSync, isProviderConfiguredSync, resolveModel } from '../../providers/index.js';
 import { SceneAgentExecutor } from '../../scenes/agentExecutor.js';
 import type { SceneActivation, ScenePermission, ScenePrincipal } from '../../scenes/contracts.js';
 import { SceneExecutionService, type SceneReadOnlyExecutor } from '../../scenes/execution.js';
@@ -11,6 +13,7 @@ import type { SceneHttpServices } from '../../scenes/httpServices.js';
 import { SceneInboxService } from '../../scenes/inbox.js';
 import type { SceneMailContextProvider } from '../../scenes/mailContext.js';
 import { SceneMailObservationService } from '../../scenes/mailObservations.js';
+import { maintainSceneStorage } from '../../scenes/maintenance.js';
 import { SceneMetrics } from '../../scenes/metrics.js';
 import { SceneRepository } from '../../scenes/repository.js';
 import { SceneResultNotifications } from '../../scenes/resultNotifications.js';
@@ -18,20 +21,24 @@ import { SceneRuntime } from '../../scenes/runtime.js';
 import { SceneApplicationService } from '../../scenes/service.js';
 import { familyPlanTemplate, mailFollowUpTemplate } from '../../scenes/templates.js';
 import { SceneUserNotesProvider } from '../../scenes/userNotes.js';
-import { assertSceneCutoverReady } from '../../storage/sqlite/migrations/scenes/journal.js';
+import { assertSceneStorageReady } from '../../storage/sqlite/scenes-schema.js';
 import { createLogger } from '../../utils/logger.js';
+import { createSceneBrowserDispatcher } from './browserNotifications.js';
 import { GatewaySceneMailContext } from './mailContext.js';
 
 const log = createLogger('Gateway:Scenes');
 
-/** Composition root for the converted database. Never creates tables or starts an old worker. */
+/** Composition root for the initialized database. Never creates tables or starts an old worker. */
 export class GatewaySceneHost {
   readonly http: SceneHttpServices;
   private readonly runtime: SceneRuntime;
   private readonly notifications: SceneResultNotifications;
+  private readonly browserDispatcher: ReturnType<typeof createSceneBrowserDispatcher>;
   private timer?: ReturnType<typeof setInterval>;
   private active?: Promise<void>;
   private stopped = false;
+  private nextMaintenanceAt = 0;
+  private readonly clock: () => number;
 
   constructor(private readonly db: DatabaseSync, input: {
     principal: ScenePrincipal;
@@ -42,9 +49,10 @@ export class GatewaySceneHost {
     clock?: () => number;
     intervalMs?: number;
   }) {
-    assertSceneCutoverReady(db);
+    assertSceneStorageReady(db);
     if (!input.principal.ownerId.trim() || !input.principal.workspaceId.trim()) throw new Error('Scene host principal is required');
     const clock = input.clock ?? Date.now;
+    this.clock = clock;
     const repository = new SceneRepository(db);
     repository.installTemplate(mailFollowUpTemplate);
     repository.installTemplate(familyPlanTemplate);
@@ -61,11 +69,18 @@ export class GatewaySceneHost {
     };
     const grant = async (activation: SceneActivation) => authorize(activation);
     const executor = input.executor ?? new SceneAgentExecutor(() => resolveModel(getDefaultModelSync(input.config())));
-    this.http = { repository, mail, application: new SceneApplicationService(repository, providers, grant, clock),
-      inbox: new SceneInboxService(db, clock), metrics: new SceneMetrics(db, clock) };
+    this.http = { repository, mail, mailDiscovery: mail instanceof GatewaySceneMailContext ? mail : undefined, application: new SceneApplicationService(repository, providers, grant, clock, () => {
+        if (input.executor) return [];
+        try {
+          const model = resolveModel(getDefaultModelSync(input.config()));
+          return isProviderConfiguredSync(model.provider) ? [] : ['model_credentials'];
+        } catch { return ['model_configuration']; }
+      }),
+      inbox: new SceneInboxService(db, clock), browser: new BrowserSubscriptionService(db, clock), preferences: new ScenePreferenceService(db), metrics: new SceneMetrics(db, clock) };
     this.runtime = new SceneRuntime(repository, new SceneExecutionService(repository, providers, executor, grant, clock),
       new SceneMailObservationService(repository, mail, grant, clock, 60_000), clock, input.intervalMs ?? 5000);
     this.notifications = new SceneResultNotifications(db, authorize, (event) => input.publish('notification.created', event), clock);
+    this.browserDispatcher = createSceneBrowserDispatcher(db, authorize, clock);
     this.intervalMs = input.intervalMs ?? 5000;
   }
 
@@ -74,10 +89,12 @@ export class GatewaySceneHost {
   start(): void {
     if (this.stopped) throw new Error('Create a new scene host after shutdown');
     if (this.timer) return;
-    assertSceneCutoverReady(this.db);
+    assertSceneStorageReady(this.db);
     this.runtime.start();
     const poll = () => {
-      try { this.notifications.drain(); } catch (err) { log.error({ err }, 'Scene result publication failed'); }
+      try {
+        if (this.clock() >= this.nextMaintenanceAt) { maintainSceneStorage(this.db, this.clock()); this.nextMaintenanceAt = this.clock() + 3600000; }
+        this.notifications.drain(); void this.browserDispatcher.drainOne().catch(err => log.error({ err }, 'Scene browser reminder failed')); } catch (err) { log.error({ err }, 'Scene result publication failed'); }
     };
     this.timer = setInterval(poll, this.intervalMs);
     this.timer.unref();
@@ -100,6 +117,7 @@ export class GatewaySceneHost {
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
     await this.runtime.stop();
+    await this.browserDispatcher.stop();
     await this.active?.catch(() => undefined);
   }
 }

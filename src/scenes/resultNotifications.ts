@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { ProductNotification } from '@xopcai/gateway-contract';
 
+import { enqueueBrowserDispatches } from '../notifications/browserSubscriptions.js';
 import { createNotificationEvent } from '../notifications/store.js';
 import { notificationQuietUntil } from '../notifications/quietHours.js';
 import { runSqliteSavepoint } from '../storage/sqlite/transaction.js';
@@ -50,6 +51,9 @@ export class SceneResultNotifications {
         payload: { ownerId: result.ownerId, workspaceId: result.workspaceId, notificationRevision: eligible.revision,
           deliveryChannel: 'in_app' },
       } }, db);
+      if (policy.preferredChannel === 'browser') {
+        enqueueBrowserDispatches(db, result, event.notification.id, result.subjectId, eligible.revision, now);
+      }
       if (event.created) this.committed.push(event.notification);
       return { action: 'settle', reason: 'page_notification' };
     }, clock);
@@ -129,6 +133,9 @@ export class SceneResultNotifications {
           .run(id, principal.ownerId, principal.workspaceId, occurrence, now, created.notification.id);
         const insert = this.db.prepare('INSERT INTO notification_digest_members VALUES (?, ?, ?)');
         for (const member of members) insert.run(id, member.id, member.revision);
+        if (policy.preferredChannel === 'browser') {
+          enqueueBrowserDispatches(this.db, principal, created.notification.id, null, 1, now);
+        }
         return created.created ? created.notification : null;
       });
       if (event) this.publish(event);

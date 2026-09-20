@@ -45,7 +45,7 @@ export function presentProductNotification(
         ? 'understanding'
         : notification.target.kind;
   return {
-    systemAllowed: notification.payload.imported !== true && notification.payload.deliveryMode !== 'auto' && (!notification.payload.deliveryChannel || ['all', 'browser'].includes(String(notification.payload.deliveryChannel))),
+    systemAllowed: notification.payload.deliveryMode !== 'auto' && (!notification.payload.deliveryChannel || ['all', 'browser'].includes(String(notification.payload.deliveryChannel))),
     id: notification.id,
     title: localized.localizedTitle,
     body: localized.localizedBody ?? localized.localizedTitle,

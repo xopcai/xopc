@@ -62,7 +62,9 @@ export class SceneRuntime {
     });
     const scan = Promise.resolve().then(() => {
       controller.signal.throwIfAborted();
-      return this.observations.scan(controller.signal, this.observationCursor);
+      return this.observations.scan(controller.signal, this.observationCursor, id => {
+        if (!controller.signal.aborted) this.observationCursor = id;
+      });
     }).then((result) => {
       controller.signal.throwIfAborted();
       this.observationCursor = result.nextCursor ?? '';

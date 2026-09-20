@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createBrowserNotificationTransport } from '../browserTransport.js';
 import { NotificationDispatcher, type NotificationDispatch } from '../dispatch.js';
-import { installNotificationLedgerSchema } from '../../storage/sqlite/migrations/scenes/schema.js';
+import { installNotificationLedgerSchema } from '../../storage/sqlite/scenes-schema.js';
 
 describe('canonical browser notification transport', () => {
   let db: DatabaseSync;

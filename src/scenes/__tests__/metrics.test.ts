@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SceneInboxService } from '../inbox.js';
 import { SceneMetrics } from '../metrics.js';
 import { SceneRepository } from '../repository.js';
-import { installSceneCutoverSchema } from '../../storage/sqlite/migrations/scenes/schema.js';
+import { installSceneStorage } from '../../storage/sqlite/scenes-schema.js';
 import { familyPlanTemplate } from '../templates.js';
 
 describe('scene usefulness metrics and feedback evidence', () => {
@@ -20,7 +20,7 @@ describe('scene usefulness metrics and feedback evidence', () => {
     now = Date.parse('2026-09-20T10:00:00Z');
     db = new DatabaseSync(':memory:');
     db.exec('PRAGMA foreign_keys = ON');
-    installSceneCutoverSchema(db);
+    installSceneStorage(db);
 
     repository = new SceneRepository(db);
     inbox = new SceneInboxService(db, () => now);
@@ -63,17 +63,6 @@ describe('scene usefulness metrics and feedback evidence', () => {
     expect(() => inbox.feedback(principal, presentationId, { expectedRevision: 0, rating: 'useful' })).toThrow('Injected failure');
     expect(inbox.getFeedback(principal, presentationId)).toBeNull();
     expect(metrics.forUser(principal).ratedOutcomes).toBe(0);
-  });
-
-  it('excludes imported execution and feedback records from new activity metrics', () => {
-    inbox.feedback(principal, presentationId, { expectedRevision: 0, rating: 'useful' });
-    db.exec("UPDATE scene_runs SET origin = 'import'; UPDATE scene_feedback_history SET origin = 'import'");
-    expect(metrics.forUser(principal)).toMatchObject({ checks: 0, ratedOutcomes: 0, usefulOutcomes: 0 });
-  });
-
-  it.each([{ ...principal, ownerId: 'other' }, { ...principal, workspaceId: 'other' }])('isolates metrics for %j', (other) => {
-    inbox.feedback(principal, presentationId, { expectedRevision: 0, rating: 'useful' });
-    expect(metrics.forUser(other)).toMatchObject({ checks: 0, ratedOutcomes: 0, usefulOutcomes: 0 });
   });
 
   it('bounds the rolling window and does not expose invalid or future data', () => {

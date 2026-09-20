@@ -43,8 +43,8 @@ export class SceneInboxService {
             AND EXISTS (SELECT 1 FROM scene_presentations WHERE id = ? AND ${actionable})`)
           .run(input.rating, note, now, id, input.expectedRevision, id, now, now);
       if (result.changes !== 1) throw new SceneConflictError('Scene feedback changed');
-      this.db.prepare(`INSERT INTO scene_feedback_history(id, presentation_id, rating, note, revision, origin, recorded_at)
-        VALUES (?, ?, ?, ?, ?, 'user', ?)`).run(randomUUID(), id, input.rating, note, input.expectedRevision + 1, now);
+      this.db.prepare(`INSERT INTO scene_feedback_history(id, presentation_id, rating, note, revision, recorded_at)
+        VALUES (?, ?, ?, ?, ?, ?)`).run(randomUUID(), id, input.rating, note, input.expectedRevision + 1, now);
       this.db.exec('RELEASE scene_feedback_write');
       return input.expectedRevision + 1;
     } catch (error) {
