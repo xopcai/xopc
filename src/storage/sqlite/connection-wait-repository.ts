@@ -1,19 +1,51 @@
 import { randomUUID } from 'node:crypto';
-import { getConnectorAccount } from './connector-account-repository.js';
-import { getConnectorConnection } from './connector-repository.js';
 import { EventEmitter } from 'node:events';
 import type { ConnectionCheckpoint, ConnectionNeed, ConnectionWait } from '@xopcai/gateway-contract';
 
 import { createLogger } from '../../utils/logger.js';
 import { TaskRunRepository } from '../../tasks/task-run-repository.js';
 import { isXopcDatabaseOpen } from './connection.js';
+import { getConnectorAccount } from './connector-account-repository.js';
+import { getConnectorConnection } from './connector-repository.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 import { readCurrentTranscriptId } from './session-instance-repository.js';
-import { getSessionMetadata } from './session-repository.js';
 import { bumpSessionInputRevision, getSessionInputById, getSessionInputState, insertSessionInput, setSessionInputStatus, type SessionInput } from './session-input-repository.js';
 
 const log = createLogger('Connectors:Wait');
 const events = new EventEmitter();
+
+type ConnectionSessionContext = {
+  sessionType: string | null;
+  parentConversationId: string | null;
+  customData: Record<string, unknown>;
+};
+
+function getConnectionSessionContext(conversationId: string): ConnectionSessionContext | undefined {
+  const row = getSqliteDatabase().prepare(`SELECT session_type, parent_conversation_id, custom_data_json
+    FROM sessions WHERE conversation_id = ?`).get(conversationId) as {
+      session_type: string | null;
+      parent_conversation_id: string | null;
+      custom_data_json: string | null;
+    } | undefined;
+  if (!row) return undefined;
+  let customData: Record<string, unknown> = {};
+  if (row.custom_data_json) {
+    try {
+      const parsed = JSON.parse(row.custom_data_json) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        customData = parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Invalid metadata is treated as absent, matching the session row mapper.
+    }
+  }
+  return {
+    sessionType: row.session_type,
+    parentConversationId: row.parent_conversation_id,
+    customData,
+  };
+}
+
 export function onConnectionWaitChanged(listener: (conversationId: string) => void): () => void {
   events.on('changed', listener);
   return () => { events.off('changed', listener); };
@@ -146,9 +178,11 @@ export function consumeConnectionResume(input: SessionInput): boolean {
 
 export function connectionBindings(conversationId: string): ConnectionNeed[] {
   if (!isXopcDatabaseOpen()) return [];
-  let metadata = getSessionMetadata(conversationId);
-  if (metadata?.sessionType === 'workflow-subagent' && metadata.parentConversationId) metadata = getSessionMetadata(metadata.parentConversationId);
-  const workflowAccounts = metadata?.sessionType === 'workflow-run' ? metadata.customData?.connectorAccounts : undefined;
+  let sessionContext = getConnectionSessionContext(conversationId);
+  if (sessionContext?.sessionType === 'workflow-subagent' && sessionContext.parentConversationId) {
+    sessionContext = getConnectionSessionContext(sessionContext.parentConversationId);
+  }
+  const workflowAccounts = sessionContext?.sessionType === 'workflow-run' ? sessionContext.customData.connectorAccounts : undefined;
   if (workflowAccounts && typeof workflowAccounts === 'object' && !Array.isArray(workflowAccounts)) {
     return Object.entries(workflowAccounts).flatMap(([connectorId, ids]) => Array.isArray(ids) ? ids.flatMap(id => {
       if (typeof id !== 'string') return [];
