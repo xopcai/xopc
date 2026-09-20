@@ -1,8 +1,5 @@
+import type { SceneAccess } from '../../scenes/httpServices.js';
 import { randomUUID } from 'node:crypto';
-import { continueMailFollowUp, mailFollowUpSources, startMailFollowUp, updateMailFollowUp } from '../../proactive/follow-ups.js';
-import { checkDelegation, delegationOverview, startDelegation } from '../../proactive/experience.js';
-import { getCard } from '../../proactive/inbox/cards.js';
-import { updateControlledSubscription } from '../../proactive/scenarios/control.js';
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import {
@@ -54,7 +51,7 @@ import { TaskDeletionService } from '../../tasks/task-deletion-service.js';
 
 const XopcUseToolSchema = Type.Object({
   mode: Type.Union([
-    Type.Literal('proactive'),
+    Type.Literal('scene'),
     Type.Literal('project'),
     Type.Literal('automation'),
     Type.Literal('note'),
@@ -65,7 +62,7 @@ const XopcUseToolSchema = Type.Object({
   ]),
   command: Type.String({
     description:
-      'Object command. Proactive commands: list, get_card {id}, start {scenarioKey: project_delivery_risk|meeting_preparation|discussion_follow_up, projectId?: string, instructions: string}, update {id, expectedRevision, userInstructions?, enabled?, completedAt?}, check {id}. Also supports mail_sources, follow_up {sourceItemId, instructions, dueAt: ISO timestamp}, update_follow_up {id, expectedRevision, instructions?, dueAt?, status?: watching|paused|completed}, continue_card {id}. continue_card binds the current conversation and returns the exact email account; review the full draft and use connector confirmation before sending. Use proactive only for work the user explicitly delegates; inspect list first and update existing work instead of duplicating it. Supports project list/get/create/update/resolve_workspace/list_milestones/create_milestone/update_milestone/list_updates/create_update, automation list/get/create/update/delete/run/pause/resume/history, note list/get/create/append/update/preview_edit/delete, task list/get/create/update_dependencies/add_context/remove_context/command/delete, task_run list/get/cancel, local_app list/get/create/validate, and settings open.',
+      'Object command. Scene commands: templates, list, get {id}, mail_accounts, mail_search {accountId, query}, mail_sources, preflight/start {templateKey, templateVersion, goal, scope, permissions}, configure {id, expectedRevision, goal, scope, permissions}, transition {id, expectedRevision, status: paused|active|completed|archived}, check {id}, notes {id, expectedRevision, content, validUntil?}, work_item {id, subjectId, accountId, dueAt}, schedule {id, triggerKey, expectedRevision, schedule}, results {id}. Start and check accept a stable requestId for retries. Scenes prepare read-only suggestions and drafts; never send mail. Only create a scene for work explicitly delegated by the user; inspect existing scenes first. Supports project list/get/create/update/resolve_workspace/list_milestones/create_milestone/update_milestone/list_updates/create_update, automation list/get/create/update/delete/run/pause/resume/history, note list/get/create/append/update/preview_edit/delete, task list/get/create/update_dependencies/add_context/remove_context/command/delete, task_run list/get/cancel, local_app list/get/create/validate, and settings open.',
   }),
   args: Type.Optional(Type.Record(Type.String(), Type.Any())),
   dryRun: Type.Optional(Type.Boolean({
@@ -73,7 +70,7 @@ const XopcUseToolSchema = Type.Object({
   })),
 });
 
-export type XopcUseMode = 'proactive' | 'project' | 'automation' | 'note' | 'task' | 'task_run' | 'local_app' | 'settings';
+export type XopcUseMode = 'scene' | 'project' | 'automation' | 'note' | 'task' | 'task_run' | 'local_app' | 'settings';
 
 export interface XopcUseToolInput {
   mode: XopcUseMode;
@@ -88,6 +85,7 @@ export interface XopcUseToolDeps {
   getCurrentAgentId?: () => string | undefined;
   getCurrentConversationId?: () => string | undefined;
   getAutomationService?: () => AutomationService | undefined;
+  getSceneAccess?: () => SceneAccess | undefined;
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;
   getLocalAppService?: () => LocalAppService | undefined;
@@ -1310,8 +1308,8 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
             source: { kind: 'xopc_use', toolCallId },
           },
           async () =>
-            mode === 'proactive'
-              ? handleProactive(command, args, deps, dryRun)
+            mode === 'scene'
+              ? await handleScene(command, args, deps, dryRun, toolCallId)
               : mode === 'project'
               ? await handleProject(command, args, deps, dryRun)
               : mode === 'automation'
@@ -1341,27 +1339,37 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
   } as AgentTool<typeof XopcUseToolSchema, XopcUseDetails>;
 }
 
-function handleProactive(command: string, args: Record<string, unknown>, deps: XopcUseToolDeps, dryRun: boolean) {
-  const workspace = deps.getWorkspace?.();
-  if (!workspace) throw new Error('Proactive workspace is unavailable');
-  if (command === 'list') return delegationOverview(workspace);
-  if (command === 'mail_sources') return { sources: mailFollowUpSources(workspace) };
-  if (command === 'get_card') return { card: getCard(String(args.id ?? ''), workspace) };
-  if (dryRun) return { requiresConfirmation: true, command, args, scope: workspace };
-  if (command === 'follow_up') return startMailFollowUp(workspace, args);
-  if (command === 'update_follow_up') { const { id, ...patch } = args; return updateMailFollowUp(workspace, String(id ?? ''), patch); }
-  if (command === 'continue_card') {
-    const card = getCard(String(args.id ?? ''), workspace);
-    if (!card.communication || ['withdrawn', 'expired', 'resolved'].includes(card.status)) throw new Error('Open a current communication card');
-    const conversationId = deps.getCurrentConversationId?.();
-    if (!conversationId) throw new Error('A conversation is required');
-    return { card, ...continueMailFollowUp(workspace, card.communication.id, conversationId) };
+async function handleScene(command: string, args: Record<string, unknown>, deps: XopcUseToolDeps, dryRun: boolean, toolCallId: string) {
+  const access = deps.getSceneAccess?.();
+  if (!access) throw new Error('Scene service is unavailable');
+  const { services, principal } = access;
+  const { id, requestId, triggerKey, ...input } = args;
+  const activationId = typeof id === 'string' ? id : '';
+  const request = typeof requestId === 'string' && requestId.trim() ? requestId : toolCallId;
+  if (command === 'templates') return { templates: services.repository.listTemplates() };
+  if (command === 'list') return { activations: services.repository.listActivations(principal) };
+  if (command === 'get') return { activation: services.repository.getActivation(principal, activationId),
+    runs: services.repository.listRuns(principal, activationId), schedules: services.repository.listSchedules(principal, activationId) };
+  if (command === 'mail_accounts') return { accounts: services.mailDiscovery?.listAccounts(principal) ?? [] };
+  if (command === 'mail_search') {
+    if (!services.mailDiscovery) throw new Error('Mail search is unavailable');
+    if (dryRun) return { preview: true, command, input };
+    return { sources: await services.mailDiscovery.searchSources(principal, input, AbortSignal.timeout(15000)) };
   }
-  if (command === 'start') return startDelegation(workspace, args);
-  if (command === 'update') {
-    const { id, ...patch } = args;
-    return updateControlledSubscription(workspace, String(id ?? ''), patch);
+  if (command === 'read_notes') return { notes: services.repository.readNotes(principal, activationId) };
+  if (command === 'mail_sources') return { sources: services.mail.listSources(principal) };
+  if (command === 'results') return { outcomes: services.repository.listInbox(principal, 50, '', activationId || null) };
+  if (command === 'preflight' || (command === 'start' && dryRun)) return services.application.preflight(principal, input);
+  if (dryRun) {
+    services.repository.getActivation(principal, activationId);
+    return { preview: true, command, activationId, input };
   }
-  if (command === 'check') return checkDelegation(workspace, String(args.id ?? ''));
-  throw new Error('Unsupported proactive command');
+  if (command === 'start') return { activation: await services.application.start(principal, input, request) };
+  if (command === 'configure') return { activation: services.application.configure(principal, activationId, input) };
+  if (command === 'transition') return { activation: await services.application.transition(principal, activationId, input) };
+  if (command === 'check') return { intentId: services.application.check(principal, activationId, request) };
+  if (command === 'notes') return { revision: services.application.writeNotes(principal, activationId, input) };
+  if (command === 'work_item') return { workItem: services.application.createWorkItem(principal, activationId, input) };
+  if (command === 'schedule') return { revision: services.application.setSchedule(principal, activationId, String(triggerKey ?? ''), input) };
+  throw new Error('Unsupported scene command');
 }

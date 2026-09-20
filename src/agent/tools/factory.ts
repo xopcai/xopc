@@ -1,3 +1,4 @@
+import type { SceneAccess } from '../../scenes/httpServices.js';
 import { resolveEffectiveAgentConfigForAgent } from '../../config/agent-profile.js';
 /**
  * Agent Tools Factory - Creates and configures agent tools
@@ -142,6 +143,7 @@ export interface ToolFactoryDeps {
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
   /** Gateway: enables the `automation` tool. */
   getAutomationService?: () => AutomationService | undefined;
+  getSceneAccess?: () => SceneAccess | undefined;
   getBrowserAutomationService?: () => BrowserAutomationService | undefined;
   emitBrowserEvent?: (type: string, payload: unknown) => void;
   /** Gateway: enables the `xopc_use` product-object tool. */
@@ -586,6 +588,7 @@ export class AgentToolsFactory {
         ? [createBrowserAutomationTool({ getBrowserAutomationService: this.deps.getBrowserAutomationService })]
         : []),
       ...(this.deps.getAutomationService
+        || this.deps.getSceneAccess
         || this.deps.getProjectService
         || this.deps.getNotesService
         || this.deps.getLocalAppService
@@ -598,6 +601,7 @@ export class AgentToolsFactory {
               getCurrentAgentId: () => options.agentId,
               getCurrentConversationId: () => this.deps.getCurrentContext()?.conversationId,
               getAutomationService: this.deps.getAutomationService,
+              getSceneAccess: this.deps.getSceneAccess,
               getNotesService: this.deps.getNotesService,
               getProjectService: this.deps.getProjectService,
               getLocalAppService: this.deps.getLocalAppService,

@@ -21,7 +21,7 @@ export type BuiltinNavId =
   | 'builtin:skills'
   | 'builtin:connectors'
   | 'builtin:localApps'
-  | 'builtin:proactive'
+  | 'builtin:scenes'
   | 'builtin:home'
   | 'builtin:projects'
   | 'builtin:automations'
@@ -54,7 +54,7 @@ export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
   { id: 'builtin:browserAutomations', to: '/browser-automations', Icon: MonitorPlay },
   { id: 'builtin:localApps', to: '/local-apps', Icon: Box },
   { id: 'builtin:extensions', to: '/extensions', Icon: Puzzle },
-  { id: 'builtin:proactive', to: '/assistant-work', Icon: CircleDotDashed },
+  { id: 'builtin:scenes', to: '/scenes', Icon: CircleDotDashed },
 ] as const;
 
 /** Product-level destinations shown by default; advanced capabilities live under More. */

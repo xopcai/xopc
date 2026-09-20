@@ -56,11 +56,11 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
-    id: 'proactive',
-    match: (path) => startsWithAny(path, ['/api/proactive', '/api/inbox/judgments', '/api/internal/proactive']),
+    id: 'scenes',
+    match: (path) => startsWithAny(path, ['/api/scenes']),
     load: async () => {
-      const { registerProactiveRoutes } = await import('./proactive.js');
-      return { register: registerProactiveRoutes };
+      const { registerSceneRoutes } = await import('./scenes.js');
+      return { register: registerSceneRoutes };
     },
   },
   {
@@ -87,14 +87,7 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
       return { register: registerFilesRoutes };
     },
   },
-  {
-    id: 'workspace',
-    match: (path) => startsWithAny(path, ['/api/workspace']),
-    load: async () => {
-      const { registerWorkspaceRoutes } = await import('./workspace.js');
-      return { register: registerWorkspaceRoutes };
-    },
-  },
+
   {
     id: 'host-fs',
     match: (path) => startsWithAny(path, ['/api/host/fs']),
@@ -143,7 +136,6 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     match: (path) =>
       startsWithAny(path, [
         '/api/config',
-        '/api/heartbeat/trigger',
         // Secret reveal handlers live in config routes but use /api/gateway and
         // /api/tools paths; without these prefixes the extension-gateway bundle
         // matches first and returns 404 (no handler for multi-segment paths).

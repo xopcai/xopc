@@ -26,21 +26,6 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ ok: true, payload: result });
   });
 
-  authenticated.post('/api/heartbeat/trigger', strictRateLimitMiddleware, async (c) => {
-    let reason = 'manual';
-    try {
-      const body = await c.req.json();
-      if (body && typeof body === 'object' && typeof (body as { reason?: unknown }).reason === 'string') {
-        const r = (body as { reason: string }).reason.trim();
-        if (r) reason = r.slice(0, 120);
-      }
-    } catch {
-      /* empty or invalid body */
-    }
-    service.requestHeartbeatNow({ reason });
-    return c.json({ ok: true, payload: { scheduled: true } });
-  });
-
   authenticated.get('/api/config', async (c) => {
     const safeConfig = await buildSafeWebConfigPayload(service, { locale: localeFromRequest(c) });
     return c.json({ ok: true, payload: { config: safeConfig } });
@@ -108,9 +93,6 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       service.currentConfig as Config,
     );
 
-    if (body.gateway?.heartbeat !== undefined && typeof body.gateway.heartbeat === 'object') {
-      service.reloadHeartbeatFromCurrentConfig();
-    }
 
     const safeConfig = await buildSafeWebConfigPayload(service, { locale: localeFromRequest(c) });
     return c.json({ ok: true, payload: { config: safeConfig } });

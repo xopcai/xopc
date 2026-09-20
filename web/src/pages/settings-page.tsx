@@ -9,7 +9,6 @@ import {
   loadGatewaySettingsPanel,
   loadRuntimeToolsSettingsPanel,
   loadEndpointToolsManagementSettings,
-  loadHeartbeatSettingsPanel,
   loadKeyboardShortcutsSettingsPanel,
   loadAgentDefaultsSettingsPanel,
   loadRemoteAccessHub,
@@ -53,9 +52,6 @@ const GatewaySettingsPanel = lazy(() =>
 );
 const RuntimeToolsSettingsPanel = lazy(() =>
   loadRuntimeToolsSettingsPanel().then((m) => ({ default: m.RuntimeToolsSettingsPanel })),
-);
-const HeartbeatSettingsPanel = lazy(() =>
-  loadHeartbeatSettingsPanel().then((m) => ({ default: m.HeartbeatSettingsPanel })),
 );
 const RemoteAccessHub = lazy(() => loadRemoteAccessHub().then((m) => ({ default: m.RemoteAccessHub })));
 const SharesSettingsPanel = lazy(() => loadSharesSettingsPanel().then((m) => ({ default: m.SharesSettingsPanel })));
@@ -135,10 +131,6 @@ export function SettingsPage() {
 
   if (id === 'devices') {
     return renderLazySection(EndpointToolsManagementSettings);
-  }
-
-  if (id === 'heartbeat') {
-    return renderLazySection(HeartbeatSettingsPanel);
   }
 
   if (id === 'remote-access') {

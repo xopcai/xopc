@@ -261,18 +261,6 @@ html.dark .markdown-code-copy-btn:hover {
   border-radius: var(--radius-sm);
 }
 
-.markdown-body a[aria-disabled="true"] {
-  color: var(--color-fg-muted);
-  cursor: default;
-  overflow-wrap: anywhere;
-}
-
-.markdown-body a[data-xopc-link-hint]::after {
-  content: ' · ' attr(data-xopc-link-hint);
-  color: var(--color-fg-subtle);
-  font-size: 0.85em;
-}
-
 .markdown-body hr {
   height: 1px;
   background: var(--color-edge);
