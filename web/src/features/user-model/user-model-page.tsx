@@ -7,6 +7,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  CircleAlert,
   Clock3,
   Compass,
   Database,
@@ -23,7 +24,7 @@ import {
   UserRoundPen,
   X,
 } from 'lucide-react';
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -60,6 +61,7 @@ type Language = 'en' | 'zh';
 type View = 'overview' | 'understanding' | 'knowledge';
 type UnderstandingFilter = 'all' | 'explicit' | 'learned' | 'pending';
 type KnowledgeKindFilter = 'all' | KnowledgeItem['kind'];
+type RefreshFeedback = 'idle' | 'refreshing' | 'success' | 'error';
 
 function viewFromSearchParams(searchParams: URLSearchParams): View {
   const value = searchParams.get('tab');
@@ -125,6 +127,9 @@ const copy = {
     maintenanceComplete: 'Memory was last organized',
     maintenanceFailed: 'The latest memory upkeep needs attention',
     refresh: 'Refresh',
+    refreshing: 'Refreshing…',
+    refreshComplete: 'Refreshed',
+    refreshFailed: 'Refresh failed',
     aboutYouTitle: 'A view you can correct',
     aboutYouHint: 'This is working context, not a fixed profile. Every item can be corrected or retired.',
     identity: 'Who you are',
@@ -211,6 +216,9 @@ const copy = {
     maintenanceComplete: '最近一次记忆整理于',
     maintenanceFailed: '最近一次记忆整理需要处理',
     refresh: '刷新',
+    refreshing: '正在刷新…',
+    refreshComplete: '已刷新',
+    refreshFailed: '刷新失败',
     aboutYouTitle: '一份可以共同修正的理解',
     aboutYouHint: '它是协作中的工作认知，不是给你定型的档案。每一条都能修正或停止使用。',
     identity: '关于你是谁',
@@ -705,6 +713,8 @@ export function UserModelPage() {
   const [priorityOpen, setPriorityOpen] = useState(false);
   const [understandingFilter, setUnderstandingFilter] = useState<UnderstandingFilter>('all');
   const [knowledgeKindFilter, setKnowledgeKindFilter] = useState<KnowledgeKindFilter>('all');
+  const [refreshFeedback, setRefreshFeedback] = useState<RefreshFeedback>('idle');
+  const refreshResetTimer = useRef<number | undefined>(undefined);
 
   const setView = (nextView: View) => {
     if (nextView === view) return;
@@ -716,6 +726,38 @@ export function UserModelPage() {
     });
   };
 
+  const refreshUserModel = useCallback(async () => {
+    if (refreshFeedback === 'refreshing' || isValidating) return;
+    if (refreshResetTimer.current) window.clearTimeout(refreshResetTimer.current);
+    setRefreshFeedback('refreshing');
+    setActionError(undefined);
+    setActionMessage(t.refreshing);
+    try {
+      await mutate();
+      setRefreshFeedback('success');
+      setActionMessage(t.refreshComplete);
+    } catch {
+      setRefreshFeedback('error');
+      setActionMessage('');
+      setActionError(t.refreshFailed);
+    } finally {
+      refreshResetTimer.current = window.setTimeout(() => setRefreshFeedback('idle'), 1600);
+    }
+  }, [isValidating, mutate, refreshFeedback, t]);
+
+  useEffect(() => () => {
+    if (refreshResetTimer.current) window.clearTimeout(refreshResetTimer.current);
+  }, []);
+
+  const refreshBusy = isValidating || refreshFeedback === 'refreshing';
+  const refreshLabel = refreshBusy
+    ? t.refreshing
+    : refreshFeedback === 'success'
+      ? t.refreshComplete
+      : refreshFeedback === 'error'
+        ? t.refreshFailed
+        : t.refresh;
+
   useEffect(() => {
     setPageHeader({
       startExtra: null,
@@ -723,15 +765,24 @@ export function UserModelPage() {
       end: (
         <div className="flex items-center gap-2">
           <UnderstandingStatusButton />
-          <Button variant="secondary" className="h-9" disabled={isValidating} onClick={() => void mutate()}>
-            {isValidating ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="size-4" aria-hidden="true" />}
-            <span className="hidden sm:inline">{t.refresh}</span>
+          <Button
+            variant="secondary"
+            className={`size-9 p-0 ${refreshFeedback === 'success' ? 'text-success' : refreshFeedback === 'error' ? 'text-danger' : ''}`}
+            disabled={refreshBusy}
+            aria-label={refreshLabel}
+            title={refreshLabel}
+            onClick={() => void refreshUserModel()}
+          >
+            {refreshBusy ? <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              : refreshFeedback === 'success' ? <Check className="size-4" aria-hidden="true" />
+                : refreshFeedback === 'error' ? <CircleAlert className="size-4" aria-hidden="true" />
+                  : <RefreshCw className="size-4" aria-hidden="true" />}
           </Button>
         </div>
       ),
     });
     return clearPageHeader;
-  }, [clearPageHeader, isValidating, mutate, setPageHeader, t]);
+  }, [clearPageHeader, refreshBusy, refreshFeedback, refreshLabel, refreshUserModel, setPageHeader, t]);
 
   const act = async (id: string, operation: () => Promise<unknown>) => {
     setBusy(id);
@@ -948,10 +999,10 @@ export function UserModelPage() {
         ariaLabel={t.pageTitle}
         tabIdPrefix="understanding-tab"
         panelIdPrefix="understanding-panel"
-        className="border-b border-edge-subtle pb-0"
-        buttonClassName="rounded-none px-1.5 pb-3 pt-2 sm:px-3"
-        selectedClassName="bg-transparent text-fg after:absolute after:inset-x-1 after:bottom-0 after:h-0.5 after:rounded-full after:bg-accent after:content-['']"
-        unselectedClassName="text-fg-muted hover:bg-transparent hover:text-fg"
+        className="w-fit max-w-full gap-1 rounded-full bg-surface-panel p-1 shadow-surface"
+        buttonClassName="rounded-full px-3.5 py-2"
+        selectedClassName="bg-surface-active text-fg"
+        unselectedClassName="text-fg-muted hover:bg-surface-hover hover:text-fg"
       />
 
       <p role="status" className="sr-only">{actionMessage}</p>

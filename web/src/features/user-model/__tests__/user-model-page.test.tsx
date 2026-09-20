@@ -136,13 +136,25 @@ describe('UserModelPage summary navigation', () => {
     expect(priority?.className).toContain('bg-surface-panel');
   });
 
+  it('renders the primary tabs as a capsule control', () => {
+    const tabs = Array.from(container.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+    expect(tabs).toHaveLength(3);
+    expect(tabs.every((tab) => tab.className.includes('rounded-full'))).toBe(true);
+    expect(tabs.find((tab) => tab.getAttribute('aria-selected') === 'true')?.className)
+      .toContain('bg-surface-active');
+  });
+
   it('places refresh in the shell header instead of the page footer', async () => {
     const headerRefresh = container.querySelector<HTMLButtonElement>('[data-testid="header-end"] button');
-    expect(headerRefresh?.textContent).toContain('Refresh');
+    expect(headerRefresh?.textContent).toBe('');
+    expect(headerRefresh?.getAttribute('aria-label')).toBe('Refresh');
     expect(container.querySelector('footer button')).toBeNull();
 
     await act(async () => headerRefresh?.click());
     expect(mutate).toHaveBeenCalledTimes(1);
+    const refreshed = container.querySelector<HTMLButtonElement>('[data-testid="header-end"] button');
+    expect(refreshed?.getAttribute('aria-label')).toBe('Refreshed');
+    expect(refreshed?.querySelector('.lucide-check')).not.toBeNull();
   });
 
   it('pushes tab changes into browser history and restores the previous tab on back', async () => {

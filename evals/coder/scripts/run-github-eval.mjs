@@ -43,7 +43,6 @@ export function gatewayConfig(model, workspace, port, token) {
     gateway: {
       mode: 'local', bind: 'loopback', port,
       auth: { mode: 'token', token },
-      heartbeat: { enabled: false, intervalMs: 1_800_000 },
     },
     browser: { enabled: false },
     runtimeTools: { enabled: false },
