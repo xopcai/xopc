@@ -5,8 +5,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { cn } from '@/lib/cn';
 import { settingsShellPopoverZClass } from '@/lib/settings-shell-layer.utils';
 import {
+  useResolvedPopoverPortalContainer,
   useSettingsShellPopoverLayer,
-  useSettingsShellPopoverPortalContainer,
 } from '@/lib/settings-shell-layer-context';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -32,6 +32,8 @@ export function DatePicker({
   className,
   ariaLabel,
   placeholder,
+  min,
+  max,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -39,15 +41,18 @@ export function DatePicker({
   className?: string;
   ariaLabel?: string;
   placeholder?: string;
+  min?: string;
+  max?: string;
 }) {
   const language = useLocaleStore((state) => state.language);
   const locale = language === 'zh' ? 'zh-CN' : 'en';
   const selectedDate = parseDatePickerValue(value);
   const [open, setOpen] = useState(false);
+  const [triggerElement, setTriggerElement] = useState<HTMLButtonElement | null>(null);
   const [visibleMonth, setVisibleMonth] = useState(
     () => selectedDate ?? new Date(),
   );
-  const portalContainer = useSettingsShellPopoverPortalContainer();
+  const portalContainer = useResolvedPopoverPortalContainer(triggerElement);
   const layer = useSettingsShellPopoverLayer();
   const popoverZ = settingsShellPopoverZClass(layer, portalContainer !== null);
   const weekStartsOn = language === 'zh' ? 1 : 0;
@@ -86,6 +91,7 @@ export function DatePicker({
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
         <button
+          ref={setTriggerElement}
           type="button"
           disabled={disabled}
           aria-label={ariaLabel}
@@ -144,17 +150,21 @@ export function DatePicker({
               const isSelected = dayValue === selectedValue;
               const isToday = dayValue === todayValue;
               const outsideMonth = date.getMonth() !== visibleMonth.getMonth();
+              const isDisabled = Boolean((min && dayValue < min) || (max && dayValue > max));
               return (
                 <button
                   key={dayValue}
                   type="button"
                   role="gridcell"
                   aria-selected={isSelected}
+                  aria-disabled={isDisabled}
+                  disabled={isDisabled}
                   aria-label={new Intl.DateTimeFormat(locale, { dateStyle: 'full' }).format(date)}
                   className={cn(
                     'mx-auto flex size-9 items-center justify-center rounded-xl text-sm tabular-nums text-fg transition-colors',
                     'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
                     outsideMonth && 'text-fg-disabled',
+                    isDisabled && 'cursor-not-allowed opacity-35 hover:bg-transparent',
                     isToday && !isSelected && 'bg-accent-soft font-semibold text-accent-fg',
                     isSelected && 'bg-accent font-semibold text-on-accent hover:bg-accent-hover',
                   )}
@@ -176,7 +186,8 @@ export function DatePicker({
             </button>
             <button
               type="button"
-              className="rounded-lg bg-accent-soft px-2.5 py-1.5 text-xs font-medium text-accent-fg hover:bg-accent-soft/80"
+              disabled={Boolean((min && todayValue < min) || (max && todayValue > max))}
+              className="rounded-lg bg-accent-soft px-2.5 py-1.5 text-xs font-medium text-accent-fg hover:bg-accent-soft/80 disabled:pointer-events-none disabled:opacity-35"
               onClick={() => selectDate(todayValue)}
             >
               {language === 'zh' ? '今天' : 'Today'}

@@ -3,7 +3,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
@@ -50,6 +50,16 @@ vi.mock('@/features/work-discovery/understanding-status-button', () => ({
 }));
 
 import { UserModelPage } from '../user-model-page';
+
+beforeAll(() => {
+  class TestResizeObserver implements ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+
+  globalThis.ResizeObserver = TestResizeObserver;
+});
 
 function HeaderEnd() {
   const end = usePageHeaderStore((state) => state.end);
@@ -142,6 +152,51 @@ describe('UserModelPage summary navigation', () => {
     expect(tabs.every((tab) => tab.className.includes('rounded-full'))).toBe(true);
     expect(tabs.find((tab) => tab.getAttribute('aria-selected') === 'true')?.className)
       .toContain('bg-surface-active');
+  });
+
+  it('lets the user set a current focus from the empty state', async () => {
+    const setFocus = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('Set current focus'));
+    expect(setFocus).toBeDefined();
+
+    await act(async () => setFocus?.click());
+
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Set current focus');
+    expect(document.querySelector<HTMLInputElement>('input[placeholder="What matters most right now?"]'))
+      .not.toBeNull();
+    expect(document.querySelector('input[type="date"]')).toBeNull();
+    const dateTrigger = document.querySelector<HTMLButtonElement>('button[aria-label="Focus through"]');
+    expect(dateTrigger).not.toBeNull();
+
+    await act(async () => dateTrigger?.click());
+
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+    expect(dialog?.className).not.toContain('overflow-hidden');
+    expect(dialog?.querySelector('form')?.className).toContain('overflow-hidden');
+    expect(dialog?.querySelector('[role="grid"]')).not.toBeNull();
+  });
+
+  it('offers a searchable timezone picker in the profile editor', async () => {
+    const editProfile = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('Edit basics'));
+    await act(async () => editProfile?.click());
+
+    const timezone = document.querySelector<HTMLButtonElement>('button[aria-label="Timezone"]');
+    expect(timezone?.textContent).toContain('Asia/Shanghai');
+    await act(async () => timezone?.click());
+
+    const search = document.querySelector<HTMLInputElement>('input[aria-label="Search timezones…"]');
+    expect(search).not.toBeNull();
+    const scrollRegion = document.querySelector<HTMLElement>('[data-select-scroll-region]');
+    expect(scrollRegion?.className).toContain('overflow-y-auto');
+    expect(scrollRegion?.closest('.xopc-dialog-content')).not.toBeNull();
+    const newYork = Array.from(document.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.includes('America/New York'));
+    expect(newYork).toBeDefined();
+    await act(async () => newYork?.click());
+
+    expect(document.querySelector<HTMLButtonElement>('button[aria-label="Timezone"]')?.textContent)
+      .toContain('America/New_York');
   });
 
   it('places refresh in the shell header instead of the page footer', async () => {

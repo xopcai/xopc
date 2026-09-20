@@ -29,11 +29,11 @@ const rowClass = cn(
   'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium leading-5 text-fg',
   'transition-colors duration-150 ease-out',
   'hover:bg-surface-hover',
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-overlay',
 );
 
 const flyoutSurfaceClass = cn(
-  'rounded-xl border border-edge bg-surface-panel p-1 shadow-popover',
+  'overflow-hidden rounded-xl border border-edge bg-surface-overlay shadow-popover',
   'dark:border-edge',
 );
 
@@ -51,9 +51,9 @@ function OptionRow({
       type="button"
       aria-pressed={selected}
       className={cn(
-        'flex w-full items-center justify-between gap-1.5 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium leading-5 text-fg',
+        'touch-target flex w-full items-center justify-between gap-2 rounded-none px-3 py-2 text-left text-sm font-medium leading-5 text-fg',
         'transition-colors duration-150 ease-out hover:bg-surface-hover',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
         selected && 'bg-accent-soft text-accent-fg hover:bg-accent-soft',
       )}
       onClick={onSelect}
