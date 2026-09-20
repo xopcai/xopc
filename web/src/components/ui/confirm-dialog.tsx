@@ -13,6 +13,8 @@ export type ConfirmDialogProps = {
   cancelLabel: string;
   /** Red/destructive styling for the confirm action (e.g. remove/delete). */
   destructive?: boolean;
+  overlayClassName?: string;
+  contentClassName?: string;
   checkboxLabel?: string;
   checkboxChecked?: boolean;
   onCheckboxCheckedChange?: (checked: boolean) => void;
@@ -27,6 +29,8 @@ export function ConfirmDialog({
   confirmLabel,
   cancelLabel,
   destructive,
+  overlayClassName,
+  contentClassName,
   checkboxLabel,
   checkboxChecked = false,
   onCheckboxCheckedChange,
@@ -47,6 +51,7 @@ export function ConfirmDialog({
           className={cn(
             'xopc-dialog-overlay fixed inset-0 bg-scrim backdrop-blur-[1px]',
             SETTINGS_SHELL_OVERLAY_Z,
+            overlayClassName,
           )}
         />
         <Dialog.Content
@@ -54,6 +59,7 @@ export function ConfirmDialog({
             'xopc-dialog-content fixed left-1/2 top-1/2 w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2',
             SETTINGS_SHELL_CONTENT_Z,
             'rounded-2xl border border-edge bg-surface-overlay p-5 sm:p-6 shadow-popover outline-none dark:border-edge',
+            contentClassName,
           )}
         >
           <Dialog.Title className="text-base font-semibold text-fg">{title}</Dialog.Title>

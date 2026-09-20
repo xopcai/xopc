@@ -17,6 +17,7 @@ import {
   MapPin,
   MessageCircle,
   Pencil,
+  Plus,
   RefreshCw,
   Search,
   Sparkles,
@@ -24,13 +25,14 @@ import {
   UserRoundPen,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 import { PageTabs } from '@/components/ui/page-tabs';
-import { Select, SelectOption } from '@/components/ui/popover-select';
+import { PopoverSelect, Select, SelectOption, type PopoverSelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
@@ -40,6 +42,7 @@ import { MemoryActions } from './memory-actions';
 import { groupUnderstandingByDate, UnderstandingRow } from './understanding-row';
 import {
   correctAssertion,
+  createPriority,
   deleteAssertion,
   deleteKnowledge,
   detectBrowserTimezone,
@@ -85,6 +88,8 @@ const copy = {
     pronouns: 'Pronouns (optional)',
     pronounsPlaceholder: 'For example: she/her, he/him, they/them',
     timezone: 'Timezone',
+    timezoneSearch: 'Search timezones…',
+    timezoneNoMatch: 'No matching timezone',
     locale: 'Language / locale',
     useDeviceTimezone: 'Use this device',
     notProvided: 'Not provided',
@@ -103,6 +108,7 @@ const copy = {
     prioritySourceGoal: 'From a goal you confirmed',
     prioritySourceWork: 'From your current work',
     editPriority: 'Edit focus',
+    addPriority: 'Set current focus',
     priorityTitle: 'Current focus',
     priorityTitlePlaceholder: 'What matters most right now?',
     priorityOutcome: 'What a good outcome looks like',
@@ -174,6 +180,8 @@ const copy = {
     pronouns: '代词（可选）',
     pronounsPlaceholder: '例如：she/her、he/him、they/them',
     timezone: '时区',
+    timezoneSearch: '搜索时区…',
+    timezoneNoMatch: '没有匹配的时区',
     locale: '语言 / 地区',
     useDeviceTimezone: '使用本机时区',
     notProvided: '未填写',
@@ -192,6 +200,7 @@ const copy = {
     prioritySourceGoal: '来自你确认的当前目标',
     prioritySourceWork: '来自当前工作上下文',
     editPriority: '编辑',
+    addPriority: '设置当前关注',
     priorityTitle: '当前关注',
     priorityTitlePlaceholder: '现在最重要的是什么？',
     priorityOutcome: '期待结果',
@@ -268,6 +277,37 @@ const knowledgeKindOrder = [
   'episode',
   'note',
 ] as const;
+
+const fallbackTimezones = [
+  'UTC',
+  'Africa/Cairo', 'Africa/Johannesburg',
+  'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'America/Mexico_City',
+  'America/New_York', 'America/Sao_Paulo', 'America/Toronto', 'America/Vancouver',
+  'Asia/Bangkok', 'Asia/Dubai', 'Asia/Hong_Kong', 'Asia/Jakarta', 'Asia/Kolkata',
+  'Asia/Seoul', 'Asia/Shanghai', 'Asia/Singapore', 'Asia/Taipei', 'Asia/Tokyo',
+  'Australia/Melbourne', 'Australia/Perth', 'Australia/Sydney',
+  'Europe/Amsterdam', 'Europe/Berlin', 'Europe/London', 'Europe/Madrid', 'Europe/Paris', 'Europe/Rome',
+  'Pacific/Auckland', 'Pacific/Honolulu',
+] as const;
+
+function supportedTimezones(): string[] {
+  try {
+    const values = Intl.supportedValuesOf('timeZone');
+    return [...new Set(['UTC', ...values])];
+  } catch {
+    return [...fallbackTimezones];
+  }
+}
+
+const browserTimezones = supportedTimezones();
+
+function timezoneOptions(values: string[]): PopoverSelectOption[] {
+  return values.map((timezone) => ({
+    value: timezone,
+    label: timezone.replaceAll('_', ' '),
+    group: timezone.includes('/') ? timezone.split('/')[0] : 'UTC',
+  }));
+}
 
 function formatDate(value: number | undefined, language: Language, withTime = false): string | null {
   if (!value) return null;
@@ -408,9 +448,13 @@ function ProfileDialog({
 }) {
   const t = copy[language];
   const [draft, setDraft] = useState(profile);
+  const [timezoneQuery, setTimezoneQuery] = useState('');
 
   useEffect(() => {
-    if (open) setDraft(profile);
+    if (open) {
+      setDraft(profile);
+      setTimezoneQuery('');
+    }
   }, [open, profile]);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
@@ -436,13 +480,25 @@ function ProfileDialog({
   );
   const localeOptions = ['zh-CN', 'zh-TW', 'en-US', 'en-GB', 'ja-JP'];
   if (draft.locale && !localeOptions.includes(draft.locale)) localeOptions.push(draft.locale);
+  const deviceTimezone = detectBrowserTimezone();
+  const availableTimezones = useMemo(() => (
+    [...new Set([...browserTimezones, deviceTimezone, draft.timezone].filter(Boolean))].sort()
+  ), [deviceTimezone, draft.timezone]);
+  const normalizedTimezoneQuery = timezoneQuery.trim().toLocaleLowerCase();
+  const filteredTimezoneOptions = useMemo(() => timezoneOptions(
+    availableTimezones.filter((timezone) => (
+      !normalizedTimezoneQuery
+      || timezone.toLocaleLowerCase().includes(normalizedTimezoneQuery)
+      || timezone.replaceAll('_', ' ').toLocaleLowerCase().includes(normalizedTimezoneQuery)
+    )),
+  ), [availableTimezones, normalizedTimezoneQuery]);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
-        <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] h-[min(40rem,calc(100vh-2rem))] w-[min(42rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-popover outline-none">
-          <form className="flex h-full min-h-0 flex-col" onSubmit={submit}>
+        <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] h-[min(40rem,calc(100vh-2rem))] w-[min(42rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-edge bg-surface-overlay shadow-popover outline-none">
+          <form className="flex h-full min-h-0 flex-col overflow-hidden [border-radius:inherit]" onSubmit={submit}>
             <header className="flex shrink-0 items-start justify-between gap-4 border-b border-edge px-5 py-4 sm:px-6">
               <div>
                 <Dialog.Title className="font-semibold text-fg">{t.editProfile}</Dialog.Title>
@@ -465,13 +521,24 @@ function ProfileDialog({
                 <label className="grid gap-1.5 text-sm sm:col-span-2">
                   <span className="font-medium text-fg">{t.timezone}</span>
                   <div className="flex gap-2">
-                    <input
+                    <PopoverSelect
                       value={draft.timezone}
-                      onChange={(event) => setDraft((current) => ({ ...current, timezone: event.target.value }))}
+                      options={filteredTimezoneOptions}
                       placeholder={detectBrowserTimezone()}
-                      className="h-10 min-w-0 flex-1 rounded-xl border border-edge bg-surface-base px-3 text-sm text-fg outline-none transition placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
+                      emptyLabel={t.notProvided}
+                      ariaLabel={t.timezone}
+                      selectedLabel={draft.timezone || t.notProvided}
+                      searchPlaceholder={t.timezoneSearch}
+                      searchValue={timezoneQuery}
+                      onSearchChange={setTimezoneQuery}
+                      statusMessage={filteredTimezoneOptions.length ? undefined : t.timezoneNoMatch}
+                      triggerClassName="min-w-0 flex-1 rounded-xl bg-surface-base"
+                      onChange={(timezone) => {
+                        setDraft((current) => ({ ...current, timezone }));
+                        setTimezoneQuery('');
+                      }}
                     />
-                    <Button className="shrink-0 whitespace-nowrap" onClick={() => setDraft((current) => ({ ...current, timezone: detectBrowserTimezone() }))}>{t.useDeviceTimezone}</Button>
+                    <Button className="shrink-0 whitespace-nowrap" onClick={() => setDraft((current) => ({ ...current, timezone: deviceTimezone }))}>{t.useDeviceTimezone}</Button>
                   </div>
                 </label>
               </div>
@@ -501,47 +568,48 @@ function PriorityDialog({
   onEnd,
 }: {
   open: boolean;
-  priority: PriorityWindow;
+  priority?: PriorityWindow;
   title: string;
   outcome?: string;
   language: Language;
   saving: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (input: { title: string; desiredOutcome?: string; validTo: number }) => void;
-  onEnd: () => void;
+  onEnd?: () => void;
 }) {
   const t = copy[language];
   const [draftTitle, setDraftTitle] = useState(title);
   const [draftOutcome, setDraftOutcome] = useState(outcome ?? '');
-  const [draftValidTo, setDraftValidTo] = useState(() => dateInputValue(priority.validTo));
+  const initialValidTo = dateInputValue(priority?.validTo ?? Date.now() + 7 * 86_400_000);
+  const [draftValidTo, setDraftValidTo] = useState(initialValidTo);
 
   useEffect(() => {
     if (!open) return;
     setDraftTitle(title);
     setDraftOutcome(outcome ?? '');
-    setDraftValidTo(dateInputValue(priority.validTo));
-  }, [open, outcome, priority.validTo, title]);
+    setDraftValidTo(initialValidTo);
+  }, [initialValidTo, open, outcome, title]);
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     onSave({
       title: draftTitle.trim(),
-      ...(priority.targetType === 'goal' ? { desiredOutcome: draftOutcome.trim() } : {}),
+      ...(priority?.targetType === 'goal' ? { desiredOutcome: draftOutcome.trim() } : {}),
       validTo: endOfLocalDay(draftValidTo),
     });
   };
   const valid = Boolean(draftTitle.trim() && draftValidTo
-    && (priority.targetType !== 'goal' || draftOutcome.trim()));
+    && (priority?.targetType !== 'goal' || draftOutcome.trim()));
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
-        <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] h-[min(34rem,calc(100vh-2rem))] w-[min(38rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-edge bg-surface-overlay shadow-popover outline-none">
-          <form className="flex h-full min-h-0 flex-col" onSubmit={submit}>
+        <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[90] h-[min(34rem,calc(100vh-2rem))] w-[min(38rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-edge bg-surface-overlay shadow-popover outline-none">
+          <form className="flex h-full min-h-0 flex-col overflow-hidden [border-radius:inherit]" onSubmit={submit}>
             <header className="flex shrink-0 items-start justify-between gap-4 border-b border-edge px-5 py-4 sm:px-6">
               <div>
-                <Dialog.Title className="font-semibold text-fg">{t.editPriority}</Dialog.Title>
+                <Dialog.Title className="font-semibold text-fg">{priority ? t.editPriority : t.addPriority}</Dialog.Title>
                 <Dialog.Description className="mt-1 text-xs leading-5 text-fg-muted">{t.priorityHint}</Dialog.Description>
               </div>
               <Dialog.Close asChild><Button variant="ghost" className="size-8 shrink-0 p-0" aria-label={t.cancel}><X className="size-4" /></Button></Dialog.Close>
@@ -557,7 +625,7 @@ function PriorityDialog({
                   className="h-10 w-full rounded-xl border border-edge bg-surface-base px-3 text-sm text-fg outline-none transition placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
                 />
               </label>
-              {priority.targetType === 'goal' ? (
+              {priority?.targetType === 'goal' ? (
                 <label className="grid gap-1.5 text-sm">
                   <span className="font-medium text-fg">{t.priorityOutcome}</span>
                   <textarea
@@ -570,19 +638,21 @@ function PriorityDialog({
               ) : null}
               <label className="grid gap-1.5 text-sm">
                 <span className="font-medium text-fg">{t.priorityUntil}</span>
-                <input
-                  type="date"
-                  min={dateInputValue(priority.validFrom)}
+                <DatePicker
+                  min={dateInputValue(priority?.validFrom ?? Date.now())}
                   value={draftValidTo}
-                  onChange={(event) => setDraftValidTo(event.target.value)}
-                  className="h-10 w-full rounded-xl border border-edge bg-surface-base px-3 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
+                  onChange={setDraftValidTo}
+                  ariaLabel={t.priorityUntil}
+                  className="rounded-xl border border-edge bg-surface-base hover:border-edge-strong hover:bg-surface-base"
                 />
               </label>
             </div>
             <footer className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-edge px-5 py-3 sm:px-6">
-              <Button variant="ghost" className="text-danger hover:text-danger" disabled={saving} onClick={onEnd}>
-                {saving ? <Loader2 className="size-4 animate-spin" /> : null}{saving ? t.endingPriority : t.endPriority}
-              </Button>
+              {priority && onEnd ? (
+                <Button variant="ghost" className="text-danger hover:text-danger" disabled={saving} onClick={onEnd}>
+                  {saving ? <Loader2 className="size-4 animate-spin" /> : null}{saving ? t.endingPriority : t.endPriority}
+                </Button>
+              ) : <span />}
               <div className="flex gap-2">
                 <Dialog.Close asChild><Button disabled={saving}>{t.cancel}</Button></Dialog.Close>
                 <Button type="submit" variant="primary" disabled={!valid || saving}>
@@ -841,6 +911,22 @@ export function UserModelPage() {
     }
   };
 
+  const addPriority = async (input: { title: string; validTo: number }) => {
+    setBusy('priority:create');
+    setActionError(undefined);
+    setActionMessage('');
+    try {
+      await createPriority(input);
+      await mutate();
+      setPriorityOpen(false);
+      setActionMessage(language === 'zh' ? '当前关注已设置' : 'Current focus set');
+    } catch {
+      setActionError(t.actionFailed);
+    } finally {
+      setBusy(undefined);
+    }
+  };
+
   const endPriority = async (priority: PriorityWindow) => {
     setBusy(`priority:${priority.id}`);
     setActionError(undefined);
@@ -1072,6 +1158,9 @@ export function UserModelPage() {
                   <div className="flex flex-1 flex-col items-center justify-center gap-2 py-6 text-center text-sm text-fg-muted">
                     <BriefcaseBusiness className="size-5 text-fg-subtle" />
                     <span>{t.noPriority}</span>
+                    <Button variant="primary" className="mt-2" onClick={() => setPriorityOpen(true)}>
+                      <Plus className="size-4" aria-hidden="true" />{t.addPriority}
+                    </Button>
                   </div>
                 )}
                 {otherGoals.length ? (
@@ -1288,19 +1377,19 @@ export function UserModelPage() {
         onOpenChange={setProfileOpen}
         onSave={(next) => void saveProfile(next)}
       />
-      {primaryPriority && primaryTitle ? (
-        <PriorityDialog
-          open={priorityOpen}
-          priority={primaryPriority}
-          title={primaryTitle}
-          outcome={primaryGoal?.desiredOutcome}
-          language={language}
-          saving={busy === `priority:${primaryPriority.id}`}
-          onOpenChange={setPriorityOpen}
-          onSave={(input) => void savePriority(primaryPriority, input)}
-          onEnd={() => void endPriority(primaryPriority)}
-        />
-      ) : null}
+      <PriorityDialog
+        open={priorityOpen}
+        priority={primaryPriority}
+        title={primaryTitle ?? ''}
+        outcome={primaryGoal?.desiredOutcome}
+        language={language}
+        saving={busy === (primaryPriority ? `priority:${primaryPriority.id}` : 'priority:create')}
+        onOpenChange={setPriorityOpen}
+        onSave={(input) => primaryPriority
+          ? void savePriority(primaryPriority, input)
+          : void addPriority(input)}
+        onEnd={primaryPriority ? () => void endPriority(primaryPriority) : undefined}
+      />
     </div>
   );
 }

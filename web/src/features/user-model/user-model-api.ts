@@ -202,6 +202,22 @@ export function updatePriority(id: string, input: {
   });
 }
 
+export function createPriority(input: { title: string; validTo: number }): Promise<unknown> {
+  const validFrom = Date.now();
+  return fetchJson(apiUrl('/api/user-model/priorities'), {
+    method: 'POST',
+    body: JSON.stringify({
+      targetType: 'topic',
+      targetId: input.title.trim(),
+      rank: 'primary',
+      urgency: 1,
+      scope: { type: 'global' },
+      validFrom,
+      validTo: input.validTo,
+    }),
+  });
+}
+
 export function setRuleStatus(id: string, status: CollaborationRule['status']): Promise<unknown> {
   return fetchJson(apiUrl(`/api/user-model/rules/${encodeURIComponent(id)}/status`), {
     method: 'PATCH', body: JSON.stringify({ status }),

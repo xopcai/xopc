@@ -48,3 +48,9 @@ export function useSettingsShellPopoverLayer(): SettingsShellPopoverLayer {
 export function useSettingsShellPopoverPortalContainer(): HTMLElement | null {
   return useContext(SettingsShellLayerContext).portalContainer;
 }
+
+/** Keep interactive popovers inside the nearest modal so dialog scroll-lock treats them as in-scope. */
+export function useResolvedPopoverPortalContainer(triggerElement: Element | null): HTMLElement | null {
+  const configuredPortalContainer = useSettingsShellPopoverPortalContainer();
+  return triggerElement?.closest<HTMLElement>('[role="dialog"]') ?? configuredPortalContainer;
+}

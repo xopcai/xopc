@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { ArrowLeft, CalendarDays, CirclePause, Inbox, RefreshCw, Settings2, Sparkles, X } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Link, useBeforeUnload, useBlocker, useLocation, useMatch, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { Link, useLocation, useMatch, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import useSWR, { SWRConfig } from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { usePageHeaderStore } from '@/stores/page-header-store';
 
 import { sceneErrorText, sceneGet, sceneWrite, type SceneActivation, type SceneMetricsReport, type SceneNotes, type SceneOutcome, type SceneRun, type SceneTemplate } from './api';
 import { SceneDiagnostics } from './scene-diagnostics';
+import { SceneDirtyGuard } from './scene-dirty-guard';
 import { SceneControlsDialog } from './scene-controls';
 import { OutcomeCard } from './outcome-card';
 import { ScheduleEditor } from './schedule-editor';
@@ -45,16 +46,6 @@ function Failure({ error, retry }: { error: unknown; retry?: () => void }) {
   </section>;
   return <div role="alert" className="space-y-3 rounded-xl border border-edge p-4"><p className="text-sm text-danger">{sceneErrorText(error, zh)}</p>
     {retry && <Button onClick={retry}><RefreshCw size={16} aria-hidden="true" />{zh ? '重新加载' : 'Reload'}</Button>}</div>;
-}
-
-function useDirtyGuard(dirty: boolean, zh: boolean) {
-  useBeforeUnload(useCallback((event) => { if (dirty) { event.preventDefault(); event.returnValue = ''; } }, [dirty]));
-  const blocker = useBlocker(dirty);
-  useEffect(() => {
-    if (blocker.state !== 'blocked') return;
-    if (window.confirm(zh ? '有未保存的内容。放弃更改并离开？' : 'You have unsaved changes. Discard them and leave?')) blocker.proceed();
-    else blocker.reset();
-  }, [blocker, zh]);
 }
 
 export function ScenesPage() {
@@ -221,7 +212,7 @@ function CreateScene({ templateKey }: { templateKey: string }) {
   const [saved, setSaved] = useState(false);
   const key = useRef({ content: '', id: '' });
   const savedId = useRef('');
-  useDirtyGuard(Boolean(goal || subjectId || confirmed) && !saved, zh);
+  const dirty = Boolean(goal || subjectId || confirmed) && !saved;
   useEffect(() => { if (saved) navigate(savedId.current, { replace: true }); }, [saved, navigate]);
   if (template.error) return <Failure error={template.error} retry={() => void template.mutate()} />;
   if (!template.data) return <Loading />;
@@ -238,7 +229,7 @@ function CreateScene({ templateKey }: { templateKey: string }) {
       savedId.current = `/scenes/${result.activation.id}`; setSaved(true);
     } catch (reason) { setError(reason); } finally { setBusy(false); }
   };
-  return <><header><h1 className="text-wrap text-xl font-semibold text-fg">{manifest.title}</h1><p className="mt-2 text-sm text-fg-muted">{manifest.description}</p></header>
+  return <><SceneDirtyGuard dirty={dirty} zh={zh} /><header><h1 className="text-wrap text-xl font-semibold text-fg">{manifest.title}</h1><p className="mt-2 text-sm text-fg-muted">{manifest.description}</p></header>
     <form onSubmit={(event) => void start(event)} className={`${panelClass} space-y-5`}>
       <fieldset disabled={busy || saved} className="space-y-5">
       <label className={labelClass}>{zh ? '希望它持续帮你做好什么？' : 'What should it keep helping you with?'}<textarea required maxLength={4000} rows={3} value={goal} onChange={(event) => setGoal(event.target.value)} className={fieldClass} autoComplete="off" /></label>
@@ -267,7 +258,7 @@ function SceneDetail({ id }: { id: string }) {
   const [notesDirty, setNotesDirty] = useState(false);
   const [scheduleDirty, setScheduleDirty] = useState(false);
   const [goalDirty, setGoalDirty] = useState(false);
-  useDirtyGuard(notesDirty || scheduleDirty || goalDirty, zh);
+  const dirty = notesDirty || scheduleDirty || goalDirty;
   const act = async (check: boolean) => {
     if (!detail.data) return;
     setBusy(true); setError(undefined); setQueued(false);
@@ -283,7 +274,7 @@ function SceneDetail({ id }: { id: string }) {
   if (detail.error) return <Failure error={detail.error} retry={() => void detail.mutate()} />;
   if (!detail.data) return <Loading />;
   const activation = detail.data.activation;
-  return <><header className="space-y-3"><h1 className="break-words text-wrap text-xl font-semibold text-fg">{activation.goal}</h1>
+  return <><SceneDirtyGuard dirty={dirty} zh={zh} /><header className="space-y-3"><h1 className="break-words text-wrap text-xl font-semibold text-fg">{activation.goal}</h1>
     <p className="text-sm text-fg-muted">{statusText(activation.status === 'active' && activation.setupMissing?.length ? 'needs_setup' : activation.status, zh)}</p>
     <p className="text-sm text-fg-muted">{(zh ? '只准备建议和成果，不自动发送或写入外部系统。' : 'Prepares suggestions and results. Does not send or write to external systems.')}</p>
     <div className="flex flex-wrap gap-3"><Button variant="primary" disabled={busy || activation.status !== 'active'} onClick={() => void act(true)}>{busy ? (zh ? '处理中…' : 'Working…') : (zh ? '现在检查' : 'Check now')}</Button>
