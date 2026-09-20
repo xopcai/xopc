@@ -51,6 +51,7 @@ const SessionsPage = lazy(() => loadSessionsPage().then((m) => ({ default: m.Ses
 const AutomationsPage = lazy(() => loadAutomationsPage().then((m) => ({ default: m.AutomationsPage })));
 const BrowserAutomationsPage = lazy(() => loadBrowserAutomationsPage().then((m) => ({ default: m.BrowserAutomationsPage })));
 const ProactivePage = lazy(() => import('@/features/proactive/proactive-page').then((m) => ({ default: m.ProactivePage })));
+const ScenesPage = lazy(() => import('@/features/scenes/scenes-page').then((m) => ({ default: m.ScenesPage })));
 const HomePage = lazy(() => loadHomePage().then((m) => ({ default: m.HomePage })));
 const TaskDetailPage = lazy(() => loadTaskDetailPage().then((m) => ({ default: m.TaskDetailPage })));
 const ProjectsPage = lazy(() => loadProjectsPage().then((m) => ({ default: m.ProjectsPage })));
@@ -213,6 +214,9 @@ const router = createHashRouter([
         path: 'assistant-work',
         element: <Suspense fallback={<SecondaryRouteFallback />}><ProactivePage /></Suspense>,
       },
+      ...['scenes', 'scenes/new/:templateKey', 'scenes/:activationId'].map((path) => ({
+        path, element: <Suspense fallback={<SecondaryRouteFallback />}><ScenesPage /></Suspense>,
+      })),
       { path: 'proactive', element: <LegacyProactiveRedirect /> },
       {
         path: 'automations',
