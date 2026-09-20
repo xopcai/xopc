@@ -5,7 +5,7 @@ const { fetchJson } = vi.hoisted(() => ({ fetchJson: vi.fn() }));
 vi.mock('@/lib/fetch', () => ({ fetchJson }));
 vi.mock('@/lib/url', () => ({ apiUrl: (path: string) => path }));
 
-import { fetchUserProfile } from '../user-model-api';
+import { fetchUserProfile, updatePriority } from '../user-model-api';
 
 describe('user-model-api', () => {
   beforeEach(() => fetchJson.mockReset());
@@ -34,5 +34,24 @@ describe('user-model-api', () => {
       suggestedCallName: 'Mic',
     });
     expect(fetchJson).toHaveBeenCalledWith('/api/user-model');
+  });
+
+  it('updates the current priority through its typed endpoint', async () => {
+    fetchJson.mockResolvedValue({ priority: { id: 'priority-1' } });
+
+    await updatePriority('priority-1', {
+      title: 'Ship the release',
+      desiredOutcome: 'The release is live.',
+      validTo: 42,
+    });
+
+    expect(fetchJson).toHaveBeenCalledWith('/api/user-model/priorities/priority-1', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        title: 'Ship the release',
+        desiredOutcome: 'The release is live.',
+        validTo: 42,
+      }),
+    });
   });
 });

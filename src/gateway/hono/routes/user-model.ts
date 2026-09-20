@@ -13,6 +13,7 @@ import {
 } from '../../../knowledge-memory/index.js';
 import { listMemoryMaintenanceRuns } from '../../../memory-maintenance/index.js';
 import { listUnderstandingSourceGrants } from '../../../user-context/sources/repository.js';
+import { runSqliteWriteTransaction } from '../../../storage/sqlite/transaction.js';
 import {
   createCollaborationRule,
   getCollaborationRule,
@@ -37,6 +38,8 @@ import {
   getUserProfileSnapshot,
   setAssertionStatus,
   setUserGoalStatus,
+  updatePriorityWindow,
+  updateUserGoal,
   type AssertionCandidate,
   type AssertionStatus,
   type UserGoalStatus,
@@ -392,6 +395,59 @@ export function registerUserModelRoutes(authenticated: Hono, deps: Authenticated
         ...(typeof input.reviewAt === 'number' ? { reviewAt: input.reviewAt } : {}),
         ...(typeof input.declaredImportance === 'number' ? { declaredImportance: input.declaredImportance } : {}),
       }) }, 201);
+    } catch (error) {
+      return c.json({ error: errorMessage(error) }, 400);
+    }
+  });
+  authenticated.patch('/api/user-model/priorities/:id', write, async (c) => {
+    const input = await body(c);
+    const priority = listPriorityWindows().find((item) => item.id === c.req.param('id'));
+    if (!priority) return c.json({ error: 'Priority not found' }, 404);
+    if (!input) return c.json({ error: 'A priority patch is required' }, 400);
+    const editableFields = ['title', 'desiredOutcome', 'validTo', 'status'] as const;
+    if (!editableFields.some((field) => Object.hasOwn(input, field))) {
+      return c.json({ error: 'At least one editable priority field is required' }, 400);
+    }
+    if ((Object.hasOwn(input, 'title') && typeof input.title !== 'string')
+      || (Object.hasOwn(input, 'desiredOutcome') && typeof input.desiredOutcome !== 'string')
+      || (Object.hasOwn(input, 'validTo') && typeof input.validTo !== 'number')
+      || (Object.hasOwn(input, 'status') && typeof input.status !== 'string')) {
+      return c.json({ error: 'Priority patch fields have invalid types' }, 400);
+    }
+    const title = typeof input.title === 'string' ? input.title.trim() : undefined;
+    const desiredOutcome = typeof input.desiredOutcome === 'string' ? input.desiredOutcome.trim() : undefined;
+    const validTo = typeof input.validTo === 'number' ? input.validTo : undefined;
+    const status = typeof input.status === 'string' ? input.status as typeof priority.status : undefined;
+    if (status && !['active', 'paused', 'completed', 'expired'].includes(status)) {
+      return c.json({ error: 'Invalid priority status' }, 400);
+    }
+    if (validTo !== undefined && validTo < priority.validFrom) {
+      return c.json({ error: 'Priority validTo must be after validFrom' }, 400);
+    }
+    if (title !== undefined && !title) return c.json({ error: 'Priority title is required' }, 400);
+    if (desiredOutcome !== undefined && !desiredOutcome) {
+      return c.json({ error: 'Priority outcome is required' }, 400);
+    }
+    try {
+      const result = runSqliteWriteTransaction(() => {
+        let goal;
+        if (priority.targetType === 'goal' && (title !== undefined || desiredOutcome !== undefined)) {
+          const currentGoal = listUserGoals().find((item) => item.id === priority.targetId);
+          if (!currentGoal) throw new Error('Priority goal not found');
+          goal = updateUserGoal(currentGoal.id, {
+            title: title ?? currentGoal.title,
+            desiredOutcome: desiredOutcome ?? currentGoal.desiredOutcome,
+            ...(currentGoal.targetAt === undefined ? {} : { targetAt: currentGoal.targetAt }),
+          });
+        }
+        const updated = updatePriorityWindow(priority.id, {
+          ...(priority.targetType === 'goal' || title === undefined ? {} : { targetId: title }),
+          ...(validTo === undefined ? {} : { validTo }),
+          ...(status === undefined ? {} : { status }),
+        });
+        return { priority: updated, ...(goal ? { goal } : {}) };
+      });
+      return c.json(result);
     } catch (error) {
       return c.json({ error: errorMessage(error) }, 400);
     }
