@@ -88,6 +88,19 @@ describe('NotificationService', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('honors injected notification preferences before persistence and queued delivery', async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    let allowed = false;
+    const service = new NotificationService({ publish: vi.fn(), fetch: fetchMock, allowsNotification: () => allowed });
+    expect(service.persistGatewayEvent('agent.run.ended', chatEvent)).toBeNull();
+    allowed = true;
+    expect(service.persistGatewayEvent('agent.run.ended', chatEvent)).not.toBeNull();
+    allowed = false;
+    await service.drain();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(notificationDeliveryMetrics()).toMatchObject({ dead: 1 });
+  });
+
   it('enqueues domain work atomically once and applies injected mobile policy and private preview', async () => {
     const enqueue = vi.fn();
     const domain: NotificationDomainDelivery = {

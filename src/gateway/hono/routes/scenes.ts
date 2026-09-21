@@ -29,6 +29,50 @@ export function registerSceneRoutes(authenticated: Hono, deps: AuthenticatedRout
     ownerId: getGatewayPrincipal(c).scopes.includes('gateway.admin') ? 'local-owner' : getGatewayPrincipal(c).principalId,
     workspaceId: deps.service.currentWorkspacePath,
   });
+  app.get('/source-providers', c => c.json({ providers: deps.scenes!.followUps?.sources.list() ?? [] }));
+  app.get('/source-providers/:provider/accounts', c => c.json({
+    accounts: deps.scenes!.followUps?.sources.get(c.req.param('provider')).listAccounts?.(principal(c)) ?? [],
+  }));
+  app.post('/source-providers/:provider/resolve-link', deps.strictRateLimitMiddleware, async c => {
+    const input = z.strictObject({ accountId: z.string().min(1).max(200), url: z.string().url().max(2000) }).parse(await c.req.json());
+    const source = deps.scenes!.followUps?.sources.get(c.req.param('provider'));
+    if (!source?.resolveLink) return c.json({ error: 'source_resolution_unavailable' }, 422);
+    const reference = await source.resolveLink(principal(c), input.accountId, input.url,
+      AbortSignal.any([c.req.raw.signal, AbortSignal.timeout(30_000)]));
+    return c.json({ source: { provider: source.id, reference } });
+  });
+  app.get('/task-follow-ups', c => c.json({ items: deps.scenes!.followUps?.list(principal(c)) ?? [] }));
+  app.get('/task-follow-ups/projects/:projectId/branches', async c => {
+    if (!deps.scenes!.followUps) return c.json({ error: 'task_follow_up_unavailable' }, 503);
+    return c.json(await deps.scenes!.followUps.branches.list(principal(c), c.req.param('projectId')));
+  });
+  app.post('/task-follow-ups/branch-links', deps.strictRateLimitMiddleware, async c => {
+    const input = z.strictObject({ projectId: z.string().min(1).max(200), taskId: z.string().uuid(),
+      branchRef: z.string().startsWith('refs/heads/').max(300), expectedSha: z.string().regex(/^[a-f0-9]{40,64}$/) }).parse(await c.req.json());
+    if (!deps.scenes!.followUps) return c.json({ error: 'task_follow_up_unavailable' }, 503);
+    return c.json(await deps.scenes!.followUps.branches.associate(principal(c), input));
+  });
+  app.post('/task-follow-ups/preflight', deps.strictRateLimitMiddleware, async c => {
+    if (!deps.scenes!.followUps) return c.json({ error: 'task_follow_up_unavailable' }, 503);
+    return c.json(await deps.scenes!.followUps.preflight(principal(c), await c.req.json()));
+  });
+  app.post('/task-follow-ups', deps.strictRateLimitMiddleware, async c => {
+    if (!deps.scenes!.followUps) return c.json({ error: 'task_follow_up_unavailable' }, 503);
+    return c.json(await deps.scenes!.followUps.create(principal(c), await c.req.json()), 201);
+  });
+  app.get('/task-follow-ups/:id', c => {
+    if (!deps.scenes!.followUps) return c.json({ error: 'task_follow_up_unavailable' }, 503);
+    return c.json(deps.scenes!.followUps.get(principal(c), c.req.param('id')));
+  });
+  app.patch('/task-follow-ups/:id', deps.strictRateLimitMiddleware, async c => {
+    const input = z.union([
+      z.strictObject({ expectedRevision: z.number().int().positive(), status: z.enum(['active', 'paused', 'archived']) }),
+      z.strictObject({ expectedRevision: z.number().int().positive(), configuration: z.unknown() }),
+    ]).parse(await c.req.json());
+    if (!deps.scenes!.followUps) return c.json({ error: 'task_follow_up_unavailable' }, 503);
+    if ('configuration' in input) return c.json(await deps.scenes!.followUps.configure(principal(c), c.req.param('id'), input.expectedRevision, input.configuration));
+    return c.json(await deps.scenes!.followUps.transition(principal(c), c.req.param('id'), input.expectedRevision, input.status));
+  });
   app.post('/browser/prepare', deps.strictRateLimitMiddleware, (c) => c.json(deps.scenes!.browser.prepare()));
   app.post('/browser/subscriptions', deps.strictRateLimitMiddleware, async (c) =>
     c.json(deps.scenes!.browser.register(principal(c), await c.req.json()), 201));
@@ -73,6 +117,9 @@ export function registerSceneRoutes(authenticated: Hono, deps: AuthenticatedRout
   });
   app.get('/activations/:id', (c) => c.json({ activation: deps.scenes!.repository.getActivation(principal(c), c.req.param('id')) }));
   app.patch('/activations/:id', deps.strictRateLimitMiddleware, async (c) => {
+    if (deps.scenes!.repository.getActivation(principal(c), c.req.param('id')).templateKey === 'task-follow-up') {
+      throw new SceneConflictError('Use the task follow-up controls to pause, resume or archive this scene');
+    }
     const body = await c.req.json();
     const stateOnly = typeof body === 'object' && body !== null && Object.hasOwn(body, 'status');
     const activation = stateOnly

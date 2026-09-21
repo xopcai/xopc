@@ -26,6 +26,9 @@ import { assertSceneStorageReady } from '../../storage/sqlite/scenes-schema.js';
 import { createLogger } from '../../utils/logger.js';
 import { createSceneBrowserDispatcher } from './browserNotifications.js';
 import { GatewaySceneMailContext } from './mailContext.js';
+import { SlackThreadSource } from './slackThreadSource.js';
+import { TaskFollowUpService } from '../../scenes/taskFollowUp/service.js';
+import { TaskSourceRegistry } from '../../scenes/taskFollowUp/contracts.js';
 
 const log = createLogger('Gateway:Scenes');
 
@@ -70,7 +73,9 @@ export class GatewaySceneHost {
     };
     const grant = async (activation: SceneActivation) => authorize(activation);
     const executor = input.executor ?? new SceneAgentExecutor(() => resolveModel(resolveSceneModelRef(input.config())));
-    this.http = { repository, mail, mailDiscovery: mail instanceof GatewaySceneMailContext ? mail : undefined, application: new SceneApplicationService(repository, providers, grant, clock, () => {
+    const slackThread = new SlackThreadSource(db);
+    const followUps = new TaskFollowUpService(db, { config: input.config, sources: new TaskSourceRegistry([slackThread]) });
+    this.http = { followUps, repository, mail, mailDiscovery: mail instanceof GatewaySceneMailContext ? mail : undefined, application: new SceneApplicationService(repository, providers, grant, clock, () => {
         if (input.executor) return [];
         try {
           const model = resolveModel(resolveSceneModelRef(input.config()));
@@ -94,6 +99,7 @@ export class GatewaySceneHost {
     assertSceneStorageReady(this.db);
     this.runtime.start();
     const poll = () => {
+      void this.http.followUps?.tick().catch(err => log.error({ err }, 'Task follow-up check failed'));
       try {
         if (this.clock() >= this.nextMaintenanceAt) { maintainSceneStorage(this.db, this.clock()); this.nextMaintenanceAt = this.clock() + 3600000; }
         this.notifications.drain(); void this.browserDispatcher.drainOne().catch(err => log.error({ err }, 'Scene browser reminder failed')); } catch (err) { log.error({ err }, 'Scene result publication failed'); }
@@ -106,7 +112,7 @@ export class GatewaySceneHost {
   tick(): Promise<void> {
     if (this.stopped) return Promise.reject(new Error('Scene host stopped'));
     if (this.active) return this.active;
-    const work = this.runtime.tick().then(() => {
+    const work = Promise.all([this.runtime.tick(), this.http.followUps?.tick()]).then(() => {
       if (!this.stopped) this.notifications.drain();
     });
     this.active = work.finally(() => { this.active = undefined; });
@@ -118,6 +124,7 @@ export class GatewaySceneHost {
     this.stopped = true;
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
+    await this.http.followUps?.stop();
     await this.runtime.stop();
     await this.browserDispatcher.stop();
     await this.active?.catch(() => undefined);

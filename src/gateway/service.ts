@@ -121,6 +121,7 @@ import {
   type ConnectorLearningCoordinator,
 } from '../connectors/learning-coordinator.js';
 import { GatewaySceneHost } from './scenes/host.js';
+import { TaskRunRepository } from '../tasks/task-run-repository.js';
 import { getSqliteDatabase } from '../storage/sqlite/transaction.js';
 import type { SceneAccess } from '../scenes/httpServices.js';
 import { ManagedComposioEventPoller } from '../connectors/composio-managed-events.js';
@@ -700,6 +701,15 @@ export class GatewayService {
           return (await this.ensureTaskConversation(taskId, { runId, requestedAgentId })).conversationId;
         },
         runAgent: async (runId, conversationId, message) => {
+          const taskRun = new TaskRunRepository().require(runId);
+          const followUpBinding = getSqliteDatabase().prepare('SELECT 1 FROM scene_task_bindings WHERE task_id = ?').get(taskRun.taskId);
+          if (followUpBinding) {
+            if (!this.sceneHost?.http.followUps) throw new Error('Task follow-up runtime is disabled');
+            // The shared AgentService owns the single transcript persistence listener.
+            this.ensureAgentService();
+            await this.sceneHost.http.followUps.executeTask(runId, conversationId);
+            return;
+          }
           const clientMessageId = `task:${runId}`;
           const session = await this.sessionIndex.getSessionMetadata(conversationId);
           if (!session) throw new Error('Task session is unavailable');
@@ -719,6 +729,8 @@ export class GatewayService {
     if (!this.notificationService) {
       this.notificationService = new NotificationService({
         publish: (type, payload) => this.realtime.broker.publish('gateway', type, payload),
+        allowsNotification: notification => notification.target.kind !== 'task'
+          || this.sceneHost?.http.followUps?.allowsTaskNotification(notification.target.taskId) !== false,
       });
     }
     return this.notificationService;

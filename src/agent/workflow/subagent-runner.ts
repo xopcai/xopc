@@ -86,6 +86,7 @@ export class DelegateSubagentRunner implements SubagentRunner {
       goal: fullPrompt,
       requesterConversationId: opts.sessionMetadata?.parentConversationId,
       allowedToolNames: allowed,
+      isComplete: wantStructured ? () => capture.called : undefined,
       maxIterations: opts.maxIterations ?? DEFAULT_MAX_ITERATIONS,
       model,
       bus: this.deps.bus,

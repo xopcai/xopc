@@ -1,10 +1,31 @@
 # 场景系统技术设计与实施方案
 
-状态：实施中；本文是目标设计，不是已实现能力清单。日期：2026-09-19。具体交付、review 和剩余工作见 [实施记录](./scenes-implementation-progress.md)。
+> 2026-09-21 架构修订：当前实现以[通用场景任务跟进方案](./scene-task-follow-up.md)为准。Slack 编码只是首个验证配置；执行复用现有 embedded Agent harness，文档无需 Git，文件修改无需 Docker。下文早期 Slack 专用执行器／强制验证安排不再作为实现约束，长期需求与历史分析保留。
+
+初稿：2026-09-19。更新：2026-09-21。本文保留 Scene 通用技术基础与历史迁移设计，不是已实现能力清单。当前 Slack 开发场景的专项协议以[产品与技术方案](/Users/micjoyce/develop/github/xopc/docs/design/ai-native-scenes-product-technical-design.md)为准，交付事实见[实施记录](./scenes-implementation-progress.md)。
 
 产品依据：[场景产品北极星](./scenes-product-north-star.md)。本文确定实现边界、协议、直接切换和验收方案；此前 Proactive 平台提案中的兼容适配、旧入口转发和双轨演进不再适用。
 
-## 1. 核心决定
+## 0. 当前技术边界：Slack → Task → 开发资源 → 验证
+
+本轮在既有 Scene／Task／Agent／Workflow 上增量实现，不再做旧运行时替换。第 2、11、12、14 节属于历史迁移输入或计划，不能据此重复删除数据。现有只读模板及其权限保持不变。
+
+- SceneActivation 保存委托与授权，Task 保存具体开发工作的唯一状态，TaskRun 保存执行尝试。
+- 以账号／workspace／channel／thread 稳定身份关联来源，持久同步水位和完整性；事件接收不等待模型。
+- 工作说明按 revision 保存，新增讨论进入原执行尝试的更新队列，区分入队、送达、确认应用与未知。
+- 编码前绑定仓库、worktree、分支、base commit 和执行会话；每个工作区最多一个活动写者。
+- 回执关联已应用的验收版本、真实 diff／commit、测试及未验证项；旧需求或旧 TaskRun 的成功不能完成当前工作。
+- 默认复用内部 BYOK Agent；外部 Codex 必须证明更新、停止、恢复、权限与证据能力，模型 provider 不等于外部任务集成。
+- 简单工作不要求 Workflow；按需复用其 agent 节点，长期等待由 Task／Scene 持久状态承接。
+- 新增关系／元数据走保留现有数据的普通迁移，物理表和 API 在代码核查后确定，不造平行任务系统。
+
+首版允许明确授权的工作区修改和约定验证，默认不 push、PR、Slack 回写、合并或部署。worktree 不是安全沙箱，shell／测试脚本仍需命令、网络、文件和凭据边界。权限沿 Task／Workflow／执行器收窄，不能回退普通聊天的完整工具集。
+
+当前按 S0 样本预检 → S1 thread 接手／排查 → S2 资源绑定／编码 → S3 持续更新／恢复／验收 → S4 分支关联／有限发现 → S5 真实试用推进，详见[当前计划](/Users/micjoyce/develop/github/xopc/docs/design/scenes-launch-plan.md)。Gmail／家庭场景保留原门禁，其专属验收不是 Slack 原型开发前提。
+
+## 1. 通用原则与历史替换决定
+
+其中旧运行时替换和首次切换条款属于已执行的历史决策，不是当前增量迭代的删除任务；本轮新增范围见第 0 节。
 
 1. 场景是用户对 Personal AI 的一项持续委托，覆盖工作与生活；不是定时 Prompt 的新名字。
 2. Proactive 是主动帮助的产品行为，Heartbeat 是周期检查的实现方式；二者不再作为两个独立产品或运行时存在。
@@ -15,7 +36,7 @@
 7. 第一版正式上线就是新运行时。开发里程碑可以分开，旧运行时不能作为新产品的线上过渡执行器。
 8. 分享的是声明式模板，不是用户的私人委托实例、账号授权或执行历史。
 
-## 2. 当前基线与替换边界
+## 2. 历史迁移基线与替换边界
 
 以下是实施前仓库的设计输入；其中旧实现已删除，当前状态见实施记录。
 
@@ -30,7 +51,7 @@
 | 自动化计划、Agent/Workflow 执行 | `src/automations/`、`src/workflows/` | 保留独立用户自动化；提取纯计划计算等基础件，场景不是隐藏 Automation |
 | 用户工具与页面 | `xopc_use` 的 proactive 模式、`/assistant-work`、Heartbeat 设置 | 替换为 scene 模式、场景入口和详情，不保留跳转别名 |
 
-当前 Proactive 使用受限只读执行器；Heartbeat 可以进入常规 Agent turn。这种权限差异不能通过“统一调用 Agent”直接带入新系统。新执行器必须由宿主注入场景权限约束。
+迁移前 Proactive 使用受限只读执行器，Heartbeat 可进入常规 Agent turn。这种权限差异不能通过“统一调用 Agent”直接带入新系统。当前扩展编码执行也必须由宿主注入场景权限约束，不能简单放开原只读 executor。
 
 网络保活、WebSocket 心跳以及被其他功能使用的通用静默标记，不属于删除范围。现有独立 Automations、Workflow、Task 和 Connector 也不是 legacy。
 
@@ -76,7 +97,7 @@
 | --- | --- | --- |
 | TemplateVersion | key、version、manifest、contentHash | 发布后不可变；Activation 固定版本 |
 | Activation | id、ownerId、workspaceId、templateRef、goal、scope、inputs、policy、revision、status | 用户自己的持续委托；修改使用 CAS |
-| WorkItem | id、activationId、subjectRef、phase、nextReviewAt、status | 一封待回复邮件或一个阶段；无需强制创建 Task |
+| WorkItem | id、activationId、subjectRef、phase、nextReviewAt、status | 轻量观察项；编码工作关联 Task，不复制其执行与完成状态 |
 | Event | id、source、sourceEventId、occurredAt、receivedAt、scope、subjectRef、revision、causationId | 来源去重；载荷优先使用引用 |
 | TriggerIntent | id、activationId、triggerKey、occurrenceKey、eventRefs、dueAt、status | 一次被接纳的执行时机，而不是每条原始事件 |
 | Run | id、intentId、activationRevision、templateRef、snapshotRef、attempt、leaseEpoch、status | 一次逻辑运行，重试更新 attempt，不重复生成逻辑运行 |
@@ -147,12 +168,12 @@ presentation:
 
 ## 6. SQLite 持久化与事务
 
-表结构、资源读取与迁移统一归属 `src/storage/sqlite/`。场景与通知运行时不创建表，不保留独立 schema 加载器。当前 SQL 放在 `schemas/`；普通版本升级清空未使用的旧实验数据并初始化新表，不导入旧历史、不建立快照或配置 journal。Node 与 Electron 从本次源码复制同一 SQL 树，使用统一资源定位，不从旧构建兜底取 SQL。
+表结构、资源读取与迁移统一归属 `src/storage/sqlite/`。场景与通知运行时不创建表，不保留独立 schema 加载器。SQL 放在 `schemas/`；旧实验清理仅属于已经定义的历史迁移，本轮新增字段／关系必须保留现有场景、任务与用户数据。Node 与 Electron 从同一源码复制 SQL 树，使用统一资源定位，不从旧构建兜底取 SQL。
 
 通用通知通过宿主注入领域投递策略，不导入场景或旧 Proactive。旧领域的通知实现必须与旧运行时整体删除；不得留在通用通知目录成为隐式依赖。具体复查及落实情况见[架构复查](./scenes-architecture-review.md)。
 
 
-建议首版表组如下；实际 migration 编号在实现时按主干分配，不预占当前正在开发的编号。
+以下为早期逻辑表组建议，不是要求重新建表的清单。新增 Slack 字段／关联先核查实际 schema，migration 编号按主干分配，不预占。
 
 | 表组 | 唯一键/索引与用途 |
 | --- | --- |
@@ -167,7 +188,7 @@ presentation:
 | `scene_presentations`、`scene_feedback` | UNIQUE(outcomeId, destination, revision)，价值证据去重 |
 | 通用通知表及 outbox | 沿用有效渠道能力，去掉 proactive 命名与反向领域依赖 |
 
-既有 Inbox 数据迁入新结果/呈现模型，不另做两个 Inbox。交付物引用现有文件、任务、项目或交付物对象，不再把大文件复制进 outcome JSON。
+沿用既有结果／呈现模型，不另做两个 Inbox，也不重新迁移旧实验历史。交付物引用现有文件、任务、项目或交付物对象，不把大文件复制进 outcome JSON。
 
 事务边界：
 
@@ -193,11 +214,11 @@ presentation:
 - 会议改期、邮件已回复、对象归档时取消对应旧时机；执行前再次确认业务条件。
 - 事件带 correlationId、causationId、originActivationId 和 depth；默认忽略自身 Effect 产生的同类触发。允许的后续阶段也有深度和每日预算上限。
 
-同 Activation 默认最多一个运行；同 WorkItem 的事件在等待期间合并。不同对象有需要时才开放有上限并发。新的关键变化在当前运行后排一个 follow-up intent，不在运行中无边界追加上下文。
+只读 Scene 判断同 Activation 默认最多一个运行，观察项变化合并。开发任务的 TaskRun 独立承接执行，更新通过持久队列在检查点应用，不等待整个编码完成才读取讨论；Scene 判断结束后不占用其租约等待代码完成。不同事项只有在工作区隔离、依赖和预算允许时并发，同一工作区最多一个活动写者。
 
 ## 8. 执行、授权与新鲜度
 
-首版必须支持受控 Agent executor；只有被首发场景需要的 Workflow 才进入同次上线，否则后续补充。两者都使用现有执行基础件，不使用旧 ProactiveExecutor 或 HeartbeatService 包装。
+既有只读场景使用受控只读 executor。新增开发场景通过 TaskRun 复用内部 Agent 或明确选择的执行器，按需使用 Workflow；不使用旧 ProactiveExecutor／HeartbeatService，也不建设平行运行时。
 
 每次运行构造 ExecutionEnvelope：主体、Activation revision、模板哈希、对象范围、连接器 account IDs、允许读取能力、允许 Effect handlers、预算、deadline、取消信号和 correlationId。
 
@@ -205,7 +226,7 @@ presentation:
 
 执行边界要求：
 
-- Agent 仅获得范围化读取和“提议 Effect”工具，不直接获得 send_message、任意 shell、任意写入或无约束连接器工具。
+- 只读模板仅获得范围化读取和“提议 Effect”能力；编码模板可在显式授权后使用指定工作区修改及约定验证工具。两者都不能获得任意 shell、任意写入、未批准发送或无约束连接器权限。
 - 所有子 Agent 和 Workflow 节点继承同一或更小的 envelope；不能通过嵌套执行重新拿到默认工具集。
 - 无法在工具层执行此约束的执行路径不能用于场景，不能靠 Prompt 替代。
 - 预算至少含超时、迭代次数、工具调用数、模型 token/估算费用；分别按 Run、Activation、主体统计。
@@ -223,7 +244,7 @@ Outcome 类型：`no_change`、`observation`、`artifact`、`decision`、`state_
 
 Effect 审批绑定 `handler + account + target + normalized payload + source preconditions + activation revision` 的 planHash，保存审批者、到期时间和消费状态。收件人、内容、账号或关键上下文变化使原审批失效。用户批准“准备回复”不等于批准发送回复。
 
-Effect Handler 注册接口职责：validatePlan、authorize、execute、可选 reconcile。自动执行只对明确低风险动作开放；首发以现有 create_project_task 为候选，发送消息等另行启用。
+Effect Handler 注册接口职责：validatePlan、authorize、execute、可选 reconcile。当前开发场景在明确委托内复用 Task 应用服务创建／更新任务及受限编码工具，不逐步重复审批；外部 push／PR／消息发送另行授权，不能绕过动作账本及 unknown 对账。
 
 外部系统支持幂等键则使用稳定 Effect ID；不支持时先持久 executing，超时后进入 unknown，优先查外部回执，无法查证则交给用户核实，禁止自动重发。Run 重试不能重放 Effect。暂停无法撤回已发出的外部请求，UI 必须如实呈现其最终或未知状态。
 
@@ -293,7 +314,9 @@ HTTP 409 表示 revision/plan 冲突，403 表示无权限，422 表示配置不
 
 删除以调用图/引用检查和测试为准，不按字符串全仓替换。网络 heartbeat、通用 notification/token 与历史 migration 中的旧名称允许在明确清单内保留。当前工作区其他 Connector、多账号和导航改动不是本次删除对象。
 
-## 12. 分阶段实施：开发拆分，切换一次
+## 12. 历史迁移阶段（不再作为当前执行清单）
+
+以下 T0—T5 是早期替换设计，完成事实以实施记录为准。当前按 Slack 计划 S0—S5 交付，不重做初始化清理，不以多个其他场景同时完成作为 Slack 前置条件。
 
 | 阶段 | 交付 | 门槛 |
 | --- | --- | --- |
@@ -324,12 +347,16 @@ T1/T2 是同一新实现的研发增量，不通过线上 legacy adapter 临时�
 | 数据初始化 | 旧实验数据／配置不阻塞启动、事务失败重试、重复启动不清空新数据、无关数据保留 |
 | HTTP/UI | 真实鉴权+lazy bundle、跨主体访问、旧 API 404、客户端深链接：入口一致 |
 | 生活试点 | 无项目/Task 也能运行，阶段完成不终止长期委托，允许休息/跳过 |
+| Slack 同步 | 重复／乱序／编辑／删除／分页／掉线：不丢关键修订、不重复建 Task，完整性可见 |
+| 需求应用 | delivered 不冒充 applied；过期 TaskRun 回报不影响当前执行，未处理关键变化不能完成 |
+| 开发资源 | 创建超时核对实际资源，单工作区单写者；不破坏用户修改，Task 与来源及分支双向可查 |
+| 编码验收 | 真实 diff／commit 和测试回执对应正确说明版本；未验证、未合并、未上线明确区分 |
 
-单元测试使用可控时钟；集成测试使用真实临时 SQLite。升级演练不连接真实外部写接口。端到端至少覆盖一次真实授权读取和测试账号的受控 Effect，对渠道不确定状态有故障注入。
+单元测试使用可控时钟，集成测试使用真实临时 SQLite。已有场景保持相关回归；生活试点不作为 Slack 新增能力的专属前置门禁。升级演练不连接真实外部写接口。Slack 端到端需真实授权线程和明确测试仓库的受控修改／验证；未开放外部写入不为验收而强行发送消息，对外部结果未知有故障注入。
 
 ### 13.2 运行观测
 
-结构化日志统一记录 activationId、intentId、runId、effectId、correlationId、phase 和有限原因码，不记录敏感正文/凭据。看板覆盖事件延迟、待执行深度、租约过期、Run 成本、Effect unknown、通知重复率和初始化失败。
+结构化日志统一记录 activationId、intentId、runId、effectId、correlationId、phase 和有限原因码；开发路径补 taskId、taskRunId、briefRevision、bindingId，不记录敏感正文／凭据。看板覆盖事件延迟、待应用修订、租约过期、成本、未知动作、工作区冲突和通知重复率。
 
 每次不执行/不通知都有可查询理由，例如 empty_input、no_relevant_change、stale_source、needs_permission、paused、budget_exceeded、quiet_hours；不用模型自由文本代替状态码。
 
@@ -337,11 +364,13 @@ T1/T2 是同一新实现的研发增量，不通过线上 legacy adapter 临时�
 
 北极星沿用 WSVR，不以执行次数作为成功。记录 `activation_started`、`real_trial_completed`、`outcome_adopted`、`effect_confirmed`、`burden_feedback`、`interruption_dismissed` 等最小证据，带版本和去重 ID。
 
-采用信号与已验证价值分开：打开、点赞、导出本身不是充分证据。首发通过访谈/明确反馈验证准备成果是否实际使用、动作是否真正完成、判断和返工成本是否降低；敏感生活内容不进入默认遥测。
+采用信号与已验证价值分开：打开、点赞、导出本身不是充分证据。当前先用用户自己的 Slack 事项比较消息复制、手动盯 thread、重复交代、分支反查和返工负担；真实代码／验证证据与明确反馈共同证明推进，不以跨人群访谈作为启动条件。敏感内容不进入默认遥测。
 
 上线门槛是用户能说清楚“它持续替我管哪件事、做到哪里、给了什么帮助、怎么停”，且初始化、权限和幂等测试全部通过。具体转化率与 WSVR 目标在试点建立基线后制定，不凭空承诺百分比。
 
-## 14. 实施启动检查表
+## 14. 历史迁移启动检查表（不得重复执行）
+
+下列检查项记录 2026-09-19 的设计输入，不代表当前迁移尚未完成，也不授权再次删除数据。当前待办以 Slack 推进计划为准。
 
 - [ ] 核定首发模板范围及一个无工作对象依赖的生活试点。
 - [ ] 完成旧 API/客户端/表/后台 worker 的穷尽引用清单。
