@@ -312,6 +312,10 @@ export class GatewaySessionsApi {
     return this.opts.sessionIndex.searchInSession(key, keyword);
   }
 
+  findMessages(key: string, query: string, limit?: number) {
+    return this.opts.sessionIndex.getStore().findInSession(key, query, limit);
+  }
+
   async export(key: string, format: ExportFormat): Promise<{ content: string }> {
     const content = await this.opts.sessionIndex.exportSession(key, format);
     return { content };

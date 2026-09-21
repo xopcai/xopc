@@ -226,6 +226,15 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     return items ? c.json({ ok: true, items }) : c.json({ ok: false, error: 'Task conversation not found' }, 404);
   });
 
+  authenticated.get('/api/tasks/:id/conversation/find', async (c) => {
+    const query = c.req.query('q')?.trim() ?? '';
+    if (!query || query.length > 256) {
+      return c.json({ ok: false, error: 'q must contain 1 to 256 characters' }, 400);
+    }
+    const result = await conversationQuery.findMessages(c.req.param('id'), query);
+    return result ? c.json({ ok: true, ...result }) : c.json({ ok: false, error: 'Task conversation not found' }, 404);
+  });
+
   authenticated.patch('/api/tasks/:id', taskRateLimit, async (c) => {
     const parsed = TaskPatchRequestSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) return c.json({ ok: false, error: 'Invalid task patch' }, 400);

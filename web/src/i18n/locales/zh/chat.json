@@ -50,6 +50,16 @@
     "timelineOpen": "打开时间线",
     "timelineClose": "关闭时间线",
     "timelineCurrent": "当前",
+    "find": {
+      "input": "在对话中查找",
+      "previous": "上一个结果",
+      "next": "下一个结果",
+      "close": "关闭查找",
+      "noResults": "无结果",
+      "resultCount": "{{current}} / {{total}} 个结果",
+      "searching": "正在搜索…",
+      "loadedOnly": "仅已加载消息"
+    },
     "welcomeTitle": "今天想让 xopc 帮你做什么？",
     "welcomeDescription": "输入问题、任务或文件处理需求，开始对话。",
     "welcomeSpotlight": {

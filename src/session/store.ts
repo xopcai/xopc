@@ -76,6 +76,7 @@ import { isAppendOnlyLlmTranscriptMessage } from './transcript-stats.js';
 import { transcriptRowsToClientHistory } from './client-history.js';
 import { backfillStructuredTurnOutcomes } from './turn-outcome-projector.js';
 import { computeTranscriptUserRoundDeleteRange } from './user-round-delete.js';
+import { findSessionMessages, type SessionFindResult } from './session-find.js';
 
 const log = createLogger('SessionStore');
 
@@ -917,6 +918,13 @@ export class SessionStore {
     return this.convertMessages(
       messages.filter((m) => this.extractTextContent(this.messageContent(m)).toLowerCase().includes(q)),
     );
+  }
+
+  async findInSession(key: string, query: string, limit?: number): Promise<SessionFindResult | null> {
+    const metadata = await this.getMetadata(key);
+    if (!metadata) return null;
+    const messages = transcriptRowsToClientHistory(await this.loadTranscriptRows(key));
+    return findSessionMessages(messages, query, limit);
   }
 
   recallSession(key: string, query: string, options?: { limit?: number; beforeSeq?: number }) {
