@@ -6,7 +6,8 @@
 <h1 align="center"><a href="https://xopc.ai">xopc</a></h1>
 
 <p align="center">
-  <strong>为超级个体打造的个人 AI。</strong><br />
+  <strong>让重要的事持续向前。</strong><br />
+  为超级个体打造的个人 AI。<br />
   记住你的目标与上下文，连接工具采取行动，<br />
   并随时从上次停下的地方继续。
 </p>

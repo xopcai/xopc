@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: xopc
-  text: Personal AI for the one-person company.
-  tagline: "Remember your goals and context, take action across your tools, and pick up where you left off."
+  text: Keep what matters moving.
+  tagline: "Personal AI for the one-person company. Remember your goals and context, take action across your tools, and pick up where you left off."
   image:
     light: /logo.svg
     dark: /logo-dark.svg
