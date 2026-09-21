@@ -40,7 +40,7 @@ export default defineConfig({
         // fixes pino transport worker path (see electron/thread-stream-bundle-shim.ts).
         // `@vscode/ripgrep` resolves a platform optionalDep at import time; packaged apps use extraResources `bin/rg`.
         // `node-pty` must resolve from its real package directory so it can load native binaries and spawn-helper.
-        external: ['electron', '@vscode/ripgrep', 'node-pty'],
+        external: ['electron', '@vscode/ripgrep', 'node-pty', '@trycua/cua-driver'],
         input: {
           index: resolve(__dirname, 'electron/main.ts'),
           compatibility: resolve(__dirname, 'electron/gateway-compatibility.ts'),

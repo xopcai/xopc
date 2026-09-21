@@ -372,7 +372,7 @@ driver 返回成功只证明调用完成。无法验证控件变化时 `outcome=
 | `step` | 对当前子目标进行一次 GUI 模型预测并最多执行一个动作 | Actor 预测像素动作也走相同校验 |
 | `close` | 清理当前桌面会话 | 不能借此把业务任务标记成功 |
 
-设备选择来自可信任务绑定；已开启 Computer Use 时允许按名称查询应用元数据，窗口标题仅在目标应用授权后返回。appRef 由宿主生成，绑定 owner 并在五分钟后失效。sessionId、owner、grantId 由工具封装注入，不允许模型传 approved、bundle ID 或驱动启动参数。公开接口不再提供 act；原生执行仅由 step 预测产生，并经 broker 校验。只读会话在 broker 中拒绝 act，完全控制不会扩大任务范围。
+设备选择来自可信任务绑定；已开启 Computer Use 时允许按名称查询应用元数据，窗口标题仅在目标应用授权后返回。appRef 由宿主生成，绑定 owner 并在五分钟后失效。sessionId、owner、grantId 由工具封装注入，不允许模型传 approved、bundle ID 或驱动启动参数。公开接口不再提供 act；原生执行仅由 step 预测产生，并经 broker 校验。只读会话在 broker 中拒绝 act；控制会话的每个修改动作均需本机审批。
 
 `open` 遇到需要用户授权时返回结构化 pending 并暂停当前 Agent run，不让 endpoint RPC 持续等待几分钟，也不让模型重复请求授权。
 

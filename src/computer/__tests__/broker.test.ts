@@ -4,7 +4,7 @@ import { ComputerBroker, type ComputerApproval, type ComputerDriver } from '../b
 const target = { appId: 'fixture', pid: 1, processIdentity: '1:100', windowId: '10', width: 800, height: 600, geometryRevision: '1' };
 const opening = { op: 'open' as const, sessionId: 's', owner: 'o', appRef: 'fixture', mode: 'control' as const, prepare: false, model: { modelRef: 'ali/gui', profile: 'gui-plus-2026-02-26' as const, origin: 'https://example.com', runtimeLocation: 'local' as const } };
 const brokers: ComputerBroker[] = [];
-function fixture(fullControl = false) {
+function fixture(autoApprove = false) {
   let settle: (approved: boolean) => void;
   let clock = 1000;
   let digest = 'a';
@@ -16,14 +16,19 @@ function fixture(fullControl = false) {
     observe: vi.fn(async () => ({ target, summary: 'fixture', stateDigest: digest, focusedEditableRef: 'field', image: new Uint8Array([1]), mimeType: 'image/png', imageWidth: 800, imageHeight: 600 })),
     perform: vi.fn(async () => {}), stop: vi.fn(async () => {}),
   };
-  const broker = new ComputerBroker(driver, { isVisible: () => visible, hasFullControl: () => fullControl, requestApproval: async (request) => {
-    approvals.push(request); return new Promise<boolean>((resolve) => { settle = resolve; });
+  const broker = new ComputerBroker(driver, { isVisible: () => visible, requestApproval: async (request) => {
+    approvals.push(request);
+    if (autoApprove) return true;
+    return new Promise<boolean>((resolve) => { settle = resolve; });
   } }, { enabled: true }, () => clock);
   brokers.push(broker);
   let appRef: string;
   return { broker, driver, approvals, open: async (mode: 'observe' | 'control' = 'control') => {
     appRef ??= (await broker.command({ op: 'discover', sessionId: 'discovery', owner: 'o', query: 'Fixture' })).apps![0].appRef;
-    return broker.command({ ...opening, appRef, mode });
+    const result = await broker.command({ ...opening, appRef, mode });
+    if (!autoApprove) return result;
+    await vi.waitFor(() => expect(broker.snapshot().status).toBe('ready'));
+    return broker.command({ op: 'status', sessionId: 's', owner: 'o' });
   }, approve: async () => { settle!(true); await vi.waitFor(() => expect(driver.resolveTarget).toHaveBeenCalled()); },
     settle: (value: boolean) => settle!(value), move: () => { digest = 'b'; }, hide: () => { visible = false; }, advance: (ms: number) => { clock += ms; } };
 }
@@ -46,7 +51,7 @@ describe('desktop computer authority', () => {
     await expect(f.broker.command({ ...opening, appRef })).rejects.toThrow('APP_REF_EXPIRED');
     expect(f.driver.resolveTarget).not.toHaveBeenCalled();
   });
-  it('enforces read-only in the host even with full control and a forged action', async () => {
+  it('enforces read-only in the host even after approval and with a forged action', async () => {
     const f = fixture(true); await f.open('observe');
     const obs = await f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' });
     await expect(f.broker.command({ op: 'act', sessionId: 's', owner: 'o', envelope: envelope(obs) })).rejects.toThrow('READ_ONLY');
@@ -64,23 +69,26 @@ describe('desktop computer authority', () => {
     expect(f.driver.stop).toHaveBeenCalledOnce();
     expect(f.approvals).toHaveLength(0); expect(f.broker.snapshot().status).toBe('idle');
   });
-  it('runs full-control sessions and actions without prompts or pending results', async () => {
+  it('never bypasses session or action approvals', async () => {
     const f = fixture(true);
     expect((await f.open()).status).toBe('ready');
     const obs = await f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' });
-    const result = await f.broker.command({ op: 'act', sessionId: 's', owner: 'o', envelope: envelope(obs) });
-    expect(result.status).toBe('ready');
+    const command = { op: 'act' as const, sessionId: 's', owner: 'o', envelope: envelope(obs) };
+    expect((await f.broker.command(command)).status).toBe('pending_action');
+    await vi.waitFor(() => expect(f.approvals).toHaveLength(2));
+    expect((await f.broker.command(command)).status).toBe('ready');
     expect(f.driver.perform).toHaveBeenCalledOnce();
-    expect(f.approvals).toHaveLength(0);
     await f.broker.stop();
     await expect(f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' })).rejects.toThrow('REVOKED');
   });
-  it('retains visibility, ownership and stale-frame guards in full control', async () => {
+  it('retains visibility, ownership and stale-frame guards after approval', async () => {
     const f = fixture(true); await f.open();
     await expect(f.broker.command({ op: 'observe', sessionId: 's', owner: 'other' })).rejects.toThrow('NOT_FOUND');
     const obs = await f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' });
     f.move();
-    expect(await f.broker.command({ op: 'act', sessionId: 's', owner: 'o', envelope: envelope(obs) })).toMatchObject({ status: 'ready', errorCode: 'COMPUTER_OBSERVATION_CHANGED' });
+    const command = { op: 'act' as const, sessionId: 's', owner: 'o', envelope: envelope(obs) };
+    await f.broker.command(command); await Promise.resolve();
+    expect(await f.broker.command(command)).toMatchObject({ status: 'ready', errorCode: 'COMPUTER_OBSERVATION_CHANGED' });
     expect(f.driver.perform).not.toHaveBeenCalled();
     f.hide();
     await expect(f.broker.command({ ...opening, sessionId: 'new' })).rejects.toThrow('LOCAL_UI_REQUIRED');
@@ -131,7 +139,9 @@ describe('desktop computer authority', () => {
     vi.mocked(f.driver.perform).mockImplementation(async () => {
       vi.mocked(f.driver.observe).mockRejectedValue(new Error('capture disconnected'));
     });
-    const result = await f.broker.command({ op: 'act', sessionId: 's', owner: 'o', envelope: envelope(obs) });
+    const command = { op: 'act' as const, sessionId: 's', owner: 'o', envelope: envelope(obs) };
+    await f.broker.command(command); await Promise.resolve();
+    const result = await f.broker.command(command);
     expect(result).toMatchObject({ status: 'stopped', errorCode: 'COMPUTER_POST_ACTION_OBSERVATION_FAILED',
       receipt: { dispatch: 'completed', outcome: 'unknown', verification: 'none' } });
     expect(f.driver.perform).toHaveBeenCalledTimes(1);

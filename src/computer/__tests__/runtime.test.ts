@@ -19,7 +19,7 @@ vi.mock('../../providers/index.js', () => ({
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => { await Promise.all(cleanups.splice(0).map(fn => fn())); vi.unstubAllGlobals(); });
-function fixture(fullControl = true) {
+function fixture(autoApprove = true) {
   const target = { appId: 'fixture', pid: 1, processIdentity: 'fixture:1', windowId: '1', width: 800, height: 600, geometryRevision: '1' };
   const images: Uint8Array[] = [];
   const driver = { discover: vi.fn(async () => [{ appId: 'fixture', name: '飞书', running: true }]),
@@ -29,15 +29,23 @@ function fixture(fullControl = true) {
       return { target, summary: 'fixture', stateDigest: 'fixed', image, mimeType: 'image/png' as const, imageWidth: 800, imageHeight: 600 };
     }) };
   let approve!: (value: boolean) => void;
-  const broker = new ComputerBroker(driver, { isVisible: () => true, hasFullControl: () => fullControl,
-    requestApproval: () => new Promise(resolve => { approve = resolve; }) }, { enabled: true });
+  const broker = new ComputerBroker(driver, { isVisible: () => true,
+    requestApproval: () => autoApprove ? Promise.resolve(true) : new Promise(resolve => { approve = resolve; }) }, { enabled: true });
   const frames = new Map<string, Uint8Array>();
   const config = { computer: ComputerConfigSchema.parse({ enabled: true, maxActionsPerSession: 2 }) };
   const fetch = vi.fn(async () => Response.json({ choices: [{ finish_reason: 'stop', message: { content: '<tool_call>{"name":"computer_use","arguments":{"action":"left_click","coordinate":[500,500]}}</tool_call>' } }] }));
   vi.stubGlobal('fetch', fetch);
   const invoke = vi.fn(async ({ arguments: args }: any) => {
     canonicalJson(args);
-    const { frame, ...value } = await broker.command(args);
+    let response = await broker.command(args);
+    if (autoApprove && response.status === 'pending_authorization') {
+      await vi.waitFor(() => expect(broker.snapshot().status).not.toBe('pending_authorization'));
+      response = await broker.command({ op: 'status', sessionId: args.sessionId, owner: args.owner });
+    } else if (autoApprove && response.status === 'pending_action') {
+      await Promise.resolve();
+      response = await broker.command(args);
+    }
+    const { frame, ...value } = response;
     const content: any[] = [{ type: 'json', value }];
     if (frame) { frames.set('frame', frame.bytes); content.push({ type: 'file', fileId: 'frame', mimeType: frame.mimeType }); }
     return { content, invocationId: 'invoke' };

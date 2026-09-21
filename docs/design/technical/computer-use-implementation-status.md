@@ -2,6 +2,24 @@
 
 Status: core macOS preview implemented, platform gateway deployed, and controlled native click/text/stop paths verified. This is not a claim of Codex-quality general desktop automation or completion of the RFC's multi-platform and real-application quality gates.
 
+## Production hardening implementation (2026-09-21)
+
+- Replaced the hand-built MCP subprocess client with Cua's embedded host and
+  official TypeScript SDK. App/window/state/click/key/scroll calls use typed SDK
+  records; window and element identifiers retain their full 64-bit values.
+- Capture admission now rejects explicit invalid frames while accepting platforms
+  that cannot assert the optional validity bit. Exact pid/window identity, bounded
+  in-memory image data, state freshness, and single-window scope remain mandatory.
+- Removed the persisted Full control preference and every IPC/UI/runtime bypass.
+  Application access and every modifying action now require local approval.
+- Added a fixed-matrix runner with separate executor and oracle processes, private
+  incremental reports, evidence references, and a macOS release gate that
+  recomputes the 60×3 threshold and verifies code signing, Gatekeeper acceptance,
+  nested driver signing, and stapled notarization.
+- These changes create enforceable release gates; they do not make the currently
+  unexecuted real-application matrix pass. Windows/Linux remain unavailable until
+  equivalent pinned packaging and native evidence exist.
+
 ## Verified prerequisites (2026-09-16)
 
 - Existing SSH deployment target reachable; platform installation present.
@@ -12,7 +30,7 @@ Status: core macOS preview implemented, platform gateway deployed, and controlle
 
 - Public operations are now discover/open/observe/step/close. Removed user-supplied bundle IDs and direct public act input, without a compatibility branch. Native act remains private and grant-checked.
 - Discovery uses the existing driver's installed/running catalog. App references are task-bound, bounded and expire after five minutes. Window references bind a process instance. Failed opens release runtime sessions; errors carry recovery hints and candidate windows.
-- Open explicitly declares observe/control and whether preparation is authorized. The host enforces read-only even under Full control. Starting and restoring are constrained native calls, never arbitrary launch arguments or scripts.
+- Open explicitly declares observe/control and whether preparation is authorized. The host enforces read-only independently of model output. Starting and restoring are constrained native calls, never arbitrary launch arguments or scripts.
 - Multi-window selection performs bounded, screenshot-free AXWindow root checks to exclude menu/proxy surfaces. Incomplete metadata returns candidates, not guessed focus. Native tests found real proxy windows and added regressions. Multiple running instances of one bundle remain an explicit limitation.
 - observe(question) performs visual understanding on the frozen GUI connection, including structured-tools-v1. GUI-Plus answer is no longer conflated with human takeover. Empty AX content is reported as unavailable, with a visual-question recovery hint; it is not evidence of an empty page.
 - Review fixes include real pi error signaling (throw, not returned isError), cancellation ownership, operation serialization, cancellation before session creation, idle discovery daemon cleanup and refusal to guess after partial AX metadata.
@@ -59,7 +77,7 @@ Use computer-use-architecture.md as the design baseline. Record evidence and del
 ## Deliberate preview boundaries
 
 - macOS, one explicitly selected running application/window; Windows/Linux execution is not certified. The driver interface remains extensible.
-- Native session and exact per-action approvals by default; optional device-local Full control skips these prompts after a one-time native opt-in. Main-window hide/minimize, lock, suspend, endpoint disconnect and explicit Stop revoke control. Stop, lock and suspend additionally pause new sessions until manual resume. This is not certified for unattended use.
+- Native session and exact per-action approvals are mandatory; the persistent Full control bypass and its stored consent were removed. Main-window hide/minimize, lock, suspend, endpoint disconnect and explicit Stop revoke control. Stop, lock and suspend additionally pause new sessions until manual resume. This is not certified for unattended use.
 - In-memory leases/receipts/frames deliberately replace the RFC's proposed persistent computer tables for this preview. Restart fails closed; no input replay. Existing endpoint audit records retain metadata, not screenshots.
 - Screenshot frame blobs are bounded, fully decoded/validated, invocation-bound, single-consumer and expire after 120 seconds. They are not downloadable through generic attachment routes and are not appended to chat transcripts.
 - A model's `terminate(success)` remains `verified:false`. There is no general business-semantic verifier yet. Screenshots changing and input acknowledgements are not treated as task success.
@@ -92,7 +110,7 @@ The existing platform login successfully read the live 34-model catalog and foun
 
 - Setup now lives at Settings → Integrations → Computer use (`#/settings/computer-use`), with sidebar navigation and command-palette discovery. Browser control retains its existing settings page.
 - The page exposes only implemented controls: desktop enablement, macOS permission requests, device/session status, conditional native re-enrollment, emergency Stop, and the dedicated GUI model using existing BYOK/Cloud connections. It does not introduce Excel integration, per-app allowlists or unattended/locked-use controls.
-- Native approvals remain the default; Full control can be enabled only through the local desktop settings with a one-time native confirmation. Stop stays available while configuration loads or another settings action is pending. Browser and unsupported desktop platforms cannot grant local control.
+- Native approvals are mandatory. Stop stays available while configuration loads or another settings action is pending. Browser and unsupported desktop platforms cannot grant local control.
 - Six focused test files / 31 tests passed, including model-only updates preserving fresh global defaults, invalid model input, native status failure, permission actions and Stop during a pending request. Web typecheck, focused ESLint and production build passed. Isolated browser rendering checked light/dark layouts and a 390-pixel viewport with mocked configuration/native status; no horizontal overflow or page errors. This was not a live native-control or hosted-model retest.
 
 ### Commands

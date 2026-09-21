@@ -35,7 +35,6 @@ export type ComputerApproval =
 export interface ComputerBrokerHost {
   requestApproval(request: ComputerApproval, signal: AbortSignal): Promise<boolean>;
   isVisible(): boolean;
-  hasFullControl?(): boolean;
   onStateChange?(): void;
 }
 type Status = 'pending_authorization' | 'ready' | 'running' | 'pending_action' | 'paused' | 'stopped';
@@ -153,8 +152,7 @@ export class ComputerBroker {
       controller: new AbortController(), receipts: new Map(), actions: 0 };
     this.session = s;
     // Catalog metadata is discoverable, but window contents and preparation require consent.
-    const fullControl = this.host.hasFullControl?.() === true;
-    const authorization = (fullControl ? Promise.resolve(true) : this.host.requestApproval({ kind: 'session', id: s.id, appId: s.appId, appName: app.name, mode: s.mode, prepare: s.prepare, model: s.model }, s.controller.signal)).then(async (approved) => {
+    void this.host.requestApproval({ kind: 'session', id: s.id, appId: s.appId, appName: app.name, mode: s.mode, prepare: s.prepare, model: s.model }, s.controller.signal).then(async (approved) => {
       this.active(s);
       if (!approved) { await this.stop(); return; }
       s.target = await this.driver.resolveTarget(s.appId, s.controller.signal, { prepare: s.prepare, windowRef: s.windowRef });
@@ -167,8 +165,6 @@ export class ComputerBroker {
       if (error instanceof ComputerTargetError) s.windows = error.windows;
       return this.stop().catch(() => {});
     }).finally(() => this.host.onStateChange?.());
-    // Full control must return ready, not suspend the agent for a nonexistent dialog.
-    if (fullControl) await authorization;
     return this.result(s);
   }
   private async observe(s: Session): Promise<BrokerResult> {
@@ -204,8 +200,7 @@ export class ComputerBroker {
     if ('point' in e.action && e.action.point && (e.action.point.x >= observed.imageWidth || e.action.point.y >= observed.imageHeight)) throw new Error('COMPUTER_COORDINATE_OUTSIDE_WINDOW');
     if (e.action.kind === 'typeText' && !e.action.point && !observed.focusedEditableRef) throw new Error('COMPUTER_EDITABLE_TARGET_REQUIRED');
     this.driver.validateAction?.(e.action);
-    // Only the local host policy can waive approval; model-supplied risk labels cannot.
-    if (e.action.kind !== 'wait' && !this.host.hasFullControl?.()) {
+    if (e.action.kind !== 'wait') {
       if (!s.pending) {
         s.pending = { envelope: e, digest }; s.status = 'pending_action';
         void this.host.requestApproval({ kind: 'action', id: e.actionId, target: observed.target, action: e.action }, s.controller.signal).then((approved) => {
