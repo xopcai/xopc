@@ -18,6 +18,7 @@ import { OutcomeCard } from './outcome-card';
 import { ScheduleEditor } from './schedule-editor';
 import { MailSourcePicker } from './mail-source-picker';
 import { MailDeadlineEditor } from './mail-deadline-editor';
+import { CreateTaskFollowUp, TaskFollowUpDetail } from './task-follow-up';
 
 const fieldClass = 'min-h-11 w-full rounded-md border border-edge bg-surface-panel px-3 py-2 text-base text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:text-sm';
 const panelClass = 'min-w-0 rounded-xl border border-edge bg-surface-panel p-4 sm:p-6';
@@ -198,6 +199,10 @@ function SceneInbox() {
 }
 
 function CreateScene({ templateKey }: { templateKey: string }) {
+  return templateKey === 'task-follow-up' ? <CreateTaskFollowUp /> : <CreateReadOnlyScene templateKey={templateKey} />;
+}
+
+function CreateReadOnlyScene({ templateKey }: { templateKey: string }) {
   const zh = useLocaleStore((state) => state.language) === 'zh';
   const [params] = useSearchParams();
   const navigate = useNavigate();
@@ -242,6 +247,13 @@ function CreateScene({ templateKey }: { templateKey: string }) {
 }
 
 function SceneDetail({ id }: { id: string }) {
+  const detail = useSWR<{ activation: SceneActivation }>(`/activations/${encodeURIComponent(id)}`, sceneGet);
+  if (detail.error) return <Failure error={detail.error} />;
+  if (!detail.data) return <Loading />;
+  return detail.data.activation.templateKey === 'task-follow-up' ? <TaskFollowUpDetail id={id} /> : <ReadOnlySceneDetail id={id} />;
+}
+
+function ReadOnlySceneDetail({ id }: { id: string }) {
   const zh = useLocaleStore((state) => state.language) === 'zh';
   const [params] = useSearchParams();
   const selectedResult = params.get('result');

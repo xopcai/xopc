@@ -33,6 +33,7 @@ export interface ProvisionManagedWorktreeInput {
   repositoryPath: string;
   baseRef?: string;
   environmentId?: string;
+  branchRef?: string;
 }
 
 export interface LocalWorktreeInspection {
@@ -131,6 +132,10 @@ export class LocalWorktreeManager {
     }
     const baseRef = input.baseRef?.trim() || 'HEAD';
     const baseSha = await resolveGitCommit(repository.repositoryRoot, baseRef);
+    if (input.branchRef) {
+      if (!/^xopc\/task-[a-f0-9-]{36}$/.test(input.branchRef)) throw new Error('Invalid task branch name');
+      await runGit(repository.repositoryRoot, ['check-ref-format', '--branch', input.branchRef]);
+    }
     const environmentId = input.environmentId?.trim() || randomUUID();
     const rootPath = resolveManagedWorktreePath(input.projectId, environmentId, this.stateDir);
     assertManagedWorktreePath(rootPath, this.stateDir, repository.repositoryRoot);
@@ -145,6 +150,7 @@ export class LocalWorktreeManager {
       gitCommonDir: repository.gitCommonDir,
       baseRef,
       baseSha,
+      ...(input.branchRef ? { branchRef: input.branchRef } : {}),
     });
     const provisioning = this.store.transition({
       environmentId: environment.id,
@@ -159,7 +165,8 @@ export class LocalWorktreeManager {
         await mkdir(dirname(rootPath), { recursive: true, mode: 0o700 });
         await mkdir(rootPath, { mode: 0o700 });
         createdDirectory = await readDirectoryIdentity(rootPath);
-        await runGit(repository.repositoryRoot, ['worktree', 'add', '--detach', '--lock', rootPath, baseSha]);
+        await runGit(repository.repositoryRoot, ['-c', 'core.hooksPath=/dev/null', 'worktree', 'add',
+          ...(input.branchRef ? ['-b', input.branchRef] : ['--detach']), '--lock', rootPath, baseSha]);
         const registered = await findGitWorktree(repository.repositoryRoot, rootPath);
         if (!registered) throw new Error(`Git did not register worktree ${rootPath}`);
       });
