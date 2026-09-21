@@ -67,6 +67,8 @@ export function formatSkillsForPrompt(
 ): string {
   const visibleSkills = selectSkillsVisibleInPrompt(skills, skillsConfig, options);
   if (visibleSkills.length === 0) return '';
+  const maxSkills = skillsConfig?.limits?.maxSkillsInPrompt;
+  const selectedSkills = maxSkills === undefined ? visibleSkills : visibleSkills.slice(0, maxSkills);
 
   const lines = [
     '\n\n<available_skills>',
@@ -75,10 +77,15 @@ export function formatSkillsForPrompt(
     '',
   ];
 
-  for (const skill of visibleSkills) {
-    lines.push(formatSkillXmlMetadataOnly(skill));
+  const maxChars = skillsConfig?.limits?.maxSkillsPromptChars;
+  for (const skill of selectedSkills) {
+    const next = formatSkillXmlMetadataOnly(skill);
+    const candidate = [...lines, next, '</available_skills>'].join('\n');
+    if (maxChars !== undefined && candidate.length > maxChars) break;
+    lines.push(next);
   }
 
+  if (lines.length === 4) return '';
   lines.push('</available_skills>');
   return lines.join('\n');
 }

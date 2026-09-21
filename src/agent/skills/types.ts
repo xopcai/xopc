@@ -179,7 +179,7 @@ export interface Skill {
   description: string;
   /** Optional user-facing translations from SKILL.md metadata.i18n. */
   localizations?: SkillLocalizations;
-  /** Category derived from parent directory (e.g. skills/creative/algorithmic-art → 'creative') */
+  /** Category derived from parent directory (e.g. skills/creative/theme-factory → 'creative') */
   category?: string;
   /** Path to SKILL.md file */
   filePath: string;

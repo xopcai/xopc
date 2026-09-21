@@ -2,6 +2,10 @@
 
 Skill 是一组可复用指令和可选资源，用来教 Agent 如何完成某类工作。Skill 决定工作方法，工具提供执行这些方法所需的动作。
 
+新安装默认只为 Agent 启用精简的核心集合：`summarize`、`define-task`、`find-skills` 和 `doc-coauthoring`。Gateway 的 Agent 默认配置页同时提供办公成果、本地应用、开发者和桌面宠物能力组合。能力组合只是便捷的 Agent allowlist，不是新的安装格式；已安装 Skill 仍会显示在 Skill 目录中，也可以单独分配给某个 Agent。
+
+已有配置会被保留。选择“使用所有已启用技能”表示该 Agent 使用完整目录，之后安装的 Skill 也会自动加入。
+
 ## 查找并启用 Skill
 
 在 Gateway 控制台打开 **Skill**，查看说明和要求，然后为目标 Agent 安装或启用。

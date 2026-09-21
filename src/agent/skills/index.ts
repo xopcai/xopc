@@ -107,6 +107,8 @@ function shouldIgnore(path: string, ignoredPaths: Set<string>): boolean {
 function discoverSkills(
   source: SkillSourceDescriptor,
   maxSkillFileBytes: number,
+  maxSkillsLoadedPerSource?: number,
+  maxCandidatesPerRoot?: number,
 ): { skills: Skill[]; diagnostics: SkillDiagnostic[] } {
   const dir = source.rootDir;
   const skills: Skill[] = [];
@@ -114,10 +116,21 @@ function discoverSkills(
   if (!existsSync(dir)) return { skills, diagnostics };
 
   function scan(currentDir: string, currentIgnoredPaths: Set<string>) {
+    if (maxSkillsLoadedPerSource !== undefined && skills.length >= maxSkillsLoadedPerSource) return;
     try {
-      const entries = readdirSync(currentDir, { withFileTypes: true });
+      const allEntries = readdirSync(currentDir, { withFileTypes: true })
+        .sort((left, right) => left.name.localeCompare(right.name));
+      const directoryEntries = allEntries.filter(
+        (entry) => entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules',
+      );
+      const allowedDirectories = maxCandidatesPerRoot === undefined
+        ? directoryEntries
+        : directoryEntries.slice(0, maxCandidatesPerRoot);
+      const allowedDirectoryNames = new Set(allowedDirectories.map((entry) => entry.name));
+      const entries = allEntries.filter((entry) => !entry.isDirectory() || allowedDirectoryNames.has(entry.name));
 
       for (const entry of entries) {
+        if (maxSkillsLoadedPerSource !== undefined && skills.length >= maxSkillsLoadedPerSource) break;
         if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
 
         const fullPath = join(currentDir, entry.name);
@@ -191,6 +204,7 @@ export interface WorkspaceSkillInventoryResult {
 function discoverAndMergeSkills(
   sources: SkillSourceDescriptor[],
   maxSkillFileBytes: number,
+  limits: Pick<NonNullable<SkillsConfig['limits']>, 'maxSkillsLoadedPerSource' | 'maxCandidatesPerRoot'> = {},
   initialDiagnostics: SkillDiagnostic[] = [],
 ): { skills: Skill[]; entries: WorkspaceSkillInventoryEntry[]; diagnostics: SkillDiagnostic[] } {
   const skillMap = new Map<string, Skill>();
@@ -198,7 +212,12 @@ function discoverAndMergeSkills(
   const diagnostics = [...initialDiagnostics];
 
   for (const source of sources) {
-    const discovered = discoverSkills(source, maxSkillFileBytes);
+    const discovered = discoverSkills(
+      source,
+      maxSkillFileBytes,
+      limits.maxSkillsLoadedPerSource,
+      limits.maxCandidatesPerRoot,
+    );
     diagnostics.push(...discovered.diagnostics);
     for (const skill of discovered.skills) {
       discoveredSkills.push(skill);
@@ -293,7 +312,7 @@ function loadSkillFromFile(
       };
     }
 
-    // Derive category from directory path: .xopc/skills/creative/algorithmic-art → 'creative'
+    // Derive category from directory path: .xopc/skills/creative/theme-factory → 'creative'
     // Only assign a category when the skill is nested at least two levels below rootDir.
     let category: string | undefined;
     if (rootDir) {
@@ -359,12 +378,22 @@ export function loadSkills(options: ResolveSkillSourcesOptions & {
   const merged = discoverAndMergeSkills(
     resolvedSources.sources,
     maxSkillFileBytes,
+    skillsConfig.limits,
     resolvedSources.diagnostics,
   );
 
+  const bundledAllowlist = skillsConfig.allowBundled
+    ? new Set(skillsConfig.allowBundled.map((name) => name.toLowerCase()))
+    : undefined;
+  const skills = bundledAllowlist
+    ? merged.skills.filter(
+        (skill) => skill.source !== 'builtin' || bundledAllowlist.has(skill.name.toLowerCase()),
+      )
+    : merged.skills;
+
   return {
-    skills: merged.skills,
-    prompt: formatSkillsForPrompt(merged.skills, skillsConfig),
+    skills,
+    prompt: formatSkillsForPrompt(skills, skillsConfig),
     diagnostics: merged.diagnostics,
   };
 }
@@ -380,7 +409,12 @@ export function loadWorkspaceSkillInventory(
   const workspaceSources = resolved.sources.filter(
     (source) => source.id === 'xopc-workspace' || source.id === 'agents-workspace',
   );
-  const discovered = discoverAndMergeSkills(workspaceSources, maxSkillFileBytes, resolved.diagnostics);
+  const discovered = discoverAndMergeSkills(
+    workspaceSources,
+    maxSkillFileBytes,
+    skillsConfig.limits,
+    resolved.diagnostics,
+  );
   const agentsRoot = resolveWorkspaceAgentsSkillsDir(workspaceDir);
   const agentsDiagnostic = resolved.diagnostics.find(
     (diagnostic) => diagnostic.type === 'warning' && diagnostic.message.includes('agents-workspace'),

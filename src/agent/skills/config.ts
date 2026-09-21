@@ -258,6 +258,13 @@ export function validateSkillConfig(config: SkillsConfig): {
 } {
   const errors: string[] = [];
 
+  if (
+    config.allowBundled !== undefined &&
+    (!Array.isArray(config.allowBundled) || config.allowBundled.some((name) => typeof name !== 'string' || !name.trim()))
+  ) {
+    errors.push('allowBundled must be an array of non-empty skill names');
+  }
+
   const extraDirs = config.load?.extraDirs as unknown;
   if (
     extraDirs !== undefined &&
@@ -312,6 +319,9 @@ export function validateSkillConfig(config: SkillsConfig): {
     }
     if (limits.maxSkillsInPrompt !== undefined && limits.maxSkillsInPrompt < 1) {
       errors.push('limits.maxSkillsInPrompt must be at least 1');
+    }
+    if (limits.maxSkillsPromptChars !== undefined && limits.maxSkillsPromptChars < 128) {
+      errors.push('limits.maxSkillsPromptChars must be at least 128');
     }
   }
 

@@ -12,6 +12,39 @@ function unique(values: string[]): string[] {
   return [...new Set(values)].sort();
 }
 
+const SKILL_PRESETS = [
+  {
+    id: 'core',
+    names: ['doc-coauthoring', 'define-task', 'find-skills', 'summarize'],
+    en: 'Core',
+    zh: '核心',
+  },
+  {
+    id: 'office',
+    names: ['doc-coauthoring', 'define-task', 'find-skills', 'summarize', 'docx', 'pdf', 'pptx', 'xlsx'],
+    en: 'Office',
+    zh: '办公成果',
+  },
+  {
+    id: 'local-app',
+    names: ['doc-coauthoring', 'define-task', 'find-skills', 'summarize', 'build-xopc-local-app', 'frontend-design', 'theme-factory'],
+    en: 'Local App',
+    zh: '本地应用',
+  },
+  {
+    id: 'developer',
+    names: ['doc-coauthoring', 'define-task', 'find-skills', 'summarize', 'diagnose', 'github', 'tdd', 'webapp-testing'],
+    en: 'Developer',
+    zh: '开发者',
+  },
+  {
+    id: 'desktop-pet',
+    names: ['doc-coauthoring', 'define-task', 'find-skills', 'summarize', 'hatch-pet'],
+    en: 'Desktop Pet',
+    zh: '桌面宠物',
+  },
+] as const;
+
 export function AgentDefaultsSkillsPanel({
   draft,
   setDraft,
@@ -56,6 +89,14 @@ export function AgentDefaultsSkillsPanel({
 
   const selectedCount = (data?.catalog ?? []).filter((skill) => skill.enabled && isIncluded(skill.name)).length;
 
+  const applyPreset = (names: readonly string[]) => {
+    const available = new Set((data?.catalog ?? []).filter((skill) => skill.enabled).map((skill) => skill.name));
+    setDraft({
+      ...draft,
+      skills: { mode: 'selected', include: unique(names.filter((name) => available.has(name))) },
+    });
+  };
+
   return (
     <div className="space-y-5">
       <section className="rounded-xl bg-surface-hover/20 p-5">
@@ -64,12 +105,28 @@ export function AgentDefaultsSkillsPanel({
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           <button type="button" onClick={() => setDraft({ ...draft, skills: { mode: 'all-enabled', exclude: [] } })} className={cn('flex items-start gap-3 rounded-xl bg-surface-base/55 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', draft.skills.mode === 'all-enabled' ? 'bg-accent-soft shadow-surface' : 'hover:bg-surface-hover')}>
             <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-accent" />
-            <span><span className="block text-sm font-medium text-fg">{zh ? '使用所有已启用技能' : 'Use every enabled skill'}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{zh ? '推荐。以后启用的新技能也会自动可用，可单独排除。' : 'Recommended. Newly enabled skills become available automatically; exclude exceptions below.'}</span></span>
+            <span><span className="block text-sm font-medium text-fg">{zh ? '使用所有已启用技能' : 'Use every enabled skill'}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{zh ? '适合需要完整目录的高级智能体；新增技能会自动加入。' : 'For advanced agents that need the full catalog; newly enabled skills are added automatically.'}</span></span>
           </button>
           <button type="button" onClick={() => setDraft({ ...draft, skills: { mode: 'selected', include: [] } })} className={cn('flex items-start gap-3 rounded-xl bg-surface-base/55 p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', draft.skills.mode === 'selected' ? 'bg-accent-soft shadow-surface' : 'hover:bg-surface-hover')}>
             <ListChecks className="mt-0.5 size-5 shrink-0 text-accent" />
             <span><span className="block text-sm font-medium text-fg">{zh ? '只使用选中的技能' : 'Use selected skills only'}</span><span className="mt-1 block text-xs leading-5 text-fg-muted">{zh ? '适合严格受控的环境；新增技能不会自动加入。' : 'For tightly controlled environments; new skills are not added automatically.'}</span></span>
           </button>
+        </div>
+        <div className="mt-4">
+          <p className="text-xs font-medium text-fg-muted">{zh ? '能力组合（会替换当前选择）' : 'Capability packs (replaces the current selection)'}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {SKILL_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => applyPreset(preset.names)}
+                disabled={!data}
+                className="rounded-lg border border-edge bg-surface-panel px-3 py-1.5 text-xs font-medium text-fg transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {zh ? preset.zh : preset.en}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 

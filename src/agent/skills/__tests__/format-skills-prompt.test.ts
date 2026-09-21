@@ -31,4 +31,20 @@ describe('formatSkillsForPrompt', () => {
     const visible = selectSkillsVisibleInPrompt([baseSkill], {}, { skillAllowlist: [] });
     expect(visible).toEqual([]);
   });
+
+  it('caps the number of skills and prompt characters', () => {
+    const beta = { ...baseSkill, name: 'beta', description: 'Beta skill' };
+    const limitedByCount = formatSkillsForPrompt(
+      [baseSkill, beta],
+      { limits: { maxSkillsInPrompt: 1 } },
+    );
+    expect(limitedByCount).toContain('<name>alpha</name>');
+    expect(limitedByCount).not.toContain('<name>beta</name>');
+
+    const limitedByChars = formatSkillsForPrompt(
+      [baseSkill],
+      { limits: { maxSkillsPromptChars: 128 } },
+    );
+    expect(limitedByChars).toBe('');
+  });
 });
