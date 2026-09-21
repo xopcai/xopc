@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ComputerModelAdapter, GUI_PLUS_SYSTEM_PROMPT, GUI_PLUS_OBSERVATION_PROMPT, parseGuiPlusProposal, predictComputerStep, readComputerJson } from '../model-adapter.js';
+import { ChatCompletionsComputerAdapter, GUI_PLUS_SYSTEM_PROMPT, GUI_PLUS_OBSERVATION_PROMPT, OpenAIResponsesComputerAdapter, parseGuiPlusProposal, predictComputerStep, readComputerJson } from '../model-adapter.js';
 import { computerDiagnostic } from '../errors.js';
 
 const call = (arguments_: unknown) => `<tool_call>${JSON.stringify({ name: 'computer_use', arguments: arguments_ })}</tool_call>`;
@@ -14,7 +14,7 @@ describe('GUI-Plus adapter', () => {
     const fetch = vi.fn()
       .mockResolvedValueOnce(Response.json({ choices: [{ message: { content: JSON.stringify({ name: 'computer_use', arguments: { action: 'answer', text: 'blue' } }) } }] }))
       .mockResolvedValueOnce(Response.json({ choices: [{ message: { content: call({ action: 'answer', text: 'blue' }) } }] }));
-    const adapter = new ComputerModelAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26' }, fetch);
+    const adapter = new ChatCompletionsComputerAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26' }, fetch);
     expect(await predictComputerStep(adapter, { readOnly: true, goal: 'Describe', image: new Uint8Array([1]), mimeType: 'image/png', width: 1, height: 1, summary: '' }, () => {})).toEqual({ kind: 'answer', text: 'blue' });
     const prompt = JSON.parse(fetch.mock.calls[1][1].body).messages[0].content;
     expect(prompt).toContain('previous answer failed format validation');
@@ -24,7 +24,7 @@ describe('GUI-Plus adapter', () => {
     const requestId = crypto.randomUUID();
     const fetch = vi.fn().mockResolvedValue(Response.json({ error: { code: 'max_input_tokens_exceeded', message: 'private prompt and secret key' } },
       { status: 400, headers: { 'x-xopc-request-id': requestId } }));
-    const adapter = new ComputerModelAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26' }, fetch);
+    const adapter = new ChatCompletionsComputerAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26' }, fetch);
     const error = await adapter.predict({ goal: 'Describe', readOnly: true, image: new Uint8Array([1]), mimeType: 'image/png', width: 1, height: 1, summary: '' }).catch(error => error);
     expect(computerDiagnostic(error)).toMatchObject({ errorCode: 'COMPUTER_MODEL_HTTP_400', phase: 'model', httpStatus: 400,
       requestId, serviceErrorCode: 'max_input_tokens_exceeded' });
@@ -33,7 +33,7 @@ describe('GUI-Plus adapter', () => {
   });
   it.each(['not json', 'x'.repeat(20_000), JSON.stringify({ error: { code: 'private-secret', message: 'private-secret' } })])('keeps the HTTP failure for invalid or untrusted error bodies', async body => {
     const fetch = vi.fn().mockResolvedValue(new Response(body, { status: 400, headers: { 'x-xopc-request-id': 'private-secret' } }));
-    const adapter = new ComputerModelAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26' }, fetch);
+    const adapter = new ChatCompletionsComputerAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26' }, fetch);
     const error = await adapter.predict({ goal: 'Describe', image: new Uint8Array(), mimeType: 'image/png', width: 1, height: 1, summary: '' }).catch(error => error);
     expect(computerDiagnostic(error)).toMatchObject({ errorCode: 'COMPUTER_MODEL_HTTP_400', httpStatus: 400 });
     expect(computerDiagnostic(error)?.requestId).toBeUndefined();
@@ -53,11 +53,11 @@ describe('GUI-Plus adapter', () => {
   it('honors the frozen service output ceiling and rejects invalid budgets', async () => {
     const connection = { modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26' as const, maxOutputTokens: 512 };
     const fetch = vi.fn().mockResolvedValue(Response.json({ choices: [{ message: { content: call({ action: 'wait', time: 0 }) } }] }));
-    const adapter = new ComputerModelAdapter(connection, fetch);
+    const adapter = new ChatCompletionsComputerAdapter(connection, fetch);
     await adapter.predict({ goal: 'Wait', image: new Uint8Array([1]), mimeType: 'image/png', width: 1, height: 1, summary: '' });
     expect(JSON.parse(fetch.mock.calls[0][1].body).max_tokens).toBe(512);
     expect(JSON.parse(fetch.mock.calls[0][1].body).messages[1].content[0].type).toBe('image_url');
-    expect(() => new ComputerModelAdapter({ ...connection, maxOutputTokens: 0 })).toThrow('COMPUTER_MODEL_OUTPUT_BUDGET');
+    expect(() => new ChatCompletionsComputerAdapter({ ...connection, maxOutputTokens: 0 })).toThrow('COMPUTER_MODEL_OUTPUT_BUDGET');
   });
   it.each([
     { kind: 'action', action: { kind: 'wait', durationMs: 0 } },
@@ -68,7 +68,7 @@ describe('GUI-Plus adapter', () => {
     const fetch = vi.fn().mockResolvedValue(Response.json({ choices: [{ message: { tool_calls: [{ function: {
       name: 'computer_proposal', arguments: JSON.stringify({ proposal }),
     } }] } }] }));
-    const adapter = new ComputerModelAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'structured-tools-v1' }, fetch);
+    const adapter = new ChatCompletionsComputerAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'structured-tools-v1' }, fetch);
     expect(await adapter.predict({ goal: 'Do the task', image: new Uint8Array([1]), mimeType: 'image/png', width: 800, height: 600, summary: '' })).toEqual(proposal);
     expect(JSON.parse(fetch.mock.calls[0][1].body).tools[0].function.name).toBe('computer_proposal');
   });
@@ -81,7 +81,7 @@ describe('GUI-Plus adapter', () => {
       ? { tool_calls: [{ function: { name: 'computer_observation', arguments: JSON.stringify({ text: 'A blue button' }) } }] }
       : { content: call({ action: 'answer', text: 'A blue button' }) };
     const fetch = vi.fn().mockResolvedValue(Response.json({ choices: [{ message }] }));
-    const adapter = new ComputerModelAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile }, fetch);
+    const adapter = new ChatCompletionsComputerAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile }, fetch);
     expect(await adapter.predict({ readOnly: true, goal: 'Describe the page', image: new Uint8Array([1]), mimeType: 'image/png', width: 800, height: 600, summary: '' }))
       .toEqual({ kind: 'answer', text: 'A blue button' });
     const body = JSON.parse(fetch.mock.calls[0][1].body);
@@ -90,13 +90,13 @@ describe('GUI-Plus adapter', () => {
   });
   it('rejects an action returned to a visual question', async () => {
     const fetch = vi.fn().mockResolvedValue(Response.json({ choices: [{ message: { content: call({ action: 'left_click', coordinate: [500, 500] }) } }] }));
-    const adapter = new ComputerModelAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26' }, fetch);
+    const adapter = new ChatCompletionsComputerAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26' }, fetch);
     await expect(adapter.predict({ readOnly: true, goal: 'Describe', image: new Uint8Array([1]), mimeType: 'image/png', width: 800, height: 600, summary: '' })).rejects.toThrow('READ_ONLY_MODEL_OUTPUT');
     expect(fetch).toHaveBeenCalledTimes(1);
   });
   it.each([undefined, 'Authorization', 'authorization', 'AUTHORIZATION'])('sends exactly one bearer credential with header %s', async name => {
     const fetch = vi.fn().mockResolvedValue(Response.json({ choices: [{ message: { content: call({ action: 'wait', time: 0 }) } }] }));
-    const adapter = new ComputerModelAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26',
+    const adapter = new ChatCompletionsComputerAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26',
       headers: { 'X-Test': 'preserved', ...(name ? { [name]: 'Bearer test' } : {}) }, deploymentRevision: 'revision' }, fetch);
     await adapter.predict({ goal: 'test', image: new Uint8Array(), mimeType: 'image/png', width: 1, height: 1, summary: '' });
     const headers = new Headers(fetch.mock.calls[0][1].headers);
@@ -106,14 +106,14 @@ describe('GUI-Plus adapter', () => {
     expect(headers.get('x-xopc-computer-deployment')).toBe('revision');
   });
   it('still rejects a conflicting authorization header', () => {
-    expect(() => new ComputerModelAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26',
+    expect(() => new ChatCompletionsComputerAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26',
       headers: { Authorization: 'Bearer other' } })).toThrow('COMPUTER_UNSUPPORTED_MODEL_HEADER');
   });
   it('allows one budgeted format re-prediction without changing the image or recipient', async () => {
     const fetch = vi.fn()
       .mockResolvedValueOnce(Response.json({ choices: [{ message: { content: '<tool_call>broken JSON</tool_call>' } }] }))
       .mockResolvedValueOnce(Response.json({ choices: [{ message: { content: call({ action: 'left_click', coordinate: [500, 500] }) } }] }));
-    const adapter = new ComputerModelAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26' }, fetch);
+    const adapter = new ChatCompletionsComputerAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26' }, fetch);
     const reserve = vi.fn();
     await expect(predictComputerStep(adapter, { goal: 'Click', image: new Uint8Array([1]), mimeType: 'image/png', width: 800, height: 600, summary: '' }, reserve)).resolves.toMatchObject({ kind: 'action' });
     expect(reserve).toHaveBeenCalledTimes(2);
@@ -148,7 +148,7 @@ describe('GUI-Plus adapter', () => {
     const raw = '<tool_call>{"name":"computer_use","arguments":{"action":"left_click","coordinate":497, 100]}}</tool_call>';
     const fetch = vi.fn().mockResolvedValueOnce(Response.json({ choices: [{ message: { content: raw } }] }))
       .mockResolvedValueOnce(Response.json({ choices: [{ message: { content: call({ action: 'left_click', coordinate: [497, 100] }) } }] }));
-    const adapter = new ComputerModelAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26' }, fetch);
+    const adapter = new ChatCompletionsComputerAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26' }, fetch);
     expect(await predictComputerStep(adapter, { goal: 'Select Memories', image: new Uint8Array([1]), mimeType: 'image/png', width: 800, height: 600, summary: '' }, () => {}))
       .toMatchObject({ action: { point: { x: 397, y: 60 } } });
     const request = JSON.parse(fetch.mock.calls[1][1].body);
@@ -202,14 +202,152 @@ describe('GUI-Plus adapter', () => {
     expect(computerDiagnostic(error)).toMatchObject({ errorCode: 'COMPUTER_INVALID_MODEL_OUTPUT', validationReason: 'invalid_arguments' });
   });
   it('requires TLS and forbids credentials in the URL', () => {
-    expect(() => new ComputerModelAdapter({ modelId: 'm', baseUrl: 'http://example.com/v1', apiKey: 'test', profile: 'structured-tools-v1' })).toThrow();
+    expect(() => new ChatCompletionsComputerAdapter({ modelId: 'm', baseUrl: 'http://example.com/v1', apiKey: 'test', profile: 'structured-tools-v1' })).toThrow();
   });
   it('never retries a vendor failure or includes the error body', async () => {
     const fetch = vi.fn().mockResolvedValue(new Response('private upstream information', { status: 429 }));
-    const adapter = new ComputerModelAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26' }, fetch);
+    const adapter = new ChatCompletionsComputerAdapter({ modelId: 'm', baseUrl: 'https://example.com/v1', apiKey: 'test', profile: 'gui-plus-2026-02-26' }, fetch);
     await expect(adapter.predict({ goal: 'test', image: new Uint8Array(), mimeType: 'image/png', width: 1, height: 1, summary: '' })).rejects.toThrow('COMPUTER_MODEL_HTTP_429');
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(fetch.mock.calls[0][1].redirect).toBe('error');
     expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({ temperature: 0, presence_penalty: 0, enable_thinking: false });
+  });
+});
+
+describe('OpenAI Responses computer adapter', () => {
+  const connection = { modelId: 'gpt-computer', baseUrl: 'https://api.example.com/v1', apiKey: 'test',
+    profile: 'openai-responses-computer-v1' as const };
+  const input = { goal: 'Open filters', image: new Uint8Array([1, 2]), mimeType: 'image/png' as const,
+    width: 800, height: 600, summary: '{"text":"Filters"}', stateDigest: 'state-1' };
+
+  it('uses the native computer tool and maps a single action', async () => {
+    const fetch = vi.fn().mockResolvedValue(Response.json({ id: 'resp_1', status: 'completed', output: [{
+      type: 'computer_call', call_id: 'call_1', actions: [{ type: 'click', button: 'left', x: 40, y: 50 }],
+    }] }));
+    const adapter = new OpenAIResponsesComputerAdapter(connection, fetch);
+    await expect(adapter.predict(input)).resolves.toEqual({ kind: 'action', action: {
+      kind: 'click', point: { x: 40, y: 50 }, button: 'left', count: 1,
+    } });
+    expect(fetch.mock.calls[0][0]).toBe('https://api.example.com/v1/responses');
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.tools).toEqual([{ type: 'computer' }]);
+    expect(body.input[0].content[0]).toMatchObject({ type: 'input_image', detail: 'original' });
+    expect(body.instructions).toContain('Goal: Open filters');
+  });
+
+  it('serializes a native action batch through the one-action broker boundary', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(Response.json({ id: 'resp_1', status: 'completed', output: [{ type: 'computer_call', call_id: 'call_1', actions: [
+        { type: 'click', button: 'left', x: 40, y: 50 }, { type: 'type', text: 'penguin' },
+      ] }] }))
+      .mockResolvedValueOnce(Response.json({ id: 'resp_2', status: 'completed', output_text: 'Done', output: [] }));
+    const adapter = new OpenAIResponsesComputerAdapter(connection, fetch);
+    const click = (await adapter.predict(input) as any).action;
+    expect(click.kind).toBe('click');
+    const typed = (await adapter.predict({ ...input, history: [{ goal: input.goal, action: 'click', actionPreview: JSON.stringify(click),
+      dispatch: 'completed', outcome: 'unknown', after: '', afterStateDigest: input.stateDigest }] }) as any).action;
+    expect(typed).toEqual({ kind: 'typeText', text: 'penguin', point: { x: 40, y: 50 } });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await expect(adapter.predict({ ...input, history: [{ goal: input.goal, action: 'typeText', actionPreview: JSON.stringify(typed),
+      dispatch: 'completed', outcome: 'unknown', after: '', afterStateDigest: input.stateDigest }] })).resolves.toEqual({ kind: 'answer', text: 'Done' });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const continuation = JSON.parse(fetch.mock.calls[1][1].body);
+    expect(continuation.previous_response_id).toBe('resp_1');
+    expect(continuation.input[0]).toMatchObject({ type: 'computer_call_output', call_id: 'call_1',
+      output: { type: 'computer_screenshot', detail: 'original' } });
+  });
+
+  it('drops the remaining batch after an unconfirmed action and replans from the screenshot', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(Response.json({ id: 'resp_1', output: [{ type: 'computer_call', call_id: 'call_1', actions: [
+        { type: 'click', button: 'left', x: 1, y: 2 }, { type: 'type', text: 'must-not-run' },
+      ] }] }))
+      .mockResolvedValueOnce(Response.json({ id: 'resp_2', output: [{ type: 'computer_call', call_id: 'call_2', actions: [{ type: 'wait' }] }] }));
+    const adapter = new OpenAIResponsesComputerAdapter(connection, fetch);
+    await adapter.predict(input);
+    await expect(adapter.predict(input)).resolves.toEqual({ kind: 'action', action: { kind: 'wait', durationMs: 500 } });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops the remaining batch when the window changes after the completed action', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(Response.json({ id: 'resp_1', output: [{ type: 'computer_call', call_id: 'call_1', actions: [
+        { type: 'click', button: 'left', x: 1, y: 2 }, { type: 'type', text: 'stale' },
+      ] }] }))
+      .mockResolvedValueOnce(Response.json({ id: 'resp_2', output: [{ type: 'computer_call', call_id: 'call_2', actions: [{ type: 'wait' }] }] }));
+    const adapter = new OpenAIResponsesComputerAdapter(connection, fetch);
+    const click = (await adapter.predict(input) as any).action;
+    await expect(adapter.predict({ ...input, stateDigest: 'state-2', history: [{ goal: input.goal, action: 'click',
+      actionPreview: JSON.stringify(click), dispatch: 'completed', outcome: 'unknown', after: '', afterStateDigest: 'state-1' }] }))
+      .resolves.toEqual({ kind: 'action', action: { kind: 'wait', durationMs: 500 } });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not carry queued actions into a different goal', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(Response.json({ id: 'resp_1', output: [{ type: 'computer_call', call_id: 'call_1', actions: [
+        { type: 'click', button: 'left', x: 1, y: 2 }, { type: 'type', text: 'stale' },
+      ] }] }))
+      .mockResolvedValueOnce(Response.json({ id: 'resp_2', output: [{ type: 'computer_call', call_id: 'call_2', actions: [{ type: 'wait' }] }] }));
+    const adapter = new OpenAIResponsesComputerAdapter(connection, fetch);
+    const click = (await adapter.predict(input) as any).action;
+    await expect(adapter.predict({ ...input, goal: 'A different task', history: [{ goal: input.goal, action: 'click',
+      actionPreview: JSON.stringify(click), dispatch: 'completed', outcome: 'unknown', after: '', afterStateDigest: input.stateDigest }] }))
+      .resolves.toEqual({ kind: 'action', action: { kind: 'wait', durationMs: 500 } });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses a click point for typing only inside the same native batch', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(Response.json({ id: 'resp_1', output: [{ type: 'computer_call', call_id: 'call_1',
+        actions: [{ type: 'click', button: 'left', x: 20, y: 30 }] }] }))
+      .mockResolvedValueOnce(Response.json({ id: 'resp_2', output: [{ type: 'computer_call', call_id: 'call_2', actions: [{ type: 'type', text: 'next' }] }] }));
+    const adapter = new OpenAIResponsesComputerAdapter(connection, fetch);
+    const click = (await adapter.predict(input) as any).action;
+    await expect(adapter.predict({ ...input, history: [{ goal: input.goal, action: 'click', actionPreview: JSON.stringify(click),
+      dispatch: 'completed', outcome: 'unknown', after: '', afterStateDigest: input.stateDigest }] })).resolves.toEqual({ kind: 'action', action: { kind: 'typeText', text: 'next' } });
+  });
+
+  it('keeps observation requests read-only and returns visible text', async () => {
+    const fetch = vi.fn().mockResolvedValue(Response.json({ id: 'resp_read', output: [{ type: 'message', content: [
+      { type: 'output_text', text: 'The Filters panel is closed.' },
+    ] }] }));
+    const adapter = new OpenAIResponsesComputerAdapter(connection, fetch);
+    await expect(adapter.predict({ ...input, readOnly: true })).resolves.toEqual({ kind: 'answer', text: 'The Filters panel is closed.' });
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.tools).toBeUndefined();
+    expect(body.previous_response_id).toBeUndefined();
+  });
+
+  it('cancels an unfinished control batch before a read-only observation', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(Response.json({ id: 'resp_1', output: [{ type: 'computer_call', call_id: 'call_1', actions: [
+        { type: 'click', button: 'left', x: 1, y: 2 }, { type: 'type', text: 'must-not-run' },
+      ] }] }))
+      .mockResolvedValueOnce(Response.json({ id: 'resp_read', output_text: 'Observed', output: [] }))
+      .mockResolvedValueOnce(Response.json({ id: 'resp_2', output: [{ type: 'computer_call', call_id: 'call_2', actions: [{ type: 'wait' }] }] }));
+    const adapter = new OpenAIResponsesComputerAdapter(connection, fetch);
+    await adapter.predict(input);
+    await expect(adapter.predict({ ...input, readOnly: true })).resolves.toEqual({ kind: 'answer', text: 'Observed' });
+    await expect(adapter.predict(input)).resolves.toEqual({ kind: 'action', action: { kind: 'wait', durationMs: 500 } });
+    expect(JSON.parse(fetch.mock.calls[2][1].body).previous_response_id).toBeUndefined();
+  });
+
+  it('hands unsupported pointer movement back to the user instead of approximating it', async () => {
+    const fetch = vi.fn().mockResolvedValue(Response.json({ id: 'resp_1', output: [{ type: 'computer_call', call_id: 'call_1',
+      actions: [{ type: 'move', x: 5, y: 6 }] }] }));
+    const adapter = new OpenAIResponsesComputerAdapter(connection, fetch);
+    await expect(adapter.predict(input)).resolves.toMatchObject({ kind: 'takeover' });
+  });
+
+  it('maps an exact two-point drag and refuses a curved path', async () => {
+    const straight = vi.fn().mockResolvedValue(Response.json({ id: 'resp_1', output: [{ type: 'computer_call', call_id: 'call_1',
+      actions: [{ type: 'drag', path: [{ x: 10, y: 20 }, { x: 30, y: 40 }] }] }] }));
+    await expect(new OpenAIResponsesComputerAdapter(connection, straight).predict(input)).resolves.toEqual({ kind: 'action', action: {
+      kind: 'drag', from: { x: 10, y: 20 }, to: { x: 30, y: 40 },
+    } });
+    const curved = vi.fn().mockResolvedValue(Response.json({ id: 'resp_2', output: [{ type: 'computer_call', call_id: 'call_2',
+      actions: [{ type: 'drag', path: [{ x: 1, y: 1 }, { x: 2, y: 2 }, { x: 3, y: 3 }] }] }] }));
+    await expect(new OpenAIResponsesComputerAdapter(connection, curved).predict(input)).resolves.toMatchObject({ kind: 'takeover' });
   });
 });

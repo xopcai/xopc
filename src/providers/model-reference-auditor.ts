@@ -1,10 +1,10 @@
-import type { Config } from '../config/schema.js';
-import type { SessionAgentConfig } from '../session/config-types.js';
 import { getImageGenerationProvider } from '../agent/image/generation/provider-registry.js';
 import { parseImageGenerationModelRef } from '../agent/image/generation/model-ref.js';
+import { isComputerModel, isDedicatedComputerProfile } from '../computer/model-policy.js';
+import type { Config } from '../config/schema.js';
+import type { SessionAgentConfig } from '../session/config-types.js';
 import { getModelCatalogStore, type ModelCatalogSnapshot } from './model-catalog-store.js';
 import { getModelRegistry, type ModelRegistry } from './model-registry.js';
-import { isComputerModel } from '../computer/model-policy.js';
 
 export interface ModelReferenceHealth {
   ref: string;
@@ -106,12 +106,13 @@ function suggestedRef(ref: string, catalog: ModelCatalogSnapshot): string | unde
   const source = Object.values(catalog.sources).find((entry) => entry.providerId === providerId);
   if (!source) return undefined;
   const available = new Set(source.models
-    .filter((model) => model.availability === 'available' && !model.computerUse)
+    .filter((model) => model.availability === 'available' && !isDedicatedComputerProfile(model.computerUse?.profile))
     .map((model) => model.id));
   if (source.recommendedModel && available.has(source.recommendedModel)) {
     return `${providerId}/${source.recommendedModel}`;
   }
-  const first = source.models.find((model) => model.availability === 'available' && !model.computerUse);
+  const first = source.models.find((model) => model.availability === 'available'
+    && !isDedicatedComputerProfile(model.computerUse?.profile));
   return first ? `${providerId}/${first.id}` : undefined;
 }
 

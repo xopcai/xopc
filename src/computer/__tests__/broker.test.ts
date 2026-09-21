@@ -57,6 +57,15 @@ describe('desktop computer authority', () => {
     await expect(f.broker.command({ op: 'act', sessionId: 's', owner: 'o', envelope: envelope(obs) })).rejects.toThrow('READ_ONLY');
     expect(f.driver.perform).not.toHaveBeenCalled();
   });
+  it('rejects either drag endpoint outside the authorized window', async () => {
+    const f = fixture(true); await f.open();
+    const obs = await f.broker.command({ op: 'observe', sessionId: 's', owner: 'o' });
+    const command = { op: 'act' as const, sessionId: 's', owner: 'o', envelope: { ...envelope(obs), action: {
+      kind: 'drag' as const, from: { x: 10, y: 10 }, to: { x: 800, y: 20 },
+    } } };
+    await expect(f.broker.command(command)).rejects.toThrow('COORDINATE_OUTSIDE_WINDOW');
+    expect(f.driver.perform).not.toHaveBeenCalled();
+  });
   it('does not cancel another task when an unrelated invocation aborts', async () => {
     const f = fixture(true); await f.open();
     await f.broker.cancel({ op: 'discover', owner: 'other', sessionId: 'other', query: '' });

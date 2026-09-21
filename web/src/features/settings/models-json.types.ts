@@ -15,7 +15,7 @@ export interface CustomModel {
   maxTokens?: number;
   cost?: ModelCost;
   reasoning?: boolean;
-  computerUse?: { profile: 'gui-plus-2026-02-26' | 'structured-tools-v1' };
+  computerUse?: { profile: 'gui-plus-2026-02-26' | 'structured-tools-v1' | 'openai-responses-computer-v1' };
   headers?: Record<string, string>;
   compat?: Record<string, unknown>;
   overrides?: {

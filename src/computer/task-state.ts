@@ -42,6 +42,7 @@ export interface ComputerHistoryEntry {
   dispatch: ComputerReceipt['dispatch'];
   outcome: ComputerReceipt['outcome'];
   after: string;
+  afterStateDigest?: string;
   verification?: ComputerVerification;
 }
 
@@ -64,7 +65,8 @@ export class ComputerTaskState {
       this.repeated = { key, count: this.repeated?.key === key ? this.repeated.count + 1 : 1 };
     } else this.repeated = undefined;
     this.history.push({ goal: goal.slice(0, 1000), action: action.kind, actionPreview: JSON.stringify(action).slice(0, 1000),
-      dispatch: receipt.dispatch, outcome: receipt.outcome, after: (after?.summary ?? '').slice(0, 2000), verification });
+      dispatch: receipt.dispatch, outcome: receipt.outcome, after: (after?.summary ?? '').slice(0, 2000),
+      ...(after ? { afterStateDigest: after.stateDigest } : {}), verification });
     if (this.history.length > 6) this.history.shift();
   }
 

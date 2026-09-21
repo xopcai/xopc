@@ -1,5 +1,5 @@
 import { getModelThinking } from '../../../providers/model-thinking.js';
-import { computerModelProfile } from '../../../computer/model-policy.js';
+import { computerModelProfile, isDedicatedComputerModel } from '../../../computer/model-policy.js';
 import type { Hono } from 'hono';
 
 import {
@@ -372,7 +372,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
       reasoning: m.reasoning ?? false,
       thinking: getModelThinking(m),
       vision: m.input?.includes('image') ?? false,
-      recommended: !computerModelProfile(m) && isRecommendedModel(m.provider, m.id),
+      recommended: !isDedicatedComputerModel(m) && isRecommendedModel(m.provider, m.id),
       cost: {
         input: m.cost?.input ?? 0,
         output: m.cost?.output ?? 0,
