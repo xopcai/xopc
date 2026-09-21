@@ -1,3 +1,4 @@
+import type { SessionFindMatch, SessionFindResult } from '../../session/session-find.js';
 import type { SessionTimelineItem } from '../../session/transcript-outline.js';
 import { TaskConversationRepository } from '../../tasks/task-conversation-repository.js';
 
@@ -5,9 +6,14 @@ import type { GatewaySessionsApi } from './sessions-api.js';
 
 type MessagePage = NonNullable<Awaited<ReturnType<GatewaySessionsApi['getMessagePage']>>>;
 
+function displayMessageCount(items: readonly SessionTimelineItem[]): number {
+  return items.reduce((count, item) =>
+    item.displayIndex === undefined ? count : Math.max(count, item.displayIndex + 1), 0);
+}
+
 export class TaskConversationQueryService {
   constructor(
-    private readonly sessions: Pick<GatewaySessionsApi, 'getMessagePage' | 'getTimeline'>,
+    private readonly sessions: Pick<GatewaySessionsApi, 'findMessages' | 'getMessagePage' | 'getTimeline'>,
     private readonly conversations: Pick<TaskConversationRepository, 'listSessions'> = new TaskConversationRepository(),
   ) {}
 
@@ -58,11 +64,8 @@ export class TaskConversationQueryService {
     let displayOffset = 0;
     let turnOffset = 0;
     for (const [index, link] of links.entries()) {
-      const [items, page] = await Promise.all([
-        this.sessions.getTimeline(link.conversationId),
-        this.sessions.getMessagePage(link.conversationId, { limit: 1 }),
-      ]);
-      if (!items || !page) return null;
+      const items = await this.sessions.getTimeline(link.conversationId);
+      if (!items) return null;
       if (index > 0) {
         output.push({
           id: `assignment:${link.id}`,
@@ -80,11 +83,38 @@ export class TaskConversationQueryService {
         turn: item.turn + turnOffset,
         ...(item.displayIndex === undefined ? {} : { displayIndex: item.displayIndex + displayOffset }),
       })));
-      displayOffset += page.pagination.total;
+      displayOffset += displayMessageCount(items);
       const highestTurn = items.reduce((max, item) => Math.max(max, item.turn), -1);
       turnOffset += highestTurn + 1;
     }
     return output;
+  }
+
+  async findMessages(taskId: string, query: string, limit = 1_000): Promise<SessionFindResult | null> {
+    const links = this.#executionSessions(taskId);
+    if (links.length === 0) return null;
+    const matches: SessionFindMatch[] = [];
+    let displayOffset = 0;
+    let total = 0;
+    for (const link of links) {
+      const [result, items] = await Promise.all([
+        this.sessions.findMessages(link.conversationId, query, limit),
+        this.sessions.getTimeline(link.conversationId),
+      ]);
+      if (!result || !items) return null;
+      total += result.total;
+      for (const match of result.matches) {
+        if (matches.length >= limit) break;
+        matches.push({ ...match, displayIndex: match.displayIndex + displayOffset });
+      }
+      displayOffset += displayMessageCount(items);
+    }
+    return {
+      query: query.trim(),
+      total,
+      truncated: total > matches.length,
+      matches,
+    };
   }
 
   #executionSessions(taskId: string) {
