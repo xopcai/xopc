@@ -142,7 +142,7 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
         ) : null}
 
         <section className="flex flex-col gap-5">
-          <div className="border-b border-edge-subtle pb-3 dark:border-edge-subtle">
+          <div className="flex flex-col gap-3 border-b border-edge-subtle pb-3 dark:border-edge-subtle sm:flex-row sm:items-center sm:justify-between">
             <PageTabs
               items={mainTabItems}
               activeTab={mainTab}
@@ -152,15 +152,9 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
               panelIdPrefix="skills-panel"
               className="flex-wrap"
             />
-          </div>
-
-          {mainTab === 'installed' ? (
-            <>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div className="min-w-0">
-                  <h2 className="text-balance text-sm font-semibold text-fg">{sk.installedHeading}</h2>
-                </div>
-                <div className="flex min-w-0 flex-wrap gap-2 sm:justify-end">
+            <div className="flex min-w-0 flex-wrap gap-2 sm:justify-end">
+              {mainTab === 'installed' ? (
+                <>
                   <PopoverSelect
                     value={sourceFilter}
                     placeholder={sk.filterAll}
@@ -195,17 +189,9 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                     align="end"
                     onChange={(value) => setCatalogStatusFilter(value as CatalogStatusFilter)}
                   />
-                </div>
-              </div>
-
-            </>
-          ) : (
-            <>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div className="min-w-0">
-                  <h2 className="text-balance text-sm font-semibold text-fg">{sk.discoverHeading}</h2>
-                </div>
-                <div className="flex min-w-0 flex-wrap gap-2 sm:justify-end">
+                </>
+              ) : (
+                <>
                   {!searchInputActive ? (
                     <PopoverSelect
                       value={marketBrowseProvider ?? ''}
@@ -234,24 +220,25 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
                     align="end"
                     onChange={(value) => setMarketSort(value as 'downloads' | 'newest')}
                   />
-                </div>
-              </div>
-              {searchInputActive ? (
-                <PageTabs
-                  items={resultTabItems}
-                  activeTab={resultTab}
-                  onChange={setResultTab}
-                  ariaLabel={sk.marketplaceResultsTabsAria}
-                  tabIdPrefix="skills-marketplace-results-tab"
-                  panelIdPrefix="skills-marketplace-results-panel"
-                  className="min-h-9 gap-1 overflow-x-auto rounded-lg border border-edge bg-surface-panel p-0.5 shadow-surface"
-                  buttonClassName="rounded-md px-2.5 py-1.5 text-xs"
-                  selectedClassName="bg-fg text-surface-panel dark:bg-fg dark:text-surface-base"
-                  unselectedClassName="text-fg-muted hover:text-fg"
-                />
-              ) : null}
-            </>
-          )}
+                </>
+              )}
+            </div>
+          </div>
+
+          {mainTab === 'marketplace' && searchInputActive ? (
+            <PageTabs
+              items={resultTabItems}
+              activeTab={resultTab}
+              onChange={setResultTab}
+              ariaLabel={sk.marketplaceResultsTabsAria}
+              tabIdPrefix="skills-marketplace-results-tab"
+              panelIdPrefix="skills-marketplace-results-panel"
+              className="min-h-9 gap-1 overflow-x-auto rounded-lg border border-edge bg-surface-panel p-0.5 shadow-surface"
+              buttonClassName="rounded-md px-2.5 py-1.5 text-xs"
+              selectedClassName="bg-fg text-surface-panel dark:bg-fg dark:text-surface-base"
+              unselectedClassName="text-fg-muted hover:text-fg"
+            />
+          ) : null}
 
           {mainTab === 'marketplace' ? (
             <SkillsPageMarketplaceContent {...vm} />

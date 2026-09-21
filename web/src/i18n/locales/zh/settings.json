@@ -1196,7 +1196,6 @@
     "discoverSearchPlaceholder": "搜索 GitHub、Slack、Notion…",
     "refreshConnections": "刷新连接状态",
     "needsAttentionTitle": "需要处理",
-    "connectedServicesTitle": "已连接服务",
     "customIntegrationsTitle": "自定义集成",
     "customIntegrationsHint": "面向高级用途的 MCP 服务器和共享运行设置。",
     "filters": "筛选",
