@@ -277,6 +277,7 @@
     "groups": {
       "navigate": "导航",
       "projects": "项目",
+      "connectors": "连接器",
       "quickSettings": "快捷设置",
       "extensions": "扩展",
       "sessions": "会话",
@@ -284,6 +285,13 @@
       "commands": "命令",
       "skills": "技能",
       "actions": "操作"
+    },
+    "connectors": {
+      "builtin": "内置",
+      "connected": "已连接",
+      "installed": "已安装",
+      "needsSetup": "需要设置",
+      "disabled": "已停用"
     },
     "routes": {
       "chatSubtitle": "打开聊天",

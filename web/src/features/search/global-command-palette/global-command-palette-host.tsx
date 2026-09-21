@@ -1,4 +1,4 @@
-import { File, FolderKanban, FolderOpen, Puzzle, Settings, Sparkles, Terminal, Zap } from 'lucide-react';
+import { Cable, File, FolderKanban, FolderOpen, Puzzle, Settings, Sparkles, Terminal, Zap } from 'lucide-react';
 import {
   useCallback,
   useEffect,
@@ -18,6 +18,8 @@ import {
   commandPaletteGroupCaps,
   commandPaletteGroupSortKey,
 } from '@/features/search/global-command-palette/command-palette-groups';
+import { getConnectorPaletteIndex } from '@/features/search/global-command-palette/connector-palette-api';
+import { buildConnectorHits } from '@/features/search/global-command-palette/connectors-provider';
 import type { GlobalHit } from '@/features/search/global-command-palette/types';
 import { hitRank, sortHits } from '@/features/search/global-command-palette/rank';
 import { buildRouteSeeds } from '@/features/search/global-command-palette/routes-provider';
@@ -87,6 +89,8 @@ function selectChatAgentFromPalette(
 
 function iconFor(hit: GlobalHit) {
   switch (hit.kind) {
+    case 'connector':
+      return <Cable className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />;
     case 'extension':
       return <Puzzle className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />;
     case 'route':
@@ -258,6 +262,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
 
   const [ui, dispatchUi] = useReducer(paletteUiReducer, initialPaletteUi);
   const [skillsVersion, setSkillsVersion] = useState(0);
+  const [connectorsVersion, setConnectorsVersion] = useState(0);
   const { query, selectedIndex, paletteLayer } = ui;
 
   const routeSeeds = useMemo(() => buildRouteSeeds(language), [language]);
@@ -274,10 +279,21 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
       ) {
         setSkillsVersion((v) => v + 1);
       }
+      setConnectorsVersion((version) => version + 1);
     };
     window.addEventListener('config-reload', onConfigReload);
     return () => window.removeEventListener('config-reload', onConfigReload);
   }, []);
+
+  const connectorIndexResource = useAsyncResource(
+    getConnectorPaletteIndex,
+    [connectorsVersion],
+    {
+      enabled: paletteLayer === 'main' && Boolean(debouncedQuery.trim()),
+      initial: { catalog: [], instances: [] },
+      errorData: { catalog: [], instances: [] },
+    },
+  );
 
   const openModelPalette = useCallback(() => {
     dispatchUi({ type: 'setLayer', layer: 'models' });
@@ -327,6 +343,17 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
       });
 
       const actionHits = buildAutomationActionHits(language, navigate, close);
+
+      const connectorHits = buildConnectorHits({
+        query: q,
+        ...connectorIndexResource.data,
+        labels: {
+          group: groups.connectors,
+          ...messages(language).commandPalette.connectors,
+        },
+        navigate,
+        close,
+      });
 
       const extensionHits = buildExtensionHits({
         query: q,
@@ -451,6 +478,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
         ...extensionHits,
         ...settingsFieldHits,
         ...projectHits,
+        ...connectorHits,
         ...sessionHits,
         ...fileHits,
         ...commandHits,
@@ -498,6 +526,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
       openAgentPalette,
       onClose,
       skillsVersion,
+      connectorIndexResource.data,
     ],
     {
       enabled: paletteLayer === 'main',
@@ -742,7 +771,9 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
           value={query}
           onChange={(e) => dispatchUi({ type: 'setQuery', value: e.target.value })}
           placeholder={
-            language === 'zh' ? '搜索…（会话 / 文件 / 设置 / 命令）' : 'Search… (sessions, files, settings, commands)'
+            language === 'zh'
+              ? '搜索…（会话 / 文件 / 连接器 / 设置 / 命令）'
+              : 'Search… (sessions, files, connectors, settings, commands)'
           }
           className="border-b border-edge bg-transparent px-4 py-3 text-sm text-fg outline-none placeholder:text-fg-muted"
           autoComplete="off"

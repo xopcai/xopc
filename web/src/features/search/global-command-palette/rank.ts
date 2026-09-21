@@ -48,13 +48,15 @@ export function hitRank(hit: Omit<GlobalHit, 'rank'>, query: string): number | n
       ? -0.15
       : hit.kind === 'project'
         ? -0.12
-      : hit.kind === 'file'
-        ? -0.1
-        : hit.kind === 'session'
-          ? -0.05
-          : hit.kind === 'setting' || hit.kind === 'action'
-            ? -0.02
-            : 0;
+        : hit.kind === 'connector'
+          ? -0.1
+          : hit.kind === 'file'
+            ? -0.1
+            : hit.kind === 'session'
+              ? -0.05
+              : hit.kind === 'setting' || hit.kind === 'action'
+                ? -0.02
+                : 0;
 
   return Math.max(0, best + kindBias);
 }
