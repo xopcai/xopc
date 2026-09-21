@@ -70,5 +70,11 @@ describe('product delivery contract', () => {
       title: 'Task',
       capabilities: ['open'],
     })).toBe('/tasks/task%2Fwith%20spaces');
+    expect(productReferenceRoute({
+      kind: 'scene',
+      id: 'scene/with spaces',
+      title: 'Scene',
+      capabilities: ['open'],
+    })).toBe('/scenes/scene%2Fwith%20spaces');
   });
 });

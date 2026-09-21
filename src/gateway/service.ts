@@ -1045,11 +1045,13 @@ export class GatewayService {
     this.running = true;
     this.taskRunDispatchTimer = setInterval(() => this.dispatchTaskRuns(), 1_000);
     this.taskRunDispatchTimer.unref?.();
-    this.sceneHost = new GatewaySceneHost(getSqliteDatabase(), {
-      principal: { ownerId: 'local-owner', workspaceId: this.workspacePath },
-      config: () => this.config,
-      publish: (type, notification) => this.realtime.broker.publish('gateway', type, notification),
-    });
+    if (this.config.gateway?.scenes?.enabled === true) {
+      this.sceneHost = new GatewaySceneHost(getSqliteDatabase(), {
+        principal: { ownerId: 'local-owner', workspaceId: this.workspacePath },
+        config: () => this.config,
+        publish: (type, notification) => this.realtime.broker.publish('gateway', type, notification),
+      });
+    }
     this.startupTrace = createGatewayStartupTrace();
     this.readiness.markStarting(this.startTime);
     const trace = this.startupTrace;
@@ -1298,7 +1300,7 @@ export class GatewayService {
       trace.mark('service.started-awaiting-http');
     }
 
-    this.sceneHost.start();
+    this.sceneHost?.start();
     log.debug('Gateway service started');
   }
 

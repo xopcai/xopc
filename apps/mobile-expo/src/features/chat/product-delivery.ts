@@ -3,7 +3,6 @@ import {
   parseProductDeliveryText,
   parseProductReferenceDeepLink,
   type ProductDeliveryEnvelope,
-  type ProductReferenceKind,
   type ProductReferenceLocator,
 } from '@xopcai/gateway-contract';
 
@@ -46,6 +45,7 @@ export function mobileProductRoute(reference: ProductReferenceLocator & { projec
     case 'workflow_run':
       return `/workflows/runs/${id}${reference.projectId ? `?projectId=${encodeURIComponent(reference.projectId)}` : ''}`;
     case 'workflow_definition':
+    case 'scene':
     case 'local_app':
       return null;
   }
@@ -55,14 +55,3 @@ export function mobileRouteFromProductDeepLink(value: string): string | null {
   const reference = parseProductReferenceDeepLink(value);
   return reference ? mobileProductRoute(reference) : null;
 }
-
-export const MOBILE_NATIVE_PRODUCT_KINDS = new Set<ProductReferenceKind>([
-  'task',
-  'project',
-  'note',
-  'automation',
-  'session',
-  'file',
-  'settings',
-  'workflow_run',
-]);

@@ -7,7 +7,7 @@ Load this manual before a non-trivial mutation.
 
 \`\`\`json
 {
-  "mode": "project | proactive | automation | note | task | task_run | local_app | settings",
+  "mode": "scene | project | automation | note | task | task_run | local_app | settings",
   "command": "...",
   "args": {},
   "dryRun": false
@@ -17,19 +17,18 @@ Load this manual before a non-trivial mutation.
 Send one object command per call. Inspect the returned JSON \`ok\` field; a tool call can
 complete successfully while the product command returns \`ok: false\`.
 
-## Proactive delegation
+## Scene delegation
 
-Use mode proactive only for explicit user delegation. Inspect list before start; edit existing subscriptions instead of duplicating them.
-When the user adopts a one-off result and repeating it would materially reduce future effort, offer one short natural-language upgrade such as “以后这类会议都这样准备吗？”. Start or update a proactive scene only after the user explicitly accepts. Confirm the moment, scope, promised help, notification timing and action boundary in ordinary language; do not expose scenario keys, schedules or runs.
-For one email thread, call mail_sources, then follow_up with sourceItemId, instructions and dueAt (ISO timestamp).
-Use update_follow_up with the current expectedRevision to pause, resume, adjust the deadline or end the delegation.
-On a communication card, continue_card with its id reads current work and binds this conversation to the delegation.
-Use the returned exact connectionId when retrieving or replying to the thread. Review current recipients and the full draft with the user and retain connector confirmation for sending. Never mark sent from an approval alone; require a successful provider receipt. The delegation continues watching synchronized replies until explicitly ended.
+Use mode \`scene\` only after the user explicitly delegates recurring or future work. Inspect
+\`list\` before \`start\`; configure an existing matching scene instead of creating a duplicate.
+Confirm the goal, source scope, timing, promised result, and read-only action boundary in ordinary
+language. A scene prepares suggestions or drafts and never sends mail or performs external writes.
 
 ## Object routing
 
 | Object | Tool |
 | --- | --- |
+| Scene and scene result | \`xopc_use\` mode \`scene\` |
 | Project, milestone, project update | \`xopc_use\` mode \`project\` |
 | Automation | \`xopc_use\` mode \`automation\` |
 | Task intent and lifecycle | \`xopc_use\` mode \`task\` |
@@ -57,15 +56,43 @@ Timestamps are Unix epoch milliseconds. Array fields are arrays of strings. Omis
 preserves a patchable field; an empty array intentionally clears it. Prefer explicit
 \`projectId\`, \`taskId\`, \`runId\`, \`noteId\`, and \`localAppId\` fields over \`id\`.
 
-## Proactive delegated work
+## Scenes
 
-Use mode \`proactive\` for work the user asks the assistant to keep following.
-Use \`list\` before starting; update existing delegations instead of duplicating them.
-- \`start\`: {scenarioKey: "project_delivery_risk" | "meeting_preparation" | "discussion_follow_up", projectId?: string, instructions: string}.
-- \`update\`: {id, expectedRevision, userInstructions?, enabled?, completedAt?}. Read the revision from list. completedAt is an ISO timestamp; ending work also sets enabled false.
-- \`check\`: {id}, for project checks.
-- \`get_card\`: {id}, reads the current authorized artifact and action state before discussing it.
-Instructions adjust what to watch; they never grant new action permissions. Distinguish a task being created from its work being completed. Do not claim a draft was sent.
+Commands: \`templates\`, \`list\`, \`get\`, \`mail_accounts\`, \`mail_search\`,
+\`mail_sources\`, \`read_notes\`, \`preflight\`, \`start\`, \`configure\`, \`transition\`,
+\`check\`, \`notes\`, \`work_item\`, \`update_work_item\`, \`schedule\`, \`results\`,
+\`feedback\`, \`mark_read\`, \`diagnostics\`, \`get_preferences\`, and \`set_preferences\`.
+
+The built-in templates are \`weekly-family-plan\` and \`mail-follow-up\`, currently version
+\`1.0.0\`. Discover templates instead of guessing keys or versions. Timestamps are Unix epoch
+milliseconds. Use \`preflight\` or \`dryRun: true\` before \`start\` when account or model readiness
+is uncertain.
+
+### Safe start protocol
+
+1. Call \`list\` and reuse a matching activation when one exists.
+2. Call \`templates\`; for mail, call \`mail_accounts\` and \`mail_search\` with the exact account.
+3. Explain the selected source and timing to the user before creating the scene.
+4. Call \`preflight\` with the complete start input.
+5. Call \`start\` with the same input and a stable \`requestId\` for retry safety.
+6. Add notes, a work item, or a schedule as required; then call \`get\` to verify the state.
+
+Family plans use scope \`{ "kind": "personal" }\` and permissions with only
+\`user_notes\`. Mail follow-up uses one selected mail source in an objects scope and exactly one
+authorized account. Never broaden either scope to make preflight pass.
+
+### Mutations and results
+
+Read the current activation \`revision\` before \`configure\` or \`transition\`. Read the current
+notes, schedule, work-item, or feedback revision before changing that object. On a conflict,
+read again and reconsider; do not retry with a guessed revision.
+
+\`check\` queues work and does not mean a result already exists. Use a stable \`requestId\` and
+inspect \`results\` later. \`no_change\` intentionally creates no user-facing draft. A returned
+draft is not a sent message. Use \`diagnostics\` for source, model, queue, or notification failures.
+
+Scene preferences control checks and reminders globally for the current principal. Read them
+with \`get_preferences\` before \`set_preferences\`; preserve fields the user did not ask to change.
 
 ## Projects
 

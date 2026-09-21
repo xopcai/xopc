@@ -63,5 +63,6 @@ describe('mobile product delivery', () => {
     };
     expect(mobileProductRoute(workflow)).toBe('/workflows/runs/run-1?projectId=project%2F1');
     expect(mobileRouteFromProductDeepLink(productReferenceDeepLink(workflow))).toBe('/workflows/runs/run-1');
+    expect(mobileProductRoute({ kind: 'scene', id: 'scene-1' })).toBeNull();
   });
 });

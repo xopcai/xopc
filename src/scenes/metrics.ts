@@ -4,7 +4,11 @@ import type { ScenePrincipal } from './contracts.js';
 
 /** Explicit feedback is a usefulness signal, not proof of adoption or saved time. */
 export class SceneMetrics {
-  constructor(private readonly db: DatabaseSync, private readonly clock: () => number = Date.now) {}
+  constructor(
+    private readonly db: DatabaseSync,
+    private readonly clock: () => number = Date.now,
+    private readonly modelRef: () => string | null = () => null,
+  ) {}
 
   diagnostics(principal: ScenePrincipal) {
     if (!principal.ownerId.trim() || !principal.workspaceId.trim()) throw new Error('Scene principal is required');
@@ -39,7 +43,9 @@ export class SceneMetrics {
     const policy = policyRow ? JSON.parse(String(policyRow.preferences_json)) : {};
     const checksPaused = policy.checksPaused === true || Date.parse(policy.checksPausedUntil ?? '') > now;
     if (checksPaused) for (const activation of activations) { activation.next_schedule_at = null; activation.next_deadline_check_at = null; activation.retry_at = null; }
-    return { checksPaused, pendingChecks: Number(queue.depth), oldestDueWaitMs: queue.oldest == null ? 0 : Math.max(0, now - Number(queue.oldest)),
+    let currentModel: string | null = null;
+    try { currentModel = this.modelRef(); } catch { /* Readiness reports invalid model configuration. */ }
+    return { checksPaused, currentModel, pendingChecks: Number(queue.depth), oldestDueWaitMs: queue.oldest == null ? 0 : Math.max(0, now - Number(queue.oldest)),
       lastSevenDays: { modelCalls: Number(usage.calls), connectorReads, tokens: Number(usage.tokens), estimatedCost: Number(usage.cost) }, notifications, activations };
   }
 

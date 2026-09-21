@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   BUILTIN_NAV_DEFS,
+  builtinNavDefsForFeatures,
   DEFAULT_VISIBLE_NAV_ITEMS,
   MAX_VISIBLE_NAV_ITEMS,
   MIN_VISIBLE_NAV_ITEMS,
@@ -15,6 +16,10 @@ function item(id: string): NavItem {
 }
 
 describe('reconcileNavOrder', () => {
+  it('only offers scenes after the rollout flag is enabled', () => {
+    expect(builtinNavDefsForFeatures(false).some((item) => item.id === 'builtin:scenes')).toBe(false);
+    expect(builtinNavDefsForFeatures(true).some((item) => item.id === 'builtin:scenes')).toBe(true);
+  });
   it('offers the app workshop as a built-in navigation destination', () => {
     expect(BUILTIN_NAV_DEFS).toContainEqual(expect.objectContaining({
       id: 'builtin:localApps',
