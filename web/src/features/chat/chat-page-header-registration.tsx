@@ -1,4 +1,4 @@
-import { Loader2, PanelRight, Plus, SquareTerminal } from 'lucide-react';
+import { Loader2, PanelRight, Plus, Search, SquareTerminal } from 'lucide-react';
 import { memo, useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
@@ -45,6 +45,7 @@ type ChatPageHeaderRegistrationProps = {
   onWorkspaceChange?: (path: string) => Promise<void>;
   prepareTerminalSession?: () => Promise<string | null>;
   terminalDisabled?: boolean;
+  onFindOpen?: () => void;
   projectId?: string | null;
   context?: Pick<SessionContextPanelProps, 'draftRefs' | 'project' | 'onLeaveProject' | 'leaveProjectLabel' | 'onDraftSourceNote' | 'draftSourceNoteLabel'>;
 };
@@ -68,6 +69,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   onWorkspaceChange,
   prepareTerminalSession,
   terminalDisabled = false,
+  onFindOpen,
   projectId,
   context,
 }: ChatPageHeaderRegistrationProps) {
@@ -218,6 +220,18 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
               {m.chat.temporarySession}
             </span>
           ) : null}
+          {hasMessages && onFindOpen ? (
+            <button
+              type="button"
+              className="rounded-md p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              title={`${m.chat.find.input} (${terminalPlatform === 'darwin' ? '⌘F' : 'Ctrl+F'})`}
+              aria-label={m.chat.find.input}
+              aria-keyshortcuts="Meta+F Control+F"
+              onClick={onFindOpen}
+            >
+              <Search className="size-4" strokeWidth={1.75} aria-hidden />
+            </button>
+          ) : null}
           {activeConversationId && hasMessages ? <SessionShareButton key={`share:${activeConversationId}`} conversationId={activeConversationId} /> : null}
           {terminalAvailable ? (
             <button
@@ -289,6 +303,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     m.chat.agentNoMatches,
     m.chat.temporarySession,
     m.chat.temporarySessionHint,
+    m.chat.find.input,
     m.chat.terminal.open,
     terminalShortcut,
     sideChatShortcut,
@@ -302,6 +317,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     terminalPreparing,
     activeConversationId,
     hasMessages,
+    onFindOpen,
     sideChatOpen,
     setSideChatOpen,
     workspacePath,

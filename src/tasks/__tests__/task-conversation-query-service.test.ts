@@ -72,4 +72,41 @@ describe('TaskConversationQueryService', () => {
       ['turn', 1],
     ]);
   });
+
+  it('offsets find results across execution sessions', async () => {
+    const totals = new Map([['old', 3], ['active', 2]]);
+    const getMessagePage = vi.fn(async (conversationId: string) => ({
+      session: { key: conversationId, messages: [] },
+      pagination: { total: totals.get(conversationId)!, limit: 1, offset: 0, hasMore: false },
+    }));
+    const findMessages = vi.fn(async (conversationId: string) => ({
+      query: 'needle',
+      total: 1,
+      truncated: false,
+      matches: [{ displayIndex: conversationId === 'old' ? 1 : 0, occurrence: 0 }],
+    }));
+    const getTimeline = vi.fn(async (conversationId: string) =>
+      Array.from({ length: totals.get(conversationId)! }, (_, displayIndex) => ({
+        id: `${conversationId}-${displayIndex}`,
+        kind: 'turn' as const,
+        title: 'message',
+        turn: displayIndex,
+        depth: 0,
+        displayIndex,
+      })));
+    const service = new TaskConversationQueryService(
+      { findMessages, getMessagePage, getTimeline } as never,
+      { listSessions: () => [link('active', 2, 'active'), link('old', 1, 'superseded')] },
+    );
+
+    await expect(service.findMessages('task-1', 'needle')).resolves.toEqual({
+      query: 'needle',
+      total: 2,
+      truncated: false,
+      matches: [
+        { displayIndex: 1, occurrence: 0 },
+        { displayIndex: 3, occurrence: 0 },
+      ],
+    });
+  });
 });

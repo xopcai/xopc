@@ -580,6 +580,7 @@ export const MessageBubble = memo(function MessageBubble({
               <>
                 <div
                   ref={isUser ? userMessageContentRef : undefined}
+                  data-chat-find-text
                   className={cn(
                     'min-w-0',
                     isUser && 'flex flex-col gap-2',
