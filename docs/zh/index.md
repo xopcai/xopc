@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: xopc
-  text: 为超级个体打造的个人 AI。
-  tagline: "记住你的目标与上下文，连接工具采取行动，并随时从上次停下的地方继续。"
+  text: 让重要的事持续向前。
+  tagline: "为超级个体打造的个人 AI。记住你的目标与上下文，连接工具采取行动，并随时从上次停下的地方继续。"
   image:
     src: /logo.svg
     alt: xopc
