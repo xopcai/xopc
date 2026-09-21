@@ -79,6 +79,17 @@ export function advancePendingAgentRunCursor(conversationId: string, runId: stri
   }
 }
 
+/** The cursor must describe the current UI projection, including a partial rebuild. */
+export function resetPendingAgentRunCursor(conversationId: string, runId: string): void {
+  try {
+    const key = pendingRunStorageKey(conversationId);
+    const pending = JSON.parse(storage.getString(key) ?? '{}') as PendingAgentRun;
+    if (pending.runId === runId) storage.set(key, JSON.stringify({ runId, lastSeq: 0 }));
+  } catch {
+    /* An unreadable entry falls back to a full replay. */
+  }
+}
+
 export function subscribePendingAgentRunChanged(
   listener: (detail: { conversationId?: string }) => void,
 ): () => void {

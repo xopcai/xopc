@@ -531,4 +531,20 @@ describe('AgentMessageSender local detach', () => {
     sender.detachLocalStream();
     await pending;
   });
+
+  it('resumes a partially rebuilt projection from its new cursor after another disconnect', async () => {
+    testState.memory.set('pending:session-a', JSON.stringify({ runId: 'run-cursor', lastSeq: 70 }));
+    const sender = new AgentMessageSender();
+    const rebuilding = sender.resume('run-cursor', 'session-a', undefined, { replayFromStart: true });
+    testState.realtimeListener?.onEvent?.({
+      topic: 'run:run-cursor', seq: 3, event: 'assistant_delta',
+      data: { type: 'assistant_delta', payload: { delta: 'rebuilt prefix' } },
+    });
+    sender.detachLocalStream();
+    await rebuilding;
+    const next = sender.resume('run-cursor', 'session-a');
+    expect(testState.realtimeAfterSeq).toBe(3);
+    sender.detachLocalStream();
+    await next;
+  });
 });

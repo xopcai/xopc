@@ -21,7 +21,7 @@ import {
   advancePendingAgentRunCursor,
   clearPendingAgentRun,
   readPendingAgentRunCursor,
-  readPendingAgentRunId,
+  resetPendingAgentRunCursor,
   setPendingAgentRun,
 } from '../features/gateway/pending-agent-run';
 import {
@@ -41,6 +41,8 @@ import { usePreferencesStore } from '../stores/preferences-store';
 export type MessagingCallbacks = AgentStreamCallbacks;
 
 export type AgentStreamResumeOptions = {
+  /** Cancels this local attachment, never the server run. */
+  signal?: AbortSignal;
   /** Rebuild an empty in-memory assistant projection from the retained run log. */
   replayFromStart?: boolean;
 };
@@ -299,6 +301,9 @@ export class AgentMessageSender {
   /** Close a stale local attachment without sending an abort or retaining its pending run. */
   settleCompletedStream(): void {
     if (!this._abort) return;
+    if (this._gatewayId === useGatewayStore.getState().activeGatewayId && this._trackedRunId) {
+      this._clearPendingRun(this._conversationId, this._trackedRunId);
+    }
     const abortController = this._abort;
     abortController.abort();
     this._streamCleanup?.();
@@ -429,9 +434,8 @@ export class AgentMessageSender {
     callbacks?: MessagingCallbacks,
     options: AgentStreamResumeOptions = {},
   ): Promise<void> {
-    if (this.isStreamingFor(conversationId)) {
-      this.detachLocalStream();
-    }
+    if (options.signal?.aborted) return;
+    this.detachLocalStream();
     this._trackedRunId = undefined;
     this._abort = new AbortController();
     const abortController = this._abort;
@@ -442,6 +446,7 @@ export class AgentMessageSender {
     const isCurrentConnection = () => useGatewayStore.getState().activeGatewayId === gatewayId && useGatewayStore.getState().connectionGeneration === generation;
     this.trackPendingRunId(runId);
     setPendingAgentRun(conversationId, runId);
+    if (options.replayFromStart) resetPendingAgentRunCursor(conversationId, runId);
     const terminal = wrapTerminalCallbacks(callbacks);
     const opts = streamDispatchOptions(conversationId, this);
     let preservePending = false;
@@ -451,6 +456,11 @@ export class AgentMessageSender {
       unsubscribe = undefined;
       if (this._streamCleanup === cleanupStream) this._streamCleanup = undefined;
     };
+    const detach = () => {
+      this._localDetaches.add(abortController);
+      abortController.abort();
+    };
+    options.signal?.addEventListener('abort', detach, { once: true });
 
     try {
       await new Promise<void>((resolve, reject) => {
@@ -475,8 +485,12 @@ export class AgentMessageSender {
           ? 0
           : readPendingAgentRunCursor(conversationId, runId);
         unsubscribe = subscribeMobileRealtimeTopic(`run:${runId}`, {
+          onSubscribed: () => {
+            if (attachDeadline.timer) clearTimeout(attachDeadline.timer);
+          },
           onEvent: (message) => {
-            if (!isCurrentConnection()) { finish(); return; }
+            if (settled || abortController.signal.aborted) return;
+            if (!isCurrentConnection() || this._abort !== abortController) { finish(); return; }
             if (attachDeadline.timer) clearTimeout(attachDeadline.timer);
             const event = message.data && typeof message.data === 'object'
               ? { ...(message.data as Record<string, unknown>), seq: message.seq }
@@ -486,6 +500,7 @@ export class AgentMessageSender {
             if (message.event === 'run_end' || message.event === 'error') finish();
           },
           onGap: (gap) => {
+            if (settled || abortController.signal.aborted) return;
             if (!isCurrentConnection()) { finish(); return; }
             if (gap.recoverable) return terminal.wrapped?.onReplayGap?.();
             finish(new AgentStreamReplayExpiredError());
@@ -502,26 +517,19 @@ export class AgentMessageSender {
       if (localDetach) return;
       throw e;
     } finally {
+      options.signal?.removeEventListener('abort', detach);
       const localDetach = this._localDetaches.has(abortController);
       this._localDetaches.delete(abortController);
       cleanupStream();
-      if (!isCurrentConnection()) {
+      if (!isCurrentConnection() || this._abort !== abortController) {
         // The previous computer keeps its cursor; never mutate the new connection.
-      } else if (localDetach || preservePending) {
-        this._rePersistPendingRunAfterDetach(conversationId, runId);
-      } else {
+      } else if (!localDetach && !preservePending) {
         this._clearPendingRun(conversationId, runId);
       }
       if (this._abort === abortController) {
         this._abort = undefined;
       }
     }
-  }
-
-  private _rePersistPendingRunAfterDetach(conversationId: string, runId: string): void {
-    const storedRunId = readPendingAgentRunId(conversationId);
-    if (storedRunId && storedRunId !== runId) return;
-    setPendingAgentRun(conversationId, runId);
   }
 
 }

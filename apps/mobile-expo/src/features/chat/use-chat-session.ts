@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { InfiniteData } from '@tanstack/react-query';
+import type { SessionAudioReadyEvent } from '@xopcai/gateway-contract';
 import { AppState } from 'react-native';
 import { randomUUID } from 'expo-crypto';
 
@@ -28,7 +29,7 @@ import { fetchSessionActiveRun, fetchSessionMessagePage, type SessionMessagePage
 import { useGatewayStore } from '../../stores/gateway-store';
 import { useAgentStreamResume } from './use-agent-stream-resume';
 import { useAgentStreamRecovery } from './use-agent-stream-recovery';
-import { isTransientNetworkError, STREAM_STALL_MS } from './network-errors';
+import { isTransientNetworkError, STREAM_STATUS_CHECK_MS } from './network-errors';
 import { useMessages } from '../../i18n/messages';
 import {
   canSendComposerDraft,
@@ -78,10 +79,10 @@ import {
   useLocalMessagesStore,
 } from './local-messages-store';
 import type { MessageSubmission } from './message-submission';
-import { resolveResumeRunId } from './resolve-resume-run-id';
 import { shouldWakeStreamRecoveryOnForeground } from './stream-recovery-foreground';
 import { formatMobileAgentRunError } from './agent-run-error';
 import { queueAssistantAudioAutoplay } from './assistant-audio-autoplay';
+import { useReadAloudStore } from '../voice/read-aloud-store';
 import { sessionContainsFinalAssistant } from './session-refresh-confirmation';
 import { recordConnectionEvent } from '../gateway/connection-log';
 
@@ -143,8 +144,8 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   const sendingRef = useRef(false);
   const mountedRef = useRef(true);
   const runBusyRef = useRef(false);
-  const resumeInFlightRef = useRef(false);
   const streamingMsgRef = useRef<Message | null>(null);
+  const streamingRunIdRef = useRef<string | null>(null);
   const finalizedMessagesRef = useRef<Message[]>([]);
   const finalizedAtRef = useRef(new Map<string, number>());
   const streamingFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -158,7 +159,6 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   const streamRecoveryRef = useRef({
     recover: (_error: unknown): boolean => false,
     wake: () => {},
-    markRecoverySucceeded: () => {},
     cancelRecovery: () => {},
   });
 
@@ -217,6 +217,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
 
   const updateStreamingMessage = useCallback((update: (message: Message) => void, flushImmediately = false) => {
     const message = ensureAssistantMessage(streamingMsgRef.current, Date.now());
+    message.turnId ??= streamingRunIdRef.current ?? undefined;
     update(message);
     streamingMsgRef.current = message;
 
@@ -252,6 +253,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   const clearStreamingMessage = useCallback(() => {
     clearStreamingFlushTimer();
     streamingMsgRef.current = null;
+    streamingRunIdRef.current = null;
     setStreamingMsg(null);
   }, [clearStreamingFlushTimer]);
 
@@ -293,7 +295,6 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       (message) => message.deliveryState === 'failed' || message.deliveryState === 'sending',
     ));
   }, [setOptimisticMessages]);
-
 
   // ── Session invalidation ─────────────────────────────────
   const invalidateSessionByKey = useCallback((targetConversationId: string) => {
@@ -337,22 +338,60 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     invalidateSessionByKey(conversationId);
   }, [invalidateSessionByKey, conversationId]);
 
-  const reconcileSessionHead = useCallback(async (targetConversationId = conversationId) => {
-    await refreshSessionHeadByKey(targetConversationId).catch(() => {
-      invalidateSessionByKey(targetConversationId);
-    });
-    if (activeConversationIdRef.current !== targetConversationId) return;
-    if (activeMessageIdRef.current) setMessageDeliveryState(activeMessageIdRef.current, 'sent');
-    sendingRef.current = false;
-    runBusyRef.current = false;
-    clearAllState();
-  }, [clearAllState, invalidateSessionByKey, refreshSessionHeadByKey, conversationId, setMessageDeliveryState]);
-
   const cancelMessageEndReconcile = useCallback(() => {
     messageEndReconcileGenerationRef.current += 1;
     if (messageEndReconcileTimerRef.current) clearTimeout(messageEndReconcileTimerRef.current);
     messageEndReconcileTimerRef.current = null;
   }, []);
+
+  // ── Finalize message ─────────────────────────────────────
+  const finalizeMessage = useCallback((targetConversationId = conversationId) => {
+    cancelMessageEndReconcile();
+    if (activeConversationIdRef.current !== targetConversationId) {
+      void refreshSessionHeadByKey(targetConversationId).catch(() => {
+        invalidateSessionByKey(targetConversationId);
+      });
+      return;
+    }
+
+    setStreaming(false);
+    streamingRef.current = false;
+    runBusyRef.current = false;
+    setProgress(null);
+    setClarifyPrompt(null);
+    setClarifySubmitError(null);
+    setClarifySubmitting(false);
+    const finalized = streamingMsgRef.current;
+    if (finalized) {
+      finalizeStreamingThinking(finalized.content);
+      finalizeRunningTools(finalized.content);
+      const snapshot = cloneMessageForRender(finalized);
+      const identity = snapshot.turnId ?? snapshot.id ?? randomUUID();
+      snapshot.id ??= identity;
+      const withoutCurrent = finalizedMessagesRef.current.filter(
+        (message) => (message.turnId ?? message.id) !== identity,
+      );
+      const next = [...withoutCurrent, snapshot];
+      finalizedMessagesRef.current = next;
+      finalizedAtRef.current.set(identity, Date.now());
+      setFinalizedMessages(next);
+    }
+    clearStreamingMessage();
+    void refreshClarification(targetConversationId).catch(() => undefined);
+  }, [cancelMessageEndReconcile, clearStreamingMessage, refreshClarification, conversationId]);
+
+  const reconcileSessionHead = useCallback(async (targetConversationId = conversationId) => {
+    if (activeConversationIdRef.current === targetConversationId) {
+      senderRef.current.settleCompletedStream();
+      sendingRef.current = false;
+      finalizeMessage(targetConversationId);
+    }
+    // History confirmation may fail or arrive after another turn starts. It must
+    // never keep the composer busy or discard the last visible answer.
+    await refreshSessionHeadByKey(targetConversationId).catch(() => {
+      invalidateSessionByKey(targetConversationId);
+    });
+  }, [finalizeMessage, invalidateSessionByKey, refreshSessionHeadByKey, conversationId]);
 
   const scheduleMessageEndReconcile = useCallback((targetConversationId: string) => {
     cancelMessageEndReconcile();
@@ -367,7 +406,6 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
             || !streamingRef.current
           ) return;
           if (!activeRun.active) {
-            senderRef.current.settleCompletedStream();
             await reconcileSessionHead(targetConversationId);
             return;
           }
@@ -398,39 +436,6 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   useEffect(() => {
     runBusyRef.current = streaming || sendingRef.current;
   }, [streaming, sending]);
-
-  // ── Finalize message ─────────────────────────────────────
-  const finalizeMessage = useCallback((targetConversationId = conversationId) => {
-    cancelMessageEndReconcile();
-    if (activeConversationIdRef.current !== targetConversationId) {
-      void refreshSessionHeadByKey(targetConversationId).catch(() => {
-        invalidateSessionByKey(targetConversationId);
-      });
-      return;
-    }
-
-    setStreaming(false);
-    streamingRef.current = false;
-    setProgress(null);
-    setClarifyPrompt(null);
-    setClarifySubmitError(null);
-    setClarifySubmitting(false);
-    const finalized = streamingMsgRef.current;
-    if (finalized) {
-      const snapshot = cloneMessageForRender(finalized);
-      const identity = snapshot.turnId ?? snapshot.id ?? randomUUID();
-      snapshot.id ??= identity;
-      const withoutCurrent = finalizedMessagesRef.current.filter(
-        (message) => (message.turnId ?? message.id) !== identity,
-      );
-      const next = [...withoutCurrent, snapshot];
-      finalizedMessagesRef.current = next;
-      finalizedAtRef.current.set(identity, Date.now());
-      setFinalizedMessages(next);
-    }
-    clearStreamingMessage();
-    void refreshClarification(targetConversationId).catch(() => undefined);
-  }, [cancelMessageEndReconcile, clearStreamingMessage, refreshClarification, conversationId]);
 
   useEffect(() => {
     if (!conversationId || finalizedMessages.length === 0) return undefined;
@@ -486,7 +491,6 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
       onStreamStart: () => {
         if (!isCurrentSession()) return;
         touchStreamActivity();
-        streamRecoveryRef.current.markRecoverySucceeded();
         setStreaming(true);
         streamingRef.current = true;
         updateStreamingMessage(() => {}, true);
@@ -697,20 +701,10 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
           return;
         }
         if (activeMessageIdRef.current) setMessageDeliveryState(activeMessageIdRef.current, 'sent');
-        if (isTransientNetworkError(msg) && streamRecoveryRef.current.recover(msg)) {
-          sendingRef.current = false;
-          runBusyRef.current = streamingRef.current;
-          return;
-        }
+        // This callback is a server terminal event. Transport failures reject
+        // the attachment promise and are handled by recovery separately.
         sendingRef.current = false;
-        setStreaming(false);
-        streamingRef.current = false;
-        runBusyRef.current = false;
-        clearStreamingMessage();
-        setProgress(null);
-        setClarifyPrompt(null);
-        setClarifySubmitError(null);
-        setClarifySubmitting(false);
+        finalizeMessage(callbackConversationId);
         setSnackMsg(formatMobileAgentRunError(msg, {
           modelQuotaExhausted: m.chat.modelQuotaExhausted,
           platformTokenLimitExceeded: m.chat.platformTokenLimitExceeded,
@@ -791,6 +785,7 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     streamingRef.current = true;
     lastStreamActivityAtRef.current = Date.now();
     // A stream failure cannot change an accepted message back to failed.
+    streamingRunIdRef.current = runId;
     void senderRef.current.resume(runId, input.conversationId, buildCallbacks(input.conversationId), {
       replayFromStart: true,
     }).catch(async error => {
@@ -898,47 +893,34 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   }, [conversationId, streaming, pendingRunTick]);
 
   // ── Resume ───────────────────────────────────────────────
-  const resume = useCallback(async (runId: string) => {
-    if (resumeInFlightRef.current || sendingRef.current) return;
-    resumeInFlightRef.current = true;
+  const resume = useCallback(async (runId: string, signal: AbortSignal) => {
+    if (signal.aborted || sendingRef.current || activeConversationIdRef.current !== conversationId) return;
+    if (!conversationId || !runId) return;
+    if (streamingRunIdRef.current && streamingRunIdRef.current !== runId) finalizeMessage(conversationId);
+    streamingRunIdRef.current = runId;
+    setProgress(null);
+    setStreaming(true);
+    streamingRef.current = true;
+    lastStreamActivityAtRef.current = Date.now();
     try {
-      if (activeConversationIdRef.current !== conversationId) return;
-      if (!conversationId || !runId) return;
-      if (senderRef.current.isStreamingFor(conversationId)) {
-        senderRef.current.detachLocalStream();
+      await senderRef.current.resume(
+        runId,
+        conversationId,
+        buildCallbacks(conversationId),
+        { replayFromStart: streamingMsgRef.current === null, signal },
+      );
+    } catch (e) {
+      if (signal.aborted) return;
+      if (activeConversationIdRef.current !== conversationId) {
+        invalidateSessionByKey(conversationId);
+        return;
       }
-      if (senderRef.current.isStreamingFor(conversationId)) return;
-      setProgress(null);
-      setStreaming(true);
-      streamingRef.current = true;
-      lastStreamActivityAtRef.current = Date.now();
-      try {
-        await senderRef.current.resume(
-          runId,
-          conversationId,
-          buildCallbacks(conversationId),
-          { replayFromStart: streamingMsgRef.current === null },
-        );
-        streamRecoveryRef.current.markRecoverySucceeded();
-      } catch (e) {
-        if (activeConversationIdRef.current !== conversationId) {
-          invalidateSessionByKey(conversationId);
-          return;
-        }
-        const message = e instanceof Error ? e.message : String(e);
-        if (isTransientNetworkError(message)) throw e;
-        clearPendingAgentRun(conversationId);
-        await reconcileSessionHead(conversationId);
-      }
-    } finally {
-      resumeInFlightRef.current = false;
+      const message = e instanceof Error ? e.message : String(e);
+      if (isTransientNetworkError(message)) throw e;
+      clearPendingAgentRun(conversationId);
+      await reconcileSessionHead(conversationId);
     }
-  }, [
-    conversationId,
-    invalidateSessionByKey,
-    buildCallbacks,
-    reconcileSessionHead,
-  ]);
+  }, [conversationId, invalidateSessionByKey, buildCallbacks, finalizeMessage, reconcileSessionHead]);
 
   // ── Stream recovery ──────────────────────────────────────
   const streamRecovery = useAgentStreamRecovery({
@@ -1008,16 +990,8 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   // only a cache; the gateway is the source of truth when the screen remounts.
   useEffect(() => {
     if (!conversationId) return undefined;
-    let cancelled = false;
-    void resolveResumeRunId(conversationId).then((runId) => {
-      if (cancelled || !runId || sendingRef.current || activeConversationIdRef.current !== conversationId) return;
-      streamRecoveryRef.current.wake();
-    }).catch(() => {
-      // A disconnected session is refreshed when connectivity returns.
-    });
-    return () => {
-      cancelled = true;
-    };
+    streamRecoveryRef.current.wake();
+    return () => streamRecoveryRef.current.cancelRecovery();
   }, [conversationId, activeGatewayId]);
 
   // ── Gateway event subscription ───────────────────────────
@@ -1039,10 +1013,23 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
   useEffect(() => {
     return subscribeGatewayEvent('session.transcript_updated', (detail) => {
       const key = (detail as { key?: string } | null)?.key;
-      if (key !== conversationId || finalizedMessages.length === 0) return;
+      if (key !== conversationId) return;
       void refreshSessionHeadByKey(conversationId).catch(() => undefined);
     });
-  }, [conversationId, finalizedMessages.length, refreshSessionHeadByKey]);
+  }, [conversationId, refreshSessionHeadByKey]);
+
+  useEffect(() => subscribeGatewayEvent('session.audio_ready', (detail) => {
+    const audio = detail as SessionAudioReadyEvent | null;
+    if (audio?.conversationId !== conversationId || !audio.uri) return;
+    void refreshSessionHeadByKey(conversationId).catch(() => invalidateSessionByKey(conversationId));
+    const reader = useReadAloudStore.getState();
+    const alreadyReading = reader.source?.conversationId === conversationId
+      && reader.status !== 'idle' && reader.status !== 'error';
+    if (AppState.currentState === 'active' && typeof audio.createdAtMs === 'number'
+      && Date.now() - audio.createdAtMs < 60_000 && !alreadyReading) {
+      queueAssistantAudioAutoplay({ type: 'audio', uri: audio.uri, mimeType: audio.mimeType, name: audio.name }, conversationId);
+    }
+  }), [conversationId, refreshSessionHeadByKey, invalidateSessionByKey]);
 
   useEffect(() => subscribeGatewayEvent('clarification.updated', (detail) => {
     if (!detail || typeof detail !== 'object') return;
@@ -1117,17 +1104,50 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
     });
   }, [refreshClarification, conversationId]);
 
-  // Detect a stalled realtime run
+  // Socket liveness belongs to the realtime heartbeat. A quiet tool/model is
+  // still a healthy run; only reconcile its status here.
   useEffect(() => {
     if (!streaming || !conversationId) return;
+    const controller = new AbortController();
+    let checking = false;
+    let lastCheckAt = 0;
     const interval = setInterval(() => {
+      if (checking || AppState.currentState !== 'active' || sendingRef.current) return;
       if (!streamingRef.current || activeConversationIdRef.current !== conversationId) return;
-      if (!readPendingAgentRunId(conversationId)) return;
-      if (Date.now() - lastStreamActivityAtRef.current < STREAM_STALL_MS) return;
-      triggerStreamRecovery();
+      if (Date.now() - Math.max(lastCheckAt, lastStreamActivityAtRef.current) < STREAM_STATUS_CHECK_MS) return;
+      const expectedRunId = readPendingAgentRunId(conversationId);
+      if (!expectedRunId) return;
+      const activityAt = lastStreamActivityAtRef.current;
+      checking = true;
+      lastCheckAt = Date.now();
+      void fetchSessionActiveRun(conversationId, controller.signal).then(async (run) => {
+        if (controller.signal.aborted || AppState.currentState !== 'active' || sendingRef.current
+          || !streamingRef.current || lastStreamActivityAtRef.current !== activityAt
+          || readPendingAgentRunId(conversationId) !== expectedRunId) return;
+        if (!run.active) {
+          clearPendingAgentRun(conversationId);
+          await reconcileSessionHead(conversationId);
+        } else if (run.runId !== expectedRunId || !senderRef.current.isStreamingFor(conversationId)) {
+          wakeStreamRecovery();
+        }
+      }).catch(() => {
+        // Realtime owns transport retries; retain the answer while HTTP is unavailable.
+      }).finally(() => { checking = false; });
     }, 5000);
-    return () => clearInterval(interval);
-  }, [streaming, conversationId, triggerStreamRecovery]);
+    return () => {
+      clearInterval(interval);
+      controller.abort();
+    };
+  }, [streaming, conversationId, reconcileSessionHead, wakeStreamRecovery]);
+
+  useEffect(() => subscribeGatewayEvent('run.completed', (detail) => {
+    const event = detail as { conversationId?: string; runId?: string } | null;
+    if (event?.conversationId !== conversationId || !event.runId || sendingRef.current) return;
+    if (readPendingAgentRunId(conversationId) !== event.runId) return;
+    streamRecoveryRef.current.cancelRecovery();
+    clearPendingAgentRun(conversationId);
+    void reconcileSessionHead(conversationId);
+  }), [conversationId, reconcileSessionHead]);
 
   return {
     // State

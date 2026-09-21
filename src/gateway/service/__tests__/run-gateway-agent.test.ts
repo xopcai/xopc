@@ -148,6 +148,7 @@ describe('runGatewayAgent', () => {
 
   it('emits one global terminal event with safe session metadata', async () => {
     const conversationId = "1f0d2f37-a857-4724-82d9-3eee13a09dff";
+    let deliverAudio!: (audio: { type: 'tts_audio'; uri: string; name: string; mimeType: string }) => void;
     const emitted: Array<{ type: string; payload: unknown }> = [];
     const realtimeEvents: Array<{ topic: string; event: string; data: unknown }> = [];
     const deps = {
@@ -157,7 +158,8 @@ describe('runGatewayAgent', () => {
         prepareInboundAttachments: async () => undefined,
         beginInboundTurn: () => {},
         turnDispatcher: {
-          processDirectStreaming: async function* () {
+          processDirectStreaming: async function* (...args: unknown[]) {
+            deliverAudio = (args[5] as { onDeferredAudio: typeof deliverAudio }).onDeferredAudio;
             const message = { role: 'assistant', content: [] };
             yield { type: 'message_start', message };
             yield {
@@ -240,6 +242,15 @@ describe('runGatewayAgent', () => {
       },
     ]);
     expect(realtimeEvents.some((event) => event.event === 'turn_outcome')).toBe(true);
+    const runEventCount = realtimeEvents.filter(event => event.topic === 'run:run-terminal').length;
+    deliverAudio({ type: 'tts_audio', uri: 'media://tts/reply.mp3', name: 'reply.mp3', mimeType: 'audio/mpeg' });
+    expect(realtimeEvents.at(-1)).toMatchObject({
+      topic: 'sessions', event: 'session.audio_ready',
+      data: { conversationId, runId: 'run-terminal', uri: 'media://tts/reply.mp3' },
+    });
+    expect(emitted.at(-1)).toEqual({ type: 'session.transcript_updated', payload: { key: conversationId } });
+    expect(realtimeEvents.filter(event => event.topic === 'run:run-terminal')).toHaveLength(runEventCount);
+
   });
 
   it('publishes a run-topic terminal when setup fails before active registration', async () => {

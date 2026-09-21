@@ -76,6 +76,24 @@ describe('RealtimeClient', () => {
     client.disconnect();
   });
 
+  it('acknowledges a quiet subscription without requiring a new run event', async () => {
+    const socket = new FakeSocket();
+    const onSubscribed = vi.fn();
+    const client = new RealtimeClient({
+      clientId: 'mobile', clientKind: 'mobile',
+      getWebSocketUrl: () => 'ws://gateway/realtime',
+      issueTicket: async () => issuedTicket(), createWebSocket: () => socket, onSubscribed,
+    });
+    client.subscribe('run:quiet', 12);
+    client.connect();
+    await vi.waitFor(() => expect(socket.onopen).not.toBeNull());
+    socket.open();
+    socket.onmessage?.({ data: serverMessage('realtime.ready', readyPayload()) });
+    socket.onmessage?.({ data: serverMessage('realtime.subscribed', { topic: 'run:quiet', cursor: 12 }) });
+    await vi.waitFor(() => expect(onSubscribed).toHaveBeenCalledWith({ topic: 'run:quiet', cursor: 12 }));
+    client.disconnect();
+  });
+
   it('authenticates, subscribes once, and advances cursors', async () => {
     const socket = new FakeSocket();
     const onEvent = vi.fn();
