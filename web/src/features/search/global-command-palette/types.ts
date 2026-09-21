@@ -1,4 +1,5 @@
 export type GlobalHitKind =
+  | 'connector'
   | 'extension'
   | 'route'
   | 'project'

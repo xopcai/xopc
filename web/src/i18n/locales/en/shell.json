@@ -277,6 +277,7 @@
     "groups": {
       "navigate": "Navigate",
       "projects": "Projects",
+      "connectors": "Connectors",
       "quickSettings": "Quick Settings",
       "extensions": "Extensions",
       "sessions": "Sessions",
@@ -284,6 +285,13 @@
       "commands": "Commands",
       "skills": "Skills",
       "actions": "Actions"
+    },
+    "connectors": {
+      "builtin": "Built-in",
+      "connected": "Connected",
+      "installed": "Installed",
+      "needsSetup": "Needs setup",
+      "disabled": "Disabled"
     },
     "routes": {
       "chatSubtitle": "Open chat",
