@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { applyPendingMigrations } from '../migrations/runner.js';
+import { applyPendingMigrations, XOPC_DB_SCHEMA_VERSION } from '../migrations/runner.js';
 import { ensureSchemaMetaTable, readSchemaVersion, setSchemaVersion } from '../schema-version.js';
 import { ensureXopcDatabaseSchema } from '../schema.js';
 import { assertSceneStorageReady, SCENE_TABLES } from '../scenes-schema.js';
@@ -34,17 +34,18 @@ describe('scene storage startup without historical imports', () => {
     db.prepare("INSERT INTO notification_acknowledgements VALUES (?, 'browser', 'web', 1)").run(id);
   };
 
-  it('adds source health to v188 without resetting current scenes', () => {
-    ensureXopcDatabaseSchema(db);
+  it.each([188, 189])('upgrades v%s without resetting current scenes', (version) => {
+    oldDatabase();
+    applyPendingMigrations(db, { targetVersion: version });
     const repository = new SceneRepository(db);
     repository.installTemplate(familyPlanTemplate);
     const principal = { ownerId: 'owner', workspaceId: 'workspace' };
     const activation = repository.createActivation(principal, { templateKey: familyPlanTemplate.key,
       templateVersion: familyPlanTemplate.version, goal: 'Keep current user data', scope: { kind: 'personal' },
       permissions: { accountIds: [], contextProviders: ['user_notes'], effectHandlers: [] } });
-    db.exec('DROP TABLE scene_source_health'); setSchemaVersion(db, 188);
     applyPendingMigrations(db);
-    expect(readSchemaVersion(db)).toBe(189);
+    expect(readSchemaVersion(db)).toBe(XOPC_DB_SCHEMA_VERSION);
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE name = 'scene_task_bindings'").get()).toBeDefined();
     expect(repository.getActivation(principal, activation.id).goal).toBe('Keep current user data');
     expect(() => assertSceneStorageReady(db)).not.toThrow();
     expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
@@ -53,7 +54,7 @@ describe('scene storage startup without historical imports', () => {
   it('initializes a fresh database through the normal startup path', () => {
     ensureXopcDatabaseSchema(db);
     expect(() => assertSceneStorageReady(db)).not.toThrow();
-    expect(readSchemaVersion(db)).toBe(189);
+    expect(readSchemaVersion(db)).toBe(XOPC_DB_SCHEMA_VERSION);
     expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     expect(db.prepare("SELECT name FROM sqlite_master WHERE name LIKE 'scene_%'").all().map(row => row.name))
       .toEqual(expect.arrayContaining([...SCENE_TABLES]));

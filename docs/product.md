@@ -124,15 +124,19 @@ On macOS, the experimental Work Discovery onboarding can request separate operat
 
 ## First product horizon
 
-The next product horizon is deliberately narrow:
+The next concrete delivery starts with the user's own Slack development work: messages are hard to keep up with, evolving threads require repeated copying into a coding agent, and branches are difficult to trace back to their requirements.
 
-1. Make the local macOS application the primary experience.
-2. Provide one universal capture path for text, voice, files, and links.
-3. Build individually authorized understanding from local files, Gmail, and Calendar.
-4. Make personal understanding inspectable, traceable, and correctable.
-5. Use Projects and Tasks to carry complex work across time.
-6. Identify one genuinely important thing each day and help move it forward.
-7. Confirm every external action before execution.
+1. Accept an explicitly delegated Slack thread and associate it with a durable Task.
+2. Investigate and develop within the authorized repository, using xopc's own BYOK Agent by default; an external executor such as Codex is optional and must meet the same control requirements.
+3. Keep new discussion connected to the original work, with versioned requirements and evidence that updates were applied.
+4. Bind the Task to its repository, workspace, branch, execution attempt, and verification results so each is traceable to the source.
+5. Interrupt only for decisions, approvals, or blockers requiring the user; record normal progress quietly.
+6. Treat code ready for delivery, accepted work, merged code, and deployment as different outcomes. Do not automatically push, open PRs, post to Slack, merge, deploy, or clean up existing branches.
+7. After reliable follow-through on selected threads, expand to discovering new work in explicitly authorized channels.
+
+This validates a generic source → Scene instructions → Task → existing Agent harness chain, not a Slack-specific coding runtime. Resources and permissions compose independently: analysis needs no files, documents use a task artifact folder, and project edits use a worktree. File edits require neither Docker nor command execution; optional verification remains separately authorized and unverified results are labeled honestly. Existing Gmail and family-planning scenes retain their current limits and release gates. Skill/Workflow packaging and a future Scene/Extension capability package remain follow-on integrations, not a second orchestration engine.
+
+See the [generic task follow-up design](./design/scene-task-follow-up.md) and [usage guide](./scenes.md). Initial validation compares message copying, manual thread checking, repeated instructions, branch lookup, and rework before and after adoption; a document-maintenance case verifies reuse beyond coding.
 
 This is a direction, not a claim that every part is complete in the current release. Check [Releases](./releases.md) and feature-specific guides for current availability.
 

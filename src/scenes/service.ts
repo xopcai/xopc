@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { activationInputSchema, activationStatuses, intersectPermissions, validateTemplate,
   type SceneActivation, type ScenePermission, type ScenePrincipal } from './contracts.js';
 import type { SceneContextProvider } from './execution.js';
-import { SceneRepository } from './repository.js';
+import { SceneConflictError, SceneRepository } from './repository.js';
 import { sceneScheduleSchema } from './schedule.js';
 
 export class SceneSetupError extends Error {
@@ -70,6 +70,7 @@ export class SceneApplicationService {
   }
 
   configure(principal: ScenePrincipal, id: string, value: unknown): SceneActivation {
+    if (this.repository.getActivation(principal, id).templateKey === 'task-follow-up') throw new SceneConflictError('Use the task follow-up controls');
     const { expectedRevision, ...input } = activationInputSchema.pick({ goal: true, scope: true, permissions: true })
       .extend({ expectedRevision: z.number().int().positive() }).parse(value);
     return this.repository.configureActivation(principal, id, expectedRevision, input);

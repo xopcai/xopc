@@ -69,7 +69,10 @@ async function api(path: string, method = 'GET', body?: unknown, key = 'smoke') 
 try {
   await start();
   assert.equal((await fetch(`${origin}/api/scenes/templates`)).status, 401);
-  assert.equal((await api('/templates')).templates.length, 2);
+  assert.equal((await api('/templates')).templates.length, 3);
+  assert.deepEqual((await api('/task-follow-ups')).items, []);
+  assert.deepEqual((await api('/source-providers/slack_thread/accounts')).accounts, []);
+  assert.equal((await fetch(`${origin}/api/scenes/task-follow-ups`)).status, 401);
   const { activation } = await api('/activations', 'POST', { templateKey: 'weekly-family-plan', templateVersion: '1.0.0', goal: 'Keep Sunday free', scope: { kind: 'personal' }, permissions: { accountIds: [], contextProviders: ['user_notes'], effectHandlers: [] } });
   await api(`/activations/${activation.id}/notes`, 'PATCH', { expectedRevision: 0, content: 'Sunday is for rest.' });
   await api(`/activations/${activation.id}/checks`, 'POST');
