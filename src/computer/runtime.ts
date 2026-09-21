@@ -8,7 +8,7 @@ import type { EndpointToolRuntime } from '../endpoint-tools/runtime.js';
 import type { Config } from '../config/schema.js';
 import { resolveEffectiveAgentConfigForSession } from '../config/agent-profile.js';
 import { getApiKey, resolveModel } from '../providers/index.js';
-import { ComputerModelAdapter, predictComputerStep, readComputerJson } from './model-adapter.js';
+import { createComputerModelAdapter, predictComputerStep, readComputerJson, type ComputerStepAdapter } from './model-adapter.js';
 import { enterComputerControl, leaveComputerControl } from './control-guard.js';
 import { computerModelProfile, ComputerServiceLimitsSchema, type ComputerServiceLimits } from './model-policy.js';
 import { ComputerDiagnosticSchema, ComputerOperationError, computerDiagnostic, computerRecovery } from './errors.js';
@@ -29,7 +29,7 @@ const Reply = z.object({
 }).strict();
 type Session = {
   id: string; owner: string; endpointId: string; appRef: string; mode: 'observe' | 'control'; prepare: boolean; windowRef?: string; binding: ComputerModelBinding;
-  adapter: ComputerModelAdapter; createdAt: number; modelRequests: number; actions: number;
+  adapter: ComputerStepAdapter; createdAt: number; modelRequests: number; actions: number;
   pending?: ActionEnvelope; controller: AbortController;
   task: ComputerTaskState;
   pendingContext?: { goal: string; before: z.infer<typeof ComputerObservationSchema>; expectation?: ComputerExpectation };
@@ -117,7 +117,7 @@ export class ComputerRuntime {
         if (!parsedDeployment.success || !parsedLimits.success) throw new Error('COMPUTER_DEPLOYMENT_UNAVAILABLE');
         deployment = parsedDeployment.data; serviceLimits = parsedLimits.data;
       }
-      const adapter = new ComputerModelAdapter({ modelId: model.id, baseUrl: model.baseUrl, apiKey, profile, headers: model.headers, deploymentRevision: deployment?.revision,
+      const adapter = createComputerModelAdapter({ modelId: model.id, baseUrl: model.baseUrl, apiKey, profile, headers: model.headers, deploymentRevision: deployment?.revision,
         maxOutputTokens: Math.min(2048, model.maxTokens ?? 2048, serviceLimits?.maxOutputTokens ?? 2048) });
       signal.throwIfAborted();
       s = { id: randomUUID(), owner, appRef: input.appRef, mode: input.mode, prepare: input.prepare, windowRef: input.windowRef, endpointId: endpoint.endpointId, adapter,
@@ -155,14 +155,18 @@ export class ComputerRuntime {
         try {
           const verification = verifyComputerExpectation(input.expect, observed.value.observation);
           if (input.op === 'observe' && !input.question) return { ...this.present(observed.value), verification, verified: verification?.status === 'satisfied', budget: this.budget(s) };
-          if (input.op === 'step' && input.expect?.kind !== 'text' && verification?.status === 'satisfied') return { status: 'condition_satisfied', sessionId: s.id, verification, verified: true, budget: this.budget(s),
-            nextAction: 'Only the supplied condition was verified. No input was dispatched. Check remaining task requirements before reporting completion.' };
+          if (input.op === 'step' && input.expect?.kind !== 'text' && verification?.status === 'satisfied') {
+            s.adapter.reset?.();
+            return { status: 'condition_satisfied', sessionId: s.id, verification, verified: true, budget: this.budget(s),
+              nextAction: 'Only the supplied condition was verified. No input was dispatched. Check remaining task requirements before reporting completion.' };
+          }
           if (input.op === 'step' && s.actions >= config.computer.maxActionsPerSession) throw new Error('COMPUTER_ACTION_BUDGET');
           const o = observed.value.observation;
           if (!o || !observed.frame || !observed.mimeType) throw new Error('COMPUTER_FRAME_REQUIRED');
           phase = 'model';
           const proposal = await predictComputerStep(s.adapter, { goal: input.op === 'observe' ? input.question! : input.goal, readOnly: input.op === 'observe', image: observed.frame, mimeType: observed.mimeType,
-            width: o.imageWidth, height: o.imageHeight, summary: o.summary, history: s.task.history, expectation: input.expect }, () => {
+            width: o.imageWidth, height: o.imageHeight, summary: o.summary, stateDigest: o.stateDigest,
+            history: s.task.history, expectation: input.expect }, () => {
             if (++s!.modelRequests > config.computer.maxModelRequests) throw new Error('COMPUTER_MODEL_BUDGET');
           }, signal);
           if (proposal.kind === 'answer') return { ...this.present(observed.value), summary: proposal.text, verified: false, verification, budget: this.budget(s) };

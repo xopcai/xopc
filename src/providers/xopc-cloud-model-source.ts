@@ -1,4 +1,7 @@
+import type { ComputerProfile } from '@xopcai/computer-control-contract';
 import { voiceManifestSchema } from '@xopcai/realtime-protocol/voice';
+
+import { isDedicatedComputerProfile } from '../computer/model-policy.js';
 import type { AvailableCatalogModel, CatalogSource } from './model-catalog-store.js';
 import { getProviderAuthService, type ProviderAuthService } from './provider-auth-service.js';
 import { resolveXopcModelRouterUrl } from './xopc-cloud-config.js';
@@ -138,7 +141,7 @@ export class XopcCloudModelSource {
         const catalogModel: AvailableCatalogModel = {
           ...(voice.success ? { voice: voice.data } : {}),
           ...(['gui-plus-2026-02-26', 'structured-tools-v1'].includes(String(model.xopc?.capabilities?.computerUse?.profile))
-            ? { computerUse: { profile: model.xopc!.capabilities!.computerUse!.profile as 'gui-plus-2026-02-26' | 'structured-tools-v1' } } : {}),
+            ? { computerUse: { profile: model.xopc!.capabilities!.computerUse!.profile as ComputerProfile } } : {}),
           id: model.id,
           name: typeof model.xopc?.displayName === 'string' && model.xopc.displayName.trim() ? model.xopc.displayName.trim() : model.id,
           ...parseDisplayNames(model.xopc?.displayNames),
@@ -178,7 +181,7 @@ export class XopcCloudModelSource {
         baseUrl: this.routerUrl,
         api: 'openai-completions',
         etag: response.headers.get('x-xopc-model-catalog-version'),
-        recommendedModel: models.find(model => !model.computerUse)?.id ?? null,
+        recommendedModel: models.find(model => !isDedicatedComputerProfile(model.computerUse?.profile))?.id ?? null,
         ...(Object.keys(recommended).length > 0 ? { recommended } : {}),
         ...(search ? { search } : {}),
         lastSuccessAt: Date.now(),
@@ -249,7 +252,7 @@ function modelMatchesRecommendation(
   capability: 'vision' | 'image-generation' | 'stt' | 'tts',
 ): boolean {
   switch (capability) {
-    case 'vision': return model.kind === 'language' && model.input.includes('image') && !model.computerUse;
+    case 'vision': return model.kind === 'language' && model.input.includes('image') && !isDedicatedComputerProfile(model.computerUse?.profile);
     case 'image-generation': return model.kind === 'image' && model.operations.includes('images.generate');
     case 'stt': return model.kind === 'stt' && model.operations.includes('audio.transcription');
     case 'tts': return model.kind === 'tts' && model.operations.includes('audio.speech');

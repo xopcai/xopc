@@ -40,4 +40,12 @@ describe('resolveModel', () => {
       )?.contextWindow,
     ).toBe(1_050_000);
   });
+
+  it('advertises native Computer Use only for explicit OpenAI Responses models', () => {
+    expect(resolveModel('openai/gpt-5.6-sol')).toMatchObject({
+      api: 'openai-responses',
+      computerUse: { profile: 'openai-responses-computer-v1' },
+    });
+    expect(resolveModel('openai-codex/gpt-5.6-sol')).not.toHaveProperty('computerUse');
+  });
 });

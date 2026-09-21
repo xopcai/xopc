@@ -17,6 +17,10 @@ Codex-level task success.
      model connection (`DASHSCOPE_API_KEY` is also supported by the provider).
    - Managed: sign in to xopc Cloud, then use
      `xopc-cloud/computer-gui-plus-preview`.
+   - OpenAI API: connect the `openai` provider and select a catalog model that
+     explicitly advertises `openai-responses-computer-v1`. Codex OAuth models
+     are not treated as public OpenAI API credentials and are not implicitly
+     enabled for Computer Use.
 4. Start the task from the desktop app using the application's name, for example
    “Read the current page in Feishu; do not click.” No bundle ID is required.
    To permit launching/restoring it, say “Open Feishu and read the current page.”
@@ -54,12 +58,14 @@ page is empty, invent controls or bypass the grounded-text-input checks.
 
 The selector uses the connected model catalog, not a manually entered model ID.
 If a Cloud model is missing, sign in and refresh the model catalog in Models.
-The dedicated GUI model is separate from the chat/planning model; an empty
-selection never inherits the chat model. Keys remain in existing provider
-connections. Custom models expose a Computer Use protocol under Advanced in
-the model editor. They must use the supported Chat Completions API and image
-input; ordinary vision capability or a protocol declaration does not certify
-GUI task quality.
+An empty selection never inherits the chat model. A general-purpose model may
+appear in both chat and Computer Use when its catalog entry explicitly declares
+the native Responses protocol; dedicated GUI models remain excluded from normal
+chat choices. Keys remain in existing provider connections. Custom models expose
+a Computer Use protocol under Advanced in the model editor. `gui-plus-2026-02-26`
+and `structured-tools-v1` require Chat Completions; `openai-responses-computer-v1`
+requires Responses. All profiles require image input. Ordinary vision capability
+or a protocol declaration does not certify GUI task quality.
 
 Models shows a separate Computer Use capability card. Configured means the
 binding and connection are available, not that this desktop has granted access
@@ -150,9 +156,10 @@ the current Gateway.
   action do not consume additional slots.
 - Routes and credentials are frozen per control session. Managed calls pin the
   platform deployment fingerprint; a changed deployment requires a new session.
-- One malformed model action can trigger at most one format re-prediction on the
-  same image and model, before any input is dispatched. Both requests consume
-  the model budget. No malformed JSON is repaired into an executable action.
+- For Chat Completions profiles, one malformed model action can trigger at most
+  one format re-prediction on the same image and model before input is dispatched.
+  Native Responses output is schema-validated and fails closed without format
+  retry. No malformed JSON is repaired into an executable action.
 - No automatic provider fallback, HTTP retry or replay of an uncertain native
   input. A revoked grant fails closed. If a pre-dispatch check positively confirms
   no input and detects changed evidence, the runtime takes one fresh observation
@@ -168,8 +175,14 @@ the current Gateway.
 
 ## Task continuity, verification and handoff
 
-Each session keeps the last six completed input previews in bounded memory. The
-GUI model receives those previews with the current window, not old screenshots.
+Each session keeps the last six completed input previews in bounded memory. Chat
+Completions profiles receive those previews with the current window, not old
+screenshots. Native Responses sessions keep model state through
+`previous_response_id`; screenshots remain ephemeral. Ordered native action
+batches are serialized through the same one-action approval boundary. A changed
+goal, read-only observation, unconfirmed action, changed post-action window state,
+or already-satisfied completion condition discards the remaining batch before
+replanning.
 Repeated identical input on an unchanged observed state stops before a third
 dispatch. This is loop detection, not a guarantee against duplicate business writes.
 
@@ -199,9 +212,13 @@ never locally repaired into coordinates. The private reply is not stored in
 transcripts or error logs. Failure after correction stops the session; this is
 not a guarantee that a hosted model will always obey the output protocol.
 
-Both GUI profiles support action, answer, finished claim and user takeover.
+The two Chat Completions profiles support action, answer, finished claim and user takeover.
 `structured-tools-v1` uses a single `computer_proposal` function for control
 decisions and a separate read-only answer schema; no legacy action parser is kept.
+`openai-responses-computer-v1` consumes native `computer_call` output and returns
+`computer_call_output` screenshots. Click, double-click, type, keypress, scroll,
+wait, screenshot and exact two-point drag are supported. Pointer-only movement
+and curved drag paths request takeover rather than being approximated.
 
 Responses expose local session action/request budgets and expiry. Managed models
 also expose available service ceilings from the platform catalog; these are not

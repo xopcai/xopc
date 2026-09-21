@@ -60,6 +60,16 @@ function fixture(autoApprove = true) {
     open: async (appRef: string, mode: 'observe' | 'control' = 'control') => runtime.execute('owner', { op: 'open', appRef, mode, prepare: false }) };
 }
 describe('agent to broker desktop lifecycle', () => {
+  it('selects the native Responses adapter for an explicitly compatible OpenAI model', async () => {
+    const f = fixture();
+    vi.mocked(resolveModel).mockReturnValueOnce({ id: 'gpt-5.6-sol', provider: 'openai', api: 'openai-responses', input: ['text', 'image'],
+      maxTokens: 4096, baseUrl: 'https://api.openai.com/v1', computerUse: { profile: 'openai-responses-computer-v1' } } as any);
+    f.fetch.mockResolvedValueOnce(Response.json({ id: 'resp_1', output: [{ type: 'computer_call', call_id: 'call_1', actions: [{ type: 'wait' }] }] }));
+    await f.open(await f.discover());
+    await f.runtime.execute('owner', { op: 'step', goal: 'Wait briefly' });
+    expect(f.fetch.mock.calls[0][0]).toBe('https://api.openai.com/v1/responses');
+    expect(JSON.parse((f.fetch.mock.calls as any)[0][1].body).tools).toEqual([{ type: 'computer' }]);
+  });
   it('uses managed service ceilings without presenting them as account balances', async () => {
     const f = fixture();
     vi.mocked(resolveModel).mockReturnValueOnce({ id: 'gui', provider: 'xopc-cloud', api: 'openai-completions', input: ['text', 'image'], maxTokens: 4096,

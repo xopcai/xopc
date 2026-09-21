@@ -3,12 +3,17 @@ import { z } from 'zod';
 export const COMPUTER_CONTROL_TOOL = 'desktop.computer.control';
 export const COMPUTER_FRAME_MAX_BYTES = 5 * 1024 * 1024;
 export const COMPUTER_FRAME_MAX_PIXELS = 16_000_000;
-export const ComputerProfileSchema = z.enum(['gui-plus-2026-02-26', 'structured-tools-v1']);
+export const ComputerProfileSchema = z.enum([
+  'gui-plus-2026-02-26',
+  'structured-tools-v1',
+  'openai-responses-computer-v1',
+]);
 export type ComputerProfile = z.infer<typeof ComputerProfileSchema>;
 const Id = z.string().min(1).max(200);
 const Point = z.object({ x: z.number().finite().min(0), y: z.number().finite().min(0) }).strict();
 export const ComputerActionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('click'), point: Point, button: z.enum(['left', 'right']), count: z.union([z.literal(1), z.literal(2)]) }).strict(),
+  z.object({ kind: z.literal('drag'), from: Point, to: Point }).strict(),
   z.object({ kind: z.literal('setValue'), ref: Id, text: z.string().max(16_384) }).strict(),
   z.object({ kind: z.literal('typeText'), text: z.string().max(16_384), point: Point.optional() }).strict(),
   z.object({ kind: z.literal('pressKeys'), keys: z.array(z.string().regex(/^[a-zA-Z0-9_]+$/).max(40)).min(1).max(4) }).strict(),
