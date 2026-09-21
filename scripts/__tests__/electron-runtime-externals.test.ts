@@ -21,6 +21,7 @@ describe('electron-runtime-externals', () => {
       'onnxruntime-common',
       'sherpa-onnx-node',
       'node-pty',
+      '@trycua/cua-driver',
     ]);
     expect(ELECTRON_GATEWAY_EXTERNALS).toContain('sharp');
     expect(ELECTRON_GATEWAY_EXTERNALS).toContain('playwright-core');
@@ -43,6 +44,7 @@ describe('electron-runtime-externals', () => {
         'onnxruntime-common': '1.21.0',
         'sherpa-onnx-node': '1.13.4',
         'node-pty': '1.1.0',
+        '@trycua/cua-driver': '0.28.2',
       },
       devDependencies: {
         vitest: '^4.0.0',
@@ -56,6 +58,7 @@ describe('electron-runtime-externals', () => {
       'onnxruntime-common',
       'sherpa-onnx-node',
       'node-pty',
+      '@trycua/cua-driver',
     ]);
     expect(minimal).not.toHaveProperty('devDependencies');
     expect(minimal.name).toBe('@xopcai/xopc');
@@ -70,6 +73,7 @@ describe('electron-runtime-externals', () => {
         ws: '^8.21.0',
         sharp: '0.35.4',
         'silk-wasm': '^3.7.1',
+        '@trycua/cua-driver': '0.28.2',
       },
       optionalDependencies: {
         '@huggingface/transformers': '3.8.1',
@@ -88,6 +92,7 @@ describe('electron-runtime-externals', () => {
       'onnxruntime-common': '1.21.0',
       'sherpa-onnx-node': '1.13.4',
       'node-pty': '1.1.0',
+      '@trycua/cua-driver': '0.28.2',
     });
   });
 
@@ -105,6 +110,7 @@ describe('electron-runtime-externals', () => {
           'onnxruntime-common': '1.21.0',
           'sherpa-onnx-node': '1.13.4',
           'node-pty': '1.1.0',
+          '@trycua/cua-driver': '0.28.2',
         },
       },
       repoRoot,
@@ -117,6 +123,7 @@ describe('electron-runtime-externals', () => {
       'onnxruntime-common': resolveInstalledPackageVersion(repoRoot, 'onnxruntime-common'),
       'sherpa-onnx-node': resolveInstalledPackageVersion(repoRoot, 'sherpa-onnx-node'),
       'node-pty': resolveInstalledPackageVersion(repoRoot, 'node-pty'),
+      '@trycua/cua-driver': resolveInstalledPackageVersion(repoRoot, '@trycua/cua-driver'),
     });
     expect(Object.values(minimal.dependencies as Record<string, string>).every((v) => !v.startsWith('^'))).toBe(true);
   });
@@ -159,6 +166,7 @@ describe('electron-runtime-externals', () => {
         'onnxruntime-common': '1.21.0',
         'sherpa-onnx-node': '1.13.4',
         'node-pty': '1.1.0',
+        '@trycua/cua-driver': '0.28.2',
       },
       devDependencies: {
         electron: '^41.7.1',

@@ -105,19 +105,49 @@ dispatch, accurate error stage, and no other-tool admission before release.
 
 ## Reporting
 
-Create JSON with `plan` and `runs` matching `src/computer/evaluation.ts` and run:
+For an existing report, create JSON with `plan` and `runs` matching
+`src/computer/evaluation.ts` and run:
 
 ```sh
 node --import tsx scripts/evaluate-computer.mts /absolute/path/to/report.json
 ```
 
+For a fresh matrix run, create a manifest containing the fixed `plan` plus
+separate JSON-in/JSON-out `executor` and `oracle` commands, then run:
+
+```sh
+pnpm computer:evaluate:run /absolute/path/to/manifest.json /absolute/path/to/report.json
+```
+
+The runner invokes one task at a time, passes `{taskId, repetition, modelRef,
+environment, evidence}` to the executor, then passes its measurements to the
+independent oracle. The executor cannot supply `outcome` or `oracle`; doing so is
+rejected. The oracle must return `outcome`, `oracle`, and an `evidenceRef`.
+Partial results are atomically persisted with mode `0600` after every run.
+Commands are argument arrays and never run through a shell.
+
 Use the 60 IDs above, repetitions=3, a fixed modelRef/environment, and evidence
-`real-app` only when actually executed against real applications. The script
-grades supplied measurements; it does not execute this matrix or independently
-authenticate an oracle. Preserve the oracle evidence references in the associated
-test log. Exit code 1 means the beta gate was not met, including incomplete data.
+`real-app` only when actually executed against real applications. The report
+grader only grades supplied measurements. The matrix runner executes configured
+commands and separates execution from grading, but cannot prove that an operator
+chose a genuinely independent oracle. Preserve every referenced artifact. Exit
+code 1 means the beta gate was not met, including incomplete data.
 
 Before comparing hosted candidates, approve the exact provider, screenshot
 recipient and spending cap. Run each candidate on the same fixtures. Never merge
 different models, select only successful retries, or automatically switch the
-user's configured provider based on benchmark outcomes.
+user’s configured provider based on benchmark outcomes.
+
+## Release gate
+
+After producing a signed and notarized macOS application, verify the application,
+its nested driver, Gatekeeper acceptance, stapled notarization ticket, the complete
+60×3 quality matrix, and one distinct oracle artifact per run:
+
+```sh
+pnpm computer:release:verify /absolute/path/to/xopc.app /absolute/path/to/report.json
+```
+
+This command is intentionally macOS-only. Windows and Linux remain unavailable in
+the product until their pinned driver artifacts, permissions, packaging, stop
+semantics, and real-application matrices pass equivalent gates.

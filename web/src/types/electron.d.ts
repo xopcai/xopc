@@ -591,10 +591,9 @@ export interface ElectronUnderstandingSourcesAPI {
 
 export interface ElectronAPI {
   computer?: {
-    status(): Promise<{ connected: boolean; fullControl: boolean; controlPaused: boolean; claim?: { type: 'endpoint'; endpointId: string; token: string }; error?: string; reenrollmentRequired?: boolean; session?: { status: string; errorCode?: string; appId?: string }; permissions: { accessibility: boolean; screenRecording: string } }>;
+    status(): Promise<{ connected: boolean; controlPaused: boolean; claim?: { type: 'endpoint'; endpointId: string; token: string }; error?: string; reenrollmentRequired?: boolean; session?: { status: string; errorCode?: string; appId?: string }; permissions: { accessibility: boolean; screenRecording: string } }>;
     stop(): Promise<{ ok: boolean }>;
     reenroll(): Promise<Awaited<ReturnType<NonNullable<ElectronAPI['computer']>['status']>>>;
-    setFullControl(enabled: boolean): Promise<Awaited<ReturnType<NonNullable<ElectronAPI['computer']>['status']>>>;
     resume(): Promise<Awaited<ReturnType<NonNullable<ElectronAPI['computer']>['status']>>>;
   };
   clipboard?: ElectronClipboardAPI;

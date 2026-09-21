@@ -1048,7 +1048,6 @@ app.whenReady().then(async () => {
   };
   ipcMain.handle('computer:status', (event) => { assertMainComputerRenderer(event); return desktopEndpointHost?.snapshot(); });
   ipcMain.handle('computer:stop', async (event) => { assertMainComputerRenderer(event); await desktopEndpointHost?.stopControl(); return { ok: true }; });
-  ipcMain.handle('computer:set-full-control', async (event, enabled: unknown) => { assertMainComputerRenderer(event); await desktopEndpointHost?.setFullControl(enabled); return desktopEndpointHost?.snapshot(); });
   ipcMain.handle('computer:resume', (event) => { assertMainComputerRenderer(event); desktopEndpointHost?.resumeControl(); return desktopEndpointHost?.snapshot(); });
   ipcMain.handle('computer:reenroll', async (event) => { assertMainComputerRenderer(event); await desktopEndpointHost?.reenroll(); return desktopEndpointHost?.snapshot(); });
   const { fileIpcRoots } = gatewayConfig;
