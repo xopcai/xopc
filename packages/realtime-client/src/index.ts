@@ -52,6 +52,7 @@ export interface RealtimeClientOptions {
   connectionTimeoutMs?: number;
   onStateChange?: (state: RealtimeConnectionState, error?: string) => void;
   onEvent?: (event: RealtimeEventPayload) => void;
+  onSubscribed?: (subscription: { topic: string; cursor: number }) => void;
   onGap?: (gap: { topic: string; requestedSeq: number; earliestSeq: number; recoverable: boolean }) => void | Promise<void>;
   onEndpointMessage?: (message: ServerEndpointMessage) => void;
   onCapabilities?: (capabilities: readonly RealtimeCapability[]) => void;
@@ -327,6 +328,7 @@ export class RealtimeClient {
       this.cursors.set(message.payload.topic, message.payload.seq);
     } else if (message.kind === 'realtime.subscribed') {
       this.cursors.set(message.payload.topic, message.payload.cursor);
+      this.options.onSubscribed?.(message.payload);
     } else if (message.kind === 'realtime.gap') {
       this.cursors.set(message.payload.topic, message.payload.earliestSeq - 1);
       return this.options.onGap?.(message.payload);

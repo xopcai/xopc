@@ -7,6 +7,16 @@ export interface AgentStreamProgressState {
   petFeedback?: PetFeedback;
 }
 
+/** Audio persisted after a text run has finished; delivered on the sessions topic. */
+export interface SessionAudioReadyEvent {
+  conversationId: string;
+  runId: string;
+  uri: string;
+  mimeType: string;
+  name: string;
+  createdAtMs: number;
+}
+
 export type PetFeedbackTaskState = 'working' | 'waiting' | 'success' | 'error';
 export type PetFeedbackSensitivity = 'public' | 'private';
 export type PetFeedbackReassurance = 'making_progress' | 'waiting_safely' | 'completed' | 'work_preserved' | 'details_available';

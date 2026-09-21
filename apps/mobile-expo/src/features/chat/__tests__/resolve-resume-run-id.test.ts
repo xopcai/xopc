@@ -36,7 +36,7 @@ describe('resolveResumeRunId', () => {
 
     await expect(resolveResumeRunId(' session-a ')).resolves.toBe('run-remote');
 
-    expect(mockedFetchSessionActiveRun).toHaveBeenCalledWith('session-a');
+    expect(mockedFetchSessionActiveRun).toHaveBeenCalledWith('session-a', undefined);
     expect(mockedSetPendingAgentRun).toHaveBeenCalledWith('session-a', 'run-remote');
     expect(mockedReadPendingAgentRunId).not.toHaveBeenCalled();
   });
@@ -62,5 +62,18 @@ describe('resolveResumeRunId', () => {
     mockedReadPendingAgentRunId.mockReturnValueOnce(null);
 
     await expect(resolveResumeRunId('session-a')).rejects.toThrow('Could not reach gateway');
+  });
+
+  it('does not overwrite pending state after a cancelled lookup returns', async () => {
+    const controller = new AbortController();
+    let complete!: (run: { active: boolean; runId: string }) => void;
+    mockedFetchSessionActiveRun.mockReturnValue(new Promise(resolve => { complete = resolve; }));
+    const lookup = resolveResumeRunId('session-a', controller.signal);
+    controller.abort();
+    complete({ active: true, runId: 'old-run' });
+    await expect(lookup).rejects.toThrow('Aborted');
+    expect(mockedSetPendingAgentRun).not.toHaveBeenCalled();
+    expect(mockedReadPendingAgentRunId).not.toHaveBeenCalled();
+    expect(mockedClearPendingAgentRun).not.toHaveBeenCalled();
   });
 });

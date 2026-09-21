@@ -175,4 +175,39 @@ describe('direct stream input visibility', () => {
       expect.objectContaining({ sourceContexts: [sourceContext] }),
     );
   });
+
+  it('finishes the text stream while deferred speech is still pending', async () => {
+    const { deps } = setup();
+    let completeAudio!: (audio: { type: 'tts_audio'; uri: string; name: string; mimeType: string }) => void;
+    deps.maybeEmitWebchatTts = vi.fn(() => new Promise(resolve => { completeAudio = resolve; }));
+    const onDeferredAudio = vi.fn();
+    const events = [];
+    for await (const event of runProcessDirectStreaming(deps, {
+      content: 'hello', conversationId: 'chat', runId: 'run',
+      origin: { type: 'system', source: 'internal' }, onDeferredAudio,
+    })) events.push(event);
+    expect(events.map(event => event.type)).toEqual(['user_message', 'message_end']);
+    expect(deps.unregisterWebchatStreamPublisher).toHaveBeenCalledOnce();
+    expect(onDeferredAudio).not.toHaveBeenCalled();
+    const audio = { type: 'tts_audio' as const, uri: 'media://tts/reply.mp3', name: 'reply.mp3', mimeType: 'audio/mpeg' };
+    completeAudio(audio);
+    await vi.waitFor(() => expect(onDeferredAudio).toHaveBeenCalledWith(audio));
+  });
+
+  it('contains deferred speech failures after the text run has ended', async () => {
+    const { deps } = setup();
+    let failAudio!: (error: Error) => void;
+    deps.maybeEmitWebchatTts = vi.fn(() => new Promise((_resolve, reject) => { failAudio = reject; }));
+    const onDeferredAudio = vi.fn();
+    for await (const _event of runProcessDirectStreaming(deps, {
+      content: 'hello', conversationId: 'chat', runId: 'run',
+      origin: { type: 'system', source: 'internal' }, onDeferredAudio,
+    })) { /* drain */ }
+    failAudio(new Error('speech offline'));
+    await vi.waitFor(() => expect(deps.log.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: 'chat', runId: 'run' }), 'Failed to deliver assistant audio',
+    ));
+    expect(onDeferredAudio).not.toHaveBeenCalled();
+  });
+
 });

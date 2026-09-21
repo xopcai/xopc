@@ -207,11 +207,12 @@ export async function fetchSessionResumeStatus(key: string, signal?: AbortSignal
   return page.session.status === 'archived' ? 'unavailable' : 'available';
 }
 
-export async function fetchSessionActiveRun(key: string): Promise<SessionActiveRunPayload> {
+export async function fetchSessionActiveRun(key: string, signal?: AbortSignal): Promise<SessionActiveRunPayload> {
   const normalizedKey = key.trim();
   if (!normalizedKey) return { active: false };
 
-  const res = await apiFetch(buildSessionRunPath(normalizedKey));
+  const path = buildSessionRunPath(normalizedKey);
+  const res = await (signal ? apiFetch(path, { signal }) : apiFetch(path));
   if (res.status === 404) return { active: false };
   if (!res.ok) throwApiError(res, await parseErrorBody(res));
   return normalizeSessionActiveRunResponse(await res.json());
