@@ -47,6 +47,19 @@ describe('buildSafeWebConfigPayload', () => {
     } as never);
 
     expect(payload.gateway.webchat.activityDetailDefault).toBe('stream');
+    expect(payload.gateway.scenes.enabled).toBe(false);
+  });
+
+  it('exposes the scene rollout flag without other scene configuration', async () => {
+    const payload = await buildSafeWebConfigPayload({
+      currentConfig: {
+        agents: { list: [] },
+        channels: {},
+        gateway: { scenes: { enabled: true } },
+      },
+    } as never);
+
+    expect(payload.gateway.scenes).toEqual({ enabled: true });
   });
 
   it('includes global model intents and agent overrides for config round trips', async () => {

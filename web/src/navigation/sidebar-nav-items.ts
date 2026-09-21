@@ -57,6 +57,12 @@ export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
   { id: 'builtin:scenes', to: '/scenes', Icon: CircleDotDashed },
 ] as const;
 
+export function builtinNavDefsForFeatures(scenesEnabled: boolean): readonly BuiltinNavDef[] {
+  return scenesEnabled
+    ? BUILTIN_NAV_DEFS
+    : BUILTIN_NAV_DEFS.filter((item) => item.id !== 'builtin:scenes');
+}
+
 /** Product-level destinations shown by default; advanced capabilities live under More. */
 export const PRIMARY_NAV_IDS = [
   'builtin:home',

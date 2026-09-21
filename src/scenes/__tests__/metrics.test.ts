@@ -24,7 +24,7 @@ describe('scene usefulness metrics and feedback evidence', () => {
 
     repository = new SceneRepository(db);
     inbox = new SceneInboxService(db, () => now);
-    metrics = new SceneMetrics(db, () => now + 1);
+    metrics = new SceneMetrics(db, () => now + 1, () => 'anthropic/reasoning');
     repository.installTemplate(familyPlanTemplate);
     const activation = repository.createActivation(principal, { templateKey: familyPlanTemplate.key, templateVersion: familyPlanTemplate.version,
       goal: 'Make time for rest', scope: { kind: 'personal' }, permissions: { accountIds: [], contextProviders: ['user_notes'], effectHandlers: [] } });
@@ -38,6 +38,7 @@ describe('scene usefulness metrics and feedback evidence', () => {
   it('does not count a completed check or read card as useful work', () => {
     inbox.setRead(principal, presentationId, true);
     expect(metrics.forUser(principal)).toMatchObject({ checks: 1, ratedOutcomes: 0, usefulOutcomes: 0, scenesWithUsefulOutcomes: 0 });
+    expect(metrics.diagnostics(principal).currentModel).toBe('anthropic/reasoning');
   });
 
   it('preserves corrections while counting only the latest explicit judgment', () => {

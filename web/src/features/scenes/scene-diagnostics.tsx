@@ -4,7 +4,7 @@ import useSWR from 'swr';
 import { sceneGet } from './api';
 
 export function SceneDiagnostics({ activationId, zh }: { activationId: string; zh: boolean }) {
-  const diagnostics = useSWR<{ checksPaused: boolean; pendingChecks: number; oldestDueWaitMs: number; lastSevenDays: { modelCalls: number; tokens: number; estimatedCost: number };
+  const diagnostics = useSWR<{ checksPaused: boolean; currentModel: string | null; pendingChecks: number; oldestDueWaitMs: number; lastSevenDays: { modelCalls: number; tokens: number; estimatedCost: number };
     activations: Array<{ id: string; status: string; next_deadline_check_at: number | null; retry_at: number | null; source_reason: string | null; source_attempt_at: number | null; source_failures: number | null; source_success_at: number | null; source_retry_at: number | null; last_check_at: number | null; next_schedule_at: number | null; deadline_at: number | null; last_reason: string | null }> }>('/diagnostics', sceneGet, { refreshInterval: 15000 });
   const row = diagnostics.data?.activations.find(item => item.id === activationId);
   if (!row) return null;
@@ -32,6 +32,7 @@ export function SceneDiagnostics({ activationId, zh }: { activationId: string; z
     {row.source_reason && <Link to="/connectors" className="inline-block text-accent underline">{zh ? '检查连接器授权' : 'Check connector access'}</Link>}
     {row.source_success_at != null && <p>{zh ? '最近成功读取邮件' : 'Last successful mail read'}: {format(row.source_success_at)}</p>}
     {reason && reasons[reason] && <p role="status">{reasons[reason][zh ? 0 : 1]}</p>}
+    <p>{zh ? '当前场景模型' : 'Current scene model'}: {diagnostics.data!.currentModel ?? (zh ? '配置不可用' : 'Configuration unavailable')}</p>
     {row.source_reason && row.status === 'active' && !diagnostics.data?.checksPaused && row.source_retry_at != null && <p>{zh ? '来源重试时间' : 'Source retry'}: {format(row.source_retry_at)}</p>}
     <p>{zh ? '所有场景待检查' : 'Pending checks across scenes'}: {diagnostics.data!.pendingChecks}</p>
     <p>{zh ? '最近 7 天所有场景的模型用量' : 'Model usage across scenes in the last 7 days'}: {diagnostics.data!.lastSevenDays.modelCalls} {zh ? '次调用' : 'calls'} · {diagnostics.data!.lastSevenDays.tokens} tokens · {zh ? '估算费用' : 'estimated cost'} ${diagnostics.data!.lastSevenDays.estimatedCost.toFixed(4)}</p>

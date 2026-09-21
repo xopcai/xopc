@@ -37,6 +37,9 @@ describe('tool_manual tool', () => {
     expect(text).toContain('create_update');
     expect(text).toContain('`automation`');
     expect(text).toContain('`workflow`');
+    expect(text).toContain('`scene`');
+    expect(text).toContain('Safe start protocol');
+    expect(text).not.toContain('mode `proactive`');
   });
 
   it('returns a clear message for missing manuals', async () => {
