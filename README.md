@@ -6,7 +6,8 @@
 <h1 align="center"><a href="https://xopc.ai">xopc</a></h1>
 
 <p align="center">
-  <strong>Personal AI for the one-person company.</strong><br />
+  <strong>Keep what matters moving.</strong><br />
+  Personal AI for the one-person company.<br />
   Remember your goals and context, take action across your tools,<br />
   and pick up where you left off.
 </p>
