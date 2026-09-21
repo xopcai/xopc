@@ -270,6 +270,9 @@ export class EndpointToolHostController {
 
   private normalizeError(error: unknown): EndpointToolClientError {
     if (error instanceof EndpointToolClientError) return error;
+    if (error instanceof Error && error.name === 'RealtimeFrameTooLargeError') {
+      return new EndpointToolClientError('RESULT_TOO_LARGE', error.message);
+    }
     if (error instanceof TypeError) {
       return new EndpointToolClientError('INVALID_ARGUMENTS', error.message);
     }

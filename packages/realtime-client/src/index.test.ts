@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { REALTIME_CAPABILITIES, REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
+import { REALTIME_CAPABILITIES, REALTIME_MAX_CLIENT_FRAME_BYTES, REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 import { ENDPOINT_PROTOCOL_VERSION } from '@xopcai/endpoint-tools-protocol';
-import { RealtimeClient, RealtimeConnectionError, type RealtimeTicket, type RealtimeWebSocket } from './index.js';
+import { RealtimeClient, RealtimeConnectionError, RealtimeFrameTooLargeError, type RealtimeTicket, type RealtimeWebSocket } from './index.js';
 
 class FakeSocket implements RealtimeWebSocket {
   readyState = 0;
@@ -199,6 +199,35 @@ describe('RealtimeClient', () => {
       payload: cancel,
     }) });
     expect(onMessage).toHaveBeenCalledWith(cancel);
+    client.disconnect();
+  });
+
+  it('rejects oversized client frames locally without closing the socket', async () => {
+    const socket = new FakeSocket();
+    const client = new RealtimeClient({
+      clientId: 'c1',
+      clientKind: 'browser_extension',
+      getWebSocketUrl: () => 'ws://gateway/realtime',
+      issueTicket: async () => issuedTicket(),
+      createWebSocket: () => socket,
+    });
+    client.connect();
+    await vi.waitFor(() => expect(socket.onopen).not.toBeNull());
+    socket.open();
+    socket.onmessage?.({ data: serverMessage('realtime.ready', readyPayload()) });
+
+    expect(() => client.sendEndpointMessage({
+      protocolVersion: ENDPOINT_PROTOCOL_VERSION,
+      messageId: crypto.randomUUID(),
+      type: 'tool.result',
+      sentAt: Date.now(),
+      payload: {
+        invocationId: crypto.randomUUID(),
+        content: [{ type: 'json', value: 'x'.repeat(REALTIME_MAX_CLIENT_FRAME_BYTES) }],
+      },
+    })).toThrow(RealtimeFrameTooLargeError);
+    expect(socket.readyState).toBe(1);
+    expect(socket.sent).toHaveLength(1);
     client.disconnect();
   });
 

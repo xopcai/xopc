@@ -14,6 +14,7 @@ import { REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 import { executeBrowserCommand } from './controller';
 import { t } from './i18n';
 import { createLogger } from './logger';
+import { fitBrowserControlResultToFrame } from './result-budget';
 import {
   createBrowserEndpointHello,
   gatewayFetch,
@@ -55,7 +56,7 @@ const browserToolRegistry = new EndpointToolRegistry([{
       timeoutMs: typeof args.timeoutMs === 'number' ? args.timeoutMs : 30_000,
       visualFallback: args.visualFallback !== false,
     });
-    return { content: [{ type: 'json', value: result.result }] };
+    return { content: [{ type: 'json', value: fitBrowserControlResultToFrame(result.result) }] };
   },
 }]);
 
