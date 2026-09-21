@@ -23,6 +23,7 @@ import { readGatewayCompatibilityIssue, useGatewayCompatibility } from './gatewa
 import { RealtimeTopicCursorStore } from './realtime-topic-cursors';
 
 type TopicListener = {
+  onSubscribed?: () => void;
   onEvent: (event: RealtimeEventPayload) => void;
   onGap?: (gap: { topic: string; requestedSeq: number; earliestSeq: number; recoverable: boolean }) => void | Promise<void>;
 };
@@ -78,6 +79,9 @@ function createClient(clientId: string, cursorScopeKey: string): RealtimeClient 
         if (compatibilityIssue) useGatewayCompatibility.getState().setIssue(compatibilityIssue);
         recordConnectionEvent({ kind: 'realtime', ok: false, message: error ?? 'realtime failed' });
       }
+    },
+    onSubscribed: ({ topic }) => {
+      for (const listener of topicListeners.get(topic) ?? []) listener.onSubscribed?.();
     },
     onEvent: (event) => {
       if (event.topic === 'gateway' || event.topic === 'sessions') emitGatewayEvent(event.event, event.data);

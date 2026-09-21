@@ -49,7 +49,7 @@ import {
   setPendingTranscriptUserMessage,
   type TranscriptUserMessage,
 } from '../inbound/attachment-pipeline.js';
-import { isSuccessfulWebchatTtsToolEvent } from './webchat-tts.js';
+import { isSuccessfulWebchatTtsToolEvent, type WebchatTtsResult } from './webchat-tts.js';
 
 export type DirectStreamInboundAttachment = InboundAttachmentInput;
 
@@ -119,6 +119,8 @@ export interface ProcessDirectStreamingInput {
   runId?: string;
   sourceContexts?: AgentSourceContext[];
   presentation?: 'voice';
+  /** Delivers durable audio independently of the completed text run. */
+  onDeferredAudio?: (audio: WebchatTtsResult) => void;
 }
 
 export type ProcessDirectStreamEvent = { type: string; [key: string]: unknown };
@@ -562,14 +564,19 @@ export async function* runProcessDirectStreaming(
         );
       }
       if (!userAborted && !streamOverflowed && channel === 'webchat' && !explicitTtsEmitted && input.presentation !== 'voice') {
-        try {
-          const ttsAudioEvent = await deps.maybeEmitWebchatTts(conversationId, inboundVoice);
-          if (ttsAudioEvent) {
-            queue.push(ttsAudioEvent);
+        const deliverAudio = async () => {
+          try {
+            // Capture the text and transcript target before another run starts.
+            const audio = await deps.maybeEmitWebchatTts(conversationId, inboundVoice);
+            if (!audio) return;
+            if (input.onDeferredAudio) input.onDeferredAudio(audio);
+            else queue.push(audio);
+          } catch (err) {
+            deps.log.warn({ err, conversationId, runId: input.runId }, 'Failed to deliver assistant audio');
           }
-        } catch (ttsErr) {
-          deps.log.warn({ err: ttsErr, conversationId }, 'Failed to emit TTS audio before stream close');
-        }
+        };
+        if (input.onDeferredAudio) void deliverAudio();
+        else await deliverAudio();
       }
       queue.close();
     }
