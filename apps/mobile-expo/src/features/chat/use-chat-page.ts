@@ -477,7 +477,6 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   const handleSessionSelect = useCallback((key: string) => {
     if (!key || key === conversationId) return;
-    if (root) { openChat(router, key); return; }
     chatSession.cancelRecovery();
     chatSession.clearAllState();
     chatSession.activeConversationIdRef.current = key;

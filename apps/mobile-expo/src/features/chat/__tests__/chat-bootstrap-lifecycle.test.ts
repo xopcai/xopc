@@ -17,7 +17,7 @@ vi.mock('../session-prefetch', () => ({ takeNewChatConversationId: vi.fn() }));
 
 import { fetchSessionResumeStatus, fetchSessionsList, type SessionsPage } from '../../../query/sessions';
 import { KEYS, storage } from '../../../storage/mmkv';
-import { useChatSelectionStore } from '../chat-selection-store';
+import { createChatSelectionStore, useChatSelectionStore } from '../chat-selection-store';
 import { useChatPageBootstrap, type ChatBootstrapDeps } from '../use-chat-page-bootstrap';
 import { takeNewChatConversationId } from '../session-prefetch';
 import { openChat } from '../../../lib/navigation';
@@ -77,6 +77,43 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => root.unmount()); client.clear(); });
 
 describe('chat startup lifecycle', () => {
+  it('switches home in place and restores the drawer selection after restarting offline', async () => {
+    useChatSelectionStore.getState().select('a', 'previous');
+    await render();
+    await act(async () => result.setPendingBootstrapKey('drawer-chat'));
+    expect(result.pendingBootstrapKey).toBe('drawer-chat');
+    expect(props.activeConversationIdRef.current).toBe('drawer-chat');
+    expect(openChat).not.toHaveBeenCalled();
+    expect(environment.router.dismissTo).not.toHaveBeenCalled();
+
+    await act(async () => root.unmount());
+    client.clear();
+    useChatSelectionStore.setState({ selections: createChatSelectionStore(storage).getState().selections });
+    root = createRoot(document.createElement('div'));
+    renderedKeys.length = 0;
+    await render({ gatewayOnline: false });
+    expect(renderedKeys[0]).toBe('drawer-chat');
+    expect(takeNewChatConversationId).not.toHaveBeenCalled();
+  });
+
+  it('restores a newly created home chat before its first message or list refresh', async () => {
+    useChatSelectionStore.getState().select('a', 'previous');
+    await render();
+    await act(async () => {
+      expect(result.beginSessionSelection('home')('new-empty-chat')).toBe(true);
+    });
+    await act(async () => root.unmount());
+    client.clear();
+    useChatSelectionStore.setState({ selections: createChatSelectionStore(storage).getState().selections });
+    root = createRoot(document.createElement('div'));
+    renderedKeys.length = 0;
+    await render();
+    expect(renderedKeys[0]).toBe('new-empty-chat');
+    expect(fetchSessionsList).not.toHaveBeenCalled();
+    expect(takeNewChatConversationId).not.toHaveBeenCalled();
+    expect(openChat).not.toHaveBeenCalled();
+  });
+
   it('renders the saved chat before any network response and never waits offline', async () => {
     useChatSelectionStore.getState().select('a', 'saved');
     vi.mocked(fetchSessionResumeStatus).mockReturnValue(new Promise(() => {}));
