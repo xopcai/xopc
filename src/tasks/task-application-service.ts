@@ -377,6 +377,7 @@ export class TaskApplicationService {
     actor?: ActorRef;
     terminalCode?: string;
     terminalMessage?: string;
+    suppressAttention?: boolean;
   }): TaskApplicationResult {
     return runSqliteWriteTransaction((db) => {
       const run = this.#runs.get(input.runId);
@@ -410,7 +411,7 @@ export class TaskApplicationService {
       }
       if (input.receipt.status !== 'succeeded') {
         const model = this.#projector.project(task);
-        enqueueTaskAttentionRequiredEvent(db, {
+        if (!input.suppressAttention) enqueueTaskAttentionRequiredEvent(db, {
           taskId: task.id,
           taskTitle: task.title,
           ...(task.projectId ? { projectId: task.projectId } : {}),

@@ -69,6 +69,7 @@ export class NotificationService {
     publish: (type: string, payload: unknown) => void;
     fetch?: typeof fetch;
     domainDelivery?: NotificationDomainDelivery;
+    allowsNotification?: (notification: NotificationPlan['notification']) => boolean;
     sendHarmony?: typeof sendHarmonyPush;
   }) {}
 
@@ -103,6 +104,7 @@ export class NotificationService {
   }
 
   persistPlan(plan: NotificationPlan) {
+    if (this.options.allowsNotification?.(plan.notification) === false) return null;
     const domain = this.options.domainDelivery?.owns(plan.notification.type) ? this.options.domainDelivery : undefined;
     if (!domain && !Object.hasOwn(STANDARD_PREFERENCES, plan.notification.type)) {
       throw new Error('Notification domain delivery is not installed');
@@ -147,6 +149,10 @@ export class NotificationService {
   }
 
   private async send(delivery: NotificationDelivery): Promise<void> {
+    if (this.options.allowsNotification?.(delivery.event) === false) {
+      markNotificationDeliveryDead(delivery.event.id, delivery.deviceId, 'Notification policy changed');
+      return;
+    }
     const domain = this.options.domainDelivery?.owns(delivery.event.type) ? this.options.domainDelivery : undefined;
     if (!domain && !Object.hasOwn(STANDARD_PREFERENCES, delivery.event.type)) {
       markNotificationDeliveryDead(delivery.event.id, delivery.deviceId, 'Notification domain delivery is not installed');

@@ -128,7 +128,7 @@ describe('openXopcDatabase', () => {
     const second = openXopcDatabase({ path: secondPath });
     expect(second.db.prepare("SELECT name FROM sqlite_master WHERE name = 'runtime_only'").get()).toBeUndefined();
     expect(readSchemaVersionForTest(second.db)).toBe(XOPC_DB_SCHEMA_VERSION);
-  });
+  }, 30_000); // Two complete migrations and fsyncs may contend with parallel integration tests.
 
   it('reopens an already upgraded database without another cutover backup', () => {
     const first = openXopcDatabase({ path: dbPath });

@@ -41,6 +41,8 @@ export interface DelegateChildProgressHooks {
 }
 
 export interface DelegateChildHandleOptions {
+  /** Host-owned completion signal, e.g. a validated structured result. */
+  isComplete?: () => boolean;
   authorizeToolCall?: import('./orchestration/agent-turn-policy.js').AgentTurnPolicyOptions['authorizeToolCall'];
   workspace: string;
   goal: string;
@@ -104,6 +106,7 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
       const policy = createAgentTurnPolicy({ maxTurns: limit + 1, maxToolFailures: 5,
         authorizeToolCall: async (context, signal) => {
           const { toolCall } = context;
+          if (options.isComplete?.()) return { block: true, reason: 'The delegated result is already complete.' };
           if (!allow.has(toolCall.name)) return { block: true, reason: 'Tool is outside the delegated capability set.' };
           if (toolIterations >= limit || tokens >= 100_000) {
             exhausted = true;
@@ -120,6 +123,7 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
       });
       const baseStop = policy.shouldStopAfterTurn;
       policy.shouldStopAfterTurn = context => {
+        if (options.isComplete?.()) return true;
         const stop = baseStop(context) || tokens >= 100_000;
         if (stop) exhausted = true;
         return stop;
