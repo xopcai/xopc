@@ -2,6 +2,10 @@
 
 A Skill is a reusable set of instructions and optional resources that teaches an Agent how to perform a particular kind of work. Skills shape how work is done; tools provide the actions used to do it.
 
+New installations start with a compact Core set: `summarize`, `define-task`, `find-skills`, and `doc-coauthoring`. The Gateway Agent Defaults screen also provides Office, Local App, Developer, and Desktop Pet capability packs. A pack is a convenient Agent allowlist, not a separate installation format; installed Skills remain visible in the Skills catalog and can be assigned to individual Agents.
+
+Existing configurations are preserved. Selecting **Use every enabled skill** opts an Agent into the complete enabled catalog, including Skills installed later.
+
 ## Find and enable a Skill
 
 In the Gateway console, open **Skills**, review the description and requirements, then install or enable it for the intended Agent.

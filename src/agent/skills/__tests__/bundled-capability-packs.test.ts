@@ -1,15 +1,33 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { loadSkills } from '../index.js';
 
 const bundledSkillsDir = join(process.cwd(), 'skills');
 
 describe('bundled capability packs', () => {
+  const isolatedStateDir = mkdtempSync(join(tmpdir(), 'xopc-bundled-packs-'));
+  let previousStateDir: string | undefined;
+
+  beforeAll(() => {
+    previousStateDir = process.env.XOPC_STATE_DIR;
+    process.env.XOPC_STATE_DIR = isolatedStateDir;
+  });
+
+  afterAll(() => {
+    if (previousStateDir === undefined) delete process.env.XOPC_STATE_DIR;
+    else process.env.XOPC_STATE_DIR = previousStateDir;
+    rmSync(isolatedStateDir, { recursive: true, force: true });
+  });
+
   it('loads the approved built-in packs with their intended tool gates', () => {
-    const result = loadSkills({ builtinDir: bundledSkillsDir });
+    const result = loadSkills({
+      builtinDir: bundledSkillsDir,
+      agentsDir: join(isolatedStateDir, 'agents-skills'),
+    });
     const byName = new Map(result.skills.map((skill) => [skill.name, skill]));
 
     expect([...byName.keys()]).toEqual(expect.arrayContaining([
@@ -18,7 +36,6 @@ describe('bundled capability packs', () => {
       'docx',
       'pptx',
       'doc-coauthoring',
-      'algorithmic-art',
     ]));
     expect(byName.get('pdf')?.toolConditions?.requiresTools).toEqual([
       'read_file',
@@ -29,10 +46,18 @@ describe('bundled capability packs', () => {
       'xopc_use',
       'tool_manual',
     ]);
-    expect(byName.get('algorithmic-art')?.toolConditions?.requiresTools).toEqual([
+    expect(byName.get('xlsx')?.toolConditions?.requiresTools).toEqual([
+      'read_file',
       'write_file',
-      'image_generate',
+      'exec_command',
     ]);
+    expect(byName.get('find-skills')?.toolConditions?.requiresTools).toEqual([
+      'skills_marketplace_search',
+    ]);
+    expect(byName.get('build-xopc-local-app')?.metadata.xopc?.activatesCapabilities).toEqual([
+      'extension-authoring',
+    ]);
+    expect(byName.has('algorithmic-art')).toBe(false);
   });
 
   it('ships a provenance notice without restricted reference material', () => {
@@ -50,8 +75,6 @@ describe('bundled capability packs', () => {
       'documents/docx/scripts/render_docx.py',
       'documents/pptx/scripts/inspect_ooxml.py',
       'documents/pptx/scripts/render_pptx.py',
-      'creative/algorithmic-art/templates/viewer.html',
-      'creative/algorithmic-art/templates/generator-template.js',
       'engineering/define-task/references/task-contract-rubric.md',
     ];
 

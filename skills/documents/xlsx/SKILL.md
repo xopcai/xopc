@@ -9,6 +9,11 @@ metadata:
     zh-CN:
       name: "电子表格"
       description: "创建、读取、编辑、清理、格式化、绘图或转换 .xlsx、.xlsm、.csv 和 .tsv 等电子表格文件。"
+  xopc:
+    requires_tools:
+      - read_file
+      - write_file
+      - exec_command
 license: Proprietary. LICENSE.txt has complete terms
 ---
 
