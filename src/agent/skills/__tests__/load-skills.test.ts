@@ -417,6 +417,27 @@ Use it.
     );
   });
 
+  it('honors the bundled allowlist and per-source load limit', () => {
+    const bundledDir = mkdtempSync(join(tmpdir(), 'xopc-bundled-skills-'));
+    for (const name of ['alpha', 'beta', 'gamma']) {
+      const skillDir = join(bundledDir, name);
+      mkdirSync(skillDir, { recursive: true });
+      writeFileSync(
+        join(skillDir, 'SKILL.md'),
+        `---\nname: ${name}\ndescription: ${name}\n---\n\nUse ${name}.\n`,
+      );
+    }
+    writeFileSync(
+      join(stateDir, 'skills.json'),
+      JSON.stringify({ allowBundled: ['beta'], limits: { maxSkillsLoadedPerSource: 2 } }),
+    );
+
+    const result = loadTestSkills({ builtinDir: bundledDir });
+
+    expect(result.skills.map((skill) => skill.name)).toEqual(['beta']);
+    rmSync(bundledDir, { recursive: true, force: true });
+  });
+
   it('applies workspace, global, bundled, and extra precedence deterministically', () => {
     const extraDir = mkdtempSync(join(tmpdir(), 'xopc-extra-skills-'));
     const bundledDir = mkdtempSync(join(tmpdir(), 'xopc-bundled-skills-'));

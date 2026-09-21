@@ -7,12 +7,14 @@ import {
   getAgentDefaultImageModelConfig,
   getAgentDefaultModelRef,
 } from '../schema.js';
+import { DEFAULT_CORE_SKILLS } from '../../agent-config/schema.js';
 
 describe('default model config', () => {
   it('uses DeepSeek V4 Flash as the built-in default model', () => {
     const config = ConfigSchema.parse({});
 
     expect(config.agents.defaults.models.chat).toEqual({ primary: DEFAULT_MODEL_REF, fallbacks: [] });
+    expect(config.agents.defaults.skills).toEqual({ mode: 'selected', include: [...DEFAULT_CORE_SKILLS] });
     expect(getAgentDefaultModelRef(config)).toBe(DEFAULT_MODEL_REF);
   });
 

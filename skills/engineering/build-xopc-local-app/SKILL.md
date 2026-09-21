@@ -11,6 +11,8 @@ metadata:
       description: "构建并迭代改进用户拥有的 XOPC 本地应用，同时保持稳定的扩展身份、UI 沙箱和第一阶段能力边界。"
   xopc:
     emoji: "🧩"
+    activates_capabilities:
+      - extension-authoring
     requires_tools:
       - read_file
       - write_file
