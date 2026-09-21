@@ -1,6 +1,17 @@
 import { z } from 'zod';
 
 export const DEFAULT_AGENT_MODEL_REF = 'deepseek/deepseek-v4-flash';
+export const DEFAULT_CORE_SKILLS = [
+  'doc-coauthoring',
+  'define-task',
+  'find-skills',
+  'summarize',
+] as const;
+
+export const DEFAULT_SKILL_POLICY = {
+  mode: 'selected' as const,
+  include: [...DEFAULT_CORE_SKILLS],
+};
 
 const AgentIdSchema = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);
 
@@ -117,7 +128,7 @@ export const RuntimePolicySchema = z.object({
 
 export const AgentDefaultsSchema = z.object({
   models: AgentModelsDefaultsSchema,
-  skills: SkillDefaultsSchema.default({ mode: 'all-enabled', exclude: [] }),
+  skills: SkillDefaultsSchema.default(DEFAULT_SKILL_POLICY),
   tools: ToolPoliciesSchema.default({}),
   workflows: WorkflowPolicySchema.default({}),
   runtime: RuntimePolicySchema.default({}),
@@ -147,7 +158,7 @@ export const AgentsConfigSchema = z.object({
       chat: { primary: DEFAULT_AGENT_MODEL_REF, fallbacks: [] },
       intents: {},
     },
-    skills: { mode: 'all-enabled', exclude: [] },
+    skills: DEFAULT_SKILL_POLICY,
     tools: {},
     workflows: {},
     runtime: {},

@@ -72,7 +72,7 @@ export interface SkillCatalogEntry {
   name: string;
   description: string;
   localizations?: SkillLocalizations;
-  /** Category derived from parent directory (e.g. skills/creative/algorithmic-art → 'creative') */
+  /** Category derived from parent directory (e.g. skills/creative/theme-factory → 'creative') */
   category?: string;
   source: 'builtin' | 'workspace' | 'global' | 'extra';
   origin: 'extra' | 'bundled' | 'agents-global' | 'agents-workspace' | 'custom-global' | 'xopc-global' | 'xopc-workspace';

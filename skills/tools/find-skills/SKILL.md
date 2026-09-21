@@ -9,6 +9,9 @@ metadata:
     zh-CN:
       name: "查找技能"
       description: "在 XOPC Store、ClawHub 和 skills.sh 中查找并评估可安装的智能体技能。"
+  xopc:
+    requires_tools:
+      - skills_marketplace_search
 ---
 
 # Find Skills
