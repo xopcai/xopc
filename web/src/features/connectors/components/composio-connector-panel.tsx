@@ -48,6 +48,7 @@ import {
 } from '../connectors-api';
 import { groupComposioConnections } from '../composio-connection-groups';
 import { formatConnectorMessage } from '../utils/connector-i18n';
+import { formatComposioError } from '../utils/composio-error';
 
 const inputClass = cn(
   'w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg',
@@ -223,12 +224,12 @@ export function ComposioConnectorPanel({
       if (accountId && connected.accountId !== accountId) throw new Error('A different account was authorized. The original account and its task bindings were not changed.');
       await Promise.all([onChanged?.(), loadComposio()]);
     } catch (authorizeError) {
-      setError(authorizeError instanceof Error ? authorizeError.message : String(authorizeError));
+      setError(formatComposioError(authorizeError, t));
     } finally {
       authWindow?.close();
       setLoading(false);
     }
-  }, [instance.connectorId, loadComposio, onChanged, toolkit]);
+  }, [instance.connectorId, loadComposio, onChanged, t, toolkit]);
 
   const updateAuthConfig = useCallback(async (authConfigId: string) => {
     setLoading(true);

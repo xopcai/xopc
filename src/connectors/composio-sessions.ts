@@ -345,18 +345,23 @@ export class ComposioSessionsAdapter {
     };
   }
 
-  /** Verify a replacement credential without changing local authorizations. */
-  async verifyConnections(connections: ConnectorConnection[]): Promise<void> {
+  /** Verify a project credential using read-only APIs without changing remote or local state. */
+  async verifyProjectAccess(
+    context: Pick<ComposioSessionContext, 'principalId' | 'installationScope'>,
+    connections: ConnectorConnection[] = [],
+  ): Promise<void> {
     const client = await this.createClient();
-    const users = [...new Set(connections.map(connection => connection.metadata.providerPrincipalId))];
-    for (const userId of users) {
-      if (typeof userId !== 'string' || !userId) throw new Error('Refresh existing account identities before replacing this key.');
-      const rows = await this.listAllAccounts(client, [userId]);
-      const ids = new Set(rows.flatMap(row => row && typeof row === 'object'
-        ? [readString(row as Record<string, unknown>, ['id', 'connected_account_id'])] : []));
-      if (connections.some(connection => connection.metadata.providerPrincipalId === userId && !ids.has(connection.providerConnectionId))) {
-        throw new Error('This key cannot access the existing accounts. Add it as a new project instead.');
-      }
+    const providerPrincipalId = createComposioPrincipalId(context.principalId, context.installationScope);
+    const storedUserIds = connections.map(connection => connection.metadata.providerPrincipalId);
+    if (storedUserIds.some(userId => typeof userId !== 'string' || !userId)) {
+      throw new Error('Refresh existing account identities before replacing this key.');
+    }
+    const userIds = [...new Set([providerPrincipalId, ...(storedUserIds as string[])])];
+    const rows = await this.listAllAccounts(client, userIds);
+    const ids = new Set(rows.flatMap(row => row && typeof row === 'object'
+      ? [readString(row as Record<string, unknown>, ['id', 'connected_account_id'])] : []));
+    if (connections.some(connection => !ids.has(connection.providerConnectionId))) {
+      throw new Error('This key cannot access the existing accounts. Add it as a new project instead.');
     }
   }
 

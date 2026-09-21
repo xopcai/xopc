@@ -94,6 +94,7 @@ function ConnectorServiceForm() {
           <p className="text-xs text-fg-subtle">{t.composioSetupStorageHint}</p>
           <Button disabled={busy || !key.trim()} onClick={() => void run(() => configureComposio(key))}>{zh ? '验证并使用新项目' : 'Verify and use new project'}</Button>
           <p className="text-xs text-fg-subtle">{zh ? '验证只检查连接服务和现有账号访问，不执行写入。工具权限在实际使用时检查。环境变量密钥需在运行环境中修改。' : 'Verification checks service and existing account access without writes. Tool permissions are checked on use. Environment keys must be updated in the gateway environment.'}</p>
+          <p className="text-xs text-fg-subtle">{t.composioSessionWritePermissionHint}</p>
           {data.backends?.filter(item => item.mode === 'byok').map(backend => <div key={backend.id} className="flex flex-wrap items-center justify-between gap-3 text-sm">
             <div className="min-w-0"><p>{backend.label}</p><p className="text-xs text-fg-muted">{backend.credentialSource === 'environment' ? (zh ? '环境变量' : 'Environment') : (zh ? '本地保存' : 'Stored locally')}
               {backend.verifiedAt && ` · ${new Date(backend.verifiedAt).toLocaleString()}`}</p></div>
