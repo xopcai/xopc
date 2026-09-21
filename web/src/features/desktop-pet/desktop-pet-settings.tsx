@@ -3,7 +3,6 @@ import {
   ExternalLink,
   MessageSquarePlus,
   PencilLine,
-  RefreshCw,
   RotateCcw,
   WandSparkles,
 } from 'lucide-react';
@@ -11,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Select, SelectOption } from '@/components/ui/popover-select';
+import { RefreshButton } from '@/components/ui/refresh-button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DesktopPetSprite } from '@/features/desktop-pet/desktop-pet-sprite';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
@@ -199,18 +199,12 @@ export function DesktopPetSettings() {
         subtitle={t.subtitle}
         actions={
           <div className="flex shrink-0 flex-wrap gap-2">
-            <button
-              type="button"
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-lg border border-edge bg-surface-base px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-hover disabled:opacity-50',
-                interaction.press,
-              )}
+            <RefreshButton
+              className="size-9 shrink-0 p-0"
               disabled={busy}
-              onClick={() => void load()}
-            >
-              <RefreshCw className={cn('size-3.5', busy && 'animate-spin')} strokeWidth={1.75} />
-              {t.refresh}
-            </button>
+              label={t.refresh}
+              onClick={load}
+            />
             <button
               type="button"
               className={cn(

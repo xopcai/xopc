@@ -1,9 +1,10 @@
-import { CheckCircle2, CircleAlert, Download, RefreshCw, RotateCcw } from 'lucide-react';
+import { CheckCircle2, CircleAlert, Download, RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
+import { RefreshButton } from '@/components/ui/refresh-button';
 import { messages } from '@/i18n/messages';
 import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -113,9 +114,12 @@ export function RuntimeToolsSettingsPanel() {
         title={t.title}
         actions={(
           <>
-            <Button onClick={() => void mutate()} disabled={running !== null}>
-              <RefreshCw className="size-4" />{t.refresh}
-            </Button>
+            <RefreshButton
+              className="size-9 shrink-0 p-0"
+              disabled={running !== null}
+              label={t.refresh}
+              onClick={async () => { await mutate(); }}
+            />
             <Button onClick={() => void prune()} disabled={pruning || running !== null}>
               {pruning ? t.pruning : t.prune}
             </Button>
