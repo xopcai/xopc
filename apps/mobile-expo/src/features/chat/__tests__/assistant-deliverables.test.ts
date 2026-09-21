@@ -83,6 +83,34 @@ describe('assistant deliverables', () => {
       .toEqual([delivery]);
   });
 
+  it('keeps only the latest delivery for the same resource', () => {
+    const opened: ProductDeliveryEnvelope = {
+      version: 1,
+      operation: 'opened',
+      primary: {
+        kind: 'note',
+        id: 'note-1',
+        title: 'Plan',
+        capabilities: ['open'],
+      },
+    };
+    const updated: ProductDeliveryEnvelope = {
+      ...opened,
+      operation: 'updated',
+      primary: { ...opened.primary!, title: 'Updated plan' },
+    };
+    const tools = [opened, updated].map((item, index): ToolUseContent => ({
+      type: 'tool_use',
+      id: `note-tool-${index}`,
+      name: 'xopc_use',
+      status: 'done',
+      result: appendProductDeliveryText('Handled note.', item),
+    }));
+
+    expect(collectAssistantDeliverables(messageWithTools(tools), false).productDeliveries)
+      .toEqual([updated]);
+  });
+
   it('does not repeat audio already rendered in the assistant message', () => {
     const uri = 'media://tts/assist.mp3';
     const artifact: TurnOutcomeDeliverable = {

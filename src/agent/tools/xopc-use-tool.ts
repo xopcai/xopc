@@ -62,7 +62,7 @@ const XopcUseToolSchema = Type.Object({
   ]),
   command: Type.String({
     description:
-      'Object command. Scene commands: templates, list, get {id}, mail_accounts, mail_search {accountId, query}, mail_sources, preflight/start {templateKey, templateVersion, goal, scope, permissions}, configure {id, expectedRevision, goal, scope, permissions}, transition {id, expectedRevision, status: paused|active|completed|archived}, check {id}, notes {id, expectedRevision, content, validUntil?}, work_item {id, subjectId, accountId, dueAt}, schedule {id, triggerKey, expectedRevision, schedule}, results {id}. Start and check accept a stable requestId for retries. Scenes prepare read-only suggestions and drafts; never send mail. Only create a scene for work explicitly delegated by the user; inspect existing scenes first. Supports project list/get/create/update/resolve_workspace/list_milestones/create_milestone/update_milestone/list_updates/create_update, automation list/get/create/update/delete/run/pause/resume/history, note list/get/create/append/update/preview_edit/delete, task list/get/create/update_dependencies/add_context/remove_context/command/delete, task_run list/get/cancel, local_app list/get/create/validate, and settings open.',
+      'Object command. Scene commands: templates, list, get {id}, mail_accounts, mail_search {accountId, query}, mail_sources, read_notes {id}, preflight/start {templateKey, templateVersion, goal, scope, permissions}, configure {id, expectedRevision, goal, scope, permissions}, transition {id, expectedRevision, status: paused|active|completed|archived}, check {id}, notes {id, expectedRevision, content, validUntil?}, work_item {id, subjectId, accountId, dueAt}, update_work_item {workItemId, expectedRevision, dueAt?, status?}, schedule {id, triggerKey, expectedRevision, schedule}, results {id?}, feedback {presentationId, expectedRevision, rating}, mark_read {presentationId, read}, diagnostics, get_preferences, set_preferences {expectedRevision, ...preferences}. Start and check accept a stable requestId for retries. Scenes prepare read-only suggestions and drafts; never send mail. Only create a scene for work explicitly delegated by the user; inspect existing scenes first. Supports project list/get/create/update/resolve_workspace/list_milestones/create_milestone/update_milestone/list_updates/create_update, automation list/get/create/update/delete/run/pause/resume/history, note list/get/create/append/update/preview_edit/delete, task list/get/create/update_dependencies/add_context/remove_context/command/delete, task_run list/get/cancel, local_app list/get/create/validate, and settings open.',
   }),
   args: Type.Optional(Type.Record(Type.String(), Type.Any())),
   dryRun: Type.Optional(Type.Boolean({
@@ -245,6 +245,19 @@ function deliveryForXopcResult(
         capabilities: ['open', 'edit', 'continue_in_chat', 'run', enabled ? 'pause' : 'resume'],
       };
     }
+  } else if (mode === 'scene') {
+    source = record(resultRecord.activation);
+    const id = deliveryText(source?.id);
+    if (id) {
+      primary = {
+        kind: 'scene',
+        id,
+        title: deliveryText(source?.goal) ?? 'Scene',
+        status: deliveryText(source?.status),
+        revision: deliveryRevision(source?.revision),
+        capabilities: ['open', 'edit', 'continue_in_chat'],
+      };
+    }
   } else if (mode === 'note') {
     source = record(resultRecord.note);
     const id = deliveryText(source?.id);
@@ -328,8 +341,9 @@ function deliveryForXopcResult(
     version: 1,
     operation: (mode === 'task' && deliveryText(resultRecord.runId))
       || (mode === 'automation' && command === 'run')
+      || (mode === 'scene' && command === 'check')
       ? 'started'
-      : command === 'create'
+      : command === 'create' || (mode === 'scene' && command === 'start')
       ? 'created'
       : command === 'get' || command === 'resolve_workspace' || mode === 'settings'
         ? 'opened'
@@ -1284,7 +1298,7 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
     name: 'xopc_use',
     label: 'XOPC Use',
     description:
-      'Operate first-class xopc objects through one safe entry point. Use for projects, automations, notes, tasks, TaskRuns, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
+      'Operate first-class xopc objects through one safe entry point. Use for scenes, projects, automations, notes, tasks, TaskRuns, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
     parameters: XopcUseToolSchema,
     mutatesWorkspace: true,
     mutationScope: 'external',
@@ -1359,8 +1373,13 @@ async function handleScene(command: string, args: Record<string, unknown>, deps:
   if (command === 'read_notes') return { notes: services.repository.readNotes(principal, activationId) };
   if (command === 'mail_sources') return { sources: services.mail.listSources(principal) };
   if (command === 'results') return { outcomes: services.repository.listInbox(principal, 50, '', activationId || null) };
+  if (command === 'diagnostics') return services.metrics.diagnostics(principal);
+  if (command === 'get_preferences') return services.preferences.get(principal);
   if (command === 'preflight' || (command === 'start' && dryRun)) return services.application.preflight(principal, input);
   if (dryRun) {
+    if (command === 'set_preferences') return { preview: true, command, input: args };
+    if (command === 'update_work_item') return { preview: true, command, workItemId: args.workItemId ?? id, input };
+    if (command === 'feedback' || command === 'mark_read') return { preview: true, command, presentationId: args.presentationId ?? id, input };
     services.repository.getActivation(principal, activationId);
     return { preview: true, command, activationId, input };
   }
@@ -1370,6 +1389,25 @@ async function handleScene(command: string, args: Record<string, unknown>, deps:
   if (command === 'check') return { intentId: services.application.check(principal, activationId, request) };
   if (command === 'notes') return { revision: services.application.writeNotes(principal, activationId, input) };
   if (command === 'work_item') return { workItem: services.application.createWorkItem(principal, activationId, input) };
+  if (command === 'update_work_item') {
+    const workItemId = typeof args.workItemId === 'string' ? args.workItemId : activationId;
+    const { workItemId: _workItemId, ...workItemInput } = args;
+    return { workItem: services.application.updateWorkItem(principal, workItemId, workItemInput) };
+  }
   if (command === 'schedule') return { revision: services.application.setSchedule(principal, activationId, String(triggerKey ?? ''), input) };
+  if (command === 'set_preferences') return services.preferences.update(principal, args);
+  if (command === 'feedback') {
+    const presentationId = typeof args.presentationId === 'string' ? args.presentationId : activationId;
+    if (!presentationId.trim()) throw new Error('presentationId is required');
+    const { presentationId: _presentationId, ...feedbackInput } = args;
+    return { revision: services.inbox.feedback(principal, presentationId, feedbackInput) };
+  }
+  if (command === 'mark_read') {
+    const presentationId = typeof args.presentationId === 'string' ? args.presentationId : activationId;
+    if (!presentationId.trim()) throw new Error('presentationId is required');
+    if (typeof args.read !== 'boolean') throw new Error('read must be a boolean');
+    services.inbox.setRead(principal, presentationId, args.read);
+    return { ok: true, presentationId, read: args.read };
+  }
   throw new Error('Unsupported scene command');
 }

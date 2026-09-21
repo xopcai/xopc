@@ -5,7 +5,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { ProductNotification } from '@xopcai/gateway-contract';
 
 import type { Config } from '../../config/schema.js';
-import { getDefaultModelSync, isProviderConfiguredSync, resolveModel } from '../../providers/index.js';
+import { isProviderConfiguredSync, resolveModel } from '../../providers/index.js';
 import { SceneAgentExecutor } from '../../scenes/agentExecutor.js';
 import type { SceneActivation, ScenePermission, ScenePrincipal } from '../../scenes/contracts.js';
 import { SceneExecutionService, type SceneReadOnlyExecutor } from '../../scenes/execution.js';
@@ -15,6 +15,7 @@ import type { SceneMailContextProvider } from '../../scenes/mailContext.js';
 import { SceneMailObservationService } from '../../scenes/mailObservations.js';
 import { maintainSceneStorage } from '../../scenes/maintenance.js';
 import { SceneMetrics } from '../../scenes/metrics.js';
+import { resolveSceneModelRef } from '../../scenes/model.js';
 import { SceneRepository } from '../../scenes/repository.js';
 import { SceneResultNotifications } from '../../scenes/resultNotifications.js';
 import { SceneRuntime } from '../../scenes/runtime.js';
@@ -68,15 +69,16 @@ export class GatewaySceneHost {
       ], effectHandlers: [] };
     };
     const grant = async (activation: SceneActivation) => authorize(activation);
-    const executor = input.executor ?? new SceneAgentExecutor(() => resolveModel(getDefaultModelSync(input.config())));
+    const executor = input.executor ?? new SceneAgentExecutor(() => resolveModel(resolveSceneModelRef(input.config())));
     this.http = { repository, mail, mailDiscovery: mail instanceof GatewaySceneMailContext ? mail : undefined, application: new SceneApplicationService(repository, providers, grant, clock, () => {
         if (input.executor) return [];
         try {
-          const model = resolveModel(getDefaultModelSync(input.config()));
+          const model = resolveModel(resolveSceneModelRef(input.config()));
           return isProviderConfiguredSync(model.provider) ? [] : ['model_credentials'];
         } catch { return ['model_configuration']; }
       }),
-      inbox: new SceneInboxService(db, clock), browser: new BrowserSubscriptionService(db, clock), preferences: new ScenePreferenceService(db), metrics: new SceneMetrics(db, clock) };
+      inbox: new SceneInboxService(db, clock), browser: new BrowserSubscriptionService(db, clock), preferences: new ScenePreferenceService(db),
+      metrics: new SceneMetrics(db, clock, () => input.executor ? null : resolveSceneModelRef(input.config())) };
     this.runtime = new SceneRuntime(repository, new SceneExecutionService(repository, providers, executor, grant, clock),
       new SceneMailObservationService(repository, mail, grant, clock, 60_000), clock, input.intervalMs ?? 5000);
     this.notifications = new SceneResultNotifications(db, authorize, (event) => input.publish('notification.created', event), clock);

@@ -13,6 +13,7 @@ import { AssistantStepsBlock } from './AssistantStepsBlock';
 import { AssistantDeliverablesCard } from './AssistantDeliverablesCard';
 import { AttachmentRenderer } from './AttachmentRenderer';
 import { AudioMessageBlock } from './AudioMessageBlock';
+import { CompactResourceList } from './CompactResourceList';
 import { MarkdownView } from './MarkdownView';
 import { extractMarkdownCodeBlocks } from './extract-markdown-code';
 import { MessageActionsBar, type MessageAction } from './MessageActionsBar';
@@ -594,13 +595,22 @@ export const MessageBubble = memo(function MessageBubble({
               />
             ) : null}
             {message.contextRefs?.length ? (
-              <View style={styles.noteReferenceList} accessibilityLabel={m.chat.references.title}>
-                {message.contextRefs.map((ref) => (
+              <CompactResourceList
+                items={message.contextRefs}
+                title={m.chat.references.title}
+                moreLabel={(count) => m.chat.moreReferences.replace('{{count}}', String(count))}
+                keyExtractor={(ref) => `${ref.kind}:${ref.sourceId}`}
+                renderItem={(ref, _index, requestAction) => (
                   <Pressable
-                    key={`${ref.kind}:${ref.sourceId}`}
                     accessibilityRole="button"
                     accessibilityLabel={m.chat.references.open.replace('{{title}}', ref.title)}
-                    onPress={() => ref.kind === 'task' ? router.push(`/tasks/${encodeURIComponent(ref.sourceId)}`) : openNoteDetail(router, ref.sourceId)}
+                    onPress={() => requestAction(() => {
+                      if (ref.kind === 'task') {
+                        router.push(`/tasks/${encodeURIComponent(ref.sourceId)}`);
+                      } else {
+                        openNoteDetail(router, ref.sourceId);
+                      }
+                    })}
                     style={({ pressed }) => [
                       styles.noteReferenceCard,
                       {
@@ -610,24 +620,17 @@ export const MessageBubble = memo(function MessageBubble({
                       },
                     ]}
                   >
-                    <View style={[styles.noteReferenceIcon, { backgroundColor: colors.accent.soft }]}>
-                      <Icon source={ref.kind === 'task' ? 'checkbox-marked-circle-outline' : 'note-text-outline'} size={18} color={colors.accent.primary} />
-                    </View>
-                    <View style={styles.noteReferenceText}>
-                      <Text style={[styles.noteReferenceKind, { color: colors.text.secondary }]}>
-                        {ref.kind === 'task' ? m.chat.references.task : m.chat.referencedNote}
-                      </Text>
-                      <Text
-                        numberOfLines={1}
-                        style={[styles.noteReferenceTitle, { color: colors.text.primary }]}
-                      >
-                        {ref.title}
-                      </Text>
-                    </View>
+                    <Icon source={ref.kind === 'task' ? 'checkbox-marked-circle-outline' : 'note-text-outline'} size={18} color={colors.accent.primary} />
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.noteReferenceTitle, { color: colors.text.primary }]}
+                    >
+                      {ref.title}
+                    </Text>
                     <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
                   </Pressable>
-                ))}
-              </View>
+                )}
+              />
             ) : null}
             {userAudio.length > 0 ? (
               <View style={styles.userVoiceStack}>
@@ -654,7 +657,7 @@ export const MessageBubble = memo(function MessageBubble({
               </Text>
             ) : null}
             {userAttachments.length ? (
-              <AttachmentRenderer attachments={userAttachments} conversationId={conversationId} compact />
+              <AttachmentRenderer attachments={userAttachments} conversationId={conversationId} />
             ) : null}
           </View>
           <MessageActionsBar actions={userActions} align="right" />
@@ -697,37 +700,19 @@ export const MessageBubble = memo(function MessageBubble({
 });
 
 const styles = StyleSheet.create({
-  noteReferenceList: {
-    gap: 6,
-  },
   noteReferenceCard: {
-    minWidth: 220,
-    maxWidth: 280,
-    minHeight: 52,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 10,
     paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  noteReferenceIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  noteReferenceText: {
-    flex: 1,
-    minWidth: 0,
-  },
-  noteReferenceKind: {
-    ...typography.micro,
   },
   noteReferenceTitle: {
-    ...typography.label,
+    flex: 1,
+    minWidth: 0,
+    fontSize: 13,
     fontWeight: '600',
   },
   userVoiceStack: {

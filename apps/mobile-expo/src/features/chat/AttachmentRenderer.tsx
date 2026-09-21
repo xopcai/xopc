@@ -1,4 +1,3 @@
-import { GatewayImage as Image } from '../../components/GatewayImage';
 import { useQuery } from '@tanstack/react-query';
 import type { FileResource } from '@xopcai/gateway-contract';
 import { useMemo, useState } from 'react';
@@ -8,9 +7,10 @@ import { Icon, Text } from 'react-native-paper';
 import { t, useMessages } from '../../i18n/messages';
 import { fileContentPath, resolveContextFileResources } from '../../query/files';
 import { useGatewayStore } from '../../stores/gateway-store';
-import { useTheme } from '../../theme';
+import { spacing, useTheme } from '../../theme';
 import { AudioMessageBlock } from './AudioMessageBlock';
 import { artifactFileId } from './artifact-uri';
+import { CompactResourceList } from './CompactResourceList';
 import { FilePreviewModal, type PreviewableFile } from '../file-preview/FilePreviewModal';
 import { buildGatewayMediaReadPath, isMediaUri } from './media-uri';
 import type { AudioContent, MessageAttachment } from './messages.types';
@@ -59,34 +59,6 @@ function attachmentToPreviewable(
   };
 }
 
-function imageSource(
-  att: MessageAttachment,
-  resource: FileResource | null,
-  conversationId: string | null | undefined,
-  apiUrl: (path: string) => string,
-): { uri: string } | null {
-  const payload = attachmentPayload(att)?.trim();
-  const fileId = artifactFileId(att.uri);
-  if (payload) {
-    if (payload.startsWith('data:')) return { uri: payload };
-    const mime = att.mimeType || 'image/png';
-    return { uri: `data:${mime};base64,${payload.replace(/\s/g, '')}` };
-  }
-  if (isMediaUri(att.uri)) {
-    return { uri: apiUrl(buildGatewayMediaReadPath(att.uri, conversationId)) };
-  }
-  if (fileId) {
-    return { uri: apiUrl(fileContentPath(fileId)) };
-  }
-  if (/^https?:\/\//i.test(att.uri ?? '')) {
-    return { uri: att.uri! };
-  }
-  if (resource) {
-    return { uri: apiUrl(fileContentPath(resource.id)) };
-  }
-  return null;
-}
-
 function attachmentToAudioContent(
   att: MessageAttachment,
   resource: FileResource | null,
@@ -114,11 +86,9 @@ function attachmentToAudioContent(
 export function AttachmentRenderer({
   attachments,
   conversationId,
-  compact = false,
 }: {
   attachments?: MessageAttachment[];
   conversationId?: string | null;
-  compact?: boolean;
 }) {
   const { colors } = useTheme();
   const m = useMessages();
@@ -151,54 +121,52 @@ export function AttachmentRenderer({
   return (
     <>
       {audioItems.length > 0 ? (
-        <View style={[styles.audioWrap, compact && styles.wrapCompact]}>
+        <View style={styles.audioWrap}>
           {audioItems.map((att, index) => {
             const itemIndex = items.indexOf(att);
             return (
-            <AudioMessageBlock
-              key={att.id ?? `${attachmentName(att, index)}-${index}`}
-              audio={attachmentToAudioContent(att, resourceByItem[itemIndex] ?? null, apiUrl)}
-            />
+              <AudioMessageBlock
+                key={att.id ?? `${attachmentName(att, index)}-${index}`}
+                audio={attachmentToAudioContent(att, resourceByItem[itemIndex] ?? null, apiUrl)}
+              />
             );
           })}
         </View>
       ) : null}
       {nonAudioItems.length > 0 ? (
-      <View style={[styles.wrap, compact && styles.wrapCompact]}>
-        {nonAudioItems.map((att, index) => {
-          const name = attachmentName(att, index);
-          const itemIndex = items.indexOf(att);
-          const resource = resourceByItem[itemIndex] ?? null;
-          const preview = attachmentToPreviewable(att, index, resource, conversationId);
-          const source = isImageAttachment(att) ? imageSource(att, resource, conversationId, apiUrl) : null;
-          if (source) {
+        <CompactResourceList
+          items={nonAudioItems}
+          title={m.chat.attachmentsHeading}
+          moreLabel={(count) => m.chat.moreAttachments.replace('{{count}}', String(count))}
+          keyExtractor={(att, index) => att.id ?? `${attachmentName(att, index)}-${index}`}
+          renderItem={(att, index, requestAction) => {
+            const name = attachmentName(att, index);
+            const itemIndex = items.indexOf(att);
+            const preview = attachmentToPreviewable(
+              att,
+              index,
+              resourceByItem[itemIndex] ?? null,
+              conversationId,
+            );
             return (
               <Pressable
-                key={att.id ?? `${name}-${index}`}
-                style={({ pressed }) => [styles.imageTile, { borderColor: border }, pressed && styles.pressed]}
-                onPress={() => setActive(preview)}
+                style={({ pressed }) => [
+                  styles.resourceRow,
+                  { borderColor: border, backgroundColor: pressed ? colors.surface.pressed : chipBg },
+                ]}
+                onPress={() => requestAction(() => setActive(preview))}
                 accessibilityRole="button"
                 accessibilityLabel={t(m.chat.previewFile, { name })}
               >
-                <Image source={source} style={styles.image} resizeMode="cover" />
+                <Icon source={isImageAttachment(att) ? 'image-outline' : 'file-outline'} size={18} color={muted} />
+                <Text style={[styles.resourceTitle, { color: textColor }]} numberOfLines={1}>
+                  {name}
+                </Text>
+                <Icon source="chevron-right" size={18} color={muted} />
               </Pressable>
             );
-          }
-          return (
-            <Pressable
-              key={att.id ?? `${name}-${index}`}
-              style={({ pressed }) => [styles.chip, { borderColor: border, backgroundColor: chipBg }, pressed && styles.pressed]}
-              onPress={() => setActive(preview)}
-              accessibilityRole="button"
-              accessibilityLabel={t(m.chat.previewFile, { name })}
-            >
-              <Icon source="file-outline" size={16} color={muted} />
-              <Text style={[styles.chipText, { color: textColor }]} numberOfLines={1}>{name}</Text>
-              <Icon source="eye-outline" size={14} color={muted} />
-            </Pressable>
-          );
-        })}
-      </View>
+          }}
+        />
       ) : null}
       <FilePreviewModal
         visible={Boolean(active)}
@@ -216,43 +184,19 @@ const styles = StyleSheet.create({
     marginTop: 4,
     alignItems: 'flex-end',
   },
-  wrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 4,
-  },
-  wrapCompact: {
-    marginTop: 0,
-  },
-  imageTile: {
-    width: 96,
-    height: 96,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-  },
-  chip: {
-    maxWidth: '100%',
-    minHeight: 36,
+  resourceRow: {
+    minHeight: 44,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: spacing.sm,
   },
-  chipText: {
-    flexShrink: 1,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  pressed: {
-    opacity: 0.72,
+  resourceTitle: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

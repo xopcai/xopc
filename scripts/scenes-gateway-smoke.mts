@@ -37,7 +37,7 @@ async function stop() {
   const timeout = setTimeout(() => child?.kill('SIGKILL'), 10000);
   await exited; clearTimeout(timeout);
 }
-async function start() {
+async function start(scenesEnabled = true) {
   const listener = createServer();
   await new Promise<void>(resolve => listener.listen(0, '127.0.0.1', resolve));
   const port = (listener.address() as { port: number }).port;
@@ -45,7 +45,7 @@ async function start() {
   origin = `http://127.0.0.1:${port}`;
   const config = join(directory, 'xopc.json');
   writeFileSync(config, JSON.stringify({ agents: { defaults: { models: { chat: { primary: 'scene-local/scene-test' } } } },
-    gateway: { bind: 'loopback', port, auth: { mode: 'token', token }, heartbeat: { enabled: true, intervalMs: 'obsolete', targetChatId: 'obsolete' } }, browser: { enabled: false } }));
+    gateway: { bind: 'loopback', port, auth: { mode: 'token', token }, scenes: { enabled: scenesEnabled }, heartbeat: { enabled: true, intervalMs: 'obsolete', targetChatId: 'obsolete' } }, browser: { enabled: false } }));
   output = '';
   child = spawn(process.execPath, ['dist/src/cli/bin.js', 'gateway', '--port', String(port), '--bind', 'loopback', '--no-hot-reload'], {
     env: { ...process.env, XOPC_STATE_DIR: directory, XOPC_WORKSPACE: workspace, XOPC_CONFIG_PATH: config, XOPC_CONFIG: config,
@@ -79,7 +79,9 @@ try {
     await new Promise(resolve => setTimeout(resolve, 200));
   }
   assert.equal((await api('/outcomes')).outcomes[0]?.content.summary, 'Keep Sunday free.');
-  assert.equal((await api('/diagnostics')).lastSevenDays.modelCalls, 1);
+  const diagnostics = await api('/diagnostics');
+  assert.equal(diagnostics.lastSevenDays.modelCalls, 1);
+  assert.equal(diagnostics.currentModel, 'scene-local/scene-test');
   await stop(); await start();
   assert.equal((await api('/activations')).activations[0].id, activation.id);
   await api(`/activations/${activation.id}/checks`, 'POST');
@@ -99,11 +101,14 @@ try {
     assert.equal((await fetch(`${origin}${path}`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })).status, 404);
   }
   await stop();
+  await start(false);
+  assert.equal((await fetch(`${origin}/api/scenes/diagnostics`, { headers: { Authorization: `Bearer ${token}` } })).status, 503);
+  await stop();
   const db = new DatabaseSync(join(directory, 'xopc.db'));
   assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
   assert.deepEqual(db.prepare("SELECT name FROM sqlite_master WHERE name GLOB 'proactive_*'").all(), []);
   db.close();
-  console.log('Built Gateway: authenticated scene start → real executor/local model → result → restart/idempotency → pause, old routes absent, database intact.');
+  console.log('Built Gateway: enabled scene lifecycle passed; disabled gate returned 503; old routes absent; database intact.');
 } finally {
   await stop(); await new Promise<void>(resolve => model.close(() => resolve())); rmSync(directory, { recursive: true, force: true });
 }

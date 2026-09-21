@@ -4,24 +4,24 @@ import { useCallback, useMemo, useState } from 'react';
 import type { DragEvent, ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 
-import { messages } from '@/i18n/messages';
-import { useLocaleStore } from '@/stores/locale-store';
-import { useNavOrderStore } from '@/stores/nav-order-store';
-import { cn } from '@/lib/cn';
-import { preloadRouteForPath } from '@/lib/route-preload';
-
-import { useUiExtensions } from '@/features/extensions/extension-provider';
 import { openDiscussionCapture } from '@/features/discussions/discussion-events';
+import { useUiExtensions } from '@/features/extensions/extension-provider';
 import { extensionPagePath } from '@/features/extensions/extension-paths';
 import { resolveLucideIcon } from '@/features/extensions/extension-nav-icon';
 import type { ExtensionUiInfo } from '@/features/extensions/types';
-
+import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
+import { messages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
+import { preloadRouteForPath } from '@/lib/route-preload';
 import {
-  BUILTIN_NAV_DEFS,
+  builtinNavDefsForFeatures,
   reconcileNavOrder,
   type BuiltinNavId,
   type NavItem,
 } from '@/navigation/sidebar-nav-items';
+import { useGatewayStore } from '@/stores/gateway-store';
+import { useLocaleStore } from '@/stores/locale-store';
+import { useNavOrderStore } from '@/stores/nav-order-store';
 
 const DRAG_MIME = 'text/plain';
 const DT_PREFIX = 'xopc-nav:';
@@ -155,6 +155,10 @@ export function SidebarNavItems({
   const m = messages(language);
 
   const uiExtensions = useUiExtensions();
+  const gatewaySession = useGatewayStore((state) => state.conversationId);
+  const gatewayConfig = useGatewayConfigSwr(Boolean(gatewaySession));
+  const scenesEnabled = (gatewayConfig.data?.payload?.config as { gateway?: { scenes?: { enabled?: boolean } } } | undefined)
+    ?.gateway?.scenes?.enabled === true;
   const order = useNavOrderStore((s) => s.order);
   const setOrder = useNavOrderStore((s) => s.setOrder);
 
@@ -164,7 +168,7 @@ export function SidebarNavItems({
   const [popoverOpen, setPopoverOpen] = useState(false);
 
   const available = useMemo<NavItem[]>(() => {
-    const builtins: NavItem[] = BUILTIN_NAV_DEFS.map((def) => {
+    const builtins: NavItem[] = builtinNavDefsForFeatures(scenesEnabled).map((def) => {
       const labelKey = def.id.slice('builtin:'.length) as 'agents' | 'scenes' | 'home' | 'projects' | 'localApps' | 'skills' | 'connectors' | 'automations' | 'browserAutomations' | 'notes' | 'workflows' | 'channels' | 'extensions';
       return {
         id: def.id,
@@ -176,7 +180,7 @@ export function SidebarNavItems({
     });
     const ext = collectExtensionNavItems(uiExtensions);
     return [...builtins, ...ext];
-  }, [m, uiExtensions]);
+  }, [m, scenesEnabled, uiExtensions]);
 
   const reconciled = useMemo(
     () => reconcileNavOrder(available, order, visibleLimit),

@@ -24,7 +24,7 @@ export type AssistantDeliverables = {
 
 function deliveryKey(delivery: ProductDeliveryEnvelope): string {
   const reference = delivery.primary;
-  return `${delivery.operation}:${reference?.kind ?? 'none'}:${reference?.id ?? 'none'}`;
+  return `${reference?.kind ?? 'none'}:${reference?.id ?? 'none'}`;
 }
 
 export function collectAssistantDeliverables(

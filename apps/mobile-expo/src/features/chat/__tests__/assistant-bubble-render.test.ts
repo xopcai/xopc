@@ -44,6 +44,7 @@ vi.mock('../AssistantStepsBlock', () => ({
 vi.mock('../AssistantDeliverablesCard', () => ({ AssistantDeliverablesCard: () => null }));
 vi.mock('../AttachmentRenderer', () => ({ AttachmentRenderer: () => null }));
 vi.mock('../AudioMessageBlock', () => ({ AudioMessageBlock: () => null }));
+vi.mock('../CompactResourceList', () => ({ CompactResourceList: () => null }));
 vi.mock('../MessageActionsBar', () => ({ MessageActionsBar: () => null }));
 
 const render = (message: Message, isStreaming = true) => renderToStaticMarkup(createElement(MessageBubble, {

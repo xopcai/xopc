@@ -5,6 +5,7 @@ import { Icon, Text } from 'react-native-paper';
 
 import type { AssistantDeliverables } from './assistant-deliverables';
 import { AttachmentRenderer } from './AttachmentRenderer';
+import { CompactResourceList } from './CompactResourceList';
 import type { MessageAttachment } from './messages.types';
 import { ProductDeliveryCard } from './ProductDeliveryCard';
 import { useMessages } from '../../i18n/messages';
@@ -58,6 +59,7 @@ export const AssistantDeliverablesCard = memo(function AssistantDeliverablesCard
   const unavailable = deliverables.artifacts.filter(
     (artifact) => artifact.availability !== 'available' || (!artifact.uri && !artifact.shareUrl),
   );
+  const secondaryArtifacts = [...links, ...unavailable];
   const hasContent = deliverables.artifacts.length > 0
     || deliverables.productDeliveries.length > 0;
   if (!hasContent && !deliverables.awaiting) return null;
@@ -83,59 +85,61 @@ export const AssistantDeliverablesCard = memo(function AssistantDeliverablesCard
           </View>
         ) : null}
         {attachments.length > 0 ? (
-          <AttachmentRenderer attachments={attachments} conversationId={conversationId} compact />
+          <AttachmentRenderer attachments={attachments} conversationId={conversationId} />
         ) : null}
-        {links.map((artifact) => (
-          <Pressable
-            key={artifact.artifactId}
-            style={({ pressed }) => [
-              styles.artifactRow,
-              { backgroundColor: colors.surface.input },
-              pressed && styles.pressed,
-            ]}
-            onPress={() => void Linking.openURL(artifact.shareUrl!)}
-            accessibilityRole="link"
-            accessibilityLabel={artifact.title}
-          >
-            <Icon source="open-in-new" size={16} color={colors.text.secondary} />
-            <Text style={[styles.artifactTitle, { color: colors.text.primary }]} numberOfLines={1}>
-              {artifact.title}
-            </Text>
-          </Pressable>
-        ))}
-        {unavailable.map((artifact) => {
-          const status = unavailableLabel(artifact, {
-            materializing: m.chat.artifactMaterializing,
-            expired: m.chat.artifactExpired,
-            missing: m.chat.artifactMissing,
-            failed: m.chat.artifactFailed,
-            unavailable: m.chat.artifactUnavailable,
-          });
-          return (
-            <View
-              key={artifact.artifactId}
-              style={[styles.artifactRow, { backgroundColor: colors.surface.input }]}
-              accessibilityLabel={`${artifact.title}. ${status}`}
-            >
-              <Icon source="file-alert-outline" size={16} color={colors.text.secondary} />
-              <View style={styles.artifactText}>
+        <CompactResourceList
+          items={secondaryArtifacts}
+          title={m.chat.messageArtifactsHeading}
+          moreLabel={(count) => m.chat.moreArtifacts.replace('{{count}}', String(count))}
+          keyExtractor={(artifact) => artifact.artifactId}
+          renderItem={(artifact, _index, requestAction) => {
+            const canOpen = artifact.availability === 'available' && Boolean(artifact.shareUrl);
+            const status = canOpen ? null : unavailableLabel(artifact, {
+              materializing: m.chat.artifactMaterializing,
+              expired: m.chat.artifactExpired,
+              missing: m.chat.artifactMissing,
+              failed: m.chat.artifactFailed,
+              unavailable: m.chat.artifactUnavailable,
+            });
+            return (
+              <Pressable
+                disabled={!canOpen}
+                style={({ pressed }) => [
+                  styles.artifactRow,
+                  { backgroundColor: pressed ? colors.surface.pressed : colors.surface.input },
+                ]}
+                onPress={canOpen
+                  ? () => requestAction(() => void Linking.openURL(artifact.shareUrl!))
+                  : undefined}
+                accessibilityRole={canOpen ? 'link' : 'text'}
+                accessibilityLabel={status ? `${artifact.title}. ${status}` : artifact.title}
+              >
+                <Icon
+                  source={canOpen ? 'open-in-new' : 'file-alert-outline'}
+                  size={18}
+                  color={colors.text.secondary}
+                />
                 <Text style={[styles.artifactTitle, { color: colors.text.primary }]} numberOfLines={1}>
                   {artifact.title}
                 </Text>
-                <Text style={[styles.artifactStatus, { color: colors.text.secondary }]} numberOfLines={1}>
-                  {status}
-                </Text>
-              </View>
-            </View>
-          );
-        })}
-        {deliverables.productDeliveries.map((delivery) => (
-          <ProductDeliveryCard
-            key={`${delivery.operation}:${delivery.primary?.kind ?? 'none'}:${delivery.primary?.id ?? 'none'}`}
-            delivery={delivery}
-            conversationId={conversationId}
-          />
-        ))}
+                {canOpen ? <Icon source="chevron-right" size={18} color={colors.text.tertiary} /> : null}
+              </Pressable>
+            );
+          }}
+        />
+        <CompactResourceList
+          items={deliverables.productDeliveries}
+          title={m.chat.messageArtifactsHeading}
+          moreLabel={(count) => m.chat.moreArtifacts.replace('{{count}}', String(count))}
+          keyExtractor={(delivery) => `${delivery.primary?.kind ?? 'none'}:${delivery.primary?.id ?? 'none'}`}
+          renderItem={(delivery, _index, requestAction) => (
+            <ProductDeliveryCard
+              delivery={delivery}
+              conversationId={conversationId}
+              requestAction={requestAction}
+            />
+          )}
+        />
       </View>
     </View>
   );
@@ -156,30 +160,18 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   artifactRow: {
-    minHeight: 56,
+    minHeight: 44,
     borderRadius: 10,
     paddingHorizontal: 10,
-    paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
   },
-  artifactText: {
-    minWidth: 0,
-    flex: 1,
-  },
   artifactTitle: {
     minWidth: 0,
-    flexShrink: 1,
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  artifactStatus: {
+    flex: 1,
     fontSize: 13,
-    lineHeight: 19,
-  },
-  pressed: {
-    opacity: 0.72,
+    fontWeight: '600',
   },
   skeletonRow: {
     minHeight: 56,
