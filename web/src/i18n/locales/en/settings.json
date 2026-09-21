@@ -1196,7 +1196,6 @@
     "discoverSearchPlaceholder": "Search GitHub, Slack, Notion…",
     "refreshConnections": "Refresh connection status",
     "needsAttentionTitle": "Needs attention",
-    "connectedServicesTitle": "Connected services",
     "customIntegrationsTitle": "Custom integrations",
     "customIntegrationsHint": "MCP servers and shared runtime settings for advanced use.",
     "filters": "Filters",

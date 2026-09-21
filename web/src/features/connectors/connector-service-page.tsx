@@ -35,9 +35,9 @@ export function ConnectorServiceDialog() {
   const zh = language === 'zh';
   return <Dialog.Root>
     <Dialog.Trigger asChild>
-      <button type="button" className="touch-target rounded-lg text-xs text-fg-muted hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+      <Button type="button" variant="secondary" className="shrink-0">
         {zh ? '应用连接服务' : 'Connection service'}
-      </button>
+      </Button>
     </Dialog.Trigger>
     <Dialog.Portal>
       <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />

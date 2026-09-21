@@ -608,10 +608,6 @@ export function ConnectorsPage() {
 
                   {availableInstances.length ? (
                     <section>
-                      <div className="mb-2 flex items-center gap-2">
-                        <h2 className="text-sm font-semibold text-fg">{cs.connectedServicesTitle}</h2>
-                        <span className="text-xs tabular-nums text-fg-subtle">{availableInstances.length}</span>
-                      </div>
                       <div className="divide-y divide-edge-subtle overflow-hidden rounded-xl border border-edge bg-surface-base">
                         {availableInstances.map((instance) => (
                           <InstalledConnectorRow

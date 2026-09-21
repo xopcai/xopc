@@ -1,6 +1,7 @@
 import { ArrowDown } from 'lucide-react';
 import { memo } from 'react';
 
+import { AnimatedLoopLogo } from '@/components/brand/animated-loop-logo';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
@@ -48,19 +49,22 @@ export const ScrollToBottomDock = memo(function ScrollToBottomDock({
         title={m.chat.scrollToBottom}
         aria-label={m.chat.scrollToBottom}
       >
-        <ArrowDown
-          data-scroll-to-bottom-arrow
-          className="size-4 transition-transform duration-150 ease-out group-hover:translate-y-0.5 motion-reduce:transition-none"
-          strokeWidth={1.8}
-          aria-hidden
-        />
         {running ? (
           <span
-            data-scroll-to-bottom-running-dot
-            className="absolute right-0 top-0 size-2 rounded-full bg-accent animate-pulse motion-reduce:animate-none"
+            data-scroll-to-bottom-running-logo
+            className="flex size-5 items-center justify-center"
+            aria-hidden
+          >
+            <AnimatedLoopLogo className="xopc-loop-logo--stream size-5" />
+          </span>
+        ) : (
+          <ArrowDown
+            data-scroll-to-bottom-arrow
+            className="size-4 transition-transform duration-150 ease-out group-hover:translate-y-0.5 motion-reduce:transition-none"
+            strokeWidth={1.8}
             aria-hidden
           />
-        ) : null}
+        )}
       </button>
     </div>
   );
