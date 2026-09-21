@@ -28,8 +28,9 @@ describe('ScrollToBottomDock', () => {
       expect(onClick).toHaveBeenCalledOnce();
 
       await act(async () => root.render(<ScrollToBottomDock visible running onClick={onClick} />));
-      expect(container.querySelectorAll('[data-scroll-to-bottom-running-dot]')).toHaveLength(1);
-      expect(container.querySelector('[data-scroll-to-bottom-arrow]')).not.toBeNull();
+      expect(container.querySelectorAll('[data-scroll-to-bottom-running-logo]')).toHaveLength(1);
+      expect(container.querySelector('.xopc-loop-logo--stream')).not.toBeNull();
+      expect(container.querySelector('[data-scroll-to-bottom-arrow]')).toBeNull();
       await act(async () => container.querySelector('button')?.click());
       expect(onClick).toHaveBeenCalledTimes(2);
 

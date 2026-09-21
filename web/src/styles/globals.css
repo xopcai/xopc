@@ -665,6 +665,33 @@ html.dark {
   animation: xopc-loop-liquid-front 8.4s cubic-bezier(.4, 0, .16, 1) infinite;
 }
 
+/* Compact streaming state: keep the brand mark legible while its liquid front circulates. */
+.xopc-loop-logo--stream .xopc-loop-logo__origin {
+  opacity: 0;
+  animation: none;
+}
+
+.xopc-loop-logo--stream .xopc-loop-logo__ai,
+.xopc-loop-logo--stream .xopc-loop-logo__human {
+  opacity: 1;
+  animation: none;
+}
+
+.xopc-loop-logo--stream .xopc-loop-logo__ambient {
+  filter: blur(18px);
+  animation: xopc-loop-stream-ambient 1.8s ease-in-out infinite;
+}
+
+.xopc-loop-logo--stream .xopc-loop-logo__ai-glow {
+  opacity: .16;
+  animation: none;
+}
+
+.xopc-loop-logo--stream .xopc-loop-logo__liquid-front {
+  opacity: .92;
+  animation: xopc-loop-stream-flow 1.45s linear infinite;
+}
+
 .xopc-onboarding-stage {
   animation: xopc-onboarding-stage-in 220ms cubic-bezier(.22, 1, .36, 1) both;
 }
@@ -832,6 +859,16 @@ html.dark {
   96%, 100% { opacity: .2; transform: scale(.92); transform-origin: center; }
 }
 
+@keyframes xopc-loop-stream-flow {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -2073.451151; }
+}
+
+@keyframes xopc-loop-stream-ambient {
+  0%, 100% { opacity: .08; transform: scale(.94); transform-origin: center; }
+  50% { opacity: .2; transform: scale(1.04); transform-origin: center; }
+}
+
 @keyframes xopc-onboarding-options-in {
   from { opacity: 0; transform: translateY(-8px); }
   to { opacity: 1; transform: translateY(0); }
@@ -900,6 +937,12 @@ html.dark {
   .xopc-source-convergence-progress {
     width: 100%;
     transform: none;
+  }
+
+  .xopc-loop-logo--stream .xopc-loop-logo__ambient,
+  .xopc-loop-logo--stream .xopc-loop-logo__liquid-front {
+    opacity: 0;
+    animation: none;
   }
 }
 
