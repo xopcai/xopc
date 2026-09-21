@@ -4,7 +4,31 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { HtmlPreviewFrame } from '../html-preview-frame';
+import { HtmlPreviewFrame, prepareHtmlPreviewDocument } from '../html-preview-frame';
+
+describe('prepareHtmlPreviewDocument', () => {
+  it('gives srcdoc documents their own base URL so fragment links stay in the preview', () => {
+    const html = '<!doctype html><html lang="zh"><head><title>Profile</title></head><body><a href="#about">About</a><section id="about">...</section></body></html>';
+
+    expect(prepareHtmlPreviewDocument(html)).toContain(
+      '<head><base href="about:srcdoc"><title>Profile</title>',
+    );
+  });
+
+  it('creates a head without moving or removing the doctype', () => {
+    const html = '<!doctype html><nav><a href="#about">About</a></nav><section id="about">...</section>';
+
+    expect(prepareHtmlPreviewDocument(html)).toBe(
+      '<!doctype html><head><base href="about:srcdoc"></head><nav><a href="#about">About</a></nav><section id="about">...</section>',
+    );
+  });
+
+  it('preserves an explicit document base', () => {
+    const html = '<head><base href="https://example.com/"></head><body></body>';
+
+    expect(prepareHtmlPreviewDocument(html)).toBe(html);
+  });
+});
 
 describe('HTML preview frame', () => {
   let container: HTMLDivElement;
@@ -35,15 +59,24 @@ describe('HTML preview frame', () => {
     const postMessage = vi.spyOn(frame.contentWindow!, 'postMessage');
 
     act(() => frame.dispatchEvent(new Event('load')));
-    expect(postMessage).toHaveBeenLastCalledWith({ type: 'xopc-html-preview', html: originalHtml }, '*');
+    expect(postMessage).toHaveBeenLastCalledWith(
+      { type: 'xopc-html-preview', html: prepareHtmlPreviewDocument(originalHtml) },
+      '*',
+    );
 
     const editedHtml = '<button onclick="this.textContent = 2">1</button>';
     act(() => root.render(<HtmlPreviewFrame html={editedHtml} title="report.html" />));
     expect(container.querySelector('iframe')).toBe(frame);
-    expect(postMessage).toHaveBeenLastCalledWith({ type: 'xopc-html-preview', html: editedHtml }, '*');
+    expect(postMessage).toHaveBeenLastCalledWith(
+      { type: 'xopc-html-preview', html: prepareHtmlPreviewDocument(editedHtml) },
+      '*',
+    );
 
     // A late shell load must receive the current file, even after a prior update.
     act(() => frame.dispatchEvent(new Event('load')));
-    expect(postMessage).toHaveBeenLastCalledWith({ type: 'xopc-html-preview', html: editedHtml }, '*');
+    expect(postMessage).toHaveBeenLastCalledWith(
+      { type: 'xopc-html-preview', html: prepareHtmlPreviewDocument(editedHtml) },
+      '*',
+    );
   });
 });
