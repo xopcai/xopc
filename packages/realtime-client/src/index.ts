@@ -5,6 +5,7 @@ import type {
 } from '@xopcai/endpoint-tools-protocol';
 import {
   REALTIME_CAPABILITIES,
+  REALTIME_MAX_CLIENT_FRAME_BYTES,
   REALTIME_PROTOCOL_VERSION,
   parseServerRealtimeMessage,
   type ClientRealtimeMessage,
@@ -20,6 +21,13 @@ export class RealtimeConnectionError extends Error {
   constructor(message: string, readonly retryable: boolean) {
     super(message);
     this.name = 'RealtimeConnectionError';
+  }
+}
+
+export class RealtimeFrameTooLargeError extends Error {
+  constructor(readonly bytes: number, readonly maxBytes: number) {
+    super(`Realtime client frame is ${bytes} bytes; maximum is ${maxBytes} bytes`);
+    this.name = 'RealtimeFrameTooLargeError';
   }
 }
 
@@ -351,7 +359,12 @@ export class RealtimeClient {
 
   private send(message: ClientRealtimeMessage): void {
     if (!this.socket || this.socket.readyState !== 1) return;
-    this.socket.send(JSON.stringify(message));
+    const data = JSON.stringify(message);
+    const bytes = new TextEncoder().encode(data).byteLength;
+    if (bytes > REALTIME_MAX_CLIENT_FRAME_BYTES) {
+      throw new RealtimeFrameTooLargeError(bytes, REALTIME_MAX_CLIENT_FRAME_BYTES);
+    }
+    this.socket.send(data);
   }
 
   private scheduleReconnect(error: string): void {

@@ -61,6 +61,7 @@ function createHost(options: {
   availability?: 'foreground' | 'background';
   authorize?: ConstructorParameters<typeof EndpointToolHostController>[0]['authorize'];
   confirm?: ConstructorParameters<typeof EndpointToolHostController>[0]['confirm'];
+  sendMessage?: (message: ClientEndpointMessage, sent: ClientEndpointMessage[]) => void;
 } = {}) {
   const tool = options.tool ?? descriptor;
   const sent: ClientEndpointMessage[] = [];
@@ -76,7 +77,10 @@ function createHost(options: {
     uploadFile: vi.fn(),
     createMessageId: () => crypto.randomUUID(),
   });
-  host.connect((message) => sent.push(message));
+  host.connect((message) => {
+    if (options.sendMessage) options.sendMessage(message, sent);
+    else sent.push(message);
+  });
   return { execute, host, sent };
 }
 
@@ -190,6 +194,26 @@ describe('EndpointToolHostController', () => {
     expect(denied.sent.at(-1)).toMatchObject({
       type: 'tool.error',
       payload: { code: 'PERMISSION_DENIED' },
+    });
+  });
+
+  it('reports an oversized transport result without disconnecting the endpoint', async () => {
+    const oversized = createHost({
+      sendMessage: (message, sent) => {
+        if (message.type === 'tool.result') {
+          const error = new Error('Realtime client frame exceeds its limit');
+          error.name = 'RealtimeFrameTooLargeError';
+          throw error;
+        }
+        sent.push(message);
+      },
+    });
+
+    await oversized.host.handleMessage(invocation());
+
+    expect(oversized.sent.map((message) => message.type)).toEqual(['tool.received', 'tool.error']);
+    expect(oversized.sent.at(-1)).toMatchObject({
+      payload: { code: 'RESULT_TOO_LARGE' },
     });
   });
 
