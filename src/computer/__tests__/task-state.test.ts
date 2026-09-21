@@ -41,6 +41,7 @@ describe('bounded desktop task state', () => {
     const state = new ComputerTaskState();
     for (let i = 0; i < 10; i++) state.record('x'.repeat(5000), action, obs, receipt, obs);
     expect(state.history).toHaveLength(6); expect(state.history[0].goal).toHaveLength(1000);
+    expect(state.history[0].afterStateDigest).toBe('same');
     state.clear(); state.record('Unknown', action, obs, { ...receipt, dispatch: 'unknown' }, obs);
     expect(state.history).toHaveLength(0);
   });

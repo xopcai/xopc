@@ -3,6 +3,7 @@ import {
   type Api,
   type Model,
 } from '@earendil-works/pi-ai/compat';
+import type { ComputerProfile } from '@xopcai/computer-control-contract';
 
 const STALE_OPENAI_CONTEXT_WINDOW = 272_000;
 const OPENAI_CONTEXT_WINDOW_CORRECTIONS = new Map<string, number>([
@@ -14,19 +15,28 @@ const OPENAI_CONTEXT_WINDOW_CORRECTIONS = new Map<string, number>([
   ['gpt-5.6-sol', 1_050_000],
   ['gpt-5.6-terra', 1_050_000],
 ]);
+const OPENAI_COMPUTER_MODELS = new Set([
+  'gpt-6-astra',
+  'gpt-5.6-sol',
+  'gpt-5.6-terra',
+  'gpt-5.6-luna',
+]);
+
+type ComputerCapableModel = Model<Api> & { computerUse?: { profile: ComputerProfile } };
 
 /** Correct narrowly scoped upstream catalog metadata while older pi-ai data is still installed. */
 export function applyOfficialModelMetadataCorrections(model: Model<Api>): Model<Api> {
   const correctedContextWindow = OPENAI_CONTEXT_WINDOW_CORRECTIONS.get(model.id);
-  if (
+  const corrected = (
     (model.provider === 'openai' || model.provider === 'openai-codex')
     && correctedContextWindow !== undefined
     && model.contextWindow === STALE_OPENAI_CONTEXT_WINDOW
-  ) {
-    return { ...model, contextWindow: correctedContextWindow };
-  }
+  ) ? { ...model, contextWindow: correctedContextWindow } : model;
 
-  return model;
+  if (corrected.provider !== 'openai' || corrected.api !== 'openai-responses' || !OPENAI_COMPUTER_MODELS.has(corrected.id)) {
+    return corrected;
+  }
+  return { ...corrected, computerUse: { profile: 'openai-responses-computer-v1' } } as ComputerCapableModel;
 }
 
 /**

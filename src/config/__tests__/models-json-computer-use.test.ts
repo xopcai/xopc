@@ -9,3 +9,11 @@ it('validates GUI profiles against the effective model API and image input', () 
   expect(validateModelsConfig(config('openai-completions', ['text'])).valid).toBe(false);
   expect(validateModelsConfig(config('openai-responses', ['text', 'image'])).valid).toBe(false);
 });
+
+it('validates the native Computer Use profile against the Responses API', () => {
+  const config = (api: string) => ({ providers: { fixture: {
+    api, baseUrl: 'https://fixture.test/v1', models: [{ id: 'gpt', input: ['text', 'image'], computerUse: { profile: 'openai-responses-computer-v1' } }],
+  } } });
+  expect(validateModelsConfig(config('openai-responses')).valid).toBe(true);
+  expect(validateModelsConfig(config('openai-completions')).valid).toBe(false);
+});

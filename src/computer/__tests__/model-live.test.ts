@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import sharp from 'sharp';
-import { ComputerModelAdapter, predictComputerStep } from '../model-adapter.js';
+import { ChatCompletionsComputerAdapter, predictComputerStep } from '../model-adapter.js';
 
 // Explicit opt-in. Synthetic pixels only; never a user's desktop or a real API-key fixture.
 describe.skipIf(process.env.XOPC_COMPUTER_LIVE_TEST !== '1')('Alibaba hosted GUI model', () => {
@@ -8,7 +8,7 @@ describe.skipIf(process.env.XOPC_COMPUTER_LIVE_TEST !== '1')('Alibaba hosted GUI
     Array.from({ length: 3 }, (_, repetition) => ({ ...point, repetition }))))('grounds the synthetic button at $x,$y, run $repetition', async ({ x, y }) => {
     const image = await sharp(Buffer.from(`<svg width="800" height="600"><rect width="800" height="600" fill="white"/><rect x="${x}" y="${y}" width="200" height="80" rx="10" fill="#1769e0"/><text x="${x + 100}" y="${y + 52}" text-anchor="middle" font-size="28" fill="white">Continue</text></svg>`)).png().toBuffer();
     try {
-    const adapter = new ComputerModelAdapter({ modelId: 'gui-plus-2026-02-26', profile: 'gui-plus-2026-02-26',
+    const adapter = new ChatCompletionsComputerAdapter({ modelId: 'gui-plus-2026-02-26', profile: 'gui-plus-2026-02-26',
       baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', apiKey: process.env.DASHSCOPE_API_KEY ?? '' });
     let requests = 0;
     const proposal = await predictComputerStep(adapter, { goal: 'Click the blue Continue button once.', image, mimeType: 'image/png', width: 800, height: 600, summary: 'Synthetic test fixture; one Continue button.' }, () => { requests++; });

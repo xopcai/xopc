@@ -36,6 +36,7 @@ describe('computer dialog copy', () => {
   it.each(['zh', 'en'] as const)('keeps exact action parameters in %s readable descriptions', language => {
     const actions: ComputerAction[] = [
       { kind: 'click', point: { x: 125, y: 67 }, button: 'right', count: 2 },
+      { kind: 'drag', from: { x: 10, y: 20 }, to: { x: 30, y: 40 } },
       { kind: 'typeText', point: { x: 125, y: 67 }, text: 'Line 1\n"Line 2"' },
       { kind: 'setValue', ref: 'e12', text: 'Exact value' },
       { kind: 'pressKeys', keys: ['cmd', 'shift', 'a'] },
@@ -45,13 +46,14 @@ describe('computer dialog copy', () => {
     const descriptions = actions.map(action => describeComputerAction(language, action));
     const t = getComputerMessages(language).actions;
     expect(descriptions[0]).toContain(`${t.doubleClick} · ${t.right} · (125, 67)`);
-    expect(descriptions[1]).toContain(JSON.stringify('Line 1\n"Line 2"'));
-    expect(descriptions[2]).toContain('e12');
-    expect(descriptions[2]).toContain(JSON.stringify('Exact value'));
-    expect(descriptions[3]).toContain('cmd + shift + a');
-    expect(descriptions[4]).toContain('-400');
-    expect(descriptions[4]).toContain('(125, 67)');
-    expect(descriptions[5]).toContain('1200');
+    expect(descriptions[1]).toContain('(10, 20) → (30, 40)');
+    expect(descriptions[2]).toContain(JSON.stringify('Line 1\n"Line 2"'));
+    expect(descriptions[3]).toContain('e12');
+    expect(descriptions[3]).toContain(JSON.stringify('Exact value'));
+    expect(descriptions[4]).toContain('cmd + shift + a');
+    expect(descriptions[5]).toContain('-400');
+    expect(descriptions[5]).toContain('(125, 67)');
+    expect(descriptions[6]).toContain('1200');
     expect(describeComputerAction(language, { kind: 'typeText', text: '' })).toContain(t.focused);
   });
 });

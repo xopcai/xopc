@@ -340,6 +340,7 @@ export class CuaComputerDriver implements ComputerDriver {
       if (keys.slice(0, -1).some(key => key !== 'shift') && ['q', 'w', 'h', 'm', 'space', 'tab', 'escape'].includes(main)) throw new Error('COMPUTER_KEY_SCOPE_UNSAFE');
     }
     if (action.kind === 'scroll' && (!!action.deltaX === !!action.deltaY)) throw new Error('COMPUTER_SCROLL_REQUIRES_ONE_AXIS');
+    if (action.kind === 'drag' && action.from.x === action.to.x && action.from.y === action.to.y) throw new Error('COMPUTER_DRAG_REQUIRES_MOVEMENT');
   }
   async perform(target: ComputerTarget, action: ComputerAction, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted();
@@ -357,6 +358,10 @@ export class CuaComputerDriver implements ComputerDriver {
           deliveryMode: this.sdk.InputDeliveryMode.Background, count: action.count, button }, { signal });
         return;
       }
+      case 'drag':
+        await this.callUntyped('drag', { pid: target.pid, window_id: this.jsonWindowId(windowId), delivery_mode: 'background',
+          from_x: action.from.x, from_y: action.from.y, to_x: action.to.x, to_y: action.to.y,
+          duration_ms: 500, steps: 20, button: 'left' }, signal); return;
       case 'typeText': {
         const field = this.editable(action);
         // Web renderers require real field focus. Never fall back after an unknown write.

@@ -16,7 +16,7 @@ const messages = {
     sessionPrivacy: '窗口截图和文字会经当前网关发送至上述服务，可能包含敏感信息。',
     sessionDuration: '本次授权最长有效 15 分钟。可随时在设置或托盘中停止；隐藏窗口或锁屏也会停止。',
     actionWarning: '仅允许这一步。涉及支付、密码、验证码或安全设置时，请取消并手动处理。',
-    actions: { click: '点击', doubleClick: '双击', left: '左键', right: '右键', typeText: '输入文字',
+    actions: { click: '点击', doubleClick: '双击', drag: '拖拽', left: '左键', right: '右键', typeText: '输入文字',
       setValue: '填写字段', pressKeys: '按键', scroll: '滚动', wait: '等待', focused: '当前输入框',
       at: '位置', text: '文字', horizontal: '水平', vertical: '垂直', milliseconds: '毫秒' },
   },
@@ -33,7 +33,7 @@ const messages = {
     sessionPrivacy: 'Window screenshots and text pass through the current Gateway to these services and may contain sensitive information.',
     sessionDuration: 'This permission lasts up to 15 minutes. Stop from settings or the tray at any time. Hiding the window or locking the screen also stops control.',
     actionWarning: 'Allow this action only. For payments, passwords, verification codes or security settings, cancel and handle them manually.',
-    actions: { click: 'Click', doubleClick: 'Double-click', left: 'left button', right: 'right button', typeText: 'Type text',
+    actions: { click: 'Click', doubleClick: 'Double-click', drag: 'Drag', left: 'left button', right: 'right button', typeText: 'Type text',
       setValue: 'Fill field', pressKeys: 'Press keys', scroll: 'Scroll', wait: 'Wait', focused: 'focused input',
       at: 'Position', text: 'Text', horizontal: 'horizontal', vertical: 'vertical', milliseconds: 'ms' },
   },
@@ -46,6 +46,7 @@ export function describeComputerAction(language: ElectronUiLanguage, action: Com
   const point = (p: { x: number; y: number }) => `(${p.x}, ${p.y})`;
   switch (action.kind) {
     case 'click': return `${action.count === 2 ? t.doubleClick : t.click} · ${t[action.button]} · ${point(action.point)}`;
+    case 'drag': return `${t.drag} · ${point(action.from)} → ${point(action.to)}`;
     case 'typeText': return `${t.typeText} · ${action.point ? point(action.point) : t.focused}\n${t.text}: ${JSON.stringify(action.text)}`;
     case 'setValue': return `${t.setValue} · ${action.ref}\n${t.text}: ${JSON.stringify(action.text)}`;
     case 'pressKeys': return `${t.pressKeys} · ${action.keys.join(' + ')}`;
