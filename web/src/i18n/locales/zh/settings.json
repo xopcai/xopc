@@ -51,6 +51,7 @@
     "sourcePolicy": "运行时来源",
     "provisionPolicy": "初始化时机",
     "install": "安装",
+    "installed": "已安装",
     "repair": "修复",
     "working": "处理中…",
     "unknown": "状态不可用",
