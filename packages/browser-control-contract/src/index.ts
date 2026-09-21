@@ -238,6 +238,12 @@ export interface BrowserObservation {
   nodes: BrowserNode[];
   changes: BrowserObservationChanges;
   visual?: BrowserVisual;
+  /** Indicates transport-level degradation applied to keep an observation deliverable. */
+  truncation?: {
+    omittedNodeCount: number;
+    visualOmitted: boolean;
+    changesOmitted: boolean;
+  };
 }
 
 export interface BrowserTab {

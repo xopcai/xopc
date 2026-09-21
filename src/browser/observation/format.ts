@@ -21,6 +21,10 @@ export function formatBrowserObservation(observation: BrowserObservation): strin
     lines.push(`Changes: +${added.length} ~${changed.length} -${removed.length}`);
   }
   if (observation.visual) lines.push('Visual screenshot attached.');
+  if (observation.truncation) {
+    const omitted = observation.truncation.omittedNodeCount;
+    lines.push(`Transport note: observation was reduced for delivery${omitted ? `; ${omitted} interactive elements omitted` : ''}.`);
+  }
   return lines.join('\n');
 }
 
