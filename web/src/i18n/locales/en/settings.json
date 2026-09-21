@@ -51,6 +51,7 @@
     "sourcePolicy": "Runtime source",
     "provisionPolicy": "Provisioning",
     "install": "Install",
+    "installed": "Installed",
     "repair": "Repair",
     "working": "Working…",
     "unknown": "Status unavailable",

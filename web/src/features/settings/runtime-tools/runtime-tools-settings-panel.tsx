@@ -20,6 +20,7 @@ import {
   type RuntimeStatus,
   type RuntimeToolsConfig,
 } from './runtime-tools-api';
+import { runtimeNeedsInstall } from './runtime-tools-state';
 
 const RUNTIMES: RuntimeKind[] = ['node', 'python', 'uv'];
 
@@ -33,9 +34,10 @@ export function RuntimeToolsSettingsPanel() {
   const [draft, setDraft] = useState<RuntimeToolsConfig | null>(null);
   const [saving, setSaving] = useState(false);
   const [pruning, setPruning] = useState(false);
-  const [running, setRunning] = useState<RuntimeKind | null>(null);
+  const [running, setRunning] = useState<Partial<Record<RuntimeKind, boolean>>>({});
   const [progress, setProgress] = useState<Partial<Record<RuntimeKind, RuntimeProgress>>>({});
   const [actionError, setActionError] = useState<string | null>(null);
+  const hasRunningOperation = Object.values(running).some(Boolean);
 
   useEffect(() => {
     if (data?.payload.config) setDraft(structuredClone(data.payload.config));
@@ -76,7 +78,7 @@ export function RuntimeToolsSettingsPanel() {
   };
 
   const operate = async (runtime: RuntimeKind, action: 'install' | 'repair') => {
-    setRunning(runtime);
+    setRunning((current) => ({ ...current, [runtime]: true }));
     setActionError(null);
     try {
       await saveRuntimeToolsConfig(draft);
@@ -91,7 +93,7 @@ export function RuntimeToolsSettingsPanel() {
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      setRunning(null);
+      setRunning((current) => ({ ...current, [runtime]: false }));
     }
   };
 
@@ -116,14 +118,14 @@ export function RuntimeToolsSettingsPanel() {
           <>
             <RefreshButton
               className="size-9 shrink-0 p-0"
-              disabled={running !== null}
+              disabled={hasRunningOperation}
               label={t.refresh}
               onClick={async () => { await mutate(); }}
             />
-            <Button onClick={() => void prune()} disabled={pruning || running !== null}>
+            <Button onClick={() => void prune()} disabled={pruning || hasRunningOperation}>
               {pruning ? t.pruning : t.prune}
             </Button>
-            <Button variant="primary" onClick={() => void save()} disabled={saving || running !== null}>
+            <Button variant="primary" onClick={() => void save()} disabled={saving || hasRunningOperation}>
               {saving ? t.saving : t.save}
             </Button>
           </>
@@ -215,6 +217,15 @@ export function RuntimeToolsSettingsPanel() {
           const isReady = status?.state === 'ready';
           const currentProgress = progress[runtime];
           const runtimeConfig = runtime === 'uv' ? draft.uv : draft[runtime];
+          const savedRuntimeConfig = runtime === 'uv'
+            ? data?.payload.config.uv
+            : data?.payload.config[runtime];
+          const isRunning = running[runtime] === true;
+          const needsInstall = runtimeNeedsInstall(
+            status,
+            runtimeConfig.version,
+            savedRuntimeConfig?.version,
+          );
           return (
             <section key={runtime} className="flex min-w-0 flex-col gap-5 rounded-xl bg-surface-base/55 p-5 sm:p-6">
               <div className="flex items-start justify-between gap-3">
@@ -292,7 +303,7 @@ export function RuntimeToolsSettingsPanel() {
                 ) : null}
               </div>
 
-              {currentProgress && running === runtime ? (
+              {currentProgress && isRunning ? (
                 <div className="rounded-lg bg-accent-soft px-3 py-2 text-xs text-accent-fg">
                   {currentProgress.message}
                   {currentProgress.totalBytes && currentProgress.downloadedBytes
@@ -303,16 +314,22 @@ export function RuntimeToolsSettingsPanel() {
 
               <div className="mt-auto flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="primary"
-                    disabled={!draft.enabled || !runtimeConfig.enabled || running !== null}
-                    onClick={() => void operate(runtime, 'install')}
-                  >
-                    <Download className="size-4" />{running === runtime ? t.working : t.install}
-                  </Button>
+                  {needsInstall ? (
+                    <Button
+                      variant="primary"
+                      disabled={!draft.enabled || !runtimeConfig.enabled || isRunning}
+                      onClick={() => void operate(runtime, 'install')}
+                    >
+                      <Download className="size-4" />{isRunning ? t.working : t.install}
+                    </Button>
+                  ) : (
+                    <span className="inline-flex h-9 items-center gap-2 px-1 text-sm text-success">
+                      <CheckCircle2 className="size-4" />{t.installed}
+                    </span>
+                  )}
                   {status?.repairable ? (
                     <Button
-                      disabled={!draft.enabled || !runtimeConfig.enabled || running !== null}
+                      disabled={!draft.enabled || !runtimeConfig.enabled || isRunning}
                       onClick={() => void operate(runtime, 'repair')}
                     >
                       <RotateCcw className="size-4" />{t.repair}
