@@ -23,6 +23,7 @@ export const ELECTRON_PACKAGED_DEPENDENCIES = [
   'onnxruntime-common',
   'sherpa-onnx-node',
   'node-pty',
+  '@trycua/cua-driver',
 ];
 
 /** Security overrides required by the isolated Electron runtime install. */

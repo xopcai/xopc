@@ -43,8 +43,8 @@ check. Missing or incomplete selection metadata returns candidates instead of
 guessing. Multiple independent processes with the same bundle ID currently
 require the user to leave only the intended instance running.
 
-Read-only sessions reject input in both the runtime and native broker, even with
-Full control enabled. `observe` returns accessibility text; adding `question`
+Read-only sessions reject input in both the runtime and native broker. `observe`
+returns accessibility text; adding `question`
 requests a visual answer from the same configured GUI model connection. The
 answer is evidence, not verified business success. Screenshots remain ephemeral.
 `step` is the only public input path, with raw actions confined to the broker.
@@ -95,17 +95,11 @@ Continue in chat only resumes the task; it never grants native permission.
 After action approval, the agent resumes the held action with `step`; `observe`
 is read-only and will not dispatch it.
 
-To avoid repeated prompts, enable **Full control** in the local macOS Computer
-use settings and accept its one-time native confirmation. This encrypted,
-device-local consent survives restarts; it is not a Gateway config field and
-cannot be enabled through tool arguments. It applies to all configured GUI
-models, including agent overrides. Subsequent sessions and input actions run
-without confirmation, including actions that may send or delete data. The app
-does not reliably classify the business risk of arbitrary GUI actions.
-Turning Full control off stops the active session and restores per-action
-confirmation. OS permissions, single-window targeting, freshness/budget limits
-and sensitive-app restrictions remain enforced. xopc cannot control its own
-window to modify this permission. Browser permissions remain separate.
+There is no persistent approval bypass. xopc does not reliably classify the
+business risk of arbitrary GUI actions, so application access and each modifying
+action require a local decision. OS permissions, single-window targeting,
+freshness/budget limits and sensitive-app restrictions are enforced in addition
+to those approvals. Browser permissions remain separate.
 
 Use **Stop computer control** in settings or the tray. Hiding/minimizing the
 xopc window, disconnecting, locking or suspending also revokes control. The

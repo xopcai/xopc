@@ -29,7 +29,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     status: () => ipcRenderer.invoke('computer:status'),
     stop: () => ipcRenderer.invoke('computer:stop'),
     reenroll: () => ipcRenderer.invoke('computer:reenroll'),
-    setFullControl: (enabled: boolean) => ipcRenderer.invoke('computer:set-full-control', enabled),
     resume: () => ipcRenderer.invoke('computer:resume'),
   },
   clipboard: {

@@ -6,13 +6,9 @@ const messages = {
   zh: {
     protocolIncompatible: '桌面端与 Gateway 版本不兼容。请将两者更新至同一构建并重新启动；无需重新授权或重配模型。',
     title: 'xopc 电脑操作', cancel: '取消', allow: '允许这一次',
-    fullControl: {
-      message: '允许 xopc 完全控制应用？', confirm: '开启完全控制',
-      detail: '开启后，xopc 执行桌面任务时不再逐次询问，可自动点击、输入，也可能发送消息或删除内容。\n\n应用窗口的截图和文字会发送至任务使用的模型服务。\n\n此授权仅在本机保存，重启后仍有效。你可以随时停止操作，或在设置中关闭完全控制。',
-    },
     reenroll: {
       message: '重新注册此桌面设备？', confirm: '重新注册设备',
-      detail: '此设备身份已被撤销。重新注册将更新本机设备密钥，并恢复与网关的连接。\n\n此操作不会新增应用控制授权；现有的完全控制设置保持不变。',
+      detail: '此设备身份已被撤销。重新注册将更新本机设备密钥，并恢复与网关的连接。\n\n此操作不会新增应用控制授权。',
     },
     sessionTitle: '允许此任务观察和操作这个应用？', actionTitle: '允许这一步操作？',
     observeTitle: '允许此任务查看这个应用？', prepare: '任务可以启动应用或恢复目标窗口，但不会因此获得操作内容的权限。',
@@ -27,13 +23,9 @@ const messages = {
   en: {
     protocolIncompatible: 'Desktop and Gateway protocols differ. Update both to the same build and restart. No permission or model changes are needed.',
     title: 'xopc Computer Use', cancel: 'Cancel', allow: 'Allow once',
-    fullControl: {
-      message: 'Allow xopc full control of apps?', confirm: 'Enable full control',
-      detail: 'xopc will run desktop tasks without asking at each step. It can click and type, and may send messages or delete content.\n\nScreenshots and text from the app window will be sent to the model service used by the task.\n\nThis permission is saved on this device and remains active after restart. You can stop operations at any time or turn off Full control in settings.',
-    },
     reenroll: {
       message: 'Re-register this desktop device?', confirm: 'Re-register device',
-      detail: 'This device identity was revoked. Re-registering replaces the local device key and reconnects to the Gateway.\n\nThis does not grant new app permissions. Your existing Full control setting stays unchanged.',
+      detail: 'This device identity was revoked. Re-registering replaces the local device key and reconnects to the Gateway.\n\nThis does not grant new app permissions.',
     },
     sessionTitle: 'Allow this task to observe and control this app?', actionTitle: 'Allow this action?',
     observeTitle: 'Allow this task to view this app?', prepare: 'The task may launch the app or restore the target window. This does not grant permission to modify its contents.',
