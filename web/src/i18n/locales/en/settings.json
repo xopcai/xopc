@@ -1312,6 +1312,8 @@
     "composioAuthConfigEmpty": "No enabled Tool Router auth config was found. Create one in Composio, then return and refresh.",
     "composioAuthConfigRequired": "This app requires a custom Composio auth config before it can be connected.",
     "composioAuthConfigUnavailable": "The selected Composio auth config is disabled, unavailable, or not enabled for Tool Router.",
+    "composioSessionWritePermissionHint": "Connecting apps and using tools requires session_management write permission on the Composio API key.",
+    "composioSessionWritePermissionRequired": "This Composio API key is missing session_management write permission. Grant it under the project's API Keys settings, or use a key that already has it, then try again.",
     "connectorBeta": "Beta",
     "connectorExperimental": "Experimental",
     "connectDialogTitle": "Connect {{name}}",

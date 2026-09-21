@@ -109,6 +109,20 @@ describe('ComposioSessionsAdapter', () => {
     await expect(adapter.syncConnections({ principalId: 'local-owner' })).rejects.toThrow('complete connected account list');
   });
 
+  it('verifies project access through read-only account listing without creating a session', async () => {
+    const adapter = new ComposioSessionsAdapter({ clientFactory: async () => client });
+
+    await expect(adapter.verifyProjectAccess({
+      principalId: 'local-owner',
+      installationScope: stateDir,
+    })).resolves.toBeUndefined();
+
+    expect(client.connectedAccounts.list).toHaveBeenCalledWith({
+      userIds: [expect.stringMatching(/^xopc_/)],
+    });
+    expect(client.sessions.create).not.toHaveBeenCalled();
+  });
+
   it('keeps BYOK priority when XOPC Cloud OAuth is also available', async () => {
     const resolveApiKey = vi.fn(async (provider: string) => {
       if (provider === 'connector-composio-api-key') return 'user-composio-key';
