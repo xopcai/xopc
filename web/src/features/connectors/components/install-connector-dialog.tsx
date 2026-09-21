@@ -17,6 +17,7 @@ import { OAuthProviderConnect } from '@/features/settings/models-hub/oauth-provi
 
 import { formatConnectorMessage } from '../utils/connector-i18n';
 import { connectorDescription } from '../utils/connector-copy';
+import { formatComposioError } from '../utils/composio-error';
 import {
   getComposioSetupStatus,
   getComposioToolkitAuthState,
@@ -199,7 +200,9 @@ function StandardInstallConnectorDialog({
           installing: false,
           result: null,
           health: null,
-          error: error instanceof Error ? error.message : String(error),
+          error: isComposioToolkit
+            ? formatComposioError(error, t)
+            : error instanceof Error ? error.message : String(error),
         });
         await onInstalled(instance);
         return;
@@ -365,6 +368,9 @@ function StandardInstallConnectorDialog({
               ) : null}
             </details>
           ) : null}
+          {isComposioToolkit && composioConfigured && composioSetupStatus?.mode === 'byok' ? (
+            <p className="text-xs leading-5 text-fg-subtle">{t.composioSessionWritePermissionHint}</p>
+          ) : null}
           {draft.store ? (
             <section className="rounded-2xl border border-edge bg-surface-base p-4">
               <h3 className="text-sm font-semibold text-fg">{t.detailPermissions}</h3>
@@ -470,8 +476,8 @@ function StandardInstallConnectorDialog({
             </div>
           ) : null}
 
-          {draft.error ? <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{draft.error}</p> : null}
-          {composioSetupError ? <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{composioSetupError}</p> : null}
+          {draft.error ? <p className="min-w-0 max-w-full break-words rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600 [overflow-wrap:anywhere]">{draft.error}</p> : null}
+          {composioSetupError ? <p className="min-w-0 max-w-full break-words rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600 [overflow-wrap:anywhere]">{composioSetupError}</p> : null}
           {draft.result ? (
             <div className="rounded-2xl border border-edge bg-surface-base p-4 text-sm text-fg-muted">
               <div className="flex flex-wrap items-start justify-between gap-3">

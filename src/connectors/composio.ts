@@ -341,18 +341,20 @@ export async function configureComposioApiKey(apiKey: string, resolver = new Cre
   if (!normalized) throw new Error('Composio API key is required.');
   if (normalized.length > 4096) throw new Error('Composio API key is too long.');
   const adapter = new ComposioSessionsAdapter({ apiKey: normalized });
-  await adapter.listToolkitCatalog({
-    principalId: LOCAL_OWNER_PRINCIPAL,
-  });
-  await ensureComposioBackend(resolver);
+  const replacement = replaceBackendId ? getComposioBackend(replaceBackendId) : undefined;
   if (replaceBackendId) {
-    const backend = getComposioBackend(replaceBackendId);
-    if (!backend || backend.mode !== 'byok' || !backend.credential_ref) throw new Error('Unknown Composio project.');
-    if (backend.credential_source === 'environment') throw new Error('Update this key in the gateway environment, or add a locally stored project.');
-    await adapter.verifyConnections(listStoredConnectorConnections({ principalId: LOCAL_OWNER_PRINCIPAL })
-      .filter(connection => getConnectorAccount(connection.accountId!)?.backendId === backend.id && connection.status !== 'revoked'));
-    await resolver.saveApiKey(backend.credential_ref, normalized, { profileName: 'default' });
-    markComposioBackendVerified(backend.id);
+    if (!replacement || replacement.mode !== 'byok' || !replacement.credential_ref) throw new Error('Unknown Composio project.');
+    if (replacement.credential_source === 'environment') throw new Error('Update this key in the gateway environment, or add a locally stored project.');
+  }
+  const existingConnections = replacement
+    ? listStoredConnectorConnections({ principalId: LOCAL_OWNER_PRINCIPAL })
+      .filter(connection => getConnectorAccount(connection.accountId!)?.backendId === replacement.id && connection.status !== 'revoked')
+    : [];
+  await adapter.verifyProjectAccess({ principalId: LOCAL_OWNER_PRINCIPAL }, existingConnections);
+  await ensureComposioBackend(resolver);
+  if (replacement) {
+    await resolver.saveApiKey(replacement.credential_ref!, normalized, { profileName: 'default' });
+    markComposioBackendVerified(replacement.id);
     return;
   }
   for (const backend of listComposioBackends()) {
