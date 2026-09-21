@@ -1798,7 +1798,7 @@ function AutomationDetails({
 
   return (
     <article className="min-w-0 overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel shadow-surface">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-edge px-5 py-4">
+      <header className="flex flex-col items-start gap-3 border-b border-edge px-5 py-4">
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
             <h2 className="truncate text-lg font-semibold text-fg">{automation.name}</h2>
@@ -1814,7 +1814,7 @@ function AutomationDetails({
           ) : null}
         </div>
         {!readOnly ? (
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2">
             <Button
               variant="secondary"
               disabled={busyAction !== null}
