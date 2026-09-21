@@ -1,9 +1,10 @@
-import { RefreshCw, ShieldOff } from 'lucide-react';
+import { ShieldOff } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { RefreshButton } from '@/components/ui/refresh-button';
 import { SettingsPageSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { messages } from '@/i18n/messages';
@@ -56,7 +57,9 @@ export function EndpointToolsManagementSettings() {
   const principalRows = principals.data ?? [];
   const invocationRows = invocations.data ?? [];
   const onlineCount = principalRows.reduce((count, principal) => count + principal.endpoints.length, 0);
-  const refresh = () => void Promise.all([principals.mutate(), invocations.mutate()]);
+  const refresh = async () => {
+    await Promise.all([principals.mutate(), invocations.mutate()]);
+  };
   const confirmRevoke = async () => {
     if (!revokeCandidate || revoking) return;
     setRevoking(true);
@@ -77,10 +80,11 @@ export function EndpointToolsManagementSettings() {
       <SettingsPageHeader
         title={copy.title}
         actions={(
-          <Button variant="secondary" onClick={refresh}>
-            <RefreshCw className="size-4" aria-hidden />
-            {copy.refresh}
-          </Button>
+          <RefreshButton
+            className="size-9 shrink-0 p-0"
+            label={copy.refresh}
+            onClick={refresh}
+          />
         )}
       />
 
