@@ -118,18 +118,8 @@ export function ComputerSettingsPanel({ zh }: { zh: boolean }) {
               </span>
             </button>
           </SettingRow>
-          <SettingRow icon={<ShieldCheck className="size-5" />} title={t.fullControl} description={<>
-            {t.fullControlDescription}
-            <span className="mt-1 block text-xs">{native ? (desktop?.fullControl ? t.fullControlEnabled : t.fullControlDisabled) : t.fullControlLocalOnly}</span>
-          </>}>
-            <button type="button" role="switch" aria-label={t.fullControl} aria-checked={desktop?.fullControl === true}
-              disabled={busy || !native || !desktop || nativeError}
-              onClick={() => { void perform(async () => { if (native) setDesktop(await native.setFullControl(desktop?.fullControl !== true)); }); }}
-              className="touch-target flex items-center rounded-lg px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
-              <span className={`flex h-6 w-11 items-center rounded-full p-0.5 transition-colors ${desktop?.fullControl ? 'bg-accent' : 'bg-fg-muted/30'}`}>
-                <span className={`size-5 rounded-full bg-white transition-transform ${desktop?.fullControl ? 'translate-x-5' : 'translate-x-0'}`} />
-              </span>
-            </button>
+          <SettingRow icon={<ShieldCheck className="size-5" />} title={t.approvals} description={t.approvalsDescription}>
+            <span className="rounded-md border border-edge px-2 py-1 text-xs text-fg-muted">{t.approvalsRequired}</span>
           </SettingRow>
           <SettingRow icon={<Globe className="size-5" />} title={t.browser} description={<>{t.browserDescription}<span className="mt-1 block text-xs">{config?.browser?.enabled ? t.browserEnabled : t.browserDisabled}</span></>}>
             <Button asChild><Link to="/settings/agent-browser">{t.manage}</Link></Button>

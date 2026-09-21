@@ -12,31 +12,36 @@ if (!binary) throw new Error('Pass the verified Cua driver binary path');
 const driver = new CuaComputerDriver(binary, 'com.github.Electron');
 if (process.env.XOPC_COMPUTER_NATIVE_DIAGNOSTICS === '1') {
   const native = driver as any;
-  const call = native.call.bind(driver);
-  native.call = async (name: string, args: unknown, signal: AbortSignal) => {
-    const result = await call(name, args, signal);
-    if (name === 'get_window_state') console.log(JSON.stringify({ phase: 'capture-metadata',
-      pid: result.data.pid, windowId: result.data.window_id, frameValid: result.data.screenshot_frame_valid,
-      degradedReason: result.data.degraded_reason,
-      windowTitle: result.data.window_title, rootShapes: result.data.elements?.slice(0, 8).map((element: any) => ({ role: element.role, depth: element.depth, index: element.element_index, parent: element.parent_index })),
-      fields: Object.keys(result.data), contentKinds: result.content.map((item: any) => item.type) }));
+  const getWindowState = native.getWindowState.bind(driver);
+  native.getWindowState = async (...args: unknown[]) => {
+    const result = await getWindowState(...args);
+    console.log(JSON.stringify({ phase: 'capture-metadata', pid: result.pid, windowId: result.windowId.toString(),
+      frameValid: result.screenshotFrameValid, degradedReason: result.degradedReason, windowTitle: result.windowTitle,
+      rootShapes: result.elements?.slice(0, 8).map((element: any) => ({ role: element.role, depth: element.depth,
+        index: element.elementIndex.toString(), parent: element.parentIndex?.toString() })), imageCount: result.images.length }));
     return result;
   };
 }
-const broker = new ComputerBroker(driver, { isVisible: () => true, hasFullControl: () => true,
-  requestApproval: async () => false }, { enabled: true });
+const broker = new ComputerBroker(driver, { isVisible: () => true, requestApproval: async () => true }, { enabled: true });
 const owner = 'synthetic-native-validation';
 const model = { modelRef: 'synthetic/no-inference', profile: 'structured-tools-v1' as const, origin: 'https://synthetic.invalid', runtimeLocation: 'local' as const };
 try {
   const catalog = await broker.command({ op: 'discover', owner, sessionId: 'discovery', query: 'XopcComputerFixture' });
   assert.equal(catalog.apps?.length, 1, 'Start only the disposable XopcComputerFixture app first');
   const open = { op: 'open' as const, owner, appRef: catalog.apps[0].appRef, prepare: true, model };
+  const waitForDecision = async (sessionId: string) => {
+    const deadline = Date.now() + 5_000;
+    while (broker.snapshot().status === 'pending_authorization' && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 20));
+    return broker.command({ op: 'status', owner, sessionId });
+  };
   const openFixture = async (sessionId: string, mode: 'observe' | 'control') => {
     let result = await broker.command({ ...open, sessionId, mode });
+    if (result.status === 'pending_authorization') result = await waitForDecision(sessionId);
     if (result.errorCode === 'COMPUTER_WINDOW_AMBIGUOUS') {
       const candidates = result.windows?.filter(window => window.title === 'XOPC Computer Use — Synthetic Fixture');
       assert.equal(candidates?.length, 1);
       result = await broker.command({ ...open, windowRef: candidates[0].windowRef, sessionId, mode });
+      if (result.status === 'pending_authorization') result = await waitForDecision(sessionId);
     }
     return result;
   };
@@ -60,8 +65,10 @@ try {
   const field = tree.elements.find((element: any) => element.role === 'AXTextField' && element.label === 'Fixture text');
   assert.ok(field?.ref, 'Expected the disposable fixture field');
   const marker = `Computer discovery ${randomUUID().slice(0, 8)}`;
-  const after = await broker.command({ op: 'act', owner, sessionId: 'control',
-    envelope: envelope(before, 'control', { kind: 'setValue', ref: field.ref, text: marker }) });
+  const action = { op: 'act' as const, owner, sessionId: 'control',
+    envelope: envelope(before, 'control', { kind: 'setValue', ref: field.ref, text: marker }) };
+  let after = await broker.command(action);
+  if (after.status === 'pending_action') { await new Promise(resolve => setTimeout(resolve, 0)); after = await broker.command(action); }
   after.frame?.bytes.fill(0);
   assert.equal(after.receipt?.dispatch, 'completed');
   assert.ok(after.observation!.summary.includes(marker));

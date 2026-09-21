@@ -10,12 +10,7 @@ describe('computer dialog copy', () => {
   });
   it('keeps English UI copy free of Chinese and removes bilingual button labels', () => {
     expect(JSON.stringify(getComputerMessages('en'))).not.toMatch(/[\u4e00-\u9fff]/);
-    for (const lang of ['zh', 'en'] as const) {
-      const t = getComputerMessages(lang);
-      expect(t.fullControl.confirm).not.toContain(' / ');
-      expect(t.fullControl.detail.split('\n\n')).toHaveLength(3);
-      expect(t.fullControl.detail.length).toBeLessThan(450);
-    }
+    for (const lang of ['zh', 'en'] as const) expect(getComputerMessages(lang).allow).not.toContain(' / ');
   });
   it.each(['zh', 'en'] as const)('preserves recipients and scope in %s session approval', language => {
     const result = computerApprovalCopy(language, { kind: 'session', id: 's', appId: 'com.example.app', appName: 'Example', mode: 'control', prepare: false, model: {

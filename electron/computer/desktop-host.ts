@@ -11,7 +11,6 @@ import { REALTIME_PROTOCOL_VERSION } from '@xopcai/realtime-protocol';
 import { COMPUTER_DESCRIPTOR, ComputerCommandSchema } from '@xopcai/computer-control-contract';
 import { ComputerBroker, type ComputerApproval } from '../../src/computer/broker.js';
 import { CuaComputerDriver } from './cua-driver.js';
-import { readFullControl, writeFullControl } from './control-preferences.js';
 import { getElectronShellLanguage, showEndpointNotification } from '../ipc/system-settings-ipc.js';
 import { computerApprovalCopy, getComputerMessages } from './messages.js';
 import { MIME_TYPE_BY_EXTENSION } from '../ipc/file-ipc.js';
@@ -40,64 +39,27 @@ export class DesktopEndpointHost {
   private error?: string;
   private reenrollmentRequired = false;
   private reenrolling = false;
-  private readonly controlPreferencesPath = join(app.getPath('userData'), 'computer-control-consent');
-  private fullControl = readFullControl(this.controlPreferencesPath);
   private controlPaused = false;
-  private modeChange?: AbortController;
   private readonly lifetime = new AbortController();
   constructor(private readonly options: { connection(): { port: number; token: string } | undefined; window(): BrowserWindow | null }) {
     // Dev launches out/main/index.js directly, so app.getAppPath() is not the repository root.
     const binary = resolveComputerDriverPath({ packaged: app.isPackaged, resourcesPath: process.resourcesPath, mainDir: import.meta.dirname });
     this.broker = new ComputerBroker(new CuaComputerDriver(binary, app.isPackaged ? 'ai.xopc.xopc' : 'com.github.Electron'), {
-      isVisible: () => this.visible() && !this.controlPaused && !this.modeChange,
-      hasFullControl: () => this.fullControl,
+      isVisible: () => this.visible() && !this.controlPaused,
       requestApproval: (request, signal) => this.approve(request, signal),
     }, { enabled: true });
   }
   private visible(): boolean { const w = this.options.window(); return !!w && !w.isDestroyed() && w.isVisible() && !w.isMinimized(); }
   snapshot() { return { connected: !!this.claim, claim: this.claim, error: this.error, reenrollmentRequired: this.reenrollmentRequired,
-    fullControl: this.fullControl, controlPaused: this.controlPaused, session: this.broker.snapshot(),
+    controlPaused: this.controlPaused, session: this.broker.snapshot(),
     permissions: { accessibility: process.platform === 'darwin' && systemPreferences.isTrustedAccessibilityClient(false),
       screenRecording: process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'unknown' } }; }
-  async setFullControl(enabled: unknown): Promise<void> {
-    if (typeof enabled !== 'boolean') throw new Error('Invalid computer control mode');
-    if (this.modeChange) throw new Error('Computer control settings are busy');
-    if (this.stopped || !this.visible()) throw new Error('Computer control settings require the local window');
-    if (enabled === this.fullControl) return;
-    const change = new AbortController();
-    this.modeChange = change;
-    try {
-      if (!enabled) {
-        this.fullControl = false;
-        // Persist revocation before yielding, so Stop cannot leave old consent on disk.
-        try { writeFullControl(this.controlPreferencesPath, false); }
-        finally { await this.broker.stop(); }
-        return;
-      }
-      if (enabled) {
-        const t = getComputerMessages(getElectronShellLanguage());
-        const answer = await dialog.showMessageBox(this.options.window()!, {
-          type: 'warning', title: t.title, message: t.fullControl.message, detail: t.fullControl.detail,
-          buttons: [t.cancel, t.fullControl.confirm], defaultId: 0, cancelId: 0, noLink: true,
-          signal: AbortSignal.any([change.signal, this.lifetime.signal]),
-        });
-        if (answer.response !== 1 || change.signal.aborted || this.stopped || !this.visible()) return;
-      }
-      // Revoke existing grants before changing the policy, even if persistence fails.
-      this.fullControl = false;
-      await this.broker.stop();
-      if (change.signal.aborted || this.stopped) return;
-      writeFullControl(this.controlPreferencesPath, enabled);
-      this.fullControl = enabled;
-    } finally { this.modeChange = undefined; }
-  }
   async stopControl(): Promise<void> {
     this.controlPaused = true;
-    this.modeChange?.abort();
     await this.broker.stop();
   }
   resumeControl(): void {
-    if (this.stopped || this.modeChange || !this.visible()) throw new Error('Computer control cannot resume now');
+    if (this.stopped || !this.visible()) throw new Error('Computer control cannot resume now');
     this.controlPaused = false;
   }
   private async approve(request: ComputerApproval, signal: AbortSignal): Promise<boolean> {

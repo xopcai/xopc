@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const io = vi.hoisted(() => ({ access: vi.fn(), mkdtemp: vi.fn(), rm: vi.fn(), rmdir: vi.fn(), spawn: vi.fn() }));
+const io = vi.hoisted(() => ({ access: vi.fn() }));
 vi.mock('node:fs/promises', () => io);
-vi.mock('node:child_process', async (original) => ({ ...await original<typeof import('node:child_process')>(), spawn: io.spawn }));
 import { CuaComputerDriver, scopeWindowAccessibility, summarizeWindowAccessibility } from '../cua-driver.js';
 
 const priorType = Object.getOwnPropertyDescriptor(process, 'type');
@@ -12,9 +11,31 @@ describe('private native driver admission', () => {
     const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
     vi.spyOn(driver as any, 'start').mockResolvedValue(undefined);
     vi.spyOn(driver as any, 'processIdentity').mockResolvedValue('42:fixture-start');
-    const call = vi.spyOn(driver as any, 'call').mockImplementation(async (name: unknown, args: any) => ({ data: name === 'list_apps' ? { apps }
+    const call = vi.spyOn(driver as any, 'callUntyped').mockImplementation(async (name: unknown, args: any) => ({ data: name === 'list_apps' ? { apps }
       : name === 'get_window_state' ? { pid: 42, window_id: args.window_id, elements: [{ role: 'AXWindow', depth: 0 }] } : { windows } }));
-    return { driver, call };
+    vi.spyOn(driver as any, 'listApps').mockImplementation(async () => {
+      const rows = (await call('list_apps', {})).data.apps as Array<any>;
+      return rows.map(row => ({ pid: row.pid, name: row.name ?? '', running: row.running ?? row.pid > 0, active: false,
+        bundleId: row.bundle_id ?? undefined, launchPath: row.launch_path ?? undefined }));
+    });
+    vi.spyOn(driver as any, 'listWindows').mockImplementation(async (pid: number) => {
+      const rows = (await call('list_windows', { pid })).data.windows as Array<any>;
+      return rows.filter(row => row.pid === pid).map(row => ({ windowId: BigInt(row.window_id), pid: row.pid, appName: '', title: row.title ?? '',
+        bounds: row.bounds, isOnScreen: row.is_on_screen, zIndex: row.z_index == null ? undefined : BigInt(row.z_index) }));
+    });
+    vi.spyOn(driver as any, 'getWindowState').mockImplementation(async (pid: number, windowId: bigint, options: any) => {
+      const data = (await call('get_window_state', { pid, window_id: Number(windowId), include_screenshot: options.includeScreenshot,
+        max_elements: options.maxElements, max_depth: options.maxDepth, max_dimension: options.maxDimension })).data as any;
+      return { pid: data.pid, windowId: BigInt(data.window_id), degraded: data.degraded,
+        elements: data.elements?.map((element: any, index: number) => ({ elementIndex: BigInt(element.element_index ?? index), ...element })), images: [] };
+    });
+    class WindowTarget { inner: unknown; constructor(inner: unknown) { this.inner = inner; } }
+    class Coordinates { inner: unknown; constructor(inner: unknown) { this.inner = inner; } }
+    const client = { click: vi.fn(), pressKey: vi.fn(), hotkey: vi.fn(), scroll: vi.fn() };
+    Object.assign(driver as any, { client, sdk: { ActionTarget: { Window: WindowTarget }, ClickPosition: { Coordinates },
+      ClickButton: { Left: 'left', Right: 'right' }, InputDeliveryMode: { Background: 'background' },
+      ScrollDirection: { Up: 'up', Down: 'down', Left: 'left', Right: 'right' }, ScrollBy: { Line: 'line' } } });
+    return { driver, call, client };
   }
   const window = (id: number, title: string, visible = true, z_index?: number) => ({ window_id: id, pid: 42, title, is_on_screen: visible, z_index,
     bounds: { x: 0, y: 0, width: 800, height: 600 } });
@@ -124,12 +145,12 @@ describe('private native driver admission', () => {
   it('includes static outcome text without exposing native element tokens', async () => {
     const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
     vi.spyOn(driver as any, 'processIdentity').mockResolvedValue('42:fixture-start');
-    vi.spyOn(driver as any, 'call').mockResolvedValue({
-      data: { pid: 42, window_id: 9, screenshot_frame_valid: true, window_bounds: { x: 0, y: 0, width: 800, height: 600 }, screenshot_width: 800, screenshot_height: 600,
-        tree_markdown: '- [0] AXWindow "Fixture"\n  - AXStaticText = "PASS: Continue clicked"', elements: [
-          { element_index: 0, role: 'AXWindow', depth: 0 },
-          { element_index: 1, parent_index: 0, depth: 1, element_token: 'private-native-token', role: 'AXButton', label: 'Continue' }] },
-      content: [{ type: 'image', mimeType: 'image/png', data: 'AQID' }],
+    vi.spyOn(driver as any, 'getWindowState').mockResolvedValue({
+      pid: 42, windowId: 9n, screenshotFrameValid: true, windowBounds: { x: 0, y: 0, width: 800, height: 600 }, screenshotWidth: 800, screenshotHeight: 600,
+      treeMarkdown: '- [0] AXWindow "Fixture"\n  - AXStaticText = "PASS: Continue clicked"', elements: [
+        { elementIndex: 0n, role: 'AXWindow', depth: 0 },
+        { elementIndex: 1n, parentIndex: 0n, depth: 1, elementToken: 'private-native-token', role: 'AXButton', label: 'Continue' }],
+      images: [{ mimeType: 'image/png', dataBase64: 'AQID' }],
     });
     const frame = await driver.observe({ appId: 'fixture', pid: 42, processIdentity: '42:fixture-start', windowId: '9', width: 800, height: 600, geometryRevision: '1' }, new AbortController().signal);
     expect(frame.summary).toContain('PASS: Continue clicked');
@@ -139,43 +160,66 @@ describe('private native driver admission', () => {
   it('preserves valid pixels and explicitly reports unavailable accessibility content', async () => {
     const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
     vi.spyOn(driver as any, 'processIdentity').mockResolvedValue('42:fixture-start');
-    vi.spyOn(driver as any, 'call').mockResolvedValue({ data: { pid: 42, window_id: 9, screenshot_frame_valid: true,
-      window_bounds: { x: 0, y: 0, width: 800, height: 600 }, screenshot_width: 800, screenshot_height: 600, elements: [] },
-      content: [{ type: 'image', mimeType: 'image/png', data: 'AQID' }] });
+    vi.spyOn(driver as any, 'getWindowState').mockResolvedValue({ pid: 42, windowId: 9n,
+      windowBounds: { x: 0, y: 0, width: 800, height: 600 }, screenshotWidth: 800, screenshotHeight: 600, elements: [],
+      images: [{ mimeType: 'image/png', dataBase64: 'AQID' }] });
     const result = await driver.observe({ appId: 'fixture', pid: 42, processIdentity: '42:fixture-start', windowId: '9', width: 800, height: 600, geometryRevision: '1' }, new AbortController().signal);
     expect(result.summary).toContain('Use observe with a visual question');
     expect(Array.from(result.image)).toEqual([1, 2, 3]);
+  });
+  it('preserves a 64-bit window identifier through binding and typed actions', async () => {
+    const largeWindowId = 9_007_199_254_740_993n;
+    const f = native([{ window_id: largeWindowId, pid: 42, title: 'Large ID', is_on_screen: true,
+      bounds: { x: 0, y: 0, width: 800, height: 600 } }]);
+    const target = await f.driver.resolveTarget('fixture', new AbortController().signal, { prepare: false });
+    expect(target.windowId).toBe(largeWindowId.toString());
+    await f.driver.perform(target, { kind: 'click', point: { x: 5, y: 7 }, button: 'left', count: 1 }, new AbortController().signal);
+    expect(f.client.click.mock.calls[0][0].target.inner.windowId).toBe(largeWindowId);
   });
   it('accepts native app catalogs containing processes without a bundle identifier', async () => {
     const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
     vi.spyOn(driver as any, 'start').mockResolvedValue(undefined);
     vi.spyOn(driver as any, 'processIdentity').mockResolvedValue('42:fixture-start');
-    vi.spyOn(driver as any, 'call')
-      .mockResolvedValueOnce({ data: { apps: [{ bundle_id: null, pid: 10 }, { bundle_id: 'fixture', pid: 42, running: true }] } })
-      .mockResolvedValueOnce({ data: { windows: [{ window_id: 9, pid: 42, bounds: { x: 0, y: 0, width: 800, height: 600 }, is_on_screen: true }] } });
+    vi.spyOn(driver as any, 'listApps').mockResolvedValue([
+      { pid: 10, name: '', running: true, active: false },
+      { bundleId: 'fixture', pid: 42, name: '', running: true, active: false },
+    ]);
+    vi.spyOn(driver as any, 'listWindows').mockResolvedValue([
+      { windowId: 9n, pid: 42, appName: '', title: '', bounds: { x: 0, y: 0, width: 800, height: 600 }, isOnScreen: true },
+    ]);
     await expect(driver.resolveTarget('fixture', new AbortController().signal, { prepare: false })).resolves.toMatchObject({ appId: 'fixture', pid: 42, windowId: '9' });
   });
-  it('cancels startup before spawning when stop races with binary access', async () => {
+  it('cancels startup before loading the SDK when stop races with binary access', async () => {
     Object.defineProperty(process, 'type', { value: 'browser', configurable: true });
     let release!: () => void;
     io.access.mockImplementation(() => new Promise<void>(resolve => { release = resolve; }));
-    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
+    const loadSdk = vi.fn();
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host', loadSdk as any);
     const starting = driver.resolveTarget('fixture', new AbortController().signal, { prepare: false });
     const rejected = expect(starting).rejects.toThrow('STOPPED');
     const stopped = driver.stop(); release(); await stopped; await rejected;
-    expect(io.spawn).not.toHaveBeenCalled();
+    expect(loadSdk).not.toHaveBeenCalled();
   });
-  it('cleans a directory created concurrently with stop without late input', async () => {
+  it('stops an SDK host created concurrently with an emergency stop', async () => {
     Object.defineProperty(process, 'type', { value: 'browser', configurable: true });
-    io.access.mockResolvedValue(undefined); io.rm.mockResolvedValue(undefined); io.rmdir.mockResolvedValue(undefined);
-    let release!: (path: string) => void;
-    io.mkdtemp.mockImplementation(() => new Promise<string>(resolve => { release = resolve; }));
-    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
+    io.access.mockResolvedValue(undefined);
+    let release!: (connection: Record<string, unknown>) => void;
+    const stop = vi.fn().mockResolvedValue(undefined);
+    const destroy = vi.fn();
+    const host = { start: vi.fn(() => new Promise(resolve => { release = resolve; })), stop, uniffiDestroy: destroy };
+    const loadSdk = vi.fn(async () => ({
+      EmbeddedCuaDriverHost: class { constructor() { return host; } },
+      CuaDriver: { connect: vi.fn() },
+    }));
+    const driver = new CuaComputerDriver('/fixture/cua-driver', 'host', loadSdk as any);
     const starting = driver.resolveTarget('fixture', new AbortController().signal, { prepare: false });
     const rejected = expect(starting).rejects.toThrow('STOPPED');
-    await vi.waitFor(() => expect(io.mkdtemp).toHaveBeenCalled());
-    const stopped = driver.stop(); release('/private/tmp/xc-owned'); await stopped; await rejected;
-    expect(io.spawn).not.toHaveBeenCalled(); expect(io.rmdir).toHaveBeenCalledWith('/private/tmp/xc-owned');
+    await vi.waitFor(() => expect(host.start).toHaveBeenCalled());
+    const stopped = driver.stop();
+    release({ socketPath: '/tmp/cua.sock' });
+    await stopped; await rejected;
+    expect(stop).toHaveBeenCalled();
+    expect(destroy).toHaveBeenCalled();
   });
   it('rejects ungrounded text and unsafe/global shortcuts', () => {
     const driver = new CuaComputerDriver('/fixture/cua-driver', 'host');
@@ -211,15 +255,19 @@ describe('private native driver admission', () => {
     expect(f.call).toHaveBeenCalledTimes(1);
   });
   it.each([
-    [{ kind: 'click', point: { x: 5, y: 7 }, button: 'right', count: 1 }, 'click', { x: 5, y: 7, button: 'right', count: 1 }],
-    [{ kind: 'click', point: { x: 5, y: 7 }, button: 'left', count: 2 }, 'click', { x: 5, y: 7, button: 'left', count: 2 }],
-    [{ kind: 'pressKeys', keys: ['Enter'] }, 'press_key', { key: 'return' }],
+    [{ kind: 'click', point: { x: 5, y: 7 }, button: 'right', count: 1 }, 'click', { count: 1, button: 'right' }],
+    [{ kind: 'click', point: { x: 5, y: 7 }, button: 'left', count: 2 }, 'click', { count: 2, button: 'left' }],
+    [{ kind: 'pressKeys', keys: ['Enter'] }, 'pressKey', { key: 'return' }],
     [{ kind: 'pressKeys', keys: ['Shift', 'Tab'] }, 'hotkey', { keys: ['shift', 'tab'] }],
-    [{ kind: 'scroll', point: { x: 5, y: 7 }, deltaX: -200, deltaY: 0 }, 'scroll', { x: 5, y: 7, by: 'line', amount: 2, direction: 'left' }],
-    [{ kind: 'scroll', point: { x: 5, y: 7 }, deltaX: 0, deltaY: 2000 }, 'scroll', { x: 5, y: 7, by: 'line', amount: 5, direction: 'down' }],
-  ])('dispatches %j once to the bound window', async (action, tool, args) => {
+    [{ kind: 'scroll', point: { x: 5, y: 7 }, deltaX: -200, deltaY: 0 }, 'scroll', { x: 5, y: 7, by: 'line', amount: 2n, direction: 'left' }],
+    [{ kind: 'scroll', point: { x: 5, y: 7 }, deltaX: 0, deltaY: 2000 }, 'scroll', { x: 5, y: 7, by: 'line', amount: 5n, direction: 'down' }],
+  ])('dispatches %j once to the bound window', async (action, method, args) => {
     const f = native([]);
     await f.driver.perform({ appId: 'fixture', pid: 42, processIdentity: '42:fixture-start', windowId: '9', width: 800, height: 600, geometryRevision: '1' }, action as any, new AbortController().signal);
-    expect(f.call).toHaveBeenCalledExactlyOnceWith(tool, { pid: 42, window_id: 9, delivery_mode: 'background', ...args }, expect.any(AbortSignal));
+    const invocation = (f.client as any)[method];
+    expect(invocation).toHaveBeenCalledOnce();
+    expect(invocation.mock.calls[0][0]).toMatchObject(args);
+    expect(invocation.mock.calls[0][0].target.inner).toEqual({ pid: 42, windowId: 9n });
+    if (method === 'click') expect(invocation.mock.calls[0][0].position.inner).toEqual({ x: 5, y: 7 });
   });
 });
