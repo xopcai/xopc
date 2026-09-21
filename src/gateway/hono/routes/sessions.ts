@@ -619,6 +619,21 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true, items });
   });
 
+  authenticated.get('/api/sessions/:key/find', async (c) => {
+    const blocked = ensureGatewayReadyForSessions(c, service, 'sessions.history');
+    if (blocked) return blocked;
+    const query = c.req.query('q')?.trim() ?? '';
+    if (!query || query.length > 256) {
+      return c.json({ ok: false, error: 'q must contain 1 to 256 characters' }, 400);
+    }
+    const result = await service.sessions.findMessages(
+      c.req.param('key'),
+      query,
+      parsePositiveInt(c.req.query('limit'), 1_000, 1_000),
+    );
+    return result ? c.json({ ok: true, ...result }) : c.json({ ok: false, error: 'Session not found' }, 404);
+  });
+
   // GET /api/sessions/:key/transcript/window — TUI-focused transcript slice around a row.
   authenticated.get('/api/sessions/:key/transcript/window', async (c) => {
     const blocked = ensureGatewayReadyForSessions(c, service, 'sessions.history');

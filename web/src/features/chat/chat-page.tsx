@@ -31,6 +31,8 @@ import {
 } from '@/features/chat/messages/user-message-plain-text';
 import { ScrollToBottomDock } from '@/features/chat/scroll/scroll-to-bottom-button';
 import { useChatScrollViewport } from '@/features/chat/scroll/use-chat-scroll-viewport';
+import { ChatFindBar } from '@/features/chat/find/chat-find-bar';
+import { useChatFind } from '@/features/chat/find/use-chat-find';
 import { useChatSession } from '@/features/chat/session/use-chat-session';
 import { useChatSessionMetadata } from '@/features/chat/session/use-chat-session-metadata';
 import { buildComposerDraftSeed, newChatHrefForProject } from '@/features/chat/session/composer-handoff-params';
@@ -434,6 +436,14 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
       timelineDisplayOffset,
     ],
   );
+  const chatFind = useChatFind({
+    conversationId: session.conversationId,
+    taskId,
+    messages: msgSlice.items,
+    displayOffset: timelineDisplayOffset,
+    viewportRef: scrollRef,
+    onRevealDisplayIndex: handleTimelineSelect,
+  });
 
   useEffect(() => {
     const pending = pendingTimelineDisplayIndexRef.current;
@@ -1051,6 +1061,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
         terminalDisabled={Boolean(session.projectPreparation && (
           projectComposer.busy || !projectComposer.allowed || projectComposer.checking
         ))}
+        onFindOpen={chatFind.show}
       /> : null}
 
       <div className={cn('relative mx-auto flex min-h-0 w-full flex-1 flex-col', embedded ? 'max-w-none' : 'max-w-[calc(var(--max-width-chat-frame)+8rem)]')}>
@@ -1106,6 +1117,21 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
           </div>
         ) : null}
         <div className={cn('relative flex min-h-0 min-w-0 flex-1', embedded ? 'px-3' : 'px-3 sm:px-5 xl:px-6')}>
+          <ChatFindBar
+            open={chatFind.open}
+            query={chatFind.query}
+            activeIndex={chatFind.activeIndex}
+            resultCount={chatFind.resultCount}
+            searching={chatFind.searching}
+            truncated={chatFind.truncated}
+            limitedToLoaded={chatFind.limitedToLoaded}
+            inputRef={chatFind.inputRef}
+            labels={m.chat.find}
+            onQueryChange={chatFind.setQuery}
+            onPrevious={chatFind.previous}
+            onNext={chatFind.next}
+            onClose={chatFind.close}
+          />
           {!embedded ? <div className="absolute inset-y-0 right-0 hidden xl:block">
             <ChatTimelineRail
               items={timeline.items}
@@ -1122,6 +1148,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 compactWelcomeLayout ? 'chat-messages--compact-welcome pt-5 pb-2' : 'py-4',
               )}
               onScroll={handleChatScroll}
+              data-chat-find-open={chatFind.open ? '' : undefined}
             >
               {isLoadingHistory ? (
                 <div className="flex min-h-[min(40vh,20rem)] w-full flex-col gap-10 py-8" aria-busy="true">

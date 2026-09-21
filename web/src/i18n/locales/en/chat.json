@@ -50,6 +50,16 @@
     "timelineOpen": "Open timeline",
     "timelineClose": "Close timeline",
     "timelineCurrent": "Current",
+    "find": {
+      "input": "Find in conversation",
+      "previous": "Previous result",
+      "next": "Next result",
+      "close": "Close find",
+      "noResults": "No results",
+      "resultCount": "{{current}} / {{total}} results",
+      "searching": "Searching…",
+      "loadedOnly": "Loaded messages only"
+    },
     "welcomeTitle": "Welcome to xopc",
     "welcomeDescription": "Send a message to get started",
     "welcomeSpotlight": {

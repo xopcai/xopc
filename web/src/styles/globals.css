@@ -98,6 +98,11 @@
   --app-chrome-sidebar-bg: var(--app-chrome-bg);
 }
 
+.chat-messages[data-chat-find-open] [data-chat-find-text] {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
 /* Dark — lifted workstation gray, restrained rim light, Loop Blue signals */
 html.dark {
   color-scheme: dark;

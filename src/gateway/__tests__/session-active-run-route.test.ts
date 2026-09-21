@@ -125,6 +125,46 @@ describe('GET /api/sessions/:key/history', () => {
   });
 });
 
+describe('GET /api/sessions/:key/find', () => {
+  it('returns ordered conversation matches', async () => {
+    const findMessages = vi.fn(async () => ({
+      query: '8318',
+      total: 2,
+      truncated: false,
+      matches: [
+        { displayIndex: 1, occurrence: 0 },
+        { displayIndex: 4, occurrence: 0 },
+      ],
+    }));
+    const service = {
+      isGatewayReady: () => true,
+      sessions: { findMessages },
+    } as unknown as GatewayService;
+    const app = new Hono();
+    registerSessionsRoutes(app, { service });
+
+    const res = await app.request('/api/sessions/conversation-1/find?q=8318');
+
+    expect(res.status).toBe(200);
+    expect(findMessages).toHaveBeenCalledWith('conversation-1', '8318', 1_000);
+    await expect(res.json()).resolves.toMatchObject({ ok: true, total: 2 });
+  });
+
+  it('rejects empty and oversized queries before searching', async () => {
+    const findMessages = vi.fn();
+    const service = {
+      isGatewayReady: () => true,
+      sessions: { findMessages },
+    } as unknown as GatewayService;
+    const app = new Hono();
+    registerSessionsRoutes(app, { service });
+
+    expect((await app.request('/api/sessions/conversation-1/find?q=')).status).toBe(400);
+    expect((await app.request(`/api/sessions/conversation-1/find?q=${'x'.repeat(257)}`)).status).toBe(400);
+    expect(findMessages).not.toHaveBeenCalled();
+  });
+});
+
 describe('/api/sessions/resolve', () => {
   it('resolves transcriptId to canonical session key', async () => {
     const conversationId = "17305fb5-e9c2-4028-8aa3-1b2b6b86fedc";
