@@ -415,7 +415,7 @@ export function validateModelsConfig(config: unknown): ValidationResult {
 				const model = providerConfig.models[i];
 				if (model.computerUse && !isComputerModel({ ...model, api: model.api ?? providerConfig.api })) {
 					errors.push({ path: `providers.${providerName}.models[${i}].computerUse`,
-						message: 'Computer Use requires image input and the openai-completions API', severity: 'error' });
+						message: 'Computer Use requires image input and an API matching its protocol', severity: 'error' });
 				}
 				if (!model.api && !providerConfig.api) {
 					errors.push({

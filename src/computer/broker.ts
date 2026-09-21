@@ -197,7 +197,9 @@ export class ComputerBroker {
     const observed = s.observation;
     if (!observed || e.observationId !== observed.id || this.now() - observed.capturedAt > 120_000) throw new Error('COMPUTER_STALE_OBSERVATION');
     if (s.actions >= this.config.maxActionsPerSession) throw new Error('COMPUTER_ACTION_BUDGET');
-    if ('point' in e.action && e.action.point && (e.action.point.x >= observed.imageWidth || e.action.point.y >= observed.imageHeight)) throw new Error('COMPUTER_COORDINATE_OUTSIDE_WINDOW');
+    const points = e.action.kind === 'drag' ? [e.action.from, e.action.to]
+      : 'point' in e.action && e.action.point ? [e.action.point] : [];
+    if (points.some(point => point.x >= observed.imageWidth || point.y >= observed.imageHeight)) throw new Error('COMPUTER_COORDINATE_OUTSIDE_WINDOW');
     if (e.action.kind === 'typeText' && !e.action.point && !observed.focusedEditableRef) throw new Error('COMPUTER_EDITABLE_TARGET_REQUIRED');
     this.driver.validateAction?.(e.action);
     if (e.action.kind !== 'wait') {

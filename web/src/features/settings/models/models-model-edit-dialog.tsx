@@ -257,8 +257,9 @@ function ModelEditForm({
             <SelectOption value="">{zh ? '未声明' : 'Not declared'}</SelectOption>
             <SelectOption value="gui-plus-2026-02-26">GUI-Plus (2026-02-26)</SelectOption>
             <SelectOption value="structured-tools-v1">structured-tools-v1</SelectOption>
+            <SelectOption value="openai-responses-computer-v1">OpenAI Responses Computer</SelectOption>
           </Select>
-          <p className="text-xs leading-relaxed text-fg-muted">{zh ? '仅适用于已适配的 OpenAI Chat Completions 视觉模型。声明协议不代表模型已通过效果验证。' : 'For adapted OpenAI Chat Completions vision models only. Declaring a protocol does not certify model quality.'}</p>
+          <p className="text-xs leading-relaxed text-fg-muted">{zh ? '协议必须与模型 API 匹配。声明协议不代表模型已通过效果验证。' : 'The protocol must match the model API. Declaring a protocol does not certify model quality.'}</p>
           {errors.has('computerUse') && <p role="alert" className="text-xs text-danger">{errors.get('computerUse')}</p>}
         </div>
       </details>

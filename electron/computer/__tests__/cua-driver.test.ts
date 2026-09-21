@@ -270,4 +270,12 @@ describe('private native driver admission', () => {
     expect(invocation.mock.calls[0][0].target.inner).toEqual({ pid: 42, windowId: 9n });
     if (method === 'click') expect(invocation.mock.calls[0][0].position.inner).toEqual({ x: 5, y: 7 });
   });
+  it('dispatches a bounded straight drag to the bound window', async () => {
+    const f = native([]);
+    const target = { appId: 'fixture', pid: 42, processIdentity: '42:fixture-start', windowId: '9', width: 800, height: 600, geometryRevision: '1' };
+    await f.driver.perform(target, { kind: 'drag', from: { x: 10, y: 20 }, to: { x: 30, y: 40 } }, new AbortController().signal);
+    expect(f.call).toHaveBeenCalledWith('drag', { pid: 42, window_id: 9, delivery_mode: 'background',
+      from_x: 10, from_y: 20, to_x: 30, to_y: 40, duration_ms: 500, steps: 20, button: 'left' }, expect.any(AbortSignal));
+    expect(() => f.driver.validateAction({ kind: 'drag', from: { x: 1, y: 1 }, to: { x: 1, y: 1 } })).toThrow('MOVEMENT');
+  });
 });

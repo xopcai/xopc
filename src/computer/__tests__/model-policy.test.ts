@@ -16,6 +16,11 @@ describe('computer model policy', () => {
       expect(computerModelProfile(invalid)).toBeUndefined();
     }
   });
+  it('accepts the native OpenAI computer protocol only on the Responses API', () => {
+    const model = { api: 'openai-responses', input: ['text', 'image'], computerUse: { profile: 'openai-responses-computer-v1' } };
+    expect(computerModelProfile(model)).toBe('openai-responses-computer-v1');
+    expect(computerModelProfile({ ...model, api: 'openai-completions' })).toBeUndefined();
+  });
   it('rejects implicit fallback configuration at the schema boundary', () => {
     expect(() => ConfigSchema.parse({ agents: { defaults: { models: { chat: { primary: 'cloud/chat' },
       computerUse: { primary: 'cloud/gui', fallbacks: ['other/gui'] } } } } })).toThrow('does not support fallback');
