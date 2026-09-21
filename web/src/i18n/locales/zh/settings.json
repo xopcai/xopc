@@ -1312,6 +1312,8 @@
     "composioAuthConfigEmpty": "未找到已启用并允许 Tool Router 使用的 Auth Config。请先在 Composio 中创建，然后返回刷新。",
     "composioAuthConfigRequired": "连接当前应用前必须选择一个自定义 Composio Auth Config。",
     "composioAuthConfigUnavailable": "所选 Composio Auth Config 已禁用、不可用，或未允许 Tool Router 使用。",
+    "composioSessionWritePermissionHint": "连接应用和使用工具时，Composio API Key 必须具有 session_management 写入权限。",
+    "composioSessionWritePermissionRequired": "当前 Composio API Key 缺少 session_management 写入权限。请在 Composio 项目设置的 API Keys 中授予该权限，或换用具备该权限的密钥，然后重试。",
     "connectorBeta": "测试版",
     "connectorExperimental": "实验性",
     "connectDialogTitle": "连接 {{name}}",
