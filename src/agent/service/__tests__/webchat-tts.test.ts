@@ -99,6 +99,19 @@ describe('maybeEmitWebchatTts', () => {
     );
   });
 
+  it('keeps deferred audio attached to the original assistant when a newer turn arrives', async () => {
+    let complete!: (value: { audio: Buffer; format: string; provider: string }) => void;
+    vi.mocked(speak).mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+    const pending = maybeEmitWebchatTts({
+      config: { messages: { tts: { enabled: true, provider: 'edge', trigger: 'always', providers: { edge: { enabled: true } } } } } as unknown as Config,
+      getLastAssistantPlainText: () => 'original reply', log: { warn: vi.fn() },
+    }, 'chat', false);
+    persistence.findLatest.mockReturnValue('newer-assistant-entry');
+    complete({ audio: Buffer.from('speech'), format: 'mp3', provider: 'edge' });
+    await pending;
+    expect(persistence.append).toHaveBeenCalledWith('chat', 'assistant-entry-1', expect.anything());
+  });
+
   it('keeps automatic replies silent when TTS config is absent', async () => {
     const result = await maybeEmitWebchatTts(
       {

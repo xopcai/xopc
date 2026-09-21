@@ -6,12 +6,11 @@ import {
   isTransientNetworkError,
   STREAM_RECOVERY_FAST_ATTEMPTS,
   STREAM_RECOVERY_PARKED_RETRY_MS,
-  STREAM_RECOVERY_WAIT_FOR_RUN_MS,
   streamRetryDelayMs,
 } from './network-errors';
 import { resolveResumeRunId } from './resolve-resume-run-id';
 
-type TryAgentStreamResume = (runId: string) => void | Promise<void>;
+type TryAgentStreamResume = (runId: string, signal: AbortSignal) => void | Promise<void>;
 
 type UseAgentStreamRecoveryOptions = {
   conversationId: string;
@@ -93,26 +92,24 @@ export function useAgentStreamRecovery(options: UseAgentStreamRecoveryOptions) {
     const controller = new AbortController();
     abortRef.current?.abort();
     abortRef.current = controller;
-    const startedAt = Date.now();
-    let transportBlocked = false;
+    const isCurrent = () => !controller.signal.aborted
+      && generation === generationRef.current
+      && activeConversationIdRef.current === conversationId
+      && AppState.currentState === 'active';
 
     try {
       for (let attempt = 1; attempt <= STREAM_RECOVERY_FAST_ATTEMPTS; attempt++) {
-        if (
-          controller.signal.aborted ||
-          generation !== generationRef.current ||
-          activeConversationIdRef.current !== conversationId
-        ) return;
+        if (!isCurrent()) return;
         let runId: string | null;
         try {
-          runId = await resolveResumeRunId(conversationId);
+          runId = await resolveResumeRunId(conversationId, controller.signal);
         } catch (error) {
+          if (!isCurrent()) return;
           const message = error instanceof Error ? error.message : String(error);
           if (!isTransientNetworkError(message)) {
             await onReconcileRef.current();
             return;
           }
-          transportBlocked = true;
           if (attempt === STREAM_RECOVERY_FAST_ATTEMPTS) {
             park();
             return;
@@ -120,28 +117,20 @@ export function useAgentStreamRecovery(options: UseAgentStreamRecoveryOptions) {
           await delay(1_200, controller.signal);
           continue;
         }
-        if (controller.signal.aborted || generation !== generationRef.current) return;
+        if (!isCurrent()) return;
         if (!runId) {
-          if (Date.now() - startedAt >= STREAM_RECOVERY_WAIT_FOR_RUN_MS || attempt === STREAM_RECOVERY_FAST_ATTEMPTS) {
-            if (transportBlocked) park();
-            else await onReconcileRef.current();
-            return;
-          }
-          await delay(1_200, controller.signal);
-          continue;
+          await onReconcileRef.current();
+          return;
         }
 
         const retryDelayMs = attempt === 1 ? 0 : streamRetryDelayMs(attempt - 1);
-        await delay(retryDelayMs, controller.signal);
-        if (
-          controller.signal.aborted ||
-          generation !== generationRef.current ||
-          activeConversationIdRef.current !== conversationId
-        ) return;
+        if (retryDelayMs > 0) await delay(retryDelayMs, controller.signal);
+        if (!isCurrent()) return;
         try {
-          await tryResumeRef.current(runId);
+          await tryResumeRef.current(runId, controller.signal);
           return;
         } catch (error) {
+          if (!isCurrent()) return;
           const message = error instanceof Error ? error.message : String(error);
           if (!isTransientNetworkError(message)) {
             await onReconcileRef.current();
@@ -149,9 +138,9 @@ export function useAgentStreamRecovery(options: UseAgentStreamRecoveryOptions) {
           }
         }
       }
-      park();
+      if (isCurrent()) park();
     } catch {
-      if (!controller.signal.aborted) park();
+      if (isCurrent()) park();
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
       if (activeGenerationRef.current === generation) activeGenerationRef.current = 0;
@@ -178,5 +167,12 @@ export function useAgentStreamRecovery(options: UseAgentStreamRecoveryOptions) {
 
   useEffect(() => () => cancelRecovery(), [cancelRecovery, conversationId]);
 
-  return { recover, wake, markRecoverySucceeded: cancelRecovery, cancelRecovery };
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') cancelRecovery();
+    });
+    return () => subscription.remove();
+  }, [cancelRecovery]);
+
+  return { recover, wake, cancelRecovery };
 }

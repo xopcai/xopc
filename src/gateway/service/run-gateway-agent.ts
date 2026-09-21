@@ -27,6 +27,7 @@ import type {
   AgentRunEndedEvent,
   AgentStreamRunStatus,
   TaskRunReceipt,
+  SessionAudioReadyEvent,
 } from '@xopcai/gateway-contract';
 
 import { formatAgentRunErrorForClient } from '../../agent/client-error-format.js';
@@ -204,7 +205,14 @@ export async function *runGatewayAgent(
           origin,
           prepared,
           thinking,
-          { signal: mergedSignal, runId, sourceContexts: runOptions?.sourceContexts, presentation: runOptions?.presentation },
+          {
+            signal: mergedSignal, runId, sourceContexts: runOptions?.sourceContexts, presentation: runOptions?.presentation,
+            onDeferredAudio: (audio) => {
+              const event: SessionAudioReadyEvent = { conversationId, runId, ...audio, createdAtMs: Date.now() };
+              publishRealtime('sessions', 'session.audio_ready', event);
+              emit('session.transcript_updated', { key: conversationId });
+            },
+          },
         );
 
         const mappedEvents = (async function* (): AsyncGenerator<ChatStreamEvent> {
