@@ -116,14 +116,29 @@ export function artifactMedia(artifact: XopcArtifact): XopcHistoryMedia {
 }
 
 interface XopcToolOutputEnvelope { text?: string; content?: XopcContentBlock[]; details?: Object; delivery?: XopcProductDelivery; }
+function validProductReference(reference?: XopcProductReference): boolean {
+  return !!reference && typeof reference.id === 'string' && typeof reference.title === 'string'
+    && ['task', 'project', 'note', 'automation', 'session', 'file', 'settings', 'workflow_run', 'workflow_definition', 'local_app'].includes(reference.kind);
+}
 function deliveryRecord(raw?: Object): XopcProductDelivery | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
   const envelope = raw as XopcToolOutputEnvelope;
   const delivery = envelope.delivery || raw as XopcProductDelivery;
+  const tableItems = delivery.presentation?.items;
+  const validTable = delivery.presentation?.kind === 'table' && Array.isArray(tableItems)
+    && tableItems.every((reference: XopcProductReference): boolean => validProductReference(reference));
   if (delivery.version === 1 && ['created', 'updated', 'opened', 'started', 'completed', 'failed'].includes(delivery.operation)
-    && delivery.primary && typeof delivery.primary.id === 'string' && typeof delivery.primary.title === 'string'
-    && ['task', 'project', 'note', 'automation', 'session', 'file', 'settings', 'workflow_run', 'workflow_definition', 'local_app'].includes(delivery.primary.kind)) return delivery;
+    && (validProductReference(delivery.primary) || validTable)) return delivery;
   return envelope.details && envelope.details !== raw ? deliveryRecord(envelope.details) : undefined;
+}
+
+function displayDeliveries(delivery: XopcProductDelivery): XopcProductDelivery[] {
+  if (delivery.presentation?.kind !== 'table') return delivery.primary ? [delivery] : [];
+  const rows: XopcProductDelivery[] = [];
+  for (const reference of delivery.presentation.items || []) {
+    rows.push({ version: delivery.version, operation: delivery.operation, primary: reference });
+  }
+  return rows;
 }
 
 export function toolOutputText(call: XopcChatTool): string {
@@ -163,7 +178,10 @@ export function chatDeliveries(row: XopcChatRow): XopcProductDelivery[] {
       const marker = toolOutputText(call).split(/\s+/).find((part: string): boolean => part.startsWith('xopc-product-delivery:'));
       if (marker) { try { delivery = deliveryRecord(JSON.parse(decodeURIComponent(marker.slice(22))) as Object); } catch (_) {} }
     }
-    if (delivery?.primary && delivery.primary.kind !== 'file') results.set(delivery.primary.kind + ':' + delivery.primary.id, delivery);
+    if (!delivery) continue;
+    for (const display of displayDeliveries(delivery)) {
+      if (display.primary && display.primary.kind !== 'file') results.set(display.primary.kind + ':' + display.primary.id, display);
+    }
   }
   return Array.from(results.values());
 }
