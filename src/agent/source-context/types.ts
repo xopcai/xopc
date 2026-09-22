@@ -1,6 +1,11 @@
 import type { ImageContent } from '@earendil-works/pi-ai';
 import type { AppContextEnvelope } from '@xopcai/gateway-contract';
-import type { AppContextGrant } from '../../gateway/service/app-context-access.js';
+import type { GatewayPrincipal } from '../../gateway/security/gateway-principal.js';
+
+export interface AppContextGrant {
+  principal: GatewayPrincipal;
+  authRevision: string;
+}
 
 export interface SessionSourceBinding {
   kind: 'note';
