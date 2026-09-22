@@ -25,7 +25,7 @@ export function automationItem(automation: XopcAutomation): XopcWorkspaceItem {
 export function noteItem(note: XopcNote): XopcWorkspaceItem {
   if (!note?.id) throw new Error('INVALID_NOTE');
   return { id: note.id, title: note.title ?? '', body: note.markdown ?? note.snippet ?? '', status: note.status,
-    version: note.remoteVersion ?? 0, editable: true, actions: ['delete'] };
+    version: note.updatedAt ?? note.remoteVersion ?? 0, editable: true, actions: ['delete'] };
 }
 export function newTask(title: string, body: string, idempotencyKey: string, projectId?: string): XopcTaskCreate {
   return { title: title.trim(), body, idempotencyKey, projectId,

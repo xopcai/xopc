@@ -52,6 +52,8 @@ export struct XopcPersonalView {
             .border({ width: 0.5, color: $r('app.color.border_subtle') })
 
           XopcSectionLabel({ heading: $r('app.string.preferences') })
+          XopcHubRow({ heading: $r('app.string.share_center'), summary: $r('app.string.share_center_help'),
+            symbol: $r('sys.symbol.share'), onOpen: (): void => { this.onNavigate({ page: 'sharing', itemId: '' }); } })
           XopcHubRow({ heading: $r('app.string.settings'), summary: $r('app.string.personal_settings_hint'),
             symbol: $r('sys.symbol.gearshape'), onOpen: (): void => { this.onNavigate({ page: 'settings', itemId: '' }); } })
           if (this.model.error) {
