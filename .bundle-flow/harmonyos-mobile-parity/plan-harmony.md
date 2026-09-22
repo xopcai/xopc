@@ -40,6 +40,8 @@ Use `apps/mobile-harmony/docs/chat-parity-audit-20260922.md` as the current scen
 
 File preview continuation: translate Expo `AttachmentRenderer` and `FilePreviewModal` behavior into Harmony without editing Expo. Group ordinary attachments into a bounded compact list; keep audio separate; route image/Markdown/text/HTML/audio/video/binary explicitly; preserve extracted-text fallback and share/download. HTML must remain local and isolated with CSP, JavaScript/storage/file access disabled and navigation intercepted. Verify with classification/security fixtures, lint, debug/release/ohosTest builds, then non-mutating device UI evidence when HDC is available.
 
+Share continuation: align Chat and Files managed-file sharing with Expo `/api/shares/auto`; never expose authenticated Gateway media URLs or replace governed links with temporary phone cache URIs. Resolve only explicit file IDs, `xopc-file:` IDs, or session-scoped workspace paths. Show link reachability before copy/system share and keep download separate. Share history/revoke/extend, note/session shares, QR/embedded preview, directory confirmation and system-to-xopc intake remain separate incomplete scenarios until implemented and verified.
+
 ### RN Chat audit follow-up (2026-09-18, user approved)
 
 Implement the reviewed differences in order, then perform a separate correctness/security/performance review. No Gateway schema changes or Expo edits. Preserve paired-device data.

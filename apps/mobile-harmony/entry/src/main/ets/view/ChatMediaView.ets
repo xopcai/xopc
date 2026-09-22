@@ -6,7 +6,9 @@ import { webview } from '@kit.ArkWeb';
 import { XopcHistoryMedia } from '../model/chat';
 import { readChatMedia, saveChatMedia } from '../service/chatMedia';
 import { XopcChatMediaPlayback } from '../service/chatMediaPlayback';
-import { shareChatMedia } from '../service/chatMediaShare';
+import { chatMediaShareRequest, createChatMediaShare, shareChatLink, shareReachabilityText } from '../service/chatMediaShare';
+import { copyChatMessage } from '../service/chatMessageActions';
+import { appSettings } from '../service/settings';
 import { XopcMarkdownView } from './MarkdownView';
 import { filePreviewKind, previewTextLimit, safeHtmlPreview, XopcFilePreviewKind } from '../common/filePreview';
 
@@ -106,6 +108,7 @@ export struct XopcChatMediaView {
   }
   private previewKind(): XopcFilePreviewKind { return filePreviewKind(this.file.name, this.file.mimeType); }
   private previewable(): boolean { return !!(this.file.uri || this.file.workspaceRelativePath || this.file.extractedText); }
+  private shareable(): boolean { return chatMediaShareRequest(this.file, this.conversationId) !== undefined; }
   private mediaSymbol(): Resource {
     const kind = this.previewKind();
     if (kind === 'image') return $r('sys.symbol.picture');
@@ -149,10 +152,23 @@ export struct XopcChatMediaView {
   }
   private async share(): Promise<void> {
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
-    if (!context || this.busy) return;
+    if (!context || this.busy || !this.shareable()) return;
     const generation = this.generation;
     this.busy = true; this.error = ''; this.failedAction = 'share';
-    try { await shareChatMedia(context, this.file, this.conversationId); }
+    try {
+      const payload = await createChatMediaShare(this.file, this.conversationId);
+      if (generation !== this.generation) return;
+      const result = await this.getUIContext().getPromptAction().showDialog({ title: payload.share.title,
+        message: payload.share.shareUrl + '\n\n' + shareReachabilityText(payload.share, appSettings.effectiveLanguage().startsWith('zh')),
+        buttons: [{ text: $r('app.string.cancel'), color: $r('app.color.secondary') },
+          { text: $r('app.string.chat_copy_link'), color: $r('app.color.secondary') },
+          { text: $r('app.string.chat_system_share'), color: $r('app.color.accent') }] });
+      if (generation !== this.generation) return;
+      if (result.index === 1) {
+        await copyChatMessage(payload.share.shareUrl);
+        this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_link_copied') });
+      } else if (result.index === 2) await shareChatLink(context, payload.share);
+    }
     catch (error) { if (generation === this.generation) this.error = (error as Error).message; }
     finally { if (generation === this.generation) this.busy = false; }
   }
@@ -183,8 +199,10 @@ export struct XopcChatMediaView {
             .id('chat-preview-' + this.file.id).enabled(!this.busy && !!(this.file.uri || this.file.workspaceRelativePath)).onClick((): void => { this.openPreview(); })
         }
         if (!this.draftPreview) {
-          Button($r('app.string.chat_share')).height(44).fontSize(12).backgroundColor(Color.Transparent).fontColor($r('app.color.secondary'))
-            .enabled(!this.busy && !!(this.file.uri || this.file.workspaceRelativePath)).onClick((): void => { this.share(); })
+          if (this.shareable()) {
+            Button($r('app.string.chat_share')).height(44).fontSize(12).backgroundColor(Color.Transparent).fontColor($r('app.color.secondary'))
+              .enabled(!this.busy).onClick((): void => { this.share(); })
+          }
           Button($r('app.string.download')).height(44).fontSize(12).backgroundColor(Color.Transparent).fontColor($r('app.color.secondary'))
             .enabled(!this.busy && !!(this.file.uri || this.file.workspaceRelativePath)).onClick((): void => { this.save(); })
         }
@@ -203,9 +221,11 @@ export struct XopcChatMediaView {
       Row({ space: 4 }) {
         Text(this.file.name).fontSize(16).fontWeight(FontWeight.Medium).fontColor($r('app.color.foreground')).maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
-        Button() { SymbolGlyph($r('sys.symbol.share')).fontSize(20).fontColor([$r('app.color.secondary')]) }
-          .width(44).height(44).padding(0).backgroundColor(Color.Transparent).enabled(!this.busy && this.previewable())
-          .accessibilityText($r('app.string.chat_share')).onClick((): void => { this.share(); })
+        if (this.shareable()) {
+          Button() { SymbolGlyph($r('sys.symbol.share')).fontSize(20).fontColor([$r('app.color.secondary')]) }
+            .width(44).height(44).padding(0).backgroundColor(Color.Transparent).enabled(!this.busy)
+            .accessibilityText($r('app.string.chat_share')).onClick((): void => { this.share(); })
+        }
         Button() { SymbolGlyph($r('sys.symbol.arrow_down_to_line')).fontSize(20).fontColor([$r('app.color.secondary')]) }
           .width(44).height(44).padding(0).backgroundColor(Color.Transparent).enabled(!this.busy && this.previewable())
           .accessibilityText($r('app.string.download')).onClick((): void => { this.save(); })

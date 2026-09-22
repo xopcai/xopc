@@ -1,6 +1,10 @@
 import { XopcFilesViewModel } from '../viewmodel/filesViewModel';
 import { XopcFile, XopcFileSpace } from '../model/files';
 import { XopcHubRow } from './MobileComponents';
+import { common } from '@kit.AbilityKit';
+import { copyChatMessage } from '../service/chatMessageActions';
+import { createManagedShare, shareChatLink, shareReachabilityText } from '../service/chatMediaShare';
+import { appSettings } from '../service/settings';
 
 @ComponentV2
 export struct XopcFilesView {
@@ -37,6 +41,26 @@ export struct XopcFilesView {
     } catch (error) { this.model.error = (error as Error).message; }
   }
 
+  private async share(): Promise<void> {
+    const file = this.model.selected;
+    const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    if (!file || !context || this.model.busy) return;
+    this.model.busy = true; this.model.error = '';
+    try {
+      const payload = await createManagedShare({ fileId: file.id, audience: 'friend' });
+      const result = await this.getUIContext().getPromptAction().showDialog({ title: payload.share.title,
+        message: payload.share.shareUrl + '\n\n' + shareReachabilityText(payload.share, appSettings.effectiveLanguage().startsWith('zh')),
+        buttons: [{ text: $r('app.string.cancel'), color: $r('app.color.secondary') },
+          { text: $r('app.string.chat_copy_link'), color: $r('app.color.secondary') },
+          { text: $r('app.string.chat_system_share'), color: $r('app.color.accent') }] });
+      if (result.index === 1) {
+        await copyChatMessage(payload.share.shareUrl);
+        this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_link_copied') });
+      } else if (result.index === 2) await shareChatLink(context, payload.share);
+    } catch (error) { this.model.error = (error as Error).message; }
+    finally { this.model.busy = false; }
+  }
+
   build() {
     NavDestination() {
     Column() {
@@ -68,6 +92,7 @@ export struct XopcFilesView {
               const context = this.getUIContext().getHostContext(); if (context) this.model.download(context);
             })
           }
+          Button($r('app.string.chat_share')).enabled(!this.model.busy).onClick((): void => { this.share(); })
           if (this.model.selected.capabilities.includes('delete')) {
             Button($r('app.string.delete')).enabled(!this.model.busy).onClick((): void => { this.remove(); })
           }
