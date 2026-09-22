@@ -27,6 +27,17 @@ function deliveryKey(delivery: ProductDeliveryEnvelope): string {
   return `${reference?.kind ?? 'none'}:${reference?.id ?? 'none'}`;
 }
 
+function displayDeliveries(delivery: ProductDeliveryEnvelope): ProductDeliveryEnvelope[] {
+  if (delivery.presentation?.kind === 'table') {
+    return delivery.presentation.items.map((primary) => ({
+      version: delivery.version,
+      operation: delivery.operation,
+      primary,
+    }));
+  }
+  return delivery.presentation || !delivery.primary ? [] : [delivery];
+}
+
 export function collectAssistantDeliverables(
   message: Message,
   isStreaming: boolean,
@@ -37,7 +48,8 @@ export function collectAssistantDeliverables(
   const completedTools = tools.filter((block) => block.status === 'done');
   const deliveries = completedTools
     .map(extractMobileProductDelivery)
-    .filter((delivery): delivery is ProductDeliveryEnvelope => delivery !== null);
+    .filter((delivery): delivery is ProductDeliveryEnvelope => delivery !== null)
+    .flatMap(displayDeliveries);
   const inlineAudioUris = new Set(message.content.flatMap((block) => (
     block.type === 'audio' && block.uri ? [block.uri] : []
   )));
