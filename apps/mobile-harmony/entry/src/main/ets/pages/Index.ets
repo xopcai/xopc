@@ -6,6 +6,8 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { readMobilePairingInvitation } from '../common/protocol';
 import { XopcSettingsView } from '../view/SettingsView';
 import { layoutState } from '../service/layoutState';
+import { voiceCall, XopcVoiceCall } from '../service/voiceCall';
+import { XopcVoiceCallView } from '../view/VoiceCallView';
 
 @Entry
 @ComponentV2
@@ -17,6 +19,7 @@ struct XopcIndex {
   @Local showHelp: boolean = false;
   @Local scanning: boolean = false;
   @Local contentHeight: number = 0;
+  @Local call: XopcVoiceCall = voiceCall;
   private invitationEditor: TextAreaController = new TextAreaController();
 
   aboutToAppear(): void { this.connection.restore(); }
@@ -25,6 +28,7 @@ struct XopcIndex {
     if (this.connection.adding) { this.invitation = ''; this.manualEntry = false; this.showHelp = false; this.showSettings = false; }
   }
   onBackPress(): boolean {
+    if (this.call.phase !== 'idle' && this.call.expanded) { this.call.expanded = false; return true; }
     if (this.showSettings) { this.showSettings = false; return true; }
     if (this.connection.managing) { this.connection.closeGateways(); return true; }
     if (this.connection.adding) { if (!this.connection.busy) this.connection.cancel(); return true; }
@@ -158,6 +162,7 @@ struct XopcIndex {
   }
 
   build() {
+    Stack({ alignContent: Alignment.TopStart }) {
     Column() {
     if (this.connection.managing) {
       XopcGatewayProfilesView()
@@ -180,5 +185,7 @@ struct XopcIndex {
         .onAreaChange((_previous: Area, current: Area): void => { this.contentHeight = Number(current.height); })
     }
     }.width('100%').height('100%').backgroundColor($r('app.color.surface'))
+    XopcVoiceCallView({ call: this.call })
+    }.width('100%').height('100%')
   }
 }
