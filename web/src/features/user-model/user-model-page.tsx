@@ -39,7 +39,8 @@ import { usePageHeaderStore } from '@/stores/page-header-store';
 import { UnderstandingStatusButton } from '@/features/work-discovery/understanding-status-button';
 
 import { MemoryActions } from './memory-actions';
-import { groupUnderstandingByDate, UnderstandingRow } from './understanding-row';
+import { UnderstandingRow } from './understanding-row';
+import { groupUnderstandingByDate } from './understanding-row.utils';
 import {
   correctAssertion,
   createPriority,
