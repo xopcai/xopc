@@ -13,7 +13,7 @@ function LocationProbe() {
   return <output data-testid="location">{`${location.pathname}${location.search}`}</output>;
 }
 
-describe('MessageBubble Note reference attachment', () => {
+describe('MessageBubble context reference attachment', () => {
   let container: HTMLDivElement;
   let root: ReturnType<typeof createRoot>;
 
@@ -61,7 +61,7 @@ describe('MessageBubble Note reference attachment', () => {
     });
 
     const card = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Referenced Notes: Launch plan"]',
+      'button[aria-label="Referenced context: Launch plan"]',
     );
     expect(card).not.toBeNull();
     expect(card?.textContent).toContain('Launch plan');
@@ -70,5 +70,72 @@ describe('MessageBubble Note reference attachment', () => {
     expect(container.querySelector('[data-testid="location"]')?.textContent).toBe(
       '/notes/note-1?returnTo=%2Fchat%2Fsession-1%3Fview%3Dfull',
     );
+  });
+
+  it('renders a selected directory with a folder icon and label', () => {
+    act(() => {
+      root.render(
+        <MemoryRouter>
+          <MessageBubble
+            message={{
+              role: 'user',
+              content: [{ type: 'text', text: 'Review this folder' }],
+              contextRefs: [{
+                kind: 'file', sourceId: 'folder-1', version: '7', title: 'mobile-expo',
+                fileKind: 'directory',
+              }],
+            }}
+            isStreaming={false}
+            progress={null}
+          />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(container.querySelector('.lucide-folder')).not.toBeNull();
+    expect(container.textContent).toContain('Folders');
+    expect(container.textContent).toContain('mobile-expo');
+    const renderedText = container.textContent ?? '';
+    expect(renderedText.indexOf('Review this folder')).toBeLessThan(renderedText.indexOf('Folders'));
+  });
+
+  it('renders every supported non-Note reference type in a user message', () => {
+    act(() => {
+      root.render(
+        <MemoryRouter>
+          <MessageBubble
+            message={{
+              role: 'user',
+              content: [],
+              contextRefs: [
+                { kind: 'file', fileKind: 'file', sourceId: 'file-1', version: '1', title: 'readme.md' },
+                { kind: 'session', sourceId: 'chat-1', version: '1', title: 'Prior chat' },
+                { kind: 'browser_tab', sourceId: 'tab-1', version: '1', title: 'Docs tab' },
+                { kind: 'mcp_resource', sourceId: 'resource-1', version: '1', title: 'Schema' },
+              ],
+            }}
+            isStreaming={false}
+            progress={null}
+          />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(container.querySelector('.lucide-file-text')).not.toBeNull();
+    expect(container.querySelector('.lucide-messages-square')).not.toBeNull();
+    expect(container.querySelector('.lucide-app-window')).not.toBeNull();
+    expect(container.querySelector('.lucide-database')).toBeNull();
+    expect(container.textContent).not.toContain('Schema');
+
+    const expand = container.querySelector<HTMLButtonElement>('button[aria-expanded="false"]');
+    expect(expand?.textContent).toContain('1 more');
+    act(() => expand?.click());
+
+    expect(container.querySelector('.lucide-database')).not.toBeNull();
+    expect(container.textContent).toContain('readme.md');
+    expect(container.textContent).toContain('Prior chat');
+    expect(container.textContent).toContain('Docs tab');
+    expect(container.textContent).toContain('Schema');
+    expect(container.querySelector('button[aria-expanded="true"]')?.textContent).toContain('Show fewer');
   });
 });

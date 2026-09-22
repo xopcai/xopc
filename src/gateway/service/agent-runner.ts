@@ -51,7 +51,10 @@ export interface GatewayAgentRunnerOptions {
   emit: (type: string, payload: unknown) => void;
   publishRealtime: (topic: string, event: string, data: unknown) => void;
   completeRealtimeTopic: (topic: string) => void;
-  resolveTurnContext: (ref: TurnContextRef) => Promise<AgentSourceContext | null>;
+  resolveTurnContext: (
+    ref: TurnContextRef,
+    conversationId: string,
+  ) => Promise<AgentSourceContext | null>;
 }
 
 const MAX_TURN_CONTEXTS = 5;
@@ -113,7 +116,7 @@ export class GatewayAgentRunner {
           size: ref.size,
         }));
       },
-      prepareContexts: async (refs) => {
+      prepareContexts: async (conversationId, refs) => {
         if (!refs?.length) return undefined;
         const unique = new Map<string, TurnContextRef>();
         for (const ref of refs) {
@@ -124,7 +127,7 @@ export class GatewayAgentRunner {
           throw new Error(`A message can reference at most ${MAX_TURN_CONTEXTS} sources`);
         }
         const contexts = await Promise.all(
-          [...unique.values()].map((ref) => opts.resolveTurnContext(ref)),
+          [...unique.values()].map((ref) => opts.resolveTurnContext(ref, conversationId)),
         );
         if (contexts.some((context) => context === null)) {
           throw new Error('A referenced source is unavailable or has changed; select it again');

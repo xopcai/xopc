@@ -38,6 +38,7 @@ describe('@ mention Note picker', () => {
           open
           anchorRef={{ current: anchor }}
           items={[{
+            id: 'note:note-1',
             kind: 'note',
             name: 'Launch plan',
             description: 'Plan snapshot',
@@ -49,8 +50,10 @@ describe('@ mention Note picker', () => {
           noResults="No matches"
           conversationId="session-1"
           recentLabel="Recent"
-          filesLabel="Files"
-          notesLabel="Notes"
+          sectionLabels={{
+            file: 'Files', note: 'Notes', session: 'Chats', skill: 'Skills', agent: 'Agents',
+            browser_tab: 'Browser tabs', mcp_server: 'MCP servers', mcp_resource: 'MCP resources',
+          }}
           ariaLabel="Search references"
           onSelectItem={onSelectItem}
         />,
@@ -60,6 +63,7 @@ describe('@ mention Note picker', () => {
     expect(document.body.textContent).toContain('Notes');
     expect(document.body.textContent).toContain('Launch plan');
     expect(document.body.textContent).toContain('Plan snapshot');
+    expect(document.body.querySelector('[data-composer-picker-panel]')).not.toBeNull();
 
     act(() => {
       document.body.querySelector<HTMLElement>('[role="option"]')

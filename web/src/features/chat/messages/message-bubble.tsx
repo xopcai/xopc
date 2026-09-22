@@ -38,7 +38,7 @@ import { buildSpeakableText, detectSpeechLanguage } from '@/features/voice/read-
 import { buildAssistantTurnViewModel } from '@/features/chat/messages/assistant-turn-view-model';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import { AssistantTurnTasks } from '@/features/chat/messages/assistant-turn-tasks';
-import { MessageNoteAttachments } from '@/features/chat/messages/message-note-attachments';
+import { MessageContextAttachments } from '@/features/chat/messages/message-context-attachments';
 import { withDetailReturnTo } from '@/lib/navigation-return';
 
 const messageActionIconButton = cn(
@@ -530,15 +530,6 @@ export const MessageBubble = memo(function MessageBubble({
           )}
         >
           <div className="flex min-w-0 flex-col gap-2">
-            {isUser && message.contextRefs?.length ? (
-              <MessageNoteAttachments
-                refs={message.contextRefs}
-                groupLabel={m.chat.commandPalette.noteContextLabel}
-                noteLabel={m.chat.commandPalette.notesSection}
-                truncatedLabel={m.chat.commandPalette.contextTruncated}
-                onOpen={(ref) => openReferencedNote(ref.sourceId)}
-              />
-            ) : null}
             {assistantTurnView?.workLog.items.length ? (
               <AssistantStepsBlock
                 workLog={assistantTurnView.workLog}
@@ -611,15 +602,32 @@ export const MessageBubble = memo(function MessageBubble({
               />
             ) : null}
 
+            {isUser && message.contextRefs?.length ? (
+              <MessageContextAttachments
+                refs={message.contextRefs}
+                groupLabel={m.chat.commandPalette.contextLabel}
+                noteLabel={m.chat.commandPalette.notesSection}
+                fileLabel={m.chat.atMention.files}
+                folderLabel={m.chat.atMention.folders}
+                sessionLabel={m.chat.atMention.chats}
+                browserTabLabel={m.chat.atMention.browserTabs}
+                mcpResourceLabel={m.chat.atMention.mcpResources}
+                truncatedLabel={m.chat.commandPalette.contextTruncated}
+                showMoreLabel={m.chat.contextReferencesMore}
+                showLessLabel={m.chat.contextReferencesLess}
+                onOpen={(ref) => openReferencedNote(ref.sourceId)}
+              />
+            ) : null}
+
             {isUser && attachmentsForBubble?.length ? (
-                <AttachmentRenderer
-                  attachments={attachmentsForBubble}
-                  authToken={authToken}
-                  conversationId={conversationId}
-                  workspaceConversationId={workspaceConversationId}
-                  layout="user"
-                  centerUserVoiceRow={userCopyText.length === 0}
-                />
+              <AttachmentRenderer
+                attachments={attachmentsForBubble}
+                authToken={authToken}
+                conversationId={conversationId}
+                workspaceConversationId={workspaceConversationId}
+                layout="user"
+                centerUserVoiceRow={userCopyText.length === 0}
+              />
             ) : null}
           </div>
         </div>
@@ -664,7 +672,9 @@ export const MessageBubble = memo(function MessageBubble({
                   }
                   dispatchFillChatComposer(userCopyText, messageAttachmentsToWire(message.attachments));
                 }}
-                disabled={(!userCopyText && !message.attachments?.length) || !userMessageCanEdit}
+                disabled={(
+                  !userCopyText && !message.attachments?.length && !message.contextRefs?.length
+                ) || !userMessageCanEdit}
                 title={userMessageCanEdit ? m.chat.userMessageEdit : m.chat.userMessageEditDisabledHint}
                 aria-label={m.chat.userMessageEdit}
               >

@@ -28,6 +28,7 @@ export interface ComposerKbdContext {
   editingFollowUpId: string | null;
   onCancelEditFollowUp: () => void;
   attachmentsLen: number;
+  contextRefsLen: number;
   isComposing: boolean;
   valueRef: MutableRefObject<string>;
   adjustHeight: () => void;
@@ -188,7 +189,9 @@ export const ChatComposerInput = memo(function ChatComposerInput({
           e.nativeEvent.isComposing;
         if (e.key === 'Enter' && !e.shiftKey && !k.isComposing && !nativeComposing) {
           e.preventDefault();
-          const hasDraft = Boolean(k.valueRef.current.trim() || k.attachmentsLen > 0);
+          const hasDraft = Boolean(
+            k.valueRef.current.trim() || k.attachmentsLen > 0 || k.contextRefsLen > 0,
+          );
           const steerKbdBusy = k.runBusy || k.pendingFollowUpsCount > 0;
           if (steerKbdBusy) {
             if ((e.metaKey || e.ctrlKey) && hasDraft) {

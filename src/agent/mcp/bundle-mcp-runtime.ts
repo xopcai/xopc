@@ -470,6 +470,23 @@ export function createSessionMcpRuntime(params: {
         },
       )) as CallToolResult;
     },
+    async readResource(serverName, uri, signal) {
+      failIfDisposed();
+      const currentCatalog = await getCatalog();
+      if (!currentCatalog.resources.some((resource) => resource.serverName === serverName && resource.uri === uri)) {
+        throw new Error(`bundle-mcp resource "${uri}" is not available from server "${serverName}"`);
+      }
+      const session = sessions.get(serverName);
+      if (!session) throw new Error(`bundle-mcp server "${serverName}" is not connected`);
+      return session.client.readResource(
+        { uri },
+        {
+          signal,
+          timeout: session.requestTimeoutMs,
+          maxTotalTimeout: session.requestTimeoutMs,
+        },
+      );
+    },
     async dispose() {
       if (disposed) {
         return;

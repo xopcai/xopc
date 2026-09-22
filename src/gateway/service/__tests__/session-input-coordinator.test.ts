@@ -157,7 +157,7 @@ describe('SessionInputCoordinator', () => {
     const execute = vi.fn(() => new Promise<{ status: string; summary: string }>((resolve) => {
       completions.push(resolve);
     }));
-    const prepareContexts = vi.fn(async (refs?: Array<{
+    const prepareContexts = vi.fn(async (_conversationId: string, refs?: Array<{
       kind: 'note'; sourceId: string; expectedVersion?: string;
     }>) => (
       refs?.length
@@ -201,6 +201,9 @@ describe('SessionInputCoordinator', () => {
 
     expect(updated.ok).toBe(true);
     expect(prepareContexts).toHaveBeenCalledTimes(2);
+    expect(prepareContexts).toHaveBeenLastCalledWith(conversationId, [
+      { kind: 'note', sourceId: 'note-1', expectedVersion: 'v1' },
+    ]);
     expect(getSessionInputById(conversationId, queued!.id)).toMatchObject({
       content: 'after edit',
       contextSnapshots: [{ sourceId: 'note-1', version: 'v1', text: 'original snapshot' }],
