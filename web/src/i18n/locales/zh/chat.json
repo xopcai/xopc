@@ -1323,6 +1323,7 @@
     "userMessageCopy": "复制消息",
     "userMessageRetry": "重试",
     "userMessageSending": "发送中…",
+    "userMessageWaitingForNetwork": "等待网络…",
     "userMessageSendFailed": "未发送",
     "userMessageEdit": "在输入框中编辑",
     "userMessageEditing": "正在编辑最新消息，发送后会覆盖原来的这一轮。",

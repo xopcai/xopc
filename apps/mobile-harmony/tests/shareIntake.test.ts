@@ -6,7 +6,7 @@ vi.hoisted(() => {
 });
 vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mocks.request } }));
 
-import { incomingShare, XopcShareIntake } from '../entry/src/main/ets/service/shareIntake.ets';
+import { decodeShareHandoff, encodeShareHandoff, incomingShare, XopcShareIntake } from '../entry/src/main/ets/service/shareIntake.ets';
 
 describe('Harmony inbound share intake', () => {
   beforeEach(() => vi.resetAllMocks());
@@ -29,6 +29,15 @@ describe('Harmony inbound share intake', () => {
     expect(incomingShare('', ['  '])).toBeUndefined();
     expect(incomingShare('', ['x'])).toBeUndefined();
     expect(incomingShare('', ['验证码 123456，请勿泄露'])).toBeUndefined();
+  });
+
+  it('hands shared content from the extension process to the main process', () => {
+    const payload = encodeShareHandoff('Article', ['https://xopc.ai/post']);
+    expect(decodeShareHandoff(payload)).toMatchObject({
+      title: 'Article', kind: 'url', content: 'Article\nhttps://xopc.ai/post'
+    });
+    expect(decodeShareHandoff('{')).toBeUndefined();
+    expect(decodeShareHandoff(JSON.stringify({ title: 'Article', values: [42] }))).toBeUndefined();
   });
 
   it('saves only after confirmation and hands a chat prompt to one matching conversation', async () => {

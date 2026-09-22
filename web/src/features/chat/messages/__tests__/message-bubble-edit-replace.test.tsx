@@ -70,23 +70,96 @@ describe('MessageBubble user edit action', () => {
     expect(container.querySelector<HTMLButtonElement>('button[aria-label="Edit in composer"]')?.disabled).toBe(true);
   });
 
-  it('shows delivery progress without exposing retry before failure', () => {
-    act(() => {
-      root.render(
-        <MemoryRouter>
-          <MessageBubble
-            message={{ ...message, deliveryStatus: 'sending', clientSubmissionId: 'local-1' }}
-            messageIndex={0}
-            isStreaming={false}
-            progress={null}
-            onRetryUserMessageRound={vi.fn()}
-          />
-        </MemoryRouter>,
-      );
-    });
+  it('shows quiet delivery progress only after a slow-send threshold', () => {
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        root.render(
+          <MemoryRouter>
+            <MessageBubble
+              message={{ ...message, deliveryStatus: 'sending', clientSubmissionId: 'local-1' }}
+              messageIndex={0}
+              isStreaming={false}
+              progress={null}
+              onRetryUserMessageRound={vi.fn()}
+            />
+          </MemoryRouter>,
+        );
+      });
 
-    expect(container.textContent).toContain('Sending…');
-    expect(container.querySelector('[data-delivery-status="sending"] button')).toBeNull();
+      expect(container.querySelector('[data-delivery-status="sending"]')).toBeNull();
+      act(() => vi.advanceTimersByTime(699));
+      expect(container.querySelector('[data-delivery-status="sending"]')).toBeNull();
+      act(() => vi.advanceTimersByTime(1));
+      expect(container.textContent).toContain('Sending…');
+      expect(container.querySelector('[data-delivery-status="sending"] button')).toBeNull();
+      expect(container.querySelector('[data-delivery-status="sending"] svg')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('shows a network wait state immediately when the browser is offline', () => {
+    vi.useFakeTimers();
+    const online = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
+    try {
+      act(() => {
+        root.render(
+          <MemoryRouter>
+            <MessageBubble
+              message={{ ...message, deliveryStatus: 'sending', clientSubmissionId: 'local-1' }}
+              messageIndex={0}
+              isStreaming={false}
+              progress={null}
+            />
+          </MemoryRouter>,
+        );
+      });
+      act(() => vi.advanceTimersByTime(0));
+
+      expect(container.textContent).toContain('Waiting for network…');
+    } finally {
+      online.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it('fades a visible sending state out after acceptance', () => {
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        root.render(
+          <MemoryRouter>
+            <MessageBubble
+              message={{ ...message, deliveryStatus: 'sending', clientSubmissionId: 'local-1' }}
+              messageIndex={0}
+              isStreaming={false}
+              progress={null}
+            />
+          </MemoryRouter>,
+        );
+      });
+      act(() => vi.advanceTimersByTime(700));
+
+      act(() => {
+        root.render(
+          <MemoryRouter>
+            <MessageBubble
+              message={message}
+              messageIndex={0}
+              isStreaming={false}
+              progress={null}
+            />
+          </MemoryRouter>,
+        );
+      });
+      act(() => vi.advanceTimersByTime(16));
+      expect(container.querySelector('[data-delivery-status="sending"]')?.classList.contains('opacity-0')).toBe(true);
+      act(() => vi.advanceTimersByTime(120));
+      expect(container.querySelector('[data-delivery-status="sending"]')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('shows an always-visible retry action when delivery fails', () => {
@@ -109,5 +182,57 @@ describe('MessageBubble user edit action', () => {
     const retryButton = container.querySelector<HTMLButtonElement>('[data-delivery-status="failed"] button');
     act(() => retryButton?.click());
     expect(retry).toHaveBeenCalledWith(3);
+  });
+
+  it('gives a newly submitted user row one subtle entrance animation', () => {
+    const optimisticMessage: Message = {
+      ...message,
+      deliveryStatus: 'sending',
+      clientSubmissionId: 'local-1',
+    };
+    act(() => {
+      root.render(
+        <MemoryRouter>
+          <MessageBubble
+            message={optimisticMessage}
+            messageIndex={0}
+            isStreaming={false}
+            progress={null}
+          />
+        </MemoryRouter>,
+      );
+    });
+    expect(container.querySelector('article')?.classList.contains('xopc-chat-user-message-enter')).toBe(true);
+
+    act(() => {
+      root.render(
+        <MemoryRouter>
+          <MessageBubble
+            message={message}
+            messageIndex={0}
+            isStreaming={false}
+            progress={null}
+          />
+        </MemoryRouter>,
+      );
+    });
+    expect(container.querySelector('article')?.classList.contains('xopc-chat-user-message-enter')).toBe(true);
+  });
+
+  it('does not animate user messages loaded from history', () => {
+    act(() => {
+      root.render(
+        <MemoryRouter>
+          <MessageBubble
+            message={message}
+            messageIndex={0}
+            isStreaming={false}
+            progress={null}
+          />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(container.querySelector('article')?.classList.contains('xopc-chat-user-message-enter')).toBe(false);
   });
 });

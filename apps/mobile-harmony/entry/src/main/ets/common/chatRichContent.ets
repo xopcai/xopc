@@ -228,6 +228,35 @@ export function chatAnswerStarted(row: XopcChatRow): boolean {
 }
 
 export function chatToolKey(name: string): string { return name.split('__').pop() || name; }
+export function chatToolDisplayKind(name: string): string {
+  const key = chatToolKey(name).toLowerCase().replace(/-/g, '_');
+  if (key.includes('search')) return 'search';
+  if (key === 'read_file' || key === 'read_media' || key === 'image') return 'read';
+  if (key === 'exec_command' || key === 'run_command') return 'command';
+  if (key === 'write_file') return 'write';
+  if (key === 'apply_patch' || key === 'edit_file') return 'edit';
+  if (key === 'web_fetch' || key === 'web_extract' || key === 'open_url' || key === 'browser_use') return 'fetch';
+  if (key === 'create_share') return 'share';
+  if (key === 'text_to_speech') return 'speech';
+  if (key === 'publish_artifacts') return 'publish';
+  if (key === 'update_plan') return 'plan';
+  return 'other';
+}
+
+export function chatToolFailed(call: XopcChatTool): boolean {
+  return !!call.isError || call.status === 'error';
+}
+
+export function chatToolFailureSummary(call: XopcChatTool): string {
+  if (!chatToolFailed(call)) return '';
+  const details = call.details as Record<string, Object> | undefined;
+  for (const key of ['errorMessage', 'error', 'message', 'reason']) {
+    const value = details?.[key];
+    if (typeof value === 'string' && value.trim()) return value.trim().split('\n')[0].slice(0, 240);
+  }
+  const text = toolOutputText(call).trim().split('\n').find((line: string): boolean => !!line.trim())?.trim() || '';
+  return text.slice(0, 240);
+}
 interface XopcToolInputPreview { path?: string; file_path?: string; command?: string; cmd?: string; query?: string; url?: string; pattern?: string; }
 export function chatToolPreview(call: XopcChatTool): string {
   let input = call.input;

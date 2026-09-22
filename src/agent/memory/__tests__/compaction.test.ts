@@ -273,6 +273,45 @@ describe('SessionCompactor', () => {
     expect(completeWithResolvedCredentials).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps the audited ledger bounded when the auditor adds a high-priority omission', async () => {
+    const rows = conversation();
+    rows[0] = { role: 'user', content: 'You must ship the requested fix before replying.' } as AgentMessage;
+    vi.mocked(completeWithResolvedCredentials)
+      .mockResolvedValueOnce(completion(JSON.stringify({
+        upserts: Array.from({ length: 120 }, (_, index) => ({
+          kind: 'tool_outcome',
+          text: `Historical tool outcome ${index}`,
+          status: 'active',
+          sourceSeqs: [1],
+          identifiers: [],
+        })),
+      })))
+      .mockResolvedValueOnce(completion(JSON.stringify({
+        upserts: [{
+          kind: 'pending_user_ask',
+          text: 'Ship the requested fix before replying.',
+          status: 'active',
+          sourceSeqs: [1],
+          identifiers: [],
+        }],
+      })));
+    const compactor = new SessionCompactor({
+      minMessagesBeforeCompact: 4,
+      keepRecentTokens: 1,
+      recentTurnsPreserve: 1,
+      summaryRetries: 0,
+    });
+
+    const result = await compactor.compact(sources(rows), model, undefined, true);
+
+    expect(result.handover?.items).toHaveLength(120);
+    expect(result.handover?.items).toContainEqual(expect.objectContaining({
+      kind: 'pending_user_ask',
+      text: 'Ship the requested fix before replying.',
+    }));
+    expect(result.audit).toMatchObject({ missingItemsFound: 1, repaired: true });
+  });
+
   it('keeps a valid handover and marks the audit degraded when the second pass fails', async () => {
     const rows = conversation();
     rows[0] = { role: 'user', content: 'Inspect /tmp/failure.log.' } as AgentMessage;
@@ -576,6 +615,50 @@ describe('SessionCompactor', () => {
     expect(result.summary).toContain('PR #8569');
     expect(result.handover?.sourceThroughSeq).toBe(entries.at(-1)!.seq);
     expect(result.firstKeptIndex).toBe(entries.length);
+  });
+
+  it('redacts a truncated attempt while advancing the durable handover through its tool results', async () => {
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValue(completion(ledger(1, 'The original request remains pending.')));
+    const entries = sources([
+      { role: 'user', content: 'Finish the original request', timestamp: 1 },
+      {
+        role: 'assistant', provider: 'test', model: 'worker', stopReason: 'length', timestamp: 2,
+        content: [
+          { type: 'thinking', thinking: 'partial private reasoning' },
+          { type: 'toolCall', id: 'call-1', name: 'read_file', arguments: { path: '/partial-secret' } },
+        ],
+      },
+      {
+        role: 'toolResult', toolCallId: 'call-1', toolName: 'read_file', timestamp: 3,
+        content: [{ type: 'text', text: 'synthetic truncated result' }],
+      },
+    ] as AgentMessage[]);
+
+    const result = await new SessionCompactor({ gapAudit: false }).compact(
+      entries,
+      model,
+      undefined,
+      true,
+      {
+        summarizeAll: true,
+        preserveLastUser: true,
+        discardedAttempt: {
+          assistantTimestamp: 2,
+          provider: 'test',
+          model: 'worker',
+          toolCallIds: ['call-1'],
+        },
+      },
+    );
+    const prompt = String(vi.mocked(completeWithResolvedCredentials).mock.calls[0]?.[1].messages[0]?.content);
+
+    expect(prompt).not.toContain('partial private reasoning');
+    expect(prompt).not.toContain('/partial-secret');
+    expect(prompt).not.toContain('synthetic truncated result');
+    expect(prompt).toContain('Discarded truncated assistant attempt');
+    expect(prompt).toContain('Discarded synthetic tool result');
+    expect(result.handover?.sourceThroughSeq).toBe(3);
+    expect(result.messages.at(-1)).toMatchObject({ role: 'user', content: 'Finish the original request' });
   });
 
   it('recovers a single oversized message by summarizing every fragment', async () => {

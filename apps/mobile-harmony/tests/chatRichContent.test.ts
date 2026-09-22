@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { historyRows } from '../entry/src/main/ets/common/chatProtocol.ets';
-import { chatActivities, chatDeliveries, chatOutcome, mergeAssistantRows, toolOutputText, chatReview, chatSearchLinks, chatAnswerText, chatProductCapability, chatAttachments } from '../entry/src/main/ets/common/chatRichContent.ets';
+import { chatActivities, chatDeliveries, chatOutcome, mergeAssistantRows, toolOutputText, chatReview, chatSearchLinks, chatAnswerText, chatProductCapability, chatAttachments, chatToolDisplayKind, chatToolFailed, chatToolFailureSummary } from '../entry/src/main/ets/common/chatRichContent.ets';
 import { reduceChatStream } from '../entry/src/main/ets/common/chatStream.ets';
 import type { XopcChatRow, XopcMessage } from '../entry/src/main/ets/model/chat.ets';
 
@@ -125,6 +125,17 @@ describe('rich live event reducer', () => {
     const rows = parse([{ role: 'assistant', content: [{ type: 'text', text: 'checking' }, { type: 'toolCall', id: 'c', name: 'read' }] },
       { role: 'toolResult', toolCallId: 'c', content: 'output' }, { role: 'assistant', content: 'answer' }]);
     expect(chatAnswerText(rows[0])).toBe('answer');
+  });
+  it('projects tool activity into compact semantic labels and bounded failure summaries', () => {
+    expect(chatToolDisplayKind('mcp__web__search_query')).toBe('search');
+    expect(chatToolDisplayKind('exec_command')).toBe('command');
+    expect(chatToolDisplayKind('create_share')).toBe('share');
+    expect(chatToolDisplayKind('unknown_action')).toBe('other');
+    expect(chatToolFailed({ id: 'ok', name: 'read_file', status: 'done' })).toBe(false);
+    const failed = { id: 'bad', name: 'exec_command', status: 'error', details: { errorMessage: 'permission denied\nstack' } };
+    expect(chatToolFailed(failed)).toBe(true);
+    expect(chatToolFailureSummary(failed)).toBe('permission denied');
+    expect(chatToolFailureSummary({ id: 'fallback', name: 'read_file', isError: true, result: 'missing file\ntrace' })).toBe('missing file');
   });
   it('separates model segments, settles thinking and matches parallel tools by ID', () => {
     let row = reduceChatStream(undefined, 'thinking_delta', { messageId: 'm1', delta: 'consider' }, 'run');

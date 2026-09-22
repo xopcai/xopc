@@ -46,3 +46,31 @@ Signing secrets and device identifiers are excluded from this document. The trac
 - USB disconnected before the screenshot and Settings interaction commands could execute. Those commands returned `E001005`; target-specific reconnect and an HDC server restart did not restore the connection (`list targets` was empty). No new screenshot or Settings interaction is claimed.
 
 **Acceptance remains partial:** installation/startup/connection-page UI passed. Chat, dock, drawer, search/selection, keyboard behavior, pairing persistence, media, voice, push and runtime-log inspection still require a connected/unlocked phone and completed Gateway pairing. The user has been asked to complete pairing on the intended Gateway and reconnect USB debugging. No real conversations were mutated.
+
+## Governed sharing acceptance — 2026-09-23
+
+- Built and installed the signed debug HAP on the connected Mate 60 with `hdc install -r`; pairing and application data were preserved. Installed HAP SHA-256: `fa2bee065185530da90e3671afbc37f221a81d3ae0682b7257f9812c11faf327`.
+- Sharing history loaded an existing active file share. The action sheet exposed preview, extension and revocation; destructive or state-changing actions were not confirmed.
+- The share result displayed its public URL and expiry, rendered a scannable QR code, loaded the same-origin public page in ArkWeb, and opened the HarmonyOS system share sheet. No third-party target was selected.
+- The system share sheet registered xopc as an inbound target and launched `ShareExtensionAbility`. This exposed a process-boundary defect: the extension wrote the intake only to its own `:share` process, so the main process could not display it.
+- The defect was fixed by serializing the title and shared values into the `EntryAbility` Want. The main process validates and reconstructs the intake before publishing it to the observed UI state. A post-fix device Want with the same payload shape displayed the full inbound sheet with link classification, preview, save-to-note, new-chat analysis and ignore actions. The test payload was ignored, so it created no note or conversation.
+- Bundle manager inspection confirms the installed `ShareExtensionAbility` still advertises `ohos.want.action.sendData`. Sampled logs showed the share extension lifecycle and no xopc JS crash or app freeze.
+- Host verification: 50 test files / 327 tests passed. The signed debug HAP built successfully after one ArkTS syntax correction and was reinstalled successfully.
+- The temporary 10-minute screen-off override used during UI automation was restored. No app data was cleared, no share was revoked or extended, and no test message was sent.
+
+Local evidence is kept under ignored `.test/device-share-20260923/`, including the history list, action sheet, QR, ArkWeb preview, system share sheet and post-fix inbound preview screenshots/UI trees.
+## Chat message layout and result density (2026-09-23)
+
+- Installed the signed Debug HAP over the existing app without clearing pairing or session data.
+- Confirmed short user messages render as a compact right-aligned light-accent bubble with the copy/edit actions aligned beneath it.
+- The first max-width-only implementation clipped long user text on the right; this was rejected during device inspection and replaced with an explicit adaptive width (short messages) / 82% width (long or attachment messages) contract so text wraps.
+- Confirmed an eight-file assistant deliverable block now renders a 3-row preview with a count header and `查看另外 5 项产出` control instead of an eight-row full-height card.
+- No message was sent, no attachment was opened/shared, and no conversation data was modified.
+- Evidence: `.test/chat-message-layout-20260923/compact-results-ready.jpeg`, `.test/chat-message-layout-20260923/user-message-4.jpeg` (the latter documents the rejected clipped intermediate build).
+
+## Thinking and tool work-log parity (2026-09-23)
+
+- Rebuilt and installed the signed Debug HAP after aligning the Harmony execution disclosure with the WebUI work-log hierarchy. Final installed HAP SHA-256: `d7d5e4c0f8a59ede405cb440b0ed3997d4f4fe820c9106f6cd93e1d4fba5eb35`.
+- Host verification passed: 52 test files / 334 tests; Hvigor completed the signed Debug build successfully. Existing capability/exception warnings remain and were not hidden.
+- Installation and `EntryAbility` startup succeeded without uninstalling or clearing app data. No message was sent and no conversation, tool result or attachment was mutated.
+- The first post-launch capture showed the app reconnecting. The phone then auto-locked before the real conversation and disclosure could be visually inspected. Final compact-row appearance and expand/collapse interaction therefore remain pending an unlocked screen; the lock-screen capture is not acceptance evidence.

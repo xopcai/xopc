@@ -182,7 +182,7 @@ export struct XopcChatMediaView {
             Text(this.file.name || this.file.type).fontSize(13).fontWeight(FontWeight.Medium).fontColor($r('app.color.foreground'))
               .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
             SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([$r('app.color.tertiary')])
-          }.width('100%').constraintSize({ minHeight: 56 }).padding({ left: 12, right: 12 })
+          }.width('100%').constraintSize({ minHeight: 48 }).padding({ left: 12, right: 12 })
         }.id('chat-preview-' + this.file.id).width('100%').padding(0)
           .backgroundColor(this.embedded ? Color.Transparent : $r('app.color.input'))
           .border({ width: this.embedded ? 0 : 0.5, color: $r('app.color.border_subtle'), radius: 10 })

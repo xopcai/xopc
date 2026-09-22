@@ -5,10 +5,18 @@ import {
   getClarification,
   isClarificationSuspended,
 } from '../../storage/sqlite/clarification-wait-repository.js';
-import type { Agent, AgentMessage, AgentTurnDecision } from '@earendil-works/pi-agent-core';
+import type {
+  Agent,
+  AgentMessage,
+  AgentRequestUpdate,
+  AgentTurnDecision,
+} from '@earendil-works/pi-agent-core';
 import {
+  createAssistantMessageEventStream,
   getCurrentSystemPrompt,
   getCurrentTools,
+  isRecoverableLength,
+  type AssistantMessage,
   type Model,
   type Api,
 } from '@earendil-works/pi-ai';
@@ -35,7 +43,7 @@ import { acquireEmbeddedSessionRunner, evictEmbeddedSessionRunner } from './sess
 import { createSqliteTranscriptRuntime } from './transcript-runtime.js';
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
 import { projectContextForModel } from '../memory/context-budget.js';
-import { assessContext, recoverContext, ContextRecoveryError } from '../memory/context-recovery.js';
+import { assessContext, recoverContext } from '../memory/context-recovery.js';
 import { resolveCompactionPolicy, type ResolvedCompactionPolicy } from '../memory/compaction-policy.js';
 import { isContextOverflowError } from '../orchestration/context-overflow.js';
 import {
@@ -52,6 +60,7 @@ import { RepositoryInstructions } from '../coding/repository-instructions.js';
 import { RunVerification } from '../coding/run-verification.js';
 import { withDelegationScope } from '../orchestration/delegation-scope.js';
 import { runWithEmbeddedExecutionSession } from './execution-context.js';
+import type { CompactionDiscardedAttempt } from '../memory/compaction.js';
 
 const log = createLogger('EmbeddedRun');
 const LOG_PREVIEW_MAX_CHARS = 300;
@@ -144,7 +153,65 @@ function userMessageToPromptText(message: AgentMessage): string {
   return '';
 }
 
-async function maybeRecoverContextOverflow(params: {
+function lastAssistantMessage(messages: readonly AgentMessage[]): AssistantMessage | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role === 'assistant') return message as AssistantMessage;
+  }
+  return undefined;
+}
+
+function discardedAttempt(message: AssistantMessage): CompactionDiscardedAttempt {
+  return {
+    assistantTimestamp: message.timestamp,
+    provider: message.provider,
+    model: message.model,
+    toolCallIds: message.content.flatMap(block => block.type === 'toolCall' ? [block.id] : []),
+  };
+}
+
+function isRecoverableLengthForModel(message: AssistantMessage, model: Model<Api>): boolean {
+  return message.provider === model.provider
+    && message.model === model.id
+    && isRecoverableLength(message, model.maxTokens ?? 0);
+}
+
+function withRecoveredMessages(
+  current: readonly AgentMessage[],
+  recovered: readonly AgentMessage[],
+): AgentMessage[] {
+  return [
+    ...current.filter(message => message.role === 'system'),
+    ...recovered.filter(message => message.role !== 'system'),
+  ];
+}
+
+function createContextErrorStream(model: Model<Api>, errorMessage: string) {
+  const stream = createAssistantMessageEventStream();
+  const error: AssistantMessage = {
+    role: 'assistant',
+    content: [],
+    api: model.api,
+    provider: model.provider,
+    model: model.id,
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+    stopReason: 'error',
+    errorMessage,
+    timestamp: Date.now(),
+  };
+  stream.push({ type: 'error', reason: 'error', error });
+  stream.end(error);
+  return stream;
+}
+
+async function recoverRunContext(params: {
   agent: Agent;
   model: Model<Api>;
   conversationId: string;
@@ -153,46 +220,93 @@ async function maybeRecoverContextOverflow(params: {
   onEvent?: RunXopcEmbeddedTurnParams['onEvent'];
   policy: ResolvedCompactionPolicy;
   systemPrompt: string;
-}): Promise<boolean> {
-  const errorMessage = getAssistantTurnErrorMessage(params.agent);
-  if (!errorMessage || !isContextOverflowError(errorMessage)) return false;
-
-  const messages = stripTrailingErrorAssistantMessages(params.agent.state.messages);
-  log.warn(
-    { conversationId: params.conversationId, errorMessage, messageCount: messages.length },
-    'Provider rejected the context window; compacting and retrying the same turn',
-  );
-  params.onEvent?.({ type: 'compaction', status: 'started' });
-
+  providerRejected?: boolean;
+  discardedAttempt?: CompactionDiscardedAttempt;
+}): Promise<Awaited<ReturnType<typeof recoverContext>>> {
+  let started = false;
   const summaryModel = params.policy.model
     ? (await import('../../providers/index.js')).resolveModel(params.policy.model) as Model<Api>
     : params.model;
-  const recovered = await recoverContext({
-    conversationId: params.conversationId,
-    transcript: params.transcriptRuntime,
-    policy: params.policy,
-    budget: {
-      contextWindow: params.model.contextWindow ?? 128_000,
-      systemPrompt: params.systemPrompt,
-      tools: params.agent.state.tools,
-      reserveTokens: params.policy.reserveTokens,
-      triggerThreshold: params.policy.triggerThreshold,
-      minToolResultKeepChars: params.policy.minToolResultKeepChars,
-    },
-    summaryModel,
-    fallbackModels: summaryModel === params.model ? [] : [params.model],
-    signal: params.abortSignal,
-    providerRejected: true,
-    preserveLastUser: true,
-  }).catch((error: unknown) => {
-    params.onEvent?.({ type: 'compaction', status: 'skipped' });
+  try {
+    const recovered = await recoverContext({
+      conversationId: params.conversationId,
+      transcript: params.transcriptRuntime,
+      policy: params.policy,
+      budget: {
+        contextWindow: params.model.contextWindow ?? 128_000,
+        systemPrompt: params.systemPrompt,
+        tools: params.agent.state.tools,
+        reserveTokens: params.policy.reserveTokens,
+        triggerThreshold: params.policy.triggerThreshold,
+        minToolResultKeepChars: params.policy.minToolResultKeepChars,
+      },
+      summaryModel,
+      fallbackModels: summaryModel === params.model ? [] : [params.model],
+      signal: params.abortSignal,
+      providerRejected: params.providerRejected,
+      forceOnTrigger: true,
+      preserveLastUser: params.providerRejected,
+      discardedAttempt: params.discardedAttempt,
+      onCompactionStart: () => {
+        if (started) return;
+        started = true;
+        params.onEvent?.({ type: 'compaction', status: 'started' });
+      },
+    });
+    if (recovered.status === 'compacted') {
+      params.onEvent?.({ type: 'compaction', status: 'completed',
+        tokensBefore: recovered.result?.tokensBefore, tokensAfter: recovered.result?.tokensAfter,
+        summary: recovered.result?.summary.slice(0, 200) });
+    } else if (started) {
+      params.onEvent?.({ type: 'compaction', status: 'skipped' });
+    }
+    return recovered;
+  } catch (error) {
+    if (started) params.onEvent?.({ type: 'compaction', status: 'skipped' });
     throw error;
+  }
+}
+
+async function maybeRecoverInterruptedContext(params: {
+  agent: Agent;
+  model: Model<Api>;
+  conversationId: string;
+  transcriptRuntime: NonNullable<RunXopcEmbeddedTurnParams['transcriptRuntime']>;
+  abortSignal?: AbortSignal;
+  onEvent?: RunXopcEmbeddedTurnParams['onEvent'];
+  policy: ResolvedCompactionPolicy;
+  systemPrompt: string;
+  recoveryState: { interruptedAttempts: number };
+  onContextRecovered?: () => void;
+}): Promise<boolean> {
+  const assistant = lastAssistantMessage(params.agent.state.messages);
+  const errorMessage = getAssistantTurnErrorMessage(params.agent);
+  const overflow = !!errorMessage && isContextOverflowError(errorMessage);
+  const recoverableLength = !!assistant && isRecoverableLengthForModel(assistant, params.model);
+  if (!overflow && !recoverableLength) return false;
+  if (recoverableLength && (!params.policy.enabled || params.recoveryState.interruptedAttempts >= 1)) {
+    log.warn({ conversationId: params.conversationId, attempts: params.recoveryState.interruptedAttempts },
+      'Truncated response recovery is unavailable or already exhausted');
+    return false;
+  }
+  if (recoverableLength) params.recoveryState.interruptedAttempts += 1;
+
+  const messages = stripTrailingErrorAssistantMessages(params.agent.state.messages);
+  log.warn(
+    { conversationId: params.conversationId, errorMessage, messageCount: messages.length,
+      reason: recoverableLength ? 'length' : 'context_overflow' },
+    recoverableLength
+      ? 'Assistant response was truncated; compacting and retrying the same turn once'
+      : 'Provider rejected the context window; compacting and retrying the same turn',
+  );
+  const recovered = await recoverRunContext({
+    ...params,
+    providerRejected: true,
+    discardedAttempt: recoverableLength && assistant ? discardedAttempt(assistant) : undefined,
   });
   params.agent.state.messages = stripTrailingErrorAssistantMessages(recovered.messages);
+  params.onContextRecovered?.();
   params.abortSignal?.throwIfAborted();
-  params.onEvent?.({ type: 'compaction', status: 'completed',
-    tokensBefore: recovered.result?.tokensBefore, tokensAfter: recovered.result?.tokensAfter,
-    summary: recovered.result?.summary.slice(0, 200) });
   await params.agent.continue();
   await params.agent.waitForIdle();
   return true;
@@ -229,6 +343,8 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
   let unsubscribe: (() => void) | undefined;
   let quarantineRunner = false;
   let runLease: ReturnType<typeof acquireEmbeddedRunLease> | undefined;
+  let restorePrepareNextTurn: (() => void) | undefined;
+  let restorePrepareRequest: (() => void) | undefined;
 
   try {
     runLease = acquireEmbeddedRunLease({
@@ -261,6 +377,78 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     }
     session.agent.state.messages = stripTrailingErrorAssistantMessages(await transcriptRuntime.loadMessages());
     runner.piSm.setActiveTurnId?.(runId);
+    const recoveryState = { interruptedAttempts: 0 };
+    let useAuthoritativeProjection = false;
+    const basePrepareNextTurn = session.agent.prepareNextTurnWithContext;
+    const inTurnPrepareNextTurn: typeof session.agent.prepareNextTurnWithContext = async (turn, signal) => {
+      const prepared = await basePrepareNextTurn?.(turn, signal);
+      const currentContext = prepared?.context ?? turn.context;
+      const recoverableLength = isRecoverableLengthForModel(turn.message, resolvedModel);
+      if (recoverableLength && (!compactionPolicy.enabled || recoveryState.interruptedAttempts >= 1)) {
+        return prepared;
+      }
+      if (recoverableLength) recoveryState.interruptedAttempts += 1;
+      try {
+        const recovered = await recoverRunContext({
+          agent: session.agent,
+          model: resolvedModel,
+          conversationId,
+          transcriptRuntime,
+          policy: compactionPolicy,
+          systemPrompt: [systemPrompt, rootInstructions].filter(Boolean).join('\n\n'),
+          abortSignal: signal ?? runAbortSignal,
+          onEvent,
+          providerRejected: recoverableLength,
+          discardedAttempt: recoverableLength ? discardedAttempt(turn.message) : undefined,
+        });
+        useAuthoritativeProjection ||= recovered.status === 'compacted';
+        return {
+          ...prepared,
+          context: {
+            ...currentContext,
+            messages: withRecoveredMessages(currentContext.messages, recovered.messages),
+          },
+        };
+      } catch (error) {
+        if (signal?.aborted || runAbortSignal.aborted) throw error;
+        log.error({ err: error, conversationId, runId, phase: 'prepare_next_turn' },
+          'In-turn context recovery failed; the next request will use the guarded provider path');
+        return prepared;
+      }
+    };
+    session.agent.prepareNextTurnWithContext = inTurnPrepareNextTurn;
+    restorePrepareNextTurn = () => {
+      if (session.agent.prepareNextTurnWithContext === inTurnPrepareNextTurn) {
+        session.agent.prepareNextTurnWithContext = basePrepareNextTurn;
+      }
+    };
+    const basePrepareRequest = session.agent.prepareRequest;
+    const authoritativePrepareRequest: typeof session.agent.prepareRequest = async (request, signal) => {
+      const prepared = await basePrepareRequest?.(request, signal) as AgentRequestUpdate | undefined;
+      const currentContext = prepared?.context ?? request.context;
+      if (!useAuthoritativeProjection) return { ...prepared, context: currentContext };
+      try {
+        const messages = await transcriptRuntime.loadMessages();
+        return {
+          ...prepared,
+          context: {
+            ...currentContext,
+            messages: withRecoveredMessages(currentContext.messages, messages),
+          },
+        };
+      } catch (error) {
+        if (signal?.aborted || runAbortSignal.aborted) throw error;
+        log.error({ err: error, conversationId, runId, phase: 'prepare_request' },
+          'Failed to refresh the authoritative compacted projection');
+        return prepared;
+      }
+    };
+    session.agent.prepareRequest = authoritativePrepareRequest;
+    restorePrepareRequest = () => {
+      if (session.agent.prepareRequest === authoritativePrepareRequest) {
+        session.agent.prepareRequest = basePrepareRequest;
+      }
+    };
 
     const streamFnWithXopcExtensions = wrapStreamFnForXopcExtensions(
       session.agent.streamFunction,
@@ -322,8 +510,11 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
         minToolResultKeepChars: compactionPolicy.minToolResultKeepChars,
       }, compactionPolicy.maxActiveTranscriptBytes);
       if (!assessed.fits) {
-        throw new ContextRecoveryError('unrecoverable',
-          `Context budget exceeded before provider request (${assessed.evaluation.estimatedTokens}/${assessed.evaluation.hardLimitTokens} tokens)`);
+        const errorMessage = `Context budget exceeded before provider request (${assessed.evaluation.estimatedTokens}/${assessed.evaluation.hardLimitTokens} tokens)`;
+        log.error({ conversationId, runId, phase: 'provider_preflight',
+          estimatedTokens: assessed.evaluation.estimatedTokens,
+          hardLimitTokens: assessed.evaluation.hardLimitTokens }, errorMessage);
+        return createContextErrorStream(streamModel, errorMessage);
       }
       effectiveContext = { ...effectiveContext, messages: assessed.messages as typeof effectiveContext.messages };
       effectiveSystemPrompt = getCurrentSystemPrompt(effectiveContext.messages);
@@ -420,6 +611,11 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     session.agent.finishTurn = async (context, signal): Promise<AgentTurnDecision | undefined> => {
       const baseDecision = await baseFinishTurn?.(context, signal);
       if (baseDecision && baseDecision.action === 'end') return { action: 'end' };
+      if (context.message && isRecoverableLengthForModel(context.message, resolvedModel)
+        && recoveryState.interruptedAttempts >= 1) {
+        log.warn({ conversationId, runId }, 'Stopping after the bounded truncated-response recovery attempt');
+        return { action: 'end' };
+      }
       policyStopped ||= params.turnPolicy?.shouldStopAfterTurn(context) ?? false;
       if (policyStopped || connectionStopped || clarificationStopped) return { action: 'end' };
       if (baseDecision && baseDecision.action === 'continue') return { action: 'continue' };
@@ -469,7 +665,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
             log,
             signal: runAbortSignal,
           });
-          await maybeRecoverContextOverflow({
+          await maybeRecoverInterruptedContext({
             agent: session.agent,
             model: resolvedModel,
             conversationId,
@@ -478,6 +674,8 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
             systemPrompt: [systemPrompt, rootInstructions].filter(Boolean).join('\n\n'),
             abortSignal: runAbortSignal,
             onEvent,
+            recoveryState,
+            onContextRecovered: () => { useAuthoritativeProjection = true; },
           });
           // One bounded continuation closes accidental early completion without
           // forcing impossible checks or bypassing user cancellation and budgets.
@@ -527,6 +725,10 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       };
     } finally {
       session.agent.finishTurn = baseFinishTurn;
+      restorePrepareNextTurn();
+      restorePrepareNextTurn = undefined;
+      restorePrepareRequest();
+      restorePrepareRequest = undefined;
       runAbortSignal.removeEventListener('abort', abortListener);
     }
   } catch (err) {
@@ -542,6 +744,8 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     onEvent?.({ type: 'error', content: em, runId });
     return { ok: false, errorMessage: em };
   } finally {
+    restorePrepareNextTurn?.();
+    restorePrepareRequest?.();
     runLease?.release();
     unsubscribe?.();
     try {

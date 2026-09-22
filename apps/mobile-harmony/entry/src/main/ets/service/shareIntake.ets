@@ -4,6 +4,9 @@ import { gatewaySession } from './gatewaySession';
 interface XopcShareCaptureBody { text: string; channel: string; platform: string; }
 interface XopcShareCaptureResult { note?: XopcShareCaptureNote; }
 interface XopcShareCaptureNote { id: string; }
+interface XopcShareHandoff { title: string; values: string[]; }
+
+export const SHARE_INTAKE_URI = 'xopc://intake';
 
 const SECRET_ASSIGNMENT = /\b(password|passwd|secret|token|api[_-]?key)(\s*[:=]\s*)(["']?)[^\n,;]+(["']?)/gi;
 const JWT = /\beyJ[a-zA-Z0-9_-]{12,}\.[a-zA-Z0-9_-]{12,}\.[a-zA-Z0-9_-]{12,}\b/g;
@@ -63,6 +66,25 @@ export function incomingShare(title: string, values: string[]): XopcIncomingShar
   JWT.lastIndex = 0; EMAIL.lastIndex = 0; PHONE.lastIndex = 0; CARD.lastIndex = 0; SECRET.lastIndex = 0; SECRET_ASSIGNMENT.lastIndex = 0;
   const kind = kindOf(content);
   return { title: title.trim(), content, chatPrompt: promptFor(kind, content), kind, preview: preview.slice(0, 1200), sensitive };
+}
+
+export function encodeShareHandoff(title: string, values: string[]): string {
+  const handoff: XopcShareHandoff = { title, values };
+  return JSON.stringify(handoff);
+}
+
+export function decodeShareHandoff(payload: string): XopcIncomingShare | undefined {
+  try {
+    const handoff = JSON.parse(payload) as XopcShareHandoff;
+    if (typeof handoff.title !== 'string' || !Array.isArray(handoff.values)) return undefined;
+    const values: string[] = [];
+    for (let index = 0; index < handoff.values.length; index++) {
+      const value = handoff.values[index];
+      if (typeof value !== 'string') return undefined;
+      values.push(value);
+    }
+    return incomingShare(handoff.title, values);
+  } catch (_) { return undefined; }
 }
 
 @ObservedV2

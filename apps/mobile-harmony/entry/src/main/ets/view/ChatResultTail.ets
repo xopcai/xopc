@@ -5,6 +5,7 @@ import { artifactMedia, chatDeliveries, chatProductCapability } from '../common/
 import { markdownLink } from '../common/markdown';
 import { XopcChatMediaView } from './ChatMediaView';
 import { appSettings } from '../service/settings';
+import { hiddenResultCount, previewArtifacts, previewDeliveries } from '../common/chatResultPreview';
 
 @ComponentV2
 export struct XopcChatResultTail {
@@ -13,9 +14,11 @@ export struct XopcChatResultTail {
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Event onFillDraft: (text: string) => void = (_text: string): void => {};
   @Computed get deliveries(): XopcProductDelivery[] { return chatDeliveries(this.row); }
-  @Computed get visibleDeliveries(): XopcProductDelivery[] { return this.deliveries.slice(0, 3); }
-  @Computed get hiddenDeliveryCount(): number { return Math.max(0, this.deliveries.length - this.visibleDeliveries.length); }
   @Computed get artifacts(): XopcArtifact[] { return this.row.outcome?.deliverables || []; }
+  @Local expanded: boolean = false;
+  @Computed get visibleArtifacts(): XopcArtifact[] { return previewArtifacts(this.artifacts, this.expanded); }
+  @Computed get visibleDeliveries(): XopcProductDelivery[] { return previewDeliveries(this.artifacts, this.deliveries, this.expanded); }
+  @Computed get hiddenCount(): number { return hiddenResultCount(this.artifacts, this.deliveries); }
   private status(artifact: XopcArtifact): Resource {
     if (artifact.availability === 'materializing') return $r('app.string.chat_artifact_materializing');
     if (artifact.availability === 'expired') return $r('app.string.chat_artifact_expired');
@@ -80,7 +83,13 @@ export struct XopcChatResultTail {
   build() {
     if (!this.row.live && (this.artifacts.length || this.deliveries.length)) {
       Column({ space: 4 }) {
-          Repeat<XopcArtifact>(this.artifacts).each((item: RepeatItem<XopcArtifact>) => {
+          Row({ space: 8 }) {
+            SymbolGlyph($r('sys.symbol.doc_plaintext')).fontSize(17).fontColor([$r('app.color.secondary')])
+            Text($r('app.string.chat_deliverables')).fontSize(13).fontWeight(FontWeight.Medium)
+              .fontColor($r('app.color.secondary')).layoutWeight(1)
+            Text((this.artifacts.length + this.deliveries.length).toString()).fontSize(12).fontColor($r('app.color.tertiary'))
+          }.height(36).padding({ left: 12, right: 12 }).width('100%')
+          Repeat<XopcArtifact>(this.visibleArtifacts).each((item: RepeatItem<XopcArtifact>) => {
             if (item.item.availability === 'available' && (item.item.uri || item.item.workspaceRelativePath)) {
               XopcChatMediaView({ file: artifactMedia(item.item), conversationId: this.conversationId, compact: true, embedded: true })
             } else if (item.item.availability === 'available' && markdownLink(item.item.shareUrl || '')) {
@@ -91,7 +100,7 @@ export struct XopcChatResultTail {
                     .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                   SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([$r('app.color.tertiary')])
                 }.width('100%')
-              }.id('chat-artifact-' + item.item.artifactId).constraintSize({ minHeight: 56 }).padding({ left: 12, right: 12 })
+              }.id('chat-artifact-' + item.item.artifactId).constraintSize({ minHeight: 48 }).padding({ left: 12, right: 12 })
                 .width('100%').borderRadius(10).backgroundColor(Color.Transparent)
                 .accessibilityText(item.item.title).onClick((): void => { this.openLink(item.item.shareUrl || ''); })
             } else {
@@ -102,7 +111,7 @@ export struct XopcChatResultTail {
                     .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                   Text(this.status(item.item)).fontSize(12).fontColor($r('app.color.secondary')).maxLines(1)
                 }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-              }.id('chat-artifact-' + item.item.artifactId).width('100%').constraintSize({ minHeight: 56 })
+              }.id('chat-artifact-' + item.item.artifactId).width('100%').constraintSize({ minHeight: 48 })
                 .padding({ left: 12, right: 12 }).borderRadius(10)
             }
           }).key((artifact: XopcArtifact): string => artifact.artifactId)
@@ -119,13 +128,15 @@ export struct XopcChatResultTail {
                   SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([$r('app.color.tertiary')])
                 }
               }.width('100%')
-            }.id('chat-product-' + item.item.primary?.id).constraintSize({ minHeight: 56 }).padding({ left: 12, right: 12 })
+            }.id('chat-product-' + item.item.primary?.id).constraintSize({ minHeight: 48 }).padding({ left: 12, right: 12 })
               .width('100%').borderRadius(10).backgroundColor(Color.Transparent).enabled(this.canOpenProduct(item.item.primary))
               .accessibilityText((item.item.primary?.title || '')).onClick((): void => { this.openProduct(item.item.primary); })
           }).key((delivery: XopcProductDelivery): string => delivery.operation + ':' + delivery.primary?.kind + ':' + delivery.primary?.id)
-          if (this.hiddenDeliveryCount > 0) {
-            Text($r('app.string.chat_more_results', this.hiddenDeliveryCount)).height(44).fontSize(13)
-              .fontWeight(FontWeight.Medium).fontColor($r('app.color.accent')).padding({ left: 12, right: 12 })
+          if (this.hiddenCount > 0) {
+            Button(this.expanded ? $r('app.string.chat_fewer_deliverables') : $r('app.string.chat_more_deliverables', this.hiddenCount))
+              .id('chat-result-toggle-' + this.row.id).height(44).width('100%').fontSize(13)
+              .fontWeight(FontWeight.Medium).fontColor($r('app.color.accent')).backgroundColor(Color.Transparent)
+              .onClick((): void => { this.expanded = !this.expanded; })
           }
       }.id('chat-result-tail-' + this.row.id).width('88%').constraintSize({ maxWidth: 420 }).padding(4)
         .borderRadius(14).backgroundColor($r('app.color.input'))

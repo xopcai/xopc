@@ -1,4 +1,6 @@
-import { common } from '@kit.AbilityKit';
+import { common, wantAgent } from '@kit.AbilityKit';
+import { avSession } from '@kit.AVSessionKit';
+import { backgroundTaskManager } from '@kit.BackgroundTasksKit';
 import { media } from '@kit.MediaKit';
 import { http } from '@kit.NetworkKit';
 import { fileIo as fs } from '@kit.CoreFileKit';
@@ -26,6 +28,8 @@ export class XopcChatReadAloud {
   private chunkIndex: number = 0;
   private language: string = 'en-US';
   private context?: common.Context;
+  private session?: avSession.AVSession;
+  private backgroundRunning: boolean = false;
 
   async speak(context: common.Context, text: string, id: string, language: string): Promise<void> {
     const cleanup = this.stop();
@@ -34,7 +38,37 @@ export class XopcChatReadAloud {
     if (generation !== this.generation) return;
     this.context = context; this.chunks = chatSpeechChunks(text); this.chunkIndex = 0; this.sourceId = id;
     this.language = chatSpeechLanguage(text, language); this.error = '';
+    await this.startPlaybackSession(context, id, generation);
+    if (generation !== this.generation) return;
     if (this.chunks.length) await this.next(generation);
+  }
+  private async startPlaybackSession(context: common.Context, id: string, generation: number): Promise<void> {
+    try {
+      const session = await avSession.createAVSession(context, 'xopc-chat-read-aloud', 'audio');
+      if (generation !== this.generation) { await session.destroy(); return; }
+      this.session = session;
+      session.on('play', (): void => { this.player?.play().catch((_error: Error): void => {}); });
+      session.on('pause', (): void => { this.player?.pause().catch((_error: Error): void => {}); });
+      session.on('stop', (): void => { this.stop().catch((_error: Error): void => {}); });
+      await session.setAVMetadata({ assetId: id, title: 'xopc', artist: 'Chat read aloud' });
+      await session.activate();
+      if (generation !== this.generation) return;
+      const agent = await wantAgent.getWantAgent({
+        wants: [{ bundleName: 'ai.xopc.mobile', abilityName: 'EntryAbility' }],
+        actionType: wantAgent.OperationType.START_ABILITY,
+        requestCode: 0,
+        actionFlags: [wantAgent.WantAgentFlags.UPDATE_PRESENT_FLAG]
+      });
+      await backgroundTaskManager.startBackgroundRunning(context, backgroundTaskManager.BackgroundMode.AUDIO_PLAYBACK, agent);
+      if (generation === this.generation) this.backgroundRunning = true;
+      else await backgroundTaskManager.stopBackgroundRunning(context);
+    } catch (_) {
+      // Playback remains usable in the foreground when a system media service is unavailable.
+    }
+  }
+  private updatePlaybackSession(state: avSession.PlaybackState): void {
+    this.session?.setAVPlaybackState({ state, speed: 1, position: { elapsedTime: this.position, updateTime: Date.now() } })
+      .catch((_error: Error): void => {});
   }
   private async next(generation: number): Promise<void> {
     if (generation !== this.generation || !this.context || this.chunkIndex >= this.chunks.length) { if (generation === this.generation) this.stop(); return; }
@@ -67,7 +101,8 @@ export class XopcChatReadAloud {
         if (generation !== this.generation || this.player !== player) return;
         if (state === 'initialized') player.prepare().catch((error: Error): void => { this.fail(error, generation); });
         else if (state === 'prepared') { this.duration = player.duration; player.play().catch((error: Error): void => { this.fail(error, generation); }); }
-        else if (state === 'playing' || state === 'paused') this.state = state;
+        else if (state === 'playing') { this.state = state; this.updatePlaybackSession(avSession.PlaybackState.PLAYBACK_STATE_PLAY); }
+        else if (state === 'paused') { this.state = state; this.updatePlaybackSession(avSession.PlaybackState.PLAYBACK_STATE_PAUSE); }
         else if (state === 'completed') this.advance(generation);
       });
       player.on('timeUpdate', (time: number): void => { if (generation === this.generation) this.position = time; });
@@ -98,8 +133,19 @@ export class XopcChatReadAloud {
   }
   async stop(): Promise<void> {
     this.generation++; this.request?.destroy(); this.request = undefined;
-    this.state = 'idle'; this.sourceId = ''; await this.releaseOutput();
+    this.state = 'idle'; this.sourceId = ''; await this.releaseOutput(); await this.releasePlaybackSession();
   }
+  private async releasePlaybackSession(): Promise<void> {
+    const context = this.context; const session = this.session; const backgroundRunning = this.backgroundRunning;
+    this.session = undefined; this.backgroundRunning = false; this.context = undefined;
+    if (session) {
+      try { await session.setAVPlaybackState({ state: avSession.PlaybackState.PLAYBACK_STATE_STOP }); } catch (_) {}
+      try { await session.deactivate(); } catch (_) {}
+      try { await session.destroy(); } catch (_) {}
+    }
+    if (context && backgroundRunning) { try { await backgroundTaskManager.stopBackgroundRunning(context); } catch (_) {} }
+  }
+  leaveForeground(): void { this.continuousConversationId = ''; }
   disableContinuous(): void { this.continuousConversationId = ''; this.stop(); }
 }
 export const chatReadAloud: XopcChatReadAloud = new XopcChatReadAloud();

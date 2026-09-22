@@ -10,7 +10,6 @@ type BubbleProps = {
   messageIndex?: number;
   suppressAssistantActions?: boolean;
   deleteRoundDisabled?: boolean;
-  sendFlightHidden?: boolean;
 };
 
 const { propsByMessageIndex } = vi.hoisted(() => ({
@@ -87,47 +86,5 @@ describe('MessageList streaming row props', () => {
     });
 
     expect(container.querySelector('[data-testid="trailing-content"]')?.textContent).toBe('Browser setup');
-  });
-
-  it('keeps the destination row hidden through optimistic acceptance', () => {
-    const animatedList: Message[] = [
-      ...list,
-      {
-        role: 'user',
-        content: [{ type: 'text', text: 'Flying message' }],
-        renderKey: 'chat-row:flight',
-      },
-    ];
-    act(() => {
-      root.render(
-        <MessageList
-          messages={animatedList}
-          streaming={false}
-          progress={null}
-          reasoningLevel="stream"
-          registerListContentRef={() => {}}
-          activeSendFlight={{
-            clientSubmissionId: 'already-accepted',
-            messageRenderKey: 'chat-row:flight',
-          }}
-        />,
-      );
-    });
-
-    expect(propsByMessageIndex.get(4)?.sendFlightHidden).toBe(true);
-
-    act(() => {
-      root.render(
-        <MessageList
-          messages={animatedList}
-          streaming={false}
-          progress={null}
-          reasoningLevel="stream"
-          registerListContentRef={() => {}}
-          activeSendFlight={null}
-        />,
-      );
-    });
-    expect(propsByMessageIndex.get(4)?.sendFlightHidden).toBe(false);
   });
 });

@@ -32,9 +32,6 @@ import {
   interpolate,
   MAX_COMPOSER_CONTEXT_REFS,
   type ComposerContextRef,
-  type ComposerDispatchReceipt,
-  type ComposerDraft,
-  type ComposerSendFlightEvent,
   type ComposerSendHandler,
   type WireAttachment,
 } from '@/features/chat/composer/composer.types';
@@ -129,7 +126,6 @@ export const ChatComposer = memo(function ChatComposer({
   prepareVoiceSession,
   editingUserTurnId,
   onCancelUserMessageEdit,
-  onSendFlightDispatched,
 }: {
   placeholder?: string;
   disabled: boolean;
@@ -179,7 +175,6 @@ export const ChatComposer = memo(function ChatComposer({
   prepareVoiceSession?: () => Promise<string>;
   editingUserTurnId?: string | null;
   onCancelUserMessageEdit?: () => void;
-  onSendFlightDispatched?: (event: ComposerSendFlightEvent) => void;
 }) {
   const call = useVoiceCall();
   const preparingCallRef = useRef(false);
@@ -466,22 +461,6 @@ export const ChatComposer = memo(function ChatComposer({
     lastLoadedEditFollowUpIdRef.current = null;
   }, []);
 
-  const handleSendDispatched = useCallback((receipt: ComposerDispatchReceipt, draft: ComposerDraft) => {
-    if (!onSendFlightDispatched || draft.text.trimStart().startsWith('/')) return;
-    const source = editor.editorRef.current?.getBoundingClientRect();
-    if (!source || source.width <= 0 || source.height <= 0) return;
-    onSendFlightDispatched({
-      receipt,
-      draft,
-      sourceRect: {
-        left: source.left,
-        top: source.top,
-        width: source.width,
-        height: source.height,
-      },
-    });
-  }, [editor.editorRef, onSendFlightDispatched]);
-
   const actions = useComposerActions({
     chat: m.chat,
     runBusy,
@@ -506,7 +485,6 @@ export const ChatComposer = memo(function ChatComposer({
     clearContextRefs: () => setContextRefs([]),
     clearEditFollowUpRef,
     onUserTextCommitted,
-    onSendDispatched: handleSendDispatched,
   });
 
   useLayoutEffect(() => {
