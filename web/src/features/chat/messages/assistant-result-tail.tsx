@@ -214,7 +214,8 @@ export function AssistantResultTail({
   conversationId?: string | null;
   projectId?: string | null;
 }) {
-  const language = useLocaleStore((state) => state.language) === 'zh' ? 'zh' : 'en';
+  const localeLanguage = useLocaleStore((state) => state.language);
+  const language = localeLanguage === 'zh' ? 'zh' : 'en';
   const preview = useAttachmentPreview({ layout: 'assistant', conversationId, projectId });
   const diffPresentations = productDeliveryDiffPresentations(view.deliveries);
   const queryState = productDeliveryQueryState(view.deliveries);
