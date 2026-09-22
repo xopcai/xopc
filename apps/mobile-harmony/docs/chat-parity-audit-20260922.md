@@ -7,8 +7,9 @@
 | 主页面/抽屉/底部导航 | `ChatScreen`、`ChatNavigationDrawer` | 已原地切换会话，保留主导航；需新包键盘/切换回归 | 验收 |
 | 输入/草稿/排队 | `composer-*`、`use-composer-attachments` | 草稿、引用、next/steer、排队编辑/取消已有；失败重试、版本冲突需隔离端到端测试 | P1 |
 | 用户消息/图片解析 | `wire-text-scrub`、`wire-attachments` | 已移植模型内部文本清洗，保留结构化媒体；复杂历史附件继续同样例对照 | 回归 |
-| AI/Thinking/Tool | `assistant-turn-view-model`、`AssistantStepsBlock`、`ToolUseBlock` | 有顺序块、状态、输入输出、折叠；缺完整计时/专用工具细节及同屏视觉比对 | P1 |
-| Review/交付物 | `ProductDeliveryCard`、`AssistantResultTail` | review、文件可用性、权限控制、继续对话已有；真实产物打开/分享尚未全验收 | P1 |
+| 用户消息布局 | `MessageBubble`、`MessageActionsBar`、`styles.chatLayout` | 已移除整行卡片背景，改为右侧内容气泡：最大宽度 82%、14×10 内边距、浅强调色、Telegram 式右下收口；操作栏随用户消息靠右，AI 内容保持透明全宽 | 真机视觉验收 |
+| AI/Thinking/Tool | `assistant-turn-view-model`、`AssistantStepsBlock`、`ToolUseBlock` | 已按 WebUI 工作记录层级收敛：整轮单行摘要、运行中语义动作、完成默认折叠、原始 thinking 不面向普通用户铺开、工具参数/输出进入二级详情、失败摘要直接露出；缺完整计时、开发者原始数据开关、专用工具结果卡及解锁后的同屏视觉比对 | P1 验收/开发 |
+| Review/交付物 | `ProductDeliveryCard`、`AssistantResultTail` | review、文件可用性、权限控制、继续对话已有；产出默认合并限制为 3 行、显示总数并显式展开，其余行高压缩至 48vp；真实产物打开/分享尚未全验收 | P1 |
 | 历史分页/性能 | `use-session-history`、滚动几何/跟随逻辑 | 有自动分页、锚点、虚拟列表和快照重叠保留；长消息高度变化及快速切换需实测 | P0 验收 |
 | 离线历史/预取 | `session-history-cache`、`session-history-prefetch` | 本轮补充有界安全首屏缓存、陈旧提示、网络覆盖和删除/重置失效；后台旧页预取、完整离线历史尚缺 | P0 验收 |
 | 连续朗读 | `use-auto-read-aloud`、`ContinuousReadAloudBar` | 本轮补充会话开关、完成边沿去重、离开/录音停止；原生音频时序待验收 | P0 验收 |
@@ -39,6 +40,14 @@
 文件预览追加批次：以 Expo `AttachmentRenderer` / `FilePreviewModal` 为基准，普通文件改为紧凑资源列表，语音附件继续独立展示；支持图片、Markdown、文本、受限 HTML、音频、视频和二进制降级，保留提取文本、分享、下载、失败重试。HTML 只加载本地已获取正文，注入 `default-src 'none'` CSP，关闭 JavaScript、DOM storage、文件访问并拦截外部导航。314 项 / 47 文件通过，Debug、Release、ohosTest 均通过；CodeLinter 无新增诊断。HDC 当前无目标，设备视觉/分享验收未冒充完成。
 
 分享语义复核发现旧实现与 Expo 不一致：鸿蒙曾把下载到手机缓存的文件 URI 直接交给系统分享，绕过 Gateway 分享的有效期、访问上限、撤销和可达性。现已改为仅针对明确的托管文件 ID、`xopc-file:` ID 或会话内相对路径调用 `/api/shares/auto`；创建后先显示分享链接和公网/LAN/仅本机状态，再提供复制链接或系统分享。Chat 预览和 Files 文件详情复用该链路，原始下载仍是独立动作。原始 `media://`、data URI 和外部 URL 不显示“创建公开分享”入口，避免误导和凭据泄漏。分享管理、笔记/会话分享、二维码/内嵌网页预览、目录分享确认和系统分享到 xopc 尚未对齐，继续列为待开发项。
+
+用户消息视觉追加批次：原实现把每条 user/assistant 消息共同包在 `width: 100% + padding: 16 + background` 的卡片中，用户消息无法靠右且短文本仍占据整行。现按 Expo `MessageBubble` 的结构拆成“全宽消息行 + 自适应气泡 + 独立操作栏”：用户气泡右对齐、最大宽度 82%，使用浅强调色与 18/6 非对称圆角；短消息按内容估宽，长消息和含附件消息使用 82% 明确宽度以保证 ArkUI 正常换行。AI 消息取消外层底色并保持全宽。列表左右边距与消息节奏同步到 Expo 的 20vp。真机发现并修复了仅设 `maxWidth` 导致长文本被裁切的问题；短消息右对齐和操作栏位置已截图确认。
+
+AI 附件/产出紧凑化追加批次：旧 `ChatResultTail` 会一次渲染所有 artifact，再额外显示最多 3 个 product delivery，8 个文件即可占满整屏。现在附件与业务产出共享 3 行默认预算，卡片头显示“交付物 + 总数”，其余通过“查看另外 N 项产出”按需展开；紧凑资源行从 56vp 降到仍满足触控要求的 48vp。Mate 60 已确认 8 个产出只显示 3 行和“另外 5 项”，预览、打开、分享、继续处理入口仍沿用原组件。
+
+本批最终验证：52 个测试文件 / 333 项 host 测试通过；签名 Debug HAP 编译、覆盖安装和启动成功。真机未发送新消息，未打开或分享附件，也未改动会话内容。
+
+Thinking / Tool WebUI 对齐追加批次：以 Web `assistant-turn-view-model.ts`、`assistant-steps-block.tsx`、`tool-action-cluster.ts` 和 `tool-friendly-title.ts` 为基准，不再把 thinking 原文及每个工具的完整输入输出直接堆成卡片。鸿蒙现将一轮活动聚合为透明的紧凑摘要；运行中根据当前工具显示搜索、读文件、命令、写入、修改或网页抓取等语义动作，结束后默认折叠；完成工具不重复显示“已完成”，失败状态和首行错误摘要保留可见；工具参数与结果只在用户进一步展开时显示。普通用户看不到模型原始 thinking 文本，计划与差异仍保留在执行详情中。新增工具分类/失败摘要单测后，全量为 52 个测试文件 / 334 项通过，签名 Debug HAP 构建成功并覆盖安装。设备随后自动锁屏，因此本批只确认安装/启动，最终视觉和展开点击不冒充已验收。
 
 设备最初无 HDC 目标，随后 Mate 60 重新连接；已使用已有本地调试签名覆盖安装成功、保留配对。解锁后 UI 树确认 Chat 和 8 个 action 卡片已渲染。截图/点击过程中手机再次锁屏，因此不能据此宣称点击跳转、真实语音发送或完整视觉验收通过。用户反馈图标未居中，已补显式居中容器。未发送测试消息、未启动录音、未接受模拟器许可。
 

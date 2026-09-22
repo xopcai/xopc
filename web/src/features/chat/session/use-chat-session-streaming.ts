@@ -371,6 +371,7 @@ export function useChatSessionStreaming(deps: {
         },
       ] as Message[];
 
+      onDispatched?.(clientSubmissionId);
       const existing = getChatSessionSnapshot(chatId);
       store().initSessionSnapshot(chatId, {
         ...(existing ?? {
@@ -391,10 +392,6 @@ export function useChatSessionStreaming(deps: {
         streaming: false,
       });
       markChatRunRunning(chatId);
-      const optimisticRenderKey = getSessionMessages(chatId).find(
-        (message) => message.clientSubmissionId === clientSubmissionId,
-      )?.renderKey;
-      onDispatched?.(clientSubmissionId, optimisticRenderKey);
 
       if (!existing?.name?.trim() && trimmed) {
         const provisional = provisionalTitleFromUserText(trimmed);

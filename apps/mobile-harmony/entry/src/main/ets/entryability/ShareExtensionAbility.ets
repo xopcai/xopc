@@ -1,7 +1,7 @@
 import { ShareExtensionAbility, UIExtensionContentSession, Want } from '@kit.AbilityKit';
 import { systemShare } from '@kit.ShareKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { incomingShare, shareIntake } from '../service/shareIntake';
+import { encodeShareHandoff, incomingShare, SHARE_INTAKE_URI } from '../service/shareIntake';
 import { XopcIncomingShare } from '../model/share';
 
 export default class XopcShareExtensionAbility extends ShareExtensionAbility {
@@ -22,8 +22,10 @@ export default class XopcShareExtensionAbility extends ShareExtensionAbility {
       });
       const intake: XopcIncomingShare | undefined = incomingShare(title, values);
       if (intake) {
-        shareIntake.receive(intake);
-        await this.context.startAbility({ bundleName: 'ai.xopc.mobile', abilityName: 'EntryAbility', uri: 'xopc://intake' });
+        await this.context.startAbility({
+          bundleName: 'ai.xopc.mobile', abilityName: 'EntryAbility', uri: SHARE_INTAKE_URI,
+          parameters: { xopcSharePayload: encodeShareHandoff(title, values) }
+        });
       }
     } catch (error) {
       hilog.warn(0x0000, 'XopcShare', 'Inbound share could not be received: %{public}s', (error as Error).message);

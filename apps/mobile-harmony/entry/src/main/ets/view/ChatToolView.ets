@@ -1,7 +1,7 @@
 import { XopcChatTool } from '../model/chat';
 import { common } from '@kit.AbilityKit';
 import { XopcChatDisclosure } from '../common/chatDisclosure';
-import { chatToolKey, chatToolPreview, toolOutputText, chatSearchLinks, XopcSearchLink } from '../common/chatRichContent';
+import { chatToolDisplayKind, chatToolFailureSummary, chatToolPreview, chatToolFailed, toolOutputText, chatSearchLinks, XopcSearchLink } from '../common/chatRichContent';
 
 @ComponentV2
 export struct XopcChatToolView {
@@ -13,6 +13,8 @@ export struct XopcChatToolView {
   @Computed get fullResult(): boolean { return this.disclosure.get(this.scope + ':full:' + this.call.id) ?? false; }
   @Computed get resultText(): string { return toolOutputText(this.call); }
   @Computed get links(): XopcSearchLink[] { return chatSearchLinks(this.call); }
+  @Computed get failed(): boolean { return chatToolFailed(this.call); }
+  @Computed get failureSummary(): string { return chatToolFailureSummary(this.call); }
   private async openLink(link: XopcSearchLink): Promise<void> {
     try {
       const choice = await this.getUIContext().getPromptAction().showDialog({ title: $r('app.string.chat_open_link'), message: link.url,
@@ -21,29 +23,38 @@ export struct XopcChatToolView {
     } catch (_) { this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_link_failed') }); }
   }
   private title(): ResourceStr {
-    const key = chatToolKey(this.call.name);
-    if (key.includes('search')) return $r('app.string.chat_step_search');
-    if (key === 'read_file') return $r('app.string.chat_step_read');
-    if (key === 'exec_command') return $r('app.string.chat_step_command');
-    if (key === 'write_file') return $r('app.string.chat_step_write');
-    if (key === 'apply_patch' || key === 'edit_file') return $r('app.string.chat_step_edit');
-    if (key === 'web_fetch' || key === 'open_url') return $r('app.string.chat_step_fetch');
+    const kind = chatToolDisplayKind(this.call.name);
+    if (kind === 'search') return $r('app.string.chat_step_search');
+    if (kind === 'read') return $r('app.string.chat_step_read');
+    if (kind === 'command') return $r('app.string.chat_step_command');
+    if (kind === 'write') return $r('app.string.chat_step_write');
+    if (kind === 'edit') return $r('app.string.chat_step_edit');
+    if (kind === 'fetch') return $r('app.string.chat_step_fetch');
+    if (kind === 'share') return $r('app.string.chat_step_share');
+    if (kind === 'speech') return $r('app.string.chat_step_speech');
+    if (kind === 'publish') return $r('app.string.chat_step_publish');
+    if (kind === 'plan') return $r('app.string.chat_step_plan');
     return this.call.name;
   }
   build() {
-    Column({ space: 8 }) {
+    Column({ space: 6 }) {
       Button({ type: ButtonType.Normal }) {
-        Row({ space: 8 }) {
-          Column({ space: 3 }) {
-            Text(this.title()).fontSize(14).fontColor($r('app.color.foreground'))
-            if (chatToolPreview(this.call)) { Text(chatToolPreview(this.call)).fontSize(12).fontColor($r('app.color.secondary')).maxLines(2) }
+        Row({ space: 6 }) {
+          Column({ space: 2 }) {
+            Text(this.title()).fontSize(13).fontColor(this.failed ? $r('app.color.danger') : $r('app.color.secondary'))
+            if (chatToolPreview(this.call)) { Text(chatToolPreview(this.call)).fontSize(12).fontColor($r('app.color.tertiary')).maxLines(1) }
           }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-            Text(this.call.isError || this.call.status === 'error' ? $r('app.string.chat_tool_failed') : this.call.status === 'pending' ? $r('app.string.chat_tool_pending') : this.call.status === 'running' ? $r('app.string.chat_running') : $r('app.string.chat_tool_done'))
-              .fontSize(12).fontColor(this.call.isError || this.call.status === 'error' ? $r('app.color.danger') : $r('app.color.secondary'))
+          if (this.failed || this.call.status === 'running') {
+            Text(this.failed ? $r('app.string.chat_tool_failed') : $r('app.string.chat_running'))
+              .fontSize(11).fontColor(this.failed ? $r('app.color.danger') : $r('app.color.tertiary'))
+          }
           SymbolGlyph(this.expanded ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down')).fontSize(12).fontColor([$r('app.color.secondary')])
         }.width('100%')
-      }.id('chat-tool-' + this.call.id).width('100%').constraintSize({ minHeight: 44 }).padding(8).borderRadius(10).backgroundColor($r('app.color.grouped'))
+      }.id('chat-tool-' + this.call.id).width('100%').constraintSize({ minHeight: 36 }).padding({ left: 2, right: 2 }).backgroundColor(Color.Transparent)
         .onClick((): void => { this.disclosure.set(this.scope + ':tool:' + this.call.id, !this.expanded); })
+      if (this.failureSummary) {
+        Text(this.failureSummary).fontSize(12).lineHeight(18).fontColor($r('app.color.danger')).maxLines(3).padding({ left: 2, right: 2 })
+      }
       if (this.expanded) {
         ForEach(this.links, (link: XopcSearchLink) => {
           Button(link.title).constraintSize({ minHeight: 44 }).width('100%').fontSize(13)

@@ -39,12 +39,19 @@ describe('Harmony mobile brand assets', () => {
       .toEqual(read(`../../../assets/brand/concepts/xopc-human-ai-loop-role-${appearance}.svg`));
   });
 
-  it('binds launcher and start-window icons to the branded resource', () => {
+  it('keeps the launcher icon opaque while the start window uses the appearance-aware transparent mark', async () => {
     const app = JSON.parse(read('../AppScope/app.json5').toString());
     const module = JSON.parse(read('../entry/src/main/module.json5').toString()).module;
     expect(app.app.icon).toBe('$media:app_icon');
     const entry = module.abilities.find((ability: { name: string }) => ability.name === 'EntryAbility');
+    const push = module.abilities.find((ability: { name: string }) => ability.name === 'PushMessageAbility');
     expect(entry.icon).toBe('$media:app_icon');
-    expect(entry.startWindowIcon).toBe('$media:app_icon');
+    expect(entry.startWindowIcon).toBe('$media:brand_logo');
+    expect(push.startWindowIcon).toBe('$media:brand_logo');
+
+    const launcher = await sharp(read('../AppScope/resources/base/media/app_icon.png')).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const alpha = launcher.data.filter((_value, index) => index % 4 === 3);
+    expect(alpha.every(value => value === 255)).toBe(true);
+    expect(read('../entry/src/main/resources/base/media/brand_logo.svg').toString()).not.toContain('<rect');
   });
 });

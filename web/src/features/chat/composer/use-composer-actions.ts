@@ -2,7 +2,6 @@ import { useCallback, useRef } from 'react';
 
 import type {
   ComposerContextRef,
-  ComposerDispatchReceipt,
   ComposerDraft,
   ComposerSendHandler,
   WireAttachment,
@@ -74,8 +73,6 @@ export interface UseComposerActionsOptions {
   clearEditFollowUpRef: () => void;
   /** After a draft is committed (send, queue, interrupt); used for input history. */
   onUserTextCommitted?: (text: string) => void;
-  /** Starts send motion only after the optimistic row has a stable client identity. */
-  onSendDispatched?: (receipt: ComposerDispatchReceipt, draft: ComposerDraft) => void;
 }
 
 export interface UseComposerActionsReturn {
@@ -109,7 +106,6 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     clearContextRefs,
     clearEditFollowUpRef,
     onUserTextCommitted,
-    onSendDispatched,
   } = options;
 
   const readers = {
@@ -129,20 +125,13 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     });
     if (!draft) return;
 
-    const sendOptions = onSendDispatched
-      ? {
-          onDispatched: (receipt: ComposerDispatchReceipt) => {
-            latestOptions.current.onSendDispatched?.(receipt, draft);
-          },
-        }
-      : undefined;
     const sendArgs: Parameters<ComposerSendHandler> = [
       draft.text,
       draft.attachments.length > 0 ? draft.attachments : undefined,
       getThinkingLevel(),
       draft.contextRefs.length > 0 ? draft.contextRefs : undefined,
+      { onDispatched: () => {} },
     ];
-    if (sendOptions) sendArgs.push(sendOptions);
     const result = onSend(...sendArgs);
     commitAcceptedSend(result, () => {
       onUserTextCommitted?.(draft.text);
@@ -161,7 +150,6 @@ export function useComposerActions(options: UseComposerActionsOptions): UseCompo
     onSend,
     getThinkingLevel,
     onUserTextCommitted,
-    onSendDispatched,
     resetEditor,
     clearAttachments,
     clearContextRefs,

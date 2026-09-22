@@ -10,6 +10,7 @@ import { pushNotifications } from '../service/pushNotifications';
 import { notificationNavigation } from '../service/notificationNavigation';
 import { layoutState } from '../service/layoutState';
 import { chatReadAloud } from '../service/chatReadAloud';
+import { decodeShareHandoff, shareIntake, SHARE_INTAKE_URI } from '../service/shareIntake';
 
 export default class EntryAbility extends UIAbility {
   private mainWindow?: window.Window;
@@ -21,10 +22,21 @@ export default class EntryAbility extends UIAbility {
     catch (_error) { hilog.warn(0x0000, 'XopcApp', 'Window listener cleanup failed'); }
     this.mainWindow = undefined; layoutState.keyboardVisible = false;
   }
-  onCreate(want: Want): void { if (want.uri) notificationNavigation.receive(want.uri); }
-  onNewWant(want: Want): void { if (want.uri) notificationNavigation.receive(want.uri); }
+  private receiveWant(want: Want): void {
+    if (want.uri === SHARE_INTAKE_URI) {
+      const payload = want.parameters?.xopcSharePayload;
+      if (typeof payload === 'string') {
+        const shared = decodeShareHandoff(payload);
+        if (shared) shareIntake.receive(shared);
+      }
+      return;
+    }
+    if (want.uri) notificationNavigation.receive(want.uri);
+  }
+  onCreate(want: Want): void { this.receiveWant(want); }
+  onNewWant(want: Want): void { this.receiveWant(want); }
   onForeground(): void { gatewaySession.setForeground(true); if (gatewaySession.currentProfile()) realtimeClient.start(); pushNotifications.restore(); }
-  onBackground(): void { gatewaySession.setForeground(false); realtimeClient.stop(); voiceCapture.cancel(); chatReadAloud.disableContinuous(); }
+  onBackground(): void { gatewaySession.setForeground(false); realtimeClient.stop(); voiceCapture.cancel(); chatReadAloud.leaveForeground(); }
   onDestroy(): void { realtimeClient.reset(); voiceCapture.cancel(); chatReadAloud.disableContinuous(); }
   onWindowStageCreate(stage: window.WindowStage): void {
     stage.loadContent('pages/Index', (error: BusinessError): void => {
