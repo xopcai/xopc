@@ -136,7 +136,7 @@ The next concrete delivery starts with the user's own Slack development work: me
 
 This validates a generic source → Scene instructions → Task → existing Agent harness chain, not a Slack-specific coding runtime. Resources and permissions compose independently: analysis needs no files, documents use a task artifact folder, and project edits use a worktree. File edits require neither Docker nor command execution; optional verification remains separately authorized and unverified results are labeled honestly. Existing Gmail and family-planning scenes retain their current limits and release gates. Skill/Workflow packaging and a future Scene/Extension capability package remain follow-on integrations, not a second orchestration engine.
 
-See the [generic task follow-up design](./design/scene-task-follow-up.md) and [usage guide](./scenes.md). Initial validation compares message copying, manual thread checking, repeated instructions, branch lookup, and rework before and after adoption; a document-maintenance case verifies reuse beyond coding.
+See the [usage guide](./scenes.md). Initial validation compares message copying, manual thread checking, repeated instructions, branch lookup, and rework before and after adoption; a document-maintenance case verifies reuse beyond coding.
 
 This is a direction, not a claim that every part is complete in the current release. Check [Releases](./releases.md) and feature-specific guides for current availability.
 

@@ -38,10 +38,10 @@ export class XopcChatHistoryCache {
     });
   }
   write(gatewayId: string, conversationId: string, page: XopcHistory): Promise<void> {
-    // Snapshot before queuing; callers must not mutate a pending write.
+    // Serialize before queuing so later caller mutations cannot change the pending write.
     const serialized = JSON.stringify(page);
-    const snapshot = JSON.parse(serialized) as XopcHistory;
     return this.serialize(async (): Promise<void> => {
+      const snapshot = JSON.parse(serialized) as XopcHistory;
       if (!gatewayId || !conversationId || !this.valid(snapshot, conversationId)) return;
       const entries = await this.entries();
       const existing = entries.find((entry: XopcCachedHistoryHead): boolean => entry.gatewayId === gatewayId && entry.conversationId === conversationId);
