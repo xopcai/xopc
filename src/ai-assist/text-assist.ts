@@ -1,4 +1,4 @@
-import type { AssistantMessage, UserMessage } from '@earendil-works/pi-ai';
+import { normalizeContext, type AssistantMessage, type UserMessage } from '@earendil-works/pi-ai';
 
 import { getAssistantMessageErrorReason, stripCodeFences } from '../providers/model-response.js';
 import type { Config } from '../config/schema.js';
@@ -362,7 +362,7 @@ export async function* streamTextAssist(
 
   yield { type: 'start', provider: model.provider, modelId: model.id, scenario: scenario.id };
 
-  const stream = await createExtensionAwareStreamFn()(model, prompt, modelCallOptions);
+  const stream = await createExtensionAwareStreamFn()(model, normalizeContext(prompt), modelCallOptions);
   let streamedText = '';
 
   for await (const event of stream) {

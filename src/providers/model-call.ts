@@ -1,5 +1,6 @@
 import {
   completeSimple,
+  normalizeContext,
   type Api,
   type AssistantMessage,
   type Context,
@@ -82,7 +83,7 @@ export async function completeWithResolvedCredentials(
 ): Promise<AssistantMessage> {
   const resolvedOptions = await resolveModelCallOptions(model, options, credentialOptions);
   if (model.baseUrl === EXTENSION_PROVIDER_BASE_URL) {
-    const stream = await createExtensionAwareStreamFn()(model, context, resolvedOptions);
+    const stream = await createExtensionAwareStreamFn()(model, normalizeContext(context), resolvedOptions);
     return await stream.result();
   }
   return await completeSimple(model, context, resolvedOptions);
@@ -100,5 +101,5 @@ export async function createResolvedModelStream(
   credentialOptions?: CredentialResolverOptions,
 ) {
   const resolvedOptions = await resolveModelCallOptions(model, options, credentialOptions);
-  return await createExtensionAwareStreamFn()(model, context, resolvedOptions);
+  return await createExtensionAwareStreamFn()(model, normalizeContext(context), resolvedOptions);
 }

@@ -33,7 +33,7 @@ export type AgentStreamCallbacks = {
   onStreamStart: () => void;
   onReplayGap?: () => void | Promise<void>;
   onUserTranscript?: (payload: AgentStreamUserTranscriptPayload) => void;
-  onToken: (delta: string, messageId?: string) => void;
+  onToken: (delta: string, messageId?: string, offset?: number) => void;
   onAssistantMessageEnd?: (
     messageId: string,
     presentation: 'narration' | 'answer',
@@ -196,7 +196,10 @@ export function dispatchAgentStreamEvent(
       break;
     case 'assistant_delta':
       if (typeof p.delta === 'string' && p.delta) {
-        cb?.onToken(p.delta, typeof p.messageId === 'string' ? p.messageId : undefined);
+        const messageId = typeof p.messageId === 'string' ? p.messageId : undefined;
+        const offset = typeof p.offset === 'number' ? p.offset : undefined;
+        if (offset === undefined) cb?.onToken(p.delta, messageId);
+        else cb?.onToken(p.delta, messageId, offset);
       }
       break;
     case 'thinking_delta':

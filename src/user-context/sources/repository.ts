@@ -15,7 +15,8 @@ type GrantRow = {
 };
 
 type RunRow = {
-  run_id: string; grant_id: string; kind: string; status: string; cursor_before: string | null;
+  run_id: string; grant_id: string; connector_learning_job_id: string | null;
+  kind: string; status: string; cursor_before: string | null;
   cursor_after: string | null; items_seen: number; metadata_json: string; error_message: string | null;
   started_at: number; completed_at: number | null;
 };
@@ -41,6 +42,7 @@ function grantFromRow(row: GrantRow): UnderstandingSourceGrant {
 function runFromRow(row: RunRow): UnderstandingSourceRun {
   return {
     id: row.run_id, grantId: row.grant_id, kind: row.kind as UnderstandingSourceRun['kind'],
+    ...(row.connector_learning_job_id ? { connectorLearningJobId: row.connector_learning_job_id } : {}),
     status: row.status as UnderstandingSourceRun['status'],
     ...(row.cursor_before ? { cursorBefore: row.cursor_before } : {}),
     ...(row.cursor_after ? { cursorAfter: row.cursor_after } : {}),
@@ -146,16 +148,43 @@ export function revokeUnderstandingSourceGrant(id: string, nowMs = Date.now()): 
 
 export function createUnderstandingSourceRun(input: {
   grantId: string; kind: UnderstandingSourceRun['kind']; status?: UnderstandingSourceRun['status'];
-  cursorBefore?: string; metadata?: Record<string, unknown>; nowMs?: number;
+  connectorLearningJobId?: string; cursorBefore?: string; metadata?: Record<string, unknown>; nowMs?: number;
 }): UnderstandingSourceRun {
   const id = randomUUID(); const now = input.nowMs ?? Date.now();
   runSqliteWriteTransaction((db) => db.prepare(`
     INSERT INTO understanding_source_runs (
-      run_id, grant_id, kind, status, cursor_before, metadata_json, started_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(id, input.grantId, input.kind, input.status ?? 'running', input.cursorBefore ?? null,
+      run_id, grant_id, connector_learning_job_id, kind, status, cursor_before, metadata_json, started_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, input.grantId, input.connectorLearningJobId ?? null, input.kind,
+    input.status ?? 'running', input.cursorBefore ?? null,
     JSON.stringify(input.metadata ?? {}), now));
   return getUnderstandingSourceRun(id)!;
+}
+
+export function getConnectorUnderstandingSourceRun(connectorLearningJobId: string): UnderstandingSourceRun | null {
+  const row = getSqliteDatabase().prepare(
+    'SELECT * FROM understanding_source_runs WHERE connector_learning_job_id = ?',
+  ).get(connectorLearningJobId) as RunRow | undefined;
+  return row ? runFromRow(row) : null;
+}
+
+export function getOrCreateConnectorUnderstandingSourceRun(input: {
+  grantId: string;
+  connectorLearningJobId: string;
+  kind: UnderstandingSourceRun['kind'];
+  status?: UnderstandingSourceRun['status'];
+  metadata?: Record<string, unknown>;
+  nowMs?: number;
+}): UnderstandingSourceRun {
+  const id = randomUUID();
+  const now = input.nowMs ?? Date.now();
+  runSqliteWriteTransaction((db) => db.prepare(`
+    INSERT OR IGNORE INTO understanding_source_runs (
+      run_id, grant_id, connector_learning_job_id, kind, status, metadata_json, started_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, input.grantId, input.connectorLearningJobId, input.kind,
+    input.status ?? 'running', JSON.stringify(input.metadata ?? {}), now));
+  return getConnectorUnderstandingSourceRun(input.connectorLearningJobId)!;
 }
 
 export function getUnderstandingSourceRun(id: string): UnderstandingSourceRun | null {

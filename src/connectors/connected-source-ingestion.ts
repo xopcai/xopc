@@ -330,6 +330,7 @@ export async function ingestComposioConnectedSource(input: {
   sourceInstanceId: string;
   itemsSeen: number;
   itemsIndexed: number;
+  sourceItemIds: string[];
   recordIds: string[];
 }> {
   const definition = getConnectorDefinition(input.connectorId);
@@ -395,6 +396,7 @@ export async function ingestComposioConnectedSource(input: {
     sourceInstanceId,
     itemsSeen: syncRun.itemsSeen,
     itemsIndexed: syncRun.itemsCreated + syncRun.itemsUpdated,
+    sourceItemIds: syncRun.changedItemIds,
     recordIds,
   };
 }

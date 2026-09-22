@@ -145,7 +145,7 @@ const RECOMMENDED_MODEL_PATTERNS: Record<string, RegExp[]> = {
   'ant-ling': [/^Ling-2\.6-1T$/i, /^Ling-2\.6-flash$/i, /^Ring-2\.6-1T$/i],
   'zhipu-cn': [/^glm-5\.2$/i],
   zai: [/^glm-5\.2$/i],
-  'zai-coding-cn': [/^glm-5\.2$/i, /^glm-5\.1$/i, /^glm-5-turbo$/i],
+  'zai-coding-cn': [/^glm-5\.3$/i, /^glm-5\.3-highspeed$/i, /^glm-5\.3-flash$/i, /^glm-4\.6v$/i],
   'zai-coding-global': [/^glm-5\.2$/i],
   'zhipu-coding-cn': [/^glm-5\.2$/i],
   minimax: [/^MiniMax-M3$/i, /^MiniMax-M2\.7-highspeed$/i, /^MiniMax-M2\.7$/i],

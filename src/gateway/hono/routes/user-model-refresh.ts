@@ -6,7 +6,7 @@ import { getConnectorAccount, listConnectorLearningJobs } from '../../../storage
 import { getWorkDiscoveryRun } from '../../../work-discovery/repository.js';
 import { isLocalUnderstandingSourceId } from '../../../user-context/sources/local-source-contract.js';
 import { normalizeUnderstandingSourceItems } from '../../../work-discovery/service.js';
-import { listUnderstandingSourceRuns } from '../../../user-context/sources/repository.js';
+import { getConnectorUnderstandingSourceRun } from '../../../user-context/sources/repository.js';
 import { UnderstandingRefreshService } from '../../../user-context/sources/refresh-service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -46,8 +46,7 @@ export function createUnderstandingRefreshService(deps: AuthenticatedRouteDeps):
         const job = listConnectorLearningJobs({ accountId: String(run.metadata.accountId), limit: 100 })
           .find((item) => item.id === run.metadata.connectorLearningJobId);
         if (!job) return { status: 'failed', phase: 'completed', error: 'Connector update is no longer available.' };
-        const sourceRun = listUnderstandingSourceRuns(run.grantId, 100).find((item) =>
-          item.id !== run.id && item.metadata.connectorLearningJobId === job.id);
+        const sourceRun = getConnectorUnderstandingSourceRun(job.id);
         if (job.status === 'completed') return { status: sourceRun?.status === 'partial' ? 'partial' : 'completed',
           phase: 'completed', added: job.candidatesCreated, itemsSeen: job.itemsDiscovered,
           error: sourceRun?.status === 'partial' ? 'Some source information could not be analyzed. Retry this source.' : undefined };

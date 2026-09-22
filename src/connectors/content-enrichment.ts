@@ -45,6 +45,7 @@ export type ConnectedContentReadResult = {
   requested: number;
   completed: number;
   failed: Array<{ sourceItemId: string; error: string }>;
+  sourceItemIds: string[];
   recordIds: string[];
 };
 
@@ -229,7 +230,13 @@ export async function readConnectedContent(input: {
   const downloadDirectory = await mkdtemp(join(tmpdir(), 'xopc-content-read-'));
   const adapter = input.adapterFactory?.(downloadDirectory)
     ?? new ComposioSessionsAdapter({ fileDownloadDir: downloadDirectory });
-  const result: ConnectedContentReadResult = { requested: sourceItemIds.length, completed: 0, failed: [], recordIds: [] };
+  const result: ConnectedContentReadResult = {
+    requested: sourceItemIds.length,
+    completed: 0,
+    failed: [],
+    sourceItemIds: [],
+    recordIds: [],
+  };
   const updatedSources = new Set<string>();
   const completedReads = new Set(listKnowledgeSourceItems({ agentId: input.agentId, includeDeleted: false, limit: 500 })
     .map((item) => text(item.metadata.sourceMetadataItemId))
@@ -272,7 +279,8 @@ export async function readConnectedContent(input: {
           ? inlineContent(execution.result)
           : await downloadedContent(execution.result, downloadDirectory);
         if (!content.trim()) throw new Error('The connector returned empty text content.');
-        upsertKnowledgeSourceItems([updatedSourceItem(item, content, recipe.actionId)]);
+        const stored = upsertKnowledgeSourceItems([updatedSourceItem(item, content, recipe.actionId)]);
+        result.sourceItemIds.push(...stored.changedItemIds);
         completedReads.add(item.id);
         updatedSources.add(item.sourceInstanceId);
         result.completed += 1;

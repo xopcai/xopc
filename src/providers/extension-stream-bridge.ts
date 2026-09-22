@@ -1,11 +1,14 @@
 import {
 	streamSimple,
 	createAssistantMessageEventStream,
+	getCurrentSystemPrompt,
+	getCurrentTools,
 	type AssistantMessage,
 	type Model,
 	type Api,
-	type Context,
+	type JsonObject,
 	type SimpleStreamOptions,
+	type TranscriptContext,
 } from '@earendil-works/pi-ai/compat';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { ProviderStreamParams } from '../extensions/types/providers.js';
@@ -36,10 +39,10 @@ function createPartialMessage(model: Model<Api>): AssistantMessage {
 	};
 }
 
-function parseToolArguments(raw: string | undefined): Record<string, unknown> {
+function parseToolArguments(raw: string | undefined): JsonObject {
 	if (!raw?.trim()) return {};
 	try {
-		return JSON.parse(raw) as Record<string, unknown>;
+		return JSON.parse(raw) as JsonObject;
 	} catch {
 		return {};
 	}
@@ -72,7 +75,7 @@ function collectExtraStreamOptions(options?: SimpleStreamOptions): Record<string
 
 /** Wraps {@link streamSimple} so extension-registered models use the plugin `createStream()` path. */
 export function createExtensionAwareStreamFn(): StreamFn {
-	return ((model: Model<Api>, context: Context, options?: SimpleStreamOptions) => {
+	return ((model: Model<Api>, context: TranscriptContext, options?: SimpleStreamOptions) => {
 		if (model.baseUrl !== EXTENSION_PROVIDER_BASE_URL) {
 			return streamSimple(model, context, options);
 		}
@@ -85,14 +88,16 @@ export function createExtensionAwareStreamFn(): StreamFn {
 		log.info({ provider: model.provider, modelId: model.id }, 'Streaming via extension provider');
 
 		const stream = createAssistantMessageEventStream();
+		const systemPrompt = getCurrentSystemPrompt(context.messages);
+		const tools = getCurrentTools(context.messages);
 
 		const params: ProviderStreamParams = {
 			model: model.id,
-			systemPrompt: context.systemPrompt
-				? stripPromptCacheBoundary(context.systemPrompt)
+			systemPrompt: systemPrompt
+				? stripPromptCacheBoundary(systemPrompt)
 				: undefined,
-			messages: context.messages as unknown as ProviderStreamParams['messages'],
-			tools: context.tools as unknown as ProviderStreamParams['tools'],
+			messages: context.messages.filter(message => message.role !== 'system') as unknown as ProviderStreamParams['messages'],
+			tools: tools as unknown as ProviderStreamParams['tools'],
 			temperature: options?.temperature,
 			maxTokens: options?.maxTokens,
 			apiKey: options?.apiKey,

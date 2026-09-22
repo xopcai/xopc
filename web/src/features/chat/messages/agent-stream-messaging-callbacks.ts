@@ -51,6 +51,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
   chatId: string;
   shouldApplyStreamUpdate: (streamConversationId: string) => boolean;
   beforeAssistantDelta: () => void;
+  reconcileHydratedAssistantText: boolean;
   setStreamingOnStreamStart: boolean;
   clearResumeRunIdOnBackgroundTerminal: boolean;
   clearResumeRunIdOnVisibleError: boolean;
@@ -69,6 +70,7 @@ export function createAgentStreamMessagingCallbacks(opts: {
     chatId,
     shouldApplyStreamUpdate,
     beforeAssistantDelta,
+    reconcileHydratedAssistantText,
     setStreamingOnStreamStart: _setStreamingOnStreamStart,
     clearResumeRunIdOnBackgroundTerminal,
     clearResumeRunIdOnVisibleError,
@@ -145,10 +147,13 @@ export function createAgentStreamMessagingCallbacks(opts: {
       });
       store().setSessionFlags(chatId, { streaming: true });
     },
-    onToken: (delta, messageId) => {
+    onToken: (delta, messageId, offset) => {
       beforeAssistantDelta();
       store().mutateSessionStreaming(chatId, (msg) => {
-        appendTextDelta(msg.content, delta, messageId);
+        appendTextDelta(msg.content, delta, messageId, {
+          offset,
+          reconcileHydratedSegment: reconcileHydratedAssistantText,
+        });
       });
       if (shouldApplyStreamUpdate(chatId)) {
         store().setSessionFlags(chatId, { streaming: true });

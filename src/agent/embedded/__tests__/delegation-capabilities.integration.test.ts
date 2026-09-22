@@ -2,7 +2,14 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Type } from '@sinclair/typebox';
-import { createAssistantMessageEventStream, type AssistantMessage, type Model, type Api } from '@earendil-works/pi-ai';
+import {
+  createAssistantMessageEventStream,
+  getCurrentSystemPrompt,
+  getCurrentTools,
+  type AssistantMessage,
+  type Model,
+  type Api,
+} from '@earendil-works/pi-ai';
 import { expect, it, vi } from 'vitest';
 
 const scripted = vi.hoisted(() => ({ stream: vi.fn() }));
@@ -41,10 +48,10 @@ it('runs research through real parent and child sessions with shared parent call
     getSubagentModel: () => model, getParentTools: () => { throw new Error('Must use current run tools'); },
     buildChildTools: () => { throw new Error('Read tools must retain their parent scope'); } }));
   scripted.stream.mockImplementation((_model, context) => {
-    const isChild = context.systemPrompt.includes('# Subagent Context');
+    const isChild = getCurrentSystemPrompt(context.messages).includes('# Subagent Context');
     let content: AssistantMessage['content'];
     if (isChild) {
-      expect(context.tools.map((tool: any) => tool.name)).toEqual(['web_search']);
+      expect(getCurrentTools(context.messages).map(tool => tool.name)).toEqual(['web_search']);
       const task = context.messages.find((message: any) => message.role === 'user')?.content;
       const key = JSON.stringify(task);
       const round = childRounds.get(key) ?? 0;

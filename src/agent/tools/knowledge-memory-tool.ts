@@ -28,7 +28,7 @@ const SearchSchema = Type.Object({
 const GetSchema = Type.Object({ id: Type.String() });
 const WriteSchema = Type.Object({
   kind: Type.Union([
-    Type.Literal('project_fact'), Type.Literal('workspace_fact'), Type.Literal('decision'),
+    Type.Literal('work_thread'), Type.Literal('project_fact'), Type.Literal('workspace_fact'), Type.Literal('decision'),
     Type.Literal('task_lesson'), Type.Literal('commitment'), Type.Literal('open_question'),
     Type.Literal('episode'), Type.Literal('note'),
   ]),
