@@ -38,14 +38,8 @@ export interface ComposerDispatchReceipt {
 }
 
 export interface ComposerSendOptions {
-  /** Fired after the optimistic user row has been inserted into the message list. */
+  /** Fired immediately before the optimistic user row is inserted into the message list. */
   onDispatched?: (receipt: ComposerDispatchReceipt) => void;
-}
-
-export interface ComposerSendFlightEvent {
-  receipt: ComposerDispatchReceipt;
-  draft: ComposerDraft;
-  sourceRect: { left: number; top: number; width: number; height: number };
 }
 
 /** False rejects a submission without consuming the current composer draft. */

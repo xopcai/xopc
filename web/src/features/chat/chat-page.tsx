@@ -17,7 +17,6 @@ import { useProjectSessionComposer } from '@/features/chat/composer/use-project-
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
 import type {
   ComposerContextRef,
-  ComposerSendFlightEvent,
   ComposerSendHandler,
 } from '@/features/chat/composer/composer.types';
 import { useChatProjectScope } from '@/features/chat/scope/use-chat-project-scope';
@@ -84,11 +83,6 @@ import { Button } from '@/components/ui/button';
 import { useTaskDetail } from '@/features/tasks/use-task-detail';
 import { peekComposerAttachmentHandoff } from '@/features/chat/composer/composer-attachment-handoff';
 import { takeComposerPayloadHandoff } from '@/features/chat/composer/composer-payload-handoff';
-import { SendFlightOverlay } from '@/features/chat/motion/send-flight-overlay';
-import {
-  createSendFlightRequest,
-  type SendFlightRequest,
-} from '@/features/chat/motion/send-flight.types';
 
 const ChatTerminalDock = lazy(async () => {
   const module = await import('@/features/chat/terminal/chat-terminal-dock');
@@ -152,7 +146,6 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   const [sourceNoteSaveError, setSourceNoteSaveError] = useState<string | null>(null);
   const [showWelcomeSkeleton, setShowWelcomeSkeleton] = useState(false);
   const [editingUserTurn, setEditingUserTurn] = useState<EditingUserTurn | null>(null);
-  const [sendFlight, setSendFlight] = useState<SendFlightRequest | null>(null);
 
   const taskId = boundTaskId?.trim() || null;
   const { data: taskDetail } = useTaskDetail(taskId ?? '');
@@ -354,25 +347,6 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     loadingMore: session.loadingMore,
     loadMoreMessages: session.loadMoreMessages,
   });
-  const handleSendFlightDispatched = useCallback((event: ComposerSendFlightEvent) => {
-    const reduceMotion = typeof window.matchMedia === 'function'
-      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduceMotion) return;
-    setSendFlight(createSendFlightRequest(
-      event.receipt.clientSubmissionId,
-      event.receipt.messageRenderKey,
-      event.sourceRect,
-      event.draft,
-    ));
-  }, []);
-  const completeSendFlight = useCallback((clientSubmissionId: string) => {
-    setSendFlight((current) => (
-      current?.clientSubmissionId === clientSubmissionId ? null : current
-    ));
-  }, []);
-  useEffect(() => {
-    setSendFlight(null);
-  }, [chatConversationId]);
   const [activeMessageIndex, setActiveMessageIndex] = useState(0);
   const timelineRafRef = useRef<number | null>(null);
   const pendingTimelineDisplayIndexRef = useRef<number | null>(null);
@@ -1309,7 +1283,6 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                         ? handleForkAssistantTurn
                         : undefined
                     }
-                    activeSendFlight={sendFlight}
                     trailingContent={latestBrowserSetup?.driver === 'extension' ? (
                       <BrowserExtensionNudge enabled={showBrowserSetupPrompt} />
                     ) : showBrowserSetupPrompt && latestBrowserSetup ? (
@@ -1412,7 +1385,6 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 onSend={projectComposer.send}
                 editingUserTurnId={editingUserTurn?.turnId}
                 onCancelUserMessageEdit={handleCancelUserMessageEdit}
-                onSendFlightDispatched={handleSendFlightDispatched}
                 onAbort={stream.abort}
                 onAddPendingFollowUp={pageContextDraft ? undefined : followUp.addPendingFollowUp}
                 onSteeringInterrupt={pageContextDraft ? undefined : (text, atts, contextRefs) => void stream.interruptAndSend(text, atts, undefined, contextRefs)}
@@ -1451,8 +1423,6 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
           <ChatTerminalDock key={chatConversationId} conversationId={chatConversationId} />
         </Suspense>
       ) : null}
-
-      <SendFlightOverlay request={sendFlight} onComplete={completeSendFlight} />
 
       <Dialog.Root
         open={sourceNoteSaveDraft !== null}

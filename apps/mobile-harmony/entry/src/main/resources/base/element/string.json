@@ -20,6 +20,15 @@
     { "name": "chat_plan", "value": "Plan" },
     { "name": "chat_tool_pending", "value": "No result yet" },
     {"name":"chat_steps","value":"Execution details"},
+    {"name":"chat_steps_failed","value":"Execution details · Failed"},
+    {"name":"chat_steps_working","value":"Working…"},
+    {"name":"chat_steps_thinking","value":"Thinking…"},
+    {"name":"chat_steps_searching","value":"Searching…"},
+    {"name":"chat_steps_reading","value":"Reading files…"},
+    {"name":"chat_steps_commanding","value":"Running command…"},
+    {"name":"chat_steps_writing","value":"Saving files…"},
+    {"name":"chat_steps_editing","value":"Editing files…"},
+    {"name":"chat_steps_fetching","value":"Fetching page…"},
     {"name":"chat_running","value":"Running"},
     {"name":"chat_tool_input","value":"Input"},
     {"name":"chat_tool_output","value":"Output"},
@@ -40,6 +49,10 @@
     {"name":"chat_step_write","value":"Write file"},
     {"name":"chat_step_edit","value":"Apply changes"},
     {"name":"chat_step_fetch","value":"Open webpage"},
+    {"name":"chat_step_share","value":"Create share link"},
+    {"name":"chat_step_speech","value":"Generate speech"},
+    {"name":"chat_step_publish","value":"Publish artifacts"},
+    {"name":"chat_step_plan","value":"Update plan"},
     {"name":"chat_preview","value":"Preview"},
     {"name":"chat_media_failed","value":"Could not load this file. Tap retry."},
     {"name":"chat_media_loading","value":"Loading preview"},
@@ -623,6 +636,14 @@
     {
       "name": "chat_fewer_attachments",
       "value": "Show fewer attachments"
+    },
+    {
+      "name": "chat_more_deliverables",
+      "value": "View %d more deliverables"
+    },
+    {
+      "name": "chat_fewer_deliverables",
+      "value": "Show fewer deliverables"
     },
     {
       "name": "chat_preview_file",

@@ -1,6 +1,6 @@
-import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as Popover from '@radix-ui/react-popover';
-import { AlertCircle, Check, ChevronDown, ChevronUp, CircleHelp, Copy, FileCode2, FilePlus2, FileText, GitFork, ListTodo, Loader2, MoreHorizontal, Pencil, RefreshCw, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
+import { AlertCircle, Check, ChevronDown, ChevronUp, CircleHelp, Copy, FileCode2, FilePlus2, FileText, GitFork, ListTodo, MoreHorizontal, Pencil, RefreshCw, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import type {
@@ -71,6 +71,9 @@ const userMessageFooterAction = cn(
   interaction.disabled,
 );
 
+const USER_MESSAGE_SENDING_DELAY_MS = 700;
+const USER_MESSAGE_SENDING_EXIT_MS = 120;
+
 export const MessageBubble = memo(function MessageBubble({
   message,
   authToken,
@@ -94,7 +97,6 @@ export const MessageBubble = memo(function MessageBubble({
   suppressAssistantActions = false,
   onEditUserMessage,
   userMessageCanEdit = true,
-  sendFlightHidden = false,
   responseFeedbackEnabled = true,
 }: {
   message: Message;
@@ -129,7 +131,6 @@ export const MessageBubble = memo(function MessageBubble({
   suppressAssistantActions?: boolean;
   onEditUserMessage?: (message: Message, messageIndex: number) => void;
   userMessageCanEdit?: boolean;
-  sendFlightHidden?: boolean;
   responseFeedbackEnabled?: boolean;
 }) {
   const language = useLocaleStore((s) => s.language);
@@ -139,7 +140,55 @@ export const MessageBubble = memo(function MessageBubble({
 
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
+  // Keep the class stable if transport acceptance clears deliveryStatus mid-animation.
+  const animateUserEntry = useRef(isUser && message.deliveryStatus === 'sending').current;
+  const isUserMessageSending = isUser && message.deliveryStatus === 'sending';
+  const isUserMessageFailed = isUser && message.deliveryStatus === 'failed';
+  const [sendingIndicatorVisible, setSendingIndicatorVisible] = useState(false);
+  const [sendingIndicatorExiting, setSendingIndicatorExiting] = useState(false);
+  const [networkOffline, setNetworkOffline] = useState(
+    () => typeof navigator !== 'undefined' && navigator.onLine === false,
+  );
   const roleLabel = isUser ? m.chat.you : isAssistant ? m.chat.assistant : m.chat.tool;
+
+  useEffect(() => {
+    if (!isUserMessageSending || typeof window === 'undefined') return undefined;
+    const updateNetworkState = () => setNetworkOffline(window.navigator.onLine === false);
+    window.addEventListener('online', updateNetworkState);
+    window.addEventListener('offline', updateNetworkState);
+    return () => {
+      window.removeEventListener('online', updateNetworkState);
+      window.removeEventListener('offline', updateNetworkState);
+    };
+  }, [isUserMessageSending]);
+
+  useEffect(() => {
+    if (isUserMessageSending) {
+      if (sendingIndicatorVisible) return undefined;
+      const timer = window.setTimeout(
+        () => setSendingIndicatorVisible(true),
+        networkOffline ? 0 : USER_MESSAGE_SENDING_DELAY_MS,
+      );
+      return () => window.clearTimeout(timer);
+    }
+    if (!sendingIndicatorVisible) return undefined;
+
+    let exitTimer = 0;
+    const frame = window.requestAnimationFrame(() => {
+      setSendingIndicatorExiting(true);
+      exitTimer = window.setTimeout(() => {
+        setSendingIndicatorVisible(false);
+        setSendingIndicatorExiting(false);
+      }, USER_MESSAGE_SENDING_EXIT_MS);
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(exitTimer);
+    };
+  }, [isUserMessageSending, networkOffline, sendingIndicatorVisible]);
+
+  const showDeliveryStatus = isUserMessageFailed || sendingIndicatorVisible;
+  const deliveryStatus = isUserMessageFailed ? 'failed' : 'sending';
   const openReferencedNote = useCallback((sourceId: string) => {
     const returnTo = `${location.pathname}${location.search}`;
     navigate(withDetailReturnTo(`/notes/${encodeURIComponent(sourceId)}`, returnTo));
@@ -476,7 +525,11 @@ export const MessageBubble = memo(function MessageBubble({
   const retryDisabled = deleteRoundDisabled || !userMessageCanRetry;
 
   return (
-    <article className={cn('group/msg flex w-full min-w-0', isUser ? 'justify-end' : 'justify-start')}>
+    <article className={cn(
+      'group/msg flex w-full min-w-0',
+      isUser ? 'justify-end' : 'justify-start',
+      animateUserEntry && 'xopc-chat-user-message-enter',
+    )}>
       <div
         className={cn(
           'min-w-0',
@@ -516,7 +569,6 @@ export const MessageBubble = memo(function MessageBubble({
 
         <div
           dir={isUser ? 'ltr' : undefined}
-          data-send-flight-target={isUser ? '' : undefined}
           className={cn(
             'min-w-0 text-fg',
             isUser && 'chat-user-message',
@@ -527,8 +579,6 @@ export const MessageBubble = memo(function MessageBubble({
                 : 'text-base leading-[1.6875]',
             isUser &&
               'w-fit max-w-full rounded-2xl bg-surface-hover/80 px-4 py-3 text-left dark:bg-surface-hover/50',
-            isUser && 'transition-opacity duration-150 ease-out motion-reduce:transition-none',
-            isUser && sendFlightHidden && 'opacity-0',
           )}
         >
           <div className="flex min-w-0 flex-col gap-2">
@@ -635,28 +685,29 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         </div>
 
-        {isUser && message.deliveryStatus ? (
+        {showDeliveryStatus ? (
           <div
-            data-delivery-status={message.deliveryStatus}
-            role={message.deliveryStatus === 'failed' ? 'alert' : 'status'}
+            data-delivery-status={deliveryStatus}
+            role={isUserMessageFailed ? 'alert' : 'status'}
             aria-live="polite"
+            aria-hidden={sendingIndicatorExiting && !isUserMessageFailed ? true : undefined}
             className={cn(
-              'mt-1 flex min-h-5 items-center justify-end gap-1.5 pe-1 text-xs transition-opacity duration-150 ease-out motion-reduce:transition-none',
-              message.deliveryStatus === 'failed' ? 'text-danger' : 'text-fg-subtle',
-              sendFlightHidden && 'opacity-0',
+              'mt-1 flex min-h-5 items-center justify-end gap-1.5 pe-1 text-xs transition-opacity duration-[120ms] ease-out motion-reduce:transition-none',
+              isUserMessageFailed ? 'text-danger' : 'text-fg-subtle',
+              sendingIndicatorExiting && !isUserMessageFailed && 'opacity-0',
             )}
           >
-            {message.deliveryStatus === 'sending' ? (
-              <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" strokeWidth={1.75} aria-hidden />
-            ) : (
+            {isUserMessageFailed ? (
               <AlertCircle className="size-3.5" strokeWidth={1.75} aria-hidden />
-            )}
+            ) : null}
             <span>
-              {message.deliveryStatus === 'sending'
-                ? m.chat.userMessageSending
-                : m.chat.userMessageSendFailed}
+              {isUserMessageFailed
+                ? m.chat.userMessageSendFailed
+                : networkOffline && isUserMessageSending
+                  ? m.chat.userMessageWaitingForNetwork
+                  : m.chat.userMessageSending}
             </span>
-            {message.deliveryStatus === 'failed' && onRetryUserMessageRound && messageIndex != null ? (
+            {isUserMessageFailed && onRetryUserMessageRound && messageIndex != null ? (
               <button
                 type="button"
                 className="rounded-md px-1.5 py-0.5 font-medium text-danger underline-offset-2 hover:bg-danger/10 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/40"

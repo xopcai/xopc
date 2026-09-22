@@ -20,6 +20,15 @@
     { "name": "chat_plan", "value": "执行计划" },
     { "name": "chat_tool_pending", "value": "尚无结果" },
     {"name":"chat_steps","value":"执行过程"},
+    {"name":"chat_steps_failed","value":"执行过程 · 失败"},
+    {"name":"chat_steps_working","value":"正在处理…"},
+    {"name":"chat_steps_thinking","value":"正在思考…"},
+    {"name":"chat_steps_searching","value":"正在搜索信息…"},
+    {"name":"chat_steps_reading","value":"正在阅读文件…"},
+    {"name":"chat_steps_commanding","value":"正在运行命令…"},
+    {"name":"chat_steps_writing","value":"正在保存文件…"},
+    {"name":"chat_steps_editing","value":"正在修改文件…"},
+    {"name":"chat_steps_fetching","value":"正在抓取网页…"},
     {"name":"chat_running","value":"执行中"},
     {"name":"chat_tool_input","value":"输入参数"},
     {"name":"chat_tool_output","value":"执行结果"},
@@ -40,6 +49,10 @@
     {"name":"chat_step_write","value":"写入文件"},
     {"name":"chat_step_edit","value":"修改文件"},
     {"name":"chat_step_fetch","value":"打开网页"},
+    {"name":"chat_step_share","value":"创建分享链接"},
+    {"name":"chat_step_speech","value":"生成语音"},
+    {"name":"chat_step_publish","value":"发布成果"},
+    {"name":"chat_step_plan","value":"更新计划"},
     {"name":"chat_preview","value":"预览"},
     {"name":"chat_media_failed","value":"文件加载失败，请重试。"},
     {"name":"chat_media_loading","value":"正在加载预览"},
@@ -623,6 +636,14 @@
     {
       "name": "chat_fewer_attachments",
       "value": "收起附件"
+    },
+    {
+      "name": "chat_more_deliverables",
+      "value": "查看另外 %d 项产出"
+    },
+    {
+      "name": "chat_fewer_deliverables",
+      "value": "收起产出"
     },
     {
       "name": "chat_preview_file",

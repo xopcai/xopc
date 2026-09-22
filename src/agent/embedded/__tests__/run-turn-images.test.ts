@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   prompt: vi.fn(),
   waitForIdle: vi.fn(),
   baseStreamFn: vi.fn(),
+  basePrepareRequest: vi.fn(),
   retryTurn: vi.fn(),
   assistantError: vi.fn(),
   compact: vi.fn(),
@@ -45,6 +46,7 @@ vi.mock('../session-runner.js', () => ({
       sendCustomMessage: mocks.customMessage,
       agent: {
         streamFunction: mocks.baseStreamFn,
+        prepareRequest: mocks.basePrepareRequest,
         waitForIdle: mocks.waitForIdle,
         continue: vi.fn(),
         state: { messages: [] },
@@ -123,6 +125,7 @@ describe('runXopcEmbeddedTurn image input', () => {
     });
     mocks.waitForIdle.mockResolvedValue(undefined);
     mocks.retryTurn.mockResolvedValue(undefined);
+    mocks.basePrepareRequest.mockResolvedValue(undefined);
     mocks.assistantError.mockReturnValue(undefined);
     mocks.compact.mockResolvedValue({
       compacted: true,
@@ -334,12 +337,146 @@ describe('runXopcEmbeddedTurn image input', () => {
       workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000,
     });
     mocks.baseStreamFn.mockClear();
-    expect(() => mocks.session.agent.streamFunction(
+    const stream = mocks.session.agent.streamFunction(
       { id: 'smaller-fallback', provider: 'test', contextWindow: 8_000 },
       { systemPrompt: 'system', messages: [{ role: 'user', content: 'x'.repeat(100_000) }], tools: [] },
       {},
-    )).toThrow('Context budget exceeded before provider request');
+    );
+    const events = [];
+    for await (const event of stream) events.push(event);
+    expect(events.at(-1)).toMatchObject({
+      type: 'error',
+      error: { stopReason: 'error', errorMessage: expect.stringContaining('Context budget exceeded before provider request') },
+    });
     expect(mocks.baseStreamFn).not.toHaveBeenCalled();
+  });
+
+  it('compacts between a tool result and the next provider request', async () => {
+    const original = [
+      { role: 'user', content: 'x'.repeat(20_000), timestamp: 1 },
+      { role: 'assistant', content: [{ type: 'toolCall', id: 'tool-1', name: 'read_file', arguments: {} }],
+        stopReason: 'toolUse', timestamp: 2 },
+      { role: 'toolResult', toolCallId: 'tool-1', toolName: 'read_file', content: [{ type: 'text', text: 'done' }], timestamp: 3 },
+    ] as AgentMessage[];
+    const compacted = [{ role: 'user', content: 'compacted handover', timestamp: 4 }] as AgentMessage[];
+    mocks.loadMessages.mockResolvedValue(original);
+    mocks.compact.mockImplementationOnce(async () => {
+      mocks.loadMessages.mockResolvedValue(compacted);
+      return { compacted: true, messages: compacted, summary: 'compacted handover',
+        firstKeptIndex: 3, tokensBefore: 5_000, tokensAfter: 20 };
+    });
+    let preparedMessages: AgentMessage[] = [];
+    mocks.basePrepareRequest.mockImplementation(async request => ({
+      context: { ...request.context, messages: [{ role: 'system', content: 'system', timestamp: 0 }, ...original] },
+    }));
+    mocks.prompt.mockImplementationOnce(async () => {
+      const update = await mocks.session.agent.prepareNextTurnWithContext({
+        message: original[1], toolResults: [original[2]], newMessages: original,
+        context: { messages: [{ role: 'system', content: 'system', timestamp: 0 }, ...original], tools: [] },
+      });
+      const request = await mocks.session.agent.prepareRequest({
+        context: update.context, model: { id: 'test', provider: 'test' }, thinkingLevel: 'off',
+      });
+      preparedMessages = request.context.messages;
+    });
+
+    await runXopcEmbeddedTurn({
+      conversationId: '259a62b5-df35-4b40-88ae-275ddf5f1ba0', runId: 'run-mid-turn-compaction',
+      userMessage: { role: 'user', content: 'work', timestamp: 1 },
+      model: { id: 'test', provider: 'test', contextWindow: 8_000 } as any,
+      modelRef: 'test/test', tools: [], systemPrompt: 'system',
+      workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000,
+    });
+
+    expect(mocks.compact).toHaveBeenCalledWith(original, expect.objectContaining({ id: 'test' }),
+      undefined, true, expect.objectContaining({ fallbackModels: [] }));
+    expect(preparedMessages).toEqual([
+      expect.objectContaining({ role: 'system' }),
+      expect.objectContaining({ role: 'user', content: 'compacted handover' }),
+    ]);
+  });
+
+  it('discards a truncated tool-call attempt and performs one full-history recovery', async () => {
+    const truncated = {
+      role: 'assistant', provider: 'test', model: 'test', stopReason: 'length', timestamp: 2,
+      content: [{ type: 'toolCall', id: 'tool-1', name: 'read_file', arguments: { path: '/partial' } }],
+      usage: { input: 100, output: 10, cacheRead: 0, cacheWrite: 0, totalTokens: 110,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+    } as AgentMessage;
+    const synthetic = { role: 'toolResult', toolCallId: 'tool-1', toolName: 'read_file',
+      content: [{ type: 'text', text: 'Skipped truncated tool call' }], timestamp: 3 } as AgentMessage;
+    const original = [{ role: 'user', content: 'finish the task', timestamp: 1 } as AgentMessage, truncated, synthetic];
+    const compacted = [{ role: 'user', content: 'finish the task', timestamp: 1 } as AgentMessage];
+    mocks.loadMessages.mockResolvedValue(original);
+    mocks.compact.mockImplementationOnce(async () => {
+      mocks.loadMessages.mockResolvedValue(compacted);
+      return { compacted: true, messages: compacted, summary: 'safe handover',
+        firstKeptIndex: 3, tokensBefore: 100, tokensAfter: 10 };
+    });
+    let preparedMessages: AgentMessage[] = [];
+    mocks.basePrepareRequest.mockImplementation(async request => ({
+      context: { ...request.context, messages: original },
+    }));
+    mocks.prompt.mockImplementationOnce(async () => {
+      const update = await mocks.session.agent.prepareNextTurnWithContext({
+        message: truncated, toolResults: [synthetic], newMessages: original,
+        context: { messages: original, tools: [] },
+      });
+      const request = await mocks.session.agent.prepareRequest({
+        context: update.context, model: { id: 'test', provider: 'test' }, thinkingLevel: 'off',
+      });
+      preparedMessages = request.context.messages;
+    });
+
+    await runXopcEmbeddedTurn({
+      conversationId: '259a62b5-df35-4b40-88ae-275ddf5f1ba0', runId: 'run-length-recovery',
+      userMessage: original[0],
+      model: { id: 'test', provider: 'test', contextWindow: 8_000, maxTokens: 100 } as any,
+      modelRef: 'test/test', tools: [], systemPrompt: 'system',
+      workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000,
+    });
+
+    expect(mocks.compact).toHaveBeenCalledOnce();
+    expect(mocks.compact.mock.calls[0]?.[4]).toMatchObject({
+      summarizeAll: true,
+      preserveLastUser: true,
+      discardedAttempt: { assistantTimestamp: 2, provider: 'test', model: 'test', toolCallIds: ['tool-1'] },
+    });
+    expect(preparedMessages).toEqual(compacted);
+    expect(mocks.session.agent.continue).not.toHaveBeenCalled();
+  });
+
+  it('recovers a thinking-only truncated response after the loop settles', async () => {
+    const truncated = {
+      role: 'assistant', provider: 'test', model: 'test', stopReason: 'length', timestamp: 2,
+      content: [{ type: 'thinking', thinking: 'unfinished reasoning' }],
+      usage: { input: 100, output: 10, cacheRead: 0, cacheWrite: 0, totalTokens: 110,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+    } as AgentMessage;
+    const original = [{ role: 'user', content: 'finish the task', timestamp: 1 } as AgentMessage, truncated];
+    const compacted = [{ role: 'user', content: 'finish the task', timestamp: 1 } as AgentMessage];
+    mocks.loadMessages.mockResolvedValue(original);
+    mocks.compact.mockImplementationOnce(async () => {
+      mocks.loadMessages.mockResolvedValue(compacted);
+      return { compacted: true, messages: compacted, summary: 'safe handover',
+        firstKeptIndex: 2, tokensBefore: 100, tokensAfter: 10 };
+    });
+
+    const result = await runXopcEmbeddedTurn({
+      conversationId: '259a62b5-df35-4b40-88ae-275ddf5f1ba0', runId: 'run-thinking-length',
+      userMessage: original[0],
+      model: { id: 'test', provider: 'test', contextWindow: 8_000, maxTokens: 100 } as any,
+      modelRef: 'test/test', tools: [], systemPrompt: 'system',
+      workspaceDir: '/tmp/workspace', sessionStore: {} as any, timeoutMs: 60_000,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(mocks.compact.mock.calls[0]?.[4]).toMatchObject({
+      summarizeAll: true,
+      discardedAttempt: { assistantTimestamp: 2, provider: 'test', model: 'test', toolCallIds: [] },
+    });
+    expect(mocks.session.agent.continue).toHaveBeenCalledOnce();
+    expect(mocks.waitForIdle).toHaveBeenCalledTimes(2);
   });
 
   it('marks run ownership conflicts as non-retryable harness failures', async () => {

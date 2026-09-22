@@ -93,6 +93,41 @@ describe('context recovery contract', () => {
     expect(recovered.messages.at(-1)?.role).toBe('user');
   });
 
+  it('forces a short oversized tool turn through full-history fallback', async () => {
+    const { transcript, options } = fixture([user('x'.repeat(420_000))]);
+    transcript.compact.mockResolvedValueOnce(result(false)).mockImplementationOnce(async () => {
+      transcript.loadMessages.mockResolvedValue([user('summary')]);
+      return result(true);
+    });
+    const recovered = await recoverContext({ ...options, forceOnTrigger: true });
+    expect(recovered.status).toBe('compacted');
+    expect(transcript.compact).toHaveBeenCalledTimes(2);
+    expect(transcript.compact.mock.calls[0]?.[3]).toBe(true);
+    expect(transcript.compact.mock.calls[1]?.[4]).toMatchObject({ summarizeAll: true });
+  });
+
+  it('omits a discarded length attempt and its synthetic tool result from the recovered view', async () => {
+    const messages = [user('pending'), {
+      role: 'assistant', provider: 'test', model: 'test', timestamp: 2, stopReason: 'length',
+      content: [{ type: 'toolCall', id: 'call-1', name: 'read', arguments: {} }],
+    }, {
+      role: 'toolResult', toolCallId: 'call-1', toolName: 'read', timestamp: 3,
+      content: [{ type: 'text', text: 'synthetic failure' }],
+    }] as AgentMessage[];
+    const { transcript, options } = fixture(messages);
+    transcript.compact.mockResolvedValue(result(true));
+    const recovered = await recoverContext({
+      ...options,
+      providerRejected: true,
+      discardedAttempt: { assistantTimestamp: 2, provider: 'test', model: 'test', toolCallIds: ['call-1'] },
+    });
+    expect(recovered.messages).toEqual([user('pending')]);
+    expect(transcript.compact.mock.calls[0]?.[4]).toMatchObject({
+      summarizeAll: true,
+      discardedAttempt: expect.objectContaining({ assistantTimestamp: 2 }),
+    });
+  });
+
   it('preserves completed facts and identifiers without reopening completed todos', () => {
     const summary = renderCompactionHandover({ version: 1, sourceThroughSeq: 1, items: [
       { id: 'file', kind: 'file_change', status: 'completed', text: 'Patched auth', sources: [], identifiers: ['src/auth.ts'] },
