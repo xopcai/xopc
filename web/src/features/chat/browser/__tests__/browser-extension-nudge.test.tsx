@@ -77,6 +77,9 @@ describe('BrowserExtensionNudge', () => {
 
     expect(container.textContent).toBe('');
     expect(Number(localStorage.getItem('xopc:browser-extension-nudge:v1'))).toBeGreaterThan(0);
+
+    act(() => root.render(<BrowserExtensionNudge key="remounted" enabled />));
+    expect(container.textContent).toBe('');
   });
 
   it('does not render once Chrome is connected', () => {

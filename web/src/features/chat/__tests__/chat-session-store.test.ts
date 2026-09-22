@@ -235,6 +235,77 @@ describe('useChatSessionStore', () => {
     expect(snap?.streaming).toBe(true);
   });
 
+  it('keeps a failed optimistic user message across an idle server refresh', () => {
+    const failed: Message = {
+      role: 'user',
+      content: [{ type: 'text', text: 'retry me' }],
+      deliveryStatus: 'failed',
+      clientSubmissionId: 'local-failed',
+      timestamp: 10,
+    };
+    useChatSessionStore.getState().initSessionSnapshot(conversationId, {
+      ...idleSlice,
+      messages: [userMsg, failed],
+    });
+
+    useChatSessionStore.getState().mergeCommittedFromServer(conversationId, [userMsg], false);
+
+    expect(getChatSessionSnapshot(conversationId)?.messages).toEqual([
+      expect.objectContaining({ content: userMsg.content }),
+      expect.objectContaining({ clientSubmissionId: 'local-failed', deliveryStatus: 'failed' }),
+    ]);
+  });
+
+  it('drops a failed optimistic row once the server contains its canonical message', () => {
+    const failed: Message = {
+      role: 'user',
+      content: [{ type: 'text', text: 'accepted after timeout' }],
+      deliveryStatus: 'failed',
+      clientSubmissionId: 'local-failed',
+      timestamp: 10,
+    };
+    useChatSessionStore.getState().initSessionSnapshot(conversationId, {
+      ...idleSlice,
+      messages: [userMsg, failed],
+    });
+
+    useChatSessionStore.getState().mergeCommittedFromServer(conversationId, [
+      userMsg,
+      { role: 'user', turnId: 'run-1', content: failed.content, timestamp: 11 },
+    ], false);
+
+    const messages = getChatSessionSnapshot(conversationId)?.messages ?? [];
+    expect(messages).toHaveLength(2);
+    expect(messages[1]).toMatchObject({ turnId: 'run-1' });
+    expect(messages[1]).not.toHaveProperty('deliveryStatus');
+  });
+
+  it('does not confuse a repeated failed message with an older canonical turn', () => {
+    const repeated: Message = {
+      role: 'user',
+      content: [{ type: 'text', text: 'same text' }],
+      timestamp: 10,
+    };
+    const failed: Message = {
+      ...repeated,
+      deliveryStatus: 'failed',
+      clientSubmissionId: 'local-failed',
+      timestamp: 20,
+    };
+    useChatSessionStore.getState().initSessionSnapshot(conversationId, {
+      ...idleSlice,
+      messages: [repeated, failed],
+    });
+
+    useChatSessionStore.getState().mergeCommittedFromServer(conversationId, [repeated], false);
+
+    expect(getChatSessionSnapshot(conversationId)?.messages).toHaveLength(2);
+    expect(getChatSessionSnapshot(conversationId)?.messages[1]).toMatchObject({
+      clientSubmissionId: 'local-failed',
+      deliveryStatus: 'failed',
+    });
+  });
+
   it('reuses unchanged message rows during a background transcript refresh', () => {
     useChatSessionStore.getState().initSessionSnapshot(conversationId, idleSlice);
     const beforeMessages = useChatSessionStore.getState().sessions[conversationId].messages;

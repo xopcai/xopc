@@ -15,7 +15,11 @@ import { useChatSessionStore } from '@/features/chat/session/chat-session-store'
 import { ProjectEnvironmentPicker } from '@/features/chat/composer/project-environment-picker';
 import { useProjectSessionComposer } from '@/features/chat/composer/use-project-session-composer';
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
-import type { ComposerContextRef } from '@/features/chat/composer/composer.types';
+import type {
+  ComposerContextRef,
+  ComposerSendFlightEvent,
+  ComposerSendHandler,
+} from '@/features/chat/composer/composer.types';
 import { useChatProjectScope } from '@/features/chat/scope/use-chat-project-scope';
 import { ChatWelcomeSpotlightSkeleton } from '@/features/chat/chat-welcome-spotlight';
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
@@ -69,7 +73,10 @@ import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-st
 import { useChatRunPresenceStore } from '@/features/chat/session/chat-run-presence-store';
 import { AgentRunErrorBanner } from '@/features/chat/messages/agent-run-error-banner';
 import { parseAgentRunError } from '@/features/chat/messages/agent-run-error-parser';
-import { parseBrowserSetupRequired } from '@/features/chat/tool-results/browser-setup-required-parser';
+import { BrowserSetupRequiredCard } from '@/features/chat/tool-results/browser-setup-required-card';
+import {
+  findLatestBrowserSetupRequired,
+} from '@/features/chat/tool-results/browser-setup-required-parser';
 import { agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { showActivity } from '@/stores/activity-store';
@@ -77,6 +84,11 @@ import { Button } from '@/components/ui/button';
 import { useTaskDetail } from '@/features/tasks/use-task-detail';
 import { peekComposerAttachmentHandoff } from '@/features/chat/composer/composer-attachment-handoff';
 import { takeComposerPayloadHandoff } from '@/features/chat/composer/composer-payload-handoff';
+import { SendFlightOverlay } from '@/features/chat/motion/send-flight-overlay';
+import {
+  createSendFlightRequest,
+  type SendFlightRequest,
+} from '@/features/chat/motion/send-flight.types';
 
 const ChatTerminalDock = lazy(async () => {
   const module = await import('@/features/chat/terminal/chat-terminal-dock');
@@ -140,6 +152,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   const [sourceNoteSaveError, setSourceNoteSaveError] = useState<string | null>(null);
   const [showWelcomeSkeleton, setShowWelcomeSkeleton] = useState(false);
   const [editingUserTurn, setEditingUserTurn] = useState<EditingUserTurn | null>(null);
+  const [sendFlight, setSendFlight] = useState<SendFlightRequest | null>(null);
 
   const taskId = boundTaskId?.trim() || null;
   const { data: taskDetail } = useTaskDetail(taskId ?? '');
@@ -203,15 +216,13 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
       ACTIVE_RUN_STATUSES.has(workflowRunView.run.status),
   );
   const latestMessage = msgSlice.items.at(-1);
-  const latestMessageHasBrowserSetup = latestMessage?.role === 'assistant'
-    && latestMessage.content.some((block) => block.type === 'tool_use'
-      && block.name === 'browser_use'
-      && parseBrowserSetupRequired(block.details) !== null);
-  const showBrowserExtensionNudge = !embedded
+  const latestBrowserSetup = latestMessage?.role === 'assistant'
+    ? findLatestBrowserSetupRequired(latestMessage.content)
+    : null;
+  const showBrowserSetupPrompt = !embedded
     && !stream.streaming
     && !stream.sending
-    && latestMessage?.role === 'assistant'
-    && !latestMessageHasBrowserSetup;
+    && latestBrowserSetup !== null;
 
   useEffect(() => {
     if (!chatConversationId) return;
@@ -343,6 +354,25 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
     loadingMore: session.loadingMore,
     loadMoreMessages: session.loadMoreMessages,
   });
+  const handleSendFlightDispatched = useCallback((event: ComposerSendFlightEvent) => {
+    const reduceMotion = typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion) return;
+    setSendFlight(createSendFlightRequest(
+      event.receipt.clientSubmissionId,
+      event.receipt.messageRenderKey,
+      event.sourceRect,
+      event.draft,
+    ));
+  }, []);
+  const completeSendFlight = useCallback((clientSubmissionId: string) => {
+    setSendFlight((current) => (
+      current?.clientSubmissionId === clientSubmissionId ? null : current
+    ));
+  }, []);
+  useEffect(() => {
+    setSendFlight(null);
+  }, [chatConversationId]);
   const [activeMessageIndex, setActiveMessageIndex] = useState(0);
   const timelineRafRef = useRef<number | null>(null);
   const pendingTimelineDisplayIndexRef = useRef<number | null>(null);
@@ -696,8 +726,8 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   }, [activeWelcomeSpotlight, agents.displayAgentId, chatConversationId, msgSlice.items.length, stream.streaming]);
 
   const handleComposerSend = useCallback(
-    async (...args: Parameters<typeof stream.sendMessage>) => {
-      const [text] = args;
+    (...args: Parameters<ComposerSendHandler>) => {
+      const [text, attachments, thinkingLevel, contextRefs, sendOptions] = args;
       if (pageContextDraft && (editingUserTurn || text.trim().startsWith('/'))) {
         useChatSessionStore.getState().setShellError(m.chat.pageContext.pending);
         return false;
@@ -719,15 +749,28 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
         setEditingUserTurn(null);
         return stream.replaceLatestUserTurn(
           editingUserTurn.turnId,
-          args[0],
-          args[1],
-          args[2],
-          args[3],
+          text,
+          attachments,
+          thinkingLevel,
+          contextRefs,
         );
       }
-      const accepted = await stream.sendMessage(args[0], args[1], args[2], args[3], args[4], pageContextDraft?.envelope);
-      if (accepted !== false && pageContextKey && pageContextDraft) pageContextDrafts.remove(pageContextKey, pageContextDraft);
-      return accepted;
+      let dispatched = false;
+      const acceptance = stream.sendMessage(
+        text,
+        attachments,
+        thinkingLevel,
+        contextRefs,
+        undefined,
+        pageContextDraft?.envelope,
+        (clientSubmissionId, messageRenderKey) => {
+          dispatched = true;
+          sendOptions?.onDispatched?.({ clientSubmissionId, messageRenderKey });
+        },
+      );
+      if (!dispatched) return acceptance;
+      if (pageContextKey && pageContextDraft) pageContextDrafts.remove(pageContextKey, pageContextDraft);
+      return true;
     },
     [agents.displayAgentId, editingUserTurn, stream.replaceLatestUserTurn, stream.sendMessage, pageContextDraft, pageContextKey, m.chat.pageContext.pending],
   );
@@ -1266,7 +1309,12 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                         ? handleForkAssistantTurn
                         : undefined
                     }
-                    trailingContent={<BrowserExtensionNudge enabled={showBrowserExtensionNudge} />}
+                    activeSendFlight={sendFlight}
+                    trailingContent={latestBrowserSetup?.driver === 'extension' ? (
+                      <BrowserExtensionNudge enabled={showBrowserSetupPrompt} />
+                    ) : showBrowserSetupPrompt && latestBrowserSetup ? (
+                      <BrowserSetupRequiredCard payload={latestBrowserSetup} />
+                    ) : null}
                   />
                 </>
               )}
@@ -1364,6 +1412,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 onSend={projectComposer.send}
                 editingUserTurnId={editingUserTurn?.turnId}
                 onCancelUserMessageEdit={handleCancelUserMessageEdit}
+                onSendFlightDispatched={handleSendFlightDispatched}
                 onAbort={stream.abort}
                 onAddPendingFollowUp={pageContextDraft ? undefined : followUp.addPendingFollowUp}
                 onSteeringInterrupt={pageContextDraft ? undefined : (text, atts, contextRefs) => void stream.interruptAndSend(text, atts, undefined, contextRefs)}
@@ -1402,6 +1451,8 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
           <ChatTerminalDock key={chatConversationId} conversationId={chatConversationId} />
         </Suspense>
       ) : null}
+
+      <SendFlightOverlay request={sendFlight} onComplete={completeSendFlight} />
 
       <Dialog.Root
         open={sourceNoteSaveDraft !== null}
