@@ -1,9 +1,12 @@
+import { createHash } from 'node:crypto';
+
 import type { Config } from '../config/schema.js';
 import { writeKnowledgeItem } from '../knowledge-memory/index.js';
 import type { KnowledgeSourceItem } from '../knowledge/types.js';
 import {
   finishContextExtractionRun,
-  listKnowledgeSourceItems,
+  getKnowledgeSourceItem,
+  type ContextExtractionOutput,
 } from '../storage/sqlite/index.js';
 import { createContextEvidence } from '../storage/sqlite/context-evidence-repository.js';
 import { reconcileAssertion } from '../user-model/index.js';
@@ -12,8 +15,17 @@ import type { UnderstandingSourceItem } from '../user-context/sources/types.js';
 import { allowsRemoteSourceProcessing } from '../user-context/sources/processing-policy.js';
 import { analyzeUnderstandingSources } from '../work-discovery/analyzer.js';
 import type { WorkDiscoveryProfileCandidate } from '../work-discovery/types.js';
+import { createLogger } from '../utils/logger.js';
 
 const MAX_CONNECTED_ITEMS = 150;
+const log = createLogger('ConnectedSourceUnderstanding');
+
+type ExtractionOutput = Omit<ContextExtractionOutput, 'id' | 'runId' | 'ordinal' | 'createdAt'>;
+
+function evidenceKey(sourceInstanceId: string, evidenceRefs: string[]): string {
+  const fingerprint = createHash('sha256').update([...evidenceRefs].sort().join('\n')).digest('hex').slice(0, 24);
+  return `connected-thread:${sourceInstanceId}:${fingerprint}`;
+}
 
 function normalizedValue(item: KnowledgeSourceItem): Record<string, unknown> {
   if (!item.normalizedText) return {};
@@ -90,6 +102,7 @@ export async function deriveConnectedSourceUnderstanding(input: {
   config: Config;
   agentId: string;
   sourceInstanceId: string;
+  sourceItemIds: string[];
   sourceRunId: string;
   processingPolicy: 'local_only' | 'remote_allowed';
   analyze?: typeof analyzeUnderstandingSources;
@@ -100,18 +113,24 @@ export async function deriveConnectedSourceUnderstanding(input: {
   status: 'completed' | 'partial' | 'failed';
   error?: string;
 }> {
-  const sourceItems = listKnowledgeSourceItems({
-    agentId: input.agentId,
-    sourceInstanceId: input.sourceInstanceId,
-    includeDeleted: false,
-    limit: MAX_CONNECTED_ITEMS,
-  });
+  const sourceItems = [...new Set(input.sourceItemIds)].slice(0, MAX_CONNECTED_ITEMS)
+    .flatMap((itemId) => getKnowledgeSourceItem(itemId) ?? [])
+    .filter((item) => item.sourceInstanceId === input.sourceInstanceId
+      && item.metadata.agentId === input.agentId && !item.deletedAt);
   const items = connectedItemsForUnderstanding(sourceItems);
-  if (!items.length) return { created: 0, knowledgeCount: 0, status: 'completed' };
+  if (!items.length) {
+    log.info({
+      sourceRunId: input.sourceRunId,
+      sourceInstanceId: input.sourceInstanceId,
+      sourceItemCount: 0,
+      reason: 'no_changed_items',
+    }, 'Connected source semantic analysis skipped');
+    return { created: 0, knowledgeCount: 0, status: 'completed' };
+  }
   const extraction = claimRegisteredExtraction({
     extractorId: 'connector-semantic',
     sourceRef: `understanding-source-run:${input.sourceRunId}`,
-    contentForHash: sourceItems.map((item) => `${item.id}:${item.sourceUpdatedAt ?? ''}`).join('\n'),
+    contentForHash: sourceItems.map((item) => `${item.id}:${item.contentHash}`).join('\n'),
     processingPolicy: input.processingPolicy,
     destination: 'remote_model',
   });
@@ -122,10 +141,17 @@ export async function deriveConnectedSourceUnderstanding(input: {
     const analysis = await (input.analyze ?? analyzeUnderstandingSources)({ config: input.config, items });
     input.assertAuthorized?.();
     const byRef = new Map(items.map((item) => [item.evidenceRef, item]));
+    const outputs: ExtractionOutput[] = [];
     let created = 0;
     for (const candidate of analysis.profileCandidates.filter(isPortraitCandidate)) {
       const evidenceItems = durableEvidence(candidate, byRef);
-      if (!evidenceItems.length) continue;
+      const candidateKey = `connected-profile:${candidate.category}:${candidate.factKey}`;
+      if (!evidenceItems.length) {
+        outputs.push({ candidateKey, outcome: 'rejected' });
+        continue;
+      }
+      let assertionId: string | undefined;
+      let candidateCreated = false;
       for (const [index, evidenceItem] of evidenceItems.entries()) {
         const evidence = createContextEvidence({
           sourceType: 'connector',
@@ -157,26 +183,55 @@ export async function deriveConnectedSourceUnderstanding(input: {
           evidenceId: evidence.id,
           evidenceConfidence: 0.9,
         });
+        assertionId = result.assertion?.id ?? assertionId;
+        candidateCreated ||= result.action === 'created' || result.action === 'superseded';
         if (index === 0 && result.action === 'created') created += 1;
       }
+      outputs.push({
+        candidateKey,
+        ...(assertionId ? { objectType: 'assertion', objectId: assertionId } : {}),
+        outcome: assertionId ? (candidateCreated ? 'created' : 'deduplicated') : 'rejected',
+      });
     }
     let knowledgeCount = 0;
     for (const thread of analysis.workThreadCandidates) {
+      const evidenceRefs = [...new Set(thread.evidenceRefs)].filter((ref) => byRef.has(ref));
+      const candidateKey = evidenceKey(input.sourceInstanceId, evidenceRefs);
+      if (!evidenceRefs.length) {
+        outputs.push({ candidateKey, outcome: 'rejected' });
+        continue;
+      }
       const result = writeKnowledgeItem({
-        kind: 'project_fact',
-        scope: { type: 'agent', id: input.agentId },
+        kind: 'work_thread',
+        scope: { type: 'global' },
         content: `${thread.title}: ${thread.summary}`,
-        canonicalKey: `connected-thread:${input.sourceInstanceId}:${thread.topicKey}`,
+        canonicalKey: candidateKey,
         confidence: thread.confidence === 'high' ? 0.9 : thread.confidence === 'medium' ? 0.72 : 0.55,
         importance: thread.horizon === 'current' ? 0.75 : 0.5,
         originClass: 'untrusted',
         sourceAgentId: input.agentId,
-        source: { sourceRunId: input.sourceRunId, evidenceRefs: thread.evidenceRefs },
+        source: { sourceRunId: input.sourceRunId, evidenceRefs },
+        replaceExisting: true,
       });
       if (result.created) knowledgeCount += 1;
+      outputs.push({
+        candidateKey,
+        ...(result.item ? { objectType: 'knowledge', objectId: result.item.id } : {}),
+        outcome: result.created ? 'created' : result.item ? 'deduplicated' : 'rejected',
+      });
     }
-    finishContextExtractionRun({ runId: extraction.run.id, status: 'completed' });
+    finishContextExtractionRun({ runId: extraction.run.id, status: 'completed', outputs });
     const sourceStatus = analysis.sourceStatuses.find((item) => item.sourceId === 'connected-work');
+    log.info({
+      sourceRunId: input.sourceRunId,
+      sourceInstanceId: input.sourceInstanceId,
+      sourceItemCount: sourceItems.length,
+      assertionCreated: created,
+      knowledgeCreated: knowledgeCount,
+      deduplicated: outputs.filter((output) => output.outcome === 'deduplicated').length,
+      rejected: outputs.filter((output) => output.outcome === 'rejected').length,
+      sourceStatus: sourceStatus?.status ?? 'failed',
+    }, 'Connected source semantic analysis finished');
     return {
       created,
       knowledgeCount,

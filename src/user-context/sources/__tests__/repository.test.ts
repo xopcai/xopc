@@ -11,6 +11,7 @@ import {
 } from '../../../storage/sqlite/index.js';
 import {
   createUnderstandingSourceRun,
+  getOrCreateConnectorUnderstandingSourceRun,
   listUnderstandingSourceGrants,
   listUnderstandingSourceRuns,
   revokeUnderstandingSourceGrant,
@@ -75,6 +76,25 @@ describe('understanding source repository', () => {
     expect(updateUnderstandingSourceGrantPolicies(grant.id, {
       retentionPolicy: 'derived_only', processingPolicy: 'remote_allowed', nowMs: 11,
     })).toMatchObject({ retentionPolicy: 'derived_only', processingPolicy: 'remote_allowed', updatedAt: 11 });
+  });
+
+  it('creates one source run per connector learning job', () => {
+    const grant = upsertUnderstandingSourceGrant({
+      sourceKey: 'connector-account:one', adapterId: 'connector:gmail', category: 'mail', platform: 'all',
+      displayName: 'Mail', accessMode: 'continuous', retentionPolicy: 'bounded_raw',
+      processingPolicy: 'remote_allowed', config: {}, nowMs: 10,
+    });
+    const first = getOrCreateConnectorUnderstandingSourceRun({
+      grantId: grant.id, connectorLearningJobId: 'job-1', kind: 'bootstrap', nowMs: 11,
+    });
+    const repeated = getOrCreateConnectorUnderstandingSourceRun({
+      grantId: grant.id, connectorLearningJobId: 'job-1', kind: 'incremental', nowMs: 12,
+    });
+
+    expect(repeated.id).toBe(first.id);
+    expect(listUnderstandingSourceRuns(grant.id)).toEqual([
+      expect.objectContaining({ id: first.id, connectorLearningJobId: 'job-1', kind: 'bootstrap' }),
+    ]);
   });
 
 });

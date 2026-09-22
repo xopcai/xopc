@@ -47,6 +47,85 @@ describe('SQLite migrations', () => {
     rmSync(migrationsDir, { recursive: true, force: true });
   });
 
+  it('migrates connected work threads to the global work-memory kind', () => {
+    const db = openEmptyDb();
+    try {
+      installBaseline(db);
+      applyPendingMigrations(db, { targetVersion: 199 });
+      db.prepare(`INSERT INTO knowledge_items (
+        knowledge_id, principal_id, kind, scope_type, scope_id, content, canonical_key,
+        status, confidence, importance, origin_class, source_agent_id, source_json,
+        created_at, updated_at, record_class
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run('connected', 'local-owner', 'project_fact', 'agent', 'main', 'Atlas launch',
+          'connected-thread:composio:gmail:atlas', 'candidate', 0.9, 0.75, 'untrusted',
+          'main', '{"sourceRunId":"run-1"}', 1, 1, 'memory');
+      db.prepare(`INSERT INTO knowledge_item_status_events (
+        event_id, knowledge_id, to_status, actor_type, reason, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?)`)
+        .run('event-1', 'connected', 'candidate', 'runtime', 'Knowledge admitted.', 1);
+
+      applyPendingMigrations(db);
+
+      expect(db.prepare(`SELECT kind, scope_type, scope_id FROM knowledge_items
+        WHERE knowledge_id = ?`).get('connected')).toEqual({
+        kind: 'work_thread', scope_type: 'global', scope_id: null,
+      });
+      expect(db.prepare('SELECT knowledge_id FROM knowledge_item_status_events WHERE event_id = ?')
+        .get('event-1')).toEqual({ knowledge_id: 'connected' });
+      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally { db.close(); }
+  });
+
+  it('deduplicates connector source runs and removes legacy extraction object types', () => {
+    const db = openEmptyDb();
+    try {
+      installBaseline(db);
+      applyPendingMigrations(db, { targetVersion: 200 });
+      db.prepare(`INSERT INTO understanding_source_grants (
+        grant_id, source_key, adapter_id, category, platform, display_name, status, access_mode,
+        retention_policy, processing_policy, config_json, checkpoint_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        'grant-1', 'connector-account:one', 'connector:gmail', 'mail', 'all', 'Mail', 'active',
+        'continuous', 'bounded_raw', 'remote_allowed', '{}', '{}', 1, 1,
+      );
+      db.prepare(`INSERT INTO understanding_source_runs (
+        run_id, grant_id, kind, status, items_seen, metadata_json, started_at, completed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        'run-completed', 'grant-1', 'bootstrap', 'completed', 10,
+        '{"connectorLearningJobId":"job-1","semanticStatus":"completed"}', 1, 2,
+      );
+      db.prepare(`INSERT INTO understanding_source_runs (
+        run_id, grant_id, kind, status, items_seen, metadata_json, started_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
+        'run-orphan', 'grant-1', 'bootstrap', 'queued', 0,
+        '{"connectorLearningJobId":"job-1"}', 3,
+      );
+      db.prepare(`INSERT INTO context_extraction_runs (
+        extraction_run_id, principal_id, source_ref, extractor_id, extractor_version,
+        processing_policy, destination, input_hash, status, started_at, completed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        'extract-1', 'local-owner', 'understanding-source-run:run-completed', 'connector-semantic', '1',
+        'remote_allowed', 'remote_model', 'hash', 'completed', 1, 2,
+      );
+      db.prepare(`INSERT INTO context_extraction_outputs (
+        output_id, extraction_run_id, ordinal, candidate_key, object_type, object_id, outcome, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        'output-1', 'extract-1', 0, 'candidate', 'understanding', 'old-object', 'created', 2,
+      );
+
+      applyPendingMigrations(db);
+
+      expect(db.prepare(`SELECT run_id, connector_learning_job_id FROM understanding_source_runs
+        WHERE connector_learning_job_id = ?`).all('job-1')).toEqual([
+        { run_id: 'run-completed', connector_learning_job_id: 'job-1' },
+      ]);
+      expect(db.prepare('SELECT object_type, object_id FROM context_extraction_outputs WHERE output_id = ?')
+        .get('output-1')).toEqual({ object_type: null, object_id: null });
+      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+    } finally { db.close(); }
+  });
+
   it('adds durable note deletion cleanup without changing existing note data', () => {
     const db = openEmptyDb();
     try {

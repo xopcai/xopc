@@ -269,6 +269,7 @@ const profilePredicates = new Set([
 ]);
 
 const knowledgeKindOrder = [
+  'work_thread',
   'project_fact',
   'workspace_fact',
   'decision',
@@ -375,11 +376,11 @@ function scopeLabel(scope: UserAssertion['scope'], language: Language): string {
 function knowledgeKindLabel(kind: KnowledgeItem['kind'], language: Language): string {
   const labels = language === 'zh'
     ? {
-        project_fact: '项目事实', workspace_fact: '工作区事实', decision: '已经决定', task_lesson: '工作经验',
+        work_thread: '工作主线', project_fact: '项目事实', workspace_fact: '工作区事实', decision: '已经决定', task_lesson: '工作经验',
         commitment: '承诺与约定', open_question: '待解问题', episode: '重要经历', note: '其他记录',
       }
     : {
-        project_fact: 'Project facts', workspace_fact: 'Workspace facts', decision: 'Decisions', task_lesson: 'Lessons',
+        work_thread: 'Work threads', project_fact: 'Project facts', workspace_fact: 'Workspace facts', decision: 'Decisions', task_lesson: 'Lessons',
         commitment: 'Commitments', open_question: 'Open questions', episode: 'Episodes', note: 'Notes',
       };
   return labels[kind];

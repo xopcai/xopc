@@ -76,7 +76,6 @@ export {
   claimContextExtractionRun,
   finishContextExtractionRun,
   getContextExtractionRun,
-  hasIndependentExtractionOutput,
   listContextExtractionOutputs,
   listContextExtractionRuns,
   type ContextExtractionOutput,
@@ -84,15 +83,6 @@ export {
   type ContextExtractionStatus,
   type ContextObjectType,
 } from './context-extraction-repository.js';
-export {
-  closeTemporalAssertions,
-  createTemporalAssertion,
-  linkContextObjects,
-  listContextObjectRelations,
-  listTemporalAssertions,
-  type ContextObjectRelation,
-  type ContextTemporalAssertion,
-} from './context-relation-repository.js';
 export {
   createCollaborationRule,
   getCollaborationRule,

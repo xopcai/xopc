@@ -99,7 +99,11 @@ export function evaluateContextBudget(input: ContextBudgetInput): ContextBudgetE
   const hardLimitTokens = Math.max(1_024, contextWindow - reserveTokens);
   const triggerThreshold = Math.min(0.98, Math.max(0.1, input.triggerThreshold ?? 0.8));
   const triggerTokens = Math.min(hardLimitTokens, Math.floor(contextWindow * triggerThreshold));
-  const transcriptTokens = estimateMessagesTokens(input.messages);
+  const transcriptTokens = estimateMessagesTokens(
+    input.systemPrompt === undefined
+      ? input.messages
+      : input.messages.filter(message => message.role !== 'system'),
+  );
   const systemPromptTokens = estimateTextTokens(input.systemPrompt ?? '');
   const currentUserTokens = input.currentUserMessage
     ? estimateMessageTokens(input.currentUserMessage)

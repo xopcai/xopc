@@ -1,6 +1,7 @@
 import type { UserModelScope } from '../user-model/domain.js';
 
 export type KnowledgeKind =
+  | 'work_thread'
   | 'project_fact'
   | 'workspace_fact'
   | 'decision'

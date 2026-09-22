@@ -75,6 +75,7 @@ export interface UnderstandingSourceCollectionResult {
 export interface UnderstandingSourceRun {
   id: string;
   grantId: string;
+  connectorLearningJobId?: string;
   kind: 'preview' | 'bootstrap' | 'incremental' | 'fingerprint';
   status: 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'canceled';
   cursorBefore?: string;

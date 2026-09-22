@@ -265,9 +265,10 @@ export function setKnowledgeSourceCursor(sourceInstanceId: string, collectionSco
 export function upsertKnowledgeSourceItems(
   inputs: KnowledgeSourceItemInput[],
   nowMs = Date.now(),
-): { items: KnowledgeSourceItem[]; created: number; updated: number; unchanged: number } {
+): { items: KnowledgeSourceItem[]; changedItemIds: string[]; created: number; updated: number; unchanged: number } {
   return runSqliteWriteTransaction((db) => {
     const items: KnowledgeSourceItem[] = [];
+    const changedItemIds: string[] = [];
     let created = 0;
     let updated = 0;
     let unchanged = 0;
@@ -332,6 +333,7 @@ export function upsertKnowledgeSourceItems(
       );
       const row = db.prepare(`SELECT * FROM knowledge_source_items WHERE item_id = ?`).get(id) as KnowledgeSourceItemRow;
       items.push(sourceItemFromRow(row));
+      changedItemIds.push(id);
       const changeKind = input.deletedAt ? 'deleted' : existing ? 'modified' : 'added';
       db.prepare(
         `INSERT INTO knowledge_source_changes (
@@ -350,7 +352,7 @@ export function upsertKnowledgeSourceItems(
       if (existing) updated += 1;
       else created += 1;
     }
-    return { items, created, updated, unchanged };
+    return { items, changedItemIds, created, updated, unchanged };
   });
 }
 

@@ -2275,7 +2275,7 @@ CREATE TABLE knowledge_items (
   knowledge_id TEXT PRIMARY KEY,
   principal_id TEXT NOT NULL,
   kind TEXT NOT NULL CHECK(kind IN (
-    'project_fact', 'workspace_fact', 'decision', 'task_lesson',
+    'work_thread', 'project_fact', 'workspace_fact', 'decision', 'task_lesson',
     'commitment', 'open_question', 'episode', 'note'
   )),
   scope_type TEXT NOT NULL CHECK(scope_type IN ('global', 'agent', 'workspace', 'project', 'session')),

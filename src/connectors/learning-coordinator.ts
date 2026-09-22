@@ -18,9 +18,9 @@ import {
 import { ConnectedKnowledgePipeline } from '../knowledge/index.js';
 import { createLogger } from '../utils/logger.js';
 import {
-  createUnderstandingSourceRun,
+  getConnectorUnderstandingSourceRun,
+  getOrCreateConnectorUnderstandingSourceRun,
   getUnderstandingSourceGrant,
-  listUnderstandingSourceRuns,
   listUnderstandingSourceGrants,
   upsertUnderstandingSourceGrant,
   updateUnderstandingSourceGrantCheckpoint,
@@ -75,14 +75,13 @@ function ensureUnderstandingSourceRun(
     processingPolicy: 'remote_allowed',
     config: { connectorId: job.connectorId, accountId: job.accountId, readOnly: true },
   });
-  return listUnderstandingSourceRuns(grant.id, 100)
-    .find((run) => run.metadata.connectorLearningJobId === job.id)
-    ?? createUnderstandingSourceRun({
-      grantId: grant.id,
-      kind: job.mode,
-      status: 'queued',
-      metadata: { connectorLearningJobId: job.id, connectorId: job.connectorId },
-    });
+  return getOrCreateConnectorUnderstandingSourceRun({
+    grantId: grant.id,
+    connectorLearningJobId: job.id,
+    kind: job.mode,
+    status: 'queued',
+    metadata: { connectorId: job.connectorId },
+  });
 }
 
 export type ConnectorLearningCoordinator = {
@@ -239,6 +238,7 @@ export function startConnectorLearningCoordinator(options: {
     }
     let itemsSeen = 0;
     let itemsIndexed = 0;
+    const changedSourceItemIds = new Set<string>();
     for (const stream of plan.streams) {
       const synced = await ingestComposioConnectedSource({
         config: options.getConfig(),
@@ -253,6 +253,7 @@ export function startConnectorLearningCoordinator(options: {
       });
       itemsSeen += synced.itemsSeen;
       itemsIndexed += synced.itemsIndexed;
+      for (const sourceItemId of synced.sourceItemIds) changedSourceItemIds.add(sourceItemId);
     }
     const enrichmentErrors: string[] = [];
     if (plan.toolkit === 'googledrive') {
@@ -268,6 +269,7 @@ export function startConnectorLearningCoordinator(options: {
         });
         enrichmentErrors.push(...enriched.failed.map((failure) => failure.error));
         itemsIndexed += enriched.completed;
+        for (const sourceItemId of enriched.sourceItemIds) changedSourceItemIds.add(sourceItemId);
       }
     }
     if (listConnectorLearningJobs({ accountId: job.accountId, limit: 100 })
@@ -289,6 +291,7 @@ export function startConnectorLearningCoordinator(options: {
         config: options.getConfig(),
         agentId: job.agentId,
         sourceInstanceId: job.sourceInstanceId,
+        sourceItemIds: [...changedSourceItemIds],
         sourceRunId: sourceRun.id,
         processingPolicy: getUnderstandingSourceGrant(sourceRun.grantId)?.processingPolicy ?? 'local_only',
         assertAuthorized: () => {
@@ -380,7 +383,7 @@ export function startConnectorLearningCoordinator(options: {
           const definition = getConnectorDefinition(job.connectorId);
           if (definition?.runtime.type === 'composio' && definition.runtime.role === 'toolkit') {
             const grant = listUnderstandingSourceGrants({ includeRevoked: true }).find((item) => item.sourceKey === `connector-account:${job.accountId}`);
-            const sourceRun = grant && listUnderstandingSourceRuns(grant.id, 100).find((item) => item.metadata.connectorLearningJobId === job.id);
+            const sourceRun = grant && getConnectorUnderstandingSourceRun(job.id);
             if (sourceRun) updateUnderstandingSourceRun(sourceRun.id, {
               status: 'failed', errorMessage: learningFailureCode(err), completed: true,
             });

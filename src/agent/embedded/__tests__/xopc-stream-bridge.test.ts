@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import type { Model, Api, Context } from '@earendil-works/pi-ai';
+import { normalizeContext, type Model, type Api } from '@earendil-works/pi-ai';
 
 import { wrapStreamFnForXopcExtensions } from '../xopc-stream-bridge.js';
 import {
@@ -10,11 +10,12 @@ import {
 import { EXTENSION_PROVIDER_BASE_URL } from '../../../providers/index.js';
 import type { ProviderPlugin } from '../../../extensions/types/providers.js';
 
-const FAKE_CONTEXT = {
+const FAKE_TOOLS = [{ name: 'search', description: 'Search', parameters: {} }];
+const FAKE_CONTEXT = normalizeContext({
   systemPrompt: 'You are xopc.',
   messages: [],
-  tools: [{ name: 'search', description: 'Search', parameters: {} }],
-} as unknown as Context;
+  tools: FAKE_TOOLS,
+});
 
 function makeBuiltinModel(): Model<Api> {
   return {
@@ -109,8 +110,8 @@ describe('wrapStreamFnForXopcExtensions', () => {
       expect.objectContaining({
         model: 'demo-model',
         systemPrompt: 'You are xopc.',
-        messages: FAKE_CONTEXT.messages,
-        tools: FAKE_CONTEXT.tools,
+        messages: [],
+        tools: FAKE_TOOLS,
         temperature: 0.2,
         maxTokens: 123,
         apiKey: 'extension-managed',

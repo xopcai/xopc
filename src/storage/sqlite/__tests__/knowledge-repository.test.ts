@@ -46,7 +46,9 @@ describe('knowledge repository', () => {
     const first = upsertKnowledgeSourceItems([input]);
     const second = upsertKnowledgeSourceItems([input]);
     expect(first.created).toBe(1);
+    expect(first.changedItemIds).toEqual([first.items[0]?.id]);
     expect(second.unchanged).toBe(1);
+    expect(second.changedItemIds).toEqual([]);
     expect(listKnowledgeSourceItems()).toHaveLength(1);
 
     setKnowledgeSourceCursor('calendar:personal', 'events', 'cursor-2');

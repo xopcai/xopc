@@ -215,8 +215,14 @@ describe('ChatStreamMapper', () => {
     const end = m.map({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'hi' }] } });
 
     expect(start).toMatchObject({ type: 'assistant_message_start', payload: { messageId: 'msg_run-1_1' } });
-    expect(firstDelta).toMatchObject({ type: 'assistant_delta', payload: { messageId: 'msg_run-1_1', delta: 'h' } });
-    expect(secondDelta).toMatchObject({ type: 'assistant_delta', payload: { messageId: 'msg_run-1_1', delta: 'i' } });
+    expect(firstDelta).toMatchObject({
+      type: 'assistant_delta',
+      payload: { messageId: 'msg_run-1_1', delta: 'h', offset: 0 },
+    });
+    expect(secondDelta).toMatchObject({
+      type: 'assistant_delta',
+      payload: { messageId: 'msg_run-1_1', delta: 'i', offset: 1 },
+    });
     expect(end.map((e) => e.type)).toEqual(['thinking_end', 'assistant_message_end']);
     expect(end.at(-1)).toMatchObject({
       type: 'assistant_message_end',

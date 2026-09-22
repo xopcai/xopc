@@ -10,6 +10,8 @@ import type { KnowledgeSourceItem } from '../../knowledge/types.js';
 import {
   closeXopcDatabase,
   getSqliteDatabase,
+  listContextExtractionOutputs,
+  listContextExtractionRuns,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
   upsertKnowledgeSourceItems,
@@ -65,9 +67,9 @@ describe('connected source understanding', () => {
 
   it('keeps current responsibilities in knowledge instead of the durable user model', async () => {
     const { sourceInstanceId, sourceRunId, processingPolicy } = sourceContext('gmail');
-    upsertKnowledgeSourceItems([sourceRow(sourceInstanceId, 1, false)]);
+    const sourceItemIds = upsertKnowledgeSourceItems([sourceRow(sourceInstanceId, 1, false)]).changedItemIds;
     const result = await deriveConnectedSourceUnderstanding({
-      config: ConfigSchema.parse({}), agentId: 'main', sourceInstanceId, sourceRunId, processingPolicy,
+      config: ConfigSchema.parse({}), agentId: 'main', sourceInstanceId, sourceItemIds, sourceRunId, processingPolicy,
       analyze: vi.fn(async ({ items }) => ({
         modelRef: 'test/model', profileCandidates: [{
           id: 'responsibility', category: 'responsibility', factKey: 'atlas',
@@ -81,14 +83,24 @@ describe('connected source understanding', () => {
     });
     expect(result).toEqual({ created: 0, knowledgeCount: 1, status: 'completed' });
     expect(listUserAssertions()).toEqual([]);
-    expect(listKnowledgeItems()).toEqual([expect.objectContaining({ content: 'Atlas launch: Review in progress.' })]);
+    expect(listKnowledgeItems()).toEqual([expect.objectContaining({
+      kind: 'work_thread',
+      scope: { type: 'global' },
+      content: 'Atlas launch: Review in progress.',
+    })]);
+    const [extraction] = listContextExtractionRuns({ sourceRef: `understanding-source-run:${sourceRunId}` });
+    expect(listContextExtractionOutputs(extraction!.id)).toEqual([
+      expect.objectContaining({ objectType: 'knowledge', objectId: listKnowledgeItems()[0]!.id, outcome: 'created' }),
+    ]);
   });
 
   it('creates only repeated owner-backed durable assertions with separate evidence', async () => {
     const { sourceInstanceId, sourceRunId, processingPolicy } = sourceContext('slack');
-    upsertKnowledgeSourceItems([1, 2, 3].map((index) => sourceRow(sourceInstanceId, index, true)));
+    const sourceItemIds = upsertKnowledgeSourceItems(
+      [1, 2, 3].map((index) => sourceRow(sourceInstanceId, index, true)),
+    ).changedItemIds;
     const result = await deriveConnectedSourceUnderstanding({
-      config: ConfigSchema.parse({}), agentId: 'main', sourceInstanceId, sourceRunId, processingPolicy,
+      config: ConfigSchema.parse({}), agentId: 'main', sourceInstanceId, sourceItemIds, sourceRunId, processingPolicy,
       analyze: vi.fn(async ({ items }) => ({
         modelRef: 'test/model',
         profileCandidates: [{
@@ -115,16 +127,67 @@ describe('connected source understanding', () => {
     expect(getSqliteDatabase().prepare(
       'SELECT COUNT(*) AS count FROM user_assertion_evidence WHERE assertion_id = ?',
     ).get(assertion!.id)).toEqual({ count: 3 });
+    const [extraction] = listContextExtractionRuns({ sourceRef: `understanding-source-run:${sourceRunId}` });
+    expect(listContextExtractionOutputs(extraction!.id)).toEqual([
+      expect.objectContaining({ objectType: 'assertion', objectId: assertion!.id, outcome: 'created' }),
+    ]);
   });
 
   it('does not send local-only source content to semantic analysis', async () => {
     const analyze = vi.fn();
-    upsertKnowledgeSourceItems([sourceRow('local:notes', 1, true)]);
+    const sourceItemIds = upsertKnowledgeSourceItems([sourceRow('local:notes', 1, true)]).changedItemIds;
     expect(await deriveConnectedSourceUnderstanding({
       config: ConfigSchema.parse({}), agentId: 'main', sourceInstanceId: 'local:notes',
-      sourceRunId: 'run-local', processingPolicy: 'local_only', analyze,
+      sourceItemIds, sourceRunId: 'run-local', processingPolicy: 'local_only', analyze,
     })).toEqual({ created: 0, knowledgeCount: 0, status: 'completed' });
     expect(analyze).not.toHaveBeenCalled();
+  });
+
+  it('skips semantic analysis when ingestion produced no changes', async () => {
+    const analyze = vi.fn();
+    const { sourceInstanceId, sourceRunId, processingPolicy } = sourceContext('gmail');
+    upsertKnowledgeSourceItems([sourceRow(sourceInstanceId, 1, true)]);
+
+    expect(await deriveConnectedSourceUnderstanding({
+      config: ConfigSchema.parse({}), agentId: 'main', sourceInstanceId,
+      sourceItemIds: [], sourceRunId, processingPolicy, analyze,
+    })).toEqual({ created: 0, knowledgeCount: 0, status: 'completed' });
+    expect(analyze).not.toHaveBeenCalled();
+  });
+
+  it('uses evidence identity to update a work thread when model wording changes', async () => {
+    const { sourceInstanceId, sourceRunId, processingPolicy } = sourceContext('gmail');
+    const firstIds = upsertKnowledgeSourceItems([sourceRow(sourceInstanceId, 1, false)]).changedItemIds;
+    const analysis = (title: string, topicKey: string) => vi.fn(async (
+      { items }: { items: ReturnType<typeof connectedItemsForUnderstanding> },
+    ) => ({
+      modelRef: 'test/model', profileCandidates: [],
+      workThreadCandidates: [{ topicKey, title, summary: 'Review in progress.', horizon: 'current' as const,
+        status: 'active' as const, confidence: 'high' as const, evidenceRefs: [items[0]!.evidenceRef] }],
+      sourceStatuses: [{ sourceId: 'connected-work', status: 'completed' as const }],
+    }));
+    await deriveConnectedSourceUnderstanding({
+      config: ConfigSchema.parse({}), agentId: 'main', sourceInstanceId,
+      sourceItemIds: firstIds, sourceRunId, processingPolicy, analyze: analysis('Atlas launch', 'atlas'),
+    });
+    const [first] = listKnowledgeItems();
+
+    const changedIds = upsertKnowledgeSourceItems([{
+      ...sourceRow(sourceInstanceId, 1, false),
+      contentHash: 'changed-hash',
+      normalizedText: JSON.stringify({ title: 'Renamed launch review' }),
+    }]).changedItemIds;
+    await deriveConnectedSourceUnderstanding({
+      config: ConfigSchema.parse({}), agentId: 'main', sourceInstanceId,
+      sourceItemIds: changedIds, sourceRunId: `${sourceRunId}-next`, processingPolicy,
+      analyze: analysis('Renamed launch review', 'different-model-key'),
+    });
+
+    expect(listKnowledgeItems()).toEqual([expect.objectContaining({
+      id: first!.id,
+      canonicalKey: first!.canonicalKey,
+      content: 'Renamed launch review: Review in progress.',
+    })]);
   });
 });
 
