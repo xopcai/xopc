@@ -1234,6 +1234,11 @@
     "messageUnderstandingReviewQueued": "相关理解已暂停使用，并进入待审核。",
     "messageWhyThisAnswer": "为什么这个回答考虑了你的情况",
     "messageWhyThisAnswerHint": "这些允许使用的个人上下文影响了本次回答。",
+    "messageContextClose": "关闭个人上下文",
+    "messageContextItemsSummary": "本次回答参考了 {{count}} 条上下文",
+    "messageContextGroupSummary": "已归为 {{count}} 组",
+    "messageContextExpandAll": "全部展开",
+    "messageContextCollapseAll": "全部收起",
     "messageContextOrigins": {
       "told_by_user": "你亲自告诉我的",
       "observed": "从多次协作中注意到的",
