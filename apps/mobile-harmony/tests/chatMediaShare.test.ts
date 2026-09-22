@@ -1,51 +1,63 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const mocks = vi.hoisted(() => ({ read: vi.fn(), access: vi.fn(), mkdir: vi.fn(), listFile: vi.fn(), stat: vi.fn(), unlink: vi.fn(), open: vi.fn(), write: vi.fn(), close: vi.fn(), show: vi.fn(), data: vi.fn(), assertConnection: vi.fn() }));
+
+const mocks = vi.hoisted(() => ({ request: vi.fn(), show: vi.fn(), data: vi.fn() }));
 vi.mock('@kit.AbilityKit', () => ({}));
-vi.mock('@kit.CoreFileKit', () => ({ fileIo: { ...mocks, OpenMode: { CREATE: 1, WRITE_ONLY: 2, EXCL: 4 } }, fileUri: { getUriFromPath: (path: string) => 'file://' + path } }));
-vi.mock('@kit.ArkTS', () => ({ util: { generateRandomUUID: () => '00000000-0000-4000-8000-000000000001' } }));
-vi.mock('@kit.ArkData', () => ({ uniformTypeDescriptor: { UniformDataType: { FILE: 'general.file' }, getUniformDataTypeByMIMEType: () => 'general.image' } }));
-vi.mock('@kit.ShareKit', () => ({ systemShare: { SharedData: class { constructor(data: unknown) { mocks.data(data); } }, ShareController: class { show = mocks.show; }, SelectionMode: { SINGLE: 1 }, SharePreviewMode: { DEFAULT: 0 } } }));
-vi.mock('../entry/src/main/ets/service/chatMedia.ets', () => ({ readChatMedia: mocks.read }));
-vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { connectionRevision: () => 1, assertConnection: mocks.assertConnection } }));
-import { shareChatMedia } from '../entry/src/main/ets/service/chatMediaShare.ets';
-const context = { cacheDir: '/sandbox/cache' } as never;
-const file = { id: 'f', name: '../photo.png', mimeType: 'image/png', uri: 'xopc-file:f', size: 5, type: 'image' };
-describe('chat file share handoff', () => {
-  beforeEach(() => {
-    vi.resetAllMocks(); mocks.read.mockResolvedValue(new ArrayBuffer(5)); mocks.access.mockResolvedValue(true);
-    mocks.listFile.mockResolvedValue([]); mocks.open.mockResolvedValue({ fd: 9 }); mocks.write.mockResolvedValue(5);
+vi.mock('@kit.ArkData', () => ({ uniformTypeDescriptor: { UniformDataType: { PLAIN_TEXT: 'general.plain-text' } } }));
+vi.mock('@kit.ShareKit', () => ({ systemShare: {
+  SharedData: class { constructor(data: object) { mocks.data(data); } },
+  ShareController: class { show = mocks.show; },
+  SelectionMode: { SINGLE: 1 }, SharePreviewMode: { DEFAULT: 0 }
+} }));
+vi.mock('../entry/src/main/ets/service/gatewaySession.ets', () => ({ gatewaySession: { request: mocks.request } }));
+
+import { chatMediaShareRequest, createChatMediaShare, shareChatLink, shareReachabilityText } from '../entry/src/main/ets/service/chatMediaShare.ets';
+
+const file = { id: 'artifact', fileId: 'managed-file', name: 'report.pdf', mimeType: 'application/pdf', uri: '', size: 5, type: 'document' };
+const payload = { share: { id: 'share-1', kind: 'file', title: 'report.pdf', description: '',
+  shareUrl: 'https://share.example/s/token', reachability: 'public' as const, expiresAt: '2026-09-23T00:00:00.000Z' } };
+
+describe('managed chat file sharing', () => {
+  beforeEach(() => { vi.resetAllMocks(); mocks.request.mockResolvedValue(JSON.stringify({ ok: true, payload })); });
+
+  it('prefers an explicit managed file id and preserves conversation context', () => {
+    expect(chatMediaShareRequest(file, 'conversation-1')).toEqual({
+      fileId: 'managed-file', conversationId: 'conversation-1', audience: 'friend'
+    });
   });
-  it('shares only a sandbox URI and keeps the file for the receiving app', async () => {
-    await shareChatMedia(context, file, 'c');
-    expect(mocks.open.mock.calls[0][0]).toBe('/sandbox/cache/chat-shares/00000000-0000-4000-8000-000000000001_.._photo.png');
-    expect(mocks.data.mock.calls[0][0].uri).toMatch(/^file:\/\/\/sandbox\/cache\/chat-shares\//);
-    expect(mocks.data.mock.calls[0][0].uri).not.toContain('xopc-file:');
-    expect(mocks.close).toHaveBeenCalledWith({ fd: 9 }); expect(mocks.unlink).not.toHaveBeenCalled();
+
+  it('accepts xopc-file ids and session-relative paths but rejects raw media', () => {
+    expect(chatMediaShareRequest({ ...file, fileId: undefined, uri: 'xopc-file:space-id.cmVwb3J0' }, 'c')?.fileId)
+      .toBe('space-id.cmVwb3J0');
+    expect(chatMediaShareRequest({ ...file, fileId: undefined, uri: '', workspaceRelativePath: 'reports/final.pdf' }, 'c'))
+      .toEqual({ path: 'reports/final.pdf', conversationId: 'c', audience: 'friend' });
+    expect(chatMediaShareRequest({ ...file, fileId: undefined, uri: 'media://inbound/1' }, 'c')).toBeUndefined();
+    expect(chatMediaShareRequest({ ...file, fileId: undefined, uri: 'data:image/png;base64,AA==' }, 'c')).toBeUndefined();
   });
-  it('cleans only the newly created file after failed handoff or incomplete write', async () => {
-    mocks.write.mockResolvedValueOnce(2);
-    await expect(shareChatMedia(context, file, 'c')).rejects.toThrow('INCOMPLETE_MEDIA');
-    expect(mocks.close).toHaveBeenCalledWith({ fd: 9 }); expect(mocks.unlink).toHaveBeenCalledOnce(); expect(mocks.show).not.toHaveBeenCalled();
-    mocks.show.mockRejectedValueOnce(new Error('NO_SHARE_SERVICE'));
-    await expect(shareChatMedia(context, file, 'c')).rejects.toThrow('NO_SHARE_SERVICE');
-    expect(mocks.unlink).toHaveBeenCalledTimes(2);
+
+  it('creates an auto-routed governed share instead of exposing a cached file', async () => {
+    await expect(createChatMediaShare(file, 'conversation-1')).resolves.toEqual(payload);
+    expect(mocks.request).toHaveBeenCalledWith('/api/shares/auto', 'POST', JSON.stringify({
+      fileId: 'managed-file', conversationId: 'conversation-1', audience: 'friend'
+    }));
   });
-  it('does not create files or open the panel when download or connection validation fails', async () => {
-    mocks.read.mockRejectedValueOnce(new Error('OFFLINE'));
-    await expect(shareChatMedia(context, file, 'c')).rejects.toThrow('OFFLINE');
-    mocks.assertConnection.mockImplementationOnce(() => { throw new Error('OPERATION_CANCELLED'); });
-    await expect(shareChatMedia(context, file, 'c')).rejects.toThrow('OPERATION_CANCELLED');
-    expect(mocks.open).not.toHaveBeenCalled(); expect(mocks.show).not.toHaveBeenCalled();
+
+  it('rejects malformed responses and unavailable sources', async () => {
+    mocks.request.mockResolvedValueOnce(JSON.stringify({ ok: true, payload: { share: { id: '', shareUrl: 'javascript:bad', reachability: 'public' } } }));
+    await expect(createChatMediaShare(file, 'c')).rejects.toThrow('INVALID_SHARE_RESPONSE');
+    await expect(createChatMediaShare({ ...file, fileId: undefined, uri: 'https://private.example/file' }, 'c'))
+      .rejects.toThrow('SHARE_SOURCE_UNAVAILABLE');
   });
-  it('prunes only expired owned files and refuses to evict active handoffs at capacity', async () => {
-    const owned = '00000000-0000-4000-8000-000000000002_old.png';
-    mocks.listFile.mockResolvedValueOnce([owned, 'unrelated']);
-    mocks.stat.mockResolvedValueOnce({ isFile: () => true, mtime: 0, size: 5 });
-    await shareChatMedia(context, file, 'c');
-    expect(mocks.unlink).toHaveBeenCalledExactlyOnceWith('/sandbox/cache/chat-shares/' + owned);
-    mocks.listFile.mockResolvedValueOnce([owned]);
-    mocks.stat.mockResolvedValueOnce({ isFile: () => true, mtime: Date.now() / 1000, size: 64 * 1024 * 1024 });
-    await expect(shareChatMedia(context, file, 'c')).rejects.toThrow('SHARE_CACHE_FULL');
-    expect(mocks.unlink).toHaveBeenCalledOnce(); expect(mocks.show).toHaveBeenCalledOnce();
+
+  it('hands only the public link and title to the system share panel', async () => {
+    await shareChatLink({} as never, payload.share);
+    expect(mocks.data).toHaveBeenCalledWith({ utd: 'general.plain-text', content: 'report.pdf\nhttps://share.example/s/token', title: 'report.pdf' });
+    expect(mocks.show).toHaveBeenCalledOnce();
+  });
+
+  it('explains public, LAN and local-only reachability before sharing', () => {
+    expect(shareReachabilityText(payload.share, false)).toBe('Publicly reachable');
+    expect(shareReachabilityText({ ...payload.share, reachability: 'lan', reachabilityHint: 'Wi-Fi only' }, true))
+      .toBe('仅同一局域网可访问\nWi-Fi only');
+    expect(shareReachabilityText({ ...payload.share, reachability: 'local-only' }, true)).toBe('目前仅本机可访问');
   });
 });

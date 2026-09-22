@@ -1,49 +1,73 @@
 import { common } from '@kit.AbilityKit';
-import { fileIo as fs, fileUri } from '@kit.CoreFileKit';
 import { uniformTypeDescriptor as utd } from '@kit.ArkData';
-import { util } from '@kit.ArkTS';
 import { systemShare } from '@kit.ShareKit';
 import { XopcHistoryMedia } from '../model/chat';
-import { readChatMedia } from './chatMedia';
 import { gatewaySession } from './gatewaySession';
 
-let sharing: boolean = false;
+export type XopcShareReachability = 'public' | 'lan' | 'local-only';
 
-// Keep handed-off files after panel dismissal: receivers may read their URI later.
-// Subsequent shares prune files older than one day; size/count caps also apply.
-export async function shareChatMedia(context: common.UIAbilityContext, file: XopcHistoryMedia, conversationId: string): Promise<void> {
-  if (sharing) throw new Error('SHARE_BUSY');
-  sharing = true;
-  let path = '';
-  try {
-    const revision = gatewaySession.connectionRevision();
-    const bytes = await readChatMedia(file, conversationId);
-    gatewaySession.assertConnection(revision);
-    const directory = context.cacheDir + '/chat-shares';
-    if (!await fs.access(directory)) await fs.mkdir(directory);
-    let retainedSize = 0; let retainedCount = 0;
-    for (const name of await fs.listFile(directory)) {
-      if (!/^[0-9a-f-]{36}_/.test(name) || name.includes('/')) continue;
-      const existing = directory + '/' + name;
-      const info = await fs.stat(existing);
-      if (!info.isFile()) continue;
-      if (Date.now() - info.mtime * 1000 > 86400000) await fs.unlink(existing);
-      else { retainedSize += info.size; retainedCount++; }
-    }
-    if (retainedCount >= 32 || retainedSize + bytes.byteLength > 64 * 1024 * 1024) throw new Error('SHARE_CACHE_FULL');
-    const name = (file.name || 'attachment').replace(/[\\/\x00-\x1f\x7f]/g, '_').slice(-100);
-    path = directory + '/' + util.generateRandomUUID() + '_' + name;
-    const output = await fs.open(path, fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY);
-    try { if (await fs.write(output.fd, bytes) !== bytes.byteLength) throw new Error('INCOMPLETE_MEDIA'); }
-    finally { await fs.close(output); }
-    gatewaySession.assertConnection(revision);
-    let type = utd.UniformDataType.FILE as string;
-    try { type = utd.getUniformDataTypeByMIMEType(file.mimeType, utd.UniformDataType.FILE); } catch (_) {}
-    const data = new systemShare.SharedData({ utd: type, uri: fileUri.getUriFromPath(path), title: file.name || 'attachment' });
-    await new systemShare.ShareController(data).show(context, { selectionMode: systemShare.SelectionMode.SINGLE, previewMode: systemShare.SharePreviewMode.DEFAULT });
-    path = '';
-  } finally {
-    if (path) { try { await fs.unlink(path); } catch (_) {} }
-    sharing = false;
+export interface XopcShareRequest {
+  fileId?: string;
+  path?: string;
+  conversationId?: string;
+  audience: string;
+}
+
+export interface XopcShareDetails {
+  id: string;
+  kind: string;
+  title: string;
+  description: string;
+  shareUrl: string;
+  lanUrl?: string | null;
+  reachability: XopcShareReachability;
+  reachabilityHint?: string | null;
+  expiresAt: string;
+  maxViews?: number | null;
+}
+
+export interface XopcSharePayload { share: XopcShareDetails; }
+interface XopcShareEnvelope { ok: boolean; payload?: XopcSharePayload; }
+
+export function chatMediaShareRequest(file: XopcHistoryMedia, conversationId: string): XopcShareRequest | undefined {
+  const explicitId = file.fileId?.trim() || '';
+  let uriId = '';
+  if (!explicitId && file.uri.startsWith('xopc-file:')) {
+    try { uriId = decodeURIComponent(file.uri.slice(10)).trim(); } catch (_) { return undefined; }
   }
+  const fileId = explicitId || uriId;
+  if (fileId) return { fileId, conversationId: conversationId || undefined, audience: 'friend' };
+  const path = file.workspaceRelativePath?.trim() || '';
+  if (path && conversationId) return { path, conversationId, audience: 'friend' };
+  return undefined;
+}
+
+export async function createManagedShare(request: XopcShareRequest): Promise<XopcSharePayload> {
+  const result = JSON.parse(await gatewaySession.request('/api/shares/auto', 'POST', JSON.stringify(request))) as XopcShareEnvelope;
+  const payload = result.payload;
+  if (!result.ok || !payload?.share?.id || !/^https?:\/\//i.test(payload.share.shareUrl)
+    || !['public', 'lan', 'local-only'].includes(payload.share.reachability)) throw new Error('INVALID_SHARE_RESPONSE');
+  return payload;
+}
+
+export async function createChatMediaShare(file: XopcHistoryMedia, conversationId: string): Promise<XopcSharePayload> {
+  const request = chatMediaShareRequest(file, conversationId);
+  if (!request) throw new Error('SHARE_SOURCE_UNAVAILABLE');
+  return createManagedShare(request);
+}
+
+export function shareReachabilityText(share: XopcShareDetails, chinese: boolean): string {
+  const status = share.reachability === 'public' ? (chinese ? '公网可访问' : 'Publicly reachable')
+    : share.reachability === 'lan' ? (chinese ? '仅同一局域网可访问' : 'Reachable on the same LAN')
+      : (chinese ? '目前仅本机可访问' : 'Currently local to your computer');
+  return status + (share.reachabilityHint ? '\n' + share.reachabilityHint : '');
+}
+
+export async function shareChatLink(context: common.UIAbilityContext, share: XopcShareDetails): Promise<void> {
+  const title = share.title.trim() || 'xopc';
+  const content = title + '\n' + share.shareUrl;
+  if (content.length * 3 > 190000) throw new Error('SHARE_TOO_LARGE');
+  const data = new systemShare.SharedData({ utd: utd.UniformDataType.PLAIN_TEXT, content, title });
+  await new systemShare.ShareController(data).show(context,
+    { selectionMode: systemShare.SelectionMode.SINGLE, previewMode: systemShare.SharePreviewMode.DEFAULT });
 }
