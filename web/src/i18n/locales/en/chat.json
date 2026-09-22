@@ -1234,6 +1234,11 @@
     "messageUnderstandingReviewQueued": "The related understanding is paused and queued for review.",
     "messageWhyThisAnswer": "Why this answer was personalized",
     "messageWhyThisAnswerHint": "These parts of your personal context were allowed to shape the response.",
+    "messageContextClose": "Close personal context",
+    "messageContextItemsSummary": "{{count}} context items influenced this answer",
+    "messageContextGroupSummary": "Organized into {{count}} groups",
+    "messageContextExpandAll": "Expand all",
+    "messageContextCollapseAll": "Collapse all",
     "messageContextOrigins": {
       "told_by_user": "You told me",
       "observed": "Noticed across your work",
