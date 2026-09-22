@@ -119,7 +119,7 @@ Physical follow-up after unlock (2026-09-18): Mate 60 passed three focus/dismiss
 
 ## 2026-09-18 rich Chat projection and interaction pass
 
-Reference source: Expo `session-message-parser.ts`, `assistant-turn-view-model.ts`, `MessageBubble.tsx`, `AssistantStepsBlock.tsx`, `ToolUseBlock.tsx`, `AssistantDeliverablesCard.tsx`, `ProductDeliveryCard.tsx` and the shared agent-stream/turn-outcome contracts. Expo and Gateway code are unchanged.
+Reference source: Expo `session-message-parser.ts`, `assistant-turn-view-model.ts`, `MessageBubble.tsx`, `AssistantStepsBlock.tsx`, `ToolUseBlock.tsx`, `AssistantResultTail.tsx`, `ProductDeliveryCard.tsx` and the shared agent-stream/turn-outcome contracts.
 
 | Scenario | Native implementation | Evidence / boundary |
 | --- | --- | --- |

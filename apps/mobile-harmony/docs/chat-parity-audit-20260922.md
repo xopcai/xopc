@@ -8,7 +8,7 @@
 | 输入/草稿/排队 | `composer-*`、`use-composer-attachments` | 草稿、引用、next/steer、排队编辑/取消已有；失败重试、版本冲突需隔离端到端测试 | P1 |
 | 用户消息/图片解析 | `wire-text-scrub`、`wire-attachments` | 已移植模型内部文本清洗，保留结构化媒体；复杂历史附件继续同样例对照 | 回归 |
 | AI/Thinking/Tool | `assistant-turn-view-model`、`AssistantStepsBlock`、`ToolUseBlock` | 有顺序块、状态、输入输出、折叠；缺完整计时/专用工具细节及同屏视觉比对 | P1 |
-| Review/交付物 | `ProductDeliveryCard`、`AssistantDeliverablesCard` | review、文件可用性、权限控制、继续对话已有；真实产物打开/分享尚未全验收 | P1 |
+| Review/交付物 | `ProductDeliveryCard`、`AssistantResultTail` | review、文件可用性、权限控制、继续对话已有；真实产物打开/分享尚未全验收 | P1 |
 | 历史分页/性能 | `use-session-history`、滚动几何/跟随逻辑 | 有自动分页、锚点、虚拟列表和快照重叠保留；长消息高度变化及快速切换需实测 | P0 验收 |
 | 离线历史/预取 | `session-history-cache`、`session-history-prefetch` | 本轮补充有界安全首屏缓存、陈旧提示、网络覆盖和删除/重置失效；后台旧页预取、完整离线历史尚缺 | P0 验收 |
 | 连续朗读 | `use-auto-read-aloud`、`ContinuousReadAloudBar` | 本轮补充会话开关、完成边沿去重、离开/录音停止；原生音频时序待验收 | P0 验收 |
