@@ -67,6 +67,8 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
       contextRefs?: ComposerContextRef[],
       replaceTurnId?: string,
       appContext?: AppContextEnvelope,
+      onDispatched?: (clientSubmissionId: string, messageRenderKey?: string) => void,
+      replaceClientSubmissionId?: string,
     ) => Promise<void | boolean>
   >(async () => {});
 

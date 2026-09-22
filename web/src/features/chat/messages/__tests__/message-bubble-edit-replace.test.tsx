@@ -69,4 +69,45 @@ describe('MessageBubble user edit action', () => {
 
     expect(container.querySelector<HTMLButtonElement>('button[aria-label="Edit in composer"]')?.disabled).toBe(true);
   });
+
+  it('shows delivery progress without exposing retry before failure', () => {
+    act(() => {
+      root.render(
+        <MemoryRouter>
+          <MessageBubble
+            message={{ ...message, deliveryStatus: 'sending', clientSubmissionId: 'local-1' }}
+            messageIndex={0}
+            isStreaming={false}
+            progress={null}
+            onRetryUserMessageRound={vi.fn()}
+          />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(container.textContent).toContain('Sending…');
+    expect(container.querySelector('[data-delivery-status="sending"] button')).toBeNull();
+  });
+
+  it('shows an always-visible retry action when delivery fails', () => {
+    const retry = vi.fn();
+    act(() => {
+      root.render(
+        <MemoryRouter>
+          <MessageBubble
+            message={{ ...message, turnId: undefined, deliveryStatus: 'failed', clientSubmissionId: 'local-1' }}
+            messageIndex={3}
+            isStreaming={false}
+            progress={null}
+            onRetryUserMessageRound={retry}
+          />
+        </MemoryRouter>,
+      );
+    });
+
+    expect(container.textContent).toContain('Not sent');
+    const retryButton = container.querySelector<HTMLButtonElement>('[data-delivery-status="failed"] button');
+    act(() => retryButton?.click());
+    expect(retry).toHaveBeenCalledWith(3);
+  });
 });

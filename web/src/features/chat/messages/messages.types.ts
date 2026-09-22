@@ -1,4 +1,4 @@
-import type { ToolActivity, TurnOutcome } from '@xopcai/gateway-contract';
+import type { AppContextEnvelope, ToolActivity, TurnOutcome } from '@xopcai/gateway-contract';
 
 /** Canonical chat message model for the web UI (gateway chat + embedded agent chat). */
 
@@ -122,6 +122,12 @@ export interface MessageContextRef {
 export interface Message {
   role: 'user' | 'assistant';
   content: MessageContent[];
+  /** Client-only delivery state for an optimistic user message. */
+  deliveryStatus?: 'sending' | 'failed';
+  /** Client-only identity used to update one optimistic submission in place. */
+  clientSubmissionId?: string;
+  /** Client-only frozen page context retained only while an optimistic send can be retried. */
+  pendingAppContext?: AppContextEnvelope;
   /** Stable server run identifier used to attribute context and feedback. */
   turnId?: string;
   /** Client-only identity that survives live-to-persisted message reconciliation. */

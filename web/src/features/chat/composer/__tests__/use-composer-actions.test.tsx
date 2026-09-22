@@ -42,6 +42,16 @@ describe('composer acceptance preserves drafts', () => {
     expect(options.clearContextRefs).toHaveBeenCalledOnce();
   });
 
+  it('clears immediately when an existing session accepts the local dispatch', async () => {
+    options = { ...options, onSend: () => true };
+    await render();
+
+    actions.send();
+
+    expect(options.resetEditor).toHaveBeenCalledOnce();
+    expect(options.clearAttachments).toHaveBeenCalledOnce();
+  });
+
   it('retains a rejected draft', async () => {
     actions.send();
     await act(async () => accept(false));
@@ -68,6 +78,32 @@ describe('composer acceptance preserves drafts', () => {
     expect(onSend).toHaveBeenCalledWith('', undefined, 'off', [expect.objectContaining({
       kind: 'file', fileKind: 'directory', sourceId: 'apps/mobile-expo',
     })]);
+  });
+
+  it('pairs the captured draft with the optimistic dispatch receipt', async () => {
+    const onSendDispatched = vi.fn();
+    const onSend = vi.fn((
+      _text: string,
+      _attachments: Parameters<UseComposerActionsOptions['onSend']>[1],
+      _thinkingLevel: string | undefined,
+      _contextRefs: Parameters<UseComposerActionsOptions['onSend']>[3],
+      sendOptions: Parameters<UseComposerActionsOptions['onSend']>[4],
+    ) => {
+      sendOptions?.onDispatched?.({
+        clientSubmissionId: 'submission-1',
+        messageRenderKey: 'chat-row:1',
+      });
+      return true;
+    });
+    options = { ...options, onSend, onSendDispatched };
+    await render();
+
+    actions.send();
+
+    expect(onSendDispatched).toHaveBeenCalledWith(
+      { clientSubmissionId: 'submission-1', messageRenderKey: 'chat-row:1' },
+      { text: 'Original', attachments: [], contextRefs: [] },
+    );
   });
 
   it.each(['text', 'attachments', 'references'])('preserves changed %s on late acceptance', async field => {

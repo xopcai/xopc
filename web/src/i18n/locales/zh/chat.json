@@ -1322,6 +1322,8 @@
     "mermaidDownloadFailed": "图表下载失败",
     "userMessageCopy": "复制消息",
     "userMessageRetry": "重试",
+    "userMessageSending": "发送中…",
+    "userMessageSendFailed": "未发送",
     "userMessageEdit": "在输入框中编辑",
     "userMessageEditing": "正在编辑最新消息，发送后会覆盖原来的这一轮。",
     "userMessageEditCancel": "取消编辑",

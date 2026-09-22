@@ -41,10 +41,6 @@ import {
 import { parseToolResult } from '@/features/chat/tool-results/parse-tool-result';
 import { useDevViewStore } from '@/stores/dev-view-store';
 import { formatStepRoundDuration } from '@/features/chat/time/step-round-duration';
-import {
-  BrowserSetupRequiredCard,
-} from '@/features/chat/tool-results/browser-setup-required-card';
-import { parseBrowserSetupRequired } from '@/features/chat/tool-results/browser-setup-required-parser';
 import { BrowserApprovalCard } from '@/features/chat/tool-results/browser-approval-card';
 import { parseBrowserApproval } from '@/features/chat/tool-results/browser-approval';
 import { ExtensionChatWidget } from '@/features/extensions/extension-chat-widget';
@@ -526,11 +522,6 @@ function StepRow({
     }
   }, [block]);
 
-  const browserSetup = useMemo(() => {
-    if (block.type !== 'tool_use' || block.status === 'running') return null;
-    if (block.name !== 'browser_use') return null;
-    return parseBrowserSetupRequired(block.details);
-  }, [block]);
   const browserApproval = useMemo(() => {
     if (block.type !== 'tool_use' || block.status === 'running' || block.name !== 'browser_use') return null;
     return parseBrowserApproval(block.details);
@@ -660,7 +651,6 @@ function StepRow({
     return <>
       {!isStreaming && !isError && (kind === 'writeFile' || kind === 'editFile') ? card : null}
       {!isStreaming && !isError ? <ToolUseWidgetSlot toolName={block.name} toolResult={block.result} /> : null}
-      {!isStreaming && browserSetup ? <BrowserSetupRequiredCard payload={browserSetup} /> : null}
       {!isStreaming && browserApproval ? <BrowserApprovalCard key={browserApproval.id} approval={browserApproval} conversationId={conversationId} /> : null}
     </>;
   }
