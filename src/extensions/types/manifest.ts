@@ -3,6 +3,7 @@
  */
 
 import type { ExtensionKind } from './core.js';
+import type { ExtensionCapabilityBinding } from '@xopcai/gateway-contract';
 
 /** Declared in `engines` in the extension manifest (e.g. VSCode-style). */
 export interface EnginesDeclaration {
@@ -140,6 +141,8 @@ export interface ExtensionManifestCommand {
 
 /** Top-level UI declaration within an extension manifest. */
 export interface ExtensionUiManifest {
+  /** Exact host-owned read contracts requested by this UI release. */
+  capabilities?: ExtensionCapabilityBinding[];
   /** Frontend entry HTML (relative to extension root). */
   main?: string;
   /** Extension icon path (relative to extension root; SVG recommended). */

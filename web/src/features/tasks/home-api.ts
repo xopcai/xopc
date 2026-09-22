@@ -1,6 +1,5 @@
 import {
   TaskCreateResponseSchema,
-  TaskDetailResponseSchema,
   parseHomeResponse,
   type HomeAttention,
   type HomeDecision,
@@ -14,6 +13,7 @@ import {
 
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import { readCapability } from '@/lib/capabilities';
 
 export type { HomeAttention, HomeDecision, HomeResponse };
 export type TaskDetail = TaskDetailResponse;
@@ -26,9 +26,7 @@ export async function createTask(input: TaskCreateRequest): Promise<TaskCreateRe
 }
 
 export async function fetchTask(taskId: string): Promise<TaskDetail> {
-  return TaskDetailResponseSchema.parse(await fetchJson<unknown>(
-    apiUrl(`/api/tasks/${encodeURIComponent(taskId)}`),
-  ));
+  return readCapability('xopc.tasks.get', { id: taskId });
 }
 
 export async function ensureTaskConversation(taskId: string): Promise<{
@@ -130,6 +128,7 @@ export async function submitTaskFeedback(
 ): Promise<void> {
   await fetchJson(apiUrl(`/api/task-runs/${encodeURIComponent(runId)}/feedback`), {
     method: 'POST',
+    headers: { 'idempotency-key': crypto.randomUUID() },
     body: JSON.stringify({ rating, reason: reason?.trim() || undefined }),
   });
 }

@@ -9,7 +9,6 @@ import {
   resetXopcDatabaseSingletonForTest,
 } from '../../../storage/sqlite/index.js';
 import { AutomationService } from '../automation-service.js';
-import { saveAutomationRun } from '../../storage/automation-run-repository.js';
 
 async function waitFor<T>(read: () => Promise<T> | T, predicate: (value: T) => boolean): Promise<T> {
   const deadline = Date.now() + 2_000;
@@ -47,6 +46,34 @@ describe('AutomationService', () => {
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  it('aborts a deleted run after commit without letting its completion mutate a recreated automation', async () => {
+    let signal: AbortSignal | undefined;
+    let release!: () => void;
+    const blocked = new Promise<void>(resolve => { release = resolve; });
+    service.setDeps({ agentService: { turnDispatcher: {
+      processDirect: async (_message, _conversationId, _origin, _attachments, _thinking, options) => {
+        signal = options?.signal;
+        await blocked;
+        return 'finished old run';
+      },
+    } } });
+    const automation = await service.create({ id: 'reusable', name: 'Old', trigger: { kind: 'manual' },
+      action: { kind: 'agent', instruction: 'Wait', timeoutSeconds: 30 } });
+    const run = await service.runNow(automation.id);
+    try {
+      await waitFor(() => signal, value => value !== undefined);
+      expect(signal).toBeDefined();
+      expect(await service.remove(automation.id)).toBe(true);
+      expect(signal?.aborted).toBe(true);
+      await service.create({ id: automation.id, name: 'New', trigger: { kind: 'manual' }, action: automation.action });
+      const replacement = await service.update(automation.id, { state: { runningRunId: 'new-run', lastError: 'Keep new state' } });
+      release();
+      const finished = await waitFor(() => service.getRun(run.id), value => value?.status === 'cancelled');
+      expect(finished).toMatchObject({ status: 'cancelled', cancelRequestedAtMs: expect.any(Number) });
+      expect(await service.get(automation.id)).toEqual(replacement);
+    } finally { release(); }
   });
 
   it('creates and runs an agent automation', async () => {
@@ -347,20 +374,7 @@ describe('AutomationService', () => {
       trigger: { kind: 'manual' },
       action: { kind: 'agent', instruction: 'resume after restart' },
     });
-    const runId = 'queued-before-restart';
-    saveAutomationRun({
-      id: runId,
-      rootRunId: runId,
-      attemptNumber: 1,
-      automationId: automation.id,
-      automationName: automation.name,
-      status: 'queued',
-      triggerSnapshot: automation.trigger,
-      actionSnapshot: automation.action,
-      manual: false,
-      createdAtMs: Date.now(),
-    });
-    await service.update(automation.id, { state: { runningRunId: runId } });
+    const runId = service.queueRunAtomically(automation.id, { manual: false }).id;
     await service.stop();
 
     service = new AutomationService();

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SessionInputCoordinator } from '../session-input-coordinator.js';
+import { appContextToAgentContext } from '../../../agent/source-context/app-context.js';
 import {
   appendTranscriptEntry,
   closeXopcDatabase,
@@ -30,6 +31,32 @@ describe('SessionInputCoordinator', () => {
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('fails closed on preflight exceptions and continues draining later inputs', async () => {
+    let finishFirst!: (value: { status: string; summary: string }) => void;
+    const execute = vi.fn().mockImplementationOnce(() => new Promise(resolve => { finishFirst = resolve; }))
+      .mockResolvedValue({ status: 'ok', summary: 'done' });
+    const coordinator = new SessionInputCoordinator({
+      sessionExists: async () => true, execute,
+      beforeExecute: async input => {
+        if (input.clientMessageId === 'revoked') throw new Error('Resource no longer accessible');
+        return input.clientMessageId !== 'denied';
+      },
+      prepareAttachments: async (_key, attachments) => attachments,
+      prepareContexts: async () => [], steer: async () => false, emit: () => {},
+    });
+    const ids = new Map<string, string>();
+    for (const key of ['active', 'revoked', 'denied', 'allowed']) {
+      await coordinator.submit({ conversationId, clientMessageId: key, delivery: 'next', content: key, origin });
+      ids.set(key, coordinator.snapshot(conversationId).inputs.find(row => row.clientMessageId === key)!.id);
+    }
+    finishFirst({ status: 'ok', summary: 'done' });
+    await vi.waitFor(() => expect(coordinator.snapshot(conversationId).inputs).toEqual([]));
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(getSessionInputById(conversationId, ids.get('revoked')!)?.status).toBe('failed');
+    expect(getSessionInputById(conversationId, ids.get('denied')!)?.status).toBe('cancelled');
+    expect(getSessionInputById(conversationId, ids.get('allowed')!)?.status).toBe('completed');
   });
 
   it('keeps one active run and publishes revisioned full snapshots', async () => {
@@ -259,7 +286,7 @@ describe('SessionInputCoordinator', () => {
       documentId: 'doc-1',
     };
 
-    await coordinator.submit({
+    const submission = coordinator.submit({
       conversationId,
       clientMessageId: 'page-turn',
       delivery: 'next',
@@ -267,6 +294,8 @@ describe('SessionInputCoordinator', () => {
       sourceContexts: [browserContext],
       origin,
     });
+    browserContext.text = 'mutated while submit awaits session lookup';
+    await submission;
 
     const stored = getSessionInputById(conversationId, coordinator.snapshot(conversationId).activeInputId!);
     expect(stored?.contextSnapshots).toEqual([expect.objectContaining({ text: 'Frozen page body' })]);
@@ -276,5 +305,84 @@ describe('SessionInputCoordinator', () => {
       expect.objectContaining({ text: 'Frozen page body' }),
     ]);
     complete({ status: 'ok', summary: 'done' });
+    await vi.waitFor(() => expect(coordinator.snapshot(conversationId).inputs).toEqual([]));
+  });
+
+  it('does not clean up or replace the transcript when context preparation fails', async () => {
+    ensureSessionRecord(conversationId, '/tmp/workspace', { agentId: 'main' });
+    appendTranscriptEntry(conversationId, { role: 'user', content: 'Keep me', turnId: 'turn-1' } as never);
+    const beforeReplace = vi.fn(async () => {});
+    const execute = vi.fn(async () => ({ status: 'ok', summary: 'done' }));
+    const coordinator = new SessionInputCoordinator({
+      sessionExists: async () => true, execute,
+      prepareAttachments: async (_key, attachments) => attachments,
+      prepareContexts: async () => { throw new Error('Revision changed'); },
+      steer: async () => false, emit: () => {},
+    });
+    const before = loadTranscriptRowsForSession(conversationId);
+    expect(await coordinator.replaceLatestTurn({
+      conversationId, targetTurnId: 'turn-1', clientMessageId: 'failed-edit',
+      delivery: 'next', content: 'Replace', origin,
+      contextRefs: [{ kind: 'note', sourceId: 'changed', expectedVersion: '1' }],
+    }, beforeReplace)).toEqual({ ok: false, code: 'CONTEXT_UNAVAILABLE' });
+    expect(beforeReplace).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+    expect(loadTranscriptRowsForSession(conversationId)).toEqual(before);
+    expect(coordinator.snapshot(conversationId).inputs).toEqual([]);
+  });
+
+  it('persists the exact application envelope and executes its original resolved content', async () => {
+    const completions: Array<(value: { status: string; summary: string }) => void> = [];
+    const execute = vi.fn(() => new Promise<{ status: string; summary: string }>(resolve => completions.push(resolve)));
+    const coordinator = new SessionInputCoordinator({
+      sessionExists: async () => true, execute,
+      prepareAttachments: async (_key, attachments) => attachments,
+      prepareContexts: async () => [], steer: async () => false, emit: () => {},
+    });
+    await coordinator.submit({ conversationId, clientMessageId: 'active', delivery: 'next', content: 'Wait', origin });
+    const reference = { kind: 'note' as const, id: 'note-1', revision: '2' };
+    const source = appContextToAgentContext({
+      snapshot: {
+        version: 1, clientInstanceId: '7ff7f7a3-463c-4d2c-8a9f-d90c43424f60',
+        tabId: '19979ed2-81e0-4c80-9a81-ccbb8fb0061c', sequence: 1,
+        surface: 'web', resourceRefs: [reference], capturedAt: 12,
+        selection: { text: 'Draft at send time', draft: true },
+      },
+      resources: [{ reference, title: 'Note', text: 'Saved at send time', truncated: false }],
+      selectionTrust: 'user-supplied',
+    });
+    const expected = structuredClone(source);
+    const submission = coordinator.submit({
+      conversationId, clientMessageId: 'app-context', delivery: 'next', content: 'Review', origin,
+      sourceContexts: [source],
+    });
+    source.appContext!.selection!.text = 'Different tab content';
+    source.text = 'Later body';
+    await submission;
+    const queued = coordinator.snapshot(conversationId).inputs.find(row => row.clientMessageId === 'app-context')!;
+    expect(getSessionInputById(conversationId, queued.id)?.contextSnapshots)
+      .toEqual([expect.objectContaining(expected)]);
+    expect(await coordinator.submit({
+      conversationId, clientMessageId: 'app-context', delivery: 'next', content: 'Review', origin,
+      sourceContexts: [source],
+    })).toMatchObject({ ok: false, code: 'CONTEXT_UNAVAILABLE' });
+    expect(await coordinator.submit({
+      conversationId, clientMessageId: 'app-context', delivery: 'next', content: 'Review', origin,
+    })).toMatchObject({ ok: false, code: 'CONTEXT_UNAVAILABLE' });
+    expect(await coordinator.update(conversationId, queued.id, {
+      version: queued.version, content: 'Edited prompt', contextRefs: [],
+    })).toMatchObject({ ok: true });
+    expect(getSessionInputById(conversationId, queued.id)?.contextSnapshots)
+      .toEqual([expect.objectContaining(expected)]);
+    completions.shift()!({ status: 'ok', summary: 'done' });
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(2));
+    expect(execute.mock.calls[1]?.[0]).toMatchObject({ sourceContexts: [expected] });
+    completions.shift()!({ status: 'ok', summary: 'done' });
+    await vi.waitFor(() => expect(coordinator.snapshot(conversationId).inputs).toEqual([]));
+    closeXopcDatabase();
+    resetXopcDatabaseSingletonForTest();
+    openXopcDatabase({ path: join(dir, 'xopc.db') });
+    expect(getSessionInputById(conversationId, queued.id)?.contextSnapshots)
+      .toEqual([expect.objectContaining(expected)]);
   });
 });

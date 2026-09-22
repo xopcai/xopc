@@ -1,17 +1,7 @@
 import { DateTime } from 'luxon';
-import { z } from 'zod';
+import { sceneScheduleSchema } from '@xopcai/gateway-contract';
 
-/** A local wall-clock schedule, not an arbitrary cron or workflow language. */
-export const sceneScheduleSchema = z.strictObject({
-  weekdays: z.array(z.number().int().min(0).max(6)).min(1).max(7)
-    .refine((days) => new Set(days).size === days.length, 'Duplicate weekdays'),
-  hour: z.number().int().min(0).max(23),
-  minute: z.number().int().min(0).max(59),
-  timeZone: z.string().trim().min(1).max(100).refine((timeZone) => {
-    try { new Intl.DateTimeFormat('en', { timeZone }); return DateTime.now().setZone(timeZone).isValid; }
-    catch { return false; }
-  }, 'Invalid time zone'),
-});
+export { sceneScheduleSchema } from '@xopcai/gateway-contract';
 
 export function nextSceneScheduleAt(value: unknown, now: number): number {
   if (!Number.isSafeInteger(now) || now < 0) throw new Error('Invalid scene schedule time');

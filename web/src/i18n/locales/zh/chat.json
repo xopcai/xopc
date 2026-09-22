@@ -1,5 +1,12 @@
 {
   "chat": {
+    "pageContext": {
+      "label": "页面上下文", "capture": "引用到新对话", "preview": "预览上下文",
+      "remove": "移除页面上下文", "frozen": "已采集的快照，仅在发送这条消息时附带。",
+      "truncated": "仅包含前 16,000 个字符。", "draft": "未保存草稿（用户提供）",
+      "selection": "选中文本", "pending": "请在当前运行结束后作为新消息发送页面上下文，或先移除它。",
+      "unavailable": "无法采集此页面，请保存编辑、刷新页面后重试。"
+    },
     "contentLinks": {
       "open": "在 xopc 中打开",
       "failed": "无法打开这个链接，请重试。",

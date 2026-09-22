@@ -1,21 +1,11 @@
-import type { Hono } from 'hono';
+import { randomUUID } from 'node:crypto';
+import type { Context, Hono } from 'hono';
+import { AutomationCancelOutputSchema, AutomationReadOutputSchema, AutomationReadAllOutputSchema, AutomationDeleteOutputSchema, AutomationMutationOutputSchema, AutomationRunMutationOutputSchema, ProductReadContracts } from '@xopcai/gateway-contract';
+import { CapabilityError } from '../../capabilities/runtime/dispatcher.js';
+import { createProductDispatcher } from '../../capabilities/runtime/product.js';
+import { capabilityHttpContext, capabilityHttpError } from '../../capabilities/adapters/http.js';
 
-import { resolveDefaultAgentId } from '../../agent/agent-scope.js';
 import type { AuthenticatedRouteDeps } from '../../gateway/hono/routes/deps.js';
-import { logRouteError } from '../../gateway/hono/lib/route-logger.js';
-import { getUserTrustPolicy } from '../../storage/sqlite/index.js';
-import { resolveAutomationSafetyForTrust } from '../../user-context/trust-policy.js';
-import { createLogger } from '../../utils/logger.js';
-import { AutomationDraftService, simulateAutomation } from '../draft/index.js';
-import type { CreateAutomationInput } from '../domain/validation.js';
-import { AutomationAlreadyRunningError } from '../service/automation-service.js';
-
-const log = createLogger('Gateway:Automations');
-
-function parseLimit(raw: string | undefined, fallback: number): number {
-  const parsed = raw ? Number.parseInt(raw, 10) : fallback;
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
 
 function parseProjectId(raw: string | undefined): string | undefined {
   const trimmed = raw?.trim();
@@ -24,241 +14,226 @@ function parseProjectId(raw: string | undefined): string | undefined {
 
 export function registerAutomationRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
+  const capabilities = createProductDispatcher(undefined, { getAutomations: () => service.automationServiceInstance, getProjects: () => service.projects, getConfig: () => service.currentConfig });
+  const queueRun = async (c: Context, command: 'run' | 'rerun', id: string) => {
+    try {
+      const caller = capabilityHttpContext(c);
+      const operation = `xopc.automations.${command}`;
+      const { run } = AutomationRunMutationOutputSchema.parse(await capabilities.call(operation, { id }, caller,
+        { ...capabilities.describe(operation, caller), idempotencyKey: c.req.header('idempotency-key') ?? randomUUID() }));
+      return c.json({ run }, command === 'rerun' ? 201 : 200);
+    } catch (error) { return capabilityHttpError(c, error); }
+  };
 
   authenticated.get('/api/automations', async (c) => {
-    const projectId = parseProjectId(c.req.query('projectId'));
-    if (projectId && !service.projects.get(projectId)) {
-      return c.json({ error: 'Project not found' }, 404);
-    }
-    const automations = await service.automationServiceInstance.list({ projectId });
-    return c.json({ automations });
+    try {
+      const { items } = ProductReadContracts['xopc.automations.list'].output.parse(await capabilities.call('xopc.automations.list',
+        { projectId: parseProjectId(c.req.query('projectId')) }, capabilityHttpContext(c)));
+      return c.json({ automations: items });
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.post('/api/automations', async (c) => {
     try {
-      const body = await c.req.json() as CreateAutomationInput;
-      if (body.projectId && !service.projects.get(body.projectId)) {
-        return c.json({ error: 'Project not found' }, 404);
-      }
-      const automation = await service.automationServiceInstance.create(body);
+      const body = await c.req.json().catch(() => { throw new CapabilityError('INVALID_INPUT', 'Invalid JSON body'); });
+      const caller = capabilityHttpContext(c);
+      const operation = 'xopc.automations.create';
+      const { automation } = AutomationMutationOutputSchema.parse(await capabilities.call(operation, body, caller,
+        { ...capabilities.describe(operation, caller), idempotencyKey: c.req.header('idempotency-key') ?? randomUUID() }));
       return c.json({ automation }, 201);
-    } catch (err) {
-      logRouteError(log, c, err, 'gateway.route.automations', { operation: 'create' });
-      return c.json({ error: err instanceof Error ? err.message : 'Failed to create automation' }, 400);
-    }
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.get('/api/automations/metrics', async (c) => {
-    const metrics = await service.automationServiceInstance.getMetrics();
-    return c.json(metrics);
+    try {
+      const { metrics } = ProductReadContracts['xopc.automations.metrics'].output.parse(await capabilities.call('xopc.automations.metrics', {}, capabilityHttpContext(c)));
+      return c.json(metrics);
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.post('/api/automations/draft', async (c) => {
-    const body = await c.req.json().catch(() => null) as {
-      prompt?: unknown;
-      agentId?: unknown;
-      language?: unknown;
-    } | null;
-    const prompt = typeof body?.prompt === 'string' ? body.prompt.trim() : '';
-    if (!prompt) return c.json({ error: 'prompt is required' }, 400);
-    const agentId = typeof body?.agentId === 'string' && body.agentId.trim()
-      ? body.agentId.trim()
-      : resolveDefaultAgentId(service.currentConfig);
-    const draftService = new AutomationDraftService({ config: service.currentConfig });
     try {
-      const draft = await draftService.createDraft({
-        prompt,
-        agentId,
-        language: body?.language === 'zh' ? 'zh' : 'en',
-      }, c.req.raw.signal);
-      const safetyMode = resolveAutomationSafetyForTrust(
-        getUserTrustPolicy().defaultActionLevel,
-        draft.automation.safety?.mode,
-      );
-      const trustedDraft = {
-        ...draft,
-        automation: { ...draft.automation, safety: { mode: safetyMode } },
-      };
-      trustedDraft.simulation = simulateAutomation(trustedDraft.automation);
-      return c.json({ draft: trustedDraft }, 201);
-    } catch (err) {
-      logRouteError(log, c, err, 'gateway.route.automations', { operation: 'draft' });
-      return c.json({ error: err instanceof Error ? err.message : 'Failed to create automation draft' }, 400);
-    }
+      const input = await c.req.json().catch(() => { throw new CapabilityError('INVALID_INPUT', 'Invalid JSON body'); });
+      const caller = capabilityHttpContext(c);
+      const operation = 'xopc.automations.draft';
+      return c.json(await capabilities.call(operation, input, caller, {
+        ...capabilities.describe(operation, caller), idempotencyKey: c.req.header('idempotency-key') ?? randomUUID(),
+      }), 201);
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.post('/api/automations/simulate', async (c) => {
     try {
-      const body = await c.req.json() as CreateAutomationInput;
-      return c.json({ simulation: simulateAutomation(body) });
-    } catch (err) {
-      logRouteError(log, c, err, 'gateway.route.automations', { operation: 'simulate' });
-      return c.json({ error: err instanceof Error ? err.message : 'Failed to simulate automation' }, 400);
-    }
+      const body = await c.req.json().catch(() => { throw new CapabilityError('INVALID_INPUT', 'Invalid JSON body'); });
+      return c.json(await capabilities.call('xopc.automations.simulate', body, capabilityHttpContext(c)));
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.get('/api/automation-runs', async (c) => {
     const automationId = c.req.query('automationId')?.trim();
     const projectId = parseProjectId(c.req.query('projectId'));
-    if (projectId && !service.projects.get(projectId)) {
-      return c.json({ error: 'Project not found' }, 404);
-    }
-    const runs = await service.automationServiceInstance.listRuns({
-      automationId: automationId || undefined,
-      projectId: automationId ? undefined : projectId,
-      limit: parseLimit(c.req.query('limit'), 50),
-    });
-    return c.json({ runs });
+    try {
+      const { items } = ProductReadContracts['xopc.automations.history'].output.parse(await capabilities.call('xopc.automations.history', {
+        automationId: automationId || undefined, projectId: automationId ? undefined : projectId,
+        limit: c.req.query('limit') === undefined ? undefined : Number(c.req.query('limit')),
+      }, capabilityHttpContext(c)));
+      return c.json({ runs: items });
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.get('/api/automation-runs/product-events', async (c) => {
-    const eventType = c.req.query('eventType')?.trim();
-    if (!eventType) return c.json({ error: 'eventType is required' }, 400);
-    const payloadKey = c.req.query('payloadKey')?.trim();
-    const payloadValue = c.req.query('payloadValue')?.trim();
-    const items = await service.automationServiceInstance.listRunsForProductEvent({
-      eventType,
-      source: c.req.query('source')?.trim() || undefined,
-      payloadKey: payloadKey || undefined,
-      payloadValue: payloadValue || undefined,
-      limit: parseLimit(c.req.query('limit'), 10),
-    });
-    return c.json({ items });
+    try {
+      const { items } = ProductReadContracts['xopc.automations.product_events'].output.parse(await capabilities.call('xopc.automations.product_events', {
+        eventType: c.req.query('eventType'), source: c.req.query('source'),
+        payloadKey: c.req.query('payloadKey'), payloadValue: c.req.query('payloadValue'),
+        limit: c.req.query('limit') === undefined ? undefined : Number(c.req.query('limit')),
+      }, capabilityHttpContext(c)));
+      return c.json({ items });
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.get('/api/automation-runs/:runId', async (c) => {
-    const run = await service.automationServiceInstance.getRun(c.req.param('runId'));
-    if (!run) return c.json({ error: 'Run not found' }, 404);
-    return c.json({ run });
+    try {
+      const { run } = ProductReadContracts['xopc.automations.get_run'].output.parse(await capabilities.call('xopc.automations.get_run', { id: c.req.param('runId') }, capabilityHttpContext(c)));
+      return c.json({ run });
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.get('/api/automation-runs/:runId/events', async (c) => {
-    const runId = c.req.param('runId');
-    const run = await service.automationServiceInstance.getRun(runId);
-    if (!run) return c.json({ error: 'Run not found' }, 404);
-    const events = await service.automationServiceInstance.listRunEvents(runId);
-    return c.json({ events });
+    try {
+      const { events } = ProductReadContracts['xopc.automations.run_events'].output.parse(await capabilities.call('xopc.automations.run_events', { id: c.req.param('runId') }, capabilityHttpContext(c)));
+      return c.json({ events });
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.post('/api/automation-runs/:runId/read', async (c) => {
-    const marked = await service.automationServiceInstance.markRunRead(c.req.param('runId'));
-    if (!marked) return c.json({ error: 'Run not found' }, 404);
-    return c.json({ marked: true });
+    try {
+      const caller = capabilityHttpContext(c);
+      const operation = 'xopc.automations.read';
+      const { marked } = AutomationReadOutputSchema.parse(await capabilities.call(operation, { id: c.req.param('runId') }, caller,
+        { ...capabilities.describe(operation, caller), idempotencyKey: c.req.header('idempotency-key') ?? randomUUID() }));
+      return c.json({ marked });
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.post('/api/automation-runs/read-all', async (c) => {
-    const count = await service.automationServiceInstance.markAllRunsRead({
-      projectId: c.req.query('projectId'),
-    });
-    return c.json({ count });
+    try {
+      const caller = capabilityHttpContext(c);
+      const operation = 'xopc.automations.read_all';
+      const { count } = AutomationReadAllOutputSchema.parse(await capabilities.call(operation, { projectId: parseProjectId(c.req.query('projectId')) }, caller,
+        { ...capabilities.describe(operation, caller), idempotencyKey: c.req.header('idempotency-key') ?? randomUUID() }));
+      return c.json({ count });
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.post('/api/automation-runs/:runId/rerun', async (c) => {
-    try {
-      const run = await service.automationServiceInstance.rerunFromRun(c.req.param('runId'));
-      return c.json({ run }, 201);
-    } catch (err) {
-      if (err instanceof AutomationAlreadyRunningError) {
-        return c.json({
-          error: err.message,
-          code: 'automation_already_running',
-          automationId: err.automationId,
-          runningRunId: err.runningRunId,
-        }, 409);
-      }
-      logRouteError(log, c, err, 'gateway.route.automations', { operation: 'rerun' });
-      return c.json({ error: err instanceof Error ? err.message : 'Failed to rerun automation' }, 400);
-    }
+    return queueRun(c, 'rerun', c.req.param('runId'));
   });
 
   authenticated.post('/api/automation-runs/:runId/repair-draft', async (c) => {
-    const runId = c.req.param('runId');
-    const run = await service.automationServiceInstance.getRun(runId);
-    if (!run) return c.json({ error: 'Run not found' }, 404);
-    if (!['failed', 'timeout', 'cancelled'].includes(run.status)) {
-      return c.json({ error: 'Repair draft is only available for failed, timed out, or cancelled runs' }, 400);
-    }
-    const automation = await service.automationServiceInstance.get(run.automationId);
-    if (!automation) return c.json({ error: 'Automation not found' }, 404);
-    const body = await c.req.json().catch(() => null) as { agentId?: unknown; language?: unknown } | null;
-    const agentId = typeof body?.agentId === 'string' && body.agentId.trim()
-      ? body.agentId.trim()
-      : resolveDefaultAgentId(service.currentConfig);
-    const events = await service.automationServiceInstance.listRunEvents(runId);
-    const draftService = new AutomationDraftService({ config: service.currentConfig });
     try {
-      const repair = await draftService.createRepairDraft({
-        agentId,
-        automation,
-        run,
-        events,
-        language: body?.language === 'zh' ? 'zh' : 'en',
-      }, c.req.raw.signal);
-      return c.json({ repair }, 201);
-    } catch (err) {
-      logRouteError(log, c, err, 'gateway.route.automations', { operation: 'repairDraft' });
-      return c.json({ error: err instanceof Error ? err.message : 'Failed to create automation repair draft' }, 400);
-    }
+      const text = await c.req.text();
+      let body: unknown;
+      try { body = text ? JSON.parse(text) : {}; } catch { throw new CapabilityError('INVALID_INPUT', 'Invalid JSON body'); }
+      if (!body || typeof body !== 'object' || Array.isArray(body)) throw new CapabilityError('INVALID_INPUT', 'Expected a request object');
+      const caller = capabilityHttpContext(c);
+      const operation = 'xopc.automations.repair_draft';
+      return c.json(await capabilities.call(operation, { ...body, id: c.req.param('runId') }, caller, {
+        ...capabilities.describe(operation, caller), idempotencyKey: c.req.header('idempotency-key') ?? randomUUID(),
+      }), 201);
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.post('/api/automation-runs/:runId/cancel', async (c) => {
-    const cancelled = await service.automationServiceInstance.cancelRun(c.req.param('runId'));
-    return c.json({ cancelled });
+    try {
+      const caller = capabilityHttpContext(c);
+      const operation = 'xopc.automations.cancel';
+      const { cancelled, confirmed } = AutomationCancelOutputSchema.parse(await capabilities.call(operation, { id: c.req.param('runId') }, caller,
+        { ...capabilities.describe(operation, caller), idempotencyKey: c.req.header('idempotency-key') ?? randomUUID() }));
+      return c.json({ cancelled, confirmed });
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.get('/api/automations/:id', async (c) => {
-    const automation = await service.automationServiceInstance.get(c.req.param('id'));
-    if (!automation) return c.json({ error: 'Automation not found' }, 404);
-    return c.json({ automation });
+    try {
+      const { automation } = ProductReadContracts['xopc.automations.get'].output.parse(await capabilities.call('xopc.automations.get',
+        { id: c.req.param('id') }, capabilityHttpContext(c)));
+      return c.json({ automation });
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.patch('/api/automations/:id', async (c) => {
     try {
-      const patch = await c.req.json() as Partial<CreateAutomationInput> & { enabled?: boolean };
-      if (patch.projectId && !service.projects.get(patch.projectId)) {
-        return c.json({ error: 'Project not found' }, 404);
+      const body = await c.req.json().catch(() => { throw new CapabilityError('INVALID_INPUT', 'Invalid JSON body'); });
+      if (!body || typeof body !== 'object' || Array.isArray(body)) throw new CapabilityError('INVALID_INPUT', 'Expected a patch object');
+      const { expectedRevision: suppliedRevision, ...patch } = body;
+      const key = c.req.header('idempotency-key');
+      if (key !== undefined && suppliedRevision === undefined) {
+        throw new CapabilityError('INVALID_INPUT', 'Idempotent automation changes require expectedRevision from the original read');
       }
-      const automation = await service.automationServiceInstance.update(c.req.param('id'), patch);
-      if (!automation) return c.json({ error: 'Automation not found' }, 404);
+      const id = c.req.param('id');
+      const expectedRevision = suppliedRevision !== undefined ? suppliedRevision : (await service.automationServiceInstance.get(id))?.updatedAtMs;
+      if (expectedRevision === undefined) throw new CapabilityError('NOT_FOUND', 'Automation not found');
+      const caller = capabilityHttpContext(c);
+      const operation = 'xopc.automations.update';
+      const { automation } = AutomationMutationOutputSchema.parse(await capabilities.call(operation, { id, expectedRevision, patch }, caller,
+        { ...capabilities.describe(operation, caller), idempotencyKey: key ?? randomUUID() }));
       return c.json({ automation });
-    } catch (err) {
-      logRouteError(log, c, err, 'gateway.route.automations', { operation: 'update' });
-      return c.json({ error: err instanceof Error ? err.message : 'Failed to update automation' }, 400);
-    }
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.delete('/api/automations/:id', async (c) => {
-    const removed = await service.automationServiceInstance.remove(c.req.param('id'));
-    return c.json({ removed });
+    try {
+      const text = await c.req.text();
+      let body: unknown = {};
+      try { body = text ? JSON.parse(text) : {}; }
+      catch { throw new CapabilityError('INVALID_INPUT', 'Invalid JSON body'); }
+      if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(key => key !== 'expectedRevision')) {
+        throw new CapabilityError('INVALID_INPUT', 'Only expectedRevision is accepted');
+      }
+      const suppliedRevision = (body as { expectedRevision?: unknown }).expectedRevision;
+      const key = c.req.header('idempotency-key');
+      if (key !== undefined && suppliedRevision === undefined) throw new CapabilityError('INVALID_INPUT', 'Idempotent deletion requires the original expectedRevision');
+      const id = c.req.param('id');
+      const expectedRevision = suppliedRevision !== undefined ? suppliedRevision : (await service.automationServiceInstance.get(id))?.updatedAtMs ?? null;
+      const caller = capabilityHttpContext(c);
+      const operation = 'xopc.automations.delete';
+      const { removed } = AutomationDeleteOutputSchema.parse(await capabilities.call(operation, { id, expectedRevision }, caller,
+        { ...capabilities.describe(operation, caller), idempotencyKey: key ?? randomUUID() }));
+      return c.json({ removed });
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.post('/api/automations/:id/run', async (c) => {
-    try {
-      const run = await service.automationServiceInstance.runNow(c.req.param('id'));
-      return c.json({ run });
-    } catch (err) {
-      if (err instanceof AutomationAlreadyRunningError) {
-        return c.json({
-          error: err.message,
-          code: 'automation_already_running',
-          automationId: err.automationId,
-          runningRunId: err.runningRunId,
-        }, 409);
-      }
-      logRouteError(log, c, err, 'gateway.route.automations', { operation: 'run' });
-      return c.json({ error: err instanceof Error ? err.message : 'Failed to run automation' }, 400);
-    }
+    return queueRun(c, 'run', c.req.param('id'));
   });
 
-  authenticated.post('/api/automations/:id/pause', async (c) => {
-    const automation = await service.automationServiceInstance.pause(c.req.param('id'));
-    if (!automation) return c.json({ error: 'Automation not found' }, 404);
-    return c.json({ automation });
-  });
-
-  authenticated.post('/api/automations/:id/resume', async (c) => {
-    const automation = await service.automationServiceInstance.resume(c.req.param('id'));
-    if (!automation) return c.json({ error: 'Automation not found' }, 404);
-    return c.json({ automation });
-  });
+  for (const command of ['pause', 'resume'] as const) {
+    authenticated.post(`/api/automations/:id/${command}`, async (c) => {
+      try {
+        const text = await c.req.text();
+        let body: unknown = {};
+        try { body = text ? JSON.parse(text) : {}; }
+        catch { throw new CapabilityError('INVALID_INPUT', 'Invalid JSON body'); }
+        if (!body || typeof body !== 'object' || Array.isArray(body)
+          || Object.keys(body).some(key => key !== 'expectedRevision')) {
+          throw new CapabilityError('INVALID_INPUT', 'Only expectedRevision is accepted');
+        }
+        const suppliedRevision = (body as { expectedRevision?: unknown }).expectedRevision;
+        const key = c.req.header('idempotency-key');
+        if (key !== undefined && suppliedRevision === undefined) {
+          throw new CapabilityError('INVALID_INPUT', 'Idempotent automation changes require expectedRevision from the original read');
+        }
+        const id = c.req.param('id');
+        const expectedRevision = suppliedRevision !== undefined ? suppliedRevision : (await service.automationServiceInstance.get(id))?.updatedAtMs;
+        if (expectedRevision === undefined) throw new CapabilityError('NOT_FOUND', 'Automation not found');
+        const caller = capabilityHttpContext(c);
+        const operation = 'xopc.automations.set_enabled';
+        const { automation } = AutomationMutationOutputSchema.parse(await capabilities.call(operation,
+          { id, enabled: command === 'resume', expectedRevision }, caller,
+          { ...capabilities.describe(operation, caller), idempotencyKey: key ?? randomUUID() }));
+        return c.json({ automation });
+      } catch (error) { return capabilityHttpError(c, error); }
+    });
+  }
 }

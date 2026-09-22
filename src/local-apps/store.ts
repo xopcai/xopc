@@ -261,14 +261,6 @@ export class LocalAppStore {
 
   recordAcceptance(appId: string, input: RecordLocalAppAcceptanceInput): LocalAppAcceptanceRun {
     const checksJson = JSON.stringify(input.checks);
-    const latest = this.listAcceptanceRuns(appId, 1)[0];
-    if (latest
-      && latest.sourceHash === input.sourceHash
-      && latest.status === input.status
-      && latest.interactiveCount === input.interactiveCount
-      && JSON.stringify(latest.checks) === checksJson) {
-      return latest;
-    }
     const row: LocalAppAcceptanceRunRow = {
       run_id: randomUUID(),
       app_id: appId,

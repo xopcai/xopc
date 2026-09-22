@@ -1,3 +1,5 @@
+import { ExtensionCapabilityBindingsSchema } from '@xopcai/gateway-contract';
+
 import type {
   ActivationDeclaration,
   ChatWidgetContribution,
@@ -244,8 +246,10 @@ export function normalizeUiManifest(raw: unknown): ExtensionUiManifest | undefin
     permissions = p.length ? p : undefined;
   }
   const contributions = normalizeUiContributions(raw.contributions);
-  if (!main && !icon && !permissions && !contributions) return undefined;
+  const capabilities = raw.capabilities === undefined ? undefined : ExtensionCapabilityBindingsSchema.parse(raw.capabilities);
+  if (!main && !icon && !permissions && !contributions && !capabilities) return undefined;
   return {
+    ...(capabilities !== undefined ? { capabilities } : {}),
     ...(main !== undefined ? { main } : {}),
     ...(icon !== undefined ? { icon } : {}),
     ...(permissions !== undefined ? { permissions } : {}),

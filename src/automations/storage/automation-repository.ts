@@ -111,7 +111,16 @@ export function saveAutomations(automations: Automation[]): void {
 
 export function deleteAutomation(automationId: string): boolean {
   return runSqliteWriteTransaction((db) => {
+    db.prepare(`INSERT INTO automation_deleted_revisions (automation_id, revision)
+      SELECT automation_id, updated_at_ms FROM automations WHERE automation_id = ?
+      ON CONFLICT(automation_id) DO UPDATE SET revision = MAX(revision, excluded.revision)`).run(automationId);
     const result = db.prepare(`DELETE FROM automations WHERE automation_id = ?`).run(automationId);
     return result.changes > 0;
   });
+}
+
+/** Keep revisions distinct when a caller recreates a previously deleted identity. */
+export function getDeletedAutomationRevision(automationId: string): number | undefined {
+  const row = getSqliteDatabase().prepare('SELECT revision FROM automation_deleted_revisions WHERE automation_id = ?').get(automationId);
+  return row ? Number(row.revision) : undefined;
 }

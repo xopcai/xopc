@@ -32,6 +32,7 @@ import { safeInternalReturnPath, withReturnTo } from '@/lib/navigation-return';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
+import { PageContextCaptureButton } from '@/features/chat/context/page-context-capture-button';
 import { useSideChatStore } from '@/stores/side-chat-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
@@ -670,6 +671,7 @@ function TaskDetailView({ taskId, presentation, backgroundPath, onDeleted }: {
 
   const headerActions = (
     <div className="flex flex-wrap items-center justify-end gap-2">
+      <PageContextCaptureButton resource={{ kind: 'task', id: detail.task.id, revision: String(detail.task.version) }} disabled={editingTitle || editingDescription || pendingOperations.size > 0} />
       {taskActions}
       {conversationConversationId && presentation !== 'modal' ? (
         <>

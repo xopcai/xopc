@@ -30,7 +30,10 @@ function methodScope(
   return method === 'GET' ? read : write;
 }
 
-export function requiredGatewayScope(method: string, path: string): GatewayScope {
+export function requiredGatewayScope(method: string, path: string): GatewayScope | undefined {
+  if (/^\/api\/local-app-capabilities\/[^/]+(?:\/[^/]+\/invocations)?$/.test(path)) return undefined;
+  // Authentication admits this surface; the dispatcher checks each capability's scopes.
+  if (path === '/api/capabilities/operations' || path.startsWith('/api/capabilities/operations/')) return undefined;
   if (method === 'GET' && path === '/api/mobile/privacy') return 'gateway.status';
   if (path === '/api/realtime/tickets' || path.startsWith('/api/status')) return 'gateway.status';
   if (path === '/api/device-auth/refresh' || path === '/api/devices/me') return 'device.self';
@@ -50,9 +53,12 @@ export function requiredGatewayScope(method: string, path: string): GatewayScope
     return methodScope(method, 'sessions.read', 'sessions.write');
   }
   if (path.startsWith('/api/tasks')) return methodScope(method, 'tasks.read', 'tasks.write');
+  if (path === '/api/task-runs' || path.startsWith('/api/task-runs/')) return methodScope(method, 'tasks.read', 'tasks.write');
   if (path.startsWith('/api/home') || path.startsWith('/api/inbox')) {
     return methodScope(method, 'tasks.read', 'tasks.write');
   }
+  if (method === 'POST' && path === '/api/automations/simulate') return 'automations.read';
+  if (method === 'POST' && /^\/api\/notes\/[^/]+\/ai\/edit$/.test(path)) return 'workspace.read';
   if (path.startsWith('/api/automations') || path.startsWith('/api/automation-runs')) {
     return methodScope(method, 'automations.read', 'automations.write');
   }

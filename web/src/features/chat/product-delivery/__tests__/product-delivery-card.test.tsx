@@ -32,6 +32,29 @@ describe('ProductDeliveryCard', () => {
     container.remove();
   });
 
+  it('renders resource tables as escaped text with internal links only', () => {
+    act(() => root.render(<MemoryRouter><ProductDeliveryCard delivery={{ version: 1, operation: 'opened', presentation: {
+      kind: 'table', truncated: true, items: [{ kind: 'task', id: 'task/one', title: '<img src=x>', status: 'ready', capabilities: ['open', 'run'] }],
+    } }} /></MemoryRouter>));
+    expect(container.querySelector('table')).not.toBeNull();
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('/tasks/task%2Fone');
+    expect(container.querySelector('[role="status"]')).not.toBeNull();
+    expect(container.querySelector('button')).toBeNull();
+  });
+
+  it('renders proposed replacements without applying them or rendering HTML', () => {
+    act(() => root.render(<MemoryRouter><ProductDeliveryCard delivery={{ version: 1, operation: 'opened', presentation: {
+      kind: 'diff', title: 'Preview', truncated: false, edits: [{ from: 0, to: 5, text: '<script>unsafe()</script>' }],
+    } }} /></MemoryRouter>));
+    expect(container.textContent).toContain('尚未应用');
+    expect(container.querySelector('script')).toBeNull();
+    act(() => container.querySelector('summary')!.click());
+    expect(container.querySelector('details')?.open).toBe(true);
+    expect(container.querySelector('pre')?.textContent).toBe('<script>unsafe()</script>');
+    expect(container.querySelector('button')).toBeNull();
+  });
+
   it('uses the borderless Note result row itself as the only action', () => {
     const delivery: ProductDeliveryEnvelope = {
       version: 1,

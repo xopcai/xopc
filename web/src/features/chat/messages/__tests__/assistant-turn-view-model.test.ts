@@ -4,6 +4,13 @@ import { buildAssistantTurnViewModel } from '@/features/chat/messages/assistant-
 import type { Message, ReasoningLevel } from '@/features/chat/messages/messages.types';
 
 describe('buildAssistantTurnViewModel', () => {
+  it('keeps separate deliveries while deduplicating replayed tool calls', () => {
+    const delivery = { version: 1, operation: 'opened', presentation: { kind: 'table', items: [], truncated: false } };
+    const block = { type: 'tool_use' as const, id: 'query', name: 'xopc_use', status: 'done' as const, details: { delivery } };
+    const view = buildAssistantTurnViewModel({ message: { role: 'assistant', content: [block, { ...block, id: 'other-query' }, block] },
+      isStreaming: false, reasoningLevel: 'off' });
+    expect(view.deliveries.map(item => item.key)).toEqual(['query', 'other-query']);
+  });
   it('keeps a concise tool status visible when activity detail is off', () => {
     const message: Message = {
       role: 'assistant',
@@ -156,7 +163,7 @@ describe('buildAssistantTurnViewModel', () => {
       reasoningLevel: 'off',
     });
 
-    expect(view.delivery).toEqual(delivery);
+    expect(view.deliveries).toEqual([{ key: 'note-update', delivery }]);
   });
 
   it('does not promote a note delivery that only opens an existing note', () => {
@@ -189,6 +196,6 @@ describe('buildAssistantTurnViewModel', () => {
       reasoningLevel: 'off',
     });
 
-    expect(view.delivery).toBeNull();
+    expect(view.deliveries).toEqual([]);
   });
 });

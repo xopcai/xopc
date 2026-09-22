@@ -84,6 +84,19 @@ describe('composer project environment selection and first send', () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
+  it('waits for server acceptance and retains a rejected draft in an existing session', async () => {
+    let accept!: (value: boolean) => void;
+    onSend.mockImplementation(() => new Promise<boolean>(resolve => { accept = resolve; }));
+    await render({ prepared: null, conversationId: 'existing', ready: true });
+    await act(async () => submit().click());
+    expect(commit).not.toHaveBeenCalled();
+    await act(async () => accept(false));
+    expect(commit).not.toHaveBeenCalled();
+    await act(async () => submit().click());
+    await act(async () => accept(true));
+    expect(commit).toHaveBeenCalledOnce();
+  });
+
   it('creates once on first send and waits for the new session before consuming the whole draft', async () => {
     let finish!: (key: string) => void;
     create.mockReturnValue(new Promise((resolve) => { finish = resolve; }));

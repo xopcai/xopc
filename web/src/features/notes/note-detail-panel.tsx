@@ -3,6 +3,9 @@ import { ArrowLeft, Check, ChevronDown, Eye, Code2, FileText, History, MessageCi
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
+import { SessionManager } from '@/features/chat/session/session-manager';
+import { pageContextDrafts, pageContextDraftKey } from '@/features/chat/context/page-context-draft';
+import { useGatewayStore } from '@/stores/gateway-store';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -177,6 +180,7 @@ function NoteDetailPanelInner({
 }: NoteDetailPanelProps) {
   const language = useLocaleStore((s) => s.language);
   const n = messages(language).notes;
+  const contextLabels = messages(language).chat.pageContext;
   const automationSuggestions = messages(language).automations.suggestions;
   const { data: meeting } = useSWR(['note-discussion-document', noteId], () => getDiscussionForNote(noteId));
   const [showMeeting, setShowMeeting] = useState(true);
@@ -192,6 +196,8 @@ function NoteDetailPanelInner({
   const [historyResizing, setHistoryResizing] = useState(false);
   const [catalyzing, setCatalyzing] = useState(false);
   const [openingChat, setOpeningChat] = useState(false);
+  const captureGeneration = useRef(0);
+  useEffect(() => () => { captureGeneration.current += 1; }, [noteId]);
   const [actionError, setActionError] = useState<string | null>(null);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareNote, setShareNote] = useState<Note | null>(null);
@@ -410,12 +416,53 @@ function NoteDetailPanelInner({
       onSaved?.();
       return saved;
     } catch (err) {
+      if (pendingMarkdownRef.current === null) pendingMarkdownRef.current = markdown;
+      if (pendingTitleRef.current === null) pendingTitleRef.current = pendingTitle;
       setActionError(`${n.saveFailed}: ${err instanceof Error ? err.message : n.saveFailedHint}`);
       return null;
     } finally {
       setSaving(false);
     }
   }, [mutate, n.saveFailed, n.saveFailedHint, note, noteId, onSaved]);
+
+  const handleCaptureContext = useCallback(async () => {
+    if (!note || openingChat || saving) return;
+    setOpeningChat(true);
+    setActionError(null);
+    const gateway = useGatewayStore.getState();
+    const generation = ++captureGeneration.current;
+    const isCurrent = () => captureGeneration.current === generation
+      && useGatewayStore.getState().baseUrl === gateway.baseUrl
+      && useGatewayStore.getState().conversationId === gateway.conversationId;
+    try {
+      const selection = window.getSelection();
+      const selectedText = selection?.anchorNode && selection.focusNode
+        && editorContainerRef.current?.contains(selection.anchorNode)
+        && editorContainerRef.current.contains(selection.focusNode) ? selection.toString() : '';
+      // Leaving this page flushes edits too; capture the saved revision, not its predecessor.
+      const saved = await flushPendingSave();
+      if (!saved || !isCurrent()) return;
+      if (pendingMarkdownRef.current !== null || pendingTitleRef.current !== null) {
+        throw new Error(contextLabels.unavailable);
+      }
+      const draft = pageContextDrafts.capture({ title: saved.title || saved.id, text: saved.markdown,
+        resourceRefs: [{ kind: 'note', id: saved.id, revision: String(saved.remoteVersion ?? 1) }],
+        selection: selectedText ? { text: selectedText, draft: false } : undefined,
+      });
+      const session = await new SessionManager().createSession();
+      if (!isCurrent()) return;
+      if (pendingMarkdownRef.current !== null || pendingTitleRef.current !== null) {
+        throw new Error(contextLabels.unavailable);
+      }
+      const key = pageContextDraftKey(gateway.baseUrl, gateway.conversationId, session.key);
+      if (!pageContextDrafts.put(key, draft)) throw new Error(contextLabels.unavailable);
+      navigate(`/chat/${encodeURIComponent(session.key)}`);
+    } catch {
+      if (isCurrent()) setActionError(contextLabels.unavailable);
+    } finally {
+      if (captureGeneration.current === generation) setOpeningChat(false);
+    }
+  }, [note, openingChat, saving, flushPendingSave, navigate, contextLabels.unavailable]);
 
   const handleShare = useCallback(async () => {
     setActionError(null);
@@ -507,6 +554,10 @@ function NoteDetailPanelInner({
           onModeChange={handleModeChange}
           labels={{ edit: n.modeEdit, source: n.modeSource, preview: n.modePreview }}
         />
+        <button type="button" onClick={() => void handleCaptureContext()} disabled={openingChat || saving || !note || Boolean(previewSnapshot)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-2.5 py-1.5 text-xs text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50">
+          <FileText className="size-3.5" aria-hidden />{contextLabels.capture}
+        </button>
         <DropdownMenu.Root modal={false}>
           <DropdownMenu.Trigger asChild>
             <button
@@ -557,6 +608,10 @@ function NoteDetailPanelInner({
       catalyzing,
       handleBreakdownClick,
       handleOpenNoteChat,
+      handleCaptureContext,
+      contextLabels.capture,
+      note,
+      previewSnapshot,
       mode,
       n.history,
       n.modeEdit,

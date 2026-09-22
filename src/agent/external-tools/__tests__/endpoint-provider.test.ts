@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { requireXopcDatabase } from '../../../storage/sqlite/connection.js';
 
 import { ENDPOINT_TEXT_OUTPUT_SCHEMA } from '@xopcai/endpoint-tools-protocol';
 
@@ -35,6 +36,7 @@ function runtime(bound = false) {
   const invoke = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'written' }] }));
   const endpoint = {
     endpointId,
+    principalId: 'principal-1',
     displayName: 'Browser tab',
     tools: [tool],
   };
@@ -54,6 +56,7 @@ function runtime(bound = false) {
 }
 
 describe('EndpointToolProvider', () => {
+  beforeEach(() => { requireXopcDatabase(); });
   it('only exposes tools from the endpoint that originated the turn', async () => {
     const provider = new EndpointToolProvider({
       runtime: runtime(),

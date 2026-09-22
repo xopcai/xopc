@@ -1,22 +1,19 @@
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 
-import { z } from 'zod';
+import { SceneFeedbackSchema } from '@xopcai/gateway-contract';
 
 import type { ScenePrincipal } from './contracts.js';
 import { SceneConflictError, SceneNotFoundError } from './repository.js';
 
-const feedbackSchema = z.strictObject({
-  expectedRevision: z.number().int().nonnegative(),
-  rating: z.enum(['useful', 'not_useful']),
-  note: z.string().trim().max(2000).optional(),
-});
 const actionable = `withdrawn_at IS NULL AND (expires_at IS NULL OR expires_at > ?)
   AND (status IN ('unread', 'read') OR (status = 'snoozed' AND snoozed_until <= ?))`;
 
 /** Feedback records a user's judgment, never an inferred successful action. */
 export class SceneInboxService {
   constructor(private readonly db: DatabaseSync, private readonly clock: () => number = Date.now) {}
+
+  get database() { return this.db; }
 
   setRead(principal: ScenePrincipal, id: string, read: boolean): void {
     if (typeof read !== 'boolean') throw new Error('Read state must be a boolean');
@@ -28,7 +25,7 @@ export class SceneInboxService {
   }
 
   feedback(principal: ScenePrincipal, id: string, value: unknown): number {
-    const input = feedbackSchema.parse(value);
+    const input = SceneFeedbackSchema.parse(value);
     this.assertVisible(principal, id);
     this.db.exec('SAVEPOINT scene_feedback_write');
     try {

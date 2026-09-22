@@ -2,18 +2,24 @@ import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 
 import { registerNotesRoutes } from '../notes.js';
+import { setGatewayPrincipal } from '../../../security/gateway-principal.js';
+import { requireXopcDatabase } from '../../../../storage/sqlite/connection.js';
 
 describe('notes routes', () => {
   it('forwards home filters and returns project summaries before the note-id route', async () => {
     const app = new Hono();
+    app.use('*', async (c, next) => {
+      setGatewayPrincipal(c, { kind: 'owner', principalId: 'test-owner', scopes: ['workspace.read'] });
+      await next();
+    });
     const listNotes = vi.fn().mockResolvedValue({ items: [], total: 0 });
     registerNotesRoutes(app, {
-      service: { notesServiceInstance: { listNotes, listProjectSummaries: () => [{ id: 'p1', noteCount: 4 }] } },
+      service: { notesServiceInstance: { listNotes, listProjectSummaries: () => [{ id: 'p1', name: 'Project', noteCount: 4 }] } },
     } as never);
     await app.request('/api/notes?unassigned=true&agentEdited=true&pinned=true&offset=12&sortBy=updatedAt');
     expect(listNotes).toHaveBeenCalledWith(expect.objectContaining({ unassigned: true, agentEdited: true, pinned: true, offset: 12, sortBy: 'updatedAt' }));
     const summary = await app.request('/api/notes/project-summaries');
-    expect(await summary.json()).toEqual({ items: [{ id: 'p1', noteCount: 4 }] });
+    expect(await summary.json()).toEqual({ items: [{ id: 'p1', name: 'Project', noteCount: 4 }] });
   });
 
   it('forwards attachment idempotency keys so retries reuse the same media', async () => {
@@ -50,11 +56,16 @@ describe('notes routes', () => {
   });
 
   it('forwards the quick capture idempotency key to the notes service', async () => {
+    requireXopcDatabase();
     const app = new Hono();
-    const quickCapture = vi.fn().mockResolvedValue({ id: 'note-1' });
+    app.use('*', async (c, next) => {
+      setGatewayPrincipal(c, { kind: 'owner', principalId: 'test-owner', scopes: ['workspace.write'] });
+      await next();
+    });
+    const quickCapture = vi.fn().mockReturnValue({ id: 'note-1', markdown: 'Remember this', kind: 'thought', status: 'inbox', createdAt: 1, updatedAt: 1 });
     registerNotesRoutes(app, {
       service: {
-        notesServiceInstance: { quickCapture },
+        notesServiceInstance: { quickCaptureAtomically: quickCapture, flushCommittedEffects: vi.fn() },
       },
       strictRateLimitMiddleware: async (_c, next) => next(),
     } as never);
@@ -77,12 +88,17 @@ describe('notes routes', () => {
   });
 
   it('forwards the full capture idempotency key to the notes service', async () => {
+    requireXopcDatabase();
     const app = new Hono();
-    const createNote = vi.fn().mockResolvedValue({ id: 'note-voice', markdown: '', attachments: [] });
+    app.use('*', async (c, next) => {
+      setGatewayPrincipal(c, { kind: 'owner', principalId: 'test-owner', scopes: ['workspace.write'] });
+      await next();
+    });
+    const createNote = vi.fn().mockReturnValue({ id: 'note-voice', markdown: '', attachments: [], kind: 'voice', status: 'inbox', createdAt: 1, updatedAt: 1 });
     registerNotesRoutes(app, {
       service: {
         projects: { get: vi.fn() },
-        notesServiceInstance: { createNote },
+        notesServiceInstance: { createNoteAtomically: createNote, flushCommittedEffects: vi.fn() },
       },
       strictRateLimitMiddleware: async (_c, next) => next(),
     } as never);
@@ -108,7 +124,7 @@ describe('notes routes', () => {
     registerNotesRoutes(app, {
       service: {
         notesServiceInstance: {
-          updateNote: vi.fn().mockResolvedValue(null),
+          getNote: vi.fn().mockResolvedValue(null),
         },
       },
       strictRateLimitMiddleware: async (_c, next) => next(),

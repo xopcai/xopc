@@ -36,6 +36,7 @@ export const TaskChangedFieldSchema = z.enum([
   'context',
   'runs',
   'receipts',
+  'feedback',
   'attention',
   'conversation',
 ]);

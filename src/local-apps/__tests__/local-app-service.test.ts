@@ -1,7 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import * as fs from 'node:fs';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('node:fs', async (importOriginal) => ({
+  ...await importOriginal<typeof import('node:fs')>(),
+}));
 
 const paths = vi.hoisted(() => {
   const { tmpdir } = require('node:os') as typeof import('node:os');
@@ -27,6 +32,10 @@ import {
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
 import { LocalAppService } from '../service.js';
+import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
+import { createProductDispatcher } from '../../capabilities/runtime/product.js';
+import type { CapabilityContext } from '../../capabilities/runtime/dispatcher.js';
+import { createXopcUseTool } from '../../agent/tools/xopc-use-tool.js';
 
 describe('LocalAppService', () => {
   let config: Config;
@@ -60,6 +69,7 @@ describe('LocalAppService', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(paths.root, { recursive: true, force: true });
@@ -80,6 +90,233 @@ describe('LocalAppService', () => {
       ],
     });
   }
+
+  function interrupted(appId: string) {
+    const root = join(paths.root, 'local-apps', 'pending-releases');
+    mkdirSync(root, { recursive: true });
+    writeFileSync(join(root, appId), '');
+    return join(root, appId);
+  }
+
+  it('recovers interrupted upgrade files and config from the committed release, idempotently', async () => {
+    const app = service.create({ name: 'Recovery fixture', idea: 'Recover interrupted upgrade' });
+    acceptCurrentDraft(app.id);
+    const first = await service.install(app.id);
+    const target = join(paths.root, 'extensions', app.extensionId);
+    const original = readFileSync(join(target, 'ui/app.js'), 'utf8');
+    writeFileSync(join(target, 'ui/app.js'), 'uncommitted code');
+    const orphan = join(paths.root, 'local-apps', 'releases', app.id, `v${first.draftVersion}`);
+    mkdirSync(orphan, { recursive: true });
+    writeFileSync(join(orphan, 'retained.txt'), 'uncommitted artifact');
+    const marker = interrupted(app.id);
+    config = { ...config, extensions: { enabled: ['unrelated'], disabled: [app.extensionId] } } as Config;
+    await service.recoverPendingReleases();
+    expect(readFileSync(join(target, 'ui/app.js'), 'utf8')).toBe(original);
+    expect(config.extensions?.enabled).toEqual(expect.arrayContaining(['unrelated', app.extensionId]));
+    expect(existsSync(marker)).toBe(false);
+    expect(existsSync(orphan)).toBe(false);
+    expect(service.get(app.id)?.activeReleaseId).toBe(first.activeReleaseId);
+    await service.recoverPendingReleases();
+  });
+
+  it('recovers a committed uninstall and a committed disable without restoring old state', async () => {
+    const app = service.create({ name: 'Committed recovery', idea: 'Recover post-commit crash' });
+    acceptCurrentDraft(app.id);
+    await service.install(app.id);
+    await service.setEnabled(app.id, false);
+    interrupted(app.id);
+    config = { ...config, extensions: { enabled: [app.extensionId] } } as Config;
+    await service.recoverPendingReleases();
+    expect(config.extensions?.disabled).toContain(app.extensionId);
+    await service.uninstall(app.id);
+    const target = join(paths.root, 'extensions', app.extensionId);
+    mkdirSync(target, { recursive: true });
+    writeFileSync(join(target, 'stale.txt'), 'stale');
+    interrupted(app.id);
+    await service.recoverPendingReleases();
+    expect(existsSync(target)).toBe(false);
+    expect(config.extensions?.disabled).not.toContain(app.extensionId);
+  });
+
+  it('fails closed and retains the marker when the recovery artifact is corrupt', async () => {
+    const app = service.create({ name: 'Corrupt recovery', idea: 'Reject corrupt release' });
+    acceptCurrentDraft(app.id);
+    await service.install(app.id);
+    writeFileSync(join(paths.root, 'local-apps', 'releases', app.id, 'v1', 'ui/app.js'), 'corrupt');
+    const marker = interrupted(app.id);
+    await expect(service.recoverPendingReleases()).rejects.toThrow('integrity');
+    expect(existsSync(marker)).toBe(true);
+    await expect(service.setEnabled(app.id, false)).rejects.toThrow('integrity');
+  });
+
+  it('keeps recovery retryable when configuration persistence fails', async () => {
+    const app = service.create({ name: 'Retry recovery', idea: 'Retry config persistence' });
+    const marker = interrupted(app.id);
+    const failing = new LocalAppService({
+      projects, workspaceRoot: join(paths.root, 'workspace'), getConfig: () => config,
+      saveConfig: async () => ({ saved: false, error: 'Injected disk failure' }),
+      getExtensionLoader: () => extensionLoader, emit: () => {},
+    });
+    await expect(failing.recoverPendingReleases()).rejects.toThrow('Injected disk failure');
+    expect(existsSync(marker)).toBe(true);
+    await service.recoverPendingReleases();
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  it('serializes installs across service instances without losing activation config', async () => {
+    const first = service.create({ name: 'First concurrent app', idea: 'First release' });
+    const second = service.create({ name: 'Second concurrent app', idea: 'Second release' });
+    acceptCurrentDraft(first.id);
+    acceptCurrentDraft(second.id);
+    let resume!: () => void;
+    let entered!: () => void;
+    const gate = new Promise<void>((resolve) => { resume = resolve; });
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    const other = new LocalAppService({
+      projects,
+      workspaceRoot: join(paths.root, 'workspace'),
+      getConfig: () => config,
+      saveConfig: async (next) => {
+        entered();
+        await gate;
+        config = next;
+        return { saved: true };
+      },
+      getExtensionLoader: () => extensionLoader,
+      emit: (type) => events.push(type),
+    });
+    const installingFirst = other.install(first.id);
+    await started;
+    const installingSecond = service.install(second.id);
+    await Promise.resolve();
+    expect(existsSync(join(paths.root, 'extensions', second.extensionId))).toBe(false);
+    resume();
+    await Promise.all([installingFirst, installingSecond]);
+    expect(config.extensions?.enabled).toEqual(expect.arrayContaining([first.extensionId, second.extensionId]));
+    expect(service.get(first.id)?.installationState).toBe('installed');
+    expect(service.get(second.id)?.installationState).toBe('installed');
+  });
+
+  it('orders install, disable and uninstall and releases the lock after rejection', async () => {
+    const app = service.create({ name: 'Ordered app', idea: 'Serialize release lifecycle' });
+    await expect(service.install(app.id)).rejects.toThrow('acceptance');
+    acceptCurrentDraft(app.id);
+    await Promise.all([service.install(app.id), service.setEnabled(app.id, false), service.uninstall(app.id)]);
+    expect(service.get(app.id)?.installationState).not.toBe('installed');
+    expect(config.extensions?.enabled).not.toContain(app.extensionId);
+    expect(config.extensions?.disabled).not.toContain(app.extensionId);
+    expect(existsSync(join(paths.root, 'extensions', app.extensionId))).toBe(false);
+    expect(events.indexOf('local_app.installed')).toBeLessThan(events.indexOf('local_app.disabled'));
+    expect(events.indexOf('local_app.disabled')).toBeLessThan(events.indexOf('local_app.uninstalled'));
+  });
+
+  it('preserves the installed release when activation staging copy fails', async () => {
+    const app = service.create({ name: 'Copy failure', idea: 'Preserve active release' });
+    acceptCurrentDraft(app.id);
+    const installed = await service.install(app.id);
+    const copy = fs.cpSync;
+    vi.spyOn(fs, 'cpSync').mockImplementation((source, target, options) => {
+      if (String(target).includes('.local-app-activate-')) throw new Error('Injected copy failure');
+      return copy(source, target, options);
+    });
+    await expect(service.rollback(app.id, installed.activeReleaseId!)).rejects.toThrow('Injected copy failure');
+    expect(service.get(app.id)?.activeReleaseId).toBe(installed.activeReleaseId);
+    expect(existsSync(join(paths.root, 'extensions', app.extensionId, 'package.json'))).toBe(true);
+  });
+
+  it('keeps a committed release successful when temporary cleanup fails', async () => {
+    const app = service.create({ name: 'Cleanup failure', idea: 'Preserve committed release' });
+    acceptCurrentDraft(app.id);
+    const remove = fs.rmSync;
+    vi.spyOn(fs, 'rmSync').mockImplementation((path, options) => {
+      if (String(path).includes('.local-app-activate-') || String(path).includes('.draft-')) {
+        throw new Error('Injected cleanup failure');
+      }
+      return remove(path, options);
+    });
+    const installed = await service.install(app.id);
+    expect(installed.installationState).toBe('installed');
+    expect(existsSync(join(paths.root, 'local-apps', 'releases', app.id, 'v1'))).toBe(true);
+    expect(existsSync(join(paths.root, 'extensions', app.extensionId, 'package.json'))).toBe(true);
+  });
+
+  it('commits acceptance, its receipt and event atomically and preserves explicit new intent', async () => {
+    const app = service.create({ name: 'Acceptance fixture', idea: 'Verify acceptance transactions' });
+    const previous = acceptCurrentDraft(app.id);
+    events.length = 0;
+    const input = { id: app.id, sourceHash: previous.sourceHash, status: previous.status,
+      checks: previous.checks, interactiveCount: previous.interactiveCount };
+    const runtime = createProductDispatcher(undefined, { getLocalApps: () => service });
+    const caller: CapabilityContext = { principalId: 'owner', surface: 'http', scopes: ['gateway.admin'], authorize: () => true };
+    const operation = 'xopc.local_apps.record_acceptance';
+    const invoke = (key = 'accept') => runtime.call(operation, input, caller, { ...runtime.describe(operation, caller), idempotencyKey: key });
+    const record = service.recordAcceptance.bind(service);
+    const failure = vi.spyOn(service, 'recordAcceptance').mockImplementationOnce((...args) => {
+      record(...args);
+      throw new Error('Fault after write');
+    });
+    await expect(invoke()).rejects.toBeDefined();
+    expect(service.get(app.id)?.acceptanceRuns).toHaveLength(1);
+    expect(events).toEqual([]);
+    failure.mockRestore();
+    const result = await invoke();
+    expect(await invoke()).toEqual(result);
+    expect(service.get(app.id)?.acceptanceRuns).toHaveLength(2);
+    expect(events).toEqual(['local_app.acceptance_recorded']);
+    const rows = getSqliteDatabase().prepare("SELECT operation_id FROM domain_outbox WHERE subject_kind = 'local_app' AND operation_id IS NOT NULL").all();
+    expect(rows).toHaveLength(1);
+    await invoke('new-intent');
+    expect(service.get(app.id)?.acceptanceRuns).toHaveLength(3);
+    await expect(runtime.call(operation, { ...input, sourceHash: '0'.repeat(64) }, caller,
+      { ...runtime.describe(operation, caller), idempotencyKey: 'stale' })).rejects.toMatchObject({ code: 'REVISION_CONFLICT' });
+    await expect(runtime.call(operation, { ...input, checks: input.checks.map(check => ({ ...check, status: 'skipped' })) }, caller,
+      { ...runtime.describe(operation, caller), idempotencyKey: 'skipped' })).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    const flush = vi.spyOn(service, 'flushAcceptanceEvents').mockImplementation(() => { throw new Error('Publisher offline'); });
+    await expect(invoke('pending-event')).rejects.toMatchObject({ code: 'UNAVAILABLE' });
+    expect(service.get(app.id)?.acceptanceRuns).toHaveLength(4);
+    expect(getSqliteDatabase().prepare("SELECT count(*) AS n FROM domain_outbox WHERE subject_kind = 'local_app' AND published_at IS NULL").get()!.n).toBe(1);
+    flush.mockRestore();
+    closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(paths.root, 'xopc.db') });
+    await invoke('pending-event');
+    expect(service.get(app.id)?.acceptanceRuns).toHaveLength(4);
+    expect(getSqliteDatabase().prepare("SELECT count(*) AS n FROM domain_outbox WHERE subject_kind = 'local_app' AND published_at IS NULL").get()!.n).toBe(0);
+  });
+
+  it('shares read results with Agent while preserving preview authorization and delegation', async () => {
+    const app = service.create({ name: 'Read fixture', idea: 'Test capability reads' });
+    const runtime = createProductDispatcher(undefined, { getLocalApps: () => service });
+    const caller: CapabilityContext = { principalId: 'owner', surface: 'http', scopes: ['gateway.admin'], authorize: () => true };
+    expect(await runtime.call('xopc.local_apps.list', {}, caller)).toEqual({ apps: service.list() });
+    const read = await runtime.call('xopc.local_apps.get', { id: app.id }, caller);
+    expect(read).toEqual({ app: service.get(app.id) });
+    const tool = createXopcUseTool({ getLocalAppService: () => service });
+    expect((await tool.execute('read', { mode: 'local_app', command: 'get', args: { id: app.id } })).details.result).toEqual({ ok: true, ...read as object });
+    await expect(runtime.call('xopc.local_apps.get', { id: app.id }, { ...caller, scopes: ['workspace.read'] })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(runtime.call('xopc.local_apps.get', { id: app.id }, { ...caller, authorize: () => false })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(runtime.call('xopc.local_apps.get', { id: 'missing' }, caller)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(runtime.list({ ...caller, allowedCapabilities: [] })).toEqual([]);
+    expect(service.get(app.id)).toEqual(app);
+  });
+
+  it('validates through shared entry points without modifying files or durable state', async () => {
+    const app = service.create({ name: 'Validation fixture', idea: 'Read only validation' });
+    const dispatcher = createProductDispatcher(undefined, { getLocalApps: () => service });
+    const caller: CapabilityContext = { principalId: 'owner', surface: 'http', scopes: ['gateway.admin'], authorize: () => true };
+    const manifestPath = join(app.workspaceRoot, 'xopc.extension.json');
+    const manifest = readFileSync(manifestPath, 'utf8');
+    const changes = getSqliteDatabase().prepare('SELECT total_changes() AS n').get()!.n;
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(123456);
+    try {
+      const read = await dispatcher.call('xopc.local_apps.validate', { id: app.id }, caller);
+      expect(read).toEqual({ validation: service.validate(app.id) });
+      const tool = createXopcUseTool({ getLocalAppService: () => service });
+      expect((await tool.execute('validate', { mode: 'local_app', command: 'validate', args: { id: app.id } })).details.result)
+        .toEqual({ ok: true, app: service.get(app.id), ...read as object });
+      expect(getSqliteDatabase().prepare('SELECT total_changes() AS n').get()!.n).toBe(changes);
+      expect(readFileSync(manifestPath, 'utf8')).toBe(manifest);
+      await expect(dispatcher.call('xopc.local_apps.validate', { id: app.id }, { ...caller, authorize: () => false })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    } finally { clock.mockRestore(); }
+  });
 
   it('creates a previewable UI-only app and a coder project', () => {
     const app = service.create({ name: 'Reading List', idea: 'Track articles and reading progress' });
@@ -121,6 +358,31 @@ describe('LocalAppService', () => {
     expect(existsSync(join(paths.root, 'extensions', created.extensionId, 'ui', 'index.html'))).toBe(true);
     expect(existsSync(join(paths.root, 'local-apps', 'releases', created.id, 'v1', 'ui', 'index.html'))).toBe(true);
     expect(events).toEqual(expect.arrayContaining(['config.reload', 'local_app.installed']));
+  });
+
+  it('rejects a stale capability contract before accepting or installing a release', async () => {
+    const created = service.create({ name: 'Stale contract', idea: 'Do not activate obsolete bindings' });
+    const path = join(created.workspaceRoot, 'xopc.extension.json');
+    const manifest = JSON.parse(readFileSync(path, 'utf8'));
+    manifest.ui.capabilities = [{ id: 'xopc.notes.create', majorVersion: 1, descriptorDigest: '0'.repeat(64) }];
+    writeFileSync(path, JSON.stringify(manifest));
+    expect(service.validate(created.id).status).toBe('failed');
+    await expect(service.install(created.id)).rejects.toThrow('Capability contract changed');
+    expect(service.get(created.id)?.installationState).toBe('not_installed');
+  });
+
+  it('rejects tampered rollback artifacts without changing the active release', async () => {
+    const created = service.create({ name: 'Tampered artifact', idea: 'Keep the active release safe' });
+    acceptCurrentDraft(created.id);
+    const first = await service.install(created.id);
+    const script = join(created.workspaceRoot, 'ui', 'app.js');
+    writeFileSync(script, readFileSync(script, 'utf8') + '\n// version 2\n');
+    acceptCurrentDraft(created.id);
+    const second = await service.install(created.id);
+    const oldArtifact = join(paths.root, 'local-apps', 'releases', created.id, 'v1', 'ui', 'app.js');
+    writeFileSync(oldArtifact, 'document.body.dataset.tampered = "true";');
+    await expect(service.rollback(created.id, first.activeReleaseId!)).rejects.toThrow('integrity check failed');
+    expect(service.get(created.id)?.activeReleaseId).toBe(second.activeReleaseId);
   });
 
   it('retains immutable releases and rolls back without changing the draft', async () => {
@@ -247,7 +509,7 @@ describe('LocalAppService', () => {
       appId: created.id,
       permissions: ['storage', 'theme'],
     });
-    const granted = service.grantUiPermissions(created.extensionId);
+    const granted = service.grantUiPermissions(created.extensionId, service.getUiGrant(created.extensionId).manifestDigest!);
     expect(granted).toMatchObject({ granted: true, extensionId: created.extensionId, appId: created.id });
     expect(service.getUiGrant(created.extensionId)).toMatchObject({
       granted: true,
@@ -273,6 +535,46 @@ describe('LocalAppService', () => {
     });
   });
 
+  it('invalidates grants on UI-only release changes and rejects stale confirmation', async () => {
+    const created = service.create({ name: 'UI version grant', idea: 'Authorize exact installed code' });
+    acceptCurrentDraft(created.id);
+    await service.install(created.id);
+    const first = service.getUiGrant(created.extensionId).manifestDigest!;
+    service.grantUiPermissions(created.extensionId, first);
+    const script = join(created.workspaceRoot, 'ui', 'app.js');
+    writeFileSync(script, readFileSync(script, 'utf8') + '\n// Revised UI release\n');
+    acceptCurrentDraft(created.id);
+    await service.install(created.id);
+    const next = service.getUiGrant(created.extensionId);
+    expect(next.granted).toBe(false);
+    expect(next.manifestDigest).not.toBe(first);
+    expect(() => service.grantUiPermissions(created.extensionId, first)).toThrow('release changed');
+    expect(service.grantUiPermissions(created.extensionId, next.manifestDigest!).granted).toBe(true);
+  });
+
+  it('binds capability access to the enabled installed release and reviewed permissions', async () => {
+    const created = service.create({ name: 'Capability binding', idea: 'Read explicitly granted notes' });
+    const manifestPath = join(created.workspaceRoot, 'xopc.extension.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    const descriptor = createProductDispatcher().describe('xopc.notes.list', { principalId: 'test', surface: 'extension', scopes: ['workspace.read'], authorize: () => true });
+    const binding = { id: descriptor.id, majorVersion: descriptor.majorVersion, descriptorDigest: descriptor.descriptorDigest };
+    manifest.ui.capabilities = [binding];
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+    expect(service.validate(created.id).permissionDelta.added).toContain('capability:xopc.notes.list');
+    expect(service.get(created.id)?.permissions).toContain('capability:xopc.notes.list');
+    expect(() => service.getCapabilityAccess(created.extensionId, 'a'.repeat(64))).toThrow('not enabled and installed');
+    acceptCurrentDraft(created.id);
+    await service.install(created.id);
+    const grant = service.getUiGrant(created.extensionId);
+    expect(grant.permissions).toContain('capability:xopc.notes.list');
+    expect(() => service.getCapabilityAccess(created.extensionId, grant.manifestDigest!)).toThrow('not been granted');
+    service.grantUiPermissions(created.extensionId, grant.manifestDigest!);
+    expect(service.getCapabilityAccess(created.extensionId, grant.manifestDigest!).bindings).toEqual([binding]);
+    expect(() => service.getCapabilityAccess(created.extensionId, '0'.repeat(64))).toThrow('release changed');
+    await service.setEnabled(created.id, false);
+    expect(() => service.getCapabilityAccess(created.extensionId, grant.manifestDigest!)).toThrow('not enabled and installed');
+  });
+
   it('stores ordinary extension UI grants in the same authoritative store', () => {
     const extensionId = 'third-party-extension';
     const extensionRoot = join(paths.root, 'extensions', extensionId);
@@ -294,7 +596,7 @@ describe('LocalAppService', () => {
       granted: false,
       permissions: ['theme'],
     });
-    expect(service.grantUiPermissions(extensionId)).toMatchObject({
+    expect(service.grantUiPermissions(extensionId, service.getUiGrant(extensionId).manifestDigest!)).toMatchObject({
       extensionId,
       granted: true,
       permissions: ['theme'],
@@ -334,6 +636,17 @@ describe('LocalAppService', () => {
     });
     await expect(service.install(created.id)).rejects.toThrow('xopc-owned runtime entry');
     expect(existsSync(join(paths.root, 'extensions', created.extensionId))).toBe(false);
+  });
+
+  it('rejects obsolete runtime entry points without rewriting the draft', () => {
+    const app = service.create({ name: 'Current runtime only', idea: 'No compatibility entry' });
+    const manifestPath = join(app.workspaceRoot, 'xopc.extension.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    manifest.main = 'index.js';
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+    writeFileSync(join(app.workspaceRoot, 'index.js'), 'export default Object.freeze({});\n');
+    expect(service.validate(app.id)).toMatchObject({ status: 'failed', issues: [expect.objectContaining({ message: expect.stringContaining('xopc-owned runtime entry') })] });
+    expect(JSON.parse(readFileSync(manifestPath, 'utf8')).main).toBe('index.js');
   });
 
   it('rolls activation back when the installed extension cannot be discovered', async () => {

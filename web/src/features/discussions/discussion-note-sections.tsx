@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { PageContextCaptureButton } from '@/features/chat/context/page-context-capture-button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchJson } from '@/lib/fetch';
@@ -12,6 +13,7 @@ import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import { MeetingEditDialog, type MeetingEditDraft } from './meeting-edit-dialog';
+import { discussionPageText } from './discussion-page-context';
 import { getDiscussionForNote, retryDiscussion } from './discussion-api';
 import type { DiscussionFact, DiscussionTranscript, DiscussionTranscriptSegment, DiscussionTemplate } from './discussion-types';
 
@@ -76,6 +78,7 @@ export function DiscussionNoteSections({ noteId }: { noteId: string }) {
   const processing = ['stopping', 'sealing', 'organizing'].includes(discussion.status);
   const editable = ['recording', 'completed', 'needs_attention'].includes(discussion.status);
   const filtered = transcript.segments.filter(segment => (segment.displayText ?? segment.rawText ?? '').toLocaleLowerCase().includes(query.toLocaleLowerCase()) || segment.speakerLabel?.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+  const pageText = discussionPageText(detail, tab, { query, page, showIgnored });
   return <section className="relative flex h-full min-h-0 w-full flex-col text-fg">
     <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-edge-subtle p-4">
       <FileText className="size-4 text-accent" /><span className="text-sm font-medium">{clock(discussion.durationMs ?? 0)} · {processing ? (zh ? '正在整理' : 'Processing') : discussion.status === 'completed' ? (zh ? '整理完成' : 'Ready') : discussion.status}</span>
@@ -87,6 +90,14 @@ export function DiscussionNoteSections({ noteId }: { noteId: string }) {
       {(['summary', 'transcript'] as const).map(value => <button key={value} className={tab === value ? 'font-medium text-accent-fg' : 'text-fg-muted'} onClick={() => setTab(value)}>{value === 'summary' ? (zh ? '纪要与行动' : 'Summary & actions') : (zh ? '逐字稿' : 'Transcript')}</button>)}
       <div className="ml-auto flex items-center gap-2 text-xs"><Download className="size-3" />{['md','txt','srt'].map(format => <a key={format} className="text-accent-fg" href={apiUrl(`${base}/export?format=${format}`)} download>{format.toUpperCase()}</a>)}</div>
     </nav>
+    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge-subtle px-4 py-2">
+      <PageContextCaptureButton resource={{ kind: 'note', id: noteId, revision: String(detail.note.remoteVersion ?? 1) }}
+        selection={{ text: pageText, draft: false }} label={zh ? '引用当前会议内容到新对话' : 'Reference displayed meeting content'}
+        disabled={busy || processing || Boolean(edit || editing) || !pageText || pageText.length > 16000} />
+      <p className="text-xs text-fg-muted">{pageText.length > 16000
+        ? (zh ? '内容超过 16,000 字符，请筛选更少的逐字稿内容后重试。' : 'Over 16,000 characters. Filter fewer transcript segments and try again.')
+        : (zh ? '仅附带当前纪要或已加载的筛选逐字稿，不含录音；作为用户提供的文本。' : 'Includes this summary or loaded filtered transcript only, not audio; treated as user-provided text.')}</p>
+    </div>
     {error ? <p role="alert" className="px-4 py-2 text-sm text-danger">{error}</p> : null}
     {detail.recordingJob?.state === 'queued' || detail.recordingJob?.state === 'running' ? <p role="status" className="px-4 py-2 text-sm text-fg-muted">{zh ? '录音已上传，正在后台校验与保存。关闭此页面不会中断处理。' : 'Recording uploaded. Verification and saving continue in the background, even if you close this page.'}</p> : null}
     {discussion.status === 'needs_attention' ? <div className="flex gap-2 p-4 text-sm text-danger"><span>{discussion.failureMessage}</span><button disabled={busy} onClick={() => void operation(() => retryDiscussion(discussion.id))}>{zh ? '重试' : 'Retry'}</button></div> : null}

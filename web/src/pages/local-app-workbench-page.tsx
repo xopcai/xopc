@@ -63,6 +63,7 @@ import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useNavOrderStore } from '@/stores/nav-order-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
+import { PageContextCaptureButton } from '@/features/chat/context/page-context-capture-button';
 import { formatShortMonthDateTime } from '@/lib/date-formatters';
 
 const LOCAL_APP_PREVIEW_SANDBOX = 'allow-scripts allow-forms';
@@ -226,12 +227,12 @@ export function LocalAppWorkbenchPage() {
   }, [app?.id]);
 
   useEffect(() => {
-    if (!validation?.sourceHash || previewSourceHashRef.current) return;
+    if (!validation?.sourceHash || previewSourceHashRef.current === validation.sourceHash) return;
     previewSourceHashRef.current = validation.sourceHash;
     setCriteriaRunTarget('all');
     setCriteriaScenarioIndex(0);
     setPreviewKey((value) => value + 1);
-  }, [validation?.sourceHash]);
+  }, [app?.id, validation?.sourceHash]);
 
   useLayoutEffect(() => {
     if (!app) return;
@@ -358,6 +359,7 @@ export function LocalAppWorkbenchPage() {
     }).catch((cause) => {
       if (acceptancePersistKeyRef.current !== key) return;
       acceptancePersistKeyRef.current = '';
+      setSavingAcceptance(false);
       setActionError(cause instanceof Error ? cause.message : String(cause));
     }).finally(() => {
       if (acceptancePersistKeyRef.current === key) setSavingAcceptance(false);
@@ -380,10 +382,10 @@ export function LocalAppWorkbenchPage() {
     setPageHeader({
       startExtra: <Link to="/local-apps" className="rounded-lg p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={zh ? '返回本地应用' : 'Back to local apps'}><ArrowLeft className="size-4" /></Link>,
       main: <h1 className="truncate text-base font-semibold tracking-tight text-fg">{app?.name || (zh ? '创建本地应用' : 'Create local app')}</h1>,
-      end: app ? <div className="flex items-center gap-2"><Button asChild variant="ghost" className="h-9"><Link to={`/projects/${encodeURIComponent(app.projectId)}`}><FolderKanban className="size-4" />{zh ? 'Project' : 'Project'}</Link></Button><Button className="h-9" onClick={() => void onContinueDevelopment()} disabled={chatBusy}>{chatBusy ? <Loader2 className="size-4 animate-spin" /> : <MessageSquareCode className="size-4" />}{zh ? '继续开发' : 'Continue building'}</Button></div> : null,
+      end: app ? <div className="flex flex-wrap items-center gap-2"><PageContextCaptureButton resource={{ kind: 'local_app', id: app.id, revision: validation?.sourceHash ?? '' }} disabled={busy || chatBusy || checkingDraft || !validation?.sourceHash} /><Button asChild variant="ghost" className="h-9"><Link to={`/projects/${encodeURIComponent(app.projectId)}`}><FolderKanban className="size-4" />{zh ? 'Project' : 'Project'}</Link></Button><Button className="h-9" onClick={() => void onContinueDevelopment()} disabled={chatBusy}>{chatBusy ? <Loader2 className="size-4 animate-spin" /> : <MessageSquareCode className="size-4" />}{zh ? '继续开发' : 'Continue building'}</Button></div> : null,
     });
     return () => clearPageHeader();
-  }, [app, chatBusy, clearPageHeader, onContinueDevelopment, setPageHeader, zh]);
+  }, [app, busy, chatBusy, checkingDraft, validation?.sourceHash, clearPageHeader, onContinueDevelopment, setPageHeader, zh]);
 
   async function onCreate(event: FormEvent) {
     event.preventDefault();

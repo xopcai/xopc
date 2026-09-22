@@ -1,10 +1,13 @@
 import { ExtensionErrorCode, type ThemeInfo } from '@xopcai/extension-ui-sdk';
+import { CapabilityCallSchema, ExtensionCapabilityBindingSchema, type CapabilityDescriptor } from '@xopcai/gateway-contract';
+import { z } from 'zod';
 
-import { apiFetch } from '@/lib/fetch';
+import { apiFetch, fetchJson } from '@/lib/fetch';
 import { waitForEndpointTurnClaim } from '@/features/endpoint-tools/turn-claim';
 import { apiUrl } from '@/lib/url';
 import { showActivity } from '@/stores/activity-store';
 import { useThemeStore } from '@/stores/theme-store';
+import { useGatewayStore } from '@/stores/gateway-store';
 
 import { buildThemeInfo } from './theme-bridge';
 
@@ -50,6 +53,7 @@ export class ExtensionMessageRouter {
   >();
   private handlers = new Map<string, MethodHandler>();
   private extensionPermissions = new Map<string, Set<string>>();
+  private releaseBindings = new Map<string, { digest: string; baseUrl: string; namespace: string | undefined }>();
   private eventSubscribers = new Map<string, Set<(e: { event: string; data?: unknown }) => void>>();
   /** extensionId → conversationIds subscribed for agent stream forwarding */
   private agentStreamSubscriptions = new Map<string, Set<string>>();
@@ -66,17 +70,23 @@ export class ExtensionMessageRouter {
     this.iframes.clear();
     this.handlers.clear();
     this.extensionPermissions.clear();
+    this.releaseBindings.clear();
     this.eventSubscribers.clear();
     this.agentStreamSubscriptions.clear();
   }
 
-  registerIframe(extensionId: string, iframe: HTMLIFrameElement, permissions: string[]): void {
+  registerIframe(extensionId: string, iframe: HTMLIFrameElement, permissions: string[], manifestDigest?: string): void {
     const prev = this.iframes.get(extensionId);
     if (prev && prev !== iframe && prev.contentWindow) {
       this.byContentWindow.delete(prev.contentWindow);
     }
     this.iframes.set(extensionId, iframe);
     this.extensionPermissions.set(extensionId, new Set(permissions));
+    this.releaseBindings.delete(extensionId);
+    if (manifestDigest) {
+      const gateway = useGatewayStore.getState();
+      this.releaseBindings.set(extensionId, { digest: manifestDigest, baseUrl: gateway.baseUrl, namespace: gateway.conversationId });
+    }
     this.rememberIframeWindow(extensionId, iframe);
   }
 
@@ -88,6 +98,7 @@ export class ExtensionMessageRouter {
     }
     this.iframes.delete(extensionId);
     this.extensionPermissions.delete(extensionId);
+    this.releaseBindings.delete(extensionId);
     this.agentStreamSubscriptions.delete(extensionId);
   }
 
@@ -150,6 +161,15 @@ export class ExtensionMessageRouter {
 
   registerMethod(method: string, handler: MethodHandler): void {
     this.handlers.set(method, handler);
+  }
+
+  getReleaseDigest(extensionId: string): string {
+    const binding = this.releaseBindings.get(extensionId);
+    const gateway = useGatewayStore.getState();
+    if (!binding || binding.baseUrl !== gateway.baseUrl || binding.namespace !== gateway.conversationId) {
+      throw new Error('Extension release authorization is unavailable');
+    }
+    return binding.digest;
   }
 
   subscribeExtensionEvents(
@@ -216,7 +236,6 @@ export class ExtensionMessageRouter {
     }
   }
 
-  /** Prefer `iframe.contentWindow`; if null (rare), fall back to the request's `event.source`. */
   private postResponse(
     iframe: HTMLIFrameElement,
     event: MessageEvent | undefined,
@@ -224,9 +243,7 @@ export class ExtensionMessageRouter {
     result?: unknown,
     error?: { code: number; message: string },
   ): void {
-    const target =
-      iframe.contentWindow ??
-      (event?.source instanceof Window ? event.source : null);
+    const target = iframe.contentWindow;
     const payload = {
       source: 'xopc-host' as const,
       type: 'response' as const,
@@ -234,63 +251,22 @@ export class ExtensionMessageRouter {
       result,
       error,
     };
-    if (!target) {
+    if (!target || target !== event?.source) {
       return;
     }
     target.postMessage(payload, '*');
-  }
-
-  private isTrustedExtensionSource(iframe: HTMLIFrameElement, ev: MessageEvent): boolean {
-    if (ev.source === null) {
-      // Sandboxed iframes (no allow-same-origin) may report a null source.
-      return true;
-    }
-    const cw = iframe.contentWindow;
-    if (ev.source === cw) {
-      return true;
-    }
-    // Some environments do not keep `===` identity between postMessage `source`
-    // and `iframe.contentWindow`; `frameElement` still ties the window to this iframe.
-    if (cw && typeof Window !== 'undefined' && ev.source instanceof Window) {
-      try {
-        return ev.source.frameElement === iframe;
-      } catch {
-        /* cross-origin access */
-      }
-    }
-    return false;
   }
 
   private async onWindowMessage(event: MessageEvent) {
     const msg = event.data as ExtensionHostMessage | undefined;
     if (!msg || msg.source !== 'xopc-extension') return;
 
-    let iframe: HTMLIFrameElement | undefined;
-    let effectiveExtensionId = msg.extensionId;
-
-    if (event.source instanceof Window) {
-      const reg = this.byContentWindow.get(event.source);
-      if (reg) {
-        iframe = reg.iframe;
-        effectiveExtensionId = reg.extensionId;
-      }
-    }
-
-    if (!iframe) {
-      iframe = this.iframes.get(msg.extensionId);
-      effectiveExtensionId = msg.extensionId;
-    }
-
-    if (!iframe) {
-      return;
-    }
-
-    const trustedByWindow =
-      event.source instanceof Window && this.byContentWindow.has(event.source);
-
-    if (!trustedByWindow && !this.isTrustedExtensionSource(iframe, event)) {
-      return;
-    }
+    // Opaque origin does not establish identity. Never trust an iframe-supplied ID.
+    if (!event.source) return;
+    const registration = this.byContentWindow.get(event.source as Window);
+    if (!registration) return;
+    const { iframe, extensionId: effectiveExtensionId } = registration;
+    if (this.iframes.get(effectiveExtensionId) !== iframe || iframe.contentWindow !== event.source) return;
 
     if (msg.type === 'event') {
       this.handleExtensionEvent(effectiveExtensionId, msg.event, msg.data);
@@ -311,6 +287,7 @@ export class ExtensionMessageRouter {
     if (msg.type !== 'request') return;
 
     const { requestId, method, params } = msg;
+    if (typeof requestId !== 'string' || requestId.length > 200 || typeof method !== 'string' || method.length > 200) return;
 
     const handler = this.handlers.get(method);
     if (!handler) {
@@ -321,7 +298,9 @@ export class ExtensionMessageRouter {
       return;
     }
 
-    const required = METHOD_PERMISSION_MAP[method];
+    const capabilityId = params && typeof params === 'object' && 'id' in params ? params.id : undefined;
+    const required = method === 'capability.describe' || method === 'capability.call'
+      ? `capability:${typeof capabilityId === 'string' ? capabilityId : ''}` : METHOD_PERMISSION_MAP[method];
     const perms = this.extensionPermissions.get(effectiveExtensionId) ?? new Set<string>();
     if (required && !perms.has(required)) {
       this.postResponse(iframe, event, requestId, undefined, {
@@ -331,10 +310,17 @@ export class ExtensionMessageRouter {
       return;
     }
 
+    const gateway = useGatewayStore.getState();
+    const isCurrent = () => this.iframes.get(effectiveExtensionId) === iframe
+      && iframe.contentWindow === event.source && this.extensionPermissions.get(effectiveExtensionId) === perms
+      && useGatewayStore.getState().baseUrl === gateway.baseUrl
+      && useGatewayStore.getState().conversationId === gateway.conversationId;
     try {
       const result = await handler(effectiveExtensionId, params);
+      if (!isCurrent()) return;
       this.postResponse(iframe, event, requestId, result);
     } catch (e) {
+      if (!isCurrent()) return;
       const message = e instanceof Error ? e.message : String(e);
       this.postResponse(iframe, event, requestId, undefined, {
         code: ExtensionErrorCode.InternalError,
@@ -345,6 +331,24 @@ export class ExtensionMessageRouter {
 }
 
 export function registerBuiltinMethods(router: ExtensionMessageRouter): void {
+  const describeInput = z.strictObject({ id: ExtensionCapabilityBindingSchema.shape.id });
+  const callInput = describeInput.extend({ call: CapabilityCallSchema });
+  router.registerMethod('capability.describe', async (extensionId, params) => {
+    const { id } = describeInput.parse(params);
+    const manifestDigest = router.getReleaseDigest(extensionId);
+    const result = await fetchJson<{ capabilities: CapabilityDescriptor[] }>(apiUrl(
+      `/api/local-app-capabilities/${encodeURIComponent(extensionId)}?manifestDigest=${encodeURIComponent(manifestDigest)}`));
+    const descriptor = result.capabilities.find(item => item.id === id);
+    if (!descriptor) throw new Error('Capability is unavailable for this release');
+    return descriptor;
+  });
+  router.registerMethod('capability.call', async (extensionId, params) => {
+    const { id, call } = callInput.parse(params);
+    const manifestDigest = router.getReleaseDigest(extensionId);
+    return fetchJson(apiUrl(`/api/local-app-capabilities/${encodeURIComponent(extensionId)}/${encodeURIComponent(id)}/invocations`), {
+      method: 'POST', body: JSON.stringify({ manifestDigest, call }),
+    });
+  });
   router.registerMethod('theme.get', async () =>
     buildThemeInfo(useThemeStore.getState().resolved),
   );

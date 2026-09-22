@@ -3,6 +3,9 @@ import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { Config } from '../../config/schema.js';
 import type { ExtensionHookRunner } from '../../extensions/index.js';
 import { connectorArgumentsHash, connectorArgumentsPreview } from '../../connectors/approval.js';
+import { evaluateConnectorExecutionPolicy } from '../../connectors/policy.js';
+import { executeExternalOperation, ExternalEffectNotAppliedError } from '../../capabilities/runtime/external-operations.js';
+import { CapabilityError } from '../../capabilities/runtime/errors.js';
 import { getConnectorDefinition } from '../../connectors/catalog.js';
 import { listConnectorInstances } from '../../connectors/instances.js';
 import { ComposioSessionsAdapter } from '../../connectors/composio-sessions.js';
@@ -64,6 +67,11 @@ function textResult(value: unknown): AgentToolResult<Record<string, unknown>> {
     content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value, null, 2) }],
     details: {},
   };
+}
+
+function actionDigest(action: ConnectorActionMetadata): string {
+  const { cachedAt: _cachedAt, ...contract } = action;
+  return connectorArgumentsHash(contract);
 }
 
 type InstalledComposioToolkit = { connectorId: string; toolkit: string; authConfigId?: string };
@@ -307,7 +315,7 @@ export class ComposioToolProvider implements ExternalToolProvider {
     toolRef: string,
     args: Record<string, unknown>,
     approvalId: string | undefined,
-    _context: ExternalToolExecutionContext,
+    context: ExternalToolExecutionContext,
   ) {
     const available = this.availableInstallations();
     const resolved = this.resolve(toolRef, available.installations);
@@ -368,8 +376,12 @@ export class ComposioToolProvider implements ExternalToolProvider {
     if (available.context && connection.accountId) bindObjectiveAccount(available.context.conversationId, resolved.installation.connectorId, connection.accountId);
     const actionArgs = { ...executionArgs };
     delete actionArgs[CONNECTION_ARGUMENT];
-    const argsHash = connectorArgumentsHash({ args: actionArgs, accountId: connection.accountId,
+    const descriptorDigest = actionDigest(action);
+    const argumentIdentity = () => connectorArgumentsHash({ args: actionArgs, accountId: connection.accountId,
+      connectionId: connection.id, descriptorDigest, principalId: available.principalId,
+      agentId: available.agentId, conversationId: available.context?.conversationId,
       objective: available.context ? connectorObjectiveScope(available.context.conversationId) : undefined });
+    const argsHash = argumentIdentity();
     let confirmed = false;
     if (approvalId) {
       const pending = getConnectorApproval(approvalId);
@@ -380,15 +392,40 @@ export class ComposioToolProvider implements ExternalToolProvider {
         || pending.actionId !== action.actionId
         || pending.conversationId !== available.context?.conversationId
         || pending.agentId !== available.agentId
-        || !pending.connectionId
-        || getConnectorConnection(pending.connectionId)?.accountId !== connection.accountId
+        || pending.connectionId !== connection.id
+        || pending.argumentsHash !== argsHash
+        || !['approved', 'consumed'].includes(pending.status)
+        || (pending.status === 'approved' && Date.parse(pending.expiresAt) <= Date.now())
       ) return textResult('The connector approval is invalid for this session or action.');
-      confirmed = Boolean(consumeConnectorApproval(approvalId, argsHash));
-      if (!confirmed) return textResult('The connector approval is not approved, has expired, or was already used.');
+      confirmed = true;
     }
+    const authorizeCurrent = () => {
+      context.signal?.throwIfAborted();
+      const current = this.availableInstallations();
+      const installation = this.resolve(toolRef, current.installations)?.installation;
+      const active = getConnectorConnection(connection.id);
+      const contract = listConnectorActionMetadata(resolved.installation.connectorId).find(item => item.actionId === action.actionId);
+      if (!installation || current.principalId !== available.principalId || current.agentId !== available.agentId
+        || current.context?.conversationId !== available.context?.conversationId
+        || !active || active.status !== 'active' || active.accountId !== connection.accountId
+        || active.providerConnectionId !== connection.providerConnectionId
+        || getConnectorAccount(active.accountId!)?.currentConnectionId !== active.id
+        || !canAccessConnectorAccount(active, installation, current.agentId)) {
+        throw new CapabilityError('FORBIDDEN', 'Connected account authorization changed');
+      }
+      if (!contract || actionDigest(contract) !== descriptorDigest || argumentIdentity() !== argsHash) {
+        throw new CapabilityError('REVISION_CONFLICT', 'Action contract or objective changed');
+      }
+      const evaluation = evaluateConnectorExecutionPolicy({ installation, action: contract, agentId: current.agentId,
+        accountId: active.accountId, confirmed });
+      if (evaluation.decision === 'denied') throw new CapabilityError('FORBIDDEN', evaluation.reason);
+      return evaluation;
+    };
+    const evaluation = authorizeCurrent();
     let result: Awaited<ReturnType<ComposioSessionsAdapter['executeWithPolicy']>>;
     try {
-      result = await this.adapter.executeWithPolicy({
+      const execute = async () => this.adapter.executeWithPolicy({
+      signal: context.signal,
       context: {
         principalId: available.principalId,
         toolkits: [toolkit],
@@ -401,7 +438,36 @@ export class ComposioToolProvider implements ExternalToolProvider {
       agentId: available.agentId,
       conversationId: available.context?.conversationId,
       confirmed,
+      beforeExecute: () => {
+        const current = authorizeCurrent();
+        if (current.decision !== 'allowed') throw new ExternalEffectNotAppliedError(current.reason);
+        if (approvalId && !consumeConnectorApproval(approvalId, argsHash)) {
+          throw new ExternalEffectNotAppliedError('Approval is no longer available');
+        }
+      },
     });
+      if (evaluation.decision === 'confirmation_required') {
+        result = { decision: 'confirmation_required', reason: evaluation.reason };
+      } else if (action.scope === 'read') {
+        result = await execute();
+      } else {
+        result = await executeExternalOperation({
+          principalId: available.principalId, capabilityId: toolRef,
+          idempotencyKey: connectorArgumentsHash(approvalId ? { approvalId }
+            : { conversationId: available.context?.conversationId, toolCallId: context.toolCallId }),
+          requestDigest: argsHash, descriptorDigest, surface: 'agent', recovery: 'manual',
+        }, async () => {
+          const outcome = await execute();
+          if (outcome.decision !== 'allowed') throw new ExternalEffectNotAppliedError(outcome.reason);
+          return outcome;
+        }, outcome => {
+          if (outcome.result && typeof outcome.result === 'object'
+            && 'successful' in outcome.result && outcome.result.successful === false) {
+            throw new Error('Provider reported an unsuccessful action without proving that no effect was applied');
+          }
+          return outcome;
+        });
+      }
     } catch (error) {
       if (action.scope === 'read') {
         const checked = await this.adapter.syncConnections({ principalId: available.principalId }).catch(() => undefined);
@@ -424,8 +490,7 @@ export class ComposioToolProvider implements ExternalToolProvider {
         conversationId: available.context?.conversationId,
         actionId: action.actionId,
         scope: action.scope,
-        argumentsHash: connectorArgumentsHash({ args: actionArgs, accountId: connection.accountId,
-          objective: available.context ? connectorObjectiveScope(available.context.conversationId) : undefined }),
+        argumentsHash: argumentIdentity(),
         argumentsPreview: { account: { id: connection.accountId, label: getConnectorAccount(connection.accountId!)?.label,
           identity: connectorIdentitySummary(connection.identity) }, arguments: connectorArgumentsPreview(actionArgs) },
         expiresAt: new Date(Date.now() + 10 * 60_000).toISOString(),

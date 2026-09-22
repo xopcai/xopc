@@ -3,6 +3,7 @@ import { writeFileSync } from 'node:fs';
 import type { DatabaseSync } from 'node:sqlite';
 
 import { createLogger } from '../../../utils/logger.js';
+import { currentOperationId } from '../../../infra/operation-context.js';
 import { readSchemaVersion, setSchemaVersion } from '../schema-version.js';
 import { resolveSqliteAssetPath } from '../sql-assets.js';
 import { backupBeforeConversationCutover } from './conversation-backup.js';
@@ -22,7 +23,7 @@ const log = createLogger('Sqlite:Migrations');
 export const XOPC_DB_BASELINE_SCHEMA_VERSION = 165;
 
 /** Latest schema version this release supports (increment when adding migrations). */
-export const XOPC_DB_SCHEMA_VERSION = 191;
+export const XOPC_DB_SCHEMA_VERSION = 199;
 
 function writeMigrationReport(backupPath: string, report: Record<string, unknown>): void {
   const reportPath = `${backupPath}.report.json`;
@@ -87,6 +88,8 @@ export function applyPendingMigrations(
   db: DatabaseSync,
   options: ApplyMigrationsOptions = {},
 ): number {
+  // Required by transactional resource triggers on every connection, including already-current databases.
+  db.function('xopc_operation_id', () => currentOperationId() ?? null);
   const targetVersion = options.targetVersion ?? XOPC_DB_SCHEMA_VERSION;
   let currentVersion = readSchemaVersion(db);
 

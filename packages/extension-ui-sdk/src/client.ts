@@ -14,6 +14,10 @@ export function createExtensionClient(options?: CreateExtensionClientOptions): E
   const transport = options?.transport ?? new Transport();
 
   const client: ExtensionClient = {
+    capability: {
+      describe: id => transport.request('capability.describe', { id }),
+      call: (id, call) => transport.request('capability.call', { id, call }),
+    },
     async whenReady() {
       await transport.ready;
     },

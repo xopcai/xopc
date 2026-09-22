@@ -36,4 +36,23 @@ describe('session input reliability', () => {
     expect(shouldRetrySessionInputStatus(400)).toBe(false);
     expect(shouldRetrySessionInputStatus(401)).toBe(false);
   });
+
+  it('includes captured page identity, revisions and unsaved selections', () => {
+    const appContext = {
+      version: 1 as const, clientInstanceId: '7ff7f7a3-463c-4d2c-8a9f-d90c43424f60',
+      tabId: '19979ed2-81e0-4c80-9a81-ccbb8fb0061c', sequence: 1,
+      surface: 'web' as const, resourceRefs: [{ kind: 'note' as const, id: 'one', revision: '1' }],
+      capturedAt: 12, selection: { text: 'Draft', draft: true },
+    };
+    const fingerprint = sessionInputFingerprint({ content: 'Review', appContext });
+    expect(sessionInputFingerprint({ content: 'Review', appContext: structuredClone(appContext) })).toBe(fingerprint);
+    for (const changed of [
+      { ...appContext, sequence: 2 },
+      { ...appContext, tabId: 'another-tab' },
+      { ...appContext, resourceRefs: [{ ...appContext.resourceRefs[0]!, revision: '2' }] },
+      { ...appContext, selection: { text: 'Changed', draft: true } },
+    ]) expect(sessionInputFingerprint({ content: 'Review', appContext: changed })).not.toBe(fingerprint);
+    expect(sessionInputFingerprint({ content: 'Review', appContext: undefined }))
+      .toBe(sessionInputFingerprint({ content: 'Review' }));
+  });
 });

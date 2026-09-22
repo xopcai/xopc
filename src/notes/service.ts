@@ -14,6 +14,10 @@ import { parseNoteMarkdown } from './note-markdown.js';
 import { buildNoteAgentContextArtifact, getCachedNoteAgentContextArtifact } from './agent-context.js';
 import { NotesStore } from './store.js';
 import { listNoteProjectSummaries } from '../storage/sqlite/notes-repository.js';
+import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
+import { DomainOutboxDispatcher } from '../infra/domain-outbox-dispatcher.js';
+import { currentOperationId } from '../infra/operation-context.js';
+import { revokeNoteShareRecords } from '../share/note-share-revocation.js';
 import type {
   CaptureSource,
   CreateNoteParams,
@@ -34,6 +38,8 @@ import type {
 const log = createLogger('NotesService');
 const MAX_SNAPSHOTS_PER_NOTE = 50;
 const SNAPSHOT_THROTTLE_MS = 60_000;
+
+export class NoteRevisionConflictError extends Error {}
 
 function quickCaptureId(idempotencyKey: string): string {
   const digest = createHash('sha256')
@@ -83,25 +89,25 @@ function summarizeIdea(markdown?: string): string {
   return lines.slice(0, 3).join('；').slice(0, 140);
 }
 
-function publishNoteEvent(
-  type: 'note.created' | 'note.updated',
+function enqueueNoteEvent(
+  type: 'note.created' | 'note.updated' | 'note.deleted',
   note: Note,
   extra?: Record<string, unknown>,
 ): void {
-  publishAutomationProductEvent({
-    type,
-    source: 'notes',
-    payload: {
-      noteId: note.id,
-      kind: note.kind,
-      status: note.status,
-      title: note.title,
-      capturedVia: note.capturedVia,
-      tagCount: note.tags?.length ?? 0,
-      hasAttachments: Boolean(note.attachments?.length),
-      ...extra,
-    },
-  });
+  const payload = {
+    noteId: note.id,
+    kind: note.kind,
+    status: note.status,
+    title: note.title,
+    capturedVia: note.capturedVia,
+    tagCount: note.tags?.length ?? 0,
+    hasAttachments: Boolean(note.attachments?.length),
+    revision: note.remoteVersion ?? 1,
+    ...extra,
+  };
+  getSqliteDatabase().prepare(`INSERT INTO domain_outbox
+    (event_id, event_type, subject_kind, subject_id, correlation_id, payload_json, created_at, operation_id)
+    VALUES (?, ?, 'note', ?, ?, ?, ?, ?)`).run(randomUUID(), type, note.id, note.id, JSON.stringify(payload), note.updatedAt, currentOperationId() ?? null);
 }
 
 function inferCatalysisStage(note: Note): NonNullable<NoteCatalysisMeta['stage']> {
@@ -187,81 +193,53 @@ async function buildAiCatalysisReport(note: Note, config?: Config): Promise<Note
 }
 
 export class NotesService {
-  private lastSnapshotAt = new Map<string, number>();
-  private quickCapturesInFlight = new Map<string, Promise<Note>>();
-  private noteCapturesInFlight = new Map<string, Promise<Note>>();
   private noteAttachmentsInFlight = new Map<string, Promise<NoteAttachment | null>>();
 
   constructor(private readonly store = new NotesStore()) {}
 
   async initialize(): Promise<void> {
     await this.store.initialize();
+    this.flushCommittedEffects();
+  }
+
+  flushCommittedEffects(): void {
+    this.store.drainAttachmentCleanup();
+    this.store.drainDeletionCleanup();
+    new DomainOutboxDispatcher(publishAutomationProductEvent).drain(100, 'note');
   }
 
   async quickCapture(markdown: string, source: CaptureSource, idempotencyKey?: string): Promise<Note> {
-    const id = idempotencyKey ? quickCaptureId(idempotencyKey) : randomUUID();
-    if (idempotencyKey) {
-      const existing = await this.store.getNote(id);
-      if (existing) return existing;
-      const inFlight = this.quickCapturesInFlight.get(id);
-      if (inFlight) return inFlight;
-      const capture = this.createQuickCapture(id, markdown, source)
-        .finally(() => this.quickCapturesInFlight.delete(id));
-      this.quickCapturesInFlight.set(id, capture);
-      return capture;
-    }
-    return this.createQuickCapture(id, markdown, source);
-  }
-
-  private async createQuickCapture(id: string, markdown: string, source: CaptureSource): Promise<Note> {
-    const now = Date.now();
-    const note: Note = {
-      id,
-      title: deriveDefaultTitle(markdown),
-      kind: inferKind(markdown),
-      status: 'inbox',
-      markdown,
-      createdAt: now,
-      updatedAt: now,
-      capturedVia: source,
-      remoteVersion: 1,
-      localVersion: 1,
-    };
-    await this.store.addNote(note);
-    emitActivity({
-      type: 'note.created',
-      primaryObject: { kind: 'note', id: note.id, title: note.title },
-      actor: systemActivityActor(),
-      source: systemActivitySource(),
-      payload: {
-        title: note.title,
-        kind: note.kind,
-        tags: note.tags,
-        contentPreview: previewText(note.markdown),
-        contentLength: note.markdown.length,
-      },
-      nowMs: note.createdAt,
-    });
-    log.debug({ id: note.id, kind: note.kind }, 'Quick capture');
+    const note = this.quickCaptureAtomically(markdown, source, idempotencyKey);
+    this.flushCommittedEffects();
     return note;
   }
 
-  async createNote(params: CreateNoteParams, idempotencyKey?: string): Promise<Note> {
-    const id = idempotencyKey ? noteCaptureId(idempotencyKey) : randomUUID();
-    if (idempotencyKey) {
-      const existing = await this.store.getNote(id);
-      if (existing) return existing;
-      const inFlight = this.noteCapturesInFlight.get(id);
-      if (inFlight) return inFlight;
-      const capture = this.createNoteWithId(id, params)
-        .finally(() => this.noteCapturesInFlight.delete(id));
-      this.noteCapturesInFlight.set(id, capture);
-      return capture;
-    }
-    return this.createNoteWithId(id, params);
+  quickCaptureAtomically(markdown: string, source: CaptureSource, idempotencyKey?: string): Note {
+    return runSqliteWriteTransaction(() => {
+      const id = idempotencyKey ? quickCaptureId(idempotencyKey) : randomUUID();
+      const existing = idempotencyKey ? this.store.getNote(id) : null;
+      return existing ?? this.createNoteWithId(id, { markdown, capturedVia: source });
+    });
   }
 
-  private async createNoteWithId(id: string, params: CreateNoteParams): Promise<Note> {
+  async createNote(params: CreateNoteParams, idempotencyKey?: string): Promise<Note> {
+    const note = this.createNoteAtomically(params, idempotencyKey);
+    this.flushCommittedEffects();
+    return note;
+  }
+
+  createNoteAtomically(params: CreateNoteParams, idempotencyKey?: string): Note {
+    return runSqliteWriteTransaction(() => {
+      const id = idempotencyKey ? noteCaptureId(idempotencyKey) : randomUUID();
+      if (idempotencyKey) {
+        const existing = this.store.getNote(id);
+        if (existing) return existing;
+      }
+      return this.createNoteWithId(id, params);
+    });
+  }
+
+  private createNoteWithId(id: string, params: CreateNoteParams): Note {
     const now = Date.now();
     const markdown = params.markdown ?? '';
     const note: Note = {
@@ -281,7 +259,7 @@ export class NotesService {
       remoteVersion: 1,
       localVersion: 1,
     };
-    await this.store.addNote(note);
+    this.store.addNote(note);
     emitActivity({
       type: 'note.created',
       primaryObject: { kind: 'note', id: note.id, title: note.title },
@@ -296,7 +274,7 @@ export class NotesService {
       },
       nowMs: note.createdAt,
     });
-    publishNoteEvent('note.created', note);
+    enqueueNoteEvent('note.created', note);
     log.debug({ id: note.id, kind: note.kind }, 'Note created');
     return note;
   }
@@ -306,63 +284,73 @@ export class NotesService {
   }
 
   async updateNote(id: string, patch: Partial<Note>, trigger: SnapshotTrigger = 'edit'): Promise<Note | null> {
-    const existing = await this.store.getNote(id);
-    if (!existing) return null;
-    const contentTouched = patch.markdown !== undefined || patch.title !== undefined;
-    if (contentTouched) await this.maybeSaveSnapshot(existing, trigger);
-
-    const normalizedPatch: Partial<Note> = { ...patch };
-    if (contentTouched) normalizedPatch.lastEditTrigger = trigger;
-    if (patch.markdown !== undefined) {
-      normalizedPatch.kind = patch.kind ?? inferKind(patch.markdown, Boolean(existing.attachments?.length), existing.attachments);
-    }
-    if (contentTouched || patch.attachments) {
-      normalizedPatch.remoteVersion = (existing.remoteVersion ?? 1) + 1;
-      normalizedPatch.localVersion = patch.localVersion ?? (existing.localVersion ?? 1) + 1;
-    }
-
-    const updatedRaw = await this.store.updateNote(id, normalizedPatch);
-    const updated = updatedRaw ? await this.reconcileAttachments(updatedRaw) : null;
-    if (updated) {
-      const changes = changedFieldsFromPatch(patch as Record<string, unknown>);
-      emitActivity({
-        type: existing.status !== updated.status ? 'note.status_changed' : 'note.updated',
-        primaryObject: { kind: 'note', id: updated.id, title: updated.title },
-        actor: systemActivityActor(),
-        source: systemActivitySource(),
-        payload: {
-          changes,
-          contentTouched,
-          ...(existing.status !== updated.status ? { from: existing.status, to: updated.status } : {}),
-        },
-        nowMs: updated.updatedAt,
-      });
-      publishNoteEvent('note.updated', updated, {
-        contentTouched,
-        trigger,
-      });
-    }
-    return updated;
+    const note = this.updateNoteAtomically(id, patch, trigger);
+    this.flushCommittedEffects();
+    return note;
   }
 
-  private async reconcileAttachments(note: Note): Promise<Note> {
+  updateNoteAtomically(id: string, patch: Partial<Note>, trigger: SnapshotTrigger = 'edit', expectedRevision?: number): Note | null {
+    return runSqliteWriteTransaction(() => {
+      const existing = this.store.getNote(id);
+      if (!existing) return null;
+      if (expectedRevision !== undefined && (existing.remoteVersion ?? 1) !== expectedRevision) throw new NoteRevisionConflictError('Note revision conflict');
+      const contentTouched = patch.markdown !== undefined || patch.title !== undefined;
+      if (contentTouched) this.maybeSaveSnapshot(existing, trigger);
+
+      const normalizedPatch: Partial<Note> = { ...patch };
+      if (contentTouched) normalizedPatch.lastEditTrigger = trigger;
+      if (patch.markdown !== undefined) {
+        normalizedPatch.kind = patch.kind ?? inferKind(patch.markdown, Boolean(existing.attachments?.length), existing.attachments);
+      }
+      normalizedPatch.remoteVersion = (existing.remoteVersion ?? 1) + 1;
+      if (contentTouched || patch.attachments) {
+        normalizedPatch.localVersion = patch.localVersion ?? (existing.localVersion ?? 1) + 1;
+      }
+
+      const updatedRaw = this.store.updateNote(id, normalizedPatch);
+      const updated = updatedRaw ? this.reconcileAttachments(updatedRaw) : null;
+      if (updated) {
+        const changes = changedFieldsFromPatch(patch as Record<string, unknown>);
+        emitActivity({
+          type: existing.status !== updated.status ? 'note.status_changed' : 'note.updated',
+          primaryObject: { kind: 'note', id: updated.id, title: updated.title },
+          actor: systemActivityActor(),
+          source: systemActivitySource(),
+          payload: {
+            changes,
+            contentTouched,
+            ...(existing.status !== updated.status ? { from: existing.status, to: updated.status } : {}),
+          },
+          nowMs: updated.updatedAt,
+        });
+        enqueueNoteEvent('note.updated', updated, {
+          contentTouched,
+          trigger,
+        });
+      }
+      return updated;
+    });
+  }
+
+  private reconcileAttachments(note: Note): Note {
     const { kept, removed } = partitionAttachmentsByReference(note);
     if (removed.length === 0) return note;
-    for (const attachment of removed) await this.store.deleteAttachmentFile(note.id, attachment.relativePath);
+    for (const attachment of removed) this.store.queueAttachmentCleanup(note.id, attachment.relativePath);
     log.debug({ noteId: note.id, removedIds: removed.map((attachment) => attachment.id) }, 'Pruned orphan note attachments');
     const hasAttachments = kept.length > 0;
-    const updated = await this.store.updateNote(note.id, { attachments: kept, kind: inferKind(note.markdown, hasAttachments, kept) });
+    const updated = this.store.updateNote(note.id, { attachments: kept, kind: inferKind(note.markdown, hasAttachments, kept) });
     return updated ?? { ...note, attachments: kept };
   }
 
   async syncNote(id: string, patch: Partial<Note>, baseRemoteVersion?: number): Promise<{ note: Note | null; conflict: boolean }> {
-    const existing = await this.store.getNote(id);
-    if (!existing) return { note: null, conflict: false };
-    if (baseRemoteVersion !== undefined && existing.remoteVersion !== undefined && baseRemoteVersion < existing.remoteVersion) {
-      return { note: existing, conflict: true };
+    try {
+      const note = this.updateNoteAtomically(id, patch, 'sync', baseRemoteVersion);
+      this.flushCommittedEffects();
+      return { note, conflict: false };
+    } catch (error) {
+      if (error instanceof NoteRevisionConflictError) return { note: this.store.getNote(id), conflict: true };
+      throw error;
     }
-    const updated = await this.updateNote(id, patch, 'sync');
-    return { note: updated, conflict: false };
   }
 
   async createAiEditPatch(id: string, instruction: string, markdownOverride?: string): Promise<{ message: string; patch: NoteAiPatch } | null> {
@@ -462,19 +450,41 @@ export class NotesService {
   }
 
   async appendTextToNote(id: string, content: string, heading = 'AI 讨论沉淀'): Promise<Note | null> {
-    const note = await this.store.getNote(id);
-    if (!note) return null;
-    const trimmed = content.trim();
-    if (!trimmed) return note;
-    const current = note.markdown.trimEnd();
-    const nextMarkdown = `${current}${current ? '\n\n' : ''}## ${heading}\n\n${trimmed}\n`;
-    return this.updateNote(id, { markdown: nextMarkdown }, 'ai_edit');
+    const note = this.appendTextToNoteAtomically(id, content, heading);
+    this.flushCommittedEffects();
+    return note;
+  }
+
+  appendTextToNoteAtomically(id: string, content: string, heading = 'AI 讨论沉淀', expectedRevision?: number): Note | null {
+    return runSqliteWriteTransaction(() => {
+      const note = this.store.getNote(id);
+      if (!note) return null;
+      if (expectedRevision !== undefined && (note.remoteVersion ?? 1) !== expectedRevision) throw new NoteRevisionConflictError('Note revision conflict');
+      const trimmed = content.trim();
+      if (!trimmed) return note;
+      const current = note.markdown.trimEnd();
+      const nextMarkdown = `${current}${current ? '\n\n' : ''}## ${heading}\n\n${trimmed}\n`;
+      return this.updateNoteAtomically(id, { markdown: nextMarkdown }, 'ai_edit', expectedRevision);
+    });
   }
 
   async deleteNote(id: string): Promise<boolean> {
-    const removed = await this.store.deleteNote(id);
-    if (removed) await this.store.deleteAllSnapshots(id);
-    return removed;
+    const result = this.deleteNoteAtomically(id);
+    this.flushCommittedEffects();
+    return result.deleted;
+  }
+
+  deleteNoteAtomically(id: string, expectedRevision?: number, revokeShares = true): { deleted: boolean; revokedShares: number } {
+    return runSqliteWriteTransaction(() => {
+      const note = this.store.getNote(id);
+      if (!note) return { deleted: false, revokedShares: 0 };
+      if (expectedRevision !== undefined && expectedRevision !== (note.remoteVersion ?? 1)) throw new NoteRevisionConflictError('Note revision conflict');
+      const shareIds = revokeShares ? revokeNoteShareRecords(id) : [];
+      for (const shareId of shareIds) this.store.queueDeletionCleanup('share', shareId);
+      this.store.deleteNoteAtomically(id);
+      enqueueNoteEvent('note.deleted', { ...note, remoteVersion: (note.remoteVersion ?? 1) + 1, updatedAt: Math.max(Date.now(), note.updatedAt + 1) });
+      return { deleted: true, revokedShares: shareIds.length };
+    });
   }
 
   async listNotes(query: NotesListQuery = {}): Promise<{ items: NoteIndexEntry[]; total: number; limit: number; offset: number; hasMore: boolean }> {
@@ -526,9 +536,16 @@ export class NotesService {
       duration: file.duration,
       retainWithoutReference: file.retainWithoutReference,
     };
-    const attachments = [...(note.attachments || []), attachment];
-    const kind = note.kind === 'thought' && attachment.type === 'audio' ? 'voice' : note.kind === 'thought' ? 'media' : note.kind;
-    await this.store.updateNote(noteId, { attachments, kind });
+    const current = this.store.getNote(noteId);
+    if (!current || current.createdAt !== note.createdAt) {
+      this.store.queueAttachmentCleanup(noteId, relativePath);
+      if (!current) this.store.queueDeletionCleanup('media', noteId);
+      this.flushCommittedEffects();
+      return null;
+    }
+    const attachments = [...(current.attachments || []), attachment];
+    const kind = current.kind === 'thought' && attachment.type === 'audio' ? 'voice' : current.kind === 'thought' ? 'media' : current.kind;
+    this.store.updateNote(noteId, { attachments, kind });
     return attachment;
   }
 
@@ -556,13 +573,18 @@ export class NotesService {
   async getNoteSnapshot(noteId: string, timestamp: number): Promise<NoteSnapshot | null> { return this.store.getSnapshot(noteId, timestamp); }
 
   async restoreNoteSnapshot(noteId: string, timestamp: number): Promise<Note | null> {
-    const snapshot = await this.store.getSnapshot(noteId, timestamp);
-    const existing = await this.store.getNote(noteId);
-    if (!snapshot || !existing) return null;
-    await this.maybeSaveSnapshot(existing, 'restore');
-    this.lastSnapshotAt.set(noteId, Date.now());
-    await this.store.pruneSnapshots(noteId, MAX_SNAPSHOTS_PER_NOTE);
-    return this.store.updateNote(noteId, { title: snapshot.title, markdown: snapshot.markdown, tags: snapshot.tags, kind: snapshot.kind, status: snapshot.status, lastEditTrigger: 'restore' });
+    const note = this.restoreNoteSnapshotAtomically(noteId, timestamp);
+    this.flushCommittedEffects();
+    return note;
+  }
+
+  restoreNoteSnapshotAtomically(noteId: string, timestamp: number, expectedRevision?: number): Note | null {
+    return runSqliteWriteTransaction(() => {
+      const snapshot = this.store.getSnapshot(noteId, timestamp);
+      if (!snapshot) return null;
+      return this.updateNoteAtomically(noteId, { title: snapshot.title, markdown: snapshot.markdown,
+        tags: snapshot.tags, kind: snapshot.kind, status: snapshot.status }, 'restore', expectedRevision);
+    });
   }
 
   async moveToGroup(noteId: string, groupId: string | null): Promise<Note | null> { return this.updateNote(noteId, { groupId: groupId ?? undefined }); }
@@ -596,18 +618,11 @@ export class NotesService {
     return this.updateNote(noteId, { lastOpenedAt: Date.now() } as Partial<Note>);
   }
 
-  private async maybeSaveSnapshot(note: Note, trigger: SnapshotTrigger): Promise<void> {
-    if (trigger !== 'edit') {
-      await this.store.saveSnapshot(note, trigger);
-      this.lastSnapshotAt.set(note.id, Date.now());
-      await this.store.pruneSnapshots(note.id, MAX_SNAPSHOTS_PER_NOTE);
-      return;
-    }
-    const last = this.lastSnapshotAt.get(note.id) ?? 0;
-    if (Date.now() - last < SNAPSHOT_THROTTLE_MS) return;
-    await this.store.saveSnapshot(note, trigger);
-    this.lastSnapshotAt.set(note.id, Date.now());
-    await this.store.pruneSnapshots(note.id, MAX_SNAPSHOTS_PER_NOTE);
+  private maybeSaveSnapshot(note: Note, trigger: SnapshotTrigger): void {
+    const last = this.store.listSnapshots(note.id)[0]?.timestamp ?? 0;
+    if (trigger === 'edit' && Date.now() - last < SNAPSHOT_THROTTLE_MS) return;
+    this.store.saveSnapshot(note, trigger);
+    this.store.pruneSnapshots(note.id, MAX_SNAPSHOTS_PER_NOTE);
   }
 }
 

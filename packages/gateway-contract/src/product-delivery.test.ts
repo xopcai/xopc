@@ -23,6 +23,17 @@ const delivery: ProductDeliveryEnvelope = {
 };
 
 describe('product delivery contract', () => {
+  it('validates bounded read-only table and proposed edit presentations', () => {
+    const table: ProductDeliveryEnvelope = { version: 1, operation: 'opened', presentation: { kind: 'table', items: [delivery.primary!], truncated: false } };
+    expect(parseProductDeliveryText(appendProductDeliveryText('Rows', table))).toEqual(table);
+    expect(parseProductDeliveryEnvelope({ ...table, presentation: { ...table.presentation, items: Array(51).fill(delivery.primary) } })).toBeNull();
+    expect(parseProductDeliveryEnvelope({ version: 1, operation: 'opened', presentation: {
+      kind: 'diff', title: 'Proposal', truncated: false, edits: [{ from: 5, to: 1, text: 'bad range' }],
+    } })).toBeNull();
+    expect(parseProductDeliveryEnvelope({ version: 1, operation: 'opened', presentation: {
+      kind: 'diff', title: 'Proposal', truncated: false, edits: [{ from: 0, to: 1, text: 'x'.repeat(16001) }],
+    } })).toBeNull();
+  });
   it('accepts session keys without changing canonical id links or other kinds', () => {
     const key = 'agent:coder:webchat:default:direct:chat_801605448ec548c9b90d1c4eb5024727';
     expect(parseProductReferenceDeepLink(`xopc://open?kind=session&key=${key}`))

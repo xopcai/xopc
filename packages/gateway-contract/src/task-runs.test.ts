@@ -6,6 +6,15 @@ import {
 import { TaskWaitSchema } from './task-lifecycle.js';
 
 describe('TaskRun contracts', () => {
+  it.each(['waiting', 'cancelled', 'failed'] as const)('accepts %s before dispatch but still validates dispatched snapshots', status => {
+    const run = {
+      id: 'r', rootRunId: 'r', taskId: 't', attempt: 1, status, executorKind: 'agent', executorRef: {},
+      trigger: {}, correlationId: 'c', idempotencyKey: 'k', contractVersion: 1,
+      queuedAt: 1, retryPolicy: {}, version: 1, ...(status === 'waiting' ? {} : { completedAt: 2 }),
+    };
+    expect(TaskRunSchema.safeParse(run).success).toBe(true);
+    expect(TaskRunSchema.safeParse({ ...run, startedAt: 1 }).success).toBe(false);
+  });
   it('accepts a queued root run without dispatch snapshots', () => {
     const run = TaskRunSchema.parse({
       id: 'run-1',

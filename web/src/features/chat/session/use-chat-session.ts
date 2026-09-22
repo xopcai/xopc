@@ -34,6 +34,7 @@ import { useChatSessionLoad } from '@/features/chat/session/use-chat-session-loa
 import { focusedConversationIdRef, useChatSessionRoute } from '@/features/chat/session/use-chat-session-route';
 import { useChatSessionStreaming } from '@/features/chat/session/use-chat-session-streaming';
 import { useChatSessionWindowEvents } from '@/features/chat/session/use-chat-session-window-events';
+import type { AppContextEnvelope } from '@xopcai/gateway-contract';
 
 /** @see docs/design/technical/new-session-preferences.md */
 export function useChatSession(options?: { fixedConversationId?: string; taskId?: string }) {
@@ -65,7 +66,8 @@ export function useChatSession(options?: { fixedConversationId?: string; taskId?
       levelOverride?: string,
       contextRefs?: ComposerContextRef[],
       replaceTurnId?: string,
-    ) => Promise<void>
+      appContext?: AppContextEnvelope,
+    ) => Promise<void | boolean>
   >(async () => {});
 
   const messagesLenRef = useRef(0);

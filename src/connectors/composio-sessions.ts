@@ -494,6 +494,8 @@ export class ComposioSessionsAdapter {
     agentId?: string;
     conversationId?: string;
     confirmed?: boolean;
+    /** Recheck authorization immediately before sending an action after session setup. */
+    beforeExecute?: () => void;
   }): Promise<{ decision: 'allowed'; result: unknown } | { decision: 'denied' | 'confirmation_required'; reason: string }> {
     input.signal?.throwIfAborted();
     if (!input.connection || input.connection.status !== 'active' || !canAccessConnectorAccount(input.connection, input.installation, input.agentId)) {
@@ -546,6 +548,7 @@ export class ComposioSessionsAdapter {
         ...(typeof providerPrincipalId === 'string' ? { providerPrincipalId } : {}),
       });
       input.signal?.throwIfAborted();
+      input.beforeExecute?.();
       const result = await session.execute(
         input.action.actionId,
         input.args ?? {},

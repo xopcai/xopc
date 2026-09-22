@@ -1,53 +1,52 @@
 import { patchChatModelConfig } from './chat-model-config.js';
-import type { Hono } from 'hono';
+import type { Context, Hono } from 'hono';
+import { randomUUID } from 'node:crypto';
+import { TaskContextMutationOutputSchema } from '../../../tasks/capabilities/relations.js';
+import { capabilityHttpContext, capabilityHttpError } from '../../../capabilities/adapters/http.js';
+import { CapabilityError } from '../../../capabilities/runtime/dispatcher.js';
+import { createProductDispatcher } from '../../../capabilities/runtime/product.js';
+import { TaskMutationOutputSchema } from '../../../tasks/capabilities/write.js';
+import { TaskDeleteOutputSchema } from '../../../tasks/capabilities/management.js';
 import {
-  TaskBoardPositionRequestSchema,
   TaskCommandRequestSchema,
-  TaskContextInputSchema,
   TaskCreateRequestSchema,
-  type TaskChangedField,
-  TaskDependencyUpdateRequestSchema,
   TaskHandoffRequestSchema,
-  TaskPatchRequestSchema,
-  TaskPhaseSchema,
+  TaskRunCancelOutputSchema,
+  TaskRunFeedbackOutputSchema,
+  ProductReadContracts,
 } from '@xopcai/gateway-contract';
 
 import { runSqliteWriteTransaction } from '../../../storage/sqlite/transaction.js';
-import { resolveProjectAgentId } from '../../../projects/project-agent.js';
-import { TaskApplicationService } from '../../../tasks/task-application-service.js';
-import { TaskContextRepository } from '../../../tasks/task-context-repository.js';
 import { TaskConversationRepository } from '../../../tasks/task-conversation-repository.js';
 import { TaskConversationQueryService } from '../../service/task-conversation-query-service.js';
 import { TaskHandoffService } from '../../../tasks/task-handoff-service.js';
 import { enqueueTaskChangedEvent } from '../../../tasks/task-change-events.js';
-import {
-  TaskDependencyError,
-  TaskDependencyService,
-} from '../../../tasks/task-dependency-service.js';
-import { TaskDeletionService } from '../../../tasks/task-deletion-service.js';
 import { TaskRepository } from '../../../tasks/task-repository.js';
-import { TaskReadModelProjector } from '../../../tasks/task-read-model-projector.js';
 import { TaskRunRepository } from '../../../tasks/task-run-repository.js';
-import { TaskSignalService } from '../../../tasks/task-signal-service.js';
 import { ProjectOperatingViewService } from '../../../tasks/project-operating-view-service.js';
-import { TaskValueMetricsService } from '../../../tasks/task-value-metrics-service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { submitSessionInput } from './session-input-handler.js';
 
 export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
+  const capabilities = createProductDispatcher(() => deps.service.notesServiceInstance, {
+    getConfig: () => deps.service.currentConfig, getProjects: () => deps.service.projects,
+    wake: runId => runId ? deps.service.dispatchTaskRuns() : deps.service.dispatchTaskEvents(),
+    abortConversation: async conversationId => {
+      const liveRunId = deps.service.getActiveWebchatRunId(conversationId);
+      if (liveRunId) await deps.service.abortAgentRun(liveRunId);
+    },
+  });
   const taskRateLimit = deps.taskRateLimitMiddleware ?? deps.strictRateLimitMiddleware;
-  const application = new TaskApplicationService();
+  const invokeRelation = async (c: Context, operation: string, input: unknown) => {
+    const caller = capabilityHttpContext(c);
+    return capabilities.call(operation, input, caller, { ...capabilities.describe(operation, caller),
+      idempotencyKey: c.req.header('idempotency-key') ?? randomUUID() });
+  };
   const operatingViews = new ProjectOperatingViewService(deps.service.projects);
-  const metrics = new TaskValueMetricsService();
   const tasks = new TaskRepository();
   const runs = new TaskRunRepository();
-  const context = new TaskContextRepository();
   const conversations = new TaskConversationRepository();
   const conversationQuery = new TaskConversationQueryService(deps.service.sessions);
-  const projector = new TaskReadModelProjector();
-  const signals = new TaskSignalService(() => deps.service.dispatchTaskRuns());
-  const dependencies = new TaskDependencyService();
-  const deletion = new TaskDeletionService(tasks, runs);
   const handoffs = new TaskHandoffService({
     getConfig: () => deps.service.currentConfig,
     sessionIndex: deps.service.sessionIndexInstance,
@@ -55,18 +54,12 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     abortRun: (runId) => deps.service.abortAgentRun(runId),
   });
 
-  authenticated.get('/api/tasks', (c) => {
-    const phase = TaskPhaseSchema.safeParse(c.req.query('phase'));
-    const rawLimit = Number(c.req.query('limit') ?? 50);
-    const limit = Number.isFinite(rawLimit) ? rawLimit : 50;
-    return c.json({
-      ok: true,
-      items: tasks.list({ search: c.req.query('search'), ...(phase.success ? { phase: phase.data } : {}), limit })
-        .map((task) => {
-          const model = projector.project(task);
-          return { task, operationalState: model.operationalState, attention: model.attention };
-        }),
-    });
+  authenticated.get('/api/tasks', async (c) => {
+    try {
+      const input: Record<string, unknown> = { ...c.req.query() };
+      for (const key of ['limit', 'offset']) if (input[key] !== undefined) input[key] = Number(input[key]);
+      return c.json(await capabilities.call('xopc.tasks.list', input, capabilityHttpContext(c)));
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.post('/api/tasks', taskRateLimit, async (c) => {
@@ -74,32 +67,13 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     const parsed = TaskCreateRequestSchema.safeParse(body);
     if (!parsed.success) return c.json({ ok: false, error: 'Invalid task request' }, 400);
     try {
-      const requestedAgentId = parsed.data.delegateAgentId
-        ?? (parsed.data.activation.mode === 'start' && parsed.data.activation.executor?.kind === 'agent'
-          ? parsed.data.activation.executor.agentId
-          : undefined);
-      const agentId = resolveProjectAgentId({
-        config: deps.service.currentConfig,
-        projects: deps.service.projects,
-        explicitAgentId: requestedAgentId,
-        projectId: parsed.data.projectId,
-      });
-      const input = {
-        ...parsed.data,
-        delegateAgentId: agentId,
-        activation: parsed.data.activation.mode === 'start'
-          ? {
-              ...parsed.data.activation,
-              executor: parsed.data.activation.executor?.kind === 'agent' || !parsed.data.activation.executor
-                ? { kind: 'agent' as const, agentId }
-                : parsed.data.activation.executor,
-            }
-          : parsed.data.activation,
-      };
-      const created = application.create(input);
+      const context = capabilityHttpContext(c);
+      const { idempotencyKey, ...input } = parsed.data;
+      const created = TaskMutationOutputSchema.parse(await capabilities.call(
+        'xopc.tasks.create', input, context,
+        { ...capabilities.describe('xopc.tasks.create', context), idempotencyKey },
+      ));
       if (created.ok === false) return c.json({ ok: false, code: created.reason, error: created.reason }, 409);
-      if (created.runId) deps.service.dispatchTaskRuns();
-      else deps.service.dispatchTaskEvents();
       return c.json({
         ok: true,
         task: created.model.task,
@@ -112,28 +86,15 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
     }
   });
 
-  authenticated.get('/api/tasks/metrics', (c) => c.json({ ok: true, metrics: metrics.get() }));
+  authenticated.get('/api/tasks/metrics', async (c) => {
+    try { return c.json(await capabilities.call('xopc.tasks.metrics', {}, capabilityHttpContext(c))); }
+    catch (error) { return capabilityHttpError(c, error); }
+  });
 
-  authenticated.get('/api/tasks/:id', (c) => {
-    const task = tasks.get(c.req.param('id'));
-    if (!task) return c.json({ ok: false, error: 'Task not found' }, 404);
-    const model = projector.project(task);
-    return c.json({
-      ok: true,
-      task,
-      operationalState: model.operationalState,
-      attention: model.attention,
-      waits: runs.listActiveWaits(task.id),
-      runs: runs.listByTask(task.id),
-      receipts: runs.listReceipts(task.id),
-      context: context.list(task.id),
-      conversation: conversations.requireState(task.id),
-      sessions: conversations.listSessions(task.id),
-      authorityGrants: context.listActiveGrants(task.id),
-      dependencies: dependencies.listDependencies(task.id),
-      dependents: dependencies.listDependents(task.id),
-      allowedCommands: model.allowedCommands,
-    });
+  authenticated.get('/api/tasks/:id', async (c) => {
+    try {
+      return c.json(await capabilities.call('xopc.tasks.get', { id: c.req.param('id') }, capabilityHttpContext(c)));
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.post('/api/tasks/:id/conversation', taskRateLimit, async (c) => {
@@ -236,32 +197,17 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
   });
 
   authenticated.patch('/api/tasks/:id', taskRateLimit, async (c) => {
-    const parsed = TaskPatchRequestSchema.safeParse(await c.req.json().catch(() => ({})));
-    if (!parsed.success) return c.json({ ok: false, error: 'Invalid task patch' }, 400);
-    const updated = runSqliteWriteTransaction((db) => {
-      const task = tasks.update(c.req.param('id'), parsed.data);
-      if (!task) return undefined;
-      const changedFields = Object.keys(parsed.data)
-        .filter((field): field is TaskChangedField => field !== 'expectedVersion');
-      enqueueTaskChangedEvent(db, {
-        taskId: task.id,
-        projectId: task.projectId,
-        version: task.version,
-        changedFields,
-        actor: { kind: 'user' },
-      });
-      return task;
-    });
-    if (!updated) return c.json({ ok: false, error: 'Task changed or was not found' }, 409);
-    deps.service.dispatchTaskEvents();
-    return c.json({ ok: true, task: updated });
+    try {
+      return c.json(await invokeRelation(c, 'xopc.tasks.update', { ...await c.req.json().catch(() => ({})), taskId: c.req.param('id') }));
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
-  authenticated.delete('/api/tasks/:id', taskRateLimit, (c) => {
+  authenticated.delete('/api/tasks/:id', taskRateLimit, async (c) => {
     const taskId = c.req.param('id');
-    const result = deletion.delete(taskId);
+    let result;
+    try { result = TaskDeleteOutputSchema.parse(await invokeRelation(c, 'xopc.tasks.delete', { taskId })); }
+    catch (error) { return capabilityHttpError(c, error); }
     if (result.ok === true) {
-      deps.service.dispatchTaskEvents();
       return c.json({ ok: true, deleted: true, taskId });
     }
     if (result.reason === 'active_run') {
@@ -276,71 +222,30 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
   });
 
   authenticated.put('/api/tasks/:id/dependencies', taskRateLimit, async (c) => {
-    const parsed = TaskDependencyUpdateRequestSchema.safeParse(await c.req.json().catch(() => ({})));
-    if (!parsed.success) return c.json({ ok: false, error: 'Invalid task dependencies' }, 400);
     try {
-      const task = runSqliteWriteTransaction((db) => {
-        const changed = dependencies.replace({ taskId: c.req.param('id'), ...parsed.data });
-        enqueueTaskChangedEvent(db, {
-          taskId: changed.id,
-          projectId: changed.projectId,
-          version: changed.version,
-          changedFields: ['dependencies'],
-          actor: { kind: 'user' },
-        });
-        return changed;
-      });
-      deps.service.dispatchTaskEvents();
-      return c.json({
-        ok: true,
-        task,
-        dependencies: dependencies.listDependencies(task.id),
-        dependents: dependencies.listDependents(task.id),
-      });
-    } catch (error) {
-      if (!(error instanceof TaskDependencyError)) throw error;
-      const status = error.code === 'not_found'
-        ? 404
-        : error.code === 'conflict'
-          ? 409
-          : 400;
-      return c.json({ ok: false, code: error.code, error: error.message }, status);
-    }
+      return c.json(await invokeRelation(c, 'xopc.tasks.update_dependencies', {
+        ...await c.req.json().catch(() => ({})), taskId: c.req.param('id'),
+      }));
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.put('/api/tasks/:id/board-position', taskRateLimit, async (c) => {
-    const parsed = TaskBoardPositionRequestSchema.safeParse(await c.req.json().catch(() => ({})));
-    if (!parsed.success) return c.json({ ok: false, error: 'Invalid task board position' }, 400);
     try {
-      const task = runSqliteWriteTransaction((db) => {
-        const reordered = tasks.reorder({ taskId: c.req.param('id'), ...parsed.data });
-        if (!reordered) return undefined;
-        enqueueTaskChangedEvent(db, {
-          taskId: reordered.id,
-          projectId: reordered.projectId,
-          version: reordered.version,
-          changedFields: ['boardRank'],
-          actor: { kind: 'user' },
-        });
-        return reordered;
-      });
-      if (!task) return c.json({ ok: false, error: 'Task changed or was not found' }, 409);
-      deps.service.dispatchTaskEvents();
-      return c.json({ ok: true, task });
-    } catch (error) {
-      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
-    }
+      return c.json(await invokeRelation(c, 'xopc.tasks.reorder', { ...await c.req.json().catch(() => ({})), taskId: c.req.param('id') }));
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.post('/api/tasks/:id/commands', taskRateLimit, async (c) => {
     const parsed = TaskCommandRequestSchema.safeParse(await c.req.json().catch(() => ({})));
     if (!parsed.success) return c.json({ ok: false, error: 'Invalid task command' }, 400);
-    const result = application.execute({
-      taskId: c.req.param('id'),
-      idempotencyKey: parsed.data.idempotencyKey,
-      expectedVersion: parsed.data.expectedVersion,
-      command: parsed.data.command!,
-    });
+    const capabilityContext = capabilityHttpContext(c);
+    const { idempotencyKey, ...input } = parsed.data;
+    let result;
+    try {
+      result = TaskMutationOutputSchema.parse(await capabilities.call('xopc.tasks.command',
+        { ...input, taskId: c.req.param('id') }, capabilityContext,
+        { ...capabilities.describe('xopc.tasks.command', capabilityContext), idempotencyKey }));
+    } catch (error) { return capabilityHttpError(c, error); }
     if (result.ok === false) {
       if (result.reason === 'not_found') return c.json({ ok: false, error: 'Task not found' }, 404);
       return c.json({
@@ -350,125 +255,61 @@ export function registerTaskRoutes(authenticated: Hono, deps: AuthenticatedRoute
         latest: result.model,
       }, 409);
     }
-    if ((parsed.data.command?.type === 'add_wait' && parsed.data.command.wait.kind === 'paused')
-      || parsed.data.command?.type === 'close'
-      || (parsed.data.command?.type === 'resolve_wait'
-        && (parsed.data.command.resolution as { kind?: string; decision?: string } | undefined)?.kind === 'task_approval'
-        && (parsed.data.command.resolution as { decision?: string }).decision === 'deny')) {
-      const activeRun = runs.getActiveRoot(c.req.param('id'));
-      if (activeRun?.conversationId) {
-        const liveRunId = deps.service.getActiveWebchatRunId(activeRun.conversationId);
-        if (liveRunId) await deps.service.abortAgentRun(liveRunId);
-      }
-    }
-    if (result.runId || parsed.data.command?.type === 'resolve_wait') deps.service.dispatchTaskRuns();
-    else deps.service.dispatchTaskEvents();
-    if (parsed.data.command?.type === 'close' && parsed.data.command.resolution === 'done') {
-      signals.dependencyClosed(c.req.param('id'));
-    }
     return c.json({ ok: true, ...result.model, ...(result.runId ? { run: runs.get(result.runId) } : {}) });
   });
 
   authenticated.post('/api/tasks/:id/context', taskRateLimit, async (c) => {
-    const task = tasks.get(c.req.param('id'));
-    if (!task) return c.json({ ok: false, error: 'Task not found' }, 404);
-    const parsed = TaskContextInputSchema.safeParse(await c.req.json().catch(() => ({})));
-    if (!parsed.success) return c.json({ ok: false, error: 'Invalid task context edge' }, 400);
-    const edge = runSqliteWriteTransaction((db) => {
-      const created = context.add({ taskId: task.id, ...parsed.data, createdBy: { kind: 'user' } });
-      enqueueTaskChangedEvent(db, {
-        taskId: task.id,
-        projectId: task.projectId,
-        version: task.version,
-        changedFields: ['context'],
-        actor: { kind: 'user' },
-      });
-      return created;
-    });
-    deps.service.dispatchTaskEvents();
-    return c.json({ ok: true, edge }, 201);
+    try {
+      const { expectedVersion, ...edge } = (await c.req.json().catch(() => ({}))) ?? {};
+      const result = TaskContextMutationOutputSchema.parse(await invokeRelation(c, 'xopc.tasks.add_context', {
+        taskId: c.req.param('id'), edge, expectedVersion,
+      }));
+      return c.json({ ok: true, edge: result.edge }, 201);
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
-  authenticated.delete('/api/tasks/:id/context/:edgeId', taskRateLimit, (c) => {
-    const task = tasks.get(c.req.param('id'));
-    const removed = task ? runSqliteWriteTransaction((db) => {
-      const didRemove = context.remove(task.id, c.req.param('edgeId'));
-      if (didRemove) {
-        enqueueTaskChangedEvent(db, {
-          taskId: task.id,
-          projectId: task.projectId,
-          version: task.version,
-          changedFields: ['context'],
-          actor: { kind: 'user' },
-        });
-      }
-      return didRemove;
-    }) : false;
-    if (removed) deps.service.dispatchTaskEvents();
-    return removed
-      ? c.json({ ok: true })
-      : c.json({ ok: false, error: 'Task context edge not found' }, 404);
+  authenticated.delete('/api/tasks/:id/context/:edgeId', taskRateLimit, async (c) => {
+    try {
+      await invokeRelation(c, 'xopc.tasks.remove_context', { taskId: c.req.param('id'), edgeId: c.req.param('edgeId') });
+      return c.json({ ok: true });
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
-  authenticated.get('/api/task-runs/:runId', (c) => {
-    const run = runs.get(c.req.param('runId'));
-    return run
-      ? c.json({ ok: true, run, receipt: runs.getReceipt(run.id) })
-      : c.json({ ok: false, error: 'TaskRun not found' }, 404);
+  authenticated.get('/api/task-runs/:runId', async (c) => {
+    try {
+      const { run, receipt } = ProductReadContracts['xopc.task_runs.get'].output.parse(
+        await capabilities.call('xopc.task_runs.get', { id: c.req.param('runId') }, capabilityHttpContext(c)));
+      return c.json({ ok: true, run, receipt });
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
-  authenticated.get('/api/task-runs/:runId/events', (c) => {
-    const run = runs.get(c.req.param('runId'));
-    return run
-      ? c.json({ ok: true, items: runs.listEvents(run.id) })
-      : c.json({ ok: false, error: 'TaskRun not found' }, 404);
+  authenticated.get('/api/task-runs/:runId/events', async (c) => {
+    try {
+      const { events } = ProductReadContracts['xopc.task_runs.get'].output.parse(
+        await capabilities.call('xopc.task_runs.get', { id: c.req.param('runId') }, capabilityHttpContext(c)));
+      return c.json({ ok: true, items: events });
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.post('/api/task-runs/:runId/cancel', taskRateLimit, async (c) => {
-    const body = await c.req.json().catch(() => ({}));
-    const run = runs.get(c.req.param('runId'));
-    if (!run) return c.json({ ok: false, error: 'TaskRun not found' }, 404);
-    if (!Number.isInteger(body.expectedVersion) || body.expectedVersion !== run.version) {
-      return c.json({ ok: false, error: 'TaskRun changed', run }, 409);
-    }
-    const task = tasks.require(run.taskId);
-    const result = application.completeRun({
-      runId: run.id,
-      expectedRunVersion: run.version,
-      actor: { kind: 'user' },
-      terminalCode: 'cancelled_by_user',
-      terminalMessage: typeof body.reason === 'string' ? body.reason : 'Cancelled by user',
-      receipt: {
-        status: 'cancelled',
-        summary: typeof body.reason === 'string' ? body.reason : 'TaskRun cancelled by user',
-        changes: [],
-        evidence: [],
-        verification: { status: 'unverified', checks: [] },
-        remainingWork: [task.contract?.objective ?? task.title],
-        needsUser: false,
-        completionVerdict: 'not_achieved',
-      },
-    });
-    if (result.ok === false) return c.json({ ok: false, error: result.reason }, 409);
-    deps.service.dispatchTaskEvents();
-    return c.json({ ok: true, run: runs.get(run.id), receipt: runs.getReceipt(run.id) });
+    try {
+      const body = await c.req.json().catch(() => { throw new CapabilityError('INVALID_INPUT', 'Invalid JSON body'); });
+      if (!body || typeof body !== 'object' || Array.isArray(body)) throw new CapabilityError('INVALID_INPUT', 'Expected an object');
+      const { run, receipt, executionStopConfirmed } = TaskRunCancelOutputSchema.parse(await invokeRelation(c, 'xopc.task_runs.cancel', {
+        id: c.req.param('runId'), expectedVersion: body.expectedVersion, reason: body.reason,
+      }));
+      return c.json({ ok: true, run, receipt, executionStopConfirmed });
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.post('/api/task-runs/:runId/feedback', taskRateLimit, async (c) => {
-    const body = await c.req.json().catch(() => ({}));
-    if (body.rating !== 'helpful' && body.rating !== 'not_helpful') {
-      return c.json({ ok: false, error: 'Invalid feedback rating' }, 400);
-    }
     try {
-      const feedback = runs.recordFeedback({
-        runId: c.req.param('runId'),
-        rating: body.rating,
-        reason: typeof body.reason === 'string' ? body.reason : undefined,
-      });
-      return c.json({ ok: true, feedback });
-    } catch {
-      return c.json({ ok: false, error: 'TaskRun not found' }, 404);
-    }
+      const body = await c.req.json().catch(() => { throw new CapabilityError('INVALID_INPUT', 'Invalid JSON body'); });
+      if (!body || typeof body !== 'object' || Array.isArray(body)) throw new CapabilityError('INVALID_INPUT', 'Expected an object');
+      return c.json(TaskRunFeedbackOutputSchema.parse(await invokeRelation(c, 'xopc.task_runs.feedback', {
+        ...body, id: c.req.param('runId'),
+      })));
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   authenticated.get('/api/projects/:projectId/operating-view', (c) => {

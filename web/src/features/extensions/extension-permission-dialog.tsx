@@ -12,6 +12,7 @@ type ExtensionPermissionDialogProps = {
   extensionName: string;
   permissions: string[];
   onConfirm: () => void;
+  confirmDisabled?: boolean;
 };
 
 export function ExtensionPermissionDialog({
@@ -21,6 +22,7 @@ export function ExtensionPermissionDialog({
   extensionName,
   permissions,
   onConfirm,
+  confirmDisabled,
 }: ExtensionPermissionDialogProps) {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).extensionUi;
@@ -62,6 +64,7 @@ export function ExtensionPermissionDialog({
             </Dialog.Close>
             <button
               type="button"
+              disabled={confirmDisabled}
               className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-on-accent hover:opacity-90"
               onClick={() => {
                 onConfirm();

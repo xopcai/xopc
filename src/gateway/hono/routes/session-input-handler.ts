@@ -13,8 +13,12 @@ import { browserPageContextToAgentContext } from '../../../agent/source-context/
 import { isTaskDestructiveCommand } from '../../../session/reset-triggers.js';
 import { parseSlashCommand, commandRegistry } from '../../../chat-commands/index.js';
 import { isVoiceLikeAttachment } from '../../../channels/attachments/voice-stt-webchat.js';
+import { getGatewayPrincipal } from '../../security/gateway-principal.js';
+import { CapabilityError } from '../../../capabilities/runtime/dispatcher.js';
+import { createLogger } from '../../../utils/logger.js';
 
 const MAX_TURN_CONTEXTS = 5;
+const log = createLogger('Gateway:SessionInput');
 
 export async function submitSessionInput(
   c: Context,
@@ -89,6 +93,26 @@ export async function submitSessionInput(
         return c.json({ ok: false, error: { code: 'MODEL_UNAVAILABLE', message: `Model unavailable: ${selection.model}` } }, 409);
       }
     }
+    const sourceContexts = browserContexts.data.map(browserPageContextToAgentContext);
+    if (body.appContext !== undefined) {
+      try {
+        sourceContexts.push(await deps.service.prepareSessionAppContext(
+          body.appContext, getGatewayPrincipal(c), conversationId,
+          typeof body.clientMessageId === 'string' ? body.clientMessageId.trim() : '',
+        ));
+      } catch (error) {
+        if (!(error instanceof CapabilityError) || ['INTERNAL', 'UNAVAILABLE'].includes(error.code)) {
+          log.warn({ err: error, conversationId, phase: 'prepare_app_context' }, 'Application context preparation failed');
+          return c.json({ ok: false, error: { code: 'UNAVAILABLE', message: 'Application context preparation failed. Retry the same input.' } }, 503);
+        }
+        const forbidden = error instanceof CapabilityError && error.code === 'FORBIDDEN';
+        const invalid = error.code === 'INVALID_INPUT';
+        return c.json({ ok: false, error: {
+          code: forbidden ? 'FORBIDDEN' : invalid ? 'BAD_REQUEST' : 'CONTEXT_UNAVAILABLE',
+          message: 'Application context is invalid, changed, or no longer accessible. Capture it again.',
+        } }, forbidden ? 403 : invalid ? 400 : 409);
+      }
+    }
     const result = await deps.service.submitSessionInput({
       expectedTranscriptId: body.expectedTranscriptId as string | undefined,
       conversationId,
@@ -97,7 +121,7 @@ export async function submitSessionInput(
       content,
       attachments: attachments as UserTurnAttachment[] | undefined,
       contextRefs,
-      sourceContexts: browserContexts.data.map(browserPageContextToAgentContext),
+      sourceContexts,
       thinking: selection?.thinkingLevel ?? (typeof body.thinking === 'string' ? body.thinking : undefined),
       origin: { type: 'endpoint', endpointId: origin.data.endpointId },
     });
@@ -120,6 +144,9 @@ export async function replaceLatestSessionTurn(
   const body = await c.req.json().catch(() => null) as Record<string, unknown> | null;
   if (!body || !conversationId || !targetTurnId) {
     return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid request' } }, 400);
+  }
+  if (body.appContext !== undefined) {
+    return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Send application context in a new input; turn replacement does not support it.' } }, 400);
   }
   const attachments = Array.isArray(body.attachments) ? body.attachments : undefined;
   const contextRefs = parseTurnContextRefs(body.contextRefs, MAX_TURN_CONTEXTS);

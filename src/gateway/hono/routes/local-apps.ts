@@ -1,7 +1,10 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { relative, resolve } from 'node:path';
 
 import type { Hono } from 'hono';
+import { createProductDispatcher } from '../../../capabilities/runtime/product.js';
+import { capabilityHttpContext, capabilityHttpError } from '../../../capabilities/adapters/http.js';
 
 import { extensionAssetMimeType } from '../lib/extension-assets.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -11,7 +14,7 @@ import {
   LOCAL_APP_RUNTIME_BRIDGE_HASH,
 } from '../../../local-apps/preview-runtime-bridge.js';
 import { readLocalAppAcceptanceConfig } from '../../../local-apps/acceptance.js';
-import type { RecordLocalAppAcceptanceInput } from '../../../local-apps/types.js';
+import { CapabilityError } from '../../../capabilities/runtime/dispatcher.js';
 
 const LOCAL_APP_PREVIEW_CSP =
   "default-src 'self'; " +
@@ -71,7 +74,11 @@ export function registerPublicLocalAppPreviewRoutes(app: Hono, service: GatewayS
 }
 
 export function registerLocalAppsRoutes(app: Hono, deps: AuthenticatedRouteDeps): void {
-  app.get('/api/local-apps', (c) => c.json({ apps: deps.service.localApps.list() }));
+  const capabilities = createProductDispatcher(undefined, { getLocalApps: () => deps.service.localApps });
+  app.get('/api/local-apps', async (c) => {
+    try { return c.json(await capabilities.call('xopc.local_apps.list', {}, capabilityHttpContext(c))); }
+    catch (error) { return capabilityHttpError(c, error); }
+  });
 
   app.post('/api/local-apps', async (c) => {
     const body = await c.req.json<Record<string, unknown>>();
@@ -86,22 +93,25 @@ export function registerLocalAppsRoutes(app: Hono, deps: AuthenticatedRouteDeps)
     return c.json({ app: appDetail }, 201);
   });
 
-  app.get('/api/local-apps/:id', (c) => {
-    const appDetail = deps.service.localApps.get(c.req.param('id'));
-    return appDetail ? c.json({ app: appDetail }) : c.json({ error: 'Local app not found' }, 404);
+  app.get('/api/local-apps/:id', async (c) => {
+    try { return c.json(await capabilities.call('xopc.local_apps.get', { id: c.req.param('id') }, capabilityHttpContext(c))); }
+    catch (error) { return capabilityHttpError(c, error); }
   });
 
-  app.post('/api/local-apps/:id/validate', (c) => {
-    return c.json({ validation: deps.service.localApps.validate(c.req.param('id')) });
+  app.post('/api/local-apps/:id/validate', async (c) => {
+    try { return c.json(await capabilities.call('xopc.local_apps.validate', { id: c.req.param('id') }, capabilityHttpContext(c))); }
+    catch (error) { return capabilityHttpError(c, error); }
   });
 
   app.post('/api/local-apps/:id/acceptance-runs', async (c) => {
-    const body = await c.req.json<Record<string, unknown>>();
-    const acceptance = deps.service.localApps.recordAcceptance(
-      c.req.param('id'),
-      body as unknown as RecordLocalAppAcceptanceInput,
-    );
-    return c.json({ acceptance }, 201);
+    try {
+      const body = await c.req.json().catch(() => { throw new CapabilityError('INVALID_INPUT', 'Invalid JSON body'); });
+      const caller = capabilityHttpContext(c);
+      const operation = 'xopc.local_apps.record_acceptance';
+      return c.json(await capabilities.call(operation, { ...body, id: c.req.param('id') }, caller, {
+        ...capabilities.describe(operation, caller), idempotencyKey: c.req.header('idempotency-key') ?? randomUUID(),
+      }), 201);
+    } catch (error) { return capabilityHttpError(c, error); }
   });
 
   app.post('/api/local-apps/:id/install', async (c) => {

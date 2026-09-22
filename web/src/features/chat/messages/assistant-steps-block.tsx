@@ -661,7 +661,7 @@ function StepRow({
       {!isStreaming && !isError && (kind === 'writeFile' || kind === 'editFile') ? card : null}
       {!isStreaming && !isError ? <ToolUseWidgetSlot toolName={block.name} toolResult={block.result} /> : null}
       {!isStreaming && browserSetup ? <BrowserSetupRequiredCard payload={browserSetup} /> : null}
-      {!isStreaming && browserApproval ? <BrowserApprovalCard approval={browserApproval} /> : null}
+      {!isStreaming && browserApproval ? <BrowserApprovalCard key={browserApproval.id} approval={browserApproval} conversationId={conversationId} /> : null}
     </>;
   }
 

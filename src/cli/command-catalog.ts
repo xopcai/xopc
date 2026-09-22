@@ -13,6 +13,7 @@ export type CliCommandCatalogEntry = {
 };
 
 export const cliCommandCatalog: readonly CliCommandCatalogEntry[] = [
+  { commandPath: ['mcp'], policy: { loadExtensions: 'never' } },
   { commandPath: ['init'], policy: { loadExtensions: 'never' } },
   { commandPath: ['profile'], policy: { loadExtensions: 'never' } },
   { commandPath: ['profile', 'list'], exact: true, policy: { loadExtensions: 'never' } },

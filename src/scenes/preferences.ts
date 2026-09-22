@@ -5,27 +5,14 @@ import { z } from 'zod';
 import type { ScenePrincipal } from './contracts.js';
 import { SceneConflictError, SceneNotFoundError } from './repository.js';
 
-const hour = z.number().int().min(0).max(23);
-export const scenePreferencesSchema = z.strictObject({
-  level: z.enum(['quiet', 'balanced', 'active']).default('balanced'),
-  timezone: z.string().min(1).max(100).refine((value) => {
-    try { new Intl.DateTimeFormat('en', { timeZone: value }); return true; } catch { return false; }
-  }).default('Asia/Shanghai'),
-  quietStartHour: hour.default(22), quietEndHour: hour.default(8),
-  dailyNotificationLimit: z.number().int().min(0).max(30).default(3),
-  digestEnabled: z.boolean().default(false), digestHour: hour.default(18),
-  digestMinute: z.number().int().min(0).max(59).default(0),
-  preferredChannel: z.enum(['in_app', 'browser']).default('browser'),
-  suppressWhileViewing: z.boolean().default(true),
-  checksPaused: z.boolean().default(false),
-  checksPausedUntil: z.string().datetime({ offset: true }).nullable().default(null),
-  notificationsMuted: z.boolean().default(false),
-});
-export type ScenePreferences = z.infer<typeof scenePreferencesSchema>;
+import { ScenePreferencePatchSchema, scenePreferencesSchema, type ScenePreferences } from '@xopcai/gateway-contract';
+export { scenePreferencesSchema, type ScenePreferences } from '@xopcai/gateway-contract';
 
 /** Owner-scoped choices. Muting presentation never changes check permissions or deletes work. */
 export class ScenePreferenceService {
   constructor(private readonly db: DatabaseSync) {}
+
+  get database() { return this.db; }
 
   get(principal: ScenePrincipal): ScenePreferences & { revision: number } {
     this.assertPrincipal(principal);
@@ -36,10 +23,8 @@ export class ScenePreferenceService {
 
   update(principal: ScenePrincipal, value: unknown): ScenePreferences & { revision: number } {
     this.assertPrincipal(principal);
-    const supplied = z.record(z.string(), z.unknown()).parse(value);
-    const { expectedRevision, ...parsed } = scenePreferencesSchema.partial().extend({ expectedRevision: z.number().int().nonnegative() }).parse(value);
-    // Zod defaults inside optional fields must not reset unspecified preferences in a patch.
-    const patch = Object.fromEntries(Object.entries(parsed).filter(([key]) => Object.hasOwn(supplied, key) && supplied[key] !== undefined));
+    const { expectedRevision, ...parsed } = ScenePreferencePatchSchema.parse(value);
+    const patch = Object.fromEntries(Object.entries(parsed).filter(([, value]) => value !== undefined));
     this.db.exec('SAVEPOINT scene_preferences_write');
     try {
       const { revision, ...current } = this.get(principal);

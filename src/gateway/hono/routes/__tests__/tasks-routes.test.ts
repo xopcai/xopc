@@ -15,6 +15,7 @@ import { TaskConversationRepository } from '../../../../tasks/task-conversation-
 import { TaskRepository } from '../../../../tasks/task-repository.js';
 import { TaskRunRepository } from '../../../../tasks/task-run-repository.js';
 import { registerTaskRoutes } from '../tasks.js';
+import { setGatewayPrincipal } from '../../../security/gateway-principal.js';
 
 describe('task routes', () => {
   let stateDir: string;
@@ -27,6 +28,10 @@ describe('task routes', () => {
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     app = new Hono();
+    app.use('*', async (c, next) => {
+      setGatewayPrincipal(c, { kind: 'owner', principalId: 'test-owner', scopes: ['tasks.read', 'tasks.write'] });
+      await next();
+    });
     registerTaskRoutes(app, {
       service: {
         currentConfig: {},

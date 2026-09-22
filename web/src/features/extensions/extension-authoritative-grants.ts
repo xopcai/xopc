@@ -21,9 +21,10 @@ export async function resolveExtensionUiGrant(
 
 export async function confirmExtensionUiGrant(
   extensionId: string,
+  manifestDigest: string,
 ): Promise<ExtensionUiGrant> {
   return (await fetchJson<{ grant: ExtensionUiGrant }>(
     apiUrl(`/api/extensions/${encodeURIComponent(extensionId)}/ui-grant`),
-    { method: 'POST' },
+    { method: 'POST', body: JSON.stringify({ manifestDigest }) },
   )).grant;
 }

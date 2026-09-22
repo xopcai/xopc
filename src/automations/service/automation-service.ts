@@ -28,7 +28,11 @@ import {
   appendAutomationRunEvent,
   deleteAutomation,
   getAutomation,
+  getDeletedAutomationRevision,
   getAutomationRun,
+  getAutomationRunRequest,
+  saveAutomationRunRequest,
+  listUnfinishedAutomationRuns,
   listAutomationRunEvents,
   listAutomationRuns,
   listAutomationRunsForProductEvent,
@@ -63,6 +67,13 @@ export class AutomationAlreadyRunningError extends Error {
   constructor(readonly automationId: string, readonly runningRunId?: string) {
     super(`Automation is already running: ${automationId}`);
     this.name = 'AutomationAlreadyRunningError';
+  }
+}
+
+export class AutomationAlreadyExistsError extends Error {
+  constructor(readonly automationId: string) {
+    super(`Automation already exists: ${automationId}`);
+    this.name = 'AutomationAlreadyExistsError';
   }
 }
 
@@ -107,6 +118,17 @@ export class AutomationService {
   }
 
   async create(input: CreateAutomationInput): Promise<Automation> {
+    const automation = this.createAtomically(input);
+    this.refreshSchedule();
+    return automation;
+  }
+
+  /** SQLite-only creation; scheduling starts after the caller commits. */
+  createAtomically(input: CreateAutomationInput): Automation {
+    return runSqliteWriteTransaction(() => this.applyCreate(input));
+  }
+
+  private applyCreate(input: CreateAutomationInput): Automation {
     const parsed = CreateAutomationSchema.parse(input);
     const now = Date.now();
     const automation = AutomationSchema.parse({
@@ -120,9 +142,10 @@ export class AutomationService {
       createdAtMs: now,
       updatedAtMs: now,
     }) as Automation;
+    if (getAutomation(automation.id)) throw new AutomationAlreadyExistsError(automation.id);
+    automation.updatedAtMs = Math.max(automation.updatedAtMs, (getDeletedAutomationRevision(automation.id) ?? -1) + 1);
     automation.state.nextRunAtMs = computeNextAutomationRunAtMs(automation, now);
     saveAutomation(automation);
-    this.armTimer();
     return automation;
   }
 
@@ -135,6 +158,21 @@ export class AutomationService {
   }
 
   async update(id: string, patch: UpdateAutomationInput): Promise<Automation | null> {
+    const automation = this.updateAtomically(id, patch);
+    this.refreshSchedule();
+    return automation;
+  }
+
+  /** SQLite-only mutation; callers must refresh scheduling after their outer transaction commits. */
+  updateAtomically(id: string, patch: UpdateAutomationInput): Automation | null {
+    return runSqliteWriteTransaction(() => this.applyUpdate(id, patch));
+  }
+
+  refreshSchedule(): void {
+    this.armTimer();
+  }
+
+  private applyUpdate(id: string, patch: UpdateAutomationInput): Automation | null {
     const parsed = UpdateAutomationSchema.parse(patch);
     const current = getAutomation(id);
     if (!current) return null;
@@ -144,7 +182,7 @@ export class AutomationService {
       ...parsed,
       id: current.id,
       createdAtMs: current.createdAtMs,
-      updatedAtMs: now,
+      updatedAtMs: Math.max(now, current.updatedAtMs + 1),
       state: {
         ...current.state,
         ...(parsed.state ?? {}),
@@ -154,20 +192,37 @@ export class AutomationService {
       next.state.nextRunAtMs = computeNextAutomationRunAtMs(next, now);
     }
     saveAutomation(next);
-    this.armTimer();
     return next;
   }
 
   async remove(id: string): Promise<boolean> {
-    const automation = getAutomation(id);
-    if (automation?.state.runningRunId) {
-      this.activeRuns.get(automation.state.runningRunId)?.abort();
-    }
-    const removed = deleteAutomation(id);
-    if (removed) {
-      this.armTimer();
-    }
-    return removed;
+    const result = this.removeAtomically(id);
+    this.finishRemoval(result.cancelRunId);
+    return result.removed;
+  }
+
+  /** Persist deletion and cancellation intent together; never abort within a transaction. */
+  removeAtomically(id: string): { removed: boolean; automation?: Automation; cancelRunId?: string } {
+    return runSqliteWriteTransaction(() => {
+      const automation = getAutomation(id);
+      if (!automation) return { removed: false };
+      const run = automation.state.runningRunId ? getAutomationRun(automation.state.runningRunId) : null;
+      let cancelRunId: string | undefined;
+      if (run?.automationId === id && ['queued', 'running', 'cancelling'].includes(run.status)) {
+        cancelRunId = run.id;
+        if (run.status !== 'cancelling') {
+          const cancelling: AutomationRun = { ...run, status: 'cancelling', currentPhase: 'cancelling', cancelRequestedAtMs: Date.now() };
+          saveAutomationRun(cancelling);
+          this.appendRunEvent(cancelling, 'run.cancel_requested', 'Automation deletion requested cancellation', { reason: 'automation_deleted' });
+        }
+      }
+      return { removed: deleteAutomation(id), automation, cancelRunId };
+    });
+  }
+
+  finishRemoval(cancelRunId?: string): void {
+    if (cancelRunId) this.activeRuns.get(cancelRunId)?.abort(new Error('Automation was deleted by the user'));
+    this.refreshSchedule();
   }
 
   async pause(id: string): Promise<Automation | null> {
@@ -179,26 +234,55 @@ export class AutomationService {
   }
 
   async runNow(id: string): Promise<AutomationRun> {
-    const automation = getAutomation(id);
-    if (!automation) throw new Error(`Automation not found: ${id}`);
-    if (automation.state.runningRunId) {
-      throw new AutomationAlreadyRunningError(id, automation.state.runningRunId);
-    }
-    return this.startRun(automation, { manual: true });
+    const run = this.queueRunAtomically(id);
+    this.dispatchQueuedRun(run.id);
+    return run;
   }
 
   async rerunFromRun(runId: string): Promise<AutomationRun> {
-    const previous = getAutomationRun(runId);
-    if (!previous) throw new Error(`Automation run not found: ${runId}`);
-    const automation = getAutomation(previous.automationId);
-    if (!automation) throw new Error(`Automation not found: ${previous.automationId}`);
-    if (automation.state.runningRunId) {
-      throw new AutomationAlreadyRunningError(automation.id, automation.state.runningRunId);
-    }
-    const triggerEvent = listAutomationRunEvents(runId)
-      .map((event) => readAutomationEventFromRunEvent(event))
-      .find((event): event is AutomationEvent => event !== null);
-    return this.startRun(automation, triggerEvent ? { manual: false, event: triggerEvent } : { manual: true });
+    const run = this.queueRerunAtomically(runId);
+    this.dispatchQueuedRun(run.id);
+    return run;
+  }
+
+  queueRerunAtomically(runId: string): AutomationRun {
+    return runSqliteWriteTransaction(() => {
+      const previous = getAutomationRun(runId);
+      if (!previous) throw new Error(`Automation run not found: ${runId}`);
+      const event = listAutomationRunEvents(runId).map(readAutomationEventFromRunEvent)
+        .find((item): item is AutomationEvent => item !== null);
+      return this.queueRunAtomically(previous.automationId, event ? { manual: false, event } : { manual: true });
+    });
+  }
+
+  queueRunAtomically(id: string, opts: { manual: boolean; event?: AutomationEvent } = { manual: true }): AutomationRun {
+    return runSqliteWriteTransaction(() => {
+      const automation = getAutomation(id);
+      if (!automation) throw new Error(`Automation not found: ${id}`);
+      if (automation.state.runningRunId) throw new AutomationAlreadyRunningError(id, automation.state.runningRunId);
+      return this.persistQueuedRun(automation, opts);
+    });
+  }
+
+  /** Claim before invoking external work; replays never restart running or completed runs. */
+  dispatchQueuedRun(runId: string): void {
+    const claimed = runSqliteWriteTransaction(() => {
+      const run = getAutomationRun(runId);
+      if (!run || run.status !== 'queued') return null;
+      const current = getAutomation(run.automationId);
+      if (!current || current.state.runningRunId !== run.id) return null;
+      const automation = getAutomationRunRequest(run.id);
+      if (!automation) throw new Error(`Execution configuration is missing for run: ${run.id}`);
+      const now = Date.now();
+      const next: AutomationRun = { ...run, status: 'running', startedAtMs: now, currentPhase: 'action',
+        heartbeatAtMs: now, leaseOwner: this.leaseOwner, leaseExpiresAtMs: now + RUN_LEASE_DURATION_MS };
+      saveAutomationRun(next);
+      return { automation, run: next };
+    });
+    if (!claimed) return;
+    void this.executeRun(claimed.automation, claimed.run).catch(err => {
+      log.error({ err, runId }, 'Queued automation run failed');
+    });
   }
 
   async triggerEvent(event: AutomationEvent): Promise<AutomationRun[]> {
@@ -252,24 +336,41 @@ export class AutomationService {
   }
 
   async cancelRun(runId: string): Promise<boolean> {
-    const controller = this.activeRuns.get(runId);
-    if (!controller) return false;
-    const now = Date.now();
-    const current = getAutomationRun(runId);
-    if (current && current.status === 'running') {
-      const cancelling: AutomationRun = {
-        ...current,
-        status: 'cancelling',
-        currentPhase: 'cancelling',
-        cancelRequestedAtMs: now,
-      };
-      saveAutomationRun(cancelling);
-      this.appendRunEvent(cancelling, 'run.cancel_requested', 'Automation cancellation requested', {
-        reason: 'user_cancelled',
-      });
-    }
-    controller.abort(new Error('Automation run was cancelled by the user'));
-    return true;
+    const result = this.cancelRunAtomically(runId);
+    if (result.cancelled) this.dispatchCancellation(runId);
+    return result.cancelled;
+  }
+
+  dispatchCancellation(runId: string): void {
+    this.activeRuns.get(runId)?.abort(new Error('Automation run was cancelled by the user'));
+    this.refreshSchedule();
+  }
+
+  cancelRunAtomically(runId: string): { cancelled: boolean; confirmed: boolean } {
+    return runSqliteWriteTransaction(() => {
+      const current = getAutomationRun(runId);
+      if (!current || !['queued', 'running', 'cancelling'].includes(current.status)) {
+        return { cancelled: false, confirmed: false };
+      }
+      const now = Date.now();
+      if (current.status !== 'queued') {
+        if (current.status === 'running') {
+          const cancelling: AutomationRun = { ...current, status: 'cancelling', currentPhase: 'cancelling', cancelRequestedAtMs: now };
+          saveAutomationRun(cancelling);
+          this.appendRunEvent(cancelling, 'run.cancel_requested', 'Automation cancellation requested', { reason: 'user_cancelled' });
+        }
+        return { cancelled: true, confirmed: false };
+      }
+      const cancelled: AutomationRun = { ...current, status: 'cancelled', currentPhase: 'completed',
+        endedAtMs: now, cancelRequestedAtMs: now, cancelConfirmedAtMs: now,
+        termination: { reason: 'user_cancelled', component: 'automation', cancellationConfirmed: true } };
+      saveAutomationRun(cancelled);
+      this.appendRunEvent(cancelled, 'run.cancel_requested', 'Queued automation cancellation requested');
+      this.appendRunEvent(cancelled, 'run.cancel_confirmed', 'Queued automation cancelled before execution');
+      this.appendRunEvent(cancelled, 'run.completed', 'Automation run cancelled', { status: 'cancelled' });
+      this.finishAutomationRun(current.automationId, runId, 'cancelled', undefined, now);
+      return { cancelled: true, confirmed: true };
+    });
   }
 
   async getMetrics(): Promise<AutomationMetrics> {
@@ -328,7 +429,7 @@ export class AutomationService {
       this.timer = null;
     }
     const next = listAutomations()
-      .filter((automation) => automation.enabled && automation.state.nextRunAtMs != null)
+      .filter((automation) => automation.enabled && automation.state.nextRunAtMs != null && !automation.state.runningRunId)
       .toSorted((a, b) => (a.state.nextRunAtMs ?? 0) - (b.state.nextRunAtMs ?? 0))[0];
     if (!next?.state.nextRunAtMs) return;
     this.timer = setTimeout(() => {
@@ -367,6 +468,12 @@ export class AutomationService {
     automation: Automation,
     opts: { manual: boolean; event?: AutomationEvent },
   ): Promise<AutomationRun> {
+    const run = this.queueRunAtomically(automation.id, opts);
+    this.dispatchQueuedRun(run.id);
+    return run;
+  }
+
+  private persistQueuedRun(automation: Automation, opts: { manual: boolean; event?: AutomationEvent }): AutomationRun {
     const now = Date.now();
     const run: AutomationRun = {
       id: randomUUID(),
@@ -404,21 +511,14 @@ export class AutomationService {
       },
     };
     saveAutomation(nextAutomation);
-
-    void this.executeRun(nextAutomation, run).catch((err) => {
-      log.error(
-        { err, automationId: automation.id, runId: run.id },
-        `Automation run failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    });
-
+    saveAutomationRunRequest(run.id, automation);
     return run;
   }
 
   private async executeRun(automation: Automation, initialRun: AutomationRun): Promise<void> {
     const controller = new AbortController();
     this.activeRuns.set(initialRun.id, controller);
-    const startedAtMs = Date.now();
+    const startedAtMs = initialRun.startedAtMs ?? Date.now();
     let run: AutomationRun = {
       ...initialRun,
       status: 'running',
@@ -535,7 +635,7 @@ export class AutomationService {
           { termination: task.termination },
         );
       }
-      if ((status === 'timeout' || status === 'cancelled')) {
+      if (controller.signal.aborted || status === 'timeout' || status === 'cancelled') {
         // Cancellation must not start new external work after the action stops.
       } else if ((automation.safety?.mode ?? 'auto_apply') !== 'auto_apply' && automation.completionWebhookUrl) {
         this.appendRunEvent(run, 'completion_hook.completed', 'Completion webhook skipped by safety mode', {
@@ -552,6 +652,8 @@ export class AutomationService {
         this.appendRunEvent(run, 'completion_hook.completed', 'Completion webhook completed');
       }
     } catch (err) {
+      const persistedRun = getAutomationRun(run.id);
+      if (persistedRun) run = { ...run, ...persistedRun };
       error = err instanceof Error ? err.message : String(err);
       const deadlineExceeded = err instanceof AutomationDeadlineExceededError
         || (run.deadlineAtMs !== undefined && Date.now() >= run.deadlineAtMs);
@@ -595,8 +697,9 @@ export class AutomationService {
       runSqliteWriteTransaction(() => {
         saveAutomationRun(run);
         this.appendRunEvent(run, 'run.completed', `Automation run ${status}`, { status, durationMs: run.durationMs, error });
-        this.finishAutomationRun(automation.id, status, error, endedAtMs);
+        this.finishAutomationRun(automation.id, run.id, status, error, endedAtMs);
       });
+      this.refreshSchedule();
       try {
         this.deps.onRunCompleted?.(run);
       } catch (err) {
@@ -606,22 +709,14 @@ export class AutomationService {
   }
 
   private async recoverInterruptedRuns(): Promise<void> {
-    const recoverable = listAutomationRuns({ limit: 500 })
-      .filter((run) => run.status === 'queued' || run.status === 'running' || run.status === 'cancelling');
+    const recoverable = listUnfinishedAutomationRuns();
     for (const run of recoverable) {
       const automation = getAutomation(run.automationId);
-      if (run.status === 'queued' && automation) {
-        const claimed: Automation = {
-          ...automation,
-          state: { ...automation.state, runningRunId: run.id },
-        };
-        saveAutomation(claimed);
+      if (run.status === 'queued' && automation?.state.runningRunId === run.id && getAutomationRunRequest(run.id)) {
         this.appendRunEvent(run, 'run.recovered', 'Queued automation run recovered after restart', {
           previousLeaseOwner: run.leaseOwner,
         });
-        void this.executeRun(claimed, run).catch((err) => {
-          log.error({ err, runId: run.id }, 'Recovered automation run failed');
-        });
+        this.dispatchQueuedRun(run.id);
         continue;
       }
 
@@ -652,7 +747,7 @@ export class AutomationService {
         previousLeaseExpiresAtMs: run.leaseExpiresAtMs,
       });
       this.appendRunEvent(recovered, 'run.completed', `Automation run ${status}`, { status, error });
-      if (automation) this.finishAutomationRun(automation.id, status, error, now);
+      if (automation) this.finishAutomationRun(automation.id, run.id, status, error, now);
     }
   }
 
@@ -690,12 +785,13 @@ export class AutomationService {
 
   private finishAutomationRun(
     automationId: string,
+    runId: string,
     status: AutomationRunStatus,
     error: string | undefined,
     finishedAtMs: number,
   ): void {
     const current = getAutomation(automationId);
-    if (!current) return;
+    if (!current || current.state.runningRunId !== runId) return;
     const failed = status === 'failed' || status === 'timeout';
     const consecutiveFailures = failed ? (current.state.consecutiveFailures ?? 0) + 1 : 0;
     const disableAfter = current.reliability?.disableAfterConsecutiveFailures;
@@ -710,12 +806,11 @@ export class AutomationService {
         lastError: error,
         consecutiveFailures,
       },
-      updatedAtMs: shouldDisable ? finishedAtMs : current.updatedAtMs,
+      updatedAtMs: shouldDisable ? Math.max(finishedAtMs, current.updatedAtMs + 1) : current.updatedAtMs,
     };
     delete next.state.runningRunId;
     next.state.nextRunAtMs = computeNextAutomationRunAtMs(next, finishedAtMs);
     saveAutomation(next);
-    this.armTimer();
   }
 
   private async postCompletionWebhook(

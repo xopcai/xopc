@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { TurnOrigin } from '@xopcai/endpoint-tools-protocol';
 
@@ -38,13 +39,20 @@ import { fitSourceContextsToBudget } from '../../agent/source-context/budget.js'
 const log = createLogger('SessionInputCoordinator');
 const MAX_PENDING_INPUTS = 10;
 
+function sameAppContext(input: SubmitSessionInput, existing: SessionInput): boolean {
+  const identity = (sources?: AgentSourceContext[]) => sources?.filter(source => source.kind === 'app_context')
+    .map(source => ({ snapshot: source.appContext, principal: source.appContextGrant?.principal.principalId })) ?? [];
+  return isDeepStrictEqual(identity(input.sourceContexts), identity(existing.contextSnapshots));
+}
+
 function contextRefsMatchFrozenSnapshot(
   requested: readonly TurnContextRef[],
   frozen: SessionInputState['inputs'][number]['contextRefs'],
 ): boolean {
-  if (requested.length !== (frozen?.length ?? 0)) return false;
+  const editable = frozen?.filter(ref => ref.kind === 'note' || ref.kind === 'task') ?? [];
+  if (requested.length !== editable.length) return false;
   return requested.every((ref, index) => {
-    const snapshot = frozen?.[index];
+    const snapshot = editable[index];
     return snapshot?.kind === ref.kind
       && snapshot.sourceId === ref.sourceId
       && ref.expectedVersion === snapshot.version;
@@ -123,6 +131,7 @@ export class SessionInputCoordinator {
     | { ok: true; effectiveDelivery: SessionInputDelivery; state: SessionInputState }
     | { ok: false; code: 'BAD_REQUEST' | 'QUEUE_FULL' | 'CONTEXT_UNAVAILABLE' | 'SESSION_CHANGED' }
   > {
+    input = structuredClone(input);
     const conversationId = input.conversationId.trim();
     try {
       return await this.runSubmissionExclusive(conversationId, () => this.submitLocked({ ...input, conversationId }));
@@ -139,6 +148,7 @@ export class SessionInputCoordinator {
     | { ok: true; effectiveDelivery: 'next'; state: SessionInputState }
     | { ok: false; code: 'BAD_REQUEST' | 'TARGET_NOT_FOUND' | 'NOT_LATEST' | 'SESSION_BUSY' | 'CONTEXT_UNAVAILABLE' }
   > {
+    input = structuredClone(input);
     const conversationId = input.conversationId.trim();
     return this.runSubmissionExclusive(conversationId, async () => {
       const clientMessageId = input.clientMessageId.trim();
@@ -152,13 +162,13 @@ export class SessionInputCoordinator {
 
       const existing = findSessionInput(conversationId, clientMessageId);
       if (existing) {
+        if (!sameAppContext(input, existing)) return { ok: false, code: 'CONTEXT_UNAVAILABLE' };
         return { ok: true, effectiveDelivery: 'next', state: this.snapshot(conversationId) };
       }
 
       const target = validateLatestSessionTurnTarget(conversationId, targetTurnId);
       if (target.ok === false) return target;
 
-      await beforeReplace();
       const attachments = await this.deps.prepareAttachments(conversationId, input.attachments);
       let sourceContexts: AgentSourceContext[] | undefined;
       try {
@@ -168,6 +178,7 @@ export class SessionInputCoordinator {
         log.warn({ err, conversationId }, 'Session input context preparation failed');
         return { ok: false, code: 'CONTEXT_UNAVAILABLE' };
       }
+      await beforeReplace();
       const result = replaceLatestSessionTurnAndQueueInput({
         conversationId,
         targetTurnId,
@@ -215,6 +226,7 @@ export class SessionInputCoordinator {
 
     const existing = findSessionInput(conversationId, clientMessageId);
     if (existing) {
+      if (!sameAppContext(input, existing)) return { ok: false, code: 'CONTEXT_UNAVAILABLE' };
       return { ok: true, effectiveDelivery: existing.effectiveDelivery, state: this.snapshot(conversationId) };
     }
     if (this.snapshot(conversationId).inputs.length >= MAX_PENDING_INPUTS) {
@@ -278,9 +290,18 @@ export class SessionInputCoordinator {
         const runId = crypto.randomUUID();
         const input = claimNextSessionInput(conversationId, runId);
         if (!input) return;
-        if ((this.deps.beforeExecute && !await this.deps.beforeExecute(input))
-          || !consumeConnectionResume(input)
-          || !consumeClarificationResume(input)) {
+        let allowed: boolean;
+        try {
+          allowed = (!this.deps.beforeExecute || await this.deps.beforeExecute(input))
+            && consumeConnectionResume(input)
+            && consumeClarificationResume(input);
+        } catch (err) {
+          log.warn({ err, conversationId, runId, inputId: input.id }, 'Session input preflight failed');
+          finishSessionInputRun(conversationId, runId, 'failed', 'Input preflight failed');
+          this.publish(conversationId);
+          continue;
+        }
+        if (!allowed) {
           finishSessionInputRun(conversationId, runId, 'cancelled');
           this.publish(conversationId);
           continue;
@@ -329,7 +350,9 @@ export class SessionInputCoordinator {
       const existing = getSessionInputById(conversationId, id);
       if (!contextRefsMatchFrozenSnapshot(body.contextRefs, existing?.contextRefs)) {
         try {
-          sourceContexts = await this.deps.prepareContexts(body.contextRefs) ?? [];
+          const resolved = await this.deps.prepareContexts(body.contextRefs) ?? [];
+          const captured = existing?.contextSnapshots?.filter(source => source.kind !== 'note' && source.kind !== 'task') ?? [];
+          sourceContexts = fitSourceContextsToBudget([...captured, ...resolved]);
         } catch (err) {
           log.warn({ err, conversationId, inputId: id }, 'Queued input context preparation failed');
           return { ok: false, contextUnavailable: true, state: this.snapshot(conversationId) };
