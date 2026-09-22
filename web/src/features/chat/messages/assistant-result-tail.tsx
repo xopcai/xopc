@@ -8,7 +8,6 @@ import {
   FileText,
   FileVideo,
   Globe2,
-  SearchX,
 } from 'lucide-react';
 
 import { AttachmentPreviewDialog } from '@/features/chat/attachments/attachment-preview-dialog';
@@ -224,7 +223,7 @@ export function AssistantResultTail({
     ...outcomeAttachments(view.outcome, language),
     ...standaloneAttachments(view.attachments, language),
   ];
-  const hasTail = productCount > 0 || attachments.length > 0 || queryState.hasEmptyQuery;
+  const hasTail = productCount > 0 || attachments.length > 0;
 
   if (diffPresentations.length === 0 && !hasTail) return null;
 
@@ -237,21 +236,6 @@ export function AssistantResultTail({
         <TurnTail label={language === 'zh' ? '本轮交付结果' : 'Turn deliverables'}>
           <ul className="m-0 list-none divide-y divide-edge-subtle p-0">
             <ProductDeliveryRows deliveries={view.deliveries} language={language} />
-            {queryState.hasEmptyQuery ? (
-              <li className="flex min-h-14 min-w-0 items-center gap-3 px-3 py-2">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover text-fg-muted" aria-hidden>
-                  <SearchX className="size-4" strokeWidth={1.75} />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-medium text-fg">
-                    {language === 'zh' ? '没有匹配结果' : 'No matching results'}
-                  </span>
-                  <span className="mt-0.5 block text-xs leading-5 text-fg-muted">
-                    {language === 'zh' ? '调整关键词后再试一次' : 'Try again with different keywords'}
-                  </span>
-                </span>
-              </li>
-            ) : null}
             {attachments.map((item) => (
               <ResultAttachmentRow
                 key={item.key}
