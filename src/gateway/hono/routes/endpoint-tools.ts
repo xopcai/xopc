@@ -6,10 +6,13 @@ import type { Hono } from 'hono';
 
 import {
   createEndpointPrincipal,
+  getDevice,
   getEndpointPrincipal,
+  listDevices,
   listEndpointPrincipals,
   revokeEndpointPrincipal,
-  listEndpointToolInvocationAudits,
+  revokeDevice,
+  listEndpointToolInvocationAuditPage,
 } from '../../../storage/sqlite/index.js';
 import { parseEndpointPublicKey } from '../../../endpoint-tools/auth.js';
 import {
@@ -18,7 +21,6 @@ import {
 } from '../../../endpoint-tools/upload-service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { getGatewayPrincipal } from '../../security/gateway-principal.js';
-import { getDevice } from '../../../storage/sqlite/device-access-repository.js';
 import { createLogger } from '../../../utils/logger.js';
 
 const log = createLogger('EndpointUpload');
@@ -57,20 +59,71 @@ export function registerEndpointToolRoutes(
   authenticated: Hono,
   deps: AuthenticatedRouteDeps,
 ): void {
-  authenticated.get('/api/endpoint-tools/principals', (c) => {
+  authenticated.get('/api/endpoint-tools/devices', (c) => {
     const endpointsByPrincipal = new Map<string, ReturnType<typeof deps.service.endpointTools.registry.list>>();
     for (const endpoint of deps.service.endpointTools.registry.list()) {
       const endpoints = endpointsByPrincipal.get(endpoint.principalId) ?? [];
       endpoints.push(endpoint);
       endpointsByPrincipal.set(endpoint.principalId, endpoints);
     }
-    return c.json({
-      ok: true,
-      payload: listEndpointPrincipals().map(({ publicKey: _publicKey, ...principal }) => ({
-        ...principal,
-        endpoints: endpointsByPrincipal.get(principal.id) ?? [],
-      })),
+
+    const devicesById = new Map(listDevices().map((device) => [device.id, device]));
+    const principalsById = new Map(listEndpointPrincipals().map((principal) => [principal.id, principal]));
+    const ids = new Set([...devicesById.keys(), ...principalsById.keys()]);
+    const devices = [...ids].map((id) => {
+      const access = devicesById.get(id);
+      const principal = principalsById.get(id);
+      const lastSeenAt = Math.max(access?.lastSeenAt ?? 0, principal?.lastSeenAt ?? 0) || undefined;
+      return {
+        id,
+        displayName: principal?.displayName ?? access?.displayName ?? id,
+        kind: principal?.kind ?? (access?.platform === 'chrome' ? 'browser' : 'mobile'),
+        platform: principal?.platform ?? access?.platform ?? 'unknown',
+        createdAt: Math.min(access?.createdAt ?? Number.POSITIVE_INFINITY, principal?.createdAt ?? Number.POSITIVE_INFINITY),
+        ...(lastSeenAt ? { lastSeenAt } : {}),
+        access: access ? {
+          scopes: access.scopes,
+          createdAt: access.createdAt,
+          ...(access.lastSeenAt ? { lastSeenAt: access.lastSeenAt } : {}),
+          ...(access.revokedAt ? { revokedAt: access.revokedAt } : {}),
+        } : null,
+        principal: principal ? {
+          createdAt: principal.createdAt,
+          ...(principal.lastSeenAt ? { lastSeenAt: principal.lastSeenAt } : {}),
+          ...(principal.revokedAt ? { revokedAt: principal.revokedAt } : {}),
+        } : null,
+        endpoints: endpointsByPrincipal.get(id) ?? [],
+      };
+    }).sort((left, right) => (right.lastSeenAt ?? right.createdAt) - (left.lastSeenAt ?? left.createdAt));
+
+    return c.json({ ok: true, payload: devices });
+  });
+
+  authenticated.post('/api/endpoint-tools/devices/revoke', async (c) => {
+    const body = await c.req.json().catch(() => null) as { ids?: unknown } | null;
+    if (!Array.isArray(body?.ids) || body.ids.length === 0 || body.ids.length > 100
+      || body.ids.some((id) => typeof id !== 'string' || !id.trim())) {
+      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Expected 1 to 100 device ids' } }, 400);
+    }
+
+    const ids = [...new Set(body.ids.map((id) => (id as string).trim()))];
+    const results = ids.map((id) => {
+      const access = getDevice(id);
+      const principal = getEndpointPrincipal(id);
+      const accessRevoked = Boolean(access && access.revokedAt === undefined && revokeDevice(id));
+      const principalRevoked = Boolean(principal && principal.revokedAt === undefined && revokeEndpointPrincipal(id));
+      if (accessRevoked) {
+        deps.service.realtime.disconnectPrincipal(id);
+        deps.service.voiceRealtime.disconnectPrincipal(id);
+      }
+      if (principalRevoked) {
+        for (const endpoint of deps.service.endpointTools.registry.list()) {
+          if (endpoint.principalId === id) deps.service.endpointTools.disconnect(endpoint.endpointId, 'Device revoked');
+        }
+      }
+      return { id, found: Boolean(access || principal), revoked: accessRevoked || principalRevoked };
     });
+    return c.json({ ok: true, payload: { results } });
   });
 
   authenticated.post('/api/endpoint-tools/principals', async (c) => {
@@ -121,28 +174,26 @@ export function registerEndpointToolRoutes(
     return c.json({ ok: true, payload: principal }, 201);
   });
 
-  authenticated.delete('/api/endpoint-tools/principals/:principalId', (c) => {
-    const principalId = c.req.param('principalId').trim();
-    if (!principalId) {
-      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing principal id' } }, 400);
-    }
-    const revoked = revokeEndpointPrincipal(principalId);
-    if (!revoked) {
-      return c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Endpoint principal not found' } }, 404);
-    }
-    for (const endpoint of deps.service.endpointTools.registry.list()) {
-      if (endpoint.principalId === principalId) {
-        deps.service.endpointTools.disconnect(endpoint.endpointId, 'Endpoint principal revoked');
-      }
-    }
-    return c.json({ ok: true, payload: { principalId, revoked: true } });
-  });
-
   authenticated.get('/api/endpoint-tools/invocations', (c) => {
-    const limit = Number(c.req.query('limit') ?? 100);
+    const page = Number(c.req.query('page') ?? 1);
+    const pageSize = Number(c.req.query('pageSize') ?? 20);
+    const status = c.req.query('status');
+    const effect = c.req.query('effect');
+    if (!Number.isInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100
+      || (status && !['running', 'succeeded', 'failed'].includes(status))
+      || (effect && !['read', 'write', 'destructive'].includes(effect))) {
+      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid invocation filters' } }, 400);
+    }
     return c.json({
       ok: true,
-      payload: listEndpointToolInvocationAudits(Number.isFinite(limit) ? limit : 100),
+      payload: listEndpointToolInvocationAuditPage({
+        page,
+        pageSize,
+        query: c.req.query('query'),
+        principalId: c.req.query('principalId'),
+        status: status as 'running' | 'succeeded' | 'failed' | undefined,
+        effect: effect as 'read' | 'write' | 'destructive' | undefined,
+      }),
     });
   });
 

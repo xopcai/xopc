@@ -127,4 +127,20 @@ describe('MessageList history identity', () => {
     expect(bubble(30)).toBe(original);
     expect(store().sessions[conversationId].messages[0].content).toEqual([{ type: 'text', text: 'edited' }]);
   });
+
+  it('adds time separators only for the first message and long gaps', () => {
+    const start = Date.now() - 2 * 60 * 60_000;
+    store().setCommittedSnapshot(conversationId, {
+      messages: [
+        message(start),
+        message(start + 60_000, 'assistant'),
+        message(start + 31 * 60_000),
+      ],
+      hasMore: false,
+    });
+
+    act(() => root.render(<Harness />));
+
+    expect(container.querySelectorAll('[data-chat-time-separator]')).toHaveLength(2);
+  });
 });

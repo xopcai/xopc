@@ -3,7 +3,7 @@ import { XopcMobileRoute } from '../model/home';
 import { XopcMarkdownView } from './MarkdownView';
 import { XopcChatStepsView } from './ChatStepsView';
 import { XopcChatMediaView } from './ChatMediaView';
-import { XopcChatDeliverablesView } from './ChatDeliverablesView';
+import { XopcChatResultTail } from './ChatResultTail';
 import { chatActivities } from '../common/chatRichContent';
 import { XopcChatDisclosure } from '../common/chatDisclosure';
 import { filePreviewKind } from '../common/filePreview';
@@ -93,7 +93,7 @@ export struct XopcChatMessageContent {
             .onClick((): void => { this.mediaExpanded = !this.mediaExpanded; })
         }
       }
-      if (this.row.role === 'assistant') { XopcChatDeliverablesView({ row: this.row, conversationId: this.conversationId, onNavigate: this.onNavigate, onFillDraft: this.onFillDraft }) }
+      if (this.row.role === 'assistant') { XopcChatResultTail({ row: this.row, conversationId: this.conversationId, onNavigate: this.onNavigate, onFillDraft: this.onFillDraft }) }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
 }

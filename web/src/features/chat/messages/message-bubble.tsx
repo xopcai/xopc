@@ -24,7 +24,6 @@ import {
 } from '@/features/chat/messages/assistant-copy-utils';
 import { ChunkedContent } from '@/features/chat/messages/message-content-renderer';
 import { AssistantStepsBlock } from '@/features/chat/messages/assistant-steps-block';
-import { formatChatMessageTime } from '@/features/chat/messages/message-time';
 import { workflowCardLabels } from '@/features/chat/workflow/workflow-card-labels';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/cn';
@@ -38,10 +37,7 @@ import { ReadAloudButton } from '@/features/voice/read-aloud-button';
 import { buildSpeakableText, detectSpeechLanguage } from '@/features/voice/read-aloud-text';
 import { buildAssistantTurnViewModel } from '@/features/chat/messages/assistant-turn-view-model';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
-import {
-  AssistantAttachmentList,
-  AssistantTurnTasks,
-} from '@/features/chat/messages/assistant-turn-tasks';
+import { AssistantTurnTasks } from '@/features/chat/messages/assistant-turn-tasks';
 import { MessageNoteAttachments } from '@/features/chat/messages/message-note-attachments';
 import { withDetailReturnTo } from '@/lib/navigation-return';
 
@@ -102,7 +98,6 @@ export const MessageBubble = memo(function MessageBubble({
   onEditUserMessage,
   userMessageCanEdit = true,
   responseFeedbackEnabled = true,
-  compactProductDelivery = false,
 }: {
   message: Message;
   authToken?: string;
@@ -137,8 +132,6 @@ export const MessageBubble = memo(function MessageBubble({
   onEditUserMessage?: (message: Message, messageIndex: number) => void;
   userMessageCanEdit?: boolean;
   responseFeedbackEnabled?: boolean;
-  /** Use a single-line operation receipt inside note-detail chat. */
-  compactProductDelivery?: boolean;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -258,7 +251,6 @@ export const MessageBubble = memo(function MessageBubble({
     : isStreaming;
 
   const showMeta =
-    Boolean(message.timestamp) ||
     Boolean(progressForMeta?.message) ||
     (isStreaming && !streamingThinking);
 
@@ -499,15 +491,6 @@ export const MessageBubble = memo(function MessageBubble({
 
         {isUser && showMeta ? (
           <div className="mb-2 flex w-full min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-0.5 text-xs">
-            {message.timestamp ? (
-              <time
-                suppressHydrationWarning
-                className="shrink-0 tabular-nums text-fg-disabled"
-                dateTime={new Date(message.timestamp).toISOString()}
-              >
-                {formatChatMessageTime(message.timestamp)}
-              </time>
-            ) : null}
             {progressForMeta?.message && !hasAssistantActivity ? (
               <span className="text-fg-subtle" title={progressForMeta.detail ?? ''}>
                 {progressForMeta.message}
@@ -521,15 +504,6 @@ export const MessageBubble = memo(function MessageBubble({
 
         {!isUser && showMeta ? (
           <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs text-fg-disabled">
-            {message.timestamp ? (
-              <time
-                suppressHydrationWarning
-                className="tabular-nums"
-                dateTime={new Date(message.timestamp).toISOString()}
-              >
-                {formatChatMessageTime(message.timestamp)}
-              </time>
-            ) : null}
             {progressForMeta?.message && !hasAssistantActivity ? (
               <span className="text-fg-subtle" title={progressForMeta.detail ?? ''}>
                 {progressForMeta.message}
@@ -630,7 +604,6 @@ export const MessageBubble = memo(function MessageBubble({
                 authToken={authToken}
                 conversationId={workspaceConversationId ?? conversationId}
                 projectId={projectId}
-                compactProductDelivery={compactProductDelivery}
                 sourcesLabel={m.chat.searchSourcesHeading.replace(
                   '{{count}}',
                   String(assistantTurnView.sources.length),
@@ -638,8 +611,7 @@ export const MessageBubble = memo(function MessageBubble({
               />
             ) : null}
 
-            {attachmentsForBubble?.length ? (
-              isUser ? (
+            {isUser && attachmentsForBubble?.length ? (
                 <AttachmentRenderer
                   attachments={attachmentsForBubble}
                   authToken={authToken}
@@ -648,15 +620,6 @@ export const MessageBubble = memo(function MessageBubble({
                   layout="user"
                   centerUserVoiceRow={userCopyText.length === 0}
                 />
-              ) : (
-                <AssistantAttachmentList
-                  attachments={attachmentsForBubble}
-                  authToken={authToken}
-                  conversationId={conversationId}
-                  workspaceConversationId={workspaceConversationId}
-                  projectId={projectId}
-                />
-              )
             ) : null}
           </div>
         </div>

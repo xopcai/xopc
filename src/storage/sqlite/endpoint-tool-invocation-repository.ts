@@ -77,10 +77,59 @@ export function finishEndpointToolInvocationAudit(params: {
   );
 }
 
-export function listEndpointToolInvocationAudits(limit = 100): EndpointToolInvocationAudit[] {
-  const boundedLimit = Math.max(1, Math.min(500, Math.trunc(limit)));
-  const rows = getSqliteDatabase().prepare(`
-    SELECT * FROM endpoint_tool_invocations ORDER BY started_at DESC LIMIT ?
-  `).all(boundedLimit) as unknown as AuditRow[];
-  return rows.map(fromRow);
+export interface EndpointToolInvocationAuditPage {
+  items: EndpointToolInvocationAudit[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export function listEndpointToolInvocationAuditPage(options: {
+  page?: number;
+  pageSize?: number;
+  query?: string;
+  principalId?: string;
+  status?: EndpointToolInvocationAudit['status'];
+  effect?: EndpointEffect;
+} = {}): EndpointToolInvocationAuditPage {
+  const page = Math.max(1, Math.trunc(options.page ?? 1));
+  const pageSize = Math.max(1, Math.min(100, Math.trunc(options.pageSize ?? 20)));
+  const clauses: string[] = [];
+  const values: string[] = [];
+  const query = options.query?.trim();
+  if (query) {
+    const pattern = `%${query.replace(/[\\%_]/g, '\\$&')}%`;
+    clauses.push("(tool_name LIKE ? ESCAPE '\\' OR endpoint_id LIKE ? ESCAPE '\\' OR error_message LIKE ? ESCAPE '\\')");
+    values.push(pattern, pattern, pattern);
+  }
+  if (options.principalId) {
+    clauses.push('principal_id = ?');
+    values.push(options.principalId);
+  }
+  if (options.status) {
+    clauses.push('status = ?');
+    values.push(options.status);
+  }
+  if (options.effect) {
+    clauses.push('effect = ?');
+    values.push(options.effect);
+  }
+  const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+  const db = getSqliteDatabase();
+  const total = (db.prepare(`SELECT COUNT(*) AS count FROM endpoint_tool_invocations ${where}`)
+    .get(...values) as { count: number }).count;
+  const rows = db.prepare(`
+    SELECT * FROM endpoint_tool_invocations
+    ${where}
+    ORDER BY started_at DESC, id DESC
+    LIMIT ? OFFSET ?
+  `).all(...values, pageSize, (page - 1) * pageSize) as unknown as AuditRow[];
+  return {
+    items: rows.map(fromRow),
+    page,
+    pageSize,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+  };
 }

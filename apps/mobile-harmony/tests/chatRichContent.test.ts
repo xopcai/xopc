@@ -76,11 +76,13 @@ describe('rich chat parity projection', () => {
   });
   it('extracts business deliveries from both structured details and persisted text markers', () => {
     const delivery = { version: 1, operation: 'created', primary: { kind: 'note', id: 'n', title: 'Plan' } };
+    const updated = { ...delivery, operation: 'updated', primary: { ...delivery.primary, title: 'Updated plan' } };
     const row: XopcChatRow = { id: 'r', role: 'assistant', text: '', toolCalls: [
       { id: 'a', name: 'xopc_use', status: 'done', details: { delivery } },
       { id: 'b', name: 'xopc_use', result: 'xopc-product-delivery:' + encodeURIComponent(JSON.stringify(delivery)) },
+      { id: 'updated', name: 'xopc_use', status: 'done', details: { delivery: updated } },
       { id: 'c', name: 'xopc_use', isError: true, details: { delivery }, result: 'failed' }] };
-    expect(chatDeliveries(row)).toEqual([delivery]);
+    expect(chatDeliveries(row)).toEqual([updated]);
     expect(toolOutputText({ id: 't', name: 'read', result: JSON.stringify({ content: [{ type: 'text', text: 'hello' }] }) })).toBe('hello');
   });
 });

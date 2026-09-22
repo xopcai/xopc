@@ -15,6 +15,7 @@ export function CompactResourceList<T>({
   moreLabel,
   keyExtractor,
   renderItem,
+  embedded = false,
 }: {
   items: T[];
   title: string;
@@ -25,6 +26,7 @@ export function CompactResourceList<T>({
     index: number,
     requestAction: (action: () => void) => void,
   ) => React.ReactElement;
+  embedded?: boolean;
 }) {
   const { colors } = useTheme();
   const { height: screenHeight } = useWindowDimensions();
@@ -51,7 +53,11 @@ export function CompactResourceList<T>({
             onPress={() => setOpen(true)}
             style={({ pressed }) => [
               styles.moreRow,
-              { backgroundColor: pressed ? colors.surface.pressed : colors.surface.input },
+              {
+                backgroundColor: pressed
+                  ? colors.surface.pressed
+                  : embedded ? 'transparent' : colors.surface.input,
+              },
             ]}
           >
             <Text style={[styles.moreText, { color: colors.accent.primary }]} numberOfLines={1}>
