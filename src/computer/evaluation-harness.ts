@@ -1,5 +1,6 @@
-import { spawn } from 'node:child_process';
 import { z } from 'zod';
+
+import { spawnProcess } from '../process/run-process.js';
 import {
   ComputerEvaluationPlanSchema,
   ComputerEvaluationRunSchema,
@@ -41,31 +42,40 @@ type ExecuteCommand = (spec: z.infer<typeof CommandSchema>, input: unknown, sign
 /** Run one JSON-in/JSON-out harness process without a shell or inherited stdin. */
 export async function executeEvaluationCommand(spec: z.infer<typeof CommandSchema>, input: unknown, signal?: AbortSignal): Promise<unknown> {
   const [file, ...args] = spec.command;
-  return new Promise((resolve, reject) => {
-    const controller = new AbortController();
-    const combined = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
-    const child = spawn(file, args, { cwd: spec.cwd, env: process.env, shell: false, stdio: ['pipe', 'pipe', 'pipe'], signal: combined });
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
-    let outputBytes = 0;
-    const collect = (chunks: Buffer[], chunk: Buffer) => {
+  const maxOutputBytes = 1_048_576;
+  let outputBytes = 0;
+  let outputLimitExceeded = false;
+  const handle = spawnProcess({
+    program: file,
+    args,
+    cwd: spec.cwd,
+    env: process.env,
+    input: JSON.stringify(input),
+    shell: false,
+    signal,
+    timeoutMs: spec.timeoutMs,
+    maxOutputBytes,
+    terminationPolicy: 'tree',
+    onOutput: (_stream, chunk) => {
       outputBytes += chunk.length;
-      if (outputBytes > 1_048_576) controller.abort(new Error('COMPUTER_EVALUATION_OUTPUT_LIMIT'));
-      else chunks.push(chunk);
-    };
-    child.stdout.on('data', chunk => collect(stdout, Buffer.from(chunk)));
-    child.stderr.on('data', chunk => collect(stderr, Buffer.from(chunk)));
-    const timer = setTimeout(() => controller.abort(new Error('COMPUTER_EVALUATION_TIMEOUT')), spec.timeoutMs);
-    timer.unref?.();
-    child.once('error', error => { clearTimeout(timer); reject(error); });
-    child.once('close', code => {
-      clearTimeout(timer);
-      if (code !== 0) return reject(new Error(`COMPUTER_EVALUATION_PROCESS_FAILED:${code}:${Buffer.concat(stderr).toString('utf8').slice(0, 1_000)}`));
-      try { resolve(JSON.parse(Buffer.concat(stdout).toString('utf8'))); }
-      catch { reject(new Error('COMPUTER_EVALUATION_INVALID_JSON')); }
-    });
-    child.stdin.end(JSON.stringify(input));
+      if (outputBytes > maxOutputBytes && !outputLimitExceeded) {
+        outputLimitExceeded = true;
+        handle.terminate();
+      }
+    },
   });
+  const result = await handle.completion;
+  if (outputLimitExceeded) throw new Error('COMPUTER_EVALUATION_OUTPUT_LIMIT');
+  if (result.timedOut) throw new Error('COMPUTER_EVALUATION_TIMEOUT');
+  if (result.aborted) {
+    signal?.throwIfAborted();
+    throw new Error('COMPUTER_EVALUATION_ABORTED');
+  }
+  if (result.exitCode !== 0) {
+    throw new Error(`COMPUTER_EVALUATION_PROCESS_FAILED:${result.spawnErrorCode ?? result.exitCode}:${result.stderr.slice(0, 1_000)}`);
+  }
+  try { return JSON.parse(result.stdout); }
+  catch { throw new Error('COMPUTER_EVALUATION_INVALID_JSON'); }
 }
 
 /** Executor and oracle are deliberately separate processes; the oracle alone grades success. */

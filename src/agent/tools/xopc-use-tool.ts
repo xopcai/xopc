@@ -1072,13 +1072,24 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
         }
         const projectedInput = command === 'update_work_item' ? { ...fields, id: workItemId ?? fields.id }
           : command === 'feedback' || command === 'mark_read' ? { ...fields, id: presentationId ?? fields.id } : fields;
-        const parsed = SceneWriteContracts[operation].input.parse(projectedInput);
-        if (dryRun) return okText({ ...details, result: { preview: true, command, input: parsed } });
+        const parsed = SceneWriteContracts[operation].input.safeParse(projectedInput);
+        if (!parsed.success) {
+          const issue = parsed.error.issues[0];
+          const field = issue?.path.join('.') || 'input';
+          const expected = issue?.code === 'invalid_type' ? issue.expected : undefined;
+          return errorText(expected ? `${field} must be ${/^[aeiou]/.test(expected) ? 'an' : 'a'} ${expected}` : issue?.message ?? 'Invalid input', details);
+        }
+        if (dryRun) return okText({ ...details, result: { preview: true, command, input: parsed.data } });
         const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
           surface: 'agent', scopes: ['gateway.admin'], authorize: deps.authorizeCapability ?? (() => true), signal };
-        const result = await capabilities.call(operation, parsed, caller, { ...capabilities.describe(operation, caller),
-          idempotencyKey: typeof idempotencyKey === 'string' ? idempotencyKey : typeof requestId === 'string' ? requestId : toolCallId });
-        return okText({ ...details, result, delivery: deliveryForXopcResult(mode, command, result, dryRun) });
+        try {
+          const result = await capabilities.call(operation, parsed.data, caller, { ...capabilities.describe(operation, caller),
+            idempotencyKey: typeof idempotencyKey === 'string' ? idempotencyKey : typeof requestId === 'string' ? requestId : toolCallId });
+          return okText({ ...details, result, delivery: deliveryForXopcResult(mode, command, result, dryRun) });
+        } catch (error) {
+          if (error instanceof CapabilityError) return errorText(error.message, details);
+          throw error;
+        }
       }
       if (mode === 'scene' && (['templates', 'get_template', 'list', 'get', 'read_notes', 'list_runs', 'list_schedules', 'list_work_items', 'get_preferences', 'preflight',
         'mail_accounts', 'mail_sources', 'results', 'get_presentation', 'get_feedback', 'digest_results', 'metrics', 'diagnostics'].includes(command) || (command === 'start' && dryRun))) {
