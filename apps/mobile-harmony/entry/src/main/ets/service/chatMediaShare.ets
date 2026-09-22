@@ -3,6 +3,7 @@ import { uniformTypeDescriptor as utd } from '@kit.ArkData';
 import { systemShare } from '@kit.ShareKit';
 import { XopcHistoryMedia } from '../model/chat';
 import { gatewaySession } from './gatewaySession';
+import { XopcShareResult } from '../model/share';
 
 export type XopcShareReachability = 'public' | 'lan' | 'local-only';
 
@@ -11,22 +12,10 @@ export interface XopcShareRequest {
   path?: string;
   conversationId?: string;
   audience: string;
+  mode?: string;
 }
 
-export interface XopcShareDetails {
-  id: string;
-  kind: string;
-  title: string;
-  description: string;
-  shareUrl: string;
-  lanUrl?: string | null;
-  reachability: XopcShareReachability;
-  reachabilityHint?: string | null;
-  expiresAt: string;
-  maxViews?: number | null;
-}
-
-export interface XopcSharePayload { share: XopcShareDetails; }
+export interface XopcSharePayload { share: XopcShareResult; }
 interface XopcShareEnvelope { ok: boolean; payload?: XopcSharePayload; }
 
 export function chatMediaShareRequest(file: XopcHistoryMedia, conversationId: string): XopcShareRequest | undefined {
@@ -56,14 +45,14 @@ export async function createChatMediaShare(file: XopcHistoryMedia, conversationI
   return createManagedShare(request);
 }
 
-export function shareReachabilityText(share: XopcShareDetails, chinese: boolean): string {
+export function shareReachabilityText(share: XopcShareResult, chinese: boolean): string {
   const status = share.reachability === 'public' ? (chinese ? '公网可访问' : 'Publicly reachable')
     : share.reachability === 'lan' ? (chinese ? '仅同一局域网可访问' : 'Reachable on the same LAN')
       : (chinese ? '目前仅本机可访问' : 'Currently local to your computer');
   return status + (share.reachabilityHint ? '\n' + share.reachabilityHint : '');
 }
 
-export async function shareChatLink(context: common.UIAbilityContext, share: XopcShareDetails): Promise<void> {
+export async function shareChatLink(context: common.UIAbilityContext, share: XopcShareResult): Promise<void> {
   const title = share.title.trim() || 'xopc';
   const content = title + '\n' + share.shareUrl;
   if (content.length * 3 > 190000) throw new Error('SHARE_TOO_LARGE');
