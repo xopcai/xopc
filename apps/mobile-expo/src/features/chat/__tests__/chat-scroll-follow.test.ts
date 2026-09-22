@@ -100,6 +100,26 @@ describe('measured chat scroll follow', () => {
     expect(chat.scrollToEnd).not.toHaveBeenCalled();
   });
 
+  it('leaves synchronously prefetched history prepends anchored by FlashList', () => {
+    const chat = setup();
+    const prepended = chat.render([
+      { id: 'older', role: 'user', content: [] },
+      { id: 'answer', role: 'assistant', content: [] },
+    ]);
+    prepended.onContentSizeChange(400, 1600);
+    prepended.onContentSizeChange(400, 1640);
+    vi.runAllTimers();
+    expect(chat.scrollToEnd).not.toHaveBeenCalled();
+
+    chat.render([
+      { id: 'older', role: 'user', content: [] },
+      { id: 'answer', role: 'assistant', content: [] },
+      { id: 'new-answer', role: 'assistant', content: [] },
+    ]);
+    vi.runAllTimers();
+    expect(chat.scrollToEnd).toHaveBeenCalledExactlyOnceWith({ animated: false });
+  });
+
   it('cancels pending follow and keeps history reading position as tokens arrive', () => {
     const chat = setup();
     chat.onContentSizeChange(400, 1200);

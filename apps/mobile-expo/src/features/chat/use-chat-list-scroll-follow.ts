@@ -32,7 +32,8 @@ export function useChatListScrollFollow({
   const momentumRef = useRef(false);
   const dragStartYRef = useRef(0);
   const frameRef = useRef<number | null>(null);
-  const previousRef = useRef({ conversationId, lastKey: '', length: 0 });
+  const historyPrependRef = useRef(false);
+  const previousRef = useRef({ conversationId, firstKey: '', lastKey: '', length: 0 });
   const metricsRef = useRef({ offsetY: 0, contentHeight: 0, viewportHeight: 0 });
   const contentLayoutHeightRef = useRef(0);
   const buttonVisibleRef = useRef(false);
@@ -107,11 +108,14 @@ export function useChatListScrollFollow({
 
   useLayoutEffect(() => {
     const previous = previousRef.current;
+    const first = messages[0];
     const last = messages[messages.length - 1];
+    const firstKey = first ? getMessageKey(first, 0) : '';
     const lastKey = last ? getMessageKey(last, messages.length - 1) : '';
     if (previous.conversationId !== conversationId) {
       cancelFollow();
       pendingContentFollow.current = false;
+      historyPrependRef.current = false;
       draggingRef.current = false;
       momentumRef.current = false;
       pinnedRef.current = true;
@@ -120,11 +124,21 @@ export function useChatListScrollFollow({
       buttonVisibleRef.current = false;
       setShowScrollToBottom(false);
       onAtBottomChange?.(true);
-    } else if (messages.length > previous.length && lastKey !== previous.lastKey) {
-      // Sending and receiving preserve the reader's current follow preference.
-      scheduleFollow(true);
+    } else if (messages.length > previous.length) {
+      const prependedHistory = previous.length > 0
+        && firstKey !== previous.firstKey
+        && lastKey === previous.lastKey;
+      historyPrependRef.current = prependedHistory;
+      if (prependedHistory) {
+        // FlashList owns anchoring for history prepends, including synchronously cached pages.
+        cancelFollow();
+        pendingContentFollow.current = false;
+      } else if (lastKey !== previous.lastKey) {
+        // Sending and receiving preserve the reader's current follow preference.
+        scheduleFollow(true);
+      }
     }
-    previousRef.current = { conversationId, lastKey, length: messages.length };
+    previousRef.current = { conversationId, firstKey, lastKey, length: messages.length };
   }, [conversationId, messages, getMessageKey, cancelFollow, onAtBottomChange, scheduleFollow]);
 
   useEffect(() => cancelFollow, [cancelFollow]);
@@ -155,7 +169,7 @@ export function useChatListScrollFollow({
     metricsRef.current.contentHeight = height;
     syncButtonVisibility();
     // One owner for content follow; FlashList must not scroll again on viewport resize.
-    if (!loadingOlder && Math.abs(height - previousHeight) > 1) scheduleFollow(true);
+    if (!loadingOlder && !historyPrependRef.current && Math.abs(height - previousHeight) > 1) scheduleFollow(true);
   }, [loadingOlder, scheduleFollow, syncButtonVisibility]);
 
   const onLayout = useCallback((event: LayoutChangeEvent) => {
@@ -197,6 +211,7 @@ export function useChatListScrollFollow({
   }, [updateUserPosition, scheduleFollow]);
 
   const scrollToBottom = useCallback(() => {
+    historyPrependRef.current = false;
     setPinned(true);
     scrollToLiveEdge();
   }, [scrollToLiveEdge, setPinned]);
