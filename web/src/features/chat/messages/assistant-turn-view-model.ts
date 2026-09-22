@@ -61,6 +61,14 @@ export interface AssistantTurnWorkLogPresentation {
   durationMs?: number;
 }
 
+function isTurnResultDelivery(delivery: ProductDeliveryEnvelope): boolean {
+  if (delivery.presentation || delivery.related?.length) return true;
+  if (!delivery.primary) return false;
+  return delivery.primary.kind !== 'note'
+    || delivery.operation === 'created'
+    || delivery.operation === 'updated';
+}
+
 export function buildAssistantTurnViewModel({
   message,
   isStreaming,
@@ -97,9 +105,7 @@ export function buildAssistantTurnViewModel({
   const deliveryByCall = new Map<string, ProductDeliveryEnvelope>();
   for (const block of toolBlocks) {
     const candidate = extractProductDelivery(block);
-    if (candidate && (candidate.presentation || (candidate.primary
-      && candidate.primary.kind !== 'workflow_run' && candidate.primary.kind !== 'file'
-      && (candidate.primary.kind !== 'note' || candidate.operation === 'created' || candidate.operation === 'updated')))) {
+    if (candidate && isTurnResultDelivery(candidate)) {
       deliveryByCall.set(block.id, candidate);
     }
   }

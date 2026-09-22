@@ -5,6 +5,10 @@ import { MessageBubble } from '@/features/chat/messages/message-bubble';
 import type { Message, ProgressState, ReasoningLevel } from '@/features/chat/messages/messages.types';
 import { isLastUserMessageInThread } from '@/features/chat/messages/user-message-plain-text';
 import { messageRowKey } from '@/features/chat/messages/thinking-blocks';
+import {
+  formatChatTimeSeparator,
+  shouldShowChatTimeSeparator,
+} from '@/features/chat/messages/message-time';
 import type {
   WelcomeSpotlightModel,
   WelcomeSuggestionSelection,
@@ -29,7 +33,6 @@ export const MessageList = memo(function MessageList({
   onSelectWelcomeProject,
   welcomeOverlay,
   compactWelcome = false,
-  compactProductDelivery = false,
   onDeleteRound,
   onRetryUserMessageRound,
   deleteRoundDisabled,
@@ -61,7 +64,6 @@ export const MessageList = memo(function MessageList({
   onSelectWelcomeProject?: (projectId: string) => Promise<void> | void;
   welcomeOverlay?: ReactNode;
   compactWelcome?: boolean;
-  compactProductDelivery?: boolean;
   onDeleteRound?: (messageIndex: number) => void;
   onRetryUserMessageRound?: (messageIndex: number) => void;
   deleteRoundDisabled?: boolean;
@@ -113,6 +115,8 @@ export const MessageList = memo(function MessageList({
     );
   }
 
+  const now = Date.now();
+
   return (
     <div ref={registerListContentRef} className="flex w-full min-w-0 flex-col gap-8 pb-8">
       {list.map((msg, index) => {
@@ -120,6 +124,10 @@ export const MessageList = memo(function MessageList({
         const isStreamRow = Boolean(streaming && isLast && msg.role === 'assistant');
         const isLastUserRow = isLastUserMessageInThread(list, index);
         const key = messageRowKey(msg, index);
+        const showTimeSeparator = shouldShowChatTimeSeparator(
+          msg.timestamp,
+          list[index - 1]?.timestamp,
+        );
         return (
           <div
             key={key}
@@ -127,6 +135,17 @@ export const MessageList = memo(function MessageList({
             className="scroll-mt-4"
             data-chat-message-index={index}
           >
+            {showTimeSeparator && msg.timestamp ? (
+              <div className="mb-8 flex justify-center" data-chat-time-separator>
+                <time
+                  suppressHydrationWarning
+                  className="rounded-md px-2 py-1 text-xs tabular-nums text-fg-disabled"
+                  dateTime={new Date(msg.timestamp).toISOString()}
+                >
+                  {formatChatTimeSeparator(msg.timestamp, now, language)}
+                </time>
+              </div>
+            ) : null}
             <MessageBubble
               message={msg}
               authToken={authToken}
@@ -136,7 +155,6 @@ export const MessageList = memo(function MessageList({
               isStreaming={isStreamRow}
               progress={isStreamRow ? progress : null}
               reasoningLevel={reasoningLevel}
-              compactProductDelivery={compactProductDelivery}
               messageIndex={index}
               onDeleteRound={onDeleteRound}
               onRetryUserMessageRound={onRetryUserMessageRound}

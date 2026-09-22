@@ -2,16 +2,6 @@ import { apiFetch, fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import type { DevicePairingStatus, DevicePairingTargetKind } from '@xopcai/gateway-contract';
 
-export type ConnectedDevice = {
-  id: string;
-  displayName: string;
-  platform: 'ios' | 'android' | 'chrome';
-  scopes: string[];
-  createdAt: number;
-  lastSeenAt?: number;
-  revokedAt?: number;
-};
-
 type DevicePairingSetupBase = {
   id: string;
   expiresAt: number;
@@ -36,11 +26,6 @@ export type DevicePairingReadiness = {
   ready: boolean;
   routes: DevicePairingSetup['routes'];
 };
-
-export async function fetchConnectedDevices(): Promise<ConnectedDevice[]> {
-  const response = await fetchJson<{ ok: true; devices: ConnectedDevice[] }>(apiUrl('/api/devices'));
-  return response.devices;
-}
 
 export async function fetchDevicePairingReadiness(): Promise<DevicePairingReadiness> {
   const response = await fetchJson<{ ok: true } & DevicePairingReadiness>(
@@ -75,10 +60,6 @@ export async function decideDevicePairing(request: DevicePairingStatus, decision
   await fetchJson(apiUrl(`/api/device-pairing/requests/${encodeURIComponent(request.requestId)}/decision`), {
     method: 'POST', body: JSON.stringify({ decision, expectedRevision: request.revision }),
   });
-}
-
-export async function revokeConnectedDevice(deviceId: string): Promise<void> {
-  await fetchJson(apiUrl(`/api/devices/${encodeURIComponent(deviceId)}`), { method: 'DELETE' });
 }
 
 export async function downloadBrowserExtensionArchive(): Promise<void> {

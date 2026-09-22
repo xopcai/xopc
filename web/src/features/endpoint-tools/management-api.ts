@@ -22,14 +22,21 @@ export interface ManagedEndpoint {
   tools: Array<{ descriptor: EndpointToolDescriptor; revision: string }>;
 }
 
-export interface ManagedEndpointPrincipal {
-  id: string;
-  kind: EndpointKind;
-  displayName: string;
-  platform: string;
+export interface ManagedDeviceIdentity {
   createdAt: number;
   lastSeenAt?: number;
   revokedAt?: number;
+}
+
+export interface ManagedDevice {
+  id: string;
+  displayName: string;
+  kind: EndpointKind;
+  platform: string;
+  createdAt: number;
+  lastSeenAt?: number;
+  access: (ManagedDeviceIdentity & { scopes: string[] }) | null;
+  principal: ManagedDeviceIdentity | null;
   endpoints: ManagedEndpoint[];
 }
 
@@ -46,6 +53,23 @@ export interface ManagedEndpointInvocation {
   startedAt: number;
   completedAt?: number;
 }
+
+export interface ManagedEndpointInvocationPage {
+  items: ManagedEndpointInvocation[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export type InvocationFilters = {
+  page: number;
+  pageSize: number;
+  query: string;
+  principalId: string;
+  status: '' | ManagedEndpointInvocation['status'];
+  effect: '' | EndpointEffect;
+};
 
 export interface ManagedEndpointSessionBinding {
   conversationId: string;
@@ -64,24 +88,41 @@ async function payload<T>(response: Response): Promise<T> {
   return body.payload;
 }
 
-export function endpointPrincipalsKey(): string {
-  return apiUrl('/api/endpoint-tools/principals');
+export function managedDevicesKey(): string {
+  return apiUrl('/api/endpoint-tools/devices');
 }
 
-export function endpointInvocationsKey(): string {
-  return apiUrl('/api/endpoint-tools/invocations?limit=50');
+export function endpointInvocationsKey(filters: InvocationFilters): string {
+  const params = new URLSearchParams({ page: String(filters.page), pageSize: String(filters.pageSize) });
+  if (filters.query.trim()) params.set('query', filters.query.trim());
+  if (filters.principalId) params.set('principalId', filters.principalId);
+  if (filters.status) params.set('status', filters.status);
+  if (filters.effect) params.set('effect', filters.effect);
+  return apiUrl(`/api/endpoint-tools/invocations?${params}`);
 }
 
 export function endpointBindingKey(conversationId: string): string {
   return apiUrl(`/api/endpoint-tools/bindings/${encodeURIComponent(conversationId)}`);
 }
 
-export async function fetchEndpointPrincipals(): Promise<ManagedEndpointPrincipal[]> {
-  return payload<ManagedEndpointPrincipal[]>(await apiFetch(endpointPrincipalsKey()));
+export async function fetchManagedDevices(): Promise<ManagedDevice[]> {
+  return payload<ManagedDevice[]>(await apiFetch(managedDevicesKey()));
 }
 
-export async function fetchEndpointInvocations(): Promise<ManagedEndpointInvocation[]> {
-  return payload<ManagedEndpointInvocation[]>(await apiFetch(endpointInvocationsKey()));
+export async function revokeManagedDevices(ids: string[]): Promise<void> {
+  const chunks = Array.from({ length: Math.ceil(ids.length / 100) }, (_, index) => (
+    ids.slice(index * 100, (index + 1) * 100)
+  ));
+  await Promise.all(chunks.map(async (chunk) => {
+    await payload(await apiFetch(apiUrl('/api/endpoint-tools/devices/revoke'), {
+      method: 'POST',
+      body: JSON.stringify({ ids: chunk }),
+    }));
+  }));
+}
+
+export async function fetchEndpointInvocations(filters: InvocationFilters): Promise<ManagedEndpointInvocationPage> {
+  return payload<ManagedEndpointInvocationPage>(await apiFetch(endpointInvocationsKey(filters)));
 }
 
 export async function fetchEndpointBinding(conversationId: string): Promise<ManagedEndpointSessionBinding | undefined> {
@@ -105,10 +146,4 @@ export async function unbindEndpointFromSession(conversationId: string): Promise
     method: 'DELETE',
   }));
   return result.removed;
-}
-
-export async function revokeManagedEndpointPrincipal(principalId: string): Promise<void> {
-  await payload(await apiFetch(apiUrl(`/api/endpoint-tools/principals/${encodeURIComponent(principalId)}`), {
-    method: 'DELETE',
-  }));
 }

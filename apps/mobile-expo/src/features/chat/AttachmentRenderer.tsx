@@ -86,9 +86,11 @@ function attachmentToAudioContent(
 export function AttachmentRenderer({
   attachments,
   conversationId,
+  embedded = false,
 }: {
   attachments?: MessageAttachment[];
   conversationId?: string | null;
+  embedded?: boolean;
 }) {
   const { colors } = useTheme();
   const m = useMessages();
@@ -138,6 +140,7 @@ export function AttachmentRenderer({
           items={nonAudioItems}
           title={m.chat.attachmentsHeading}
           moreLabel={(count) => m.chat.moreAttachments.replace('{{count}}', String(count))}
+          embedded={embedded}
           keyExtractor={(att, index) => att.id ?? `${attachmentName(att, index)}-${index}`}
           renderItem={(att, index, requestAction) => {
             const name = attachmentName(att, index);
@@ -152,7 +155,13 @@ export function AttachmentRenderer({
               <Pressable
                 style={({ pressed }) => [
                   styles.resourceRow,
-                  { borderColor: border, backgroundColor: pressed ? colors.surface.pressed : chipBg },
+                  embedded && styles.embeddedResourceRow,
+                  {
+                    borderColor: embedded ? 'transparent' : border,
+                    backgroundColor: pressed
+                      ? colors.surface.pressed
+                      : embedded ? 'transparent' : chipBg,
+                  },
                 ]}
                 onPress={() => requestAction(() => setActive(preview))}
                 accessibilityRole="button"
@@ -198,5 +207,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
     fontSize: 13,
     fontWeight: '600',
+  },
+  embeddedResourceRow: {
+    minHeight: 56,
   },
 });
