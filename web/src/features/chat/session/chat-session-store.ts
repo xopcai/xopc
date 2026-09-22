@@ -211,6 +211,26 @@ function reconcileMessages(current: Message[], incoming: Message[]): Message[] {
   return changed ? next : current;
 }
 
+function preserveFailedOptimisticMessages(current: Message[], incoming: Message[]): Message[] {
+  const failed = current.filter((message) => message.deliveryStatus === 'failed');
+  if (failed.length === 0) return incoming;
+  const knownLocalUserCount = current.filter(
+    (message) => isUiUserMessage(message.role) && message.deliveryStatus !== 'failed',
+  ).length;
+  const unmatchedServerUsers = incoming
+    .filter((message) => isUiUserMessage(message.role))
+    .slice(knownLocalUserCount);
+  const missing = failed.filter((message) => {
+    const matchIndex = unmatchedServerUsers.findIndex(
+      (serverMessage) => shouldReplaceOptimisticUserRow(message, serverMessage),
+    );
+    if (matchIndex < 0) return true;
+    unmatchedServerUsers.splice(matchIndex, 1);
+    return false;
+  });
+  return missing.length > 0 ? [...incoming, ...missing] : incoming;
+}
+
 function appendFinalAssistantMessage(current: Message[], message: Message): Message[] {
   const finalMessage = cloneMessageForRender(message);
   const last = current[current.length - 1];
@@ -376,7 +396,10 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
             },
           };
         }
-        const messages = reconcileMessages(current.messages, data.messages);
+        const messages = reconcileMessages(
+          current.messages,
+          preserveFailedOptimisticMessages(current.messages, data.messages),
+        );
         return {
           sessions: {
             ...state.sessions,
@@ -709,10 +732,11 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
           };
         }
         if (!isSessionSliceLive(current)) {
+          const messages = preserveFailedOptimisticMessages(current.messages, serverMessages);
           return {
             sessions: {
               ...state.sessions,
-              [key]: { ...meta, historyStatus: 'ready', messages: cloneMessages(serverMessages), hasMore: nextHasMore, ...IDLE_STREAM },
+              [key]: { ...meta, historyStatus: 'ready', messages: cloneMessages(messages), hasMore: nextHasMore, ...IDLE_STREAM },
             },
           };
         }

@@ -3,6 +3,7 @@ import type { AgentStreamRunStatus, AppContextEnvelope } from '@xopcai/gateway-c
 
 import { trackInputAcceptance } from '../messages/input-acceptance';
 import { buildSendFailedErrorPayload } from '@/features/chat/messages/agent-run-error-parser';
+import { setOptimisticUserMessageDelivery } from '@/features/chat/messages/optimistic-user-message';
 import {
   createAgentStreamMessagingCallbacks,
   readStreamingBubbleFromStore,
@@ -68,6 +69,8 @@ export function useChatSessionStreaming(deps: {
       contextRefs?: ComposerContextRef[],
       replaceTurnId?: string,
       appContext?: AppContextEnvelope,
+      onDispatched?: (clientSubmissionId: string, messageRenderKey?: string) => void,
+      replaceClientSubmissionId?: string,
     ) => Promise<void | boolean>
   >;
 
@@ -304,6 +307,8 @@ export function useChatSessionStreaming(deps: {
       contextRefs?: ComposerContextRef[],
       replaceTurnId?: string,
       appContext?: AppContextEnvelope,
+      onDispatched?: (clientSubmissionId: string, messageRenderKey?: string) => void,
+      replaceClientSubmissionId?: string,
     ) => {
       if (!conversationId) return false;
       if (!shouldApplyStreamUpdate(conversationId)) return false;
@@ -326,7 +331,11 @@ export function useChatSessionStreaming(deps: {
 
       const effectiveThinking = modelSupportsThinking ? (levelOverride ?? thinkingLevel) : 'off';
       const chatId = conversationId;
-      const currentMessages = getSessionMessages(chatId);
+      const clientSubmissionId = crypto.randomUUID();
+      const storedMessages = getSessionMessages(chatId);
+      const currentMessages = replaceClientSubmissionId
+        ? storedMessages.filter((message) => message.clientSubmissionId !== replaceClientSubmissionId)
+        : storedMessages;
       const replaceIndex = replaceTurnId
         ? currentMessages.findIndex(
             (message) => message.role === 'user' && message.turnId === replaceTurnId,
@@ -347,6 +356,9 @@ export function useChatSessionStreaming(deps: {
         {
           role: 'user',
           content: content ? [{ type: 'text', text: content }] : [],
+          deliveryStatus: 'sending',
+          clientSubmissionId,
+          pendingAppContext: appContext === undefined ? undefined : structuredClone(appContext),
           attachments,
           contextRefs: contextRefs?.map((ref) => ({
             kind: ref.kind,
@@ -379,6 +391,10 @@ export function useChatSessionStreaming(deps: {
         streaming: false,
       });
       markChatRunRunning(chatId);
+      const optimisticRenderKey = getSessionMessages(chatId).find(
+        (message) => message.clientSubmissionId === clientSubmissionId,
+      )?.renderKey;
+      onDispatched?.(clientSubmissionId, optimisticRenderKey);
 
       if (!existing?.name?.trim() && trimmed) {
         const provisional = provisionalTitleFromUserText(trimmed);
@@ -388,7 +404,15 @@ export function useChatSessionStreaming(deps: {
         }
       }
 
+      const updateDeliveryStatus = (status: 'accepted' | 'failed') => {
+        store().updateSessionMessages(
+          chatId,
+          (messages) => setOptimisticUserMessageDelivery(messages, clientSubmissionId, status),
+        );
+      };
+
       return trackInputAcceptance(async (onInputAccepted) => {
+        let inputAccepted = false;
         try {
           await sessionMgrRef.current.ensureSessionExists(chatId);
 
@@ -406,7 +430,11 @@ export function useChatSessionStreaming(deps: {
             finalizeMessage,
             fq,
           });
-          sendStreamCallbacks.onInputAccepted = onInputAccepted;
+          sendStreamCallbacks.onInputAccepted = () => {
+            inputAccepted = true;
+            updateDeliveryStatus('accepted');
+            onInputAccepted();
+          };
 
           await chatRunManager.senderFor(chatId).send(
             content,
@@ -431,6 +459,7 @@ export function useChatSessionStreaming(deps: {
             clearChatRunPresence(chatId);
           }
         } finally {
+          if (!inputAccepted) updateDeliveryStatus('failed');
           if (shouldApplyStreamUpdate(chatId)) {
             sendingRef.current = false;
             streamingRef.current = false;
@@ -502,6 +531,13 @@ export function useChatSessionStreaming(deps: {
       const msg = messages[messageIndex];
       if (!msg || !isUiUserMessage(msg.role)) return;
 
+      if (msg.deliveryStatus === 'failed') {
+        const updated = [...messages];
+        updated.splice(messageIndex, 1);
+        store().updateSessionMessages(key, () => updated);
+        return;
+      }
+
       const userRoundIndex = userRoundIndexFromUiMessageIndex(messages, messageIndex);
       if (userRoundIndex === null) return;
 
@@ -536,7 +572,6 @@ export function useChatSessionStreaming(deps: {
       const wireAtt = messageAttachmentsToWire(msg.attachments);
       if (!text.trim() && !wireAtt?.length && !msg.contextRefs?.length) return;
 
-      if (!msg.turnId) return;
       const contextRefs = msg.contextRefs?.map((ref) => ({
         kind: ref.kind,
         sourceId: ref.sourceId,
@@ -544,7 +579,20 @@ export function useChatSessionStreaming(deps: {
         title: ref.title,
         fileKind: ref.fileKind,
       }));
-      void sendMessageRef.current(text, wireAtt, undefined, contextRefs, msg.turnId).catch(() => {
+      const failedSubmissionId = msg.deliveryStatus === 'failed' ? msg.clientSubmissionId : undefined;
+      if (!failedSubmissionId && !msg.turnId) {
+        return;
+      }
+      void sendMessageRef.current(
+        text,
+        wireAtt,
+        undefined,
+        contextRefs,
+        msg.turnId,
+        msg.pendingAppContext,
+        undefined,
+        failedSubmissionId,
+      ).catch(() => {
         void loadSessionById(key, 0);
       });
     },
