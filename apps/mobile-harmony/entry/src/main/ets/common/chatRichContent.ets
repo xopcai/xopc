@@ -163,7 +163,7 @@ export function chatDeliveries(row: XopcChatRow): XopcProductDelivery[] {
       const marker = toolOutputText(call).split(/\s+/).find((part: string): boolean => part.startsWith('xopc-product-delivery:'));
       if (marker) { try { delivery = deliveryRecord(JSON.parse(decodeURIComponent(marker.slice(22))) as Object); } catch (_) {} }
     }
-    if (delivery?.primary && delivery.primary.kind !== 'file') results.set(delivery.operation + ':' + delivery.primary.kind + ':' + delivery.primary.id, delivery);
+    if (delivery?.primary && delivery.primary.kind !== 'file') results.set(delivery.primary.kind + ':' + delivery.primary.id, delivery);
   }
   return Array.from(results.values());
 }

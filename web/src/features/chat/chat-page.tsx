@@ -1244,7 +1244,6 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                       ) : undefined
                     }
                     compactWelcome={embedded}
-                    compactProductDelivery={embedded}
                     onRetryWelcomeContext={welcomeContextState.retry}
                     onRefreshWelcomeExploration={
                       activeWelcomeSpotlight?.categories.some((category) => category.scope === 'explore')

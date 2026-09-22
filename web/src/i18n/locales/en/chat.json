@@ -1138,6 +1138,7 @@
       "statusSucceeded": "Completed",
       "statusFailed": "Not completed",
       "deliverables": "Deliverables",
+      "generatedFile": "Generated file",
       "changes": "Code changes",
       "evidence": "Checks",
       "deliverableCount": "{{count}} deliverables",

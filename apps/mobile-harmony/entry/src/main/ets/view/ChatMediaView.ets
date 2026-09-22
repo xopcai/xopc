@@ -18,6 +18,7 @@ export struct XopcChatMediaView {
   @Param conversationId: string = '';
   @Param draftPreview: boolean = false;
   @Param compact: boolean = false;
+  @Param embedded: boolean = false;
   @Local picture?: image.PixelMap;
   @Local previewPicture?: image.PixelMap;
   @Local pictureRatio: number = 1;
@@ -181,9 +182,11 @@ export struct XopcChatMediaView {
             Text(this.file.name || this.file.type).fontSize(13).fontWeight(FontWeight.Medium).fontColor($r('app.color.foreground'))
               .layoutWeight(1).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
             SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([$r('app.color.tertiary')])
-          }.width('100%').height(44).padding({ left: 12, right: 12 })
-        }.id('chat-preview-' + this.file.id).width('100%').padding(0).backgroundColor($r('app.color.input'))
-          .border({ width: 0.5, color: $r('app.color.border_subtle'), radius: 10 }).enabled(!this.busy && this.previewable())
+          }.width('100%').constraintSize({ minHeight: 56 }).padding({ left: 12, right: 12 })
+        }.id('chat-preview-' + this.file.id).width('100%').padding(0)
+          .backgroundColor(this.embedded ? Color.Transparent : $r('app.color.input'))
+          .border({ width: this.embedded ? 0 : 0.5, color: $r('app.color.border_subtle'), radius: 10 })
+          .enabled(!this.busy && this.previewable())
           .accessibilityText($r('app.string.chat_preview_file', this.file.name)).onClick((): void => { this.openPreview(); })
       } else if (this.picture) {
         Image(this.picture).width(this.draftPreview ? 120 : '100%').height(this.draftPreview ? 100 : 200).objectFit(ImageFit.Contain).borderRadius(12)
@@ -192,24 +195,26 @@ export struct XopcChatMediaView {
         Column() {}.width('100%').height(160).borderRadius(12).backgroundColor($r('app.color.grouped'))
           .accessibilityText($r('app.string.chat_media_loading'))
       }
-      Row({ space: 8 }) {
-        Text(this.file.name || this.file.type).fontSize(13).fontColor($r('app.color.secondary')).layoutWeight(1).maxLines(2)
-        if (this.previewable()) {
-          Button($r('app.string.chat_preview')).height(44).fontSize(12).fontColor($r('app.color.accent')).backgroundColor(Color.Transparent)
-            .id('chat-preview-' + this.file.id).enabled(!this.busy && !!(this.file.uri || this.file.workspaceRelativePath)).onClick((): void => { this.openPreview(); })
-        }
-        if (!this.draftPreview) {
-          if (this.shareable()) {
-            Button($r('app.string.chat_share')).height(44).fontSize(12).backgroundColor(Color.Transparent).fontColor($r('app.color.secondary'))
-              .enabled(!this.busy).onClick((): void => { this.share(); })
+      if (!this.compact) {
+        Row({ space: 8 }) {
+          Text(this.file.name || this.file.type).fontSize(13).fontColor($r('app.color.secondary')).layoutWeight(1).maxLines(2)
+          if (this.previewable()) {
+            Button($r('app.string.chat_preview')).height(44).fontSize(12).fontColor($r('app.color.accent')).backgroundColor(Color.Transparent)
+              .id('chat-preview-' + this.file.id).enabled(!this.busy && !!(this.file.uri || this.file.workspaceRelativePath)).onClick((): void => { this.openPreview(); })
           }
-          Button($r('app.string.download')).height(44).fontSize(12).backgroundColor(Color.Transparent).fontColor($r('app.color.secondary'))
-            .enabled(!this.busy && !!(this.file.uri || this.file.workspaceRelativePath)).onClick((): void => { this.save(); })
+          if (!this.draftPreview) {
+            if (this.shareable()) {
+              Button($r('app.string.chat_share')).height(44).fontSize(12).backgroundColor(Color.Transparent).fontColor($r('app.color.secondary'))
+                .enabled(!this.busy).onClick((): void => { this.share(); })
+            }
+            Button($r('app.string.download')).height(44).fontSize(12).backgroundColor(Color.Transparent).fontColor($r('app.color.secondary'))
+              .enabled(!this.busy && !!(this.file.uri || this.file.workspaceRelativePath)).onClick((): void => { this.save(); })
+          }
+        }.width('100%')
+        if (this.error) {
+          Text(this.error === 'INVALID_MEDIA_OR_TOO_LARGE' ? $r('app.string.chat_media_too_large') : $r('app.string.chat_media_failed')).fontSize(12).fontColor($r('app.color.danger'))
+          Button($r('app.string.refresh')).backgroundColor($r('app.color.grouped')).fontColor($r('app.color.secondary')).onClick((): void => { if (this.failedAction === 'save') this.save(); else if (this.failedAction === 'share') this.share(); else this.openPreview(); })
         }
-      }.width('100%')
-      if (this.error) {
-        Text(this.error === 'INVALID_MEDIA_OR_TOO_LARGE' ? $r('app.string.chat_media_too_large') : $r('app.string.chat_media_failed')).fontSize(12).fontColor($r('app.color.danger'))
-        Button($r('app.string.refresh')).backgroundColor($r('app.color.grouped')).fontColor($r('app.color.secondary')).onClick((): void => { if (this.failedAction === 'save') this.save(); else if (this.failedAction === 'share') this.share(); else this.openPreview(); })
       }
     }.width('100%').onVisibleAreaChange([0.1], (visible: boolean): void => { if (visible && !this.compact && !this.attempted) this.load(); })
       .bindSheet($$this.expanded, this.preview, { height: this.previewKind() === 'audio' ? 280 : '100%', dragBar: false,

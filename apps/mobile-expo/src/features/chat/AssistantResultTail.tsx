@@ -9,7 +9,7 @@ import { CompactResourceList } from './CompactResourceList';
 import type { MessageAttachment } from './messages.types';
 import { ProductDeliveryCard } from './ProductDeliveryCard';
 import { useMessages } from '../../i18n/messages';
-import { typography, useTheme } from '../../theme';
+import { radii, spacing, typography, useTheme } from '../../theme';
 
 function attachmentFromArtifact(artifact: TurnOutcomeDeliverable): MessageAttachment | null {
   if (artifact.availability !== 'available' || !artifact.uri) return null;
@@ -41,7 +41,7 @@ function unavailableLabel(
   return labels.unavailable;
 }
 
-export const AssistantDeliverablesCard = memo(function AssistantDeliverablesCard({
+export const AssistantResultTail = memo(function AssistantResultTail({
   deliverables,
   conversationId,
 }: {
@@ -62,35 +62,27 @@ export const AssistantDeliverablesCard = memo(function AssistantDeliverablesCard
   const secondaryArtifacts = [...links, ...unavailable];
   const hasContent = deliverables.artifacts.length > 0
     || deliverables.productDeliveries.length > 0;
-  if (!hasContent && !deliverables.awaiting) return null;
+  if (!hasContent) return null;
 
   return (
-    <View
-      style={[
-        styles.card,
-        { backgroundColor: 'transparent', borderColor: colors.border.default },
-      ]}
-    >
-      <Text style={[styles.title, { color: colors.text.secondary }]}>
-        {m.chat.messageArtifactsHeading}
-      </Text>
-      <View style={styles.body}>
-        {deliverables.awaiting && !hasContent ? (
-          <View style={styles.skeletonRow} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-            <View style={[styles.skeletonThumb, { backgroundColor: colors.surface.input }]} />
-            <View style={styles.skeletonText}>
-              <View style={[styles.skeletonLineWide, { backgroundColor: colors.surface.input }]} />
-              <View style={[styles.skeletonLineNarrow, { backgroundColor: colors.surface.input }]} />
-            </View>
-          </View>
-        ) : null}
+    <View style={styles.shell} accessibilityLabel={m.chat.messageArtifactsHeading}>
+      <View
+        pointerEvents="none"
+        style={[styles.pointer, { backgroundColor: colors.surface.input }]}
+      />
+      <View style={[styles.card, { backgroundColor: colors.surface.input }]}>
         {attachments.length > 0 ? (
-          <AttachmentRenderer attachments={attachments} conversationId={conversationId} />
+          <AttachmentRenderer
+            attachments={attachments}
+            conversationId={conversationId}
+            embedded
+          />
         ) : null}
         <CompactResourceList
           items={secondaryArtifacts}
           title={m.chat.messageArtifactsHeading}
           moreLabel={(count) => m.chat.moreArtifacts.replace('{{count}}', String(count))}
+          embedded
           keyExtractor={(artifact) => artifact.artifactId}
           renderItem={(artifact, _index, requestAction) => {
             const canOpen = artifact.availability === 'available' && Boolean(artifact.shareUrl);
@@ -106,7 +98,7 @@ export const AssistantDeliverablesCard = memo(function AssistantDeliverablesCard
                 disabled={!canOpen}
                 style={({ pressed }) => [
                   styles.artifactRow,
-                  { backgroundColor: pressed ? colors.surface.pressed : colors.surface.input },
+                  { backgroundColor: pressed ? colors.surface.pressed : 'transparent' },
                 ]}
                 onPress={canOpen
                   ? () => requestAction(() => void Linking.openURL(artifact.shareUrl!))
@@ -119,9 +111,16 @@ export const AssistantDeliverablesCard = memo(function AssistantDeliverablesCard
                   size={18}
                   color={colors.text.secondary}
                 />
-                <Text style={[styles.artifactTitle, { color: colors.text.primary }]} numberOfLines={1}>
-                  {artifact.title}
-                </Text>
+                <View style={styles.artifactCopy}>
+                  <Text style={[styles.artifactTitle, { color: colors.text.primary }]} numberOfLines={1}>
+                    {artifact.title}
+                  </Text>
+                  {status ? (
+                    <Text style={[styles.artifactMeta, { color: colors.text.secondary }]} numberOfLines={1}>
+                      {status}
+                    </Text>
+                  ) : null}
+                </View>
                 {canOpen ? <Icon source="chevron-right" size={18} color={colors.text.tertiary} /> : null}
               </Pressable>
             );
@@ -131,12 +130,14 @@ export const AssistantDeliverablesCard = memo(function AssistantDeliverablesCard
           items={deliverables.productDeliveries}
           title={m.chat.messageArtifactsHeading}
           moreLabel={(count) => m.chat.moreArtifacts.replace('{{count}}', String(count))}
+          embedded
           keyExtractor={(delivery) => `${delivery.primary?.kind ?? 'none'}:${delivery.primary?.id ?? 'none'}`}
           renderItem={(delivery, _index, requestAction) => (
             <ProductDeliveryCard
               delivery={delivery}
               conversationId={conversationId}
               requestAction={requestAction}
+              embedded
             />
           )}
         />
@@ -146,56 +147,47 @@ export const AssistantDeliverablesCard = memo(function AssistantDeliverablesCard
 });
 
 const styles = StyleSheet.create({
+  shell: {
+    alignSelf: 'flex-start',
+    width: '88%',
+    maxWidth: 420,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    paddingBottom: spacing.xs,
+  },
+  pointer: {
+    position: 'absolute',
+    left: spacing.md,
+    bottom: 1,
+    width: spacing.md,
+    height: spacing.md,
+    borderRadius: spacing.xxs,
+    transform: [{ rotate: '45deg' }],
+  },
   card: {
-    paddingVertical: 12,
-    marginTop: 10,
-    gap: 8,
-  },
-  title: {
-    ...typography.label,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-  },
-  body: {
-    gap: 8,
+    borderRadius: radii.lg,
+    padding: spacing.xs,
+    gap: spacing.xs,
+    overflow: 'hidden',
   },
   artifactRow: {
-    minHeight: 44,
-    borderRadius: 10,
-    paddingHorizontal: 10,
+    minHeight: 56,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: spacing.sm,
+  },
+  artifactCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
   },
   artifactTitle: {
-    minWidth: 0,
-    flex: 1,
-    fontSize: 13,
+    ...typography.ui,
     fontWeight: '600',
   },
-  skeletonRow: {
-    minHeight: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  skeletonThumb: {
-    width: 48,
-    height: 48,
-    borderRadius: 10,
-  },
-  skeletonText: {
-    flex: 1,
-    gap: 8,
-  },
-  skeletonLineWide: {
-    width: '68%',
-    height: 10,
-    borderRadius: 5,
-  },
-  skeletonLineNarrow: {
-    width: '38%',
-    height: 10,
-    borderRadius: 5,
+  artifactMeta: {
+    ...typography.caption,
   },
 });

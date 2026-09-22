@@ -13,11 +13,12 @@ vi.mock('../attachment-tile', () => ({
   ),
 }));
 vi.mock('../attachment-preview-dialog', () => ({
-  AttachmentPreviewDialog: ({ open }: { open: boolean }) => open ? <div role="dialog" /> : null,
+  AttachmentPreviewDialog: ({ open }: { open: boolean }) => open ? <dialog open /> : null,
 }));
 
 import { AttachmentRenderer } from '../attachment-renderer';
-import { TurnOutcomeResult } from '@/features/chat/messages/turn-outcome-result';
+import { AssistantResultTail } from '@/features/chat/messages/assistant-result-tail';
+import type { AssistantTurnViewModel } from '@/features/chat/messages/assistant-turn-view-model';
 import type { TurnOutcome } from '@xopcai/gateway-contract';
 
 describe('file preview entry points', () => {
@@ -50,10 +51,19 @@ describe('file preview entry points', () => {
         uri: file.uri, workspaceRelativePath: file.workspaceRelativePath,
       }],
     };
-    act(() => root.render(<TurnOutcomeResult outcome={outcome} conversationId="session-a" projectId="project-a" />));
+    const view: AssistantTurnViewModel = {
+      answerContent: [],
+      workLog: { items: [], active: false, status: 'completed', expandedByDefault: false, compact: false },
+      answer: { started: true, showStreamingCursor: false },
+      lifecycle: { state: 'completed' },
+      outcome,
+      deliveries: [],
+      sources: [],
+    };
+    act(() => root.render(<AssistantResultTail view={view} conversationId="session-a" projectId="project-a" />));
     act(() => container.querySelector<HTMLButtonElement>('button')?.click());
     expect(useWorkspacePreviewStore.getState()).toMatchObject({ path: 'output/report.md', conversationId: 'session-a', projectId: 'project-a' });
-    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(container.querySelector('dialog')).toBeNull();
   });
 
   it('uses the same workspace preview for generated message attachments', () => {
@@ -87,6 +97,6 @@ describe('file preview entry points', () => {
     act(() => root.render(<AttachmentRenderer attachments={[attachment]} layout={layout} conversationId={conversationId} />));
     act(() => container.querySelector<HTMLButtonElement>('button')?.click());
     expect(useWorkspacePreviewStore.getState().path).toBeNull();
-    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(container.querySelector('dialog')).not.toBeNull();
   });
 });

@@ -1,11 +1,9 @@
-import { useState } from 'react';
-
 import { AttachmentPreviewDialog } from '@/features/chat/attachments/attachment-preview-dialog';
 import { AttachmentTile } from '@/features/chat/attachments/attachment-tile';
+import { useAttachmentPreview } from '@/features/chat/attachments/use-attachment-preview';
 import type { MessageAttachment } from '@/features/chat/messages/messages.types';
 import { VoiceMessageBar } from '@/features/chat/composer/voice-message-bar';
 import { cn } from '@/lib/cn';
-import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
 function isAudioAttachment(att: MessageAttachment): boolean {
   return (
@@ -84,19 +82,12 @@ export function AttachmentRenderer({
   /** When text is empty (attachment-only bubble), center audio so horizontal padding reads even. */
   centerUserVoiceRow?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const [active, setActive] = useState<MessageAttachment | null>(null);
-
-  const setPreviewPath = useWorkspacePreviewStore((state) => state.setPath);
-  const openAttachment = (attachment: MessageAttachment) => {
-    const fileConversationId = workspaceConversationId ?? conversationId;
-    if (layout === 'assistant' && attachment.workspaceRelativePath?.trim() && (projectId?.trim() || fileConversationId?.trim())) {
-      setPreviewPath(attachment.workspaceRelativePath.trim(), null, projectId, fileConversationId);
-      return;
-    }
-    setActive(attachment);
-    setOpen(true);
-  };
+  const preview = useAttachmentPreview({
+    layout,
+    conversationId,
+    workspaceConversationId,
+    projectId,
+  });
 
   if (!attachments?.length) return null;
 
@@ -132,7 +123,7 @@ export function AttachmentRenderer({
                     conversationId={conversationId}
                     imageSize={grid.tileSize}
                     compact={layout === 'user'}
-                    onOpen={openAttachment}
+                    onOpen={preview.openAttachment}
                   />
                 ))}
                 {grid.overflowCount != null ? (
@@ -147,7 +138,7 @@ export function AttachmentRenderer({
                     imageSize="grid-cell"
                     compact={layout === 'user'}
                     overflowLabel={`+${grid.overflowCount}`}
-                    onOpen={openAttachment}
+                    onOpen={preview.openAttachment}
                   />
                 ) : null}
               </div>
@@ -187,7 +178,7 @@ export function AttachmentRenderer({
                 attachment={doc}
                 authToken={authToken}
                 conversationId={conversationId}
-                onOpen={openAttachment}
+                onOpen={preview.openAttachment}
               />
             ))}
           </div>
@@ -195,14 +186,11 @@ export function AttachmentRenderer({
       </div>
 
       <AttachmentPreviewDialog
-        open={open}
-        attachment={active}
+        open={preview.open}
+        attachment={preview.active}
         authToken={authToken}
         conversationId={conversationId}
-        onClose={() => {
-          setOpen(false);
-          setActive(null);
-        }}
+        onClose={preview.closePreview}
       />
     </>
   );

@@ -10,7 +10,7 @@ import { Icon, Text } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 
 import { AssistantStepsBlock } from './AssistantStepsBlock';
-import { AssistantDeliverablesCard } from './AssistantDeliverablesCard';
+import { AssistantResultTail } from './AssistantResultTail';
 import { AttachmentRenderer } from './AttachmentRenderer';
 import { AudioMessageBlock } from './AudioMessageBlock';
 import { CompactResourceList } from './CompactResourceList';
@@ -685,7 +685,7 @@ export const MessageBubble = memo(function MessageBubble({
           </View>
 
           {showAssistantDeliverables && assistantTurnView ? (
-            <AssistantDeliverablesCard
+            <AssistantResultTail
               deliverables={assistantTurnView.deliverables}
               conversationId={conversationId}
             />

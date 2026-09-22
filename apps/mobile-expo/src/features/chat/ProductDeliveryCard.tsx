@@ -4,11 +4,11 @@ import type {
 } from '@xopcai/gateway-contract';
 import { type Href, useRouter } from 'expo-router';
 import { memo } from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
 import { usePreferencesStore } from '../../stores/preferences-store';
-import { spacing, useTheme } from '../../theme';
+import { radii, spacing, typography, useTheme } from '../../theme';
 import { dispatchMobileComposerFill } from './mobile-composer-fill';
 import { mobileProductRoute } from './product-delivery';
 
@@ -53,10 +53,12 @@ export const ProductDeliveryCard = memo(function ProductDeliveryCard({
   delivery,
   conversationId,
   requestAction = (action) => action(),
+  embedded = false,
 }: {
   delivery: ProductDeliveryEnvelope;
   conversationId?: string | null;
   requestAction?: (action: () => void) => void;
+  embedded?: boolean;
 }) {
   const reference = delivery.primary;
   const router = useRouter();
@@ -90,15 +92,22 @@ export const ProductDeliveryCard = memo(function ProductDeliveryCard({
       style={({ pressed }) => [
         styles.row,
         {
-          backgroundColor: pressed ? colors.surface.pressed : colors.surface.input,
-          borderColor: colors.border.subtle,
+          backgroundColor: pressed
+            ? colors.surface.pressed
+            : embedded ? 'transparent' : colors.surface.input,
+          borderColor: embedded ? 'transparent' : colors.border.subtle,
         },
       ]}
     >
       <Icon source={KIND_ICONS[reference.kind]} size={18} color={colors.accent.primary} />
-      <Text style={[styles.title, { color: colors.text.primary }]} numberOfLines={1}>
-        {reference.title}
-      </Text>
+      <View style={styles.copy}>
+        <Text style={[styles.title, { color: colors.text.primary }]} numberOfLines={1}>
+          {reference.title}
+        </Text>
+        <Text style={[styles.meta, { color: colors.text.secondary }]} numberOfLines={1}>
+          {operation}
+        </Text>
+      </View>
       {action ? <Icon source="chevron-right" size={18} color={colors.text.tertiary} /> : null}
     </Pressable>
   );
@@ -106,18 +115,24 @@ export const ProductDeliveryCard = memo(function ProductDeliveryCard({
 
 const styles = StyleSheet.create({
   row: {
-    minHeight: 44,
+    minHeight: 56,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 10,
+    borderRadius: radii.md,
     paddingHorizontal: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
-  title: {
+  copy: {
     flex: 1,
     minWidth: 0,
-    fontSize: 13,
+    gap: 2,
+  },
+  title: {
+    ...typography.ui,
     fontWeight: '600',
+  },
+  meta: {
+    ...typography.caption,
   },
 });

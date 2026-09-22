@@ -273,4 +273,30 @@ describe('buildAssistantTurnViewModel', () => {
     expect(view.outcome?.deliverables).toHaveLength(1);
     expect(view.attachments).toEqual([]);
   });
+
+  it('keeps every structured product reference for the result tail', () => {
+    const delivery = {
+      version: 1,
+      operation: 'completed',
+      primary: {
+        kind: 'workflow_run',
+        id: 'run-1',
+        title: 'Publish report',
+        capabilities: ['open'],
+      },
+    };
+    const view = buildAssistantTurnViewModel({
+      message: assistantMessage([{
+        type: 'tool_use',
+        id: 'workflow-1',
+        name: 'workflow',
+        status: 'done',
+        details: { delivery },
+      }]),
+      isStreaming: false,
+      reasoningLevel: 'stream',
+    });
+
+    expect(view.deliveries).toEqual([{ key: 'workflow-1', delivery }]);
+  });
 });

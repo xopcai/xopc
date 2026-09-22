@@ -8,10 +8,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   closeXopcDatabase,
+  createDevice,
   createEndpointPrincipal,
+  finishEndpointToolInvocationAudit,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
   revokeEndpointPrincipal,
+  startEndpointToolInvocationAudit,
 } from '../../../../storage/sqlite/index.js';
 import type { AuthenticatedRouteDeps } from '../deps.js';
 import { registerEndpointToolRoutes } from '../endpoint-tools.js';
@@ -72,38 +75,123 @@ describe('endpoint tool principal routes', () => {
     });
   });
 
-  it('lists persisted principals with only their active endpoint snapshots', async () => {
-    const principal = createEndpointPrincipal({
-      id: crypto.randomUUID(),
-      displayName: 'Desktop',
-      kind: 'desktop',
-      platform: 'darwin',
+  it('aggregates access and tool identities and revokes both together', async () => {
+    const { publicKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+    const id = crypto.randomUUID();
+    createDevice({
+      id,
+      displayName: 'Phone access',
+      platform: 'android',
+      publicKeyJwk: publicKey.export({ format: 'jwk' }),
+      scopes: ['device.self'],
+    });
+    createEndpointPrincipal({
+      id,
+      displayName: 'Phone tools',
+      kind: 'mobile',
+      platform: 'android',
       publicKey: 'private-management-key',
     });
+    const endpointOnlyId = crypto.randomUUID();
+    createEndpointPrincipal({
+      id: endpointOnlyId,
+      displayName: 'Local browser',
+      kind: 'web',
+      platform: 'web',
+      publicKey: 'second-private-management-key',
+    });
     const endpoint = {
-      principalId: principal.id,
-      endpointId: `${principal.id}:desktop`,
+      principalId: id,
+      endpointId: `${id}:mobile`,
       connectionId: crypto.randomUUID(),
-      displayName: principal.displayName,
-      kind: principal.kind,
-      platform: principal.platform,
+      displayName: 'Phone tools',
+      kind: 'mobile' as const,
+      platform: 'android',
       appVersion: '1',
-      availability: 'foreground',
+      availability: 'foreground' as const,
       lastHeartbeatAt: Date.now(),
       tools: [],
     };
+    const disconnect = () => undefined;
     const app = new Hono();
     registerEndpointToolRoutes(app, {
-      service: { endpointTools: { registry: { list: () => [endpoint] } } },
+      service: {
+        realtime: { disconnectPrincipal: disconnect },
+        voiceRealtime: { disconnectPrincipal: disconnect },
+        endpointTools: { registry: { list: () => [endpoint] }, disconnect },
+      },
     } as unknown as AuthenticatedRouteDeps);
 
-    const response = await app.request('/api/endpoint-tools/principals');
-    expect(response.status).toBe(200);
-    const body = await response.text();
-    expect(JSON.parse(body)).toMatchObject({
-      payload: [{ id: principal.id, endpoints: [{ endpointId: endpoint.endpointId }] }],
+    const listed = await app.request('/api/endpoint-tools/devices');
+    expect(listed.status).toBe(200);
+    const listedText = await listed.text();
+    const listedBody = JSON.parse(listedText) as { payload: unknown[] };
+    expect(listedBody.payload).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id,
+        displayName: 'Phone tools',
+        access: expect.objectContaining({ scopes: ['device.self'] }),
+        principal: expect.objectContaining({ createdAt: expect.any(Number) }),
+        endpoints: expect.arrayContaining([
+          expect.objectContaining({ endpointId: endpoint.endpointId }),
+        ]),
+      }),
+    ]));
+    expect(listedText).not.toContain('private-management-key');
+
+    const revoked = await app.request('/api/endpoint-tools/devices/revoke', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: [id, endpointOnlyId] }),
     });
-    expect(body).not.toContain('private-management-key');
+    expect(revoked.status).toBe(200);
+    await expect(revoked.json()).resolves.toMatchObject({ payload: { results: [
+      { id, found: true, revoked: true },
+      { id: endpointOnlyId, found: true, revoked: true },
+    ] } });
+
+    const after = await app.request('/api/endpoint-tools/devices');
+    const afterBody = await after.json() as { payload: unknown[] };
+    expect(afterBody.payload).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id,
+        access: expect.objectContaining({ revokedAt: expect.any(Number) }),
+        principal: expect.objectContaining({ revokedAt: expect.any(Number) }),
+      }),
+      expect.objectContaining({
+        id: endpointOnlyId,
+        principal: expect.objectContaining({ revokedAt: expect.any(Number) }),
+      }),
+    ]));
+
+    expect((await app.request('/api/endpoint-tools/principals')).status).toBe(404);
+    expect((await app.request(`/api/endpoint-tools/principals/${id}`, { method: 'DELETE' })).status).toBe(404);
+  });
+
+  it('filters and paginates invocation audits', async () => {
+    for (const [index, status] of (['succeeded', 'failed'] as const).entries()) {
+      startEndpointToolInvocationAudit({
+        id: `invocation-${index}`,
+        principalId: `principal-${index}`,
+        endpointId: `endpoint-${index}`,
+        toolCallId: `call-${index}`,
+        toolName: index === 0 ? 'web.page.read' : 'mobile.notify',
+        effect: index === 0 ? 'read' : 'write',
+        confirmationRequired: false,
+        argumentsSha256: String(index).repeat(64),
+        startedAt: 100 + index,
+      });
+      finishEndpointToolInvocationAudit({ id: `invocation-${index}`, status });
+    }
+    const app = new Hono();
+    registerEndpointToolRoutes(app, { service: {} } as AuthenticatedRouteDeps);
+
+    const response = await app.request('/api/endpoint-tools/invocations?page=1&pageSize=1&status=failed');
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      payload: { page: 1, pageSize: 1, total: 1, totalPages: 1, items: [{ id: 'invocation-1' }] },
+    });
+    expect((await app.request('/api/endpoint-tools/invocations?page=0')).status).toBe(400);
   });
 
   it('creates and removes an explicit session endpoint binding', async () => {
