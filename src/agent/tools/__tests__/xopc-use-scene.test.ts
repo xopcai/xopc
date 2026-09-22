@@ -24,7 +24,8 @@ afterEach(async () => { await host.stop(); closeXopcDatabase(); resetXopcDatabas
 
 it('uses the same activation and revision rules for Agent calls and the Gateway', async () => {
   const tool = createXopcUseTool({ getSceneAccess: () => ({ principal, services: host.http }) });
-  const call = async (command: string, args: Record<string, unknown>, request = 'tool-call') => {
+  let requestSequence = 0;
+  const call = async (command: string, args: Record<string, unknown>, request = command === 'start' ? 'start' : `tool-call-${requestSequence++}`) => {
     const result = await tool.execute(request, { mode: 'scene', command, args });
     const text = (result.content[0] as { text: string }).text;
     return text.startsWith('Error:') ? { ok: false, error: text } : JSON.parse(text.split('\nOpen in xopc:')[0]);

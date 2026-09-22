@@ -3,7 +3,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 vi.mock('../../../providers/model-call.js', () => ({
   completeWithResolvedCredentials: vi.fn(async () => ({ role: 'assistant', content: [{ type: 'text',
-    text: JSON.stringify({ items: [{ kind: 'tool_outcome', text: 'Review completed', status: 'completed', sourceSeqs: [1], identifiers: ['PR #8569'] }] }) }] })),
+    text: JSON.stringify({ upserts: [{ kind: 'tool_outcome', text: 'Review completed', status: 'completed', sourceSeqs: [1], identifiers: ['PR #8569'] }] }) }] })),
 }));
 
 import { InMemoryTranscriptRuntime } from '../transcript-runtime.js';
@@ -87,7 +87,7 @@ describe('InMemoryTranscriptRuntime', () => {
     const manager = runtime.openSessionManager(process.cwd());
     vi.mocked(completeWithResolvedCredentials).mockImplementationOnce(async () => {
       manager.appendMessage({ role: 'user', content: 'Concurrent update', timestamp: 2 });
-      return { role: 'assistant', content: [{ type: 'text', text: JSON.stringify({ items: [
+      return { role: 'assistant', content: [{ type: 'text', text: JSON.stringify({ upserts: [
         { kind: 'current_state', text: 'Reviewing', status: 'active', sourceSeqs: [1], identifiers: [] },
       ] }) }] } as any;
     });
