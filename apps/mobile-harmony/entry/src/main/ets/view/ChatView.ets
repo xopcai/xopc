@@ -5,6 +5,7 @@ import { chatAnswerText, chatAttachments } from '../common/chatRichContent';
 import { extractMarkdownCodeBlocks } from '../common/chatDisplay';
 import { XopcChatMediaView } from './ChatMediaView';
 import { XopcChatDisclosure } from '../common/chatDisclosure';
+import { advanceChatAutoRead, latestChatAutoRead, XopcAutoReadState } from '../common/chatAutoRead';
 import { common } from '@kit.AbilityKit';
 import { voiceCapture, XopcVoiceCapture } from '../service/voiceCapture';
 import { appSettings } from '../service/settings';
@@ -20,7 +21,7 @@ import { XopcChatWelcome } from './ChatWelcome';
 import { layoutState, XopcLayoutState } from '../service/layoutState';
 import { XopcChatContext } from './ChatContext';
 import { XopcChatContextViewModel } from '../viewmodel/chatContextViewModel';
-import { validateAttachmentSize } from '../common/attachments';
+import { MAX_ATTACHMENTS, validateAttachmentSize } from '../common/attachments';
 import { copyChatMessage, saveChatMessage } from '../service/chatMessageActions';
 import { pickChatPhoto } from '../service/chatPhotoPicker';
 import { XopcChatPromptViewModel } from '../viewmodel/chatPromptViewModel';
@@ -53,6 +54,7 @@ export struct XopcChatView {
   @Local panelOpen: boolean = false;
   @Local sheetOpen: boolean = false;
   @Local sheetMode: string = 'actions';
+  @Local referenceKind: string = 'note';
   @Local draft: string = '';
   @Local showVoice: boolean = false;
   @Computed get expandedComposer(): boolean {
@@ -95,6 +97,25 @@ export struct XopcChatView {
   @Local olderFailed: boolean = false;
   private initialScrollPending: boolean = true;
   private olderGeneration: number = 0;
+  private autoReadState?: XopcAutoReadState;
+
+  @Monitor('chat.rows', 'chat.runId', 'chat.selectedId', 'chat.loading', 'activePage', 'reader.continuousConversationId', 'voice.state')
+  onAutoReadChange(): void {
+    if ((!this.activePage || this.voice.state !== 'idle') && this.reader.continuousConversationId) this.reader.disableContinuous();
+    const enabled = this.activePage && !this.disposed && !this.chat.loading && this.voice.state === 'idle'
+      && this.reader.continuousConversationId === this.chat.selectedId && !!this.chat.selectedId;
+    const next = advanceChatAutoRead(this.autoReadState, this.chat.selectedId, enabled, !!this.chat.runId,
+      latestChatAutoRead(this.chat.rows, this.chat.selectedId));
+    this.autoReadState = next.state;
+    const context = this.getUIContext().getHostContext();
+    if (next.candidate && context) this.reader.speak(context, next.candidate.text, 'auto-read-aloud:' + next.candidate.key, appSettings.effectiveLanguage());
+  }
+
+  private toggleContinuousRead(): void {
+    if (this.reader.continuousConversationId === this.chat.selectedId) this.reader.disableContinuous();
+    else { this.reader.continuousConversationId = this.chat.selectedId; this.onAutoReadChange(); }
+    this.sheetOpen = false;
+  }
   private appliedRequestRevision: number = -1;
 
   private applyPalette(item: XopcPaletteItem): void {
@@ -126,6 +147,7 @@ export struct XopcChatView {
     if (!this.chat.selectedId || scope === this.draftScope) return;
     clearTimeout(this.draftTimer); this.saveDraft();
     this.initialScrollPending = true; this.atBottom = true; this.palette.close();
+    if (this.reader.continuousConversationId !== this.chat.selectedId) this.reader.disableContinuous();
     this.olderGeneration++; this.loadingOlder = false; this.olderFailed = false; this.firstVisible = 0;
     const generation = ++this.draftGeneration;
     this.restoringDraft = true; this.draftScope = scope; this.draft = ''; this.refs = []; this.attachments = [];
@@ -139,7 +161,7 @@ export struct XopcChatView {
 
   @Monitor('chat.rows', 'chat.liveRow', 'chat.streaming', 'chat.thinking', 'chat.tool', 'chat.loading')
   onMessageChange(): void {
-    if (!this.visible || (!this.atBottom && !this.initialScrollPending) || this.loadingOlder || this.chat.loading) return;
+    if (!this.visible || (!this.atBottom && !this.initialScrollPending) || this.loadingOlder || (this.chat.loading && !this.chat.cachedHistory)) return;
     clearTimeout(this.scrollTimer);
     this.scrollTimer = setTimeout((): void => {
       if (this.visible && (this.atBottom || this.initialScrollPending) && !this.loadingOlder) {
@@ -272,7 +294,7 @@ export struct XopcChatView {
     this.olderGeneration++; this.loadingOlder = false; this.olderFailed = false; this.firstVisible = 0;
     this.chat.open(this.requestedId);
   }
-  aboutToDisappear(): void { this.attention.dispose(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.scrollTimer); clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setDrawer(false); this.setPanel(false); this.prompt.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voice.cancel(); this.reader.stop(); this.attachments = []; }
+  aboutToDisappear(): void { this.attention.dispose(); this.visible = false; this.disposed = true; clearTimeout(this.composerFocusTimer); clearTimeout(this.scrollTimer); clearTimeout(this.draftTimer); this.saveDraft(); this.draftGeneration++; this.palette.dispose(); this.setDrawer(false); this.setPanel(false); this.prompt.dispose(); this.context.dispose(); this.options.dispose(); this.chat.dispose(); this.voice.cancel(); this.reader.disableContinuous(); this.attachments = []; }
 
   private async attentionAction(action: XopcHomeAction): Promise<void> {
     if (action.type === 'open' || action.type === 'review_judgment') {
@@ -332,6 +354,7 @@ export struct XopcChatView {
     if (this.pickingAttachment || this.chat.sending) return;
     const id = this.chat.selectedId; const context = this.getUIContext().getHostContext();
     if (!id || !context) return;
+    this.setPanel(false);
     this.pickingAttachment = true;
     try {
       const file = kind === 'document' ? await pickChatAttachment(context, this.attachments) : await pickChatPhoto(context, this.attachments, kind === 'camera');
@@ -350,6 +373,17 @@ export struct XopcChatView {
       this.showVoice = false;
     }
   }
+
+  private async sendVoice(): Promise<void> {
+    const id = this.chat.selectedId;
+    const sent = await this.voice.send(async (attachment: XopcChatAttachment): Promise<boolean> => {
+      if (!this.visible || this.disposed || id !== this.chat.selectedId) return false;
+      return this.chat.send('', [attachment]);
+    });
+    if (sent && this.visible && id === this.chat.selectedId) this.showVoice = false;
+  }
+
+  private openReference(kind: string): void { this.referenceKind = kind; this.openSheet('references'); }
 
   private toggleVoice(): void {
     if (this.chat.sending || this.chat.runId || this.voice.busy || this.voice.state !== 'idle') return;
@@ -398,7 +432,7 @@ export struct XopcChatView {
         }.id('chat-send').width(COMPOSER_SEND_SIZE).height(COMPOSER_SEND_SIZE).padding(0)
           .backgroundColor($r('app.color.foreground'))
           .accessibilityText(this.chat.runId ? $r('app.string.chat_send_next') : $r('app.string.send'))
-          .enabled(!!this.chat.selectedId && !this.chat.loading && !this.pickingAttachment && this.voice.state === 'idle' && !this.voice.busy && !this.chat.sending && !this.options.saving && this.chat.connection === 'connected')
+          .enabled(!!this.chat.selectedId && !this.chat.loading && !this.chat.cachedHistory && !this.pickingAttachment && this.voice.state === 'idle' && !this.voice.busy && !this.chat.sending && !this.options.saving && this.chat.connection === 'connected')
           .onClick((): void => { this.send(); })
       }
       if (this.chat.runId) {
@@ -438,7 +472,7 @@ export struct XopcChatView {
 
   @Builder
   conversation() {
-    if (this.chat.loading) { this.skeleton() }
+    if (this.chat.loading && !this.chat.rows.length) { this.skeleton() }
     if (!this.chat.loading && !this.chat.rows.length && !this.chat.liveRow && !this.chat.runId) {
       XopcChatWelcome({ scope: this.context.summary, workspace: this.context.config?.effectiveWorkspacePath || '',
         agent: this.options.agents.find((agent: XopcChatAgent): boolean => agent.id === this.options.agentId), agentId: this.options.agentId || this.chat.agentId,
@@ -593,6 +627,13 @@ export struct XopcChatView {
     }
     if (this.voice.error) { Text(this.voice.error).fontColor($r('app.color.danger')).padding(8) }
     if (this.reader.error) { Text(this.reader.error).fontColor($r('app.color.danger')).padding(8) }
+    if (this.reader.continuousConversationId === this.chat.selectedId && this.chat.selectedId) {
+      Row({ space: 8 }) {
+        Text($r('app.string.chat_continuous_active')).fontSize(13).fontColor($r('app.color.secondary')).layoutWeight(1)
+        Button('×').width(44).height(44).backgroundColor(Color.Transparent).fontColor($r('app.color.secondary'))
+          .accessibilityText($r('app.string.chat_continuous_stop')).onClick((): void => { this.reader.disableContinuous(); })
+      }.id('chat-continuous-reading').padding({ left: 16, right: 16 }).width('100%')
+    }
     if (this.reader.state !== 'idle') {
       Row({ space: 8 }) {
         Text($r('app.string.chat_read_aloud')).fontSize(13).fontColor($r('app.color.secondary')).layoutWeight(1)
@@ -650,9 +691,15 @@ export struct XopcChatView {
                     .enabled(!this.voice.busy).onClick((): void => { this.voice.stop(); })
                 } else if (this.voice.state === 'ready') {
                   Button($r('app.string.play_recording')).layoutWeight(1).height(36).fontSize(12).padding(4)
+                    .backgroundColor($r('app.color.input')).fontColor($r('app.color.secondary'))
                     .enabled(!this.voice.busy).onClick((): void => { this.voice.play(); })
                   Button($r('app.string.transcribe')).layoutWeight(1).height(36).fontSize(12).padding(4)
+                    .backgroundColor($r('app.color.input')).fontColor($r('app.color.secondary'))
                     .enabled(!this.voice.busy).onClick((): void => { this.transcribe(); })
+                  Button($r('app.string.send')).id('chat-voice-send').layoutWeight(1).height(36).fontSize(12).padding(4)
+                    .backgroundColor($r('app.color.foreground')).fontColor($r('app.color.panel'))
+                    .enabled(!this.voice.busy && !this.chat.sending && !this.chat.loading && !this.chat.cachedHistory && this.chat.connection === 'connected')
+                    .onClick((): void => { this.sendVoice(); })
                 } else if (this.voice.state === 'playing') {
                   Button($r('app.string.stop')).layoutWeight(1).height(36).fontSize(13)
                     .enabled(!this.voice.busy).onClick((): void => { this.voice.stopPlayback(); })
@@ -686,26 +733,7 @@ export struct XopcChatView {
       }
     }.id('chat-composer-shell').width('calc(100% - 16vp)').backgroundColor($r('app.color.panel'))
       .border({ width: 0.5, color: $r('app.color.border_subtle'), radius: 14 }).clip(true).margin({ bottom: 8, top: 8 })
-    if (this.panelOpen) {
-      Column({ space: 8 }) {
-      Row({ space: 12 }) {
-        Button($r('app.string.chat_photos')).height(56).layoutWeight(1).fontColor($r('app.color.foreground')).backgroundColor($r('app.color.grouped'))
-          .enabled(!this.pickingAttachment).onClick((): void => { this.addAttachment('photos'); })
-        Button($r('app.string.chat_camera')).height(56).layoutWeight(1).fontColor($r('app.color.foreground')).backgroundColor($r('app.color.grouped'))
-          .enabled(!this.pickingAttachment).onClick((): void => { this.addAttachment('camera'); })
-      }.width('90%')
-      Row({ space: 12 }) {
-        Button($r('app.string.chat_local_files')).height(64).layoutWeight(1).fontSize(14).backgroundColor($r('app.color.grouped')).fontColor($r('app.color.foreground'))
-          .onClick((): void => { this.addAttachment(); })
-        Button($r('app.string.record_voice')).height(64).layoutWeight(1).fontSize(14).backgroundColor($r('app.color.grouped')).fontColor($r('app.color.foreground'))
-          .enabled(!this.chat.runId && !this.voice.busy && this.voice.state === 'idle')
-          .onClick((): void => { if (!this.showVoice) this.toggleVoice(); else this.setPanel(false); })
-        Button($r('app.string.new_chat')).height(64).layoutWeight(1).fontSize(14).backgroundColor($r('app.color.grouped')).fontColor($r('app.color.foreground'))
-          .onClick((): void => { this.newConversation(); })
-      }.width('100%').padding(16)
-      Button($r('app.string.chat_add_reference')).width('90%').height(44).onClick((): void => { this.openSheet('references'); })
-      }.padding({ bottom: 16 })
-    }
+    if (this.panelOpen) { this.actionPanel() }
     this.bottomDock()
     }.id('chat-bottom-region').width('calc(100% - 24vp)').backgroundColor($r('app.color.panel'))
       .border({ width: 0.5, color: $r('app.color.border_subtle'), radius: 20 }).clip(true)
@@ -714,6 +742,51 @@ export struct XopcChatView {
 
   @Builder
   emptyDock() {}
+
+  @Builder
+  actionTile(id: string, label: Resource, symbol: Resource, enabled: boolean) {
+    Button({ type: ButtonType.Normal }) {
+      Column({ space: 8 }) {
+        Row() {
+          SymbolGlyph(symbol).fontSize(26).fontColor([$r('app.color.foreground')])
+        }.width(52).height(52).justifyContent(FlexAlign.Center).alignItems(VerticalAlign.Center)
+          .borderRadius(16).backgroundColor($r('app.color.input'))
+        Text(label).fontSize(12).fontColor($r('app.color.secondary')).maxLines(2).textAlign(TextAlign.Center)
+      }.width('100%')
+    }.id('chat-action-' + id).width('33.33%').height(98).padding(4).backgroundColor(Color.Transparent)
+      .accessibilityText(label).enabled(enabled).onClick((): void => { this.chooseAction(id); })
+  }
+
+  private chooseAction(id: string): void {
+    if (!this.panelOpen || !this.visible || this.chat.sending || this.voice.busy || this.voice.state !== 'idle') return;
+    this.setPanel(false);
+    if (id === 'camera' || id === 'photos' || id === 'document') this.addAttachment(id);
+    else if (id.startsWith('reference-')) this.openReference(id.slice('reference-'.length));
+    else if (id === 'new-chat') this.newConversation();
+    else if (id === 'record-voice' && !this.showVoice) this.toggleVoice();
+  }
+
+  @Builder
+  actionPanel() {
+    Scroll() {
+      Column({ space: 4 }) {
+        Row() {
+          this.actionTile('camera', $r('app.string.chat_camera'), $r('sys.symbol.camera'), !this.pickingAttachment && !this.chat.runId && this.attachments.length < MAX_ATTACHMENTS)
+          this.actionTile('photos', $r('app.string.chat_photos'), $r('sys.symbol.picture'), !this.pickingAttachment && !this.chat.runId && this.attachments.length < MAX_ATTACHMENTS)
+          this.actionTile('document', $r('app.string.chat_local_files'), $r('sys.symbol.folder'), !this.pickingAttachment && !this.chat.runId && this.attachments.length < MAX_ATTACHMENTS)
+        }.width('100%')
+        Row() {
+          this.actionTile('reference-note', $r('app.string.chat_reference_note'), $r('sys.symbol.doc'), this.refs.length < 5)
+          this.actionTile('reference-task', $r('app.string.chat_reference_task'), $r('sys.symbol.checkmark_circle'), this.refs.length < 5)
+          this.actionTile('reference-file', $r('app.string.chat_reference_file'), $r('sys.symbol.folder'), this.attachments.length < MAX_ATTACHMENTS)
+        }.width('100%')
+        Row() {
+          this.actionTile('record-voice', $r('app.string.record_voice'), $r('sys.symbol.mic'), !this.chat.runId && !this.voice.busy && this.voice.state === 'idle')
+          this.actionTile('new-chat', $r('app.string.new_chat'), $r('sys.symbol.square_and_pencil'), !this.chat.sending)
+        }.width('100%')
+      }.width('100%').padding({ left: 8, right: 8, bottom: 12 })
+    }.id('chat-action-panel').width('100%').height(224).scrollBar(BarState.Auto)
+  }
 
   build() {
     Stack({ alignContent: Alignment.Start }) {
@@ -751,6 +824,10 @@ export struct XopcChatView {
             Button($r('app.string.refresh')).height(36).onClick((): void => { this.chat.reconnect(); })
           }
         }.width('100%').padding(8).alignItems(VerticalAlign.Center)
+      }
+      if (this.chat.cachedHistory) {
+        Text($r('app.string.chat_cached_history')).id('chat-cached-history').fontSize(12).fontColor($r('app.color.secondary'))
+          .padding({ left: 16, right: 16, bottom: 6 })
       }
       if (this.chat.error) {
         Row({ space: 8 }) {
@@ -799,12 +876,13 @@ export struct XopcChatView {
         }.width('100%').layoutWeight(1)
       }.id('chat-attention-sheet').width('100%').height('100%').padding(20)
     } else if (['context', 'project', 'environment', 'directory', 'references'].includes(this.sheetMode)) {
-      XopcChatContext({ model: this.context, initialMode: this.sheetMode, refs: this.refs,
+      XopcChatContext({ model: this.context, initialMode: this.sheetMode, initialReferenceKind: this.referenceKind, refs: this.refs,
         onScope: (projectId: string | null, mode?: string): void => { this.newConversation(this.options.agentId, projectId, mode); },
         onReference: (item: XopcReferenceItem): void => { this.addReference(item); },
         onClose: (): void => { this.sheetOpen = false; }, onRetry: (): void => { this.context.load(this.chat.selectedId); } })
     } else {
-    XopcChatOptions({ model: this.options, mode: this.sheetMode,
+    XopcChatOptions({ model: this.options, mode: this.sheetMode, continuousRead: this.reader.continuousConversationId === this.chat.selectedId,
+      onContinuousRead: (): void => { this.toggleContinuousRead(); },
       onMode: (mode: string): void => { this.sheetMode = mode; }, onClose: (): void => { this.sheetOpen = false; },
       onRetry: (): void => { this.options.load(this.chat.selectedId, this.chat.agentId); },
       onAgent: (id: string): void => { this.newConversation(id); }, onNewChat: (): void => { this.newConversation(); },

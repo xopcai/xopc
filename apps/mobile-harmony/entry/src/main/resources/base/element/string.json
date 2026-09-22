@@ -1,5 +1,9 @@
 {
   "string": [
+    { "name": "chat_continuous_start", "value": "Read new replies aloud" },
+    { "name": "chat_continuous_stop", "value": "Stop continuous reading" },
+    { "name": "chat_continuous_active", "value": "New replies will be read aloud" },
+    { "name": "chat_cached_history", "value": "Showing saved history. Reconnect to refresh." },
     { "name": "chat_copy_code", "value": "Copy code" },
     { "name": "chat_product_created", "value": "Created" },
     { "name": "chat_product_updated", "value": "Updated" },
@@ -602,6 +606,46 @@
     {
       "name": "tomorrow",
       "value": "Tomorrow"
+    },
+    {
+      "name": "chat_attachments_heading",
+      "value": "Attachments"
+    },
+    {
+      "name": "chat_more_attachments",
+      "value": "View %d more attachments"
+    },
+    {
+      "name": "chat_fewer_attachments",
+      "value": "Show fewer attachments"
+    },
+    {
+      "name": "chat_preview_file",
+      "value": "Preview %s"
+    },
+    {
+      "name": "chat_preview_unsupported",
+      "value": "Inline preview is not supported for this file type on mobile."
+    },
+    {
+      "name": "chat_preview_unsupported_text",
+      "value": "Inline preview is not supported for this file type. Extracted text is shown below."
+    },
+    {
+      "name": "chat_html_unavailable",
+      "value": "Could not load HTML preview."
+    },
+    {
+      "name": "chat_reference_note",
+      "value": "Reference note"
+    },
+    {
+      "name": "chat_reference_task",
+      "value": "Reference task"
+    },
+    {
+      "name": "chat_reference_file",
+      "value": "Reference file"
     },
     {
       "name": "dismiss",

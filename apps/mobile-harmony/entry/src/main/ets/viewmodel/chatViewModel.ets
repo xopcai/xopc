@@ -19,6 +19,7 @@ export class XopcChatViewModel {
   @Trace projectId: string = '';
   @Trace status: string = '';
   @Trace loading: boolean = false;
+  @Trace cachedHistory: boolean = false;
   @Trace sending: boolean = false;
   @Trace error: string = '';
   @Trace connection: string = 'connecting';
@@ -46,6 +47,7 @@ export class XopcChatViewModel {
   private disposed: boolean = false;
   private listRequest: number = 0;
   private recoveryRequest: number = 0;
+  private hasNetworkHistory: boolean = false;
 
   start(initialId: string = '', main: boolean = !initialId): void {
     this.main = main;
@@ -128,6 +130,7 @@ export class XopcChatViewModel {
     this.selection++; this.historyRequest++; this.olderPending = false;
     this.selectedId = id; this.rows = []; this.runId = ''; this.streaming = ''; this.thinking = ''; this.tool = '';
     this.liveRow = undefined; this.historyMessages = [];
+    this.cachedHistory = false; this.hasNetworkHistory = false;
     this.transcriptId = undefined; this.title = ''; this.agentId = ''; this.projectId = ''; this.status = ''; this.hasOlder = false;
     this.pendingId = ''; this.pendingContent = ''; this.before = ''; this.error = ''; this.loading = true;
     const selection = this.selection;
@@ -136,8 +139,21 @@ export class XopcChatViewModel {
         if (!this.disposed && selection === this.selection) this.error = 'CHAT_SELECTION_SAVE_FAILED';
       });
     }
+    this.restoreCachedHistory(id, selection);
     await this.recover();
     if (selection === this.selection) this.loading = false;
+  }
+
+  private async restoreCachedHistory(id: string, selection: number): Promise<void> {
+    try {
+      const page = await this.repository.cachedHistory(id);
+      if (!page || this.disposed || selection !== this.selection || this.hasNetworkHistory) return;
+      const rows = mergeAssistantRows(historyRows(page));
+      this.historyMessages = page.session.messages; this.rows = rows;
+      this.title = page.session.name || ''; this.transcriptId = page.session.transcriptId;
+      this.before = page.pagination.nextBeforeCursor || ''; this.hasOlder = page.pagination.hasMore && !!this.before;
+      this.cachedHistory = true;
+    } catch (_) { /* Cache is optional; network recovery remains authoritative. */ }
   }
 
   back(): void {
@@ -179,6 +195,9 @@ export class XopcChatViewModel {
       if (selection !== this.selection || request !== this.historyRequest) return;
       // Validate before touching retained pages or their cursor.
       historyRows(result, before || 'latest');
+      if (result.session.key !== this.selectedId) throw new Error('INVALID_HISTORY_SESSION');
+      if (!older) { this.hasNetworkHistory = true; this.cachedHistory = false; }
+      if (!older && !this.runId) this.repository.rememberHistory(this.selectedId, result).catch((_error: Error): void => {});
       const sameTranscript = !!this.transcriptId && this.transcriptId === result.session.transcriptId;
       const overlap = !older && sameTranscript ? chatHistoryOverlap(this.historyMessages, result.session.messages) : -1;
       const preserveCursor = !older && overlap >= 0;
@@ -208,7 +227,7 @@ export class XopcChatViewModel {
   }
 
   async send(content: string, attachments: XopcChatAttachment[] = [], delivery: string = 'next', refs: XopcContextRef[] = []): Promise<boolean> {
-    if (this.sending || !this.selectedId || (!content.trim() && !attachments.length && !refs.length) || this.connection !== 'connected') return false;
+    if (this.sending || this.cachedHistory || !this.selectedId || (!content.trim() && !attachments.length && !refs.length) || this.connection !== 'connected') return false;
     if (delivery !== 'next' && delivery !== 'steer') return false;
     this.sending = true; this.error = '';
     const selection = this.selection;

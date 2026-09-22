@@ -9,13 +9,13 @@ describe('chat media source isolation', () => {
   it('decodes image data without accessing the gateway', () => {
     expect(new Uint8Array(chatMediaSource('data:image/png;base64,YWJj', '').data!)).toEqual(new Uint8Array([97, 98, 99]));
   });
-  it.each(['text/plain', 'text/markdown', 'text/csv', 'application/json', 'application/pdf'])('allows bounded embedded document data: %s', mime => {
+  it.each(['text/plain', 'text/markdown', 'text/html', 'text/csv', 'application/json', 'application/pdf'])('allows bounded embedded document data: %s', mime => {
     expect(new Uint8Array(chatMediaSource(`data:${mime};base64,YWJj`, '').data!)).toEqual(new Uint8Array([97, 98, 99]));
   });
   it('never authenticates externally supplied URLs', () => {
     expect(chatMediaSource('https://example.com/p.png', 'c')).toEqual({ external: true, path: 'https://example.com/p.png' });
   });
-  it.each(['file:///etc/passwd', '/api/config', 'http://external.test/a', 'javascript:alert(1)', 'media://a', 'xopc-file:', 'data:text/html;base64,YQ==', 'data:image/png;base64,%%%'])('rejects unsafe or incomplete source %s', uri => {
+  it.each(['file:///etc/passwd', '/api/config', 'http://external.test/a', 'javascript:alert(1)', 'media://a', 'xopc-file:', 'data:image/png;base64,%%%'])('rejects unsafe or incomplete source %s', uri => {
     expect(() => chatMediaSource(uri, '')).toThrow();
   });
   it('rejects oversized embedded media before decoding', () => {

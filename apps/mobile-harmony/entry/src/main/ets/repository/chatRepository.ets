@@ -3,6 +3,7 @@ import { realtimeClient } from '../service/realtimeClient';
 import { XopcDeviceCrypto } from '../service/deviceCrypto';
 import { XopcPayload } from '../model/realtime';
 import { XopcSecureStore } from '../service/secureStore';
+import { chatHistoryCache } from '../service/chatHistoryCache';
 import {
   XopcSessionList, XopcSessionItem, XopcHistory, XopcCreatedSession, XopcCreateSession, XopcInput,
   XopcInputResult, XopcRun, XopcAbort, XopcRename, XopcChatAttachment,
@@ -12,6 +13,9 @@ import {
 export class XopcChatRepository {
   private crypto: XopcDeviceCrypto = new XopcDeviceCrypto();
   private store: XopcSecureStore = new XopcSecureStore();
+  private cachePage?: XopcHistory;
+  private cacheGatewayId: string = '';
+  private cacheRevision: number = -1;
   async mainConversation(): Promise<string> {
     const gatewayId = gatewaySession.currentProfile()?.gatewayId;
     return gatewayId ? await this.store.read('main-chat.' + gatewayId) ?? '' : '';
@@ -47,8 +51,23 @@ export class XopcChatRepository {
     return result.session.key;
   }
   async history(id: string, before: string = ''): Promise<XopcHistory> {
-    return JSON.parse(await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/history?limit=50'
+    const revision = chatHistoryCache.revision();
+    const gatewayId = gatewaySession.currentProfile()?.gatewayId || '';
+    const page = JSON.parse(await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/history?limit=50'
       + (before ? '&before=' + encodeURIComponent(before) : ''))) as XopcHistory;
+    if (!before) { this.cachePage = page; this.cacheGatewayId = gatewayId; this.cacheRevision = revision; }
+    return page;
+  }
+  async cachedHistory(id: string): Promise<XopcHistory | undefined> {
+    const revision = gatewaySession.connectionRevision();
+    const page = await chatHistoryCache.read(gatewaySession.currentProfile()?.gatewayId || '', id);
+    gatewaySession.assertConnection(revision);
+    return page;
+  }
+  async rememberHistory(id: string, page: XopcHistory): Promise<void> {
+    if (page !== this.cachePage || this.cacheRevision !== chatHistoryCache.revision()
+      || this.cacheGatewayId !== gatewaySession.currentProfile()?.gatewayId) return;
+    await chatHistoryCache.write(this.cacheGatewayId, id, page);
   }
   async activeRun(id: string): Promise<XopcRun> {
     const result = JSON.parse(await gatewaySession.request('/api/sessions/' + encodeURIComponent(id) + '/run')) as XopcPayload<XopcRun>;
@@ -113,7 +132,16 @@ export class XopcChatRepository {
   }
   async action(id: string, action: string): Promise<void> {
     if (!['pin', 'unpin', 'archive', 'unarchive', 'reset', 'delete'].includes(action)) throw new Error('INVALID_ACTION');
+    const gatewayId = gatewaySession.currentProfile()?.gatewayId || '';
+    const connection = gatewaySession.connectionRevision();
+    // Invalidate before mutation so an ambiguous response cannot resurrect a reset/deleted head.
+    if (gatewayId && (action === 'delete' || action === 'reset')) await chatHistoryCache.remove(gatewayId, id);
     const path = '/api/sessions/' + encodeURIComponent(id);
-    await gatewaySession.request(action === 'delete' ? path : path + '/' + action, action === 'delete' ? 'DELETE' : 'POST', '{}');
+    gatewaySession.assertConnection(connection);
+    try {
+      await gatewaySession.request(action === 'delete' ? path : path + '/' + action, action === 'delete' ? 'DELETE' : 'POST', '{}');
+    } finally {
+      if (gatewayId && (action === 'delete' || action === 'reset')) await chatHistoryCache.remove(gatewayId, id);
+    }
   }
 }

@@ -7,6 +7,7 @@ import { XopcHubRow, XopcListSkeleton } from './MobileComponents';
 export struct XopcChatContext {
   @Param model: XopcChatContextViewModel = new XopcChatContextViewModel();
   @Param initialMode: string = 'context';
+  @Param initialReferenceKind: string = 'note';
   @Param refs: XopcContextRef[] = [];
   @Event onScope: (project: string | null, mode?: string) => void = (_project: string | null, _mode?: string): void => {};
   @Event onReference: (item: XopcReferenceItem) => void = (_item: XopcReferenceItem): void => {};
@@ -17,7 +18,7 @@ export struct XopcChatContext {
   @Local search: string = '';
   @Local path: string = '';
   private searchTimer: number = -1;
-  aboutToAppear(): void { this.choose(this.initialMode); }
+  aboutToAppear(): void { this.kind = this.initialReferenceKind; this.choose(this.initialMode); }
   aboutToDisappear(): void { clearTimeout(this.searchTimer); }
   private choose(mode: string): void {
     this.mode = mode;
