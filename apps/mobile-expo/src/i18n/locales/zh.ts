@@ -1204,7 +1204,7 @@ export const zh: MessageBundle = {
     interval: '每 {{duration}} 毫秒',
     triggerKinds: { manual: '手动触发', webhook: 'Webhook 触发', event: '事件触发' },
     actionKinds: { agent: '智能体指令', workflow: '工作流', browser_automation: '浏览器自动化', task_command: '任务指令' },
-    afterRunKinds: { none: '仅保存运行记录', saveToSession: '保存到对话', webhook: '发送 Webhook' },
+    conversationModes: { new_session: '每次创建新对话', continuous: '继续同一对话' },
   },
 
   automationRunDetail: {

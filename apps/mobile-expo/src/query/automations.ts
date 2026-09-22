@@ -60,7 +60,7 @@ function scheduledAgentBody(input: ScheduledAgentAutomationInput) {
       schedule: { kind: 'cron' as const, expr: input.cronExpression },
     },
     action: { kind: 'agent' as const, instruction: input.instruction.trim() },
-    afterRun: { kind: 'saveToSession' as const },
+    conversationMode: 'new_session' as const,
   };
 }
 
