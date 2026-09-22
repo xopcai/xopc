@@ -11,15 +11,36 @@ export interface HandoverChunk {
   sourceThroughSeq: number;
 }
 
+export interface CompactionChunkCursorState {
+  index: number;
+  offset: number;
+}
+
 /** Consume source text in order, fitting each chunk against the current ledger. */
 export class CompactionChunkCursor {
-  private index = 0;
-  private offset = 0;
+  private index: number;
+  private offset: number;
 
-  constructor(private readonly sources: readonly CompactionSourceText[]) {}
+  constructor(
+    private readonly sources: readonly CompactionSourceText[],
+    state: CompactionChunkCursorState = { index: 0, offset: 0 },
+  ) {
+    const source = sources[state.index];
+    if (!Number.isInteger(state.index) || state.index < 0 || state.index > sources.length
+      || !Number.isInteger(state.offset) || state.offset < 0
+      || (state.index === sources.length ? state.offset !== 0 : state.offset > source!.text.length)) {
+      throw new Error('Invalid compaction chunk checkpoint');
+    }
+    this.index = state.index;
+    this.offset = state.offset;
+  }
 
   get done(): boolean {
     return this.index >= this.sources.length;
+  }
+
+  checkpoint(): CompactionChunkCursorState {
+    return { index: this.index, offset: this.offset };
   }
 
   next(maxTokens: number, fits: (text: string) => boolean): HandoverChunk {
