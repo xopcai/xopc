@@ -1,9 +1,10 @@
 import type {
   AfterToolCallContext,
+  AgentTurnContext,
   BeforeToolCallContext,
   BeforeToolCallResult,
-  ShouldStopAfterTurnContext,
 } from '@earendil-works/pi-agent-core';
+import type { JsonObject } from '@earendil-works/pi-ai';
 import { dataOperationCalls } from '../data-acquisition/schema.js';
 
 export interface AgentTurnPolicy {
@@ -13,7 +14,7 @@ export interface AgentTurnPolicy {
     signal?: AbortSignal,
   ): Promise<BeforeToolCallResult | undefined>;
   afterToolCall(context: AfterToolCallContext): Promise<undefined>;
-  shouldStopAfterTurn(context: ShouldStopAfterTurnContext): boolean;
+  shouldStopAfterTurn(context: AgentTurnContext): boolean;
 }
 
 export interface AgentTurnPolicyOptions {
@@ -46,7 +47,12 @@ export function createAgentTurnPolicy(options: AgentTurnPolicyOptions): AgentTur
       const contexts = context.toolCall.name === 'data_batch'
         ? [context, ...dataOperationCalls(context.args).map((call, index) => ({
             ...context, args: call.args,
-            toolCall: { ...context.toolCall, id: `${context.toolCall.id}:${index}`, name: call.name, arguments: call.args },
+            toolCall: {
+              ...context.toolCall,
+              id: `${context.toolCall.id}:${index}`,
+              name: call.name,
+              arguments: call.args as JsonObject,
+            },
           }))]
         : [context];
       for (const item of contexts) {

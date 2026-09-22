@@ -101,6 +101,7 @@ import { parseExternalToolRef } from './external-tools/refs.js';
 import { SkillFilesystemWatcher } from './skills/filesystem-watcher.js';
 import { resolveWorkspaceSkillsDir, resolveWorkspaceSkillsLockPath } from './skills/workspace-skills-dir.js';
 import { ProjectTrustStore, hasTrustRequiringProjectResources } from '../project-trust/trust-store.js';
+import { replaceAgentSystemPrompt } from './prompt/agent-system-prompt.js';
 import {
   createAgentTurnPolicy as buildAgentTurnPolicy,
   type AgentTurnPolicy,
@@ -676,17 +677,17 @@ export class AgentManager implements AgentInstanceGateway {
       ? sortToolsForPromptCache([...originalTools, ...newTools])
       : originalTools;
     inst.registeredToolNames = nextRegisteredToolNames;
-    inst.agent.state.systemPrompt = this.buildSystemPromptForInstance(
+    replaceAgentSystemPrompt(inst.agent, this.buildSystemPromptForInstance(
       inst,
       nextRegisteredToolNames,
       requested,
-    );
+    ));
     try {
       return await run();
     } finally {
       inst.agent.state.tools = originalTools;
       inst.registeredToolNames = originalRegisteredToolNames;
-      inst.agent.state.systemPrompt = originalSystemPrompt;
+      replaceAgentSystemPrompt(inst.agent, originalSystemPrompt);
     }
   }
 
@@ -1012,7 +1013,7 @@ export class AgentManager implements AgentInstanceGateway {
         thinkingLevel: this.config.thinkingLevel ?? 'medium',
         activeProjectContext: instance.activeProjectContext,
       });
-      instance.agent.state.systemPrompt = newPrompt;
+      replaceAgentSystemPrompt(instance.agent, newPrompt);
     }
     log.info({ agents: this.agents.size }, 'Skill toggles applied; system prompt updated');
     this.scheduleSkillsUpdated('config');
@@ -1020,14 +1021,14 @@ export class AgentManager implements AgentInstanceGateway {
 
   refreshActionTrustPolicy(): void {
     for (const instance of this.agents.values()) {
-      instance.agent.state.systemPrompt = this.buildSystemPromptForInstance(instance);
+      replaceAgentSystemPrompt(instance.agent, this.buildSystemPromptForInstance(instance));
     }
     log.info({ agents: this.agents.size }, 'Action trust policy applied to active agents');
   }
 
   refreshUserProfileContext(): void {
     for (const instance of this.agents.values()) {
-      instance.agent.state.systemPrompt = this.buildSystemPromptForInstance(instance);
+      replaceAgentSystemPrompt(instance.agent, this.buildSystemPromptForInstance(instance));
     }
     log.info({ agents: this.agents.size }, 'User profile applied to active agents');
   }
@@ -1119,7 +1120,7 @@ export class AgentManager implements AgentInstanceGateway {
         thinkingLevel: this.config.thinkingLevel ?? 'medium',
         activeProjectContext: instance.activeProjectContext,
       });
-      instance.agent.state.systemPrompt = newPrompt;
+      replaceAgentSystemPrompt(instance.agent, newPrompt);
     }
     log.info({ agents: this.agents.size }, 'Skills refreshed; system prompt updated');
   }
@@ -1269,7 +1270,7 @@ export class AgentManager implements AgentInstanceGateway {
 
     const activeProjectContext = this.buildExecutionScopeContext(conversationId);
 
-    instance.agent.state.systemPrompt = rt.systemPromptBuilder.build(contextFiles, {
+    replaceAgentSystemPrompt(instance.agent, rt.systemPromptBuilder.build(contextFiles, {
       externalMemoryInstructions: this.buildExternalMemoryInstructions(conversationId, rt),
       workspaceOverride: resolvedWorkspacePath,
       profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
@@ -1282,7 +1283,7 @@ export class AgentManager implements AgentInstanceGateway {
       thinkingLevel,
       extraSystemPrompt: trimmed,
       activeProjectContext,
-    });
+    }));
     instance.activeProjectContext = activeProjectContext;
   }
 
@@ -1442,7 +1443,7 @@ export class AgentManager implements AgentInstanceGateway {
       toolExecution: 'parallel',
       streamFn: createExtensionAwareStreamFn(),
       getApiKey: (provider: string) => this.resolveApiKeyWithCache(provider),
-      shouldStopAfterTurn: turnPolicy.shouldStopAfterTurn,
+      finishTurn: context => turnPolicy.shouldStopAfterTurn(context) ? { action: 'end' } : undefined,
       beforeToolCall: turnPolicy.beforeToolCall,
       afterToolCall: turnPolicy.afterToolCall,
     });
@@ -1609,7 +1610,7 @@ export class AgentManager implements AgentInstanceGateway {
       (instance.agent.state.thinkingLevel as ThinkingLevel | undefined) ??
       this.config.thinkingLevel ??
       'medium';
-    instance.agent.state.systemPrompt = rt.systemPromptBuilder.build(contextFiles, {
+    replaceAgentSystemPrompt(instance.agent, rt.systemPromptBuilder.build(contextFiles, {
       externalMemoryInstructions: this.buildExternalMemoryInstructions(instance.conversationId, rt),
       workspaceOverride: resolvedWorkspacePath,
       profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
@@ -1621,7 +1622,7 @@ export class AgentManager implements AgentInstanceGateway {
       agentId: instance.effectiveProfile.agentId,
       thinkingLevel,
       activeProjectContext: nextProjectContext,
-    });
+    }));
     instance.activeProjectContext = nextProjectContext;
     instance.interactionStateVersion = interactionStateVersion;
     instance.userContextAccessVersion = userContextAccessVersion;
@@ -1662,7 +1663,7 @@ export class AgentManager implements AgentInstanceGateway {
 
       const activeProjectContext = this.buildExecutionScopeContext(conversationId);
 
-      instance.agent.state.systemPrompt = rt.systemPromptBuilder.build(contextFiles, {
+      replaceAgentSystemPrompt(instance.agent, rt.systemPromptBuilder.build(contextFiles, {
         externalMemoryInstructions: this.buildExternalMemoryInstructions(conversationId, rt),
         workspaceOverride: resolvedWorkspacePath,
         profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
@@ -1674,7 +1675,7 @@ export class AgentManager implements AgentInstanceGateway {
         agentId: instance.effectiveProfile.agentId,
         thinkingLevel,
         activeProjectContext,
-      });
+      }));
       instance.activeProjectContext = activeProjectContext;
 
       log.info({ conversationId, modelId }, 'Model set for session');

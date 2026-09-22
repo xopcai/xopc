@@ -102,7 +102,7 @@ describe('domestic provider presets', () => {
     );
     expect(getRecommendedModelsForProvider('ant-ling').map((model) => model.ref)).toContain('ant-ling/Ling-2.6-1T');
     expect(getRecommendedModelsForProvider('zai-coding-cn').map((model) => model.ref)).toContain(
-      'zai-coding-cn/glm-5.2',
+      'zai-coding-cn/glm-5.3',
     );
     expect(getRecommendedModelsForProvider('zhipu-coding-cn').map((model) => model.ref)).toContain(
       'zhipu-coding-cn/glm-5.2',

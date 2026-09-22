@@ -1,4 +1,12 @@
-import type { Model, Api, Context, SimpleStreamOptions } from '@earendil-works/pi-ai';
+import {
+  getCurrentSystemPrompt,
+  getCurrentTools,
+  normalizeContext,
+  type Model,
+  type Api,
+  type SimpleStreamOptions,
+  type TranscriptContext,
+} from '@earendil-works/pi-ai';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 
 import { EXTENSION_PROVIDER_BASE_URL } from '../../providers/index.js';
@@ -24,14 +32,26 @@ export function wrapStreamFnForXopcExtensions(
 ): StreamFn {
   const extensionStreamFn = createExtensionAwareStreamFn();
 
-  return ((model: Model<Api>, context: Context, options?: SimpleStreamOptions) => {
+  return ((model: Model<Api>, context: TranscriptContext, options?: SimpleStreamOptions) => {
+    const promptContext = {
+      systemPrompt: getCurrentSystemPrompt(context.messages),
+      tools: getCurrentTools(context.messages),
+    };
+    const preparedContext = preparePromptCacheContext(model, promptContext);
+    const providerContext = preparedContext.systemPrompt === promptContext.systemPrompt
+      ? context
+      : normalizeContext({
+          systemPrompt: preparedContext.systemPrompt,
+          tools: promptContext.tools,
+          messages: context.messages.filter(message => message.role !== 'system'),
+        });
     if (model.baseUrl === EXTENSION_PROVIDER_BASE_URL) {
-      return extensionStreamFn(model, preparePromptCacheContext(model, context), options);
+      return extensionStreamFn(model, providerContext, options);
     }
     return originalStreamFn(
       model,
-      preparePromptCacheContext(model, context),
-      withPromptCachePayloadTransform(model, context, options, promptCachePolicy),
+      providerContext,
+      withPromptCachePayloadTransform(model, promptContext, options, promptCachePolicy),
     );
   }) as StreamFn;
 }

@@ -76,21 +76,6 @@ export type CollaborationRule = {
   updatedAt: number;
 };
 
-export type PersonalizationItem = {
-  objectType: 'profile' | 'rule' | 'focus' | 'understanding';
-  objectId: string;
-  versionId?: string;
-  decision: 'selected' | 'irrelevant' | 'expired' | 'scope_mismatch' | 'sensitive'
-    | 'needs_consent' | 'budget_exceeded' | 'conflicted' | 'disabled';
-  reason: string;
-  content: string;
-  sourceLabel: string;
-  origin: 'told_by_user' | 'observed' | 'inferred' | 'connected_source';
-  rank?: number;
-  score?: number;
-  injectedChars: number;
-};
-
 export type ContextEvidence = {
   id: string;
   sourceType: 'conversation' | 'connector' | 'user' | 'runtime';

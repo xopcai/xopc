@@ -202,7 +202,11 @@ export class ChatStreamMapper {
     }
     const delta = event.assistantMessageEvent as { type?: unknown; delta?: unknown } | undefined;
     if (delta?.type === 'text_delta' && typeof delta.delta === 'string' && delta.delta) {
-      events.push(this.make('assistant_delta', { messageId, delta: delta.delta }));
+      events.push(this.make('assistant_delta', {
+        messageId,
+        delta: delta.delta,
+        offset: this.currentAssistantText.length,
+      }));
       this.currentAssistantText += delta.delta;
     }
     if (delta?.type === 'thinking_delta' && typeof delta.delta === 'string' && delta.delta) {
@@ -212,7 +216,11 @@ export class ChatStreamMapper {
       const text = extractTextFromMessage(message);
       const suffix = appendSuffix(this.currentAssistantText, text);
       if (suffix) {
-        events.push(this.make('assistant_delta', { messageId, delta: suffix }));
+        events.push(this.make('assistant_delta', {
+          messageId,
+          delta: suffix,
+          offset: this.currentAssistantText.length,
+        }));
         this.currentAssistantText = text || `${this.currentAssistantText}${suffix}`;
       }
     }
@@ -231,8 +239,9 @@ export class ChatStreamMapper {
     const text = extractTextFromMessage(message);
     const suffix = appendSuffix(this.currentAssistantText, text);
     if (!suffix) return [];
+    const offset = this.currentAssistantText.length;
     this.currentAssistantText = text || `${this.currentAssistantText}${suffix}`;
-    return [this.make('assistant_delta', { messageId, delta: suffix })];
+    return [this.make('assistant_delta', { messageId, delta: suffix, offset })];
   }
 
   private mapMessageEnd(raw: unknown): ChatStreamEvent[] {
@@ -247,7 +256,13 @@ export class ChatStreamMapper {
     }
     const text = extractTextFromMessage(message);
     const suffix = appendSuffix(this.currentAssistantText, text);
-    if (suffix) events.push(this.make('assistant_delta', { messageId, delta: suffix }));
+    if (suffix) {
+      events.push(this.make('assistant_delta', {
+        messageId,
+        delta: suffix,
+        offset: this.currentAssistantText.length,
+      }));
+    }
     this.currentAssistantText = text || this.currentAssistantText;
     events.push(this.make('thinking_end', { messageId }));
     if (this.turnDiffs.length > 0) {

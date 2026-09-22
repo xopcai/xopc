@@ -61,7 +61,7 @@ Current values are resolved from lifecycle eligibility, valid-time containment, 
 
 ### Knowledge
 
-`knowledge_items` stores two explicitly separated record classes. `memory` contains distilled project/workspace facts, decisions, task lessons, commitments, open questions, episodes, and notes. `source_index` contains bounded connector records used for retrieval and provenance; it is never presented as work memory. Each item has scope, canonical key, lifecycle, confidence, importance, validity/expiry/review time, origin class, and source provenance.
+`knowledge_items` stores two explicitly separated record classes. `memory` contains global work threads, distilled project/workspace facts, decisions, task lessons, commitments, open questions, episodes, and notes. A work thread learned from an account-level connector is global work context, not a project fact or a durable user trait. `source_index` contains bounded connector records used for retrieval and provenance; it is never presented as work memory. Each item has scope, canonical key, lifecycle, confidence, importance, validity/expiry/review time, origin class, and source provenance.
 
 Canonical identity prevents duplicate current records. A connected source item that disappears is archived; if it returns, the same source-index id is reactivated and updated. Raw daily rollups are not created because they duplicate source records without adding semantic value.
 
@@ -69,13 +69,13 @@ Canonical identity prevents duplicate current records. A connected source item t
 
 `execution_context_runs` records the turn, session, query hash, time, selection budget, and metrics. `execution_context_items` records selected object ids, scores, and reasons. `execution_context_feedback` stores `helpful` or `irrelevant` feedback against that exact turn.
 
-`memory_maintenance_runs` and `memory_maintenance_decisions` record the algorithm version, configuration snapshot, result metrics, and every maintenance transition.
+`memory_maintenance_runs` and `memory_maintenance_decisions` record the algorithm version, configuration snapshot, result metrics, and every maintenance transition. `context_extraction_runs` and `context_extraction_outputs` link each connector semantic pass to the assertion or knowledge record it created, deduplicated, or rejected.
 
 ## Capture and reconciliation
 
 Direct UI/API writes are authoritative `user_explicit` candidates and use the same reconciliation transaction as background capture.
 
-Background review runs after eligible Agent turns at the configured interval. It receives bounded transcript history and emits typed assertion candidates with evidence, scope, time, authority, and sensitivity. Authorized connected sources use the same model: repeated owner-attributed preferences or routines can become assertion candidates; ongoing work becomes knowledge.
+Background review runs after eligible Agent turns at the configured interval. It receives bounded transcript history and emits typed assertion candidates with evidence, scope, time, authority, and sensitivity. Authorized connected sources analyze only source items added or changed by the current sync: repeated owner-attributed preferences or routines can become assertion candidates, while ongoing work becomes global work-thread knowledge. Evidence identity supplies the stable canonical key, so model wording changes update the existing thread.
 
 Reconciliation follows this order:
 

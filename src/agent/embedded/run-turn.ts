@@ -5,8 +5,13 @@ import {
   getClarification,
   isClarificationSuspended,
 } from '../../storage/sqlite/clarification-wait-repository.js';
-import type { Agent, AgentMessage } from '@earendil-works/pi-agent-core';
-import type { Model, Api } from '@earendil-works/pi-ai';
+import type { Agent, AgentMessage, AgentTurnDecision } from '@earendil-works/pi-agent-core';
+import {
+  getCurrentSystemPrompt,
+  getCurrentTools,
+  type Model,
+  type Api,
+} from '@earendil-works/pi-ai';
 
 import { createLogger } from '../../utils/logger.js';
 import { acquireEmbeddedRunLease, EmbeddedRunConflictError } from './runs.js';
@@ -147,6 +152,7 @@ async function maybeRecoverContextOverflow(params: {
   abortSignal?: AbortSignal;
   onEvent?: RunXopcEmbeddedTurnParams['onEvent'];
   policy: ResolvedCompactionPolicy;
+  systemPrompt: string;
 }): Promise<boolean> {
   const errorMessage = getAssistantTurnErrorMessage(params.agent);
   if (!errorMessage || !isContextOverflowError(errorMessage)) return false;
@@ -167,7 +173,7 @@ async function maybeRecoverContextOverflow(params: {
     policy: params.policy,
     budget: {
       contextWindow: params.model.contextWindow ?? 128_000,
-      systemPrompt: params.agent.state.systemPrompt,
+      systemPrompt: params.systemPrompt,
       tools: params.agent.state.tools,
       reserveTokens: params.policy.reserveTokens,
       triggerThreshold: params.policy.triggerThreshold,
@@ -273,11 +279,14 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
           { role: 'user' as const, content: loopGuard.injection, timestamp: Date.now() }] };
       }
 
+      let effectiveSystemPrompt = getCurrentSystemPrompt(effectiveContext.messages);
+      let effectiveTools = getCurrentTools(effectiveContext.messages);
+
       const projection = projectContextForModel({
         messages: effectiveContext.messages as AgentMessage[],
         contextWindow: streamModel.contextWindow ?? 128_000,
-        systemPrompt: effectiveContext.systemPrompt,
-        tools: effectiveContext.tools,
+        systemPrompt: effectiveSystemPrompt,
+        tools: effectiveTools,
         reserveTokens: compactionPolicy.reserveTokens,
         minToolResultKeepChars: compactionPolicy.minToolResultKeepChars,
         canCompact: false,
@@ -290,6 +299,8 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
           ...effectiveContext,
           messages: projection.messages as typeof effectiveContext.messages,
         };
+        effectiveSystemPrompt = getCurrentSystemPrompt(effectiveContext.messages);
+        effectiveTools = getCurrentTools(effectiveContext.messages);
         log.warn(
           {
             conversationId,
@@ -306,7 +317,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       const assessed = assessContext({
         messages: effectiveContext.messages as AgentMessage[],
         contextWindow: streamModel.contextWindow ?? 128_000,
-        systemPrompt: effectiveContext.systemPrompt, tools: effectiveContext.tools,
+        systemPrompt: effectiveSystemPrompt, tools: effectiveTools,
         reserveTokens: compactionPolicy.reserveTokens,
         minToolResultKeepChars: compactionPolicy.minToolResultKeepChars,
       }, compactionPolicy.maxActiveTranscriptBytes);
@@ -315,11 +326,13 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
           `Context budget exceeded before provider request (${assessed.evaluation.estimatedTokens}/${assessed.evaluation.hardLimitTokens} tokens)`);
       }
       effectiveContext = { ...effectiveContext, messages: assessed.messages as typeof effectiveContext.messages };
+      effectiveSystemPrompt = getCurrentSystemPrompt(effectiveContext.messages);
+      effectiveTools = getCurrentTools(effectiveContext.messages);
 
       const promptCacheSnapshot = buildPromptCacheSnapshot({
         model: streamModel,
-        systemPrompt: effectiveContext.systemPrompt,
-        tools: effectiveContext.tools,
+        systemPrompt: effectiveSystemPrompt,
+        tools: effectiveTools,
         reasoning: options?.reasoning,
       });
       const promptCacheChanges = observePromptCacheSnapshot(conversationId, promptCacheSnapshot);
@@ -330,10 +343,10 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
           runId,
           reusedRunner: reused,
           modelRef: `${streamModel.provider}/${streamModel.id}`,
-          systemPromptLength: effectiveContext.systemPrompt?.length ?? 0,
-          messageCount: effectiveContext.messages.length,
+          systemPromptLength: effectiveSystemPrompt.length,
+          messageCount: effectiveContext.messages.filter(message => message.role !== 'system').length,
           transcriptRepaired: hygienicMessages !== sourceMessages,
-          toolCount: effectiveContext.tools?.length ?? 0,
+          toolCount: effectiveTools.length,
           lastUserMessagePreview: getLastUserMessagePreview(effectiveContext.messages),
           loopWarningInjected: !!loopGuard.injection,
           promptCache: promptCacheSnapshot,
@@ -341,9 +354,9 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
           ...(process.env.XOPC_LOG_LLM_PAYLOAD === 'true'
             ? {
                 effectiveContext: {
-                  systemPrompt: effectiveContext.systemPrompt,
-                  messages: effectiveContext.messages,
-                  tools: effectiveContext.tools,
+                  systemPrompt: effectiveSystemPrompt,
+                  messages: effectiveContext.messages.filter(message => message.role !== 'system'),
+                  tools: effectiveTools,
                 },
               }
             : {}),
@@ -403,9 +416,14 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
       await params.turnPolicy?.afterToolCall({ ...context, ...checked });
       return checked;
     };
-    session.agent.shouldStopAfterTurn = (context) => {
+    const baseFinishTurn = session.agent.finishTurn;
+    session.agent.finishTurn = async (context, signal): Promise<AgentTurnDecision | undefined> => {
+      const baseDecision = await baseFinishTurn?.(context, signal);
+      if (baseDecision && baseDecision.action === 'end') return { action: 'end' };
       policyStopped ||= params.turnPolicy?.shouldStopAfterTurn(context) ?? false;
-      return policyStopped || connectionStopped || clarificationStopped;
+      if (policyStopped || connectionStopped || clarificationStopped) return { action: 'end' };
+      if (baseDecision && baseDecision.action === 'continue') return { action: 'continue' };
+      return undefined;
     };
 
     unsubscribe = subscribeEmbeddedSessionEvents(session, (event) => {
@@ -457,6 +475,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
             conversationId,
             transcriptRuntime,
             policy: compactionPolicy,
+            systemPrompt: [systemPrompt, rootInstructions].filter(Boolean).join('\n\n'),
             abortSignal: runAbortSignal,
             onEvent,
           });
@@ -507,6 +526,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
         lastAssistantText: lastAssistantPlainText(session),
       };
     } finally {
+      session.agent.finishTurn = baseFinishTurn;
       runAbortSignal.removeEventListener('abort', abortListener);
     }
   } catch (err) {
