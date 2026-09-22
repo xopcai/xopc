@@ -33,7 +33,7 @@ export async function submitSessionInput(
   const attachments = Array.isArray(body.attachments) ? body.attachments : undefined;
   const contextRefs = parseTurnContextRefs(body.contextRefs, MAX_TURN_CONTEXTS);
   if (contextRefs === null) {
-    return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: `contextRefs must contain at most ${MAX_TURN_CONTEXTS} valid note or task references` } }, 400);
+    return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: `contextRefs must contain at most ${MAX_TURN_CONTEXTS} valid source references` } }, 400);
   }
   const browserContexts = browserPageContextsInputSchema.safeParse(body.browserContexts ?? []);
   if (!browserContexts.success) {
@@ -127,7 +127,7 @@ export async function submitSessionInput(
     });
     if (result.ok === false) {
       return c.json(
-        { ok: false, error: { code: result.code, message: result.code === 'CONTEXT_UNAVAILABLE' ? 'A referenced Note changed or is no longer available. Select it again.' : 'Input was not accepted' } },
+        { ok: false, error: { code: result.code, message: result.code === 'CONTEXT_UNAVAILABLE' ? 'A referenced source changed or is no longer available. Select it again.' : 'Input was not accepted' } },
         result.code === 'SESSION_CHANGED' || result.code === 'QUEUE_FULL' || result.code === 'CONTEXT_UNAVAILABLE' ? 409 : 400,
       );
     }
@@ -151,7 +151,7 @@ export async function replaceLatestSessionTurn(
   const attachments = Array.isArray(body.attachments) ? body.attachments : undefined;
   const contextRefs = parseTurnContextRefs(body.contextRefs, MAX_TURN_CONTEXTS);
   if (contextRefs === null) {
-    return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: `contextRefs must contain at most ${MAX_TURN_CONTEXTS} valid note or task references` } }, 400);
+    return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: `contextRefs must contain at most ${MAX_TURN_CONTEXTS} valid source references` } }, 400);
   }
   const content = typeof body.content === 'string' ? body.content : '';
   const contentError = validateWebchatContent(content);
@@ -202,7 +202,7 @@ export async function replaceLatestSessionTurn(
         : result.code === 'TARGET_NOT_FOUND'
           ? 'User turn was not found'
           : result.code === 'CONTEXT_UNAVAILABLE'
-            ? 'A referenced Note changed or is no longer available. Select it again.'
+            ? 'A referenced source changed or is no longer available. Select it again.'
             : 'Replacement input was not accepted';
       return c.json({ ok: false, error: { code: result.code, message } }, status);
     }

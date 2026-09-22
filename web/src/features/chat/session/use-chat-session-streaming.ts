@@ -352,6 +352,7 @@ export function useChatSessionStreaming(deps: {
             sourceId: ref.sourceId,
             version: ref.expectedVersion,
             title: ref.title,
+            fileKind: ref.fileKind,
           })),
           timestamp: Date.now(),
         },
@@ -531,7 +532,7 @@ export function useChatSessionStreaming(deps: {
 
       const text = extractUserMessagePlainText(msg.content);
       const wireAtt = messageAttachmentsToWire(msg.attachments);
-      if (!text.trim() && !wireAtt?.length) return;
+      if (!text.trim() && !wireAtt?.length && !msg.contextRefs?.length) return;
 
       if (!msg.turnId) return;
       const contextRefs = msg.contextRefs?.map((ref) => ({
@@ -539,6 +540,7 @@ export function useChatSessionStreaming(deps: {
         sourceId: ref.sourceId,
         expectedVersion: ref.version,
         title: ref.title,
+        fileKind: ref.fileKind,
       }));
       void sendMessageRef.current(text, wireAtt, undefined, contextRefs, msg.turnId).catch(() => {
         void loadSessionById(key, 0);

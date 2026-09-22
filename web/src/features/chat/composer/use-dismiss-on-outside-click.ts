@@ -10,11 +10,8 @@ export interface UseDismissOnOutsideClickOptions {
 }
 
 /**
- * Captures `pointerdown` on the document while `active`. Calls `onDismiss` when the click
+ * Captures `pointerdown` on the window while `active`. Calls `onDismiss` when the click
  * lands outside every anchor and is not inside an element matching `ignoreSelector`.
- *
- * Mirrors the pattern in `chat-composer.tsx` for closing the slash palette without losing
- * focus on the editor itself.
  */
 export function useDismissOnOutsideClick({
   active,
@@ -36,7 +33,7 @@ export function useDismissOnOutsideClick({
       }
       onDismiss();
     };
-    document.addEventListener('pointerdown', onPointerDown, true);
-    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+    window.addEventListener('pointerdown', onPointerDown, true);
+    return () => window.removeEventListener('pointerdown', onPointerDown, true);
   }, [active, anchors, ignoreSelector, onDismiss]);
 }

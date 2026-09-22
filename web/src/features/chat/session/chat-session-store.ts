@@ -174,11 +174,23 @@ function messagesEqualForRender(left: Message, right: Message): boolean {
   return JSON.stringify({ ...left, renderKey: undefined }) === JSON.stringify({ ...right, renderKey: undefined });
 }
 
+function preserveLocalUserDisplayPayload(existing: Message, incoming: Message): Message {
+  if (existing.turnId && incoming.turnId && existing.turnId !== incoming.turnId) return incoming;
+  if (!userMessagesEquivalent(existing, incoming)) return incoming;
+  const attachments = incoming.attachments?.length ? incoming.attachments : existing.attachments;
+  const contextRefs = incoming.contextRefs?.length ? incoming.contextRefs : existing.contextRefs;
+  if (attachments === incoming.attachments && contextRefs === incoming.contextRefs) return incoming;
+  return { ...incoming, attachments, contextRefs };
+}
+
 /** Keep row identities stable when a background history refresh returns unchanged data. */
 function reconcileMessages(current: Message[], incoming: Message[]): Message[] {
   let changed = current.length !== incoming.length;
-  const next = incoming.map((message, index) => {
+  const next = incoming.map((incomingMessage, index) => {
     const existing = current[index];
+    const message = existing && isUiUserMessage(existing.role) && isUiUserMessage(incomingMessage.role)
+      ? preserveLocalUserDisplayPayload(existing, incomingMessage)
+      : incomingMessage;
     if (existing && messagesEqualForRender(existing, message)) {
       return existing;
     }

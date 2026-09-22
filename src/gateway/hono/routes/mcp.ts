@@ -1,6 +1,7 @@
 import type { Hono } from 'hono';
 
 import {
+  listBundleMcpResourcesForGateway,
   listBundleMcpServerCapabilitiesForGateway,
   listBundleMcpServerToolsForGateway,
 } from '../../../agent/mcp/bundle-mcp-gateway.js';
@@ -41,6 +42,25 @@ export function registerMcpRoutes(authenticated: Hono, deps: AuthenticatedRouteD
         configured,
       },
     });
+  });
+
+  authenticated.get('/api/mcp/resources', async (c) => {
+    const cfg = deps.service.currentConfig;
+    const workspaceDir = getWorkspacePath(cfg) || './workspace';
+    const query = (c.req.query('q') ?? '').trim().toLocaleLowerCase();
+    const serverId = (c.req.query('serverId') ?? '').trim();
+    try {
+      const resources = await listBundleMcpResourcesForGateway({ workspaceDir, cfg });
+      const items = resources.filter((resource) => {
+        if (serverId && resource.serverId !== serverId) return false;
+        if (!query) return true;
+        return [resource.name, resource.title, resource.description, resource.uri, resource.serverId]
+          .some((value) => value?.toLocaleLowerCase().includes(query));
+      }).slice(0, 20);
+      return c.json({ ok: true, payload: { resources: items } });
+    } catch (err) {
+      return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 500);
+    }
   });
 
   authenticated.get('/api/mcp/servers/:id/oauth', async (c) => {

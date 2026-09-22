@@ -110,10 +110,11 @@ export type MessageAttachment = {
 export type Attachment = MessageAttachment;
 
 export interface MessageContextRef {
-  kind: 'note';
+  kind: 'note' | 'file' | 'session' | 'browser_tab' | 'mcp_resource';
   sourceId: string;
   version: string;
   title: string;
+  fileKind?: 'file' | 'directory';
   tokenEstimate?: number;
   truncated?: boolean;
 }

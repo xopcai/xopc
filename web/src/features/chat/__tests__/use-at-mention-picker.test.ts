@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
-import { detectAtRange } from '@/features/chat/palette/use-at-mention-picker';
-import { noteContextRefFromAtMentionItem } from '@/features/chat/composer/use-composer-pickers';
+import { detectAtRange, escapeAtQuery } from '@/features/chat/palette/use-at-mention-picker';
+import { contextRefFromAtMentionItem } from '@/features/chat/composer/use-composer-pickers';
 
 describe('detectAtRange', () => {
   it('returns range and query after @', () => {
@@ -18,26 +18,25 @@ describe('detectAtRange', () => {
     expect(detectAtRange(atDomain, atDomain.length)).toBeNull();
   });
 
-  it('returns null inside @file: wire token', () => {
-    const text = 'see @file:src/foo.ts please';
-    const cursor = text.indexOf('please');
-    expect(detectAtRange(text, cursor)).toBeNull();
-  });
-
-  it('returns null inside @doc: wire token', () => {
-    const text = 'read @doc:README.md thanks';
-    const cursor = text.indexOf('thanks');
-    expect(detectAtRange(text, cursor)).toBeNull();
-  });
-
   it('returns null when no @ before caret', () => {
     expect(detectAtRange('plain', 5)).toBeNull();
   });
+
+  it('keeps directory browsing active when a path contains spaces', () => {
+    const text = 'see @My\\ Folder/';
+    expect(detectAtRange(text, text.length)).toEqual({
+      start: 4,
+      end: text.length,
+      query: 'My Folder/',
+    });
+    expect(escapeAtQuery('My Folder/nested')).toBe('My\\ Folder/nested');
+  });
 });
 
-describe('Note @ mention context', () => {
+describe('@ mention context references', () => {
   it('maps a Note item to a frozen composer context reference', () => {
-    expect(noteContextRefFromAtMentionItem({
+    expect(contextRefFromAtMentionItem({
+      id: 'note:note-1',
       kind: 'note',
       name: 'Launch plan',
       description: 'Plan snapshot',
@@ -50,12 +49,68 @@ describe('Note @ mention context', () => {
     });
   });
 
-  it('does not treat files as Note context', () => {
-    expect(noteContextRefFromAtMentionItem({
+  it('maps a file item to a frozen composer context reference', () => {
+    expect(contextRefFromAtMentionItem({
+      id: 'file:file-1',
       kind: 'file',
       name: 'README.md',
+      description: 'README.md',
       relativePath: 'README.md',
       isDirectory: false,
+      fileRef: { sourceId: 'file-1', expectedVersion: '7' },
+    })).toEqual({
+      kind: 'file',
+      sourceId: 'file-1',
+      expectedVersion: '7',
+      title: 'README.md',
+      fileKind: 'file',
+    });
+  });
+
+  it('turns a selected directory into a frozen context reference', () => {
+    expect(contextRefFromAtMentionItem({
+      id: 'file:dir-1',
+      kind: 'file',
+      name: 'src',
+      description: 'src',
+      relativePath: 'src',
+      isDirectory: true,
+      fileRef: { sourceId: 'dir-1', expectedVersion: '7' },
+    })).toEqual({
+      kind: 'file',
+      sourceId: 'dir-1',
+      expectedVersion: '7',
+      title: 'src',
+      fileKind: 'directory',
+    });
+  });
+
+  it('keeps the synthetic browse-up row as navigation only', () => {
+    expect(contextRefFromAtMentionItem({
+      id: 'browse-up:src',
+      kind: 'file',
+      name: '..',
+      description: '/',
+      relativePath: '',
+      isDirectory: true,
+      isBrowseUp: true,
     })).toBeNull();
+  });
+
+  it('maps browser tabs and MCP resources without serializing magic text tokens', () => {
+    expect(contextRefFromAtMentionItem({
+      id: 'browser-tab:binding-1', kind: 'browser_tab', name: 'Example',
+      description: 'https://example.com', url: 'https://example.com',
+      tabRef: { sourceId: 'binding-1', expectedVersion: 'doc-1' },
+    })).toEqual({
+      kind: 'browser_tab', sourceId: 'binding-1', expectedVersion: 'doc-1', title: 'Example',
+    });
+    expect(contextRefFromAtMentionItem({
+      id: 'mcp-resource:resource-1', kind: 'mcp_resource', name: 'Launch brief',
+      description: 'docs', serverId: 'docs', uri: 'file:///launch.md',
+      resourceRef: { sourceId: 'resource-1', expectedVersion: 'rev-1' },
+    })).toEqual({
+      kind: 'mcp_resource', sourceId: 'resource-1', expectedVersion: 'rev-1', title: 'Launch brief',
+    });
   });
 });

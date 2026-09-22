@@ -25,13 +25,14 @@ function harvestDraft(opts: {
   }
 
   const text = opts.getTextValue();
-  if (!text.trim() && opts.getAttachmentCount() === 0) return null;
+  const contextRefs = opts.getContextRefs();
+  if (!text.trim() && opts.getAttachmentCount() === 0 && contextRefs.length === 0) return null;
 
   const wirePayload = opts.wireAttachmentsPayload();
   return structuredClone({
     text,
     attachments: wirePayload,
-    contextRefs: opts.getContextRefs(),
+    contextRefs,
   });
 }
 

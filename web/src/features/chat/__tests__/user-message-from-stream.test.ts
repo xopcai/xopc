@@ -71,6 +71,23 @@ describe('userMessageFromStreamPayload', () => {
     }]);
   });
 
+  it('preserves directory identity in a realtime user message', () => {
+    const msg = userMessageFromStreamPayload({
+      content: 'review it',
+      metadata: {
+        sourceContexts: [{
+          kind: 'file', sourceId: 'folder-1', version: '7', title: 'mobile-expo',
+          fileKind: 'directory',
+        }],
+      },
+    });
+
+    expect(msg?.contextRefs).toEqual([{
+      kind: 'file', sourceId: 'folder-1', version: '7', title: 'mobile-expo',
+      fileKind: 'directory',
+    }]);
+  });
+
   it('parses user_transcript text shortcut', () => {
     const msg = userMessageFromStreamPayload({ text: 'voice line', timestamp: 9 });
     expect(msg?.content[0]).toEqual({ type: 'text', text: 'voice line' });

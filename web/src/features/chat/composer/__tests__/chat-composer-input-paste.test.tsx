@@ -46,6 +46,7 @@ describe('ChatComposerInput paste handling', () => {
         editingFollowUpId: null,
         onCancelEditFollowUp: vi.fn(),
         attachmentsLen: 0,
+        contextRefsLen: 0,
         isComposing: false,
         valueRef,
         adjustHeight: vi.fn(),

@@ -167,8 +167,15 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/browser/test')?.id).toBe('browser');
     expect(findAuthenticatedLazyRouteBundle('/api/browser/extension/install')?.id).toBe('browser');
     expect(findAuthenticatedLazyRouteBundle('/api/browser/extension/archive')?.id).toBe('browser');
+    expect(findAuthenticatedLazyRouteBundle('/api/browser/tabs')?.id).toBe('browser');
     expect(findAuthenticatedLazyRouteBundle('/api/browser/tab-bindings/session-1')?.id).toBe('browser');
     expect(findAuthenticatedLazyRouteBundle('/api/browserish/tab-bindings/session-1')).toBeUndefined();
+  });
+
+  it('routes MCP resources through the MCP bundle without capturing nearby paths', () => {
+    expect(findAuthenticatedLazyRouteBundle('/api/mcp/resources')?.id).toBe('mcp');
+    expect(findAuthenticatedLazyRouteBundle('/api/mcp/servers/docs')?.id).toBe('mcp');
+    expect(findAuthenticatedLazyRouteBundle('/api/mcpish/resources')).toBeUndefined();
   });
 
   it('routes image generation APIs to models, not agents', () => {

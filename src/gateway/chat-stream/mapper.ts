@@ -493,7 +493,8 @@ function userMessageDisplayMetadata(value: unknown): unknown {
   const sourceContexts = rows.flatMap((value) => {
     const row = asRecord(value);
     if (
-      (row?.kind !== 'note' && row?.kind !== 'task')
+      (row?.kind !== 'note' && row?.kind !== 'task' && row?.kind !== 'file'
+        && row?.kind !== 'session' && row?.kind !== 'browser_tab' && row?.kind !== 'mcp_resource')
       || typeof row.sourceId !== 'string'
       || typeof row.version !== 'string'
       || typeof row.title !== 'string'
@@ -505,6 +506,9 @@ function userMessageDisplayMetadata(value: unknown): unknown {
       title: row.title,
       ...(typeof row.tokenEstimate === 'number' ? { tokenEstimate: row.tokenEstimate } : {}),
       ...(row.truncated === true ? { truncated: true } : {}),
+      ...(row.kind === 'file' && (row.fileKind === 'file' || row.fileKind === 'directory')
+        ? { fileKind: row.fileKind }
+        : {}),
     }];
   });
   return sourceContexts.length > 0 ? { sourceContexts } : undefined;

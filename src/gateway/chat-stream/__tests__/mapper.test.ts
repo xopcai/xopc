@@ -125,6 +125,34 @@ describe('ChatStreamMapper', () => {
     expect(JSON.stringify(event)).not.toContain('private Note contents');
   });
 
+  it('preserves a directory summary in the realtime user message', () => {
+    const m = mapper();
+    const [event] = m.map({
+      type: 'user_message',
+      content: [{ type: 'text', text: 'review it' }],
+      metadata: {
+        sourceContexts: [{
+          kind: 'file', sourceId: 'folder-1', version: '7', title: 'mobile-expo',
+          fileKind: 'directory', text: 'private directory listing',
+        }],
+      },
+    });
+
+    expect(event).toMatchObject({
+      payload: {
+        message: {
+          metadata: {
+            sourceContexts: [{
+              kind: 'file', sourceId: 'folder-1', version: '7', title: 'mobile-expo',
+              fileKind: 'directory',
+            }],
+          },
+        },
+      },
+    });
+    expect(JSON.stringify(event)).not.toContain('private directory listing');
+  });
+
   it('adds ambient-safe feedback to progress without inferring from its private message', () => {
     const m = mapper();
     const [progress] = m.map({

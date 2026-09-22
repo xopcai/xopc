@@ -19,7 +19,7 @@ export interface ClientHistoryMessage {
   /** Whitelisted display metadata; never includes source snapshot text. */
   metadata?: {
     sourceContexts?: Array<{
-      kind: 'note' | 'task' | 'browser_page';
+      kind: 'note' | 'task' | 'file' | 'session' | 'browser_tab' | 'browser_page' | 'mcp_resource';
       sourceId: string;
       version: string;
       title: string;
@@ -28,6 +28,7 @@ export interface ClientHistoryMessage {
       url?: string;
       capturedAt?: number;
       documentId?: string;
+      fileKind?: 'file' | 'directory';
     }>;
     turnOutcome?: TurnOutcome;
   };
@@ -71,7 +72,9 @@ function sourceContextDisplayMetadata(metadata: unknown): ClientHistoryMessage['
     if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
     const row = value as Record<string, unknown>;
     if (
-      (row.kind !== 'note' && row.kind !== 'task' && row.kind !== 'browser_page')
+      (row.kind !== 'note' && row.kind !== 'task' && row.kind !== 'file'
+        && row.kind !== 'session' && row.kind !== 'browser_tab'
+        && row.kind !== 'browser_page' && row.kind !== 'mcp_resource')
       || typeof row.sourceId !== 'string'
       || typeof row.version !== 'string'
       || typeof row.title !== 'string'
@@ -86,6 +89,9 @@ function sourceContextDisplayMetadata(metadata: unknown): ClientHistoryMessage['
       ...(typeof row.url === 'string' ? { url: row.url } : {}),
       ...(typeof row.capturedAt === 'number' ? { capturedAt: row.capturedAt } : {}),
       ...(typeof row.documentId === 'string' ? { documentId: row.documentId } : {}),
+      ...(row.kind === 'file' && (row.fileKind === 'file' || row.fileKind === 'directory')
+        ? { fileKind: row.fileKind }
+        : {}),
     }];
   });
   return sourceContexts.length ? { sourceContexts } : undefined;
