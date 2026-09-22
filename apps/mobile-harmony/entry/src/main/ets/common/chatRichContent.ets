@@ -243,6 +243,35 @@ export function chatToolDisplayKind(name: string): string {
   return 'other';
 }
 
+interface XopcSemanticToolInput {
+  mode?: string; command?: string; name?: string; title?: string; id?: string;
+  noteId?: string; taskId?: string; projectId?: string; automationId?: string;
+}
+
+export function chatToolSemanticKind(call: XopcChatTool): string {
+  const key = chatToolKey(call.name).toLowerCase().replace(/-/g, '_');
+  if (key === 'skill_view') return 'skill_view';
+  if (key === 'tool_manual') return 'tool_manual';
+  if (key !== 'xopc_use') return '';
+  let raw = call.input;
+  if (typeof raw === 'string') { try { raw = JSON.parse(raw) as Object; } catch (_) { return 'manage_work'; } }
+  const input = raw as XopcSemanticToolInput | undefined;
+  const mode = input?.mode?.trim().toLowerCase() || 'work';
+  const command = input?.command?.trim().toLowerCase() || '';
+  const inspect = ['list', 'get', 'get_card', 'history', 'list_milestones', 'list_updates', 'mail_sources', 'preview_edit', 'resolve_workspace'].includes(command);
+  const object = mode === 'note' ? 'notes' : mode === 'task' || mode === 'task_run' ? 'tasks'
+    : mode === 'project' ? 'projects' : mode === 'automation' ? 'automations' : 'work';
+  return (inspect ? 'inspect_' : 'manage_') + object;
+}
+
+export function chatToolReadGroupKey(call: XopcChatTool): string {
+  if (chatToolFailed(call) || call.status === 'running') return '';
+  const semantic = chatToolSemanticKind(call);
+  if (semantic === 'skill_view' || semantic === 'tool_manual' || semantic.startsWith('inspect_')) return semantic;
+  const kind = chatToolDisplayKind(call.name);
+  return kind === 'read' || kind === 'search' || kind === 'fetch' ? kind : '';
+}
+
 export function chatToolFailed(call: XopcChatTool): boolean {
   return !!call.isError || call.status === 'error';
 }
@@ -257,12 +286,17 @@ export function chatToolFailureSummary(call: XopcChatTool): string {
   const text = toolOutputText(call).trim().split('\n').find((line: string): boolean => !!line.trim())?.trim() || '';
   return text.slice(0, 240);
 }
-interface XopcToolInputPreview { path?: string; file_path?: string; command?: string; cmd?: string; query?: string; url?: string; pattern?: string; }
+interface XopcToolInputPreview { path?: string; file_path?: string; command?: string; cmd?: string; query?: string; url?: string; pattern?: string;
+  mode?: string; name?: string; title?: string; id?: string; noteId?: string; taskId?: string; projectId?: string; automationId?: string; }
 export function chatToolPreview(call: XopcChatTool): string {
   let input = call.input;
   if (typeof input === 'string') { const text = input; try { input = JSON.parse(text) as Object; } catch (_) { return text.slice(0, 160); } }
   const details = input as XopcToolInputPreview | undefined;
   if (!details || typeof details !== 'object') return '';
+  if (chatToolKey(call.name).toLowerCase().replace(/-/g, '_') === 'xopc_use') {
+    const target = details.title || details.name || details.noteId || details.taskId || details.projectId || details.automationId || details.id;
+    return typeof target === 'string' ? target.slice(0, 160) : '';
+  }
   const value = details.query || details.path || details.file_path || details.command || details.cmd || details.url || details.pattern;
   return typeof value === 'string' ? value.slice(0, 160) : '';
 }
