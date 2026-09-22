@@ -72,7 +72,7 @@ describe('automation gateway query', () => {
         enabled: true,
         trigger: { kind: 'schedule', schedule: { kind: 'cron', expr: '0 9 * * 1-5' } },
         action: { kind: 'agent', instruction: 'Summarize my inbox' },
-        afterRun: { kind: 'saveToSession' },
+        conversationMode: 'new_session',
       }),
     });
   });
