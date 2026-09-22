@@ -72,6 +72,7 @@ const STATUS_LABELS: Record<string, { en: string; zh: string }> = {
   disabled: { en: 'Disabled', zh: '已停用' },
   enabled: { en: 'Enabled', zh: '已启用' },
   failed: { en: 'Failed', zh: '失败' },
+  inbox: { en: 'Inbox', zh: '收件箱' },
   paused: { en: 'Paused', zh: '已暂停' },
   ready: { en: 'Ready', zh: '已就绪' },
   running: { en: 'Running', zh: '运行中' },

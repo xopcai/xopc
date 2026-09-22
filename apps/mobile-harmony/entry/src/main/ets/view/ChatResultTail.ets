@@ -13,6 +13,8 @@ export struct XopcChatResultTail {
   @Event onNavigate: (route: XopcMobileRoute) => void = (_route: XopcMobileRoute): void => {};
   @Event onFillDraft: (text: string) => void = (_text: string): void => {};
   @Computed get deliveries(): XopcProductDelivery[] { return chatDeliveries(this.row); }
+  @Computed get visibleDeliveries(): XopcProductDelivery[] { return this.deliveries.slice(0, 3); }
+  @Computed get hiddenDeliveryCount(): number { return Math.max(0, this.deliveries.length - this.visibleDeliveries.length); }
   @Computed get artifacts(): XopcArtifact[] { return this.row.outcome?.deliverables || []; }
   private status(artifact: XopcArtifact): Resource {
     if (artifact.availability === 'materializing') return $r('app.string.chat_artifact_materializing');
@@ -45,6 +47,10 @@ export struct XopcChatResultTail {
       default: return $r('app.string.chat_product_ready');
     }
   }
+  private productState(delivery: XopcProductDelivery): Resource {
+    if (delivery.primary?.status === 'inbox') return $r('app.string.chat_product_inbox');
+    return this.operationLabel(delivery.operation);
+  }
   private canOpenProduct(reference?: XopcProductReference): boolean {
     return !!this.productPage(reference)
       || (!!this.conversationId && chatProductCapability(reference, 'continue_in_chat'));
@@ -73,8 +79,7 @@ export struct XopcChatResultTail {
   }
   build() {
     if (!this.row.live && (this.artifacts.length || this.deliveries.length)) {
-      Stack({ alignContent: Alignment.BottomStart }) {
-        Column({ space: 4 }) {
+      Column({ space: 4 }) {
           Repeat<XopcArtifact>(this.artifacts).each((item: RepeatItem<XopcArtifact>) => {
             if (item.item.availability === 'available' && (item.item.uri || item.item.workspaceRelativePath)) {
               XopcChatMediaView({ file: artifactMedia(item.item), conversationId: this.conversationId, compact: true, embedded: true })
@@ -101,14 +106,14 @@ export struct XopcChatResultTail {
                 .padding({ left: 12, right: 12 }).borderRadius(10)
             }
           }).key((artifact: XopcArtifact): string => artifact.artifactId)
-          Repeat<XopcProductDelivery>(this.deliveries).each((item: RepeatItem<XopcProductDelivery>) => {
+          Repeat<XopcProductDelivery>(this.visibleDeliveries).each((item: RepeatItem<XopcProductDelivery>) => {
             Button({ type: ButtonType.Normal }) {
               Row({ space: 10 }) {
                 SymbolGlyph($r('sys.symbol.doc_plaintext')).fontSize(20).fontColor([$r('app.color.accent')])
                 Column({ space: 2 }) {
                   Text(item.item.primary?.title || '').fontSize(14).fontWeight(FontWeight.Medium).fontColor($r('app.color.foreground'))
                     .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                  Text(this.operationLabel(item.item.operation)).fontSize(12).fontColor($r('app.color.secondary')).maxLines(1)
+                  Text(this.productState(item.item)).fontSize(12).fontColor($r('app.color.secondary')).maxLines(1)
                 }.layoutWeight(1).alignItems(HorizontalAlign.Start)
                 if (this.canOpenProduct(item.item.primary)) {
                   SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(15).fontColor([$r('app.color.tertiary')])
@@ -118,10 +123,12 @@ export struct XopcChatResultTail {
               .width('100%').borderRadius(10).backgroundColor(Color.Transparent).enabled(this.canOpenProduct(item.item.primary))
               .accessibilityText((item.item.primary?.title || '')).onClick((): void => { this.openProduct(item.item.primary); })
           }).key((delivery: XopcProductDelivery): string => delivery.operation + ':' + delivery.primary?.kind + ':' + delivery.primary?.id)
-        }.width('100%').padding(4).borderRadius(14).backgroundColor($r('app.color.input')).margin({ bottom: 4 })
-        Path().width(12).height(8).commands('M 0 0 L 12 0 L 0 8 Z').fill($r('app.color.input')).stroke($r('app.color.input'))
-          .align(Alignment.BottomStart).margin({ left: 12 })
-      }.id('chat-result-tail-' + this.row.id).width('88%').constraintSize({ maxWidth: 420 })
+          if (this.hiddenDeliveryCount > 0) {
+            Text($r('app.string.chat_more_results', this.hiddenDeliveryCount)).height(44).fontSize(13)
+              .fontWeight(FontWeight.Medium).fontColor($r('app.color.accent')).padding({ left: 12, right: 12 })
+          }
+      }.id('chat-result-tail-' + this.row.id).width('88%').constraintSize({ maxWidth: 420 }).padding(4)
+        .borderRadius(14).backgroundColor($r('app.color.input'))
         .margin({ top: 8, bottom: 4 }).accessibilityText($r('app.string.chat_deliverables'))
     }
   }

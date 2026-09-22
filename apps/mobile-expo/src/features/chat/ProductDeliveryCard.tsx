@@ -27,27 +27,39 @@ const KIND_ICONS: Record<ProductReferenceKind, string> = {
 };
 
 const KIND_LABELS: Record<ProductReferenceKind, { en: string; zh: string }> = {
-  task: { en: 'task', zh: '任务' },
-  project: { en: 'project', zh: '项目' },
-  note: { en: 'note', zh: '笔记' },
-  workflow_definition: { en: 'workflow', zh: '工作流' },
-  workflow_run: { en: 'workflow run', zh: '工作流运行' },
-  automation: { en: 'automation', zh: '自动化' },
-  scene: { en: 'scene', zh: '场景' },
-  local_app: { en: 'local app', zh: '本地应用' },
-  file: { en: 'file', zh: '文件' },
-  session: { en: 'conversation', zh: '对话' },
-  settings: { en: 'settings', zh: '设置' },
+  task: { en: 'Task', zh: '任务' },
+  project: { en: 'Project', zh: '项目' },
+  note: { en: 'Note', zh: '笔记' },
+  workflow_definition: { en: 'Workflow', zh: '工作流' },
+  workflow_run: { en: 'Workflow run', zh: '工作流运行' },
+  automation: { en: 'Automation', zh: '自动化' },
+  scene: { en: 'Scene', zh: '场景' },
+  local_app: { en: 'Local app', zh: '本地应用' },
+  file: { en: 'File', zh: '文件' },
+  session: { en: 'Conversation', zh: '对话' },
+  settings: { en: 'Settings', zh: '设置' },
 };
 
 const OPERATION_LABELS = {
   created: { en: 'Created', zh: '已创建' },
   updated: { en: 'Updated', zh: '已更新' },
-  opened: { en: 'Opened', zh: '已读取' },
+  opened: { en: 'Ready', zh: '已就绪' },
   started: { en: 'Started', zh: '已启动' },
   completed: { en: 'Completed', zh: '已完成' },
   failed: { en: 'Failed', zh: '失败' },
 } satisfies Record<ProductDeliveryEnvelope['operation'], { en: string; zh: string }>;
+
+const STATUS_LABELS: Record<string, { en: string; zh: string }> = {
+  active: { en: 'Active', zh: '运行中' },
+  completed: { en: 'Completed', zh: '已完成' },
+  disabled: { en: 'Disabled', zh: '已停用' },
+  enabled: { en: 'Enabled', zh: '已启用' },
+  failed: { en: 'Failed', zh: '失败' },
+  inbox: { en: 'Inbox', zh: '收件箱' },
+  paused: { en: 'Paused', zh: '已暂停' },
+  ready: { en: 'Ready', zh: '已就绪' },
+  running: { en: 'Running', zh: '运行中' },
+};
 
 export const ProductDeliveryCard = memo(function ProductDeliveryCard({
   delivery,
@@ -78,17 +90,25 @@ export const ProductDeliveryCard = memo(function ProductDeliveryCard({
         conversationId!,
         language === 'zh'
           ? `继续处理${KIND_LABELS[reference.kind].zh}「${reference.title}」（ID: ${reference.id}）：`
-          : `Continue working on ${KIND_LABELS[reference.kind].en} "${reference.title}" (ID: ${reference.id}): `,
+          : `Continue working on ${KIND_LABELS[reference.kind].en.toLowerCase()} "${reference.title}" (ID: ${reference.id}): `,
       )
       : undefined;
   const operation = OPERATION_LABELS[delivery.operation][language];
+  const rawStatus = reference.status?.trim();
+  const status = rawStatus ? STATUS_LABELS[rawStatus.toLowerCase()]?.[language] ?? rawStatus : null;
+  const state = status && delivery.operation === 'opened'
+    ? status
+    : status && status.toLowerCase() !== operation.toLowerCase()
+      ? `${operation} · ${status}`
+      : status ?? operation;
+  const meta = `${KIND_LABELS[reference.kind][language]} · ${state}`;
 
   return (
     <Pressable
       onPress={action ? () => requestAction(action) : undefined}
       disabled={!action}
       accessibilityRole={action ? 'button' : 'text'}
-      accessibilityLabel={`${operation}: ${reference.title}`}
+      accessibilityLabel={`${reference.title}. ${meta}`}
       style={({ pressed }) => [
         styles.row,
         {
@@ -105,7 +125,7 @@ export const ProductDeliveryCard = memo(function ProductDeliveryCard({
           {reference.title}
         </Text>
         <Text style={[styles.meta, { color: colors.text.secondary }]} numberOfLines={1}>
-          {operation}
+          {meta}
         </Text>
       </View>
       {action ? <Icon source="chevron-right" size={18} color={colors.text.tertiary} /> : null}

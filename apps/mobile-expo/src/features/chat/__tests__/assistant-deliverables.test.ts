@@ -2,6 +2,7 @@ import {
   appendProductDeliveryText,
   fileResourceArtifactUri,
   type ProductDeliveryEnvelope,
+  type ProductReference,
   type TurnOutcome,
   type TurnOutcomeDeliverable,
 } from '@xopcai/gateway-contract';
@@ -109,6 +110,31 @@ describe('assistant deliverables', () => {
 
     expect(collectAssistantDeliverables(messageWithTools(tools), false).productDeliveries)
       .toEqual([updated]);
+  });
+
+  it('projects table query results into compact mobile delivery rows', () => {
+    const reference: ProductReference = {
+      kind: 'note', id: 'note-1', title: 'Research note', status: 'inbox', capabilities: ['open'],
+    };
+    const delivery: ProductDeliveryEnvelope = {
+      version: 1,
+      operation: 'opened',
+      presentation: {
+        kind: 'table',
+        truncated: false,
+        items: [reference],
+      },
+    };
+    const tool: ToolUseContent = {
+      type: 'tool_use',
+      id: 'query-tool',
+      name: 'xopc_use',
+      status: 'done',
+      result: appendProductDeliveryText('Found one note.', delivery),
+    };
+
+    expect(collectAssistantDeliverables(messageWithTools([tool]), false).productDeliveries)
+      .toEqual([{ version: 1, operation: 'opened', primary: reference }]);
   });
 
   it('does not repeat audio already rendered in the assistant message', () => {

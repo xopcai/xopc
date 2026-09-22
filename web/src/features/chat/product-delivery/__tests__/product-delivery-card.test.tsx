@@ -46,15 +46,49 @@ describe('AssistantResultTail product deliveries', () => {
     container.remove();
   });
 
-  it('renders resource tables as escaped text with internal links only', () => {
+  it('renders query results as a compact tail without table metadata', () => {
     act(() => root.render(<MemoryRouter>{renderDelivery({ version: 1, operation: 'opened', presentation: {
       kind: 'table', truncated: true, items: [{ kind: 'task', id: 'task/one', title: '<img src=x>', status: 'ready', capabilities: ['open', 'run'] }],
     } })}</MemoryRouter>));
-    expect(container.querySelector('table')).not.toBeNull();
+    expect(container.querySelector('table')).toBeNull();
     expect(container.querySelector('img')).toBeNull();
-    expect(container.querySelector('a')?.getAttribute('href')).toBe('/tasks/task%2Fone');
+    expect(container.querySelector('[data-turn-tail]')).not.toBeNull();
+    expect(container.textContent).toContain('<img src=x>');
+    expect(container.textContent).toContain('任务 · 已就绪');
+    expect(container.textContent).not.toContain('task/one');
     expect(container.querySelector('[role="status"]')).not.toBeNull();
-    expect(container.querySelector('button')).toBeNull();
+    expect(container.querySelectorAll('button')).toHaveLength(1);
+  });
+
+  it('renders an empty query as a compact tail state', () => {
+    act(() => root.render(<MemoryRouter>{renderDelivery({ version: 1, operation: 'opened', presentation: {
+      kind: 'table', truncated: false, items: [],
+    } })}</MemoryRouter>));
+
+    expect(container.querySelector('[data-turn-tail]')).not.toBeNull();
+    expect(container.textContent).toContain('没有匹配结果');
+    expect(container.querySelector('table')).toBeNull();
+  });
+
+  it('does not mix an empty state into a turn that also has query results', () => {
+    const view: AssistantTurnViewModel = {
+      answerContent: [],
+      workLog: { items: [], active: false, status: 'completed', expandedByDefault: false, compact: false },
+      answer: { started: true, showStreamingCursor: false },
+      lifecycle: { state: 'completed' },
+      outcome: undefined,
+      deliveries: [
+        { key: 'empty', delivery: { version: 1, operation: 'opened', presentation: { kind: 'table', truncated: false, items: [] } } },
+        { key: 'result', delivery: { version: 1, operation: 'opened', presentation: { kind: 'table', truncated: false,
+          items: [{ kind: 'note', id: 'note-1', title: 'Research note', capabilities: ['open'] }] } } },
+      ],
+      sources: [],
+    };
+
+    act(() => root.render(<MemoryRouter><AssistantResultTail view={view} /></MemoryRouter>));
+
+    expect(container.textContent).toContain('Research note');
+    expect(container.textContent).not.toContain('没有匹配结果');
   });
 
   it('renders proposed replacements without applying them or rendering HTML', () => {
@@ -104,7 +138,7 @@ describe('AssistantResultTail product deliveries', () => {
     expect(container.textContent).not.toContain('在对话中继续');
     expect(container.querySelectorAll('button')).toHaveLength(1);
     expect(container.querySelector('[data-turn-tail]')).not.toBeNull();
-    expect(container.querySelector('[data-turn-tail-tip]')).not.toBeNull();
+    expect(container.querySelector('[data-turn-tail-tip]')).toBeNull();
 
     act(() => container.querySelector('button')?.click());
     expect(container.querySelector('[data-testid="location"]')?.textContent).toBe(
@@ -201,7 +235,7 @@ describe('AssistantResultTail product deliveries', () => {
 
     expect(container.querySelectorAll('[data-turn-tail]')).toHaveLength(1);
     expect(container.querySelectorAll('li')).toHaveLength(2);
-    expect(container.querySelectorAll('[data-turn-tail-tip]')).toHaveLength(1);
+    expect(container.querySelectorAll('[data-turn-tail-tip]')).toHaveLength(0);
   });
 
   it('combines product objects, outcome artifacts, and generated files in one tail', () => {

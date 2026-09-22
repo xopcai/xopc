@@ -9,6 +9,8 @@
     { "name": "chat_product_updated", "value": "Updated" },
     { "name": "chat_product_started", "value": "Started" },
     { "name": "chat_product_ready", "value": "Ready" },
+    { "name": "chat_product_inbox", "value": "Inbox" },
+    { "name": "chat_more_results", "value": "%d more results — refine your query to narrow them" },
     { "name": "chat_continue", "value": "Continue in chat" },
     { "name": "chat_share", "value": "Share" },
     { "name": "chat_share_failed", "value": "Unable to share this result. Please try again." },
