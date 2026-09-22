@@ -1,5 +1,9 @@
 {
   "string": [
+    { "name": "chat_continuous_start", "value": "连续朗读新回复" },
+    { "name": "chat_continuous_stop", "value": "停止连续朗读" },
+    { "name": "chat_continuous_active", "value": "新回复将自动朗读" },
+    { "name": "chat_cached_history", "value": "正在显示已保存的历史，连接后刷新" },
     { "name": "chat_copy_code", "value": "复制代码" },
     { "name": "chat_product_created", "value": "已创建" },
     { "name": "chat_product_updated", "value": "已更新" },
@@ -602,6 +606,46 @@
     {
       "name": "tomorrow",
       "value": "明天再看"
+    },
+    {
+      "name": "chat_attachments_heading",
+      "value": "附件"
+    },
+    {
+      "name": "chat_more_attachments",
+      "value": "查看另外 %d 个附件"
+    },
+    {
+      "name": "chat_fewer_attachments",
+      "value": "收起附件"
+    },
+    {
+      "name": "chat_preview_file",
+      "value": "预览 %s"
+    },
+    {
+      "name": "chat_preview_unsupported",
+      "value": "移动端暂不支持该文件类型的内嵌预览。"
+    },
+    {
+      "name": "chat_preview_unsupported_text",
+      "value": "移动端暂不支持该文件类型的内嵌预览，以下为可提取文本。"
+    },
+    {
+      "name": "chat_html_unavailable",
+      "value": "无法加载 HTML 预览。"
+    },
+    {
+      "name": "chat_reference_note",
+      "value": "引用笔记"
+    },
+    {
+      "name": "chat_reference_task",
+      "value": "引用任务"
+    },
+    {
+      "name": "chat_reference_file",
+      "value": "引用文件"
     },
     {
       "name": "dismiss",

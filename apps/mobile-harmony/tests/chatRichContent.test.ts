@@ -41,6 +41,10 @@ describe('rich chat parity projection', () => {
     expect(chatProductCapability({ kind: 'note', id: 'n', title: 'Note', capabilities: ['open'] }, 'open')).toBe(true);
     expect(chatProductCapability({ kind: 'note', id: 'n', title: 'Note', capabilities: 'open' as never }, 'open')).toBe(false);
     expect(chatAttachments([{ name: 'photo.jpg', data: 'YWJj' } as never], 'r')[0]).toMatchObject({ id: 'r:0', mimeType: 'image/jpeg', type: 'image', uri: 'data:image/jpeg;base64,YWJj' });
+    expect(chatAttachments([{ name: 'report.pdf', extractedText: 'parsed copy' } as never], 'r')[0])
+      .toMatchObject({ mimeType: 'application/pdf', extractedText: 'parsed copy' });
+    expect(chatAttachments([{ name: 'page.html', data: 'PGgxPng8L2gxPg==' } as never], 'r')[0])
+      .toMatchObject({ mimeType: 'text/html', uri: 'data:text/html;base64,PGgxPng8L2gxPg==' });
   });
   it('preserves ordered thinking/tool/text across assistant fragments and ignores system/unknown roles', () => {
     const rows = parse([{ role: 'system', content: 'secret' }, { id: 'a', role: 'assistant', content: [

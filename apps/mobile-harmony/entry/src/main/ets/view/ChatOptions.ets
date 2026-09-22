@@ -7,6 +7,8 @@ import { appSettings } from '../service/settings';
 export struct XopcChatOptions {
   @Param model: XopcChatOptionsViewModel = new XopcChatOptionsViewModel();
   @Param mode: string = 'actions';
+  @Param continuousRead: boolean = false;
+  @Event onContinuousRead: () => void = (): void => {};
   @Event onMode: (mode: string) => void = (_mode: string): void => {};
   @Event onAgent: (id: string) => void = (_id: string): void => {};
   @Event onFiles: () => void = (): void => {};
@@ -83,6 +85,7 @@ export struct XopcChatOptions {
           ListItem() { XopcHubRow({ heading: $r('app.string.chat_model'), summary: this.model.modelName(appSettings.effectiveLanguage()), onOpen: (): void => { this.onMode('model'); } }) }
           ListItem() { XopcHubRow({ heading: $r('app.string.new_chat'), onOpen: (): void => { this.onNewChat(); } }) }
           ListItem() { XopcHubRow({ heading: $r('app.string.chat_session_files'), onOpen: (): void => { this.onFiles(); } }) }
+          ListItem() { XopcHubRow({ heading: this.continuousRead ? $r('app.string.chat_continuous_stop') : $r('app.string.chat_continuous_start'), onOpen: (): void => { this.onContinuousRead(); } }) }
         }
       }.layoutWeight(1).width('100%')
     }.padding({ left: 24, right: 24, top: 8, bottom: 24 }).width('100%').height('100%').backgroundColor($r('app.color.panel'))

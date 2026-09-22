@@ -73,7 +73,10 @@ export function chatAttachments(files: XopcHistoryMedia[], prefix: string): Xopc
     if (!mime || mime === 'application/octet-stream') {
       const extension = name.toLowerCase().split('.').pop() || '';
       const known: Record<string, string> = { 'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'webp': 'image/webp', 'gif': 'image/gif',
-        'mp3': 'audio/mpeg', 'wav': 'audio/wav', 'm4a': 'audio/mp4', 'mp4': 'video/mp4', 'txt': 'text/plain', 'md': 'text/markdown', 'pdf': 'application/pdf', 'json': 'application/json' };
+        'mp3': 'audio/mpeg', 'wav': 'audio/wav', 'm4a': 'audio/mp4', 'mp4': 'video/mp4', 'txt': 'text/plain', 'md': 'text/markdown',
+        'html': 'text/html', 'htm': 'text/html', 'csv': 'text/csv', 'xml': 'application/xml', 'pdf': 'application/pdf', 'json': 'application/json',
+        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
       mime = known[extension] || 'application/octet-stream';
     }
     let uri = typeof file.uri === 'string' ? file.uri : '';
@@ -82,7 +85,8 @@ export function chatAttachments(files: XopcHistoryMedia[], prefix: string): Xopc
     const id = typeof file.id === 'string' && file.id ? file.id : prefix + ':' + output.size;
     const key = uri || workspace || id;
     const type = /^(image|audio|video)\//.test(mime) ? mime.split('/')[0] : typeof file.type === 'string' ? file.type : 'document';
-    output.set(key, { id, name, mimeType: mime, type, size: typeof file.size === 'number' ? file.size : 0, uri, workspaceRelativePath: workspace });
+    output.set(key, { id, name, mimeType: mime, type, size: typeof file.size === 'number' ? file.size : 0, uri, workspaceRelativePath: workspace,
+      extractedText: typeof file.extractedText === 'string' ? file.extractedText : undefined });
   }
   return Array.from(output.values());
 }

@@ -6,6 +6,7 @@ import { XopcChatMediaView } from './ChatMediaView';
 import { XopcChatDeliverablesView } from './ChatDeliverablesView';
 import { chatActivities } from '../common/chatRichContent';
 import { XopcChatDisclosure } from '../common/chatDisclosure';
+import { filePreviewKind } from '../common/filePreview';
 
 @ComponentV2
 export struct XopcChatMessageContent {
@@ -19,6 +20,14 @@ export struct XopcChatMessageContent {
     const artifacts = this.row.outcome?.deliverables || [];
     return (this.row.media || []).filter((file: XopcHistoryMedia): boolean => !artifacts.some((artifact): boolean => artifact.availability === 'available' && !!artifact.uri && artifact.uri === file.uri));
   }
+  @Local mediaExpanded: boolean = false;
+  @Computed get audioMedia(): XopcHistoryMedia[] {
+    return this.visibleMedia.filter((file: XopcHistoryMedia): boolean => filePreviewKind(file.name, file.mimeType) === 'audio');
+  }
+  @Computed get fileMedia(): XopcHistoryMedia[] {
+    return this.visibleMedia.filter((file: XopcHistoryMedia): boolean => filePreviewKind(file.name, file.mimeType) !== 'audio');
+  }
+  @Computed get displayedMedia(): XopcHistoryMedia[] { return this.mediaExpanded ? this.fileMedia : this.fileMedia.slice(0, 3); }
   @Computed get body(): XopcChatBlock[] {
     const body: XopcChatBlock[] = []; let inserted = false;
     const hasSteps = chatActivities(this.row, this.reasoning).length > 0;
@@ -69,9 +78,21 @@ export struct XopcChatMessageContent {
       } else {
         Text(this.row.text).fontSize(13).fontColor($r('app.color.secondary')).copyOption(CopyOptions.InApp)
       }
-      Repeat<XopcHistoryMedia>(this.visibleMedia).each((item: RepeatItem<XopcHistoryMedia>) => {
+      Repeat<XopcHistoryMedia>(this.audioMedia).each((item: RepeatItem<XopcHistoryMedia>) => {
         XopcChatMediaView({ file: item.item, conversationId: this.conversationId })
       }).key((file: XopcHistoryMedia): string => file.id || file.uri)
+      if (this.fileMedia.length) {
+        Text($r('app.string.chat_attachments_heading')).fontSize(12).fontWeight(FontWeight.Medium).fontColor($r('app.color.secondary'))
+        Repeat<XopcHistoryMedia>(this.displayedMedia).each((item: RepeatItem<XopcHistoryMedia>) => {
+          XopcChatMediaView({ file: item.item, conversationId: this.conversationId, compact: true })
+        }).key((file: XopcHistoryMedia): string => file.id || file.uri)
+        if (this.fileMedia.length > 3) {
+          Button(this.mediaExpanded ? $r('app.string.chat_fewer_attachments')
+            : $r('app.string.chat_more_attachments', this.fileMedia.length - 3)).height(44).fontSize(13)
+            .backgroundColor(Color.Transparent).fontColor($r('app.color.accent'))
+            .onClick((): void => { this.mediaExpanded = !this.mediaExpanded; })
+        }
+      }
       if (this.row.role === 'assistant') { XopcChatDeliverablesView({ row: this.row, conversationId: this.conversationId, onNavigate: this.onNavigate, onFillDraft: this.onFillDraft }) }
     }.width('100%').alignItems(HorizontalAlign.Start)
   }

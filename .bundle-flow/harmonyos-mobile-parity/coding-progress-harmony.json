@@ -2,11 +2,11 @@
   "requirement_id": "harmonyos-mobile-parity",
   "platform": "harmony",
   "status": "in_progress",
-  "updated_at": "2026-09-18",
+  "updated_at": "2026-09-22",
   "chat_audit_followup": {
     "status": "in_progress",
-    "evidence": "RN display scrub, top pagination/offset guards, retained overlapping history, neutral actions/pause-resume/copy-code, draft/full image and Markdown previews, bounded media cache/file sharing, virtualized history and immutable streaming updates implemented. 275 host tests / 43 files pass; Debug, Release and ohosTest builds pass; CodeLinter empty. Self-review corrections and remaining implementation gaps are recorded in apps/mobile-harmony/docs/chat-parity-checklist.md.",
-    "device_gate": "No HDC targets. Existing emulator requires license confirmation requested from the user; new native fixture is built but not run. No installation or physical acceptance this pass."
+    "evidence": "Sept 22: continuous reading completion-edge state, Expo speech text/language parity, bounded secure history heads with mutation fences, direct voice-message sending with failure retention/cancellation guards, neutral action tiles/per-kind references, and Expo-aligned compact file preview routing implemented. File preview covers image/Markdown/text/isolated HTML/audio/video/binary fallback, extracted text, share/download; HTML disables JS/storage/file access and external navigation. 314 host tests / 47 files pass; Debug/Release/ohosTest built. CodeLinter has one pre-existing JSON snapshot performance recommendation, no new diagnostics. Remaining realtime voice, recording gestures/meetings, action paging, image editing and device gaps: apps/mobile-harmony/docs/chat-parity-audit-20260922.md.",
+    "device_gate": "Mate 60 signed debug update installed without clearing pairing. Chat/action controls observed in UI tree; icon-centering correction subsequently installed and launched. HDC disconnected before final panel screenshot/interaction acceptance. No voice message sent and no approval accepted; full physical acceptance remains pending."
   },
   "execution_order": ["4.1.1", "4.1.2", "4.2.1", "4.2.2", "4.3.1", "4.4.1", "4.5.1", "4.6.1", "4.7.1"],
   "subtasks": [
