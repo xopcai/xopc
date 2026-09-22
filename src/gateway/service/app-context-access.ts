@@ -9,11 +9,6 @@ import { isBrowserSessionActive } from '../../storage/sqlite/browser-session-rep
 import type { ResolvedGatewayAuth } from '../auth.js';
 import type { GatewayPrincipal } from '../security/gateway-principal.js';
 
-export interface AppContextGrant {
-  principal: GatewayPrincipal;
-  authRevision: string;
-}
-
 const authorizationEpochKey = randomBytes(32);
 function authRevision(auth: ResolvedGatewayAuth): string {
   // Never persist a guessable credential hash. Restart invalidates queued grants conservatively.
