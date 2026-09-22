@@ -1,9 +1,12 @@
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
+import { createHash } from 'node:crypto';
 import type { EndpointToolContent } from '@xopcai/endpoint-tools-protocol';
 import { BROWSER_CONTROL_ENDPOINT_TOOL_NAME } from '@xopcai/browser-control-contract';
 import { COMPUTER_CONTROL_TOOL } from '@xopcai/computer-control-contract';
 
 import type { EndpointToolRuntime } from '../../endpoint-tools/index.js';
+import { executeExternalOperation } from '../../capabilities/runtime/external-operations.js';
+import { canonicalCapabilityJson } from '../../capabilities/runtime/dispatcher.js';
 import { externalToolRef, parseExternalToolRef } from './refs.js';
 import type {
   ExternalToolDescriptor,
@@ -63,7 +66,7 @@ export class EndpointToolProvider implements ExternalToolProvider {
   ): Promise<AgentToolResult<Record<string, unknown>>> {
     const resolved = this.resolve(toolRef);
     if (!resolved) throw new Error(`Endpoint tool is unavailable for this turn: ${toolRef}`);
-    const result = await this.deps.runtime.invocations.invoke({
+    const invoke = () => this.deps.runtime.invocations.invoke({
       endpointId: resolved.endpointId,
       toolCallId: context.toolCallId,
       toolName: resolved.tool.descriptor.name,
@@ -80,6 +83,14 @@ export class EndpointToolProvider implements ExternalToolProvider {
         });
       },
     });
+    const result = resolved.tool.descriptor.effect === 'read' ? await invoke() : await executeExternalOperation({
+      principalId: resolved.principalId,
+      capabilityId: toolRef,
+      idempotencyKey: createHash('sha256').update(`${this.deps.getCurrentContext()?.conversationId}:${context.toolCallId}`).digest('hex'),
+      requestDigest: createHash('sha256').update(canonicalCapabilityJson(args)).digest('hex'),
+      descriptorDigest: resolved.tool.revision,
+      surface: 'agent', recovery: 'manual',
+    }, invoke);
     const files = result.content.filter((item) => item.type === 'file');
     return {
       content: result.content.map((item) => ({ type: 'text' as const, text: contentText(item) })),
@@ -110,6 +121,6 @@ export class EndpointToolProvider implements ExternalToolProvider {
     if (!endpoint || endpoint.endpointId !== parsed.namespace) return undefined;
     const tool = this.deps.runtime.registry.getTool(endpoint.endpointId, parsed.toolName);
     if (tool && [BROWSER_CONTROL_ENDPOINT_TOOL_NAME, COMPUTER_CONTROL_TOOL].includes(tool.descriptor.name)) return undefined;
-    return tool ? { endpointId: endpoint.endpointId, displayName: endpoint.displayName, tool } : undefined;
+    return tool ? { endpointId: endpoint.endpointId, principalId: endpoint.principalId, displayName: endpoint.displayName, tool } : undefined;
   }
 }

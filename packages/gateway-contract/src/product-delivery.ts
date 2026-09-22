@@ -59,11 +59,20 @@ export const ProductDeliveryOperationSchema = z.enum([
 
 export type ProductDeliveryOperation = z.infer<typeof ProductDeliveryOperationSchema>;
 
+export const ProductDeliveryPresentationSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('table'), items: z.array(ProductReferenceSchema).max(50), truncated: z.boolean() }),
+  z.object({ kind: z.literal('diff'), title: z.string().max(2000), truncated: z.boolean(),
+    edits: z.array(z.object({ from: z.number().int().nonnegative(), to: z.number().int().nonnegative(),
+      text: z.string().max(16000) }).refine(edit => edit.to >= edit.from, 'Invalid replacement range')).max(20)
+      .refine(edits => edits.reduce((total, edit) => total + edit.text.length, 0) <= 16000, 'Replacement text exceeds preview limit') }),
+]);
+
 export const ProductDeliveryEnvelopeSchema = z.object({
   version: z.literal(PRODUCT_DELIVERY_VERSION),
   operation: ProductDeliveryOperationSchema,
   primary: ProductReferenceSchema.optional(),
   related: z.array(ProductReferenceSchema).optional(),
+  presentation: ProductDeliveryPresentationSchema.optional(),
 });
 
 export type ProductDeliveryEnvelope = z.infer<typeof ProductDeliveryEnvelopeSchema>;
@@ -82,6 +91,8 @@ export function appendProductDeliveryText(
   if (!delivery) return text;
   const accessLink = delivery.primary
     ? `\nOpen in xopc: [Open](${productReferenceDeepLink(delivery.primary)})`
+    : delivery.presentation?.kind === 'table' && delivery.presentation.items.length
+      ? `\nOpen in xopc: ${delivery.presentation.items.map((item, index) => `[${index + 1}](${productReferenceDeepLink(item)})`).join(' · ')}`
     : '';
   return `${text}${accessLink}\n${PRODUCT_DELIVERY_TEXT_PREFIX}${encodeURIComponent(JSON.stringify(delivery))}`;
 }

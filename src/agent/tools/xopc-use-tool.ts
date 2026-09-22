@@ -1,56 +1,62 @@
 import type { SceneAccess } from '../../scenes/httpServices.js';
 import { randomUUID } from 'node:crypto';
+import { createProductDispatcher } from '../../capabilities/runtime/product.js';
+import { localAppCapabilities } from '../../local-apps/capabilities/runtime.js';
+import { CapabilityCallSchema } from '@xopcai/gateway-contract';
+import { CapabilityError, type CapabilityContext, type CapabilityDispatcher } from '../../capabilities/runtime/dispatcher.js';
+import { TaskMutationOutputSchema } from '../../tasks/capabilities/write.js';
+import { TaskDeleteOutputSchema } from '../../tasks/capabilities/management.js';
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import {
   appendProductDeliveryText,
+  AutomationMutationOutputSchema,
+  AutomationRunMutationOutputSchema,
+  AutomationCancelOutputSchema,
+  AutomationReadOutputSchema,
+  AutomationReadAllOutputSchema,
+  AutomationReadAllInputSchema,
+  CapabilityResourceInputSchema,
+  AutomationDeleteOutputSchema,
+  NoteGetOutputSchema,
+  NoteDeleteOutputSchema,
   TaskContextInputSchema,
   type TaskCommand,
   TaskCommandSchema,
-  type TaskPhase,
+  TaskRunCancelInputSchema,
+  TaskRunCancelOutputSchema,
+  TaskRunFeedbackInputSchema, TaskRunFeedbackOutputSchema,
+  ProjectCreateInputSchema, ProjectEditInputSchema, ProjectDeleteInputSchema, ProjectDeleteOutputSchema, ProjectSetPinnedInputSchema, ProjectMutationOutputSchema, ProjectMilestoneCreateInputSchema, ProjectMilestoneUpdateInputSchema, ProjectMilestoneDeleteInputSchema,
+  ProjectMilestoneOutputSchema, ProjectMilestoneDeleteOutputSchema, ProjectUpdateCreateInputSchema, ProjectUpdateOutputSchema,
+  ProjectResolveWorkspaceInputSchema, ProjectResolveWorkspaceOutputSchema,
+  SceneWriteContracts,
   type TaskPriority,
   type ProductDeliveryEnvelope,
   type ProductReference,
 } from '@xopcai/gateway-contract';
 
-import { ObjectLinkService, runWithActivityContext } from '../../activity/index.js';
-import {
-  CreateAutomationSchema,
-  UpdateAutomationSchema,
-  type AutomationService,
-} from '../../automations/index.js';
+import { runWithActivityContext } from '../../activity/index.js';
+import type { AutomationService } from '../../automations/index.js';
+import { AutomationCreateCapabilityInputSchema, AutomationUpdatePatchSchema } from '../../automations/capabilities/write.js';
 import type { Config } from '../../config/schema.js';
 import type { NoteKind, NotesService, NoteStatus } from '../../notes/index.js';
 import {
-  isValidProjectAgentId,
-  normalizeProjectAgentId,
   resolveProjectAgentId,
-  type ProjectHealth,
-  type ProjectMilestone,
   type ProjectService,
-  type ProjectStatus,
 } from '../../projects/index.js';
 import type { LocalAppService } from '../../local-apps/index.js';
 import { getDefaultAgentId } from '../../routing/resolve-route.js';
 import { getSessionMetadata } from '../../storage/sqlite/index.js';
-import { runSqliteWriteTransaction } from '../../storage/sqlite/transaction.js';
 import {
   defineTaskContract,
-  enqueueTaskChangedEvent,
-  TaskApplicationService,
-  TaskContextRepository,
-  TaskReadModelProjector,
   TaskRepository,
   TaskRunRepository,
 } from '../../tasks/index.js';
-import {
-  TaskDependencyError,
-  TaskDependencyService,
-} from '../../tasks/task-dependency-service.js';
 import { TaskDeletionService } from '../../tasks/task-deletion-service.js';
 
 const XopcUseToolSchema = Type.Object({
   mode: Type.Union([
+    Type.Literal('context'),
     Type.Literal('scene'),
     Type.Literal('project'),
     Type.Literal('automation'),
@@ -62,7 +68,12 @@ const XopcUseToolSchema = Type.Object({
   ]),
   command: Type.String({
     description:
-      'Object command. Scene commands: templates, list, get {id}, mail_accounts, mail_search {accountId, query}, mail_sources, read_notes {id}, preflight/start {templateKey, templateVersion, goal, scope, permissions}, configure {id, expectedRevision, goal, scope, permissions}, transition {id, expectedRevision, status: paused|active|completed|archived}, check {id}, notes {id, expectedRevision, content, validUntil?}, work_item {id, subjectId, accountId, dueAt}, update_work_item {workItemId, expectedRevision, dueAt?, status?}, schedule {id, triggerKey, expectedRevision, schedule}, results {id?}, feedback {presentationId, expectedRevision, rating}, mark_read {presentationId, read}, diagnostics, get_preferences, set_preferences {expectedRevision, ...preferences}. Start and check accept a stable requestId for retries. Scenes prepare read-only suggestions and drafts; never send mail. Only create a scene for work explicitly delegated by the user; inspect existing scenes first. Supports project list/get/create/update/resolve_workspace/list_milestones/create_milestone/update_milestone/list_updates/create_update, automation list/get/create/update/delete/run/pause/resume/history, note list/get/create/append/update/preview_edit/delete, task list/get/create/update_dependencies/add_context/remove_context/command/delete, task_run list/get/cancel, local_app list/get/create/validate, and settings open.',
+      'Context resolve takes an explicit AppContextEnvelope; never guess a current page. Automation draft/repair_draft accept prompt/id, agentId?, language?, idempotencyKey?; simulate explains an automation without running it. Local_app record_acceptance records supplied checks and sourceHash, not proof that checks were executed. ' +
+      'Project create accepts idempotencyKey; update/pin/unpin/delete accepts {projectId, expectedVersion?, idempotencyKey?}; stable retries require the original expectedVersion. Delete preserves workspace files and does not confirm external execution stopped. ' +
+      'Project milestone writes support idempotencyKey; update_milestone/delete_milestone require original expectedRevision for stable retries, and create_update requires original expectedVersion. TaskRun cancel accepts idempotencyKey and expectedVersion, and does not confirm external execution stopped. ' +
+      'Automation diagnostics: get_run/run_events {runId}, metrics {}, product_events {eventType, source?, payloadKey?, payloadValue?, limit?}; payload filters require both key and value. ' +
+      'Automation also supports cancel/read {runId, idempotencyKey?} and read_all {projectId?, idempotencyKey?}; omitted projectId means all projects. Cancel acceptance is not confirmation of stopping. ' +
+      'Object command. Scene commands: templates, list, get {id}, mail_accounts, mail_search {accountId, query}, mail_sources, read_notes {id}, preflight/start {templateKey, templateVersion, goal, scope, permissions}, configure {id, expectedRevision, goal, scope, permissions}, transition {id, expectedRevision, status: paused|active|completed|archived}, check {id}, notes {id, expectedRevision, content, validUntil?}, work_item {id, subjectId, accountId, dueAt}, update_work_item {workItemId, expectedRevision, dueAt?, status?}, schedule {id, triggerKey, expectedRevision, schedule}, results {id?}, feedback {presentationId, expectedRevision, rating}, mark_read {presentationId, read}, diagnostics, get_preferences, set_preferences {expectedRevision, ...preferences}. Start and check accept a stable requestId for retries. Scenes prepare read-only suggestions and drafts; never send mail. Only create a scene for work explicitly delegated by the user; inspect existing scenes first. Supports project list/get/create/update/resolve_workspace/list_milestones/create_milestone/update_milestone/list_updates/create_update, automation list/get/create/update/delete/run/rerun/pause/resume/history (rerun takes runId; run/rerun accept idempotencyKey), note list/get/project_summaries/history {noteId}/snapshot {noteId, timestamp}/create/append/update/preview_edit/delete, task list/get/create/update_dependencies/add_context/remove_context/command/delete, task_run list/get/cancel, local_app list/get/create/validate, and settings open.',
   }),
   args: Type.Optional(Type.Record(Type.String(), Type.Any())),
   dryRun: Type.Optional(Type.Boolean({
@@ -70,7 +81,7 @@ const XopcUseToolSchema = Type.Object({
   })),
 });
 
-export type XopcUseMode = 'scene' | 'project' | 'automation' | 'note' | 'task' | 'task_run' | 'local_app' | 'settings';
+export type XopcUseMode = 'context' | 'scene' | 'project' | 'automation' | 'note' | 'task' | 'task_run' | 'local_app' | 'settings';
 
 export interface XopcUseToolInput {
   mode: XopcUseMode;
@@ -80,6 +91,7 @@ export interface XopcUseToolInput {
 }
 
 export interface XopcUseToolDeps {
+  authorizeCapability?: CapabilityContext['authorize'];
   getWorkspace?: () => string;
   getConfig?: () => Config | undefined;
   getCurrentAgentId?: () => string | undefined;
@@ -88,6 +100,7 @@ export interface XopcUseToolDeps {
   getSceneAccess?: () => SceneAccess | undefined;
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;
+  getWorkDiscovery?: () => import('../../work-discovery/service.js').WorkDiscoveryService | undefined;
   getLocalAppService?: () => LocalAppService | undefined;
   dispatchTaskEvents?: () => void;
   dispatchTaskRuns?: () => void;
@@ -101,16 +114,8 @@ type XopcUseDetails = {
   delivery?: ProductDeliveryEnvelope;
 };
 
-const PROJECT_STATUSES = new Set<ProjectStatus>([
-  'planned', 'active', 'paused', 'completed', 'cancelled', 'archived',
-]);
-const PROJECT_HEALTHS = new Set<ProjectHealth>(['unknown', 'on_track', 'at_risk', 'off_track']);
-const MILESTONE_STATUSES = new Set<ProjectMilestone['status']>([
-  'planned', 'active', 'completed', 'cancelled',
-]);
 const NOTE_KINDS = new Set<NoteKind>(['thought', 'todo', 'voice', 'media', 'bookmark', 'mixed', 'task']);
 const NOTE_STATUSES = new Set<NoteStatus>(['inbox', 'processed', 'archived', 'trashed']);
-const TASK_PHASES = new Set<TaskPhase>(['backlog', 'ready', 'active', 'review', 'closed']);
 const TASK_PRIORITIES = new Set<TaskPriority>(['low', 'normal', 'high', 'critical']);
 const TASK_COMMANDS = new Set<TaskCommand['type']>([
   'mark_ready', 'start', 'request_review', 'close', 'reopen',
@@ -143,17 +148,6 @@ function optionalString(value: unknown): string | null | undefined {
   return undefined;
 }
 
-function boundedLimit(value: unknown, fallback = 20, max = 100): number {
-  const raw = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : fallback;
-  if (!Number.isFinite(raw)) return fallback;
-  return Math.max(1, Math.min(max, Math.floor(raw)));
-}
-
-function offset(value: unknown): number | undefined {
-  const raw = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : undefined;
-  return raw !== undefined && Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : undefined;
-}
-
 function enumValue<T extends string>(value: unknown, allowed: Set<T>): T | undefined {
   return typeof value === 'string' && allowed.has(value as T) ? value as T : undefined;
 }
@@ -172,10 +166,6 @@ function stringArray(value: unknown): string[] | undefined {
   return value.filter((item): item is string => typeof item === 'string');
 }
 
-function nullableFiniteNumber(value: unknown): number | null | undefined {
-  if (value === null) return null;
-  return finiteNumber(value);
-}
 
 function ensureArgs(input: XopcUseToolInput): Record<string, unknown> {
   return input.args && typeof input.args === 'object' && !Array.isArray(input.args) ? input.args : {};
@@ -208,9 +198,37 @@ function deliveryForXopcResult(
   result: unknown,
   dryRun: boolean,
 ): ProductDeliveryEnvelope | undefined {
-  if (dryRun || command === 'list' || command === 'delete') return undefined;
+  if (dryRun || command === 'delete') return undefined;
   const resultRecord = record(result);
   if (!resultRecord || resultRecord.ok === false) return undefined;
+  if (command === 'list') {
+    const rows = resultRecord.items ?? resultRecord.activations ?? resultRecord.apps;
+    if (!Array.isArray(rows) || !['task', 'note', 'project', 'automation', 'scene', 'local_app'].includes(mode)) return undefined;
+    const field = mode === 'scene' ? 'activation' : mode === 'local_app' ? 'app' : mode;
+    const items = rows.slice(0, 50).flatMap(row => {
+      const reference = deliveryForXopcResult(mode, 'get', { [field]: row }, false)?.primary;
+      return reference ? [{ ...reference, capabilities: ['open' as const] }] : [];
+    });
+    return { version: 1, operation: 'opened', presentation: { kind: 'table', items,
+      truncated: rows.length > 50 || Boolean(resultRecord.nextCursor) || (typeof resultRecord.total === 'number' && resultRecord.total > items.length) } };
+  }
+  if (mode === 'note' && command === 'preview_edit') {
+    const patch = record(resultRecord.patch);
+    if (!patch || !Array.isArray(patch.operations)) return undefined;
+    let remaining = 16000;
+    let truncated = patch.operations.length > 20;
+    const edits = patch.operations.slice(0, 20).flatMap(value => {
+      const edit = record(value);
+      if (!edit || edit.type !== 'replaceRange' || !Number.isSafeInteger(edit.from) || !Number.isSafeInteger(edit.to)
+        || (edit.from as number) < 0 || (edit.to as number) < (edit.from as number) || typeof edit.markdown !== 'string') return [];
+      const text = edit.markdown.slice(0, remaining);
+      truncated ||= text.length < edit.markdown.length;
+      remaining -= text.length;
+      return [{ from: edit.from as number, to: edit.to as number, text }];
+    });
+    return { version: 1, operation: 'opened', presentation: { kind: 'diff',
+      title: String(patch.summary ?? '').slice(0, 2000), edits, truncated } };
+  }
 
   let source: Record<string, unknown> | undefined;
   let primary: ProductReference | undefined;
@@ -225,7 +243,7 @@ function deliveryForXopcResult(
         title: deliveryText(source?.name) ?? 'Project',
         summary: deliverySummary(source?.description, source?.brief),
         status: deliveryText(source?.status),
-        revision: deliveryRevision(source?.updatedAt),
+        revision: deliveryRevision(source?.version),
         capabilities: ['open', 'edit', 'continue_in_chat'],
       };
     }
@@ -268,7 +286,7 @@ function deliveryForXopcResult(
         title: deliveryText(source?.title) ?? 'Untitled note',
         summary: deliverySummary(source?.markdown),
         status: deliveryText(source?.status),
-        revision: deliveryRevision(source?.localVersion) ?? deliveryRevision(source?.updatedAt),
+        revision: deliveryRevision(source?.remoteVersion ?? 1),
         projectId: deliveryText(resultRecord.projectId),
         capabilities: ['open', 'preview', 'edit', 'continue_in_chat', 'share'],
       };
@@ -340,7 +358,7 @@ function deliveryForXopcResult(
   return {
     version: 1,
     operation: (mode === 'task' && deliveryText(resultRecord.runId))
-      || (mode === 'automation' && command === 'run')
+      || (mode === 'automation' && (command === 'run' || command === 'rerun'))
       || (mode === 'scene' && command === 'check')
       ? 'started'
       : command === 'create' || (mode === 'scene' && command === 'start')
@@ -389,204 +407,103 @@ function optionalProjectWorkspaceRootArg(args: Record<string, unknown>): string 
   return undefined;
 }
 
-function validateDefaultAgentId(raw: unknown, config: Config | undefined): string | null | undefined {
-  if (raw === null) return null;
-  const normalized = normalizeProjectAgentId(trimString(raw));
-  if (!normalized) return undefined;
-  if (config && !isValidProjectAgentId(config, normalized)) {
-    throw new Error(`Default agent not found: ${normalized}`);
-  }
-  return normalized;
-}
-
 async function handleProject(
   command: string,
   args: Record<string, unknown>,
   deps: XopcUseToolDeps,
   dryRun: boolean,
+  capabilities: CapabilityDispatcher,
 ): Promise<unknown> {
   const projects = deps.getProjectService?.();
   if (!projects) return { ok: false, error: 'Project service is unavailable' };
 
-  if (command === 'list') {
-    return {
-      ok: true,
-      ...projects.list({
-        status: enumValue(args.status, PROJECT_STATUSES),
-        search: trimString(args.search),
-        sortBy: enumValue(args.sortBy, new Set(['updatedAt', 'createdAt', 'name'] as const)),
-        sortOrder: enumValue(args.sortOrder, new Set(['asc', 'desc'] as const)),
-        limit: boundedLimit(args.limit),
-        offset: offset(args.offset),
-      }),
-    };
-  }
-
-  if (command === 'get') {
-    const id = trimString(args.projectId) ?? trimString(args.id);
-    if (!id) return { ok: false, error: 'projectId is required' };
-    const project = projects.getWithDetails(id);
-    return project ? { ok: true, project } : { ok: false, error: `Project not found: ${id}` };
-  }
-
   if (command === 'resolve_workspace') {
-    const workspacePath = projectWorkspaceRootArg(args);
-    if (!workspacePath) return { ok: false, error: 'workspacePath is required' };
-    const defaultAgentId = args.defaultAgentId !== undefined
-      ? validateDefaultAgentId(args.defaultAgentId, deps.getConfig?.()) ?? undefined
-      : undefined;
-    const input = {
-      workspacePath,
-      agentId: trimString(args.agentId),
-      defaultAgentId,
-      autoCreate: args.autoCreate === true,
-    };
+    if (args.idempotencyKey !== undefined && !trimString(args.idempotencyKey)) return { ok: false, error: 'Invalid idempotencyKey' };
+    const input = ProjectResolveWorkspaceInputSchema.parse({
+      ...pickDefined(args, ['agentId', 'defaultAgentId', 'projectKind', 'autoCreate', 'conversationId']),
+      workspacePath: projectWorkspaceRootArg(args),
+    });
     if (dryRun) return { ok: true, dryRun: true, action: 'resolve_project_workspace', input };
-    const match = projects.resolveOrCreateForWorkspacePath(input);
-    return match ? { ok: true, match } : { ok: false, error: 'No project matched workspace path' };
+    const caller: CapabilityContext = { principalId: 'agent:' + (deps.getCurrentAgentId?.() ?? 'main'), surface: 'agent',
+      scopes: ['workspace.write'], actor: { kind: 'agent', id: deps.getCurrentAgentId?.() }, authorize: deps.authorizeCapability ?? (() => true) };
+    const operation = 'xopc.projects.resolve_workspace';
+    const result = ProjectResolveWorkspaceOutputSchema.parse(await capabilities.call(operation, input, caller,
+      { ...capabilities.describe(operation, caller), idempotencyKey: trimString(args.idempotencyKey) ?? randomUUID() }));
+    const { ok: _ok, ...match } = result;
+    return result.project ? { ok: true, match } : { ok: false, error: 'No project matched workspace path' };
   }
 
-  if (command === 'create') {
-    const name = trimString(args.name);
-    const workspaceRoot = projectWorkspaceRootArg(args);
-    if (!name && !workspaceRoot) return { ok: false, error: 'name or workspaceRoot is required' };
-    const input = {
-      name,
-      description: trimString(args.description),
-      defaultAgentId: validateDefaultAgentId(args.defaultAgentId, deps.getConfig?.()) ?? undefined,
-      workspaceRoot,
-      createWorkspaceRoot: args.createWorkspaceRoot === true,
-      projectKind: trimString(args.projectKind),
-      brief: trimString(args.brief),
-      instructions: trimString(args.instructions),
-      outcome: trimString(args.outcome),
-      successCriteria: args.successCriteria === undefined ? undefined : stringArray(args.successCriteria),
-      scope: args.scope === undefined ? undefined : record(args.scope),
-      nonGoals: args.nonGoals === undefined ? undefined : stringArray(args.nonGoals),
-      health: args.health === undefined ? undefined : enumValue(args.health, PROJECT_HEALTHS),
-      ownerId: trimString(args.ownerId),
-      targetAt: args.targetAt === undefined ? undefined : finiteNumber(args.targetAt),
-    };
-    if (args.successCriteria !== undefined && !input.successCriteria) return { ok: false, error: 'Invalid successCriteria' };
-    if (args.scope !== undefined && !input.scope) return { ok: false, error: 'Invalid scope' };
-    if (args.nonGoals !== undefined && !input.nonGoals) return { ok: false, error: 'Invalid nonGoals' };
-    if (args.health !== undefined && !input.health) return { ok: false, error: 'Invalid project health' };
-    if (args.targetAt !== undefined && input.targetAt === undefined) return { ok: false, error: 'Invalid targetAt' };
-    if (dryRun) return { ok: true, dryRun: true, action: 'create_project', input };
-    const project = projects.create(input);
-    return { ok: true, project };
+  if (command === 'create' || command === 'update') {
+    const fields = ['name', 'description', 'defaultAgentId', 'createWorkspaceRoot', 'executionMode', 'brief', 'instructions',
+      'outcome', 'successCriteria', 'scope', 'nonGoals', 'health', 'ownerId', 'targetAt'];
+    const values = pickDefined(args, fields);
+    const workspaceRoot = command === 'create' ? projectWorkspaceRootArg(args) : optionalProjectWorkspaceRootArg(args);
+    if (workspaceRoot !== undefined) values.workspaceRoot = workspaceRoot;
+    if (args.workspaceRoot !== undefined && typeof args.workspaceRoot !== 'string' && args.workspaceRoot !== null) values.workspaceRoot = args.workspaceRoot;
+    if (args.idempotencyKey !== undefined && !trimString(args.idempotencyKey)) return { ok: false, error: 'Invalid idempotencyKey' };
+    let input: unknown;
+    if (command === 'create') {
+      input = ProjectCreateInputSchema.parse({ ...values, ...pickDefined(args, ['projectKind', 'autoUnderstand']) });
+    } else {
+      const id = trimString(args.projectId) ?? trimString(args.id);
+      if (!id) return { ok: false, error: 'projectId is required' };
+      if (args.idempotencyKey !== undefined && args.expectedVersion === undefined) return { ok: false, error: 'Stable retries require the original expectedVersion' };
+      const project = args.expectedVersion === undefined ? projects.get(id) : undefined;
+      if (args.expectedVersion === undefined && !project) return { ok: false, error: 'Project not found' };
+      input = ProjectEditInputSchema.parse({ id, expectedVersion: args.expectedVersion === undefined ? project?.version : args.expectedVersion,
+        patch: { ...values, ...pickDefined(args, ['status']) } });
+    }
+    if (dryRun) return { ok: true, dryRun: true, action: `${command}_project`, input };
+    const caller: CapabilityContext = { principalId: 'agent:' + (deps.getCurrentAgentId?.() ?? 'main'), surface: 'agent',
+      scopes: ['workspace.write'], actor: { kind: 'agent', id: deps.getCurrentAgentId?.() }, authorize: deps.authorizeCapability ?? (() => true) };
+    const operation = 'xopc.projects.' + command;
+    return ProjectMutationOutputSchema.parse(await capabilities.call(operation, input, caller,
+      { ...capabilities.describe(operation, caller), idempotencyKey: trimString(args.idempotencyKey) ?? randomUUID() }));
   }
 
-  if (command === 'update') {
+  if (command === 'pin' || command === 'unpin' || command === 'delete') {
     const id = trimString(args.projectId) ?? trimString(args.id);
     if (!id) return { ok: false, error: 'projectId is required' };
-    const workspaceRoot = optionalProjectWorkspaceRootArg(args);
-    const patch = {
-      ...(args.name !== undefined ? { name: trimString(args.name) ?? '' } : {}),
-      ...(args.description !== undefined ? { description: optionalString(args.description) } : {}),
-      ...(args.status !== undefined ? { status: enumValue(args.status, PROJECT_STATUSES) } : {}),
-      ...(args.defaultAgentId !== undefined ? { defaultAgentId: validateDefaultAgentId(args.defaultAgentId, deps.getConfig?.()) } : {}),
-      ...(workspaceRoot !== undefined ? { workspaceRoot } : {}),
-      ...(args.createWorkspaceRoot === true ? { createWorkspaceRoot: true } : {}),
-      ...(args.brief !== undefined ? { brief: optionalString(args.brief) } : {}),
-      ...(args.instructions !== undefined ? { instructions: optionalString(args.instructions) } : {}),
-      ...(args.outcome !== undefined ? { outcome: optionalString(args.outcome) } : {}),
-      ...(args.successCriteria !== undefined ? { successCriteria: stringArray(args.successCriteria) } : {}),
-      ...(args.scope !== undefined ? { scope: record(args.scope) } : {}),
-      ...(args.nonGoals !== undefined ? { nonGoals: stringArray(args.nonGoals) } : {}),
-      ...(args.health !== undefined ? { health: enumValue(args.health, PROJECT_HEALTHS) } : {}),
-      ...(args.ownerId !== undefined ? { ownerId: optionalString(args.ownerId) } : {}),
-      ...(args.targetAt !== undefined ? { targetAt: nullableFiniteNumber(args.targetAt) } : {}),
-    };
-    if (args.status !== undefined && patch.status === undefined) return { ok: false, error: 'Invalid project status' };
-    if (args.successCriteria !== undefined && patch.successCriteria === undefined) return { ok: false, error: 'Invalid successCriteria' };
-    if (args.scope !== undefined && patch.scope === undefined) return { ok: false, error: 'Invalid scope' };
-    if (args.nonGoals !== undefined && patch.nonGoals === undefined) return { ok: false, error: 'Invalid nonGoals' };
-    if (args.health !== undefined && patch.health === undefined) return { ok: false, error: 'Invalid project health' };
-    if (args.targetAt !== undefined && patch.targetAt === undefined) return { ok: false, error: 'Invalid targetAt' };
-    if (dryRun) return { ok: true, dryRun: true, action: 'update_project', projectId: id, patch };
-    const project = projects.update(id, patch);
-    return { ok: true, project };
+    if (args.idempotencyKey !== undefined && !trimString(args.idempotencyKey)) return { ok: false, error: 'Invalid idempotencyKey' };
+    if (args.idempotencyKey !== undefined && args.expectedVersion === undefined) return { ok: false, error: 'Stable retries require the original expectedVersion' };
+    const project = args.expectedVersion === undefined ? projects.get(id) : undefined;
+    if (args.expectedVersion === undefined && !project) return { ok: false, error: 'Project not found' };
+    const common = { id, expectedVersion: args.expectedVersion === undefined ? project?.version : args.expectedVersion };
+    const input = command === 'delete' ? ProjectDeleteInputSchema.parse(common)
+      : ProjectSetPinnedInputSchema.parse({ ...common, pinned: command === 'pin' });
+    if (dryRun) return { ok: true, dryRun: true, action: `${command}_project`, input };
+    const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`, surface: 'agent',
+      scopes: ['workspace.write'], actor: { kind: 'agent', id: deps.getCurrentAgentId?.() }, authorize: deps.authorizeCapability ?? (() => true) };
+    const operation = command === 'delete' ? 'xopc.projects.delete' : 'xopc.projects.set_pinned';
+    const result = await capabilities.call(operation, input, caller, { ...capabilities.describe(operation, caller), idempotencyKey: trimString(args.idempotencyKey) ?? randomUUID() });
+    return (command === 'delete' ? ProjectDeleteOutputSchema : ProjectMutationOutputSchema).parse(result);
   }
 
-  const projectId = trimString(args.projectId) ?? trimString(args.id);
-  if (command === 'list_milestones') {
+  if (['create_milestone', 'update_milestone', 'delete_milestone', 'create_update'].includes(command)) {
+    const projectId = trimString(args.projectId) ?? trimString(args.id);
     if (!projectId) return { ok: false, error: 'projectId is required' };
-    return { ok: true, projectId, items: projects.listMilestones(projectId) };
-  }
-
-  if (command === 'create_milestone') {
-    if (!projectId) return { ok: false, error: 'projectId is required' };
-    const title = trimString(args.title);
-    const status = args.status === undefined ? undefined : enumValue(args.status, MILESTONE_STATUSES);
-    const targetAt = args.targetAt === undefined ? undefined : finiteNumber(args.targetAt);
-    const sortOrder = args.sortOrder === undefined ? undefined : finiteNumber(args.sortOrder);
-    if (!title) return { ok: false, error: 'title is required' };
-    if (args.status !== undefined && !status) return { ok: false, error: 'Invalid milestone status' };
-    if (args.targetAt !== undefined && targetAt === undefined) return { ok: false, error: 'Invalid targetAt' };
-    if (args.sortOrder !== undefined && sortOrder === undefined) return { ok: false, error: 'Invalid sortOrder' };
-    const input = { title, description: trimString(args.description), status, targetAt, sortOrder };
-    if (dryRun) return { ok: true, dryRun: true, action: 'create_project_milestone', projectId, input };
-    return {
-      ok: true,
-      milestone: projects.createMilestone(projectId, input),
-      project: projects.get(projectId),
-    };
-  }
-
-  if (command === 'update_milestone') {
-    if (!projectId) return { ok: false, error: 'projectId is required' };
-    const milestoneId = trimString(args.milestoneId);
-    if (!milestoneId) return { ok: false, error: 'milestoneId is required' };
-    const patch = {
-      ...(args.title !== undefined ? { title: trimString(args.title) ?? '' } : {}),
-      ...(args.description !== undefined ? { description: optionalString(args.description) } : {}),
-      ...(args.status !== undefined ? { status: enumValue(args.status, MILESTONE_STATUSES) } : {}),
-      ...(args.targetAt !== undefined ? { targetAt: nullableFiniteNumber(args.targetAt) } : {}),
-      ...(args.sortOrder !== undefined ? { sortOrder: finiteNumber(args.sortOrder) } : {}),
-    };
-    if (args.status !== undefined && patch.status === undefined) return { ok: false, error: 'Invalid milestone status' };
-    if (args.targetAt !== undefined && patch.targetAt === undefined) return { ok: false, error: 'Invalid targetAt' };
-    if (args.sortOrder !== undefined && patch.sortOrder === undefined) return { ok: false, error: 'Invalid sortOrder' };
-    if (dryRun) return { ok: true, dryRun: true, action: 'update_project_milestone', projectId, milestoneId, patch };
-    return {
-      ok: true,
-      milestone: projects.updateMilestone(projectId, milestoneId, patch),
-      project: projects.get(projectId),
-    };
-  }
-
-  if (command === 'list_updates') {
-    if (!projectId) return { ok: false, error: 'projectId is required' };
-    return { ok: true, projectId, items: projects.listUpdates(projectId, boundedLimit(args.limit)) };
-  }
-
-  if (command === 'create_update') {
-    if (!projectId) return { ok: false, error: 'projectId is required' };
-    const health = enumValue(args.health, PROJECT_HEALTHS);
-    const summary = trimString(args.summary);
-    const progress = args.progress === undefined ? undefined : stringArray(args.progress);
-    const risks = args.risks === undefined ? undefined : stringArray(args.risks);
-    const nextSteps = args.nextSteps === undefined ? undefined : stringArray(args.nextSteps);
-    if (!health) return { ok: false, error: 'health is required' };
-    if (!summary) return { ok: false, error: 'summary is required' };
-    if (args.progress !== undefined && !progress) return { ok: false, error: 'Invalid progress' };
-    if (args.risks !== undefined && !risks) return { ok: false, error: 'Invalid risks' };
-    if (args.nextSteps !== undefined && !nextSteps) return { ok: false, error: 'Invalid nextSteps' };
-    const input = {
-      health,
-      summary,
-      progress,
-      risks,
-      nextSteps,
-      actor: { kind: 'agent', agentId: deps.getCurrentAgentId?.(), conversationId: deps.getCurrentConversationId?.() },
-    };
-    if (dryRun) return { ok: true, dryRun: true, action: 'create_project_update', projectId, input };
-    return {
-      ok: true,
-      update: projects.createUpdate(projectId, input),
-      project: projects.get(projectId),
-    };
+    const operation = 'xopc.projects.' + command;
+    let input: unknown;
+    if (command === 'create_milestone') {
+      input = ProjectMilestoneCreateInputSchema.parse({ projectId, ...pickDefined(args, ['title', 'description', 'status', 'targetAt', 'sortOrder']) });
+    } else if (command === 'create_update') {
+      if (args.idempotencyKey !== undefined && args.expectedVersion === undefined) return { ok: false, error: 'Stable retries require the original expectedVersion' };
+      input = ProjectUpdateCreateInputSchema.parse({ projectId, ...pickDefined(args, ['health', 'summary', 'progress', 'risks', 'nextSteps']),
+        expectedVersion: args.expectedVersion === undefined ? projects.get(projectId)?.version : args.expectedVersion });
+    } else {
+      const id = trimString(args.milestoneId);
+      if (args.idempotencyKey !== undefined && args.expectedRevision === undefined) return { ok: false, error: 'Stable retries require the original expectedRevision' };
+      const expectedRevision = args.expectedRevision === undefined
+        ? projects.listMilestones(projectId).find(item => item.id === id)?.updatedAt : args.expectedRevision;
+      const common = { projectId, id, expectedRevision };
+      input = command === 'delete_milestone' ? ProjectMilestoneDeleteInputSchema.parse(common)
+        : ProjectMilestoneUpdateInputSchema.parse({ ...common, patch: pickDefined(args, ['title', 'description', 'status', 'targetAt', 'sortOrder']) });
+    }
+    if (dryRun) return { ok: true, dryRun: true, action: command, input };
+    const caller: CapabilityContext = { principalId: 'agent:' + (deps.getCurrentAgentId?.() ?? 'main'), surface: 'agent',
+      scopes: ['workspace.write'], actor: { kind: 'agent', id: deps.getCurrentAgentId?.() }, authorize: deps.authorizeCapability ?? (() => true) };
+    const result = await capabilities.call(operation, input, caller, { ...capabilities.describe(operation, caller), idempotencyKey: trimString(args.idempotencyKey) ?? randomUUID() });
+    return (command === 'create_update' ? ProjectUpdateOutputSchema : command === 'delete_milestone' ? ProjectMilestoneDeleteOutputSchema : ProjectMilestoneOutputSchema).parse(result);
   }
 
   return { ok: false, error: `Unsupported project command: ${command}` };
@@ -597,35 +514,42 @@ async function handleAutomation(
   args: Record<string, unknown>,
   deps: XopcUseToolDeps,
   dryRun: boolean,
+  capabilities: CapabilityDispatcher,
 ): Promise<unknown> {
   const automations = deps.getAutomationService?.();
   if (!automations) return { ok: false, error: 'Automation service is unavailable' };
+  const invoke = async (operation: string, input: unknown) => {
+    const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
+      surface: 'agent', scopes: ['automations.write'], authorize: deps.authorizeCapability ?? (() => true) };
+    try {
+      return (operation === 'xopc.automations.delete' ? AutomationDeleteOutputSchema
+        : operation === 'xopc.automations.cancel' ? AutomationCancelOutputSchema
+        : operation === 'xopc.automations.read' ? AutomationReadOutputSchema
+        : operation === 'xopc.automations.read_all' ? AutomationReadAllOutputSchema
+        : operation === 'xopc.automations.run' || operation === 'xopc.automations.rerun' ? AutomationRunMutationOutputSchema : AutomationMutationOutputSchema).parse(await capabilities.call(operation, input, caller,
+        { ...capabilities.describe(operation, caller), idempotencyKey: trimString(args.idempotencyKey) ?? randomUUID() }));
+    } catch (error) {
+      if (error instanceof CapabilityError) return { ok: false as const, error: error.message, code: error.code };
+      throw error;
+    }
+  };
 
-  if (command === 'list') {
-    const projectId = currentProjectId(args, deps);
-    const projectError = automationProjectError(projectId, deps);
-    if (projectError) return { ok: false, error: projectError };
-    return {
-      ok: true,
-      items: await automations.list({ projectId }),
-      ...(projectId ? { projectId } : {}),
-    };
-  }
-
-  if (command === 'get') {
-    const id = trimString(args.automationId) ?? trimString(args.id);
-    if (!id) return { ok: false, error: 'automationId is required' };
-    const automation = await automations.get(id);
-    return automation ? { ok: true, automation } : { ok: false, error: `Automation not found: ${id}` };
+  if (command === 'cancel' || command === 'read' || command === 'read_all') {
+    const input = command === 'read_all' ? AutomationReadAllInputSchema.parse({ projectId: trimString(args.projectId) })
+      : CapabilityResourceInputSchema.parse({ id: trimString(args.runId) ?? trimString(args.id) });
+    if (dryRun) return { ok: true, dryRun: true, action: command, input };
+    return invoke(`xopc.automations.${command}`, input);
   }
 
   if (command === 'create') {
     const source = automationPayload(args, 'automation');
     const explicitProjectId = trimString(args.projectId) ?? trimString(source.projectId);
     const projectId = explicitProjectId ?? currentProjectId({}, deps);
-    const projectError = automationProjectError(projectId, deps);
-    if (projectError) return { ok: false, error: projectError };
-    const input = CreateAutomationSchema.parse({
+    if (dryRun) {
+      const projectError = automationProjectError(projectId, deps);
+      if (projectError) return { ok: false, error: projectError };
+    }
+    const input = AutomationCreateCapabilityInputSchema.parse({
       ...pickDefined(source, [
         'id', 'name', 'description', 'enabled', 'trigger', 'action', 'safety', 'conversationMode',
         'notificationPolicy', 'completionWebhookUrl', 'reliability', 'state',
@@ -633,63 +557,66 @@ async function handleAutomation(
       ...(projectId ? { projectId } : {}),
     });
     if (dryRun) return { ok: true, dryRun: true, action: 'create_automation', input, projectId };
-    const automation = await automations.create(input);
-    return { ok: true, automation, ...(projectId ? { projectId } : {}) };
+    const result = await invoke('xopc.automations.create', input);
+    return { ...result, ...(result.ok && projectId ? { projectId } : {}) };
   }
 
   if (command === 'update') {
     const id = trimString(args.automationId) ?? trimString(args.id);
     if (!id) return { ok: false, error: 'automationId is required' };
     const source = automationPayload(args, 'patch');
-    const patch = UpdateAutomationSchema.parse(pickDefined(source, [
+    const patch = AutomationUpdatePatchSchema.parse(pickDefined(source, [
       'name', 'description', 'projectId', 'enabled', 'trigger', 'action', 'safety', 'conversationMode',
       'notificationPolicy', 'completionWebhookUrl', 'reliability', 'state',
     ]));
-    const projectError = automationProjectError(patch.projectId, deps);
-    if (projectError) return { ok: false, error: projectError };
+    if (dryRun) {
+      const projectError = automationProjectError(patch.projectId, deps);
+      if (projectError) return { ok: false, error: projectError };
+    }
     if (dryRun) return { ok: true, dryRun: true, action: 'update_automation', automationId: id, patch };
-    const automation = await automations.update(id, patch);
-    return automation ? { ok: true, automation } : { ok: false, error: `Automation not found: ${id}` };
+    if (args.idempotencyKey !== undefined && args.expectedRevision === undefined) {
+      return { ok: false, error: 'Idempotent automation changes require expectedRevision from the original read' };
+    }
+    const expectedRevision = args.expectedRevision !== undefined ? args.expectedRevision : (await automations.get(id))?.updatedAtMs;
+    if (expectedRevision === undefined) return { ok: false, error: `Automation not found: ${id}` };
+    return invoke('xopc.automations.update', { id, patch, expectedRevision });
   }
 
-  if (command === 'history') {
-    const automationId = trimString(args.automationId) ?? trimString(args.id);
-    const projectId = automationId ? undefined : currentProjectId(args, deps);
-    const projectError = automationProjectError(projectId, deps);
-    if (projectError) return { ok: false, error: projectError };
-    return {
-      ok: true,
-      items: await automations.listRuns({
-        automationId,
-        projectId,
-        limit: boundedLimit(args.limit, 20, 50),
-      }),
-      ...(projectId ? { projectId } : {}),
-    };
-  }
 
+  if (command === 'rerun') {
+    const runId = trimString(args.runId) ?? trimString(args.id);
+    if (!runId) return { ok: false, error: 'runId is required' };
+    if (dryRun) return { ok: true, dryRun: true, action: 'rerun_automation', runId };
+    return invoke('xopc.automations.rerun', { id: runId });
+  }
   if (!['delete', 'run', 'pause', 'resume'].includes(command)) {
     return { ok: false, error: `Unsupported automation command: ${command}` };
   }
 
   const id = trimString(args.automationId) ?? trimString(args.id);
   if (!id) return { ok: false, error: 'automationId is required' };
+  if (!dryRun && command === 'run') return invoke('xopc.automations.run', { id });
+  if (!dryRun && command === 'delete') {
+    if (args.idempotencyKey !== undefined && args.expectedRevision === undefined) {
+      return { ok: false, error: 'Idempotent deletion requires the original expectedRevision' };
+    }
+    const expectedRevision = args.expectedRevision !== undefined ? args.expectedRevision : (await automations.get(id))?.updatedAtMs ?? null;
+    return invoke('xopc.automations.delete', { id, expectedRevision });
+  }
+  if (!dryRun && (command === 'pause' || command === 'resume')) {
+    if (args.idempotencyKey !== undefined && args.expectedRevision === undefined) {
+      return { ok: false, error: 'Idempotent automation changes require expectedRevision from the original read' };
+    }
+    const expectedRevision = args.expectedRevision !== undefined ? args.expectedRevision : (await automations.get(id))?.updatedAtMs;
+    if (expectedRevision === undefined) return { ok: false, error: `Automation not found: ${id}` };
+    return invoke('xopc.automations.set_enabled', { id, enabled: command === 'resume', expectedRevision });
+  }
   const current = await automations.get(id);
   if (!current) return { ok: false, error: `Automation not found: ${id}` };
   if (dryRun) {
     return { ok: true, dryRun: true, action: `${command}_automation`, automationId: id, automation: current };
   }
 
-  if (command === 'delete') {
-    return { ok: true, removed: await automations.remove(id), automation: current };
-  }
-  if (command === 'run') {
-    return { ok: true, automation: current, run: await automations.runNow(id) };
-  }
-  if (command === 'pause' || command === 'resume') {
-    const automation = command === 'pause' ? await automations.pause(id) : await automations.resume(id);
-    return automation ? { ok: true, automation } : { ok: false, error: `Automation not found: ${id}` };
-  }
 
   return { ok: false, error: `Automation command failed: ${command}` };
 }
@@ -699,36 +626,17 @@ async function handleNote(
   args: Record<string, unknown>,
   deps: XopcUseToolDeps,
   dryRun: boolean,
+  capabilities: CapabilityDispatcher,
 ): Promise<unknown> {
   const notes = deps.getNotesService?.();
   if (!notes) return { ok: false, error: 'Notes service is unavailable' };
-
-  if (command === 'list') {
-    const projectId = currentProjectId(args, deps);
-    return {
-      ok: true,
-      ...(await notes.listNotes({
-        status: enumValue(args.status, NOTE_STATUSES),
-        kind: enumValue(args.kind, NOTE_KINDS),
-        tag: trimString(args.tag),
-        projectId,
-        search: trimString(args.search),
-        pinned: typeof args.pinned === 'boolean' ? args.pinned : undefined,
-        limit: boundedLimit(args.limit),
-        offset: offset(args.offset),
-        sortBy: enumValue(args.sortBy, new Set(['createdAt', 'updatedAt', 'lastOpenedAt'] as const)),
-        sortOrder: enumValue(args.sortOrder, new Set(['asc', 'desc'] as const)),
-      })),
-      ...(projectId ? { projectId } : {}),
-    };
-  }
-
-  if (command === 'get') {
-    const id = trimString(args.noteId) ?? trimString(args.id);
-    if (!id) return { ok: false, error: 'noteId is required' };
-    const note = await notes.getNote(id);
-    return note ? { ok: true, note } : { ok: false, error: `Note not found: ${id}` };
-  }
+  const invoke = async (operation: string, input: unknown) => {
+    const context: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
+      surface: 'agent', scopes: ['workspace.write'], authorize: deps.authorizeCapability ?? (() => true),
+      actor: { kind: 'agent', id: deps.getCurrentAgentId?.() ?? 'main' } };
+    return NoteGetOutputSchema.parse(await capabilities.call(operation, input, context,
+      { ...capabilities.describe(operation, context), idempotencyKey: trimString(args.idempotencyKey) ?? randomUUID() }));
+  };
 
   if (command === 'create') {
     const projectId = currentProjectId(args, deps);
@@ -746,16 +654,7 @@ async function handleNote(
       pinned: args.pinned === true,
     };
     if (dryRun) return { ok: true, dryRun: true, action: 'create_note', input, projectId };
-    const note = await notes.createNote(input);
-    if (project) {
-      new ObjectLinkService().create({
-        id: `note:${note.id}:project:${project.id}`,
-        from: { kind: 'note', id: note.id, title: note.title },
-        to: { kind: 'project', id: project.id, title: project.name },
-        relation: 'belongs_to',
-        source: 'user',
-      });
-    }
+    const { note } = await invoke('xopc.notes.create', { ...input, projectId });
     return { ok: true, note, ...(projectId ? { projectId } : {}) };
   }
 
@@ -766,18 +665,8 @@ async function handleNote(
     if (!content) return { ok: false, error: 'content is required' };
     const heading = trimString(args.heading);
     if (dryRun) return { ok: true, dryRun: true, action: 'append_note', noteId: id, heading, content };
-    const note = await notes.appendTextToNote(id, content, heading);
-    return note ? { ok: true, note } : { ok: false, error: `Note not found: ${id}` };
-  }
-
-  if (command === 'preview_edit') {
-    const id = trimString(args.noteId) ?? trimString(args.id);
-    const instruction = trimString(args.instruction);
-    if (!id) return { ok: false, error: 'noteId is required' };
-    if (!instruction) return { ok: false, error: 'instruction is required' };
-    const markdown = typeof args.markdown === 'string' ? args.markdown : undefined;
-    const result = await notes.createAiEditPatch(id, instruction, markdown);
-    return result ? { ok: true, ...result } : { ok: false, error: `Note not found: ${id}` };
+    const { note } = await invoke('xopc.notes.append', { id, content, heading, expectedRevision: args.expectedRevision });
+    return { ok: true, note };
   }
 
   if (command === 'update') {
@@ -798,9 +687,14 @@ async function handleNote(
     };
     if (args.kind !== undefined && patch.kind === undefined) return { ok: false, error: 'Invalid note kind' };
     if (args.status !== undefined && patch.status === undefined) return { ok: false, error: 'Invalid note status' };
+    if (args.idempotencyKey !== undefined && args.expectedRevision === undefined) {
+      return { ok: false, error: 'Idempotent note updates require expectedRevision from the original read' };
+    }
     if (dryRun) return { ok: true, dryRun: true, action: 'update_note', noteId: id, patch };
-    const note = await notes.updateNote(id, patch, 'ai_edit');
-    return note ? { ok: true, note } : { ok: false, error: `Note not found: ${id}` };
+    const current = await notes.getNote(id);
+    if (!current) return { ok: false, error: `Note not found: ${id}` };
+    const { note } = await invoke('xopc.notes.update', { id, patch, expectedRevision: args.expectedRevision ?? current.remoteVersion ?? 1 });
+    return { ok: true, note };
   }
 
   if (command === 'delete') {
@@ -812,10 +706,19 @@ async function handleNote(
         ? { ok: true, dryRun: true, action: 'delete_note', noteId: id, note }
         : { ok: false, error: `Note not found: ${id}` };
     }
-    const removed = await notes.deleteNote(id);
-    return removed
-      ? { ok: true, removed: true, noteId: id }
-      : { ok: false, error: `Note not found: ${id}` };
+    if (args.idempotencyKey !== undefined && args.expectedRevision === undefined) return { ok: false, error: 'Stable retries require the original expectedRevision' };
+    let expectedRevision = args.expectedRevision;
+    if (expectedRevision === undefined) {
+      const note = await notes.getNote(id);
+      if (!note) return { ok: false, error: `Note not found: ${id}` };
+      expectedRevision = note.remoteVersion ?? 1;
+    }
+    const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`, surface: 'agent',
+      scopes: ['workspace.write'], authorize: deps.authorizeCapability ?? (() => true) };
+    const operation = 'xopc.notes.delete';
+    const result = NoteDeleteOutputSchema.parse(await capabilities.call(operation, { id, expectedRevision, revokeShares: args.revokeShares }, caller,
+      { ...capabilities.describe(operation, caller), idempotencyKey: trimString(args.idempotencyKey) ?? randomUUID() }));
+    return { ok: true, removed: result.deleted, noteId: id, revokedShares: result.revokedShares };
   }
 
   return { ok: false, error: `Unsupported note command: ${command}` };
@@ -826,66 +729,23 @@ async function handleTask(
   args: Record<string, unknown>,
   deps: XopcUseToolDeps,
   dryRun: boolean,
+  capabilities: CapabilityDispatcher,
 ): Promise<unknown> {
   const tasks = new TaskRepository();
-  const dependencies = new TaskDependencyService();
-  const context = new TaskContextRepository();
   const runs = new TaskRunRepository();
-  const projector = new TaskReadModelProjector();
   const deletion = new TaskDeletionService(tasks, runs);
-
-  if (command === 'list') {
-    const projectId = currentProjectId(args, deps);
-    const phase = enumValue(args.phase, TASK_PHASES);
-    const priority = enumValue(args.priority, TASK_PRIORITIES);
-    const search = trimString(args.search)?.toLocaleLowerCase();
-    const start = offset(args.offset) ?? 0;
-    const limit = boundedLimit(args.limit);
-    const candidates = projectId
-      ? tasks.listByProject(projectId, 200)
-      : tasks.list({ limit: 200 });
-    const matching = candidates.filter((task) =>
-      (!phase || task.phase === phase)
-      && (!priority || task.priority === priority)
-      && (!search || `${task.title}\n${task.contract?.objective ?? ''}`.toLocaleLowerCase().includes(search))
-    );
-    return {
-      ok: true,
-      items: matching.slice(start, start + limit),
-      total: matching.length,
-      ...(projectId ? { projectId } : {}),
-    };
-  }
-
-  if (command === 'get') {
-    const id = trimString(args.taskId) ?? trimString(args.id);
-    if (!id) return { ok: false, error: 'taskId is required' };
-    const task = tasks.get(id);
-    if (!task) return { ok: false, error: `Task not found: ${id}` };
-    const model = projector.project(task);
-    return {
-      ok: true,
-      task,
-      model,
-      operationalState: model.operationalState,
-      attention: model.attention,
-      allowedCommands: model.allowedCommands,
-      dependencies: dependencies.listDependencies(id),
-      dependents: dependencies.listDependents(id),
-      context: context.list(id),
-      authorityGrants: context.listActiveGrants(id),
-      runs: runs.listByTask(id),
-      receipts: runs.listReceipts(id),
-      waits: runs.listActiveWaits(id),
-    };
-  }
+  const invokeRelation = (operation: string, input: unknown) => {
+    const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`, surface: 'agent', scopes: ['tasks.write'],
+      actor: { kind: 'agent', id: deps.getCurrentAgentId?.() ?? 'main' }, authorize: deps.authorizeCapability ?? (() => true) };
+    return capabilities.call(operation, input, caller, { ...capabilities.describe(operation, caller),
+      idempotencyKey: trimString(args.idempotencyKey) ?? randomUUID() });
+  };
 
   if (command === 'delete') {
     const id = trimString(args.taskId) ?? trimString(args.id);
     if (!id) return { ok: false, error: 'taskId is required' };
-    const result = dryRun ? deletion.inspect(id) : deletion.delete(id);
+    const result = dryRun ? deletion.inspect(id) : TaskDeleteOutputSchema.parse(await invokeRelation('xopc.tasks.delete', { taskId: id, expectedVersion: args.expectedVersion }));
     if (result.ok === true) {
-      if (!dryRun) deps.dispatchTaskEvents?.();
       return dryRun
         ? { ok: true, dryRun: true, action: 'delete_task', taskId: id, task: result.task }
         : { ok: true, removed: true, taskId: id };
@@ -980,10 +840,15 @@ async function handleTask(
     if (dryRun) {
       return { ok: true, dryRun: true, action: 'create_task', createMode, input, dependsOnTaskIds };
     }
-    const created = new TaskApplicationService().create(input, { kind: 'agent', id: agentId });
+    const capabilityContext: CapabilityContext = {
+      principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`, surface: 'agent', scopes: ['tasks.write'],
+      actor: { kind: 'agent', id: deps.getCurrentAgentId?.() ?? 'main' },
+      authorize: deps.authorizeCapability ?? (() => true),
+    };
+    const { idempotencyKey, ...capabilityInput } = input;
+    const created = TaskMutationOutputSchema.parse(await capabilities.call('xopc.tasks.create', capabilityInput, capabilityContext,
+      { ...capabilities.describe('xopc.tasks.create', capabilityContext), idempotencyKey }));
     if (created.ok === false) return { ok: false, error: created.reason, ...created };
-    if (created.runId) deps.dispatchTaskRuns?.();
-    else deps.dispatchTaskEvents?.();
     return { ok: true, task: created.model.task, operationalState: created.model.operationalState,
       createMode, ...(created.runId ? { runId: created.runId } : {}) };
   }
@@ -1007,33 +872,7 @@ async function handleTask(
         dependsOnTaskIds,
       };
     }
-    try {
-      const task = runSqliteWriteTransaction((db) => {
-        const changed = dependencies.replace({
-          taskId: id,
-          dependsOnTaskIds,
-          expectedVersion,
-        });
-        enqueueTaskChangedEvent(db, {
-          taskId: changed.id,
-          projectId: changed.projectId,
-          version: changed.version,
-          changedFields: ['dependencies'],
-          actor: { kind: 'agent', id: deps.getCurrentAgentId?.() },
-        });
-        return changed;
-      });
-      deps.dispatchTaskEvents?.();
-      return {
-        ok: true,
-        task,
-        dependencies: dependencies.listDependencies(id),
-        dependents: dependencies.listDependents(id),
-      };
-    } catch (error) {
-      if (!(error instanceof TaskDependencyError)) throw error;
-      return { ok: false, error: error.message, reason: error.code };
-    }
+    return invokeRelation('xopc.tasks.update_dependencies', { taskId: id, dependsOnTaskIds, expectedVersion });
   }
 
   if (command === 'add_context') {
@@ -1056,20 +895,7 @@ async function handleTask(
       createdBy: { kind: 'agent' as const, id: deps.getCurrentAgentId?.() },
     };
     if (dryRun) return { ok: true, dryRun: true, action: 'add_task_context', input };
-    const task = tasks.require(id);
-    const edge = runSqliteWriteTransaction((db) => {
-      const created = context.add(input);
-      enqueueTaskChangedEvent(db, {
-        taskId: task.id,
-        projectId: task.projectId,
-        version: task.version,
-        changedFields: ['context'],
-        actor: input.createdBy,
-      });
-      return created;
-    });
-    deps.dispatchTaskEvents?.();
-    return { ok: true, edge, context: context.list(id) };
+    return invokeRelation('xopc.tasks.add_context', { taskId: id, edge: parsed.data, expectedVersion: args.expectedVersion });
   }
 
   if (command === 'remove_context') {
@@ -1078,25 +904,7 @@ async function handleTask(
     if (!id) return { ok: false, error: 'taskId is required' };
     if (!edgeId) return { ok: false, error: 'edgeId is required' };
     if (dryRun) return { ok: true, dryRun: true, action: 'remove_task_context', taskId: id, edgeId };
-    const task = tasks.get(id);
-    const actor = { kind: 'agent' as const, id: deps.getCurrentAgentId?.() };
-    const removed = task ? runSqliteWriteTransaction((db) => {
-      const didRemove = context.remove(id, edgeId);
-      if (didRemove) {
-        enqueueTaskChangedEvent(db, {
-          taskId: task.id,
-          projectId: task.projectId,
-          version: task.version,
-          changedFields: ['context'],
-          actor,
-        });
-      }
-      return didRemove;
-    }) : false;
-    if (removed) deps.dispatchTaskEvents?.();
-    return removed
-      ? { ok: true, taskId: id, edgeId, context: context.list(id) }
-      : { ok: false, error: `Task context edge not found: ${edgeId}` };
+    return invokeRelation('xopc.tasks.remove_context', { taskId: id, edgeId, expectedVersion: args.expectedVersion });
   }
 
   if (command === 'command') {
@@ -1126,13 +934,14 @@ async function handleTask(
         expectedVersion,
       };
     }
-    const result = new TaskApplicationService().execute({
-      taskId: id,
-      idempotencyKey: trimString(args.idempotencyKey) ?? randomUUID(),
-      expectedVersion,
-      command: parsedCommand.data,
-      actor: { kind: 'agent', id: deps.getCurrentAgentId?.() },
-    });
+    const capabilityContext: CapabilityContext = {
+      principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`, surface: 'agent', scopes: ['tasks.write'],
+      actor: { kind: 'agent', id: deps.getCurrentAgentId?.() ?? 'main' },
+      authorize: deps.authorizeCapability ?? (() => true),
+    };
+    const result = TaskMutationOutputSchema.parse(await capabilities.call('xopc.tasks.command',
+      { taskId: id, expectedVersion, command: parsedCommand.data }, capabilityContext,
+      { ...capabilities.describe('xopc.tasks.command', capabilityContext), idempotencyKey: trimString(args.idempotencyKey) ?? randomUUID() }));
     if (result.ok === false) {
       return {
         ok: false,
@@ -1141,8 +950,6 @@ async function handleTask(
         ...result,
       };
     }
-    if (result.runId) deps.dispatchTaskRuns?.();
-    else deps.dispatchTaskEvents?.();
     return {
       ok: true,
       task: result.model.task,
@@ -1160,73 +967,30 @@ async function handleTaskRun(
   args: Record<string, unknown>,
   dryRun: boolean,
   deps: XopcUseToolDeps,
+  capabilities: CapabilityDispatcher,
 ): Promise<unknown> {
-  const runs = new TaskRunRepository();
-
-  if (command === 'list') {
-    const taskId = trimString(args.taskId);
-    if (!taskId) return { ok: false, error: 'taskId is required' };
-    const limit = boundedLimit(args.limit);
-    return {
-      ok: true,
-      taskId,
-      items: runs.listByTask(taskId).slice(0, limit),
-      receipts: runs.listReceipts(taskId, limit),
-      activeWaits: runs.listActiveWaits(taskId),
-    };
+  if (command === 'feedback') {
+    const input = TaskRunFeedbackInputSchema.parse({ id: args.runId ?? args.id, rating: args.rating, reason: args.reason });
+    if (dryRun) return { ok: true, dryRun: true, action: 'task_run_feedback', input };
+    const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`, surface: 'agent',
+      scopes: ['tasks.write'], actor: { kind: 'agent', id: deps.getCurrentAgentId?.() }, authorize: deps.authorizeCapability ?? (() => true) };
+    const operation = 'xopc.task_runs.feedback';
+    return TaskRunFeedbackOutputSchema.parse(await capabilities.call(operation, input, caller,
+      { ...capabilities.describe(operation, caller), idempotencyKey: trimString(args.idempotencyKey) ?? randomUUID() }));
   }
-
-  if (command === 'get') {
-    const runId = trimString(args.runId) ?? trimString(args.id);
-    if (!runId) return { ok: false, error: 'runId is required' };
-    const run = runs.get(runId);
-    if (!run) return { ok: false, error: `TaskRun not found: ${runId}` };
-    return {
-      ok: true,
-      run,
-      receipt: runs.getReceipt(runId),
-      events: runs.listEvents(runId),
-      activeWaits: runs.listActiveWaits(run.taskId),
-    };
-  }
-
   if (command === 'cancel') {
-    const runId = trimString(args.runId) ?? trimString(args.id);
-    const expectedVersion = finiteNumber(args.expectedVersion);
-    if (!runId) return { ok: false, error: 'runId is required' };
-    if (expectedVersion === undefined || !Number.isInteger(expectedVersion) || expectedVersion < 1) {
-      return { ok: false, error: 'expectedVersion is required' };
-    }
-    const run = runs.get(runId);
-    if (!run) return { ok: false, error: `TaskRun not found: ${runId}` };
-    if (run.version !== expectedVersion) {
-      return { ok: false, error: 'TaskRun changed', reason: 'conflict', run };
-    }
-    const task = new TaskRepository().require(run.taskId);
-    const reason = trimString(args.reason) ?? 'TaskRun cancelled by agent';
+    const input = TaskRunCancelInputSchema.parse({ id: args.runId ?? args.id, expectedVersion: args.expectedVersion, reason: args.reason });
     if (dryRun) {
-      return { ok: true, dryRun: true, action: 'cancel_task_run', runId, expectedVersion, reason };
+      const run = new TaskRunRepository().get(input.id);
+      if (!run) return { ok: false, error: 'TaskRun not found' };
+      if (run.version !== input.expectedVersion) return { ok: false, error: 'TaskRun changed', reason: 'conflict', run };
+      return { ok: true, dryRun: true, action: 'cancel_task_run', runId: input.id, expectedVersion: input.expectedVersion, reason: input.reason };
     }
-    const result = new TaskApplicationService().completeRun({
-      runId,
-      expectedRunVersion: expectedVersion,
-      actor: { kind: 'agent', id: deps.getCurrentAgentId?.() },
-      terminalCode: 'cancelled_by_agent',
-      terminalMessage: reason,
-      receipt: {
-        status: 'cancelled',
-        summary: reason,
-        changes: [],
-        evidence: [],
-        verification: { status: 'unverified', checks: [] },
-        remainingWork: [task.contract?.objective ?? task.title],
-        needsUser: false,
-        completionVerdict: 'not_achieved',
-      },
-    });
-    if (result.ok === false) return { ok: false, error: result.reason, ...result };
-    deps.dispatchTaskEvents?.();
-    return { ok: true, run: runs.get(runId), receipt: runs.getReceipt(runId), model: result.model };
+    const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`, surface: 'agent',
+      scopes: ['tasks.write'], actor: { kind: 'agent', id: deps.getCurrentAgentId?.() }, authorize: deps.authorizeCapability ?? (() => true) };
+    const operation = 'xopc.task_runs.cancel';
+    return TaskRunCancelOutputSchema.parse(await capabilities.call(operation, input, caller,
+      { ...capabilities.describe(operation, caller), idempotencyKey: trimString(args.idempotencyKey) ?? randomUUID() }));
   }
 
   return { ok: false, error: `Unsupported task_run command: ${command}` };
@@ -1241,17 +1005,6 @@ async function handleLocalApp(
   const localApps = deps.getLocalAppService?.();
   if (!localApps) return { ok: false, error: 'Local app service is unavailable' };
 
-  if (command === 'list') {
-    return { ok: true, apps: localApps.list() };
-  }
-
-  const id = trimString(args.localAppId) ?? trimString(args.id);
-  if (command === 'get') {
-    if (!id) return { ok: false, error: 'localAppId is required' };
-    const app = localApps.get(id);
-    return app ? { ok: true, app } : { ok: false, error: `Local app not found: ${id}` };
-  }
-
   if (command === 'create') {
     const name = trimString(args.name);
     const idea = trimString(args.idea);
@@ -1262,55 +1015,189 @@ async function handleLocalApp(
     return { ok: true, app: localApps.create(input) };
   }
 
-  if (command === 'validate') {
-    if (!id) return { ok: false, error: 'localAppId is required' };
-    const app = localApps.get(id);
-    if (!app) return { ok: false, error: `Local app not found: ${id}` };
-    return { ok: true, app, validation: localApps.validate(id) };
-  }
-
   return { ok: false, error: `Unsupported local_app command: ${command}` };
 }
 
-function handleSettings(
-  command: string,
-  args: Record<string, unknown>,
-): unknown {
-  if (command !== 'open') {
-    return { ok: false, error: `Unsupported settings command: ${command}` };
-  }
-  const section = trimString(args.section) ?? 'overview';
-  if (!/^[a-z0-9][a-z0-9/_-]*$/i.test(section) || section.includes('..')) {
-    return { ok: false, error: 'Invalid settings section' };
-  }
-  return {
-    ok: true,
-    settings: {
-      section,
-      title: trimString(args.title) ?? 'Settings',
-      summary: trimString(args.summary),
-    },
-  };
-}
-
 export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcUseToolSchema, XopcUseDetails> {
+  const capabilities = createProductDispatcher(deps.getNotesService, {
+    getConfig: deps.getConfig, getProjects: deps.getProjectService,
+    getWorkDiscovery: deps.getWorkDiscovery,
+    getLocalApps: deps.getLocalAppService,
+    getSceneAccess: deps.getSceneAccess,
+    getAutomations: deps.getAutomationService,
+    wake: deps.dispatchTaskRuns || deps.dispatchTaskEvents ? runId => runId ? deps.dispatchTaskRuns?.() : deps.dispatchTaskEvents?.() : undefined,
+  });
   return {
     name: 'xopc_use',
     label: 'XOPC Use',
     description:
-      'Operate first-class xopc objects through one safe entry point. Use for scenes, projects, automations, notes, tasks, TaskRuns, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
+      'Operate first-class xopc objects through one safe entry point. Local App capabilities takes extensionId and discovers already granted bindings. Local App invoke requires extensionId, the discovered manifestDigest, capabilityId and a pinned call {majorVersion, descriptorDigest, input, idempotencyKey for writes}. Never manufacture grants or change a retry key after an uncertain write. Use for scenes, projects, automations, notes, tasks, TaskRuns, local apps, and exact settings jump targets instead of editing storage files directly. For non-trivial object changes, load the built-in manual first with tool_manual({ tool: "xopc_use" }).',
     parameters: XopcUseToolSchema,
     mutatesWorkspace: true,
     mutationScope: 'external',
     requiresExclusiveWorkspaceLock: true,
     finalGuardRelevant: true,
-    async execute(toolCallId, input: XopcUseToolInput): Promise<AgentToolResult<XopcUseDetails>> {
+    async execute(toolCallId, input: XopcUseToolInput, signal): Promise<AgentToolResult<XopcUseDetails>> {
       const mode = input.mode;
       const command = input.command.trim();
       const dryRun = input.dryRun === true;
       const args = ensureArgs(input);
       const details: XopcUseDetails = { mode, command, dryRun };
       if (!command) return errorText('command is required', details);
+      if (mode === 'local_app' && (command === 'capabilities' || command === 'invoke')) {
+        const apps = deps.getLocalAppService?.();
+        if (!apps) return errorText('Local app service is unavailable', details);
+        if (typeof args.extensionId !== 'string') return errorText('extensionId is required', details);
+        const manifestDigest = command === 'capabilities' ? apps.getUiGrant(args.extensionId).manifestDigest : args.manifestDigest;
+        if (typeof manifestDigest !== 'string') return errorText('A discovered manifestDigest is required', details);
+        const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
+          surface: 'agent', scopes: ['gateway.admin'], authorize: deps.authorizeCapability ?? (() => true), signal };
+        const runtime = localAppCapabilities(apps, capabilities, args.extensionId, manifestDigest, caller);
+        if (command === 'capabilities') return okText({ ...details, result: runtime.list() });
+        if (dryRun) return errorText('Use capabilities to inspect the pinned contract; invoke does not execute in dryRun', details);
+        if (typeof args.capabilityId !== 'string') return errorText('capabilityId is required', details);
+        const call = CapabilityCallSchema.parse(args.call);
+        return okText({ ...details, result: await runtime.call(args.capabilityId, call) });
+      }
+      if (mode === 'context' && command === 'resolve') {
+        const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
+          surface: 'agent', scopes: ['gateway.admin'], authorize: deps.authorizeCapability ?? (() => true), signal };
+        return okText({ ...details, result: await capabilities.call('xopc.context.resolve', args, caller) });
+      }
+      if (mode === 'scene' && (['configure', 'check', 'notes', 'work_item', 'update_work_item', 'schedule', 'set_preferences', 'feedback', 'mark_read', 'transition'].includes(command) || (command === 'start' && !dryRun))) {
+        const operation = `xopc.scenes.${command}` as keyof typeof SceneWriteContracts;
+        const { requestId, idempotencyKey, workItemId, presentationId, ...fields } = args;
+        if ((requestId !== undefined && typeof requestId !== 'string') || (idempotencyKey !== undefined && typeof idempotencyKey !== 'string')) {
+          return errorText('Request identity must be a string', details);
+        }
+        const projectedInput = command === 'update_work_item' ? { ...fields, id: workItemId ?? fields.id }
+          : command === 'feedback' || command === 'mark_read' ? { ...fields, id: presentationId ?? fields.id } : fields;
+        const parsed = SceneWriteContracts[operation].input.parse(projectedInput);
+        if (dryRun) return okText({ ...details, result: { preview: true, command, input: parsed } });
+        const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
+          surface: 'agent', scopes: ['gateway.admin'], authorize: deps.authorizeCapability ?? (() => true), signal };
+        const result = await capabilities.call(operation, parsed, caller, { ...capabilities.describe(operation, caller),
+          idempotencyKey: typeof idempotencyKey === 'string' ? idempotencyKey : typeof requestId === 'string' ? requestId : toolCallId });
+        return okText({ ...details, result, delivery: deliveryForXopcResult(mode, command, result, dryRun) });
+      }
+      if (mode === 'scene' && (['templates', 'get_template', 'list', 'get', 'read_notes', 'list_runs', 'list_schedules', 'list_work_items', 'get_preferences', 'preflight',
+        'mail_accounts', 'mail_sources', 'results', 'get_presentation', 'get_feedback', 'digest_results', 'metrics', 'diagnostics'].includes(command) || (command === 'start' && dryRun))) {
+        const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
+          surface: 'agent', scopes: ['gateway.admin'], authorize: deps.authorizeCapability ?? (() => true), signal };
+        const { id: _id, requestId: _requestId, triggerKey: _triggerKey, ...preflightInput } = args;
+        const result = await capabilities.call(`xopc.scenes.${command === 'start' ? 'preflight' : command}`,
+          command === 'start' || command === 'preflight' ? preflightInput
+            : command === 'results' ? { ...preflightInput, activationId: args.activationId ?? args.id } : args, caller);
+        return okText({ ...details, result, delivery: deliveryForXopcResult(mode, command, result, dryRun) });
+      }
+      if (mode === 'settings' && command === 'open') {
+        const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
+          surface: 'agent', scopes: ['gateway.status'], authorize: deps.authorizeCapability ?? (() => true), signal };
+        const result = await capabilities.call('xopc.settings.open', args, caller);
+        return okText({ ...details, result, delivery: deliveryForXopcResult(mode, command, result, dryRun) });
+      }
+      if (mode === 'local_app' && (command === 'get' || command === 'list' || command === 'validate')) {
+        const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
+          surface: 'agent', scopes: ['gateway.admin'], authorize: deps.authorizeCapability ?? (() => true), signal };
+        const result = await capabilities.call(`xopc.local_apps.${command}`, command === 'list' ? {} : { id: args.localAppId ?? args.id }, caller) as Record<string, unknown>;
+        if (command === 'validate') Object.assign(result, await capabilities.call('xopc.local_apps.get', { id: args.localAppId ?? args.id }, caller));
+        return okText({ ...details, result: { ok: true, ...result }, delivery: deliveryForXopcResult(mode, command, result, dryRun) });
+      }
+      if (mode === 'task' && command === 'metrics') {
+        const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
+          surface: 'agent', scopes: ['tasks.read'], authorize: deps.authorizeCapability ?? (() => true), signal };
+        return okText({ ...details, result: await capabilities.call('xopc.tasks.metrics', {}, caller) });
+      }
+      if (mode === 'local_app' && command === 'record_acceptance') {
+        const { idempotencyKey, localAppId, ...input } = args;
+        if (idempotencyKey !== undefined && typeof idempotencyKey !== 'string') return errorText('idempotencyKey must be a string', details);
+        const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
+          surface: 'agent', scopes: ['gateway.admin'], authorize: deps.authorizeCapability ?? (() => true), signal };
+        if (dryRun) return okText({ ...details, result: { ok: true, dryRun: true, input } });
+        const operation = 'xopc.local_apps.record_acceptance';
+        return okText({ ...details, result: await capabilities.call(operation, { ...input, id: localAppId ?? input.id }, caller, {
+          ...capabilities.describe(operation, caller), idempotencyKey: typeof idempotencyKey === 'string' ? idempotencyKey : toolCallId,
+        }) });
+      }
+      if (mode === 'note' && ['project_summaries', 'history', 'snapshot', 'preview_edit'].includes(command)) {
+        const projectedInput = command === 'project_summaries' ? {} : {
+          id: args.noteId ?? args.id, ...(command === 'snapshot' ? { timestamp: args.timestamp } : {}),
+          ...(command === 'preview_edit' ? { instruction: args.instruction, markdown: args.markdown } : {}),
+        };
+        const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
+          surface: 'agent', scopes: ['workspace.read'], authorize: deps.authorizeCapability ?? (() => true), signal };
+        const result = await capabilities.call(`xopc.notes.${command}`, projectedInput, caller) as Record<string, unknown>;
+        return okText({ ...details, result: command === 'preview_edit' ? { ok: true, ...result } : result,
+          delivery: deliveryForXopcResult(mode, command, result, dryRun) });
+      }
+      if (mode === 'automation' && ['get_run', 'run_events', 'metrics', 'product_events'].includes(command)) {
+        const projectedInput = command === 'metrics' ? {} : command === 'product_events'
+          ? { eventType: args.eventType, source: args.source, payloadKey: args.payloadKey, payloadValue: args.payloadValue, limit: args.limit }
+          : { id: args.runId ?? args.id };
+        const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
+          surface: 'agent', scopes: ['automations.read'], authorize: deps.authorizeCapability ?? (() => true), signal };
+        const result = await capabilities.call(`xopc.automations.${command}`, projectedInput, caller);
+        return okText({ ...details, result });
+      }
+      if (mode === 'automation' && ['draft', 'repair_draft', 'simulate'].includes(command)) {
+        const operation = `xopc.automations.${command}`;
+        const { idempotencyKey, ...input } = args;
+        if (idempotencyKey !== undefined && typeof idempotencyKey !== 'string') return errorText('idempotencyKey must be a string', details);
+        const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
+          surface: 'agent', scopes: [command === 'simulate' ? 'automations.read' : 'automations.write'],
+          authorize: deps.authorizeCapability ?? (() => true), signal };
+        if (dryRun && command !== 'simulate') return okText({ ...details, result: { ok: true, dryRun: true, input } });
+        return okText({ ...details, result: await capabilities.call(operation, input, caller, {
+          ...capabilities.describe(operation, caller), idempotencyKey: typeof idempotencyKey === 'string' ? idempotencyKey : toolCallId,
+        }) });
+      }
+      if (mode === 'automation' && ['get', 'list', 'history'].includes(command)) {
+        const id = trimString(args.automationId) ?? trimString(args.id);
+        const projectId = command === 'get' || (command === 'history' && id) ? undefined : currentProjectId(args, deps);
+        const projectedInput = command === 'get' ? { id } : command === 'list' ? { projectId }
+          : { automationId: id, projectId, limit: args.limit ?? 20 };
+        const caller: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
+          surface: 'agent', scopes: ['automations.read'], authorize: deps.authorizeCapability ?? (() => true), signal };
+        const result = await capabilities.call(`xopc.automations.${command}`, projectedInput, caller);
+        return okText({ ...details, result, delivery: deliveryForXopcResult(mode, command, result, dryRun) });
+      }
+
+      if (mode === 'project' && ['get', 'list', 'list_milestones', 'list_updates'].includes(command)) {
+        const id = args.projectId ?? args.id;
+        const projectedInput = command === 'list'
+          ? Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'conversationId'))
+          : { id, ...(command === 'list_updates' && args.limit !== undefined ? { limit: args.limit } : {}) };
+        const context: CapabilityContext = { principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
+          surface: 'agent', scopes: ['workspace.read'], authorize: deps.authorizeCapability ?? (() => true), signal };
+        const result = await capabilities.call(`xopc.projects.${command}`, projectedInput, context);
+        return okText({ ...details, result, delivery: deliveryForXopcResult(mode, command, result, dryRun) });
+      }
+
+      if ((mode === 'note' || mode === 'task' || mode === 'task_run') && (command === 'get' || command === 'list')) {
+        const id = mode === 'note' ? args.noteId ?? args.id : mode === 'task_run' ? args.runId ?? args.id : args.taskId ?? args.id;
+        const projectId = mode === 'task_run' ? undefined : currentProjectId(args, deps);
+        const capabilityId = `xopc.${mode === 'note' ? 'notes' : mode === 'task_run' ? 'task_runs' : 'tasks'}.${command}`;
+        const context: CapabilityContext = {
+          principalId: `agent:${deps.getCurrentAgentId?.() ?? 'main'}`,
+          surface: 'agent', scopes: ['workspace.read', 'tasks.read'],
+          allowedCapabilities: ['xopc.notes.get', 'xopc.notes.list', 'xopc.tasks.get', 'xopc.tasks.list', 'xopc.task_runs.get', 'xopc.task_runs.list'],
+          authorize: deps.authorizeCapability ?? (() => true),
+          signal,
+        };
+        const input = command === 'get' ? { id } : {
+          ...Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'conversationId')),
+          ...(projectId ? { projectId } : {}), limit: args.limit ?? 20,
+        };
+        const result = await capabilities.call(capabilityId, input, context) as Record<string, unknown>;
+        const projected = mode === 'task' && command === 'list'
+          ? { ...result, items: (result.items as Array<{ task: unknown }>).map(item => item.task) }
+          : mode === 'task' && command === 'get'
+            ? { ...result, model: { task: result.task, operationalState: result.operationalState,
+              attention: result.attention, allowedCommands: result.allowedCommands } }
+            : result;
+        return okText({ ...details, result: { ok: true, ...projected, ...(command === 'list' && projectId ? { projectId } : {}) },
+          delivery: deliveryForXopcResult(mode, command, projected, dryRun) });
+      }
 
       try {
         const conversationId = deps.getCurrentConversationId?.();
@@ -1323,21 +1210,19 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
           },
           async () =>
             mode === 'scene'
-              ? await handleScene(command, args, deps, dryRun, toolCallId)
+              ? await handleScene(command, args, deps, dryRun)
               : mode === 'project'
-              ? await handleProject(command, args, deps, dryRun)
+            ? await handleProject(command, args, deps, dryRun, capabilities)
               : mode === 'automation'
-                ? await handleAutomation(command, args, deps, dryRun)
+                ? await handleAutomation(command, args, deps, dryRun, capabilities)
                 : mode === 'note'
-                  ? await handleNote(command, args, deps, dryRun)
+                  ? await handleNote(command, args, deps, dryRun, capabilities)
                 : mode === 'task'
-                  ? await handleTask(command, args, deps, dryRun)
+                  ? await handleTask(command, args, deps, dryRun, capabilities)
                   : mode === 'task_run'
-                    ? await handleTaskRun(command, args, dryRun, deps)
+                    ? await handleTaskRun(command, args, dryRun, deps, capabilities)
                   : mode === 'local_app'
                     ? await handleLocalApp(command, args, deps, dryRun)
-                    : mode === 'settings'
-                      ? handleSettings(command, args)
                       : { ok: false, error: `Unsupported mode: ${String(mode)}` },
         );
         return okText({
@@ -1353,61 +1238,12 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
   } as AgentTool<typeof XopcUseToolSchema, XopcUseDetails>;
 }
 
-async function handleScene(command: string, args: Record<string, unknown>, deps: XopcUseToolDeps, dryRun: boolean, toolCallId: string) {
+async function handleScene(command: string, args: Record<string, unknown>, deps: XopcUseToolDeps, dryRun: boolean) {
+  if (command !== 'mail_search') throw new Error('Unsupported scene command');
   const access = deps.getSceneAccess?.();
   if (!access) throw new Error('Scene service is unavailable');
   const { services, principal } = access;
-  const { id, requestId, triggerKey, ...input } = args;
-  const activationId = typeof id === 'string' ? id : '';
-  const request = typeof requestId === 'string' && requestId.trim() ? requestId : toolCallId;
-  if (command === 'templates') return { templates: services.repository.listTemplates() };
-  if (command === 'list') return { activations: services.repository.listActivations(principal) };
-  if (command === 'get') return { activation: services.repository.getActivation(principal, activationId),
-    runs: services.repository.listRuns(principal, activationId), schedules: services.repository.listSchedules(principal, activationId) };
-  if (command === 'mail_accounts') return { accounts: services.mailDiscovery?.listAccounts(principal) ?? [] };
-  if (command === 'mail_search') {
-    if (!services.mailDiscovery) throw new Error('Mail search is unavailable');
-    if (dryRun) return { preview: true, command, input };
-    return { sources: await services.mailDiscovery.searchSources(principal, input, AbortSignal.timeout(15000)) };
-  }
-  if (command === 'read_notes') return { notes: services.repository.readNotes(principal, activationId) };
-  if (command === 'mail_sources') return { sources: services.mail.listSources(principal) };
-  if (command === 'results') return { outcomes: services.repository.listInbox(principal, 50, '', activationId || null) };
-  if (command === 'diagnostics') return services.metrics.diagnostics(principal);
-  if (command === 'get_preferences') return services.preferences.get(principal);
-  if (command === 'preflight' || (command === 'start' && dryRun)) return services.application.preflight(principal, input);
-  if (dryRun) {
-    if (command === 'set_preferences') return { preview: true, command, input: args };
-    if (command === 'update_work_item') return { preview: true, command, workItemId: args.workItemId ?? id, input };
-    if (command === 'feedback' || command === 'mark_read') return { preview: true, command, presentationId: args.presentationId ?? id, input };
-    services.repository.getActivation(principal, activationId);
-    return { preview: true, command, activationId, input };
-  }
-  if (command === 'start') return { activation: await services.application.start(principal, input, request) };
-  if (command === 'configure') return { activation: services.application.configure(principal, activationId, input) };
-  if (command === 'transition') return { activation: await services.application.transition(principal, activationId, input) };
-  if (command === 'check') return { intentId: services.application.check(principal, activationId, request) };
-  if (command === 'notes') return { revision: services.application.writeNotes(principal, activationId, input) };
-  if (command === 'work_item') return { workItem: services.application.createWorkItem(principal, activationId, input) };
-  if (command === 'update_work_item') {
-    const workItemId = typeof args.workItemId === 'string' ? args.workItemId : activationId;
-    const { workItemId: _workItemId, ...workItemInput } = args;
-    return { workItem: services.application.updateWorkItem(principal, workItemId, workItemInput) };
-  }
-  if (command === 'schedule') return { revision: services.application.setSchedule(principal, activationId, String(triggerKey ?? ''), input) };
-  if (command === 'set_preferences') return services.preferences.update(principal, args);
-  if (command === 'feedback') {
-    const presentationId = typeof args.presentationId === 'string' ? args.presentationId : activationId;
-    if (!presentationId.trim()) throw new Error('presentationId is required');
-    const { presentationId: _presentationId, ...feedbackInput } = args;
-    return { revision: services.inbox.feedback(principal, presentationId, feedbackInput) };
-  }
-  if (command === 'mark_read') {
-    const presentationId = typeof args.presentationId === 'string' ? args.presentationId : activationId;
-    if (!presentationId.trim()) throw new Error('presentationId is required');
-    if (typeof args.read !== 'boolean') throw new Error('read must be a boolean');
-    services.inbox.setRead(principal, presentationId, args.read);
-    return { ok: true, presentationId, read: args.read };
-  }
-  throw new Error('Unsupported scene command');
+  if (!services.mailDiscovery) throw new Error('Mail search is unavailable');
+  if (dryRun) return { preview: true, command, input: args };
+  return { sources: await services.mailDiscovery.searchSources(principal, args, AbortSignal.timeout(15000)) };
 }

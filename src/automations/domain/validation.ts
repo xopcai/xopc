@@ -5,12 +5,7 @@ import { TaskCommandSchema } from '@xopcai/gateway-contract';
 const nonEmptyString = z.string().trim().min(1);
 
 const optionalTrimmedString = (max: number) =>
-  z.preprocess((value) => {
-    if (value == null) return undefined;
-    if (typeof value !== 'string') return value;
-    const trimmed = value.trim();
-    return trimmed.length === 0 ? undefined : trimmed;
-  }, z.string().min(1).max(max).optional());
+  z.string().trim().max(max).nullish().transform(value => value || undefined);
 
 export const AutomationScheduleSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -154,6 +149,10 @@ export const UpdateAutomationSchema = AutomationSchema.omit({
   id: true,
   createdAtMs: true,
   updatedAtMs: true,
+}).extend({
+  conversationMode: z.enum(['new_session', 'continuous']),
+  notificationPolicy: z.enum(['attention', 'all', 'none']),
+  state: AutomationStateSchema,
 }).partial().refine(
   (data) => Object.keys(data).length > 0,
   { message: 'At least one field must be provided' },

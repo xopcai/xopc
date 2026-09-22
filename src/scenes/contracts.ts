@@ -1,81 +1,11 @@
 import { createHash } from 'node:crypto';
 
-import { z } from 'zod';
+export {
+  sceneOutcomeKinds, activationStatuses, sceneScopeSchema, sceneTemplateSchema, scenePermissionSchema, sceneNotesSchema, activationInputSchema,
+  type ActivationStatus, type SceneScope, type SceneTemplate, type ScenePrincipal, type ScenePermission, type ActivationInput, type SceneActivation,
+} from '@xopcai/gateway-contract';
 
-const identifier = z.string().trim().min(1).max(200);
-const uniqueIds = z.array(identifier).max(100).refine((items) => new Set(items).size === items.length, 'Duplicate identifiers');
-
-export const sceneOutcomeKinds = ['no_change', 'observation', 'artifact', 'decision', 'state_change', 'effect_proposal', 'receipt'] as const;
-export const activationStatuses = ['needs_setup', 'active', 'paused', 'completed', 'archived'] as const;
-export type ActivationStatus = typeof activationStatuses[number];
-
-export const sceneScopeSchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('personal') }),
-  z.strictObject({ kind: z.literal('project'), id: identifier }),
-  z.strictObject({ kind: z.literal('conversation'), id: identifier }),
-  z.strictObject({ kind: z.literal('objects'), ids: uniqueIds.refine((ids) => ids.length > 0) }),
-]);
-export type SceneScope = z.infer<typeof sceneScopeSchema>;
-
-const limitsSchema = z.strictObject({
-  timeoutSeconds: z.number().int().min(1).max(600),
-  maxIterations: z.number().int().min(1).max(30),
-  maxToolCalls: z.number().int().min(0).max(100),
-  maxOutputTokens: z.number().int().min(1).max(32_768),
-});
-
-export const sceneTemplateSchema = z.strictObject({
-  schemaVersion: z.literal(1),
-  key: z.string().regex(/^[a-z][a-z0-9-]{0,79}$/),
-  version: z.string().regex(/^\d+\.\d+\.\d+$/),
-  title: z.string().trim().min(1).max(120),
-  description: z.string().trim().min(1).max(2000),
-  goalMode: z.enum(['finite', 'ongoing']),
-  contextProviders: uniqueIds,
-  triggers: z.array(z.discriminatedUnion('type', [
-    z.strictObject({ id: identifier, type: z.literal('manual') }),
-    z.strictObject({ id: identifier, type: z.literal('event'), eventType: identifier }),
-    z.strictObject({ id: identifier, type: z.literal('schedule') }),
-  ])).min(1).max(20).refine((items) => new Set(items.map((item) => item.id)).size === items.length, 'Duplicate trigger IDs'),
-  execution: z.strictObject({
-    kind: z.literal('agent'),
-    instruction: z.string().trim().min(1).max(32_000),
-    limits: limitsSchema,
-  }),
-  allowedOutcomeKinds: z.array(z.enum(sceneOutcomeKinds)).min(1),
-  allowedEffectHandlers: uniqueIds,
-});
-export type SceneTemplate = z.infer<typeof sceneTemplateSchema>;
-
-export interface ScenePrincipal { ownerId: string; workspaceId: string }
-
-export const scenePermissionSchema = z.strictObject({
-  accountIds: uniqueIds,
-  contextProviders: uniqueIds,
-  effectHandlers: uniqueIds,
-});
-export type ScenePermission = z.infer<typeof scenePermissionSchema>;
-
-export const sceneNotesSchema = z.strictObject({
-  expectedRevision: z.number().int().nonnegative(),
-  content: z.string().trim().max(32_000),
-  validUntil: z.number().int().nonnegative().nullable().default(null),
-});
-
-export const activationInputSchema = z.strictObject({
-  templateKey: identifier,
-  templateVersion: identifier,
-  goal: z.string().trim().min(1).max(12_000),
-  scope: sceneScopeSchema,
-  permissions: scenePermissionSchema,
-});
-export type ActivationInput = z.infer<typeof activationInputSchema>;
-export interface SceneActivation extends ActivationInput, ScenePrincipal {
-  id: string;
-  status: ActivationStatus;
-  setupMissing?: string[];
-  revision: number;
-}
+import { sceneTemplateSchema, type SceneTemplate, type ScenePermission, type ActivationStatus } from '@xopcai/gateway-contract';
 
 /** Stable JSON hashing binds approvals and immutable versions to exact content. */
 export function sceneContentHash(value: unknown): string {

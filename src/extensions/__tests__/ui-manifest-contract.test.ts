@@ -3,6 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { normalizeUiManifest } from '../normalize-manifest.js';
 
 describe('extension UI manifest contract', () => {
+  it('preserves exact capability bindings and fails on unsupported declarations', () => {
+    const binding = { id: 'xopc.notes.get', majorVersion: 1, descriptorDigest: 'a'.repeat(64) };
+    expect(normalizeUiManifest({ capabilities: [binding] })?.capabilities).toEqual([binding]);
+    expect(() => normalizeUiManifest({ capabilities: [{ ...binding, id: 'xopc.notes.delete' }] })).toThrow();
+  });
   it('keeps only permissions implemented by the host', () => {
     const ui = normalizeUiManifest({
       permissions: ['theme', 'config.read', 'clipboard', 'workspace.read'],

@@ -23,6 +23,7 @@ import type { GatewayService } from '../../../service.js';
 import { registerActivityRoutes } from '../activity.js';
 import { registerProjectsRoutes } from '../projects.js';
 import { registerSearchRoutes } from '../search.js';
+import { setGatewayPrincipal } from '../../../security/gateway-principal.js';
 import { registerSessionsRoutes } from '../sessions.js';
 
 function registerActivityRouteApp(service: Partial<GatewayService>): Hono {
@@ -33,6 +34,10 @@ function registerActivityRouteApp(service: Partial<GatewayService>): Hono {
 
 function registerProjectRouteApp(service: Partial<GatewayService>): Hono {
   const app = new Hono();
+  app.use('*', async (c, next) => {
+    setGatewayPrincipal(c, { kind: 'owner', principalId: 'test-owner', scopes: ['gateway.admin'] });
+    await next();
+  });
   registerProjectsRoutes(app, { service: { currentConfig: ConfigSchema.parse({}), ...service } as GatewayService });
   return app;
 }
@@ -153,9 +158,39 @@ describe('project association routes', () => {
     expect(await res.json()).toEqual({
       ok: false,
       code: 'workspace_root_missing',
-      error: `Workspace root does not exist: ${workspaceRoot}`,
-      workspaceRoot,
+      error: `Workspace root does not exist: ${join(realpathSync(stateDir), 'missing-workspace')}`,
+      workspaceRoot: join(realpathSync(stateDir), 'missing-workspace'),
     });
+  });
+
+  it('version-checks pin writes and replays the original result without reapplying it', async () => {
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Pin route' });
+    const app = registerProjectRouteApp({ projects });
+    const pin = () => app.request(`/api/projects/${project.id}/pin`, { method: 'POST',
+      headers: { 'content-type': 'application/json', 'idempotency-key': 'pin-route' }, body: JSON.stringify({ expectedVersion: 1 }) });
+    const first = await pin();
+    expect(first.status).toBe(200);
+    const result = await first.json();
+    expect(result).toMatchObject({ project: { version: 2, pinnedAt: expect.any(Number) } });
+    const stale = await app.request(`/api/projects/${project.id}/unpin`, { method: 'POST', body: JSON.stringify({ expectedVersion: 1 }) });
+    expect(stale.status).toBe(409);
+    expect((await app.request(`/api/projects/${project.id}/unpin`, { method: 'POST', body: JSON.stringify({ expectedVersion: 2 }) })).status).toBe(200);
+    expect(await (await pin()).json()).toEqual(result);
+    expect(projects.get(project.id)).toMatchObject({ version: 3, pinnedAt: undefined });
+  });
+
+  it('rejects malformed pin input and requires the original version for keyed retries', async () => {
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Pin validation' });
+    const app = registerProjectRouteApp({ projects });
+    for (const body of ['null', '[]', '{', '{"expectedVersion":null}', '{"pinned":false}', '{"expectedVersion":"1"}']) {
+      expect((await app.request(`/api/projects/${project.id}/pin`, { method: 'POST', body })).status).toBe(400);
+    }
+    expect((await app.request(`/api/projects/${project.id}/pin`, { method: 'POST', headers: { 'idempotency-key': 'pin' } })).status).toBe(400);
+    expect(projects.get(project.id)?.version).toBe(1);
+    expect((await app.request(`/api/projects/${project.id}/pin`, { method: 'POST' })).status).toBe(200);
+    expect((await app.request('/api/projects/missing/pin', { method: 'POST' })).status).toBe(404);
   });
 
   it('does not delete a project while it still owns an execution environment', async () => {
@@ -175,6 +210,25 @@ describe('project association routes', () => {
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({ ok: false, code: 'execution_environments_exist' });
     expect(projects.get(project.id)).not.toBeNull();
+  });
+
+  it('rejects stale or malformed deletions and replays a keyed deletion after the project is gone', async () => {
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Delete route' });
+    const app = registerProjectRouteApp({ projects });
+    const path = `/api/projects/${project.id}`;
+    for (const body of ['null', '[]', '{', '{"expectedVersion":null}', '{"expectedVersion":"1"}']) {
+      expect((await app.request(path, { method: 'DELETE', body })).status).toBe(400);
+    }
+    expect((await app.request(path, { method: 'DELETE', headers: { 'idempotency-key': 'delete' } })).status).toBe(400);
+    projects.update(project.id, { name: 'New version' });
+    expect((await app.request(path, { method: 'DELETE', body: JSON.stringify({ expectedVersion: 1 }) })).status).toBe(409);
+    const remove = () => app.request(path, { method: 'DELETE', headers: { 'idempotency-key': 'delete' }, body: JSON.stringify({ expectedVersion: 2 }) });
+    const first = await remove();
+    expect(first.status).toBe(200);
+    expect(await first.json()).toEqual({ ok: true, deleted: true, executionStopConfirmed: false });
+    expect((await remove()).status).toBe(200);
+    expect((await app.request(path, { method: 'DELETE' })).status).toBe(404);
   });
 
   it('does not expose the removed direct project delegation endpoint', async () => {

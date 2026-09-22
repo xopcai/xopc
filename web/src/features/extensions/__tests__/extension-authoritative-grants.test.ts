@@ -32,12 +32,12 @@ describe('authoritative extension grants', () => {
       grant: { granted: true, extensionId: 'local-app', appId: 'app-1', permissions: ['theme'] },
     });
 
-    const grant = await confirmExtensionUiGrant('local-app');
+    const grant = await confirmExtensionUiGrant('local-app', 'a'.repeat(64));
 
     expect(grant.granted).toBe(true);
     expect(mocks.fetchJson).toHaveBeenCalledWith(
       expect.stringContaining('/api/extensions/local-app/ui-grant'),
-      { method: 'POST' },
+      { method: 'POST', body: JSON.stringify({ manifestDigest: 'a'.repeat(64) }) },
     );
   });
 });

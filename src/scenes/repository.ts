@@ -51,6 +51,8 @@ export class SceneInputError extends Error {}
 export class SceneRepository {
   constructor(private readonly db: DatabaseSync) {}
 
+  get database(): DatabaseSync { return this.db; }
+
   private transaction<T>(operation: () => T): T {
     const savepoint = `scene_${randomUUID().replaceAll('-', '')}`;
     this.db.exec(`SAVEPOINT ${savepoint}`);
@@ -214,7 +216,7 @@ export class SceneRepository {
 
   writeNotes(principal: ScenePrincipal, id: string, value: unknown, now: number): number {
     const input = sceneNotesSchema.parse(value);
-    if (!Number.isSafeInteger(now) || now < 0 || (input.validUntil !== null && input.validUntil <= now)) throw new Error('Invalid notes validity time');
+    if (!Number.isSafeInteger(now) || now < 0 || (input.validUntil !== null && input.validUntil <= now)) throw new SceneInputError('Invalid notes validity time');
     return this.transaction(() => {
       const activation = this.getActivation(principal, id);
       if (activation.scope.kind !== 'personal' || !['active', 'paused', 'needs_setup'].includes(activation.status)

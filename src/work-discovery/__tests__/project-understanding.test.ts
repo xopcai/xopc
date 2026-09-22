@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Config } from '../../config/schema.js';
 import { buildActiveProjectContextForPrompt } from '../../agent/context/project-context.js';
 import { ProjectService } from '../../projects/project-service.js';
+import * as workspace from '../../projects/workspace-project.js';
+import { runSqliteWriteTransaction, SqliteCommitEffectError } from '../../storage/sqlite/transaction.js';
 import type { SessionIndex } from '../../session/manager.js';
 import { closeXopcDatabase, ensureSessionRecord, getSessionMetadata, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 import { listUserAssertions } from '../../user-model/index.js';
@@ -44,6 +46,7 @@ describe('background project understanding', () => {
 
   afterEach(async () => {
     await service.stop();
+    vi.restoreAllMocks();
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(root, { recursive: true, force: true });
@@ -72,6 +75,36 @@ describe('background project understanding', () => {
     expect(buildActiveProjectContextForPrompt(chat, { includeKnowledge: false })).not.toContain('pnpm test');
   });
 
+  it('does not start background work when the enclosing transaction rolls back', async () => {
+    const project = projects.create({ name: 'Rollback', workspaceRoot: root });
+    let runId = '';
+    expect(() => runSqliteWriteTransaction(() => {
+      runId = service.startProjectUnderstanding(project.id).id;
+      throw new Error('rollback');
+    })).toThrow('rollback');
+    await new Promise<void>(resolve => setImmediate(resolve));
+    expect(service.getRun(runId)).toBeNull();
+    expect(analyzeWorkContext).not.toHaveBeenCalled();
+  });
+
+  it('waits for durable workspace creation before consuming an understanding attempt', async () => {
+    vi.spyOn(workspace, 'ensureWorkspaceDirectory').mockImplementationOnce(() => { throw new Error('temporary failure'); });
+    let projectId = '';
+    let runId = '';
+    expect(() => runSqliteWriteTransaction(() => {
+      const project = projects.create({ name: 'Recover', workspaceRoot: join(root, 'pending'), createWorkspaceRoot: true });
+      projectId = project.id;
+      runId = service.startProjectUnderstanding(project.id).id;
+    })).toThrow(SqliteCommitEffectError);
+    await new Promise<void>(resolve => setImmediate(resolve));
+    expect(service.getRun(runId)).toMatchObject({ status: 'queued', attempts: 0 });
+    expect(analyzeWorkContext).not.toHaveBeenCalled();
+    projects.flushCommittedEffects(projectId);
+    service.dispatchProjectUnderstanding();
+    await vi.waitFor(() => expect(service.getRun(runId)?.status).toBe('completed'));
+    expect(service.getRun(runId)?.attempts).toBe(1);
+  });
+
   it('retries once and leaves a persistent failure state', async () => {
     vi.mocked(analyzeWorkContext).mockRejectedValue(new Error('Model temporarily unavailable'));
     const project = projects.create({ name: 'Example', workspaceRoot: root });
@@ -94,6 +127,54 @@ describe('background project understanding', () => {
     release();
     await service.stop();
     expect(getProjectUnderstandingOverview(project.id)).toBeUndefined();
+  });
+
+  it('aborts only the committed deleted project executions and does not retry them', async () => {
+    let release!: () => void;
+    let executionSignal: AbortSignal | undefined;
+    const barrier = new Promise<void>(resolve => { release = resolve; });
+    const result = await vi.mocked(analyzeWorkContext)({} as never);
+    vi.mocked(analyzeWorkContext).mockImplementation(async input => {
+      executionSignal = input.signal;
+      await barrier;
+      return result;
+    });
+    const project = projects.create({ name: 'Deletion cancellation', workspaceRoot: root });
+    const run = service.startProjectUnderstanding(project.id);
+    await vi.waitFor(() => expect(executionSignal).toBeDefined());
+    service.abortDeletedProjectRuns(project.id, [run.id]);
+    expect(executionSignal?.aborted).toBe(false);
+    projects.delete(project.id);
+    expect(service.getRun(run.id)).toBeNull();
+    service.abortDeletedProjectRuns('unrelated', [run.id]);
+    expect(executionSignal?.aborted).toBe(false);
+    service.abortDeletedProjectRuns(project.id, ['unrelated']);
+    expect(executionSignal?.aborted).toBe(false);
+    service.abortDeletedProjectRuns(project.id, [run.id]);
+    expect(executionSignal?.aborted).toBe(true);
+    expect(service.retryRun(run.id)).toBeNull();
+    release();
+    await service.stop();
+    expect(service.getRun(run.id)).toBeNull();
+    expect(getProjectUnderstandingOverview(project.id)).toBeUndefined();
+  });
+
+  it('does not resurrect a deleted project run during shutdown even before its outbox event is delivered', async () => {
+    let release!: () => void;
+    const barrier = new Promise<void>(resolve => { release = resolve; });
+    const result = await vi.mocked(analyzeWorkContext)({} as never);
+    vi.mocked(analyzeWorkContext).mockImplementation(async () => { await barrier; return result; });
+    const project = projects.create({ name: 'Shutdown deletion', workspaceRoot: root });
+    const run = service.startProjectUnderstanding(project.id);
+    await vi.waitFor(() => expect(service.getRun(run.id)?.status).toBe('analyzing'));
+    projects.delete(project.id);
+    const stopped = service.stop();
+    release();
+    await stopped;
+    expect(service.getRun(run.id)).toBeNull();
+    expect(getProjectUnderstandingOverview(project.id)).toBeUndefined();
+    service.resumeProjectUnderstanding();
+    expect(service.retryRun(run.id)).toBeNull();
   });
 
   it('preserves user corrections on refresh and isolates project knowledge', () => {

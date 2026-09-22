@@ -37,6 +37,7 @@ export interface AgentServiceConfig {
   /** Gateway: exposes first-class xopc product objects for the `xopc_use` tool. */
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;
+  getWorkDiscovery?: () => import('../work-discovery/service.js').WorkDiscoveryService | undefined;
   getLocalAppService?: () => LocalAppService | undefined;
   dispatchTaskEvents?: () => void;
   dispatchTaskRuns?: () => void;

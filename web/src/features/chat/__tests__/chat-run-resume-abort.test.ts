@@ -14,6 +14,7 @@ import {
   publishEndpointTurnClaim,
 } from '@/features/endpoint-tools/turn-claim';
 import type { RealtimeEventPayload } from '@xopcai/realtime-protocol';
+import type { AppContextEnvelope } from '@xopcai/gateway-contract';
 
 const realtimeState = vi.hoisted(() => ({
   listener: undefined as undefined | {
@@ -192,6 +193,79 @@ describe('MessageSender terminal state', () => {
     publishEndpointTurnClaim('web-test', 'test-turn-token');
   });
 
+  it('freezes page context and attachments before waiting for an endpoint', async () => {
+    clearEndpointTurnClaim();
+    const sender = new MessageSender();
+    const appContext: AppContextEnvelope = {
+      version: 1, clientInstanceId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      tabId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', sequence: 1, surface: 'web', capturedAt: 10,
+      resourceRefs: [{ kind: 'note', id: 'note', revision: '1' }], selection: { text: 'Original draft', draft: true },
+    };
+    const original = structuredClone(appContext);
+    const attachments = [{ type: 'file', name: 'Original.txt', data: 'original' }];
+    const refs = [{ kind: 'note' as const, sourceId: 'note', expectedVersion: '1' }];
+    vi.mocked(apiFetch).mockResolvedValue(new Response(JSON.stringify({ payload: { state: { inputs: [] } } }), { status: 202 }));
+    const sending = sender.send('Review', conversationId, attachments, undefined, undefined, undefined, undefined, refs, appContext);
+    await expect(sender.send('Concurrent', conversationId)).rejects.toThrow('already in progress');
+    appContext.selection!.text = 'Different page';
+    attachments[0].data = 'Changed';
+    refs[0].expectedVersion = '2';
+    expect(apiFetch).not.toHaveBeenCalled();
+    publishEndpointTurnClaim('web-test', 'test-turn-token');
+    await sending;
+    const body = JSON.parse(String(vi.mocked(apiFetch).mock.calls[0]?.[1]?.body));
+    expect(body.appContext).toEqual(original);
+    expect(body.attachments[0].data).toBe('original');
+    expect(body.contextRefs[0].expectedVersion).toBe('1');
+    expect(sender.isSending).toBe(false);
+  });
+
+  it('retains the same context retry identity after failure, but changes it for a different snapshot', async () => {
+    const sender = new MessageSender();
+    const appContext: AppContextEnvelope = {
+      version: 1, clientInstanceId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      tabId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', sequence: 1, surface: 'web', capturedAt: 10,
+      resourceRefs: [], selection: { text: 'Draft', draft: true },
+    };
+    vi.mocked(apiFetch).mockImplementation(async () => new Response(JSON.stringify({ error: { message: 'Conflict' } }), { status: 409 }));
+    const send = () => sender.send('Review', conversationId, undefined, undefined, undefined, undefined, undefined, undefined, appContext);
+    await expect(send()).rejects.toThrow();
+    expect(sender.isSending).toBe(false);
+    await expect(send()).rejects.toThrow();
+    appContext.selection!.text = 'Changed';
+    await expect(send()).rejects.toThrow();
+    const bodies = vi.mocked(apiFetch).mock.calls.map(call => JSON.parse(String(call[1]?.body)));
+    expect(bodies[0].clientMessageId).toBe(bodies[1].clientMessageId);
+    expect(bodies[2].clientMessageId).not.toBe(bodies[0].clientMessageId);
+  });
+
+  it('rejects unsupported replacement snapshots before starting a send', async () => {
+    const sender = new MessageSender();
+    await expect(sender.send('Review', conversationId, undefined, undefined, undefined, undefined, 'turn', undefined,
+      {} as AppContextEnvelope)).rejects.toThrow('requires a new input');
+    expect(sender.isSending).toBe(false);
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('retries transient failures with a byte-identical frozen request', async () => {
+    const sender = new MessageSender();
+    const appContext: AppContextEnvelope = {
+      version: 1, clientInstanceId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      tabId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', sequence: 1, surface: 'web', capturedAt: 10,
+      resourceRefs: [], selection: { text: 'Original selection', draft: true },
+    };
+    vi.mocked(apiFetch).mockImplementationOnce(async () => {
+      appContext.selection!.text = 'Later selection';
+      return new Response('{}', { status: 503 });
+    }).mockResolvedValueOnce(new Response(JSON.stringify({ payload: { state: { inputs: [] } } }), { status: 202 }));
+    await sender.send('Review', conversationId, undefined, undefined, undefined, undefined, undefined, undefined, appContext);
+    expect(apiFetch).toHaveBeenCalledTimes(2);
+    const bodies = vi.mocked(apiFetch).mock.calls.map(call => call[1]?.body);
+    expect(bodies[1]).toBe(bodies[0]);
+    expect(JSON.parse(String(bodies[1])).appContext.selection.text).toBe('Original selection');
+    expect(sender.isSending).toBe(false);
+  });
+
   it('attributes replayed user messages to their run', () => {
     const sender = new MessageSender();
     const onUserMessage = vi.fn();
@@ -253,6 +327,7 @@ describe('MessageSender terminal state', () => {
     'marks the %s stream idle before notifying sidebar listeners',
     async (method) => {
       const sender = new MessageSender();
+      const onInputAccepted = vi.fn();
       const streamingStatesAtNotification: boolean[] = [];
       vi.stubGlobal('window', {
         location: { origin: 'http://localhost:3000' },
@@ -281,13 +356,17 @@ describe('MessageSender terminal state', () => {
 
       let pending: Promise<unknown>;
       if (method === 'send') {
-        pending = sender.send('hello', conversationId);
+        pending = sender.send('hello', conversationId, undefined, undefined, {
+          onInputAccepted, onStreamStart: vi.fn(), onToken: vi.fn(), onThinking: vi.fn(), onThinkingEnd: vi.fn(),
+          onToolStart: vi.fn(), onToolEnd: vi.fn(), onProgress: vi.fn(), onResult: vi.fn(), onError: vi.fn(),
+        });
       } else {
         setPendingAgentRun(conversationId, 'run-complete');
         streamingStatesAtNotification.length = 0;
         pending = sender.resume('run-complete', conversationId);
       }
       await vi.waitFor(() => expect(realtimeState.listener).toBeDefined());
+      expect(onInputAccepted).toHaveBeenCalledTimes(method === 'send' ? 1 : 0);
       realtimeState.listener?.onEvent({
         topic: 'run:run-complete',
         seq: 1,

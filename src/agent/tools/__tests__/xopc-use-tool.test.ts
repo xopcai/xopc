@@ -23,12 +23,13 @@ import {
 } from '../../../storage/sqlite/index.js';
 import type { LocalAppService } from '../../../local-apps/index.js';
 import { createXopcUseTool } from '../xopc-use-tool.js';
+import { createProductDispatcher } from '../../../capabilities/runtime/product.js';
 
 const CONVERSATION_ID = "d2727fdb-ecad-4efa-86e1-46af39a71a2c";
 
 function parseToolJson(result: Awaited<ReturnType<ReturnType<typeof createXopcUseTool>['execute']>>) {
   const text = result.content[0]?.type === 'text' ? result.content[0].text : '{}';
-  return JSON.parse(text.split('\nOpen in xopc:')[0]) as Record<string, any>;
+  return JSON.parse(text.split('\nOpen in xopc:')[0].split('\nxopc-product-delivery:')[0]) as Record<string, any>;
 }
 
 describe('xopc_use tool', () => {
@@ -56,6 +57,29 @@ describe('xopc_use tool', () => {
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
+  });
+
+  it('executes a granted Local App write through the Agent boundary with stable replay and revocation', async () => {
+    const dispatcher = createProductDispatcher(() => notes);
+    const descriptor = dispatcher.describe('xopc.notes.create', { principalId: 'agent:main', scopes: ['gateway.admin'], surface: 'extension', authorize: () => true });
+    const binding = { id: descriptor.id, majorVersion: descriptor.majorVersion, descriptorDigest: descriptor.descriptorDigest };
+    const access = vi.fn(() => ({ releaseId: 'release', bindings: [binding] }));
+    const tool = createXopcUseTool({ getNotesService: () => notes, getLocalAppService: () => ({ getCapabilityAccess: access,
+      getUiGrant: () => ({ manifestDigest: 'b'.repeat(64) }) }) as unknown as LocalAppService });
+    const discovered = parseToolJson(await tool.execute('discover', { mode: 'local_app', command: 'capabilities', args: { extensionId: 'fixture' } }));
+    expect(discovered.manifestDigest).toBe('b'.repeat(64));
+    expect(discovered.capabilities[0].id).toBe('xopc.notes.create');
+    const input = { mode: 'local_app' as const, command: 'invoke', args: { extensionId: 'fixture', manifestDigest: 'b'.repeat(64),
+      capabilityId: binding.id, call: { ...binding, input: { title: 'Local App note' }, idempotencyKey: 'intent' } } };
+    const { id: _id, ...call } = input.args.call;
+    const request = { ...input, args: { ...input.args, call } };
+    const first = parseToolJson(await tool.execute('call-one', request));
+    const second = parseToolJson(await tool.execute('call-two', request));
+    expect(first).toMatchObject({ status: 'succeeded', data: { note: { title: 'Local App note' } } });
+    expect(second).toEqual(first);
+    expect((await notes.listNotes({})).items.filter(note => note.title === 'Local App note')).toHaveLength(1);
+    access.mockImplementation(() => { throw new Error('Grant revoked'); });
+    await expect(tool.execute('call-three', request)).rejects.toThrow('Grant revoked');
   });
 
   it('creates and updates a project through one entry point', async () => {
@@ -174,7 +198,7 @@ describe('xopc_use tool', () => {
         action: { kind: 'agent', instruction: 'This must not be created.' },
       },
     }));
-    expect(missingProject).toEqual({ ok: false, error: 'Project not found: missing-project' });
+    expect(missingProject).toEqual({ ok: false, error: 'Project not found', code: 'NOT_FOUND' });
   });
 
   it('deletes an automation without delivering a stale product link', async () => {
@@ -352,11 +376,14 @@ describe('xopc_use tool', () => {
     const deletedResult = await tool.execute('call-note-delete', {
       mode: 'note',
       command: 'delete',
-      args: { noteId: note.id },
+      args: { noteId: note.id, expectedRevision: note.remoteVersion ?? 1, idempotencyKey: 'delete-note' },
     });
-    expect(parseToolJson(deletedResult)).toEqual({ ok: true, removed: true, noteId: note.id });
+    expect(parseToolJson(deletedResult)).toEqual({ ok: true, removed: true, noteId: note.id, revokedShares: 0 });
     expect(deletedResult.details.delivery).toBeUndefined();
     expect(await notes.getNote(note.id)).toBeNull();
+    expect(parseToolJson(await tool.execute('call-note-delete-retry', {
+      mode: 'note', command: 'delete', args: { noteId: note.id, expectedRevision: note.remoteVersion ?? 1, idempotencyKey: 'delete-note' },
+    }))).toEqual(parseToolJson(deletedResult));
 
     const missing = parseToolJson(await tool.execute('call-note-delete-missing', {
       mode: 'note',
@@ -425,17 +452,32 @@ describe('xopc_use tool', () => {
       getCurrentConversationId: () => CONVERSATION_ID,
     });
 
-    const result = parseToolJson(await tool.execute('call-1', {
+    const previewResult = await tool.execute('call-1', {
       mode: 'note',
       command: 'preview_edit',
       args: { noteId: note.id, instruction: '生成摘要' },
-    }));
+    });
+    const result = parseToolJson(previewResult);
+    expect(previewResult.details.delivery).toMatchObject({ presentation: { kind: 'diff', truncated: false,
+      edits: [{ text: expect.stringContaining('[!SUMMARY]') }] } });
+    const listed = await tool.execute('table', { mode: 'note', command: 'list', args: {} });
+    expect(listed.details.delivery).toMatchObject({ presentation: { kind: 'table',
+      items: [{ id: note.id, capabilities: ['open'] }], truncated: false } });
 
     const unchanged = await notes.getNote(note.id);
     expect(result.ok).toBe(true);
     expect(result.patch.operations[0].type).toBe('replaceRange');
     expect(result.patch.operations[0].markdown).toContain('[!SUMMARY]');
     expect(unchanged?.markdown).toBe('First line\nSecond line');
+    const snapshot = { version: 1, clientInstanceId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      tabId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', sequence: 1, surface: 'web', capturedAt: 1,
+      resourceRefs: [{ kind: 'note', id: note.id, revision: String(note.remoteVersion ?? 1) }],
+    };
+    const context = parseToolJson(await tool.execute('context', { mode: 'context', command: 'resolve', args: snapshot }));
+    expect(context.resources[0]).toMatchObject({ text: note.markdown, truncated: false });
+    const denied = createXopcUseTool({ getNotesService: () => notes, authorizeCapability: id => id !== 'xopc.notes.get' });
+    await expect(denied.execute('context-denied', { mode: 'context', command: 'resolve', args: snapshot }))
+      .rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
   it('does not mutate on dryRun', async () => {
@@ -567,12 +609,11 @@ describe('xopc_use tool', () => {
     expect(deletedResult.details.delivery).toBeUndefined();
     expect(dispatchTaskEvents).toHaveBeenCalledOnce();
 
-    const missing = parseToolJson(await tool.execute('call-task-delete-get', {
+    await expect(tool.execute('call-task-delete-get', {
       mode: 'task',
       command: 'get',
       args: { taskId },
-    }));
-    expect(missing).toEqual({ ok: false, error: `Task not found: ${taskId}` });
+    })).rejects.toMatchObject({ code: 'NOT_FOUND', message: `Task not found: ${taskId}` });
   });
 
   it('cancels a TaskRun with optimistic concurrency and records a receipt', async () => {

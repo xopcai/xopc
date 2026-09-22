@@ -13,7 +13,8 @@ import type {
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 
-import { enqueueTaskAttentionRequiredEvent } from './task-change-events.js';
+import { enqueueTaskAttentionRequiredEvent, enqueueTaskChangedEvent } from './task-change-events.js';
+import { TaskRepository } from './task-repository.js';
 
 const ACTIVE_RUN_STATUSES: TaskRunStatus[] = ['queued', 'running', 'waiting', 'verifying'];
 
@@ -442,29 +443,37 @@ export class TaskRunRepository {
     rating: 'helpful' | 'not_helpful';
     reason?: string;
     now?: number;
+    actor?: ActorRef;
   }): { id: string; runId: string; rating: 'helpful' | 'not_helpful'; reason?: string; createdAt: number } {
-    this.require(input.runId);
-    const id = randomUUID();
-    const createdAt = input.now ?? Date.now();
-    getSqliteDatabase().prepare(
-      `INSERT INTO task_run_feedback (
-        feedback_id, run_id, rating, reason, needs_correction, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run(
-      id,
-      input.runId,
-      input.rating,
-      input.reason?.trim() || null,
-      input.rating === 'not_helpful' ? 1 : 0,
-      createdAt,
-    );
-    return {
-      id,
-      runId: input.runId,
-      rating: input.rating,
-      ...(input.reason?.trim() ? { reason: input.reason.trim() } : {}),
-      createdAt,
-    };
+    return runSqliteWriteTransaction(db => {
+      const run = this.require(input.runId);
+      const id = randomUUID();
+      const createdAt = input.now ?? Date.now();
+      getSqliteDatabase().prepare(
+        `INSERT INTO task_run_feedback (
+          feedback_id, run_id, rating, reason, needs_correction, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?)`,
+      ).run(
+        id,
+        input.runId,
+        input.rating,
+        input.reason?.trim() || null,
+        input.rating === 'not_helpful' ? 1 : 0,
+        createdAt,
+      );
+      const tasks = new TaskRepository();
+      const task = tasks.require(run.taskId);
+      const updated = tasks.update(task.id, { expectedVersion: task.version })!;
+      enqueueTaskChangedEvent(db, { taskId: task.id, projectId: task.projectId, version: updated.version,
+        changedFields: ['feedback'], actor: input.actor, occurredAt: createdAt });
+      return {
+        id,
+        runId: input.runId,
+        rating: input.rating,
+        ...(input.reason?.trim() ? { reason: input.reason.trim() } : {}),
+        createdAt,
+      };
+    });
   }
 
   createWait(input: {

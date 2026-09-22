@@ -12,7 +12,7 @@ import {
   Search,
   X,
 } from 'lucide-react';
-import { type FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { type FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -165,21 +165,29 @@ export function ProjectsPage() {
     onPicked: setWorkspaceRoot,
   });
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const loadSequence = useRef(0);
+  const load = useCallback(async (silent = false) => {
+    const request = ++loadSequence.current;
+    if (!silent) { setLoading(true); setError(null); }
     try {
       const result = await fetchProjects({ limit: 100, sortBy: 'updatedAt', sortOrder: 'desc' });
-      setProjects(sortLoadedProjects(result.items));
+      if (request === loadSequence.current) setProjects(sortLoadedProjects(result.items));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      if (!silent && request === loadSequence.current) setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
-      setLoading(false);
+      if (request === loadSequence.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void load();
+    return () => { loadSequence.current++; };
+  }, [load]);
+
+  useEffect(() => {
+    const refresh = () => { void load(true); };
+    window.addEventListener('project-resource-changed', refresh);
+    return () => { window.removeEventListener('project-resource-changed', refresh); };
   }, [load]);
 
   const visibleProjects = useMemo(() => {
@@ -242,12 +250,12 @@ export function ProjectsPage() {
       let updatedProject: Project;
       if (action === 'pin') {
         updatedProject = project.pinnedAt
-          ? await unpinProject(project.id)
-          : await pinProject(project.id);
+          ? await unpinProject(project.id, project.version)
+          : await pinProject(project.id, project.version);
       } else if (project.status === 'archived') {
-        updatedProject = await restoreProject(project.id);
+        updatedProject = await restoreProject(project.id, project.version);
       } else {
-        updatedProject = await archiveProject(project.id);
+        updatedProject = await archiveProject(project.id, project.version);
       }
       setProjects((current) => current.map((item) => (
         item.id === updatedProject.id ? updatedProject : item

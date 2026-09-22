@@ -214,9 +214,10 @@ export const automationApi = {
     return fetchJson<{ automations: Automation[] }>(apiUrl(`/api/automations${suffix ? `?${suffix}` : ''}`));
   },
   metrics: () => fetchJson<AutomationMetrics>(apiUrl('/api/automations/metrics')),
-  draft: (input: { prompt: string; agentId?: string; language?: 'en' | 'zh' }) =>
+  draft: (input: { prompt: string; agentId?: string; language?: 'en' | 'zh' }, idempotencyKey = crypto.randomUUID()) =>
     fetchJson<{ draft: AutomationDraft }>(apiUrl('/api/automations/draft'), {
       method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey },
       body: JSON.stringify(input),
     }),
   simulate: (input: AutomationInput) =>
@@ -280,9 +281,10 @@ export const automationApi = {
     fetchJson<{ run: AutomationRun }>(apiUrl(`/api/automation-runs/${encodeURIComponent(runId)}/rerun`), {
       method: 'POST',
     }),
-  repairDraft: (runId: string, input: { agentId?: string; language?: 'en' | 'zh' }) =>
+  repairDraft: (runId: string, input: { agentId?: string; language?: 'en' | 'zh' }, idempotencyKey = crypto.randomUUID()) =>
     fetchJson<{ repair: AutomationRepairDraft }>(apiUrl(`/api/automation-runs/${encodeURIComponent(runId)}/repair-draft`), {
       method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey },
       body: JSON.stringify(input),
     }),
   cancelRun: (runId: string) =>

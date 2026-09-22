@@ -1,10 +1,11 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { flushSync } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
 import type { TaskFollowUpInput } from '../../../../src/scenes/taskFollowUp/contracts';
 import { Button } from '@/components/ui/button';
+import { PageContextCaptureButton } from '@/features/chat/context/page-context-capture-button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchProjects } from '@/features/projects/api';
@@ -121,6 +122,7 @@ export function CreateTaskFollowUp() {
 }
 
 export function TaskFollowUpDetail({ id }: { id: string }) {
+  const [configurationDirty, setConfigurationDirty] = useState(false);
   const zh = useLocaleStore(state => state.language) === 'zh';
   const text = (cn: string, en: string) => zh ? cn : en;
   const path = `/task-follow-ups/${encodeURIComponent(id)}`;
@@ -139,6 +141,7 @@ export function TaskFollowUpDetail({ id }: { id: string }) {
   const current = item.processedRevision > 0 && item.processedRevision === item.observedRevision;
   return <div className="space-y-5">
     <h2 className="break-words text-lg font-semibold text-fg">{item.activation.goal}</h2>
+    <PageContextCaptureButton resource={{ kind: 'scene', id: item.activation.id, revision: String(item.activation.revision) }} disabled={busy || configurationDirty} />
     <p className="text-sm text-fg-muted" role="status">{item.activation.status === 'archived' ? text('已停止跟进，任务与产物已保留', 'Stopped following; task and artifacts retained')
       : item.lastError || item.activation.status === 'needs_setup' || item.receipt?.needsUser ? text('需要你处理', 'Needs your attention')
       : item.activation.status === 'paused' ? text('已暂停', 'Paused')
@@ -171,7 +174,7 @@ export function TaskFollowUpDetail({ id }: { id: string }) {
       </details>
     </section>}
     {item.input.resource === 'worktree' && item.input.projectId && <TaskBranches projectId={item.input.projectId} taskId={item.task.id} />}
-    {item.activation.status === 'paused' && <FollowUpConfiguration key={item.activation.revision} item={item} onSaved={() => detail.mutate()} />}
+    {item.activation.status === 'paused' && <FollowUpConfiguration key={item.activation.id} item={item} onSaved={() => detail.mutate()} onDirty={setConfigurationDirty} />}
     {error && <p role="alert" className="text-sm text-danger">{error}</p>}
     <div className="flex flex-wrap gap-3">{item.activation.status !== 'archived' && <>
       <Button variant="secondary" disabled={busy} onClick={() => void transition(item.activation.status === 'active' ? 'paused' : 'active')}>
@@ -181,32 +184,37 @@ export function TaskFollowUpDetail({ id }: { id: string }) {
   </div>;
 }
 
-function FollowUpConfiguration({ item, onSaved }: { item: FollowUp; onSaved: () => Promise<unknown> }) {
+function FollowUpConfiguration({ item, onSaved, onDirty }: { item: FollowUp; onSaved: () => Promise<unknown>; onDirty: (dirty: boolean) => void }) {
   const zh = useLocaleStore(state => state.language) === 'zh';
   const text = (cn: string, en: string) => zh ? cn : en;
-  const [instruction, setInstruction] = useState(item.input.instruction);
-  const [writable, setWritable] = useState(item.input.capabilities.includes('workspace.write'));
-  const [command, setCommand] = useState(item.input.verificationCommand ?? '');
+  const [draft, setDraft] = useState<{ base: FollowUp; instruction: string; writable: boolean; command: string } | null>(null);
+  const fields = draft ?? { base: item, instruction: item.input.instruction, writable: item.input.capabilities.includes('workspace.write'), command: item.input.verificationCommand ?? '' };
+  const { instruction, writable, command } = fields;
+  const edit = (patch: Partial<Pick<typeof fields, 'instruction' | 'writable' | 'command'>>) => setDraft(previous => ({ ...(previous ?? fields), ...patch }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const dirty = instruction !== item.input.instruction || writable !== item.input.capabilities.includes('workspace.write') || command !== (item.input.verificationCommand ?? '');
+  useEffect(() => { onDirty(dirty || busy); return () => onDirty(false); }, [dirty, busy, onDirty]);
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError('');
     try {
-      await sceneWrite(`/task-follow-ups/${item.activation.id}`, 'PATCH', { expectedRevision: item.activation.revision,
-        configuration: { ...item.input, instruction, capabilities: capabilities(item.input.resource, writable, command), verificationCommand: command.trim() || undefined } });
+      const base = fields.base;
+      await sceneWrite(`/task-follow-ups/${item.activation.id}`, 'PATCH', { expectedRevision: base.activation.revision,
+        configuration: { ...base.input, instruction, capabilities: capabilities(base.input.resource, writable, command), verificationCommand: command.trim() || undefined } });
       await onSaved();
+      setDraft(null);
     } catch (cause) { setError(sceneErrorText(cause, zh)); } finally { setBusy(false); }
   }
   return <details className={panel}><summary className="cursor-pointer text-sm text-fg">{text('调整指令与授权', 'Edit instructions and permissions')}</summary>
     <SceneDirtyGuard dirty={dirty} zh={zh} />
     <form className="space-y-3" onSubmit={submit}>
-      <label className="grid gap-2 text-sm text-fg">{text('处理指令', 'Instructions')}<textarea className={field} rows={4} maxLength={12000} value={instruction} onChange={e => setInstruction(e.target.value)} /></label>
-      {item.input.resource !== 'none' && <label className="flex min-h-11 items-center gap-3 text-sm text-fg"><input type="checkbox" className="ui-checkbox" checked={writable} onChange={e => setWritable(e.target.checked)} />{text('允许修改任务工作区文件', 'Allow task workspace file edits')}</label>}
-      {item.input.resource === 'worktree' && <label className="grid gap-2 text-sm text-fg">{text('验证命令（可选；留空不执行）', 'Verification command (optional; blank disables execution)')}<input className={field} maxLength={2000} value={command} onChange={e => setCommand(e.target.value)} /></label>}
+      <label className="grid gap-2 text-sm text-fg">{text('处理指令', 'Instructions')}<textarea disabled={busy} className={field} rows={4} maxLength={12000} value={instruction} onChange={e => edit({ instruction: e.target.value })} /></label>
+      {fields.base.input.resource !== 'none' && <label className="flex min-h-11 items-center gap-3 text-sm text-fg"><input disabled={busy} type="checkbox" className="ui-checkbox" checked={writable} onChange={e => edit({ writable: e.target.checked })} />{text('允许修改任务工作区文件', 'Allow task workspace file edits')}</label>}
+      {fields.base.input.resource === 'worktree' && <label className="grid gap-2 text-sm text-fg">{text('验证命令（可选；留空不执行）', 'Verification command (optional; blank disables execution)')}<input disabled={busy} className={field} maxLength={2000} value={command} onChange={e => edit({ command: e.target.value })} /></label>}
       <p className="text-sm text-fg-muted">{text('保存后仍保持暂停。确认授权范围后再恢复。', 'Saving keeps the scene paused. Review permissions before resuming.')}</p>
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
       <Button type="submit" disabled={busy || !dirty}>{busy ? text('正在保存…', 'Saving…') : text('保存指令与授权', 'Save instructions and permissions')}</Button>
+      {draft && <Button type="button" variant="ghost" disabled={busy} onClick={() => { setDraft(null); setError(''); }}>{text('放弃修改', 'Discard edits')}</Button>}
     </form>
   </details>;
 }

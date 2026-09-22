@@ -17,7 +17,7 @@ export type SceneNotes = { content: string; revision: number; validUntil: number
 export const sceneGet = <T,>(path: string) => fetchJson<T>(apiUrl(`/api/scenes${path}`));
 export const sceneWrite = <T,>(path: string, method: 'POST' | 'PATCH', body?: unknown, requestId?: string) =>
   fetchJson<T>(apiUrl(`/api/scenes${path}`), { method, body: body === undefined ? undefined : JSON.stringify(body),
-    headers: requestId ? { 'Idempotency-Key': requestId } : undefined });
+    headers: { 'Idempotency-Key': requestId ?? crypto.randomUUID() } });
 
 export function sceneErrorText(error: unknown, zh: boolean): string {
   const status = (error as { status?: number } | undefined)?.status;

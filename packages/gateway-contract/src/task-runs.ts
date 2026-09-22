@@ -51,7 +51,9 @@ export const TaskRunSchema = z.object({
       message: 'A root run must reference itself',
     });
   }
-  if (run.status !== 'queued' && (!run.contextSnapshotId || !run.policySnapshot)) {
+  // A queued run can be paused or cancelled before dispatch captures snapshots.
+  const dispatched = run.startedAt !== undefined || ['running', 'verifying', 'succeeded'].includes(run.status);
+  if (dispatched && (!run.contextSnapshotId || !run.policySnapshot)) {
     context.addIssue({
       code: 'custom',
       path: ['contextSnapshotId'],

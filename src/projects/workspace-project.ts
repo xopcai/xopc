@@ -58,6 +58,11 @@ export function canonicalWorkspacePath(raw: string | null | undefined): string |
     if (!stat.isDirectory()) return normalized;
     return realpathSync.native(normalized);
   } catch {
+    let parent = dirname(normalized);
+    while (parent !== dirname(parent)) {
+      try { return resolve(realpathSync.native(parent), relative(parent, normalized)); }
+      catch { parent = dirname(parent); }
+    }
     return normalized;
   }
 }

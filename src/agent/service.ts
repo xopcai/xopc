@@ -294,6 +294,7 @@ export class AgentService {
       emitBrowserEvent: config.emitBrowserEvent,
       getNotesService: config.getNotesService,
       getProjectService: config.getProjectService,
+      getWorkDiscovery: config.getWorkDiscovery,
       getLocalAppService: config.getLocalAppService,
       dispatchTaskEvents: config.dispatchTaskEvents,
       dispatchTaskRuns: config.dispatchTaskRuns,

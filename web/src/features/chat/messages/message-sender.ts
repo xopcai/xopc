@@ -3,11 +3,13 @@ import {
   SESSION_INPUT_REQUEST_TIMEOUT_MS,
   SESSION_INPUT_RETRY_DELAYS_MS,
   parseTurnOutcome,
+  parseAppContextEnvelope,
   sessionInputFingerprint,
   shouldRetrySessionInputStatus,
   type AgentStreamRunEndPayload,
   type ToolActivity,
   type TurnOutcome,
+  type AppContextEnvelope,
 } from '@xopcai/gateway-contract';
 
 import { buildSendFailedErrorPayload } from '@/features/chat/messages/agent-run-error-parser';
@@ -65,6 +67,7 @@ async function postSessionInput(
         body,
         signal: controller.signal,
       });
+      signal.throwIfAborted();
       if (!shouldRetrySessionInputStatus(response.status)) return response;
       lastError = new Error(`Session input temporarily unavailable (${response.status})`);
     } catch (error) {
@@ -230,6 +233,8 @@ export type TaskPlanState = {
 };
 
 export type MessagingCallbacks = {
+  /** The server durably accepted this input, before its run finishes. */
+  onInputAccepted?: () => void;
   onStreamStart: (turnId: string) => void;
   onReplayGap?: () => void | Promise<void>;
   onToken: (delta: string, messageId?: string) => void;
@@ -363,63 +368,77 @@ export class MessageSender {
     taskId?: string,
     replaceTurnId?: string,
     contextRefs?: WireContextRef[],
+    appContext?: AppContextEnvelope,
   ): Promise<void> {
+    if (this.isSending) throw new Error('A submission is already in progress');
+    if (replaceTurnId && appContext) throw new Error('Application context requires a new input');
+    const capturedContext = appContext === undefined ? undefined : parseAppContextEnvelope(appContext);
+    attachments = attachments === undefined ? undefined : structuredClone(attachments);
+    contextRefs = contextRefs === undefined ? undefined : structuredClone(contextRefs);
     this._trackedRunId = undefined;
-    this._abort = new AbortController();
+    const controller = new AbortController();
+    this._abort = controller;
     this._chatId = chatId;
 
-    const capped =
-      attachments && attachments.length > MAX_CHAT_ATTACHMENTS
-        ? attachments.slice(0, MAX_CHAT_ATTACHMENTS)
-        : attachments;
+    try {
+      const capped =
+        attachments && attachments.length > MAX_CHAT_ATTACHMENTS
+          ? attachments.slice(0, MAX_CHAT_ATTACHMENTS)
+          : attachments;
 
-    const selection = useChatSessionStore.getState().sessions[chatId];
-    if (selection?.modelConfigSaving) throw new Error('Wait for model configuration to finish saving');
-    const configVersion = selection?.configVersion;
-    const origin = await waitForEndpointTurnClaim(this._abort.signal);
-    const fingerprint = `${sessionInputFingerprint({ content, attachments: capped, thinking: thinkingLevel, contextRefs })}:${configVersion ?? ''}${replaceTurnId ? `:replace:${replaceTurnId}` : ''}`;
-    const clientMessageId = claimSubmissionId(chatId, fingerprint);
-    const res = await postSessionInput(
-      apiUrl(taskId
-        ? `/api/tasks/${encodeURIComponent(taskId)}/inputs`
-        : replaceTurnId
-          ? `/api/sessions/${encodeURIComponent(chatId)}/turns/${encodeURIComponent(replaceTurnId)}/replace`
-          : `/api/sessions/${encodeURIComponent(chatId)}/inputs`),
-      JSON.stringify({
-        clientMessageId,
-        configVersion,
-        delivery: 'next',
-        content,
-        attachments: capped,
-        thinking: thinkingLevel,
-        origin,
-        contextRefs,
-      }),
-      this._abort.signal,
-      taskId ? chatId : undefined,
-    );
+      const selection = useChatSessionStore.getState().sessions[chatId];
+      if (selection?.modelConfigSaving) throw new Error('Wait for model configuration to finish saving');
+      const configVersion = selection?.configVersion;
+      const origin = await waitForEndpointTurnClaim(controller.signal);
+      const fingerprint = `${sessionInputFingerprint({ content, attachments: capped, thinking: thinkingLevel, contextRefs, appContext: capturedContext })}:${configVersion ?? ''}${replaceTurnId ? `:replace:${replaceTurnId}` : ''}`;
+      const clientMessageId = claimSubmissionId(chatId, fingerprint);
+      const res = await postSessionInput(
+        apiUrl(taskId
+          ? `/api/tasks/${encodeURIComponent(taskId)}/inputs`
+          : replaceTurnId
+            ? `/api/sessions/${encodeURIComponent(chatId)}/turns/${encodeURIComponent(replaceTurnId)}/replace`
+            : `/api/sessions/${encodeURIComponent(chatId)}/inputs`),
+        JSON.stringify({
+          clientMessageId,
+          configVersion,
+          delivery: 'next',
+          content,
+          attachments: capped,
+          thinking: thinkingLevel,
+          origin,
+          contextRefs,
+          appContext: capturedContext,
+        }),
+        controller.signal,
+        taskId ? chatId : undefined,
+      );
 
-    if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as { error?: { message?: string; code?: string } };
-      if (body.error?.code === 'CONFIG_CHANGED') window.dispatchEvent(new CustomEvent('session-model-config-stale', { detail: { conversationId: chatId } }));
-      throw new Error(formatApiHttpError(res.status, res.statusText, body.error?.message));
-    }
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: { message?: string; code?: string } };
+        if (body.error?.code === 'CONFIG_CHANGED') window.dispatchEvent(new CustomEvent('session-model-config-stale', { detail: { conversationId: chatId } }));
+        throw new Error(formatApiHttpError(res.status, res.statusText, body.error?.message));
+      }
 
-    const json = await res.json() as {
-      payload?: {
-        conversationId?: string;
-        state?: { activeRunId?: string; activeInputId?: string; inputs?: Array<{ id: string; clientMessageId: string }> };
+      const json = await res.json() as {
+        payload?: {
+          conversationId?: string;
+          state?: { activeRunId?: string; activeInputId?: string; inputs?: Array<{ id: string; clientMessageId: string }> };
+        };
       };
-    };
-    completeSubmission(chatId, clientMessageId);
-    const state = json.payload?.state;
-    const resolvedChatId = json.payload?.conversationId?.trim() || chatId;
-    const ownInput = state?.inputs?.find((input) => input.clientMessageId === clientMessageId);
-    if (state?.activeRunId && ownInput?.id === state.activeInputId) {
-      await this.resume(state.activeRunId, resolvedChatId, callbacks);
-      return;
+      controller.signal.throwIfAborted();
+      completeSubmission(chatId, clientMessageId);
+      callbacks?.onInputAccepted?.();
+      const state = json.payload?.state;
+      const resolvedChatId = json.payload?.conversationId?.trim() || chatId;
+      const ownInput = state?.inputs?.find((input) => input.clientMessageId === clientMessageId);
+      if (state?.activeRunId && ownInput?.id === state.activeInputId) {
+        await this.resume(state.activeRunId, resolvedChatId, callbacks);
+        return;
+      }
+      this._abort = undefined;
+    } finally {
+      if (this._abort === controller) this._abort = undefined;
     }
-    this._abort = undefined;
   }
 
   abort(): void {

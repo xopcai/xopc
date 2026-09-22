@@ -201,11 +201,12 @@ export function getProjectUnderstandingRun(projectId: string): WorkDiscoveryRun 
   return row ? runFromRow(row) : null;
 }
 
-export function listPendingProjectUnderstandingRuns(): WorkDiscoveryRun[] {
+export function listPendingProjectUnderstandingRuns(projectId?: string): WorkDiscoveryRun[] {
   const { db } = requireXopcDatabase();
   return (db.prepare(`SELECT * FROM work_discovery_runs
-    WHERE mode = 'background' AND status IN ('queued', 'probing', 'analyzing')`)
-    .all() as RunRow[]).map(runFromRow);
+    WHERE mode = 'background' AND status IN ('queued', 'probing', 'analyzing')
+      AND (? IS NULL OR project_id = ?)`)
+    .all(projectId ?? null, projectId ?? null) as RunRow[]).map(runFromRow);
 }
 
 export function setWorkDiscoveryFeedback(input: {

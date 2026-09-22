@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { currentOperationId } from '../infra/operation-context.js';
 
 import type {
   ActorRef,
@@ -15,6 +16,23 @@ import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/
 export type TaskExecutionSource = 'chat' | 'cli' | 'cron' | 'workflow' | 'channel' | 'api';
 export type TaskUiLocale = 'en' | 'zh';
 export type TaskAggregate = Task;
+
+type TaskListQuery = { search?: string; phase?: TaskPhase; priority?: TaskPriority; projectId?: string; limit?: number; offset?: number; order?: 'recent' | 'board' };
+
+function taskListFilter(input: TaskListQuery): { where: string; params: Array<string | number> } {
+  const clauses: string[] = [];
+  const params: Array<string | number> = [];
+  for (const [column, value] of [['phase', input.phase], ['priority', input.priority], ['project_id', input.projectId]]) {
+    if (value) { clauses.push(`${column} = ?`); params.push(value); }
+  }
+  if (input.search?.trim()) {
+    clauses.push(`(instr(lower(title), lower(?)) > 0 OR instr(lower(coalesce(body, '')), lower(?)) > 0
+      OR EXISTS (SELECT 1 FROM task_contracts c WHERE c.task_id = tasks.task_id
+        AND c.version = tasks.latest_contract_version AND instr(lower(c.objective), lower(?)) > 0))`);
+    params.push(input.search.trim(), input.search.trim(), input.search.trim());
+  }
+  return { where: clauses.length ? ` WHERE ${clauses.join(' AND ')}` : '', params };
+}
 
 type TaskRow = {
   task_id: string;
@@ -209,33 +227,25 @@ export class TaskRepository {
     return row ? taskFromRow(row, this.getContract(row.task_id, row.latest_contract_version)) : undefined;
   }
 
-  list(input: { search?: string; phase?: TaskPhase; projectId?: string; limit?: number; order?: 'recent' | 'board' } = {}): TaskAggregate[] {
-    const clauses: string[] = [];
-    const params: Array<string | number> = [];
-    if (input.phase) {
-      clauses.push('phase = ?');
-      params.push(input.phase);
-    }
-    if (input.projectId) {
-      clauses.push('project_id = ?');
-      params.push(input.projectId);
-    }
-    if (input.search?.trim()) {
-      clauses.push("(instr(lower(title), lower(?)) > 0 OR instr(lower(coalesce(body, '')), lower(?)) > 0)");
-      params.push(input.search.trim(), input.search.trim());
-    }
+  list(input: TaskListQuery = {}): TaskAggregate[] {
+    const { where, params } = taskListFilter(input);
     const limit = Math.max(1, Math.min(200, Math.floor(input.limit ?? 50)));
-    params.push(limit);
+    params.push(limit, Math.max(0, Math.floor(input.offset ?? 0)));
     const rows = getSqliteDatabase().prepare(
-      `SELECT * FROM tasks${clauses.length ? ` WHERE ${clauses.join(' AND ')}` : ''}
+      `SELECT * FROM tasks${where}
        ORDER BY ${input.order === 'board'
         ? 'board_rank ASC, created_at ASC, task_id ASC'
-        : 'updated_at DESC'} LIMIT ?`,
+        : 'updated_at DESC, task_id ASC'} LIMIT ? OFFSET ?`,
     ).all(...params) as TaskRow[];
     return rows.map((row) => taskFromRow(
       row,
       this.getContract(row.task_id, row.latest_contract_version),
     ));
+  }
+
+  count(input: TaskListQuery = {}): number {
+    const { where, params } = taskListFilter(input);
+    return (getSqliteDatabase().prepare(`SELECT count(*) AS total FROM tasks${where}`).get(...params) as { total: number }).total;
   }
 
   listByProject(projectId: string, limit = 50): TaskAggregate[] {
@@ -410,8 +420,8 @@ export class TaskRepository {
   delete(taskId: string): boolean {
     return runSqliteWriteTransaction((db) => {
       const task = db.prepare(
-        'SELECT project_id FROM tasks WHERE task_id = ?',
-      ).get(taskId) as { project_id: string | null } | undefined;
+        'SELECT project_id, version FROM tasks WHERE task_id = ?',
+      ).get(taskId) as { project_id: string | null; version: number } | undefined;
       if (!task) return false;
       const runIds = (db.prepare(
         'SELECT run_id FROM task_runs WHERE task_id = ?',
@@ -439,8 +449,8 @@ export class TaskRepository {
       db.prepare(
         `INSERT INTO domain_outbox (
           event_id, event_type, subject_kind, subject_id, correlation_id,
-          payload_json, created_at
-        ) VALUES (?, 'task.deleted.v1', 'task', ?, ?, ?, ?)`,
+          payload_json, created_at, operation_id
+        ) VALUES (?, 'task.deleted.v1', 'task', ?, ?, ?, ?, ?)`,
       ).run(
         randomUUID(),
         taskId,
@@ -449,8 +459,10 @@ export class TaskRepository {
           taskId,
           ...(task.project_id ? { projectId: task.project_id } : {}),
           deletedAt,
+          version: task.version + 1,
         }),
         deletedAt,
+        currentOperationId() ?? null,
       );
       return deleted;
     });

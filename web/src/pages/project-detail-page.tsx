@@ -7,6 +7,7 @@ import { type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent 
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { PageContextCaptureButton } from '@/features/chat/context/page-context-capture-button';
 import { AutosaveStatus } from '@/components/ui/autosave-status';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { PageTabs } from '@/components/ui/page-tabs';
@@ -51,6 +52,7 @@ import {
   type ProjectWithDetails,
 } from '@/features/projects/api';
 import { ProjectSkillsPanel } from '@/features/projects/project-skills-panel';
+import { mergeProjectSettingsDraft, projectSettingsDraft, type ProjectSettingsDraft } from '@/features/projects/project-settings-draft';
 import { ProjectUnderstandingCheckbox, ProjectUnderstandingPanel } from '@/features/projects/project-understanding';
 import { selectOverviewTasks } from '@/features/projects/project-overview-model';
 import { ProjectTaskBoard, type CreateProjectTaskInput, type ProjectTaskBoardHandle } from '@/features/projects/task-board/project-task-board';
@@ -98,17 +100,6 @@ const PROJECT_FILES_PANEL_WIDTH_DEFAULT = 320;
 const PROJECT_FILES_PANEL_WIDTH_MIN = 220;
 const PROJECT_FILES_PANEL_WIDTH_MAX = 560;
 type WorkspaceMigrationMode = 'follow' | 'fixed';
-type ProjectSettingsDraft = {
-  name: string;
-  description: string;
-  status: ProjectStatus;
-  defaultAgentId: string;
-  executionMode: Project['executionMode'];
-  workspaceRoot: string;
-  brief: string;
-  instructions: string;
-};
-
 function projectSettingsDirty(draft: ProjectSettingsDraft, project: Project): boolean {
   return draft.name !== project.name
     || draft.description !== (project.description ?? '')
@@ -666,6 +657,8 @@ export function ProjectDetailPage() {
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
   const [project, setProject] = useState<ProjectWithDetails | null>(null);
+  const projectRef = useRef(project);
+  useLayoutEffect(() => { projectRef.current = project; }, [project]);
   const [operatingView, setOperatingView] = useState<ProjectOperatingView | null>(null);
   const [sessions, setSessions] = useState<ProjectSession[]>([]);
   const [sessionSearchQuery, setSessionSearchQuery] = useState('');
@@ -794,16 +787,7 @@ export function ProjectDetailPage() {
         const nextAgents = agentPayload?.agents ?? [];
         setAgents(nextAgents);
         setSelectedAgentId(projectResult.defaultAgentId ?? '');
-        const loadedDraft: ProjectSettingsDraft = {
-          name: projectResult.name,
-          description: projectResult.description ?? '',
-          status: projectResult.status,
-          defaultAgentId: projectResult.defaultAgentId ?? '',
-          executionMode: projectResult.executionMode,
-          workspaceRoot: projectResult.workspaceRoot ?? '',
-          brief: projectResult.brief ?? '',
-          instructions: projectResult.instructions ?? '',
-        };
+        const loadedDraft = projectSettingsDraft(projectResult);
         draftRef.current = loadedDraft;
         setDraft(loadedDraft);
       })
@@ -825,6 +809,42 @@ export function ProjectDetailPage() {
     if (!projectId) return;
     setOperatingView(await fetchProjectOperatingView(projectId));
   }, [projectId]);
+
+  useEffect(() => {
+    if (loading) return;
+    let active = true;
+    let sequence = 0;
+    const refresh = (event: Event) => {
+      const id = (event as CustomEvent<{ id?: string }>).detail?.id;
+      if (!projectId || (id && id !== projectId)) return;
+      const request = ++sequence;
+      void Promise.all([fetchProject(projectId), fetchProjectOperatingView(projectId)])
+        .then(([next, view]) => {
+          if (!active || sequence !== request) return;
+          const previous = projectRef.current;
+          if (previous?.id === next.id && previous.version > next.version) return;
+          if (previous?.id === next.id) {
+            const merged = mergeProjectSettingsDraft(draftRef.current, previous, next);
+            draftRef.current = merged;
+            setDraft(merged);
+          }
+          projectRef.current = next;
+          setProject(next);
+          setOperatingView(view);
+        })
+        .catch((err: unknown) => {
+          if (!active || sequence !== request) return;
+          if (err instanceof Error && 'status' in err && err.status === 404) {
+            setProject(null);
+            setOperatingView(null);
+            setError(err.message);
+          }
+        });
+    };
+    window.addEventListener('project-resource-changed', refresh);
+    refresh(new Event('project-resource-changed'));
+    return () => { active = false; window.removeEventListener('project-resource-changed', refresh); };
+  }, [projectId, loading]);
 
   useEffect(() => {
     let refreshTimer: number | undefined;
@@ -1153,6 +1173,7 @@ export function ProjectDetailPage() {
   const headerEnd = useMemo(
     () => project ? (
       <>
+        <PageContextCaptureButton resource={{ kind: 'project', id: project.id, revision: String(project.version) }} disabled={saving || projectSettingsDirty(draft, project)} />
         <Button asChild variant="secondary" className="h-9 rounded-lg">
           <Link to={`/workflows?tab=library&projectId=${encodeURIComponent(project.id)}`}>
             <GitBranch className="size-4" aria-hidden />
@@ -1171,7 +1192,7 @@ export function ProjectDetailPage() {
         </Button>
       </>
     ) : null,
-    [openTaskCreate, onProjectTabLinkClick, pm.board.create, pm.common.newChat, pm.common.runWorkflow, project],
+    [openTaskCreate, onProjectTabLinkClick, pm.board.create, pm.common.newChat, pm.common.runWorkflow, project, saving, draft],
   );
 
   useLayoutEffect(() => {
@@ -1214,7 +1235,7 @@ export function ProjectDetailPage() {
         executionMode: snapshot.executionMode,
         brief: snapshot.brief,
         instructions: snapshot.instructions,
-      });
+      }, project.version);
       applyProjectUpdate(updated);
       const currentDraft = draftRef.current;
       const normalizedDraft: ProjectSettingsDraft = {
@@ -1271,7 +1292,7 @@ export function ProjectDetailPage() {
       const updated = await updateProject(project.id, {
         workspaceRoot: nextWorkspaceRoot,
         ...(options.createWorkspaceRoot ? { createWorkspaceRoot: true } : {}),
-      });
+      }, project.version);
       applyProjectUpdate(updated);
       updateProjectDraft({ workspaceRoot: updated.workspaceRoot ?? '' });
       setWorkspaceMigrationOpen(false);
@@ -1294,7 +1315,7 @@ export function ProjectDetailPage() {
     setProjectActionBusy('pin');
     setError(null);
     try {
-      const updated = project.pinnedAt ? await unpinProject(project.id) : await pinProject(project.id);
+      const updated = project.pinnedAt ? await unpinProject(project.id, project.version) : await pinProject(project.id, project.version);
       applyProjectUpdate(updated);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -1308,7 +1329,7 @@ export function ProjectDetailPage() {
     setProjectActionBusy('archive');
     setError(null);
     try {
-      const updated = project.status === 'archived' ? await restoreProject(project.id) : await archiveProject(project.id);
+      const updated = project.status === 'archived' ? await restoreProject(project.id, project.version) : await archiveProject(project.id, project.version);
       applyProjectUpdate(updated);
       updateProjectDraft({ status: updated.status });
     } catch (err) {
@@ -1323,7 +1344,7 @@ export function ProjectDetailPage() {
     setDeletingProject(true);
     setError(null);
     try {
-      await deleteProject(project.id);
+      await deleteProject(project.id, project.version);
       setDeleteConfirmOpen(false);
       navigate('/projects');
     } catch (err) {
