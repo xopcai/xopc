@@ -1323,6 +1323,7 @@
     "userMessageCopy": "Copy message",
     "userMessageRetry": "Retry",
     "userMessageSending": "Sending…",
+    "userMessageWaitingForNetwork": "Waiting for network…",
     "userMessageSendFailed": "Not sent",
     "userMessageEdit": "Edit in composer",
     "userMessageEditing": "Editing your latest message. Sending will replace the previous turn.",

@@ -249,6 +249,16 @@ export struct XopcChatView {
     this.focusComposerOnMount = true; this.focusMountedComposer();
   }
 
+  private userBubbleWidth(row: XopcChatRow): string {
+    if ((row.media?.length || 0) > 0 || (row.refs?.length || 0) > 0) return '82%';
+    let units = 0;
+    for (let index = 0; index < row.text.length; index++) {
+      units += row.text.charCodeAt(index) > 255 ? 1 : 0.55;
+    }
+    const width = Math.max(44, Math.min(262, Math.ceil(units * 16) + 28));
+    return width >= 262 ? '82%' : width + 'vp';
+  }
+
   aboutToAppear(): void {
     this.visible = this.activePage;
     if (this.visible) { this.bindBack(); this.attention.activate(); }
@@ -483,6 +493,44 @@ export struct XopcChatView {
   }
 
   @Builder
+  messageActions(row: XopcChatRow) {
+    if (row.text && (row.role === 'user' || row.role === 'assistant')) {
+      Row({ space: 8 }) {
+        Button() { SymbolGlyph($r('sys.symbol.doc_plaintext')).fontSize(18).fontColor([$r('app.color.tertiary')]) }
+          .width(44).height(44).padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.chat_copy'))
+          .onClick((): void => { this.messageAction('copy', row); })
+        if (row.role === 'user') {
+          Button() { SymbolGlyph($r('sys.symbol.square_and_pencil')).fontSize(18).fontColor([$r('app.color.tertiary')]) }
+            .width(44).height(44).padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.chat_edit'))
+            .onClick((): void => { this.messageAction('edit', row); })
+        } else {
+          Button() { SymbolGlyph($r('sys.symbol.bookmark')).fontSize(18).fontColor([$r('app.color.tertiary')]) }
+            .width(44).height(44).padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.chat_save_note'))
+            .enabled(!this.savingNote).onClick((): void => { this.messageAction('save', row); })
+          Button() { SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(18).fontColor([$r('app.color.tertiary')]) }
+            .width(44).height(44).padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.chat_regenerate'))
+            .enabled(!this.chat.runId && !this.chat.sending).onClick((): void => { this.messageAction('regenerate', row); })
+          if (extractMarkdownCodeBlocks(chatAnswerText(row))) {
+            Button() { Text('</>').fontSize(16).fontColor($r('app.color.secondary')) }
+              .width(44).height(44).padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.chat_copy_code'))
+              .onClick((): void => { this.messageAction('copy-code', row); })
+          }
+          if (!(row.media || []).some((file: XopcHistoryMedia): boolean => file.mimeType.startsWith('audio/'))) {
+            Button() {
+              if (this.reader.sourceId === row.id && this.reader.state === 'loading') { LoadingProgress().width(18).height(18).color($r('app.color.secondary')) }
+              else if (this.reader.sourceId === row.id && this.reader.state === 'playing') { Text('Ⅱ').fontSize(18).fontColor($r('app.color.secondary')) }
+              else { SymbolGlyph($r('sys.symbol.speaker_wave_2')).fontSize(18).fontColor([$r('app.color.secondary')]) }
+            }
+              .width(44).height(44).padding(0).backgroundColor(Color.Transparent)
+              .accessibilityText(this.reader.sourceId === row.id && this.reader.state === 'playing' ? $r('app.string.pause') : this.reader.sourceId === row.id && this.reader.state === 'paused' ? $r('app.string.resume') : $r('app.string.chat_read_aloud'))
+              .enabled(!!chatAnswerText(row)).onClick((): void => { this.messageAction('read', row); })
+          }
+        }
+      }.width('100%').justifyContent(row.role === 'user' ? FlexAlign.End : FlexAlign.Start)
+    }
+  }
+
+  @Builder
   conversation() {
     if (this.chat.loading && !this.chat.rows.length) { this.skeleton() }
     if (!this.chat.loading && !this.chat.rows.length && !this.chat.liveRow && !this.chat.runId) {
@@ -498,7 +546,7 @@ export struct XopcChatView {
         } }).layoutWeight(1).width('100%')
     } else {
     Stack({ alignContent: Alignment.Bottom }) {
-    List({ space: 16, scroller: this.messagesScroller }) {
+    List({ space: 20, scroller: this.messagesScroller }) {
       if (this.chat.hasOlder) {
         ListItem() {
           Row() {
@@ -511,45 +559,29 @@ export struct XopcChatView {
       }
       Repeat<XopcChatRow>(this.chat.rows).each((item: RepeatItem<XopcChatRow>) => {
         ListItem() {
-          Column({ space: 8 }) {
-            XopcChatMessageContent({ row: item.item, conversationId: this.chat.selectedId, disclosure: this.disclosure, reasoning: this.context.config?.reasoningLevel || 'on', onNavigate: this.onNavigate,
-              onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
-            if (item.item.text && (item.item.role === 'user' || item.item.role === 'assistant')) {
-              Row({ space: 8 }) {
-                Button() { SymbolGlyph($r('sys.symbol.doc_plaintext')).fontSize(18).fontColor([$r('app.color.tertiary')]) }
-                  .width(44).height(44).padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.chat_copy'))
-                  .onClick((): void => { this.messageAction('copy', item.item); })
-                if (item.item.role === 'user') {
-                  Button() { SymbolGlyph($r('sys.symbol.square_and_pencil')).fontSize(18).fontColor([$r('app.color.tertiary')]) }
-                    .width(44).height(44).padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.chat_edit'))
-                    .onClick((): void => { this.messageAction('edit', item.item); })
-                } else {
-                  Button() { SymbolGlyph($r('sys.symbol.bookmark')).fontSize(18).fontColor([$r('app.color.tertiary')]) }
-                    .width(44).height(44).padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.chat_save_note'))
-                    .enabled(!this.savingNote).onClick((): void => { this.messageAction('save', item.item); })
-                  Button() { SymbolGlyph($r('sys.symbol.arrow_clockwise')).fontSize(18).fontColor([$r('app.color.tertiary')]) }
-                    .width(44).height(44).padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.chat_regenerate'))
-                    .enabled(!this.chat.runId && !this.chat.sending).onClick((): void => { this.messageAction('regenerate', item.item); })
-                  if (extractMarkdownCodeBlocks(chatAnswerText(item.item))) {
-                    Button() { Text('</>').fontSize(16).fontColor($r('app.color.secondary')) }
-                      .width(44).height(44).padding(0).backgroundColor(Color.Transparent).accessibilityText($r('app.string.chat_copy_code'))
-                      .onClick((): void => { this.messageAction('copy-code', item.item); })
-                  }
-                  if (!(item.item.media || []).some((file: XopcHistoryMedia): boolean => file.mimeType.startsWith('audio/'))) {
-                  Button() {
-                    if (this.reader.sourceId === item.item.id && this.reader.state === 'loading') { LoadingProgress().width(18).height(18).color($r('app.color.secondary')) }
-                    else if (this.reader.sourceId === item.item.id && this.reader.state === 'playing') { Text('Ⅱ').fontSize(18).fontColor($r('app.color.secondary')) }
-                    else { SymbolGlyph($r('sys.symbol.speaker_wave_2')).fontSize(18).fontColor([$r('app.color.secondary')]) }
-                  }
-                    .width(44).height(44).padding(0).backgroundColor(Color.Transparent)
-                    .accessibilityText(this.reader.sourceId === item.item.id && this.reader.state === 'playing' ? $r('app.string.pause') : this.reader.sourceId === item.item.id && this.reader.state === 'paused' ? $r('app.string.resume') : $r('app.string.chat_read_aloud'))
-                    .enabled(!!chatAnswerText(item.item)).onClick((): void => { this.messageAction('read', item.item); })
-                  }
-                }
-              }.width('100%').justifyContent(item.item.role === 'user' ? FlexAlign.End : FlexAlign.Start)
-            }
-          }.width('100%').padding(16).alignItems(HorizontalAlign.Start).borderRadius(12)
-            .backgroundColor(item.item.role === 'user' ? $r('app.color.panel') : $r('app.color.surface'))
+          if (item.item.role === 'user') {
+            Column({ space: 2 }) {
+              Row() {
+                Column() {
+                  XopcChatMessageContent({ row: item.item, conversationId: this.chat.selectedId, disclosure: this.disclosure,
+                    reasoning: this.context.config?.reasoningLevel || 'on', onNavigate: this.onNavigate,
+                    onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
+                }.id('chat-user-bubble-' + item.item.id).width(this.userBubbleWidth(item.item))
+                  .constraintSize({ minWidth: 44, maxWidth: '82%' })
+                  .padding({ left: 14, right: 14, top: 10, bottom: 10 }).alignItems(HorizontalAlign.Start)
+                  .borderRadius({ topLeft: 18, topRight: 18, bottomLeft: 18, bottomRight: 6 })
+                  .backgroundColor($r('app.color.accent_soft'))
+              }.width('100%').justifyContent(FlexAlign.End)
+              this.messageActions(item.item)
+            }.width('100%').alignItems(HorizontalAlign.End)
+          } else {
+            Column({ space: 2 }) {
+              XopcChatMessageContent({ row: item.item, conversationId: this.chat.selectedId, disclosure: this.disclosure,
+                reasoning: this.context.config?.reasoningLevel || 'on', onNavigate: this.onNavigate,
+                onFillDraft: (text: string): void => { this.fillProductDraft(text); } })
+              this.messageActions(item.item)
+            }.width('100%').alignItems(HorizontalAlign.Start)
+          }
         }
       }).key((row: XopcChatRow): string => this.chat.selectedId + ':' + row.id).virtualScroll({ totalCount: this.chat.rows.length })
       if (this.chat.liveRow) {
@@ -561,7 +593,7 @@ export struct XopcChatView {
       } else if (this.chat.runId) {
         ListItem() { Text($r('app.string.chat_running')).fontSize(13).fontColor($r('app.color.secondary')).padding(16) }
       }
-    }.id('chat-message-list').height('100%').width('100%').padding({ left: 16, right: 16 }).cachedCount(3)
+    }.id('chat-message-list').height('100%').width('100%').padding({ left: 20, right: 20 }).cachedCount(3)
       .onScrollIndex((start: number, end: number): void => {
         this.firstVisible = start;
       })
