@@ -7,6 +7,11 @@ import { XopcProgressView, XopcLibraryView } from './HomeHubs';
 import { XopcPersonalView } from './PersonalView';
 import { XopcWorkflowView } from './WorkflowView';
 import { XopcAutomationRunView } from './AutomationRunView';
+import { XopcShareCenterView } from './ShareCenterView';
+import { XopcShareIntakeDialog } from './ShareIntakeDialog';
+import { XopcIncomingShare } from '../model/share';
+import { XopcChatRepository } from '../repository/chatRepository';
+import { shareIntake, XopcShareIntake } from '../service/shareIntake';
 import { XopcMobileRoute } from '../model/home';
 import { pushNotifications } from '../service/pushNotifications';
 import { notificationNavigation } from '../service/notificationNavigation';
@@ -23,6 +28,8 @@ export struct XopcHomeView {
   @Local attention: XopcProgressViewModel = new XopcProgressViewModel();
   @Local requestedChatId: string = '';
   @Local chatRequestRevision: number = 0;
+  @Local intake: XopcShareIntake = shareIntake;
+  private chatRepository: XopcChatRepository = new XopcChatRepository();
   private readonly onMotionChange = (reduced: boolean): void => { layoutState.reduceMotion = reduced; };
   private attentionTimer: number = -1;
   private pathStack: NavPathStack = new NavPathStack();
@@ -55,6 +62,13 @@ export struct XopcHomeView {
     if (route.page === 'progress') { this.pathStack.clear(); this.tab = 1; return; }
     this.pathStack.pushPath({ name: route.page, param: route });
   }
+  private async exploreShare(value: XopcIncomingShare): Promise<boolean> {
+    try {
+      const id = await this.chatRepository.create();
+      this.intake.targetChat(id, value.chatPrompt); this.navigate({ page: 'chat', itemId: id });
+      return true;
+    } catch (error) { this.getUIContext().getPromptAction().showToast({ message: (error as Error).message }); return false; }
+  }
 
   @Builder
   destination(page: string, param: Object) {
@@ -75,6 +89,8 @@ export struct XopcHomeView {
     } else if (page === 'automation-run') {
       XopcAutomationRunView({ runId: (param as XopcMobileRoute).itemId,
         onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); } })
+    } else if (page === 'sharing') {
+      XopcShareCenterView({ onExit: (): void => { this.pathStack.pop(); } })
     } else {
       NavDestination() {
         if (page === 'settings') {
@@ -133,10 +149,12 @@ export struct XopcHomeView {
   }
 
   build() {
-    Navigation(this.pathStack) {
-      Column() {
+    Stack() {
+      Navigation(this.pathStack) {
+        Column() {
       Tabs({ barPosition: BarPosition.End, index: this.tab }) {
         TabContent() { XopcChatView({ requestedId: this.requestedChatId, requestRevision: this.chatRequestRevision,
+          intakeRevision: this.intake.chatRevision,
           bottomDock: this.chatDock,
           activePage: this.tab === 0 && !this.detailVisible, attentionItems: this.attention.needsUser, onAttentionRefresh: (): void => { this.attention.refresh(); },
           onNavigate: (route: XopcMobileRoute): void => { this.navigate(route); },
@@ -153,9 +171,12 @@ export struct XopcHomeView {
         }.id('secondary-tab-dock').width('92%').height(52).borderRadius(30).backgroundColor($r('app.color.panel'))
           .border({ width: 0.5, color: $r('app.color.border_subtle') }).margin({ bottom: 8 })
       }
-      }.width('100%').height('100%')
-    }.hideTitleBar(true).mode(NavigationMode.Stack).navDestination(this.destination)
-      .onNavBarStateChange((shown: boolean): void => { this.detailVisible = !shown; })
-      .width('100%').height('100%').backgroundColor($r('app.color.surface'))
+        }.width('100%').height('100%')
+      }.hideTitleBar(true).mode(NavigationMode.Stack).navDestination(this.destination)
+        .onNavBarStateChange((shown: boolean): void => { this.detailVisible = !shown; })
+        .width('100%').height('100%').backgroundColor($r('app.color.surface'))
+      XopcShareIntakeDialog({ onExplore: async (value: XopcIncomingShare): Promise<boolean> => await this.exploreShare(value),
+        onSaved: (noteId: string): void => { this.navigate({ page: 'notes', itemId: noteId }); } })
+    }.width('100%').height('100%')
   }
 }

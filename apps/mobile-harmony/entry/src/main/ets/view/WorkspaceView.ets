@@ -3,6 +3,9 @@ import { XopcWorkspaceViewModel } from '../viewmodel/workspaceViewModel';
 import { XopcMarkdownView } from './MarkdownView';
 import { XopcHubRow, XopcListSkeleton } from './MobileComponents';
 import { XopcJudgmentsView } from './JudgmentsView';
+import { XopcShareResult } from '../model/share';
+import { shareService } from '../service/shareService';
+import { XopcShareResultView } from './ShareResultView';
 
 @ComponentV2
 export struct XopcWorkspaceView {
@@ -15,6 +18,8 @@ export struct XopcWorkspaceView {
   @Local model: XopcWorkspaceViewModel = new XopcWorkspaceViewModel();
   @Local search: string = '';
   @Local agentId: string = '';
+  @Local shareResult?: XopcShareResult;
+  @Local shareOpen: boolean = false;
 
   aboutToAppear(): void { this.model.start(this.section, this.initialId, this.noteStatus); }
   @Monitor('initialId')
@@ -70,6 +75,19 @@ export struct XopcWorkspaceView {
       } catch (error) { this.model.error = (error as Error).message; return; }
     }
     await this.model.action(action, this.agentId);
+  }
+
+  private async shareNote(item: XopcWorkspaceItem): Promise<void> {
+    if (this.model.busy || !item.id || item.version <= 0) return;
+    this.model.busy = true; this.model.error = '';
+    try { this.shareResult = await shareService.note(item.id, item.version); this.shareOpen = true; }
+    catch (error) { this.model.error = (error as Error).message; }
+    finally { this.model.busy = false; }
+  }
+
+  @Builder
+  shareSheet() {
+    if (this.shareResult) { XopcShareResultView({ share: this.shareResult, onClose: (): void => { this.shareOpen = false; } }) }
   }
 
   @Builder
@@ -132,6 +150,9 @@ export struct XopcWorkspaceView {
         if (item.editable) {
           ListItem() { Button($r('app.string.edit')).onClick((): void => { this.model.editing = true; }) }
         }
+        if (this.section === 'notes' && item.id && item.version > 0) {
+          ListItem() { Button($r('app.string.chat_share')).enabled(!this.model.busy).onClick((): void => { this.shareNote(item); }) }
+        }
         if (this.section === 'tasks' && item.actions.includes('start')) {
           ListItem() {
             TextInput({ text: this.agentId, placeholder: $r('app.string.agent_id') })
@@ -169,6 +190,7 @@ export struct XopcWorkspaceView {
       }
       if (this.model.selected) { this.detail(this.model.selected) } else { this.list() }
     }.height('100%').width('100%').backgroundColor($r('app.color.surface'))
+      .bindSheet($$this.shareOpen, this.shareSheet, { height: '92%', dragBar: false })
     }.hideTitleBar(true).onBackPressed((): boolean => { if (!this.model.busy) this.goBack(); return true; })
   }
 }

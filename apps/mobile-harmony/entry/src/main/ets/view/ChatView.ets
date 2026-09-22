@@ -33,11 +33,13 @@ import { XopcChatPaletteViewModel } from '../viewmodel/chatPaletteViewModel';
 import { XopcPaletteItem } from '../common/composerTokens';
 import { COMPOSER_INPUT_MIN, COMPOSER_INPUT_MAX, COMPOSER_TOOL_SIZE, COMPOSER_SEND_SIZE,
   composerExpanded, composerHasPayload } from '../common/composerLayout';
+import { shareIntake } from '../service/shareIntake';
 
 @ComponentV2
 export struct XopcChatView {
   @Param requestedId: string = '';
   @Param requestRevision: number = 0;
+  @Param intakeRevision: number = 0;
   @Param activePage: boolean = true;
   @BuilderParam bottomDock: () => void = this.emptyDock;
   @Param attentionItems: XopcHomeItem[] = [];
@@ -117,6 +119,7 @@ export struct XopcChatView {
     this.sheetOpen = false;
   }
   private appliedRequestRevision: number = -1;
+  private appliedIntakeRevision: number = -1;
 
   private applyPalette(item: XopcPaletteItem): void {
     const range = this.palette.range; if (!range || this.restoringDraft) return;
@@ -156,7 +159,16 @@ export struct XopcChatView {
       if (generation !== this.draftGeneration) return;
       if (saved) { this.draft = saved.text; this.refs = saved.refs; this.attachments = saved.files; }
     } catch (_error) { if (generation === this.draftGeneration) this.chat.error = 'DRAFT_RESTORE_FAILED'; }
-    finally { if (generation === this.draftGeneration) this.restoringDraft = false; }
+    finally { if (generation === this.draftGeneration) { this.restoringDraft = false; this.applyShareIntake(); } }
+  }
+
+  @Monitor('intakeRevision', 'chat.selectedId', 'restoringDraft')
+  applyShareIntake(): void {
+    if (this.restoringDraft || !this.chat.selectedId || this.appliedIntakeRevision === this.intakeRevision) return;
+    const value = shareIntake.consumeChat(this.chat.selectedId);
+    if (!value) return;
+    this.appliedIntakeRevision = this.intakeRevision; this.draft = value; this.cursor = value.length;
+    this.focusComposerOnMount = true; this.focusMountedComposer();
   }
 
   @Monitor('chat.rows', 'chat.liveRow', 'chat.streaming', 'chat.thinking', 'chat.tool', 'chat.loading')
