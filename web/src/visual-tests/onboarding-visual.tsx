@@ -57,7 +57,7 @@ window.fetch = async (input) => {
   throw new Error(`Unexpected visual fixture request: ${url}`);
 };
 
-function VisualFixture() {
+export function VisualFixture() {
   return (
     <div className="h-dvh w-dvw overflow-hidden" data-visual-stage={stage}>
       {stage === 'setup' ? (

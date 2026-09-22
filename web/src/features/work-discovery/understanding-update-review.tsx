@@ -19,7 +19,8 @@ import { useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import type { UserAssertion, UserModelResponse } from '@/features/user-model/user-model-api';
-import { groupUnderstandingByDate, UnderstandingRow } from '@/features/user-model/understanding-row';
+import { UnderstandingRow } from '@/features/user-model/understanding-row';
+import { groupUnderstandingByDate } from '@/features/user-model/understanding-row.utils';
 import { cn } from '@/lib/cn';
 
 import { UnderstandingRefreshButton, UnderstandingRefreshProgress } from './understanding-refresh-controls';
