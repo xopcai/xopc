@@ -1,10 +1,9 @@
 import { XopcFilesViewModel } from '../viewmodel/filesViewModel';
 import { XopcFile, XopcFileSpace } from '../model/files';
 import { XopcHubRow } from './MobileComponents';
-import { common } from '@kit.AbilityKit';
-import { copyChatMessage } from '../service/chatMessageActions';
-import { createManagedShare, shareChatLink, shareReachabilityText } from '../service/chatMediaShare';
-import { appSettings } from '../service/settings';
+import { createManagedShare } from '../service/chatMediaShare';
+import { XopcShareResult } from '../model/share';
+import { XopcShareResultView } from './ShareResultView';
 
 @ComponentV2
 export struct XopcFilesView {
@@ -13,6 +12,8 @@ export struct XopcFilesView {
   @Event onExit: () => void = (): void => {};
   @Local model: XopcFilesViewModel = new XopcFilesViewModel();
   @Local search: string = '';
+  @Local shareResult?: XopcShareResult;
+  @Local shareOpen: boolean = false;
 
   aboutToAppear(): void { this.model.start(this.initialId, this.conversationId); }
   aboutToDisappear(): void { this.model.dispose(); }
@@ -43,22 +44,34 @@ export struct XopcFilesView {
 
   private async share(): Promise<void> {
     const file = this.model.selected;
-    const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
-    if (!file || !context || this.model.busy) return;
+    if (!file || this.model.busy) return;
     this.model.busy = true; this.model.error = '';
     try {
       const payload = await createManagedShare({ fileId: file.id, audience: 'friend' });
-      const result = await this.getUIContext().getPromptAction().showDialog({ title: payload.share.title,
-        message: payload.share.shareUrl + '\n\n' + shareReachabilityText(payload.share, appSettings.effectiveLanguage().startsWith('zh')),
-        buttons: [{ text: $r('app.string.cancel'), color: $r('app.color.secondary') },
-          { text: $r('app.string.chat_copy_link'), color: $r('app.color.secondary') },
-          { text: $r('app.string.chat_system_share'), color: $r('app.color.accent') }] });
-      if (result.index === 1) {
-        await copyChatMessage(payload.share.shareUrl);
-        this.getUIContext().getPromptAction().showToast({ message: $r('app.string.chat_link_copied') });
-      } else if (result.index === 2) await shareChatLink(context, payload.share);
+      this.shareResult = payload.share; this.shareOpen = true;
     } catch (error) { this.model.error = (error as Error).message; }
     finally { this.model.busy = false; }
+  }
+
+  private async shareDirectory(file: XopcFile, zipOnly: boolean): Promise<void> {
+    if (this.model.busy) return;
+    this.model.busy = true; this.model.error = '';
+    try {
+      const payload = await createManagedShare({ fileId: file.id, audience: 'friend', mode: zipOnly ? 'force-zip' : 'auto' });
+      this.shareResult = payload.share; this.shareOpen = true;
+    } catch (error) { this.model.error = (error as Error).message; }
+    finally { this.model.busy = false; }
+  }
+  private confirmDirectoryShare(file: XopcFile): void {
+    this.getUIContext().showActionSheet({ title: $r('app.string.share_directory_title'), message: $r('app.string.share_directory_confirm'), sheets: [
+      { title: this.text($r('app.string.share_directory_browse')), action: (): void => { this.shareDirectory(file, false); } },
+      { title: this.text($r('app.string.share_directory_zip')), action: (): void => { this.shareDirectory(file, true); } }
+    ] });
+  }
+  private text(resource: Resource): string { return this.getUIContext().getHostContext()?.resourceManager.getStringSync(resource.id) ?? ''; }
+  @Builder
+  shareSheet() {
+    if (this.shareResult) { XopcShareResultView({ share: this.shareResult, onClose: (): void => { this.shareOpen = false; } }) }
   }
 
   build() {
@@ -116,12 +129,15 @@ export struct XopcFilesView {
               XopcHubRow({ heading: file.name, summary: file.relativePath,
                 symbol: file.kind === 'directory' ? $r('sys.symbol.folder') : $r('sys.symbol.doc'),
                 onOpen: (): void => { this.model.open(file); } })
-            }
+            }.gesture(LongPressGesture({ duration: 350, repeat: false }).onAction((): void => {
+              if (file.kind === 'directory' && file.capabilities.includes('share')) this.confirmDirectoryShare(file);
+            }))
           }, (file: XopcFile): string => file.id)
         }.layoutWeight(1).width('100%').padding(12)
         Text($r('app.string.transfer_limits')).fontSize(11).fontColor($r('app.color.secondary')).padding(8)
       }
     }.height('100%').width('100%').backgroundColor($r('app.color.surface'))
+      .bindSheet($$this.shareOpen, this.shareSheet, { height: '92%', dragBar: false })
     }.hideTitleBar(true).onBackPressed((): boolean => {
       this.goBack(); return true;
     })

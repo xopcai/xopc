@@ -3,6 +3,9 @@ import { XopcSessionItem, XopcSessionGroup } from '../model/chat';
 import { groupChatSessions, sessionAge } from '../common/sessionGroups';
 import { XopcListSkeleton } from './MobileComponents';
 import { appSettings } from '../service/settings';
+import { XopcShareResult } from '../model/share';
+import { shareService } from '../service/shareService';
+import { XopcShareResultView } from './ShareResultView';
 
 interface XopcSessionDisplayRow {
   key: string;
@@ -98,6 +101,9 @@ export struct XopcSessionsView {
   @Local renameOpen: boolean = false;
   @Local renameId: string = '';
   @Local renameText: string = '';
+  @Local shareResult?: XopcShareResult;
+  @Local shareOpen: boolean = false;
+  @Local shareBusy: boolean = false;
   private scroller: Scroller = new Scroller();
   private opening: boolean = false;
 
@@ -132,6 +138,7 @@ export struct XopcSessionsView {
     if (this.sessions.busy) return;
     this.getUIContext().showActionSheet({ title: item.displayName || item.name || item.title || this.text($r('app.string.untitled')), message: '',
       sheets: [
+        { title: this.text($r('app.string.chat_share')), action: (): void => { this.shareSession(item); } },
         { title: this.text($r('app.string.sessions_rename')), action: (): void => { this.renameItem(item); } },
         { title: this.text(item.status === 'pinned' ? $r('app.string.unpin') : $r('app.string.pin')),
           action: (): void => { this.sessions.act([item], item.status === 'pinned' ? 'unpin' : 'pin'); } },
@@ -140,6 +147,20 @@ export struct XopcSessionsView {
         { title: this.text($r('app.string.delete')), action: (): void => { this.sessions.scheduleDelete(item.key); } },
         { title: this.text($r('app.string.sessions_select')), action: (): void => { this.sessions.select(item.key); } }
       ] });
+  }
+  private async shareSession(item: XopcSessionItem): Promise<void> {
+    if (this.shareBusy || this.sessions.busy) return;
+    this.shareBusy = true; this.sessions.actionError = '';
+    try {
+      const preview = await shareService.sessionPreview(item.key);
+      const result = await this.getUIContext().getPromptAction().showDialog({ title: $r('app.string.share_session_title'),
+        message: this.text($r('app.string.share_session_confirm')).replace('%d', preview.messageCount.toString())
+          .replace('%d', preview.attachmentCandidates.length.toString()),
+        buttons: [{ text: $r('app.string.cancel'), color: $r('app.color.secondary') },
+          { text: $r('app.string.chat_share'), color: $r('app.color.accent') }] });
+      if (result.index === 1) { this.shareResult = await shareService.session(item.key, preview); this.shareOpen = true; }
+    } catch (error) { this.sessions.actionError = (error as Error).message; }
+    finally { this.shareBusy = false; }
   }
   private confirmDelete(): void {
     const targets = this.sessions.selectedItems();
@@ -164,6 +185,10 @@ export struct XopcSessionsView {
           .onClick(async (): Promise<void> => { if (await this.sessions.rename(this.renameId, this.renameText)) this.renameOpen = false; })
       }
     }.width('100%').padding(20)
+  }
+  @Builder
+  shareSheet() {
+    if (this.shareResult) { XopcShareResultView({ share: this.shareResult, onClose: (): void => { this.shareOpen = false; } }) }
   }
   @Builder
   batchBar() {
@@ -271,6 +296,7 @@ export struct XopcSessionsView {
         if (this.sessions.selecting) { this.batchBar() }
       }.width('100%').height('100%')
         .bindSheet($$this.renameOpen, this.renameSheet, { height: '45%', dragBar: true, backgroundColor: $r('app.color.panel') })
+        .bindSheet($$this.shareOpen, this.shareSheet, { height: '92%', dragBar: false })
     }.hideTitleBar(true).backgroundColor($r('app.color.surface'))
       .onShown((): void => { this.opening = false; this.sessions.load(); })
       .onBackPressed((): boolean => this.back())

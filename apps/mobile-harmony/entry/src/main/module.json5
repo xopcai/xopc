@@ -32,6 +32,23 @@
       "startWindowBackground": "$color:surface",
       "skills": [{ "actions": ["action.ohos.push.listener"] }]
     }],
+    "extensionAbilities": [{
+      "name": "ShareExtensionAbility",
+      "srcEntry": "./ets/entryability/ShareExtensionAbility.ets",
+      "type": "share",
+      "description": "$string:share_intake_description",
+      "icon": "$media:app_icon",
+      "label": "$string:app_name",
+      "exported": true,
+      "skills": [{
+        "actions": ["ohos.want.action.sendData"],
+        "uris": [
+          { "scheme": "file", "utd": "general.text", "maxFileSupported": 1 },
+          { "scheme": "file", "utd": "general.plain-text", "maxFileSupported": 1 },
+          { "scheme": "file", "utd": "general.hyperlink", "maxFileSupported": 1 }
+        ]
+      }]
+    }],
     "requestPermissions": [
       { "name": "ohos.permission.INTERNET" },
       { "name": "ohos.permission.MICROPHONE", "reason": "$string:microphone_reason",

@@ -42,6 +42,8 @@ File preview continuation: translate Expo `AttachmentRenderer` and `FilePreviewM
 
 Share continuation: align Chat and Files managed-file sharing with Expo `/api/shares/auto`; never expose authenticated Gateway media URLs or replace governed links with temporary phone cache URIs. Resolve only explicit file IDs, `xopc-file:` IDs, or session-scoped workspace paths. Show link reachability before copy/system share and keep download separate. Share history/revoke/extend, note/session shares, QR/embedded preview, directory confirmation and system-to-xopc intake remain separate incomplete scenarios until implemented and verified.
 
+Share continuation result (2026-09-22): implemented the remaining app-side scenarios. Personal → Shared links lists active/inactive governed records and supports preview, 1/3/7-day extension and confirmed revocation. Sessions use a fingerprinted preview before immutable snapshot creation; notes pin the requested version; directories require an explicit browsable-folder versus ZIP choice. All result surfaces share QR, copy, outbound system share and same-origin ArkWeb preview behavior. `ShareExtensionAbility` receives system text/link records, filters low-value/OTP content, masks sensitive previews, and requires an explicit save-to-note or new-chat action. Evidence: 325 host tests / 50 files, successful Debug HAP build and clean changed-source CodeLinter. HDC reported no connected target, so system share-panel discovery and complete physical interaction acceptance remain open under 4.7.1.
+
 ### RN Chat audit follow-up (2026-09-18, user approved)
 
 Implement the reviewed differences in order, then perform a separate correctness/security/performance review. No Gateway schema changes or Expo edits. Preserve paired-device data.
