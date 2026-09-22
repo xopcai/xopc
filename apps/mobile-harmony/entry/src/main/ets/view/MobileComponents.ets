@@ -29,14 +29,15 @@ export struct XopcHubRow {
   @Param summary: ResourceStr = '';
   @Param symbol: Resource = $r('sys.symbol.doc');
   @Param navigable: boolean = true;
+  @Param compact: boolean = false;
   @Event onOpen: () => void = (): void => {};
 
   build() {
     Button({ type: ButtonType.Normal }) {
-      Row({ space: 12 }) {
-        SymbolGlyph(this.symbol).fontSize(23).fontColor([$r('app.color.secondary')])
-        Column({ space: 4 }) {
-          Text(this.heading).fontSize(16).lineHeight(23).fontWeight(FontWeight.Medium)
+      Row({ space: this.compact ? 10 : 12 }) {
+        SymbolGlyph(this.symbol).fontSize(this.compact ? 20 : 23).fontColor([$r('app.color.secondary')])
+        Column({ space: this.compact ? 2 : 4 }) {
+          Text(this.heading).fontSize(this.compact ? 15 : 16).lineHeight(this.compact ? 21 : 23).fontWeight(FontWeight.Medium)
             .fontColor($r('app.color.foreground')).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis })
           if (this.summary !== '') {
             Text(this.summary).fontSize(13).lineHeight(18).fontColor($r('app.color.secondary'))
@@ -44,7 +45,8 @@ export struct XopcHubRow {
           }
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
         if (this.navigable) { SymbolGlyph($r('sys.symbol.chevron_right')).fontSize(16).fontColor([$r('app.color.tertiary')]) }
-      }.width('100%').constraintSize({ minHeight: 64 }).padding({ top: 12, bottom: 12 })
+      }.width('100%').constraintSize({ minHeight: this.compact ? 52 : 64 })
+        .padding({ top: this.compact ? 6 : 12, bottom: this.compact ? 6 : 12 })
     }.width('100%').padding(0).backgroundColor(Color.Transparent)
       .border({ width: { bottom: 0.5 }, color: $r('app.color.border_subtle') })
       .onClick((): void => { if (this.navigable) this.onOpen(); })

@@ -18,7 +18,7 @@
       "startWindowBackground": "$color:surface",
       "exported": true,
       "launchType": "singleton",
-      "backgroundModes": ["audioPlayback"],
+      "backgroundModes": ["audioPlayback", "audioRecording"],
       "skills": [
         { "entities": ["entity.system.home"], "actions": ["ohos.want.action.home"] },
         { "entities": ["entity.system.browsable"], "actions": ["ohos.want.action.viewData"],
