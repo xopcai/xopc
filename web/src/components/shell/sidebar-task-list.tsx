@@ -1256,11 +1256,11 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
   }, []);
 
   const runProjectRename = async () => {
-    if (!renameProjectId) return;
+    if (!renameProjectId || !renameProjectTarget) return;
     const name = renameProjectDraft.trim();
     if (!name) return;
     try {
-      await renameProject(renameProjectId, name);
+      await renameProject(renameProjectId, name, renameProjectTarget.version);
       setRenameProjectId(null);
       refreshSidebar();
       window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: renameProjectId } }));
@@ -1271,7 +1271,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
 
   const runProjectArchive = useCallback(async (project: Project) => {
     try {
-      await archiveProject(project.id);
+      await archiveProject(project.id, project.version);
       if (pathname === `/projects/${encodeURIComponent(project.id)}`) {
         navigate('/projects');
       }
@@ -1285,9 +1285,9 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
   const toggleProjectPin = useCallback(async (project: Project) => {
     try {
       if (project.pinnedAt) {
-        await unpinProject(project.id);
+        await unpinProject(project.id, project.version);
       } else {
-        await pinProject(project.id);
+        await pinProject(project.id, project.version);
       }
       refreshSidebar();
       window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: project.id } }));
@@ -1296,9 +1296,10 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
     }
   }, [refreshSidebar]);
 
-  const runProjectRemove = async (projectId: string) => {
+  const runProjectRemove = async (project: Project) => {
+    const projectId = project.id;
     try {
-      await deleteProject(projectId);
+      await deleteProject(projectId, project.version);
       if (pathname === `/projects/${encodeURIComponent(projectId)}`) {
         navigate('/projects');
       }
@@ -1898,7 +1899,7 @@ function SidebarTaskListContent({ onNavigate, gateway }: { onNavigate?: () => vo
                 variant="primary"
                 className="bg-red-600 hover:bg-red-700"
                 onClick={() => {
-                  if (removeProjectId) void runProjectRemove(removeProjectId);
+                  if (removeProjectTarget) void runProjectRemove(removeProjectTarget);
                   setRemoveProjectId(null);
                 }}
               >

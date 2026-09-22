@@ -9,6 +9,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { SkillDiscoveryWelcome } from '@/features/skills/skill-discovery-welcome';
 import { BrowserExtensionNudge } from '@/features/chat/browser/browser-extension-nudge';
 import { ChatComposer } from '@/features/chat/composer/chat-composer';
+import { PageContextPreview } from '@/features/chat/context/page-context-preview';
+import { pageContextDrafts, pageContextDraftKey } from '@/features/chat/context/page-context-draft';
+import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import { ProjectEnvironmentPicker } from '@/features/chat/composer/project-environment-picker';
 import { useProjectSessionComposer } from '@/features/chat/composer/use-project-session-composer';
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
@@ -570,6 +573,9 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   const loadedProject = useChatProjectScope(chatConversationId, searchParams.get('projectId'));
   const scopedProject = session.projectPreparation?.project ?? loadedProject;
   const [composerContextRefs, setComposerContextRefs] = useState<ComposerContextRef[]>([]);
+  const contextGatewayUrl = useGatewayStore(state => state.baseUrl);
+  const pageContextKey = chatConversationId ? pageContextDraftKey(contextGatewayUrl, token, chatConversationId) : null;
+  const pageContextDraft = pageContextDrafts.store(state => pageContextKey ? state.drafts[pageContextKey] : undefined);
   const contextSwitchSourceRef = useRef<string | null | undefined>(undefined);
   const [updatingContext, setUpdatingContext] = useState(false);
   useLayoutEffect(() => {
@@ -690,8 +696,12 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
   }, [activeWelcomeSpotlight, agents.displayAgentId, chatConversationId, msgSlice.items.length, stream.streaming]);
 
   const handleComposerSend = useCallback(
-    (...args: Parameters<typeof stream.sendMessage>) => {
+    async (...args: Parameters<typeof stream.sendMessage>) => {
       const [text] = args;
+      if (pageContextDraft && (editingUserTurn || text.trim().startsWith('/'))) {
+        useChatSessionStore.getState().setShellError(m.chat.pageContext.pending);
+        return false;
+      }
       const selection = pendingWelcomeSelectionRef.current;
       if (selection && welcomePromptWasUsed(selection.prompt, text)) {
         recordWelcomeSuggestionMetric({
@@ -715,9 +725,11 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
           args[3],
         );
       }
-      return stream.sendMessage(...args);
+      const accepted = await stream.sendMessage(args[0], args[1], args[2], args[3], args[4], pageContextDraft?.envelope);
+      if (accepted !== false && pageContextKey && pageContextDraft) pageContextDrafts.remove(pageContextKey, pageContextDraft);
+      return accepted;
     },
-    [agents.displayAgentId, editingUserTurn, stream.replaceLatestUserTurn, stream.sendMessage],
+    [agents.displayAgentId, editingUserTurn, stream.replaceLatestUserTurn, stream.sendMessage, pageContextDraft, pageContextKey, m.chat.pageContext.pending],
   );
 
   const projectComposer = useProjectSessionComposer({
@@ -1332,6 +1344,8 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                   onWorkspaceChange: handleComposerWorkspaceChange,
                 } : undefined}
                 contextRefs={composerContextRefs}
+                pageContextPreview={pageContextDraft && pageContextKey ? <PageContextPreview draft={pageContextDraft} disabled={stream.sending} waiting={stream.streaming}
+                  onRemove={() => pageContextDrafts.remove(pageContextKey, pageContextDraft)} /> : undefined}
                 setContextRefs={setComposerContextRefs}
                 disabled={
                   !session.modelConfigReady || (!session.projectPreparation && isSessionTransitioning) ||
@@ -1351,8 +1365,8 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
                 editingUserTurnId={editingUserTurn?.turnId}
                 onCancelUserMessageEdit={handleCancelUserMessageEdit}
                 onAbort={stream.abort}
-                onAddPendingFollowUp={followUp.addPendingFollowUp}
-                onSteeringInterrupt={(text, atts, contextRefs) => void stream.interruptAndSend(text, atts, undefined, contextRefs)}
+                onAddPendingFollowUp={pageContextDraft ? undefined : followUp.addPendingFollowUp}
+                onSteeringInterrupt={pageContextDraft ? undefined : (text, atts, contextRefs) => void stream.interruptAndSend(text, atts, undefined, contextRefs)}
                 pendingFollowUps={followUp.pendingFollowUps}
                 editingFollowUpId={followUp.editingFollowUpId}
                 onBeginEditFollowUp={followUp.beginEditFollowUp}

@@ -24,6 +24,22 @@ function startsWithAny(path: string, prefixes: readonly string[]): boolean {
 
 export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBundle[] = [
   {
+    id: 'local-app-capabilities',
+    match: path => /^\/api\/local-app-capabilities\/[^/]+(?:\/[^/]+\/invocations)?$/.test(path),
+    load: async () => {
+      const { registerLocalAppCapabilityRoutes } = await import('./local-app-capabilities.js');
+      return { register: registerLocalAppCapabilityRoutes };
+    },
+  },
+  {
+    id: 'capability-operations',
+    match: path => startsWithAny(path, ['/api/capabilities/operations']),
+    load: async () => {
+      const { registerCapabilityOperationRoutes } = await import('./capability-operations.js');
+      return { register: registerCapabilityOperationRoutes };
+    },
+  },
+  {
     id: 'endpoint-compatibility',
     match: (path) => path === '/api/endpoint-tools/compatibility',
     load: async () => {

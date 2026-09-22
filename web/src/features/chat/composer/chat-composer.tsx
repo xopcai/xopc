@@ -1,6 +1,6 @@
 import { useMediaQuery } from '@/lib/use-media-query';
 import { ConnectionActionBar } from '../connections/connection-action-bar';
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachments/attachment-utils';
@@ -92,6 +92,7 @@ export const ChatComposer = memo(function ChatComposer({
   streaming,
   conversationId,
   composerContext,
+  pageContextPreview,
   contextRefs,
   setContextRefs,
   thinkingLevel,
@@ -132,6 +133,7 @@ export const ChatComposer = memo(function ChatComposer({
   streaming: boolean;
   conversationId: string | null;
   composerContext?: Omit<ComposerContextBarProps, 'conversationId' | 'disabled'> & { disabled?: boolean };
+  pageContextPreview?: ReactNode;
   contextRefs: ComposerContextRef[];
   setContextRefs: Dispatch<SetStateAction<ComposerContextRef[]>>;
   welcomeDraftSeed?: { id: number; text: string } | null;
@@ -655,6 +657,7 @@ export const ChatComposer = memo(function ChatComposer({
         label={m.chat.commandPalette.noteContextLabel}
         onRemove={(sourceId) => setContextRefs((current) => current.filter((ref) => ref.sourceId !== sourceId))}
       />
+      {pageContextPreview}
 
 
       <div className="flex min-h-0 shrink-0 flex-col">

@@ -134,8 +134,7 @@ export function useProjectSessionComposer({ preparation, conversationId, ready, 
       }
     }
     // The session-bound callback changes after navigation; never send through the old one.
-    void onSendRef.current(...args);
-    return true;
+    return onSendRef.current(...args);
   };
 
   return {

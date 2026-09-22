@@ -1,4 +1,5 @@
 import { fetch as undiciFetch } from 'undici';
+import { CapabilityErrorCodeSchema, type CapabilityErrorCode } from '@xopcai/gateway-contract';
 import { resolveGatewayLocalClientHost } from '../config/gateway-bind.js';
 import type { Config } from '../config/schema.js';
 import { loadConfig } from '../config/loader.js';
@@ -10,6 +11,19 @@ import {
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('Mcp:GatewayClient');
+
+export class GatewayHttpError extends Error {
+  constructor(readonly status: number, readonly code?: CapabilityErrorCode, readonly operationId?: string) {
+    super(`Gateway request failed (${status})`);
+  }
+}
+
+async function responseError(res: Awaited<ReturnType<typeof undiciFetch>>): Promise<GatewayHttpError> {
+  const body = await res.json().catch(() => null) as { code?: unknown; operationId?: unknown } | null;
+  const code = CapabilityErrorCodeSchema.safeParse(body?.code);
+  return new GatewayHttpError(res.status, code.success ? code.data : undefined,
+    typeof body?.operationId === 'string' && body.operationId.length <= 200 ? body.operationId : undefined);
+}
 
 function resolveGatewayCredentialFromConfig(cfg: Config): GatewayCredential | undefined {
   const auth = cfg.gateway?.auth;
@@ -42,11 +56,13 @@ export class GatewayHttpClient {
   async getJson<T>(path: string): Promise<T> {
     const res = await undiciFetch(`${this.opts.baseUrl}${path}`, {
       headers: this.headers(),
+      redirect: 'error',
+      signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) {
       const em = `Gateway GET ${path} failed: ${res.status}`;
       log.warn({ phase: 'mcp.gateway.http', method: 'GET', path, status: res.status }, em);
-      throw new Error(em);
+      throw await responseError(res);
     }
     const body = (await res.json()) as { ok?: boolean; payload?: T } | T;
     if (body && typeof body === 'object' && 'payload' in body) {
@@ -60,11 +76,13 @@ export class GatewayHttpClient {
       method: 'POST',
       headers: this.headers({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(data),
+      redirect: 'error',
+      signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) {
       const em = `Gateway POST ${path} failed: ${res.status}`;
       log.warn({ phase: 'mcp.gateway.http', method: 'POST', path, status: res.status }, em);
-      throw new Error(em);
+      throw await responseError(res);
     }
     const body = (await res.json()) as { ok?: boolean; payload?: T } | T;
     if (body && typeof body === 'object' && 'payload' in body) {

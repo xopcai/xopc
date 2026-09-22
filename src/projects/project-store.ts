@@ -201,7 +201,7 @@ export class ProjectStore {
       ...(input.status !== undefined ? { status: input.status } : {}),
       ...(input.targetAt !== undefined ? { targetAt: input.targetAt ?? undefined } : {}),
       ...(input.sortOrder !== undefined ? { sortOrder: Math.floor(input.sortOrder) } : {}),
-      updatedAt: Date.now(),
+      updatedAt: Math.max(Date.now(), current.updatedAt + 1),
     };
     getSqliteDatabase().prepare(
       `UPDATE project_milestones SET title = ?, description = ?, status = ?, target_at = ?,
@@ -256,7 +256,8 @@ export class ProjectStore {
       db.prepare(`UPDATE projects SET health = ?, updated_at = ?, version = version + 1 WHERE project_id = ?`)
         .run(input.health, createdAt, projectId);
     });
-    return this.listUpdates(projectId, 1)[0]!;
+    return { id, projectId, health: input.health, summary, progress: input.progress ?? [], risks: input.risks ?? [],
+      nextSteps: input.nextSteps ?? [], actor: input.actor, createdAt };
   }
 
   create(input: CreateProjectInput): Project {

@@ -4,6 +4,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { ActorRef, TaskChangedField } from '@xopcai/gateway-contract';
 
 import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
+import { currentOperationId } from '../infra/operation-context.js';
 
 export type TaskChangeInput = {
   taskId: string;
@@ -29,8 +30,8 @@ export function enqueueTaskChangedEvent(db: DatabaseSync, input: TaskChangeInput
   db.prepare(
     `INSERT INTO domain_outbox (
       event_id, event_type, subject_kind, subject_id, correlation_id,
-      payload_json, created_at
-    ) VALUES (?, 'task.changed.v2', 'task', ?, ?, ?, ?)`,
+      payload_json, created_at, operation_id
+    ) VALUES (?, 'task.changed.v2', 'task', ?, ?, ?, ?, ?)`,
   ).run(
     randomUUID(),
     input.taskId,
@@ -45,6 +46,7 @@ export function enqueueTaskChangedEvent(db: DatabaseSync, input: TaskChangeInput
       occurredAt,
     }),
     occurredAt,
+    currentOperationId() ?? null,
   );
 }
 

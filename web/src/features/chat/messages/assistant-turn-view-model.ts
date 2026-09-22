@@ -44,7 +44,7 @@ export interface AssistantTurnViewModel {
     activeTool?: ToolUseContent;
   };
   outcome: Message['outcome'];
-  delivery: ProductDeliveryEnvelope | null;
+  deliveries: Array<{ key: string; delivery: ProductDeliveryEnvelope }>;
   attachments?: MessageAttachment[];
   sources: SearchSource[];
 }
@@ -94,15 +94,16 @@ export function buildAssistantTurnViewModel({
   const runningTool = [...toolBlocks].reverse().find(
     (tool) => tool.status === 'running' || tool.activity?.status === 'running',
   );
-  const delivery = [...toolBlocks]
-    .reverse()
-    .map(extractProductDelivery)
-    .find((candidate) => candidate !== null
-      && candidate.primary?.kind !== 'workflow_run'
-      && candidate.primary?.kind !== 'file'
-      && (candidate.primary?.kind !== 'note'
-        || candidate.operation === 'created'
-        || candidate.operation === 'updated')) ?? null;
+  const deliveryByCall = new Map<string, ProductDeliveryEnvelope>();
+  for (const block of toolBlocks) {
+    const candidate = extractProductDelivery(block);
+    if (candidate && (candidate.presentation || (candidate.primary
+      && candidate.primary.kind !== 'workflow_run' && candidate.primary.kind !== 'file'
+      && (candidate.primary.kind !== 'note' || candidate.operation === 'created' || candidate.operation === 'updated')))) {
+      deliveryByCall.set(block.id, candidate);
+    }
+  }
+  const deliveries = [...deliveryByCall].map(([key, delivery]) => ({ key, delivery }));
   const activityEndedAt = !isStreaming
     ? message.completedAt ?? message.timestamp
     : undefined;
@@ -180,7 +181,7 @@ export function buildAssistantTurnViewModel({
       activeTool: state === 'using_tool' ? runningTool : undefined,
     },
     outcome: message.outcome,
-    delivery,
+    deliveries,
     attachments: standaloneAttachments,
     sources: extractSearchSources(toolBlocks),
   };

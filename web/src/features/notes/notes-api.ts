@@ -94,6 +94,7 @@ export interface NoteAiDeepMeta {
 
 export interface Note {
   id: string;
+  remoteVersion?: number;
   title?: string;
   kind: NoteKind;
   status: NoteStatus;

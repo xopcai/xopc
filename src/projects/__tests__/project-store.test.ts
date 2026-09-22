@@ -92,7 +92,7 @@ describe('ProjectService', () => {
     expect(update).toMatchObject({ health: 'at_risk', risks: ['External review pending'] });
     expect(projects.getWithDetails(project.id)).toMatchObject({
       health: 'at_risk',
-      version: 2,
+      version: 4,
       milestones: [{ id: milestone.id, status: 'completed' }],
       recentUpdates: [{ id: update.id }],
     });

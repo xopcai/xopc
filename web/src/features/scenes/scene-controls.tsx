@@ -37,13 +37,14 @@ function SceneControls({ zh }: { zh: boolean }) {
   const preferences = useSWR<ScenePreferences & { revision: number }>('/preferences', sceneGet);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
-  async function update(patch: Partial<ScenePreferences>) {
-    if (!preferences.data || busy) return;
+  async function update(patch: Partial<ScenePreferences>, expectedRevision = preferences.data?.revision): Promise<boolean> {
+    if (!preferences.data || busy || expectedRevision === undefined) return false;
     setBusy(true); setError(undefined);
     try {
-      const next = await sceneWrite<ScenePreferences & { revision: number }>('/preferences', 'PATCH', { ...patch, expectedRevision: preferences.data.revision });
+      const next = await sceneWrite<ScenePreferences & { revision: number }>('/preferences', 'PATCH', { ...patch, expectedRevision });
       await preferences.mutate(next, false);
-    } catch (cause) { setError(cause); await preferences.mutate(); }
+      return true;
+    } catch (cause) { setError(cause); await preferences.mutate(); return false; }
     finally { setBusy(false); }
   }
   if (!preferences.data) return preferences.error
@@ -58,16 +59,37 @@ function SceneControls({ zh }: { zh: boolean }) {
         ['suppressWhileViewing', zh ? '查看成果时不重复提醒' : 'Avoid reminders while viewing a result'],
         ['digestEnabled', zh ? '汇总为每日摘要' : 'Use a daily digest'],
       ] as const).map(([key, label]) => <label key={key} className="flex flex-wrap items-center gap-2"><input type="checkbox" checked={data[key]} disabled={busy} onChange={e => void update({ [key]: e.target.checked })} />{label}</label>)}
-      <label className="flex flex-wrap items-center gap-2">{zh ? '时区' : 'Timezone'}<input key={data.timezone} defaultValue={data.timezone} disabled={busy} className={`${field} w-48`} onBlur={e => { if (e.target.value !== data.timezone) void update({ timezone: e.target.value }); }} /></label>
+      <label className="flex flex-wrap items-center gap-2">{zh ? '时区' : 'Timezone'}<PreferenceInput value={data.timezone} revision={data.revision} disabled={busy} className={`${field} w-48`} zh={zh} onSave={(value, revision) => update({ timezone: String(value) }, revision)} /></label>
       {([
         ['quietStartHour', zh ? '免打扰开始（小时）' : 'Quiet hours start', 23],
         ['quietEndHour', zh ? '免打扰结束（小时）' : 'Quiet hours end', 23],
         ['dailyNotificationLimit', zh ? '每日提醒上限' : 'Daily reminder limit', 30],
         ...(data.digestEnabled ? [['digestHour', zh ? '摘要时间（小时）' : 'Digest hour', 23], ['digestMinute', zh ? '摘要时间（分钟）' : 'Digest minute', 59]] as const : []),
-      ] as const).map(([key, label, max]) => <label key={key} className="flex flex-wrap items-center gap-2">{label}<input key={data[key]} type="number" min={0} max={max} defaultValue={data[key]} disabled={busy} className={field} onBlur={e => { const value = Number(e.target.value); if (e.target.value && Number.isInteger(value) && value >= 0 && value <= max && value !== data[key]) void update({ [key]: value }); }} /></label>)}
+      ] as const).map(([key, label, max]) => <label key={key} className="flex flex-wrap items-center gap-2">{label}<PreferenceInput value={data[key]} revision={data.revision} max={max} disabled={busy} className={field} zh={zh} onSave={(value, revision) => update({ [key]: Number(value) }, revision)} /></label>)}
       <label className="flex flex-wrap items-center gap-2"><input type="checkbox" disabled={busy} checked={data.preferredChannel === 'browser'} onChange={e => void update({ preferredChannel: e.target.checked ? 'browser' : 'in_app' })} />{zh ? '允许浏览器后台提醒' : 'Allow background browser reminders'}</label>
       <BrowserReminders zh={zh} />
       {error != null && <p role="alert" className="text-danger">{sceneErrorText(error, zh)}</p>}
       {data.checksPausedUntil && <Button disabled={busy} onClick={() => void update({ checksPausedUntil: null })}>{zh ? '取消定时暂停' : 'Clear timed pause'}</Button>}
   </div>;
+}
+
+function PreferenceInput({ value, revision, max, disabled, className, zh, onSave }: {
+  value: string | number; revision: number; max?: number; disabled: boolean; className: string; zh: boolean;
+  onSave: (value: string | number, revision: number) => Promise<boolean>;
+}) {
+  const [draft, setDraft] = useState<{ value: string; revision: number } | null>(null);
+  const save = async () => {
+    if (!draft || draft.value === String(value)) return;
+    const next = max === undefined ? draft.value : Number(draft.value);
+    if (!draft.value || (typeof next === 'number' && (!Number.isInteger(next) || next < 0 || next > max!))) return;
+    if (await onSave(next, draft.revision)) setDraft(null);
+  };
+  return <><input type={max === undefined ? 'text' : 'number'} min={max === undefined ? undefined : 0} max={max}
+    value={draft?.value ?? value} disabled={disabled} className={className}
+    onChange={event => setDraft(previous => ({ value: event.target.value, revision: previous?.revision ?? revision }))}
+    onKeyDown={event => { if (event.key === 'Escape') setDraft(null); }} onBlur={event => {
+      if (!(event.relatedTarget instanceof HTMLElement && event.relatedTarget.hasAttribute('data-discard-preference'))) void save();
+    }} />
+    {draft && <Button data-discard-preference type="button" variant="ghost" disabled={disabled} onPointerDown={event => event.preventDefault()} onClick={() => setDraft(null)}>{zh ? '放弃修改' : 'Discard edits'}</Button>}
+  </>;
 }

@@ -1,4 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../storage/sqlite/index.js';
 
 vi.mock('../../providers/model-call.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../providers/model-call.js')>();
@@ -34,10 +38,10 @@ class MemoryNotesStore {
   snapshots: NoteSnapshot[] = [];
 
   async initialize(): Promise<void> {}
-  async addNote(note: Note): Promise<void> { this.notes.set(note.id, note); }
-  async getNote(id: string): Promise<Note | null> { return this.notes.get(id) ?? null; }
+  addNote(note: Note): void { this.notes.set(note.id, note); }
+  getNote(id: string): Note | null { return this.notes.get(id) ?? null; }
 
-  async updateNote(id: string, patch: Partial<Note>): Promise<Note | null> {
+  updateNote(id: string, patch: Partial<Note>): Note | null {
     const existing = this.notes.get(id);
     if (!existing) return null;
     const updated: Note = { ...existing, ...patch, id: existing.id, createdAt: existing.createdAt, updatedAt: Date.now() };
@@ -45,9 +49,10 @@ class MemoryNotesStore {
     return updated;
   }
 
-  async deleteNote(id: string): Promise<boolean> {
+  deleteNoteAtomically(id: string): boolean {
     if (!this.notes.has(id)) return false;
     this.notes.delete(id);
+    this.snapshots = this.snapshots.filter(snapshot => snapshot.noteId !== id);
     return true;
   }
 
@@ -56,7 +61,12 @@ class MemoryNotesStore {
   resolveAttachmentPath(): string { return 'mock'; }
   async deleteAttachmentFile(): Promise<void> {}
 
-  async saveSnapshot(note: Note, trigger: SnapshotTrigger): Promise<void> {
+  queueAttachmentCleanup(): void {}
+  queueDeletionCleanup(): void {}
+  drainDeletionCleanup(): void {}
+  drainAttachmentCleanup(): void {}
+
+  saveSnapshot(note: Note, trigger: SnapshotTrigger): void {
     this.snapshots.push({
       noteId: note.id,
       timestamp: Date.now(),
@@ -69,30 +79,39 @@ class MemoryNotesStore {
     });
   }
 
-  async listSnapshots(noteId: string): Promise<NoteSnapshotEntry[]> {
+  listSnapshots(noteId: string): NoteSnapshotEntry[] {
     return this.snapshots
       .filter((s) => s.noteId === noteId)
       .sort((a, b) => b.timestamp - a.timestamp)
       .map((s) => ({ timestamp: s.timestamp, trigger: s.trigger, snippet: s.markdown.slice(0, 80) || undefined }));
   }
 
-  async getSnapshot(noteId: string, timestamp: number): Promise<NoteSnapshot | null> {
+  getSnapshot(noteId: string, timestamp: number): NoteSnapshot | null {
     return this.snapshots.find((s) => s.noteId === noteId && s.timestamp === timestamp) ?? null;
   }
 
-  async pruneSnapshots(_noteId: string, _maxCount: number): Promise<void> {}
-  async deleteAllSnapshots(noteId: string): Promise<void> { this.snapshots = this.snapshots.filter((s) => s.noteId !== noteId); }
+  pruneSnapshots(_noteId: string, _maxCount: number): void {}
   async flush(): Promise<void> {}
 }
 
 describe('NotesService markdown sync and AI edit', () => {
   let store: MemoryNotesStore;
   let service: NotesService;
+  let stateDir: string;
 
   beforeEach(() => {
+    stateDir = mkdtempSync(join(tmpdir(), 'xopc-notes-service-'));
+    resetXopcDatabaseSingletonForTest();
+    openXopcDatabase({ path: join(stateDir, 'xopc.db') });
     vi.mocked(completeWithResolvedCredentials).mockReset();
     store = new MemoryNotesStore();
     service = new NotesService(store as never);
+  });
+
+  afterEach(() => {
+    closeXopcDatabase();
+    resetXopcDatabaseSingletonForTest();
+    rmSync(stateDir, { recursive: true, force: true });
   });
 
   it('records the latest content editor even when manual snapshots are throttled', async () => {

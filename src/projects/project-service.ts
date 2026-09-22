@@ -2,12 +2,17 @@ import { changedFieldsFromPatch, emitActivity, systemActivityActor, systemActivi
 import { getSessionMetadata } from '../storage/sqlite/index.js';
 import { runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import { ProjectStore } from './project-store.js';
+import { enqueueProjectChanged } from './project-change-events.js';
+import { drainProjectWorkspaceCreation, queueProjectWorkspaceCreation } from './project-workspace-creation.js';
+import { DomainOutboxDispatcher } from '../infra/domain-outbox-dispatcher.js';
+import { publishAutomationProductEvent } from '../automations/product-events.js';
+import { ExecutionEnvironmentStore } from '../execution-environments/store.js';
+import { listPendingProjectUnderstandingRuns } from '../work-discovery/repository.js';
 import { inferProjectExecutionMode } from './project-kind.js';
 import { bindSessionToProject, listProjectConversationIds, unbindSessionFromProject } from './session-bind.js';
 import type { CreateProjectInput, Project, ProjectHealth, ProjectListQuery, ProjectListResult, ProjectMilestone, ProjectUpdate, ProjectWithDetails, SidebarProjectListQuery, UpdateProjectInput } from './types.js';
 import {
   canonicalWorkspacePath,
-  ensureWorkspaceDirectory,
   inferProjectNameFromWorkspaceRoot,
   isPathSameOrInsideWorkspace,
   isSafeAutoCreateWorkspaceRoot,
@@ -24,6 +29,27 @@ export type ProjectSuggestion = {
   score: number;
   reason: string;
 };
+
+export class ProjectDeletionBlockedError extends Error {
+  constructor() {
+    super('Delete the project execution environments before deleting the project');
+    this.name = 'ProjectDeletionBlockedError';
+  }
+}
+
+export class ProjectWorkspaceInvalidError extends Error {
+  constructor() {
+    super('Invalid workspace root');
+    this.name = 'ProjectWorkspaceInvalidError';
+  }
+}
+
+export class ProjectWorkspaceInUseError extends Error {
+  constructor() {
+    super('Delete the project execution environments before changing its workspace');
+    this.name = 'ProjectWorkspaceInUseError';
+  }
+}
 
 export class ProjectService {
   constructor(
@@ -47,18 +73,13 @@ export class ProjectService {
     const rawWorkspaceRoot = input.workspaceRoot?.trim();
     const workspaceRoot = rawWorkspaceRoot ? canonicalWorkspacePath(rawWorkspaceRoot) : undefined;
     if (rawWorkspaceRoot && !workspaceRoot) {
-      throw new Error('Invalid workspace root');
+      throw new ProjectWorkspaceInvalidError();
     }
+    const needsWorkspaceCreation = Boolean(workspaceRoot && !workspaceDirectoryExists(workspaceRoot));
     if (workspaceRoot) {
       const existing = this.findByWorkspaceRoot(workspaceRoot);
       if (existing) throw new ProjectWorkspaceConflictError(existing);
-      if (!workspaceDirectoryExists(workspaceRoot)) {
-        if (input.createWorkspaceRoot === true) {
-          ensureWorkspaceDirectory(workspaceRoot);
-        } else {
-          throw new ProjectWorkspaceMissingError(workspaceRoot);
-        }
-      }
+      if (needsWorkspaceCreation && input.createWorkspaceRoot !== true) throw new ProjectWorkspaceMissingError(workspaceRoot);
     }
     const name = input.name?.trim() || inferProjectNameFromWorkspaceRoot(workspaceRoot) || '';
     const slug = input.slug?.trim() || this.store.generateSlug(name);
@@ -68,21 +89,25 @@ export class ProjectService {
       workspaceRoot,
       projectKind: input.projectKind,
     });
-    const project = this.store.create({ ...input, name, slug, workspaceRoot, executionMode });
-    emitActivity({
-      type: 'project.created',
-      primaryObject: { kind: 'project', id: project.id, title: project.name },
-      actor: systemActivityActor(),
-      source: systemActivitySource(),
-      payload: {
-        name: project.name,
-        workspaceRoot: project.workspaceRoot,
-        brief: project.brief,
-      },
-      scopes: [{ scopeKind: 'project', scopeId: project.id, reason: 'object_owner' }],
-      nowMs: project.createdAt,
+    return runSqliteWriteTransaction(() => {
+      const project = this.store.create({ ...input, name, slug, workspaceRoot, executionMode });
+      if (needsWorkspaceCreation && workspaceRoot) queueProjectWorkspaceCreation(project.id, workspaceRoot);
+      emitActivity({
+        type: 'project.created',
+        primaryObject: { kind: 'project', id: project.id, title: project.name },
+        actor: systemActivityActor(),
+        source: systemActivitySource(),
+        payload: {
+          name: project.name,
+          workspaceRoot: project.workspaceRoot,
+          brief: project.brief,
+        },
+        scopes: [{ scopeKind: 'project', scopeId: project.id, reason: 'object_owner' }],
+        nowMs: project.createdAt,
+      });
+      enqueueProjectChanged(project, [], 'created');
+      return project;
     });
-    return project;
   }
 
   get(id: string): Project | null {
@@ -151,26 +176,26 @@ export class ProjectService {
   }
 
   update(id: string, input: UpdateProjectInput): Project {
+    if (!this.store.get(id)) throw new Error(`Project not found: ${id}`);
     const patch = { ...input };
+    let needsWorkspaceCreation = false;
     if (input.workspaceRoot !== undefined && input.workspaceRoot !== null && input.workspaceRoot.trim()) {
       const workspaceRoot = canonicalWorkspacePath(input.workspaceRoot);
       if (!workspaceRoot) {
-        throw new Error('Invalid workspace root');
+        throw new ProjectWorkspaceInvalidError();
       }
       const existing = this.findByWorkspaceRoot(workspaceRoot, { excludeProjectId: id });
       if (existing) throw new ProjectWorkspaceConflictError(existing);
-      if (!workspaceDirectoryExists(workspaceRoot)) {
-        if (input.createWorkspaceRoot === true) {
-          ensureWorkspaceDirectory(workspaceRoot);
-        } else {
-          throw new ProjectWorkspaceMissingError(workspaceRoot);
-        }
-      }
+      needsWorkspaceCreation = !workspaceDirectoryExists(workspaceRoot);
+      if (needsWorkspaceCreation && input.createWorkspaceRoot !== true) throw new ProjectWorkspaceMissingError(workspaceRoot);
       patch.workspaceRoot = workspaceRoot;
     }
     return runSqliteWriteTransaction(() => {
       const before = this.store.get(id);
+      if (patch.workspaceRoot !== undefined && (patch.workspaceRoot || undefined) !== before?.workspaceRoot
+        && new ExecutionEnvironmentStore().list({ projectId: id, limit: 1 }).length) throw new ProjectWorkspaceInUseError();
       const project = this.store.update(id, patch);
+      if (needsWorkspaceCreation && project.workspaceRoot) queueProjectWorkspaceCreation(project.id, project.workspaceRoot);
       const changes = changedFieldsFromPatch(patch as Record<string, unknown>, ['createWorkspaceRoot']);
       const type = before?.status !== project.status
         ? 'project.status_changed'
@@ -186,6 +211,7 @@ export class ProjectService {
           ...(type === 'project.workspace_changed' ? { from: before?.workspaceRoot, to: project.workspaceRoot } : {}) },
         scopes: [{ scopeKind: 'project', scopeId: project.id, reason: 'object_owner' }], nowMs: project.updatedAt,
       });
+      enqueueProjectChanged(project, changes);
       return project;
     });
   }
@@ -199,7 +225,14 @@ export class ProjectService {
   }
 
   delete(id: string): void {
-    this.store.delete(id);
+    runSqliteWriteTransaction(() => {
+      const project = this.store.get(id);
+      if (!project) return;
+      if (new ExecutionEnvironmentStore().list({ projectId: id, limit: 1 }).length) throw new ProjectDeletionBlockedError();
+      const deletedUnderstandingRunIds = listPendingProjectUnderstandingRuns(id).map(run => run.id);
+      this.store.delete(id);
+      enqueueProjectChanged({ ...project, version: project.version + 1, updatedAt: Math.max(Date.now(), project.updatedAt + 1) }, [], 'deleted', deletedUnderstandingRunIds);
+    });
   }
 
   getWithDetails(id: string): ProjectWithDetails | null {
@@ -211,15 +244,37 @@ export class ProjectService {
   }
 
   createMilestone(projectId: string, input: Parameters<ProjectStore['createMilestone']>[1]): ProjectMilestone {
-    return this.store.createMilestone(projectId, input);
+    return runSqliteWriteTransaction(() => {
+      const milestone = this.store.createMilestone(projectId, input);
+      this.recordMilestoneChange(projectId);
+      return milestone;
+    });
   }
 
   updateMilestone(projectId: string, milestoneId: string, input: Parameters<ProjectStore['updateMilestone']>[2]): ProjectMilestone {
-    return this.store.updateMilestone(projectId, milestoneId, input);
+    return runSqliteWriteTransaction(() => {
+      const milestone = this.store.updateMilestone(projectId, milestoneId, input);
+      this.recordMilestoneChange(projectId);
+      return milestone;
+    });
   }
 
   deleteMilestone(projectId: string, milestoneId: string): boolean {
-    return this.store.deleteMilestone(projectId, milestoneId);
+    return runSqliteWriteTransaction(() => {
+      const deleted = this.store.deleteMilestone(projectId, milestoneId);
+      if (deleted) this.recordMilestoneChange(projectId);
+      return deleted;
+    });
+  }
+
+  private recordMilestoneChange(projectId: string): void {
+    const project = this.store.update(projectId, {});
+    enqueueProjectChanged(project, ['milestones']);
+  }
+
+  flushCommittedEffects(projectId?: string): void {
+    drainProjectWorkspaceCreation(projectId);
+    new DomainOutboxDispatcher(publishAutomationProductEvent).drain(100, 'project');
   }
 
   listUpdates(projectId: string, limit?: number): ProjectUpdate[] {
@@ -234,11 +289,23 @@ export class ProjectService {
     nextSteps?: string[];
     actor: Record<string, unknown>;
   }): ProjectUpdate {
-    return this.store.createUpdate(projectId, input);
+    return runSqliteWriteTransaction(() => {
+      const update = this.store.createUpdate(projectId, input);
+      enqueueProjectChanged(this.store.get(projectId)!, ['health', 'updates']);
+      return update;
+    });
   }
 
   attachSession(conversationId: string, projectId: string): void {
-    bindSessionToProject(conversationId, projectId);
+    runSqliteWriteTransaction(() => {
+      const previousProjectId = getSessionMetadata(conversationId)?.projectId;
+      if (previousProjectId === projectId) return;
+      bindSessionToProject(conversationId, projectId);
+      enqueueProjectChanged(this.store.update(projectId, {}), ['sessions']);
+      if (previousProjectId && this.store.get(previousProjectId)) {
+        enqueueProjectChanged(this.store.update(previousProjectId, {}), ['sessions']);
+      }
+    });
   }
 
   detachSession(conversationId: string): void {

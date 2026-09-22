@@ -276,6 +276,7 @@ export async function createProject(input: {
 }): Promise<Project> {
   const res = await fetchJson<{ ok: true; project: Project }>(apiUrl('/api/projects'), {
     method: 'POST',
+    headers: { 'idempotency-key': crypto.randomUUID() },
     body: JSON.stringify(input),
   });
   return res.project;
@@ -316,44 +317,48 @@ export async function updateProject(
   input: Partial<Pick<Project, 'name' | 'description' | 'status' | 'defaultAgentId' | 'workspaceRoot' | 'executionMode' | 'brief' | 'instructions' | 'outcome' | 'successCriteria' | 'scope' | 'nonGoals' | 'health' | 'ownerId' | 'targetAt'>> & {
     createWorkspaceRoot?: boolean;
   },
+  expectedVersion: number,
 ): Promise<Project> {
   const res = await fetchJson<{ ok: true; project: Project }>(apiUrl(`/api/projects/${encodeURIComponent(id)}`), {
     method: 'PATCH',
-    body: JSON.stringify(input),
+    headers: { 'idempotency-key': crypto.randomUUID() },
+    body: JSON.stringify({ ...input, expectedVersion }),
   });
   return res.project;
 }
 
-export async function renameProject(id: string, name: string): Promise<Project> {
-  return updateProject(id, { name });
+export async function renameProject(id: string, name: string, expectedVersion: number): Promise<Project> {
+  return updateProject(id, { name }, expectedVersion);
 }
 
-export async function archiveProject(id: string): Promise<Project> {
-  return updateProject(id, { status: 'archived' });
+export async function archiveProject(id: string, expectedVersion: number): Promise<Project> {
+  return updateProject(id, { status: 'archived' }, expectedVersion);
 }
 
-export async function restoreProject(id: string): Promise<Project> {
-  return updateProject(id, { status: 'active' });
+export async function restoreProject(id: string, expectedVersion: number): Promise<Project> {
+  return updateProject(id, { status: 'active' }, expectedVersion);
 }
 
-export async function pinProject(id: string): Promise<Project> {
+export async function pinProject(id: string, expectedVersion: number): Promise<Project> {
   const res = await fetchJson<{ ok: true; project: Project }>(
     apiUrl(`/api/projects/${encodeURIComponent(id)}/pin`),
-    { method: 'POST' },
+    { method: 'POST', headers: { 'idempotency-key': crypto.randomUUID() }, body: JSON.stringify({ expectedVersion }) },
   );
   return res.project;
 }
 
-export async function unpinProject(id: string): Promise<Project> {
+export async function unpinProject(id: string, expectedVersion: number): Promise<Project> {
   const res = await fetchJson<{ ok: true; project: Project }>(
     apiUrl(`/api/projects/${encodeURIComponent(id)}/unpin`),
-    { method: 'POST' },
+    { method: 'POST', headers: { 'idempotency-key': crypto.randomUUID() }, body: JSON.stringify({ expectedVersion }) },
   );
   return res.project;
 }
 
-export async function deleteProject(id: string): Promise<void> {
-  await fetchJson(apiUrl(`/api/projects/${encodeURIComponent(id)}`), { method: 'DELETE' });
+export async function deleteProject(id: string, expectedVersion: number): Promise<void> {
+  await fetchJson(apiUrl(`/api/projects/${encodeURIComponent(id)}`), {
+    method: 'DELETE', headers: { 'idempotency-key': crypto.randomUUID() }, body: JSON.stringify({ expectedVersion }),
+  });
 }
 
 export async function fetchProjectSessions(projectId: string): Promise<ProjectSession[]> {

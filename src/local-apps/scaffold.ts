@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { ExtensionCapabilityBindingsSchema, extensionCapabilityPermissions } from '@xopcai/gateway-contract';
 
 import { LOCAL_APP_RUNTIME_ENTRY, LOCAL_APP_RUNTIME_SOURCE } from './runtime-entry.js';
 
@@ -118,11 +119,12 @@ button?.addEventListener('click', () => {
 export function readLocalAppPermissions(workspaceRoot: string): string[] {
   try {
     const raw = JSON.parse(readFileSync(join(workspaceRoot, 'xopc.extension.json'), 'utf8')) as {
-      ui?: { permissions?: unknown };
+      ui?: { permissions?: unknown; capabilities?: unknown };
     };
-    return Array.isArray(raw.ui?.permissions)
+    const permissions = Array.isArray(raw.ui?.permissions)
       ? raw.ui.permissions.filter((permission): permission is string => typeof permission === 'string')
       : [];
+    return [...permissions, ...extensionCapabilityPermissions(ExtensionCapabilityBindingsSchema.parse(raw.ui?.capabilities ?? []))];
   } catch {
     return [];
   }

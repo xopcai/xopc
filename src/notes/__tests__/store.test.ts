@@ -48,7 +48,7 @@ describe('NotesStore deleteNote', () => {
 
     await store.addNote(note);
 
-    const deleted = await store.deleteNote(note.id);
+    const deleted = store.deleteNoteAtomically(note.id);
 
     expect(deleted).toBe(true);
     expect(await store.getNote(note.id)).toBeNull();
@@ -325,13 +325,13 @@ describe('NotesStore snapshots', () => {
     expect(entries[2].snippet).toBe('v2');
   });
 
-  it('deleteAllSnapshots removes stored versions', async () => {
+  it('zero snapshot retention removes stored versions', async () => {
     const note = makeNote('snap-del', 'text');
     await store.addNote(note);
     await store.saveSnapshot(note, 'edit');
 
     expect(await store.listSnapshots('snap-del')).toHaveLength(1);
-    await store.deleteAllSnapshots('snap-del');
+    store.pruneSnapshots('snap-del', 0);
     expect(await store.listSnapshots('snap-del')).toEqual([]);
   });
 

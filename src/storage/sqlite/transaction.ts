@@ -13,6 +13,21 @@ function nextSavepointName(): string {
 }
 
 const transactionDepthByDatabase = new WeakMap<DatabaseSync, number>();
+const commitEffectsByDatabase = new WeakMap<DatabaseSync, Array<() => void>>();
+
+export class SqliteCommitEffectError extends Error {
+  constructor(cause: unknown) {
+    super('Transaction committed; post-commit work is pending recovery', { cause });
+    this.name = 'SqliteCommitEffectError';
+  }
+}
+
+/** Schedule a synchronous effect after an owned transaction commits. Persist its recovery intent first. */
+export function afterSqliteCommit(effect: () => void): void {
+  const effects = commitEffectsByDatabase.get(getSqliteDatabase());
+  if (!effects) throw new Error('Commit effects require a transaction owned by runSqliteWriteTransaction');
+  effects.push(effect);
+}
 
 function getTransactionDepth(db: DatabaseSync): number {
   return transactionDepthByDatabase.get(db) ?? 0;
@@ -85,6 +100,8 @@ export function runSqliteWriteTransaction<T>(fn: (db: DatabaseSync) => T): T {
 
   // Nested call: use SAVEPOINT so outer transaction stays in control.
   if (depth > 0) {
+    const effects = commitEffectsByDatabase.get(db);
+    const effectCount = effects?.length ?? 0;
     const savepoint = nextSavepointName();
     db.exec(`SAVEPOINT ${savepoint}`);
     setTransactionDepth(db, depth + 1);
@@ -94,6 +111,7 @@ export function runSqliteWriteTransaction<T>(fn: (db: DatabaseSync) => T): T {
       db.exec(`RELEASE SAVEPOINT ${savepoint}`);
       return result;
     } catch (error) {
+      effects?.splice(effectCount);
       try {
         db.exec(`ROLLBACK TO SAVEPOINT ${savepoint}`);
       } finally {
@@ -108,12 +126,15 @@ export function runSqliteWriteTransaction<T>(fn: (db: DatabaseSync) => T): T {
   // Top-level: own the full BEGIN IMMEDIATE / COMMIT / ROLLBACK lifecycle.
   db.exec('BEGIN IMMEDIATE');
   setTransactionDepth(db, 1);
+  const effects: Array<() => void> = [];
+  commitEffectsByDatabase.set(db, effects);
   let transactionActive = true;
   let result: T;
   try {
     result = fn(db);
     assertSyncTransactionResult(result);
   } catch (error) {
+    commitEffectsByDatabase.delete(db);
     try {
       abortImmediateTransaction(db);
       transactionActive = false;
@@ -130,8 +151,8 @@ export function runSqliteWriteTransaction<T>(fn: (db: DatabaseSync) => T): T {
   try {
     commitImmediateTransaction(db);
     transactionActive = false;
-    return result;
   } catch (error) {
+    commitEffectsByDatabase.delete(db);
     try {
       abortImmediateTransaction(db);
       transactionActive = false;
@@ -144,6 +165,14 @@ export function runSqliteWriteTransaction<T>(fn: (db: DatabaseSync) => T): T {
       setTransactionDepth(db, 0);
     }
   }
+  commitEffectsByDatabase.delete(db);
+  let failure: { error: unknown } | undefined;
+  for (const effect of effects) {
+    try { assertSyncTransactionResult(effect()); }
+    catch (error) { failure ??= { error }; }
+  }
+  if (failure) throw new SqliteCommitEffectError(failure.error);
+  return result;
 }
 
 export function getSqliteDatabase(): DatabaseSync {
@@ -154,6 +183,8 @@ export function getSqliteDatabase(): DatabaseSync {
 export function runSqliteSavepoint<T>(db: DatabaseSync, operation: () => T): T {
   const name = nextSavepointName();
   const depth = getTransactionDepth(db);
+  const effects = commitEffectsByDatabase.get(db);
+  const effectCount = effects?.length ?? 0;
   db.exec(`SAVEPOINT ${name}`);
   setTransactionDepth(db, depth + 1);
   try {
@@ -162,6 +193,7 @@ export function runSqliteSavepoint<T>(db: DatabaseSync, operation: () => T): T {
     db.exec(`RELEASE ${name}`);
     return result;
   } catch (error) {
+    effects?.splice(effectCount);
     db.exec(`ROLLBACK TO ${name}`);
     db.exec(`RELEASE ${name}`);
     throw error;

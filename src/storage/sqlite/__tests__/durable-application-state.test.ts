@@ -77,7 +77,7 @@ describe('durable application storage', () => {
     await store.saveSnapshot(note, 'edit');
     await store.saveSnapshot({ ...note, markdown: 'two' }, 'edit');
     expect((await store.listSnapshots(note.id)).map(item => item.timestamp)).toEqual([1001, 1000]);
-    await store.deleteNote(note.id);
+    store.deleteNoteAtomically(note.id);
     expect(await store.listSnapshots(note.id)).toEqual([]);
   });
 

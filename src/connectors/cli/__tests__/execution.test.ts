@@ -13,6 +13,7 @@ import { getConnectorDefinition } from '../../catalog.js';
 import { registerCliAdapter } from '../adapterRegistry.js';
 import { commitCliIdentity, createCliAuthorization, updateCliAuthorization } from '../store.js';
 import type { CliAdapter } from '../types.js';
+import * as cliRuntime from '../runtime.js';
 
 vi.mock('../installer.js', () => ({ verifyInstalledCli: async () => process.execPath }));
 const adapter: CliAdapter = {
@@ -20,7 +21,8 @@ const adapter: CliAdapter = {
   curatedActions: { 'records.read': 'read', 'records.create': 'write' },
   schemaArgs: () => ['-e', 'console.log("{}")'],
   decodeSchema: id => ({ id, description: id, scope: id.endsWith('read') ? 'read' : 'write', requiredScopes: [], revision: '1', inputSchema: { type: 'object', additionalProperties: false, properties: { title: { type: 'string' } }, required: ['title'] } }),
-  actionArgs: (_action, input) => input.title === 'lost-result' ? ['-e', 'console.log("not-json")'] : ['-e', 'console.log(process.argv[1])', JSON.stringify(input)],
+  actionArgs: (_action, input) => input.title === 'lost-result' ? ['-e', 'console.log("not-json")']
+    : input.title === 'partial-failure' ? ['-e', 'console.log("{}"); process.exit(1)'] : ['-e', 'console.log(process.argv[1])', JSON.stringify(input)],
   decodeResult: output => JSON.parse(output.stdout), statusArgs: ['-e', 'console.log("verified")'],
   decodeIdentity: output => { if (output.stdout.trim() !== 'verified') throw new Error('Unverified'); return { key: 'user', label: 'Test', scopes: [], identity: { name: 'Test' } }; },
   authorizationSteps: [],
@@ -44,7 +46,7 @@ beforeEach(() => {
   accountId = commitCliIdentity(attempt, { key: 'user', label: 'Test', scopes: [], identity: { name: 'Test' } });
   provider = new CliToolProvider({ getConfig: () => config, getCurrentContext: () => null });
 });
-afterEach(() => { closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); vi.unstubAllEnvs(); rmSync(directory, { recursive: true, force: true }); });
+afterEach(() => { vi.restoreAllMocks(); closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); vi.unstubAllEnvs(); rmSync(directory, { recursive: true, force: true }); });
 
 describe('generic CLI provider contract', () => {
   it('runs a third adapter through discovery, schema, identity and execution without provider branches', async () => {
@@ -57,29 +59,31 @@ describe('generic CLI provider contract', () => {
     expect(pending.status).toBe('confirmation_required');
     decideConnectorApproval(pending.approvalId, 'approved');
     expect(parse(await provider.execute(write, { title: 'changed' }, pending.approvalId, execution))).toMatchObject({ outcome: 'failed' });
-    expect(parse(await provider.execute(write, { title: 'meeting' }, pending.approvalId, execution))).toMatchObject({ outcome: 'success' });
-    expect(parse(await provider.execute(write, { title: 'meeting' }, pending.approvalId, execution))).toMatchObject({ outcome: 'failed' });
+    const accepted = parse(await provider.execute(write, { title: 'meeting' }, pending.approvalId, execution));
+    expect(accepted).toMatchObject({ outcome: 'success' });
+    expect(parse(await provider.execute(write, { title: 'meeting' }, pending.approvalId, { toolCallId: 'retry-call' }))).toEqual(accepted);
     expect(getSqliteDatabase().prepare('SELECT count(*) AS n FROM connector_cli_executions').get()).toMatchObject({ n: 1 });
   });
   it('serializes duplicate approvals and rechecks revoked policy before spawning', async () => {
     const pending = parse(await provider.execute(write, { title: 'one' }, undefined, execution));
     decideConnectorApproval(pending.approvalId, 'approved');
-    const results = await Promise.all([provider.execute(write, { title: 'one' }, pending.approvalId, execution), provider.execute(write, { title: 'one' }, pending.approvalId, execution)]);
-    expect(results.map(value => parse(value).outcome).sort()).toEqual(['failed', 'success']);
+    const results = await Promise.allSettled([provider.execute(write, { title: 'one' }, pending.approvalId, execution), provider.execute(write, { title: 'one' }, pending.approvalId, execution)]);
+    expect(results.filter(value => value.status === 'fulfilled')).toHaveLength(1);
+    expect(results.find(value => value.status === 'rejected')).toMatchObject({ reason: { code: 'IN_PROGRESS' } });
     const second = parse(await provider.execute(write, { title: 'two' }, undefined, execution));
     decideConnectorApproval(second.approvalId, 'approved');
     const active = provider.execute(write, { title: 'two' }, second.approvalId, execution);
     getSqliteDatabase().prepare("UPDATE connector_installations SET max_scope = 'read'").run();
-    expect(parse(await active)).toMatchObject({ outcome: 'failed' });
+    await expect(active).rejects.toMatchObject({ code: expect.stringMatching(/FORBIDDEN|UNAVAILABLE/) });
     expect(getSqliteDatabase().prepare('SELECT count(*) AS n FROM connector_cli_executions').get()).toMatchObject({ n: 1 });
   });
   it('records uncertain writes and does not reuse their approval', async () => {
     const pending = parse(await provider.execute(write, { title: 'lost-result' }, undefined, execution));
     decideConnectorApproval(pending.approvalId, 'approved');
-    const result = parse(await provider.execute(write, { title: 'lost-result' }, pending.approvalId, execution));
-    expect(result).toMatchObject({ outcome: 'unknown', instruction: expect.stringContaining('do not retry') });
-    expect(getSqliteDatabase().prepare('SELECT status FROM connector_cli_executions WHERE id = ?').get(result.executionId)).toMatchObject({ status: 'unknown' });
-    expect(parse(await provider.execute(write, { title: 'lost-result' }, pending.approvalId, execution))).toMatchObject({ outcome: 'failed' });
+    await expect(provider.execute(write, { title: 'lost-result' }, pending.approvalId, execution)).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN', operationId: expect.any(String) });
+    expect(getSqliteDatabase().prepare('SELECT status FROM connector_cli_executions').get()).toMatchObject({ status: 'unknown' });
+    await expect(provider.execute(write, { title: 'lost-result' }, pending.approvalId, execution)).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' });
+    expect(getSqliteDatabase().prepare('SELECT count(*) AS n FROM connector_cli_executions').get()).toMatchObject({ n: 1 });
   });
   it('invalidates approval after reconnecting the same account', async () => {
     const pending = parse(await provider.execute(write, { title: 'meeting' }, undefined, execution));
@@ -88,6 +92,47 @@ describe('generic CLI provider contract', () => {
     commitCliIdentity(attempt, { key: 'user', label: 'Test', scopes: [], identity: { name: 'Test' } });
     expect(getConnectorAccount(accountId)?.currentConnectionId).toBeDefined();
     expect(parse(await provider.execute(write, { title: 'meeting' }, pending.approvalId, execution))).toMatchObject({ outcome: 'failed' });
+  });
+
+  it('does not interpret a nonzero exit as proof that no remote effect occurred', async () => {
+    const pending = parse(await provider.execute(write, { title: 'partial-failure' }, undefined, execution));
+    decideConnectorApproval(pending.approvalId, 'approved');
+    await expect(provider.execute(write, { title: 'partial-failure' }, pending.approvalId, execution)).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' });
+    expect(getSqliteDatabase().prepare('SELECT status FROM connector_cli_executions').get()).toMatchObject({ status: 'unknown' });
+    expect(getSqliteDatabase().prepare('SELECT state FROM capability_operations').get()).toMatchObject({ state: 'unknown' });
+  });
+
+  it('replays a committed write after reopening and still rejects revoked access', async () => {
+    const pending = parse(await provider.execute(write, { title: 'durable' }, undefined, execution));
+    decideConnectorApproval(pending.approvalId, 'approved');
+    const first = parse(await provider.execute(write, { title: 'durable' }, pending.approvalId, execution));
+    closeXopcDatabase(); resetXopcDatabaseSingletonForTest();
+    openXopcDatabase({ path: join(directory, 'test.db') });
+    expect(parse(await provider.execute(write, { title: 'durable' }, pending.approvalId, { toolCallId: 'after-restart' }))).toEqual(first);
+    expect(getSqliteDatabase().prepare('SELECT count(*) AS n FROM connector_cli_executions').get()).toMatchObject({ n: 1 });
+    getSqliteDatabase().prepare("UPDATE connector_installations SET max_scope = 'read'").run();
+    await expect(provider.execute(write, { title: 'durable' }, pending.approvalId, execution)).rejects.toThrow('scope');
+  });
+
+  it('binds approval to the complete contract even when a provider forgets to bump its revision', async () => {
+    const pending = parse(await provider.execute(write, { title: 'contract' }, undefined, execution));
+    decideConnectorApproval(pending.approvalId, 'approved');
+    const describe = cliRuntime.describeCliAction;
+    vi.spyOn(cliRuntime, 'describeCliAction').mockImplementationOnce(async (...args) => {
+      const action = await describe(...args);
+      return { ...action, description: 'Changed semantics at the same revision' };
+    });
+    expect(parse(await provider.execute(write, { title: 'contract' }, pending.approvalId, execution))).toMatchObject({ outcome: 'failed' });
+    expect(getSqliteDatabase().prepare('SELECT count(*) AS n FROM connector_cli_executions').get()).toMatchObject({ n: 0 });
+  });
+
+  it('deduplicates unconfirmed-policy writes by logical call identity, not by arguments', async () => {
+    getSqliteDatabase().prepare("UPDATE connector_installations SET confirmation_policy = 'never'").run();
+    const first = parse(await provider.execute(write, { title: 'repeatable' }, undefined, execution));
+    expect(parse(await provider.execute(write, { title: 'repeatable' }, undefined, execution))).toEqual(first);
+    await expect(provider.execute(write, { title: 'changed' }, undefined, execution)).rejects.toMatchObject({ code: 'REVISION_CONFLICT' });
+    expect(parse(await provider.execute(write, { title: 'repeatable' }, undefined, { toolCallId: 'new-intent' }))).toMatchObject({ outcome: 'success' });
+    expect(getSqliteDatabase().prepare('SELECT count(*) AS n FROM connector_cli_executions').get()).toMatchObject({ n: 2 });
   });
   it('does not substitute an unavailable selected account and validates input before execution', async () => {
     expect(parse(await provider.execute(read, { title: 'x', xopcAccountId: 'other' }, undefined, execution))).toMatchObject({ status: 'account_selection_required' });

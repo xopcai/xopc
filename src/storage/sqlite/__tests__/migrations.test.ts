@@ -22,6 +22,7 @@ import {
   setSchemaVersion,
 } from '../schema-version.js';
 import { ensureXopcDatabaseSchema } from '../schema.js';
+import { AutomationSchema } from '../../../automations/domain/validation.js';
 
 const { DatabaseSync } = requireNodeSqlite();
 
@@ -44,6 +45,63 @@ describe('SQLite migrations', () => {
 
   afterEach(() => {
     rmSync(migrationsDir, { recursive: true, force: true });
+  });
+
+  it('adds durable note deletion cleanup without changing existing note data', () => {
+    const db = openEmptyDb();
+    try {
+      installBaseline(db);
+      applyPendingMigrations(db, { targetVersion: 196 });
+      const notes = db.prepare('SELECT * FROM notes').all();
+      applyPendingMigrations(db);
+      db.prepare("INSERT INTO note_deletion_cleanup(kind, object_id, created_at) VALUES ('media', 'test-note', 1)").run();
+      expect(db.prepare('SELECT attempts, next_attempt_at FROM note_deletion_cleanup').get()).toEqual({ attempts: 0, next_attempt_at: 0 });
+      expect(() => db.prepare("INSERT INTO note_deletion_cleanup(kind, object_id, created_at) VALUES ('unsafe', 'test-note', 1)").run()).toThrow();
+      expect(db.prepare('SELECT * FROM notes').all()).toEqual(notes);
+      applyPendingMigrations(db);
+      expect(db.prepare('SELECT * FROM note_deletion_cleanup').all()).toHaveLength(1);
+    } finally { db.close(); }
+  });
+
+  it('freezes queued execution configuration during the run-request migration', () => {
+    const db = openEmptyDb();
+    try {
+      installBaseline(db);
+      applyPendingMigrations(db, { targetVersion: 195 });
+      db.prepare(`INSERT INTO automations (automation_id, name, enabled, trigger_json, action_json, state_json, created_at_ms, updated_at_ms, notification_policy)
+        VALUES (?, ?, 1, ?, ?, ?, 10, 12, 'none')`).run('queued-owner', 'Current name', '{"kind":"manual"}', '{"kind":"agent","instruction":"Current"}', '{"runningRunId":"queued"}');
+      db.prepare(`INSERT INTO automation_runs (run_id, automation_id, automation_name, status, trigger_snapshot_json, action_snapshot_json, manual, created_at_ms)
+        VALUES ('queued', 'queued-owner', 'Queued name', 'queued', ?, ?, 1, 11)`)
+        .run('{"kind":"manual"}', '{"kind":"workflow","workflowId":"accepted","input":{"keep":null}}');
+      applyPendingMigrations(db);
+      const snapshot = db.prepare('SELECT automation_json FROM automation_run_requests WHERE run_id = ?').get('queued');
+      expect(AutomationSchema.parse(JSON.parse(String(snapshot?.automation_json)))).toMatchObject({
+        id: 'queued-owner', enabled: true, name: 'Queued name', notificationPolicy: 'none',
+        action: { kind: 'workflow', workflowId: 'accepted', input: { keep: null } },
+      });
+      db.prepare('UPDATE automations SET name = ?').run('Later');
+      applyPendingMigrations(db);
+      expect(db.prepare('SELECT automation_json FROM automation_run_requests WHERE run_id = ?').get('queued')).toEqual(snapshot);
+      expect(db.prepare('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' });
+    } finally { db.close(); }
+  });
+
+  it('adds deleted automation revision storage without changing existing automations', () => {
+    const db = openEmptyDb();
+    try {
+      installBaseline(db);
+      applyPendingMigrations(db, { targetVersion: 194 });
+      db.prepare(`INSERT INTO automations (automation_id, name, enabled, trigger_json, action_json, state_json, created_at_ms, updated_at_ms)
+        VALUES (?, ?, 1, ?, ?, ?, 10, 12)`).run('retained', 'Retained', '{"kind":"manual"}', '{"kind":"agent","instruction":"Do not execute"}', '{"lastError":"Retained"}');
+      const before = db.prepare('SELECT * FROM automations').all();
+      applyPendingMigrations(db);
+      expect(db.prepare('SELECT * FROM automations').all()).toEqual(before);
+      expect(db.prepare('SELECT * FROM automation_deleted_revisions').all()).toEqual([]);
+      db.prepare('INSERT INTO automation_deleted_revisions VALUES (?, ?)').run('removed', 42);
+      applyPendingMigrations(db);
+      expect(db.prepare('SELECT revision FROM automation_deleted_revisions WHERE automation_id = ?').get('removed')).toEqual({ revision: 42 });
+      expect(db.prepare('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' });
+    } finally { db.close(); }
   });
 
   it('migrates connection allowlists once and preserves account and authorization references', () => {

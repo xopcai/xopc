@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import {
   cpSync,
   existsSync,
@@ -9,8 +9,12 @@ import {
   readdirSync,
   renameSync,
   rmSync,
+  writeFileSync,
 } from 'node:fs';
 import { basename, join, relative, resolve, sep } from 'node:path';
+import { ExtensionCapabilityBindingsSchema, extensionCapabilityPermissions } from '@xopcai/gateway-contract';
+import { CapabilityError } from '../capabilities/runtime/errors.js';
+import { validateLocalAppCapabilityContracts } from './capabilities/contracts.js';
 
 import { resolveExtensionsDir, resolveStateDir } from '../config/paths.js';
 import type { Config } from '../config/schema.js';
@@ -18,14 +22,17 @@ import type { ExtensionLoader } from '../extensions/index.js';
 import type { ProjectService } from '../projects/index.js';
 import { slugifyProjectName } from '../projects/project-store.js';
 import { createLogger } from '../utils/logger.js';
+import { afterSqliteCommit, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
+import { currentOperationId } from '../infra/operation-context.js';
+import { DomainOutboxDispatcher } from '../infra/domain-outbox-dispatcher.js';
 import { readLocalAppAcceptanceConfig } from './acceptance.js';
 import {
-  legacyLocalAppRuntimeSource,
   LOCAL_APP_RUNTIME_ENTRY,
   LOCAL_APP_RUNTIME_SOURCE,
 } from './runtime-entry.js';
 import { readLocalAppPermissions, scaffoldLocalApp } from './scaffold.js';
 import { LocalAppStore } from './store.js';
+import { withLocalAppReleaseLock } from './release-lock.js';
 import type {
   CreateLocalAppInput,
   LocalAppChangedFile,
@@ -41,6 +48,17 @@ import type {
 const log = createLogger('LocalApps');
 const RELEASE_COPY_EXCLUDED_NAMES = new Set(['.git', 'node_modules']);
 const UI_ONLY_PERMISSIONS = new Set(['theme', 'storage', 'notification']);
+
+function cleanupReleaseStaging(path: string): void {
+  try {
+    rmSync(path, { recursive: true, force: true });
+  } catch (err) {
+    log.warn({ err, path }, 'Local app staging cleanup failed; retained for inspection');
+  }
+}
+
+export class LocalAppRevisionConflictError extends Error {}
+export class LocalAppAcceptanceValidationError extends Error {}
 
 export interface LocalAppServiceOptions {
   projects: ProjectService;
@@ -150,10 +168,11 @@ function changedFiles(current: Map<string, string>, active: Map<string, string>)
 function permissionsFromManifestJson(manifestJson: string | undefined): string[] {
   if (!manifestJson) return [];
   try {
-    const manifest = JSON.parse(manifestJson) as { ui?: { permissions?: unknown } };
-    return Array.isArray(manifest.ui?.permissions)
+    const manifest = JSON.parse(manifestJson) as { ui?: { permissions?: unknown; capabilities?: unknown } };
+    const permissions = Array.isArray(manifest.ui?.permissions)
       ? manifest.ui.permissions.filter((value): value is string => typeof value === 'string')
       : [];
+    return [...permissions, ...extensionCapabilityPermissions(ExtensionCapabilityBindingsSchema.parse(manifest.ui?.capabilities ?? []))];
   } catch {
     return [];
   }
@@ -170,7 +189,7 @@ function validateLocalAppPackage(root: string, extensionId: string): {
     id?: string;
     name?: string;
     main?: string;
-    ui?: { main?: string; permissions?: unknown };
+    ui?: { main?: string; permissions?: unknown; capabilities?: unknown };
   };
   if (manifest.id !== extensionId) throw new Error('Extension id cannot change after the app is created');
   if (!manifest.main || !manifest.ui?.main) throw new Error('Local app manifest must declare main and ui.main');
@@ -183,9 +202,7 @@ function validateLocalAppPackage(root: string, extensionId: string): {
   }
   const trustedRuntime = manifest.main === LOCAL_APP_RUNTIME_ENTRY
     ? LOCAL_APP_RUNTIME_SOURCE
-    : manifest.main === 'index.js' && typeof manifest.name === 'string'
-      ? legacyLocalAppRuntimeSource(extensionId, manifest.name)
-      : null;
+    : null;
   if (trustedRuntime === null || readFileSync(join(root, manifest.main), 'utf8') !== trustedRuntime) {
     throw new Error(`Phase 1 local apps must use the xopc-owned runtime entry: ${LOCAL_APP_RUNTIME_ENTRY}`);
   }
@@ -196,6 +213,7 @@ function validateLocalAppPackage(root: string, extensionId: string): {
   if (unsupported.length) {
     throw new Error(`Phase 1 local apps cannot request: ${unsupported.join(', ')}`);
   }
+  validateLocalAppCapabilityContracts(manifest.ui.capabilities);
   const html = readFileSync(join(root, manifest.ui.main), 'utf8');
   if (/<script\b(?![^>]*\bsrc=)[^>]*>/i.test(html)) {
     throw new Error('Inline scripts are blocked in local app previews');
@@ -219,6 +237,79 @@ export class LocalAppService {
     private readonly options: LocalAppServiceOptions,
     private readonly store = new LocalAppStore(),
   ) {}
+
+  private recoveryRoot(): string {
+    return join(resolveStateDir(), 'local-apps', 'pending-releases');
+  }
+
+  private recoveryMarker(id: string): string {
+    if (!/^[a-zA-Z0-9-]+$/.test(id)) throw new Error('Invalid local app id');
+    return join(this.recoveryRoot(), id);
+  }
+
+  /** Reconcile interrupted mutations before any extension code or request can run. */
+  async recoverPendingReleases(): Promise<void> {
+    return withLocalAppReleaseLock(resolveExtensionsDir(), () => this.recoverReleases());
+  }
+
+  private async recoverReleases(): Promise<void> {
+    if (!existsSync(this.recoveryRoot())) return;
+    for (const id of readdirSync(this.recoveryRoot())) {
+      const marker = this.recoveryMarker(id);
+      const app = this.store.get(id);
+      if (!app) throw new Error(`Pending local app recovery has no database record: ${id}`);
+      if (!/^[a-zA-Z0-9-]+$/.test(app.extensionId)) throw new Error('Invalid local app extension id');
+      const extensionsDir = resolveExtensionsDir();
+      mkdirSync(extensionsDir, { recursive: true });
+      const target = join(extensionsDir, app.extensionId);
+      if (app.installationState === 'installed') {
+        const release = app.activeReleaseId ? this.store.getRelease(id, app.activeReleaseId) : null;
+        if (!release || resolve(release.artifactPath) !== resolve(this.releaseRoot(id), `v${release.version}`)) {
+          throw new Error(`Local app recovery release is unavailable: ${id}`);
+        }
+        validateLocalAppPackage(release.artifactPath, app.extensionId);
+        if (hashDirectory(release.artifactPath) !== release.sourceHash) throw new Error(`Local app recovery integrity check failed: ${id}`);
+        const staging = mkdtempSync(join(extensionsDir, '.local-app-recover-'));
+        try {
+          const replacement = join(staging, app.extensionId);
+          cpSync(release.artifactPath, replacement, { recursive: true, filter: shouldCopyReleasePath });
+          rmSync(target, { recursive: true, force: true });
+          renameSync(replacement, target);
+        } finally {
+          cleanupReleaseStaging(staging);
+        }
+      } else {
+        rmSync(target, { recursive: true, force: true });
+      }
+      const config = this.options.getConfig();
+      const saved = await this.options.saveConfig(app.installationState === 'installed'
+        ? setExtensionActivation(config, app.extensionId, app.enabled)
+        : removeExtensionActivation(config, app.extensionId));
+      if (!saved.saved) throw new Error(saved.error ?? `Local app recovery config save failed: ${id}`);
+      const orphan = join(this.releaseRoot(id), `v${app.draftVersion}`);
+      const recorded = this.store.listReleases(id).some((release) => resolve(release.artifactPath) === resolve(orphan));
+      if (!recorded && existsSync(orphan)) {
+        const retained = mkdtempSync(join(this.releaseRoot(id), '.interrupted-'));
+        renameSync(orphan, join(retained, 'package'));
+      }
+      this.refreshExtensions('local-app-recovery');
+      rmSync(marker);
+      log.info({ appId: id, releaseId: app.activeReleaseId }, 'Interrupted local app release recovered');
+    }
+  }
+
+  private async mutateRelease(id: string, action: () => Promise<LocalAppDetail>): Promise<LocalAppDetail> {
+    return withLocalAppReleaseLock(resolveExtensionsDir(), async () => {
+      await this.recoverReleases();
+      if (!this.store.get(id)) throw new Error('Local app not found');
+      const marker = this.recoveryMarker(id);
+      mkdirSync(this.recoveryRoot(), { recursive: true });
+      writeFileSync(marker, '', { flag: 'wx', mode: 0o600, flush: true });
+      const result = await action();
+      rmSync(marker);
+      return result;
+    });
+  }
 
   list(): LocalApp[] {
     return this.store.list();
@@ -245,10 +336,12 @@ export class LocalAppService {
       : null;
     if (!release && !discovered) throw new Error('Extension UI manifest not found');
     const manifestJson = release?.manifestJson ?? JSON.stringify(discovered!.manifest);
-    const manifestDigest = createHash('sha256').update(manifestJson).digest('hex');
+    const manifestDigest = createHash('sha256').update(release
+      ? JSON.stringify({ manifestJson, sourceHash: release.sourceHash }) : manifestJson).digest('hex');
     const permissions = release
       ? permissionsFromManifestJson(manifestJson).toSorted()
-      : [...(discovered!.manifest.ui?.permissions ?? [])].toSorted();
+      : [...(discovered!.manifest.ui?.permissions ?? []),
+        ...extensionCapabilityPermissions(discovered!.manifest.ui?.capabilities ?? [])].toSorted();
     const grant = this.store.getUiGrant(extensionId, manifestDigest);
     const granted = Boolean(grant
       && JSON.stringify(grant.permissions.toSorted()) === JSON.stringify(permissions));
@@ -262,9 +355,29 @@ export class LocalAppService {
     };
   }
 
-  grantUiPermissions(extensionId: string): LocalAppUiGrant {
+  getCapabilityAccess(extensionId: string, expectedManifestDigest: string) {
+    const app = this.store.findByExtensionId(extensionId);
+    const config = extensionConfigRecord(this.options.getConfig());
+    if (app && existsSync(this.recoveryMarker(app.id))) {
+      throw new CapabilityError('FORBIDDEN', 'Local app release mutation or recovery is pending');
+    }
+    if (!app || !app.enabled || app.installationState !== 'installed' || !app.activeReleaseId
+      || stringIds(config.disabled).includes(extensionId) || !stringIds(config.enabled).includes(extensionId)) {
+      throw new CapabilityError('FORBIDDEN', 'Local app is not enabled and installed');
+    }
+    const grant = this.getUiGrant(extensionId);
+    if (!grant.granted) throw new CapabilityError('FORBIDDEN', 'Local app permissions have not been granted');
+    if (grant.manifestDigest !== expectedManifestDigest) throw new CapabilityError('CONTRACT_CHANGED', 'Local app release changed');
+    const release = this.store.getRelease(app.id, app.activeReleaseId);
+    if (!release) throw new CapabilityError('FORBIDDEN', 'Local app release is unavailable');
+    const manifest = JSON.parse(release.manifestJson) as { ui?: { capabilities?: unknown } };
+    return { releaseId: release.id, bindings: ExtensionCapabilityBindingsSchema.parse(manifest.ui?.capabilities ?? []) };
+  }
+
+  grantUiPermissions(extensionId: string, expectedManifestDigest: string): LocalAppUiGrant {
     const current = this.getUiGrant(extensionId);
     if (!current.manifestDigest) throw new Error('Extension UI manifest not found');
+    if (current.manifestDigest !== expectedManifestDigest) throw new Error('Extension release changed; review permissions again');
     return this.store.saveUiGrant({
       extensionId,
       appId: current.appId,
@@ -382,16 +495,16 @@ export class LocalAppService {
     if (!app) throw new Error('Local app not found');
     const validation = this.validate(id);
     if (validation.status !== 'healthy' || !validation.sourceHash) {
-      throw new Error('The current draft must pass static validation before acceptance can be recorded');
+      throw new LocalAppAcceptanceValidationError('The current draft must pass static validation before acceptance can be recorded');
     }
     if (input.sourceHash !== validation.sourceHash) {
-      throw new Error('Acceptance result is stale because the draft changed');
+      throw new LocalAppRevisionConflictError('Acceptance result is stale because the draft changed');
     }
     if (input.status !== 'passed' && input.status !== 'failed') {
-      throw new Error('Invalid acceptance status');
+      throw new LocalAppAcceptanceValidationError('Invalid acceptance status');
     }
     if (!Number.isInteger(input.interactiveCount) || input.interactiveCount < 0 || input.interactiveCount > 10_000) {
-      throw new Error('Invalid acceptance interactive count');
+      throw new LocalAppAcceptanceValidationError('Invalid acceptance interactive count');
     }
     const requiredIds = new Set(['document', 'content', 'interaction']);
     if (validation.acceptanceScenarioCount > 0) requiredIds.add('criteria');
@@ -400,29 +513,40 @@ export class LocalAppService {
     if (!Array.isArray(input.checks)
       || input.checks.length < requiredIds.size
       || input.checks.length > allowedIds.size) {
-      throw new Error('Automatic acceptance must include every required check');
+      throw new LocalAppAcceptanceValidationError('Automatic acceptance must include every required check');
     }
     const seenIds = new Set<string>();
     for (const check of input.checks) {
-      if (!allowedIds.has(check.id) || seenIds.has(check.id)) throw new Error('Invalid automatic acceptance check');
-      if (!allowedStatuses.has(check.status)) throw new Error('Invalid automatic acceptance check status');
+      if (!allowedIds.has(check.id) || seenIds.has(check.id)) throw new LocalAppAcceptanceValidationError('Invalid automatic acceptance check');
+      if (!allowedStatuses.has(check.status)) throw new LocalAppAcceptanceValidationError('Invalid automatic acceptance check status');
       if (typeof check.message !== 'string' || !check.message.trim() || check.message.length > 500) {
-        throw new Error('Invalid automatic acceptance check message');
+        throw new LocalAppAcceptanceValidationError('Invalid automatic acceptance check message');
       }
       seenIds.add(check.id);
     }
     if ([...requiredIds].some((checkId) => !seenIds.has(checkId))) {
-      throw new Error('Automatic acceptance must include every required check');
+      throw new LocalAppAcceptanceValidationError('Automatic acceptance must include every required check');
     }
     const derivedStatus = input.checks.some((check) => check.status === 'failed') ? 'failed' : 'passed';
-    if (derivedStatus !== input.status) throw new Error('Acceptance status does not match its checks');
-    const run = this.store.recordAcceptance(app.id, input);
-    this.options.emit('local_app.acceptance_recorded', {
-      appId: app.id,
-      sourceHash: run.sourceHash,
-      status: run.status,
+    if (derivedStatus !== input.status) throw new LocalAppAcceptanceValidationError('Acceptance status does not match its checks');
+    if (input.status === 'passed' && input.checks.some(check => requiredIds.has(check.id) && check.status !== 'passed'
+      && !(check.id === 'interaction' && check.status === 'skipped' && input.interactiveCount === 0))) {
+      throw new LocalAppAcceptanceValidationError('Passed acceptance cannot skip required checks');
+    }
+    return runSqliteWriteTransaction(db => {
+      const run = this.store.recordAcceptance(app.id, input);
+      db.prepare(`INSERT INTO domain_outbox
+        (event_id, event_type, subject_kind, subject_id, correlation_id, payload_json, created_at, operation_id)
+        VALUES (?, 'local_app.acceptance_recorded', 'local_app', ?, ?, ?, ?, ?)`).run(randomUUID(), app.id, run.id,
+        JSON.stringify({ appId: app.id, sourceHash: run.sourceHash, status: run.status, acceptanceId: run.id }),
+        run.createdAt, currentOperationId() ?? null);
+      afterSqliteCommit(() => this.flushAcceptanceEvents());
+      return run;
     });
-    return run;
+  }
+
+  flushAcceptanceEvents(): void {
+    new DomainOutboxDispatcher(event => this.options.emit(event.type, event.payload)).drain(100, 'local_app');
   }
 
   private releaseRoot(appId: string): string {
@@ -464,15 +588,18 @@ export class LocalAppService {
     const staged = join(transactionRoot, input.app.extensionId);
     const backup = join(transactionRoot, 'previous');
     const target = join(extensionsDir, input.app.extensionId);
-    cpSync(input.artifactPath, staged, { recursive: true, filter: shouldCopyReleasePath });
     let hadPrevious = false;
+    let targetInstalled = false;
+    let canCleanup = false;
     let configSaved = false;
     try {
+      cpSync(input.artifactPath, staged, { recursive: true, filter: shouldCopyReleasePath });
       if (existsSync(target)) {
         renameSync(target, backup);
         hadPrevious = true;
       }
       renameSync(staged, target);
+      targetInstalled = true;
       validateLocalAppPackage(target, input.app.extensionId);
       const saved = await this.options.saveConfig(input.nextConfig);
       if (!saved.saved) throw new Error(saved.error ?? 'Failed to update local app activation');
@@ -480,9 +607,11 @@ export class LocalAppService {
       this.refreshExtensions(input.source);
       this.assertInstalledRuntime(input.app, target);
       input.commit();
+      canCleanup = true;
     } catch (error) {
-      if (existsSync(target)) rmSync(target, { recursive: true, force: true });
+      if (targetInstalled && existsSync(target)) rmSync(target, { recursive: true, force: true });
       if (hadPrevious && existsSync(backup)) renameSync(backup, target);
+      canCleanup = true;
       if (configSaved) {
         const restored = await this.options.saveConfig(previousConfig);
         if (!restored.saved) {
@@ -492,11 +621,15 @@ export class LocalAppService {
       this.refreshExtensions(`${input.source}-rollback`);
       throw error;
     } finally {
-      rmSync(transactionRoot, { recursive: true, force: true });
+      if (canCleanup) cleanupReleaseStaging(transactionRoot);
     }
   }
 
   async install(id: string): Promise<LocalAppDetail> {
+    return this.mutateRelease(id, () => this.installRelease(id));
+  }
+
+  private async installRelease(id: string): Promise<LocalAppDetail> {
     const app = this.store.get(id);
     if (!app) throw new Error('Local app not found');
     const releaseRoot = this.releaseRoot(app.id);
@@ -535,7 +668,7 @@ export class LocalAppService {
       if (artifactCreated) rmSync(artifactPath, { recursive: true, force: true });
       throw error;
     } finally {
-      rmSync(stagingRoot, { recursive: true, force: true });
+      cleanupReleaseStaging(stagingRoot);
     }
 
     const next = this.get(id)!;
@@ -549,6 +682,10 @@ export class LocalAppService {
   }
 
   async rollback(id: string, releaseId: string): Promise<LocalAppDetail> {
+    return this.mutateRelease(id, () => this.rollbackRelease(id, releaseId));
+  }
+
+  private async rollbackRelease(id: string, releaseId: string): Promise<LocalAppDetail> {
     const app = this.store.get(id);
     if (!app) throw new Error('Local app not found');
     const release = this.store.getRelease(id, releaseId);
@@ -556,6 +693,9 @@ export class LocalAppService {
       throw new Error('Local app release artifact is unavailable');
     }
     validateLocalAppPackage(release.artifactPath, app.extensionId);
+    if (hashDirectory(release.artifactPath) !== release.sourceHash) {
+      throw new Error('Release artifact integrity check failed; rollback was not applied');
+    }
     await this.activateArtifact({
       app,
       artifactPath: release.artifactPath,
@@ -568,6 +708,10 @@ export class LocalAppService {
   }
 
   async setEnabled(id: string, enabled: boolean): Promise<LocalAppDetail> {
+    return this.mutateRelease(id, () => this.setReleaseEnabled(id, enabled));
+  }
+
+  private async setReleaseEnabled(id: string, enabled: boolean): Promise<LocalAppDetail> {
     const app = this.store.get(id);
     if (!app) throw new Error('Local app not found');
     if (app.installationState !== 'installed') throw new Error('Install the local app before changing its enabled state');
@@ -586,6 +730,10 @@ export class LocalAppService {
   }
 
   async uninstall(id: string): Promise<LocalAppDetail> {
+    return this.mutateRelease(id, () => this.uninstallRelease(id));
+  }
+
+  private async uninstallRelease(id: string): Promise<LocalAppDetail> {
     const app = this.store.get(id);
     if (!app) throw new Error('Local app not found');
     const extensionsDir = resolveExtensionsDir();
@@ -595,6 +743,7 @@ export class LocalAppService {
     const backup = join(transactionRoot, app.extensionId);
     const previousConfig = this.options.getConfig();
     let moved = false;
+    let canCleanup = false;
     let configSaved = false;
     try {
       if (existsSync(target)) {
@@ -605,14 +754,16 @@ export class LocalAppService {
       if (!saved.saved) throw new Error(saved.error ?? 'Failed to uninstall local app');
       configSaved = true;
       this.store.markUninstalled(id);
-      this.refreshExtensions('local-app-uninstall');
+      canCleanup = true;
     } catch (error) {
       if (moved && existsSync(backup)) renameSync(backup, target);
+      canCleanup = true;
       if (configSaved) await this.options.saveConfig(previousConfig);
       throw error;
     } finally {
-      rmSync(transactionRoot, { recursive: true, force: true });
+      if (canCleanup) cleanupReleaseStaging(transactionRoot);
     }
+    this.refreshExtensions('local-app-uninstall');
     this.options.emit('local_app.uninstalled', { appId: id, projectId: app.projectId });
     return this.get(id)!;
   }

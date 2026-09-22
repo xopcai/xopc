@@ -1,3 +1,5 @@
+import type { CapabilityCall, CapabilityDescriptor } from '@xopcai/gateway-contract';
+
 export enum ExtensionErrorCode {
   PermissionDenied = 4001,
   InvalidRequest = 4002,
@@ -62,6 +64,10 @@ export type ExtensionToHostMessage = ExtensionRequest | ExtensionEventMessage;
 export type StreamHandler = (payload: unknown) => void;
 
 export interface ExtensionClient {
+  capability: {
+    describe(id: string): Promise<CapabilityDescriptor>;
+    call(id: string, call: CapabilityCall): Promise<{ status: 'succeeded'; releaseId: string; data: unknown }>;
+  };
   whenReady(): Promise<void>;
   theme: {
     getTheme(): Promise<ThemeInfo>;

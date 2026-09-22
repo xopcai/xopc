@@ -70,8 +70,10 @@ describe('durable connection recovery', () => {
     upsertConnectorActionMetadata({ connectorId: need.connectorId, actionId: 'GMAIL_SEND_EMAIL', toolkit: 'gmail', scope: 'write', curated: true,
       inputSchema: { type: 'object', properties: { body: { type: 'string' } } }, cachedAt: new Date().toISOString() });
     searchCapabilities.mockResolvedValue({ toolSchemas: { GMAIL_SEND_EMAIL: { inputSchema: { type: 'object' } } } });
-    const execute = vi.fn(async (input: { confirmed?: boolean }) => input.confirmed
-      ? { decision: 'allowed', result: { sent: true } } : { decision: 'confirmation_required', reason: 'Approve sending.' });
+    const execute = vi.fn(async (input: { confirmed?: boolean; beforeExecute?: () => void }) => {
+      input.beforeExecute?.();
+      return { decision: 'allowed', result: { sent: true } };
+    });
     const provider = new ComposioToolProvider({ getConfig: () => config, getCurrentContext: () => ({ conversationId, channel: 'webchat', chatId: conversationId }),
       adapter: { syncConnections, executeWithPolicy: execute } as unknown as ComposioSessionsAdapter });
     const ref = 'composio:composio-gmail-local-owner:GMAIL_SEND_EMAIL';
@@ -85,13 +87,13 @@ describe('durable connection recovery', () => {
     const resumed = claimNextSessionInput(conversationId, 'approved-run')!;
     consumeConnectionResume(resumed);
     const changed = await provider.execute(ref, { body: 'Different' }, approval.id, { toolCallId: 'changed' });
-    expect(JSON.stringify(changed)).toContain('not approved');
-    expect(execute).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(changed)).toContain('invalid');
+    expect(execute).not.toHaveBeenCalled();
     const result = await provider.execute(ref, { body: 'Hello' }, approval.id, { toolCallId: 'approved' });
     expect(JSON.stringify(result)).toContain('sent');
     expect(execute).toHaveBeenLastCalledWith(expect.objectContaining({ confirmed: true, connection: expect.objectContaining({ accountId: account.accountId }) }));
     await provider.execute(ref, { body: 'Hello' }, approval.id, { toolCallId: 'replay' });
-    expect(execute).toHaveBeenCalledTimes(2);
+    expect(execute).toHaveBeenCalledTimes(1);
   });
 
   it('does not expose restricted identities to agent descriptors or let explicit IDs bypass account policy', async () => {
@@ -109,6 +111,99 @@ describe('durable connection recovery', () => {
     await provider.execute(ref, { xopcAccountId: b.accountId }, undefined, { toolCallId: 'denied' });
     expect(execute).not.toHaveBeenCalled();
     expect(recovery.snapshot(conversationId).wait?.needs[0].accounts).toHaveLength(0);
+  });
+
+  function writeFixture(execute: (input: { beforeExecute?: () => void }) => Promise<unknown>, confirmationPolicy: 'never' | 'writes' = 'never') {
+    const connection = activeConnection();
+    upsertConnectorInstallation({ ...getConnectorInstallation('composio-gmail-local-owner')!, maxScope: 'write', confirmationPolicy });
+    const action = { connectorId: need.connectorId, actionId: 'GMAIL_SEND_EMAIL', toolkit: 'gmail', scope: 'write' as const,
+      curated: true, inputSchema: { type: 'object', properties: { body: { type: 'string' } } }, cachedAt: new Date().toISOString() };
+    upsertConnectorActionMetadata(action);
+    const provider = new ComposioToolProvider({ getConfig: () => config,
+      getCurrentContext: () => ({ conversationId, channel: 'webchat', chatId: conversationId }),
+      adapter: { syncConnections, executeWithPolicy: execute } as unknown as ComposioSessionsAdapter });
+    const call = (toolCallId = 'intent', body = 'Hello', approvalId?: string) => provider.execute(
+      'composio:composio-gmail-local-owner:GMAIL_SEND_EMAIL', { body }, approvalId, { toolCallId });
+    return { connection, action, call };
+  }
+
+  it('replays Composio receipts after reopen, rejects changed intent, and permits a distinct intent', async () => {
+    const execute = vi.fn(async (input: { beforeExecute?: () => void }) => {
+      input.beforeExecute?.();
+      return { decision: 'allowed', result: { sent: true } };
+    });
+    const { call } = writeFixture(execute);
+    const result = await call();
+    closeXopcDatabase(); resetXopcDatabaseSingletonForTest(); openXopcDatabase({ path: join(dir, 'xopc.db') });
+    expect(await call()).toEqual(result);
+    await expect(call('intent', 'Changed')).rejects.toMatchObject({ code: 'REVISION_CONFLICT' });
+    await call('second-intent');
+    expect(execute).toHaveBeenCalledTimes(2);
+    upsertConnectorInstallation({ ...getConnectorInstallation('composio-gmail-local-owner')!, maxScope: 'read' });
+    await expect(call()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(execute).toHaveBeenCalledTimes(2);
+  });
+
+  it('never resends an uncertain Composio action', async () => {
+    const execute = vi.fn(async (input: { beforeExecute?: () => void }) => {
+      input.beforeExecute?.();
+      throw new Error('Provider accepted the action but the response was lost');
+    });
+    const { call } = writeFixture(execute);
+    await expect(call()).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' });
+    await expect(call()).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' });
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains an unsuccessful provider response as evidence without declaring the write unapplied', async () => {
+    const execute = vi.fn(async (input: { beforeExecute?: () => void }) => {
+      input.beforeExecute?.();
+      return { decision: 'allowed', result: { successful: false, error: 'Remote response incomplete' } };
+    });
+    const { call } = writeFixture(execute);
+    await expect(call()).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' });
+    await expect(call()).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' });
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(getSqliteDatabase().prepare('SELECT evidence_json FROM capability_operations').get()!.evidence_json).toContain('Remote response incomplete');
+  });
+
+  it('claims concurrent Composio writes once and rechecks authorization after session setup', async () => {
+    let finish!: () => void;
+    const send = vi.fn();
+    const execute = vi.fn(async (input: { beforeExecute?: () => void }) => {
+      await new Promise<void>(resolve => { finish = resolve; });
+      input.beforeExecute?.();
+      send();
+      return { decision: 'allowed', result: {} };
+    });
+    const { call } = writeFixture(execute);
+    const first = call();
+    const rejected = expect(first).rejects.toMatchObject({ code: 'OUTCOME_UNKNOWN' });
+    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
+    await expect(call()).rejects.toMatchObject({ code: 'IN_PROGRESS' });
+    upsertConnectorInstallation({ ...getConnectorInstallation('composio-gmail-local-owner')!, maxScope: 'read' });
+    finish();
+    await rejected;
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('binds Composio approval to the exact contract but not metadata cache time', async () => {
+    const execute = vi.fn(async (input: { beforeExecute?: () => void }) => {
+      input.beforeExecute?.();
+      return { decision: 'allowed', result: {} };
+    });
+    const { call, action } = writeFixture(execute, 'writes');
+    await call();
+    const approval = listConnectorApprovals({ status: 'pending' })[0]!;
+    decideConnectorApproval(approval.id, 'approved');
+    upsertConnectorActionMetadata({ ...action, inputSchema: { type: 'object' } });
+    expect(JSON.stringify(await call('changed-contract', 'Hello', approval.id))).toContain('invalid');
+    expect(execute).not.toHaveBeenCalled();
+    upsertConnectorActionMetadata({ ...action, cachedAt: '2030-01-01T00:00:00.000Z' });
+    await call('approved', 'Hello', approval.id);
+    await call('replay', 'Hello', approval.id);
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(listConnectorApprovals({ status: 'consumed' })).toHaveLength(1);
   });
   function action(action: ConnectionAction['action'], extra: Partial<ConnectionAction> = {}): ConnectionAction {
     const wait = getActiveConnectionWait(conversationId)!;

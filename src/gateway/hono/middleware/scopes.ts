@@ -10,7 +10,7 @@ export function gatewayScopes() {
   return createMiddleware(async (c, next) => {
     const principal = getGatewayPrincipal(c);
     const requiredScope = requiredGatewayScope(c.req.method, c.req.path);
-    if (!hasGatewayScope(principal.scopes, requiredScope)) {
+    if (requiredScope && !hasGatewayScope(principal.scopes, requiredScope)) {
       log.warn(
         { path: c.req.path, method: c.req.method, principalId: principal.principalId, requiredScope },
         `Scope check failed: missing ${requiredScope}`,

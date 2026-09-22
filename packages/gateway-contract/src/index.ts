@@ -32,3 +32,7 @@ export * from './clarifications.js';
 export * from './proactive.js';
 
 export * from './discussions.js';
+export * from './capabilities.js';
+export * from './scenes.js';
+export * from './app-context.js';
+export * from './extension-capabilities.js';

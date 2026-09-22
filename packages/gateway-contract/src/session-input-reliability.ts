@@ -7,14 +7,18 @@ export function sessionInputFingerprint(input: {
   attachments?: unknown[];
   contextRefs?: unknown[];
   browserContexts?: unknown[];
+  appContext?: AppContextEnvelope;
 }): string {
-  const serialized = JSON.stringify([
+  const fields: unknown[] = [
     input.content,
     input.thinking ?? null,
     input.attachments ?? null,
     input.contextRefs ?? null,
     input.browserContexts ?? null,
-  ]);
+  ];
+  // Keep identities of submissions without a page snapshot stable.
+  if (input.appContext !== undefined) fields.push(input.appContext);
+  const serialized = JSON.stringify(fields);
   let fnvHash = 2166136261;
   let djbHash = 5381;
   for (let index = 0; index < serialized.length; index++) {
@@ -29,3 +33,4 @@ export function sessionInputFingerprint(input: {
 export function shouldRetrySessionInputStatus(status: number): boolean {
   return status === 408 || status === 429 || status >= 500;
 }
+import type { AppContextEnvelope } from './app-context.js';

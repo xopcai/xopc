@@ -146,6 +146,33 @@ describe('RealtimeRuntime', () => {
     });
   });
 
+  it('restricts resource topics to their domain scopes', async () => {
+    runtime = new RealtimeRuntime();
+    server = createServer();
+    server.on('upgrade', (request, connection, head) => runtime!.handleUpgrade(request, connection, head));
+    await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing test address');
+    const issued = runtime.tickets.issue('notes-client', 'web', { principalId: 'reader', scopes: ['workspace.read'] });
+    socket = new WebSocket(`ws://127.0.0.1:${address.port}/api/realtime/v1/ws`);
+    await waitForOpen(socket);
+    const messages = collectMessages(socket);
+    socket.send(JSON.stringify({
+      protocolVersion: REALTIME_PROTOCOL_VERSION, messageId: crypto.randomUUID(), kind: 'realtime.hello', sentAt: Date.now(),
+      payload: { ticket: issued.ticket, clientId: 'notes-client', clientKind: 'web',
+        subscriptions: [{ topic: 'resources:notes' }, { topic: 'resources:projects' }, { topic: 'resources:tasks' }] },
+    }));
+    await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.ready' });
+    await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.error', payload: { code: 'FORBIDDEN_TOPIC' } });
+    await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.subscribed', payload: { topic: 'resources:notes' } });
+    await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.subscribed', payload: { topic: 'resources:projects' } });
+    runtime.broker.publish('resources:projects', 'resource.changed', { id: 'visible-project' });
+    await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.event', payload: { topic: 'resources:projects', data: { id: 'visible-project' } } });
+    runtime.broker.publish('resources:tasks', 'resource.changed', { id: 'secret' });
+    runtime.broker.publish('resources:notes', 'resource.changed', { id: 'visible' });
+    await expect(messages.next()).resolves.toMatchObject({ kind: 'realtime.event', payload: { topic: 'resources:notes', data: { id: 'visible' } } });
+  });
+
   it('negotiates only server-supported capabilities when the client opts in', async () => {
     runtime = new RealtimeRuntime();
     server = createServer();

@@ -4,6 +4,16 @@ import { createExtensionClient } from './client.js';
 import type { Transport } from './transport.js';
 
 describe('extension client product navigation', () => {
+  it('forwards the pinned capability contract without attaching caller authority', async () => {
+    const request = vi.fn(async () => ({ status: 'succeeded', releaseId: 'release', data: {} }));
+    const client = createExtensionClient({ transport: { request } as unknown as Transport });
+    const call = { majorVersion: 1, descriptorDigest: 'a'.repeat(64), input: {} };
+    await client.capability.describe('xopc.notes.list');
+    await client.capability.call('xopc.notes.list', call);
+    expect(request.mock.calls).toEqual([
+      ['capability.describe', { id: 'xopc.notes.list' }], ['capability.call', { id: 'xopc.notes.list', call }],
+    ]);
+  });
   it('opens first-class product references through the host router', async () => {
     const request = vi.fn(async () => undefined);
     const transport = {
