@@ -98,7 +98,7 @@ export function EndpointToolsManagementSettings() {
   const onlineDeviceCount = deviceRows.filter((device) => managedDeviceStatus(device) === 'online').length;
   const activeCount = deviceRows.filter((device) => managedDeviceStatus(device) !== 'revoked').length;
   const staleCount = deviceRows.filter((device) => isManagedDeviceStale(device)).length;
-  const platforms = [...new Set(deviceRows.map((device) => device.platform))].sort();
+  const platforms = [...new Set(deviceRows.map((device) => device.platform))].toSorted();
   const filteredDevices = filterManagedDevices(deviceRows, {
     query,
     status: statusFilter,
@@ -110,9 +110,10 @@ export function EndpointToolsManagementSettings() {
     (currentDevicePage - 1) * DEVICE_PAGE_SIZE,
     currentDevicePage * DEVICE_PAGE_SIZE,
   );
-  const selectablePageIds = pagedDevices
-    .filter((device) => managedDeviceStatus(device) !== 'revoked')
-    .map((device) => device.id);
+  const selectablePageIds = pagedDevices.reduce<string[]>((ids, device) => {
+    if (managedDeviceStatus(device) !== 'revoked') ids.push(device.id);
+    return ids;
+  }, []);
   const allPageSelected = selectablePageIds.length > 0 && selectablePageIds.every((id) => selectedIds.has(id));
 
   const setActiveTab = (tab: ManagementTab) => {
