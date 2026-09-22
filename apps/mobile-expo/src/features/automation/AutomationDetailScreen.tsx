@@ -100,7 +100,7 @@ export function AutomationDetailScreen() {
         <InfoCard title={labels.definition} rows={[
           [labels.trigger, trigger],
           [labels.action, `${labels.actionKinds[automation.action.kind]} · ${automationActionPreview(automation)}`],
-          [labels.output, labels.afterRunKinds[automation.afterRun?.kind ?? 'none']],
+          [labels.output, labels.conversationModes[automation.conversationMode ?? 'new_session']],
         ]} />
         <InfoCard title={labels.statusTitle} rows={[
           [labels.nextRun, formatAutomationDate(automation.state.nextRunAtMs, locale) ?? labels.notScheduled],
