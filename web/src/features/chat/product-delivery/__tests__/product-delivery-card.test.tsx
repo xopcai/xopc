@@ -60,13 +60,13 @@ describe('AssistantResultTail product deliveries', () => {
     expect(container.querySelectorAll('button')).toHaveLength(1);
   });
 
-  it('renders an empty query as a compact tail state', () => {
+  it('does not render an empty query as a turn result', () => {
     act(() => root.render(<MemoryRouter>{renderDelivery({ version: 1, operation: 'opened', presentation: {
       kind: 'table', truncated: false, items: [],
     } })}</MemoryRouter>));
 
-    expect(container.querySelector('[data-turn-tail]')).not.toBeNull();
-    expect(container.textContent).toContain('没有匹配结果');
+    expect(container.querySelector('[data-turn-tail]')).toBeNull();
+    expect(container.textContent).not.toContain('没有匹配结果');
     expect(container.querySelector('table')).toBeNull();
   });
 
