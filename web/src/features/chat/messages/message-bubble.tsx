@@ -39,6 +39,10 @@ import { buildAssistantTurnViewModel } from '@/features/chat/messages/assistant-
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import { AssistantTurnTasks } from '@/features/chat/messages/assistant-turn-tasks';
 import { MessageContextAttachments } from '@/features/chat/messages/message-context-attachments';
+import {
+  ResponseContextDialog,
+  type ResponsePersonalContext,
+} from '@/features/chat/messages/response-context-dialog';
 import { withDetailReturnTo } from '@/lib/navigation-return';
 
 const messageActionIconButton = cn(
@@ -59,13 +63,6 @@ const RESPONSE_FEEDBACK_REASONS = [
 ] as const;
 
 type ResponseFeedbackReason = (typeof RESPONSE_FEEDBACK_REASONS)[number];
-
-type ResponsePersonalContext = {
-  id: string;
-  statement: string;
-  origin: 'told_by_user' | 'observed' | 'inferred' | 'connected_source';
-  sourceName: string;
-};
 
 const userMessageFooterAction = cn(
   'inline-flex h-8 shrink-0 items-center justify-center gap-1 rounded-md px-2 text-xs text-fg-muted transition-colors',
@@ -890,23 +887,22 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         ) : null}
 
-        {assistantActionsVisible && responseContextOpen && responsePersonalContext.length > 0 ? (
-          <div className="mt-2 w-full max-w-xl rounded-xl border border-edge-subtle bg-surface-panel p-3">
-            <p className="text-sm font-medium text-fg">{m.chat.messageWhyThisAnswer}</p>
-            <p className="mt-0.5 text-xs text-fg-muted">{m.chat.messageWhyThisAnswerHint}</p>
-            <div className="mt-2 space-y-2">
-              {responsePersonalContext.map((context) => (
-                <div key={context.id} className="rounded-lg bg-surface-panel px-3 py-2">
-                  <p className="text-xs leading-5 text-fg">{context.statement}</p>
-                  <p className="mt-1 text-[11px] text-fg-subtle">
-                    {context.origin === 'connected_source'
-                      ? m.chat.messageContextOrigins.connected_source.replace('{{source}}', context.sourceName)
-                      : m.chat.messageContextOrigins[context.origin]}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
+        {assistantActionsVisible && responsePersonalContext.length > 0 ? (
+          <ResponseContextDialog
+            open={responseContextOpen}
+            onOpenChange={setResponseContextOpen}
+            items={responsePersonalContext}
+            labels={{
+              title: m.chat.messageWhyThisAnswer,
+              hint: m.chat.messageWhyThisAnswerHint,
+              close: m.chat.messageContextClose,
+              itemsSummary: m.chat.messageContextItemsSummary,
+              expandAll: m.chat.messageContextExpandAll,
+              collapseAll: m.chat.messageContextCollapseAll,
+              groupSummary: m.chat.messageContextGroupSummary,
+              origins: m.chat.messageContextOrigins,
+            }}
+          />
         ) : null}
 
         {assistantActionsVisible && responseFeedbackPromptOpen ? (
