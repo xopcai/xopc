@@ -17,6 +17,11 @@ import {
   MODEL_CATALOG_SWR_KEY,
   revalidateModelsHubCaches,
 } from './models-hub-cache';
+import {
+  deriveCapabilityDisplayStatus,
+  type CapabilityId,
+  type CapabilityReadinessPayload,
+} from './capability-display-status';
 
 interface CatalogPayload {
   sources: Record<string, {
@@ -35,28 +40,6 @@ interface CatalogPayload {
     locations: string[];
     suggestedRef?: string;
   }>;
-}
-
-type CapabilityId = 'vision' | 'image-generation' | 'stt' | 'tts' | 'computer-use';
-
-interface CapabilityReadinessPayload {
-  capabilities: Record<CapabilityId, {
-    status: 'ready' | 'degraded' | 'unavailable' | 'disabled';
-    selectionSource: string;
-    primary?: { provider: string; model: string };
-    rejected?: Array<{ provider: string; model: string }>;
-  }>;
-}
-
-export type CapabilityDisplayStatus = 'ready' | 'off' | 'not-configured' | 'degraded' | 'misconfigured';
-
-export function deriveCapabilityDisplayStatus(
-  plan: CapabilityReadinessPayload['capabilities'][CapabilityId],
-): CapabilityDisplayStatus {
-  if (plan.status === 'ready') return 'ready';
-  if (plan.status === 'disabled') return 'off';
-  if (plan.status === 'degraded') return 'degraded';
-  return plan.rejected?.length ? 'misconfigured' : 'not-configured';
 }
 
 function capabilityAction(capability: CapabilityId, zh: boolean) {

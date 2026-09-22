@@ -18,6 +18,7 @@ export function PageContextCaptureButton({ resource, selection, label, disabled 
   const labels = messages(language).chat.pageContext;
   const navigate = useNavigate();
   const location = useLocation();
+  const locationKey = location.key;
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const pending = useRef(false);
@@ -29,7 +30,7 @@ export function PageContextCaptureButton({ resource, selection, label, disabled 
     setBusy(false);
     setFailed(false);
     return () => { generation.current += 1; };
-  }, [location.key, resource.kind, resource.id, resource.revision, selection?.text, selection?.draft, disabled, gatewayUrl, namespace]);
+  }, [locationKey, resource.kind, resource.id, resource.revision, selection?.text, selection?.draft, disabled, gatewayUrl, namespace]);
 
   async function capture() {
     if (disabled || pending.current) return;
