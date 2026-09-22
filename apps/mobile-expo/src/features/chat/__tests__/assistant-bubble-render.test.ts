@@ -41,7 +41,7 @@ vi.mock('../AssistantStepsBlock', () => ({
   AssistantStepsBlock: ({ blocks }: { blocks: Message['content'] }) =>
     blocks.map(block => block.type === 'thinking' ? block.text : '').join('|'),
 }));
-vi.mock('../AssistantDeliverablesCard', () => ({ AssistantDeliverablesCard: () => null }));
+vi.mock('../AssistantResultTail', () => ({ AssistantResultTail: () => null }));
 vi.mock('../AttachmentRenderer', () => ({ AttachmentRenderer: () => null }));
 vi.mock('../AudioMessageBlock', () => ({ AudioMessageBlock: () => null }));
 vi.mock('../CompactResourceList', () => ({ CompactResourceList: () => null }));

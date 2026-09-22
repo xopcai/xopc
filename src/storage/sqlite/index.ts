@@ -184,9 +184,10 @@ export {
 } from './endpoint-principal-repository.js';
 export {
   finishEndpointToolInvocationAudit,
-  listEndpointToolInvocationAudits,
+  listEndpointToolInvocationAuditPage,
   startEndpointToolInvocationAudit,
   type EndpointToolInvocationAudit,
+  type EndpointToolInvocationAuditPage,
 } from './endpoint-tool-invocation-repository.js';
 export {
   getInteractionState,

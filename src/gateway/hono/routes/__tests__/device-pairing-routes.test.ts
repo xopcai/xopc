@@ -99,6 +99,12 @@ describe('device pairing routes', () => {
     });
     expect(missingTarget.status).toBe(400);
   });
+
+  it('does not expose the removed device management routes', async () => {
+    expect((await app.request('/api/devices')).status).toBe(404);
+    expect((await app.request('/api/devices/legacy-device', { method: 'DELETE' })).status).toBe(404);
+  });
+
   it('creates a non-navigable browser invitation', async () => {
     const response = await app.request('/api/device-pairing/setups', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targetKind: 'browser' }),

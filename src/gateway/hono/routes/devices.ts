@@ -176,8 +176,6 @@ export function registerDeviceRoutes(authenticated: Hono, deps: AuthenticatedRou
     }, 201);
   });
 
-  authenticated.get('/api/devices', (c) => c.json({ ok: true, devices: listDevices() }));
-
   authenticated.get('/api/devices/me', (c) => {
     const principal = getGatewayPrincipal(c);
     if (principal.kind !== 'device' || !principal.deviceId) {
@@ -198,16 +196,6 @@ export function registerDeviceRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (revoked) {
       deps.service.realtime.disconnectPrincipal(principal.deviceId);
       deps.service.voiceRealtime.disconnectPrincipal(principal.deviceId);
-    }
-    return c.json({ ok: true, revoked });
-  });
-
-  authenticated.delete('/api/devices/:deviceId', (c) => {
-    const deviceId = c.req.param('deviceId');
-    const revoked = revokeDevice(deviceId);
-    if (revoked) {
-      deps.service.realtime.disconnectPrincipal(deviceId);
-      deps.service.voiceRealtime.disconnectPrincipal(deviceId);
     }
     return c.json({ ok: true, revoked });
   });
