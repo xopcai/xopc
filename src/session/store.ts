@@ -12,11 +12,13 @@ import { resolveAgentIdFromConversationId } from '../routing/agent-session-key.j
 import { createLogger } from '../utils/logger.js';
 import {
   SessionCompactor,
+  type CompactionCheckpointStore,
   type CompactionConfig,
   type CompactionExecutionOptions,
   type CompactionResult,
 } from '../agent/memory/compaction.js';
 import { SlidingWindow, type WindowConfig } from '../agent/memory/window.js';
+import { DurableState } from '../storage/sqlite/durable-state.js';
 import {
   requireXopcDatabase,
   appendCompactionBoundaryIfUnchanged,
@@ -143,6 +145,26 @@ export class SessionStore {
   private compactor: SessionCompactor;
   private compactionHooks: SessionCompactionHooks = {};
   private readonly compactionTails = new Map<string, Promise<void>>();
+
+  private compactionCheckpoint(key: string): CompactionCheckpointStore {
+    const state = new DurableState<unknown>('session-compaction-progress', key);
+    return {
+      load: () => state.get('active'),
+      save: (checkpoint) => state.set('active', checkpoint),
+      clear: () => { state.delete('active'); },
+    };
+  }
+
+  private clearCompactionCheckpoint(
+    key: string,
+    checkpoint: CompactionCheckpointStore = this.compactionCheckpoint(key),
+  ): void {
+    try {
+      checkpoint.clear();
+    } catch (err) {
+      log.warn({ err, conversationId: key, phase: 'checkpoint_clear' }, 'Compaction checkpoint cleanup failed');
+    }
+  }
 
   constructor(
     private options: SessionStoreOptions,
@@ -484,6 +506,7 @@ export class SessionStore {
       const cwd = this.resolveWorkspaceCwd(key);
       const task = resetSessionRecord(key, cwd);
       if (task) {
+        this.clearCompactionCheckpoint(key);
         log.info({ key, ...task }, 'Session reset');
       }
       return task;
@@ -495,6 +518,7 @@ export class SessionStore {
       requireXopcDatabase();
       const ok = deleteSessionRecord(key);
       if (ok) {
+        this.clearCompactionCheckpoint(key);
         log.info({ key }, 'Session deleted');
       }
       return ok;
@@ -855,17 +879,23 @@ export class SessionStore {
         messageCount: messages.length,
         tokenCount,
       });
-      const result = await this.compactor.compact(snapshot.entries, model, instructions, force, { ...executionOptions, conversationId: key });
+      const checkpoint = executionOptions?.checkpoint ?? this.compactionCheckpoint(key);
+      const result = await this.compactor.compact(snapshot.entries, model, instructions, force, {
+        ...executionOptions,
+        conversationId: key,
+        checkpoint,
+      });
       executionOptions?.signal?.throwIfAborted();
       if (result.compacted) {
         const compacted = await this.applyCompaction(key, result, snapshot);
+        this.clearCompactionCheckpoint(key, checkpoint);
         await this.runCompactionHook('after', {
           conversationId: key,
           messageCount: compacted.length,
           tokenCount: result.tokensAfter,
           compactedCount: Math.max(0, Math.min(messages.length, result.firstKeptIndex)),
         });
-      }
+      } else this.clearCompactionCheckpoint(key, checkpoint);
       return result;
     });
   }
