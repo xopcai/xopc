@@ -30,7 +30,7 @@ import { fetchCommandsCached, getSkillsCached } from '@/features/chat/palette/co
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
 import { wireTextForSlashCommandEntry } from '@/features/chat/palette/slash-command-wire-text';
 import { rememberSelectedAgent } from '@/features/chat/session/new-session-preferences';
-import { searchWorkspaceFiles } from '@/features/chat/palette/at-mention-api';
+import { searchWorkspaceEntries } from '@/features/chat/palette/at-mention-api';
 import { listSessions } from '@/features/sessions/session-api';
 import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
@@ -372,7 +372,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
           const sk = chatConversationId?.trim();
           const aid = editorAgentId.trim();
           if (!sk && !aid) return [];
-          const items = await searchWorkspaceFiles(q, {
+          const items = await searchWorkspaceEntries(q, {
             conversationId: sk || undefined,
             agentId: sk ? undefined : aid || undefined,
             limit: 10,

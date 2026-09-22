@@ -97,7 +97,10 @@ export class SessionInputCoordinator {
       conversationId: string,
       attachments?: UserTurnAttachment[],
     ) => Promise<UserTurnAttachment[] | undefined>;
-    prepareContexts: (contextRefs?: TurnContextRef[]) => Promise<AgentSourceContext[] | undefined>;
+    prepareContexts: (
+      conversationId: string,
+      contextRefs?: TurnContextRef[],
+    ) => Promise<AgentSourceContext[] | undefined>;
     steer: (conversationId: string, content: string) => Promise<boolean>;
     emit: (type: string, payload: unknown) => void;
   }) {}
@@ -172,7 +175,7 @@ export class SessionInputCoordinator {
       const attachments = await this.deps.prepareAttachments(conversationId, input.attachments);
       let sourceContexts: AgentSourceContext[] | undefined;
       try {
-        const resolved = await this.deps.prepareContexts(input.contextRefs) ?? [];
+        const resolved = await this.deps.prepareContexts(conversationId, input.contextRefs) ?? [];
         sourceContexts = fitSourceContextsToBudget([...resolved, ...(input.sourceContexts ?? [])]);
       } catch (err) {
         log.warn({ err, conversationId }, 'Session input context preparation failed');
@@ -236,7 +239,7 @@ export class SessionInputCoordinator {
     const attachments = await this.deps.prepareAttachments(conversationId, input.attachments);
     let sourceContexts: AgentSourceContext[] | undefined;
     try {
-      const resolved = await this.deps.prepareContexts(input.contextRefs) ?? [];
+      const resolved = await this.deps.prepareContexts(conversationId, input.contextRefs) ?? [];
       sourceContexts = fitSourceContextsToBudget([...resolved, ...(input.sourceContexts ?? [])]);
     } catch (err) {
       log.warn({ err, conversationId }, 'Session input context preparation failed');
@@ -350,7 +353,7 @@ export class SessionInputCoordinator {
       const existing = getSessionInputById(conversationId, id);
       if (!contextRefsMatchFrozenSnapshot(body.contextRefs, existing?.contextRefs)) {
         try {
-          const resolved = await this.deps.prepareContexts(body.contextRefs) ?? [];
+          const resolved = await this.deps.prepareContexts(conversationId, body.contextRefs) ?? [];
           const captured = existing?.contextSnapshots?.filter(source => source.kind !== 'note' && source.kind !== 'task') ?? [];
           sourceContexts = fitSourceContextsToBudget([...captured, ...resolved]);
         } catch (err) {

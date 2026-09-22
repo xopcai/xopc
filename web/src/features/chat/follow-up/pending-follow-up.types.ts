@@ -45,16 +45,20 @@ export function projectPendingFollowUps(inputs: readonly unknown[]): PendingFoll
           if (!value || typeof value !== 'object') return [];
           const ref = value as Record<string, unknown>;
           if (
-            ref.kind !== 'note'
+            (ref.kind !== 'note' && ref.kind !== 'file' && ref.kind !== 'session'
+              && ref.kind !== 'browser_tab' && ref.kind !== 'mcp_resource')
             || typeof ref.sourceId !== 'string'
             || typeof ref.version !== 'string'
             || typeof ref.title !== 'string'
           ) return [];
           return [{
-            kind: 'note',
+            kind: ref.kind,
             sourceId: ref.sourceId,
             expectedVersion: ref.version,
             title: ref.title,
+            ...(ref.kind === 'file' && (ref.fileKind === 'file' || ref.fileKind === 'directory')
+              ? { fileKind: ref.fileKind }
+              : {}),
           }];
         })
       : undefined;

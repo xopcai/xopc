@@ -707,6 +707,7 @@ export function SideChatConversation({
     editingFollowUpId: null,
     onCancelEditFollowUp: () => {},
     attachmentsLen: attachments.attachments.length,
+    contextRefsLen: 0,
     isComposing: editor.isComposing,
     valueRef: editor.valueRef,
     adjustHeight: editor.adjustHeight,

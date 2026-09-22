@@ -23,10 +23,11 @@ export interface WireAttachment {
 }
 
 export interface ComposerContextRef {
-  kind: 'note';
+  kind: 'note' | 'file' | 'session' | 'browser_tab' | 'mcp_resource';
   sourceId: string;
   expectedVersion: string;
   title: string;
+  fileKind?: 'file' | 'directory';
 }
 
 export type WireContextRef = Pick<ComposerContextRef, 'kind' | 'sourceId' | 'expectedVersion'>;

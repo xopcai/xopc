@@ -1,4 +1,4 @@
-import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
+import type { CallToolResult, ReadResourceResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import type { JsonSchemaType } from "@modelcontextprotocol/sdk/validation/types.js";
 import type { Config } from "../../config/schema.js";
 
@@ -64,6 +64,7 @@ export type SessionMcpRuntime = {
     input: unknown,
     signal?: AbortSignal,
   ) => Promise<CallToolResult>;
+  readResource: (serverName: string, uri: string, signal?: AbortSignal) => Promise<ReadResourceResult>;
   dispose: () => Promise<void>;
 };
 

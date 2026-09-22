@@ -543,6 +543,7 @@ export const ChatComposer = memo(function ChatComposer({
     editingFollowUpId,
     onCancelEditFollowUp,
     attachmentsLen: att.attachments.length,
+    contextRefsLen: contextRefs.length,
     isComposing: editor.isComposing,
     valueRef: editor.valueRef,
     adjustHeight: editor.adjustHeight,
@@ -559,7 +560,7 @@ export const ChatComposer = memo(function ChatComposer({
 
   const runBusyState = runBusy;
   const hasDraft =
-    Boolean(editor.value.trim()) || att.attachments.length > 0;
+    Boolean(editor.value.trim()) || att.attachments.length > 0 || contextRefs.length > 0;
   const showSteeringInterrupt = hasDraft && Boolean(onSteeringInterrupt);
   const hasFinePointer = useMediaQuery('(hover: hover) and (pointer: fine)');
   const contextualPlaceholder =
@@ -654,7 +655,7 @@ export const ChatComposer = memo(function ChatComposer({
 
       <ComposerContextChips
         refs={contextRefs}
-        label={m.chat.commandPalette.noteContextLabel}
+        label={m.chat.commandPalette.contextLabel}
         onRemove={(sourceId) => setContextRefs((current) => current.filter((ref) => ref.sourceId !== sourceId))}
       />
       {pageContextPreview}
@@ -686,8 +687,16 @@ export const ChatComposer = memo(function ChatComposer({
             noResults={pickers.atPicker.error ?? m.chat.atMention.noResults}
             conversationId={conversationId}
             recentLabel={m.chat.atMention.recentBadge}
-            filesLabel={m.chat.atMention.files}
-            notesLabel={m.chat.atMention.notes}
+            sectionLabels={{
+              file: m.chat.atMention.files,
+              note: m.chat.atMention.notes,
+              session: m.chat.atMention.chats,
+              skill: m.chat.atMention.skills,
+              agent: m.chat.atMention.agents,
+              browser_tab: m.chat.atMention.browserTabs,
+              mcp_server: m.chat.atMention.mcpServers,
+              mcp_resource: m.chat.atMention.mcpResources,
+            }}
             ariaLabel={m.chat.atMention.placeholder}
             shiftHint={m.chat.atMention.shiftHint}
             onSelectItem={(it, meta) => pickers.applyAtMention(it, { stayOpen: meta?.shiftKey === true })}

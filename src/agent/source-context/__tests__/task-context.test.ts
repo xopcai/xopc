@@ -5,7 +5,12 @@ import { join } from 'node:path';
 import { closeXopcDatabase, openXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../storage/sqlite/index.js';
 import { TaskRepository } from '../../../tasks/task-repository.js';
 import { buildTaskAgentContext } from '../task-context.js';
+import { buildSessionAgentContext } from '../session-context.js';
+import { buildBrowserTabAgentContext } from '../browser-tab.js';
+import { buildFileAgentContext } from '../file-context.js';
+import { decodeMcpResourceId, encodeMcpResourceId } from '../../mcp/mcp-resource-id.js';
 import { isSessionSourceBinding, parseTurnContextRefs } from '../types.js';
+import type { FileSpaceService } from '../../../files/file-service.js';
 
 describe('task references', () => {
   let directory: string;
@@ -42,7 +47,66 @@ describe('task references', () => {
   it('accepts per-turn task references without creating persistent task bindings', () => {
     expect(parseTurnContextRefs([{ kind: 'task', sourceId: ' t ', expectedVersion: '2' }]))
       .toEqual([{ kind: 'task', sourceId: 't', expectedVersion: '2' }]);
-    expect(parseTurnContextRefs([{ kind: 'file', sourceId: 'f' }])).toBeNull();
+    expect(parseTurnContextRefs([
+      { kind: 'file', sourceId: ' f ', expectedVersion: '3' },
+      { kind: 'session', sourceId: ' s ', expectedVersion: '4' },
+      { kind: 'browser_tab', sourceId: ' b ', expectedVersion: '5' },
+      { kind: 'mcp_resource', sourceId: ' m ', expectedVersion: '6' },
+    ])).toEqual([
+      { kind: 'file', sourceId: 'f', expectedVersion: '3' },
+      { kind: 'session', sourceId: 's', expectedVersion: '4' },
+      { kind: 'browser_tab', sourceId: 'b', expectedVersion: '5' },
+      { kind: 'mcp_resource', sourceId: 'm', expectedVersion: '6' },
+    ]);
     expect(isSessionSourceBinding({ kind: 'task', sourceId: 't', version: '2', attachedAt: 1 })).toBe(false);
+  });
+
+  it('freezes a bounded user and assistant transcript at the selected session version', () => {
+    const metadata = { key: 'session-1', name: 'Launch chat', updatedAt: '2026-09-22T00:00:00Z' };
+    const context = buildSessionAgentContext(metadata, [
+      { role: 'system', content: 'hidden' },
+      { role: 'user', content: 'What changed?' },
+      { role: 'assistant', content: [{ type: 'text', text: 'The launch date.' }] },
+    ], metadata.updatedAt);
+    expect(context).toMatchObject({
+      kind: 'session', sourceId: 'session-1', version: metadata.updatedAt, title: 'Launch chat',
+    });
+    expect(context?.text).toBe('user: What changed?\n\nassistant: The launch date.');
+    expect(buildSessionAgentContext(metadata, [], 'stale')).toBeNull();
+  });
+
+  it('preserves opaque MCP identities and rejects stale browser documents', () => {
+    const resource = { serverId: 'docs', uri: 'file:///launch plan.md' };
+    expect(decodeMcpResourceId(encodeMcpResourceId(resource))).toEqual(resource);
+    expect(decodeMcpResourceId('invalid')).toBeNull();
+
+    const observation = {
+      sessionId: 'browser-session', tabId: '7', revision: 1, documentId: 'doc-1',
+      url: 'https://example.com/launch', title: 'Launch', nodes: [],
+      changes: { added: [], changed: [], removed: [] },
+    };
+    expect(buildBrowserTabAgentContext('binding-1', observation, 'doc-1')).toMatchObject({
+      kind: 'browser_tab', sourceId: 'binding-1', version: 'doc-1', title: 'Launch',
+    });
+    expect(buildBrowserTabAgentContext('binding-1', observation, 'doc-2')).toBeNull();
+  });
+
+  it('preserves directory identity in a frozen file context', async () => {
+    const files = {
+      resource: async () => ({
+        space: { id: 'space-1' },
+        resource: {
+          kind: 'directory', spaceId: 'space-1', revision: '7', relativePath: 'apps/mobile-expo',
+          name: 'mobile-expo',
+        },
+        absolutePath: '/workspace/apps/mobile-expo',
+      }),
+      children: async () => [],
+    } as unknown as FileSpaceService;
+
+    await expect(buildFileAgentContext(files, 'folder-1', '7', 'space-1')).resolves.toMatchObject({
+      kind: 'file', fileKind: 'directory', sourceId: 'folder-1', title: 'apps/mobile-expo',
+    });
+    await expect(buildFileAgentContext(files, 'folder-1', '7', 'other-space')).resolves.toBeNull();
   });
 });

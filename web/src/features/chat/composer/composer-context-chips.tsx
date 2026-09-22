@@ -1,4 +1,4 @@
-import { NotebookPen, X } from 'lucide-react';
+import { AppWindow, Database, FileText, Folder, MessagesSquare, NotebookPen, X } from 'lucide-react';
 
 import type { ComposerContextRef } from '@/features/chat/composer/composer.types';
 
@@ -20,7 +20,19 @@ export function ComposerContextChips({
           key={ref.sourceId}
           className="inline-flex h-7 min-w-0 max-w-56 items-center gap-1.5 rounded-md border border-edge-subtle bg-accent-soft/50 px-2 text-xs text-fg"
         >
-          <NotebookPen className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
+          {ref.kind === 'file' && ref.fileKind === 'directory' ? (
+            <Folder className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
+          ) : ref.kind === 'file' ? (
+            <FileText className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
+          ) : ref.kind === 'session' ? (
+            <MessagesSquare className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
+          ) : ref.kind === 'browser_tab' ? (
+            <AppWindow className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
+          ) : ref.kind === 'mcp_resource' ? (
+            <Database className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
+          ) : (
+            <NotebookPen className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
+          )}
           <span className="truncate">{ref.title}</span>
           <button
             type="button"

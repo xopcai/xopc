@@ -21,6 +21,7 @@ describe('composer delete events', () => {
     const kbdRef = { current: {
       adapters: [], send: vi.fn(), runBusy: false, pendingFollowUpsCount: 0,
       editingFollowUpId: null, onCancelEditFollowUp: vi.fn(), attachmentsLen: 0,
+      contextRefsLen: 0,
       isComposing: false, valueRef: { current: '/skill:summarize ' }, adjustHeight: vi.fn(), editorRef,
     } satisfies ComposerKbdContext };
     act(() => root.render(<ChatComposerInput editorRef={editorRef} disabled={false} placeholder="Message"

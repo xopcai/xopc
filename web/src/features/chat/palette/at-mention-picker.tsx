@@ -1,4 +1,4 @@
-import { FileText, Folder, Loader2, NotebookPen } from 'lucide-react';
+import { AppWindow, Bot, Database, FileText, Folder, Loader2, MessagesSquare, NotebookPen, Plug, Sparkles } from 'lucide-react';
 import {
   Fragment,
   memo,
@@ -12,7 +12,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 
-import type { AtMentionItem } from '@/features/chat/palette/at-mention-api';
+import type { AtMentionItem, AtMentionItemKind } from '@/features/chat/palette/at-mention-api';
 import { fileExtColor } from '@/features/file-tree/file-tree-utils';
 import { cn } from '@/lib/cn';
 import { readWorkspaceFile } from '@/features/workspace/workspace-api';
@@ -99,8 +99,7 @@ export const AtMentionPicker = memo(function AtMentionPicker({
   noResults,
   conversationId,
   recentLabel,
-  filesLabel,
-  notesLabel,
+  sectionLabels,
   ariaLabel,
   onSelectItem,
   shiftHint,
@@ -114,8 +113,7 @@ export const AtMentionPicker = memo(function AtMentionPicker({
   noResults: string;
   conversationId: string | null;
   recentLabel: string;
-  filesLabel: string;
-  notesLabel: string;
+  sectionLabels: Record<AtMentionItemKind, string>;
   ariaLabel: string;
   onSelectItem: (item: AtMentionItem, meta?: { shiftKey?: boolean }) => void;
   shiftHint?: string;
@@ -219,6 +217,7 @@ export const AtMentionPicker = memo(function AtMentionPicker({
 
   const shell = (
     <div
+      data-composer-picker-panel
       className="pointer-events-auto max-h-[min(28rem,60vh)] min-h-[2.5rem] overflow-hidden rounded-lg border border-edge bg-surface-overlay shadow-lg"
       style={{
         position: 'fixed',
@@ -249,10 +248,10 @@ export const AtMentionPicker = memo(function AtMentionPicker({
           <>
             {items.map((item, i) => {
               const previousKind = items[i - 1]?.kind;
-              const sectionLabel = item.kind === 'note' ? notesLabel : filesLabel;
+              const sectionLabel = sectionLabels[item.kind];
               const isRecent = item.kind === 'file' && item.isRecent;
               return (
-                <Fragment key={item.kind === 'note' ? `note:${item.noteRef.sourceId}` : `file:${item.relativePath}`}>
+                <Fragment key={item.id}>
                   {previousKind !== item.kind ? (
                     <div className="border-t border-edge-subtle px-3 pb-1 pt-2 text-[0.65rem] font-medium uppercase tracking-wide text-fg-muted first:border-t-0">
                       {sectionLabel}
@@ -283,6 +282,18 @@ export const AtMentionPicker = memo(function AtMentionPicker({
                     <span className="mt-0.5 shrink-0">
                       {item.kind === 'note' ? (
                         <NotebookPen className="size-3.5 text-accent-fg" aria-hidden />
+                      ) : item.kind === 'session' ? (
+                        <MessagesSquare className="size-3.5 text-violet-600 dark:text-violet-400" aria-hidden />
+                      ) : item.kind === 'skill' ? (
+                        <Sparkles className="size-3.5 text-cyan-600 dark:text-cyan-400" aria-hidden />
+                      ) : item.kind === 'agent' ? (
+                        <Bot className="size-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                      ) : item.kind === 'browser_tab' ? (
+                        <AppWindow className="size-3.5 text-blue-600 dark:text-blue-400" aria-hidden />
+                      ) : item.kind === 'mcp_server' ? (
+                        <Plug className="size-3.5 text-orange-600 dark:text-orange-400" aria-hidden />
+                      ) : item.kind === 'mcp_resource' ? (
+                        <Database className="size-3.5 text-orange-600 dark:text-orange-400" aria-hidden />
                       ) : item.isBrowseUp ? (
                         <Folder className="size-3.5 text-fg-muted" aria-hidden />
                       ) : item.isDirectory ? (
@@ -303,13 +314,19 @@ export const AtMentionPicker = memo(function AtMentionPicker({
                         ) : null}
                       </div>
                       <div className="mt-0.5 truncate text-xs text-fg-muted">
-                        {item.kind === 'note' ? item.description || notesLabel : item.relativePath || '—'}
+                        {item.description || sectionLabel}
                       </div>
                     </span>
                   </div>
                 </Fragment>
               );
             })}
+            {loading && totalRows > 0 ? (
+              <div className="flex items-center gap-2 border-t border-edge-subtle px-3 py-2 text-xs text-fg-muted">
+                <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                <span>…</span>
+              </div>
+            ) : null}
           </>
         )}
       </div>

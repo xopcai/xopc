@@ -48,6 +48,28 @@ describe('composer acceptance preserves drafts', () => {
     expect(options.resetEditor).not.toHaveBeenCalled();
   });
 
+  it('sends a reference-only draft', async () => {
+    const onSend = vi.fn(() => true);
+    options = {
+      ...options,
+      getTextValue: () => '',
+      getContextRefs: () => [{
+        kind: 'file',
+        fileKind: 'directory',
+        sourceId: 'apps/mobile-expo',
+        title: 'mobile-expo',
+        expectedVersion: '42',
+      }],
+      onSend,
+    };
+
+    await render();
+    actions.send();
+    expect(onSend).toHaveBeenCalledWith('', undefined, 'off', [expect.objectContaining({
+      kind: 'file', fileKind: 'directory', sourceId: 'apps/mobile-expo',
+    })]);
+  });
+
   it.each(['text', 'attachments', 'references'])('preserves changed %s on late acceptance', async field => {
     actions.send();
     options = { ...options };

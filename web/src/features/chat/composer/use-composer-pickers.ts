@@ -11,11 +11,11 @@ import { useDismissOnOutsideClick } from '@/features/chat/composer/use-dismiss-o
 import type { AtMentionItem } from '@/features/chat/palette/at-mention-api';
 import { recordRecentAtPath } from '@/features/chat/palette/at-mention-recent';
 import type { PaletteItem, SkillPaletteItem } from '@/features/chat/palette/command-palette.types';
-import { formatFilePathForWire } from '@/features/chat/palette/file-wire-pattern';
 import {
   browseDirFromQuery,
   browseParentDir,
   detectAtRange,
+  escapeAtQuery,
   useAtMentionPicker,
 } from '@/features/chat/palette/use-at-mention-picker';
 import { commandRowDisabled, useCommandPalette } from '@/features/chat/palette/use-command-palette';
@@ -69,19 +69,44 @@ export interface UseComposerPickersReturn {
   applyAtMention: (item: AtMentionItem, opts?: { stayOpen?: boolean }) => void;
 }
 
-export function noteContextRefFromAtMentionItem(item: AtMentionItem): ComposerContextRef | null {
-  if (item.kind !== 'note') return null;
-  return {
-    kind: 'note',
-    sourceId: item.noteRef.sourceId,
-    expectedVersion: item.noteRef.expectedVersion,
-    title: item.name,
-  };
+export function contextRefFromAtMentionItem(item: AtMentionItem): ComposerContextRef | null {
+  if (item.kind === 'note') {
+    return {
+      kind: 'note', sourceId: item.noteRef.sourceId,
+      expectedVersion: item.noteRef.expectedVersion, title: item.name,
+    };
+  }
+  if (item.kind === 'file' && !item.isBrowseUp && item.fileRef) {
+    return {
+      kind: 'file', sourceId: item.fileRef.sourceId,
+      expectedVersion: item.fileRef.expectedVersion, title: item.name,
+      fileKind: item.isDirectory ? 'directory' : 'file',
+    };
+  }
+  if (item.kind === 'session') {
+    return {
+      kind: 'session', sourceId: item.sessionRef.sourceId,
+      expectedVersion: item.sessionRef.expectedVersion, title: item.name,
+    };
+  }
+  if (item.kind === 'browser_tab') {
+    return {
+      kind: 'browser_tab', sourceId: item.tabRef.sourceId,
+      expectedVersion: item.tabRef.expectedVersion, title: item.name,
+    };
+  }
+  if (item.kind === 'mcp_resource') {
+    return {
+      kind: 'mcp_resource', sourceId: item.resourceRef.sourceId,
+      expectedVersion: item.resourceRef.expectedVersion, title: item.name,
+    };
+  }
+  return null;
 }
 
 /**
  * Composes the slash palette and @-mention pickers, their mutual exclusion, the keyboard adapters,
- * and the outside-click dismiss for the slash palette. ChatComposer wires the returned `adapters`
+ * and outside-click dismissal for both floating pickers. ChatComposer wires the returned `adapters`
  * to its `<ChatComposerInput>`; nothing else changes about how each picker hook works internally.
  */
 export function useComposerPickers(opts: UseComposerPickersOptions): UseComposerPickersReturn {
@@ -124,10 +149,11 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
   });
   const atPicker = useAtMentionPicker(editorValue, editorCursor, {
     conversationId,
+    currentAgentId,
     slashPaletteOpen: palette.open,
     isComposing,
     precomputedAtRange: atRangeRaw,
-    selectedNoteIds: new Set(contextRefs.map((ref) => ref.sourceId)),
+    selectedContextKeys: new Set(contextRefs.map((ref) => `${ref.kind}:${ref.sourceId}`)),
   });
 
   const shouldSyncSelection = palette.open || atPicker.open || atRangeRaw != null;
@@ -186,8 +212,8 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
     (item: AtMentionItem, applyOpts?: { stayOpen?: boolean }) => {
       const range = atPicker.atRange;
       if (!range) return;
-      const noteContextRef = noteContextRefFromAtMentionItem(item);
-      if (noteContextRef) {
+      const contextRef = contextRefFromAtMentionItem(item);
+      if (contextRef) {
         const insert = applyOpts?.stayOpen ? '@' : '';
         const next = replaceRange(valueRef.current, range.start, range.end, insert);
         resetEditor({
@@ -195,49 +221,68 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
           caretOffset: range.start + insert.length,
           focus: true,
         });
-        onAddContextRef(noteContextRef);
+        onAddContextRef(contextRef);
+        if (conversationId && item.kind === 'file') {
+          recordRecentAtPath(conversationId, item.relativePath);
+        }
         return;
       }
-      if (item.kind !== 'file') return;
-      if (item.isBrowseUp) {
-        const dir = browseDirFromQuery(range.query);
-        const parentDir = browseParentDir(dir);
-        const newQuery = parentDir ? `${parentDir}/` : '';
-        const insert = `@${newQuery}`;
+
+      if (item.kind === 'skill') {
+        const insert = `/skill:${item.canonicalName} `;
         const next = replaceRange(valueRef.current, range.start, range.end, insert);
-        const pos = range.start + insert.length;
-        resetEditor({ nextText: next, caretOffset: pos, focus: true });
+        resetEditor({ nextText: next, caretOffset: range.start + insert.length, focus: true });
         return;
       }
 
-      const path =
-        item.isDirectory && !item.relativePath.endsWith('/')
-          ? `${item.relativePath}/`
-          : item.relativePath;
-
-      const wire = `@file:${formatFilePathForWire(path)}`;
-
-      if (conversationId && !item.isDirectory) {
-        recordRecentAtPath(conversationId, path.replace(/\/$/, ''));
+      if (item.kind === 'agent') {
+        const next = replaceRange(valueRef.current, range.start, range.end, '');
+        resetEditor({ nextText: next, caretOffset: range.start, focus: true });
+        onChatAgentChange?.(item.agentId);
+        return;
       }
 
-      const suffix = applyOpts?.stayOpen ? ' @' : ' ';
-      const insert = wire + suffix;
+      if (item.kind === 'mcp_server') {
+        const insert = `@mcp:${encodeURIComponent(item.serverId)}/`;
+        const next = replaceRange(valueRef.current, range.start, range.end, insert);
+        resetEditor({ nextText: next, caretOffset: range.start + insert.length, focus: true });
+        return;
+      }
+
+      if (item.kind !== 'file' || !item.isDirectory) return;
+      const newQuery = item.isBrowseUp
+        ? (() => {
+            const parentDir = browseParentDir(browseDirFromQuery(range.query));
+            return parentDir ? `${parentDir}/` : '';
+          })()
+        : `${item.relativePath.replace(/\/+$/, '')}/`;
+      const insert = `@${escapeAtQuery(newQuery)}`;
       const next = replaceRange(valueRef.current, range.start, range.end, insert);
       const pos = range.start + insert.length;
       resetEditor({ nextText: next, caretOffset: pos, focus: true });
     },
-    [atPicker.atRange, onAddContextRef, conversationId, valueRef, resetEditor],
+    [
+      atPicker.atRange,
+      onAddContextRef,
+      conversationId,
+      onChatAgentChange,
+      valueRef,
+      resetEditor,
+    ],
   );
 
-  // ── Outside-click dismiss for the slash palette ─────────────────
+  // ── Outside-click dismiss ───────────────────────────────────────
 
-  const paletteSlashRangeRef = useRef(palette.slashRange);
-  paletteSlashRangeRef.current = palette.slashRange;
+  const activePickerRangeRef = useRef<{ start: number; end: number } | null>(null);
+  activePickerRangeRef.current = atPicker.open
+    ? atPicker.atRange
+    : palette.open
+      ? palette.slashRange
+      : null;
   const valueRefRef = valueRef;
 
-  const dismissPalette = useCallback(() => {
-    const range = paletteSlashRangeRef.current;
+  const dismissPicker = useCallback(() => {
+    const range = activePickerRangeRef.current;
     if (!range) return;
     const v = valueRefRef.current;
     const next = v.slice(0, range.start) + v.slice(range.end);
@@ -250,10 +295,10 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
   );
 
   useDismissOnOutsideClick({
-    active: palette.open,
+    active: palette.open || atPicker.open,
     anchors: dismissAnchors,
-    ignoreSelector: '[data-slash-palette-tooltip]',
-    onDismiss: dismissPalette,
+    ignoreSelector: '[data-composer-picker-panel], [data-slash-palette-tooltip]',
+    onDismiss: dismissPicker,
   });
 
   // ── Keyboard adapters ───────────────────────────────────────────

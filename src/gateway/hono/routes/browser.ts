@@ -128,6 +128,30 @@ function canManageBrowserSession(c: Context, service: AuthenticatedRouteDeps['se
 export function registerBrowserRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
 
+  authenticated.get('/api/browser/tabs', (c) => {
+    const conversationId = (c.req.query('conversationId') ?? '').trim();
+    if (!conversationId) {
+      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing conversationId' } }, 400);
+    }
+    const binding = getBrowserTabBinding(conversationId);
+    if (!binding) return c.json({ ok: true, payload: { tabs: [] } });
+    if (!canManageBrowserSession(c, service, conversationId)) {
+      return c.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Tab binding belongs to another device' } }, 403);
+    }
+    return c.json({
+      ok: true,
+      payload: {
+        tabs: [{
+          id: binding.id,
+          title: new URL(binding.urlOrigin).hostname,
+          url: binding.urlOrigin,
+          documentId: binding.documentId,
+          active: true,
+        }],
+      },
+    });
+  });
+
   authenticated.get('/api/browser/tab-bindings/:conversationId', (c) => {
     const conversationId = c.req.param('conversationId').trim();
     const binding = getBrowserTabBinding(conversationId);

@@ -333,18 +333,22 @@ function normalizeMessageContextRefs(metadata: unknown): Message['contextRefs'] 
     const row = asRecord(value);
     if (
       !row
-      || row.kind !== 'note'
+      || (row.kind !== 'note' && row.kind !== 'file' && row.kind !== 'session'
+        && row.kind !== 'browser_tab' && row.kind !== 'mcp_resource')
       || typeof row.sourceId !== 'string'
       || typeof row.version !== 'string'
       || typeof row.title !== 'string'
     ) return [];
     return [{
-      kind: 'note',
+      kind: row.kind,
       sourceId: row.sourceId,
       version: row.version,
       title: row.title,
       ...(typeof row.tokenEstimate === 'number' ? { tokenEstimate: row.tokenEstimate } : {}),
       ...(row.truncated === true ? { truncated: true } : {}),
+      ...(row.kind === 'file' && (row.fileKind === 'file' || row.fileKind === 'directory')
+        ? { fileKind: row.fileKind }
+        : {}),
     }];
   });
   return refs.length > 0 ? refs : undefined;

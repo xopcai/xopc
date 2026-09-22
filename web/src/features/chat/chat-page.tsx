@@ -750,6 +750,7 @@ export function ChatPage({ embedded = false, conversationId, taskId: boundTaskId
         sourceId: ref.sourceId,
         expectedVersion: ref.version,
         title: ref.title,
+        fileKind: ref.fileKind,
       })),
     );
   }, []);

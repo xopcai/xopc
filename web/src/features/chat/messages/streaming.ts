@@ -65,6 +65,7 @@ export function cloneMessageForRender(msg: Message): Message {
     ...msg,
     content: msg.content.map((b) => ({ ...b })),
     attachments: msg.attachments ? msg.attachments.map((a) => ({ ...a })) : undefined,
+    contextRefs: msg.contextRefs ? msg.contextRefs.map((ref) => ({ ...ref })) : undefined,
   };
 }
 

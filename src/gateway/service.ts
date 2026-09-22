@@ -3,6 +3,12 @@ import { getSessionMetadata } from '../storage/sqlite/session-repository.js';
 import { resolveAgentMainConversationId } from '../routing/agent-session-key.js';
 import { createBackgroundTask } from '../infra/background-task.js';
 import { buildTaskAgentContext } from '../agent/source-context/task-context.js';
+import { buildFileAgentContext } from '../agent/source-context/file-context.js';
+import { buildSessionAgentContext } from '../agent/source-context/session-context.js';
+import { buildMcpResourceAgentContext } from '../agent/source-context/mcp-resource-context.js';
+import { buildBrowserTabAgentContext } from '../agent/source-context/browser-tab.js';
+import { RealtimeExtensionBrowserProvider } from '../browser/providers/realtime-extension.js';
+import { getBrowserTabBindingById } from '../storage/sqlite/browser-tab-binding-repository.js';
 import crypto from 'node:crypto';
 import { WorkDiscoveryService } from '../work-discovery/service.js';
 
@@ -56,6 +62,7 @@ import {
 import { getExposureManager } from '../remote-access/exposure-manager.js';
 import { sanitizeTunnelConfig } from '../tunnel/tunnel-config.js';
 import { prepareAutomationAgentSession } from './automation-agent-session.js';
+import { getGatewayFileSpaceService } from './file-space-service.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured, validateToken, extractToken, type ResolvedGatewayAuth } from './auth.js';
 import { assertGatewayAuthNotKnownWeak } from './security/known-weak-secrets.js';
 import { auditGatewayConfig } from './security/audit.js';
@@ -514,9 +521,48 @@ export class GatewayService {
       getAgentService: () => this.ensureAgentService(),
       getChannelManager: () => this.channelManager,
       getConfig: () => this.config,
-      resolveTurnContext: async (ref) => {
+      resolveTurnContext: async (ref, conversationId) => {
         if (ref.kind === 'task') return buildTaskAgentContext(new TaskRepository().get(ref.sourceId), ref.expectedVersion);
-        if (ref.kind !== 'note') return null;
+        if (ref.kind === 'file') {
+          const files = getGatewayFileSpaceService(this);
+          const space = await files.forContext('session', conversationId).catch(() => null);
+          if (!space) return null;
+          return buildFileAgentContext(
+            files,
+            ref.sourceId,
+            ref.expectedVersion,
+            space.id,
+          );
+        }
+        if (ref.kind === 'session') {
+          const [metadata, messages] = await Promise.all([
+            this.sessionIndex.getSessionMetadata(ref.sourceId),
+            this.sessionIndex.getStore().loadMessages(ref.sourceId),
+          ]);
+          return buildSessionAgentContext(metadata, messages, ref.expectedVersion);
+        }
+        if (ref.kind === 'mcp_resource') {
+          return buildMcpResourceAgentContext({
+            workspaceDir: this.currentWorkspacePath,
+            config: this.config,
+            sourceId: ref.sourceId,
+            expectedVersion: ref.expectedVersion,
+          });
+        }
+        if (ref.kind === 'browser_tab') {
+          const binding = getBrowserTabBindingById(ref.sourceId);
+          if (!binding
+            || binding.conversationId !== conversationId
+            || (ref.expectedVersion && ref.expectedVersion !== binding.documentId)) return null;
+          const wire = await new RealtimeExtensionBrowserProvider(this.endpointTools).send({
+            action: 'observe',
+            sessionId: `context:${binding.conversationId}`,
+            target: { kind: 'attached_tab', bindingId: binding.id },
+            visual: 'never',
+          }).catch(() => null);
+          if (!wire?.result.ok || !wire.result.receipt.observation) return null;
+          return buildBrowserTabAgentContext(ref.sourceId, wire.result.receipt.observation, ref.expectedVersion);
+        }
         const note = await this.notesService.getNote(ref.sourceId);
         if (!note || note.status === 'trashed') return null;
         if (ref.expectedVersion && ref.expectedVersion !== String(note.updatedAt)) return null;
