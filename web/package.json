@@ -2,7 +2,7 @@
   "name": "@xopc/web",
   "private": true,
   "type": "module",
-  "version": "0.0.313",
+  "version": "0.0.314",
   "scripts": {
     "dev": "vite",
     "dev:host": "vite --host",
