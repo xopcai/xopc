@@ -66,10 +66,6 @@ export const AssistantResultTail = memo(function AssistantResultTail({
 
   return (
     <View style={styles.shell} accessibilityLabel={m.chat.messageArtifactsHeading}>
-      <View
-        pointerEvents="none"
-        style={[styles.pointer, { backgroundColor: colors.surface.input }]}
-      />
       <View style={[styles.card, { backgroundColor: colors.surface.input }]}>
         {attachments.length > 0 ? (
           <AttachmentRenderer
@@ -153,16 +149,6 @@ const styles = StyleSheet.create({
     maxWidth: 420,
     marginTop: spacing.sm,
     marginBottom: spacing.xs,
-    paddingBottom: spacing.xs,
-  },
-  pointer: {
-    position: 'absolute',
-    left: spacing.md,
-    bottom: 1,
-    width: spacing.md,
-    height: spacing.md,
-    borderRadius: spacing.xxs,
-    transform: [{ rotate: '45deg' }],
   },
   card: {
     borderRadius: radii.lg,

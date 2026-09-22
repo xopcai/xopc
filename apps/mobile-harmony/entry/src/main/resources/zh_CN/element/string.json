@@ -9,6 +9,8 @@
     { "name": "chat_product_updated", "value": "已更新" },
     { "name": "chat_product_started", "value": "已启动" },
     { "name": "chat_product_ready", "value": "已就绪" },
+    { "name": "chat_product_inbox", "value": "收件箱" },
+    { "name": "chat_more_results", "value": "另有 %d 项结果，可缩小查询范围" },
     { "name": "chat_continue", "value": "在对话中继续" },
     { "name": "chat_share", "value": "分享" },
     { "name": "chat_share_failed", "value": "暂时无法分享此结果，请重试。" },

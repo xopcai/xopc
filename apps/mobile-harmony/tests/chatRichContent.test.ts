@@ -85,6 +85,13 @@ describe('rich chat parity projection', () => {
     expect(chatDeliveries(row)).toEqual([updated]);
     expect(toolOutputText({ id: 't', name: 'read', result: JSON.stringify({ content: [{ type: 'text', text: 'hello' }] }) })).toBe('hello');
   });
+  it('projects table query results into compact product deliveries', () => {
+    const delivery = { version: 1, operation: 'opened', presentation: { kind: 'table', truncated: false,
+      items: [{ kind: 'note', id: 'n', title: 'Research note', status: 'inbox', capabilities: ['open'] }] } };
+    const row: XopcChatRow = { id: 'r', role: 'assistant', text: '', toolCalls: [
+      { id: 'query', name: 'xopc_use', status: 'done', details: { delivery } }] };
+    expect(chatDeliveries(row)).toEqual([{ version: 1, operation: 'opened', primary: delivery.presentation.items[0] }]);
+  });
 });
 describe('rich live event reducer', () => {
   it('does not add empty plan or diff steps, or erase a valid plan on an invalid update', () => {

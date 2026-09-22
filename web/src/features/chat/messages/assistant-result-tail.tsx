@@ -8,6 +8,7 @@ import {
   FileText,
   FileVideo,
   Globe2,
+  SearchX,
 } from 'lucide-react';
 
 import { AttachmentPreviewDialog } from '@/features/chat/attachments/attachment-preview-dialog';
@@ -19,11 +20,12 @@ import { useAttachmentImageSrc } from '@/features/chat/attachments/use-attachmen
 import { useAttachmentPreview } from '@/features/chat/attachments/use-attachment-preview';
 import type { MessageAttachment } from '@/features/chat/messages/messages.types';
 import {
-  productDeliveryPresentations,
+  productDeliveryDiffPresentations,
+  productDeliveryQueryState,
   productDeliveryReferences,
 } from '@/features/chat/product-delivery/product-delivery-model';
 import { ProductDeliveryRows } from '@/features/chat/product-delivery/product-delivery-tail';
-import { ProductDeliveryPresentation } from '@/features/chat/product-delivery/product-delivery-presentation';
+import { ProductDeliveryDiffPreview } from '@/features/chat/product-delivery/product-delivery-diff-preview';
 import { TurnTail } from '@/features/chat/product-delivery/turn-tail';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -214,25 +216,41 @@ export function AssistantResultTail({
 }) {
   const language = useLocaleStore((state) => state.language) === 'zh' ? 'zh' : 'en';
   const preview = useAttachmentPreview({ layout: 'assistant', conversationId, projectId });
-  const presentations = productDeliveryPresentations(view.deliveries);
+  const diffPresentations = productDeliveryDiffPresentations(view.deliveries);
+  const queryState = productDeliveryQueryState(view.deliveries);
   const productCount = productDeliveryReferences(view.deliveries).length;
   const attachments = [
     ...outcomeAttachments(view.outcome, language),
     ...standaloneAttachments(view.attachments, language),
   ];
-  const hasTail = productCount > 0 || attachments.length > 0;
+  const hasTail = productCount > 0 || attachments.length > 0 || queryState.hasEmptyQuery;
 
-  if (presentations.length === 0 && !hasTail) return null;
+  if (diffPresentations.length === 0 && !hasTail) return null;
 
   return (
     <>
-      {presentations.map(({ key, presentation }) => (
-        <ProductDeliveryPresentation key={key} presentation={presentation} />
+      {diffPresentations.map(({ key, presentation }) => (
+        <ProductDeliveryDiffPreview key={key} presentation={presentation} />
       ))}
       {hasTail ? (
         <TurnTail label={language === 'zh' ? '本轮交付结果' : 'Turn deliverables'}>
           <ul className="m-0 list-none divide-y divide-edge-subtle p-0">
             <ProductDeliveryRows deliveries={view.deliveries} language={language} />
+            {queryState.hasEmptyQuery ? (
+              <li className="flex min-h-14 min-w-0 items-center gap-3 px-3 py-2">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover text-fg-muted" aria-hidden>
+                  <SearchX className="size-4" strokeWidth={1.75} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium text-fg">
+                    {language === 'zh' ? '没有匹配结果' : 'No matching results'}
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-5 text-fg-muted">
+                    {language === 'zh' ? '调整关键词后再试一次' : 'Try again with different keywords'}
+                  </span>
+                </span>
+              </li>
+            ) : null}
             {attachments.map((item) => (
               <ResultAttachmentRow
                 key={item.key}
@@ -244,6 +262,11 @@ export function AssistantResultTail({
               />
             ))}
           </ul>
+          {queryState.truncated ? (
+            <p role="status" className="border-t border-edge-subtle px-3 py-2 text-xs text-fg-muted">
+              {language === 'zh' ? '仅显示部分结果' : 'Showing partial results'}
+            </p>
+          ) : null}
         </TurnTail>
       ) : null}
       {attachments.length > 0 ? (
